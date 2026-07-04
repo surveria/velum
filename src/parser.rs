@@ -43,6 +43,15 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Result<Stmt> {
+        if self.match_kind(&TokenKind::LBrace) {
+            return self.block();
+        }
+        if self.match_kind(&TokenKind::If) {
+            return self.if_statement();
+        }
+        if self.match_kind(&TokenKind::Throw) {
+            return self.throw_statement();
+        }
         if self.match_kind(&TokenKind::Let) {
             return self.var_decl(true, false);
         }
@@ -56,6 +65,41 @@ impl Parser {
         let expr = self.expression()?;
         self.consume_optional_semicolon();
         Ok(Stmt::Expr(expr))
+    }
+
+    fn block(&mut self) -> Result<Stmt> {
+        let mut statements = Vec::new();
+        while !self.check(&TokenKind::RBrace) {
+            if self.at_end() {
+                return Err(Error::parse("expected '}' after block", self.offset()));
+            }
+            statements.push(self.statement()?);
+        }
+        self.consume(&TokenKind::RBrace, "expected '}' after block")?;
+        Ok(Stmt::Block(statements))
+    }
+
+    fn if_statement(&mut self) -> Result<Stmt> {
+        self.consume(&TokenKind::LParen, "expected '(' after 'if'")?;
+        let condition = self.expression()?;
+        self.consume(&TokenKind::RParen, "expected ')' after if condition")?;
+        let consequent = Box::new(self.statement()?);
+        let alternate = if self.match_kind(&TokenKind::Else) {
+            Some(Box::new(self.statement()?))
+        } else {
+            None
+        };
+        Ok(Stmt::If {
+            condition,
+            consequent,
+            alternate,
+        })
+    }
+
+    fn throw_statement(&mut self) -> Result<Stmt> {
+        let value = self.expression()?;
+        self.consume_optional_semicolon();
+        Ok(Stmt::Throw(value))
     }
 
     fn var_decl(&mut self, mutable: bool, require_init: bool) -> Result<Stmt> {
@@ -159,6 +203,9 @@ impl Parser {
     }
 
     fn unary(&mut self) -> Result<Expr> {
+        if self.match_kind(&TokenKind::New) {
+            return self.new_expr();
+        }
         if self.match_kind(&TokenKind::Bang) {
             let expr = self.unary()?;
             return Ok(Expr::Unary {
@@ -183,6 +230,14 @@ impl Parser {
         self.call()
     }
 
+    fn new_expr(&mut self) -> Result<Expr> {
+        let constructor = self.consume_identifier("expected constructor name after 'new'")?;
+        self.consume(&TokenKind::LParen, "expected '(' after constructor name")?;
+        let args = self.arguments()?;
+        self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
+        Ok(Expr::New { constructor, args })
+    }
+
     fn call(&mut self) -> Result<Expr> {
         let mut expr = self.primary()?;
         loop {
@@ -190,15 +245,11 @@ impl Parser {
                 break;
             }
 
-            let mut args = Vec::new();
-            if !self.check(&TokenKind::RParen) {
-                loop {
-                    args.push(self.expression()?);
-                    if !self.match_kind(&TokenKind::Comma) {
-                        break;
-                    }
-                }
-            }
+            let args = if self.check(&TokenKind::RParen) {
+                Vec::new()
+            } else {
+                self.arguments()?
+            };
 
             self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
             expr = Expr::Call {
@@ -207,6 +258,17 @@ impl Parser {
             };
         }
         Ok(expr)
+    }
+
+    fn arguments(&mut self) -> Result<Vec<Expr>> {
+        let mut args = Vec::new();
+        loop {
+            args.push(self.expression()?);
+            if !self.match_kind(&TokenKind::Comma) {
+                break;
+            }
+        }
+        Ok(args)
     }
 
     fn primary(&mut self) -> Result<Expr> {

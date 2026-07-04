@@ -13,6 +13,7 @@ const DEFAULT_MAX_RUNTIME_STEPS: usize = 100_000;
 const DEFAULT_MAX_STRING_LEN: usize = 65_536;
 const DEFAULT_MAX_BINDINGS: usize = 4_096;
 const HOST_PRINT_NAME: &str = "print";
+const TEST262_ERROR_NAME: &str = "Test262Error";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct RuntimeLimits {
@@ -151,6 +152,25 @@ impl Context {
 
     fn eval_statement(&mut self, statement: &Stmt) -> Result<Value> {
         match statement {
+            Stmt::Block(statements) => self.eval_block(statements),
+            Stmt::If {
+                condition,
+                consequent,
+                alternate,
+            } => {
+                let condition = self.eval_expr(condition)?;
+                if condition.is_truthy() {
+                    self.eval_statement(consequent)
+                } else if let Some(alternate) = alternate {
+                    self.eval_statement(alternate)
+                } else {
+                    Ok(Value::Undefined)
+                }
+            }
+            Stmt::Throw(expr) => {
+                let value = self.eval_expr(expr)?;
+                Err(Error::runtime(format!("uncaught throw: {value}")))
+            }
             Stmt::VarDecl {
                 name,
                 mutable,
@@ -184,7 +204,17 @@ impl Context {
                 Ok(value)
             }
             Expr::Call { callee, args } => self.eval_call(callee, args),
+            Expr::New { constructor, args } => self.eval_new(constructor, args),
         }
+    }
+
+    fn eval_block(&mut self, statements: &[Stmt]) -> Result<Value> {
+        let mut last = Value::Undefined;
+        for statement in statements {
+            self.step()?;
+            last = self.eval_statement(statement)?;
+        }
+        Ok(last)
     }
 
     fn eval_unary(op: UnaryOp, value: &Value) -> Result<Value> {
@@ -268,6 +298,19 @@ impl Context {
             }
             _ => Err(Error::runtime(format!("'{name}' is not callable"))),
         }
+    }
+
+    fn eval_new(&mut self, constructor: &str, args: &[Expr]) -> Result<Value> {
+        if constructor != TEST262_ERROR_NAME {
+            return Err(Error::runtime(format!(
+                "constructor '{constructor}' is not supported"
+            )));
+        }
+        let Some(message) = args.first() else {
+            return Ok(Value::String(TEST262_ERROR_NAME.to_owned()));
+        };
+        let message = self.eval_expr(message)?;
+        Ok(Value::String(message.display_for_concat()))
     }
 
     fn define(&mut self, name: &str, value: Value, mutable: bool) -> Result<()> {

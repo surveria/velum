@@ -55,6 +55,27 @@ fn short_circuits_logical_operators() -> TestResult {
 }
 
 #[test]
+fn evaluates_if_blocks_and_throw_statements() -> TestResult {
+    expect_value(
+        r#"
+        let value = 1;
+        if (value === 1) {
+            value = value + 41;
+        } else {
+            throw new Test262Error("unreachable");
+        }
+        value
+        "#,
+        &Value::Number(42.0),
+    )?;
+
+    let Err(error) = eval(r#"throw new Test262Error("expected failure")"#) else {
+        return Err("expected throw statement to fail".into());
+    };
+    ensure_error_kind(&error, "runtime")
+}
+
+#[test]
 fn enforces_resource_limits() -> TestResult {
     let limits = RuntimeLimits {
         max_source_len: 8,
