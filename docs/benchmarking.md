@@ -15,6 +15,18 @@ Track these against QuickJS on every supported device class:
 - JSON parse and stringify when implemented
 - selected `bench-v8` cases when coverage is sufficient
 
+## QuickJS Reference
+
+`scripts/test-all.sh` prepares a pinned QuickJS reference binary before running the Rust test runner. The setup order is:
+
+1. use `RSQJS_QUICKJS` when it points to an executable file;
+2. use `qjs` from `PATH` when available;
+3. download, checksum, and build QuickJS `2026-06-04` under `target/quickjs`.
+
+Set `RSQJS_QUICKJS_AUTO_SETUP=0` to disable automatic download and build. In that mode, differential checks and QuickJS benchmark columns are reported as skipped unless `RSQJS_QUICKJS` or `qjs` is available.
+
+The standard test script builds `target/release/rsqjs` and exposes it to the runner through `RSQJS_ENGINE`. Benchmark rows compare the release `rsqjs` CLI with the QuickJS `qjs` CLI sequentially.
+
 ## Initial Targets
 
 - hello-world memory: within roughly 2x QuickJS on ARM Linux devices
