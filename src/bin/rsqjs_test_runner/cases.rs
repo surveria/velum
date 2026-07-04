@@ -33,8 +33,11 @@ const PATH_CONST_ASSIGNMENT: &str = "tests/engine_cases/const_assignment_error.j
 const PATH_SHORT_CIRCUIT: &str = "tests/engine_cases/short_circuit.js";
 const PATH_VAR_HOISTING: &str = "tests/engine_cases/var_hoisting.js";
 const PATH_TRY_CATCH: &str = "tests/engine_cases/try_catch.js";
+const PATH_CONDITIONAL_BITAND: &str = "tests/engine_cases/conditional_bitand.js";
 const PATH_TEST262_ARITHMETIC: &str =
     "tests/corpora/test262/active/language/expressions/arithmetic.js";
+const PATH_TEST262_CONDITIONAL_BITAND: &str =
+    "tests/corpora/test262/active/language/expressions/conditional_bitand.js";
 const PATH_TEST262_LET_CONST: &str = "tests/corpora/test262/active/language/bindings/let_const.js";
 const PATH_TEST262_VAR_HOISTING: &str =
     "tests/corpora/test262/active/language/bindings/var_hoisting.js";
@@ -48,7 +51,10 @@ const PATH_QUICKJS_BOOLEAN_CONVERSION: &str =
     "tests/corpora/quickjs_differential/active/boolean_conversion.js";
 const PATH_QUICKJS_VAR_HOISTING: &str = "tests/corpora/quickjs_differential/active/var_hoisting.js";
 const PATH_QUICKJS_TRY_CATCH: &str = "tests/corpora/quickjs_differential/active/try_catch.js";
+const PATH_QUICKJS_CONDITIONAL_BITAND: &str =
+    "tests/corpora/quickjs_differential/active/conditional_bitand.js";
 const PATH_BENCH_ARITHMETIC: &str = "tests/corpora/benchmarks/active/arithmetic_chain.js";
+const PATH_BENCH_CONDITIONAL_BITAND: &str = "tests/corpora/benchmarks/active/conditional_bitand.js";
 const PATH_BENCH_STRING: &str = "tests/corpora/benchmarks/active/string_concat.js";
 const PATH_BENCH_BOOLEAN: &str = "tests/corpora/benchmarks/active/boolean_conversion.js";
 const PATH_BENCH_VAR_HOISTING: &str = "tests/corpora/benchmarks/active/var_hoisting.js";
@@ -95,6 +101,14 @@ pub fn engine_cases() -> Vec<EngineCase> {
                 value: "42",
             },
         },
+        EngineCase {
+            id: "conditional_bitand",
+            path: PATH_CONDITIONAL_BITAND,
+            expectation: Expectation::OutputAndValue {
+                output: &["1"],
+                value: "42",
+            },
+        },
     ]
 }
 
@@ -104,6 +118,11 @@ pub fn test262_cases() -> Vec<EngineCase> {
             id: "language/expressions/arithmetic",
             path: PATH_TEST262_ARITHMETIC,
             expectation: Expectation::Value("5"),
+        },
+        EngineCase {
+            id: "language/expressions/conditional_bitand",
+            path: PATH_TEST262_CONDITIONAL_BITAND,
+            expectation: Expectation::Value("42"),
         },
         EngineCase {
             id: "language/bindings/let_const",
@@ -145,6 +164,10 @@ pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
             id: "try_catch",
             path: PATH_QUICKJS_TRY_CATCH,
         },
+        DifferentialCase {
+            id: "conditional_bitand",
+            path: PATH_QUICKJS_CONDITIONAL_BITAND,
+        },
     ]
 }
 
@@ -153,6 +176,10 @@ pub fn benchmark_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "arithmetic_chain",
             path: PATH_BENCH_ARITHMETIC,
+        },
+        BenchmarkCase {
+            id: "conditional_bitand",
+            path: PATH_BENCH_CONDITIONAL_BITAND,
         },
         BenchmarkCase {
             id: "string_concat",

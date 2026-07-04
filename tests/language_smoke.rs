@@ -93,6 +93,25 @@ fn short_circuits_logical_operators() -> TestResult {
 }
 
 #[test]
+fn supports_conditional_and_bitwise_and() -> TestResult {
+    expect_value("true ? 42 : missing", &Value::Number(42.0))?;
+    expect_value("false ? missing : 42", &Value::Number(42.0))?;
+    expect_value("(true ? 5 : 0) & 3", &Value::Number(1.0))?;
+    expect_value("-1 & 1", &Value::Number(1.0))?;
+    expect_value("4294967297 & 3", &Value::Number(1.0))?;
+    expect_value(
+        r"
+        let value = false ? missing : 40;
+        value = value + (((value === 40) & true) ? 2 : 0);
+        value
+        ",
+        &Value::Number(42.0),
+    )?;
+
+    expect_value(r#""camera" & 1"#, &Value::Number(0.0))
+}
+
+#[test]
 fn evaluates_if_blocks_and_throw_statements() -> TestResult {
     expect_value(
         r#"

@@ -147,7 +147,7 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> Result<Expr> {
-        let expr = self.logical_or()?;
+        let expr = self.conditional()?;
         if self.match_kind(&TokenKind::Equal) {
             let offset = self.previous_offset();
             let Expr::Identifier(name) = expr else {
@@ -162,6 +162,22 @@ impl Parser {
         Ok(expr)
     }
 
+    fn conditional(&mut self) -> Result<Expr> {
+        let condition = self.logical_or()?;
+        if !self.match_kind(&TokenKind::Question) {
+            return Ok(condition);
+        }
+
+        let consequent = self.assignment()?;
+        self.consume(&TokenKind::Colon, "expected ':' in conditional expression")?;
+        let alternate = self.assignment()?;
+        Ok(Expr::Conditional {
+            condition: Box::new(condition),
+            consequent: Box::new(consequent),
+            alternate: Box::new(alternate),
+        })
+    }
+
     fn logical_or(&mut self) -> Result<Expr> {
         self.left_assoc(
             Self::logical_and,
@@ -171,9 +187,13 @@ impl Parser {
 
     fn logical_and(&mut self) -> Result<Expr> {
         self.left_assoc(
-            Self::equality,
+            Self::bitwise_and,
             &[(&TokenKind::AndAnd, BinaryOp::LogicalAnd)],
         )
+    }
+
+    fn bitwise_and(&mut self) -> Result<Expr> {
+        self.left_assoc(Self::equality, &[(&TokenKind::Ampersand, BinaryOp::BitAnd)])
     }
 
     fn equality(&mut self) -> Result<Expr> {
