@@ -13,6 +13,11 @@ if [[ -n "${quickjs_path}" ]]; then
   export RSQJS_QUICKJS="${quickjs_path}"
 fi
 
+test262_path="$("${script_dir}/prepare-test262.sh")"
+if [[ -n "${test262_path}" ]]; then
+  export RSQJS_TEST262_DIR="${test262_path}"
+fi
+
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
