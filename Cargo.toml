@@ -1,0 +1,26 @@
+[package]
+name = "rs-quickjs"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/surveria/rs-quickjs"
+description = "A small JavaScript engine prototype written in safe Rust, using QuickJS as a reference."
+readme = "README.md"
+
+[lib]
+name = "rs_quickjs"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rsqjs"
+path = "src/bin/rsqjs.rs"
+
+[dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+missing_errors_doc = "allow"
+module_name_repetitions = "allow"
