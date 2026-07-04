@@ -89,6 +89,21 @@ struct Binding {
     kind: DeclKind,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+enum Completion {
+    Normal(Value),
+    Throw(Value),
+}
+
+impl Completion {
+    fn into_result(self) -> Result<Value> {
+        match self {
+            Self::Normal(value) => Ok(value),
+            Self::Throw(value) => Err(Error::runtime(format!("uncaught throw: {value}"))),
+        }
+    }
+}
+
 impl Context {
     #[must_use]
     pub const fn new(limits: RuntimeLimits) -> Self {
@@ -145,15 +160,10 @@ impl Context {
 
     fn eval_program(&mut self, program: &Program) -> Result<Value> {
         self.hoist_var_declarations(&program.statements)?;
-        let mut last = Value::Undefined;
-        for statement in &program.statements {
-            self.step()?;
-            last = self.eval_statement(statement)?;
-        }
-        Ok(last)
+        self.eval_block(&program.statements)?.into_result()
     }
 
-    fn eval_statement(&mut self, statement: &Stmt) -> Result<Value> {
+    fn eval_statement(&mut self, statement: &Stmt) -> Result<Completion> {
         match statement {
             Stmt::Block(statements) => self.eval_block(statements),
             Stmt::If {
@@ -167,15 +177,20 @@ impl Context {
                 } else if let Some(alternate) = alternate {
                     self.eval_statement(alternate)
                 } else {
-                    Ok(Value::Undefined)
+                    Ok(Completion::Normal(Value::Undefined))
                 }
             }
+            Stmt::TryCatch {
+                body,
+                catch_param,
+                catch_body,
+            } => self.eval_try_catch(body, catch_param, catch_body),
             Stmt::Throw(expr) => {
                 let value = self.eval_expr(expr)?;
-                Err(Error::runtime(format!("uncaught throw: {value}")))
+                Ok(Completion::Throw(value))
             }
             Stmt::VarDecl { name, kind, init } => self.eval_declaration(name, *kind, init.as_ref()),
-            Stmt::Expr(expr) => self.eval_expr(expr),
+            Stmt::Expr(expr) => self.eval_expr(expr).map(Completion::Normal),
         }
     }
 
@@ -199,6 +214,12 @@ impl Context {
                     self.hoist_statement_vars(alternate)?;
                 }
                 Ok(())
+            }
+            Stmt::TryCatch {
+                body, catch_body, ..
+            } => {
+                self.hoist_var_declarations(body)?;
+                self.hoist_var_declarations(catch_body)
             }
             Stmt::VarDecl {
                 name,
@@ -236,7 +257,7 @@ impl Context {
         name: &str,
         kind: DeclKind,
         init: Option<&Expr>,
-    ) -> Result<Value> {
+    ) -> Result<Completion> {
         match kind {
             DeclKind::Var => {
                 if let Some(init) = init {
@@ -256,7 +277,7 @@ impl Context {
                 self.define(name, value, DeclKind::Const)?;
             }
         }
-        Ok(Value::Undefined)
+        Ok(Completion::Normal(Value::Undefined))
     }
 
     fn eval_optional_init(&mut self, init: Option<&Expr>) -> Result<Value> {
@@ -290,13 +311,58 @@ impl Context {
         }
     }
 
-    fn eval_block(&mut self, statements: &[Stmt]) -> Result<Value> {
+    fn eval_block(&mut self, statements: &[Stmt]) -> Result<Completion> {
         let mut last = Value::Undefined;
         for statement in statements {
             self.step()?;
-            last = self.eval_statement(statement)?;
+            match self.eval_statement(statement)? {
+                Completion::Normal(value) => last = value,
+                Completion::Throw(value) => return Ok(Completion::Throw(value)),
+            }
         }
-        Ok(last)
+        Ok(Completion::Normal(last))
+    }
+
+    fn eval_try_catch(
+        &mut self,
+        body: &[Stmt],
+        catch_param: &str,
+        catch_body: &[Stmt],
+    ) -> Result<Completion> {
+        match self.eval_block(body)? {
+            Completion::Normal(value) => Ok(Completion::Normal(value)),
+            Completion::Throw(value) => self.eval_catch(catch_param, value, catch_body),
+        }
+    }
+
+    fn eval_catch(
+        &mut self,
+        catch_param: &str,
+        value: Value,
+        catch_body: &[Stmt],
+    ) -> Result<Completion> {
+        let previous = self.globals.remove(catch_param);
+        if previous.is_none() {
+            self.ensure_binding_capacity(catch_param)?;
+        }
+        self.checked_value(value.clone())?;
+        self.globals.insert(
+            catch_param.to_owned(),
+            Binding {
+                value,
+                mutable: true,
+                kind: DeclKind::Let,
+            },
+        );
+        let result = self.eval_block(catch_body);
+        let removed = self.globals.remove(catch_param);
+        if removed.is_none() {
+            return Err(Error::runtime("catch binding disappeared"));
+        }
+        if let Some(previous) = previous {
+            self.globals.insert(catch_param.to_owned(), previous);
+        }
+        result
     }
 
     fn eval_unary(op: UnaryOp, value: &Value) -> Result<Value> {

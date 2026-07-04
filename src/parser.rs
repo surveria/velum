@@ -49,6 +49,9 @@ impl Parser {
         if self.match_kind(&TokenKind::If) {
             return self.if_statement();
         }
+        if self.match_kind(&TokenKind::Try) {
+            return self.try_statement();
+        }
         if self.match_kind(&TokenKind::Throw) {
             return self.throw_statement();
         }
@@ -68,6 +71,10 @@ impl Parser {
     }
 
     fn block(&mut self) -> Result<Stmt> {
+        Ok(Stmt::Block(self.block_statements()?))
+    }
+
+    fn block_statements(&mut self) -> Result<Vec<Stmt>> {
         let mut statements = Vec::new();
         while !self.check(&TokenKind::RBrace) {
             if self.at_end() {
@@ -76,7 +83,7 @@ impl Parser {
             statements.push(self.statement()?);
         }
         self.consume(&TokenKind::RBrace, "expected '}' after block")?;
-        Ok(Stmt::Block(statements))
+        Ok(statements)
     }
 
     fn if_statement(&mut self) -> Result<Stmt> {
@@ -93,6 +100,22 @@ impl Parser {
             condition,
             consequent,
             alternate,
+        })
+    }
+
+    fn try_statement(&mut self) -> Result<Stmt> {
+        self.consume(&TokenKind::LBrace, "expected '{' after 'try'")?;
+        let body = self.block_statements()?;
+        self.consume(&TokenKind::Catch, "expected 'catch' after try block")?;
+        self.consume(&TokenKind::LParen, "expected '(' after 'catch'")?;
+        let catch_param = self.consume_identifier("expected catch binding name")?;
+        self.consume(&TokenKind::RParen, "expected ')' after catch binding")?;
+        self.consume(&TokenKind::LBrace, "expected '{' after catch binding")?;
+        let catch_body = self.block_statements()?;
+        Ok(Stmt::TryCatch {
+            body,
+            catch_param,
+            catch_body,
         })
     }
 

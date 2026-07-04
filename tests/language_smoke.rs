@@ -114,6 +114,50 @@ fn evaluates_if_blocks_and_throw_statements() -> TestResult {
 }
 
 #[test]
+fn catches_thrown_values() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let marker = "outer";
+        let value = 0;
+        try {
+            throw "boom";
+            value = 1;
+        } catch (marker) {
+            print(marker);
+            value = 42;
+        }
+        if (marker !== "outer") {
+            throw new Test262Error("catch binding leaked");
+        }
+        value
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_optional_value(
+        context.get_global("marker"),
+        &Value::String("outer".to_owned()),
+    )?;
+    ensure_output(context.output(), &["boom".to_owned()])?;
+
+    let Err(error) = eval(
+        r#"
+        try {
+            throw "first";
+        } catch (error) {
+            throw "second";
+        }
+        "#,
+    ) else {
+        return Err("expected rethrow from catch block to fail".into());
+    };
+    ensure_error_kind(&error, "runtime")
+}
+
+#[test]
 fn enforces_resource_limits() -> TestResult {
     let limits = RuntimeLimits {
         max_source_len: 8,

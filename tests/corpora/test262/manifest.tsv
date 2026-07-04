@@ -1,5 +1,5 @@
 # case_id	path	mode	reason
 numeric-decimal-literals	test/language/literals/numeric/S7.8.3_A1.1_T1.js	run	official Test262 numeric literal smoke
 boolean-literal-constructor	test/language/literals/boolean/S7.8.2_A1_T1.js	run	official Test262 Boolean function smoke
-variable-hoisting	test/language/statements/variable/S12.2_A1.js	skip	requires try/catch, assert.throws, and function expressions after basic var hoisting
+variable-hoisting	test/language/statements/variable/S12.2_A1.js	skip	requires assert.throws, function expressions, conditional operator, bitwise &, and ReferenceError after var hoisting and try/catch
 string-negative-parse	test/language/literals/string/S7.8.4_A1.1_T1.js	negative-parse	official Test262 negative parse smoke

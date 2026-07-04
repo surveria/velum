@@ -32,11 +32,14 @@ const PATH_HOST_PRINT: &str = "tests/engine_cases/host_print.js";
 const PATH_CONST_ASSIGNMENT: &str = "tests/engine_cases/const_assignment_error.js";
 const PATH_SHORT_CIRCUIT: &str = "tests/engine_cases/short_circuit.js";
 const PATH_VAR_HOISTING: &str = "tests/engine_cases/var_hoisting.js";
+const PATH_TRY_CATCH: &str = "tests/engine_cases/try_catch.js";
 const PATH_TEST262_ARITHMETIC: &str =
     "tests/corpora/test262/active/language/expressions/arithmetic.js";
 const PATH_TEST262_LET_CONST: &str = "tests/corpora/test262/active/language/bindings/let_const.js";
 const PATH_TEST262_VAR_HOISTING: &str =
     "tests/corpora/test262/active/language/bindings/var_hoisting.js";
+const PATH_TEST262_TRY_CATCH: &str =
+    "tests/corpora/test262/active/language/statements/try_catch.js";
 const PATH_QUICKJS_PRINT_ARITHMETIC: &str =
     "tests/corpora/quickjs_differential/active/print_arithmetic.js";
 const PATH_QUICKJS_PRINT_BINDING: &str =
@@ -44,10 +47,12 @@ const PATH_QUICKJS_PRINT_BINDING: &str =
 const PATH_QUICKJS_BOOLEAN_CONVERSION: &str =
     "tests/corpora/quickjs_differential/active/boolean_conversion.js";
 const PATH_QUICKJS_VAR_HOISTING: &str = "tests/corpora/quickjs_differential/active/var_hoisting.js";
+const PATH_QUICKJS_TRY_CATCH: &str = "tests/corpora/quickjs_differential/active/try_catch.js";
 const PATH_BENCH_ARITHMETIC: &str = "tests/corpora/benchmarks/active/arithmetic_chain.js";
 const PATH_BENCH_STRING: &str = "tests/corpora/benchmarks/active/string_concat.js";
 const PATH_BENCH_BOOLEAN: &str = "tests/corpora/benchmarks/active/boolean_conversion.js";
 const PATH_BENCH_VAR_HOISTING: &str = "tests/corpora/benchmarks/active/var_hoisting.js";
+const PATH_BENCH_TRY_CATCH: &str = "tests/corpora/benchmarks/active/try_catch.js";
 
 pub fn engine_cases() -> Vec<EngineCase> {
     vec![
@@ -82,6 +87,14 @@ pub fn engine_cases() -> Vec<EngineCase> {
                 value: "42",
             },
         },
+        EngineCase {
+            id: "try_catch",
+            path: PATH_TRY_CATCH,
+            expectation: Expectation::OutputAndValue {
+                output: &["boom"],
+                value: "42",
+            },
+        },
     ]
 }
 
@@ -100,6 +113,11 @@ pub fn test262_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/bindings/var_hoisting",
             path: PATH_TEST262_VAR_HOISTING,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/statements/try_catch",
+            path: PATH_TEST262_TRY_CATCH,
             expectation: Expectation::Value("42"),
         },
     ]
@@ -123,6 +141,10 @@ pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
             id: "var_hoisting",
             path: PATH_QUICKJS_VAR_HOISTING,
         },
+        DifferentialCase {
+            id: "try_catch",
+            path: PATH_QUICKJS_TRY_CATCH,
+        },
     ]
 }
 
@@ -143,6 +165,10 @@ pub fn benchmark_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "var_hoisting",
             path: PATH_BENCH_VAR_HOISTING,
+        },
+        BenchmarkCase {
+            id: "try_catch",
+            path: PATH_BENCH_TRY_CATCH,
         },
     ]
 }

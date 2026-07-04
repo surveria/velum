@@ -13,6 +13,11 @@ pub enum Stmt {
         consequent: Box<Self>,
         alternate: Option<Box<Self>>,
     },
+    TryCatch {
+        body: Vec<Self>,
+        catch_param: String,
+        catch_body: Vec<Self>,
+    },
     Throw(Expr),
     VarDecl {
         name: String,
