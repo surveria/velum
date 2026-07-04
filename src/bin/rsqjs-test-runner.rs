@@ -2,6 +2,8 @@ use std::{
     env, fmt, fs,
     path::{Path, PathBuf},
     process,
+    process::Command,
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context as _, bail};
@@ -9,39 +11,38 @@ use rs_quickjs::{Runtime, Value};
 use tabled::{Table, Tabled};
 
 const USAGE: &str = "usage: rsqjs-test-runner --report <path>";
-const STATUS_PASSED: &str = "passed";
-const STATUS_FAILED: &str = "failed";
-const STATUS_SKIPPED: &str = "skipped";
-const SUITE_ENGINE: &str = "engine";
-const SUITE_TEST262: &str = "test262";
-const SUITE_QUICKJS: &str = "quickjs-reference";
+const STATUS_PASSED: &str = "✅ passed";
+const STATUS_FAILED: &str = "❌ failed";
+const STATUS_SKIPPED: &str = "🟡 skipped";
+const STATUS_MEASURED: &str = "✅ measured";
+const STATUS_NOT_CONFIGURED: &str = "🟡 not configured";
 const REPORT_TITLE: &str = "# rs-quickjs Test Report";
 const RUNNER_NAME: &str = "`rsqjs-test-runner`";
 const BASIS_POINTS_SCALE: usize = 10_000;
 const PERCENT_SCALE: usize = 100;
+const BENCH_ITERATIONS: usize = 50;
+const NANOS_PER_MICROSECOND: u128 = 1_000;
+const NANOS_PER_MILLISECOND: u128 = 1_000_000;
+const QUICKJS_ENV: &str = "RSQJS_QUICKJS";
 
-const CASE_ARITHMETIC: &str = "arithmetic_precedence";
-const CASE_HOST_PRINT: &str = "host_print";
-const CASE_CONST_ASSIGNMENT: &str = "const_assignment_error";
-const CASE_SHORT_CIRCUIT: &str = "short_circuit";
-const CASE_TEST262: &str = "test262_corpus";
-const CASE_QUICKJS: &str = "quickjs_differential";
+const REASON_MATCHED: &str = "matched expected behavior";
+const REASON_QUICKJS_ENV_MISSING: &str = "set RSQJS_QUICKJS=/path/to/qjs to enable";
+const REASON_TEST262_EXTERNAL_MISSING: &str =
+    "full upstream Test262 checkout is not configured yet";
 
 const PATH_ARITHMETIC: &str = "tests/engine_cases/arithmetic_precedence.js";
 const PATH_HOST_PRINT: &str = "tests/engine_cases/host_print.js";
 const PATH_CONST_ASSIGNMENT: &str = "tests/engine_cases/const_assignment_error.js";
 const PATH_SHORT_CIRCUIT: &str = "tests/engine_cases/short_circuit.js";
-
-const EXPECTED_ARITHMETIC_VALUE: &str = "5";
-const EXPECTED_HOST_PRINT_VALUE: &str = "id-7";
-const EXPECTED_HOST_PRINT_OUTPUT: &[&str] = &["hello camera"];
-const EXPECTED_SHORT_CIRCUIT_VALUE: &str = "ok";
-const EXPECTED_CONST_ASSIGNMENT_ERROR: &str = "assignment to constant";
-
-const REASON_MATCHED: &str = "matched expected behavior";
-const REASON_TEST262_SKIPPED: &str = "Test262 corpus integration is not wired into the runner yet";
-const REASON_QUICKJS_SKIPPED: &str =
-    "QuickJS reference binary and differential harness are not wired yet";
+const PATH_TEST262_ARITHMETIC: &str =
+    "tests/corpora/test262/active/language/expressions/arithmetic.js";
+const PATH_TEST262_LET_CONST: &str = "tests/corpora/test262/active/language/bindings/let_const.js";
+const PATH_QUICKJS_PRINT_ARITHMETIC: &str =
+    "tests/corpora/quickjs_differential/active/print_arithmetic.js";
+const PATH_QUICKJS_PRINT_BINDING: &str =
+    "tests/corpora/quickjs_differential/active/print_binding.js";
+const PATH_BENCH_ARITHMETIC: &str = "tests/corpora/benchmarks/active/arithmetic_chain.js";
+const PATH_BENCH_STRING: &str = "tests/corpora/benchmarks/active/string_concat.js";
 
 fn main() {
     if let Err(error) = run() {
@@ -52,16 +53,17 @@ fn main() {
 
 fn run() -> anyhow::Result<()> {
     let config = Config::from_args(env::args().skip(1))?;
-    let report = run_all_cases();
+    let quickjs = env::var_os(QUICKJS_ENV).map(PathBuf::from);
+    let report = build_report(quickjs.as_deref());
     write_report(&config.report_path, &report)?;
 
-    if report.failed == 0 {
+    if report.failed_count() == 0 {
         return Ok(());
     }
 
     bail!(
         "test runner recorded {} failed case(s); report written to {}",
-        report.failed,
+        report.failed_count(),
         config.report_path.display()
     )
 }
@@ -92,6 +94,74 @@ impl Config {
 }
 
 #[derive(Debug)]
+struct FullReport {
+    corpora: Vec<CorpusReport>,
+    benchmarks: BenchmarkReport,
+}
+
+impl FullReport {
+    fn failed_count(&self) -> usize {
+        let corpus_failures = self
+            .corpora
+            .iter()
+            .map(CorpusReport::failed)
+            .fold(0usize, usize::saturating_add);
+        corpus_failures.saturating_add(self.benchmarks.failed)
+    }
+}
+
+#[derive(Debug)]
+struct CorpusReport {
+    name: &'static str,
+    rows: Vec<CaseRow>,
+}
+
+impl CorpusReport {
+    const fn total(&self) -> usize {
+        self.rows.len()
+    }
+
+    fn passed(&self) -> usize {
+        self.rows
+            .iter()
+            .filter(|row| row.status == STATUS_PASSED)
+            .count()
+    }
+
+    fn failed(&self) -> usize {
+        self.rows
+            .iter()
+            .filter(|row| row.status == STATUS_FAILED)
+            .count()
+    }
+
+    fn skipped(&self) -> usize {
+        self.rows
+            .iter()
+            .filter(|row| row.status == STATUS_SKIPPED)
+            .count()
+    }
+}
+
+#[derive(Debug, Tabled)]
+struct CorpusSummaryRow {
+    corpus: String,
+    total: usize,
+    passed: String,
+    failed: String,
+    skipped: String,
+    pass_rate: String,
+}
+
+#[derive(Debug, Tabled)]
+struct CaseRow {
+    case: String,
+    status: String,
+    source: String,
+    detail: String,
+}
+
+#[derive(Debug)]
 struct EngineCase {
     id: &'static str,
     path: &'static str,
@@ -109,130 +179,140 @@ enum Expectation {
 }
 
 #[derive(Debug)]
-struct SkipCase {
-    suite: &'static str,
+struct DifferentialCase {
     id: &'static str,
-    reason: &'static str,
+    path: &'static str,
 }
 
 #[derive(Debug)]
-struct TestReport {
-    rows: Vec<ReportRow>,
-    passed: usize,
+struct BenchmarkCase {
+    id: &'static str,
+    path: &'static str,
+}
+
+#[derive(Debug)]
+struct BenchmarkReport {
+    rows: Vec<BenchmarkRow>,
+    measured: usize,
     failed: usize,
     skipped: usize,
 }
 
-impl TestReport {
-    const fn total(&self) -> usize {
-        self.passed
-            .saturating_add(self.failed)
-            .saturating_add(self.skipped)
-    }
-}
-
 #[derive(Debug, Tabled)]
-struct ReportRow {
-    suite: String,
-    case: String,
+struct BenchmarkRow {
+    benchmark: String,
     status: String,
     source: String,
+    iterations: usize,
+    rs_quickjs_avg: String,
+    quickjs_avg: String,
+    ratio: String,
     detail: String,
 }
 
-fn run_all_cases() -> TestReport {
-    let mut report = TestReport {
-        rows: Vec::new(),
-        passed: 0,
-        failed: 0,
-        skipped: 0,
-    };
-
-    for case in engine_cases() {
-        let row = run_engine_case(&case);
-        report.record(row);
-    }
-
-    for case in skipped_cases() {
-        report.record(ReportRow {
-            suite: case.suite.to_owned(),
-            case: case.id.to_owned(),
-            status: STATUS_SKIPPED.to_owned(),
-            source: "-".to_owned(),
-            detail: case.reason.to_owned(),
-        });
-    }
-
-    report
-}
-
-impl TestReport {
-    fn record(&mut self, row: ReportRow) {
-        if row.status == STATUS_PASSED {
-            self.passed = self.passed.saturating_add(1);
-        } else if row.status == STATUS_SKIPPED {
-            self.skipped = self.skipped.saturating_add(1);
-        } else {
-            self.failed = self.failed.saturating_add(1);
-        }
-        self.rows.push(row);
+fn build_report(quickjs: Option<&Path>) -> FullReport {
+    let corpora = vec![
+        run_engine_corpus(),
+        run_test262_corpus(),
+        run_quickjs_corpus(quickjs),
+    ];
+    let benchmarks = run_benchmarks(quickjs);
+    FullReport {
+        corpora,
+        benchmarks,
     }
 }
 
-fn engine_cases() -> Vec<EngineCase> {
-    vec![
-        EngineCase {
-            id: CASE_ARITHMETIC,
+fn run_engine_corpus() -> CorpusReport {
+    let rows = vec![
+        run_engine_case(&EngineCase {
+            id: "arithmetic_precedence",
             path: PATH_ARITHMETIC,
-            expectation: Expectation::Value(EXPECTED_ARITHMETIC_VALUE),
-        },
-        EngineCase {
-            id: CASE_HOST_PRINT,
+            expectation: Expectation::Value("5"),
+        }),
+        run_engine_case(&EngineCase {
+            id: "host_print",
             path: PATH_HOST_PRINT,
             expectation: Expectation::OutputAndValue {
-                output: EXPECTED_HOST_PRINT_OUTPUT,
-                value: EXPECTED_HOST_PRINT_VALUE,
+                output: &["hello camera"],
+                value: "id-7",
             },
-        },
-        EngineCase {
-            id: CASE_CONST_ASSIGNMENT,
+        }),
+        run_engine_case(&EngineCase {
+            id: "const_assignment_error",
             path: PATH_CONST_ASSIGNMENT,
-            expectation: Expectation::ErrorContains(EXPECTED_CONST_ASSIGNMENT_ERROR),
-        },
-        EngineCase {
-            id: CASE_SHORT_CIRCUIT,
+            expectation: Expectation::ErrorContains("assignment to constant"),
+        }),
+        run_engine_case(&EngineCase {
+            id: "short_circuit",
             path: PATH_SHORT_CIRCUIT,
-            expectation: Expectation::Value(EXPECTED_SHORT_CIRCUIT_VALUE),
-        },
-    ]
+            expectation: Expectation::Value("ok"),
+        }),
+    ];
+    CorpusReport {
+        name: "Engine fixtures",
+        rows,
+    }
 }
 
-fn skipped_cases() -> Vec<SkipCase> {
+fn run_test262_corpus() -> CorpusReport {
+    let mut rows = vec![
+        run_engine_case(&EngineCase {
+            id: "language/expressions/arithmetic",
+            path: PATH_TEST262_ARITHMETIC,
+            expectation: Expectation::Value("5"),
+        }),
+        run_engine_case(&EngineCase {
+            id: "language/bindings/let_const",
+            path: PATH_TEST262_LET_CONST,
+            expectation: Expectation::Value("42"),
+        }),
+    ];
+    rows.push(CaseRow {
+        case: "full-upstream-test262".to_owned(),
+        status: STATUS_SKIPPED.to_owned(),
+        source: "RSQJS_TEST262_DIR".to_owned(),
+        detail: REASON_TEST262_EXTERNAL_MISSING.to_owned(),
+    });
+    CorpusReport {
+        name: "Test262 active subset",
+        rows,
+    }
+}
+
+fn run_quickjs_corpus(quickjs: Option<&Path>) -> CorpusReport {
+    let rows = quickjs_differential_cases()
+        .into_iter()
+        .map(|case| run_differential_case(&case, quickjs))
+        .collect();
+    CorpusReport {
+        name: "QuickJS differential",
+        rows,
+    }
+}
+
+fn quickjs_differential_cases() -> Vec<DifferentialCase> {
     vec![
-        SkipCase {
-            suite: SUITE_TEST262,
-            id: CASE_TEST262,
-            reason: REASON_TEST262_SKIPPED,
+        DifferentialCase {
+            id: "print_arithmetic",
+            path: PATH_QUICKJS_PRINT_ARITHMETIC,
         },
-        SkipCase {
-            suite: SUITE_QUICKJS,
-            id: CASE_QUICKJS,
-            reason: REASON_QUICKJS_SKIPPED,
+        DifferentialCase {
+            id: "print_binding",
+            path: PATH_QUICKJS_PRINT_BINDING,
         },
     ]
 }
 
-fn run_engine_case(case: &EngineCase) -> ReportRow {
+fn run_engine_case(case: &EngineCase) -> CaseRow {
     match execute_engine_case(case) {
-        Ok(()) => ReportRow {
-            suite: SUITE_ENGINE.to_owned(),
+        Ok(()) => CaseRow {
             case: case.id.to_owned(),
             status: STATUS_PASSED.to_owned(),
             source: case.path.to_owned(),
             detail: REASON_MATCHED.to_owned(),
         },
-        Err(error) => ReportRow {
-            suite: SUITE_ENGINE.to_owned(),
+        Err(error) => CaseRow {
             case: case.id.to_owned(),
             status: STATUS_FAILED.to_owned(),
             source: case.path.to_owned(),
@@ -281,12 +361,206 @@ fn execute_engine_case(case: &EngineCase) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn run_differential_case(case: &DifferentialCase, quickjs: Option<&Path>) -> CaseRow {
+    let Some(quickjs) = quickjs else {
+        return CaseRow {
+            case: case.id.to_owned(),
+            status: STATUS_SKIPPED.to_owned(),
+            source: case.path.to_owned(),
+            detail: REASON_QUICKJS_ENV_MISSING.to_owned(),
+        };
+    };
+
+    match execute_differential_case(case, quickjs) {
+        Ok(()) => CaseRow {
+            case: case.id.to_owned(),
+            status: STATUS_PASSED.to_owned(),
+            source: case.path.to_owned(),
+            detail: "rs-quickjs stdout matched QuickJS stdout".to_owned(),
+        },
+        Err(error) => CaseRow {
+            case: case.id.to_owned(),
+            status: STATUS_FAILED.to_owned(),
+            source: case.path.to_owned(),
+            detail: error.to_string(),
+        },
+    }
+}
+
+fn execute_differential_case(case: &DifferentialCase, quickjs: &Path) -> anyhow::Result<()> {
+    let source = fs::read_to_string(case.path)
+        .with_context(|| format!("failed to read differential source '{}'", case.path))?;
+    let ours = run_source_with_output(&source)?;
+    let quickjs_output = Command::new(quickjs)
+        .arg(case.path)
+        .output()
+        .with_context(|| format!("failed to execute QuickJS '{}'", quickjs.display()))?;
+    if !quickjs_output.status.success() {
+        bail!(
+            "QuickJS failed for '{}': {}",
+            case.path,
+            String::from_utf8_lossy(&quickjs_output.stderr)
+        );
+    }
+    let quickjs_stdout = String::from_utf8_lossy(&quickjs_output.stdout);
+    if ours != quickjs_stdout {
+        bail!(
+            "stdout mismatch: rs-quickjs {}, QuickJS {}",
+            DisplayText(&ours),
+            DisplayText(&quickjs_stdout)
+        );
+    }
+    Ok(())
+}
+
+fn run_source_with_output(source: &str) -> anyhow::Result<String> {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context
+        .eval(source)
+        .context("rs-quickjs evaluation failed")?;
+    let mut output = context.take_output().join("\n");
+    if !output.is_empty() {
+        output.push('\n');
+    }
+    if value != Value::Undefined {
+        output.push_str(&value.to_string());
+        output.push('\n');
+    }
+    Ok(output)
+}
+
+fn run_benchmarks(quickjs: Option<&Path>) -> BenchmarkReport {
+    let mut report = BenchmarkReport {
+        rows: Vec::new(),
+        measured: 0,
+        failed: 0,
+        skipped: 0,
+    };
+    for case in benchmark_cases() {
+        let row = run_benchmark_case(&case, quickjs);
+        if row.status == STATUS_FAILED {
+            report.failed = report.failed.saturating_add(1);
+        } else {
+            report.measured = report.measured.saturating_add(1);
+            if row.quickjs_avg == STATUS_NOT_CONFIGURED {
+                report.skipped = report.skipped.saturating_add(1);
+            }
+        }
+        report.rows.push(row);
+    }
+    report
+}
+
+fn benchmark_cases() -> Vec<BenchmarkCase> {
+    vec![
+        BenchmarkCase {
+            id: "arithmetic_chain",
+            path: PATH_BENCH_ARITHMETIC,
+        },
+        BenchmarkCase {
+            id: "string_concat",
+            path: PATH_BENCH_STRING,
+        },
+    ]
+}
+
+fn run_benchmark_case(case: &BenchmarkCase, quickjs: Option<&Path>) -> BenchmarkRow {
+    match measure_rs_quickjs(case.path, BENCH_ITERATIONS) {
+        Ok(ours) => {
+            let quickjs_measurement = quickjs
+                .map(|quickjs| measure_quickjs(quickjs, case.path, BENCH_ITERATIONS))
+                .transpose();
+            match quickjs_measurement {
+                Ok(Some(quickjs_duration)) => BenchmarkRow {
+                    benchmark: case.id.to_owned(),
+                    status: STATUS_MEASURED.to_owned(),
+                    source: case.path.to_owned(),
+                    iterations: BENCH_ITERATIONS,
+                    rs_quickjs_avg: format_duration(ours),
+                    quickjs_avg: format_duration(quickjs_duration),
+                    ratio: ratio(ours, quickjs_duration),
+                    detail: "sequential benchmark completed".to_owned(),
+                },
+                Ok(None) => BenchmarkRow {
+                    benchmark: case.id.to_owned(),
+                    status: STATUS_MEASURED.to_owned(),
+                    source: case.path.to_owned(),
+                    iterations: BENCH_ITERATIONS,
+                    rs_quickjs_avg: format_duration(ours),
+                    quickjs_avg: STATUS_NOT_CONFIGURED.to_owned(),
+                    ratio: "-".to_owned(),
+                    detail: REASON_QUICKJS_ENV_MISSING.to_owned(),
+                },
+                Err(error) => BenchmarkRow {
+                    benchmark: case.id.to_owned(),
+                    status: STATUS_FAILED.to_owned(),
+                    source: case.path.to_owned(),
+                    iterations: BENCH_ITERATIONS,
+                    rs_quickjs_avg: format_duration(ours),
+                    quickjs_avg: STATUS_FAILED.to_owned(),
+                    ratio: "-".to_owned(),
+                    detail: error.to_string(),
+                },
+            }
+        }
+        Err(error) => BenchmarkRow {
+            benchmark: case.id.to_owned(),
+            status: STATUS_FAILED.to_owned(),
+            source: case.path.to_owned(),
+            iterations: BENCH_ITERATIONS,
+            rs_quickjs_avg: STATUS_FAILED.to_owned(),
+            quickjs_avg: "-".to_owned(),
+            ratio: "-".to_owned(),
+            detail: error.to_string(),
+        },
+    }
+}
+
+fn measure_rs_quickjs(path: &str, iterations: usize) -> anyhow::Result<Duration> {
+    let source =
+        fs::read_to_string(path).with_context(|| format!("failed to read benchmark '{path}'"))?;
+    let start = Instant::now();
+    for _ in 0..iterations {
+        let runtime = Runtime::new();
+        let mut context = runtime.context();
+        context
+            .eval(&source)
+            .with_context(|| format!("benchmark '{path}' failed in rs-quickjs"))?;
+    }
+    avg_duration(start.elapsed(), iterations)
+}
+
+fn measure_quickjs(quickjs: &Path, path: &str, iterations: usize) -> anyhow::Result<Duration> {
+    let start = Instant::now();
+    for _ in 0..iterations {
+        let output = Command::new(quickjs)
+            .arg(path)
+            .output()
+            .with_context(|| format!("failed to execute QuickJS '{}'", quickjs.display()))?;
+        if !output.status.success() {
+            bail!(
+                "QuickJS benchmark '{}' failed: {}",
+                path,
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+    avg_duration(start.elapsed(), iterations)
+}
+
+fn avg_duration(total: Duration, iterations: usize) -> anyhow::Result<Duration> {
+    let divisor = u32::try_from(iterations).context("benchmark iteration count is too large")?;
+    total
+        .checked_div(divisor)
+        .context("benchmark iteration count must be non-zero")
+}
+
 fn ensure_value(case_id: &str, actual: &Value, expected: &str) -> anyhow::Result<()> {
     let actual_text = actual.to_string();
     if actual_text == expected {
         return Ok(());
     }
-
     bail!("case '{case_id}' expected value '{expected}', got '{actual_text}'")
 }
 
@@ -299,7 +573,6 @@ fn ensure_output(case_id: &str, actual: &[String], expected: &[&str]) -> anyhow:
             DisplaySlice(actual)
         );
     }
-
     for (actual_line, expected_line) in actual.iter().zip(expected.iter()) {
         if actual_line != expected_line {
             bail!(
@@ -310,48 +583,98 @@ fn ensure_output(case_id: &str, actual: &[String], expected: &[&str]) -> anyhow:
             );
         }
     }
-
     Ok(())
 }
 
-fn write_report(path: &Path, report: &TestReport) -> anyhow::Result<()> {
+fn write_report(path: &Path, report: &FullReport) -> anyhow::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create report directory '{}'", parent.display()))?;
     }
 
-    let table = Table::new(&report.rows).to_string();
-    let body = format!(
-        "{REPORT_TITLE}\n\nGenerated by {RUNNER_NAME}.\n\n\
-         ## Summary\n\n\
-         - Total: {}\n\
-         - Passed: {} ({})\n\
-         - Failed: {} ({})\n\
-         - Skipped: {} ({})\n\n\
-         ## Cases\n\n```text\n{}\n```\n",
-        report.total(),
-        report.passed,
-        percent(report.passed, report.total()),
-        report.failed,
-        percent(report.failed, report.total()),
-        report.skipped,
-        percent(report.skipped, report.total()),
-        table
-    );
-
+    let body = render_report(report);
     fs::write(path, body)
         .with_context(|| format!("failed to write test report '{}'", path.display()))
+}
+
+fn render_report(report: &FullReport) -> String {
+    let mut sections = vec![
+        REPORT_TITLE.to_owned(),
+        String::new(),
+        format!("Generated by {RUNNER_NAME}."),
+        String::new(),
+        "## Corpus Summary".to_owned(),
+        String::new(),
+        fenced_table(&Table::new(corpus_summary_rows(report))),
+    ];
+    for corpus in &report.corpora {
+        sections.push(format!("## {}", corpus.name));
+        sections.push(String::new());
+        sections.push(fenced_table(&Table::new(&corpus.rows)));
+    }
+    sections.push("## Benchmarks".to_owned());
+    sections.push(String::new());
+    sections.push(format!(
+        "- Measured: {}\n- Failed: {}\n- Skipped reference: {}",
+        report.benchmarks.measured, report.benchmarks.failed, report.benchmarks.skipped
+    ));
+    sections.push(String::new());
+    sections.push(fenced_table(&Table::new(&report.benchmarks.rows)));
+    sections.push(String::new());
+    sections.join("\n")
+}
+
+fn corpus_summary_rows(report: &FullReport) -> Vec<CorpusSummaryRow> {
+    report
+        .corpora
+        .iter()
+        .map(|corpus| CorpusSummaryRow {
+            corpus: corpus.name.to_owned(),
+            total: corpus.total(),
+            passed: format!("{} {}", corpus.passed(), STATUS_PASSED),
+            failed: format!("{} {}", corpus.failed(), STATUS_FAILED),
+            skipped: format!("{} {}", corpus.skipped(), STATUS_SKIPPED),
+            pass_rate: percent(corpus.passed(), corpus.total()),
+        })
+        .collect()
+}
+
+fn fenced_table(table: &Table) -> String {
+    format!("```text\n{table}\n```")
 }
 
 fn percent(part: usize, total: usize) -> String {
     if total == 0 {
         return "0.00%".to_owned();
     }
-
     let basis_points = part.saturating_mul(BASIS_POINTS_SCALE) / total;
     let major = basis_points / PERCENT_SCALE;
     let minor = basis_points % PERCENT_SCALE;
     format!("{major}.{minor:02}%")
+}
+
+fn format_duration(duration: Duration) -> String {
+    let nanos = duration.as_nanos();
+    if nanos < NANOS_PER_MICROSECOND {
+        return format!("{nanos} ns");
+    }
+    if nanos < NANOS_PER_MILLISECOND {
+        return format!("{} us", nanos / NANOS_PER_MICROSECOND);
+    }
+    format!("{} ms", nanos / NANOS_PER_MILLISECOND)
+}
+
+fn ratio(ours: Duration, quickjs: Duration) -> String {
+    let quickjs_nanos = quickjs.as_nanos();
+    if quickjs_nanos == 0 {
+        return "-".to_owned();
+    }
+    let basis_points = ours.as_nanos().saturating_mul(BASIS_POINTS_SCALE as u128) / quickjs_nanos;
+    format!(
+        "{}.{:02}x",
+        basis_points / PERCENT_SCALE as u128,
+        basis_points % PERCENT_SCALE as u128
+    )
 }
 
 struct DisplaySlice<'a, T>(&'a [T]);
@@ -369,5 +692,13 @@ impl<T: fmt::Display> fmt::Display for DisplaySlice<'_, T> {
             write!(formatter, "\"{item}\"")?;
         }
         formatter.write_str("]")
+    }
+}
+
+struct DisplayText<'a>(&'a str);
+
+impl fmt::Display for DisplayText<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "{:?}", self.0)
     }
 }
