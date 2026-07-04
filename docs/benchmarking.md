@@ -27,6 +27,15 @@ Set `RSQJS_QUICKJS_AUTO_SETUP=0` to disable automatic download and build. In tha
 
 The standard test script builds `target/release/rsqjs` and exposes it to the runner through `RSQJS_ENGINE`. Benchmark rows compare the release `rsqjs` CLI with the QuickJS `qjs` CLI sequentially.
 
+## Test262 Reference
+
+`scripts/test-all.sh` also prepares a pinned subset of the official Test262 corpus before running the Rust test runner. The setup order is:
+
+1. use `RSQJS_TEST262_DIR` when it points to a directory;
+2. download the files listed in `tests/corpora/test262/manifest.tsv` from Test262 commit `64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1` into `target/test262`.
+
+Set `RSQJS_TEST262_AUTO_SETUP=0` to disable automatic materialization. In that mode, upstream manifest rows that need source files are reported as skipped.
+
 ## Initial Targets
 
 - hello-world memory: within roughly 2x QuickJS on ARM Linux devices

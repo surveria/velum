@@ -10,6 +10,9 @@ use anyhow::{Context as _, bail};
 use rs_quickjs::{Runtime, Value};
 use tabled::{Table, Tabled};
 
+#[path = "rsqjs_test_runner/test262_external.rs"]
+mod test262_external;
+
 const USAGE: &str = "usage: rsqjs-test-runner --report <path>";
 const STATUS_PASSED: &str = "✅ passed";
 const STATUS_FAILED: &str = "❌ failed";
@@ -26,12 +29,11 @@ const NANOS_PER_MILLISECOND: u128 = 1_000_000;
 const RATIO_DECIMAL_SCALE: u128 = 100;
 const QUICKJS_ENV: &str = "RSQJS_QUICKJS";
 const ENGINE_ENV: &str = "RSQJS_ENGINE";
+const TEST262_ENV: &str = "RSQJS_TEST262_DIR";
 
 const REASON_MATCHED: &str = "matched expected behavior";
 const REASON_ENGINE_ENV_MISSING: &str = "set RSQJS_ENGINE=/path/to/rsqjs to enable benchmarks";
 const REASON_QUICKJS_ENV_MISSING: &str = "set RSQJS_QUICKJS=/path/to/qjs to enable";
-const REASON_TEST262_EXTERNAL_MISSING: &str =
-    "full upstream Test262 checkout is not configured yet";
 
 const PATH_ARITHMETIC: &str = "tests/engine_cases/arithmetic_precedence.js";
 const PATH_HOST_PRINT: &str = "tests/engine_cases/host_print.js";
@@ -58,7 +60,8 @@ fn run() -> anyhow::Result<()> {
     let config = Config::from_args(env::args().skip(1))?;
     let quickjs = env::var_os(QUICKJS_ENV).map(PathBuf::from);
     let engine = env::var_os(ENGINE_ENV).map(PathBuf::from);
-    let report = build_report(quickjs.as_deref(), engine.as_deref());
+    let test262 = env::var_os(TEST262_ENV).map(PathBuf::from);
+    let report = build_report(quickjs.as_deref(), engine.as_deref(), test262.as_deref());
     write_report(&config.report_path, &report)?;
 
     if report.failed_count() == 0 {
@@ -214,10 +217,15 @@ struct BenchmarkRow {
     detail: String,
 }
 
-fn build_report(quickjs: Option<&Path>, engine: Option<&Path>) -> FullReport {
+fn build_report(
+    quickjs: Option<&Path>,
+    engine: Option<&Path>,
+    test262: Option<&Path>,
+) -> FullReport {
     let corpora = vec![
         run_engine_corpus(),
         run_test262_corpus(),
+        run_test262_upstream_corpus(test262),
         run_quickjs_corpus(quickjs),
     ];
     let benchmarks = run_benchmarks(quickjs, engine);
@@ -260,7 +268,7 @@ fn run_engine_corpus() -> CorpusReport {
 }
 
 fn run_test262_corpus() -> CorpusReport {
-    let mut rows = vec![
+    let rows = vec![
         run_engine_case(&EngineCase {
             id: "language/expressions/arithmetic",
             path: PATH_TEST262_ARITHMETIC,
@@ -272,15 +280,16 @@ fn run_test262_corpus() -> CorpusReport {
             expectation: Expectation::Value("42"),
         }),
     ];
-    rows.push(CaseRow {
-        case: "full-upstream-test262".to_owned(),
-        status: STATUS_SKIPPED.to_owned(),
-        source: "RSQJS_TEST262_DIR".to_owned(),
-        detail: REASON_TEST262_EXTERNAL_MISSING.to_owned(),
-    });
     CorpusReport {
         name: "Test262 active subset",
         rows,
+    }
+}
+
+fn run_test262_upstream_corpus(test262: Option<&Path>) -> CorpusReport {
+    CorpusReport {
+        name: "Test262 upstream manifest",
+        rows: test262_external::run(test262),
     }
 }
 

@@ -30,3 +30,4 @@
 !/tests/**/*.md
 !/tests/**/*.rs
 !/tests/**/*.js
+!/tests/**/*.tsv

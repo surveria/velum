@@ -7,6 +7,13 @@ pub struct Program {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
+    Block(Vec<Self>),
+    If {
+        condition: Expr,
+        consequent: Box<Self>,
+        alternate: Option<Box<Self>>,
+    },
+    Throw(Expr),
     VarDecl {
         name: String,
         mutable: bool,
@@ -34,6 +41,10 @@ pub enum Expr {
     },
     Call {
         callee: Box<Self>,
+        args: Vec<Self>,
+    },
+    New {
+        constructor: String,
         args: Vec<Self>,
     },
 }
