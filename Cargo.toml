@@ -15,8 +15,13 @@ path = "src/lib.rs"
 name = "rsqjs"
 path = "src/bin/rsqjs.rs"
 
+[[bin]]
+name = "rsqjs-test-runner"
+path = "src/bin/rsqjs-test-runner.rs"
+
 [dependencies]
 anyhow = "1"
+tabled = "0.21.0"
 thiserror = "2"
 
 [lints.rust]
