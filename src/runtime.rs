@@ -12,6 +12,7 @@ const DEFAULT_MAX_EXPRESSION_DEPTH: usize = 256;
 const DEFAULT_MAX_RUNTIME_STEPS: usize = 100_000;
 const DEFAULT_MAX_STRING_LEN: usize = 65_536;
 const DEFAULT_MAX_BINDINGS: usize = 4_096;
+const BOOLEAN_NAME: &str = "Boolean";
 const HOST_PRINT_NAME: &str = "print";
 const TEST262_ERROR_NAME: &str = "Test262Error";
 
@@ -282,6 +283,7 @@ impl Context {
         };
 
         match name.as_str() {
+            BOOLEAN_NAME => self.eval_boolean_call(args),
             HOST_PRINT_NAME => {
                 let values = args
                     .iter()
@@ -298,6 +300,14 @@ impl Context {
             }
             _ => Err(Error::runtime(format!("'{name}' is not callable"))),
         }
+    }
+
+    fn eval_boolean_call(&mut self, args: &[Expr]) -> Result<Value> {
+        let Some(arg) = args.first() else {
+            return Ok(Value::Bool(false));
+        };
+        let value = self.eval_expr(arg)?;
+        Ok(Value::Bool(value.is_truthy()))
     }
 
     fn eval_new(&mut self, constructor: &str, args: &[Expr]) -> Result<Value> {

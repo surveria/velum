@@ -46,8 +46,11 @@ const PATH_QUICKJS_PRINT_ARITHMETIC: &str =
     "tests/corpora/quickjs_differential/active/print_arithmetic.js";
 const PATH_QUICKJS_PRINT_BINDING: &str =
     "tests/corpora/quickjs_differential/active/print_binding.js";
+const PATH_QUICKJS_BOOLEAN_CONVERSION: &str =
+    "tests/corpora/quickjs_differential/active/boolean_conversion.js";
 const PATH_BENCH_ARITHMETIC: &str = "tests/corpora/benchmarks/active/arithmetic_chain.js";
 const PATH_BENCH_STRING: &str = "tests/corpora/benchmarks/active/string_concat.js";
+const PATH_BENCH_BOOLEAN: &str = "tests/corpora/benchmarks/active/boolean_conversion.js";
 
 fn main() {
     if let Err(error) = run() {
@@ -314,6 +317,10 @@ fn quickjs_differential_cases() -> Vec<DifferentialCase> {
             id: "print_binding",
             path: PATH_QUICKJS_PRINT_BINDING,
         },
+        DifferentialCase {
+            id: "boolean_conversion",
+            path: PATH_QUICKJS_BOOLEAN_CONVERSION,
+        },
     ]
 }
 
@@ -474,6 +481,10 @@ fn benchmark_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "string_concat",
             path: PATH_BENCH_STRING,
+        },
+        BenchmarkCase {
+            id: "boolean_conversion",
+            path: PATH_BENCH_BOOLEAN,
         },
     ]
 }

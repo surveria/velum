@@ -49,6 +49,19 @@ fn supports_strings_and_host_print() -> TestResult {
 }
 
 #[test]
+fn supports_boolean_function_conversion() -> TestResult {
+    expect_value("Boolean()", &Value::Bool(false))?;
+    expect_value("Boolean(false)", &Value::Bool(false))?;
+    expect_value("Boolean(0)", &Value::Bool(false))?;
+    expect_value(r#"Boolean("")"#, &Value::Bool(false))?;
+    expect_value("Boolean(null)", &Value::Bool(false))?;
+    expect_value("Boolean(undefined)", &Value::Bool(false))?;
+    expect_value("Boolean(true)", &Value::Bool(true))?;
+    expect_value("Boolean(1)", &Value::Bool(true))?;
+    expect_value(r#"Boolean("camera")"#, &Value::Bool(true))
+}
+
+#[test]
 fn short_circuits_logical_operators() -> TestResult {
     expect_value("false && missing", &Value::Bool(false))?;
     expect_value(r#""ok" || missing"#, &Value::String("ok".to_owned()))
