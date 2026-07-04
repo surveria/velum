@@ -39,6 +39,7 @@ cargo run --bin rsqjs -- -e 'let x = 40 + 2; print("answer", x); x'
 
 ## Project Docs
 
+- [Project Rules](AGENTS.md)
 - [Architecture](docs/architecture.md)
 - [Roadmap](docs/roadmap.md)
 - [Benchmarking](docs/benchmarking.md)

@@ -1,12 +1,14 @@
-use std::fmt;
-
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, thiserror::Error)]
 pub enum Error {
+    #[error("lexer error at {offset}: {message}")]
     Lex { message: String, offset: usize },
+    #[error("parser error at {offset}: {message}")]
     Parse { message: String, offset: usize },
+    #[error("runtime error: {message}")]
     Runtime { message: String },
+    #[error("resource limit exceeded: {message}")]
     ResourceLimit { message: String },
 }
 
@@ -37,16 +39,3 @@ impl Error {
         }
     }
 }
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Lex { message, offset } => write!(f, "lexer error at {offset}: {message}"),
-            Self::Parse { message, offset } => write!(f, "parser error at {offset}: {message}"),
-            Self::Runtime { message } => write!(f, "runtime error: {message}"),
-            Self::ResourceLimit { message } => write!(f, "resource limit exceeded: {message}"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}

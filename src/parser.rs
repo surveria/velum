@@ -4,7 +4,7 @@ use crate::lexer::{Token, TokenKind};
 use crate::runtime::RuntimeLimits;
 use crate::value::Value;
 
-pub(crate) fn parse(tokens: Vec<Token>, limits: RuntimeLimits) -> Result<Program> {
+pub fn parse(tokens: Vec<Token>, limits: RuntimeLimits) -> Result<Program> {
     Parser::new(tokens, limits).parse()
 }
 
@@ -16,7 +16,7 @@ struct Parser {
 }
 
 impl Parser {
-    fn new(tokens: Vec<Token>, limits: RuntimeLimits) -> Self {
+    const fn new(tokens: Vec<Token>, limits: RuntimeLimits) -> Self {
         Self {
             tokens,
             cursor: 0,
@@ -210,7 +210,9 @@ impl Parser {
     }
 
     fn primary(&mut self) -> Result<Expr> {
-        let token = self.advance().clone();
+        let token = self
+            .advance()
+            .ok_or_else(|| Error::parse("expected expression", self.offset()))?;
         let expr = match token.kind {
             TokenKind::Number(value) => Expr::Literal(Value::Number(value)),
             TokenKind::String(value) => Expr::Literal(Value::String(value)),
@@ -237,7 +239,9 @@ impl Parser {
         let mut expr = next(self)?;
         while let Some((_, op)) = ops.iter().find(|(kind, _)| self.check(kind)) {
             let op = *op;
-            self.advance();
+            if self.advance().is_none() {
+                return Err(Error::parse("expected operator", self.offset()));
+            }
             let right = next(self)?;
             expr = Expr::Binary {
                 op,
@@ -252,21 +256,26 @@ impl Parser {
         &mut self,
         parse: impl FnOnce(&mut Self) -> Result<Expr>,
     ) -> Result<Expr> {
-        self.expression_depth += 1;
+        self.expression_depth = self
+            .expression_depth
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("expression nesting overflowed"))?;
         if self.expression_depth > self.limits.max_expression_depth {
-            self.expression_depth -= 1;
+            self.expression_depth = self.expression_depth.saturating_sub(1);
             return Err(Error::limit(format!(
                 "expression nesting exceeded {}",
                 self.limits.max_expression_depth
             )));
         }
         let result = parse(self);
-        self.expression_depth -= 1;
+        self.expression_depth = self.expression_depth.saturating_sub(1);
         result
     }
 
     fn consume_identifier(&mut self, message: &str) -> Result<String> {
-        let token = self.advance().clone();
+        let token = self
+            .advance()
+            .ok_or_else(|| Error::parse(message, self.offset()))?;
         match token.kind {
             TokenKind::Identifier(name) => Ok(name),
             _ => Err(Error::parse(message, token.offset)),
@@ -275,55 +284,61 @@ impl Parser {
 
     fn consume(&mut self, expected: &TokenKind, message: &str) -> Result<()> {
         if self.check(expected) {
-            self.advance();
-            Ok(())
+            if self.advance().is_some() {
+                Ok(())
+            } else {
+                Err(Error::parse(message, self.offset()))
+            }
         } else {
             Err(Error::parse(message, self.offset()))
         }
     }
 
     fn consume_optional_semicolon(&mut self) {
-        let _ = self.match_kind(&TokenKind::Semicolon);
+        self.match_kind(&TokenKind::Semicolon);
     }
 
     fn match_kind(&mut self, expected: &TokenKind) -> bool {
         if self.check(expected) {
-            self.advance();
-            true
+            self.advance().is_some()
         } else {
             false
         }
     }
 
     fn check(&self, expected: &TokenKind) -> bool {
-        token_kind_eq(&self.peek().kind, expected)
+        self.peek()
+            .is_some_and(|token| token_kind_eq(&token.kind, expected))
     }
 
-    fn advance(&mut self) -> &Token {
-        if !self.at_end() {
-            self.cursor += 1;
+    fn advance(&mut self) -> Option<Token> {
+        let token = self.peek()?.clone();
+        if !matches!(token.kind, TokenKind::Eof) {
+            self.cursor = self.cursor.saturating_add(1);
         }
-        self.previous()
+        Some(token)
     }
 
     fn at_end(&self) -> bool {
-        matches!(self.peek().kind, TokenKind::Eof)
+        self.peek()
+            .is_none_or(|token| matches!(token.kind, TokenKind::Eof))
     }
 
-    fn peek(&self) -> &Token {
-        &self.tokens[self.cursor]
-    }
-
-    fn previous(&self) -> &Token {
-        &self.tokens[self.cursor - 1]
+    fn peek(&self) -> Option<&Token> {
+        self.tokens.get(self.cursor)
     }
 
     fn offset(&self) -> usize {
-        self.peek().offset
+        self.peek()
+            .or_else(|| self.tokens.last())
+            .map_or(0, |token| token.offset)
     }
 
     fn previous_offset(&self) -> usize {
-        self.previous().offset
+        self.cursor
+            .checked_sub(1)
+            .and_then(|cursor| self.tokens.get(cursor))
+            .map_or_else(|| self.offset(), |token| token.offset)
     }
 }
 

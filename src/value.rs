@@ -21,7 +21,7 @@ impl Value {
     }
 
     #[must_use]
-    pub fn type_name(&self) -> &'static str {
+    pub const fn type_name(&self) -> &'static str {
         match self {
             Self::Undefined => "undefined",
             Self::Null => "object",
@@ -31,7 +31,7 @@ impl Value {
         }
     }
 
-    pub(crate) fn as_number(&self) -> Option<f64> {
+    pub(crate) const fn as_number(&self) -> Option<f64> {
         match self {
             Self::Number(value) => Some(*value),
             _ => None,

@@ -13,7 +13,7 @@ The current AST evaluator is deliberately simple. It lets us validate resource a
 
 ## Safety Policy
 
-The crate uses `#![forbid(unsafe_code)]` and the CI repeats this with `RUSTFLAGS=-Dunsafe-code`.
+The crate uses `#![deny(unsafe_code)]`, and the lint is also declared in `Cargo.toml`.
 
 If future performance work appears to require unsafe code, it must go through a separate design document with:
 

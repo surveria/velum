@@ -1,12 +1,12 @@
 use crate::value::Value;
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct Program {
-    pub(crate) statements: Vec<Stmt>,
+pub struct Program {
+    pub statements: Vec<Stmt>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum Stmt {
+pub enum Stmt {
     VarDecl {
         name: String,
         mutable: bool,
@@ -16,37 +16,37 @@ pub(crate) enum Stmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum Expr {
+pub enum Expr {
     Literal(Value),
     Identifier(String),
     Unary {
         op: UnaryOp,
-        expr: Box<Expr>,
+        expr: Box<Self>,
     },
     Binary {
         op: BinaryOp,
-        left: Box<Expr>,
-        right: Box<Expr>,
+        left: Box<Self>,
+        right: Box<Self>,
     },
     Assignment {
         name: String,
-        expr: Box<Expr>,
+        expr: Box<Self>,
     },
     Call {
-        callee: Box<Expr>,
-        args: Vec<Expr>,
+        callee: Box<Self>,
+        args: Vec<Self>,
     },
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub(crate) enum UnaryOp {
+pub enum UnaryOp {
     Negate,
     Plus,
     Not,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub(crate) enum BinaryOp {
+pub enum BinaryOp {
     Add,
     Sub,
     Mul,
