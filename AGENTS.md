@@ -56,6 +56,21 @@ These rules are mandatory for humans and agents working in any part of this repo
 - Always run `cargo fmt`.
 - Always run `cargo clippy` and fix every warning. Suppress lints only when there is a strong reason.
 
+## Testing
+
+- Keep tests and test fixtures under `tests/`. Do not hide test code inside production modules when an integration test or fixture is appropriate.
+- Tests must follow the same rules as production code: no `unsafe`, no `unwrap()`, no `expect()`, no intentional panics, no unchecked indexing, no ignored `Result` or `Option`.
+- Every test case must have one finished status: passed, failed, or skipped.
+- Skipped tests must always include a concrete reason, such as the missing engine feature, missing reference runner, or unsupported external corpus step.
+- Failed tests must report enough context to diagnose the problem: suite, case id, source path when applicable, expected behavior, and actual behavior or error.
+- `scripts/test-all.sh` is the default test entrypoint for humans, agents, and CI. Use it before pushing unless a task explicitly narrows validation.
+- The Rust test runner is responsible for executing engine-level test cases and writing the final test report.
+- Test reports belong under `reports/test-runs/`. Each report must be a separate tracked Markdown file with a sortable UTC timestamp suffix.
+- Test reports must include a summary and a per-case table that records all passed, failed, and skipped cases.
+- Official ECMAScript compatibility work should use Test262 as the external corpus and track pass or skip status by feature area.
+- QuickJS should remain the reference implementation for differential behavior checks where the feature is implemented locally.
+- Future benchmark reports should follow the same pattern: one command, Rust-owned execution, tracked report files, and clear comparison against QuickJS where possible.
+
 ## Rust Lints
 
 Use strict lints in `Cargo.toml`:
