@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::ast::{BinaryOp, Expr, Program, Stmt, UnaryOp};
+use crate::ast::{BinaryOp, DeclKind, Expr, Program, Stmt, UnaryOp};
 use crate::error::{Error, Result};
 use crate::lexer;
 use crate::parser;
@@ -86,6 +86,7 @@ pub struct Context {
 struct Binding {
     value: Value,
     mutable: bool,
+    kind: DeclKind,
 }
 
 impl Context {
@@ -143,6 +144,7 @@ impl Context {
     }
 
     fn eval_program(&mut self, program: &Program) -> Result<Value> {
+        self.hoist_var_declarations(&program.statements)?;
         let mut last = Value::Undefined;
         for statement in &program.statements {
             self.step()?;
@@ -172,17 +174,96 @@ impl Context {
                 let value = self.eval_expr(expr)?;
                 Err(Error::runtime(format!("uncaught throw: {value}")))
             }
-            Stmt::VarDecl {
-                name,
-                mutable,
-                init,
-            } => {
-                let value = self.eval_expr(init)?;
-                self.define(name, value, *mutable)?;
-                Ok(Value::Undefined)
-            }
+            Stmt::VarDecl { name, kind, init } => self.eval_declaration(name, *kind, init.as_ref()),
             Stmt::Expr(expr) => self.eval_expr(expr),
         }
+    }
+
+    fn hoist_var_declarations(&mut self, statements: &[Stmt]) -> Result<()> {
+        for statement in statements {
+            self.hoist_statement_vars(statement)?;
+        }
+        Ok(())
+    }
+
+    fn hoist_statement_vars(&mut self, statement: &Stmt) -> Result<()> {
+        match statement {
+            Stmt::Block(statements) => self.hoist_var_declarations(statements),
+            Stmt::If {
+                consequent,
+                alternate,
+                ..
+            } => {
+                self.hoist_statement_vars(consequent)?;
+                if let Some(alternate) = alternate {
+                    self.hoist_statement_vars(alternate)?;
+                }
+                Ok(())
+            }
+            Stmt::VarDecl {
+                name,
+                kind: DeclKind::Var,
+                ..
+            } => self.hoist_var(name),
+            Stmt::Throw(_) | Stmt::VarDecl { .. } | Stmt::Expr(_) => Ok(()),
+        }
+    }
+
+    fn hoist_var(&mut self, name: &str) -> Result<()> {
+        if let Some(binding) = self.globals.get(name) {
+            if binding.kind == DeclKind::Var {
+                return Ok(());
+            }
+            return Err(Error::runtime(format!(
+                "'{name}' has already been declared"
+            )));
+        }
+
+        self.ensure_binding_capacity(name)?;
+        self.globals.insert(
+            name.to_owned(),
+            Binding {
+                value: Value::Undefined,
+                mutable: true,
+                kind: DeclKind::Var,
+            },
+        );
+        Ok(())
+    }
+
+    fn eval_declaration(
+        &mut self,
+        name: &str,
+        kind: DeclKind,
+        init: Option<&Expr>,
+    ) -> Result<Value> {
+        match kind {
+            DeclKind::Var => {
+                if let Some(init) = init {
+                    let value = self.eval_expr(init)?;
+                    self.assign(name, value)?;
+                }
+            }
+            DeclKind::Let => {
+                let value = self.eval_optional_init(init)?;
+                self.define(name, value, DeclKind::Let)?;
+            }
+            DeclKind::Const => {
+                let Some(init) = init else {
+                    return Err(Error::runtime("const declaration requires an initializer"));
+                };
+                let value = self.eval_expr(init)?;
+                self.define(name, value, DeclKind::Const)?;
+            }
+        }
+        Ok(Value::Undefined)
+    }
+
+    fn eval_optional_init(&mut self, init: Option<&Expr>) -> Result<Value> {
+        if let Some(init) = init {
+            return self.eval_expr(init);
+        }
+        Ok(Value::Undefined)
     }
 
     fn eval_expr(&mut self, expr: &Expr) -> Result<Value> {
@@ -323,14 +404,8 @@ impl Context {
         Ok(Value::String(message.display_for_concat()))
     }
 
-    fn define(&mut self, name: &str, value: Value, mutable: bool) -> Result<()> {
-        if self.globals.len() >= self.limits.max_bindings && !self.globals.contains_key(name) {
-            return Err(Error::limit(format!(
-                "binding count exceeded {}",
-                self.limits.max_bindings
-            )));
-        }
-
+    fn define(&mut self, name: &str, value: Value, kind: DeclKind) -> Result<()> {
+        self.ensure_binding_capacity(name)?;
         if self.globals.contains_key(name) {
             return Err(Error::runtime(format!(
                 "'{name}' has already been declared"
@@ -338,8 +413,25 @@ impl Context {
         }
 
         self.checked_value(value.clone())?;
-        self.globals
-            .insert(name.to_owned(), Binding { value, mutable });
+        let mutable = kind != DeclKind::Const;
+        self.globals.insert(
+            name.to_owned(),
+            Binding {
+                value,
+                mutable,
+                kind,
+            },
+        );
+        Ok(())
+    }
+
+    fn ensure_binding_capacity(&self, name: &str) -> Result<()> {
+        if self.globals.len() >= self.limits.max_bindings && !self.globals.contains_key(name) {
+            return Err(Error::limit(format!(
+                "binding count exceeded {}",
+                self.limits.max_bindings
+            )));
+        }
         Ok(())
     }
 
