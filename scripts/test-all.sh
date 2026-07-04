@@ -8,10 +8,18 @@ cd "${repo_root}"
 timestamp="${RSQJS_TEST_TIMESTAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
 report_path="${RSQJS_TEST_REPORT_PATH:-reports/test-runs/rsqjs-test-report-${timestamp}.md}"
 
+quickjs_path="$("${script_dir}/prepare-quickjs.sh")"
+if [[ -n "${quickjs_path}" ]]; then
+  export RSQJS_QUICKJS="${quickjs_path}"
+fi
+
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
+cargo build --release --bin rsqjs
+
+export RSQJS_ENGINE="${RSQJS_ENGINE:-${repo_root}/target/release/rsqjs}"
 cargo run --quiet --bin rsqjs-test-runner -- --report "${report_path}"
 
 printf 'test report: %s\n' "${report_path}"

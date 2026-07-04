@@ -1,2 +1,2 @@
 let name = "camera";
-name + "-stream-" + 42
+let result = name + "-stream-" + 42;

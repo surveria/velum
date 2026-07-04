@@ -23,9 +23,12 @@ const PERCENT_SCALE: usize = 100;
 const BENCH_ITERATIONS: usize = 50;
 const NANOS_PER_MICROSECOND: u128 = 1_000;
 const NANOS_PER_MILLISECOND: u128 = 1_000_000;
+const RATIO_DECIMAL_SCALE: u128 = 100;
 const QUICKJS_ENV: &str = "RSQJS_QUICKJS";
+const ENGINE_ENV: &str = "RSQJS_ENGINE";
 
 const REASON_MATCHED: &str = "matched expected behavior";
+const REASON_ENGINE_ENV_MISSING: &str = "set RSQJS_ENGINE=/path/to/rsqjs to enable benchmarks";
 const REASON_QUICKJS_ENV_MISSING: &str = "set RSQJS_QUICKJS=/path/to/qjs to enable";
 const REASON_TEST262_EXTERNAL_MISSING: &str =
     "full upstream Test262 checkout is not configured yet";
@@ -54,7 +57,8 @@ fn main() {
 fn run() -> anyhow::Result<()> {
     let config = Config::from_args(env::args().skip(1))?;
     let quickjs = env::var_os(QUICKJS_ENV).map(PathBuf::from);
-    let report = build_report(quickjs.as_deref());
+    let engine = env::var_os(ENGINE_ENV).map(PathBuf::from);
+    let report = build_report(quickjs.as_deref(), engine.as_deref());
     write_report(&config.report_path, &report)?;
 
     if report.failed_count() == 0 {
@@ -204,19 +208,19 @@ struct BenchmarkRow {
     status: String,
     source: String,
     iterations: usize,
-    rs_quickjs_avg: String,
-    quickjs_avg: String,
+    rsqjs_cli_avg: String,
+    quickjs_cli_avg: String,
     ratio: String,
     detail: String,
 }
 
-fn build_report(quickjs: Option<&Path>) -> FullReport {
+fn build_report(quickjs: Option<&Path>, engine: Option<&Path>) -> FullReport {
     let corpora = vec![
         run_engine_corpus(),
         run_test262_corpus(),
         run_quickjs_corpus(quickjs),
     ];
-    let benchmarks = run_benchmarks(quickjs);
+    let benchmarks = run_benchmarks(quickjs, engine);
     FullReport {
         corpora,
         benchmarks,
@@ -430,7 +434,7 @@ fn run_source_with_output(source: &str) -> anyhow::Result<String> {
     Ok(output)
 }
 
-fn run_benchmarks(quickjs: Option<&Path>) -> BenchmarkReport {
+fn run_benchmarks(quickjs: Option<&Path>, engine: Option<&Path>) -> BenchmarkReport {
     let mut report = BenchmarkReport {
         rows: Vec::new(),
         measured: 0,
@@ -438,12 +442,12 @@ fn run_benchmarks(quickjs: Option<&Path>) -> BenchmarkReport {
         skipped: 0,
     };
     for case in benchmark_cases() {
-        let row = run_benchmark_case(&case, quickjs);
+        let row = run_benchmark_case(&case, quickjs, engine);
         if row.status == STATUS_FAILED {
             report.failed = report.failed.saturating_add(1);
         } else {
             report.measured = report.measured.saturating_add(1);
-            if row.quickjs_avg == STATUS_NOT_CONFIGURED {
+            if row.quickjs_cli_avg == STATUS_NOT_CONFIGURED {
                 report.skipped = report.skipped.saturating_add(1);
             }
         }
@@ -465,11 +469,28 @@ fn benchmark_cases() -> Vec<BenchmarkCase> {
     ]
 }
 
-fn run_benchmark_case(case: &BenchmarkCase, quickjs: Option<&Path>) -> BenchmarkRow {
-    match measure_rs_quickjs(case.path, BENCH_ITERATIONS) {
+fn run_benchmark_case(
+    case: &BenchmarkCase,
+    quickjs: Option<&Path>,
+    engine: Option<&Path>,
+) -> BenchmarkRow {
+    let Some(engine) = engine else {
+        return BenchmarkRow {
+            benchmark: case.id.to_owned(),
+            status: STATUS_FAILED.to_owned(),
+            source: case.path.to_owned(),
+            iterations: BENCH_ITERATIONS,
+            rsqjs_cli_avg: STATUS_FAILED.to_owned(),
+            quickjs_cli_avg: "-".to_owned(),
+            ratio: "-".to_owned(),
+            detail: REASON_ENGINE_ENV_MISSING.to_owned(),
+        };
+    };
+
+    match measure_cli(engine, case.path, BENCH_ITERATIONS, "rsqjs") {
         Ok(ours) => {
             let quickjs_measurement = quickjs
-                .map(|quickjs| measure_quickjs(quickjs, case.path, BENCH_ITERATIONS))
+                .map(|quickjs| measure_cli(quickjs, case.path, BENCH_ITERATIONS, "QuickJS"))
                 .transpose();
             match quickjs_measurement {
                 Ok(Some(quickjs_duration)) => BenchmarkRow {
@@ -477,8 +498,8 @@ fn run_benchmark_case(case: &BenchmarkCase, quickjs: Option<&Path>) -> Benchmark
                     status: STATUS_MEASURED.to_owned(),
                     source: case.path.to_owned(),
                     iterations: BENCH_ITERATIONS,
-                    rs_quickjs_avg: format_duration(ours),
-                    quickjs_avg: format_duration(quickjs_duration),
+                    rsqjs_cli_avg: format_duration(ours),
+                    quickjs_cli_avg: format_duration(quickjs_duration),
                     ratio: ratio(ours, quickjs_duration),
                     detail: "sequential benchmark completed".to_owned(),
                 },
@@ -487,8 +508,8 @@ fn run_benchmark_case(case: &BenchmarkCase, quickjs: Option<&Path>) -> Benchmark
                     status: STATUS_MEASURED.to_owned(),
                     source: case.path.to_owned(),
                     iterations: BENCH_ITERATIONS,
-                    rs_quickjs_avg: format_duration(ours),
-                    quickjs_avg: STATUS_NOT_CONFIGURED.to_owned(),
+                    rsqjs_cli_avg: format_duration(ours),
+                    quickjs_cli_avg: STATUS_NOT_CONFIGURED.to_owned(),
                     ratio: "-".to_owned(),
                     detail: REASON_QUICKJS_ENV_MISSING.to_owned(),
                 },
@@ -497,8 +518,8 @@ fn run_benchmark_case(case: &BenchmarkCase, quickjs: Option<&Path>) -> Benchmark
                     status: STATUS_FAILED.to_owned(),
                     source: case.path.to_owned(),
                     iterations: BENCH_ITERATIONS,
-                    rs_quickjs_avg: format_duration(ours),
-                    quickjs_avg: STATUS_FAILED.to_owned(),
+                    rsqjs_cli_avg: format_duration(ours),
+                    quickjs_cli_avg: STATUS_FAILED.to_owned(),
                     ratio: "-".to_owned(),
                     detail: error.to_string(),
                 },
@@ -509,38 +530,30 @@ fn run_benchmark_case(case: &BenchmarkCase, quickjs: Option<&Path>) -> Benchmark
             status: STATUS_FAILED.to_owned(),
             source: case.path.to_owned(),
             iterations: BENCH_ITERATIONS,
-            rs_quickjs_avg: STATUS_FAILED.to_owned(),
-            quickjs_avg: "-".to_owned(),
+            rsqjs_cli_avg: STATUS_FAILED.to_owned(),
+            quickjs_cli_avg: "-".to_owned(),
             ratio: "-".to_owned(),
             detail: error.to_string(),
         },
     }
 }
 
-fn measure_rs_quickjs(path: &str, iterations: usize) -> anyhow::Result<Duration> {
-    let source =
-        fs::read_to_string(path).with_context(|| format!("failed to read benchmark '{path}'"))?;
+fn measure_cli(
+    engine: &Path,
+    path: &str,
+    iterations: usize,
+    label: &str,
+) -> anyhow::Result<Duration> {
     let start = Instant::now();
     for _ in 0..iterations {
-        let runtime = Runtime::new();
-        let mut context = runtime.context();
-        context
-            .eval(&source)
-            .with_context(|| format!("benchmark '{path}' failed in rs-quickjs"))?;
-    }
-    avg_duration(start.elapsed(), iterations)
-}
-
-fn measure_quickjs(quickjs: &Path, path: &str, iterations: usize) -> anyhow::Result<Duration> {
-    let start = Instant::now();
-    for _ in 0..iterations {
-        let output = Command::new(quickjs)
+        let output = Command::new(engine)
             .arg(path)
             .output()
-            .with_context(|| format!("failed to execute QuickJS '{}'", quickjs.display()))?;
+            .with_context(|| format!("failed to execute {label} '{}'", engine.display()))?;
         if !output.status.success() {
             bail!(
-                "QuickJS benchmark '{}' failed: {}",
+                "{} benchmark '{}' failed: {}",
+                label,
                 path,
                 String::from_utf8_lossy(&output.stderr)
             );
@@ -669,11 +682,11 @@ fn ratio(ours: Duration, quickjs: Duration) -> String {
     if quickjs_nanos == 0 {
         return "-".to_owned();
     }
-    let basis_points = ours.as_nanos().saturating_mul(BASIS_POINTS_SCALE as u128) / quickjs_nanos;
+    let scaled_ratio = ours.as_nanos().saturating_mul(RATIO_DECIMAL_SCALE) / quickjs_nanos;
     format!(
         "{}.{:02}x",
-        basis_points / PERCENT_SCALE as u128,
-        basis_points % PERCENT_SCALE as u128
+        scaled_ratio / RATIO_DECIMAL_SCALE,
+        scaled_ratio % RATIO_DECIMAL_SCALE
     )
 }
 
@@ -700,5 +713,36 @@ struct DisplayText<'a>(&'a str);
 impl fmt::Display for DisplayText<'_> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(formatter, "{:?}", self.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ratio;
+    use std::time::Duration;
+
+    type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn formats_ratio_below_one() -> TestResult {
+        ensure_text(
+            &ratio(Duration::from_micros(5), Duration::from_micros(366)),
+            "0.01x",
+        )
+    }
+
+    #[test]
+    fn formats_ratio_above_one() -> TestResult {
+        ensure_text(
+            &ratio(Duration::from_micros(250), Duration::from_micros(100)),
+            "2.50x",
+        )
+    }
+
+    fn ensure_text(actual: &str, expected: &str) -> TestResult {
+        if actual == expected {
+            return Ok(());
+        }
+        Err(format!("expected '{expected}', got '{actual}'").into())
     }
 }
