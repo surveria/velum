@@ -7,3 +7,9 @@ The repository tracks a small active subset under `active/` so CI can measure pr
 The runner reports both implemented active cases and unavailable corpus areas as explicit rows, so skipped coverage remains visible.
 
 `manifest.tsv` lists the pinned upstream Test262 cases used by the default test run. `scripts/prepare-test262.sh` materializes only those files under `target/test262` from the official Test262 repository at commit `64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1`.
+
+Manifest modes:
+
+- `run` executes a positive Test262 case and passes when evaluation completes without output or error.
+- `negative-parse` executes a negative parse Test262 case and passes only when lexing or parsing fails.
+- `skip` records an explicit unsupported feature area with a concrete reason.
