@@ -6,6 +6,14 @@ use crate::lexer;
 use crate::parser;
 use crate::value::Value;
 
+const DEFAULT_MAX_SOURCE_LEN: usize = 65_536;
+const DEFAULT_MAX_STATEMENTS: usize = 4_096;
+const DEFAULT_MAX_EXPRESSION_DEPTH: usize = 256;
+const DEFAULT_MAX_RUNTIME_STEPS: usize = 100_000;
+const DEFAULT_MAX_STRING_LEN: usize = 65_536;
+const DEFAULT_MAX_BINDINGS: usize = 4_096;
+const HOST_PRINT_NAME: &str = "print";
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct RuntimeLimits {
     pub max_source_len: usize,
@@ -19,12 +27,12 @@ pub struct RuntimeLimits {
 impl Default for RuntimeLimits {
     fn default() -> Self {
         Self {
-            max_source_len: 64 * 1024,
-            max_statements: 4_096,
-            max_expression_depth: 256,
-            max_runtime_steps: 100_000,
-            max_string_len: 64 * 1024,
-            max_bindings: 4_096,
+            max_source_len: DEFAULT_MAX_SOURCE_LEN,
+            max_statements: DEFAULT_MAX_STATEMENTS,
+            max_expression_depth: DEFAULT_MAX_EXPRESSION_DEPTH,
+            max_runtime_steps: DEFAULT_MAX_RUNTIME_STEPS,
+            max_string_len: DEFAULT_MAX_STRING_LEN,
+            max_bindings: DEFAULT_MAX_BINDINGS,
         }
     }
 }
@@ -43,17 +51,17 @@ impl Runtime {
     }
 
     #[must_use]
-    pub fn with_limits(limits: RuntimeLimits) -> Self {
+    pub const fn with_limits(limits: RuntimeLimits) -> Self {
         Self { limits }
     }
 
     #[must_use]
-    pub fn limits(&self) -> RuntimeLimits {
+    pub const fn limits(&self) -> RuntimeLimits {
         self.limits
     }
 
     #[must_use]
-    pub fn context(&self) -> Context {
+    pub const fn context(&self) -> Context {
         Context::new(self.limits)
     }
 }
@@ -80,7 +88,7 @@ struct Binding {
 
 impl Context {
     #[must_use]
-    pub fn new(limits: RuntimeLimits) -> Self {
+    pub const fn new(limits: RuntimeLimits) -> Self {
         Self {
             limits,
             globals: BTreeMap::new(),
@@ -89,6 +97,11 @@ impl Context {
         }
     }
 
+    /// Evaluates source text in this context.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when lexing, parsing, evaluation, or configured resource limits fail.
     pub fn eval(&mut self, source: &str) -> Result<Value> {
         self.check_source(source)?;
         let tokens = lexer::lex(source)?;
@@ -112,7 +125,7 @@ impl Context {
     }
 
     #[must_use]
-    pub fn runtime_steps(&self) -> usize {
+    pub const fn runtime_steps(&self) -> usize {
         self.runtime_steps
     }
 
@@ -226,7 +239,9 @@ impl Context {
             BinaryOp::GreaterEqual => {
                 compare_binary(&left, &right, ">=", |left, right| left >= right)?
             }
-            BinaryOp::LogicalAnd | BinaryOp::LogicalOr => unreachable!("handled before eager eval"),
+            BinaryOp::LogicalAnd | BinaryOp::LogicalOr => {
+                return Err(Error::runtime("logical operator reached eager evaluation"));
+            }
         };
         self.checked_value(value)
     }
@@ -237,7 +252,7 @@ impl Context {
         };
 
         match name.as_str() {
-            "print" => {
+            HOST_PRINT_NAME => {
                 let values = args
                     .iter()
                     .map(|arg| self.eval_expr(arg))
@@ -320,7 +335,10 @@ impl Context {
     }
 
     fn step(&mut self) -> Result<()> {
-        self.runtime_steps += 1;
+        self.runtime_steps = self
+            .runtime_steps
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("runtime steps overflowed"))?;
         if self.runtime_steps > self.limits.max_runtime_steps {
             return Err(Error::limit(format!(
                 "runtime steps exceeded {}",

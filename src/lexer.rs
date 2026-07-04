@@ -1,13 +1,13 @@
 use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct Token {
-    pub(crate) kind: TokenKind,
-    pub(crate) offset: usize,
+pub struct Token {
+    pub kind: TokenKind,
+    pub offset: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum TokenKind {
+pub enum TokenKind {
     Number(f64),
     String(String),
     Identifier(String),
@@ -42,7 +42,7 @@ pub(crate) enum TokenKind {
     Eof,
 }
 
-pub(crate) fn lex(source: &str) -> Result<Vec<Token>> {
+pub fn lex(source: &str) -> Result<Vec<Token>> {
     Lexer::new(source).lex()
 }
 
@@ -73,7 +73,7 @@ impl<'a> Lexer<'a> {
                 '/' if self.peek_next_char() == Some('*') => self.block_comment(offset)?,
                 '0'..='9' => self.number(offset)?,
                 '"' | '\'' => self.string(offset, ch)?,
-                ch if is_identifier_start(ch) => self.identifier(offset),
+                ch if is_identifier_start(ch) => self.identifier(offset)?,
                 '+' => self.simple(TokenKind::Plus),
                 '-' => self.simple(TokenKind::Minus),
                 '*' => self.simple(TokenKind::Star),
@@ -163,9 +163,9 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        let start_offset = self.chars[start].0;
+        let start_offset = self.char_offset(start, offset, "number")?;
         let end_offset = self.current_offset();
-        let text = &self.source[start_offset..end_offset];
+        let text = self.source_slice(start_offset, end_offset, offset, "number")?;
         let value = text
             .parse::<f64>()
             .map_err(|_| Error::lex("invalid number literal", offset))?;
@@ -213,16 +213,16 @@ impl<'a> Lexer<'a> {
         Err(Error::lex("unterminated string literal", offset))
     }
 
-    fn identifier(&mut self, offset: usize) {
+    fn identifier(&mut self, offset: usize) -> Result<()> {
         let start = self.cursor;
         self.advance();
         while self.peek_char().is_some_and(is_identifier_part) {
             self.advance();
         }
 
-        let start_offset = self.chars[start].0;
+        let start_offset = self.char_offset(start, offset, "identifier")?;
         let end_offset = self.current_offset();
-        let text = &self.source[start_offset..end_offset];
+        let text = self.source_slice(start_offset, end_offset, offset, "identifier")?;
         let kind = match text {
             "let" => TokenKind::Let,
             "const" => TokenKind::Const,
@@ -234,6 +234,7 @@ impl<'a> Lexer<'a> {
             _ => TokenKind::Identifier(text.to_owned()),
         };
         self.push(kind, offset);
+        Ok(())
     }
 
     fn line_comment(&mut self) {
@@ -274,7 +275,7 @@ impl<'a> Lexer<'a> {
     fn advance(&mut self) -> Option<(usize, char)> {
         let value = self.peek();
         if value.is_some() {
-            self.cursor += 1;
+            self.cursor = self.cursor.saturating_add(1);
         }
         value
     }
@@ -297,7 +298,8 @@ impl<'a> Lexer<'a> {
     }
 
     fn peek_next_char(&self) -> Option<char> {
-        self.chars.get(self.cursor + 1).map(|(_, ch)| *ch)
+        let next_cursor = self.cursor.checked_add(1)?;
+        self.chars.get(next_cursor).map(|(_, ch)| *ch)
     }
 
     fn current_offset(&self) -> usize {
@@ -305,12 +307,31 @@ impl<'a> Lexer<'a> {
             .get(self.cursor)
             .map_or(self.source.len(), |(offset, _)| *offset)
     }
+
+    fn char_offset(&self, cursor: usize, offset: usize, description: &str) -> Result<usize> {
+        self.chars
+            .get(cursor)
+            .map(|(offset, _)| *offset)
+            .ok_or_else(|| Error::lex(format!("invalid {description} start"), offset))
+    }
+
+    fn source_slice(
+        &self,
+        start: usize,
+        end: usize,
+        offset: usize,
+        description: &str,
+    ) -> Result<&str> {
+        self.source
+            .get(start..end)
+            .ok_or_else(|| Error::lex(format!("invalid {description} span"), offset))
+    }
 }
 
-fn is_identifier_start(ch: char) -> bool {
+const fn is_identifier_start(ch: char) -> bool {
     ch == '_' || ch == '$' || ch.is_ascii_alphabetic()
 }
 
-fn is_identifier_part(ch: char) -> bool {
+const fn is_identifier_part(ch: char) -> bool {
     is_identifier_start(ch) || ch.is_ascii_digit()
 }
