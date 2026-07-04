@@ -15,6 +15,9 @@ const DEFAULT_MAX_BINDINGS: usize = 4_096;
 const BOOLEAN_NAME: &str = "Boolean";
 const HOST_PRINT_NAME: &str = "print";
 const TEST262_ERROR_NAME: &str = "Test262Error";
+const TO_INT32_MODULUS: f64 = 4_294_967_296.0;
+const TO_INT32_SIGN_BOUNDARY: u64 = 2_147_483_648;
+const TO_INT32_SIGN_OFFSET: i64 = 4_294_967_296;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct RuntimeLimits {
@@ -301,6 +304,11 @@ impl Context {
                 Self::eval_unary(*op, &value)
             }
             Expr::Binary { op, left, right } => self.eval_binary(*op, left, right),
+            Expr::Conditional {
+                condition,
+                consequent,
+                alternate,
+            } => self.eval_conditional(condition, consequent, alternate),
             Expr::Assignment { name, expr } => {
                 let value = self.eval_expr(expr)?;
                 self.assign(name, value.clone())?;
@@ -309,6 +317,19 @@ impl Context {
             Expr::Call { callee, args } => self.eval_call(callee, args),
             Expr::New { constructor, args } => self.eval_new(constructor, args),
         }
+    }
+
+    fn eval_conditional(
+        &mut self,
+        condition: &Expr,
+        consequent: &Expr,
+        alternate: &Expr,
+    ) -> Result<Value> {
+        let condition = self.eval_expr(condition)?;
+        if condition.is_truthy() {
+            return self.eval_expr(consequent);
+        }
+        self.eval_expr(alternate)
     }
 
     fn eval_block(&mut self, statements: &[Stmt]) -> Result<Completion> {
@@ -417,6 +438,7 @@ impl Context {
             BinaryOp::GreaterEqual => {
                 compare_binary(&left, &right, ">=", |left, right| left >= right)?
             }
+            BinaryOp::BitAnd => Self::bitwise_and(&left, &right)?,
             BinaryOp::LogicalAnd | BinaryOp::LogicalOr => {
                 return Err(Error::runtime("logical operator reached eager evaluation"));
             }
@@ -527,6 +549,12 @@ impl Context {
         }
     }
 
+    fn bitwise_and(left: &Value, right: &Value) -> Result<Value> {
+        let left = bitwise_i32(left)?;
+        let right = bitwise_i32(right)?;
+        Ok(Value::Number(f64::from(left & right)))
+    }
+
     fn checked_value(&self, value: Value) -> Result<Value> {
         if let Value::String(text) = &value {
             self.check_string_len(text)?;
@@ -588,4 +616,53 @@ fn compare_binary(
         return Err(Error::runtime(format!("operator '{op}' expects numbers")));
     };
     Ok(Value::Bool(apply(left, right)))
+}
+
+fn bitwise_i32(value: &Value) -> Result<i32> {
+    match value {
+        Value::Undefined | Value::Null => Ok(0),
+        Value::Bool(value) => Ok(i32::from(*value)),
+        Value::Number(value) => number_to_i32(*value),
+        Value::String(value) => string_to_i32(value),
+    }
+}
+
+fn string_to_i32(value: &str) -> Result<i32> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(0);
+    }
+    let Ok(value) = trimmed.parse::<f64>() else {
+        return Ok(0);
+    };
+    number_to_i32(value)
+}
+
+fn number_to_i32(value: f64) -> Result<i32> {
+    if !value.is_finite() || value == 0.0 {
+        return Ok(0);
+    }
+
+    let truncated = if value.is_sign_negative() {
+        value.ceil()
+    } else {
+        value.floor()
+    };
+    let modulo = truncated.rem_euclid(TO_INT32_MODULUS);
+    let unsigned = format!("{modulo:.0}")
+        .parse::<u64>()
+        .map_err(|_| Error::runtime("bitwise '&' failed to convert number to uint32"))?;
+    let signed = if unsigned >= TO_INT32_SIGN_BOUNDARY {
+        let unsigned = i64::try_from(unsigned)
+            .map_err(|_| Error::runtime("bitwise '&' uint32 conversion overflowed"))?;
+        unsigned
+            .checked_sub(TO_INT32_SIGN_OFFSET)
+            .ok_or_else(|| Error::runtime("bitwise '&' int32 conversion overflowed"))?
+    } else {
+        i64::try_from(unsigned)
+            .map_err(|_| Error::runtime("bitwise '&' uint32 conversion overflowed"))?
+    };
+
+    i32::try_from(signed)
+        .map_err(|_| Error::runtime("bitwise '&' failed to convert number to int32"))
 }

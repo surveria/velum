@@ -47,6 +47,11 @@ pub enum Expr {
         left: Box<Self>,
         right: Box<Self>,
     },
+    Conditional {
+        condition: Box<Self>,
+        consequent: Box<Self>,
+        alternate: Box<Self>,
+    },
     Assignment {
         name: String,
         expr: Box<Self>,
@@ -83,6 +88,7 @@ pub enum BinaryOp {
     LessEqual,
     Greater,
     GreaterEqual,
+    BitAnd,
     LogicalAnd,
     LogicalOr,
 }

@@ -39,8 +39,11 @@ pub enum TokenKind {
     LessEqual,
     Greater,
     GreaterEqual,
+    Ampersand,
     AndAnd,
     OrOr,
+    Question,
+    Colon,
     LParen,
     RParen,
     LBrace,
@@ -87,6 +90,8 @@ impl<'a> Lexer<'a> {
                 '*' => self.simple(TokenKind::Star),
                 '/' => self.simple(TokenKind::Slash),
                 '%' => self.simple(TokenKind::Percent),
+                '?' => self.simple(TokenKind::Question),
+                ':' => self.simple(TokenKind::Colon),
                 '(' => self.simple(TokenKind::LParen),
                 ')' => self.simple(TokenKind::RParen),
                 '{' => self.simple(TokenKind::LBrace),
@@ -138,7 +143,7 @@ impl<'a> Lexer<'a> {
                     if self.match_char('&') {
                         self.push(TokenKind::AndAnd, offset);
                     } else {
-                        return Err(Error::lex("expected '&' after '&'", offset));
+                        self.push(TokenKind::Ampersand, offset);
                     }
                 }
                 '|' => {
