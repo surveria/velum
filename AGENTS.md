@@ -70,6 +70,8 @@ These rules are mandatory for humans and agents working in any part of this repo
 - Official ECMAScript compatibility work should use Test262 as the external corpus and track pass or skip status by feature area.
 - QuickJS should remain the reference implementation for differential behavior checks where the feature is implemented locally.
 - Future benchmark reports should follow the same pattern: one command, Rust-owned execution, tracked report files, and clear comparison against QuickJS where possible.
+- Benchmark cases must run sequentially, not in parallel, so measurements do not interfere with each other.
+- Benchmark reports must separate local engine measurements from QuickJS measurements and mark unavailable reference runs as skipped with a concrete reason.
 
 ## Rust Lints
 

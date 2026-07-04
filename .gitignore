@@ -27,5 +27,6 @@
 
 !/tests/
 !/tests/**/
+!/tests/**/*.md
 !/tests/**/*.rs
 !/tests/**/*.js
