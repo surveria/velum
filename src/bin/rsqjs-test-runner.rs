@@ -10,8 +10,12 @@ use anyhow::{Context as _, bail};
 use rs_quickjs::{Runtime, Value};
 use tabled::{Table, Tabled};
 
+#[path = "rsqjs_test_runner/cases.rs"]
+mod cases;
 #[path = "rsqjs_test_runner/test262_external.rs"]
 mod test262_external;
+
+use cases::{BenchmarkCase, DifferentialCase, EngineCase, Expectation};
 
 const USAGE: &str = "usage: rsqjs-test-runner --report <path>";
 const STATUS_PASSED: &str = "✅ passed";
@@ -34,23 +38,6 @@ const TEST262_ENV: &str = "RSQJS_TEST262_DIR";
 const REASON_MATCHED: &str = "matched expected behavior";
 const REASON_ENGINE_ENV_MISSING: &str = "set RSQJS_ENGINE=/path/to/rsqjs to enable benchmarks";
 const REASON_QUICKJS_ENV_MISSING: &str = "set RSQJS_QUICKJS=/path/to/qjs to enable";
-
-const PATH_ARITHMETIC: &str = "tests/engine_cases/arithmetic_precedence.js";
-const PATH_HOST_PRINT: &str = "tests/engine_cases/host_print.js";
-const PATH_CONST_ASSIGNMENT: &str = "tests/engine_cases/const_assignment_error.js";
-const PATH_SHORT_CIRCUIT: &str = "tests/engine_cases/short_circuit.js";
-const PATH_TEST262_ARITHMETIC: &str =
-    "tests/corpora/test262/active/language/expressions/arithmetic.js";
-const PATH_TEST262_LET_CONST: &str = "tests/corpora/test262/active/language/bindings/let_const.js";
-const PATH_QUICKJS_PRINT_ARITHMETIC: &str =
-    "tests/corpora/quickjs_differential/active/print_arithmetic.js";
-const PATH_QUICKJS_PRINT_BINDING: &str =
-    "tests/corpora/quickjs_differential/active/print_binding.js";
-const PATH_QUICKJS_BOOLEAN_CONVERSION: &str =
-    "tests/corpora/quickjs_differential/active/boolean_conversion.js";
-const PATH_BENCH_ARITHMETIC: &str = "tests/corpora/benchmarks/active/arithmetic_chain.js";
-const PATH_BENCH_STRING: &str = "tests/corpora/benchmarks/active/string_concat.js";
-const PATH_BENCH_BOOLEAN: &str = "tests/corpora/benchmarks/active/boolean_conversion.js";
 
 fn main() {
     if let Err(error) = run() {
@@ -172,35 +159,6 @@ struct CaseRow {
 }
 
 #[derive(Debug)]
-struct EngineCase {
-    id: &'static str,
-    path: &'static str,
-    expectation: Expectation,
-}
-
-#[derive(Debug)]
-enum Expectation {
-    Value(&'static str),
-    OutputAndValue {
-        output: &'static [&'static str],
-        value: &'static str,
-    },
-    ErrorContains(&'static str),
-}
-
-#[derive(Debug)]
-struct DifferentialCase {
-    id: &'static str,
-    path: &'static str,
-}
-
-#[derive(Debug)]
-struct BenchmarkCase {
-    id: &'static str,
-    path: &'static str,
-}
-
-#[derive(Debug)]
 struct BenchmarkReport {
     rows: Vec<BenchmarkRow>,
     measured: usize,
@@ -239,31 +197,8 @@ fn build_report(
 }
 
 fn run_engine_corpus() -> CorpusReport {
-    let rows = vec![
-        run_engine_case(&EngineCase {
-            id: "arithmetic_precedence",
-            path: PATH_ARITHMETIC,
-            expectation: Expectation::Value("5"),
-        }),
-        run_engine_case(&EngineCase {
-            id: "host_print",
-            path: PATH_HOST_PRINT,
-            expectation: Expectation::OutputAndValue {
-                output: &["hello camera"],
-                value: "id-7",
-            },
-        }),
-        run_engine_case(&EngineCase {
-            id: "const_assignment_error",
-            path: PATH_CONST_ASSIGNMENT,
-            expectation: Expectation::ErrorContains("assignment to constant"),
-        }),
-        run_engine_case(&EngineCase {
-            id: "short_circuit",
-            path: PATH_SHORT_CIRCUIT,
-            expectation: Expectation::Value("ok"),
-        }),
-    ];
+    let cases = cases::engine_cases();
+    let rows = cases.iter().map(run_engine_case).collect();
     CorpusReport {
         name: "Engine fixtures",
         rows,
@@ -271,18 +206,8 @@ fn run_engine_corpus() -> CorpusReport {
 }
 
 fn run_test262_corpus() -> CorpusReport {
-    let rows = vec![
-        run_engine_case(&EngineCase {
-            id: "language/expressions/arithmetic",
-            path: PATH_TEST262_ARITHMETIC,
-            expectation: Expectation::Value("5"),
-        }),
-        run_engine_case(&EngineCase {
-            id: "language/bindings/let_const",
-            path: PATH_TEST262_LET_CONST,
-            expectation: Expectation::Value("42"),
-        }),
-    ];
+    let cases = cases::test262_cases();
+    let rows = cases.iter().map(run_engine_case).collect();
     CorpusReport {
         name: "Test262 active subset",
         rows,
@@ -297,7 +222,7 @@ fn run_test262_upstream_corpus(test262: Option<&Path>) -> CorpusReport {
 }
 
 fn run_quickjs_corpus(quickjs: Option<&Path>) -> CorpusReport {
-    let rows = quickjs_differential_cases()
+    let rows = cases::quickjs_differential_cases()
         .into_iter()
         .map(|case| run_differential_case(&case, quickjs))
         .collect();
@@ -305,23 +230,6 @@ fn run_quickjs_corpus(quickjs: Option<&Path>) -> CorpusReport {
         name: "QuickJS differential",
         rows,
     }
-}
-
-fn quickjs_differential_cases() -> Vec<DifferentialCase> {
-    vec![
-        DifferentialCase {
-            id: "print_arithmetic",
-            path: PATH_QUICKJS_PRINT_ARITHMETIC,
-        },
-        DifferentialCase {
-            id: "print_binding",
-            path: PATH_QUICKJS_PRINT_BINDING,
-        },
-        DifferentialCase {
-            id: "boolean_conversion",
-            path: PATH_QUICKJS_BOOLEAN_CONVERSION,
-        },
-    ]
 }
 
 fn run_engine_case(case: &EngineCase) -> CaseRow {
@@ -457,7 +365,7 @@ fn run_benchmarks(quickjs: Option<&Path>, engine: Option<&Path>) -> BenchmarkRep
         failed: 0,
         skipped: 0,
     };
-    for case in benchmark_cases() {
+    for case in cases::benchmark_cases() {
         let row = run_benchmark_case(&case, quickjs, engine);
         if row.status == STATUS_FAILED {
             report.failed = report.failed.saturating_add(1);
@@ -470,23 +378,6 @@ fn run_benchmarks(quickjs: Option<&Path>, engine: Option<&Path>) -> BenchmarkRep
         report.rows.push(row);
     }
     report
-}
-
-fn benchmark_cases() -> Vec<BenchmarkCase> {
-    vec![
-        BenchmarkCase {
-            id: "arithmetic_chain",
-            path: PATH_BENCH_ARITHMETIC,
-        },
-        BenchmarkCase {
-            id: "string_concat",
-            path: PATH_BENCH_STRING,
-        },
-        BenchmarkCase {
-            id: "boolean_conversion",
-            path: PATH_BENCH_BOOLEAN,
-        },
-    ]
 }
 
 fn run_benchmark_case(

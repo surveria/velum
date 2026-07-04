@@ -1,4 +1,4 @@
-use crate::ast::{BinaryOp, Expr, Program, Stmt, UnaryOp};
+use crate::ast::{BinaryOp, DeclKind, Expr, Program, Stmt, UnaryOp};
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
 use crate::runtime::RuntimeLimits;
@@ -53,13 +53,13 @@ impl Parser {
             return self.throw_statement();
         }
         if self.match_kind(&TokenKind::Let) {
-            return self.var_decl(true, false);
+            return self.var_decl(DeclKind::Let);
         }
         if self.match_kind(&TokenKind::Const) {
-            return self.var_decl(false, true);
+            return self.var_decl(DeclKind::Const);
         }
         if self.match_kind(&TokenKind::Var) {
-            return self.var_decl(true, false);
+            return self.var_decl(DeclKind::Var);
         }
 
         let expr = self.expression()?;
@@ -102,25 +102,21 @@ impl Parser {
         Ok(Stmt::Throw(value))
     }
 
-    fn var_decl(&mut self, mutable: bool, require_init: bool) -> Result<Stmt> {
+    fn var_decl(&mut self, kind: DeclKind) -> Result<Stmt> {
         let name = self.consume_identifier("expected binding name")?;
         let init = if self.match_kind(&TokenKind::Equal) {
-            self.expression()?
-        } else if require_init {
+            Some(self.expression()?)
+        } else if kind == DeclKind::Const {
             return Err(Error::parse(
                 "const declaration requires an initializer",
                 self.offset(),
             ));
         } else {
-            Expr::Literal(Value::Undefined)
+            None
         };
 
         self.consume_optional_semicolon();
-        Ok(Stmt::VarDecl {
-            name,
-            mutable,
-            init,
-        })
+        Ok(Stmt::VarDecl { name, kind, init })
     }
 
     fn expression(&mut self) -> Result<Expr> {

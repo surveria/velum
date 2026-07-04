@@ -16,10 +16,17 @@ pub enum Stmt {
     Throw(Expr),
     VarDecl {
         name: String,
-        mutable: bool,
-        init: Expr,
+        kind: DeclKind,
+        init: Option<Expr>,
     },
     Expr(Expr),
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum DeclKind {
+    Var,
+    Let,
+    Const,
 }
 
 #[derive(Debug, Clone, PartialEq)]

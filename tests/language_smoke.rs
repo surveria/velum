@@ -62,6 +62,31 @@ fn supports_boolean_function_conversion() -> TestResult {
 }
 
 #[test]
+fn supports_basic_var_hoisting() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r"
+        print(value);
+        var value = 40;
+        value = value + 2;
+        var value;
+        value
+        ",
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_optional_value(context.get_global("value"), &Value::Number(42.0))?;
+    ensure_output(context.output(), &["undefined".to_owned()])?;
+
+    let Err(error) = eval("let lexical = 1; var lexical;") else {
+        return Err("expected var and lexical redeclaration conflict".into());
+    };
+    ensure_error_kind(&error, "runtime")
+}
+
+#[test]
 fn short_circuits_logical_operators() -> TestResult {
     expect_value("false && missing", &Value::Bool(false))?;
     expect_value(r#""ok" || missing"#, &Value::String("ok".to_owned()))
