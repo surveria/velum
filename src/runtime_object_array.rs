@@ -5,12 +5,14 @@ use crate::{
 
 use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ArrayLength, ObjectHeap};
 
+const ARRAY_INDEX_OF_RECEIVER_ERROR: &str = "Array.prototype.indexOf requires an array receiver";
 const ARRAY_JOIN_RECEIVER_ERROR: &str = "Array.prototype.join requires an array receiver";
 const ARRAY_POP_RECEIVER_ERROR: &str = "Array.prototype.pop requires an array receiver";
 const ARRAY_PUSH_RECEIVER_ERROR: &str = "Array.prototype.push requires an array receiver";
 const ARRAY_SHIFT_RECEIVER_ERROR: &str = "Array.prototype.shift requires an array receiver";
 const ARRAY_SLICE_RECEIVER_ERROR: &str = "Array.prototype.slice requires an array receiver";
 const ARRAY_UNSHIFT_RECEIVER_ERROR: &str = "Array.prototype.unshift requires an array receiver";
+const INDEX_NOT_FOUND: f64 = -1.0;
 
 impl ObjectHeap {
     pub(crate) fn array_push(
@@ -141,6 +143,36 @@ impl ObjectHeap {
             .to_usize()
     }
 
+    pub(crate) fn array_len_for_index_of(&self, id: ObjectId) -> Result<usize> {
+        self.array_length_for_method(id, ARRAY_INDEX_OF_RECEIVER_ERROR)?
+            .to_usize()
+    }
+
+    pub(crate) fn array_index_of(
+        &self,
+        id: ObjectId,
+        search: &Value,
+        start: usize,
+    ) -> Result<Value> {
+        let length = self
+            .array_length_for_method(id, ARRAY_INDEX_OF_RECEIVER_ERROR)?
+            .to_usize()?;
+        if start >= length {
+            return Ok(Value::Number(INDEX_NOT_FOUND));
+        }
+
+        for index in start..length {
+            let key = ArrayIndex::from_usize(index)?.key();
+            if self.has(id, &key)? {
+                let value = self.get(id, &key)?;
+                if &value == search {
+                    return Self::array_index_value(index);
+                }
+            }
+        }
+        Ok(Value::Number(INDEX_NOT_FOUND))
+    }
+
     pub(crate) fn array_get_index(&self, id: ObjectId, index: usize) -> Result<Value> {
         let object = self.object(id)?;
         if object.array_length.is_none() {
@@ -170,6 +202,11 @@ impl ObjectHeap {
         }
         self.delete(id, &to_key)?;
         Ok(())
+    }
+
+    fn array_index_value(index: usize) -> Result<Value> {
+        let index = u32::try_from(index).map_err(|_| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
+        Ok(Value::Number(f64::from(index)))
     }
 }
 

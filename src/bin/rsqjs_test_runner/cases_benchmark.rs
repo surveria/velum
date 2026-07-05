@@ -38,6 +38,8 @@ const PATH_BENCH_ARRAY_PROTOTYPE_METHODS: &str =
     "tests/corpora/benchmarks/active/array_prototype_methods.js";
 const PATH_BENCH_ARRAY_PROTOTYPE_JOIN: &str =
     "tests/corpora/benchmarks/active/array_prototype_join.js";
+const PATH_BENCH_ARRAY_PROTOTYPE_INDEX_OF: &str =
+    "tests/corpora/benchmarks/active/array_prototype_index_of.js";
 const PATH_BENCH_ARRAY_PROTOTYPE_SHIFT_UNSHIFT: &str =
     "tests/corpora/benchmarks/active/array_prototype_shift_unshift.js";
 const PATH_BENCH_ARRAY_PROTOTYPE_SLICE: &str =
@@ -184,6 +186,10 @@ fn benchmark_object_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "array_prototype_join",
             path: PATH_BENCH_ARRAY_PROTOTYPE_JOIN,
+        },
+        BenchmarkCase {
+            id: "array_prototype_index_of",
+            path: PATH_BENCH_ARRAY_PROTOTYPE_INDEX_OF,
         },
         BenchmarkCase {
             id: "array_prototype_shift_unshift",
