@@ -1,9 +1,9 @@
 # Roadmap
 
-The operational task board and optimization sequence live in
-[Optimization Execution Plan](optimization-execution-plan.md). Update that
-document in the same branch that starts or completes an optimization or feature
-task.
+The operational task board and execution sequence live in
+[Development Plan](development-plan.md). Update that document in the same
+branch that starts or completes a compatibility, embedding, testing,
+performance, memory, resource-control, or observability task.
 
 ## Phase 0: Repository and Guardrails
 

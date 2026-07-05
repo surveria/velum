@@ -43,4 +43,4 @@ cargo run --bin rsqjs -- -e 'let x = 40 + 2; print("answer", x); x'
 - [Architecture](docs/architecture.md)
 - [Roadmap](docs/roadmap.md)
 - [Benchmarking](docs/benchmarking.md)
-- [Optimization Execution Plan](docs/optimization-execution-plan.md)
+- [Development Plan](docs/development-plan.md)
