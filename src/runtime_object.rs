@@ -7,6 +7,8 @@ use crate::value::{ObjectId, Value};
 mod runtime_object_array;
 #[path = "runtime_object_data.rs"]
 mod runtime_object_data;
+#[path = "runtime_object_descriptor.rs"]
+mod runtime_object_descriptor;
 #[path = "runtime_object_index.rs"]
 mod runtime_object_index;
 #[path = "runtime_object_keys.rs"]
@@ -14,24 +16,16 @@ mod runtime_object_keys;
 #[path = "runtime_object_string.rs"]
 mod runtime_object_string;
 
+pub use runtime_object_descriptor::{
+    DataPropertyDescriptor, DataPropertyUpdate, ObjectProperty, PropertyConfigurable,
+    PropertyEnumerable, PropertyWritable,
+};
 use runtime_object_index::{ArrayIndex, ArrayLength};
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
 const ARRAY_INDEX_LIMIT_ERROR: &str = "array index exceeded supported range";
 const OBJECT_CONSTRUCTOR_PROPERTY: &str = "constructor";
 const PROTOTYPE_PROPERTY: &str = "__proto__";
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum PropertyEnumerable {
-    Yes,
-    No,
-}
-
-impl PropertyEnumerable {
-    const fn is_yes(self) -> bool {
-        matches!(self, Self::Yes)
-    }
-}
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum LiteralPrototype {
@@ -577,7 +571,7 @@ impl Object {
                 }
                 self.property_order.push(entry.key().clone());
                 let property =
-                    ObjectProperty::new(value, enumerable.unwrap_or(PropertyEnumerable::Yes));
+                    ObjectProperty::ordinary(value, enumerable.unwrap_or(PropertyEnumerable::Yes));
                 if property.is_enumerable() {
                     enumerable_update = Some((false, true));
                 }
@@ -637,7 +631,8 @@ impl Object {
             .array_elements
             .get_mut(position)
             .ok_or_else(|| Error::runtime("array index storage is not available"))?;
-        let property = ObjectProperty::new(value, enumerable.unwrap_or(PropertyEnumerable::Yes));
+        let property =
+            ObjectProperty::ordinary(value, enumerable.unwrap_or(PropertyEnumerable::Yes));
         if property.is_enumerable() {
             self.enumerable_property_count = self.enumerable_property_count.saturating_add(1);
         }
@@ -656,14 +651,19 @@ impl Object {
         {
             return true;
         }
-        let removed_property = self.properties.remove(property);
-        if let Some(removed_property) = removed_property {
-            if removed_property.is_enumerable() {
-                self.enumerable_property_count = self.enumerable_property_count.saturating_sub(1);
-            }
-            self.property_order.retain(|key| key != property);
+        let Some(existing_property) = self.properties.get(property) else {
             return true;
+        };
+        if !existing_property.is_configurable() {
+            return false;
         }
+        let Some(removed_property) = self.properties.remove(property) else {
+            return true;
+        };
+        if removed_property.is_enumerable() {
+            self.enumerable_property_count = self.enumerable_property_count.saturating_sub(1);
+        }
+        self.property_order.retain(|key| key != property);
         true
     }
 
@@ -703,6 +703,12 @@ impl Object {
         let Some(slot) = self.array_elements.get_mut(position) else {
             return false;
         };
+        let Some(property) = slot.as_ref() else {
+            return false;
+        };
+        if !property.is_configurable() {
+            return false;
+        }
         if let Some(property) = slot.take() {
             if property.is_enumerable() {
                 self.enumerable_property_count = self.enumerable_property_count.saturating_sub(1);
@@ -737,33 +743,5 @@ impl Object {
         self.properties
             .len()
             .saturating_add(self.array_property_count)
-    }
-}
-
-#[derive(Debug, Clone)]
-struct ObjectProperty {
-    value: Value,
-    enumerable: PropertyEnumerable,
-}
-
-impl ObjectProperty {
-    const fn new(value: Value, enumerable: PropertyEnumerable) -> Self {
-        Self { value, enumerable }
-    }
-
-    fn value(&self) -> Value {
-        self.value.clone()
-    }
-
-    const fn is_enumerable(&self) -> bool {
-        self.enumerable.is_yes()
-    }
-
-    fn set_value(&mut self, value: Value) {
-        self.value = value;
-    }
-
-    const fn set_enumerable(&mut self, enumerable: PropertyEnumerable) {
-        self.enumerable = enumerable;
     }
 }

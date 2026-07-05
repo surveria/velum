@@ -19,6 +19,8 @@ mod runtime_native_json;
 mod runtime_native_math;
 #[path = "runtime_native_number.rs"]
 mod runtime_native_number;
+#[path = "runtime_native_object.rs"]
+mod runtime_native_object;
 #[path = "runtime_native_string.rs"]
 mod runtime_native_string;
 
@@ -99,6 +101,14 @@ const NAN_NAME: &str = "NaN";
 const NUMBER_FUNCTION_LENGTH: f64 = 1.0;
 const NUMBER_NAME: &str = "Number";
 const OBJECT_FUNCTION_LENGTH: f64 = 1.0;
+const OBJECT_DEFINE_PROPERTY_FUNCTION_LENGTH: f64 = 3.0;
+const OBJECT_DEFINE_PROPERTY_NAME: &str = "defineProperty";
+const OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH: f64 = 2.0;
+const OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME: &str = "getOwnPropertyDescriptor";
+const OBJECT_HAS_OWN_FUNCTION_LENGTH: f64 = 2.0;
+const OBJECT_HAS_OWN_NAME: &str = "hasOwn";
+const OBJECT_KEYS_FUNCTION_LENGTH: f64 = 1.0;
+const OBJECT_KEYS_NAME: &str = "keys";
 const OBJECT_NAME: &str = "Object";
 const STRING_FUNCTION_LENGTH: f64 = 1.0;
 const STRING_NAME: &str = "String";
@@ -176,6 +186,12 @@ impl NativeFunction {
             | NativeFunctionKind::MathPow => MATH_FUNCTION_LENGTH_TWO,
             NativeFunctionKind::Number => NUMBER_FUNCTION_LENGTH,
             NativeFunctionKind::Object => OBJECT_FUNCTION_LENGTH,
+            NativeFunctionKind::ObjectDefineProperty => OBJECT_DEFINE_PROPERTY_FUNCTION_LENGTH,
+            NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
+                OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH
+            }
+            NativeFunctionKind::ObjectHasOwn => OBJECT_HAS_OWN_FUNCTION_LENGTH,
+            NativeFunctionKind::ObjectKeys => OBJECT_KEYS_FUNCTION_LENGTH,
             NativeFunctionKind::String => STRING_FUNCTION_LENGTH,
         }
     }
@@ -235,6 +251,12 @@ impl NativeFunction {
             NativeFunctionKind::MathTrunc => MATH_TRUNC_NAME,
             NativeFunctionKind::Number => NUMBER_NAME,
             NativeFunctionKind::Object => OBJECT_NAME,
+            NativeFunctionKind::ObjectDefineProperty => OBJECT_DEFINE_PROPERTY_NAME,
+            NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
+                OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME
+            }
+            NativeFunctionKind::ObjectHasOwn => OBJECT_HAS_OWN_NAME,
+            NativeFunctionKind::ObjectKeys => OBJECT_KEYS_NAME,
             NativeFunctionKind::String => STRING_NAME,
         }
     }
@@ -304,6 +326,10 @@ impl NativeFunction {
             | NativeFunctionKind::MathTanh
             | NativeFunctionKind::MathTrunc
             | NativeFunctionKind::Object
+            | NativeFunctionKind::ObjectDefineProperty
+            | NativeFunctionKind::ObjectGetOwnPropertyDescriptor
+            | NativeFunctionKind::ObjectHasOwn
+            | NativeFunctionKind::ObjectKeys
             | NativeFunctionKind::String => None,
         }
     }
@@ -368,6 +394,10 @@ pub(super) enum NativeFunctionKind {
     MathTrunc,
     Number,
     Object,
+    ObjectDefineProperty,
+    ObjectGetOwnPropertyDescriptor,
+    ObjectHasOwn,
+    ObjectKeys,
     String,
 }
 
@@ -469,6 +499,12 @@ impl Context {
             NativeFunctionKind::MathTrunc => self.eval_math_trunc(args),
             NativeFunctionKind::Number => self.eval_number_constructor(args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
+            NativeFunctionKind::ObjectDefineProperty => self.eval_object_define_property(args),
+            NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
+                self.eval_object_get_own_property_descriptor(args)
+            }
+            NativeFunctionKind::ObjectHasOwn => self.eval_object_has_own(args),
+            NativeFunctionKind::ObjectKeys => self.eval_object_keys(args),
             NativeFunctionKind::String => self.eval_string_constructor(args),
         }
     }
@@ -527,7 +563,11 @@ impl Context {
             | NativeFunctionKind::MathSqrt
             | NativeFunctionKind::MathTan
             | NativeFunctionKind::MathTanh
-            | NativeFunctionKind::MathTrunc => {
+            | NativeFunctionKind::MathTrunc
+            | NativeFunctionKind::ObjectDefineProperty
+            | NativeFunctionKind::ObjectGetOwnPropertyDescriptor
+            | NativeFunctionKind::ObjectHasOwn
+            | NativeFunctionKind::ObjectKeys => {
                 Err(Error::runtime("native method is not a constructor"))
             }
             NativeFunctionKind::Boolean => self.construct_boolean_object(args),
@@ -551,20 +591,6 @@ impl Context {
         self.native_functions
             .get_mut(id.index())
             .ok_or_else(|| Error::runtime("native function id is not defined"))
-    }
-
-    fn object_constructor_value(&mut self) -> Result<Value> {
-        if let Some(id) = self.native_function_id(NativeFunctionKind::Object) {
-            return Ok(Value::NativeFunction(id));
-        }
-
-        let id = NativeFunctionId::new(self.native_functions.len());
-        let constructor = Value::NativeFunction(id);
-        let prototype = self.object_prototype_id_with_constructor(constructor.clone())?;
-        self.native_functions
-            .push(NativeFunction::new(NativeFunctionKind::Object, prototype));
-        self.insert_global_builtin(OBJECT_NAME, constructor.clone())?;
-        Ok(constructor)
     }
 
     fn error_constructor_value(&mut self, name: ErrorName) -> Result<Value> {
@@ -644,29 +670,6 @@ impl Context {
             })
     }
 
-    fn eval_object_constructor(&mut self, args: &[Expr]) -> Result<Value> {
-        let values = args
-            .iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
-        let Some(value) = values.first() else {
-            return self.create_object_from_constructor();
-        };
-
-        match value {
-            Value::Object(_)
-            | Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => Ok(value.clone()),
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::String(_) => self.create_object_from_constructor(),
-        }
-    }
-
     pub(super) fn eval_error_constructor(
         &mut self,
         name: ErrorName,
@@ -681,13 +684,5 @@ impl Context {
             .map_or_else(String::new, Value::display_for_concat);
         self.check_string_len(&message)?;
         Ok(Value::Error(ErrorObject::new(name, message)))
-    }
-
-    fn create_object_from_constructor(&mut self) -> Result<Value> {
-        self.objects.create_with_prototype(
-            None,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )
     }
 }
