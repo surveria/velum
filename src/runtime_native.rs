@@ -50,16 +50,38 @@ const BOOLEAN_NAME: &str = "Boolean";
 const ERROR_FUNCTION_LENGTH: f64 = 1.0;
 const INFINITY_NAME: &str = "Infinity";
 const MATH_ABS_NAME: &str = "abs";
+const MATH_ACOS_NAME: &str = "acos";
+const MATH_ACOSH_NAME: &str = "acosh";
+const MATH_ASIN_NAME: &str = "asin";
+const MATH_ASINH_NAME: &str = "asinh";
+const MATH_ATAN_NAME: &str = "atan";
+const MATH_ATAN2_NAME: &str = "atan2";
+const MATH_ATANH_NAME: &str = "atanh";
+const MATH_CBRT_NAME: &str = "cbrt";
 const MATH_CEIL_NAME: &str = "ceil";
+const MATH_COS_NAME: &str = "cos";
+const MATH_COSH_NAME: &str = "cosh";
+const MATH_EXP_NAME: &str = "exp";
+const MATH_EXPM1_NAME: &str = "expm1";
 const MATH_FLOOR_NAME: &str = "floor";
 const MATH_FUNCTION_LENGTH_ONE: f64 = 1.0;
 const MATH_FUNCTION_LENGTH_TWO: f64 = 2.0;
+const MATH_HYPOT_NAME: &str = "hypot";
+const MATH_LOG_NAME: &str = "log";
+const MATH_LOG10_NAME: &str = "log10";
+const MATH_LOG1P_NAME: &str = "log1p";
+const MATH_LOG2_NAME: &str = "log2";
 const MATH_MAX_NAME: &str = "max";
 const MATH_MIN_NAME: &str = "min";
 const MATH_NAME: &str = "Math";
 const MATH_POW_NAME: &str = "pow";
 const MATH_ROUND_NAME: &str = "round";
+const MATH_SIGN_NAME: &str = "sign";
+const MATH_SIN_NAME: &str = "sin";
+const MATH_SINH_NAME: &str = "sinh";
 const MATH_SQRT_NAME: &str = "sqrt";
+const MATH_TAN_NAME: &str = "tan";
+const MATH_TANH_NAME: &str = "tanh";
 const MATH_TRUNC_NAME: &str = "trunc";
 const NAN_NAME: &str = "NaN";
 const NUMBER_FUNCTION_LENGTH: f64 = 1.0;
@@ -104,12 +126,34 @@ impl NativeFunction {
             NativeFunctionKind::Boolean => BOOLEAN_FUNCTION_LENGTH,
             NativeFunctionKind::ErrorConstructor(_) => ERROR_FUNCTION_LENGTH,
             NativeFunctionKind::MathAbs
+            | NativeFunctionKind::MathAcos
+            | NativeFunctionKind::MathAcosh
+            | NativeFunctionKind::MathAsin
+            | NativeFunctionKind::MathAsinh
+            | NativeFunctionKind::MathAtan
+            | NativeFunctionKind::MathAtanh
+            | NativeFunctionKind::MathCbrt
             | NativeFunctionKind::MathCeil
+            | NativeFunctionKind::MathCos
+            | NativeFunctionKind::MathCosh
+            | NativeFunctionKind::MathExp
+            | NativeFunctionKind::MathExpm1
             | NativeFunctionKind::MathFloor
+            | NativeFunctionKind::MathLog
+            | NativeFunctionKind::MathLog10
+            | NativeFunctionKind::MathLog1p
+            | NativeFunctionKind::MathLog2
             | NativeFunctionKind::MathRound
+            | NativeFunctionKind::MathSign
+            | NativeFunctionKind::MathSin
+            | NativeFunctionKind::MathSinh
             | NativeFunctionKind::MathSqrt
+            | NativeFunctionKind::MathTan
+            | NativeFunctionKind::MathTanh
             | NativeFunctionKind::MathTrunc => MATH_FUNCTION_LENGTH_ONE,
-            NativeFunctionKind::MathMax
+            NativeFunctionKind::MathAtan2
+            | NativeFunctionKind::MathHypot
+            | NativeFunctionKind::MathMax
             | NativeFunctionKind::MathMin
             | NativeFunctionKind::MathPow => MATH_FUNCTION_LENGTH_TWO,
             NativeFunctionKind::Number => NUMBER_FUNCTION_LENGTH,
@@ -135,13 +179,35 @@ impl NativeFunction {
             NativeFunctionKind::Boolean => BOOLEAN_NAME,
             NativeFunctionKind::ErrorConstructor(name) => name.as_str(),
             NativeFunctionKind::MathAbs => MATH_ABS_NAME,
+            NativeFunctionKind::MathAcos => MATH_ACOS_NAME,
+            NativeFunctionKind::MathAcosh => MATH_ACOSH_NAME,
+            NativeFunctionKind::MathAsin => MATH_ASIN_NAME,
+            NativeFunctionKind::MathAsinh => MATH_ASINH_NAME,
+            NativeFunctionKind::MathAtan => MATH_ATAN_NAME,
+            NativeFunctionKind::MathAtan2 => MATH_ATAN2_NAME,
+            NativeFunctionKind::MathAtanh => MATH_ATANH_NAME,
+            NativeFunctionKind::MathCbrt => MATH_CBRT_NAME,
             NativeFunctionKind::MathCeil => MATH_CEIL_NAME,
+            NativeFunctionKind::MathCos => MATH_COS_NAME,
+            NativeFunctionKind::MathCosh => MATH_COSH_NAME,
+            NativeFunctionKind::MathExp => MATH_EXP_NAME,
+            NativeFunctionKind::MathExpm1 => MATH_EXPM1_NAME,
             NativeFunctionKind::MathFloor => MATH_FLOOR_NAME,
+            NativeFunctionKind::MathHypot => MATH_HYPOT_NAME,
+            NativeFunctionKind::MathLog => MATH_LOG_NAME,
+            NativeFunctionKind::MathLog10 => MATH_LOG10_NAME,
+            NativeFunctionKind::MathLog1p => MATH_LOG1P_NAME,
+            NativeFunctionKind::MathLog2 => MATH_LOG2_NAME,
             NativeFunctionKind::MathMax => MATH_MAX_NAME,
             NativeFunctionKind::MathMin => MATH_MIN_NAME,
             NativeFunctionKind::MathPow => MATH_POW_NAME,
             NativeFunctionKind::MathRound => MATH_ROUND_NAME,
+            NativeFunctionKind::MathSign => MATH_SIGN_NAME,
+            NativeFunctionKind::MathSin => MATH_SIN_NAME,
+            NativeFunctionKind::MathSinh => MATH_SINH_NAME,
             NativeFunctionKind::MathSqrt => MATH_SQRT_NAME,
+            NativeFunctionKind::MathTan => MATH_TAN_NAME,
+            NativeFunctionKind::MathTanh => MATH_TANH_NAME,
             NativeFunctionKind::MathTrunc => MATH_TRUNC_NAME,
             NativeFunctionKind::Number => NUMBER_NAME,
             NativeFunctionKind::Object => OBJECT_NAME,
@@ -177,13 +243,35 @@ impl NativeFunction {
             | NativeFunctionKind::Boolean
             | NativeFunctionKind::ErrorConstructor(_)
             | NativeFunctionKind::MathAbs
+            | NativeFunctionKind::MathAcos
+            | NativeFunctionKind::MathAcosh
+            | NativeFunctionKind::MathAsin
+            | NativeFunctionKind::MathAsinh
+            | NativeFunctionKind::MathAtan
+            | NativeFunctionKind::MathAtan2
+            | NativeFunctionKind::MathAtanh
+            | NativeFunctionKind::MathCbrt
             | NativeFunctionKind::MathCeil
+            | NativeFunctionKind::MathCos
+            | NativeFunctionKind::MathCosh
+            | NativeFunctionKind::MathExp
+            | NativeFunctionKind::MathExpm1
             | NativeFunctionKind::MathFloor
+            | NativeFunctionKind::MathHypot
+            | NativeFunctionKind::MathLog
+            | NativeFunctionKind::MathLog10
+            | NativeFunctionKind::MathLog1p
+            | NativeFunctionKind::MathLog2
             | NativeFunctionKind::MathMax
             | NativeFunctionKind::MathMin
             | NativeFunctionKind::MathPow
             | NativeFunctionKind::MathRound
+            | NativeFunctionKind::MathSign
+            | NativeFunctionKind::MathSin
+            | NativeFunctionKind::MathSinh
             | NativeFunctionKind::MathSqrt
+            | NativeFunctionKind::MathTan
+            | NativeFunctionKind::MathTanh
             | NativeFunctionKind::MathTrunc
             | NativeFunctionKind::Object
             | NativeFunctionKind::String => None,
@@ -212,13 +300,35 @@ pub(super) enum NativeFunctionKind {
     Boolean,
     ErrorConstructor(ErrorName),
     MathAbs,
+    MathAcos,
+    MathAcosh,
+    MathAsin,
+    MathAsinh,
+    MathAtan,
+    MathAtan2,
+    MathAtanh,
+    MathCbrt,
     MathCeil,
+    MathCos,
+    MathCosh,
+    MathExp,
+    MathExpm1,
     MathFloor,
+    MathHypot,
+    MathLog,
+    MathLog10,
+    MathLog1p,
+    MathLog2,
     MathMax,
     MathMin,
     MathPow,
     MathRound,
+    MathSign,
+    MathSin,
+    MathSinh,
     MathSqrt,
+    MathTan,
+    MathTanh,
     MathTrunc,
     Number,
     Object,
@@ -284,13 +394,35 @@ impl Context {
             NativeFunctionKind::Boolean => self.eval_boolean_constructor(args),
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
             NativeFunctionKind::MathAbs => self.eval_math_abs(args),
+            NativeFunctionKind::MathAcos => self.eval_math_acos(args),
+            NativeFunctionKind::MathAcosh => self.eval_math_acosh(args),
+            NativeFunctionKind::MathAsin => self.eval_math_asin(args),
+            NativeFunctionKind::MathAsinh => self.eval_math_asinh(args),
+            NativeFunctionKind::MathAtan => self.eval_math_atan(args),
+            NativeFunctionKind::MathAtan2 => self.eval_math_atan2(args),
+            NativeFunctionKind::MathAtanh => self.eval_math_atanh(args),
+            NativeFunctionKind::MathCbrt => self.eval_math_cbrt(args),
             NativeFunctionKind::MathCeil => self.eval_math_ceil(args),
+            NativeFunctionKind::MathCos => self.eval_math_cos(args),
+            NativeFunctionKind::MathCosh => self.eval_math_cosh(args),
+            NativeFunctionKind::MathExp => self.eval_math_exp(args),
+            NativeFunctionKind::MathExpm1 => self.eval_math_expm1(args),
             NativeFunctionKind::MathFloor => self.eval_math_floor(args),
+            NativeFunctionKind::MathHypot => self.eval_math_hypot(args),
+            NativeFunctionKind::MathLog => self.eval_math_log(args),
+            NativeFunctionKind::MathLog10 => self.eval_math_log10(args),
+            NativeFunctionKind::MathLog1p => self.eval_math_log1p(args),
+            NativeFunctionKind::MathLog2 => self.eval_math_log2(args),
             NativeFunctionKind::MathMax => self.eval_math_max(args),
             NativeFunctionKind::MathMin => self.eval_math_min(args),
             NativeFunctionKind::MathPow => self.eval_math_pow(args),
             NativeFunctionKind::MathRound => self.eval_math_round(args),
+            NativeFunctionKind::MathSign => self.eval_math_sign(args),
+            NativeFunctionKind::MathSin => self.eval_math_sin(args),
+            NativeFunctionKind::MathSinh => self.eval_math_sinh(args),
             NativeFunctionKind::MathSqrt => self.eval_math_sqrt(args),
+            NativeFunctionKind::MathTan => self.eval_math_tan(args),
+            NativeFunctionKind::MathTanh => self.eval_math_tanh(args),
             NativeFunctionKind::MathTrunc => self.eval_math_trunc(args),
             NativeFunctionKind::Number => self.eval_number_constructor(args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
@@ -317,13 +449,35 @@ impl Context {
             | NativeFunctionKind::ArraySlice
             | NativeFunctionKind::ArrayUnshift
             | NativeFunctionKind::MathAbs
+            | NativeFunctionKind::MathAcos
+            | NativeFunctionKind::MathAcosh
+            | NativeFunctionKind::MathAsin
+            | NativeFunctionKind::MathAsinh
+            | NativeFunctionKind::MathAtan
+            | NativeFunctionKind::MathAtan2
+            | NativeFunctionKind::MathAtanh
+            | NativeFunctionKind::MathCbrt
             | NativeFunctionKind::MathCeil
+            | NativeFunctionKind::MathCos
+            | NativeFunctionKind::MathCosh
+            | NativeFunctionKind::MathExp
+            | NativeFunctionKind::MathExpm1
             | NativeFunctionKind::MathFloor
+            | NativeFunctionKind::MathHypot
+            | NativeFunctionKind::MathLog
+            | NativeFunctionKind::MathLog10
+            | NativeFunctionKind::MathLog1p
+            | NativeFunctionKind::MathLog2
             | NativeFunctionKind::MathMax
             | NativeFunctionKind::MathMin
             | NativeFunctionKind::MathPow
             | NativeFunctionKind::MathRound
+            | NativeFunctionKind::MathSign
+            | NativeFunctionKind::MathSin
+            | NativeFunctionKind::MathSinh
             | NativeFunctionKind::MathSqrt
+            | NativeFunctionKind::MathTan
+            | NativeFunctionKind::MathTanh
             | NativeFunctionKind::MathTrunc => {
                 Err(Error::runtime("native method is not a constructor"))
             }
