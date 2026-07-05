@@ -29,6 +29,7 @@ const PATH_BENCH_OBJECT_LITERALS: &str = "tests/corpora/benchmarks/active/object
 const PATH_BENCH_OBJECT_PROTOTYPES: &str = "tests/corpora/benchmarks/active/object_prototypes.js";
 const PATH_BENCH_OBJECT_PROTOTYPE_ROOT: &str =
     "tests/corpora/benchmarks/active/object_prototype_root.js";
+const PATH_BENCH_OBJECT_BUILTIN: &str = "tests/corpora/benchmarks/active/object_builtin.js";
 const PATH_BENCH_COMPUTED_PROPERTIES: &str =
     "tests/corpora/benchmarks/active/computed_properties.js";
 const PATH_BENCH_ARRAY_LITERALS: &str = "tests/corpora/benchmarks/active/array_literals.js";
@@ -150,6 +151,10 @@ fn benchmark_object_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "object_prototype_root",
             path: PATH_BENCH_OBJECT_PROTOTYPE_ROOT,
+        },
+        BenchmarkCase {
+            id: "object_builtin",
+            path: PATH_BENCH_OBJECT_BUILTIN,
         },
         BenchmarkCase {
             id: "computed_properties",

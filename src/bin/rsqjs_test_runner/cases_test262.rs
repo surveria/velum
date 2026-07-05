@@ -28,6 +28,8 @@ const PATH_TEST262_OBJECT_PROTOTYPES: &str =
     "tests/corpora/test262/active/language/expressions/object_prototypes.js";
 const PATH_TEST262_OBJECT_PROTOTYPE_ROOT: &str =
     "tests/corpora/test262/active/language/expressions/object_prototype_root.js";
+const PATH_TEST262_OBJECT_BUILTIN: &str =
+    "tests/corpora/test262/active/language/expressions/object_builtin.js";
 const PATH_TEST262_COMPUTED_PROPERTIES: &str =
     "tests/corpora/test262/active/language/expressions/computed_properties.js";
 const PATH_TEST262_ARRAY_LITERALS: &str =
@@ -165,6 +167,11 @@ fn test262_object_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/object_prototype_root",
             path: PATH_TEST262_OBJECT_PROTOTYPE_ROOT,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/object_builtin",
+            path: PATH_TEST262_OBJECT_BUILTIN,
             expectation: Expectation::Value("42"),
         },
         EngineCase {

@@ -72,6 +72,7 @@ const PATH_CLOSURE_ENVIRONMENTS: &str = "tests/engine_cases/closure_environments
 const PATH_OBJECT_LITERALS: &str = "tests/engine_cases/object_literals.js";
 const PATH_OBJECT_PROTOTYPES: &str = "tests/engine_cases/object_prototypes.js";
 const PATH_OBJECT_PROTOTYPE_ROOT: &str = "tests/engine_cases/object_prototype_root.js";
+const PATH_OBJECT_BUILTIN: &str = "tests/engine_cases/object_builtin.js";
 const PATH_COMPUTED_PROPERTIES: &str = "tests/engine_cases/computed_properties.js";
 const PATH_ARRAY_LITERALS: &str = "tests/engine_cases/array_literals.js";
 const PATH_UNARY_OPERATORS: &str = "tests/engine_cases/unary_operators.js";
@@ -420,6 +421,18 @@ fn engine_object_cases() -> Vec<EngineCase> {
                     "root false true true",
                     "constructor true true true false",
                     "keys:||",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "object_builtin",
+            path: PATH_OBJECT_BUILTIN,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "function Object 1 true",
+                    "true true true true true",
+                    "keys:|",
                 ],
                 value: "42",
             },
