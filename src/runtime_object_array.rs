@@ -3,7 +3,7 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ArrayLength, Object, ObjectHeap};
+use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ArrayLength, Object, ObjectHeap, ObjectProperty};
 
 const ARRAY_CONCAT_RECEIVER_ERROR: &str = "Array.prototype.concat requires an array receiver";
 const ARRAY_INCLUDES_RECEIVER_ERROR: &str = "Array.prototype.includes requires an array receiver";
@@ -18,6 +18,12 @@ const ARRAY_SHIFT_RECEIVER_ERROR: &str = "Array.prototype.shift requires an arra
 const ARRAY_SLICE_RECEIVER_ERROR: &str = "Array.prototype.slice requires an array receiver";
 const ARRAY_UNSHIFT_RECEIVER_ERROR: &str = "Array.prototype.unshift requires an array receiver";
 const INDEX_NOT_FOUND: f64 = -1.0;
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct ArrayCopyProgress {
+    next_index: usize,
+    source_index: usize,
+}
 
 impl ObjectHeap {
     pub(crate) fn array_push(
@@ -374,18 +380,17 @@ impl ObjectHeap {
         length: ArrayLength,
         max_properties: usize,
     ) -> Result<()> {
-        if self.has_dense_own_array_values(source_id, length)? {
-            *next_index = self.concat_dense_own_array_source(
-                result_id,
-                *next_index,
-                source_id,
-                length,
-                max_properties,
-            )?;
-            return Ok(());
-        }
+        let length = length.to_usize()?;
+        let progress = self.concat_own_array_prefix(
+            result_id,
+            *next_index,
+            source_id,
+            length,
+            max_properties,
+        )?;
+        *next_index = progress.next_index;
 
-        for source_index in 0..length.to_usize()? {
+        for source_index in progress.source_index..length {
             let source_key = ArrayIndex::from_usize(source_index)?.key();
             if let Some(value) = self.array_property_value(source_id, &source_key)? {
                 self.set_concat_result_index(result_id, *next_index, value, max_properties)?;
@@ -395,40 +400,39 @@ impl ObjectHeap {
         Ok(())
     }
 
-    fn has_dense_own_array_values(&self, source_id: ObjectId, length: ArrayLength) -> Result<bool> {
-        let object = self.object(source_id)?;
-        for source_index in 0..length.to_usize()? {
-            let source_key = ArrayIndex::from_usize(source_index)?.key();
-            if !object.has_own(&source_key) {
-                return Ok(false);
-            }
-        }
-        Ok(true)
-    }
-
-    fn concat_dense_own_array_source(
+    fn concat_own_array_prefix(
         &mut self,
         result_id: ObjectId,
         start_index: usize,
         source_id: ObjectId,
-        length: ArrayLength,
+        length: usize,
         max_properties: usize,
-    ) -> Result<usize> {
+    ) -> Result<ArrayCopyProgress> {
         let (source, result) = self.object_pair_for_concat(source_id, result_id)?;
         if result.array_length.is_none() {
             return Err(Error::runtime("array concat result is not an array"));
         }
         let mut next_index = start_index;
-        for source_index in 0..length.to_usize()? {
+        for source_index in 0..length {
             let source_key = ArrayIndex::from_usize(source_index)?.key();
-            let Some(value) = source.get_own(&source_key) else {
-                return Err(Error::runtime("array concat dense source changed"));
+            let Some(value) = source
+                .properties
+                .get(&source_key)
+                .map(ObjectProperty::value)
+            else {
+                return Ok(ArrayCopyProgress {
+                    next_index,
+                    source_index,
+                });
             };
             let target_index = ArrayIndex::from_usize(next_index)?;
             result.set_ordinary(target_index.key(), value, max_properties)?;
             next_index = Self::next_concat_index(next_index)?;
         }
-        Ok(next_index)
+        Ok(ArrayCopyProgress {
+            next_index,
+            source_index: length,
+        })
     }
 
     fn object_pair_for_concat(

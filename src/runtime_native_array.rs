@@ -78,7 +78,7 @@ impl Context {
                 "Array.prototype.concat requires an array receiver",
             ));
         };
-        let prototype = self.array_constructor_prototype()?;
+        let prototype = self.existing_array_constructor_prototype()?;
         self.objects.array_concat(
             *id,
             values,
@@ -238,7 +238,7 @@ impl Context {
         let length = self.objects.array_len_for_slice(*id)?;
         let start = Self::array_slice_bound(values.first(), length, 0)?;
         let end = Self::array_slice_bound(values.get(1), length, length)?.max(start);
-        let prototype = self.array_constructor_prototype()?;
+        let prototype = self.existing_array_constructor_prototype()?;
         self.objects.array_slice(
             *id,
             start,
@@ -388,6 +388,10 @@ impl Context {
             Value::Object(id) => Ok(id),
             _ => Err(Error::runtime("Array prototype is not an object")),
         }
+    }
+
+    fn existing_array_constructor_prototype(&self) -> Result<ObjectId> {
+        self.objects.existing_array_prototype_id()
     }
 
     fn array_constructor_length(values: &[Value]) -> Result<Option<usize>> {

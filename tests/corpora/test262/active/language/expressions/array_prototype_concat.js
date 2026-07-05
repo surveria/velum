@@ -21,6 +21,14 @@ inherited[1] = "own-one";
 let inheritedResult = [].concat(inherited);
 delete Array.prototype[0];
 
+Array.prototype[2] = "proto-two";
+let prefixFallback = Array(4);
+prefixFallback[0] = "own-zero";
+prefixFallback[1] = "own-one";
+prefixFallback[3] = "own-three";
+let prefixFallbackResult = [].concat(prefixFallback);
+delete Array.prototype[2];
+
 let plain = {};
 plain[0] = "plain-zero";
 plain.length = 1;
@@ -56,6 +64,13 @@ result.length === 6 &&
     inheritedResult[0] === "proto-zero" &&
     ("0" in inheritedResult) &&
     inheritedResult[1] === "own-one" &&
+    prefixFallbackResult.length === 4 &&
+    prefixFallbackResult[0] === "own-zero" &&
+    prefixFallbackResult[1] === "own-one" &&
+    prefixFallbackResult[2] === "proto-two" &&
+    ("2" in prefixFallbackResult) &&
+    prefixFallbackResult[3] === "own-three" &&
+    prefixFallbackResult.join("|") === "own-zero|own-one|proto-two|own-three" &&
     plainResult.length === 2 &&
     plainResult[0] === 1 &&
     plainResult[1] === plain &&

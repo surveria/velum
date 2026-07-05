@@ -237,6 +237,11 @@ impl ObjectHeap {
         Ok(prototype)
     }
 
+    pub(crate) fn existing_array_prototype_id(&self) -> Result<ObjectId> {
+        self.array_prototype
+            .ok_or_else(|| Error::runtime("Array prototype is not initialized"))
+    }
+
     pub(crate) fn define_non_enumerable(
         &mut self,
         id: ObjectId,
