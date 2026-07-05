@@ -65,9 +65,10 @@ impl Context {
         } else {
             Value::Undefined
         };
+        let function_name = self.function_name(name)?;
         let param_atoms = self.function_param_atoms(params)?;
         self.functions.push(super::Function {
-            name: name.unwrap_or_default().to_owned(),
+            name: function_name,
             arity: super::FunctionArity::new(params.len()),
             param_atoms,
             body: Rc::clone(body),
@@ -145,19 +146,20 @@ impl Context {
     pub(crate) fn get_function_property(&self, id: FunctionId, property: &str) -> Result<Value> {
         let function = self.function(id)?;
         let lookup = self.property_lookup(property);
-        let value = function_default_intrinsic_descriptor(function, property)?.map_or_else(
-            || match property {
-                FUNCTION_PROTOTYPE_PROPERTY => function.properties.prototype(),
-                _ => function.properties.get(lookup),
-            },
-            |default_descriptor| {
-                function.properties.intrinsic_value_or_property(
-                    property,
-                    lookup,
-                    default_descriptor,
-                )
-            },
-        );
+        let value = function_default_intrinsic_descriptor(function, &self.atoms, property)?
+            .map_or_else(
+                || match property {
+                    FUNCTION_PROTOTYPE_PROPERTY => function.properties.prototype(),
+                    _ => function.properties.get(lookup),
+                },
+                |default_descriptor| {
+                    function.properties.intrinsic_value_or_property(
+                        property,
+                        lookup,
+                        default_descriptor,
+                    )
+                },
+            );
         self.checked_value(value)
     }
 
@@ -167,7 +169,7 @@ impl Context {
         property: &str,
     ) -> Result<Option<DataPropertyDescriptor>> {
         let function = self.function(id)?;
-        if let Some(descriptor) = function_intrinsic_descriptor(function, property)? {
+        if let Some(descriptor) = function_intrinsic_descriptor(function, &self.atoms, property)? {
             return Ok(Some(descriptor));
         }
         Ok(function
@@ -197,7 +199,7 @@ impl Context {
         let max_properties = self.limits.max_object_properties;
         let default_intrinsic = {
             let function = self.function(id)?;
-            function_default_intrinsic_descriptor(function, property)?
+            function_default_intrinsic_descriptor(function, &self.atoms, property)?
         };
         let key = self.intern_property_key(property)?;
         let function = self.function_mut(id)?;
@@ -215,7 +217,7 @@ impl Context {
         let max_properties = self.limits.max_object_properties;
         let default_intrinsic = {
             let function = self.function(id)?;
-            function_default_intrinsic_descriptor(function, property)?
+            function_default_intrinsic_descriptor(function, &self.atoms, property)?
         };
         let key = self.intern_property_key(property)?;
         let function = self.function_mut(id)?;
@@ -235,7 +237,7 @@ impl Context {
     ) -> Result<bool> {
         let default_intrinsic = {
             let function = self.function(id)?;
-            function_default_intrinsic_descriptor(function, property)?
+            function_default_intrinsic_descriptor(function, &self.atoms, property)?
         };
         let lookup = self.property_lookup(property);
         let function = self.function_mut(id)?;
@@ -244,8 +246,10 @@ impl Context {
 
     pub(crate) fn function_enumerable_keys(&self, id: FunctionId) -> Result<Vec<String>> {
         let function = self.function(id)?;
-        let length = function_default_intrinsic_descriptor(function, FUNCTION_LENGTH_PROPERTY)?;
-        let name = function_default_intrinsic_descriptor(function, FUNCTION_NAME_PROPERTY)?;
+        let length =
+            function_default_intrinsic_descriptor(function, &self.atoms, FUNCTION_LENGTH_PROPERTY)?;
+        let name =
+            function_default_intrinsic_descriptor(function, &self.atoms, FUNCTION_NAME_PROPERTY)?;
         function.properties.keys(&self.atoms, length, name)
     }
 
@@ -434,6 +438,13 @@ impl Context {
         Ok(atoms.into())
     }
 
+    fn function_name(&mut self, name: Option<&str>) -> Result<super::FunctionName> {
+        let Some(name) = name.filter(|name| !name.is_empty()) else {
+            return Ok(super::FunctionName::anonymous());
+        };
+        Ok(super::FunctionName::new(self.intern_atom(name)?))
+    }
+
     fn function_scope(&self, params: &[AtomId], args: Vec<Value>) -> Result<BindingScope> {
         let mut scope = BindingScope::new();
         let mut args = args.into_iter();
@@ -459,9 +470,10 @@ impl super::Function {
 
 fn function_intrinsic_descriptor(
     function: &super::Function,
+    atoms: &crate::atom::AtomTable,
     property: &str,
 ) -> Result<Option<DataPropertyDescriptor>> {
-    if let Some(default) = function_default_intrinsic_descriptor(function, property)? {
+    if let Some(default) = function_default_intrinsic_descriptor(function, atoms, property)? {
         return Ok(function.properties.intrinsic_descriptor(property, default));
     }
     let descriptor = match property {
@@ -478,6 +490,7 @@ fn function_intrinsic_descriptor(
 
 fn function_default_intrinsic_descriptor(
     function: &super::Function,
+    atoms: &crate::atom::AtomTable,
     property: &str,
 ) -> Result<Option<DataPropertyDescriptor>> {
     let descriptor = match property {
@@ -488,7 +501,7 @@ fn function_default_intrinsic_descriptor(
             PropertyConfigurable::Yes,
         ),
         FUNCTION_NAME_PROPERTY => DataPropertyDescriptor::new(
-            Value::String(function.name.clone()),
+            function.name.value(atoms)?,
             PropertyWritable::No,
             PropertyEnumerable::No,
             PropertyConfigurable::Yes,
