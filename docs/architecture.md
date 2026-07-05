@@ -23,6 +23,11 @@ The public model should evolve around these roles:
 - `CompiledScript`: a reusable compiled representation. It can start as an AST wrapper and later become bytecode without changing the embedding API.
 - `HostFunctionRegistry`: synchronous and asynchronous Rust callbacks exposed to JavaScript as functions.
 
+The current public skeleton exposes `Engine`, `EngineConfig`, `Vm`, `VmConfig`,
+`Context`, `VmResourceUsage`, and `VmTeardownReport`. `Runtime` remains as a
+compatibility surface for existing smoke tests and runner code, while new
+embedding-facing work should prefer the `Engine -> Vm -> Context` path.
+
 Multiple `Vm` instances must be able to run in the same Rust process without sharing mutable JavaScript state. A failure, resource-limit hit, pending job, or global mutation in one VM must not affect another VM. Shared data is allowed only when it is immutable or protected by explicit synchronization and resource accounting.
 
 Embedding API invariants:

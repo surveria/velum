@@ -32,6 +32,26 @@ cargo test
 cargo run --bin rsqjs -- -e 'let x = 40 + 2; print("answer", x); x'
 ```
 
+## Library Embedding
+
+```rust
+use rs_quickjs::Engine;
+
+fn main() -> rs_quickjs::Result<()> {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let value = vm.context().eval(r#"let camera = "front"; print(camera); camera"#)?;
+    let output = vm.context().take_output();
+
+    let report = vm.finish();
+    println!("value: {value}");
+    println!("output: {output:?}");
+    println!("runtime steps: {}", report.resources.runtime_steps);
+    Ok(())
+}
+```
+
 ## Reference Projects
 
 - [QuickJS](https://bellard.org/quickjs/) remains the behavioral and footprint reference.

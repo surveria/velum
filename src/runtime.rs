@@ -101,6 +101,10 @@ impl Context {
         self.runtime_steps
     }
 
+    pub(crate) fn global_binding_count(&self) -> usize {
+        self.globals.len()
+    }
+
     fn check_source(&self, source: &str) -> Result<()> {
         if source.len() > self.limits.max_source_len {
             return Err(Error::limit(format!(
