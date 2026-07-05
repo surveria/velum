@@ -167,7 +167,7 @@ impl ObjectHeap {
             .map(Some)
     }
 
-    fn object_prototype_id(
+    pub(crate) fn object_prototype_id(
         &mut self,
         max_objects: usize,
         max_properties: usize,
@@ -191,6 +191,17 @@ impl ObjectHeap {
         self.objects.push(object);
         self.object_prototype = Some(id);
         Ok(id)
+    }
+
+    pub(crate) fn define_non_enumerable(
+        &mut self,
+        id: ObjectId,
+        property: String,
+        value: Value,
+        max_properties: usize,
+    ) -> Result<()> {
+        let object = self.object_mut(id)?;
+        object.define(property, value, PropertyEnumerable::No, max_properties)
     }
 
     pub fn get(&self, id: ObjectId, property: &str) -> Result<Value> {
@@ -376,6 +387,7 @@ impl Object {
             | Value::Number(_)
             | Value::String(_)
             | Value::Function(_)
+            | Value::NativeFunction(_)
             | Value::Error(_) => None,
         }
     }
