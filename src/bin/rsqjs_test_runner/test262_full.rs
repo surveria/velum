@@ -16,6 +16,7 @@ use super::{
 
 const CORPUS_NAME: &str = "Test262 full corpus";
 const TEST262_TEST_ROOT: &str = "test";
+const TEST262_RUN_ALL_ENV: &str = "RSQJS_TEST262_RUN_ALL";
 const UNKNOWN_AREA: &str = "unknown";
 
 pub fn run(test262_dir: Option<&Path>) -> CorpusReport {
@@ -27,6 +28,7 @@ pub fn run(test262_dir: Option<&Path>) -> CorpusReport {
         Ok(report) => report,
         Err(error) => CorpusReport {
             name: CORPUS_NAME,
+            required: false,
             stats: CorpusStats {
                 total: 1,
                 passed: 0,
@@ -47,6 +49,7 @@ pub fn run(test262_dir: Option<&Path>) -> CorpusReport {
 fn unavailable_report() -> CorpusReport {
     CorpusReport {
         name: CORPUS_NAME,
+        required: false,
         stats: CorpusStats {
             total: 0,
             passed: 0,
@@ -64,6 +67,7 @@ fn unavailable_report() -> CorpusReport {
 fn execute_full_corpus(test262_dir: &Path) -> anyhow::Result<CorpusReport> {
     let test_paths = discover_test_files(test262_dir)?;
     let manifest = manifest_cases()?;
+    let run_all = should_run_all();
     let mut manifest_by_path = BTreeMap::<String, ManifestCase>::new();
     let mut rows = Vec::<CaseRow>::new();
     let mut stats = CorpusStats {
@@ -91,6 +95,8 @@ fn execute_full_corpus(test262_dir: &Path) -> anyhow::Result<CorpusReport> {
     for path in &test_paths {
         if let Some(case) = manifest_by_path.get(path) {
             run_enabled_case(test262_dir, case, &mut stats, &mut rows, &mut skip_reasons);
+        } else if run_all {
+            run_discovered_case(test262_dir, path, &mut stats, &mut rows);
         } else {
             record_skip(&mut stats, &mut skip_reasons, default_skip_reason(path));
         }
@@ -110,10 +116,53 @@ fn execute_full_corpus(test262_dir: &Path) -> anyhow::Result<CorpusReport> {
 
     Ok(CorpusReport {
         name: CORPUS_NAME,
+        required: false,
         stats,
         rows,
         skip_reasons: skip_reason_rows(skip_reasons),
     })
+}
+
+fn should_run_all() -> bool {
+    std::env::var(TEST262_RUN_ALL_ENV).is_ok_and(|value| is_run_all_value(&value))
+}
+
+fn is_run_all_value(value: &str) -> bool {
+    let value = value.trim();
+    value == "1"
+        || value.eq_ignore_ascii_case("true")
+        || value.eq_ignore_ascii_case("yes")
+        || value.eq_ignore_ascii_case("all")
+        || value.eq_ignore_ascii_case("full")
+}
+
+fn run_discovered_case(
+    test262_dir: &Path,
+    path: &str,
+    stats: &mut CorpusStats,
+    rows: &mut Vec<CaseRow>,
+) {
+    let case = ManifestCase {
+        id: path.to_owned(),
+        path: path.to_owned(),
+        mode: MODE_RUN.to_owned(),
+        reason: "discovered by full Test262 corpus scan".to_owned(),
+    };
+    match execute_manifest_case(test262_dir, &case) {
+        Ok(()) => {
+            stats.passed = stats.passed.saturating_add(1);
+        }
+        Err(error) => {
+            stats.failed = stats.failed.saturating_add(1);
+            let source = source_label(&case.path);
+            rows.push(CaseRow {
+                case: case.id,
+                status: STATUS_FAILED.to_owned(),
+                source,
+                detail: error.to_string(),
+            });
+        }
+    }
 }
 
 fn run_enabled_case(
