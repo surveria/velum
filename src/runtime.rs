@@ -57,12 +57,25 @@ pub struct Context {
 #[derive(Debug, Clone)]
 struct Function {
     name: String,
-    params: Rc<[String]>,
+    arity: FunctionArity,
     param_atoms: Rc<[AtomId]>,
     body: Rc<[Stmt]>,
     captures: Vec<BindingScope>,
     properties: runtime_function_properties::FunctionProperties,
     constructable: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FunctionArity(usize);
+
+impl FunctionArity {
+    const fn new(value: usize) -> Self {
+        Self(value)
+    }
+
+    const fn as_usize(self) -> usize {
+        self.0
+    }
 }
 
 impl Context {

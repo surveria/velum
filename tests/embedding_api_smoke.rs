@@ -278,6 +278,9 @@ fn tracks_atoms_for_function_parameters_before_calls() -> TestResult {
         ",
     )?;
     ensure_value(&value, &Value::Undefined)?;
+
+    let value = vm.context().eval("add.length")?;
+    ensure_value(&value, &Value::Number(2.0))?;
     let function_atoms = vm.resource_usage().atom_count;
 
     let value = vm.context().eval("add(20, 22)")?;

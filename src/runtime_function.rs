@@ -68,7 +68,7 @@ impl Context {
         let param_atoms = self.function_param_atoms(params)?;
         self.functions.push(super::Function {
             name: name.unwrap_or_default().to_owned(),
-            params: Rc::clone(params),
+            arity: super::FunctionArity::new(params.len()),
             param_atoms,
             body: Rc::clone(body),
             captures: self.locals.clone(),
@@ -451,7 +451,7 @@ impl Context {
 
 impl super::Function {
     fn length(&self) -> Result<f64> {
-        let length = u32::try_from(self.params.len())
+        let length = u32::try_from(self.arity.as_usize())
             .map_err(|_| Error::limit("function parameter count exceeded supported range"))?;
         Ok(f64::from(length))
     }
