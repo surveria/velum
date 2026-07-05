@@ -9,6 +9,7 @@ const PATH_GLOBAL_INFINITY_COMPOUND_ASSIGNMENT_ERROR: &str =
 const PATH_GLOBAL_NAN_ASSIGNMENT_ERROR: &str = "tests/engine_cases/global_nan_assignment_error.js";
 const PATH_GLOBAL_NUMERIC_CONSTANTS: &str = "tests/engine_cases/global_numeric_constants.js";
 const PATH_MATH_BUILTIN: &str = "tests/engine_cases/math_builtin.js";
+const PATH_MATH_INTEGER_METHODS: &str = "tests/engine_cases/math_integer_methods.js";
 const PATH_MATH_METHODS: &str = "tests/engine_cases/math_methods.js";
 const PATH_STANDARD_ERROR_CONSTRUCTORS: &str = "tests/engine_cases/standard_error_constructors.js";
 
@@ -79,6 +80,14 @@ pub(super) fn engine_runtime_cases() -> Vec<EngineCase> {
             path: PATH_MATH_METHODS,
             expectation: Expectation::OutputAndValue {
                 output: &["true true true", "true true true true true"],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "math_integer_methods",
+            path: PATH_MATH_INTEGER_METHODS,
+            expectation: Expectation::OutputAndValue {
+                output: &["true true true", "true true"],
                 value: "42",
             },
         },
