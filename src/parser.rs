@@ -55,6 +55,9 @@ impl Parser {
         if self.match_kind(&TokenKind::Throw) {
             return self.throw_statement();
         }
+        if self.match_kind(&TokenKind::Return) {
+            return self.return_statement();
+        }
         if self.match_kind(&TokenKind::Let) {
             return self.var_decl(DeclKind::Let);
         }
@@ -123,6 +126,18 @@ impl Parser {
         let value = self.expression()?;
         self.consume_optional_semicolon();
         Ok(Stmt::Throw(value))
+    }
+
+    fn return_statement(&mut self) -> Result<Stmt> {
+        let value =
+            if self.check(&TokenKind::Semicolon) || self.check(&TokenKind::RBrace) || self.at_end()
+            {
+                None
+            } else {
+                Some(self.expression()?)
+            };
+        self.consume_optional_semicolon();
+        Ok(Stmt::Return(value))
     }
 
     fn var_decl(&mut self, kind: DeclKind) -> Result<Stmt> {

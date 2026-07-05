@@ -146,6 +146,52 @@ fn supports_function_expressions() -> TestResult {
 }
 
 #[test]
+fn supports_function_return_statements() -> TestResult {
+    expect_value(
+        r"
+        let choose = function() {
+            if (true) {
+                return 40 + 2;
+            }
+            return 0;
+        };
+        choose()
+        ",
+        &Value::Number(42.0),
+    )?;
+
+    expect_value(
+        r"
+        let stop = function() {
+            return;
+            42;
+        };
+        stop()
+        ",
+        &Value::Undefined,
+    )?;
+
+    expect_value(
+        r"
+        let wrapped = function() {
+            try {
+                return 42;
+            } catch (error) {
+                return 0;
+            }
+        };
+        wrapped()
+        ",
+        &Value::Number(42.0),
+    )?;
+
+    let Err(error) = eval("return 1;") else {
+        return Err("expected top-level return to fail".into());
+    };
+    ensure_error_contains(&error, "return statement outside function")
+}
+
+#[test]
 fn supports_assert_throws_and_reference_errors() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

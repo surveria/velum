@@ -19,6 +19,7 @@ pub enum Stmt {
         catch_body: Vec<Self>,
     },
     Throw(Expr),
+    Return(Option<Expr>),
     VarDecl {
         name: String,
         kind: DeclKind,

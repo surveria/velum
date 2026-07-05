@@ -8,6 +8,7 @@ use crate::runtime_assertions::{
     error_property, expected_error_name, is_assert_throws_call, reference_error_undefined,
     runtime_exception_value, thrown_value_matches,
 };
+use crate::runtime_completion::Completion;
 use crate::value::{ErrorName, ErrorObject, FunctionId, Value};
 
 const DEFAULT_MAX_SOURCE_LEN: usize = 65_536;
@@ -102,21 +103,6 @@ struct Function {
     body: Vec<Stmt>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-enum Completion {
-    Normal(Value),
-    Throw(Value),
-}
-
-impl Completion {
-    fn into_result(self) -> Result<Value> {
-        match self {
-            Self::Normal(value) => Ok(value),
-            Self::Throw(value) => Err(Error::runtime(format!("uncaught throw: {value}"))),
-        }
-    }
-}
-
 impl Context {
     #[must_use]
     pub const fn new(limits: RuntimeLimits) -> Self {
@@ -203,6 +189,10 @@ impl Context {
                 let value = self.eval_expr(expr)?;
                 Ok(Completion::Throw(value))
             }
+            Stmt::Return(expr) => {
+                let value = self.eval_optional_init(expr.as_ref())?;
+                Ok(Completion::Return(value))
+            }
             Stmt::VarDecl { name, kind, init } => self.eval_declaration(name, *kind, init.as_ref()),
             Stmt::Expr(expr) => self.eval_expr(expr).map(Completion::Normal),
         }
@@ -240,7 +230,7 @@ impl Context {
                 kind: DeclKind::Var,
                 ..
             } => self.hoist_var(name),
-            Stmt::Throw(_) | Stmt::VarDecl { .. } | Stmt::Expr(_) => Ok(()),
+            Stmt::Throw(_) | Stmt::Return(_) | Stmt::VarDecl { .. } | Stmt::Expr(_) => Ok(()),
         }
     }
 
@@ -362,6 +352,7 @@ impl Context {
             match completion {
                 Completion::Normal(value) => last = value,
                 Completion::Throw(value) => return Ok(Completion::Throw(value)),
+                Completion::Return(value) => return Ok(Completion::Return(value)),
             }
         }
         Ok(Completion::Normal(last))
@@ -376,6 +367,7 @@ impl Context {
         match self.eval_block(body)? {
             Completion::Normal(value) => Ok(Completion::Normal(value)),
             Completion::Throw(value) => self.eval_catch(catch_param, value, catch_body),
+            Completion::Return(value) => Ok(Completion::Return(value)),
         }
     }
 
@@ -519,7 +511,7 @@ impl Context {
             Completion::Throw(value) => Err(Error::runtime(format!(
                 "assert.throws expected {expected_name}, got {value}"
             ))),
-            Completion::Normal(_) => Err(Error::runtime(format!(
+            Completion::Normal(_) | Completion::Return(_) => Err(Error::runtime(format!(
                 "assert.throws expected {expected_name}, but no exception was thrown"
             ))),
         }
@@ -584,8 +576,8 @@ impl Context {
     }
 
     fn eval_function(&mut self, id: FunctionId) -> Result<Value> {
-        self.eval_function_completion(id)?.into_result()?;
-        Ok(Value::Undefined)
+        let value = self.eval_function_completion(id)?.into_function_result()?;
+        self.checked_value(value)
     }
 
     fn eval_function_completion(&mut self, id: FunctionId) -> Result<Completion> {
