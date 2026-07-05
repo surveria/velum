@@ -2,6 +2,7 @@
 #![doc = include_str!("../README.md")]
 
 mod ast;
+mod embedding;
 mod error;
 mod lexer;
 mod parser;
@@ -23,6 +24,7 @@ mod runtime_unary;
 mod runtime_update;
 mod value;
 
+pub use crate::embedding::{Engine, EngineConfig, Vm, VmConfig, VmResourceUsage, VmTeardownReport};
 pub use crate::error::{Error, Result};
 pub use crate::runtime::Context;
 pub use crate::runtime_engine::Runtime;
