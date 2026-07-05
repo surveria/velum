@@ -4,6 +4,10 @@ use crate::error::{Error, Result};
 use crate::value::{ObjectId, Value};
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
+const ARRAY_INDEX_LIMIT_ERROR: &str = "array index exceeded supported range";
+const ARRAY_JOIN_RECEIVER_ERROR: &str = "Array.prototype.join requires an array receiver";
+const ARRAY_SHIFT_RECEIVER_ERROR: &str = "Array.prototype.shift requires an array receiver";
+const ARRAY_UNSHIFT_RECEIVER_ERROR: &str = "Array.prototype.unshift requires an array receiver";
 const OBJECT_CONSTRUCTOR_PROPERTY: &str = "constructor";
 const PROTOTYPE_PROPERTY: &str = "__proto__";
 
@@ -271,25 +275,88 @@ impl ObjectHeap {
         Ok(value)
     }
 
-    pub(crate) fn array_len(&self, id: ObjectId) -> Result<usize> {
-        let object = self.object(id)?;
-        let Some(length) = object.array_length else {
-            return Err(Error::runtime(
-                "Array.prototype.join requires an array receiver",
-            ));
+    pub(crate) fn array_shift(&mut self, id: ObjectId, max_properties: usize) -> Result<Value> {
+        let length = self.array_length_for_method(id, ARRAY_SHIFT_RECEIVER_ERROR)?;
+        let Some(first_index) = length.first_index() else {
+            return Ok(Value::Undefined);
         };
-        length.to_usize()
+
+        let first_value = self.get(id, &first_index.key())?;
+        let length_usize = length.to_usize()?;
+        for index in 1..length_usize {
+            let from_key = ArrayIndex::from_usize(index)?.key();
+            let to_index = index.saturating_sub(1);
+            let to_key = ArrayIndex::from_usize(to_index)?.key();
+            if self.has(id, &from_key)? {
+                let value = self.get(id, &from_key)?;
+                self.set(id, to_key, value, max_properties)?;
+            } else {
+                self.delete(id, &to_key)?;
+            }
+        }
+
+        let Some(last_index) = length.previous_index() else {
+            return Ok(first_value);
+        };
+        self.delete(id, &last_index.key())?;
+        self.object_mut(id)?.array_length = Some(last_index.length());
+        Ok(first_value)
+    }
+
+    pub(crate) fn array_unshift(
+        &mut self,
+        id: ObjectId,
+        values: Vec<Value>,
+        max_properties: usize,
+    ) -> Result<Value> {
+        let length = self.array_length_for_method(id, ARRAY_UNSHIFT_RECEIVER_ERROR)?;
+        let value_count = values.len();
+        let new_length = length.add_usize(value_count)?;
+        if value_count == 0 {
+            return Ok(new_length.value());
+        }
+
+        let length_usize = length.to_usize()?;
+        for offset in 0..length_usize {
+            let from_index = length_usize.saturating_sub(offset).saturating_sub(1);
+            let to_index = from_index
+                .checked_add(value_count)
+                .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
+            let from_key = ArrayIndex::from_usize(from_index)?.key();
+            let to_key = ArrayIndex::from_usize(to_index)?.key();
+            if self.has(id, &from_key)? {
+                let value = self.get(id, &from_key)?;
+                self.set(id, to_key, value, max_properties)?;
+            } else {
+                self.delete(id, &to_key)?;
+            }
+        }
+
+        for (index, value) in values.into_iter().enumerate() {
+            let key = ArrayIndex::from_usize(index)?.key();
+            self.set(id, key, value, max_properties)?;
+        }
+        self.object_mut(id)?.array_length = Some(new_length);
+        Ok(new_length.value())
+    }
+
+    pub(crate) fn array_len(&self, id: ObjectId) -> Result<usize> {
+        self.array_length_for_method(id, ARRAY_JOIN_RECEIVER_ERROR)?
+            .to_usize()
     }
 
     pub(crate) fn array_get_index(&self, id: ObjectId, index: usize) -> Result<Value> {
         let object = self.object(id)?;
         if object.array_length.is_none() {
-            return Err(Error::runtime(
-                "Array.prototype.join requires an array receiver",
-            ));
+            return Err(Error::runtime(ARRAY_JOIN_RECEIVER_ERROR));
         }
         let index = ArrayIndex::from_usize(index)?;
         self.get(id, &index.key())
+    }
+
+    fn array_length_for_method(&self, id: ObjectId, error: &str) -> Result<ArrayLength> {
+        let object = self.object(id)?;
+        object.array_length.ok_or_else(|| Error::runtime(error))
     }
 
     pub(crate) fn define_non_enumerable(
@@ -660,12 +727,28 @@ impl ArrayLength {
         usize::try_from(self.0).map_err(|_| Error::limit("array length exceeded supported range"))
     }
 
+    fn add_usize(self, value: usize) -> Result<Self> {
+        let value = u32::try_from(value)
+            .map_err(|_| Error::limit("array length exceeded supported range"))?;
+        self.0
+            .checked_add(value)
+            .map(Self)
+            .ok_or_else(|| Error::limit("array length exceeded supported range"))
+    }
+
     const fn contains(self, index: ArrayIndex) -> bool {
         index.0 < self.0
     }
 
     fn index(self) -> Result<ArrayIndex> {
         ArrayIndex::from_u32(self.0)
+    }
+
+    const fn first_index(self) -> Option<ArrayIndex> {
+        if self.0 == 0 {
+            return None;
+        }
+        Some(ArrayIndex(0))
     }
 
     const fn previous_index(self) -> Option<ArrayIndex> {
@@ -682,14 +765,13 @@ struct ArrayIndex(u32);
 impl ArrayIndex {
     fn from_u32(value: u32) -> Result<Self> {
         if value == u32::MAX {
-            return Err(Error::limit("array index exceeded supported range"));
+            return Err(Error::limit(ARRAY_INDEX_LIMIT_ERROR));
         }
         Ok(Self(value))
     }
 
     fn from_usize(value: usize) -> Result<Self> {
-        let value = u32::try_from(value)
-            .map_err(|_| Error::limit("array index exceeded supported range"))?;
+        let value = u32::try_from(value).map_err(|_| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
         Self::from_u32(value)
     }
 

@@ -78,6 +78,8 @@ const PATH_ARRAY_LITERALS: &str = "tests/engine_cases/array_literals.js";
 const PATH_ARRAY_BUILTIN: &str = "tests/engine_cases/array_builtin.js";
 const PATH_ARRAY_PROTOTYPE_METHODS: &str = "tests/engine_cases/array_prototype_methods.js";
 const PATH_ARRAY_PROTOTYPE_JOIN: &str = "tests/engine_cases/array_prototype_join.js";
+const PATH_ARRAY_PROTOTYPE_SHIFT_UNSHIFT: &str =
+    "tests/engine_cases/array_prototype_shift_unshift.js";
 const PATH_UNARY_OPERATORS: &str = "tests/engine_cases/unary_operators.js";
 const PATH_ASSERT_THROWS_REFERENCE_ERROR: &str =
     "tests/engine_cases/assert_throws_reference_error.js";
@@ -504,6 +506,24 @@ fn engine_array_cases() -> Vec<EngineCase> {
                     "meta function join 1",
                     "keys:",
                     "in true",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "array_prototype_shift_unshift",
+            path: PATH_ARRAY_PROTOTYPE_SHIFT_UNSHIFT,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "shift 1 2 2 3 undefined 42",
+                    "sparse undefined 2 false undefined tail",
+                    "inherited undefined 1 proto-one",
+                    "unshift 3 3 3 1 2 3",
+                    "holes 3 false a||b",
+                    "inherited-unshift 2 head|proto-zero undefined",
+                    "meta function shift 0 function unshift 1",
+                    "keys:",
+                    "in true true",
                 ],
                 value: "42",
             },
