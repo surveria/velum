@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use crate::ast::{BinaryOp, DeclKind, Expr, Program, Stmt, UnaryOp};
 use crate::error::{Error, Result};
 use crate::lexer;
@@ -10,6 +8,7 @@ use crate::runtime_assertions::{
 };
 use crate::runtime_completion::Completion;
 use crate::runtime_numeric::{bitwise_and, compare_binary, numeric_binary};
+use crate::runtime_scope::{BindingCell, BindingScope};
 use crate::value::{ErrorName, ErrorObject, FunctionId, Value};
 
 const DEFAULT_MAX_SOURCE_LEN: usize = 65_536;
@@ -83,24 +82,18 @@ impl Default for Runtime {
 #[derive(Debug, Clone)]
 pub struct Context {
     limits: RuntimeLimits,
-    globals: BTreeMap<String, Binding>,
-    locals: Vec<BTreeMap<String, Binding>>,
+    globals: BindingScope,
+    locals: Vec<BindingScope>,
     functions: Vec<Function>,
     output: Vec<String>,
     runtime_steps: usize,
 }
 
 #[derive(Debug, Clone)]
-struct Binding {
-    value: Value,
-    mutable: bool,
-    kind: DeclKind,
-}
-
-#[derive(Debug, Clone)]
 struct Function {
     params: Vec<String>,
     body: Vec<Stmt>,
+    captures: Vec<BindingScope>,
 }
 
 impl Context {
@@ -108,7 +101,7 @@ impl Context {
     pub const fn new(limits: RuntimeLimits) -> Self {
         Self {
             limits,
-            globals: BTreeMap::new(),
+            globals: BindingScope::new(),
             locals: Vec::new(),
             functions: Vec::new(),
             output: Vec::new(),
@@ -139,8 +132,8 @@ impl Context {
     }
 
     #[must_use]
-    pub fn get_global(&self, name: &str) -> Option<&Value> {
-        self.globals.get(name).map(|binding| &binding.value)
+    pub fn get_global(&self, name: &str) -> Option<Value> {
+        self.globals.get(name).map(|binding| binding.value())
     }
 
     #[must_use]
@@ -237,7 +230,7 @@ impl Context {
 
     fn hoist_var(&mut self, name: &str) -> Result<()> {
         if let Some(binding) = self.active_bindings().get(name) {
-            if binding.kind == DeclKind::Var {
+            if binding.kind() == DeclKind::Var {
                 return Ok(());
             }
             return Err(Error::runtime(format!(
@@ -248,11 +241,7 @@ impl Context {
         self.ensure_binding_capacity(name)?;
         self.active_bindings_mut().insert(
             name.to_owned(),
-            Binding {
-                value: Value::Undefined,
-                mutable: true,
-                kind: DeclKind::Var,
-            },
+            BindingCell::new(Value::Undefined, true, DeclKind::Var),
         );
         Ok(())
     }
@@ -298,7 +287,7 @@ impl Context {
             Expr::Literal(value) => self.checked_value(value.clone()),
             Expr::Identifier(name) => self
                 .get_binding(name)
-                .map(|binding| binding.value.clone())
+                .map(|binding| binding.value())
                 .ok_or_else(|| reference_error_undefined(name)),
             Expr::Unary { op, expr } => {
                 let value = self.eval_expr(expr)?;
@@ -384,11 +373,7 @@ impl Context {
         self.checked_value(value.clone())?;
         self.active_bindings_mut().insert(
             catch_param.to_owned(),
-            Binding {
-                value,
-                mutable: true,
-                kind: DeclKind::Let,
-            },
+            BindingCell::new(value, true, DeclKind::Let),
         );
         let result = self.eval_block(catch_body);
         let removed = self.active_bindings_mut().remove(catch_param);
@@ -569,6 +554,7 @@ impl Context {
         self.functions.push(Function {
             params: params.to_vec(),
             body: body.to_vec(),
+            captures: self.locals.clone(),
         });
         Value::Function(id)
     }
@@ -587,12 +573,20 @@ impl Context {
             .cloned()
             .ok_or_else(|| Error::runtime("function id is not defined"))?;
         let args = self.eval_args(args)?;
-        let scope = self.function_scope(&function.params, args)?;
+        let caller_locals = std::mem::replace(&mut self.locals, function.captures);
+        let scope = match self.function_scope(&function.params, args) {
+            Ok(scope) => scope,
+            Err(error) => {
+                self.locals = caller_locals;
+                return Err(error);
+            }
+        };
         self.locals.push(scope);
         let result = self
             .hoist_var_declarations(&function.body)
             .and_then(|()| self.eval_block(&function.body));
         let removed = self.locals.pop();
+        self.locals = caller_locals;
         if removed.is_none() {
             return Err(Error::runtime("function scope disappeared"));
         }
@@ -603,34 +597,23 @@ impl Context {
         args.iter().map(|arg| self.eval_expr(arg)).collect()
     }
 
-    fn function_scope(
-        &self,
-        params: &[String],
-        args: Vec<Value>,
-    ) -> Result<BTreeMap<String, Binding>> {
-        let mut scope = BTreeMap::new();
+    fn function_scope(&self, params: &[String], args: Vec<Value>) -> Result<BindingScope> {
+        let mut scope = BindingScope::new();
         let mut args = args.into_iter();
         for param in params {
-            if !scope.contains_key(param) {
+            if !scope.contains(param) {
                 self.ensure_extra_binding_capacity(scope.len())?;
             }
             let value = args.next().unwrap_or(Value::Undefined);
             self.checked_value(value.clone())?;
-            scope.insert(
-                param.clone(),
-                Binding {
-                    value,
-                    mutable: true,
-                    kind: DeclKind::Var,
-                },
-            );
+            scope.insert(param.clone(), BindingCell::new(value, true, DeclKind::Var));
         }
         Ok(scope)
     }
 
     fn define(&mut self, name: &str, value: Value, kind: DeclKind) -> Result<()> {
         self.ensure_binding_capacity(name)?;
-        if self.active_bindings().contains_key(name) {
+        if self.active_bindings().contains(name) {
             return Err(Error::runtime(format!(
                 "'{name}' has already been declared"
             )));
@@ -638,19 +621,13 @@ impl Context {
 
         self.checked_value(value.clone())?;
         let mutable = kind != DeclKind::Const;
-        self.active_bindings_mut().insert(
-            name.to_owned(),
-            Binding {
-                value,
-                mutable,
-                kind,
-            },
-        );
+        self.active_bindings_mut()
+            .insert(name.to_owned(), BindingCell::new(value, mutable, kind));
         Ok(())
     }
 
     fn ensure_binding_capacity(&self, name: &str) -> Result<()> {
-        if self.active_bindings().contains_key(name) {
+        if self.active_bindings().contains(name) {
             return Ok(());
         }
         if self.binding_count()? >= self.limits.max_bindings {
@@ -686,52 +663,34 @@ impl Context {
             })
     }
 
-    fn assign(&mut self, name: &str, value: Value) -> Result<()> {
+    fn assign(&self, name: &str, value: Value) -> Result<()> {
         self.checked_value(value.clone())?;
-        let Some(binding) = self.get_binding_mut(name) else {
+        let Some(binding) = self.get_binding(name) else {
             return Err(reference_error_undefined(name));
         };
-
-        if !binding.mutable {
-            return Err(Error::runtime(format!("assignment to constant '{name}'")));
-        }
-
-        binding.value = value;
-        Ok(())
+        binding.assign(name, value)
     }
 
-    fn active_bindings(&self) -> &BTreeMap<String, Binding> {
+    fn active_bindings(&self) -> &BindingScope {
         if let Some(scope) = self.locals.last() {
             return scope;
         }
         &self.globals
     }
 
-    fn active_bindings_mut(&mut self) -> &mut BTreeMap<String, Binding> {
+    fn active_bindings_mut(&mut self) -> &mut BindingScope {
         if let Some(scope) = self.locals.last_mut() {
             return scope;
         }
         &mut self.globals
     }
 
-    fn get_binding(&self, name: &str) -> Option<&Binding> {
+    fn get_binding(&self, name: &str) -> Option<BindingCell> {
         self.locals
             .iter()
             .rev()
             .find_map(|scope| scope.get(name))
             .or_else(|| self.globals.get(name))
-    }
-
-    fn get_binding_mut(&mut self, name: &str) -> Option<&mut Binding> {
-        if let Some(scope) = self
-            .locals
-            .iter_mut()
-            .rev()
-            .find(|scope| scope.contains_key(name))
-        {
-            return scope.get_mut(name);
-        }
-        self.globals.get_mut(name)
     }
 
     fn add(&self, left: &Value, right: &Value) -> Result<Value> {

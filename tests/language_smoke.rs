@@ -20,7 +20,7 @@ fn evaluates_bindings_and_assignment() -> TestResult {
 
     let value = context.eval("let x = 40; x = x + 2; x")?;
     ensure_value(&value, &Value::Number(42.0))?;
-    ensure_optional_value(context.get_global("x"), &Value::Number(42.0))?;
+    ensure_optional_value(context.get_global("x").as_ref(), &Value::Number(42.0))?;
     Ok(())
 }
 
@@ -77,7 +77,7 @@ fn supports_basic_var_hoisting() -> TestResult {
     )?;
 
     ensure_value(&value, &Value::Number(42.0))?;
-    ensure_optional_value(context.get_global("value"), &Value::Number(42.0))?;
+    ensure_optional_value(context.get_global("value").as_ref(), &Value::Number(42.0))?;
     ensure_output(context.output(), &["undefined".to_owned()])?;
 
     let Err(error) = eval("let lexical = 1; var lexical;") else {
@@ -130,7 +130,7 @@ fn supports_function_expressions() -> TestResult {
     )?;
 
     ensure_value(&value, &Value::Number(42.0))?;
-    ensure_optional_value(context.get_global("first"), &Value::Undefined)?;
+    ensure_optional_value(context.get_global("first").as_ref(), &Value::Undefined)?;
 
     let extra = context.eval(
         r"
@@ -218,11 +218,11 @@ fn supports_function_parameters_and_local_scope() -> TestResult {
     )?;
 
     ensure_value(&value, &Value::Number(42.0))?;
-    ensure_optional_value(context.get_global("global"), &Value::Number(42.0))?;
-    ensure_optional_value(context.get_global("result"), &Value::Number(42.0))?;
-    ensure_optional_value(context.get_global("absent"), &Value::Undefined)?;
-    ensure_optional_value(context.get_global("total"), &Value::Number(42.0))?;
-    ensure_missing_global(context.get_global("local"), "local")?;
+    ensure_optional_value(context.get_global("global").as_ref(), &Value::Number(42.0))?;
+    ensure_optional_value(context.get_global("result").as_ref(), &Value::Number(42.0))?;
+    ensure_optional_value(context.get_global("absent").as_ref(), &Value::Undefined)?;
+    ensure_optional_value(context.get_global("total").as_ref(), &Value::Number(42.0))?;
+    ensure_missing_global(context.get_global("local").as_ref(), "local")?;
 
     expect_value(
         r"
@@ -233,6 +233,95 @@ fn supports_function_parameters_and_local_scope() -> TestResult {
         ",
         &Value::Number(2.0),
     )
+}
+
+#[test]
+fn supports_escaping_closures() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r"
+        let makeCounter = function(start) {
+            var value = start;
+            return function(delta) {
+                value = value + delta;
+                return value;
+            };
+        };
+        let counter = makeCounter(40);
+        let first = counter(1);
+        let second = counter(1);
+        second
+        ",
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_optional_value(context.get_global("first").as_ref(), &Value::Number(41.0))?;
+    ensure_optional_value(context.get_global("second").as_ref(), &Value::Number(42.0))?;
+    ensure_missing_global(context.get_global("value").as_ref(), "value")?;
+
+    expect_value(
+        r"
+        let makeReader = function() {
+            var value = 1;
+            let read = function() {
+                return value;
+            };
+            value = 42;
+            return read;
+        };
+        let read = makeReader();
+        read()
+        ",
+        &Value::Number(42.0),
+    )?;
+
+    expect_value(
+        r"
+        let makeCounter = function(start) {
+            var value = start;
+            return function() {
+                value = value + 1;
+                return value;
+            };
+        };
+        let left = makeCounter(0);
+        let right = makeCounter(40);
+        left() + left() + right()
+        ",
+        &Value::Number(44.0),
+    )?;
+
+    expect_value(
+        r"
+        let outer = function(a) {
+            return function(b) {
+                return function(c) {
+                    return a + b + c;
+                };
+            };
+        };
+        outer(20)(20)(2)
+        ",
+        &Value::Number(42.0),
+    )?;
+
+    let Err(error) = eval(
+        r"
+        let makeWriter = function() {
+            const value = 1;
+            return function() {
+                value = 2;
+            };
+        };
+        let write = makeWriter();
+        write();
+        ",
+    ) else {
+        return Err("expected captured const assignment to fail".into());
+    };
+    ensure_error_contains(&error, "assignment to constant")
 }
 
 #[test]
@@ -263,13 +352,13 @@ fn supports_assert_throws_and_reference_errors() -> TestResult {
     )?;
 
     ensure_value(&value, &Value::Number(42.0))?;
-    ensure_optional_value(context.get_global("first"), &Value::Undefined)?;
+    ensure_optional_value(context.get_global("first").as_ref(), &Value::Undefined)?;
     ensure_optional_value(
-        context.get_global("caught_name"),
+        context.get_global("caught_name").as_ref(),
         &Value::String("ReferenceError".to_owned()),
     )?;
     ensure_optional_value(
-        context.get_global("caught_message"),
+        context.get_global("caught_message").as_ref(),
         &Value::String("'missing' is not defined".to_owned()),
     )?;
     ensure_output(
@@ -365,7 +454,7 @@ fn catches_thrown_values() -> TestResult {
 
     ensure_value(&value, &Value::Number(42.0))?;
     ensure_optional_value(
-        context.get_global("marker"),
+        context.get_global("marker").as_ref(),
         &Value::String("outer".to_owned()),
     )?;
     ensure_output(context.output(), &["boom".to_owned()])?;
