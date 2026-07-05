@@ -8,7 +8,10 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime_completion::Completion,
-    runtime_object::PropertyEnumerable,
+    runtime_object::{
+        DataPropertyDescriptor, DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable,
+        PropertyWritable,
+    },
     runtime_scope::{BindingCell, BindingScope},
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
 };
@@ -152,6 +155,18 @@ impl Context {
         self.checked_value(value)
     }
 
+    pub(crate) fn function_own_property_descriptor(
+        &self,
+        id: FunctionId,
+        property: &str,
+    ) -> Result<Option<DataPropertyDescriptor>> {
+        let function = self.function(id)?;
+        if let Some(descriptor) = function_intrinsic_descriptor(function, property)? {
+            return Ok(Some(descriptor));
+        }
+        Ok(function.properties.own_property_descriptor(property))
+    }
+
     pub(crate) fn has_function_property(&self, id: FunctionId, property: &str) -> Result<bool> {
         let function = self.function(id)?;
         Ok(
@@ -170,6 +185,19 @@ impl Context {
         let max_properties = self.limits.max_object_properties;
         let function = self.function_mut(id)?;
         function.properties.set(property, value, max_properties)
+    }
+
+    pub(crate) fn define_function_property(
+        &mut self,
+        id: FunctionId,
+        property: String,
+        update: DataPropertyUpdate,
+    ) -> Result<()> {
+        let max_properties = self.limits.max_object_properties;
+        let function = self.function_mut(id)?;
+        function
+            .properties
+            .define_property(property, update, max_properties)
     }
 
     pub(crate) fn delete_function_property(
@@ -236,6 +264,26 @@ impl Context {
         self.checked_value(value)
     }
 
+    pub(crate) fn native_function_own_property_descriptor(
+        &self,
+        id: NativeFunctionId,
+        property: &str,
+    ) -> Result<Option<DataPropertyDescriptor>> {
+        let function = self.native_function(id)?;
+        if let Some(descriptor) = native_function_intrinsic_descriptor(function, property) {
+            return Ok(Some(descriptor));
+        }
+        if let Some(value) = function.intrinsic_property(property) {
+            return Ok(Some(DataPropertyDescriptor::new(
+                value,
+                PropertyWritable::No,
+                PropertyEnumerable::No,
+                PropertyConfigurable::No,
+            )));
+        }
+        Ok(function.properties().own_property_descriptor(property))
+    }
+
     pub(crate) fn has_native_function_property(
         &self,
         id: NativeFunctionId,
@@ -267,6 +315,22 @@ impl Context {
         function
             .properties_mut()
             .set(property, value, max_properties)
+    }
+
+    pub(crate) fn define_native_function_property(
+        &mut self,
+        id: NativeFunctionId,
+        property: String,
+        update: DataPropertyUpdate,
+    ) -> Result<()> {
+        if self.native_function(id)?.has_intrinsic_property(&property) {
+            return Ok(());
+        }
+        let max_properties = self.limits.max_object_properties;
+        let function = self.native_function_mut(id)?;
+        function
+            .properties_mut()
+            .define_property(property, update, max_properties)
     }
 
     pub(crate) fn delete_native_function_property(
@@ -332,6 +396,12 @@ impl FunctionProperties {
             .map_or(Value::Undefined, FunctionProperty::value)
     }
 
+    pub(super) fn own_property_descriptor(&self, property: &str) -> Option<DataPropertyDescriptor> {
+        self.properties
+            .get(property)
+            .map(FunctionProperty::descriptor)
+    }
+
     pub(super) fn has(&self, property: &str) -> bool {
         self.properties.contains_key(property)
     }
@@ -371,15 +441,21 @@ impl FunctionProperties {
 
     pub(super) fn delete(&mut self, property: &str) -> bool {
         if matches!(property, FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY) {
-            return true;
+            return false;
         }
         if property == FUNCTION_PROTOTYPE_PROPERTY {
             return false;
         }
-        let removed_property = self.properties.remove(property);
-        if removed_property.is_some() {
-            self.property_order.retain(|key| key != property);
+        let Some(existing_property) = self.properties.get(property) else {
+            return true;
+        };
+        if !existing_property.is_configurable() {
+            return false;
         }
+        let Some(_) = self.properties.remove(property) else {
+            return true;
+        };
+        self.property_order.retain(|key| key != property);
         true
     }
 
@@ -412,33 +488,114 @@ impl FunctionProperties {
             }
         }
     }
+
+    pub(super) fn define_property(
+        &mut self,
+        property: String,
+        update: DataPropertyUpdate,
+        max_properties: usize,
+    ) -> Result<()> {
+        if matches!(
+            property.as_str(),
+            FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY
+        ) {
+            return Ok(());
+        }
+        if property == FUNCTION_PROTOTYPE_PROPERTY {
+            if let Some(value) = update.value() {
+                self.prototype = value;
+            }
+            return Ok(());
+        }
+        match self.properties.entry(property) {
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().define(&update);
+            }
+            Entry::Vacant(entry) => {
+                if self.property_order.len() >= max_properties {
+                    return Err(Error::limit(format!(
+                        "function property count exceeded {max_properties}"
+                    )));
+                }
+                self.property_order.push(entry.key().clone());
+                entry.insert(FunctionProperty::from_update(update));
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
 struct FunctionProperty {
-    value: Value,
-    enumerable: PropertyEnumerable,
+    descriptor: DataPropertyDescriptor,
 }
 
 impl FunctionProperty {
     const fn new(value: Value, enumerable: PropertyEnumerable) -> Self {
-        Self { value, enumerable }
+        Self {
+            descriptor: DataPropertyDescriptor::new(
+                value,
+                PropertyWritable::Yes,
+                enumerable,
+                PropertyConfigurable::Yes,
+            ),
+        }
+    }
+
+    fn from_update(update: DataPropertyUpdate) -> Self {
+        Self {
+            descriptor: update.complete_for_new(),
+        }
     }
 
     fn value(&self) -> Value {
-        self.value.clone()
+        self.descriptor.value()
+    }
+
+    const fn is_configurable(&self) -> bool {
+        self.descriptor.configurable().is_yes()
     }
 
     const fn is_enumerable(&self) -> bool {
-        self.enumerable.is_yes()
+        self.descriptor.enumerable().is_yes()
+    }
+
+    fn descriptor(&self) -> DataPropertyDescriptor {
+        self.descriptor.clone()
     }
 
     fn set_value(&mut self, value: Value) {
-        self.value = value;
+        if self.descriptor.writable().is_yes() {
+            self.descriptor = DataPropertyDescriptor::new(
+                value,
+                self.descriptor.writable(),
+                self.descriptor.enumerable(),
+                self.descriptor.configurable(),
+            );
+        }
     }
 
-    const fn set_enumerable(&mut self, enumerable: PropertyEnumerable) {
-        self.enumerable = enumerable;
+    fn define(&mut self, update: &DataPropertyUpdate) {
+        let value = update.value().unwrap_or_else(|| self.descriptor.value());
+        let writable = update
+            .writable()
+            .unwrap_or_else(|| self.descriptor.writable());
+        let enumerable = update
+            .enumerable()
+            .unwrap_or_else(|| self.descriptor.enumerable());
+        let configurable = update
+            .configurable()
+            .unwrap_or_else(|| self.descriptor.configurable());
+        self.descriptor = DataPropertyDescriptor::new(value, writable, enumerable, configurable);
+    }
+
+    fn set_enumerable(&mut self, enumerable: PropertyEnumerable) {
+        self.descriptor = DataPropertyDescriptor::new(
+            self.descriptor.value(),
+            self.descriptor.writable(),
+            enumerable,
+            self.descriptor.configurable(),
+        );
     }
 }
 
@@ -448,4 +605,60 @@ impl super::Function {
             .map_err(|_| Error::limit("function parameter count exceeded supported range"))?;
         Ok(f64::from(length))
     }
+}
+
+fn function_intrinsic_descriptor(
+    function: &super::Function,
+    property: &str,
+) -> Result<Option<DataPropertyDescriptor>> {
+    let descriptor = match property {
+        FUNCTION_LENGTH_PROPERTY => DataPropertyDescriptor::new(
+            Value::Number(function.length()?),
+            PropertyWritable::No,
+            PropertyEnumerable::No,
+            PropertyConfigurable::Yes,
+        ),
+        FUNCTION_NAME_PROPERTY => DataPropertyDescriptor::new(
+            Value::String(function.name.clone()),
+            PropertyWritable::No,
+            PropertyEnumerable::No,
+            PropertyConfigurable::Yes,
+        ),
+        FUNCTION_PROTOTYPE_PROPERTY if function.constructable => DataPropertyDescriptor::new(
+            function.properties.prototype(),
+            PropertyWritable::Yes,
+            PropertyEnumerable::No,
+            PropertyConfigurable::No,
+        ),
+        _ => return Ok(None),
+    };
+    Ok(Some(descriptor))
+}
+
+fn native_function_intrinsic_descriptor(
+    function: &super::runtime_native::NativeFunction,
+    property: &str,
+) -> Option<DataPropertyDescriptor> {
+    let descriptor = match property {
+        FUNCTION_LENGTH_PROPERTY => DataPropertyDescriptor::new(
+            Value::Number(function.length()),
+            PropertyWritable::No,
+            PropertyEnumerable::No,
+            PropertyConfigurable::Yes,
+        ),
+        FUNCTION_NAME_PROPERTY => DataPropertyDescriptor::new(
+            Value::String(function.name().to_owned()),
+            PropertyWritable::No,
+            PropertyEnumerable::No,
+            PropertyConfigurable::Yes,
+        ),
+        FUNCTION_PROTOTYPE_PROPERTY => DataPropertyDescriptor::new(
+            function.properties().prototype(),
+            PropertyWritable::No,
+            PropertyEnumerable::No,
+            PropertyConfigurable::No,
+        ),
+        _ => return None,
+    };
+    Some(descriptor)
 }
