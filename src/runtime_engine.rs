@@ -1,3 +1,5 @@
+use crate::compiled_script::CompiledScript;
+use crate::error::Result;
 use crate::runtime::Context;
 use crate::runtime_limits::RuntimeLimits;
 
@@ -27,6 +29,12 @@ impl Runtime {
     #[must_use]
     pub const fn context(&self) -> Context {
         Context::new(self.limits)
+    }
+
+    /// # Errors
+    /// Fails when lexing, parsing, or configured compile-time resource limits fail.
+    pub fn compile(&self, source: &str) -> Result<CompiledScript> {
+        CompiledScript::compile(source, self.limits)
     }
 }
 

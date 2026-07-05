@@ -7,6 +7,8 @@ type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 const ISOLATED_VM_LABELS: [&str; 8] = [
     "front", "rear", "side", "gate", "lobby", "roof", "garage", "hall",
 ];
+const COMPILED_COUNTER_SOURCE: &str = "counter = counter + 1; counter";
+const COMPILED_LABEL_SOURCE: &str = r#"print("compiled", label); label"#;
 
 struct VmCase {
     label: &'static str,
@@ -162,6 +164,105 @@ fn reports_vm_resource_usage_at_teardown() -> TestResult {
     ensure_usage(&finished.resources, &report.resources)
 }
 
+#[test]
+fn evaluates_compiled_script_repeatedly_in_one_vm() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.context().eval("var counter = 0;")?;
+
+    let script = vm.compile(COMPILED_COUNTER_SOURCE)?;
+    ensure_usize(script.usage().source_len(), COMPILED_COUNTER_SOURCE.len())?;
+    ensure_usize(script.usage().top_level_statement_count(), 2)?;
+    ensure_positive(
+        script.usage().max_expression_depth(),
+        "compiled expression depth",
+    )?;
+
+    let first = vm.eval_compiled(&script)?;
+    let second = vm.eval_compiled(&script)?;
+
+    ensure_value(&first, &Value::Number(1.0))?;
+    ensure_value(&second, &Value::Number(2.0))
+}
+
+#[test]
+fn evaluates_one_compiled_script_in_isolated_vms() -> TestResult {
+    let engine = Engine::new();
+    let compile_vm = engine.create_vm();
+    let script = compile_vm.compile(COMPILED_LABEL_SOURCE)?;
+    let mut front_vm = engine.create_vm();
+    let mut rear_vm = engine.create_vm();
+
+    front_vm.context().eval(r#"let label = "front";"#)?;
+    rear_vm.context().eval(r#"let label = "rear";"#)?;
+
+    let front = front_vm.eval_compiled(&script)?;
+    let rear = rear_vm.eval_compiled(&script)?;
+
+    ensure_value(&front, &Value::String("front".to_owned()))?;
+    ensure_value(&rear, &Value::String("rear".to_owned()))?;
+    ensure_output(front_vm.context().output(), &["compiled front".to_owned()])?;
+    ensure_output(rear_vm.context().output(), &["compiled rear".to_owned()])
+}
+
+#[test]
+fn reports_compile_errors_before_evaluation() -> TestResult {
+    let engine = Engine::new();
+    let vm = engine.create_vm();
+
+    let Err(error) = vm.compile("let value = ;") else {
+        return Err("expected compiled script parsing to fail".into());
+    };
+    ensure_parse_error(&error)
+}
+
+#[test]
+fn rejects_compiled_script_that_exceeds_target_vm_limits() -> TestResult {
+    let runtime = rs_quickjs::Runtime::new();
+    let statement_script = runtime.compile("1; 2;")?;
+    ensure_compiled_script_rejected_by_limits(
+        &statement_script,
+        RuntimeLimits {
+            max_statements: 1,
+            ..RuntimeLimits::default()
+        },
+        "statement limit",
+    )?;
+
+    let source_script = runtime.compile("123;")?;
+    ensure_compiled_script_rejected_by_limits(
+        &source_script,
+        RuntimeLimits {
+            max_source_len: 1,
+            ..RuntimeLimits::default()
+        },
+        "source length limit",
+    )?;
+
+    let expression_script = runtime.compile("((1));")?;
+    ensure_compiled_script_rejected_by_limits(
+        &expression_script,
+        RuntimeLimits {
+            max_expression_depth: 1,
+            ..RuntimeLimits::default()
+        },
+        "expression depth limit",
+    )
+}
+
+fn ensure_compiled_script_rejected_by_limits(
+    script: &rs_quickjs::CompiledScript,
+    limits: RuntimeLimits,
+    label: &str,
+) -> TestResult {
+    let mut vm = Vm::with_config(VmConfig::with_limits(limits));
+
+    let Err(error) = vm.eval_compiled(script) else {
+        return Err(format!("expected compiled script to exceed target VM {label}").into());
+    };
+    ensure_resource_limit(&error)
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
@@ -190,11 +291,25 @@ fn ensure_resource_limit(error: &Error) -> TestResult {
     Err(format!("expected resource limit error, got {error}").into())
 }
 
+fn ensure_parse_error(error: &Error) -> TestResult {
+    if matches!(error, Error::Parse { .. }) {
+        return Ok(());
+    }
+    Err(format!("expected parse error, got {error}").into())
+}
+
 fn ensure_positive(actual: usize, label: &str) -> TestResult {
     if actual > 0 {
         return Ok(());
     }
     Err(format!("expected positive {label}, got {actual}").into())
+}
+
+fn ensure_usize(actual: usize, expected: usize) -> TestResult {
+    if actual == expected {
+        return Ok(());
+    }
+    Err(format!("expected {expected}, got {actual}").into())
 }
 
 fn ensure_usage(actual: &VmResourceUsage, expected: &VmResourceUsage) -> TestResult {

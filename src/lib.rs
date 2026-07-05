@@ -2,6 +2,7 @@
 #![doc = include_str!("../README.md")]
 
 mod ast;
+mod compiled_script;
 mod embedding;
 mod error;
 mod host;
@@ -25,6 +26,7 @@ mod runtime_unary;
 mod runtime_update;
 mod value;
 
+pub use crate::compiled_script::{CompiledScript, CompiledScriptUsage};
 pub use crate::embedding::{Engine, EngineConfig, Vm, VmConfig, VmResourceUsage, VmTeardownReport};
 pub use crate::error::{Error, Result};
 pub use crate::host::HostCall;

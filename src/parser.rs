@@ -12,8 +12,18 @@ mod parser_expression;
 #[path = "parser_statement.rs"]
 mod parser_statement;
 
-pub fn parse(tokens: Vec<Token>, limits: RuntimeLimits) -> Result<Program> {
+pub fn parse_with_usage(tokens: Vec<Token>, limits: RuntimeLimits) -> Result<ParsedProgram> {
     Parser::new(tokens, limits).parse()
+}
+
+pub struct ParsedProgram {
+    pub program: Program,
+    pub usage: ParseUsage,
+}
+
+pub struct ParseUsage {
+    pub top_level_statement_count: usize,
+    pub max_expression_depth: usize,
 }
 
 struct Parser {
@@ -21,6 +31,7 @@ struct Parser {
     cursor: usize,
     limits: RuntimeLimits,
     expression_depth: usize,
+    max_expression_depth: usize,
 }
 
 impl Parser {
@@ -30,10 +41,11 @@ impl Parser {
             cursor: 0,
             limits,
             expression_depth: 0,
+            max_expression_depth: 0,
         }
     }
 
-    fn parse(mut self) -> Result<Program> {
+    fn parse(mut self) -> Result<ParsedProgram> {
         let mut statements = Vec::new();
         while !self.at_end() {
             if self.match_kind(&TokenKind::Semicolon) {
@@ -47,7 +59,14 @@ impl Parser {
             }
             statements.push(self.statement()?);
         }
-        Ok(Program { statements })
+        let usage = ParseUsage {
+            top_level_statement_count: statements.len(),
+            max_expression_depth: self.max_expression_depth,
+        };
+        Ok(ParsedProgram {
+            program: Program { statements },
+            usage,
+        })
     }
 
     pub(super) fn consume_identifier(&mut self, message: &str) -> Result<String> {

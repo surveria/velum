@@ -46,7 +46,9 @@ fn main() -> rs_quickjs::Result<()> {
         Ok(Value::String(format!("camera:{name}")))
     })?;
 
-    let value = vm.context().eval(r#"let camera = cameraLabel("front"); print(camera); camera"#)?;
+    vm.context().eval(r#"let camera = cameraLabel("front");"#)?;
+    let script = vm.compile("print(camera); camera")?;
+    let value = vm.eval_compiled(&script)?;
     let output = vm.context().take_output();
 
     let report = vm.finish();

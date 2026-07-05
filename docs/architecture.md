@@ -24,9 +24,17 @@ The public model should evolve around these roles:
 - `HostFunctionRegistry`: synchronous and asynchronous Rust callbacks exposed to JavaScript as functions.
 
 The current public skeleton exposes `Engine`, `EngineConfig`, `Vm`, `VmConfig`,
-`Context`, `VmResourceUsage`, and `VmTeardownReport`. `Runtime` remains as a
-compatibility surface for existing smoke tests and runner code, while new
-embedding-facing work should prefer the `Engine -> Vm -> Context` path.
+`Context`, `CompiledScript`, `CompiledScriptUsage`, `VmResourceUsage`, and
+`VmTeardownReport`. `Runtime` remains as a compatibility surface for existing
+smoke tests and runner code, while new embedding-facing work should prefer the
+`Engine -> Vm -> Context` path.
+
+The first `CompiledScript` implementation is an immutable AST wrapper. It
+records compile-time usage for source length, top-level statement count, and
+maximum expression depth. A target `Context` checks those metrics before
+execution, so a script compiled with wider limits cannot bypass a stricter VM's
+compile-time resource limits. The representation is intentionally hidden behind
+the public API so bytecode can replace the AST later.
 
 Multiple `Vm` instances must be able to run in the same Rust process without sharing mutable JavaScript state. A failure, resource-limit hit, pending job, or global mutation in one VM must not affect another VM. Shared data is allowed only when it is immutable or protected by explicit synchronization and resource accounting.
 
