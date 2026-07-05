@@ -13,7 +13,7 @@ The current AST evaluator is deliberately simple. It lets us validate resource a
 
 ## Embedding Model
 
-The library API is the product surface. The CLI exists for smoke tests, differential checks, and benchmark orchestration, but engine architecture must optimize for embedding inside a larger Rust application.
+The library API is the product surface. The CLI exists for smoke tests, differential checks, and benchmark orchestration, but engine architecture must optimize for embedding inside a larger Rust application. A feature is not complete just because it works through the CLI; VM-facing behavior must also make sense through the Rust API.
 
 The public model should evolve around these roles:
 
@@ -24,6 +24,14 @@ The public model should evolve around these roles:
 - `HostFunctionRegistry`: synchronous and asynchronous Rust callbacks exposed to JavaScript as functions.
 
 Multiple `Vm` instances must be able to run in the same Rust process without sharing mutable JavaScript state. A failure, resource-limit hit, pending job, or global mutation in one VM must not affect another VM. Shared data is allowed only when it is immutable or protected by explicit synchronization and resource accounting.
+
+Embedding API invariants:
+
+- Creating, running, interrupting, and dropping one `Vm` must not require stopping or mutating another `Vm`.
+- Public handles must not permit values, objects, promises, or callbacks to cross VM boundaries accidentally.
+- APIs should make resource ownership explicit. Engine-wide caches, VM heaps, queued jobs, host callbacks, and output buffers must have clear owners.
+- The engine must not assume a process-wide async runtime. Async integration belongs at the embedding boundary.
+- The API should be stable enough that the current AST evaluator can later be replaced by bytecode without changing ordinary embedder code.
 
 Host extensions are a first-class design concern:
 
@@ -77,3 +85,5 @@ QuickJS is the reference engine, not code to transliterate line by line. The com
 6. only then widen the supported Test262 subset or mark the feature as covered
 
 Feature work should not rely on Test262 alone. Project-specific tests must cover embedding behavior, resource limits, host extension behavior, and regressions that are important for surveillance-device workloads even when those cases are not represented in upstream ECMAScript tests.
+
+For embedding-sensitive features, the compatibility path also needs a direct library API check. CLI-only coverage is acceptable for smoke tests, but it must not be the final proof for VM isolation, host callback behavior, async job scheduling, resource accounting, or teardown reporting.

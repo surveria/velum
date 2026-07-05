@@ -6,6 +6,7 @@
 - CLI for smoke testing.
 - CI for format, clippy, tests, docs, and unsafe-code denial.
 - Initial docs for architecture, resource limits, and benchmarks.
+- Project rules that treat the library API, isolated VMs, host extensions, and direct API benchmarks as first-class requirements.
 
 ## Phase 1: Small Interpreter
 
@@ -13,6 +14,7 @@
 - Add function objects and lexical scopes.
 - Add objects, arrays, property lookup, and prototypes.
 - Add a minimal standard library surface needed by embedding use cases.
+- Avoid internal shortcuts that would make isolated VM instances, host bindings, or future bytecode compilation harder.
 - Start differential tests against QuickJS for every implemented feature.
 - Add project-specific engine tests for every implemented behavior, including resource-limit and embedding edge cases that Test262 does not cover.
 - Add benchmark cases for implemented language and runtime features, with QuickJS comparison wherever the feature exists in QuickJS.
@@ -21,8 +23,10 @@
 
 - Define the public library API around isolated virtual machines rather than the CLI runner.
 - Support many independent VM instances in one Rust process without shared mutable JavaScript state.
+- Add direct API tests for parallel VM creation, isolation, resource-limit failures, teardown reporting, and output separation.
 - Add a host function registration API for synchronous Rust callbacks.
 - Design the async host callback contract around VM-owned jobs and embedder-owned executors.
+- Add direct API benchmarks for VM creation, script compilation or evaluation, host callback dispatch, job draining, and teardown.
 - Add explicit teardown reports, resource usage snapshots, and structured execution events.
 - Keep the API compatible with a future bytecode backend by introducing a `CompiledScript` abstraction before bytecode is required for performance.
 
