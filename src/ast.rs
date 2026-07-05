@@ -84,6 +84,7 @@ pub struct CatchClause {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Literal(Value),
+    This,
     Identifier(String),
     Parenthesized(Box<Self>),
     Unary {

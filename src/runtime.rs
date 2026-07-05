@@ -36,6 +36,7 @@ pub struct Context {
     locals: Vec<BindingScope>,
     functions: Vec<Function>,
     objects: ObjectHeap,
+    this_values: Vec<Value>,
     output: Vec<String>,
     runtime_steps: usize,
 }
@@ -58,6 +59,7 @@ impl Context {
             locals: Vec::new(),
             functions: Vec::new(),
             objects: ObjectHeap::new(),
+            this_values: Vec::new(),
             output: Vec::new(),
             runtime_steps: 0,
         }
@@ -166,6 +168,7 @@ impl Context {
         self.step()?;
         match expr {
             Expr::Literal(value) => self.checked_value(value.clone()),
+            Expr::This => self.current_this(),
             Expr::Identifier(name) => self
                 .get_binding(name)
                 .map(|binding| binding.value())
@@ -343,9 +346,34 @@ impl Context {
             }
         }
 
+        if let Some((callee, this_value)) = self.eval_call_reference(callee)? {
+            return match callee {
+                Value::Function(id) => self.eval_function_with_this(id, args, this_value),
+                value => Err(Error::runtime(format!("'{value}' is not callable"))),
+            };
+        }
+
         match self.eval_expr(callee)? {
             Value::Function(id) => self.eval_function(id, args),
             value => Err(Error::runtime(format!("'{value}' is not callable"))),
+        }
+    }
+
+    fn eval_call_reference(&mut self, callee: &Expr) -> Result<Option<(Value, Value)>> {
+        match callee {
+            Expr::Member { object, property } => {
+                let this_value = self.eval_expr(object)?;
+                let function = self.get_property_value(&this_value, property)?;
+                Ok(Some((function, this_value)))
+            }
+            Expr::ComputedMember { object, property } => {
+                let this_value = self.eval_expr(object)?;
+                let property = self.eval_property_key(property)?;
+                let function = self.get_property_value(&this_value, &property)?;
+                Ok(Some((function, this_value)))
+            }
+            Expr::Parenthesized(expr) => self.eval_call_reference(expr),
+            _ => Ok(None),
         }
     }
 
@@ -527,6 +555,10 @@ impl Context {
             | Value::Object(_) => {}
         }
         Ok(value)
+    }
+
+    pub(crate) fn current_this(&self) -> Result<Value> {
+        self.checked_value(self.this_values.last().cloned().unwrap_or(Value::Undefined))
     }
 
     fn check_string_len(&self, text: &str) -> Result<()> {
