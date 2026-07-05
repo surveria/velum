@@ -13,6 +13,11 @@ use tabled::{Table, Tabled};
 
 #[path = "rsqjs_test_runner/cases.rs"]
 mod cases;
+#[path = "rsqjs_test_runner/failure_classification.rs"]
+mod failure_classification;
+#[cfg(test)]
+#[path = "rsqjs_test_runner/report_formatting_tests.rs"]
+mod report_formatting_tests;
 #[path = "rsqjs_test_runner/test262_external.rs"]
 mod test262_external;
 #[path = "rsqjs_test_runner/test262_full.rs"]
@@ -31,6 +36,7 @@ const STATUS_NOT_CONFIGURED: &str = "🟡 not configured";
 const REPORT_TITLE: &str = "# rs-quickjs Test Report";
 const RUNNER_NAME: &str = "`rsqjs-test-runner`";
 const NO_FAILED_CASES: &str = "No failed cases.";
+const TEST262_FULL_CORPUS_NAME: &str = "Test262 full corpus";
 const FAILED_CASE_DETAIL_LIMIT: usize = 30;
 const BASIS_POINTS_SCALE: usize = 10_000;
 const PERCENT_SCALE: usize = 100;
@@ -615,9 +621,12 @@ fn render_report(report: &FullReport) -> String {
             sections.push(fenced_table(&Table::new(&corpus.skip_reasons)));
         }
         sections.push(String::new());
+        let failed_rows = corpus.failed_rows();
+        if corpus.name == TEST262_FULL_CORPUS_NAME {
+            sections.extend(failure_classification::sections(&failed_rows));
+        }
         sections.push("### Failed Cases".to_owned());
         sections.push(String::new());
-        let failed_rows = corpus.failed_rows();
         if failed_rows.is_empty() {
             sections.push(NO_FAILED_CASES.to_owned());
         } else {
@@ -752,41 +761,5 @@ struct DisplayText<'a>(&'a str);
 impl fmt::Display for DisplayText<'_> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(formatter, "{:?}", self.0)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{coverage_percent, ratio};
-    use std::time::Duration;
-
-    type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
-
-    #[test]
-    fn formats_ratio_below_one() -> TestResult {
-        ensure_text(
-            &ratio(Duration::from_micros(5), Duration::from_micros(366)),
-            "0.01x",
-        )
-    }
-
-    #[test]
-    fn formats_ratio_above_one() -> TestResult {
-        ensure_text(
-            &ratio(Duration::from_micros(250), Duration::from_micros(100)),
-            "2.50x",
-        )
-    }
-
-    #[test]
-    fn formats_small_coverage_with_four_decimals() -> TestResult {
-        ensure_text(&coverage_percent(4, 53_683), "0.0074%")
-    }
-
-    fn ensure_text(actual: &str, expected: &str) -> TestResult {
-        if actual == expected {
-            return Ok(());
-        }
-        Err(format!("expected '{expected}', got '{actual}'").into())
     }
 }
