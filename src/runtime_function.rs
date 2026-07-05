@@ -1,3 +1,5 @@
+use std::collections::{BTreeMap, btree_map::Entry};
+
 use crate::{
     ast::{DeclKind, Expr, Stmt},
     error::{Error, Result},
@@ -9,6 +11,12 @@ use crate::{
 
 const FUNCTION_LENGTH_PROPERTY: &str = "length";
 const FUNCTION_NAME_PROPERTY: &str = "name";
+
+#[derive(Debug, Clone, Default)]
+pub(super) struct FunctionProperties {
+    properties: BTreeMap<String, Value>,
+    property_order: Vec<String>,
+}
 
 impl Context {
     pub(crate) fn create_function(
@@ -23,6 +31,7 @@ impl Context {
             params: params.to_vec(),
             body: body.to_vec(),
             captures: self.locals.clone(),
+            properties: FunctionProperties::new(),
         });
         Value::Function(id)
     }
@@ -66,23 +75,52 @@ impl Context {
         let value = match property {
             FUNCTION_LENGTH_PROPERTY => Value::Number(function.length()?),
             FUNCTION_NAME_PROPERTY => Value::String(function.name.clone()),
-            _ => Value::Undefined,
+            _ => function.properties.get(property),
         };
         self.checked_value(value)
     }
 
     pub(crate) fn has_function_property(&self, id: FunctionId, property: &str) -> Result<bool> {
-        self.function(id)
-            .map(|_| matches!(property, FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY))
+        let function = self.function(id)?;
+        Ok(
+            matches!(property, FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY)
+                || function.properties.has(property),
+        )
+    }
+
+    pub(crate) fn set_function_property(
+        &mut self,
+        id: FunctionId,
+        property: String,
+        value: Value,
+    ) -> Result<()> {
+        let max_properties = self.limits.max_object_properties;
+        let function = self.function_mut(id)?;
+        function.properties.set(property, value, max_properties)
+    }
+
+    pub(crate) fn delete_function_property(
+        &mut self,
+        id: FunctionId,
+        property: &str,
+    ) -> Result<bool> {
+        let function = self.function_mut(id)?;
+        Ok(function.properties.delete(property))
     }
 
     pub(crate) fn function_enumerable_keys(&self, id: FunctionId) -> Result<Vec<String>> {
-        self.function(id).map(|_| Vec::new())
+        self.function(id).map(|function| function.properties.keys())
     }
 
     fn function(&self, id: FunctionId) -> Result<&super::Function> {
         self.functions
             .get(id.index())
+            .ok_or_else(|| Error::runtime("function id is not defined"))
+    }
+
+    fn function_mut(&mut self, id: FunctionId) -> Result<&mut super::Function> {
+        self.functions
+            .get_mut(id.index())
             .ok_or_else(|| Error::runtime("function id is not defined"))
     }
 
@@ -102,6 +140,65 @@ impl Context {
             scope.insert(param.clone(), BindingCell::new(value, true, DeclKind::Var));
         }
         Ok(scope)
+    }
+}
+
+impl FunctionProperties {
+    const fn new() -> Self {
+        Self {
+            properties: BTreeMap::new(),
+            property_order: Vec::new(),
+        }
+    }
+
+    fn get(&self, property: &str) -> Value {
+        self.properties
+            .get(property)
+            .cloned()
+            .unwrap_or(Value::Undefined)
+    }
+
+    fn has(&self, property: &str) -> bool {
+        self.properties.contains_key(property)
+    }
+
+    fn set(&mut self, property: String, value: Value, max_properties: usize) -> Result<()> {
+        if matches!(
+            property.as_str(),
+            FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY
+        ) {
+            return Ok(());
+        }
+        match self.properties.entry(property) {
+            Entry::Occupied(mut entry) => {
+                entry.insert(value);
+            }
+            Entry::Vacant(entry) => {
+                if self.property_order.len() >= max_properties {
+                    return Err(Error::limit(format!(
+                        "function property count exceeded {max_properties}"
+                    )));
+                }
+                self.property_order.push(entry.key().clone());
+                entry.insert(value);
+            }
+        }
+        Ok(())
+    }
+
+    fn delete(&mut self, property: &str) -> bool {
+        if matches!(property, FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY) {
+            return true;
+        }
+        let removed_property = self.properties.remove(property);
+        if removed_property.is_some() {
+            self.property_order.retain(|key| key != property);
+        }
+        true
+    }
+
+    fn keys(&self) -> Vec<String> {
+        self.property_order.clone()
     }
 }
 
