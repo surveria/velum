@@ -78,6 +78,11 @@ pub enum Expr {
         op: UnaryOp,
         expr: Box<Self>,
     },
+    Update {
+        op: UpdateOp,
+        prefix: bool,
+        expr: Box<Self>,
+    },
     Binary {
         op: BinaryOp,
         left: Box<Self>,
@@ -134,6 +139,12 @@ pub enum UnaryOp {
     Typeof,
     Void,
     Delete,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum UpdateOp {
+    Increment,
+    Decrement,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

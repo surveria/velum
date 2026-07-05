@@ -1,5 +1,6 @@
 use crate::ast::{
     BinaryOp, CatchClause, DeclKind, Expr, ObjectProperty, Program, Stmt, SwitchCase, UnaryOp,
+    UpdateOp,
 };
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
@@ -443,6 +444,16 @@ impl Parser {
         if self.match_kind(&TokenKind::New) {
             return self.new_expr();
         }
+        if self.match_kind(&TokenKind::PlusPlus) {
+            let offset = self.previous_offset();
+            let expr = self.unary()?;
+            return Self::update_expr(UpdateOp::Increment, true, expr, offset);
+        }
+        if self.match_kind(&TokenKind::MinusMinus) {
+            let offset = self.previous_offset();
+            let expr = self.unary()?;
+            return Self::update_expr(UpdateOp::Decrement, true, expr, offset);
+        }
         if self.match_kind(&TokenKind::Typeof) {
             let expr = self.unary()?;
             return Ok(Expr::Unary {
@@ -507,7 +518,6 @@ impl Parser {
                 };
                 continue;
             }
-
             if self.match_kind(&TokenKind::LBracket) {
                 let property = self.expression()?;
                 self.consume(
@@ -520,24 +530,41 @@ impl Parser {
                 };
                 continue;
             }
-
             if !self.match_kind(&TokenKind::LParen) {
                 break;
             }
-
             let args = if self.check(&TokenKind::RParen) {
                 Vec::new()
             } else {
                 self.arguments()?
             };
-
             self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
             expr = Expr::Call {
                 callee: Box::new(expr),
                 args,
             };
         }
+        if self.match_kind(&TokenKind::PlusPlus) {
+            return Self::update_expr(UpdateOp::Increment, false, expr, self.previous_offset());
+        }
+        if self.match_kind(&TokenKind::MinusMinus) {
+            return Self::update_expr(UpdateOp::Decrement, false, expr, self.previous_offset());
+        }
         Ok(expr)
+    }
+
+    fn update_expr(op: UpdateOp, prefix: bool, expr: Expr, offset: usize) -> Result<Expr> {
+        if !matches!(
+            expr,
+            Expr::Identifier(_) | Expr::Member { .. } | Expr::ComputedMember { .. }
+        ) {
+            return Err(Error::parse("invalid update target", offset));
+        }
+        Ok(Expr::Update {
+            op,
+            prefix,
+            expr: Box::new(expr),
+        })
     }
 
     fn arguments(&mut self) -> Result<Vec<Expr>> {
