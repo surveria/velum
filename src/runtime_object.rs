@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, btree_map::Entry};
+use std::collections::BTreeMap;
 
 use crate::error::{Error, Result};
 use crate::value::{ObjectId, Value};
@@ -17,6 +17,8 @@ mod runtime_object_index;
 mod runtime_object_key;
 #[path = "runtime_object_keys.rs"]
 mod runtime_object_keys;
+#[path = "runtime_object_slot.rs"]
+mod runtime_object_slot;
 #[path = "runtime_object_string.rs"]
 mod runtime_object_string;
 
@@ -421,8 +423,8 @@ impl ObjectHeap {
 
 #[derive(Debug, Clone, Default)]
 struct Object {
-    properties: BTreeMap<PropertyKey, ObjectProperty>,
-    property_order: Vec<PropertyKey>,
+    properties: BTreeMap<PropertyKey, runtime_object_slot::PropertySlot>,
+    named_properties: Vec<runtime_object_slot::NamedProperty>,
     array_elements: Vec<Option<ObjectProperty>>,
     sparse_array_keys: BTreeMap<ArrayIndex, PropertyKey>,
     array_property_count: usize,
@@ -435,7 +437,7 @@ impl Object {
     const fn ordinary() -> Self {
         Self {
             properties: BTreeMap::new(),
-            property_order: Vec::new(),
+            named_properties: Vec::new(),
             array_elements: Vec::new(),
             sparse_array_keys: BTreeMap::new(),
             array_property_count: 0,
@@ -448,7 +450,7 @@ impl Object {
     fn ordinary_with_property_capacity(capacity: usize) -> Self {
         Self {
             properties: BTreeMap::new(),
-            property_order: Vec::with_capacity(capacity),
+            named_properties: Vec::with_capacity(capacity),
             array_elements: Vec::new(),
             sparse_array_keys: BTreeMap::new(),
             array_property_count: 0,
@@ -461,7 +463,7 @@ impl Object {
     const fn array(length: ArrayLength) -> Self {
         Self {
             properties: BTreeMap::new(),
-            property_order: Vec::new(),
+            named_properties: Vec::new(),
             array_elements: Vec::new(),
             sparse_array_keys: BTreeMap::new(),
             array_property_count: 0,
@@ -500,7 +502,7 @@ impl Object {
             return Some(value);
         }
         let key = property.key()?;
-        self.properties.get(&key).map(ObjectProperty::value)
+        self.named_property(key).map(ObjectProperty::value)
     }
 
     fn has_own(&self, property: PropertyLookup<'_>) -> bool {
@@ -510,7 +512,7 @@ impl Object {
                     .is_some_and(|index| self.has_array_element(index)))
             || property
                 .key()
-                .is_some_and(|key| self.properties.contains_key(&key))
+                .is_some_and(|key| self.named_property(key).is_some())
     }
 
     fn set(
@@ -595,31 +597,26 @@ impl Object {
         max_properties: usize,
     ) -> Result<()> {
         let property_count = self.property_count();
-        let mut enumerable_update = None;
-        match self.properties.entry(property) {
-            Entry::Occupied(mut entry) => {
-                let was_enumerable = entry.get().is_enumerable();
-                entry.get_mut().set_value(value);
-                if let Some(enumerable) = enumerable {
-                    entry.get_mut().set_enumerable(enumerable);
-                }
-                enumerable_update = Some((was_enumerable, entry.get().is_enumerable()));
+        let enumerable_update = if self.properties.contains_key(&property) {
+            let existing = self.named_property_mut(property)?;
+            let was_enumerable = existing.is_enumerable();
+            existing.set_value(value);
+            if let Some(enumerable) = enumerable {
+                existing.set_enumerable(enumerable);
             }
-            Entry::Vacant(entry) => {
-                if property_count >= max_properties {
-                    return Err(Error::limit(format!(
-                        "object property count exceeded {max_properties}"
-                    )));
-                }
-                self.property_order.push(*entry.key());
-                let property =
-                    ObjectProperty::ordinary(value, enumerable.unwrap_or(PropertyEnumerable::Yes));
-                if property.is_enumerable() {
-                    enumerable_update = Some((false, true));
-                }
-                entry.insert(property);
+            Some((was_enumerable, existing.is_enumerable()))
+        } else {
+            if property_count >= max_properties {
+                return Err(Error::limit(format!(
+                    "object property count exceeded {max_properties}"
+                )));
             }
-        }
+            let named_property =
+                ObjectProperty::ordinary(value, enumerable.unwrap_or(PropertyEnumerable::Yes));
+            let enumerable_update = named_property.is_enumerable().then_some((false, true));
+            self.push_named_property(property, named_property)?;
+            enumerable_update
+        };
         if let Some((was_enumerable, is_enumerable)) = enumerable_update {
             self.update_enumerable_property_count(was_enumerable, is_enumerable);
         }
@@ -699,19 +696,18 @@ impl Object {
         let Some(key) = property.key() else {
             return true;
         };
-        let Some(existing_property) = self.properties.get(&key) else {
+        let Some(existing_property) = self.named_property(key) else {
             return true;
         };
         if !existing_property.is_configurable() {
             return false;
         }
-        let Some(removed_property) = self.properties.remove(&key) else {
+        let Some(removed_property) = self.remove_named_property(key) else {
             return true;
         };
         if removed_property.is_enumerable() {
             self.enumerable_property_count = self.enumerable_property_count.saturating_sub(1);
         }
-        self.property_order.retain(|stored_key| *stored_key != key);
         if let Some(index) = ArrayIndex::parse(property.name()) {
             self.sparse_array_keys.remove(&index);
         }

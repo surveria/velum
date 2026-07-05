@@ -567,7 +567,7 @@ impl Object {
             return Some(value);
         }
         let key = self.sparse_array_keys.get(&index)?;
-        self.properties.get(key).map(super::ObjectProperty::value)
+        self.named_property(*key).map(super::ObjectProperty::value)
     }
 
     fn set_array_index(
@@ -587,9 +587,10 @@ impl Object {
         let Some(key) = self.sparse_array_keys.remove(&index) else {
             return true;
         };
-        let removed_property = self.properties.remove(&key);
-        if removed_property.is_some() {
-            self.property_order.retain(|stored_key| *stored_key != key);
+        if let Some(property) = self.remove_named_property(key)
+            && property.is_enumerable()
+        {
+            self.enumerable_property_count = self.enumerable_property_count.saturating_sub(1);
         }
         true
     }

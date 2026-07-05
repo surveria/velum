@@ -130,6 +130,64 @@ fn supports_data_property_descriptors() -> TestResult {
     )
 }
 
+#[test]
+fn preserves_descriptor_slots_after_delete_and_reinsert() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let object = { first: 1, second: 2, third: 3 };
+        let deleteFirst = delete object.first;
+        let thirdBefore = Object.getOwnPropertyDescriptor(object, "third");
+
+        object.first = 10;
+        Object.defineProperty(object, "second", {
+            value: 20,
+            enumerable: true,
+            writable: true,
+            configurable: true
+        });
+        let deleteSecond = delete object.second;
+        object.second = 22;
+
+        let thirdAfter = Object.getOwnPropertyDescriptor(object, "third");
+        let keys = Object.keys(object);
+        let seen = "";
+        for (let key in object) {
+            seen = seen + key + ":" + object[key] + ";";
+        }
+
+        print(seen);
+        print(keys.length, keys[0], keys[1], keys[2]);
+        print(deleteFirst, deleteSecond, thirdBefore.value, thirdAfter.value);
+
+        seen === "third:3;first:10;second:22;" &&
+            keys.length === 3 &&
+            keys[0] === "third" &&
+            keys[1] === "first" &&
+            keys[2] === "second" &&
+            deleteFirst === true &&
+            deleteSecond === true &&
+            ("first" in object) &&
+            ("second" in object) &&
+            ("third" in object) &&
+            thirdBefore.value === 3 &&
+            thirdAfter.value === 3 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(
+        context.output(),
+        &[
+            "third:3;first:10;second:22;",
+            "3 third first second",
+            "true true 3 3",
+        ],
+    )
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

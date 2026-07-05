@@ -70,16 +70,13 @@ impl Object {
         keys: &mut Vec<String>,
         skip_array_indices: bool,
     ) -> Result<()> {
-        for key in &self.property_order {
+        for named_property in self.named_properties() {
+            let key = named_property.key();
             let name = atoms.name(key.atom())?;
             if skip_array_indices && ArrayIndex::parse(name).is_some() {
                 continue;
             }
-            if self
-                .properties
-                .get(key)
-                .is_some_and(super::ObjectProperty::is_enumerable)
-            {
+            if named_property.property().is_enumerable() {
                 push_unique_key(keys, name.to_owned());
             }
         }
@@ -108,8 +105,7 @@ impl Object {
         let mut entries: Vec<(ArrayIndex, PropertyKey)> = Vec::new();
         for (index, key) in &self.sparse_array_keys {
             if self
-                .properties
-                .get(key)
+                .named_property(*key)
                 .is_some_and(super::ObjectProperty::is_enumerable)
             {
                 entries.push((*index, *key));
