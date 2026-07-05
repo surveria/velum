@@ -8,7 +8,10 @@ use crate::runtime_assertions::{
 };
 use crate::runtime_completion::Completion;
 use crate::runtime_limits::RuntimeLimits;
-use crate::runtime_numeric::{bitwise_and, compare_binary, numeric_binary};
+use crate::runtime_numeric::{
+    bitwise_and, bitwise_or, bitwise_xor, compare_binary, numeric_binary, shift_left, shift_right,
+    shift_right_unsigned,
+};
 use crate::runtime_object::ObjectHeap;
 use crate::runtime_property::{delete_property, get_property, property_key, set_property};
 use crate::runtime_scope::{BindingCell, BindingScope};
@@ -390,6 +393,7 @@ impl Context {
             BinaryOp::Mul => numeric_binary(&left, &right, "*", |left, right| left * right)?,
             BinaryOp::Div => numeric_binary(&left, &right, "/", |left, right| left / right)?,
             BinaryOp::Rem => numeric_binary(&left, &right, "%", |left, right| left % right)?,
+            BinaryOp::Pow => numeric_binary(&left, &right, "**", f64::powf)?,
             BinaryOp::Equal | BinaryOp::StrictEqual => Value::Bool(left == right),
             BinaryOp::NotEqual | BinaryOp::StrictNotEqual => Value::Bool(left != right),
             BinaryOp::Less => compare_binary(&left, &right, "<", |left, right| left < right)?,
@@ -401,6 +405,11 @@ impl Context {
                 compare_binary(&left, &right, ">=", |left, right| left >= right)?
             }
             BinaryOp::BitAnd => bitwise_and(&left, &right)?,
+            BinaryOp::BitOr => bitwise_or(&left, &right)?,
+            BinaryOp::BitXor => bitwise_xor(&left, &right)?,
+            BinaryOp::ShiftLeft => shift_left(&left, &right)?,
+            BinaryOp::ShiftRight => shift_right(&left, &right)?,
+            BinaryOp::ShiftRightUnsigned => shift_right_unsigned(&left, &right)?,
             BinaryOp::LogicalAnd | BinaryOp::LogicalOr => {
                 return Err(Error::runtime("logical operator reached eager evaluation"));
             }

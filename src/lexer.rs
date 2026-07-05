@@ -44,7 +44,9 @@ pub enum TokenKind {
     MinusMinus,
     MinusEqual,
     Star,
+    StarStar,
     StarEqual,
+    StarStarEqual,
     Slash,
     SlashEqual,
     Percent,
@@ -57,10 +59,20 @@ pub enum TokenKind {
     StrictNotEqual,
     Less,
     LessEqual,
+    LessLess,
+    LessLessEqual,
     Greater,
     GreaterEqual,
+    GreaterGreater,
+    GreaterGreaterEqual,
+    GreaterGreaterGreater,
+    GreaterGreaterGreaterEqual,
     Ampersand,
     AmpersandEqual,
+    Pipe,
+    PipeEqual,
+    Caret,
+    CaretEqual,
     AndAnd,
     OrOr,
     Question,
@@ -111,7 +123,7 @@ impl<'a> Lexer<'a> {
                 ch if is_identifier_start(ch) => self.identifier(offset)?,
                 '+' => self.plus_or_increment(offset),
                 '-' => self.minus_or_decrement(offset),
-                '*' => self.simple_or_equal(offset, TokenKind::Star, TokenKind::StarEqual),
+                '*' => self.star_or_power(offset),
                 '/' => self.simple_or_equal(offset, TokenKind::Slash, TokenKind::SlashEqual),
                 '%' => self.simple_or_equal(offset, TokenKind::Percent, TokenKind::PercentEqual),
                 '?' => self.simple(TokenKind::Question),
@@ -149,22 +161,8 @@ impl<'a> Lexer<'a> {
                         self.push(TokenKind::Equal, offset);
                     }
                 }
-                '<' => {
-                    self.advance();
-                    if self.match_char('=') {
-                        self.push(TokenKind::LessEqual, offset);
-                    } else {
-                        self.push(TokenKind::Less, offset);
-                    }
-                }
-                '>' => {
-                    self.advance();
-                    if self.match_char('=') {
-                        self.push(TokenKind::GreaterEqual, offset);
-                    } else {
-                        self.push(TokenKind::Greater, offset);
-                    }
-                }
+                '<' => self.less_token(offset),
+                '>' => self.greater_token(offset),
                 '&' => {
                     self.advance();
                     if self.match_char('&') {
@@ -179,10 +177,13 @@ impl<'a> Lexer<'a> {
                     self.advance();
                     if self.match_char('|') {
                         self.push(TokenKind::OrOr, offset);
+                    } else if self.match_char('=') {
+                        self.push(TokenKind::PipeEqual, offset);
                     } else {
-                        return Err(Error::lex("expected '|' after '|'", offset));
+                        self.push(TokenKind::Pipe, offset);
                     }
                 }
+                '^' => self.simple_or_equal(offset, TokenKind::Caret, TokenKind::CaretEqual),
                 _ => return Err(Error::lex(format!("unexpected character '{ch}'"), offset)),
             }
         }
@@ -350,6 +351,63 @@ impl<'a> Lexer<'a> {
             self.push(TokenKind::MinusEqual, offset);
         } else {
             self.push(TokenKind::Minus, offset);
+        }
+    }
+
+    fn star_or_power(&mut self, offset: usize) {
+        self.advance();
+        if !self.match_char('*') {
+            if self.match_char('=') {
+                self.push(TokenKind::StarEqual, offset);
+            } else {
+                self.push(TokenKind::Star, offset);
+            }
+            return;
+        }
+        if self.match_char('=') {
+            self.push(TokenKind::StarStarEqual, offset);
+        } else {
+            self.push(TokenKind::StarStar, offset);
+        }
+    }
+
+    fn less_token(&mut self, offset: usize) {
+        self.advance();
+        if self.match_char('<') {
+            if self.match_char('=') {
+                self.push(TokenKind::LessLessEqual, offset);
+            } else {
+                self.push(TokenKind::LessLess, offset);
+            }
+        } else if self.match_char('=') {
+            self.push(TokenKind::LessEqual, offset);
+        } else {
+            self.push(TokenKind::Less, offset);
+        }
+    }
+
+    fn greater_token(&mut self, offset: usize) {
+        self.advance();
+        if self.match_char('>') {
+            self.greater_shift_token(offset);
+        } else if self.match_char('=') {
+            self.push(TokenKind::GreaterEqual, offset);
+        } else {
+            self.push(TokenKind::Greater, offset);
+        }
+    }
+
+    fn greater_shift_token(&mut self, offset: usize) {
+        if self.match_char('>') {
+            if self.match_char('=') {
+                self.push(TokenKind::GreaterGreaterGreaterEqual, offset);
+            } else {
+                self.push(TokenKind::GreaterGreaterGreater, offset);
+            }
+        } else if self.match_char('=') {
+            self.push(TokenKind::GreaterGreaterEqual, offset);
+        } else {
+            self.push(TokenKind::GreaterGreater, offset);
         }
     }
 

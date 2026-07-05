@@ -2,7 +2,10 @@ use crate::{
     ast::{BinaryOp, Expr},
     error::{Error, Result},
     runtime::Context,
-    runtime_numeric::{bitwise_and, numeric_binary},
+    runtime_numeric::{
+        bitwise_and, bitwise_or, bitwise_xor, numeric_binary, shift_left, shift_right,
+        shift_right_unsigned,
+    },
     value::Value,
 };
 
@@ -90,7 +93,13 @@ impl Context {
             BinaryOp::Mul => numeric_binary(left, right, "*=", |left, right| left * right)?,
             BinaryOp::Div => numeric_binary(left, right, "/=", |left, right| left / right)?,
             BinaryOp::Rem => numeric_binary(left, right, "%=", |left, right| left % right)?,
+            BinaryOp::Pow => numeric_binary(left, right, "**=", f64::powf)?,
             BinaryOp::BitAnd => bitwise_and(left, right)?,
+            BinaryOp::BitOr => bitwise_or(left, right)?,
+            BinaryOp::BitXor => bitwise_xor(left, right)?,
+            BinaryOp::ShiftLeft => shift_left(left, right)?,
+            BinaryOp::ShiftRight => shift_right(left, right)?,
+            BinaryOp::ShiftRightUnsigned => shift_right_unsigned(left, right)?,
             BinaryOp::Equal
             | BinaryOp::NotEqual
             | BinaryOp::StrictEqual

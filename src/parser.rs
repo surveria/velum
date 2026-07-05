@@ -1,6 +1,5 @@
 use crate::ast::{
-    BinaryOp, CatchClause, DeclKind, Expr, ObjectProperty, Program, Stmt, SwitchCase, UnaryOp,
-    UpdateOp,
+    CatchClause, DeclKind, Expr, ObjectProperty, Program, Stmt, SwitchCase, UnaryOp, UpdateOp,
 };
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
@@ -9,6 +8,8 @@ use crate::value::Value;
 
 #[path = "parser_assignment.rs"]
 mod parser_assignment;
+#[path = "parser_binary.rs"]
+mod parser_binary;
 
 pub fn parse(tokens: Vec<Token>, limits: RuntimeLimits) -> Result<Program> {
     Parser::new(tokens, limits).parse()
@@ -338,85 +339,6 @@ impl Parser {
         self.with_expression_depth(Self::assignment)
     }
 
-    fn conditional(&mut self) -> Result<Expr> {
-        let condition = self.logical_or()?;
-        if !self.match_kind(&TokenKind::Question) {
-            return Ok(condition);
-        }
-
-        let consequent = self.assignment()?;
-        self.consume(&TokenKind::Colon, "expected ':' in conditional expression")?;
-        let alternate = self.assignment()?;
-        Ok(Expr::Conditional {
-            condition: Box::new(condition),
-            consequent: Box::new(consequent),
-            alternate: Box::new(alternate),
-        })
-    }
-
-    fn logical_or(&mut self) -> Result<Expr> {
-        self.left_assoc(
-            Self::logical_and,
-            &[(&TokenKind::OrOr, BinaryOp::LogicalOr)],
-        )
-    }
-
-    fn logical_and(&mut self) -> Result<Expr> {
-        self.left_assoc(
-            Self::bitwise_and,
-            &[(&TokenKind::AndAnd, BinaryOp::LogicalAnd)],
-        )
-    }
-
-    fn bitwise_and(&mut self) -> Result<Expr> {
-        self.left_assoc(Self::equality, &[(&TokenKind::Ampersand, BinaryOp::BitAnd)])
-    }
-
-    fn equality(&mut self) -> Result<Expr> {
-        self.left_assoc(
-            Self::comparison,
-            &[
-                (&TokenKind::EqualEqual, BinaryOp::Equal),
-                (&TokenKind::BangEqual, BinaryOp::NotEqual),
-                (&TokenKind::StrictEqual, BinaryOp::StrictEqual),
-                (&TokenKind::StrictNotEqual, BinaryOp::StrictNotEqual),
-            ],
-        )
-    }
-
-    fn comparison(&mut self) -> Result<Expr> {
-        self.left_assoc(
-            Self::term,
-            &[
-                (&TokenKind::Less, BinaryOp::Less),
-                (&TokenKind::LessEqual, BinaryOp::LessEqual),
-                (&TokenKind::Greater, BinaryOp::Greater),
-                (&TokenKind::GreaterEqual, BinaryOp::GreaterEqual),
-            ],
-        )
-    }
-
-    fn term(&mut self) -> Result<Expr> {
-        self.left_assoc(
-            Self::factor,
-            &[
-                (&TokenKind::Plus, BinaryOp::Add),
-                (&TokenKind::Minus, BinaryOp::Sub),
-            ],
-        )
-    }
-
-    fn factor(&mut self) -> Result<Expr> {
-        self.left_assoc(
-            Self::unary,
-            &[
-                (&TokenKind::Star, BinaryOp::Mul),
-                (&TokenKind::Slash, BinaryOp::Div),
-                (&TokenKind::Percent, BinaryOp::Rem),
-            ],
-        )
-    }
-
     fn unary(&mut self) -> Result<Expr> {
         if self.match_kind(&TokenKind::New) {
             return self.new_expr();
@@ -657,27 +579,6 @@ impl Parser {
         }
 
         Ok(params)
-    }
-
-    fn left_assoc(
-        &mut self,
-        next: fn(&mut Self) -> Result<Expr>,
-        ops: &[(&TokenKind, BinaryOp)],
-    ) -> Result<Expr> {
-        let mut expr = next(self)?;
-        while let Some((_, op)) = ops.iter().find(|(kind, _)| self.check(kind)) {
-            let op = *op;
-            if self.advance().is_none() {
-                return Err(Error::parse("expected operator", self.offset()));
-            }
-            let right = next(self)?;
-            expr = Expr::Binary {
-                op,
-                left: Box::new(expr),
-                right: Box::new(right),
-            };
-        }
-        Ok(expr)
     }
 
     fn with_expression_depth(

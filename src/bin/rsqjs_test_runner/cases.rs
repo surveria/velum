@@ -27,6 +27,11 @@ pub struct BenchmarkCase {
     pub path: &'static str,
 }
 
+#[path = "cases_reporting.rs"]
+mod cases_reporting;
+
+pub use cases_reporting::{benchmark_cases, quickjs_differential_cases};
+
 const PATH_ARITHMETIC: &str = "tests/engine_cases/arithmetic_precedence.js";
 const PATH_HOST_PRINT: &str = "tests/engine_cases/host_print.js";
 const PATH_CONST_ASSIGNMENT: &str = "tests/engine_cases/const_assignment_error.js";
@@ -37,6 +42,8 @@ const PATH_TRY_FINALLY: &str = "tests/engine_cases/try_finally.js";
 const PATH_CONDITIONAL_BITAND: &str = "tests/engine_cases/conditional_bitand.js";
 const PATH_UPDATE_EXPRESSIONS: &str = "tests/engine_cases/update_expressions.js";
 const PATH_COMPOUND_ASSIGNMENT: &str = "tests/engine_cases/compound_assignment.js";
+const PATH_COMPOUND_ASSIGNMENT_EXTENDED: &str =
+    "tests/engine_cases/compound_assignment_extended.js";
 const PATH_WHILE_STATEMENTS: &str = "tests/engine_cases/while_statements.js";
 const PATH_BREAK_CONTINUE: &str = "tests/engine_cases/break_continue.js";
 const PATH_FOR_STATEMENTS: &str = "tests/engine_cases/for_statements.js";
@@ -77,6 +84,8 @@ const PATH_TEST262_UPDATE_EXPRESSIONS: &str =
     "tests/corpora/test262/active/language/expressions/update_expressions.js";
 const PATH_TEST262_COMPOUND_ASSIGNMENT: &str =
     "tests/corpora/test262/active/language/expressions/compound_assignment.js";
+const PATH_TEST262_COMPOUND_ASSIGNMENT_EXTENDED: &str =
+    "tests/corpora/test262/active/language/expressions/compound_assignment_extended.js";
 const PATH_TEST262_LET_CONST: &str = "tests/corpora/test262/active/language/bindings/let_const.js";
 const PATH_TEST262_VAR_HOISTING: &str =
     "tests/corpora/test262/active/language/bindings/var_hoisting.js";
@@ -95,83 +104,6 @@ const PATH_TEST262_ASSERT_THROWS_REFERENCE_ERROR: &str =
     "tests/corpora/test262/active/language/statements/assert_throws_reference_error.js";
 const PATH_TEST262_ERROR_OBJECT_PROPERTIES: &str =
     "tests/corpora/test262/active/language/statements/error_object_properties.js";
-const PATH_QUICKJS_PRINT_ARITHMETIC: &str =
-    "tests/corpora/quickjs_differential/active/print_arithmetic.js";
-const PATH_QUICKJS_PRINT_BINDING: &str =
-    "tests/corpora/quickjs_differential/active/print_binding.js";
-const PATH_QUICKJS_BOOLEAN_CONVERSION: &str =
-    "tests/corpora/quickjs_differential/active/boolean_conversion.js";
-const PATH_QUICKJS_VAR_HOISTING: &str = "tests/corpora/quickjs_differential/active/var_hoisting.js";
-const PATH_QUICKJS_TRY_CATCH: &str = "tests/corpora/quickjs_differential/active/try_catch.js";
-const PATH_QUICKJS_TRY_FINALLY: &str = "tests/corpora/quickjs_differential/active/try_finally.js";
-const PATH_QUICKJS_CONDITIONAL_BITAND: &str =
-    "tests/corpora/quickjs_differential/active/conditional_bitand.js";
-const PATH_QUICKJS_WHILE_STATEMENTS: &str =
-    "tests/corpora/quickjs_differential/active/while_statements.js";
-const PATH_QUICKJS_BREAK_CONTINUE: &str =
-    "tests/corpora/quickjs_differential/active/break_continue.js";
-const PATH_QUICKJS_FOR_STATEMENTS: &str =
-    "tests/corpora/quickjs_differential/active/for_statements.js";
-const PATH_QUICKJS_SWITCH_STATEMENTS: &str =
-    "tests/corpora/quickjs_differential/active/switch_statements.js";
-const PATH_QUICKJS_BLOCK_LEXICAL_SCOPE: &str =
-    "tests/corpora/quickjs_differential/active/block_lexical_scope.js";
-const PATH_QUICKJS_FUNCTION_EXPRESSION: &str =
-    "tests/corpora/quickjs_differential/active/function_expression.js";
-const PATH_QUICKJS_FUNCTION_RETURN: &str =
-    "tests/corpora/quickjs_differential/active/function_return.js";
-const PATH_QUICKJS_FUNCTION_PARAMETERS_SCOPE: &str =
-    "tests/corpora/quickjs_differential/active/function_parameters_scope.js";
-const PATH_QUICKJS_CLOSURE_ENVIRONMENTS: &str =
-    "tests/corpora/quickjs_differential/active/closure_environments.js";
-const PATH_QUICKJS_OBJECT_LITERALS: &str =
-    "tests/corpora/quickjs_differential/active/object_literals.js";
-const PATH_QUICKJS_COMPUTED_PROPERTIES: &str =
-    "tests/corpora/quickjs_differential/active/computed_properties.js";
-const PATH_QUICKJS_ARRAY_LITERALS: &str =
-    "tests/corpora/quickjs_differential/active/array_literals.js";
-const PATH_QUICKJS_UNARY_OPERATORS: &str =
-    "tests/corpora/quickjs_differential/active/unary_operators.js";
-const PATH_QUICKJS_UPDATE_EXPRESSIONS: &str =
-    "tests/corpora/quickjs_differential/active/update_expressions.js";
-const PATH_QUICKJS_COMPOUND_ASSIGNMENT: &str =
-    "tests/corpora/quickjs_differential/active/compound_assignment.js";
-const PATH_QUICKJS_REFERENCE_ERROR_CATCH: &str =
-    "tests/corpora/quickjs_differential/active/reference_error_catch.js";
-const PATH_QUICKJS_ERROR_OBJECT_PROPERTIES: &str =
-    "tests/corpora/quickjs_differential/active/error_object_properties.js";
-const PATH_BENCH_ARITHMETIC: &str = "tests/corpora/benchmarks/active/arithmetic_chain.js";
-const PATH_BENCH_CONDITIONAL_BITAND: &str = "tests/corpora/benchmarks/active/conditional_bitand.js";
-const PATH_BENCH_WHILE_STATEMENTS: &str = "tests/corpora/benchmarks/active/while_statements.js";
-const PATH_BENCH_BREAK_CONTINUE: &str = "tests/corpora/benchmarks/active/break_continue.js";
-const PATH_BENCH_FOR_STATEMENTS: &str = "tests/corpora/benchmarks/active/for_statements.js";
-const PATH_BENCH_SWITCH_STATEMENTS: &str = "tests/corpora/benchmarks/active/switch_statements.js";
-const PATH_BENCH_BLOCK_LEXICAL_SCOPE: &str =
-    "tests/corpora/benchmarks/active/block_lexical_scope.js";
-const PATH_BENCH_FUNCTION_EXPRESSION: &str =
-    "tests/corpora/benchmarks/active/function_expression.js";
-const PATH_BENCH_FUNCTION_RETURN: &str = "tests/corpora/benchmarks/active/function_return.js";
-const PATH_BENCH_FUNCTION_PARAMETERS_SCOPE: &str =
-    "tests/corpora/benchmarks/active/function_parameters_scope.js";
-const PATH_BENCH_CLOSURE_ENVIRONMENTS: &str =
-    "tests/corpora/benchmarks/active/closure_environments.js";
-const PATH_BENCH_OBJECT_LITERALS: &str = "tests/corpora/benchmarks/active/object_literals.js";
-const PATH_BENCH_COMPUTED_PROPERTIES: &str =
-    "tests/corpora/benchmarks/active/computed_properties.js";
-const PATH_BENCH_ARRAY_LITERALS: &str = "tests/corpora/benchmarks/active/array_literals.js";
-const PATH_BENCH_UNARY_OPERATORS: &str = "tests/corpora/benchmarks/active/unary_operators.js";
-const PATH_BENCH_UPDATE_EXPRESSIONS: &str = "tests/corpora/benchmarks/active/update_expressions.js";
-const PATH_BENCH_COMPOUND_ASSIGNMENT: &str =
-    "tests/corpora/benchmarks/active/compound_assignment.js";
-const PATH_BENCH_STRING: &str = "tests/corpora/benchmarks/active/string_concat.js";
-const PATH_BENCH_BOOLEAN: &str = "tests/corpora/benchmarks/active/boolean_conversion.js";
-const PATH_BENCH_VAR_HOISTING: &str = "tests/corpora/benchmarks/active/var_hoisting.js";
-const PATH_BENCH_TRY_CATCH: &str = "tests/corpora/benchmarks/active/try_catch.js";
-const PATH_BENCH_TRY_FINALLY: &str = "tests/corpora/benchmarks/active/try_finally.js";
-const PATH_BENCH_REFERENCE_ERROR_CATCH: &str =
-    "tests/corpora/benchmarks/active/reference_error_catch.js";
-const PATH_BENCH_ERROR_OBJECT_PROPERTIES: &str =
-    "tests/corpora/benchmarks/active/error_object_properties.js";
 
 pub fn engine_cases() -> Vec<EngineCase> {
     let mut cases = engine_language_cases();
@@ -261,6 +193,20 @@ fn engine_control_flow_cases() -> Vec<EngineCase> {
                     "cam-01",
                     "15 12 12",
                     "10 2 2",
+                    "kr 42 42",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "compound_assignment_extended",
+            path: PATH_COMPOUND_ASSIGNMENT_EXTENDED,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "7 4 16 8 4 64 64",
+                    "-4 2147483646 2147483646",
+                    "5 2 16 16",
+                    "32 2 32 32 32",
                     "kr 42 42",
                 ],
                 value: "42",
@@ -484,6 +430,11 @@ fn test262_expression_cases() -> Vec<EngineCase> {
             path: PATH_TEST262_COMPOUND_ASSIGNMENT,
             expectation: Expectation::Value("42"),
         },
+        EngineCase {
+            id: "language/expressions/compound_assignment_extended",
+            path: PATH_TEST262_COMPOUND_ASSIGNMENT_EXTENDED,
+            expectation: Expectation::Value("42"),
+        },
     ]
 }
 
@@ -548,208 +499,6 @@ fn test262_statement_cases() -> Vec<EngineCase> {
             id: "language/statements/error_object_properties",
             path: PATH_TEST262_ERROR_OBJECT_PROPERTIES,
             expectation: Expectation::Value("42"),
-        },
-    ]
-}
-
-pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
-    vec![
-        DifferentialCase {
-            id: "print_arithmetic",
-            path: PATH_QUICKJS_PRINT_ARITHMETIC,
-        },
-        DifferentialCase {
-            id: "print_binding",
-            path: PATH_QUICKJS_PRINT_BINDING,
-        },
-        DifferentialCase {
-            id: "boolean_conversion",
-            path: PATH_QUICKJS_BOOLEAN_CONVERSION,
-        },
-        DifferentialCase {
-            id: "var_hoisting",
-            path: PATH_QUICKJS_VAR_HOISTING,
-        },
-        DifferentialCase {
-            id: "try_catch",
-            path: PATH_QUICKJS_TRY_CATCH,
-        },
-        DifferentialCase {
-            id: "try_finally",
-            path: PATH_QUICKJS_TRY_FINALLY,
-        },
-        DifferentialCase {
-            id: "conditional_bitand",
-            path: PATH_QUICKJS_CONDITIONAL_BITAND,
-        },
-        DifferentialCase {
-            id: "while_statements",
-            path: PATH_QUICKJS_WHILE_STATEMENTS,
-        },
-        DifferentialCase {
-            id: "break_continue",
-            path: PATH_QUICKJS_BREAK_CONTINUE,
-        },
-        DifferentialCase {
-            id: "for_statements",
-            path: PATH_QUICKJS_FOR_STATEMENTS,
-        },
-        DifferentialCase {
-            id: "switch_statements",
-            path: PATH_QUICKJS_SWITCH_STATEMENTS,
-        },
-        DifferentialCase {
-            id: "block_lexical_scope",
-            path: PATH_QUICKJS_BLOCK_LEXICAL_SCOPE,
-        },
-        DifferentialCase {
-            id: "function_expression",
-            path: PATH_QUICKJS_FUNCTION_EXPRESSION,
-        },
-        DifferentialCase {
-            id: "function_return",
-            path: PATH_QUICKJS_FUNCTION_RETURN,
-        },
-        DifferentialCase {
-            id: "function_parameters_scope",
-            path: PATH_QUICKJS_FUNCTION_PARAMETERS_SCOPE,
-        },
-        DifferentialCase {
-            id: "closure_environments",
-            path: PATH_QUICKJS_CLOSURE_ENVIRONMENTS,
-        },
-        DifferentialCase {
-            id: "object_literals",
-            path: PATH_QUICKJS_OBJECT_LITERALS,
-        },
-        DifferentialCase {
-            id: "computed_properties",
-            path: PATH_QUICKJS_COMPUTED_PROPERTIES,
-        },
-        DifferentialCase {
-            id: "array_literals",
-            path: PATH_QUICKJS_ARRAY_LITERALS,
-        },
-        DifferentialCase {
-            id: "unary_operators",
-            path: PATH_QUICKJS_UNARY_OPERATORS,
-        },
-        DifferentialCase {
-            id: "update_expressions",
-            path: PATH_QUICKJS_UPDATE_EXPRESSIONS,
-        },
-        DifferentialCase {
-            id: "compound_assignment",
-            path: PATH_QUICKJS_COMPOUND_ASSIGNMENT,
-        },
-        DifferentialCase {
-            id: "reference_error_catch",
-            path: PATH_QUICKJS_REFERENCE_ERROR_CATCH,
-        },
-        DifferentialCase {
-            id: "error_object_properties",
-            path: PATH_QUICKJS_ERROR_OBJECT_PROPERTIES,
-        },
-    ]
-}
-
-pub fn benchmark_cases() -> Vec<BenchmarkCase> {
-    vec![
-        BenchmarkCase {
-            id: "arithmetic_chain",
-            path: PATH_BENCH_ARITHMETIC,
-        },
-        BenchmarkCase {
-            id: "conditional_bitand",
-            path: PATH_BENCH_CONDITIONAL_BITAND,
-        },
-        BenchmarkCase {
-            id: "while_statements",
-            path: PATH_BENCH_WHILE_STATEMENTS,
-        },
-        BenchmarkCase {
-            id: "break_continue",
-            path: PATH_BENCH_BREAK_CONTINUE,
-        },
-        BenchmarkCase {
-            id: "for_statements",
-            path: PATH_BENCH_FOR_STATEMENTS,
-        },
-        BenchmarkCase {
-            id: "switch_statements",
-            path: PATH_BENCH_SWITCH_STATEMENTS,
-        },
-        BenchmarkCase {
-            id: "block_lexical_scope",
-            path: PATH_BENCH_BLOCK_LEXICAL_SCOPE,
-        },
-        BenchmarkCase {
-            id: "function_expression",
-            path: PATH_BENCH_FUNCTION_EXPRESSION,
-        },
-        BenchmarkCase {
-            id: "function_return",
-            path: PATH_BENCH_FUNCTION_RETURN,
-        },
-        BenchmarkCase {
-            id: "function_parameters_scope",
-            path: PATH_BENCH_FUNCTION_PARAMETERS_SCOPE,
-        },
-        BenchmarkCase {
-            id: "closure_environments",
-            path: PATH_BENCH_CLOSURE_ENVIRONMENTS,
-        },
-        BenchmarkCase {
-            id: "object_literals",
-            path: PATH_BENCH_OBJECT_LITERALS,
-        },
-        BenchmarkCase {
-            id: "computed_properties",
-            path: PATH_BENCH_COMPUTED_PROPERTIES,
-        },
-        BenchmarkCase {
-            id: "array_literals",
-            path: PATH_BENCH_ARRAY_LITERALS,
-        },
-        BenchmarkCase {
-            id: "unary_operators",
-            path: PATH_BENCH_UNARY_OPERATORS,
-        },
-        BenchmarkCase {
-            id: "update_expressions",
-            path: PATH_BENCH_UPDATE_EXPRESSIONS,
-        },
-        BenchmarkCase {
-            id: "compound_assignment",
-            path: PATH_BENCH_COMPOUND_ASSIGNMENT,
-        },
-        BenchmarkCase {
-            id: "string_concat",
-            path: PATH_BENCH_STRING,
-        },
-        BenchmarkCase {
-            id: "boolean_conversion",
-            path: PATH_BENCH_BOOLEAN,
-        },
-        BenchmarkCase {
-            id: "var_hoisting",
-            path: PATH_BENCH_VAR_HOISTING,
-        },
-        BenchmarkCase {
-            id: "try_catch",
-            path: PATH_BENCH_TRY_CATCH,
-        },
-        BenchmarkCase {
-            id: "try_finally",
-            path: PATH_BENCH_TRY_FINALLY,
-        },
-        BenchmarkCase {
-            id: "reference_error_catch",
-            path: PATH_BENCH_REFERENCE_ERROR_CATCH,
-        },
-        BenchmarkCase {
-            id: "error_object_properties",
-            path: PATH_BENCH_ERROR_OBJECT_PROPERTIES,
         },
     ]
 }
