@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::ast::{BinaryOp, Expr, ObjectProperty, Program, Stmt};
 use crate::error::{Error, Result};
 use crate::lexer;
@@ -47,10 +49,11 @@ pub struct Context {
 #[derive(Debug, Clone)]
 struct Function {
     name: String,
-    params: Vec<String>,
-    body: Vec<Stmt>,
+    params: Rc<[String]>,
+    body: Rc<[Stmt]>,
     captures: Vec<BindingScope>,
     properties: runtime_function::FunctionProperties,
+    constructable: bool,
 }
 
 impl Context {
@@ -209,6 +212,9 @@ impl Context {
             Expr::Function { name, params, body } => {
                 self.create_function(name.as_deref(), params, body)
             }
+            Expr::MethodFunction { name, params, body } => {
+                self.create_method_function(name, params, body)
+            }
             Expr::Object(properties) => self.eval_object_literal(properties),
             Expr::Array(elements) => self.eval_array_literal(elements),
             Expr::New { constructor, args } => self.eval_new(constructor, args),
@@ -216,7 +222,7 @@ impl Context {
     }
 
     fn eval_object_literal(&mut self, properties: &[ObjectProperty]) -> Result<Value> {
-        let mut values = Vec::new();
+        let mut values = Vec::with_capacity(properties.len());
         for property in properties {
             let value = self.eval_expr(&property.value)?;
             values.push((property.key.clone(), value));
@@ -229,7 +235,7 @@ impl Context {
     }
 
     fn eval_array_literal(&mut self, elements: &[Expr]) -> Result<Value> {
-        let mut values = Vec::new();
+        let mut values = Vec::with_capacity(elements.len());
         for element in elements {
             values.push(self.eval_expr(element)?);
         }

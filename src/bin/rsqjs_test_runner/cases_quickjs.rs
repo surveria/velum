@@ -44,6 +44,8 @@ const PATH_QUICKJS_CLOSURE_ENVIRONMENTS: &str =
     "tests/corpora/quickjs_differential/active/closure_environments.js";
 const PATH_QUICKJS_OBJECT_LITERALS: &str =
     "tests/corpora/quickjs_differential/active/object_literals.js";
+const PATH_QUICKJS_OBJECT_LITERAL_SHORTHAND_METHODS: &str =
+    "tests/corpora/quickjs_differential/active/object_literal_shorthand_methods.js";
 const PATH_QUICKJS_OBJECT_PROTOTYPES: &str =
     "tests/corpora/quickjs_differential/active/object_prototypes.js";
 const PATH_QUICKJS_OBJECT_PROTOTYPE_ROOT: &str =
@@ -207,6 +209,10 @@ fn quickjs_object_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "object_literals",
             path: PATH_QUICKJS_OBJECT_LITERALS,
+        },
+        DifferentialCase {
+            id: "object_literal_shorthand_methods",
+            path: PATH_QUICKJS_OBJECT_LITERAL_SHORTHAND_METHODS,
         },
         DifferentialCase {
             id: "object_prototypes",

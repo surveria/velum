@@ -26,6 +26,8 @@ const PATH_BENCH_FUNCTION_PARAMETERS_SCOPE: &str =
 const PATH_BENCH_CLOSURE_ENVIRONMENTS: &str =
     "tests/corpora/benchmarks/active/closure_environments.js";
 const PATH_BENCH_OBJECT_LITERALS: &str = "tests/corpora/benchmarks/active/object_literals.js";
+const PATH_BENCH_OBJECT_LITERAL_SHORTHAND_METHODS: &str =
+    "tests/corpora/benchmarks/active/object_literal_shorthand_methods.js";
 const PATH_BENCH_OBJECT_PROTOTYPES: &str = "tests/corpora/benchmarks/active/object_prototypes.js";
 const PATH_BENCH_OBJECT_PROTOTYPE_ROOT: &str =
     "tests/corpora/benchmarks/active/object_prototype_root.js";
@@ -166,6 +168,10 @@ fn benchmark_object_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "object_literals",
             path: PATH_BENCH_OBJECT_LITERALS,
+        },
+        BenchmarkCase {
+            id: "object_literal_shorthand_methods",
+            path: PATH_BENCH_OBJECT_LITERAL_SHORTHAND_METHODS,
         },
         BenchmarkCase {
             id: "object_prototypes",

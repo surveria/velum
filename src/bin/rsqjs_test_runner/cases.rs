@@ -71,6 +71,8 @@ const PATH_FUNCTION_RETURN: &str = "tests/engine_cases/function_return.js";
 const PATH_FUNCTION_PARAMETERS_SCOPE: &str = "tests/engine_cases/function_parameters_scope.js";
 const PATH_CLOSURE_ENVIRONMENTS: &str = "tests/engine_cases/closure_environments.js";
 const PATH_OBJECT_LITERALS: &str = "tests/engine_cases/object_literals.js";
+const PATH_OBJECT_LITERAL_SHORTHAND_METHODS: &str =
+    "tests/engine_cases/object_literal_shorthand_methods.js";
 const PATH_OBJECT_PROTOTYPES: &str = "tests/engine_cases/object_prototypes.js";
 const PATH_OBJECT_PROTOTYPE_ROOT: &str = "tests/engine_cases/object_prototype_root.js";
 const PATH_OBJECT_BUILTIN: &str = "tests/engine_cases/object_builtin.js";
@@ -426,6 +428,14 @@ fn engine_plain_object_cases() -> Vec<EngineCase> {
             path: PATH_OBJECT_LITERALS,
             expectation: Expectation::OutputAndValue {
                 output: &["front-door undefined", "42", "42"],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "object_literal_shorthand_methods",
+            path: PATH_OBJECT_LITERAL_SHORTHAND_METHODS,
+            expectation: Expectation::OutputAndValue {
+                output: &["front-door 1 5 2 add false"],
                 value: "42",
             },
         },

@@ -26,6 +26,8 @@ const PATH_TEST262_CLOSURE_ENVIRONMENTS: &str =
     "tests/corpora/test262/active/language/expressions/closure_environments.js";
 const PATH_TEST262_OBJECT_LITERALS: &str =
     "tests/corpora/test262/active/language/expressions/object_literals.js";
+const PATH_TEST262_OBJECT_LITERAL_SHORTHAND_METHODS: &str =
+    "tests/corpora/test262/active/language/expressions/object_literal_shorthand_methods.js";
 const PATH_TEST262_OBJECT_PROTOTYPES: &str =
     "tests/corpora/test262/active/language/expressions/object_prototypes.js";
 const PATH_TEST262_OBJECT_PROTOTYPE_ROOT: &str =
@@ -186,6 +188,11 @@ fn test262_object_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/object_literals",
             path: PATH_TEST262_OBJECT_LITERALS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/object_literal_shorthand_methods",
+            path: PATH_TEST262_OBJECT_LITERAL_SHORTHAND_METHODS,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
