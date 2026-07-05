@@ -3,8 +3,9 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ArrayLength, ObjectHeap};
+use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ArrayLength, Object, ObjectHeap};
 
+const ARRAY_CONCAT_RECEIVER_ERROR: &str = "Array.prototype.concat requires an array receiver";
 const ARRAY_INCLUDES_RECEIVER_ERROR: &str = "Array.prototype.includes requires an array receiver";
 const ARRAY_INDEX_OF_RECEIVER_ERROR: &str = "Array.prototype.indexOf requires an array receiver";
 const ARRAY_JOIN_RECEIVER_ERROR: &str = "Array.prototype.join requires an array receiver";
@@ -154,6 +155,42 @@ impl ObjectHeap {
             self.reverse_array_pair(id, lower_index, upper_index, max_properties)?;
         }
         Ok(Value::Object(id))
+    }
+
+    pub(crate) fn array_concat(
+        &mut self,
+        id: ObjectId,
+        values: Vec<Value>,
+        prototype: ObjectId,
+        max_objects: usize,
+        max_properties: usize,
+    ) -> Result<Value> {
+        let this_length = self.array_length_for_method(id, ARRAY_CONCAT_RECEIVER_ERROR)?;
+        let result = self.create_array_with_length(0, prototype, max_objects)?;
+        let Value::Object(result_id) = result else {
+            return Err(Error::runtime("array concat result is not an object"));
+        };
+
+        let mut next_index = 0;
+        self.concat_array_source(result_id, &mut next_index, id, this_length, max_properties)?;
+
+        for value in values {
+            if let Value::Object(source_id) = &value
+                && let Some(length) = self.array_length_if_array(*source_id)?
+            {
+                self.concat_array_source(
+                    result_id,
+                    &mut next_index,
+                    *source_id,
+                    length,
+                    max_properties,
+                )?;
+            } else {
+                self.concat_single_value(result_id, &mut next_index, value, max_properties)?;
+            }
+        }
+        self.object_mut(result_id)?.array_length = Some(ArrayLength::from_usize(next_index)?);
+        Ok(Value::Object(result_id))
     }
 
     pub(crate) fn array_len(&self, id: ObjectId) -> Result<usize> {
@@ -314,10 +351,151 @@ impl ObjectHeap {
     }
 
     fn array_property_value(&self, id: ObjectId, key: &str) -> Result<Option<Value>> {
+        let object = self.object(id)?;
+        if let Some(value) = object.get_own(key) {
+            return Ok(Some(value));
+        }
         if self.has(id, key)? {
             return self.get(id, key).map(Some);
         }
         Ok(None)
+    }
+
+    fn array_length_if_array(&self, id: ObjectId) -> Result<Option<ArrayLength>> {
+        let object = self.object(id)?;
+        Ok(object.array_length)
+    }
+
+    fn concat_array_source(
+        &mut self,
+        result_id: ObjectId,
+        next_index: &mut usize,
+        source_id: ObjectId,
+        length: ArrayLength,
+        max_properties: usize,
+    ) -> Result<()> {
+        if self.has_dense_own_array_values(source_id, length)? {
+            *next_index = self.concat_dense_own_array_source(
+                result_id,
+                *next_index,
+                source_id,
+                length,
+                max_properties,
+            )?;
+            return Ok(());
+        }
+
+        for source_index in 0..length.to_usize()? {
+            let source_key = ArrayIndex::from_usize(source_index)?.key();
+            if let Some(value) = self.array_property_value(source_id, &source_key)? {
+                self.set_concat_result_index(result_id, *next_index, value, max_properties)?;
+            }
+            *next_index = Self::next_concat_index(*next_index)?;
+        }
+        Ok(())
+    }
+
+    fn has_dense_own_array_values(&self, source_id: ObjectId, length: ArrayLength) -> Result<bool> {
+        let object = self.object(source_id)?;
+        for source_index in 0..length.to_usize()? {
+            let source_key = ArrayIndex::from_usize(source_index)?.key();
+            if !object.has_own(&source_key) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    fn concat_dense_own_array_source(
+        &mut self,
+        result_id: ObjectId,
+        start_index: usize,
+        source_id: ObjectId,
+        length: ArrayLength,
+        max_properties: usize,
+    ) -> Result<usize> {
+        let (source, result) = self.object_pair_for_concat(source_id, result_id)?;
+        if result.array_length.is_none() {
+            return Err(Error::runtime("array concat result is not an array"));
+        }
+        let mut next_index = start_index;
+        for source_index in 0..length.to_usize()? {
+            let source_key = ArrayIndex::from_usize(source_index)?.key();
+            let Some(value) = source.get_own(&source_key) else {
+                return Err(Error::runtime("array concat dense source changed"));
+            };
+            let target_index = ArrayIndex::from_usize(next_index)?;
+            result.set_ordinary(target_index.key(), value, max_properties)?;
+            next_index = Self::next_concat_index(next_index)?;
+        }
+        Ok(next_index)
+    }
+
+    fn object_pair_for_concat(
+        &mut self,
+        source_id: ObjectId,
+        result_id: ObjectId,
+    ) -> Result<(&Object, &mut Object)> {
+        if source_id == result_id {
+            return Err(Error::runtime("array concat source and result alias"));
+        }
+        let source_index = source_id.index();
+        let result_index = result_id.index();
+        if source_index >= self.objects.len() || result_index >= self.objects.len() {
+            return Err(Error::runtime("object id is not defined"));
+        }
+        if source_index < result_index {
+            let (left, right) = self.objects.split_at_mut(result_index);
+            let source = left
+                .get(source_index)
+                .ok_or_else(|| Error::runtime("object id is not defined"))?;
+            let result = right
+                .first_mut()
+                .ok_or_else(|| Error::runtime("object id is not defined"))?;
+            return Ok((source, result));
+        }
+
+        let (left, right) = self.objects.split_at_mut(source_index);
+        let result = left
+            .get_mut(result_index)
+            .ok_or_else(|| Error::runtime("object id is not defined"))?;
+        let source = right
+            .first()
+            .ok_or_else(|| Error::runtime("object id is not defined"))?;
+        Ok((source, result))
+    }
+
+    fn concat_single_value(
+        &mut self,
+        result_id: ObjectId,
+        next_index: &mut usize,
+        value: Value,
+        max_properties: usize,
+    ) -> Result<()> {
+        self.set_concat_result_index(result_id, *next_index, value, max_properties)?;
+        *next_index = Self::next_concat_index(*next_index)?;
+        Ok(())
+    }
+
+    fn set_concat_result_index(
+        &mut self,
+        result_id: ObjectId,
+        index: usize,
+        value: Value,
+        max_properties: usize,
+    ) -> Result<()> {
+        let index = ArrayIndex::from_usize(index)?;
+        let object = self.object_mut(result_id)?;
+        if object.array_length.is_none() {
+            return Err(Error::runtime("array concat result is not an array"));
+        }
+        object.set_ordinary(index.key(), value, max_properties)
+    }
+
+    fn next_concat_index(index: usize) -> Result<usize> {
+        index
+            .checked_add(1)
+            .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))
     }
 
     fn array_index_value(index: usize) -> Result<Value> {

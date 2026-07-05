@@ -12,6 +12,8 @@ use super::runtime_function::FunctionProperties;
 mod runtime_native_array;
 
 const OBJECT_CONSTRUCTOR_PROPERTY: &str = "constructor";
+const ARRAY_CONCAT_FUNCTION_LENGTH: f64 = 1.0;
+const ARRAY_CONCAT_NAME: &str = "concat";
 const ARRAY_INCLUDES_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_INCLUDES_NAME: &str = "includes";
 const ARRAY_INDEX_OF_FUNCTION_LENGTH: f64 = 1.0;
@@ -58,6 +60,7 @@ impl NativeFunction {
     pub(super) const fn length(&self) -> f64 {
         match self.kind {
             NativeFunctionKind::Array => ARRAY_FUNCTION_LENGTH,
+            NativeFunctionKind::ArrayConcat => ARRAY_CONCAT_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayIncludes => ARRAY_INCLUDES_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayIndexOf => ARRAY_INDEX_OF_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayJoin => ARRAY_JOIN_FUNCTION_LENGTH,
@@ -75,6 +78,7 @@ impl NativeFunction {
     pub(super) const fn name(&self) -> &'static str {
         match self.kind {
             NativeFunctionKind::Array => ARRAY_NAME,
+            NativeFunctionKind::ArrayConcat => ARRAY_CONCAT_NAME,
             NativeFunctionKind::ArrayIncludes => ARRAY_INCLUDES_NAME,
             NativeFunctionKind::ArrayIndexOf => ARRAY_INDEX_OF_NAME,
             NativeFunctionKind::ArrayJoin => ARRAY_JOIN_NAME,
@@ -101,6 +105,7 @@ impl NativeFunction {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(super) enum NativeFunctionKind {
     Array,
+    ArrayConcat,
     ArrayIncludes,
     ArrayIndexOf,
     ArrayJoin,
@@ -138,6 +143,7 @@ impl Context {
     ) -> Result<Value> {
         match self.native_function(id)?.kind() {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
+            NativeFunctionKind::ArrayConcat => self.eval_array_concat(args, this_value),
             NativeFunctionKind::ArrayIncludes => self.eval_array_includes(args, this_value),
             NativeFunctionKind::ArrayIndexOf => self.eval_array_index_of(args, this_value),
             NativeFunctionKind::ArrayJoin => self.eval_array_join(args, this_value),
@@ -159,7 +165,8 @@ impl Context {
     ) -> Result<Value> {
         match self.native_function(id)?.kind() {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
-            NativeFunctionKind::ArrayIncludes
+            NativeFunctionKind::ArrayConcat
+            | NativeFunctionKind::ArrayIncludes
             | NativeFunctionKind::ArrayIndexOf
             | NativeFunctionKind::ArrayJoin
             | NativeFunctionKind::ArrayLastIndexOf
