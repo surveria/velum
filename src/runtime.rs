@@ -277,6 +277,9 @@ impl Context {
                 self.assign(name, value.clone())?;
                 Ok(value)
             }
+            Expr::CompoundAssignment { op, target, expr } => {
+                self.eval_compound_assignment(*op, target, expr)
+            }
             Expr::PropertyAssignment {
                 object,
                 property,
@@ -471,29 +474,11 @@ impl Context {
         self.get_property_value(&object, &property)
     }
 
-    fn eval_property_assignment(
-        &mut self,
-        object: &Expr,
-        property: &str,
-        expr: &Expr,
-    ) -> Result<Value> {
-        let object = self.eval_expr(object)?;
-        let value = self.eval_expr(expr)?;
-        self.set_property_value(&object, property.to_owned(), value.clone())?;
-        Ok(value)
-    }
-
-    fn eval_computed_property_assignment(
-        &mut self,
-        object: &Expr,
-        property: &Expr,
-        expr: &Expr,
-    ) -> Result<Value> {
-        let object = self.eval_expr(object)?;
-        let property = self.eval_property_key(property)?;
-        let value = self.eval_expr(expr)?;
-        self.set_property_value(&object, property, value.clone())?;
-        Ok(value)
+    pub(crate) fn eval_property_key(&mut self, property: &Expr) -> Result<String> {
+        let value = self.eval_expr(property)?;
+        let key = property_key(&value);
+        self.check_string_len(&key)?;
+        Ok(key)
     }
 
     pub(crate) fn get_property_value(&self, object: &Value, property: &str) -> Result<Value> {
@@ -514,13 +499,6 @@ impl Context {
             value,
             self.limits.max_object_properties,
         )
-    }
-
-    pub(crate) fn eval_property_key(&mut self, property: &Expr) -> Result<String> {
-        let value = self.eval_expr(property)?;
-        let key = property_key(&value);
-        self.check_string_len(&key)?;
-        Ok(key)
     }
 
     pub(crate) fn delete_property_value(
@@ -722,7 +700,7 @@ impl Context {
             .or_else(|| self.globals.get(name))
     }
 
-    fn add(&self, left: &Value, right: &Value) -> Result<Value> {
+    pub(crate) fn add(&self, left: &Value, right: &Value) -> Result<Value> {
         match (left, right) {
             (Value::Number(left), Value::Number(right)) => Ok(Value::Number(left + right)),
             (Value::String(_), _) | (_, Value::String(_)) => {

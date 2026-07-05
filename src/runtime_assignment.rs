@@ -1,0 +1,109 @@
+use crate::{
+    ast::{BinaryOp, Expr},
+    error::{Error, Result},
+    runtime::Context,
+    runtime_numeric::{bitwise_and, numeric_binary},
+    value::Value,
+};
+
+impl Context {
+    pub(crate) fn eval_property_assignment(
+        &mut self,
+        object: &Expr,
+        property: &str,
+        expr: &Expr,
+    ) -> Result<Value> {
+        let object = self.eval_expr(object)?;
+        let value = self.eval_expr(expr)?;
+        self.set_property_value(&object, property.to_owned(), value.clone())?;
+        Ok(value)
+    }
+
+    pub(crate) fn eval_computed_property_assignment(
+        &mut self,
+        object: &Expr,
+        property: &Expr,
+        expr: &Expr,
+    ) -> Result<Value> {
+        let object = self.eval_expr(object)?;
+        let property = self.eval_property_key(property)?;
+        let value = self.eval_expr(expr)?;
+        self.set_property_value(&object, property, value.clone())?;
+        Ok(value)
+    }
+
+    pub(crate) fn eval_compound_assignment(
+        &mut self,
+        op: BinaryOp,
+        target: &Expr,
+        expr: &Expr,
+    ) -> Result<Value> {
+        match target {
+            Expr::Identifier(name) => self.eval_binding_compound_assignment(op, name, expr),
+            Expr::Member { object, property } => {
+                let object = self.eval_expr(object)?;
+                self.eval_property_compound_assignment(op, &object, property, expr)
+            }
+            Expr::ComputedMember { object, property } => {
+                let object = self.eval_expr(object)?;
+                let property = self.eval_property_key(property)?;
+                self.eval_property_compound_assignment(op, &object, &property, expr)
+            }
+            _ => Err(Error::runtime("invalid compound assignment target")),
+        }
+    }
+
+    fn eval_binding_compound_assignment(
+        &mut self,
+        op: BinaryOp,
+        name: &str,
+        expr: &Expr,
+    ) -> Result<Value> {
+        let old_value = self
+            .get_binding(name)
+            .map(|binding| binding.value())
+            .ok_or_else(|| Error::runtime(format!("ReferenceError: '{name}' is not defined")))?;
+        let right = self.eval_expr(expr)?;
+        let value = self.eval_compound_value(op, &old_value, &right)?;
+        self.assign(name, value.clone())?;
+        Ok(value)
+    }
+
+    fn eval_property_compound_assignment(
+        &mut self,
+        op: BinaryOp,
+        object: &Value,
+        property: &str,
+        expr: &Expr,
+    ) -> Result<Value> {
+        let old_value = self.get_property_value(object, property)?;
+        let right = self.eval_expr(expr)?;
+        let value = self.eval_compound_value(op, &old_value, &right)?;
+        self.set_property_value(object, property.to_owned(), value.clone())?;
+        Ok(value)
+    }
+
+    fn eval_compound_value(&self, op: BinaryOp, left: &Value, right: &Value) -> Result<Value> {
+        let value = match op {
+            BinaryOp::Add => self.add(left, right)?,
+            BinaryOp::Sub => numeric_binary(left, right, "-=", |left, right| left - right)?,
+            BinaryOp::Mul => numeric_binary(left, right, "*=", |left, right| left * right)?,
+            BinaryOp::Div => numeric_binary(left, right, "/=", |left, right| left / right)?,
+            BinaryOp::Rem => numeric_binary(left, right, "%=", |left, right| left % right)?,
+            BinaryOp::BitAnd => bitwise_and(left, right)?,
+            BinaryOp::Equal
+            | BinaryOp::NotEqual
+            | BinaryOp::StrictEqual
+            | BinaryOp::StrictNotEqual
+            | BinaryOp::Less
+            | BinaryOp::LessEqual
+            | BinaryOp::Greater
+            | BinaryOp::GreaterEqual
+            | BinaryOp::LogicalAnd
+            | BinaryOp::LogicalOr => {
+                return Err(Error::runtime("invalid compound assignment operator"));
+            }
+        };
+        self.checked_value(value)
+    }
+}
