@@ -8,6 +8,8 @@ const PATH_TEST262_CONDITIONAL_BITAND: &str =
     "tests/corpora/test262/active/language/expressions/conditional_bitand.js";
 const PATH_TEST262_STRING_ESCAPE_SEQUENCES: &str =
     "tests/corpora/test262/active/language/expressions/string_escape_sequences.js";
+const PATH_TEST262_TEMPLATE_LITERALS: &str =
+    "tests/corpora/test262/active/language/expressions/template_literals.js";
 const PATH_TEST262_FUNCTION_EXPRESSION: &str =
     "tests/corpora/test262/active/language/expressions/function_expression.js";
 const PATH_TEST262_FUNCTION_PROPERTIES: &str =
@@ -140,6 +142,11 @@ fn test262_basic_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/string_escape_sequences",
             path: PATH_TEST262_STRING_ESCAPE_SEQUENCES,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/template_literals",
+            path: PATH_TEST262_TEMPLATE_LITERALS,
             expectation: Expectation::Value("42"),
         },
     ]

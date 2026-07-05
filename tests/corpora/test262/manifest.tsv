@@ -3,3 +3,4 @@ numeric-decimal-literals	test/language/literals/numeric/S7.8.3_A1.1_T1.js	run	of
 boolean-literal-constructor	test/language/literals/boolean/S7.8.2_A1_T1.js	run	official Test262 Boolean function smoke
 variable-hoisting	test/language/statements/variable/S12.2_A1.js	run	official Test262 var hoisting and ReferenceError smoke
 string-negative-parse	test/language/literals/string/S7.8.4_A1.1_T1.js	negative-parse	official Test262 negative parse smoke
+template-literal-no-substitution	test/language/expressions/template-literal/no-sub.js	run	official Test262 no-substitution template literal smoke
