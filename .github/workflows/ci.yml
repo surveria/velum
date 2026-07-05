@@ -8,13 +8,39 @@ on:
 
 jobs:
   rust:
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - surveria
+      - rust
+      - isolated
+      - gha-runner-ctrl-test
     env:
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/rs-quickjs
+      RSQJS_QUICKJS_SOURCE: git
+      RSQJS_QUICKJS_CACHE_DIR: /home/runner/.cache/cargo-target/rs-quickjs/external/quickjs
+      RSQJS_TEST262_CACHE_DIR: /home/runner/.cache/cargo-target/rs-quickjs/external/test262
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-      - name: Configure private dependency access
+      - name: Check self-hosted runner
+        run: |
+          printf 'RUNNER_NAME=%s\n' "${RUNNER_NAME:-unknown}"
+          printf 'CARGO_HOME=%s\n' "${CARGO_HOME:-${HOME}/.cargo}"
+          printf 'CARGO_TARGET_DIR=%s\n' "${CARGO_TARGET_DIR}"
+          printf 'RSQJS_QUICKJS_CACHE_DIR=%s\n' "${RSQJS_QUICKJS_CACHE_DIR}"
+          printf 'RSQJS_TEST262_CACHE_DIR=%s\n' "${RSQJS_TEST262_CACHE_DIR}"
+          mkdir -p "${CARGO_TARGET_DIR}" "${RSQJS_QUICKJS_CACHE_DIR}" "${RSQJS_TEST262_CACHE_DIR}"
+          rustc --version
+          cargo --version
+          cargo fmt --version
+          cargo clippy --version
+
+      - name: Test all
         env:
           RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
         run: |
@@ -22,11 +48,7 @@ jobs:
             echo "RSQJS_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
             exit 1
           fi
-          git config --global url."https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/".insteadOf "https://github.com/"
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-
-      - name: Test all
-        run: ./scripts/test-all.sh
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
+          export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
+          ./scripts/test-all.sh
