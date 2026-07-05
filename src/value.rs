@@ -27,6 +27,19 @@ impl NativeFunctionId {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct HostFunctionId(usize);
+
+impl HostFunctionId {
+    pub(crate) const fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    pub(crate) const fn index(self) -> usize {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ObjectId(usize);
 
 impl ObjectId {
@@ -116,6 +129,7 @@ pub enum Value {
     String(String),
     Function(FunctionId),
     NativeFunction(NativeFunctionId),
+    HostFunction(HostFunctionId),
     Object(ObjectId),
     Error(ErrorObject),
 }
@@ -128,7 +142,11 @@ impl Value {
             Self::Bool(value) => *value,
             Self::Number(value) => *value != 0.0 && !value.is_nan(),
             Self::String(value) => !value.is_empty(),
-            Self::Function(_) | Self::NativeFunction(_) | Self::Object(_) | Self::Error(_) => true,
+            Self::Function(_)
+            | Self::NativeFunction(_)
+            | Self::HostFunction(_)
+            | Self::Object(_)
+            | Self::Error(_) => true,
         }
     }
 
@@ -140,7 +158,7 @@ impl Value {
             Self::Bool(_) => "boolean",
             Self::Number(_) => "number",
             Self::String(_) => "string",
-            Self::Function(_) | Self::NativeFunction(_) => "function",
+            Self::Function(_) | Self::NativeFunction(_) | Self::HostFunction(_) => "function",
         }
     }
 
@@ -173,7 +191,9 @@ impl fmt::Display for Value {
                 }
             }
             Self::String(value) => f.write_str(value),
-            Self::Function(_) | Self::NativeFunction(_) => f.write_str("function()"),
+            Self::Function(_) | Self::NativeFunction(_) | Self::HostFunction(_) => {
+                f.write_str("function()")
+            }
             Self::Object(_) => f.write_str("[object Object]"),
             Self::Error(error) => {
                 if error.message().is_empty() {

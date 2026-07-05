@@ -47,6 +47,14 @@ Host extensions are a first-class design concern:
 - Host callbacks must have per-callback quotas for runtime steps, allocations, output, and wall-clock cancellation hooks.
 - Host callbacks must never bypass VM isolation or leak values across VM boundaries without an explicit serialization or transfer step.
 
+The current synchronous host-function skeleton is registered through
+`Context::register_host_function`. Callbacks receive a `HostCall` view with
+checked argument accessors such as `number`, `string`, and `boolean`, and they
+return `Result<Value>`. Callback storage is VM-local. The skeleton rejects
+VM-owned handle return values (`Object`, `Function`, `NativeFunction`, and
+`HostFunction`) until the embedding API has VM-bound handles or explicit
+serialization.
+
 ## Safety Policy
 
 The crate uses `#![deny(unsafe_code)]`, and the lint is also declared in `Cargo.toml`.

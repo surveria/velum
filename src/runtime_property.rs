@@ -51,7 +51,8 @@ pub fn enumerable_property_keys(objects: &ObjectHeap, object: &Value) -> Result<
         | Value::Number(_)
         | Value::String(_)
         | Value::Function(_)
-        | Value::NativeFunction(_) => Ok(Vec::new()),
+        | Value::NativeFunction(_)
+        | Value::HostFunction(_) => Ok(Vec::new()),
     }
 }
 
@@ -80,6 +81,7 @@ pub fn delete_property(objects: &mut ObjectHeap, object: &Value, property: &str)
         | Value::Number(_)
         | Value::String(_)
         | Value::Function(_)
-        | Value::NativeFunction(_) => Ok(true),
+        | Value::NativeFunction(_)
+        | Value::HostFunction(_) => Ok(true),
     }
 }

@@ -4,6 +4,7 @@
 mod ast;
 mod embedding;
 mod error;
+mod host;
 mod lexer;
 mod parser;
 mod runtime;
@@ -26,6 +27,7 @@ mod value;
 
 pub use crate::embedding::{Engine, EngineConfig, Vm, VmConfig, VmResourceUsage, VmTeardownReport};
 pub use crate::error::{Error, Result};
+pub use crate::host::HostCall;
 pub use crate::runtime::Context;
 pub use crate::runtime_engine::Runtime;
 pub use crate::runtime_limits::RuntimeLimits;

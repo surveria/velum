@@ -27,15 +27,38 @@ impl Error {
         }
     }
 
-    pub(crate) fn runtime(message: impl Into<String>) -> Self {
+    #[must_use]
+    pub fn runtime(message: impl Into<String>) -> Self {
         Self::Runtime {
             message: message.into(),
         }
     }
 
-    pub(crate) fn limit(message: impl Into<String>) -> Self {
+    #[must_use]
+    pub fn limit(message: impl Into<String>) -> Self {
         Self::ResourceLimit {
             message: message.into(),
+        }
+    }
+
+    #[must_use]
+    pub fn with_context(self, context: impl AsRef<str>) -> Self {
+        let context = context.as_ref();
+        match self {
+            Self::Lex { message, offset } => Self::Lex {
+                message: format!("{context}: {message}"),
+                offset,
+            },
+            Self::Parse { message, offset } => Self::Parse {
+                message: format!("{context}: {message}"),
+                offset,
+            },
+            Self::Runtime { message } => Self::Runtime {
+                message: format!("{context}: {message}"),
+            },
+            Self::ResourceLimit { message } => Self::ResourceLimit {
+                message: format!("{context}: {message}"),
+            },
         }
     }
 }

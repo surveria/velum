@@ -462,6 +462,7 @@ impl Context {
             Value::Undefined
             | Value::Function(_)
             | Value::NativeFunction(_)
+            | Value::HostFunction(_)
             | Value::Object(_)
             | Value::Error(_)
             | Value::Null => 0.0,
