@@ -1,5 +1,6 @@
 use crate::ast::{
-    CatchClause, DeclKind, Expr, ObjectProperty, Program, Stmt, SwitchCase, UnaryOp, UpdateOp,
+    CatchClause, DeclKind, Expr, ForInTarget, ObjectProperty, Program, Stmt, SwitchCase, UnaryOp,
+    UpdateOp,
 };
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
@@ -140,6 +141,20 @@ impl Parser {
 
     fn for_statement(&mut self) -> Result<Stmt> {
         self.consume(&TokenKind::LParen, "expected '(' after 'for'")?;
+        let cursor = self.cursor;
+        let expression_depth = self.expression_depth;
+        if let Some((target, object)) = self.for_in_header()? {
+            self.consume(&TokenKind::RParen, "expected ')' after for-in expression")?;
+            let body = Box::new(self.statement()?);
+            return Ok(Stmt::ForIn {
+                target,
+                object,
+                body,
+            });
+        }
+        self.cursor = cursor;
+        self.expression_depth = expression_depth;
+
         let init = self.for_init()?;
         let condition = if self.check(&TokenKind::Semicolon) {
             None
@@ -159,6 +174,49 @@ impl Parser {
             condition,
             update,
             body,
+        })
+    }
+
+    fn for_in_header(&mut self) -> Result<Option<(ForInTarget, Expr)>> {
+        if self.match_kind(&TokenKind::Let) {
+            return self.for_in_binding_header(DeclKind::Let);
+        }
+        if self.match_kind(&TokenKind::Const) {
+            return self.for_in_binding_header(DeclKind::Const);
+        }
+        if self.match_kind(&TokenKind::Var) {
+            return self.for_in_binding_header(DeclKind::Var);
+        }
+
+        if !self.for_in_assignment_target_start() {
+            return Ok(None);
+        }
+        let target = self.call()?;
+        if !self.match_kind(&TokenKind::In) {
+            return Ok(None);
+        }
+        let Some(target) = Self::assignment_target(target) else {
+            return Err(Error::parse(
+                "invalid for-in assignment target",
+                self.offset(),
+            ));
+        };
+        let object = self.expression()?;
+        Ok(Some((ForInTarget::Assignment(target), object)))
+    }
+
+    fn for_in_binding_header(&mut self, kind: DeclKind) -> Result<Option<(ForInTarget, Expr)>> {
+        let name = self.consume_identifier("expected for-in binding name")?;
+        if !self.match_kind(&TokenKind::In) {
+            return Ok(None);
+        }
+        let object = self.expression()?;
+        Ok(Some((ForInTarget::Binding { name, kind }, object)))
+    }
+
+    fn for_in_assignment_target_start(&self) -> bool {
+        self.peek().is_some_and(|token| {
+            matches!(&token.kind, TokenKind::Identifier(_) | TokenKind::LParen)
         })
     }
 

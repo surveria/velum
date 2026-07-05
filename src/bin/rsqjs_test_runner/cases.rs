@@ -52,6 +52,8 @@ const PATH_IN_OPERATOR_RHS_ERROR: &str = "tests/engine_cases/in_operator_rhs_err
 const PATH_WHILE_STATEMENTS: &str = "tests/engine_cases/while_statements.js";
 const PATH_BREAK_CONTINUE: &str = "tests/engine_cases/break_continue.js";
 const PATH_FOR_STATEMENTS: &str = "tests/engine_cases/for_statements.js";
+const PATH_FOR_IN_STATEMENTS: &str = "tests/engine_cases/for_in_statements.js";
+const PATH_FOR_IN_NULLISH_ERROR: &str = "tests/engine_cases/for_in_nullish_error.js";
 const PATH_SWITCH_STATEMENTS: &str = "tests/engine_cases/switch_statements.js";
 const PATH_BLOCK_LEXICAL_SCOPE: &str = "tests/engine_cases/block_lexical_scope.js";
 const PATH_FUNCTION_EXPRESSION: &str = "tests/engine_cases/function_expression.js";
@@ -110,6 +112,9 @@ const PATH_TEST262_WHILE: &str = "tests/corpora/test262/active/language/statemen
 const PATH_TEST262_BREAK_CONTINUE: &str =
     "tests/corpora/test262/active/language/statements/break_continue.js";
 const PATH_TEST262_FOR: &str = "tests/corpora/test262/active/language/statements/for.js";
+const PATH_TEST262_FOR_IN: &str = "tests/corpora/test262/active/language/statements/for_in.js";
+const PATH_TEST262_FOR_IN_NULLISH_ERROR: &str =
+    "tests/corpora/test262/active/language/statements/for_in_nullish_error.js";
 const PATH_TEST262_SWITCH: &str = "tests/corpora/test262/active/language/statements/switch.js";
 const PATH_TEST262_BLOCK_LEXICAL_SCOPE: &str =
     "tests/corpora/test262/active/language/statements/block_lexical_scope.js";
@@ -205,6 +210,24 @@ fn engine_control_flow_cases() -> Vec<EngineCase> {
                 output: &["5 1 42 5"],
                 value: "42",
             },
+        },
+        EngineCase {
+            id: "for_in_statements",
+            path: PATH_FOR_IN_STATEMENTS,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "first:1;third:3;second:20; undefined",
+                    "0=10;1=20;3=40; undefined",
+                    "beta string beta",
+                    "ac c",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "for_in_nullish_error",
+            path: PATH_FOR_IN_NULLISH_ERROR,
+            expectation: Expectation::ErrorContains("Cannot convert"),
         },
         EngineCase {
             id: "switch_statements",
@@ -555,6 +578,16 @@ fn test262_statement_cases() -> Vec<EngineCase> {
             id: "language/statements/for",
             path: PATH_TEST262_FOR,
             expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/statements/for_in",
+            path: PATH_TEST262_FOR_IN,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/statements/for_in_nullish_error",
+            path: PATH_TEST262_FOR_IN_NULLISH_ERROR,
+            expectation: Expectation::ErrorContains("Cannot convert"),
         },
         EngineCase {
             id: "language/statements/switch",
