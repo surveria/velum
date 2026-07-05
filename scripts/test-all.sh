@@ -17,6 +17,7 @@ test262_path="$("${script_dir}/prepare-test262.sh")"
 if [[ -n "${test262_path}" ]]; then
   export RSQJS_TEST262_DIR="${test262_path}"
 fi
+export RSQJS_TEST262_RUN_ALL="${RSQJS_TEST262_RUN_ALL:-1}"
 
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
