@@ -115,6 +115,7 @@ impl Context {
                     Ok(Completion::Normal(Value::Undefined))
                 }
             }
+            Stmt::While { condition, body } => self.eval_while(condition, body),
             Stmt::TryCatch {
                 body,
                 catch_param,
@@ -154,6 +155,7 @@ impl Context {
                 }
                 Ok(())
             }
+            Stmt::While { body, .. } => self.hoist_statement_vars(body),
             Stmt::TryCatch {
                 body, catch_body, ..
             } => {
@@ -303,6 +305,19 @@ impl Context {
             return self.eval_expr(consequent);
         }
         self.eval_expr(alternate)
+    }
+
+    fn eval_while(&mut self, condition: &Expr, body: &Stmt) -> Result<Completion> {
+        let mut last = Value::Undefined;
+        while self.eval_expr(condition)?.is_truthy() {
+            self.step()?;
+            match self.eval_statement(body)? {
+                Completion::Normal(value) => last = value,
+                Completion::Throw(value) => return Ok(Completion::Throw(value)),
+                Completion::Return(value) => return Ok(Completion::Return(value)),
+            }
+        }
+        Ok(Completion::Normal(last))
     }
 
     fn eval_block(&mut self, statements: &[Stmt]) -> Result<Completion> {

@@ -13,6 +13,10 @@ pub enum Stmt {
         consequent: Box<Self>,
         alternate: Option<Box<Self>>,
     },
+    While {
+        condition: Expr,
+        body: Box<Self>,
+    },
     TryCatch {
         body: Vec<Self>,
         catch_param: String,

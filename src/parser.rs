@@ -49,6 +49,9 @@ impl Parser {
         if self.match_kind(&TokenKind::If) {
             return self.if_statement();
         }
+        if self.match_kind(&TokenKind::While) {
+            return self.while_statement();
+        }
         if self.match_kind(&TokenKind::Try) {
             return self.try_statement();
         }
@@ -104,6 +107,14 @@ impl Parser {
             consequent,
             alternate,
         })
+    }
+
+    fn while_statement(&mut self) -> Result<Stmt> {
+        self.consume(&TokenKind::LParen, "expected '(' after 'while'")?;
+        let condition = self.expression()?;
+        self.consume(&TokenKind::RParen, "expected ')' after while condition")?;
+        let body = Box::new(self.statement()?);
+        Ok(Stmt::While { condition, body })
     }
 
     fn try_statement(&mut self) -> Result<Stmt> {
