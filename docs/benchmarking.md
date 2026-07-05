@@ -31,7 +31,7 @@ Track these against QuickJS on every supported device class:
 
 Set `RSQJS_QUICKJS_AUTO_SETUP=0` to disable automatic download and build. In that mode, differential checks and QuickJS benchmark columns are reported as skipped unless `RSQJS_QUICKJS` or `qjs` is available.
 
-The standard test script builds `target/release/rsqjs` and exposes it to the runner through `RSQJS_ENGINE`. Current benchmark rows compare the release `rsqjs` CLI with the QuickJS `qjs` CLI sequentially.
+The standard test script builds `target/release/rsqjs` and exposes it to the runner through `RSQJS_ENGINE`. Current benchmark rows compare the release `rsqjs` CLI with the QuickJS `qjs` CLI sequentially. Each row reports average CLI latency, peak process RSS when GNU `time` is available, latency ratio, memory ratio, and the current 1.10x budget status.
 
 CLI benchmarks are useful integration smoke tests, but they include process startup and argument handling. Optimization decisions should be based on in-process library benchmarks that separate parser, compiler, VM execution, host callback, and teardown costs.
 
@@ -51,9 +51,9 @@ Set `RSQJS_TEST262_AUTO_SETUP=0` to disable automatic materialization. In that m
 - VM creation and teardown latency should stay within 1.10x of QuickJS once in-process measurements are available
 - no unbounded allocations without a runtime limit path
 
-The 1.10x budget applies to features that are implemented locally and have comparable QuickJS behavior. A slower result is allowed only when the report marks it as a tracked exception with the suspected cause, affected benchmark, and follow-up work.
+The 1.10x budget applies to features that are implemented locally and have comparable QuickJS behavior. A slower result is allowed only when the report marks it as a tracked exception with the suspected cause, affected benchmark, and follow-up work. The current CI report records over-budget benchmark rows as tracked exceptions rather than hard failures until the baseline is below the target; once that happens, the same metrics should become a regression gate.
 
-Memory reporting should track both peak resident memory and engine-owned heap counters where available. The first implementation can use process-level measurements for CLI parity, but the long-term target is VM-level accounting exposed through the library API.
+Memory reporting should track both peak resident memory and engine-owned heap counters where available. The current report uses process-level maximum resident set size for CLI parity. The long-term target is VM-level accounting exposed through the library API.
 
 ## Coverage Expectations
 
