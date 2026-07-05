@@ -17,8 +17,14 @@ const ARRAY_POP_NAME: &str = "pop";
 const ARRAY_PROTOTYPE_JOIN_PROPERTY: &str = "join";
 const ARRAY_PROTOTYPE_POP_PROPERTY: &str = "pop";
 const ARRAY_PROTOTYPE_PUSH_PROPERTY: &str = "push";
+const ARRAY_PROTOTYPE_SHIFT_PROPERTY: &str = "shift";
+const ARRAY_PROTOTYPE_UNSHIFT_PROPERTY: &str = "unshift";
 const ARRAY_PUSH_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_PUSH_NAME: &str = "push";
+const ARRAY_SHIFT_FUNCTION_LENGTH: f64 = 0.0;
+const ARRAY_SHIFT_NAME: &str = "shift";
+const ARRAY_UNSHIFT_FUNCTION_LENGTH: f64 = 1.0;
+const ARRAY_UNSHIFT_NAME: &str = "unshift";
 const ARRAY_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_NAME: &str = "Array";
 const OBJECT_FUNCTION_LENGTH: f64 = 1.0;
@@ -48,6 +54,8 @@ impl NativeFunction {
             NativeFunctionKind::ArrayJoin => ARRAY_JOIN_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayPop => ARRAY_POP_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayPush => ARRAY_PUSH_FUNCTION_LENGTH,
+            NativeFunctionKind::ArrayShift => ARRAY_SHIFT_FUNCTION_LENGTH,
+            NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_FUNCTION_LENGTH,
             NativeFunctionKind::Object => OBJECT_FUNCTION_LENGTH,
         }
     }
@@ -58,6 +66,8 @@ impl NativeFunction {
             NativeFunctionKind::ArrayJoin => ARRAY_JOIN_NAME,
             NativeFunctionKind::ArrayPop => ARRAY_POP_NAME,
             NativeFunctionKind::ArrayPush => ARRAY_PUSH_NAME,
+            NativeFunctionKind::ArrayShift => ARRAY_SHIFT_NAME,
+            NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_NAME,
             NativeFunctionKind::Object => OBJECT_NAME,
         }
     }
@@ -77,6 +87,8 @@ pub(super) enum NativeFunctionKind {
     ArrayJoin,
     ArrayPop,
     ArrayPush,
+    ArrayShift,
+    ArrayUnshift,
     Object,
 }
 
@@ -107,6 +119,8 @@ impl Context {
             NativeFunctionKind::ArrayJoin => self.eval_array_join(args, this_value),
             NativeFunctionKind::ArrayPop => self.eval_array_pop(args, this_value),
             NativeFunctionKind::ArrayPush => self.eval_array_push(args, this_value),
+            NativeFunctionKind::ArrayShift => self.eval_array_shift(args, this_value),
+            NativeFunctionKind::ArrayUnshift => self.eval_array_unshift(args, this_value),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
         }
     }
@@ -120,7 +134,9 @@ impl Context {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
             NativeFunctionKind::ArrayJoin
             | NativeFunctionKind::ArrayPop
-            | NativeFunctionKind::ArrayPush => {
+            | NativeFunctionKind::ArrayPush
+            | NativeFunctionKind::ArrayShift
+            | NativeFunctionKind::ArrayUnshift => {
                 Err(Error::runtime("native method is not a constructor"))
             }
             NativeFunctionKind::Object => self.eval_object_constructor(args),
@@ -228,6 +244,23 @@ impl Context {
             prototype,
             ARRAY_PROTOTYPE_POP_PROPERTY.to_owned(),
             pop,
+            self.limits.max_object_properties,
+        )?;
+
+        let shift = self.create_native_function(NativeFunctionKind::ArrayShift, Value::Undefined);
+        self.objects.define_non_enumerable(
+            prototype,
+            ARRAY_PROTOTYPE_SHIFT_PROPERTY.to_owned(),
+            shift,
+            self.limits.max_object_properties,
+        )?;
+
+        let unshift =
+            self.create_native_function(NativeFunctionKind::ArrayUnshift, Value::Undefined);
+        self.objects.define_non_enumerable(
+            prototype,
+            ARRAY_PROTOTYPE_UNSHIFT_PROPERTY.to_owned(),
+            unshift,
             self.limits.max_object_properties,
         )
     }
@@ -337,6 +370,33 @@ impl Context {
             self.push_join_text(&mut joined, &text)?;
         }
         Ok(Value::String(joined))
+    }
+
+    fn eval_array_shift(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
+        args.iter()
+            .map(|arg| self.eval_expr(arg))
+            .collect::<Result<Vec<_>>>()?;
+        let Value::Object(id) = this_value else {
+            return Err(Error::runtime(
+                "Array.prototype.shift requires an array receiver",
+            ));
+        };
+        self.objects
+            .array_shift(*id, self.limits.max_object_properties)
+    }
+
+    fn eval_array_unshift(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
+        let values = args
+            .iter()
+            .map(|arg| self.eval_expr(arg))
+            .collect::<Result<Vec<_>>>()?;
+        let Value::Object(id) = this_value else {
+            return Err(Error::runtime(
+                "Array.prototype.unshift requires an array receiver",
+            ));
+        };
+        self.objects
+            .array_unshift(*id, values, self.limits.max_object_properties)
     }
 
     fn array_join_separator(value: Option<&Value>) -> String {
