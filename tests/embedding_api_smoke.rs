@@ -293,6 +293,46 @@ fn tracks_atoms_for_function_parameters_before_calls() -> TestResult {
 }
 
 #[test]
+fn tracks_atoms_for_function_names_without_repeated_name_reads() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let initial_atoms = vm.resource_usage().atom_count;
+    let value = vm.context().eval(
+        r"
+        let namedHolder = function UniqueCameraName(value) {
+            return value;
+        };
+        let anonymousHolder = function(value) {
+            return value;
+        };
+        ",
+    )?;
+    ensure_value(&value, &Value::Undefined)?;
+    let function_atoms = vm.resource_usage().atom_count;
+    ensure_greater_than(function_atoms, initial_atoms, "function name atoms")?;
+
+    let value = vm.context().eval(
+        r#"
+        namedHolder.name + "|" +
+            (anonymousHolder.name === "") + "|" +
+            (namedHolder(20) + anonymousHolder(22))
+        "#,
+    )?;
+    ensure_value(
+        &value,
+        &Value::String("UniqueCameraName|true|42".to_owned()),
+    )?;
+    let name_read_atoms = vm.resource_usage().atom_count;
+
+    let value = vm
+        .context()
+        .eval("namedHolder.name + anonymousHolder.name")?;
+    ensure_value(&value, &Value::String("UniqueCameraName".to_owned()))?;
+    ensure_usize(vm.resource_usage().atom_count, name_read_atoms)
+}
+
+#[test]
 fn preserves_binding_slot_updates_and_shadowing() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();

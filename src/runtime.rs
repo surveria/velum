@@ -56,13 +56,33 @@ pub struct Context {
 
 #[derive(Debug, Clone)]
 struct Function {
-    name: String,
+    name: FunctionName,
     arity: FunctionArity,
     param_atoms: Rc<[AtomId]>,
     body: Rc<[Stmt]>,
     captures: Vec<BindingScope>,
     properties: runtime_function_properties::FunctionProperties,
     constructable: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FunctionName(Option<AtomId>);
+
+impl FunctionName {
+    const fn anonymous() -> Self {
+        Self(None)
+    }
+
+    const fn new(atom: AtomId) -> Self {
+        Self(Some(atom))
+    }
+
+    fn value(self, atoms: &AtomTable) -> Result<Value> {
+        let Some(atom) = self.0 else {
+            return Ok(Value::String(String::new()));
+        };
+        Ok(Value::String(atoms.name(atom)?.to_owned()))
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
