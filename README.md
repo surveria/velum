@@ -70,4 +70,4 @@ fn main() -> rs_quickjs::Result<()> {
 - [Architecture](docs/architecture.md)
 - [Roadmap](docs/roadmap.md)
 - [Benchmarking](docs/benchmarking.md)
-- [Development Plan](docs/development-plan.md)
+- [Project Plan](docs/project-plan.md)

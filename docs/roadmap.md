@@ -1,14 +1,14 @@
 # Roadmap
 
 The operational task board and branch protocol live in
-[Development Plan](development-plan.md). Update that document in the same
-branch that starts or completes a compatibility, embedding, testing,
-performance, memory, resource-control, or observability task.
+[Project Plan](project-plan.md). Update that document in the same branch that
+starts or completes a compatibility, embedding, testing, runtime-architecture,
+resource-control, observability, performance, or memory task.
 
-This roadmap is a short product-level view. It is intentionally broader than a
-performance plan: the engine must become a safe, embeddable Rust library first,
-then grow compatibility, runtime architecture, resource controls, and
-observability while keeping QuickJS-like size and speed as acceptance criteria.
+This roadmap is a short product-level view. The engine must become a safe,
+embeddable Rust library first, then grow compatibility, runtime architecture,
+resource controls, and observability while keeping QuickJS-like size and speed
+as acceptance criteria.
 
 ## Phase 0: Repository And Guardrails
 
@@ -61,7 +61,30 @@ observability while keeping QuickJS-like size and speed as acceptance criteria.
 - Separate parse, compile, execute, host-callback, and teardown measurements.
 - Keep the API stable enough for a later bytecode backend.
 
-## Phase 6: Runtime Data Model
+## Phase 6: Modules, Jobs, And Async
+
+- Design module loading around embedder-owned I/O and policy.
+- Add promises and the JavaScript job queue.
+- Add async functions when the job model can support them.
+- Add async Rust host callbacks through explicit job-draining APIs.
+- Keep the embedding application in control of the outer executor.
+
+## Phase 7: Resource Control
+
+- Expand hard limits from source and runtime counters toward heap, stack, atom,
+  job, module, host callback, and wall-clock controls.
+- Make every limit visible through the library API.
+- Preserve deterministic teardown reporting.
+
+## Phase 8: Production Observability
+
+- Add structured execution events.
+- Add profiling hooks and resource snapshots.
+- Add per-context and per-callback quotas.
+- Add interrupt hooks for watchdogs.
+- Add feature gates for constrained devices.
+
+## Phase 9: Runtime Data Model
 
 - Add atom ids for identifiers, property keys, function names, and reusable
   string constants.
@@ -70,31 +93,16 @@ observability while keeping QuickJS-like size and speed as acceptance criteria.
 - Split array storage into packed, holey, and sparse representations.
 - Prefer VM-owned indexed heaps over scattered small allocations.
 
-## Phase 7: Async JavaScript And Jobs
-
-- Add promises and the JavaScript job queue.
-- Add async functions when the job model can support them.
-- Add async Rust host callbacks through explicit job-draining APIs.
-- Keep the embedding application in control of the outer executor.
-
-## Phase 8: Bytecode And Dispatch
+## Phase 10: Bytecode And Dispatch
 
 - Add bytecode after enough language coverage exists to benchmark honestly.
 - Keep opcodes compact and cache-friendly.
 - Preserve interpreter fallback tests so bytecode generation has an oracle.
 - Add inline property caches after shapes exist.
 
-## Phase 9: Heap Management And Hard Limits
+## Phase 11: Heap Management And Collection
 
 - Grow indexed VM ownership into deterministic heap accounting.
 - Evaluate a safe collector design over explicit VM roots.
-- Add hard heap, stack, atom, job, host callback, and wall-clock controls.
-- Preserve deterministic teardown reporting.
-
-## Phase 10: Production Observability
-
-- Add structured execution events.
-- Add profiling hooks and resource snapshots.
-- Add per-context and per-callback quotas.
-- Add interrupt hooks for watchdogs.
-- Add feature gates for constrained devices.
+- Keep collection compatible with host callbacks, promises, queued jobs, hard
+  limits, and many isolated VMs.
