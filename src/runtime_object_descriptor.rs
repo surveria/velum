@@ -242,7 +242,7 @@ impl Object {
             return Some(descriptor);
         }
         let key = property.key()?;
-        self.properties.get(&key).map(ObjectProperty::descriptor)
+        self.named_property(key).map(ObjectProperty::descriptor)
     }
 
     fn define_property(
@@ -272,27 +272,22 @@ impl Object {
         max_properties: usize,
     ) -> Result<()> {
         let property_count = self.property_count();
-        let mut enumerable_update = None;
-        match self.properties.entry(property) {
-            std::collections::btree_map::Entry::Occupied(mut entry) => {
-                let was_enumerable = entry.get().is_enumerable();
-                entry.get_mut().define(update);
-                enumerable_update = Some((was_enumerable, entry.get().is_enumerable()));
+        let enumerable_update = if self.properties.contains_key(&property) {
+            let existing = self.named_property_mut(property)?;
+            let was_enumerable = existing.is_enumerable();
+            existing.define(update);
+            Some((was_enumerable, existing.is_enumerable()))
+        } else {
+            if property_count >= max_properties {
+                return Err(crate::error::Error::limit(format!(
+                    "object property count exceeded {max_properties}"
+                )));
             }
-            std::collections::btree_map::Entry::Vacant(entry) => {
-                if property_count >= max_properties {
-                    return Err(crate::error::Error::limit(format!(
-                        "object property count exceeded {max_properties}"
-                    )));
-                }
-                self.property_order.push(*entry.key());
-                let property = ObjectProperty::from_descriptor(update.complete_for_new());
-                if property.is_enumerable() {
-                    enumerable_update = Some((false, true));
-                }
-                entry.insert(property);
-            }
-        }
+            let named_property = ObjectProperty::from_descriptor(update.complete_for_new());
+            let enumerable_update = named_property.is_enumerable().then_some((false, true));
+            self.push_named_property(property, named_property)?;
+            enumerable_update
+        };
         if let Some((was_enumerable, is_enumerable)) = enumerable_update {
             self.update_enumerable_property_count(was_enumerable, is_enumerable);
         }
