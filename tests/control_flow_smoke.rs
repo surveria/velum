@@ -503,6 +503,26 @@ fn propagates_try_finally_completion() -> TestResult {
 }
 
 #[test]
+fn supports_omitted_catch_binding() -> TestResult {
+    expect_value(
+        r#"
+        let marker = "outer";
+        let value = 0;
+        try {
+            throw "boom";
+        } catch {
+            let marker = "inner";
+            value = value + 20;
+        } finally {
+            value = value + 22;
+        }
+        marker === "outer" ? value : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
 fn rejects_try_without_catch_or_finally() -> TestResult {
     let Err(error) = eval("try {}") else {
         return Err("expected try without catch or finally to fail".into());

@@ -278,12 +278,19 @@ impl Parser {
     }
 
     fn catch_clause(&mut self) -> Result<CatchClause> {
-        self.consume(&TokenKind::LParen, "expected '(' after 'catch'")?;
+        if self.match_kind(&TokenKind::LBrace) {
+            let body = self.block_statements()?;
+            return Ok(CatchClause { param: None, body });
+        }
+        self.consume(&TokenKind::LParen, "expected '(' or '{' after 'catch'")?;
         let param = self.consume_identifier("expected catch binding name")?;
         self.consume(&TokenKind::RParen, "expected ')' after catch binding")?;
         self.consume(&TokenKind::LBrace, "expected '{' after catch binding")?;
         let body = self.block_statements()?;
-        Ok(CatchClause { param, body })
+        Ok(CatchClause {
+            param: Some(param),
+            body,
+        })
     }
 
     fn throw_statement(&mut self) -> Result<Stmt> {
