@@ -1,4 +1,4 @@
-use crate::ast::{BinaryOp, DeclKind, Expr, ObjectProperty, Program, Stmt};
+use crate::ast::{BinaryOp, Expr, ObjectProperty, Program, Stmt};
 use crate::error::{Error, Result};
 use crate::lexer;
 use crate::parser;
@@ -17,11 +17,13 @@ use crate::runtime_property::{
     delete_property, enumerable_property_keys, get_property, has_property, property_key,
     set_property,
 };
-use crate::runtime_scope::{BindingCell, BindingScope};
-use crate::value::{ErrorName, ErrorObject, FunctionId, Value};
+use crate::runtime_scope::BindingScope;
+use crate::value::{ErrorName, ErrorObject, Value};
 
 #[path = "runtime_declaration.rs"]
 mod runtime_declaration;
+#[path = "runtime_function.rs"]
+mod runtime_function;
 
 const BOOLEAN_NAME: &str = "Boolean";
 const HOST_PRINT_NAME: &str = "print";
@@ -40,6 +42,7 @@ pub struct Context {
 
 #[derive(Debug, Clone)]
 struct Function {
+    name: String,
     params: Vec<String>,
     body: Vec<Stmt>,
     captures: Vec<BindingScope>,
@@ -198,7 +201,9 @@ impl Context {
                 self.eval_computed_member(object, property)
             }
             Expr::Call { callee, args } => self.eval_call(callee, args),
-            Expr::Function { params, body } => Ok(self.create_function(params, body)),
+            Expr::Function { name, params, body } => {
+                Ok(self.create_function(name.as_deref(), params, body))
+            }
             Expr::Object(properties) => self.eval_object_literal(properties),
             Expr::Array(elements) => self.eval_array_literal(elements),
             Expr::New { constructor, args } => self.eval_new(constructor, args),
@@ -321,7 +326,7 @@ impl Context {
     fn eval_in(&self, left: &Value, right: &Value) -> Result<Value> {
         let property = property_key(left);
         self.check_string_len(&property)?;
-        has_property(&self.objects, right, &property).map(Value::Bool)
+        self.has_property_value(right, &property).map(Value::Bool)
     }
 
     fn eval_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<Value> {
@@ -398,6 +403,9 @@ impl Context {
     }
 
     pub(crate) fn get_property_value(&self, object: &Value, property: &str) -> Result<Value> {
+        if let Value::Function(id) = object {
+            return self.get_function_property(*id, property);
+        }
         self.checked_value(get_property(&self.objects, object, property)?)
     }
 
@@ -425,7 +433,17 @@ impl Context {
         delete_property(&mut self.objects, object, property).map(Value::Bool)
     }
 
+    fn has_property_value(&self, object: &Value, property: &str) -> Result<bool> {
+        match object {
+            Value::Function(id) => self.has_function_property(*id, property),
+            _ => has_property(&self.objects, object, property),
+        }
+    }
+
     pub(crate) fn enumerable_keys(&self, object: &Value) -> Result<Vec<String>> {
+        if let Value::Function(id) = object {
+            return self.function_enumerable_keys(*id);
+        }
         enumerable_property_keys(&self.objects, object)
     }
 
@@ -466,68 +484,6 @@ impl Context {
             ErrorName::Test262Error,
             message.display_for_concat(),
         )))
-    }
-
-    fn create_function(&mut self, params: &[String], body: &[Stmt]) -> Value {
-        let id = FunctionId::new(self.functions.len());
-        self.functions.push(Function {
-            params: params.to_vec(),
-            body: body.to_vec(),
-            captures: self.locals.clone(),
-        });
-        Value::Function(id)
-    }
-
-    fn eval_function(&mut self, id: FunctionId, args: &[Expr]) -> Result<Value> {
-        let value = self
-            .eval_function_completion(id, args)?
-            .into_function_result()?;
-        self.checked_value(value)
-    }
-
-    fn eval_function_completion(&mut self, id: FunctionId, args: &[Expr]) -> Result<Completion> {
-        let function = self
-            .functions
-            .get(id.index())
-            .cloned()
-            .ok_or_else(|| Error::runtime("function id is not defined"))?;
-        let args = self.eval_args(args)?;
-        let caller_locals = std::mem::replace(&mut self.locals, function.captures);
-        let scope = match self.function_scope(&function.params, args) {
-            Ok(scope) => scope,
-            Err(error) => {
-                self.locals = caller_locals;
-                return Err(error);
-            }
-        };
-        self.locals.push(scope);
-        let result = self
-            .hoist_var_declarations(&function.body)
-            .and_then(|()| self.eval_block(&function.body));
-        let removed = self.locals.pop();
-        self.locals = caller_locals;
-        if removed.is_none() {
-            return Err(Error::runtime("function scope disappeared"));
-        }
-        result
-    }
-
-    fn eval_args(&mut self, args: &[Expr]) -> Result<Vec<Value>> {
-        args.iter().map(|arg| self.eval_expr(arg)).collect()
-    }
-
-    fn function_scope(&self, params: &[String], args: Vec<Value>) -> Result<BindingScope> {
-        let mut scope = BindingScope::new();
-        let mut args = args.into_iter();
-        for param in params {
-            if !scope.contains(param) {
-                self.ensure_extra_binding_capacity(scope.len())?;
-            }
-            let value = args.next().unwrap_or(Value::Undefined);
-            self.checked_value(value.clone())?;
-            scope.insert(param.clone(), BindingCell::new(value, true, DeclKind::Var));
-        }
-        Ok(scope)
     }
 
     pub(crate) fn push_lexical_scope(&mut self) {

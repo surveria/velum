@@ -137,6 +137,7 @@ pub enum Expr {
         args: Vec<Self>,
     },
     Function {
+        name: Option<String>,
         params: Vec<String>,
         body: Vec<Stmt>,
     },
