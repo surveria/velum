@@ -31,6 +31,7 @@ mod runtime_function;
 mod runtime_native;
 
 const HOST_PRINT_NAME: &str = "print";
+const INITIAL_RANDOM_STATE: u64 = 0x9e37_79b9_7f4a_7c15;
 const TEST262_ERROR_NAME: &str = "Test262Error";
 
 #[derive(Debug, Clone)]
@@ -45,6 +46,7 @@ pub struct Context {
     objects: ObjectHeap,
     this_values: Vec<Value>,
     output: Vec<String>,
+    random_state: u64,
     runtime_steps: usize,
 }
 
@@ -72,6 +74,7 @@ impl Context {
             objects: ObjectHeap::new(),
             this_values: Vec::new(),
             output: Vec::new(),
+            random_state: INITIAL_RANDOM_STATE,
             runtime_steps: 0,
         }
     }

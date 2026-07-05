@@ -83,6 +83,7 @@ const PATH_BENCH_MATH_BUILTIN: &str = "tests/corpora/benchmarks/active/math_buil
 const PATH_BENCH_MATH_INTEGER_METHODS: &str =
     "tests/corpora/benchmarks/active/math_integer_methods.js";
 const PATH_BENCH_MATH_METHODS: &str = "tests/corpora/benchmarks/active/math_methods.js";
+const PATH_BENCH_MATH_RANDOM: &str = "tests/corpora/benchmarks/active/math_random.js";
 const PATH_BENCH_STANDARD_ERROR_CONSTRUCTORS: &str =
     "tests/corpora/benchmarks/active/standard_error_constructors.js";
 const PATH_BENCH_COMPILED_SCRIPT_REUSE: &str =
@@ -333,6 +334,10 @@ fn benchmark_runtime_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "math_integer_methods",
             path: PATH_BENCH_MATH_INTEGER_METHODS,
+        },
+        BenchmarkCase {
+            id: "math_random",
+            path: PATH_BENCH_MATH_RANDOM,
         },
         BenchmarkCase {
             id: "standard_error_constructors",
