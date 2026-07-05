@@ -68,6 +68,6 @@ fn main() -> rs_quickjs::Result<()> {
 
 - [Project Rules](AGENTS.md)
 - [Architecture](docs/architecture.md)
-- [Roadmap](docs/roadmap.md)
+- [Product Roadmap](docs/roadmap.md)
 - [Benchmarking](docs/benchmarking.md)
-- [Project Plan](docs/project-plan.md)
+- [Project Roadmap And Execution Plan](docs/project-plan.md)

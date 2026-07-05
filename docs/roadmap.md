@@ -1,15 +1,17 @@
-# Roadmap
+# Product Roadmap
 
 The operational task board and branch protocol live in
-[Project Plan](project-plan.md). Update that document in the same branch that
-starts or completes a compatibility, embedding, testing, runtime-architecture,
-resource-control, observability, performance, or memory task.
+[Project Roadmap And Execution Plan](project-plan.md). Update that document in
+the same branch that starts or completes a compatibility, embedding, testing,
+runtime-architecture, resource-control, observability, performance, or memory
+task.
 
-This roadmap is a short product-level view. It is not an optimization plan.
-The engine must become a safe, embeddable Rust library first, then grow
-compatibility, built-ins, modules, async integration, resource controls, and
-observability. Runtime architecture, performance, and memory work support those
-product goals while keeping QuickJS-like size and speed as acceptance criteria.
+This roadmap is a short product-level view. It is not an optimization plan and
+should not be read as a queue of runtime micro-optimizations. The engine must
+become a safe, embeddable Rust library first, then grow compatibility,
+built-ins, modules, async integration, resource controls, and observability.
+Runtime architecture, performance, and memory work support those product goals
+while keeping QuickJS-like size and speed as acceptance criteria.
 
 ## Phase 0: Repository And Guardrails
 
