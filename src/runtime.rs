@@ -265,6 +265,7 @@ impl Context {
                 .map(|binding| binding.value())
                 .ok_or_else(|| reference_error_undefined(name)),
             Expr::Unary { op, expr } => self.eval_unary_expr(*op, expr),
+            Expr::Update { op, prefix, expr } => self.eval_update_expr(*op, *prefix, expr),
             Expr::Binary { op, left, right } => self.eval_binary(*op, left, right),
             Expr::Conditional {
                 condition,
@@ -461,13 +462,13 @@ impl Context {
 
     fn eval_member(&mut self, object: &Expr, property: &str) -> Result<Value> {
         let object = self.eval_expr(object)?;
-        self.checked_value(get_property(&self.objects, &object, property)?)
+        self.get_property_value(&object, property)
     }
 
     fn eval_computed_member(&mut self, object: &Expr, property: &Expr) -> Result<Value> {
         let object = self.eval_expr(object)?;
         let property = self.eval_property_key(property)?;
-        self.checked_value(get_property(&self.objects, &object, &property)?)
+        self.get_property_value(&object, &property)
     }
 
     fn eval_property_assignment(
@@ -478,14 +479,7 @@ impl Context {
     ) -> Result<Value> {
         let object = self.eval_expr(object)?;
         let value = self.eval_expr(expr)?;
-        self.checked_value(value.clone())?;
-        set_property(
-            &mut self.objects,
-            &object,
-            property.to_owned(),
-            value.clone(),
-            self.limits.max_object_properties,
-        )?;
+        self.set_property_value(&object, property.to_owned(), value.clone())?;
         Ok(value)
     }
 
@@ -498,15 +492,28 @@ impl Context {
         let object = self.eval_expr(object)?;
         let property = self.eval_property_key(property)?;
         let value = self.eval_expr(expr)?;
+        self.set_property_value(&object, property, value.clone())?;
+        Ok(value)
+    }
+
+    pub(crate) fn get_property_value(&self, object: &Value, property: &str) -> Result<Value> {
+        self.checked_value(get_property(&self.objects, object, property)?)
+    }
+
+    pub(crate) fn set_property_value(
+        &mut self,
+        object: &Value,
+        property: String,
+        value: Value,
+    ) -> Result<()> {
         self.checked_value(value.clone())?;
         set_property(
             &mut self.objects,
-            &object,
+            object,
             property,
-            value.clone(),
+            value,
             self.limits.max_object_properties,
-        )?;
-        Ok(value)
+        )
     }
 
     pub(crate) fn eval_property_key(&mut self, property: &Expr) -> Result<String> {
@@ -677,7 +684,7 @@ impl Context {
             })
     }
 
-    fn assign(&self, name: &str, value: Value) -> Result<()> {
+    pub(crate) fn assign(&self, name: &str, value: Value) -> Result<()> {
         self.checked_value(value.clone())?;
         let Some(binding) = self.get_binding(name) else {
             return Err(reference_error_undefined(name));

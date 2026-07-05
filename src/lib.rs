@@ -19,6 +19,7 @@ mod runtime_scope;
 mod runtime_switch;
 mod runtime_try;
 mod runtime_unary;
+mod runtime_update;
 mod value;
 
 pub use crate::error::{Error, Result};

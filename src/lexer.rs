@@ -38,7 +38,9 @@ pub enum TokenKind {
     Null,
     Undefined,
     Plus,
+    PlusPlus,
     Minus,
+    MinusMinus,
     Star,
     Slash,
     Percent,
@@ -101,8 +103,8 @@ impl<'a> Lexer<'a> {
                 '0'..='9' => self.number(offset)?,
                 '"' | '\'' => self.string(offset, ch)?,
                 ch if is_identifier_start(ch) => self.identifier(offset)?,
-                '+' => self.simple(TokenKind::Plus),
-                '-' => self.simple(TokenKind::Minus),
+                '+' => self.plus_or_increment(offset),
+                '-' => self.minus_or_decrement(offset),
                 '*' => self.simple(TokenKind::Star),
                 '/' => self.simple(TokenKind::Slash),
                 '%' => self.simple(TokenKind::Percent),
@@ -319,6 +321,24 @@ impl<'a> Lexer<'a> {
         let offset = self.peek().map_or(self.source.len(), |(offset, _)| offset);
         self.advance();
         self.push(kind, offset);
+    }
+
+    fn plus_or_increment(&mut self, offset: usize) {
+        self.advance();
+        if self.match_char('+') {
+            self.push(TokenKind::PlusPlus, offset);
+        } else {
+            self.push(TokenKind::Plus, offset);
+        }
+    }
+
+    fn minus_or_decrement(&mut self, offset: usize) {
+        self.advance();
+        if self.match_char('-') {
+            self.push(TokenKind::MinusMinus, offset);
+        } else {
+            self.push(TokenKind::Minus, offset);
+        }
     }
 
     fn push(&mut self, kind: TokenKind, offset: usize) {
