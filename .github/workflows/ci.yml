@@ -19,6 +19,7 @@ jobs:
     env:
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
       CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/rs-quickjs
+      RSQJS_QUICKJS_SOURCE: git
       RSQJS_QUICKJS_CACHE_DIR: /home/runner/.cache/cargo-target/rs-quickjs/external/quickjs
       RSQJS_TEST262_CACHE_DIR: /home/runner/.cache/cargo-target/rs-quickjs/external/test262
     steps:
