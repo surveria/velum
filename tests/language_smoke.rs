@@ -576,6 +576,52 @@ fn supports_error_object_properties() -> TestResult {
 }
 
 #[test]
+fn supports_standard_error_constructors() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let value = 0;
+        let plain = Error("plain", value = value + 1);
+        let typed = new TypeError("typed");
+        let syntax = SyntaxError("syntax");
+
+        assert.throws(TypeError, function() {
+            throw new TypeError("boom");
+        }, "TypeError should match");
+
+        assert.throws(Error, function() {
+            throw new RangeError("range");
+        });
+
+        if (TypeError.prototype.constructor === TypeError) {
+            value = value + 20;
+        }
+        if (SyntaxError.name === "SyntaxError" && SyntaxError.length === 1) {
+            value = value + 21;
+        }
+
+        print(
+            plain.name,
+            plain.message,
+            typed.name,
+            typed.message,
+            syntax.name,
+            syntax.message
+        );
+        value
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(
+        context.output(),
+        &["Error plain TypeError typed SyntaxError syntax".to_owned()],
+    )
+}
+
+#[test]
 fn evaluates_if_blocks_and_throw_statements() -> TestResult {
     expect_value(
         r#"

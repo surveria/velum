@@ -2,8 +2,9 @@ use crate::{
     ast::{DeclKind, Expr},
     error::{Error, Result},
     runtime::Context,
+    runtime_object::PropertyEnumerable,
     runtime_scope::BindingCell,
-    value::{NativeFunctionId, Value},
+    value::{ErrorName, ErrorObject, NativeFunctionId, Value},
 };
 
 use super::runtime_function::FunctionProperties;
@@ -36,6 +37,7 @@ const ARRAY_UNSHIFT_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_UNSHIFT_NAME: &str = "unshift";
 const ARRAY_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_NAME: &str = "Array";
+const ERROR_FUNCTION_LENGTH: f64 = 1.0;
 const OBJECT_FUNCTION_LENGTH: f64 = 1.0;
 const OBJECT_NAME: &str = "Object";
 
@@ -71,6 +73,7 @@ impl NativeFunction {
             NativeFunctionKind::ArrayShift => ARRAY_SHIFT_FUNCTION_LENGTH,
             NativeFunctionKind::ArraySlice => ARRAY_SLICE_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_FUNCTION_LENGTH,
+            NativeFunctionKind::ErrorConstructor(_) => ERROR_FUNCTION_LENGTH,
             NativeFunctionKind::Object => OBJECT_FUNCTION_LENGTH,
         }
     }
@@ -89,6 +92,7 @@ impl NativeFunction {
             NativeFunctionKind::ArrayShift => ARRAY_SHIFT_NAME,
             NativeFunctionKind::ArraySlice => ARRAY_SLICE_NAME,
             NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_NAME,
+            NativeFunctionKind::ErrorConstructor(name) => name.as_str(),
             NativeFunctionKind::Object => OBJECT_NAME,
         }
     }
@@ -116,6 +120,7 @@ pub(super) enum NativeFunctionKind {
     ArrayShift,
     ArraySlice,
     ArrayUnshift,
+    ErrorConstructor(ErrorName),
     Object,
 }
 
@@ -124,7 +129,14 @@ impl Context {
         match name {
             ARRAY_NAME => self.array_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
-            _ => Ok(None),
+            _ => {
+                let Some(name) =
+                    ErrorName::from_constructor_name(name).filter(|name| name.is_standard())
+                else {
+                    return Ok(None);
+                };
+                self.error_constructor_value(name).map(Some)
+            }
         }
     }
 
@@ -154,6 +166,7 @@ impl Context {
             NativeFunctionKind::ArrayShift => self.eval_array_shift(args, this_value),
             NativeFunctionKind::ArraySlice => self.eval_array_slice(args, this_value),
             NativeFunctionKind::ArrayUnshift => self.eval_array_unshift(args, this_value),
+            NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
         }
     }
@@ -178,6 +191,7 @@ impl Context {
             | NativeFunctionKind::ArrayUnshift => {
                 Err(Error::runtime("native method is not a constructor"))
             }
+            NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
         }
     }
@@ -211,6 +225,22 @@ impl Context {
         Ok(constructor)
     }
 
+    fn error_constructor_value(&mut self, name: ErrorName) -> Result<Value> {
+        if let Some(id) = self.native_function_id(NativeFunctionKind::ErrorConstructor(name)) {
+            return Ok(Value::NativeFunction(id));
+        }
+
+        let id = NativeFunctionId::new(self.native_functions.len());
+        let constructor = Value::NativeFunction(id);
+        let prototype = self.error_prototype_with_constructor(constructor.clone())?;
+        self.native_functions.push(NativeFunction::new(
+            NativeFunctionKind::ErrorConstructor(name),
+            prototype,
+        ));
+        self.insert_global_builtin(name.as_str(), constructor.clone())?;
+        Ok(constructor)
+    }
+
     fn insert_global_builtin(&mut self, name: &str, constructor: Value) -> Result<()> {
         if self.globals.contains(name) {
             return Ok(());
@@ -234,6 +264,19 @@ impl Context {
             self.limits.max_object_properties,
         )?;
         Ok(Value::Object(prototype))
+    }
+
+    fn error_prototype_with_constructor(&mut self, constructor: Value) -> Result<Value> {
+        self.objects
+            .create_with_prototype_property(
+                None,
+                OBJECT_CONSTRUCTOR_PROPERTY.to_owned(),
+                constructor,
+                PropertyEnumerable::No,
+                self.limits.max_objects,
+                self.limits.max_object_properties,
+            )
+            .map(Value::Object)
     }
 
     fn create_native_function(&mut self, kind: NativeFunctionKind, prototype: Value) -> Value {
@@ -274,6 +317,22 @@ impl Context {
             | Value::Number(_)
             | Value::String(_) => self.create_object_from_constructor(),
         }
+    }
+
+    pub(super) fn eval_error_constructor(
+        &mut self,
+        name: ErrorName,
+        args: &[Expr],
+    ) -> Result<Value> {
+        let values = args
+            .iter()
+            .map(|arg| self.eval_expr(arg))
+            .collect::<Result<Vec<_>>>()?;
+        let message = values
+            .first()
+            .map_or_else(String::new, Value::display_for_concat);
+        self.check_string_len(&message)?;
+        Ok(Value::Error(ErrorObject::new(name, message)))
     }
 
     fn create_object_from_constructor(&mut self) -> Result<Value> {

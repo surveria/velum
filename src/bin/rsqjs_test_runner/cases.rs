@@ -91,6 +91,7 @@ const PATH_UNARY_OPERATORS: &str = "tests/engine_cases/unary_operators.js";
 const PATH_ASSERT_THROWS_REFERENCE_ERROR: &str =
     "tests/engine_cases/assert_throws_reference_error.js";
 const PATH_ERROR_OBJECT_PROPERTIES: &str = "tests/engine_cases/error_object_properties.js";
+const PATH_STANDARD_ERROR_CONSTRUCTORS: &str = "tests/engine_cases/standard_error_constructors.js";
 pub fn engine_cases() -> Vec<EngineCase> {
     let mut cases = engine_language_cases();
     cases.extend(engine_expression_cases());
@@ -706,6 +707,14 @@ fn engine_runtime_cases() -> Vec<EngineCase> {
             path: PATH_ERROR_OBJECT_PROPERTIES,
             expectation: Expectation::OutputAndValue {
                 output: &["ReferenceError", "'missing' is not defined"],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "standard_error_constructors",
+            path: PATH_STANDARD_ERROR_CONSTRUCTORS,
+            expectation: Expectation::OutputAndValue {
+                output: &["Error plain TypeError typed SyntaxError syntax"],
                 value: "42",
             },
         },
