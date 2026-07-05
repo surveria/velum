@@ -267,6 +267,7 @@ impl Context {
                 .get_binding(name)
                 .map(|binding| binding.value())
                 .ok_or_else(|| reference_error_undefined(name)),
+            Expr::Parenthesized(expr) => self.eval_expr(expr),
             Expr::Unary { op, expr } => self.eval_unary_expr(*op, expr),
             Expr::Update { op, prefix, expr } => self.eval_update_expr(*op, *prefix, expr),
             Expr::Binary { op, left, right } => self.eval_binary(*op, left, right),

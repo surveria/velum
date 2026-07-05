@@ -44,6 +44,9 @@ const PATH_UPDATE_EXPRESSIONS: &str = "tests/engine_cases/update_expressions.js"
 const PATH_COMPOUND_ASSIGNMENT: &str = "tests/engine_cases/compound_assignment.js";
 const PATH_COMPOUND_ASSIGNMENT_EXTENDED: &str =
     "tests/engine_cases/compound_assignment_extended.js";
+const PATH_EXPONENTIATION_PARENTHESES: &str = "tests/engine_cases/exponentiation_parentheses.js";
+const PATH_EXPONENTIATION_UNARY_LEFT_ERROR: &str =
+    "tests/engine_cases/exponentiation_unary_left_error.js";
 const PATH_WHILE_STATEMENTS: &str = "tests/engine_cases/while_statements.js";
 const PATH_BREAK_CONTINUE: &str = "tests/engine_cases/break_continue.js";
 const PATH_FOR_STATEMENTS: &str = "tests/engine_cases/for_statements.js";
@@ -86,6 +89,10 @@ const PATH_TEST262_COMPOUND_ASSIGNMENT: &str =
     "tests/corpora/test262/active/language/expressions/compound_assignment.js";
 const PATH_TEST262_COMPOUND_ASSIGNMENT_EXTENDED: &str =
     "tests/corpora/test262/active/language/expressions/compound_assignment_extended.js";
+const PATH_TEST262_EXPONENTIATION_PARENTHESES: &str =
+    "tests/corpora/test262/active/language/expressions/exponentiation_parentheses.js";
+const PATH_TEST262_EXPONENTIATION_UNARY_LEFT_ERROR: &str =
+    "tests/corpora/test262/active/language/expressions/exponentiation_unary_left_error.js";
 const PATH_TEST262_LET_CONST: &str = "tests/corpora/test262/active/language/bindings/let_const.js";
 const PATH_TEST262_VAR_HOISTING: &str =
     "tests/corpora/test262/active/language/bindings/var_hoisting.js";
@@ -107,6 +114,7 @@ const PATH_TEST262_ERROR_OBJECT_PROPERTIES: &str =
 
 pub fn engine_cases() -> Vec<EngineCase> {
     let mut cases = engine_language_cases();
+    cases.extend(engine_expression_cases());
     cases.extend(engine_control_flow_cases());
     cases.extend(engine_function_cases());
     cases.extend(engine_object_cases());
@@ -169,50 +177,6 @@ fn engine_language_cases() -> Vec<EngineCase> {
 fn engine_control_flow_cases() -> Vec<EngineCase> {
     vec![
         EngineCase {
-            id: "conditional_bitand",
-            path: PATH_CONDITIONAL_BITAND,
-            expectation: Expectation::OutputAndValue {
-                output: &["1"],
-                value: "42",
-            },
-        },
-        EngineCase {
-            id: "update_expressions",
-            path: PATH_UPDATE_EXPRESSIONS,
-            expectation: Expectation::OutputAndValue {
-                output: &["40 42 42 40 40", "1 3 3", "1 3 2 3", "6 -1"],
-                value: "42",
-            },
-        },
-        EngineCase {
-            id: "compound_assignment",
-            path: PATH_COMPOUND_ASSIGNMENT,
-            expectation: Expectation::OutputAndValue {
-                output: &[
-                    "15 12 48 24 3 2 2",
-                    "cam-01",
-                    "15 12 12",
-                    "10 2 2",
-                    "kr 42 42",
-                ],
-                value: "42",
-            },
-        },
-        EngineCase {
-            id: "compound_assignment_extended",
-            path: PATH_COMPOUND_ASSIGNMENT_EXTENDED,
-            expectation: Expectation::OutputAndValue {
-                output: &[
-                    "7 4 16 8 4 64 64",
-                    "-4 2147483646 2147483646",
-                    "5 2 16 16",
-                    "32 2 32 32 32",
-                    "kr 42 42",
-                ],
-                value: "42",
-            },
-        },
-        EngineCase {
             id: "while_statements",
             path: PATH_WHILE_STATEMENTS,
             expectation: Expectation::OutputAndValue {
@@ -258,6 +222,74 @@ fn engine_control_flow_cases() -> Vec<EngineCase> {
                 ],
                 value: "42",
             },
+        },
+    ]
+}
+
+fn engine_expression_cases() -> Vec<EngineCase> {
+    vec![
+        EngineCase {
+            id: "conditional_bitand",
+            path: PATH_CONDITIONAL_BITAND,
+            expectation: Expectation::OutputAndValue {
+                output: &["1"],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "update_expressions",
+            path: PATH_UPDATE_EXPRESSIONS,
+            expectation: Expectation::OutputAndValue {
+                output: &["40 42 42 40 40", "1 3 3", "1 3 2 3", "6 -1"],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "compound_assignment",
+            path: PATH_COMPOUND_ASSIGNMENT,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "15 12 48 24 3 2 2",
+                    "cam-01",
+                    "15 12 12",
+                    "10 2 2",
+                    "kr 42 42",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "compound_assignment_extended",
+            path: PATH_COMPOUND_ASSIGNMENT_EXTENDED,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "7 4 16 8 4 64 64",
+                    "-4 2147483646 2147483646",
+                    "5 2 16 16",
+                    "32 2 32 32 32",
+                    "kr 42 42",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "exponentiation_parentheses",
+            path: PATH_EXPONENTIATION_PARENTHESES,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "512 4 -4",
+                    "8 8 10 10",
+                    "16 16",
+                    "undefined true true undefined",
+                    "42",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "exponentiation_unary_left_error",
+            path: PATH_EXPONENTIATION_UNARY_LEFT_ERROR,
+            expectation: Expectation::ErrorContains("unary expression cannot be the left operand"),
         },
     ]
 }
@@ -434,6 +466,16 @@ fn test262_expression_cases() -> Vec<EngineCase> {
             id: "language/expressions/compound_assignment_extended",
             path: PATH_TEST262_COMPOUND_ASSIGNMENT_EXTENDED,
             expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/exponentiation_parentheses",
+            path: PATH_TEST262_EXPONENTIATION_PARENTHESES,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/exponentiation_unary_left_error",
+            path: PATH_TEST262_EXPONENTIATION_UNARY_LEFT_ERROR,
+            expectation: Expectation::ErrorContains("unary expression cannot be the left operand"),
         },
     ]
 }
