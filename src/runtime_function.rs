@@ -5,6 +5,7 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime_completion::Completion,
+    runtime_object::PropertyEnumerable,
     runtime_scope::{BindingCell, BindingScope},
     value::{FunctionId, ObjectId, Value},
 };
@@ -12,6 +13,7 @@ use crate::{
 const FUNCTION_LENGTH_PROPERTY: &str = "length";
 const FUNCTION_NAME_PROPERTY: &str = "name";
 const FUNCTION_PROTOTYPE_PROPERTY: &str = "prototype";
+const PROTOTYPE_CONSTRUCTOR_PROPERTY: &str = "constructor";
 
 #[derive(Debug, Clone)]
 pub(super) struct FunctionProperties {
@@ -29,9 +31,15 @@ impl Context {
     ) -> Result<Value> {
         let id = FunctionId::new(self.functions.len());
         let function = Value::Function(id);
-        let prototype = self
-            .objects
-            .create_with_prototype(None, self.limits.max_objects)?;
+        let prototype_id = self.objects.create_with_prototype_property(
+            None,
+            PROTOTYPE_CONSTRUCTOR_PROPERTY.to_owned(),
+            function.clone(),
+            PropertyEnumerable::No,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
+        let prototype = Value::Object(prototype_id);
         self.functions.push(super::Function {
             name: name.unwrap_or_default().to_owned(),
             params: params.to_vec(),
