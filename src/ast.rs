@@ -24,6 +24,11 @@ pub enum Stmt {
         update: Option<Expr>,
         body: Box<Self>,
     },
+    ForIn {
+        target: ForInTarget,
+        object: Expr,
+        body: Box<Self>,
+    },
     Switch {
         discriminant: Expr,
         cases: Vec<SwitchCase>,
@@ -50,6 +55,12 @@ pub enum DeclKind {
     Var,
     Let,
     Const,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ForInTarget {
+    Binding { name: String, kind: DeclKind },
+    Assignment(Expr),
 }
 
 #[derive(Debug, Clone, PartialEq)]

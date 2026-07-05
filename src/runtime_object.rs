@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, btree_map::Entry};
 
 use crate::error::{Error, Result};
 use crate::value::{ObjectId, Value};
@@ -69,6 +69,11 @@ impl ObjectHeap {
         Ok(object.has(property))
     }
 
+    pub fn keys(&self, id: ObjectId) -> Result<Vec<String>> {
+        let object = self.object(id)?;
+        Ok(object.keys())
+    }
+
     pub fn set(
         &mut self,
         id: ObjectId,
@@ -101,6 +106,7 @@ impl ObjectHeap {
 #[derive(Debug, Clone, Default)]
 struct Object {
     properties: BTreeMap<String, Value>,
+    property_order: Vec<String>,
     array_length: Option<ArrayLength>,
 }
 
@@ -108,6 +114,7 @@ impl Object {
     const fn ordinary() -> Self {
         Self {
             properties: BTreeMap::new(),
+            property_order: Vec::new(),
             array_length: None,
         }
     }
@@ -115,6 +122,7 @@ impl Object {
     const fn array(length: ArrayLength) -> Self {
         Self {
             properties: BTreeMap::new(),
+            property_order: Vec::new(),
             array_length: Some(length),
         }
     }
@@ -137,6 +145,10 @@ impl Object {
             || self.properties.contains_key(property)
     }
 
+    fn keys(&self) -> Vec<String> {
+        self.property_order.clone()
+    }
+
     fn set(&mut self, property: String, value: Value, max_properties: usize) -> Result<()> {
         if self.array_length.is_some() && property == ARRAY_LENGTH_PROPERTY {
             return Err(Error::runtime("array length assignment is not supported"));
@@ -155,12 +167,20 @@ impl Object {
         value: Value,
         max_properties: usize,
     ) -> Result<()> {
-        if !self.properties.contains_key(&property) && self.properties.len() >= max_properties {
-            return Err(Error::limit(format!(
-                "object property count exceeded {max_properties}"
-            )));
+        match self.properties.entry(property) {
+            Entry::Occupied(mut entry) => {
+                entry.insert(value);
+            }
+            Entry::Vacant(entry) => {
+                if self.property_order.len() >= max_properties {
+                    return Err(Error::limit(format!(
+                        "object property count exceeded {max_properties}"
+                    )));
+                }
+                self.property_order.push(entry.key().clone());
+                entry.insert(value);
+            }
         }
-        self.properties.insert(property, value);
         Ok(())
     }
 
@@ -170,6 +190,7 @@ impl Object {
         }
         let removed_property = self.properties.remove(property);
         if removed_property.is_some() {
+            self.property_order.retain(|key| key != property);
             return true;
         }
         true

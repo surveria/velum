@@ -1,6 +1,6 @@
 use crate::{
-    ast::{DeclKind, Expr, Stmt},
-    error::Result,
+    ast::{DeclKind, Expr, ForInTarget, Stmt},
+    error::{Error, Result},
     runtime::Context,
     runtime_completion::Completion,
     value::Value,
@@ -37,6 +37,89 @@ impl Context {
         }
 
         self.eval_for_loop(init, condition, update, body)
+    }
+
+    pub(crate) fn eval_for_in(
+        &mut self,
+        target: &ForInTarget,
+        object: &Expr,
+        body: &Stmt,
+    ) -> Result<Completion> {
+        let object = self.eval_expr(object)?;
+        let keys = self.enumerable_keys(&object)?;
+        match target {
+            ForInTarget::Binding {
+                name,
+                kind: kind @ (DeclKind::Let | DeclKind::Const),
+            } => self.eval_for_in_lexical_binding(name, *kind, keys, body),
+            ForInTarget::Binding {
+                name,
+                kind: DeclKind::Var,
+            } => self.eval_for_in_assignment_loop(keys, body, |context, key| {
+                context.assign(name, Value::String(key))
+            }),
+            ForInTarget::Assignment(target) => {
+                self.eval_for_in_assignment_loop(keys, body, |context, key| {
+                    context.assign_for_in_target(target, Value::String(key))
+                })
+            }
+        }
+    }
+
+    fn eval_for_in_lexical_binding(
+        &mut self,
+        name: &str,
+        kind: DeclKind,
+        keys: Vec<String>,
+        body: &Stmt,
+    ) -> Result<Completion> {
+        let mut last = Value::Undefined;
+        for key in keys {
+            self.step()?;
+            let completion = self.with_lexical_scope(|context| {
+                context.define(name, Value::String(key), kind)?;
+                context.eval_statement(body)
+            })?;
+            if let Some(completion) = loop_completion(&mut last, completion) {
+                return Ok(completion);
+            }
+        }
+        Ok(Completion::Normal(last))
+    }
+
+    fn eval_for_in_assignment_loop(
+        &mut self,
+        keys: Vec<String>,
+        body: &Stmt,
+        mut assign: impl FnMut(&mut Self, String) -> Result<()>,
+    ) -> Result<Completion> {
+        let mut last = Value::Undefined;
+        for key in keys {
+            self.step()?;
+            assign(self, key)?;
+            let completion = self.eval_statement(body)?;
+            if let Some(completion) = loop_completion(&mut last, completion) {
+                return Ok(completion);
+            }
+        }
+        Ok(Completion::Normal(last))
+    }
+
+    fn assign_for_in_target(&mut self, target: &Expr, value: Value) -> Result<()> {
+        match target {
+            Expr::Identifier(name) => self.assign(name, value),
+            Expr::Member { object, property } => {
+                let object = self.eval_expr(object)?;
+                self.set_property_value(&object, property.to_owned(), value)
+            }
+            Expr::ComputedMember { object, property } => {
+                let object = self.eval_expr(object)?;
+                let property = self.eval_property_key(property)?;
+                self.set_property_value(&object, property, value)
+            }
+            Expr::Parenthesized(expr) => self.assign_for_in_target(expr, value),
+            _ => Err(Error::runtime("invalid for-in assignment target")),
+        }
     }
 
     fn eval_for_loop(
@@ -105,6 +188,18 @@ impl Context {
     }
 }
 
+fn loop_completion(last: &mut Value, completion: Completion) -> Option<Completion> {
+    match completion {
+        Completion::Normal(value) => {
+            *last = value;
+            None
+        }
+        Completion::Continue => None,
+        Completion::Break => Some(Completion::Normal(last.clone())),
+        completion @ (Completion::Throw(_) | Completion::Return(_)) => Some(completion),
+    }
+}
+
 fn for_init_needs_lexical_scope(init: Option<&Stmt>) -> bool {
     match init {
         Some(Stmt::VarDecl {
@@ -121,6 +216,7 @@ fn for_init_needs_lexical_scope(init: Option<&Stmt>) -> bool {
             | Stmt::If { .. }
             | Stmt::While { .. }
             | Stmt::For { .. }
+            | Stmt::ForIn { .. }
             | Stmt::Switch { .. }
             | Stmt::Try { .. }
             | Stmt::Break

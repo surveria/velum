@@ -1,4 +1,4 @@
-use crate::ast::{BinaryOp, DeclKind, Expr, ObjectProperty, Program, Stmt};
+use crate::ast::{BinaryOp, DeclKind, Expr, ForInTarget, ObjectProperty, Program, Stmt};
 use crate::error::{Error, Result};
 use crate::lexer;
 use crate::parser;
@@ -14,7 +14,8 @@ use crate::runtime_numeric::{
 };
 use crate::runtime_object::ObjectHeap;
 use crate::runtime_property::{
-    delete_property, get_property, has_property, property_key, set_property,
+    delete_property, enumerable_property_keys, get_property, has_property, property_key,
+    set_property,
 };
 use crate::runtime_scope::{BindingCell, BindingScope};
 use crate::value::{ErrorName, ErrorObject, FunctionId, Value};
@@ -125,6 +126,11 @@ impl Context {
                 update,
                 body,
             } => self.eval_for(init.as_deref(), condition.as_ref(), update.as_ref(), body),
+            Stmt::ForIn {
+                target,
+                object,
+                body,
+            } => self.eval_for_in(target, object, body),
             Stmt::Switch {
                 discriminant,
                 cases,
@@ -176,6 +182,16 @@ impl Context {
             Stmt::For { init, body, .. } => {
                 if let Some(init) = init {
                     self.hoist_statement_vars(init)?;
+                }
+                self.hoist_statement_vars(body)
+            }
+            Stmt::ForIn { target, body, .. } => {
+                if let ForInTarget::Binding {
+                    name,
+                    kind: DeclKind::Var,
+                } = target
+                {
+                    self.hoist_var(name)?;
                 }
                 self.hoist_statement_vars(body)
             }
@@ -528,6 +544,10 @@ impl Context {
         delete_property(&mut self.objects, object, property).map(Value::Bool)
     }
 
+    pub(crate) fn enumerable_keys(&self, object: &Value) -> Result<Vec<String>> {
+        enumerable_property_keys(&self.objects, object)
+    }
+
     fn eval_print_call(&mut self, args: &[Expr]) -> Result<Value> {
         let values = args
             .iter()
@@ -629,7 +649,7 @@ impl Context {
         Ok(scope)
     }
 
-    fn define(&mut self, name: &str, value: Value, kind: DeclKind) -> Result<()> {
+    pub(crate) fn define(&mut self, name: &str, value: Value, kind: DeclKind) -> Result<()> {
         self.ensure_binding_capacity(name)?;
         if self.active_bindings().contains(name) {
             return Err(Error::runtime(format!(
