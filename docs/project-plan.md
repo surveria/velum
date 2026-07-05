@@ -1,19 +1,20 @@
-# Project Development Plan
+# Project Plan
 
-This document is the working plan for growing `rs-quickjs` into a safe-Rust,
-embeddable JavaScript engine. It describes what we are building, the rough
-order of work, and the protocol every branch should follow.
+This document is the canonical project plan for growing `rs-quickjs` into a
+safe-Rust, embeddable JavaScript engine. It describes what we are building, the
+rough order of work, and the protocol every branch should follow.
 
-The plan is intentionally operational. Each feature, compatibility,
-embedding, memory, testing, or optimization task should update this document in
-the same branch that implements the task. Future work should resume from
-repository state instead of relying on conversation history.
+The plan is intentionally operational. Each feature, compatibility, embedding,
+memory, testing, runtime-architecture, resource-control, or observability task
+should update this document in the same branch that implements the task. Future
+work should resume from repository state instead of relying on conversation
+history.
 
-This is not an optimization-only backlog. The primary sequence is product
-delivery: library surface, VM isolation, host extension APIs, language
-compatibility, built-ins, async integration, resource control, and
-observability. Performance and memory budgets are acceptance criteria for that
-work, with dedicated checkpoint tasks when measurements show debt.
+This is a product roadmap, not a single-workstream backlog. The primary
+sequence is product delivery: library surface, VM isolation, host extension
+APIs, language compatibility, built-ins, async integration, resource control,
+and observability. Performance and memory budgets are acceptance criteria for
+that work, with dedicated checkpoint tasks when measurements show debt.
 
 ## Product Direction
 
@@ -102,11 +103,12 @@ detailed reports:
 Reports should stay compact: summaries and failure classifications are more
 important than listing every passing or intentionally skipped case.
 
-### Performance And Memory
+### Runtime Architecture, Performance, And Memory
 
-Performance work keeps implemented behavior close to QuickJS instead of
-letting compatibility progress accumulate hidden debt. It is a continuous
-constraint on feature work, not the only purpose of the roadmap.
+Runtime architecture work keeps implemented behavior close to QuickJS while the
+engine grows into a complete embeddable library. Performance and memory are
+continuous acceptance criteria for feature work, not the only purpose of the
+roadmap.
 
 The major implementation directions are:
 
@@ -228,7 +230,7 @@ note about what changed, what was difficult, and what remains possible later.
 
 | Done | Status | Task | Workstream | Purpose | Current notes |
 | --- | --- | --- | --- | --- | --- |
-| [x] | Done | Establish persistent development plan | Planning | Create the general project plan, task board, and task protocol. | Replaces the optimization-only plan with a broader development plan. Future branches should update this board when they start and finish work. |
+| [x] | Done | Establish persistent development plan | Planning | Create the general project plan, task board, and task protocol. | Replaces the earlier narrow plan with a broader development plan. Future branches should update this board when they start and finish work. |
 | [x] | Done | Generalize project roadmap scope | Planning | Rebalance the plan around product development order instead of an optimization-first backlog. | Clarifies that performance and memory are recurring guardrails, while embedding API, compatibility, host extensions, resource control, and observability are first-class roadmap tracks. |
 | [x] | Done | Embedding API skeleton | Embedding API | Introduce the public direction for `Engine`, isolated `Vm`, execution `Context`, and embedder-owned configuration. | Adds `Engine`, `EngineConfig`, `Vm`, `VmConfig`, VM resource usage, teardown reports, README coverage, and direct library tests for isolated VMs, output separation, VM-specific limits, and teardown. Validation passed with `cargo fmt -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T144858Z.md` keeps existing benchmark exceptions tracked. |
 | [x] | Done | Multi-VM isolation fixtures | Embedding API / testing | Prove that many VMs can run in one Rust process with isolated globals, output, limits, errors, and teardown. | Adds a direct library fixture that runs eight VMs in one process, verifies isolated globals and output buffers, forces a separate VM resource-limit failure, then confirms the surviving VMs continue and produce teardown reports. Validation passed with `cargo fmt -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T145428Z.md` keeps benchmark exceptions tracked. |
@@ -236,84 +238,91 @@ note about what changed, what was difficult, and what remains possible later.
 | [x] | Done | Test262 feature map | Compatibility / testing | Convert full Test262 results into a feature-oriented progress map. | Adds compact full-corpus feature-area tables with pass/fail/skip counts, pass rate, active-manifest counts, top skip reasons, and an aggregated `other feature areas` row. Validation passed with `cargo fmt -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T151636Z.md` records 102578 executed Test262 variants, 9098 passed, 93480 failed, and keeps failed case details capped at the last 30. |
 | [x] | Done | Parser and lexer Test262 cluster | Compatibility | Reduce top parser and lexer failure categories in full Test262 reports. | Adds the `numeric-literal-syntax` cluster: binary, octal, hexadecimal, decimal exponent, leading-decimal, and numeric separator support without BigInt semantics. Validation passed with `cargo fmt -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T152806Z.md` raises full Test262 passes from 9098 to 9378, raises `language/literals` passes from 514 to 784, lowers parser failures from 25349 to 23170, and lowers the top `lexer: unexpected character` hint from 17549 to 16369. BigInt literals remain unsupported and are now reported explicitly. |
 | [x] | Done | Runtime semantics cluster | Compatibility | Expand coherent statement, expression, scope, function, and error semantics. | Adds omitted catch binding support (`try { ... } catch { ... }`) without creating a catch parameter binding. Validation passed with `cargo fmt -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T153644Z.md` raises full Test262 passes from 9378 to 9388, lowers parser failures from 23170 to 23160, and adds one active Test262 and one QuickJS differential case. |
-| [x] | Done | Clarify general development sequence | Planning | Make the working plan clearly describe the whole product roadmap instead of looking like an optimization plan. | Adds product delivery milestones, aligns the short roadmap with the operational plan, and frames performance work as acceptance criteria plus checkpoint tasks. This was a documentation-only change validated with `git diff --check`; full CI remains the merge gate. |
+| [x] | Done | Clarify general development sequence | Planning | Make the working plan clearly describe the whole product roadmap instead of looking like a single-workstream plan. | Adds product delivery milestones, aligns the short roadmap with the operational plan, and frames performance work as acceptance criteria plus checkpoint tasks. This was a documentation-only change validated with `git diff --check`; full CI remains the merge gate. |
 | [x] | Done | Basic built-ins expansion | Compatibility | Expand high-value `Object`, `Array`, `String`, `Number`, and `Math` behavior. | Starts the built-ins track with `Number` as a function/constructor, `Number.prototype.constructor`, basic string/boolean/null/undefined conversions, and static constants such as `NaN`, infinities, safe integer bounds, `MAX_VALUE`, `MIN_VALUE`, and `EPSILON`. Adds engine, active Test262, QuickJS differential, and benchmark fixtures. Validation passed with `cargo fmt -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T155826Z.md` raises full Test262 passes from 9388 to 9609, raises `built-ins/Number` passes from 8 to 32, and removes `missing binding: Number` from the top missing bindings. The new `number_builtin` benchmark is tracked as a latency exception at `1.29x`; `Number.prototype` primitive-wrapper internals remain future work. |
 | [x] | Done | `CompiledScript` AST wrapper | Embedding API / performance | Add a reusable compiled representation before bytecode, so embedders can parse once and evaluate repeatedly. | Adds AST-backed `CompiledScript` and `CompiledScriptUsage`, plus `compile`/`eval_compiled` on `Context`, `Vm`, and compatibility `Runtime`. The parser now reports compile usage so target VMs reject compiled scripts that exceed their stricter source, statement, or expression-depth limits. Direct library tests cover repeated eval in one VM, reuse across isolated VMs, compile-time parse errors, and stricter target VM limits. Benchmark reports now separate cold eval, compile-only, and compiled-eval columns and add `compiled_script_reuse`. Validation passed with `cargo fmt -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T161440Z.md` keeps full Test262 at 9609 passed, measures 51 benchmarks, and records `compiled_script_reuse` as a rounded `1.10x` latency exception while showing `3 us` compile-only, `54 us` compiled eval, and `67 us` cold eval. Future bytecode, atoms, and slot locals can replace the backing representation behind this API. |
 | [x] | Done | Atom interner | Performance and memory | Store identifiers, property keys, function names, and reusable string constants as compact atom ids. | Starts atomization with a VM-owned `AtomTable`, `AtomId`, and lexical/global bindings keyed by atoms instead of owned strings. Public APIs still accept string names, missing-name lookups do not create atoms, and `VmResourceUsage` now reports `atom_count`. Adds direct embedding coverage for atom accounting and a binding-heavy `atomized_bindings` benchmark. Property keys, function metadata, reusable string constants, and atom budgets remain follow-up work so this branch does not mix atomization with shape/object-layout changes. Validation passed with `cargo fmt -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T162515Z.md` keeps full Test262 at 9609 passed, measures 52 benchmarks, brings `compiled_script_reuse` within budget at `1.09x`, and records `atomized_bindings` as a `1.17x` latency exception. |
-| [ ] | Backlog | Slot-based local bindings | Performance and memory | Replace repeated string lookups for local variables with compiler-assigned local, global, and upvalue slots. | Requires scope analysis, closure/upvalue model, and migration tests for lexical bindings. |
-| [ ] | Backlog | Object and prototype performance checkpoint | Performance and memory | Bring `object_prototype_root`, `prototype_constructor_property`, and `object_builtin` within the `1.10x` latency and memory budget where measurements are stable. | This is a checkpoint task driven by reports, not the whole project direction. Preserve semantics with engine tests and QuickJS differential cases. |
-| [ ] | Backlog | Shape-based object layout | Performance and memory | Move ordinary objects toward shape plus slot storage instead of per-object key maps for stable layouts. | This unlocks faster property access and lower allocation pressure. |
-| [ ] | Backlog | Dense array fast paths | Performance and memory | Split array storage into packed, holey, and sparse representations. | Most array-heavy benchmarks need packed or holey arrays to stay close to QuickJS. |
-| [ ] | Backlog | Promise job queue and async host callbacks | Embedding API / compatibility | Add the job model needed by promises and async Rust host functions. | The embedding application must own the outer executor; the VM owns queued JavaScript jobs. |
-| [ ] | Backlog | Bytecode VM | Performance and memory | Replace direct AST evaluation on hot paths with compact bytecode behind the `CompiledScript` API. | Start only after enough language coverage exists to benchmark honestly. |
-| [ ] | Backlog | VM-owned heap accounting and GC | Resource control | Define mark/sweep or reference-counting plus cycle collection over indexed VM heaps. | Must preserve deterministic teardown, hard heap limits, and VM isolation. |
-| [ ] | Backlog | Observability hooks | Observability | Add structured events, profiling hooks, resource usage snapshots, and teardown reports. | Useful for production embedding, debugging, and future performance work. |
+| [x] | Done | Project plan naming and sequence | Planning | Make the canonical plan name and task order reflect the whole product roadmap. | Renames the canonical plan to `docs/project-plan.md`, updates README and roadmap links, broadens the backlog around API, compatibility, async, resources, observability, and runtime architecture, and moves performance work into recurring checkpoint and runtime-architecture tracks. Validation passed with stale-link checks and `git diff --check`; full CI remains the merge gate. |
+| [ ] | Backlog | Embedding API stability pass | Embedding API | Review `Engine`, `Vm`, `Context`, `CompiledScript`, configuration, teardown, and error surfaces before more features depend on them. | Add direct library tests and examples for expected embedder workflows. Do not make CLI behavior the only proof. |
+| [ ] | Backlog | Host value conversion layer | Embedding API | Add typed conversions between Rust values and JavaScript values for host functions. | Keep errors contextual, avoid hidden global state, and preserve VM-local ownership rules. |
+| [ ] | Backlog | Parser and syntax compatibility tranches | Compatibility | Continue reducing Test262 parser and lexer failure clusters. | Pick coherent clusters from the full report, then add engine, active Test262, and QuickJS differential cases where relevant. |
+| [ ] | Backlog | Runtime semantics tranches | Compatibility | Expand statements, functions, lexical environments, `this`, exceptions, equality, iteration, and prototype behavior. | Each tranche should improve a visible Test262 feature area without mixing unrelated semantics. |
+| [ ] | Backlog | Practical built-ins tranches | Compatibility | Expand `Object`, `Array`, `String`, `Number`, `Math`, `Boolean`, `Function`, errors, JSON, Date, RegExp, Map, Set, and other high-value built-ins. | Prioritize by Test262 failure maps, embedding use cases, and QuickJS differential evidence. Add benchmarks for hot methods as they land. |
+| [ ] | Backlog | Diagnostics and error model | Compatibility / embedding API | Make syntax, runtime, host callback, and resource-limit errors precise and stable enough for embedders. | Preserve error chains and report enough location/context data for production logging. |
+| [ ] | Backlog | Module loading design | Compatibility / embedding API | Design how modules are resolved, loaded, cached, limited, and observed by embedding applications. | Keep the embedder in control of I/O and policy; document what is intentionally unsupported in the first implementation. |
+| [ ] | Backlog | Promise job queue | Compatibility / embedding API | Add the JavaScript job model required by promises and async functions. | The VM owns JavaScript jobs; the embedding application controls when jobs are drained. |
+| [ ] | Backlog | Async host callbacks | Embedding API | Allow Rust host callbacks to complete asynchronously through embedder-owned executors. | Should build on the promise job queue and preserve VM isolation, cancellation, and resource accounting. |
+| [ ] | Backlog | Resource limit expansion | Resource control | Extend limits from source and runtime counters toward heap, stack, atom table, jobs, host callbacks, modules, and cancellation. | Every new limit needs library tests, error reporting, and teardown accounting. |
+| [ ] | Backlog | Observability hooks | Observability | Add structured execution events, profiling hooks, resource usage snapshots, and teardown reports. | Useful for production embedding, debugging, and future performance work. |
+| [ ] | Backlog | Slot-based local bindings | Runtime architecture / performance | Replace repeated name lookups for local variables with compiler-assigned local, global, and upvalue slots. | Requires scope analysis, closure/upvalue model, and migration tests for lexical bindings. |
+| [ ] | Backlog | Shape-based object layout | Runtime architecture / performance | Move ordinary objects toward shape plus slot storage instead of per-object key maps for stable layouts. | This supports compatibility and performance for object/prototype-heavy built-ins. |
+| [ ] | Backlog | Dense array fast paths | Runtime architecture / performance | Split array storage into packed, holey, and sparse representations. | Most array-heavy JavaScript needs packed or holey arrays to stay close to QuickJS. |
+| [ ] | Backlog | VM-owned heap accounting and GC | Resource control / runtime architecture | Define mark/sweep or reference-counting plus cycle collection over indexed VM heaps. | Must preserve deterministic teardown, hard heap limits, host callback handles, queued jobs, and VM isolation. |
+| [ ] | Backlog | Bytecode VM | Runtime architecture / performance | Replace direct AST evaluation on hot paths with compact bytecode behind the `CompiledScript` API. | Start only after enough language coverage exists to benchmark honestly. |
+| [ ] | Backlog | Inline caches | Runtime architecture / performance | Cache stable property and call access paths after shapes and bytecode exist. | Keep fallback paths correct and keep all cache invalidation explicit. |
+| [ ] | Backlog | Performance and memory checkpoints | Performance and memory | Bring tracked benchmark exceptions back within the `1.10x` latency and memory budget where measurements are stable. | These are recurring checkpoint tasks driven by reports, not the whole project direction. Preserve semantics with engine tests and QuickJS differential cases. |
 
-## Default Execution Order
+## Default Project Sequence
 
-The order below is the default project direction. It can change when the
-latest report shows a clearer bottleneck, compatibility gap, or embedding API
-need, but branches should document why they changed priority.
+The order below is the default project direction. It can change when the latest
+report shows a clearer bottleneck, compatibility gap, or embedding API need,
+but branches should document why they changed priority.
 
 1. Keep the repository and reports trustworthy.
    Guardrails, CI, test reports, QuickJS setup, Test262 setup, and benchmark
    reporting are part of the product. Do not let them drift.
 
-2. Strengthen the embedding API.
-   Add direct library tests for many VMs in one process, isolation, resource
-   failures, teardown, and host output. Keep CLI behavior as smoke coverage, not
-   the only proof.
+2. Stabilize the embedding API.
+   Keep direct library tests ahead of CLI-only coverage. The API must support
+   many VMs per process, isolated state, resource failures, deterministic
+   teardown, host output, host functions, and reusable compiled scripts.
 
-3. Add the first host extension path.
-   Typed synchronous host functions should land before async callbacks. This
-   proves argument conversion, contextual host errors, output separation, and
-   VM-boundary rules.
+3. Expand compatibility in coherent tranches.
+   Use Test262 feature maps to pick parser, runtime, built-in, and error-model
+   clusters. Each branch should close a visible area and add engine plus QuickJS
+   differential coverage where possible.
 
-4. Expand core compatibility in narrow clusters.
-   Use Test262 failure classifications to pick parser, runtime, and built-in
-   clusters. Each branch should close a coherent area rather than mixing
-   unrelated syntax and runtime changes.
+4. Grow practical built-ins.
+   Prioritize `Object`, `Array`, `String`, `Number`, `Math`, `Boolean`,
+   `Function`, standard errors, JSON, Date, RegExp, Map, and Set based on
+   reports and embedding needs. Add benchmarks for hot paths as they land.
 
-5. Expand practical built-ins.
-   Use top missing bindings, feature-area reports, and embedding use cases to
-   prioritize `Object`, `Array`, `String`, `Number`, `Math`, `Function`, and
-   standard errors. Add benchmarks for hot methods as they become implemented.
+5. Keep host extension support close to real embedding use.
+   Improve value conversion, host callback errors, VM-local callback ownership,
+   and examples before adding advanced async behavior.
 
-6. Introduce `CompiledScript` before bytecode.
-   The first reusable compilation layer can wrap the current AST. It should
-   prove the public API shape, separate parse cost from execution cost, and give
-   embedders a stable contract before the evaluator is replaced.
+6. Add modules, promises, and async integration.
+   Design module loading around embedder-owned I/O and policy. Add the
+   JavaScript job queue before promises, async functions, and async Rust host
+   callbacks.
 
-7. Keep performance checkpoints close behind feature work.
-   Benchmark exceptions should be handled as recurring checkpoint tasks, not as
-   the only roadmap. When a feature makes a hot path slower, either fix it in
-   the same branch or record a measured exception with a follow-up task.
+7. Expand resource control.
+   Move from source and runtime counters toward heap, stack, atom, job, module,
+   host callback, and cancellation limits. Every limit must be visible through
+   the library API and teardown reports.
 
-8. Add atoms and slot-based locals.
-   Atoms reduce repeated string allocation, cloning, and comparison. Slot-based
-   locals turn variable access into checked index operations and prepare the
-   runtime for bytecode.
+8. Add observability as product surface.
+   Structured events, profiling hooks, resource snapshots, and execution reports
+   should be designed for production embedders, not only for local debugging.
 
-9. Add shape-based objects and dense arrays.
-   Object and array layout work should happen before long-tail built-in
-   expansion makes slow storage harder to replace.
+9. Improve runtime data structures when they unblock features or measured debt.
+   Atoms, slot-based locals, shape-based objects, dense arrays, and indexed
+   heaps are architecture tasks. They should support compatibility and resource
+   control while keeping QuickJS-like speed and footprint.
 
-10. Add promises, job queue, and async host callbacks.
-   Promise semantics and async host integration are product-critical, but they
-   need the embedding model and job ownership to be clear first.
+10. Add bytecode after the source language is broad enough.
+    Bytecode should preserve the `CompiledScript` API and have interpreter
+    fallback tests as an oracle. Inline caches belong after shapes and bytecode.
 
-11. Add bytecode and inline caches.
-   Bytecode should preserve the `CompiledScript` API. Inline caches become most
-   valuable after shapes and bytecode exist.
-
-12. Add explicit VM heap accounting and GC.
+11. Add explicit VM heap accounting and GC.
     The indexed heap model should grow into deterministic accounting and a safe
     collection strategy compatible with host callbacks, promises, queued jobs,
     and many isolated VMs.
 
-13. Add observability and production controls.
-    Profiling hooks, structured events, resource snapshots, and feature gates
-    should become part of the embeddable engine surface.
+12. Run performance and memory checkpoint tasks continuously.
+    Benchmark exceptions should be handled as recurring checkpoint tasks. When
+    a feature makes a hot path slower, either fix it in the same branch or
+    record a measured exception with a follow-up task.
 
 ## Branch Execution Protocol
 
