@@ -392,6 +392,125 @@ fn rejects_invalid_switch_control_flow() -> TestResult {
 }
 
 #[test]
+fn supports_try_finally_statements() -> TestResult {
+    expect_value(
+        r"
+        let value = 0;
+        try {
+            value = 20;
+        } finally {
+            value = value + 22;
+        }
+        value
+        ",
+        &Value::Number(42.0),
+    )?;
+
+    expect_value(
+        r#"
+        let value = 0;
+        try {
+            throw "caught";
+        } catch (error) {
+            if (error === "caught") {
+                value = 20;
+            }
+        } finally {
+            value = value + 22;
+        }
+        value
+        "#,
+        &Value::Number(42.0),
+    )?;
+
+    expect_value(
+        r#"
+        let value = 0;
+        try {
+            try {
+                throw "boom";
+            } finally {
+                value = 42;
+            }
+        } catch (error) {
+            value = value;
+        }
+        value
+        "#,
+        &Value::Number(42.0),
+    )?;
+
+    expect_value(
+        r"
+        try {
+            42;
+        } finally {
+            0;
+        }
+        ",
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
+fn propagates_try_finally_completion() -> TestResult {
+    expect_value(
+        r"
+        let pick = function() {
+            try {
+                return 1;
+            } finally {
+                return 42;
+            }
+        };
+        pick()
+        ",
+        &Value::Number(42.0),
+    )?;
+
+    expect_value(
+        r#"
+        let caught = "none";
+        try {
+            try {
+                throw "try";
+            } finally {
+                throw "finally";
+            }
+        } catch (error) {
+            caught = error;
+        }
+        caught
+        "#,
+        &Value::String("finally".to_owned()),
+    )?;
+
+    expect_value(
+        r"
+        let value = 0;
+        while (true) {
+            try {
+                value = 42;
+            } finally {
+                break;
+            }
+            value = 0;
+        }
+        value
+        ",
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
+fn rejects_try_without_catch_or_finally() -> TestResult {
+    let Err(error) = eval("try {}") else {
+        return Err("expected try without catch or finally to fail".into());
+    };
+    ensure_error_contains(&error, "expected 'catch' or 'finally'")
+}
+
+#[test]
 fn rejects_break_and_continue_outside_loops() -> TestResult {
     let Err(error) = eval("break;") else {
         return Err("expected top-level break to fail".into());

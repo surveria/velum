@@ -123,11 +123,11 @@ impl Context {
                 discriminant,
                 cases,
             } => self.eval_switch(discriminant, cases),
-            Stmt::TryCatch {
+            Stmt::Try {
                 body,
-                catch_param,
-                catch_body,
-            } => self.eval_try_catch(body, catch_param, catch_body),
+                catch,
+                finally_body,
+            } => self.eval_try(body, catch.as_ref(), finally_body.as_deref()),
             Stmt::Break => Ok(Completion::Break),
             Stmt::Continue => Ok(Completion::Continue),
             Stmt::Throw(expr) => {
@@ -172,11 +172,19 @@ impl Context {
                 self.hoist_statement_vars(body)
             }
             Stmt::Switch { cases, .. } => self.hoist_switch_vars(cases),
-            Stmt::TryCatch {
-                body, catch_body, ..
+            Stmt::Try {
+                body,
+                catch,
+                finally_body,
             } => {
                 self.hoist_var_declarations(body)?;
-                self.hoist_var_declarations(catch_body)
+                if let Some(catch) = catch {
+                    self.hoist_var_declarations(&catch.body)?;
+                }
+                if let Some(finally_body) = finally_body {
+                    self.hoist_var_declarations(finally_body)?;
+                }
+                Ok(())
             }
             Stmt::VarDecl {
                 name,
@@ -348,46 +356,6 @@ impl Context {
             }
         }
         Ok(Completion::Normal(last))
-    }
-
-    fn eval_try_catch(
-        &mut self,
-        body: &[Stmt],
-        catch_param: &str,
-        catch_body: &[Stmt],
-    ) -> Result<Completion> {
-        match self.eval_block(body)? {
-            Completion::Normal(value) => Ok(Completion::Normal(value)),
-            Completion::Throw(value) => self.eval_catch(catch_param, value, catch_body),
-            completion => Ok(completion),
-        }
-    }
-
-    fn eval_catch(
-        &mut self,
-        catch_param: &str,
-        value: Value,
-        catch_body: &[Stmt],
-    ) -> Result<Completion> {
-        let previous = self.active_bindings_mut().remove(catch_param);
-        if previous.is_none() {
-            self.ensure_binding_capacity(catch_param)?;
-        }
-        self.checked_value(value.clone())?;
-        self.active_bindings_mut().insert(
-            catch_param.to_owned(),
-            BindingCell::new(value, true, DeclKind::Let),
-        );
-        let result = self.eval_block(catch_body);
-        let removed = self.active_bindings_mut().remove(catch_param);
-        if removed.is_none() {
-            return Err(Error::runtime("catch binding disappeared"));
-        }
-        if let Some(previous) = previous {
-            self.active_bindings_mut()
-                .insert(catch_param.to_owned(), previous);
-        }
-        result
     }
 
     fn eval_unary(op: UnaryOp, value: &Value) -> Result<Value> {
@@ -678,7 +646,7 @@ impl Context {
         Ok(())
     }
 
-    fn ensure_binding_capacity(&self, name: &str) -> Result<()> {
+    pub(crate) fn ensure_binding_capacity(&self, name: &str) -> Result<()> {
         if self.active_bindings().contains(name) {
             return Ok(());
         }
@@ -730,7 +698,7 @@ impl Context {
         &self.globals
     }
 
-    fn active_bindings_mut(&mut self) -> &mut BindingScope {
+    pub(crate) fn active_bindings_mut(&mut self) -> &mut BindingScope {
         if let Some(scope) = self.locals.last_mut() {
             return scope;
         }
@@ -757,7 +725,7 @@ impl Context {
         }
     }
 
-    fn checked_value(&self, value: Value) -> Result<Value> {
+    pub(crate) fn checked_value(&self, value: Value) -> Result<Value> {
         match &value {
             Value::String(text) => self.check_string_len(text)?,
             Value::Error(error) => self.check_string_len(error.message())?,
