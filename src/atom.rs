@@ -11,6 +11,10 @@ impl AtomId {
             .map_err(|_| Error::limit("atom table exceeded supported range"))?;
         Ok(Self(id))
     }
+
+    fn index(self) -> Result<usize> {
+        usize::try_from(self.0).map_err(|_| Error::limit("atom id exceeded supported range"))
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -48,5 +52,12 @@ impl AtomTable {
 
     pub fn get(&self, name: &str) -> Option<AtomId> {
         self.ids.get(name).copied()
+    }
+
+    pub fn name(&self, id: AtomId) -> Result<&str> {
+        self.names
+            .get(id.index()?)
+            .map(String::as_str)
+            .ok_or_else(|| Error::runtime("atom id is not defined"))
     }
 }

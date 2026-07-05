@@ -2,7 +2,7 @@ use crate::{
     ast::Expr,
     error::{Error, Result},
     runtime::Context,
-    runtime_object::PropertyEnumerable,
+    runtime_object::{ObjectPropertyInit, PropertyEnumerable},
     value::{NativeFunctionId, ObjectId, Value},
 };
 
@@ -32,19 +32,26 @@ impl Context {
     pub(super) fn construct_boolean_object(&mut self, args: &[Expr]) -> Result<Value> {
         self.eval_boolean_argument(args)?;
         let prototype = self.boolean_constructor_prototype()?;
+        let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_with_prototype(
             Some(prototype),
+            constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
         )
     }
 
     fn boolean_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<ObjectId> {
+        let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_with_prototype_property(
             None,
-            OBJECT_CONSTRUCTOR_PROPERTY.to_owned(),
-            constructor,
-            PropertyEnumerable::No,
+            ObjectPropertyInit::new(
+                constructor_key,
+                OBJECT_CONSTRUCTOR_PROPERTY,
+                constructor,
+                PropertyEnumerable::No,
+            ),
+            constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
         )

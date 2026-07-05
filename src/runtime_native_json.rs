@@ -26,9 +26,12 @@ impl Context {
             return Ok(binding.value());
         }
 
-        let object = self
-            .objects
-            .create_empty_data_object(self.limits.max_objects, self.limits.max_object_properties)?;
+        let constructor_key = self.object_constructor_property_key()?;
+        let object = self.objects.create_empty_data_object(
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
         self.define_json_method(object, JSON_PARSE_NAME, NativeFunctionKind::JsonParse)?;
         self.define_json_method(
             object,
@@ -73,12 +76,7 @@ impl Context {
         kind: NativeFunctionKind,
     ) -> Result<()> {
         let function = self.create_native_function(kind, Value::Undefined);
-        self.objects.define_non_enumerable(
-            object,
-            name.to_owned(),
-            function,
-            self.limits.max_object_properties,
-        )
+        self.define_non_enumerable_object_property(object, name, function)
     }
 
     fn eval_json_args(&mut self, args: &[Expr]) -> Result<Vec<Value>> {
@@ -118,10 +116,13 @@ impl Context {
         let mut properties = Vec::with_capacity(object.len());
         for (key, value) in object {
             self.check_string_len(&key)?;
-            properties.push((key, self.value_from_json(value)?));
+            let property = self.intern_property_key(&key)?;
+            properties.push((property, key, self.value_from_json(value)?));
         }
+        let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_data_object(
             properties,
+            constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
         )
@@ -189,7 +190,7 @@ impl Context {
         self.check_string_len(&output)?;
         let mut has_property = false;
 
-        for key in self.objects.own_keys(id)? {
+        for key in self.objects.own_keys(id, &self.atoms)? {
             let value = self.get_property_value(&Value::Object(id), &key)?;
             let Some(serialized_value) = self.stringify_json_value(&value, stack)? else {
                 continue;

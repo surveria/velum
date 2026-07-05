@@ -191,6 +191,40 @@ fn tracks_atoms_for_bindings_without_interning_missing_names() -> TestResult {
 }
 
 #[test]
+fn tracks_atoms_for_object_property_keys_without_interning_missing_properties() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let initial_atoms = vm.resource_usage().atom_count;
+    let value = vm.context().eval("let bag = { alpha: 1 }; bag.alpha")?;
+    ensure_value(&value, &Value::Number(1.0))?;
+    let object_atoms = vm.resource_usage().atom_count;
+    ensure_greater_than(object_atoms, initial_atoms, "object property atoms")?;
+
+    let value = vm.context().eval("bag.missing")?;
+    ensure_value(&value, &Value::Undefined)?;
+    ensure_usize(vm.resource_usage().atom_count, object_atoms)?;
+
+    let value = vm.context().eval(
+        r#"
+        bag.beta = 2;
+        bag["gamma"] = 3;
+        let keys = "";
+        for (let key in bag) {
+            keys = keys + key + ":";
+        }
+        keys + (bag.beta + bag.gamma)
+        "#,
+    )?;
+    ensure_value(&value, &Value::String("alpha:beta:gamma:5".to_owned()))?;
+    ensure_greater_than(
+        vm.resource_usage().atom_count,
+        object_atoms,
+        "mutated object property atoms",
+    )
+}
+
+#[test]
 fn preserves_binding_slot_updates_and_shadowing() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
@@ -398,6 +432,13 @@ fn ensure_positive(actual: usize, label: &str) -> TestResult {
         return Ok(());
     }
     Err(format!("expected positive {label}, got {actual}").into())
+}
+
+fn ensure_greater_than(actual: usize, minimum: usize, label: &str) -> TestResult {
+    if actual > minimum {
+        return Ok(());
+    }
+    Err(format!("expected {label} greater than {minimum}, got {actual}").into())
 }
 
 fn ensure_usize(actual: usize, expected: usize) -> TestResult {

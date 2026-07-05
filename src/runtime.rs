@@ -15,13 +15,13 @@ use crate::runtime_numeric::{
     bitwise_and, bitwise_or, bitwise_xor, compare_binary, numeric_binary, shift_left, shift_right,
     shift_right_unsigned,
 };
-use crate::runtime_object::ObjectHeap;
+use crate::runtime_object::{OBJECT_CONSTRUCTOR_PROPERTY, ObjectHeap, PropertyKey, PropertyLookup};
 use crate::runtime_property::{
     delete_property, enumerable_property_keys, get_property, has_property, property_key,
     set_property,
 };
 use crate::runtime_scope::BindingScope;
-use crate::value::{ErrorName, Value};
+use crate::value::{ErrorName, ObjectId, Value};
 
 #[path = "runtime_declaration.rs"]
 mod runtime_declaration;
@@ -140,6 +140,29 @@ impl Context {
         self.atoms.get(name)
     }
 
+    pub(crate) fn intern_property_key(&mut self, name: &str) -> Result<PropertyKey> {
+        self.intern_atom(name).map(PropertyKey::new)
+    }
+
+    pub(crate) fn property_lookup<'a>(&self, name: &'a str) -> PropertyLookup<'a> {
+        PropertyLookup::new(name, self.atom(name).map(PropertyKey::new))
+    }
+
+    pub(crate) fn object_constructor_property_key(&mut self) -> Result<PropertyKey> {
+        self.intern_property_key(OBJECT_CONSTRUCTOR_PROPERTY)
+    }
+
+    pub(crate) fn define_non_enumerable_object_property(
+        &mut self,
+        id: ObjectId,
+        name: &str,
+        value: Value,
+    ) -> Result<()> {
+        let key = self.intern_property_key(name)?;
+        self.objects
+            .define_non_enumerable(id, key, name, value, self.limits.max_object_properties)
+    }
+
     fn eval_program(&mut self, program: &Program) -> Result<Value> {
         self.hoist_var_declarations(&program.statements)?;
         self.eval_block(&program.statements)?.into_result()
@@ -254,10 +277,13 @@ impl Context {
         let mut values = Vec::with_capacity(properties.len());
         for property in properties {
             let value = self.eval_expr(&property.value)?;
-            values.push((property.key.clone(), value));
+            let key = self.intern_property_key(&property.key)?;
+            values.push((key, property.key.clone(), value));
         }
+        let constructor_key = self.intern_property_key(OBJECT_CONSTRUCTOR_PROPERTY)?;
         self.objects.create(
             values,
+            constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
         )
@@ -475,7 +501,11 @@ impl Context {
         if let Value::NativeFunction(id) = object {
             return self.get_native_function_property(*id, property);
         }
-        self.checked_value(get_property(&self.objects, object, property)?)
+        self.checked_value(get_property(
+            &self.objects,
+            object,
+            self.property_lookup(property),
+        )?)
     }
 
     pub(crate) fn set_property_value(
@@ -491,10 +521,12 @@ impl Context {
         if let Value::NativeFunction(id) = object {
             return self.set_native_function_property(*id, property, value);
         }
+        let key = self.intern_property_key(&property)?;
         set_property(
             &mut self.objects,
             object,
-            property,
+            key,
+            &property,
             value,
             self.limits.max_object_properties,
         )
@@ -515,14 +547,15 @@ impl Context {
                 .delete_native_function_property(*id, property)
                 .map(Value::Bool);
         }
-        delete_property(&mut self.objects, object, property).map(Value::Bool)
+        let lookup = self.property_lookup(property);
+        delete_property(&mut self.objects, object, lookup).map(Value::Bool)
     }
 
     fn has_property_value(&self, object: &Value, property: &str) -> Result<bool> {
         match object {
             Value::Function(id) => self.has_function_property(*id, property),
             Value::NativeFunction(id) => self.has_native_function_property(*id, property),
-            _ => has_property(&self.objects, object, property),
+            _ => has_property(&self.objects, object, self.property_lookup(property)),
         }
     }
 
@@ -533,7 +566,7 @@ impl Context {
         if let Value::NativeFunction(id) = object {
             return self.native_function_enumerable_keys(*id);
         }
-        enumerable_property_keys(&self.objects, object)
+        enumerable_property_keys(&self.objects, &self.atoms, object)
     }
 
     fn eval_print_call(&mut self, args: &[Expr]) -> Result<Value> {
@@ -571,8 +604,10 @@ impl Context {
             )));
         };
         let prototype = self.function_constructor_prototype(id)?;
+        let constructor_key = self.object_constructor_property_key()?;
         let object = self.objects.create_with_prototype(
             prototype,
+            constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
         )?;

@@ -1,6 +1,7 @@
+use crate::atom::AtomTable;
 use crate::error::{Error, Result};
 use crate::runtime_assertions::error_property;
-use crate::runtime_object::ObjectHeap;
+use crate::runtime_object::{ObjectHeap, PropertyKey, PropertyLookup};
 use crate::value::Value;
 
 const NULLISH_PROPERTY_DELETE_ERROR: &str = "Cannot convert undefined or null to object";
@@ -15,26 +16,35 @@ pub fn property_key(value: &Value) -> String {
     }
 }
 
-pub fn get_property(objects: &ObjectHeap, object: &Value, property: &str) -> Result<Value> {
+pub fn get_property(
+    objects: &ObjectHeap,
+    object: &Value,
+    property: PropertyLookup<'_>,
+) -> Result<Value> {
     match object {
-        Value::Error(error) => Ok(error_property(error, property)),
+        Value::Error(error) => Ok(error_property(error, property.name())),
         Value::Object(id) => objects.get(*id, property),
-        Value::String(value) => string_property(value, property),
+        Value::String(value) => string_property(value, property.name()),
         value => Err(Error::runtime(format!(
-            "member access '{property}' is not supported for {}",
+            "member access '{}' is not supported for {}",
+            property.name(),
             value.type_name()
         ))),
     }
 }
 
-pub fn has_property(objects: &ObjectHeap, object: &Value, property: &str) -> Result<bool> {
+pub fn has_property(
+    objects: &ObjectHeap,
+    object: &Value,
+    property: PropertyLookup<'_>,
+) -> Result<bool> {
     match object {
         Value::Error(_) => Ok(matches!(
-            property,
+            property.name(),
             ERROR_NAME_PROPERTY | ERROR_MESSAGE_PROPERTY
         )),
         Value::Object(id) => objects.has(*id, property),
-        Value::String(value) => string_has_property(value, property),
+        Value::String(value) => string_has_property(value, property.name()),
         value => Err(Error::runtime(format!(
             "operator 'in' is not supported for {}",
             value.type_name()
@@ -42,10 +52,14 @@ pub fn has_property(objects: &ObjectHeap, object: &Value, property: &str) -> Res
     }
 }
 
-pub fn enumerable_property_keys(objects: &ObjectHeap, object: &Value) -> Result<Vec<String>> {
+pub fn enumerable_property_keys(
+    objects: &ObjectHeap,
+    atoms: &AtomTable,
+    object: &Value,
+) -> Result<Vec<String>> {
     match object {
         Value::Undefined | Value::Null => Err(Error::runtime(NULLISH_PROPERTY_DELETE_ERROR)),
-        Value::Object(id) => objects.keys(*id),
+        Value::Object(id) => objects.keys(*id, atoms),
         Value::Error(_) => Ok(vec![
             ERROR_NAME_PROPERTY.to_owned(),
             ERROR_MESSAGE_PROPERTY.to_owned(),
@@ -62,20 +76,25 @@ pub fn enumerable_property_keys(objects: &ObjectHeap, object: &Value) -> Result<
 pub fn set_property(
     objects: &mut ObjectHeap,
     object: &Value,
-    property: String,
+    property: PropertyKey,
+    property_name: &str,
     value: Value,
     max_properties: usize,
 ) -> Result<()> {
     let Value::Object(id) = object else {
         return Err(Error::runtime(format!(
-            "property assignment '{property}' is not supported for {}",
+            "property assignment '{property_name}' is not supported for {}",
             object.type_name()
         )));
     };
-    objects.set(*id, property, value, max_properties)
+    objects.set(*id, property, property_name, value, max_properties)
 }
 
-pub fn delete_property(objects: &mut ObjectHeap, object: &Value, property: &str) -> Result<bool> {
+pub fn delete_property(
+    objects: &mut ObjectHeap,
+    object: &Value,
+    property: PropertyLookup<'_>,
+) -> Result<bool> {
     match object {
         Value::Object(id) => objects.delete(*id, property),
         Value::Undefined | Value::Null => Err(Error::runtime(NULLISH_PROPERTY_DELETE_ERROR)),
