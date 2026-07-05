@@ -81,6 +81,71 @@ fn propagates_while_completion() -> TestResult {
 }
 
 #[test]
+fn supports_break_and_continue() -> TestResult {
+    expect_value(
+        r"
+        let values = [20, 1, 22, 100];
+        let index = 0;
+        let total = 0;
+        while (index < values.length) {
+            if (index === 1) {
+                index = index + 1;
+                continue;
+            }
+            if (index === 3) {
+                break;
+            }
+            total = total + values[index];
+            index = index + 1;
+        }
+        total
+        ",
+        &Value::Number(42.0),
+    )?;
+
+    expect_value(
+        r"
+        let index = 0;
+        let total = 0;
+        while (index < 5) {
+            index = index + 1;
+            try {
+                if (index === 2) {
+                    continue;
+                }
+                if (index === 4) {
+                    break;
+                }
+            } catch (error) {
+                total = 0;
+            }
+            total = total + index;
+        }
+        total
+        ",
+        &Value::Number(4.0),
+    )
+}
+
+#[test]
+fn rejects_break_and_continue_outside_loops() -> TestResult {
+    let Err(error) = eval("break;") else {
+        return Err("expected top-level break to fail".into());
+    };
+    ensure_error_contains(&error, "break statement outside loop")?;
+
+    let Err(error) = eval("continue;") else {
+        return Err("expected top-level continue to fail".into());
+    };
+    ensure_error_contains(&error, "continue statement outside loop")?;
+
+    let Err(error) = eval("let fail = function() { break; }; fail();") else {
+        return Err("expected function-local break outside a loop to fail".into());
+    };
+    ensure_error_contains(&error, "break statement outside loop")
+}
+
+#[test]
 fn limits_infinite_while_loops() -> TestResult {
     let limits = RuntimeLimits {
         max_runtime_steps: 16,
