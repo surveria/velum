@@ -38,6 +38,8 @@ const PATH_TEST262_ARRAY_BUILTIN: &str =
     "tests/corpora/test262/active/language/expressions/array_builtin.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_METHODS: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_methods.js";
+const PATH_TEST262_ARRAY_PROTOTYPE_INCLUDES: &str =
+    "tests/corpora/test262/active/language/expressions/array_prototype_includes.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_JOIN: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_join.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_INDEX_OF: &str =
@@ -211,6 +213,11 @@ fn test262_object_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/array_prototype_join",
             path: PATH_TEST262_ARRAY_PROTOTYPE_JOIN,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/array_prototype_includes",
+            path: PATH_TEST262_ARRAY_PROTOTYPE_INCLUDES,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
