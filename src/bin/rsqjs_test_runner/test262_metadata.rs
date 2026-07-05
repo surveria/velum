@@ -8,22 +8,22 @@ const FRONTMATTER_START: &str = "/*---";
 const FRONTMATTER_END: &str = "---*/";
 const HARNESS_DIR: &str = "harness";
 const HARNESS_ASSERT: &str = "assert.js";
+const HARNESS_DONEPRINT_HANDLE: &str = "doneprintHandle.js";
 const HARNESS_STA: &str = "sta.js";
 const STRICT_DIRECTIVE: &str = "\"use strict\";\n";
 const DEFAULT_VARIANT: &str = "default";
+const MODULE_VARIANT: &str = "module";
 const STRICT_VARIANT: &str = "strict";
 const RAW_VARIANT: &str = "raw";
-const UNSUPPORTED_VARIANT: &str = "unsupported";
 const DEFAULT_HARNESS_FILES: [&str; 2] = [HARNESS_STA, HARNESS_ASSERT];
+const ASYNC_COMPLETE_OUTPUT: &str = "Test262:AsyncTestComplete";
+const ASYNC_FAILURE_PREFIX: &str = "Test262:AsyncTestFailure:";
 const FLAG_ASYNC: &str = "async";
-const FLAG_CAN_BLOCK_FALSE: &str = "CanBlockIsFalse";
-const FLAG_CAN_BLOCK_TRUE: &str = "CanBlockIsTrue";
 const FLAG_MODULE: &str = "module";
 const FLAG_NO_STRICT: &str = "noStrict";
 const FLAG_ONLY_STRICT: &str = "onlyStrict";
 const FLAG_RAW: &str = "raw";
 const NEGATIVE_PHASE_PARSE: &str = "parse";
-const NEGATIVE_PHASE_RESOLUTION: &str = "resolution";
 const NEGATIVE_PHASE_RUNTIME: &str = "runtime";
 const TEST262_MAX_BINDINGS: usize = 65_536;
 const TEST262_MAX_OBJECT_PROPERTIES: usize = 65_536;
@@ -93,7 +93,6 @@ assert.throws = function (expectedErrorConstructor, func, message) {
 pub enum Test262Outcome {
     Passed,
     Failed(String),
-    Skipped(String),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -126,13 +125,12 @@ struct NegativeMetadata {
 #[derive(Debug, Clone, Eq, PartialEq)]
 enum VariantPlan {
     Run { name: &'static str, strict: bool },
-    Skip { name: &'static str, reason: String },
 }
 
 impl VariantPlan {
     const fn name(&self) -> &'static str {
         match self {
-            Self::Run { name, .. } | Self::Skip { name, .. } => name,
+            Self::Run { name, .. } => name,
         }
     }
 }
@@ -157,7 +155,6 @@ pub fn execute_test262_path(
             VariantPlan::Run { strict, .. } => {
                 execute_variant(test262_dir, relative_path, &source, &metadata, strict)
             }
-            VariantPlan::Skip { reason, .. } => Test262Outcome::Skipped(reason),
         };
         results.push(Test262CaseResult { id, outcome });
     }
@@ -187,23 +184,16 @@ fn parse_metadata_yaml(yaml: &str, relative_path: &str) -> anyhow::Result<Test26
 }
 
 fn variant_plans(metadata: &Test262Metadata) -> Vec<VariantPlan> {
-    let unsupported = unsupported_flags(metadata);
-    if !unsupported.is_empty() {
-        return vec![VariantPlan::Skip {
-            name: UNSUPPORTED_VARIANT,
-            reason: format!("unsupported Test262 flags: {}", unsupported.join(", ")),
-        }];
-    }
-    if has_unsupported_negative_phase(metadata) {
-        return vec![VariantPlan::Skip {
-            name: UNSUPPORTED_VARIANT,
-            reason: format!("unsupported Test262 negative phase: {NEGATIVE_PHASE_RESOLUTION}"),
-        }];
-    }
     if metadata.has_flag(FLAG_RAW) {
         return vec![VariantPlan::Run {
             name: RAW_VARIANT,
             strict: false,
+        }];
+    }
+    if metadata.has_flag(FLAG_MODULE) {
+        return vec![VariantPlan::Run {
+            name: MODULE_VARIANT,
+            strict: true,
         }];
     }
     if metadata.has_flag(FLAG_ONLY_STRICT) {
@@ -228,28 +218,6 @@ fn variant_plans(metadata: &Test262Metadata) -> Vec<VariantPlan> {
             strict: true,
         },
     ]
-}
-
-fn unsupported_flags(metadata: &Test262Metadata) -> Vec<&'static str> {
-    let mut flags = Vec::new();
-    for flag in [
-        FLAG_MODULE,
-        FLAG_ASYNC,
-        FLAG_CAN_BLOCK_FALSE,
-        FLAG_CAN_BLOCK_TRUE,
-    ] {
-        if metadata.has_flag(flag) {
-            flags.push(flag);
-        }
-    }
-    flags
-}
-
-fn has_unsupported_negative_phase(metadata: &Test262Metadata) -> bool {
-    metadata
-        .negative
-        .as_ref()
-        .is_some_and(|negative| negative.phase == NEGATIVE_PHASE_RESOLUTION)
 }
 
 fn execute_variant(
@@ -289,9 +257,10 @@ fn execute_variant_result(
     }
 
     result.with_context(|| format!("upstream Test262 case '{relative_path}' failed"))?;
-    if !context.output().is_empty() {
-        bail!("upstream Test262 case '{relative_path}' produced host output");
+    if metadata.has_flag(FLAG_ASYNC) {
+        return ensure_async_completion(relative_path, context.output());
     }
+    ensure_no_host_output(relative_path, context.output())?;
     Ok(())
 }
 
@@ -299,19 +268,25 @@ fn harness_sources(
     test262_dir: &Path,
     metadata: &Test262Metadata,
 ) -> anyhow::Result<Vec<HarnessSource>> {
+    harness_names(metadata)
+        .into_iter()
+        .map(|name| read_harness_source(test262_dir, &name))
+        .collect()
+}
+
+fn harness_names(metadata: &Test262Metadata) -> Vec<String> {
     let mut names = Vec::new();
     let mut seen = BTreeSet::new();
     for name in DEFAULT_HARNESS_FILES {
         push_harness_name(&mut names, &mut seen, name);
     }
+    if metadata.has_flag(FLAG_ASYNC) {
+        push_harness_name(&mut names, &mut seen, HARNESS_DONEPRINT_HANDLE);
+    }
     for name in &metadata.includes {
         push_harness_name(&mut names, &mut seen, name);
     }
-
     names
-        .into_iter()
-        .map(|name| read_harness_source(test262_dir, &name))
-        .collect()
 }
 
 fn push_harness_name(names: &mut Vec<String>, seen: &mut BTreeSet<String>, name: &str) {
@@ -350,6 +325,38 @@ fn variant_source(source: &str, strict: bool) -> Cow<'_, str> {
         return Cow::Owned(format!("{STRICT_DIRECTIVE}{source}"));
     }
     Cow::Borrowed(source)
+}
+
+fn ensure_no_host_output(relative_path: &str, output: &[String]) -> anyhow::Result<()> {
+    if output.is_empty() {
+        return Ok(());
+    }
+    bail!("upstream Test262 case '{relative_path}' produced host output")
+}
+
+fn ensure_async_completion(relative_path: &str, output: &[String]) -> anyhow::Result<()> {
+    let mut completion_count = 0usize;
+    for line in output {
+        if line == ASYNC_COMPLETE_OUTPUT {
+            completion_count = completion_count.saturating_add(1);
+        } else if line.starts_with(ASYNC_FAILURE_PREFIX) {
+            bail!("upstream async Test262 case '{relative_path}' signaled failure: {line}");
+        } else {
+            bail!(
+                "upstream async Test262 case '{relative_path}' produced unexpected output: {line}"
+            );
+        }
+    }
+
+    if completion_count == 1 {
+        return Ok(());
+    }
+    if completion_count == 0 {
+        bail!("upstream async Test262 case '{relative_path}' did not signal completion");
+    }
+    bail!(
+        "upstream async Test262 case '{relative_path}' signaled completion {completion_count} times"
+    )
 }
 
 fn ensure_negative_result(
@@ -444,12 +451,15 @@ struct HarnessSource {
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_VARIANT, FLAG_ASYNC, FLAG_NO_STRICT, FLAG_ONLY_STRICT, FLAG_RAW, RAW_VARIANT,
-        STRICT_VARIANT, Test262Metadata, VariantPlan, parse_metadata, runtime_error_matches,
-        variant_id, variant_plans,
+        ASYNC_COMPLETE_OUTPUT, ASYNC_FAILURE_PREFIX, DEFAULT_VARIANT, FLAG_ASYNC, FLAG_MODULE,
+        FLAG_NO_STRICT, FLAG_ONLY_STRICT, FLAG_RAW, HARNESS_ASSERT, HARNESS_DONEPRINT_HANDLE,
+        HARNESS_STA, MODULE_VARIANT, RAW_VARIANT, STRICT_VARIANT, Test262Metadata, VariantPlan,
+        ensure_async_completion, harness_names, parse_metadata, runtime_error_matches, variant_id,
+        variant_plans,
     };
 
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+    const FLAG_CAN_BLOCK_FALSE: &str = "CanBlockIsFalse";
 
     #[test]
     fn parses_test262_frontmatter() -> TestResult {
@@ -521,15 +531,73 @@ bad source
     }
 
     #[test]
-    fn skips_unsupported_flags() -> TestResult {
-        let plans = variant_plans(&metadata_with_flags(&[FLAG_ASYNC]));
-        let Some(VariantPlan::Skip { reason, .. }) = plans.first() else {
-            return Err("expected unsupported flag skip".into());
+    fn plans_async_tests_as_runnable_variants() -> TestResult {
+        ensure_plans(
+            &variant_plans(&metadata_with_flags(&[FLAG_ASYNC])),
+            &[
+                VariantPlan::Run {
+                    name: DEFAULT_VARIANT,
+                    strict: false,
+                },
+                VariantPlan::Run {
+                    name: STRICT_VARIANT,
+                    strict: true,
+                },
+            ],
+        )
+    }
+
+    #[test]
+    fn plans_module_tests_as_one_strict_variant() -> TestResult {
+        ensure_plans(
+            &variant_plans(&metadata_with_flags(&[FLAG_MODULE])),
+            &[VariantPlan::Run {
+                name: MODULE_VARIANT,
+                strict: true,
+            }],
+        )
+    }
+
+    #[test]
+    fn plans_canblock_tests_as_runnable_variants() -> TestResult {
+        ensure_plans(
+            &variant_plans(&metadata_with_flags(&[FLAG_CAN_BLOCK_FALSE])),
+            &[
+                VariantPlan::Run {
+                    name: DEFAULT_VARIANT,
+                    strict: false,
+                },
+                VariantPlan::Run {
+                    name: STRICT_VARIANT,
+                    strict: true,
+                },
+            ],
+        )
+    }
+
+    #[test]
+    fn includes_doneprint_handle_for_async_tests() -> TestResult {
+        ensure_texts(
+            &harness_names(&metadata_with_flags(&[FLAG_ASYNC])),
+            &[HARNESS_STA, HARNESS_ASSERT, HARNESS_DONEPRINT_HANDLE],
+        )
+    }
+
+    #[test]
+    fn accepts_single_async_completion_signal() -> TestResult {
+        ensure_unit(ensure_async_completion(
+            "test/example.js",
+            &[ASYNC_COMPLETE_OUTPUT.to_owned()],
+        ))
+    }
+
+    #[test]
+    fn rejects_async_failure_signal() -> TestResult {
+        let output = format!("{ASYNC_FAILURE_PREFIX}Test262Error: bad");
+        let Err(error) = ensure_async_completion("test/example.js", &[output]) else {
+            return Err("expected async failure signal to fail".into());
         };
-        if reason.contains(FLAG_ASYNC) {
-            return Ok(());
-        }
-        Err(format!("expected skip reason to mention '{FLAG_ASYNC}', got '{reason}'").into())
+        ensure_text_contains(&error.to_string(), "signaled failure")
     }
 
     #[test]
@@ -589,10 +657,21 @@ bad source
         Err(format!("expected '{expected}', got '{actual}'").into())
     }
 
+    fn ensure_text_contains(actual: &str, expected: &str) -> TestResult {
+        if actual.contains(expected) {
+            return Ok(());
+        }
+        Err(format!("expected '{actual}' to contain '{expected}'").into())
+    }
+
     fn ensure_bool(value: bool) -> TestResult {
         if value {
             return Ok(());
         }
         Err("expected true".into())
+    }
+
+    fn ensure_unit(result: anyhow::Result<()>) -> TestResult {
+        result.map_err(Into::into)
     }
 }
