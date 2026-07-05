@@ -2,6 +2,8 @@ use super::super::DifferentialCase;
 
 const PATH_QUICKJS_PRINT_ARITHMETIC: &str =
     "tests/corpora/quickjs_differential/active/print_arithmetic.js";
+const PATH_QUICKJS_NUMERIC_LITERALS: &str =
+    "tests/corpora/quickjs_differential/active/numeric_literals.js";
 const PATH_QUICKJS_PRINT_BINDING: &str =
     "tests/corpora/quickjs_differential/active/print_binding.js";
 const PATH_QUICKJS_STRING_ESCAPE_SEQUENCES: &str =
@@ -107,6 +109,10 @@ fn quickjs_language_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "print_arithmetic",
             path: PATH_QUICKJS_PRINT_ARITHMETIC,
+        },
+        DifferentialCase {
+            id: "numeric_literals",
+            path: PATH_QUICKJS_NUMERIC_LITERALS,
         },
         DifferentialCase {
             id: "print_binding",
