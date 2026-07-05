@@ -191,6 +191,30 @@ fn tracks_atoms_for_bindings_without_interning_missing_names() -> TestResult {
 }
 
 #[test]
+fn preserves_binding_slot_updates_and_shadowing() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let value = vm.context().eval(
+        r"
+        let camera = 1;
+        {
+            let camera = 10;
+            camera = camera + 5;
+        }
+        camera = camera + 1;
+        camera
+        ",
+    )?;
+
+    ensure_value(&value, &Value::Number(2.0))?;
+    ensure_optional_value(
+        vm.context().get_global("camera").as_ref(),
+        &Value::Number(2.0),
+    )
+}
+
+#[test]
 fn evaluates_compiled_script_repeatedly_in_one_vm() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();

@@ -123,7 +123,7 @@ impl Context {
         self.atoms.len()
     }
 
-    pub(crate) fn global_binding_count(&self) -> usize {
+    pub(crate) const fn global_binding_count(&self) -> usize {
         self.globals.len()
     }
 
