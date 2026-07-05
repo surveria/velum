@@ -97,6 +97,11 @@ pub enum Expr {
         name: String,
         expr: Box<Self>,
     },
+    CompoundAssignment {
+        op: BinaryOp,
+        target: Box<Self>,
+        expr: Box<Self>,
+    },
     PropertyAssignment {
         object: Box<Self>,
         property: String,

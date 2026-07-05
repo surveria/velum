@@ -7,6 +7,9 @@ use crate::lexer::{Token, TokenKind};
 use crate::runtime_limits::RuntimeLimits;
 use crate::value::Value;
 
+#[path = "parser_assignment.rs"]
+mod parser_assignment;
+
 pub fn parse(tokens: Vec<Token>, limits: RuntimeLimits) -> Result<Program> {
     Parser::new(tokens, limits).parse()
 }
@@ -333,32 +336,6 @@ impl Parser {
 
     fn expression(&mut self) -> Result<Expr> {
         self.with_expression_depth(Self::assignment)
-    }
-
-    fn assignment(&mut self) -> Result<Expr> {
-        let expr = self.conditional()?;
-        if self.match_kind(&TokenKind::Equal) {
-            let offset = self.previous_offset();
-            let value = self.assignment()?;
-            return match expr {
-                Expr::Identifier(name) => Ok(Expr::Assignment {
-                    name,
-                    expr: Box::new(value),
-                }),
-                Expr::Member { object, property } => Ok(Expr::PropertyAssignment {
-                    object,
-                    property,
-                    expr: Box::new(value),
-                }),
-                Expr::ComputedMember { object, property } => Ok(Expr::ComputedPropertyAssignment {
-                    object,
-                    property,
-                    expr: Box::new(value),
-                }),
-                _ => Err(Error::parse("invalid assignment target", offset)),
-            };
-        }
-        Ok(expr)
     }
 
     fn conditional(&mut self) -> Result<Expr> {

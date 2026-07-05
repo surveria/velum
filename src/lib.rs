@@ -7,6 +7,7 @@ mod lexer;
 mod parser;
 mod runtime;
 mod runtime_assertions;
+mod runtime_assignment;
 mod runtime_completion;
 mod runtime_engine;
 mod runtime_lexical_scope;

@@ -39,11 +39,16 @@ pub enum TokenKind {
     Undefined,
     Plus,
     PlusPlus,
+    PlusEqual,
     Minus,
     MinusMinus,
+    MinusEqual,
     Star,
+    StarEqual,
     Slash,
+    SlashEqual,
     Percent,
+    PercentEqual,
     Bang,
     Equal,
     EqualEqual,
@@ -55,6 +60,7 @@ pub enum TokenKind {
     Greater,
     GreaterEqual,
     Ampersand,
+    AmpersandEqual,
     AndAnd,
     OrOr,
     Question,
@@ -105,9 +111,9 @@ impl<'a> Lexer<'a> {
                 ch if is_identifier_start(ch) => self.identifier(offset)?,
                 '+' => self.plus_or_increment(offset),
                 '-' => self.minus_or_decrement(offset),
-                '*' => self.simple(TokenKind::Star),
-                '/' => self.simple(TokenKind::Slash),
-                '%' => self.simple(TokenKind::Percent),
+                '*' => self.simple_or_equal(offset, TokenKind::Star, TokenKind::StarEqual),
+                '/' => self.simple_or_equal(offset, TokenKind::Slash, TokenKind::SlashEqual),
+                '%' => self.simple_or_equal(offset, TokenKind::Percent, TokenKind::PercentEqual),
                 '?' => self.simple(TokenKind::Question),
                 ':' => self.simple(TokenKind::Colon),
                 '.' => self.simple(TokenKind::Dot),
@@ -163,6 +169,8 @@ impl<'a> Lexer<'a> {
                     self.advance();
                     if self.match_char('&') {
                         self.push(TokenKind::AndAnd, offset);
+                    } else if self.match_char('=') {
+                        self.push(TokenKind::AmpersandEqual, offset);
                     } else {
                         self.push(TokenKind::Ampersand, offset);
                     }
@@ -327,6 +335,8 @@ impl<'a> Lexer<'a> {
         self.advance();
         if self.match_char('+') {
             self.push(TokenKind::PlusPlus, offset);
+        } else if self.match_char('=') {
+            self.push(TokenKind::PlusEqual, offset);
         } else {
             self.push(TokenKind::Plus, offset);
         }
@@ -336,8 +346,19 @@ impl<'a> Lexer<'a> {
         self.advance();
         if self.match_char('-') {
             self.push(TokenKind::MinusMinus, offset);
+        } else if self.match_char('=') {
+            self.push(TokenKind::MinusEqual, offset);
         } else {
             self.push(TokenKind::Minus, offset);
+        }
+    }
+
+    fn simple_or_equal(&mut self, offset: usize, plain: TokenKind, assigned: TokenKind) {
+        self.advance();
+        if self.match_char('=') {
+            self.push(assigned, offset);
+        } else {
+            self.push(plain, offset);
         }
     }
 
