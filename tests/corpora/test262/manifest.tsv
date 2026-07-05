@@ -18,3 +18,26 @@ math-abs-negative-zero	test/built-ins/Math/abs/S15.8.2.1_A2.js	run	official Test
 math-max-no-args	test/built-ins/Math/max/S15.8.2.11_A1.js	run	official Test262 Math.max no-args smoke
 math-pow-nan-exponent	test/built-ins/Math/pow/applying-the-exp-operator_A1.js	run	official Test262 Math.pow NaN exponent smoke
 math-sqrt-nan	test/built-ins/Math/sqrt/S15.8.2.17_A1.js	run	official Test262 Math.sqrt NaN smoke
+math-acos-nan	test/built-ins/Math/acos/S15.8.2.2_A1.js	run	official Test262 Math.acos NaN smoke
+math-asin-nan	test/built-ins/Math/asin/S15.8.2.3_A1.js	run	official Test262 Math.asin NaN smoke
+math-atan-nan	test/built-ins/Math/atan/S15.8.2.4_A1.js	run	official Test262 Math.atan NaN smoke
+math-atan2-nan	test/built-ins/Math/atan2/S15.8.2.5_A1.js	run	official Test262 Math.atan2 NaN smoke
+math-cbrt-special-values	test/built-ins/Math/cbrt/cbrt-specialValues.js	run	official Test262 Math.cbrt special values smoke
+math-cos-nan	test/built-ins/Math/cos/S15.8.2.7_A1.js	run	official Test262 Math.cos NaN smoke
+math-exp-nan	test/built-ins/Math/exp/S15.8.2.8_A1.js	run	official Test262 Math.exp NaN smoke
+math-expm1-special-values	test/built-ins/Math/expm1/expm1-specialVals.js	run	official Test262 Math.expm1 special values smoke
+math-log-nan	test/built-ins/Math/log/S15.8.2.10_A1.js	run	official Test262 Math.log NaN smoke
+math-log10-special-values	test/built-ins/Math/log10/Log10-specialVals.js	run	official Test262 Math.log10 special values smoke
+math-log1p-specific-results	test/built-ins/Math/log1p/specific-results.js	run	official Test262 Math.log1p specific results smoke
+math-log2-basic	test/built-ins/Math/log2/log2-basicTests.js	run	official Test262 Math.log2 basic results smoke
+math-sign-special-values	test/built-ins/Math/sign/sign-specialVals.js	run	official Test262 Math.sign special values smoke
+math-sin-nan	test/built-ins/Math/sin/S15.8.2.16_A1.js	run	official Test262 Math.sin NaN smoke
+math-tan-nan	test/built-ins/Math/tan/S15.8.2.18_A1.js	run	official Test262 Math.tan NaN smoke
+math-asinh-special-values	test/built-ins/Math/asinh/asinh-specialVals.js	run	official Test262 Math.asinh special values smoke
+math-acosh-nan-results	test/built-ins/Math/acosh/nan-returns.js	run	official Test262 Math.acosh NaN results smoke
+math-atanh-special-values	test/built-ins/Math/atanh/atanh-specialVals.js	run	official Test262 Math.atanh special values smoke
+math-cosh-special-values	test/built-ins/Math/cosh/cosh-specialVals.js	run	official Test262 Math.cosh special values smoke
+math-sinh-special-values	test/built-ins/Math/sinh/sinh-specialVals.js	run	official Test262 Math.sinh special values smoke
+math-tanh-special-values	test/built-ins/Math/tanh/tanh-specialVals.js	run	official Test262 Math.tanh special values smoke
+math-hypot-no-args	test/built-ins/Math/hypot/Math.hypot_NoArgs.js	run	official Test262 Math.hypot no-args smoke
+math-hypot-basic	test/built-ins/Math/hypot/Math.hypot_Success_2.js	run	official Test262 Math.hypot basic smoke

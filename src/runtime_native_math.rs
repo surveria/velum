@@ -8,8 +8,13 @@ use crate::{
 };
 
 use super::{
-    MATH_ABS_NAME, MATH_CEIL_NAME, MATH_FLOOR_NAME, MATH_MAX_NAME, MATH_MIN_NAME, MATH_NAME,
-    MATH_POW_NAME, MATH_ROUND_NAME, MATH_SQRT_NAME, MATH_TRUNC_NAME, NativeFunctionKind,
+    MATH_ABS_NAME, MATH_ACOS_NAME, MATH_ACOSH_NAME, MATH_ASIN_NAME, MATH_ASINH_NAME,
+    MATH_ATAN_NAME, MATH_ATAN2_NAME, MATH_ATANH_NAME, MATH_CBRT_NAME, MATH_CEIL_NAME,
+    MATH_COS_NAME, MATH_COSH_NAME, MATH_EXP_NAME, MATH_EXPM1_NAME, MATH_FLOOR_NAME,
+    MATH_HYPOT_NAME, MATH_LOG_NAME, MATH_LOG1P_NAME, MATH_LOG2_NAME, MATH_LOG10_NAME,
+    MATH_MAX_NAME, MATH_MIN_NAME, MATH_NAME, MATH_POW_NAME, MATH_ROUND_NAME, MATH_SIGN_NAME,
+    MATH_SIN_NAME, MATH_SINH_NAME, MATH_SQRT_NAME, MATH_TAN_NAME, MATH_TANH_NAME, MATH_TRUNC_NAME,
+    NativeFunctionKind,
 };
 
 const MATH_E_NAME: &str = "E";
@@ -42,13 +47,35 @@ impl Context {
         self.define_math_constant(object, MATH_SQRT2_NAME, SQRT_2)?;
 
         self.define_math_method(object, MATH_ABS_NAME, NativeFunctionKind::MathAbs)?;
+        self.define_math_method(object, MATH_ACOS_NAME, NativeFunctionKind::MathAcos)?;
+        self.define_math_method(object, MATH_ACOSH_NAME, NativeFunctionKind::MathAcosh)?;
+        self.define_math_method(object, MATH_ASIN_NAME, NativeFunctionKind::MathAsin)?;
+        self.define_math_method(object, MATH_ASINH_NAME, NativeFunctionKind::MathAsinh)?;
+        self.define_math_method(object, MATH_ATAN_NAME, NativeFunctionKind::MathAtan)?;
+        self.define_math_method(object, MATH_ATAN2_NAME, NativeFunctionKind::MathAtan2)?;
+        self.define_math_method(object, MATH_ATANH_NAME, NativeFunctionKind::MathAtanh)?;
+        self.define_math_method(object, MATH_CBRT_NAME, NativeFunctionKind::MathCbrt)?;
         self.define_math_method(object, MATH_CEIL_NAME, NativeFunctionKind::MathCeil)?;
+        self.define_math_method(object, MATH_COS_NAME, NativeFunctionKind::MathCos)?;
+        self.define_math_method(object, MATH_COSH_NAME, NativeFunctionKind::MathCosh)?;
+        self.define_math_method(object, MATH_EXP_NAME, NativeFunctionKind::MathExp)?;
+        self.define_math_method(object, MATH_EXPM1_NAME, NativeFunctionKind::MathExpm1)?;
         self.define_math_method(object, MATH_FLOOR_NAME, NativeFunctionKind::MathFloor)?;
+        self.define_math_method(object, MATH_HYPOT_NAME, NativeFunctionKind::MathHypot)?;
+        self.define_math_method(object, MATH_LOG_NAME, NativeFunctionKind::MathLog)?;
+        self.define_math_method(object, MATH_LOG10_NAME, NativeFunctionKind::MathLog10)?;
+        self.define_math_method(object, MATH_LOG1P_NAME, NativeFunctionKind::MathLog1p)?;
+        self.define_math_method(object, MATH_LOG2_NAME, NativeFunctionKind::MathLog2)?;
         self.define_math_method(object, MATH_MAX_NAME, NativeFunctionKind::MathMax)?;
         self.define_math_method(object, MATH_MIN_NAME, NativeFunctionKind::MathMin)?;
         self.define_math_method(object, MATH_POW_NAME, NativeFunctionKind::MathPow)?;
         self.define_math_method(object, MATH_ROUND_NAME, NativeFunctionKind::MathRound)?;
+        self.define_math_method(object, MATH_SIGN_NAME, NativeFunctionKind::MathSign)?;
+        self.define_math_method(object, MATH_SIN_NAME, NativeFunctionKind::MathSin)?;
+        self.define_math_method(object, MATH_SINH_NAME, NativeFunctionKind::MathSinh)?;
         self.define_math_method(object, MATH_SQRT_NAME, NativeFunctionKind::MathSqrt)?;
+        self.define_math_method(object, MATH_TAN_NAME, NativeFunctionKind::MathTan)?;
+        self.define_math_method(object, MATH_TANH_NAME, NativeFunctionKind::MathTanh)?;
         self.define_math_method(object, MATH_TRUNC_NAME, NativeFunctionKind::MathTrunc)?;
 
         let value = Value::Object(object);
@@ -57,18 +84,106 @@ impl Context {
     }
 
     pub(super) fn eval_math_abs(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::abs)
+    }
+
+    pub(super) fn eval_math_acos(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::acos)
+    }
+
+    pub(super) fn eval_math_acosh(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::acosh)
+    }
+
+    pub(super) fn eval_math_asin(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::asin)
+    }
+
+    pub(super) fn eval_math_asinh(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::asinh)
+    }
+
+    pub(super) fn eval_math_atan(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::atan)
+    }
+
+    pub(super) fn eval_math_atan2(&mut self, args: &[Expr]) -> Result<Value> {
         let values = self.eval_math_args(args)?;
-        Ok(Value::Number(Self::math_arg_or_nan(values.first()).abs()))
+        let y = Self::math_arg_or_nan(values.first());
+        let x = values.get(1).map_or(f64::NAN, Self::value_to_number);
+        Ok(Value::Number(y.atan2(x)))
+    }
+
+    pub(super) fn eval_math_atanh(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::atanh)
+    }
+
+    pub(super) fn eval_math_cbrt(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::cbrt)
     }
 
     pub(super) fn eval_math_ceil(&mut self, args: &[Expr]) -> Result<Value> {
-        let values = self.eval_math_args(args)?;
-        Ok(Value::Number(Self::math_arg_or_nan(values.first()).ceil()))
+        self.eval_math_unary(args, f64::ceil)
+    }
+
+    pub(super) fn eval_math_cos(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::cos)
+    }
+
+    pub(super) fn eval_math_cosh(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::cosh)
+    }
+
+    pub(super) fn eval_math_exp(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::exp)
+    }
+
+    pub(super) fn eval_math_expm1(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::exp_m1)
     }
 
     pub(super) fn eval_math_floor(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::floor)
+    }
+
+    pub(super) fn eval_math_hypot(&mut self, args: &[Expr]) -> Result<Value> {
         let values = self.eval_math_args(args)?;
-        Ok(Value::Number(Self::math_arg_or_nan(values.first()).floor()))
+        let mut has_infinity = false;
+        let mut has_nan = false;
+        let mut magnitude = 0.0_f64;
+        for value in values {
+            let value = Self::value_to_number(&value);
+            if value.is_infinite() {
+                has_infinity = true;
+            } else if value.is_nan() {
+                has_nan = true;
+            } else {
+                magnitude = magnitude.hypot(value);
+            }
+        }
+        if has_infinity {
+            return Ok(Value::Number(f64::INFINITY));
+        }
+        if has_nan {
+            return Ok(Value::Number(f64::NAN));
+        }
+        Ok(Value::Number(magnitude))
+    }
+
+    pub(super) fn eval_math_log(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::ln)
+    }
+
+    pub(super) fn eval_math_log10(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::log10)
+    }
+
+    pub(super) fn eval_math_log1p(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::ln_1p)
+    }
+
+    pub(super) fn eval_math_log2(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::log2)
     }
 
     pub(super) fn eval_math_max(&mut self, args: &[Expr]) -> Result<Value> {
@@ -115,14 +230,40 @@ impl Context {
         )))
     }
 
-    pub(super) fn eval_math_sqrt(&mut self, args: &[Expr]) -> Result<Value> {
+    pub(super) fn eval_math_sign(&mut self, args: &[Expr]) -> Result<Value> {
         let values = self.eval_math_args(args)?;
-        Ok(Value::Number(Self::math_arg_or_nan(values.first()).sqrt()))
+        let value = Self::math_arg_or_nan(values.first());
+        if value.is_nan() || value == 0.0 {
+            return Ok(Value::Number(value));
+        }
+        if value.is_sign_negative() {
+            return Ok(Value::Number(-1.0));
+        }
+        Ok(Value::Number(1.0))
+    }
+
+    pub(super) fn eval_math_sin(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::sin)
+    }
+
+    pub(super) fn eval_math_sinh(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::sinh)
+    }
+
+    pub(super) fn eval_math_sqrt(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::sqrt)
+    }
+
+    pub(super) fn eval_math_tan(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::tan)
+    }
+
+    pub(super) fn eval_math_tanh(&mut self, args: &[Expr]) -> Result<Value> {
+        self.eval_math_unary(args, f64::tanh)
     }
 
     pub(super) fn eval_math_trunc(&mut self, args: &[Expr]) -> Result<Value> {
-        let values = self.eval_math_args(args)?;
-        Ok(Value::Number(Self::math_arg_or_nan(values.first()).trunc()))
+        self.eval_math_unary(args, f64::trunc)
     }
 
     fn define_math_constant(&mut self, object: ObjectId, name: &str, value: f64) -> Result<()> {
@@ -155,6 +296,13 @@ impl Context {
             values.push(self.eval_expr(arg)?);
         }
         Ok(values)
+    }
+
+    fn eval_math_unary(&mut self, args: &[Expr], operation: fn(f64) -> f64) -> Result<Value> {
+        let values = self.eval_math_args(args)?;
+        Ok(Value::Number(operation(Self::math_arg_or_nan(
+            values.first(),
+        ))))
     }
 
     fn math_arg_or_nan(value: Option<&Value>) -> f64 {
