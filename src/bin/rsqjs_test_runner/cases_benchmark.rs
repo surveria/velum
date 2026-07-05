@@ -62,6 +62,8 @@ const PATH_BENCH_EXPONENTIATION_PARENTHESES: &str =
     "tests/corpora/benchmarks/active/exponentiation_parentheses.js";
 const PATH_BENCH_IN_OPERATOR: &str = "tests/corpora/benchmarks/active/in_operator.js";
 const PATH_BENCH_STRING: &str = "tests/corpora/benchmarks/active/string_concat.js";
+const PATH_BENCH_STRING_ESCAPE_SEQUENCES: &str =
+    "tests/corpora/benchmarks/active/string_escape_sequences.js";
 const PATH_BENCH_BOOLEAN: &str = "tests/corpora/benchmarks/active/boolean_conversion.js";
 const PATH_BENCH_VAR_HOISTING: &str = "tests/corpora/benchmarks/active/var_hoisting.js";
 const PATH_BENCH_TRY_CATCH: &str = "tests/corpora/benchmarks/active/try_catch.js";
@@ -257,6 +259,10 @@ fn benchmark_runtime_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "string_concat",
             path: PATH_BENCH_STRING,
+        },
+        BenchmarkCase {
+            id: "string_escape_sequences",
+            path: PATH_BENCH_STRING_ESCAPE_SEQUENCES,
         },
         BenchmarkCase {
             id: "boolean_conversion",

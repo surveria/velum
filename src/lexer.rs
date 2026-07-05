@@ -1,5 +1,15 @@
 use crate::error::{Error, Result};
 
+const HEX_ESCAPE_DIGITS: usize = 2;
+const UNICODE_ESCAPE_DIGITS: usize = 4;
+const MAX_BRACED_UNICODE_ESCAPE_DIGITS: usize = 6;
+const MAX_UNICODE_CODE_POINT: u32 = 0x10_FFFF;
+const ASCII_BACKSPACE: char = '\u{0008}';
+const ASCII_FORM_FEED: char = '\u{000c}';
+const ASCII_VERTICAL_TAB: char = '\u{000b}';
+const LINE_SEPARATOR: char = '\u{2028}';
+const PARAGRAPH_SEPARATOR: char = '\u{2029}';
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
@@ -231,33 +241,155 @@ impl<'a> Lexer<'a> {
                     self.push(TokenKind::String(output), offset);
                     return Ok(());
                 }
-                '\\' => {
-                    let Some((escape_offset, escaped)) = self.peek() else {
-                        return Err(Error::lex("unterminated escape sequence", current_offset));
-                    };
-                    self.advance();
-                    let escaped = match escaped {
-                        'n' => '\n',
-                        'r' => '\r',
-                        't' => '\t',
-                        '\\' => '\\',
-                        '"' => '"',
-                        '\'' => '\'',
-                        other => {
-                            return Err(Error::lex(
-                                format!("unsupported escape sequence '\\{other}'"),
-                                escape_offset,
-                            ));
-                        }
-                    };
-                    output.push(escaped);
-                }
+                '\\' => self.string_escape(current_offset, &mut output)?,
                 '\n' | '\r' => return Err(Error::lex("unterminated string literal", offset)),
                 other => output.push(other),
             }
         }
 
         Err(Error::lex("unterminated string literal", offset))
+    }
+
+    fn string_escape(&mut self, slash_offset: usize, output: &mut String) -> Result<()> {
+        let Some((escape_offset, escaped)) = self.peek() else {
+            return Err(Error::lex("unterminated escape sequence", slash_offset));
+        };
+        self.advance();
+        match escaped {
+            'b' => output.push(ASCII_BACKSPACE),
+            'f' => output.push(ASCII_FORM_FEED),
+            'n' => output.push('\n'),
+            'r' => output.push('\r'),
+            't' => output.push('\t'),
+            'v' => output.push(ASCII_VERTICAL_TAB),
+            '0' => self.zero_escape(escape_offset, output)?,
+            'x' => output.push(self.fixed_hex_escape(
+                escape_offset,
+                HEX_ESCAPE_DIGITS,
+                "hex escape",
+            )?),
+            'u' => output.push(self.unicode_escape(escape_offset)?),
+            '\\' => output.push('\\'),
+            '"' => output.push('"'),
+            '\'' => output.push('\''),
+            '\n' | LINE_SEPARATOR | PARAGRAPH_SEPARATOR => {}
+            '\r' => {
+                if self.peek_char() == Some('\n') {
+                    self.advance();
+                }
+            }
+            other => {
+                return Err(Error::lex(
+                    format!("unsupported escape sequence '\\{other}'"),
+                    escape_offset,
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn zero_escape(&self, escape_offset: usize, output: &mut String) -> Result<()> {
+        if self.peek_char().is_some_and(|ch| ch.is_ascii_digit()) {
+            return Err(Error::lex(
+                "legacy octal escape sequences are not supported",
+                escape_offset,
+            ));
+        }
+        output.push('\0');
+        Ok(())
+    }
+
+    fn unicode_escape(&mut self, escape_offset: usize) -> Result<char> {
+        if self.match_char('{') {
+            return self.braced_unicode_escape(escape_offset);
+        }
+        self.fixed_hex_escape(escape_offset, UNICODE_ESCAPE_DIGITS, "unicode escape")
+    }
+
+    fn braced_unicode_escape(&mut self, escape_offset: usize) -> Result<char> {
+        let mut value = 0u32;
+        let mut digits = 0usize;
+        loop {
+            let Some((digit_offset, ch)) = self.peek() else {
+                return Err(Error::lex(
+                    "unterminated braced unicode escape",
+                    escape_offset,
+                ));
+            };
+            if ch == '}' {
+                return self.finish_braced_unicode_escape(escape_offset, value, digits);
+            }
+            if digits >= MAX_BRACED_UNICODE_ESCAPE_DIGITS {
+                return Err(Error::lex(
+                    "braced unicode escape has too many digits",
+                    digit_offset,
+                ));
+            }
+            let Some(digit) = ch.to_digit(16) else {
+                return Err(Error::lex(
+                    format!("braced unicode escape has non-hex digit '{ch}'"),
+                    digit_offset,
+                ));
+            };
+            self.advance();
+            digits = digits.saturating_add(1);
+            value = checked_hex_accumulate(value, digit, digit_offset, "braced unicode escape")?;
+            if value > MAX_UNICODE_CODE_POINT {
+                return Err(Error::lex(
+                    "braced unicode escape exceeds maximum code point",
+                    digit_offset,
+                ));
+            }
+        }
+    }
+
+    fn finish_braced_unicode_escape(
+        &mut self,
+        escape_offset: usize,
+        value: u32,
+        digits: usize,
+    ) -> Result<char> {
+        if digits == 0 {
+            return Err(Error::lex("empty braced unicode escape", escape_offset));
+        }
+        self.advance();
+        unicode_char(value, escape_offset, "braced unicode escape")
+    }
+
+    fn fixed_hex_escape(
+        &mut self,
+        escape_offset: usize,
+        digits: usize,
+        description: &str,
+    ) -> Result<char> {
+        let value = self.hex_digits(escape_offset, digits, description)?;
+        unicode_char(value, escape_offset, description)
+    }
+
+    fn hex_digits(
+        &mut self,
+        escape_offset: usize,
+        digits: usize,
+        description: &str,
+    ) -> Result<u32> {
+        let mut value = 0u32;
+        for _ in 0..digits {
+            let Some((digit_offset, ch)) = self.peek() else {
+                return Err(Error::lex(
+                    format!("{description} requires {digits} hex digits"),
+                    escape_offset,
+                ));
+            };
+            let Some(digit) = ch.to_digit(16) else {
+                return Err(Error::lex(
+                    format!("{description} has non-hex digit '{ch}'"),
+                    digit_offset,
+                ));
+            };
+            self.advance();
+            value = checked_hex_accumulate(value, digit, digit_offset, description)?;
+        }
+        Ok(value)
     }
 
     fn identifier(&mut self, offset: usize) -> Result<()> {
@@ -490,4 +622,15 @@ const fn is_identifier_start(ch: char) -> bool {
 
 const fn is_identifier_part(ch: char) -> bool {
     is_identifier_start(ch) || ch.is_ascii_digit()
+}
+
+fn checked_hex_accumulate(value: u32, digit: u32, offset: usize, description: &str) -> Result<u32> {
+    value
+        .checked_mul(16)
+        .and_then(|value| value.checked_add(digit))
+        .ok_or_else(|| Error::lex(format!("{description} value overflow"), offset))
+}
+
+fn unicode_char(value: u32, offset: usize, description: &str) -> Result<char> {
+    char::from_u32(value).ok_or_else(|| Error::lex(format!("{description} is invalid"), offset))
 }

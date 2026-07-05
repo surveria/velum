@@ -4,6 +4,8 @@ const PATH_QUICKJS_PRINT_ARITHMETIC: &str =
     "tests/corpora/quickjs_differential/active/print_arithmetic.js";
 const PATH_QUICKJS_PRINT_BINDING: &str =
     "tests/corpora/quickjs_differential/active/print_binding.js";
+const PATH_QUICKJS_STRING_ESCAPE_SEQUENCES: &str =
+    "tests/corpora/quickjs_differential/active/string_escape_sequences.js";
 const PATH_QUICKJS_BOOLEAN_CONVERSION: &str =
     "tests/corpora/quickjs_differential/active/boolean_conversion.js";
 const PATH_QUICKJS_VAR_HOISTING: &str = "tests/corpora/quickjs_differential/active/var_hoisting.js";
@@ -107,6 +109,10 @@ fn quickjs_language_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "print_binding",
             path: PATH_QUICKJS_PRINT_BINDING,
+        },
+        DifferentialCase {
+            id: "string_escape_sequences",
+            path: PATH_QUICKJS_STRING_ESCAPE_SEQUENCES,
         },
         DifferentialCase {
             id: "boolean_conversion",
