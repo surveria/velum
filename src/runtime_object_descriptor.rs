@@ -1,0 +1,331 @@
+use crate::value::Value;
+
+use super::{ARRAY_LENGTH_PROPERTY, ArrayIndex, Object, ObjectHeap};
+use crate::error::Result;
+use crate::value::ObjectId;
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum PropertyEnumerable {
+    Yes,
+    No,
+}
+
+impl PropertyEnumerable {
+    pub const fn is_yes(self) -> bool {
+        matches!(self, Self::Yes)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum PropertyWritable {
+    Yes,
+    No,
+}
+
+impl PropertyWritable {
+    pub const fn is_yes(self) -> bool {
+        matches!(self, Self::Yes)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum PropertyConfigurable {
+    Yes,
+    No,
+}
+
+impl PropertyConfigurable {
+    pub const fn is_yes(self) -> bool {
+        matches!(self, Self::Yes)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DataPropertyDescriptor {
+    value: Value,
+    writable: PropertyWritable,
+    enumerable: PropertyEnumerable,
+    configurable: PropertyConfigurable,
+}
+
+impl DataPropertyDescriptor {
+    pub const fn new(
+        value: Value,
+        writable: PropertyWritable,
+        enumerable: PropertyEnumerable,
+        configurable: PropertyConfigurable,
+    ) -> Self {
+        Self {
+            value,
+            writable,
+            enumerable,
+            configurable,
+        }
+    }
+
+    pub fn value(&self) -> Value {
+        self.value.clone()
+    }
+
+    pub const fn writable(&self) -> PropertyWritable {
+        self.writable
+    }
+
+    pub const fn enumerable(&self) -> PropertyEnumerable {
+        self.enumerable
+    }
+
+    pub const fn configurable(&self) -> PropertyConfigurable {
+        self.configurable
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DataPropertyUpdate {
+    value: Option<Value>,
+    writable: Option<PropertyWritable>,
+    enumerable: Option<PropertyEnumerable>,
+    configurable: Option<PropertyConfigurable>,
+}
+
+impl DataPropertyUpdate {
+    pub const fn new(
+        value: Option<Value>,
+        writable: Option<PropertyWritable>,
+        enumerable: Option<PropertyEnumerable>,
+        configurable: Option<PropertyConfigurable>,
+    ) -> Self {
+        Self {
+            value,
+            writable,
+            enumerable,
+            configurable,
+        }
+    }
+
+    fn complete_for_new(self) -> DataPropertyDescriptor {
+        DataPropertyDescriptor::new(
+            self.value.unwrap_or(Value::Undefined),
+            self.writable.unwrap_or(PropertyWritable::No),
+            self.enumerable.unwrap_or(PropertyEnumerable::No),
+            self.configurable.unwrap_or(PropertyConfigurable::No),
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ObjectProperty {
+    descriptor: DataPropertyDescriptor,
+}
+
+impl ObjectProperty {
+    pub const fn ordinary(value: Value, enumerable: PropertyEnumerable) -> Self {
+        Self {
+            descriptor: DataPropertyDescriptor::new(
+                value,
+                PropertyWritable::Yes,
+                enumerable,
+                PropertyConfigurable::Yes,
+            ),
+        }
+    }
+
+    const fn from_descriptor(descriptor: DataPropertyDescriptor) -> Self {
+        Self { descriptor }
+    }
+
+    pub fn value(&self) -> Value {
+        self.descriptor.value()
+    }
+
+    pub const fn is_enumerable(&self) -> bool {
+        self.descriptor.enumerable().is_yes()
+    }
+
+    pub const fn is_configurable(&self) -> bool {
+        self.descriptor.configurable().is_yes()
+    }
+
+    pub fn descriptor(&self) -> DataPropertyDescriptor {
+        self.descriptor.clone()
+    }
+
+    pub fn set_value(&mut self, value: Value) {
+        if self.descriptor.writable().is_yes() {
+            self.descriptor.value = value;
+        }
+    }
+
+    pub fn define(&mut self, update: DataPropertyUpdate) {
+        if let Some(value) = update.value {
+            self.descriptor.value = value;
+        }
+        if let Some(writable) = update.writable {
+            self.descriptor.writable = writable;
+        }
+        if let Some(enumerable) = update.enumerable {
+            self.descriptor.enumerable = enumerable;
+        }
+        if let Some(configurable) = update.configurable {
+            self.descriptor.configurable = configurable;
+        }
+    }
+
+    pub const fn set_enumerable(&mut self, enumerable: PropertyEnumerable) {
+        self.descriptor.enumerable = enumerable;
+    }
+}
+
+impl ObjectHeap {
+    pub fn own_property_descriptor(
+        &self,
+        id: ObjectId,
+        property: &str,
+    ) -> Result<Option<DataPropertyDescriptor>> {
+        self.object(id)
+            .map(|object| object.own_property_descriptor(property))
+    }
+
+    pub fn define_property(
+        &mut self,
+        id: ObjectId,
+        property: String,
+        update: DataPropertyUpdate,
+        max_properties: usize,
+    ) -> Result<()> {
+        let object = self.object_mut(id)?;
+        object.define_property(property, update, max_properties)
+    }
+
+    pub fn has_own(&self, id: ObjectId, property: &str) -> Result<bool> {
+        self.object(id).map(|object| object.has_own(property))
+    }
+}
+
+impl Object {
+    fn own_property_descriptor(&self, property: &str) -> Option<DataPropertyDescriptor> {
+        if let Some(length) = self
+            .array_length
+            .filter(|_| property == ARRAY_LENGTH_PROPERTY)
+        {
+            return Some(DataPropertyDescriptor::new(
+                length.value(),
+                PropertyWritable::Yes,
+                PropertyEnumerable::No,
+                PropertyConfigurable::No,
+            ));
+        }
+        if self.array_length.is_some()
+            && let Some(index) = ArrayIndex::parse(property)
+            && let Some(descriptor) = self.array_element_descriptor(index)
+        {
+            return Some(descriptor);
+        }
+        self.properties
+            .get(property)
+            .map(ObjectProperty::descriptor)
+    }
+
+    fn define_property(
+        &mut self,
+        property: String,
+        update: DataPropertyUpdate,
+        max_properties: usize,
+    ) -> Result<()> {
+        if self.array_length.is_some()
+            && let Some(index) = ArrayIndex::parse(&property)
+        {
+            return self.define_array_property(index, property, update, max_properties);
+        }
+        self.define_named_property(property, update, max_properties)
+    }
+
+    fn define_named_property(
+        &mut self,
+        property: String,
+        update: DataPropertyUpdate,
+        max_properties: usize,
+    ) -> Result<()> {
+        let property_count = self.property_count();
+        let mut enumerable_update = None;
+        match self.properties.entry(property) {
+            std::collections::btree_map::Entry::Occupied(mut entry) => {
+                let was_enumerable = entry.get().is_enumerable();
+                entry.get_mut().define(update);
+                enumerable_update = Some((was_enumerable, entry.get().is_enumerable()));
+            }
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                if property_count >= max_properties {
+                    return Err(crate::error::Error::limit(format!(
+                        "object property count exceeded {max_properties}"
+                    )));
+                }
+                self.property_order.push(entry.key().clone());
+                let property = ObjectProperty::from_descriptor(update.complete_for_new());
+                if property.is_enumerable() {
+                    enumerable_update = Some((false, true));
+                }
+                entry.insert(property);
+            }
+        }
+        if let Some((was_enumerable, is_enumerable)) = enumerable_update {
+            self.update_enumerable_property_count(was_enumerable, is_enumerable);
+        }
+        Ok(())
+    }
+
+    fn define_array_property(
+        &mut self,
+        index: ArrayIndex,
+        property: String,
+        update: DataPropertyUpdate,
+        max_properties: usize,
+    ) -> Result<()> {
+        let Some(position) = index.dense_position(max_properties)? else {
+            return self.define_named_property(property, update, max_properties);
+        };
+        if self.array_elements.get(position).is_none() {
+            let new_len = position
+                .checked_add(1)
+                .ok_or_else(|| crate::error::Error::limit(super::ARRAY_INDEX_LIMIT_ERROR))?;
+            self.array_elements.resize_with(new_len, || None);
+        }
+
+        let has_existing = self
+            .array_elements
+            .get(position)
+            .and_then(Option::as_ref)
+            .is_some();
+        if !has_existing && self.property_count() >= max_properties {
+            return Err(crate::error::Error::limit(format!(
+                "object property count exceeded {max_properties}"
+            )));
+        }
+        let slot = self
+            .array_elements
+            .get_mut(position)
+            .ok_or_else(|| crate::error::Error::runtime("array index storage is not available"))?;
+        if let Some(existing) = slot {
+            let was_enumerable = existing.is_enumerable();
+            existing.define(update);
+            let is_enumerable = existing.is_enumerable();
+            self.update_enumerable_property_count(was_enumerable, is_enumerable);
+        } else {
+            let property = ObjectProperty::from_descriptor(update.complete_for_new());
+            if property.is_enumerable() {
+                self.enumerable_property_count = self.enumerable_property_count.saturating_add(1);
+            }
+            *slot = Some(property);
+            self.array_property_count = self.array_property_count.saturating_add(1);
+        }
+        self.extend_array_length(index)
+    }
+
+    fn array_element_descriptor(&self, index: ArrayIndex) -> Option<DataPropertyDescriptor> {
+        let position = index.position().ok()?;
+        self.array_elements
+            .get(position)
+            .and_then(Option::as_ref)
+            .map(ObjectProperty::descriptor)
+    }
+}

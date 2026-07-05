@@ -21,7 +21,7 @@ const PROTOTYPE_CONSTRUCTOR_PROPERTY: &str = "constructor";
 #[derive(Debug, Clone)]
 pub(super) struct FunctionProperties {
     prototype: Value,
-    properties: BTreeMap<String, Value>,
+    properties: BTreeMap<String, FunctionProperty>,
     property_order: Vec<String>,
 }
 
@@ -329,8 +329,7 @@ impl FunctionProperties {
     pub(super) fn get(&self, property: &str) -> Value {
         self.properties
             .get(property)
-            .cloned()
-            .unwrap_or(Value::Undefined)
+            .map_or(Value::Undefined, FunctionProperty::value)
     }
 
     pub(super) fn has(&self, property: &str) -> bool {
@@ -355,7 +354,7 @@ impl FunctionProperties {
         }
         match self.properties.entry(property) {
             Entry::Occupied(mut entry) => {
-                entry.insert(value);
+                entry.get_mut().set_value(value);
             }
             Entry::Vacant(entry) => {
                 if self.property_order.len() >= max_properties {
@@ -364,7 +363,7 @@ impl FunctionProperties {
                     )));
                 }
                 self.property_order.push(entry.key().clone());
-                entry.insert(value);
+                entry.insert(FunctionProperty::new(value, PropertyEnumerable::Yes));
             }
         }
         Ok(())
@@ -385,7 +384,61 @@ impl FunctionProperties {
     }
 
     pub(super) fn keys(&self) -> Vec<String> {
-        self.property_order.clone()
+        self.property_order
+            .iter()
+            .filter_map(|key| {
+                self.properties
+                    .get(key)
+                    .filter(|property| property.is_enumerable())
+                    .map(|_| key.clone())
+            })
+            .collect()
+    }
+
+    pub(super) fn define_builtin(
+        &mut self,
+        property: String,
+        value: Value,
+        enumerable: PropertyEnumerable,
+    ) {
+        match self.properties.entry(property) {
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().set_value(value);
+                entry.get_mut().set_enumerable(enumerable);
+            }
+            Entry::Vacant(entry) => {
+                self.property_order.push(entry.key().clone());
+                entry.insert(FunctionProperty::new(value, enumerable));
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct FunctionProperty {
+    value: Value,
+    enumerable: PropertyEnumerable,
+}
+
+impl FunctionProperty {
+    const fn new(value: Value, enumerable: PropertyEnumerable) -> Self {
+        Self { value, enumerable }
+    }
+
+    fn value(&self) -> Value {
+        self.value.clone()
+    }
+
+    const fn is_enumerable(&self) -> bool {
+        self.enumerable.is_yes()
+    }
+
+    fn set_value(&mut self, value: Value) {
+        self.value = value;
+    }
+
+    const fn set_enumerable(&mut self, enumerable: PropertyEnumerable) {
+        self.enumerable = enumerable;
     }
 }
 
