@@ -9,11 +9,14 @@ use crate::{
 use super::runtime_function::FunctionProperties;
 
 const OBJECT_CONSTRUCTOR_PROPERTY: &str = "constructor";
+const ARRAY_INDEX_OF_FUNCTION_LENGTH: f64 = 1.0;
+const ARRAY_INDEX_OF_NAME: &str = "indexOf";
 const ARRAY_JOIN_DEFAULT_SEPARATOR: &str = ",";
 const ARRAY_JOIN_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_JOIN_NAME: &str = "join";
 const ARRAY_POP_FUNCTION_LENGTH: f64 = 0.0;
 const ARRAY_POP_NAME: &str = "pop";
+const ARRAY_PROTOTYPE_INDEX_OF_PROPERTY: &str = "indexOf";
 const ARRAY_PROTOTYPE_JOIN_PROPERTY: &str = "join";
 const ARRAY_PROTOTYPE_POP_PROPERTY: &str = "pop";
 const ARRAY_PROTOTYPE_PUSH_PROPERTY: &str = "push";
@@ -54,6 +57,7 @@ impl NativeFunction {
     pub(super) const fn length(&self) -> f64 {
         match self.kind {
             NativeFunctionKind::Array => ARRAY_FUNCTION_LENGTH,
+            NativeFunctionKind::ArrayIndexOf => ARRAY_INDEX_OF_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayJoin => ARRAY_JOIN_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayPop => ARRAY_POP_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayPush => ARRAY_PUSH_FUNCTION_LENGTH,
@@ -67,6 +71,7 @@ impl NativeFunction {
     pub(super) const fn name(&self) -> &'static str {
         match self.kind {
             NativeFunctionKind::Array => ARRAY_NAME,
+            NativeFunctionKind::ArrayIndexOf => ARRAY_INDEX_OF_NAME,
             NativeFunctionKind::ArrayJoin => ARRAY_JOIN_NAME,
             NativeFunctionKind::ArrayPop => ARRAY_POP_NAME,
             NativeFunctionKind::ArrayPush => ARRAY_PUSH_NAME,
@@ -89,6 +94,7 @@ impl NativeFunction {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(super) enum NativeFunctionKind {
     Array,
+    ArrayIndexOf,
     ArrayJoin,
     ArrayPop,
     ArrayPush,
@@ -122,6 +128,7 @@ impl Context {
     ) -> Result<Value> {
         match self.native_function(id)?.kind() {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
+            NativeFunctionKind::ArrayIndexOf => self.eval_array_index_of(args, this_value),
             NativeFunctionKind::ArrayJoin => self.eval_array_join(args, this_value),
             NativeFunctionKind::ArrayPop => self.eval_array_pop(args, this_value),
             NativeFunctionKind::ArrayPush => self.eval_array_push(args, this_value),
@@ -139,7 +146,8 @@ impl Context {
     ) -> Result<Value> {
         match self.native_function(id)?.kind() {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
-            NativeFunctionKind::ArrayJoin
+            NativeFunctionKind::ArrayIndexOf
+            | NativeFunctionKind::ArrayJoin
             | NativeFunctionKind::ArrayPop
             | NativeFunctionKind::ArrayPush
             | NativeFunctionKind::ArrayShift
@@ -231,6 +239,15 @@ impl Context {
     }
 
     fn install_array_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
+        let index_of =
+            self.create_native_function(NativeFunctionKind::ArrayIndexOf, Value::Undefined);
+        self.objects.define_non_enumerable(
+            prototype,
+            ARRAY_PROTOTYPE_INDEX_OF_PROPERTY.to_owned(),
+            index_of,
+            self.limits.max_object_properties,
+        )?;
+
         let join = self.create_native_function(NativeFunctionKind::ArrayJoin, Value::Undefined);
         self.objects.define_non_enumerable(
             prototype,
@@ -361,6 +378,25 @@ impl Context {
             ));
         };
         self.objects.array_pop(*id)
+    }
+
+    fn eval_array_index_of(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
+        let values = args
+            .iter()
+            .map(|arg| self.eval_expr(arg))
+            .collect::<Result<Vec<_>>>()?;
+        let Value::Object(id) = this_value else {
+            return Err(Error::runtime(
+                "Array.prototype.indexOf requires an array receiver",
+            ));
+        };
+
+        let length = self.objects.array_len_for_index_of(*id)?;
+        let from_index = Self::array_slice_bound(values.get(1), length, 0)?;
+        let search = values
+            .first()
+            .map_or(Value::Undefined, std::clone::Clone::clone);
+        self.objects.array_index_of(*id, &search, from_index)
     }
 
     fn eval_array_join(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
