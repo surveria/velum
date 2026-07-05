@@ -33,6 +33,10 @@ let inheritedIndex = inherited.indexOf("proto-one");
 let inheritedUndefined = inherited.indexOf(undefined);
 delete Array.prototype[1];
 
+Array.prototype[0] = undefined;
+let inheritedUndefinedValue = Array(1).indexOf(undefined);
+delete Array.prototype[0];
+
 let side = 0;
 let marker = function() {
     side = 42;
@@ -52,7 +56,7 @@ for (let key in Array.prototype) {
 print("indexOf", firstTwo, nextTwo, fromNegative, missing, fromTooLarge, stringTwo);
 print("values", undefinedIndex, nullIndex, stringStart, fractionStart, veryNegative);
 print("sparse", holeUndefined, tailIndex, tailFromEnd, ownUndefined);
-print("inherited", inheritedIndex, inheritedUndefined, side, extra);
+print("inherited", inheritedIndex, inheritedUndefined, inheritedUndefinedValue, side, extra);
 print("coerced", boolStart, nullStart, missingSearch);
 print("meta", typeof Array.prototype.indexOf, Array.prototype.indexOf.name, Array.prototype.indexOf.length);
 print("keys:" + prototypeKeys);
@@ -75,6 +79,7 @@ firstTwo === 1 &&
     ownUndefined === 1 &&
     inheritedIndex === 1 &&
     inheritedUndefined === -1 &&
+    inheritedUndefinedValue === 0 &&
     side === 42 &&
     extra === 0 &&
     boolStart === 1 &&
@@ -91,7 +96,7 @@ const INDEX_OF_OUTPUT: &[&str] = &[
     "indexOf 1 3 3 -1 -1 6",
     "values 4 5 3 3 0",
     "sparse -1 2 2 1",
-    "inherited 1 -1 42 0",
+    "inherited 1 -1 0 42 0",
     "coerced 1 0 0",
     "meta function indexOf 1",
     "keys:",

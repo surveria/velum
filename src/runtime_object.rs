@@ -295,6 +295,13 @@ impl ObjectHeap {
         if property == PROTOTYPE_PROPERTY {
             return self.prototype_value(id);
         }
+        if let Some(value) = self.property_value_in_chain(id, property)? {
+            return Ok(value);
+        }
+        Ok(Value::Undefined)
+    }
+
+    fn property_value_in_chain(&self, id: ObjectId, property: &str) -> Result<Option<Value>> {
         let mut current = Some(id);
         let mut visited = Vec::new();
         while let Some(current_id) = current {
@@ -304,11 +311,11 @@ impl ObjectHeap {
             visited.push(current_id);
             let object = self.object(current_id)?;
             if let Some(value) = object.get_own(property) {
-                return Ok(value);
+                return Ok(Some(value));
             }
             current = object.prototype;
         }
-        Ok(Value::Undefined)
+        Ok(None)
     }
 
     fn has_in_chain(&self, id: ObjectId, property: &str) -> Result<bool> {
