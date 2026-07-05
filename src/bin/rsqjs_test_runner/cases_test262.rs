@@ -34,6 +34,8 @@ const PATH_TEST262_COMPUTED_PROPERTIES: &str =
     "tests/corpora/test262/active/language/expressions/computed_properties.js";
 const PATH_TEST262_ARRAY_LITERALS: &str =
     "tests/corpora/test262/active/language/expressions/array_literals.js";
+const PATH_TEST262_ARRAY_BUILTIN: &str =
+    "tests/corpora/test262/active/language/expressions/array_builtin.js";
 const PATH_TEST262_UNARY_OPERATORS: &str =
     "tests/corpora/test262/active/language/expressions/unary_operators.js";
 const PATH_TEST262_UPDATE_EXPRESSIONS: &str =
@@ -182,6 +184,11 @@ fn test262_object_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/array_literals",
             path: PATH_TEST262_ARRAY_LITERALS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/array_builtin",
+            path: PATH_TEST262_ARRAY_BUILTIN,
             expectation: Expectation::Value("42"),
         },
     ]

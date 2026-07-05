@@ -75,6 +75,7 @@ const PATH_OBJECT_PROTOTYPE_ROOT: &str = "tests/engine_cases/object_prototype_ro
 const PATH_OBJECT_BUILTIN: &str = "tests/engine_cases/object_builtin.js";
 const PATH_COMPUTED_PROPERTIES: &str = "tests/engine_cases/computed_properties.js";
 const PATH_ARRAY_LITERALS: &str = "tests/engine_cases/array_literals.js";
+const PATH_ARRAY_BUILTIN: &str = "tests/engine_cases/array_builtin.js";
 const PATH_UNARY_OPERATORS: &str = "tests/engine_cases/unary_operators.js";
 const PATH_ASSERT_THROWS_REFERENCE_ERROR: &str =
     "tests/engine_cases/assert_throws_reference_error.js";
@@ -450,6 +451,19 @@ fn engine_object_cases() -> Vec<EngineCase> {
             path: PATH_ARRAY_LITERALS,
             expectation: Expectation::OutputAndValue {
                 output: &["4 2 undefined", "7 4", "0 2"],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "array_builtin",
+            path: PATH_ARRAY_BUILTIN,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "function Array 1 true",
+                    "true true true true",
+                    "0 0 2 front 42 3 undefined",
+                    "keys:|",
+                ],
                 value: "42",
             },
         },
