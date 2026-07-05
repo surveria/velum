@@ -62,6 +62,7 @@ impl Context {
         name: &str,
         expr: &Expr,
     ) -> Result<Value> {
+        self.materialize_builtin_binding(name)?;
         let old_value = self
             .get_binding(name)
             .map(|binding| binding.value())

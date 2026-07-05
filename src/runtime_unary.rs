@@ -59,7 +59,11 @@ impl Context {
     fn eval_delete(&mut self, expr: &Expr) -> Result<Value> {
         match expr {
             Expr::Parenthesized(expr) => self.eval_delete(expr),
-            Expr::Identifier(name) => Ok(Value::Bool(self.get_binding(name).is_none())),
+            Expr::Identifier(name) => {
+                let binding_exists =
+                    self.get_binding(name).is_some() || self.materialize_builtin_binding(name)?;
+                Ok(Value::Bool(!binding_exists))
+            }
             Expr::Member { object, property } => {
                 let object = self.eval_expr(object)?;
                 self.delete_property_value(&object, property)
