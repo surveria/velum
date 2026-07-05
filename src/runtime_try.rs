@@ -40,14 +40,22 @@ impl Context {
     }
 
     fn eval_catch(&mut self, catch: &CatchClause, value: Value) -> Result<Completion> {
-        self.with_lexical_scope(|context| context.eval_catch_scope(catch, value))
+        let Some(param) = catch.param.as_ref() else {
+            return self.eval_scoped_block(&catch.body);
+        };
+        self.with_lexical_scope(|context| context.eval_catch_scope(catch, param, value))
     }
 
-    fn eval_catch_scope(&mut self, catch: &CatchClause, value: Value) -> Result<Completion> {
-        self.ensure_binding_capacity(&catch.param)?;
+    fn eval_catch_scope(
+        &mut self,
+        catch: &CatchClause,
+        param: &str,
+        value: Value,
+    ) -> Result<Completion> {
+        self.ensure_binding_capacity(param)?;
         self.checked_value(value.clone())?;
         self.active_bindings_mut().insert(
-            catch.param.clone(),
+            param.to_owned(),
             BindingCell::new(value, true, DeclKind::Let),
         );
         self.eval_scoped_block(&catch.body)

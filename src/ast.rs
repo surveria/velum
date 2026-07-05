@@ -79,7 +79,7 @@ pub struct SwitchCase {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CatchClause {
-    pub param: String,
+    pub param: Option<String>,
     pub body: Vec<Stmt>,
 }
 

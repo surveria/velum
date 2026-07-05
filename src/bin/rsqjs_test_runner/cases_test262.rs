@@ -81,6 +81,8 @@ const PATH_TEST262_VAR_HOISTING: &str =
     "tests/corpora/test262/active/language/bindings/var_hoisting.js";
 const PATH_TEST262_TRY_CATCH: &str =
     "tests/corpora/test262/active/language/statements/try_catch.js";
+const PATH_TEST262_OMITTED_CATCH_BINDING: &str =
+    "tests/corpora/test262/active/language/statements/omitted_catch_binding.js";
 const PATH_TEST262_TRY_FINALLY: &str =
     "tests/corpora/test262/active/language/statements/try_finally.js";
 const PATH_TEST262_WHILE: &str = "tests/corpora/test262/active/language/statements/while.js";
@@ -345,6 +347,11 @@ fn test262_statement_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/statements/try_catch",
             path: PATH_TEST262_TRY_CATCH,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/statements/omitted_catch_binding",
+            path: PATH_TEST262_OMITTED_CATCH_BINDING,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
