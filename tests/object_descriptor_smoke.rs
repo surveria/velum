@@ -188,6 +188,61 @@ fn preserves_descriptor_slots_after_delete_and_reinsert() -> TestResult {
     )
 }
 
+#[test]
+fn preserves_out_of_order_property_lookup_with_vector_index() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let object = { zeta: 1, alpha: 2, middle: 3 };
+        object.zeta = object.zeta + object.alpha;
+        Object.defineProperty(object, "middle", {
+            value: object.middle + object.zeta,
+            enumerable: true,
+            writable: true,
+            configurable: true
+        });
+        let alphaDescriptor = Object.getOwnPropertyDescriptor(object, "alpha");
+        let deleteAlpha = delete object.alpha;
+        object.alpha = 20;
+        let keys = Object.keys(object);
+        let seen = "";
+        for (let key in object) {
+            seen = seen + key + ":" + object[key] + ";";
+        }
+
+        print(seen);
+        print(keys.length, keys[0], keys[1], keys[2]);
+        print(alphaDescriptor.value, deleteAlpha, "middle" in object);
+
+        seen === "zeta:3;middle:6;alpha:20;" &&
+            keys.length === 3 &&
+            keys[0] === "zeta" &&
+            keys[1] === "middle" &&
+            keys[2] === "alpha" &&
+            alphaDescriptor.value === 2 &&
+            deleteAlpha === true &&
+            ("zeta" in object) &&
+            ("alpha" in object) &&
+            ("middle" in object) &&
+            object.zeta === 3 &&
+            object.alpha === 20 &&
+            object.middle === 6 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(
+        context.output(),
+        &[
+            "zeta:3;middle:6;alpha:20;",
+            "3 zeta middle alpha",
+            "2 true true",
+        ],
+    )
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

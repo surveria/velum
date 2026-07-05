@@ -15,6 +15,30 @@ impl PropertySlot {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(super) struct PropertyIndexEntry {
+    key: PropertyKey,
+    slot: PropertySlot,
+}
+
+impl PropertyIndexEntry {
+    const fn new(key: PropertyKey, slot: PropertySlot) -> Self {
+        Self { key, slot }
+    }
+
+    const fn key(self) -> PropertyKey {
+        self.key
+    }
+
+    const fn slot(self) -> PropertySlot {
+        self.slot
+    }
+
+    const fn set_slot(&mut self, slot: PropertySlot) {
+        self.slot = slot;
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct NamedProperty {
     key: PropertyKey,
@@ -37,7 +61,7 @@ impl NamedProperty {
 
 impl Object {
     pub(super) fn named_property(&self, key: PropertyKey) -> Option<&ObjectProperty> {
-        let slot = self.properties.get(&key)?;
+        let slot = self.named_property_slot(key)?;
         self.named_properties
             .get(slot.index())
             .map(NamedProperty::property)
@@ -45,8 +69,7 @@ impl Object {
 
     pub(super) fn named_property_mut(&mut self, key: PropertyKey) -> Result<&mut ObjectProperty> {
         let slot = self
-            .properties
-            .get(&key)
+            .named_property_slot(key)
             .ok_or_else(|| Error::runtime("object property slot is not defined"))?;
         self.named_properties
             .get_mut(slot.index())
@@ -58,34 +81,64 @@ impl Object {
         self.named_properties.iter()
     }
 
+    pub(super) fn contains_named_property(&self, key: PropertyKey) -> bool {
+        self.property_position(key).is_ok()
+    }
+
     pub(super) fn push_named_property(
         &mut self,
         key: PropertyKey,
         property: ObjectProperty,
     ) -> Result<()> {
+        let Err(position) = self.property_position(key) else {
+            return Err(Error::runtime("object property slot replaced existing key"));
+        };
         let slot = PropertySlot::from_index(self.named_properties.len());
         self.named_properties
             .push(NamedProperty::new(key, property));
-        let previous = self.properties.insert(key, slot);
-        if previous.is_some() {
-            return Err(Error::runtime("object property slot replaced existing key"));
-        }
+        self.properties
+            .insert(position, PropertyIndexEntry::new(key, slot));
         Ok(())
     }
 
     pub(super) fn remove_named_property(&mut self, key: PropertyKey) -> Option<ObjectProperty> {
-        let slot = self.properties.remove(&key)?;
+        let position = self.property_position(key).ok()?;
+        let slot = self.properties.get(position)?.slot();
         let index = slot.index();
         self.named_properties.get(index)?;
         let removed = self.named_properties.remove(index);
+        self.properties.remove(position);
         self.reindex_named_properties_from(index);
         Some(removed.property)
     }
 
     fn reindex_named_properties_from(&mut self, start: usize) {
-        for (index, property) in self.named_properties.iter().enumerate().skip(start) {
-            self.properties
-                .insert(property.key(), PropertySlot::from_index(index));
+        let mut index = start;
+        while index < self.named_properties.len() {
+            let Some(property) = self.named_properties.get(index) else {
+                return;
+            };
+            let key = property.key();
+            let slot = PropertySlot::from_index(index);
+            if let Some(entry) = self.property_index_entry_mut(key) {
+                entry.set_slot(slot);
+            }
+            index = index.saturating_add(1);
         }
+    }
+
+    fn named_property_slot(&self, key: PropertyKey) -> Option<PropertySlot> {
+        let position = self.property_position(key).ok()?;
+        self.properties.get(position).map(|entry| entry.slot())
+    }
+
+    fn property_index_entry_mut(&mut self, key: PropertyKey) -> Option<&mut PropertyIndexEntry> {
+        let position = self.property_position(key).ok()?;
+        self.properties.get_mut(position)
+    }
+
+    fn property_position(&self, key: PropertyKey) -> std::result::Result<usize, usize> {
+        self.properties
+            .binary_search_by(|entry| entry.key().cmp(&key))
     }
 }
