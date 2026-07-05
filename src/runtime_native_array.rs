@@ -8,6 +8,7 @@ use crate::{
 use super::{ARRAY_NAME, NativeFunction, NativeFunctionKind};
 
 const ARRAY_JOIN_DEFAULT_SEPARATOR: &str = ",";
+const ARRAY_PROTOTYPE_CONCAT_PROPERTY: &str = "concat";
 const ARRAY_PROTOTYPE_INCLUDES_PROPERTY: &str = "includes";
 const ARRAY_PROTOTYPE_INDEX_OF_PROPERTY: &str = "indexOf";
 const ARRAY_PROTOTYPE_JOIN_PROPERTY: &str = "join";
@@ -65,6 +66,26 @@ impl Context {
             .collect::<Result<Vec<_>>>()?;
         self.objects
             .array_push(*id, values, self.limits.max_object_properties)
+    }
+
+    pub(super) fn eval_array_concat(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
+        let values = args
+            .iter()
+            .map(|arg| self.eval_expr(arg))
+            .collect::<Result<Vec<_>>>()?;
+        let Value::Object(id) = this_value else {
+            return Err(Error::runtime(
+                "Array.prototype.concat requires an array receiver",
+            ));
+        };
+        let prototype = self.array_constructor_prototype()?;
+        self.objects.array_concat(
+            *id,
+            values,
+            prototype,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )
     }
 
     pub(super) fn eval_array_reverse(
@@ -265,6 +286,14 @@ impl Context {
     }
 
     fn install_array_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
+        let concat = self.create_native_function(NativeFunctionKind::ArrayConcat, Value::Undefined);
+        self.objects.define_non_enumerable(
+            prototype,
+            ARRAY_PROTOTYPE_CONCAT_PROPERTY.to_owned(),
+            concat,
+            self.limits.max_object_properties,
+        )?;
+
         let includes =
             self.create_native_function(NativeFunctionKind::ArrayIncludes, Value::Undefined);
         self.objects.define_non_enumerable(

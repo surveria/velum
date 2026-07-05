@@ -77,6 +77,7 @@ const PATH_COMPUTED_PROPERTIES: &str = "tests/engine_cases/computed_properties.j
 const PATH_ARRAY_LITERALS: &str = "tests/engine_cases/array_literals.js";
 const PATH_ARRAY_BUILTIN: &str = "tests/engine_cases/array_builtin.js";
 const PATH_ARRAY_PROTOTYPE_METHODS: &str = "tests/engine_cases/array_prototype_methods.js";
+const PATH_ARRAY_PROTOTYPE_CONCAT: &str = "tests/engine_cases/array_prototype_concat.js";
 const PATH_ARRAY_PROTOTYPE_INCLUDES: &str = "tests/engine_cases/array_prototype_includes.js";
 const PATH_ARRAY_PROTOTYPE_JOIN: &str = "tests/engine_cases/array_prototype_join.js";
 const PATH_ARRAY_PROTOTYPE_INDEX_OF: &str = "tests/engine_cases/array_prototype_index_of.js";
@@ -635,23 +636,43 @@ fn engine_array_mutation_cases() -> Vec<EngineCase> {
 }
 
 fn engine_array_copy_cases() -> Vec<EngineCase> {
-    vec![EngineCase {
-        id: "array_prototype_slice",
-        path: PATH_ARRAY_PROTOTYPE_SLICE,
-        expectation: Expectation::OutputAndValue {
-            output: &[
-                "slice 2|3 2|3 3|4 0 0",
-                "source 4 1 2 3 4",
-                "sparse 3 one false undefined three one||three |one||three",
-                "inherited 3 undefined proto-one tail true",
-                "coerced 1|2 1 42 7",
-                "meta function slice 2",
-                "keys:",
-                "in true",
-            ],
-            value: "42",
+    vec![
+        EngineCase {
+            id: "array_prototype_concat",
+            path: PATH_ARRAY_PROTOTYPE_CONCAT,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "concat 6 1 2 3 4 5 true",
+                    "source 2 1|2 3|4",
+                    "side 42 7|8|9",
+                    "sparse 6 zero false undefined one false undefined three tail zero||one||three|tail",
+                    "inherited 2 proto-zero true own-one",
+                    "plain 2 1 true",
+                    "meta function concat 1",
+                    "keys:",
+                    "in true",
+                ],
+                value: "42",
+            },
         },
-    }]
+        EngineCase {
+            id: "array_prototype_slice",
+            path: PATH_ARRAY_PROTOTYPE_SLICE,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "slice 2|3 2|3 3|4 0 0",
+                    "source 4 1 2 3 4",
+                    "sparse 3 one false undefined three one||three |one||three",
+                    "inherited 3 undefined proto-one tail true",
+                    "coerced 1|2 1 42 7",
+                    "meta function slice 2",
+                    "keys:",
+                    "in true",
+                ],
+                value: "42",
+            },
+        },
+    ]
 }
 
 fn engine_unary_cases() -> Vec<EngineCase> {
