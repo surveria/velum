@@ -423,7 +423,7 @@ impl ObjectHeap {
 
 #[derive(Debug, Clone, Default)]
 struct Object {
-    properties: BTreeMap<PropertyKey, runtime_object_slot::PropertySlot>,
+    properties: Vec<runtime_object_slot::PropertyIndexEntry>,
     named_properties: Vec<runtime_object_slot::NamedProperty>,
     array_elements: Vec<Option<ObjectProperty>>,
     sparse_array_keys: BTreeMap<ArrayIndex, PropertyKey>,
@@ -436,7 +436,7 @@ struct Object {
 impl Object {
     const fn ordinary() -> Self {
         Self {
-            properties: BTreeMap::new(),
+            properties: Vec::new(),
             named_properties: Vec::new(),
             array_elements: Vec::new(),
             sparse_array_keys: BTreeMap::new(),
@@ -449,7 +449,7 @@ impl Object {
 
     fn ordinary_with_property_capacity(capacity: usize) -> Self {
         Self {
-            properties: BTreeMap::new(),
+            properties: Vec::with_capacity(capacity),
             named_properties: Vec::with_capacity(capacity),
             array_elements: Vec::new(),
             sparse_array_keys: BTreeMap::new(),
@@ -462,7 +462,7 @@ impl Object {
 
     const fn array(length: ArrayLength) -> Self {
         Self {
-            properties: BTreeMap::new(),
+            properties: Vec::new(),
             named_properties: Vec::new(),
             array_elements: Vec::new(),
             sparse_array_keys: BTreeMap::new(),
@@ -597,7 +597,7 @@ impl Object {
         max_properties: usize,
     ) -> Result<()> {
         let property_count = self.property_count();
-        let enumerable_update = if self.properties.contains_key(&property) {
+        let enumerable_update = if self.contains_named_property(property) {
             let existing = self.named_property_mut(property)?;
             let was_enumerable = existing.is_enumerable();
             existing.set_value(value);
@@ -786,7 +786,7 @@ impl Object {
         }
     }
 
-    fn property_count(&self) -> usize {
+    const fn property_count(&self) -> usize {
         self.properties
             .len()
             .saturating_add(self.array_property_count)

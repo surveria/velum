@@ -272,7 +272,7 @@ impl Object {
         max_properties: usize,
     ) -> Result<()> {
         let property_count = self.property_count();
-        let enumerable_update = if self.properties.contains_key(&property) {
+        let enumerable_update = if self.contains_named_property(property) {
             let existing = self.named_property_mut(property)?;
             let was_enumerable = existing.is_enumerable();
             existing.define(update);
