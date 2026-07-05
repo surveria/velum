@@ -13,6 +13,8 @@ use super::runtime_function::FunctionProperties;
 mod runtime_native_array;
 #[path = "runtime_native_number.rs"]
 mod runtime_native_number;
+#[path = "runtime_native_string.rs"]
+mod runtime_native_string;
 
 const OBJECT_CONSTRUCTOR_PROPERTY: &str = "constructor";
 const ARRAY_CONCAT_FUNCTION_LENGTH: f64 = 1.0;
@@ -44,6 +46,8 @@ const NUMBER_FUNCTION_LENGTH: f64 = 1.0;
 const NUMBER_NAME: &str = "Number";
 const OBJECT_FUNCTION_LENGTH: f64 = 1.0;
 const OBJECT_NAME: &str = "Object";
+const STRING_FUNCTION_LENGTH: f64 = 1.0;
+const STRING_NAME: &str = "String";
 
 #[derive(Debug, Clone)]
 pub(super) struct NativeFunction {
@@ -80,6 +84,7 @@ impl NativeFunction {
             NativeFunctionKind::ErrorConstructor(_) => ERROR_FUNCTION_LENGTH,
             NativeFunctionKind::Number => NUMBER_FUNCTION_LENGTH,
             NativeFunctionKind::Object => OBJECT_FUNCTION_LENGTH,
+            NativeFunctionKind::String => STRING_FUNCTION_LENGTH,
         }
     }
 
@@ -100,6 +105,7 @@ impl NativeFunction {
             NativeFunctionKind::ErrorConstructor(name) => name.as_str(),
             NativeFunctionKind::Number => NUMBER_NAME,
             NativeFunctionKind::Object => OBJECT_NAME,
+            NativeFunctionKind::String => STRING_NAME,
         }
     }
 
@@ -129,7 +135,8 @@ impl NativeFunction {
             | NativeFunctionKind::ArraySlice
             | NativeFunctionKind::ArrayUnshift
             | NativeFunctionKind::ErrorConstructor(_)
-            | NativeFunctionKind::Object => None,
+            | NativeFunctionKind::Object
+            | NativeFunctionKind::String => None,
         }
     }
 
@@ -155,6 +162,7 @@ pub(super) enum NativeFunctionKind {
     ErrorConstructor(ErrorName),
     Number,
     Object,
+    String,
 }
 
 impl Context {
@@ -163,6 +171,7 @@ impl Context {
             ARRAY_NAME => self.array_constructor_value().map(Some),
             NUMBER_NAME => self.number_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
+            STRING_NAME => self.string_constructor_value().map(Some),
             _ => {
                 let Some(name) =
                     ErrorName::from_constructor_name(name).filter(|name| name.is_standard())
@@ -203,6 +212,7 @@ impl Context {
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
             NativeFunctionKind::Number => self.eval_number_constructor(args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
+            NativeFunctionKind::String => self.eval_string_constructor(args),
         }
     }
 
@@ -229,6 +239,7 @@ impl Context {
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
             NativeFunctionKind::Number => self.construct_number_object(args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
+            NativeFunctionKind::String => self.construct_string_object(args),
         }
     }
 
