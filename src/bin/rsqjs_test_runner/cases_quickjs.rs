@@ -64,6 +64,8 @@ const PATH_QUICKJS_ARRAY_PROTOTYPE_INDEX_OF: &str =
     "tests/corpora/quickjs_differential/active/array_prototype_index_of.js";
 const PATH_QUICKJS_ARRAY_PROTOTYPE_LAST_INDEX_OF: &str =
     "tests/corpora/quickjs_differential/active/array_prototype_last_index_of.js";
+const PATH_QUICKJS_ARRAY_PROTOTYPE_REVERSE: &str =
+    "tests/corpora/quickjs_differential/active/array_prototype_reverse.js";
 const PATH_QUICKJS_ARRAY_PROTOTYPE_SHIFT_UNSHIFT: &str =
     "tests/corpora/quickjs_differential/active/array_prototype_shift_unshift.js";
 const PATH_QUICKJS_ARRAY_PROTOTYPE_SLICE: &str =
@@ -239,6 +241,10 @@ fn quickjs_object_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "array_prototype_last_index_of",
             path: PATH_QUICKJS_ARRAY_PROTOTYPE_LAST_INDEX_OF,
+        },
+        DifferentialCase {
+            id: "array_prototype_reverse",
+            path: PATH_QUICKJS_ARRAY_PROTOTYPE_REVERSE,
         },
         DifferentialCase {
             id: "array_prototype_shift_unshift",

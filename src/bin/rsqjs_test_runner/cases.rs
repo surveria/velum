@@ -82,6 +82,7 @@ const PATH_ARRAY_PROTOTYPE_JOIN: &str = "tests/engine_cases/array_prototype_join
 const PATH_ARRAY_PROTOTYPE_INDEX_OF: &str = "tests/engine_cases/array_prototype_index_of.js";
 const PATH_ARRAY_PROTOTYPE_LAST_INDEX_OF: &str =
     "tests/engine_cases/array_prototype_last_index_of.js";
+const PATH_ARRAY_PROTOTYPE_REVERSE: &str = "tests/engine_cases/array_prototype_reverse.js";
 const PATH_ARRAY_PROTOTYPE_SHIFT_UNSHIFT: &str =
     "tests/engine_cases/array_prototype_shift_unshift.js";
 const PATH_ARRAY_PROTOTYPE_SLICE: &str = "tests/engine_cases/array_prototype_slice.js";
@@ -594,24 +595,43 @@ fn engine_array_search_cases() -> Vec<EngineCase> {
 }
 
 fn engine_array_mutation_cases() -> Vec<EngineCase> {
-    vec![EngineCase {
-        id: "array_prototype_shift_unshift",
-        path: PATH_ARRAY_PROTOTYPE_SHIFT_UNSHIFT,
-        expectation: Expectation::OutputAndValue {
-            output: &[
-                "shift 1 2 2 3 undefined 42",
-                "sparse undefined 2 false undefined tail",
-                "inherited undefined 1 proto-one",
-                "unshift 3 3 3 1 2 3",
-                "holes 3 false a||b",
-                "inherited-unshift 2 head|proto-zero undefined",
-                "meta function shift 0 function unshift 1",
-                "keys:",
-                "in true true",
-            ],
-            value: "42",
+    vec![
+        EngineCase {
+            id: "array_prototype_reverse",
+            path: PATH_ARRAY_PROTOTYPE_REVERSE,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "reverse true 4|3|2|1 4 true 3|2|1",
+                    "side 42 true 7",
+                    "sparse 4 three false one false three||one| true",
+                    "inherited-upper true proto-two true undefined false",
+                    "inherited-lower true undefined false proto-zero true",
+                    "meta function reverse 0",
+                    "keys:",
+                    "in true",
+                ],
+                value: "42",
+            },
         },
-    }]
+        EngineCase {
+            id: "array_prototype_shift_unshift",
+            path: PATH_ARRAY_PROTOTYPE_SHIFT_UNSHIFT,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "shift 1 2 2 3 undefined 42",
+                    "sparse undefined 2 false undefined tail",
+                    "inherited undefined 1 proto-one",
+                    "unshift 3 3 3 1 2 3",
+                    "holes 3 false a||b",
+                    "inherited-unshift 2 head|proto-zero undefined",
+                    "meta function shift 0 function unshift 1",
+                    "keys:",
+                    "in true true",
+                ],
+                value: "42",
+            },
+        },
+    ]
 }
 
 fn engine_array_copy_cases() -> Vec<EngineCase> {
