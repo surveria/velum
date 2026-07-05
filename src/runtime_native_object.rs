@@ -75,9 +75,9 @@ impl Context {
                     self.limits.max_object_properties,
                 )?;
             }
-            Value::Function(id) => self.define_function_property(*id, property, descriptor)?,
+            Value::Function(id) => self.define_function_property(*id, &property, descriptor)?,
             Value::NativeFunction(id) => {
-                self.define_native_function_property(*id, property, descriptor)?;
+                self.define_native_function_property(*id, &property, descriptor)?;
             }
             Value::Undefined
             | Value::Null
@@ -180,9 +180,10 @@ impl Context {
         kind: NativeFunctionKind,
     ) -> Result<()> {
         let function = self.create_native_function(kind, Value::Undefined);
+        let key = self.intern_property_key(name)?;
         self.native_function_mut(constructor)?
             .properties_mut()
-            .define_builtin(name.to_owned(), function, PropertyEnumerable::No);
+            .define_builtin(key, function, PropertyEnumerable::No);
         Ok(())
     }
 
