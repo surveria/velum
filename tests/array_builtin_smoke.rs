@@ -200,6 +200,52 @@ fn counts_dense_array_elements_toward_property_limit() -> TestResult {
     ensure_error_contains(&error, "object property count exceeded 1")
 }
 
+#[test]
+fn preserves_index_access_across_array_methods_and_prototypes() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        Array.prototype[1] = "proto-one";
+
+        let values = ["head"];
+        values[2] = "tail";
+        let direct = values[1];
+        let included = values.includes("proto-one");
+        let found = values.indexOf("proto-one");
+        let sliced = values.slice(0, 3);
+        let joined = values.join("|");
+
+        let shifted = values.shift();
+        let afterShift = values.join("|");
+        delete Array.prototype[1];
+
+        print(direct, included, found, sliced[1], "1" in sliced);
+        print(joined, shifted, afterShift, values.length);
+
+        direct === "proto-one" &&
+            included &&
+            found === 1 &&
+            sliced[1] === "proto-one" &&
+            ("1" in sliced) &&
+            joined === "head|proto-one|tail" &&
+            shifted === "head" &&
+            afterShift === "proto-one|tail" &&
+            values.length === 2 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(
+        context.output(),
+        &[
+            "proto-one true 1 proto-one true".to_owned(),
+            "head|proto-one|tail head proto-one|tail 2".to_owned(),
+        ],
+    )
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
