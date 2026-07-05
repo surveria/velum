@@ -12,6 +12,12 @@ boolean-constructor-numeric-values	test/built-ins/Boolean/S15.6.1.1_A1_T2.js	run
 boolean-constructor-new	test/built-ins/Boolean/S15.6.2.1_A1.js	run	official Test262 Boolean constructor smoke
 boolean-prototype-constructor	test/built-ins/Boolean/prototype/constructor/S15.6.4.1_A1.js	run	official Test262 Boolean prototype constructor smoke
 global-value-properties	test/built-ins/global/S10.2.3_A1.2_T1.js	run	official Test262 global value properties smoke
+json-object-binding	test/built-ins/JSON/15.12-0-1.js	run	official Test262 JSON object binding smoke
+json-stringify-primitives	test/built-ins/JSON/stringify/value-primitive-top-level.js	run	official Test262 JSON.stringify primitive smoke
+json-stringify-non-finite-numbers	test/built-ins/JSON/stringify/value-number-non-finite.js	run	official Test262 JSON.stringify non-finite number smoke
+json-stringify-negative-zero	test/built-ins/JSON/stringify/value-number-negative-zero.js	run	official Test262 JSON.stringify negative zero smoke
+json-stringify-functions	test/built-ins/JSON/stringify/value-function.js	run	official Test262 JSON.stringify function-value smoke
+json-parse-negative-zero	test/built-ins/JSON/parse/text-negative-zero.js	run	official Test262 JSON.parse negative zero smoke
 math-pi-value	test/built-ins/Math/PI/value.js	run	official Test262 Math.PI value smoke
 math-abs-nan	test/built-ins/Math/abs/S15.8.2.1_A1.js	run	official Test262 Math.abs NaN smoke
 math-abs-negative-zero	test/built-ins/Math/abs/S15.8.2.1_A2.js	run	official Test262 Math.abs negative zero smoke

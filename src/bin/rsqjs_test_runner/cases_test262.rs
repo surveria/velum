@@ -109,6 +109,7 @@ const PATH_TEST262_ERROR_OBJECT_PROPERTIES: &str =
     "tests/corpora/test262/active/language/statements/error_object_properties.js";
 const PATH_TEST262_GLOBAL_NUMERIC_CONSTANTS: &str =
     "tests/corpora/test262/active/built-ins/global/numeric_constants.js";
+const PATH_TEST262_JSON_BUILTIN: &str = "tests/corpora/test262/active/built-ins/JSON/basic.js";
 const PATH_TEST262_MATH_BUILTIN: &str = "tests/corpora/test262/active/built-ins/Math/basic.js";
 const PATH_TEST262_MATH_INTEGER_METHODS: &str =
     "tests/corpora/test262/active/built-ins/Math/integer_methods.js";
@@ -358,6 +359,11 @@ fn test262_builtin_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "built-ins/global/numeric-constants",
             path: PATH_TEST262_GLOBAL_NUMERIC_CONSTANTS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/JSON/basic",
+            path: PATH_TEST262_JSON_BUILTIN,
             expectation: Expectation::Value("42"),
         },
         EngineCase {

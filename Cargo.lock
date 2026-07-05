@@ -190,6 +190,7 @@ dependencies = [
  "human-yaml",
  "parking_lot",
  "serde",
+ "serde_json",
  "tabled",
  "thiserror",
 ]

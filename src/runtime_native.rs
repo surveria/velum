@@ -13,6 +13,8 @@ use super::runtime_function::FunctionProperties;
 mod runtime_native_array;
 #[path = "runtime_native_boolean.rs"]
 mod runtime_native_boolean;
+#[path = "runtime_native_json.rs"]
+mod runtime_native_json;
 #[path = "runtime_native_math.rs"]
 mod runtime_native_math;
 #[path = "runtime_native_number.rs"]
@@ -49,6 +51,11 @@ const BOOLEAN_FUNCTION_LENGTH: f64 = 1.0;
 const BOOLEAN_NAME: &str = "Boolean";
 const ERROR_FUNCTION_LENGTH: f64 = 1.0;
 const INFINITY_NAME: &str = "Infinity";
+const JSON_NAME: &str = "JSON";
+const JSON_PARSE_FUNCTION_LENGTH: f64 = 2.0;
+const JSON_PARSE_NAME: &str = "parse";
+const JSON_STRINGIFY_FUNCTION_LENGTH: f64 = 3.0;
+const JSON_STRINGIFY_NAME: &str = "stringify";
 const MATH_ABS_NAME: &str = "abs";
 const MATH_ACOS_NAME: &str = "acos";
 const MATH_ACOSH_NAME: &str = "acosh";
@@ -130,6 +137,8 @@ impl NativeFunction {
             NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_FUNCTION_LENGTH,
             NativeFunctionKind::Boolean => BOOLEAN_FUNCTION_LENGTH,
             NativeFunctionKind::ErrorConstructor(_) => ERROR_FUNCTION_LENGTH,
+            NativeFunctionKind::JsonParse => JSON_PARSE_FUNCTION_LENGTH,
+            NativeFunctionKind::JsonStringify => JSON_STRINGIFY_FUNCTION_LENGTH,
             NativeFunctionKind::MathRandom => MATH_FUNCTION_LENGTH_ZERO,
             NativeFunctionKind::MathAbs
             | NativeFunctionKind::MathAcos
@@ -187,6 +196,8 @@ impl NativeFunction {
             NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_NAME,
             NativeFunctionKind::Boolean => BOOLEAN_NAME,
             NativeFunctionKind::ErrorConstructor(name) => name.as_str(),
+            NativeFunctionKind::JsonParse => JSON_PARSE_NAME,
+            NativeFunctionKind::JsonStringify => JSON_STRINGIFY_NAME,
             NativeFunctionKind::MathAbs => MATH_ABS_NAME,
             NativeFunctionKind::MathAcos => MATH_ACOS_NAME,
             NativeFunctionKind::MathAcosh => MATH_ACOSH_NAME,
@@ -255,6 +266,8 @@ impl NativeFunction {
             | NativeFunctionKind::ArrayUnshift
             | NativeFunctionKind::Boolean
             | NativeFunctionKind::ErrorConstructor(_)
+            | NativeFunctionKind::JsonParse
+            | NativeFunctionKind::JsonStringify
             | NativeFunctionKind::MathAbs
             | NativeFunctionKind::MathAcos
             | NativeFunctionKind::MathAcosh
@@ -316,6 +329,8 @@ pub(super) enum NativeFunctionKind {
     ArrayUnshift,
     Boolean,
     ErrorConstructor(ErrorName),
+    JsonParse,
+    JsonStringify,
     MathAbs,
     MathAcos,
     MathAcosh,
@@ -364,6 +379,7 @@ impl Context {
             INFINITY_NAME => self
                 .global_constant_value(INFINITY_NAME, Value::Number(f64::INFINITY))
                 .map(Some),
+            JSON_NAME => self.json_object_value().map(Some),
             MATH_NAME => self.math_object_value().map(Some),
             NAN_NAME => self
                 .global_constant_value(NAN_NAME, Value::Number(f64::NAN))
@@ -414,6 +430,8 @@ impl Context {
             NativeFunctionKind::ArrayUnshift => self.eval_array_unshift(args, this_value),
             NativeFunctionKind::Boolean => self.eval_boolean_constructor(args),
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
+            NativeFunctionKind::JsonParse => self.eval_json_parse(args),
+            NativeFunctionKind::JsonStringify => self.eval_json_stringify(args),
             NativeFunctionKind::MathAbs => self.eval_math_abs(args),
             NativeFunctionKind::MathAcos => self.eval_math_acos(args),
             NativeFunctionKind::MathAcosh => self.eval_math_acosh(args),
@@ -473,6 +491,8 @@ impl Context {
             | NativeFunctionKind::ArrayShift
             | NativeFunctionKind::ArraySlice
             | NativeFunctionKind::ArrayUnshift
+            | NativeFunctionKind::JsonParse
+            | NativeFunctionKind::JsonStringify
             | NativeFunctionKind::MathAbs
             | NativeFunctionKind::MathAcos
             | NativeFunctionKind::MathAcosh

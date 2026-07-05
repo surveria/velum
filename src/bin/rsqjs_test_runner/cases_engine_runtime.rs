@@ -8,6 +8,7 @@ const PATH_GLOBAL_INFINITY_COMPOUND_ASSIGNMENT_ERROR: &str =
     "tests/engine_cases/global_infinity_compound_assignment_error.js";
 const PATH_GLOBAL_NAN_ASSIGNMENT_ERROR: &str = "tests/engine_cases/global_nan_assignment_error.js";
 const PATH_GLOBAL_NUMERIC_CONSTANTS: &str = "tests/engine_cases/global_numeric_constants.js";
+const PATH_JSON_BUILTIN: &str = "tests/engine_cases/json_builtin.js";
 const PATH_MATH_BUILTIN: &str = "tests/engine_cases/math_builtin.js";
 const PATH_MATH_INTEGER_METHODS: &str = "tests/engine_cases/math_integer_methods.js";
 const PATH_MATH_METHODS: &str = "tests/engine_cases/math_methods.js";
@@ -15,6 +16,12 @@ const PATH_MATH_RANDOM: &str = "tests/engine_cases/math_random.js";
 const PATH_STANDARD_ERROR_CONSTRUCTORS: &str = "tests/engine_cases/standard_error_constructors.js";
 
 pub(super) fn engine_runtime_cases() -> Vec<EngineCase> {
+    let mut cases = engine_error_and_global_cases();
+    cases.extend(engine_builtin_runtime_cases());
+    cases
+}
+
+fn engine_error_and_global_cases() -> Vec<EngineCase> {
     vec![
         EngineCase {
             id: "assert_throws_reference_error",
@@ -62,6 +69,26 @@ pub(super) fn engine_runtime_cases() -> Vec<EngineCase> {
             id: "global_infinity_compound_assignment_error",
             path: PATH_GLOBAL_INFINITY_COMPOUND_ASSIGNMENT_ERROR,
             expectation: Expectation::ErrorContains("assignment to constant 'Infinity'"),
+        },
+    ]
+}
+
+fn engine_builtin_runtime_cases() -> Vec<EngineCase> {
+    vec![
+        EngineCase {
+            id: "json_builtin",
+            path: PATH_JSON_BUILTIN,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "object true function parse 2 function stringify 3",
+                    "front true 2 3 x false",
+                    "null true false \"front\" 42 null null undefined 0",
+                    "[1,null,\"x\"]",
+                    "{\"z\":1,\"a\":\"front\",\"nested\":{\"ok\":true},\"arr\":[true,null,null,null,null]}",
+                    "keys:",
+                ],
+                value: "42",
+            },
         },
         EngineCase {
             id: "math_builtin",
