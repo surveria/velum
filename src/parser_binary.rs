@@ -113,6 +113,12 @@ impl Parser {
         if !self.match_kind(&TokenKind::StarStar) {
             return Ok(left);
         }
+        if matches!(left, Expr::Unary { .. }) {
+            return Err(Error::parse(
+                "unary expression cannot be the left operand of '**'",
+                self.previous_offset(),
+            ));
+        }
         let right = self.power()?;
         Ok(Expr::Binary {
             op: BinaryOp::Pow,

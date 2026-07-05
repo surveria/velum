@@ -74,6 +74,7 @@ pub struct CatchClause {
 pub enum Expr {
     Literal(Value),
     Identifier(String),
+    Parenthesized(Box<Self>),
     Unary {
         op: UnaryOp,
         expr: Box<Self>,

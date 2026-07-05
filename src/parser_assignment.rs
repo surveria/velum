@@ -58,6 +58,9 @@ impl Parser {
         if let Some(op) = operator {
             return Self::compound_assignment_expr(target, op, value, offset);
         }
+        let Some(target) = Self::assignment_target(target) else {
+            return Err(Error::parse("invalid assignment target", offset));
+        };
         match target {
             Expr::Identifier(name) => Ok(Expr::Assignment {
                 name,
@@ -83,12 +86,9 @@ impl Parser {
         value: Expr,
         offset: usize,
     ) -> Result<Expr> {
-        if !matches!(
-            target,
-            Expr::Identifier(_) | Expr::Member { .. } | Expr::ComputedMember { .. }
-        ) {
+        let Some(target) = Self::assignment_target(target) else {
             return Err(Error::parse("invalid assignment target", offset));
-        }
+        };
         Ok(Expr::CompoundAssignment {
             op,
             target: Box::new(target),

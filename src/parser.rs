@@ -453,17 +453,21 @@ impl Parser {
     }
 
     fn update_expr(op: UpdateOp, prefix: bool, expr: Expr, offset: usize) -> Result<Expr> {
-        if !matches!(
-            expr,
-            Expr::Identifier(_) | Expr::Member { .. } | Expr::ComputedMember { .. }
-        ) {
-            return Err(Error::parse("invalid update target", offset));
-        }
+        let expr = Self::assignment_target(expr)
+            .ok_or_else(|| Error::parse("invalid update target", offset))?;
         Ok(Expr::Update {
             op,
             prefix,
             expr: Box::new(expr),
         })
+    }
+
+    fn assignment_target(expr: Expr) -> Option<Expr> {
+        match expr {
+            Expr::Identifier(_) | Expr::Member { .. } | Expr::ComputedMember { .. } => Some(expr),
+            Expr::Parenthesized(expr) => Self::assignment_target(*expr),
+            _ => None,
+        }
     }
 
     fn arguments(&mut self) -> Result<Vec<Expr>> {
@@ -495,7 +499,7 @@ impl Parser {
             TokenKind::LParen => {
                 let expr = self.expression()?;
                 self.consume(&TokenKind::RParen, "expected ')' after expression")?;
-                expr
+                Expr::Parenthesized(Box::new(expr))
             }
             _ => return Err(Error::parse("expected expression", token.offset)),
         };

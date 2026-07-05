@@ -39,6 +39,9 @@ impl Context {
     }
 
     fn eval_typeof(&mut self, expr: &Expr) -> Result<Value> {
+        if let Expr::Parenthesized(expr) = expr {
+            return self.eval_typeof(expr);
+        }
         if let Expr::Identifier(name) = expr {
             let Some(binding) = self.get_binding(name) else {
                 return Ok(Value::String(Value::Undefined.type_name().to_owned()));
@@ -52,6 +55,7 @@ impl Context {
 
     fn eval_delete(&mut self, expr: &Expr) -> Result<Value> {
         match expr {
+            Expr::Parenthesized(expr) => self.eval_delete(expr),
             Expr::Identifier(name) => Ok(Value::Bool(self.get_binding(name).is_none())),
             Expr::Member { object, property } => {
                 let object = self.eval_expr(object)?;
