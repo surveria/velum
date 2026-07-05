@@ -25,12 +25,24 @@ impl Parser {
             Some(BinaryOp::Sub)
         } else if self.match_kind(&TokenKind::StarEqual) {
             Some(BinaryOp::Mul)
+        } else if self.match_kind(&TokenKind::StarStarEqual) {
+            Some(BinaryOp::Pow)
         } else if self.match_kind(&TokenKind::SlashEqual) {
             Some(BinaryOp::Div)
         } else if self.match_kind(&TokenKind::PercentEqual) {
             Some(BinaryOp::Rem)
         } else if self.match_kind(&TokenKind::AmpersandEqual) {
             Some(BinaryOp::BitAnd)
+        } else if self.match_kind(&TokenKind::PipeEqual) {
+            Some(BinaryOp::BitOr)
+        } else if self.match_kind(&TokenKind::CaretEqual) {
+            Some(BinaryOp::BitXor)
+        } else if self.match_kind(&TokenKind::LessLessEqual) {
+            Some(BinaryOp::ShiftLeft)
+        } else if self.match_kind(&TokenKind::GreaterGreaterEqual) {
+            Some(BinaryOp::ShiftRight)
+        } else if self.match_kind(&TokenKind::GreaterGreaterGreaterEqual) {
+            Some(BinaryOp::ShiftRightUnsigned)
         } else {
             return None;
         };
