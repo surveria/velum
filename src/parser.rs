@@ -1,4 +1,6 @@
-use crate::ast::{BinaryOp, DeclKind, Expr, ObjectProperty, Program, Stmt, SwitchCase, UnaryOp};
+use crate::ast::{
+    BinaryOp, CatchClause, DeclKind, Expr, ObjectProperty, Program, Stmt, SwitchCase, UnaryOp,
+};
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
 use crate::runtime_limits::RuntimeLimits;
@@ -231,17 +233,37 @@ impl Parser {
     fn try_statement(&mut self) -> Result<Stmt> {
         self.consume(&TokenKind::LBrace, "expected '{' after 'try'")?;
         let body = self.block_statements()?;
-        self.consume(&TokenKind::Catch, "expected 'catch' after try block")?;
+        let catch = if self.match_kind(&TokenKind::Catch) {
+            Some(self.catch_clause()?)
+        } else {
+            None
+        };
+        let finally_body = if self.match_kind(&TokenKind::Finally) {
+            self.consume(&TokenKind::LBrace, "expected '{' after 'finally'")?;
+            Some(self.block_statements()?)
+        } else {
+            None
+        };
+        if catch.is_none() && finally_body.is_none() {
+            return Err(Error::parse(
+                "expected 'catch' or 'finally' after try block",
+                self.offset(),
+            ));
+        }
+        Ok(Stmt::Try {
+            body,
+            catch,
+            finally_body,
+        })
+    }
+
+    fn catch_clause(&mut self) -> Result<CatchClause> {
         self.consume(&TokenKind::LParen, "expected '(' after 'catch'")?;
-        let catch_param = self.consume_identifier("expected catch binding name")?;
+        let param = self.consume_identifier("expected catch binding name")?;
         self.consume(&TokenKind::RParen, "expected ')' after catch binding")?;
         self.consume(&TokenKind::LBrace, "expected '{' after catch binding")?;
-        let catch_body = self.block_statements()?;
-        Ok(Stmt::TryCatch {
-            body,
-            catch_param,
-            catch_body,
-        })
+        let body = self.block_statements()?;
+        Ok(CatchClause { param, body })
     }
 
     fn throw_statement(&mut self) -> Result<Stmt> {

@@ -27,10 +27,10 @@ pub enum Stmt {
         discriminant: Expr,
         cases: Vec<SwitchCase>,
     },
-    TryCatch {
+    Try {
         body: Vec<Self>,
-        catch_param: String,
-        catch_body: Vec<Self>,
+        catch: Option<CatchClause>,
+        finally_body: Option<Vec<Self>>,
     },
     Break,
     Continue,
@@ -61,6 +61,12 @@ pub struct ObjectProperty {
 pub struct SwitchCase {
     pub test: Option<Expr>,
     pub statements: Vec<Stmt>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CatchClause {
+    pub param: String,
+    pub body: Vec<Stmt>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
