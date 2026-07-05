@@ -78,6 +78,7 @@ const PATH_ARRAY_LITERALS: &str = "tests/engine_cases/array_literals.js";
 const PATH_ARRAY_BUILTIN: &str = "tests/engine_cases/array_builtin.js";
 const PATH_ARRAY_PROTOTYPE_METHODS: &str = "tests/engine_cases/array_prototype_methods.js";
 const PATH_ARRAY_PROTOTYPE_JOIN: &str = "tests/engine_cases/array_prototype_join.js";
+const PATH_ARRAY_PROTOTYPE_INDEX_OF: &str = "tests/engine_cases/array_prototype_index_of.js";
 const PATH_ARRAY_PROTOTYPE_SHIFT_UNSHIFT: &str =
     "tests/engine_cases/array_prototype_shift_unshift.js";
 const PATH_ARRAY_PROTOTYPE_SLICE: &str = "tests/engine_cases/array_prototype_slice.js";
@@ -462,6 +463,12 @@ fn engine_plain_object_cases() -> Vec<EngineCase> {
 }
 
 fn engine_array_cases() -> Vec<EngineCase> {
+    let mut cases = engine_array_core_cases();
+    cases.extend(engine_array_prototype_cases());
+    cases
+}
+
+fn engine_array_core_cases() -> Vec<EngineCase> {
     vec![
         EngineCase {
             id: "array_literals",
@@ -484,6 +491,11 @@ fn engine_array_cases() -> Vec<EngineCase> {
                 value: "42",
             },
         },
+    ]
+}
+
+fn engine_array_prototype_cases() -> Vec<EngineCase> {
+    vec![
         EngineCase {
             id: "array_prototype_methods",
             path: PATH_ARRAY_PROTOTYPE_METHODS,
@@ -505,6 +517,23 @@ fn engine_array_cases() -> Vec<EngineCase> {
                     "join 1,two,,,true 1-two---true 1null2",
                     "sparse true |middle| 7 42 proto|",
                     "meta function join 1",
+                    "keys:",
+                    "in true",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "array_prototype_index_of",
+            path: PATH_ARRAY_PROTOTYPE_INDEX_OF,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "indexOf 1 3 3 -1 -1 6",
+                    "values 4 5 3 3 0",
+                    "sparse -1 2 2 1",
+                    "inherited 1 -1 42 0",
+                    "coerced 1 0 0",
+                    "meta function indexOf 1",
                     "keys:",
                     "in true",
                 ],
