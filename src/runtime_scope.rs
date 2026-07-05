@@ -33,10 +33,6 @@ impl BindingScope {
     pub fn insert(&mut self, name: String, binding: BindingCell) -> Option<BindingCell> {
         self.bindings.insert(name, binding)
     }
-
-    pub fn remove(&mut self, name: &str) -> Option<BindingCell> {
-        self.bindings.remove(name)
-    }
 }
 
 #[derive(Debug, Clone)]

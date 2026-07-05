@@ -326,7 +326,7 @@ impl Parser {
             };
             Ok(declaration)
         } else {
-            Ok(Stmt::Block(declarations))
+            Ok(Stmt::DeclList(declarations))
         }
     }
 

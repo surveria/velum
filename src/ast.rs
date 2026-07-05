@@ -8,6 +8,7 @@ pub struct Program {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Block(Vec<Self>),
+    DeclList(Vec<Self>),
     If {
         condition: Expr,
         consequent: Box<Self>,

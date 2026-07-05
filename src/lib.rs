@@ -9,6 +9,7 @@ mod runtime;
 mod runtime_assertions;
 mod runtime_completion;
 mod runtime_engine;
+mod runtime_lexical_scope;
 mod runtime_limits;
 mod runtime_loop;
 mod runtime_numeric;

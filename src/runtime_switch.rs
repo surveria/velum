@@ -17,6 +17,10 @@ impl Context {
             return Ok(Completion::Normal(Value::Undefined));
         };
 
+        self.with_lexical_scope(|context| context.eval_switch_cases(cases, start))
+    }
+
+    fn eval_switch_cases(&mut self, cases: &[SwitchCase], start: usize) -> Result<Completion> {
         let mut last = Value::Undefined;
         for case in cases.iter().skip(start) {
             match self.eval_block(&case.statements)? {
