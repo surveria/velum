@@ -1,5 +1,18 @@
 use std::fmt;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FunctionId(usize);
+
+impl FunctionId {
+    pub(crate) const fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    pub(crate) const fn index(self) -> usize {
+        self.0
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Undefined,
@@ -7,6 +20,7 @@ pub enum Value {
     Bool(bool),
     Number(f64),
     String(String),
+    Function(FunctionId),
 }
 
 impl Value {
@@ -17,6 +31,7 @@ impl Value {
             Self::Bool(value) => *value,
             Self::Number(value) => *value != 0.0 && !value.is_nan(),
             Self::String(value) => !value.is_empty(),
+            Self::Function(_) => true,
         }
     }
 
@@ -28,6 +43,7 @@ impl Value {
             Self::Bool(_) => "boolean",
             Self::Number(_) => "number",
             Self::String(_) => "string",
+            Self::Function(_) => "function",
         }
     }
 
@@ -60,6 +76,7 @@ impl fmt::Display for Value {
                 }
             }
             Self::String(value) => f.write_str(value),
+            Self::Function(_) => f.write_str("function()"),
         }
     }
 }

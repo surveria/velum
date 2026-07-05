@@ -4,7 +4,7 @@ use crate::ast::{BinaryOp, DeclKind, Expr, Program, Stmt, UnaryOp};
 use crate::error::{Error, Result};
 use crate::lexer;
 use crate::parser;
-use crate::value::Value;
+use crate::value::{FunctionId, Value};
 
 const DEFAULT_MAX_SOURCE_LEN: usize = 65_536;
 const DEFAULT_MAX_STATEMENTS: usize = 4_096;
@@ -81,6 +81,7 @@ impl Default for Runtime {
 pub struct Context {
     limits: RuntimeLimits,
     globals: BTreeMap<String, Binding>,
+    functions: Vec<Function>,
     output: Vec<String>,
     runtime_steps: usize,
 }
@@ -90,6 +91,11 @@ struct Binding {
     value: Value,
     mutable: bool,
     kind: DeclKind,
+}
+
+#[derive(Debug, Clone)]
+struct Function {
+    body: Vec<Stmt>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -113,6 +119,7 @@ impl Context {
         Self {
             limits,
             globals: BTreeMap::new(),
+            functions: Vec::new(),
             output: Vec::new(),
             runtime_steps: 0,
         }
@@ -315,6 +322,7 @@ impl Context {
                 Ok(value)
             }
             Expr::Call { callee, args } => self.eval_call(callee, args),
+            Expr::Function { body } => Ok(self.create_function(body)),
             Expr::New { constructor, args } => self.eval_new(constructor, args),
         }
     }
@@ -447,28 +455,37 @@ impl Context {
     }
 
     fn eval_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<Value> {
-        let Expr::Identifier(name) = callee else {
-            return Err(Error::runtime("only host function calls are supported"));
-        };
-
-        match name.as_str() {
-            BOOLEAN_NAME => self.eval_boolean_call(args),
-            HOST_PRINT_NAME => {
-                let values = args
-                    .iter()
-                    .map(|arg| self.eval_expr(arg))
-                    .collect::<Result<Vec<_>>>()?;
-                let line = values
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                self.check_string_len(&line)?;
-                self.output.push(line);
-                Ok(Value::Undefined)
+        if let Expr::Identifier(name) = callee {
+            match name.as_str() {
+                BOOLEAN_NAME => return self.eval_boolean_call(args),
+                HOST_PRINT_NAME => return self.eval_print_call(args),
+                _ => {}
             }
-            _ => Err(Error::runtime(format!("'{name}' is not callable"))),
         }
+
+        if !args.is_empty() {
+            return Err(Error::runtime("function arguments are not supported yet"));
+        }
+
+        match self.eval_expr(callee)? {
+            Value::Function(id) => self.eval_function(id),
+            value => Err(Error::runtime(format!("'{value}' is not callable"))),
+        }
+    }
+
+    fn eval_print_call(&mut self, args: &[Expr]) -> Result<Value> {
+        let values = args
+            .iter()
+            .map(|arg| self.eval_expr(arg))
+            .collect::<Result<Vec<_>>>()?;
+        let line = values
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(" ");
+        self.check_string_len(&line)?;
+        self.output.push(line);
+        Ok(Value::Undefined)
     }
 
     fn eval_boolean_call(&mut self, args: &[Expr]) -> Result<Value> {
@@ -490,6 +507,25 @@ impl Context {
         };
         let message = self.eval_expr(message)?;
         Ok(Value::String(message.display_for_concat()))
+    }
+
+    fn create_function(&mut self, body: &[Stmt]) -> Value {
+        let id = FunctionId::new(self.functions.len());
+        self.functions.push(Function {
+            body: body.to_vec(),
+        });
+        Value::Function(id)
+    }
+
+    fn eval_function(&mut self, id: FunctionId) -> Result<Value> {
+        let body = self
+            .functions
+            .get(id.index())
+            .map(|function| function.body.clone())
+            .ok_or_else(|| Error::runtime("function id is not defined"))?;
+        self.hoist_var_declarations(&body)?;
+        self.eval_block(&body)?.into_result()?;
+        Ok(Value::Undefined)
     }
 
     fn define(&mut self, name: &str, value: Value, kind: DeclKind) -> Result<()> {
@@ -620,7 +656,7 @@ fn compare_binary(
 
 fn bitwise_i32(value: &Value) -> Result<i32> {
     match value {
-        Value::Undefined | Value::Null => Ok(0),
+        Value::Undefined | Value::Null | Value::Function(_) => Ok(0),
         Value::Bool(value) => Ok(i32::from(*value)),
         Value::Number(value) => number_to_i32(*value),
         Value::String(value) => string_to_i32(value),

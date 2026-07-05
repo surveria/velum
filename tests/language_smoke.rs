@@ -112,6 +112,40 @@ fn supports_conditional_and_bitwise_and() -> TestResult {
 }
 
 #[test]
+fn supports_function_expressions() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r"
+        let value = 0;
+        let update = function() {
+            value = value + 20;
+        };
+        let first = update();
+        update();
+        value = value + 2;
+        value
+        ",
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_optional_value(context.get_global("first"), &Value::Undefined)?;
+
+    let Err(error) = eval(
+        r"
+        let update = function() {
+            1;
+        };
+        update(1);
+        ",
+    ) else {
+        return Err("expected function arguments to fail".into());
+    };
+    ensure_error_kind(&error, "runtime")
+}
+
+#[test]
 fn evaluates_if_blocks_and_throw_statements() -> TestResult {
     expect_value(
         r#"

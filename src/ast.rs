@@ -60,6 +60,9 @@ pub enum Expr {
         callee: Box<Self>,
         args: Vec<Self>,
     },
+    Function {
+        body: Vec<Stmt>,
+    },
     New {
         constructor: String,
         args: Vec<Self>,

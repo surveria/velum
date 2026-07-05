@@ -322,6 +322,7 @@ impl Parser {
             TokenKind::Null => Expr::Literal(Value::Null),
             TokenKind::Undefined => Expr::Literal(Value::Undefined),
             TokenKind::Identifier(name) => Expr::Identifier(name),
+            TokenKind::Function => self.function_expression()?,
             TokenKind::LParen => {
                 let expr = self.expression()?;
                 self.consume(&TokenKind::RParen, "expected ')' after expression")?;
@@ -330,6 +331,20 @@ impl Parser {
             _ => return Err(Error::parse("expected expression", token.offset)),
         };
         Ok(expr)
+    }
+
+    fn function_expression(&mut self) -> Result<Expr> {
+        self.consume(&TokenKind::LParen, "expected '(' after 'function'")?;
+        if !self.check(&TokenKind::RParen) {
+            return Err(Error::parse(
+                "function parameters are not supported yet",
+                self.offset(),
+            ));
+        }
+        self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
+        self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
+        let body = self.block_statements()?;
+        Ok(Expr::Function { body })
     }
 
     fn left_assoc(
