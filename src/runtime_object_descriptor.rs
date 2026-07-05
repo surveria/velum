@@ -103,7 +103,23 @@ impl DataPropertyUpdate {
         }
     }
 
-    fn complete_for_new(self) -> DataPropertyDescriptor {
+    pub fn value(&self) -> Option<Value> {
+        self.value.clone()
+    }
+
+    pub const fn writable(&self) -> Option<PropertyWritable> {
+        self.writable
+    }
+
+    pub const fn enumerable(&self) -> Option<PropertyEnumerable> {
+        self.enumerable
+    }
+
+    pub const fn configurable(&self) -> Option<PropertyConfigurable> {
+        self.configurable
+    }
+
+    pub fn complete_for_new(self) -> DataPropertyDescriptor {
         DataPropertyDescriptor::new(
             self.value.unwrap_or(Value::Undefined),
             self.writable.unwrap_or(PropertyWritable::No),

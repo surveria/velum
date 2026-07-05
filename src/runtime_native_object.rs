@@ -61,20 +61,32 @@ impl Context {
     pub(super) fn eval_object_define_property(&mut self, args: &[Expr]) -> Result<Value> {
         let values = self.eval_native_args(args)?;
         let target = Self::argument_or_undefined(&values, 0);
-        let Value::Object(id) = &target else {
-            return Err(Error::runtime(
-                "Object.defineProperty target must be an object",
-            ));
-        };
         let property = self.object_property_key(&values, 1)?;
         let descriptor_value = Self::argument_or_undefined(&values, 2);
         let descriptor = self.data_property_update_from_value(&descriptor_value)?;
-        self.objects.define_property(
-            *id,
-            property,
-            descriptor,
-            self.limits.max_object_properties,
-        )?;
+        match &target {
+            Value::Object(id) => self.objects.define_property(
+                *id,
+                property,
+                descriptor,
+                self.limits.max_object_properties,
+            )?,
+            Value::Function(id) => self.define_function_property(*id, property, descriptor)?,
+            Value::NativeFunction(id) => {
+                self.define_native_function_property(*id, property, descriptor)?;
+            }
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::HostFunction(_)
+            | Value::Error(_) => {
+                return Err(Error::runtime(
+                    "Object.defineProperty target must be an object",
+                ));
+            }
+        }
         Ok(target)
     }
 
@@ -84,13 +96,26 @@ impl Context {
     ) -> Result<Value> {
         let values = self.eval_native_args(args)?;
         let target = Self::argument_or_undefined(&values, 0);
-        let Value::Object(id) = target else {
-            return Err(Error::runtime(
-                "Object.getOwnPropertyDescriptor target must be an object",
-            ));
-        };
         let property = self.object_property_key(&values, 1)?;
-        let Some(descriptor) = self.objects.own_property_descriptor(id, &property)? else {
+        let descriptor = match target {
+            Value::Object(id) => self.objects.own_property_descriptor(id, &property)?,
+            Value::Function(id) => self.function_own_property_descriptor(id, &property)?,
+            Value::NativeFunction(id) => {
+                self.native_function_own_property_descriptor(id, &property)?
+            }
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::HostFunction(_)
+            | Value::Error(_) => {
+                return Err(Error::runtime(
+                    "Object.getOwnPropertyDescriptor target must be an object",
+                ));
+            }
+        };
+        let Some(descriptor) = descriptor else {
             return Ok(Value::Undefined);
         };
         self.create_property_descriptor_object(&descriptor)
