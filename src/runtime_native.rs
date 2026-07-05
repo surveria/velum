@@ -78,6 +78,7 @@ const MATH_MAX_NAME: &str = "max";
 const MATH_MIN_NAME: &str = "min";
 const MATH_NAME: &str = "Math";
 const MATH_POW_NAME: &str = "pow";
+const MATH_RANDOM_NAME: &str = "random";
 const MATH_ROUND_NAME: &str = "round";
 const MATH_SIGN_NAME: &str = "sign";
 const MATH_SIN_NAME: &str = "sin";
@@ -86,6 +87,7 @@ const MATH_SQRT_NAME: &str = "sqrt";
 const MATH_TAN_NAME: &str = "tan";
 const MATH_TANH_NAME: &str = "tanh";
 const MATH_TRUNC_NAME: &str = "trunc";
+const MATH_FUNCTION_LENGTH_ZERO: f64 = 0.0;
 const NAN_NAME: &str = "NaN";
 const NUMBER_FUNCTION_LENGTH: f64 = 1.0;
 const NUMBER_NAME: &str = "Number";
@@ -128,6 +130,7 @@ impl NativeFunction {
             NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_FUNCTION_LENGTH,
             NativeFunctionKind::Boolean => BOOLEAN_FUNCTION_LENGTH,
             NativeFunctionKind::ErrorConstructor(_) => ERROR_FUNCTION_LENGTH,
+            NativeFunctionKind::MathRandom => MATH_FUNCTION_LENGTH_ZERO,
             NativeFunctionKind::MathAbs
             | NativeFunctionKind::MathAcos
             | NativeFunctionKind::MathAcosh
@@ -210,6 +213,7 @@ impl NativeFunction {
             NativeFunctionKind::MathMax => MATH_MAX_NAME,
             NativeFunctionKind::MathMin => MATH_MIN_NAME,
             NativeFunctionKind::MathPow => MATH_POW_NAME,
+            NativeFunctionKind::MathRandom => MATH_RANDOM_NAME,
             NativeFunctionKind::MathRound => MATH_ROUND_NAME,
             NativeFunctionKind::MathSign => MATH_SIGN_NAME,
             NativeFunctionKind::MathSin => MATH_SIN_NAME,
@@ -277,6 +281,7 @@ impl NativeFunction {
             | NativeFunctionKind::MathMax
             | NativeFunctionKind::MathMin
             | NativeFunctionKind::MathPow
+            | NativeFunctionKind::MathRandom
             | NativeFunctionKind::MathRound
             | NativeFunctionKind::MathSign
             | NativeFunctionKind::MathSin
@@ -337,6 +342,7 @@ pub(super) enum NativeFunctionKind {
     MathMax,
     MathMin,
     MathPow,
+    MathRandom,
     MathRound,
     MathSign,
     MathSin,
@@ -434,6 +440,7 @@ impl Context {
             NativeFunctionKind::MathMax => self.eval_math_max(args),
             NativeFunctionKind::MathMin => self.eval_math_min(args),
             NativeFunctionKind::MathPow => self.eval_math_pow(args),
+            NativeFunctionKind::MathRandom => self.eval_math_random(args),
             NativeFunctionKind::MathRound => self.eval_math_round(args),
             NativeFunctionKind::MathSign => self.eval_math_sign(args),
             NativeFunctionKind::MathSin => self.eval_math_sin(args),
@@ -492,6 +499,7 @@ impl Context {
             | NativeFunctionKind::MathMax
             | NativeFunctionKind::MathMin
             | NativeFunctionKind::MathPow
+            | NativeFunctionKind::MathRandom
             | NativeFunctionKind::MathRound
             | NativeFunctionKind::MathSign
             | NativeFunctionKind::MathSin

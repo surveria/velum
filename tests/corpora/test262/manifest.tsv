@@ -53,3 +53,4 @@ math-fround-zero	test/built-ins/Math/fround/Math.fround_Zero.js	run	official Tes
 math-fround-infinity	test/built-ins/Math/fround/Math.fround_Infinity.js	run	official Test262 Math.fround infinity smoke
 math-fround-value-conversion	test/built-ins/Math/fround/value-convertion.js	run	official Test262 Math.fround value conversion smoke
 math-fround-ties	test/built-ins/Math/fround/ties.js	run	official Test262 Math.fround ties-to-even smoke
+math-random-range	test/built-ins/Math/random/S15.8.2.14_A1.js	run	official Test262 Math.random range smoke

@@ -2,7 +2,7 @@ use std::f64::consts::{E, FRAC_1_SQRT_2, LN_2, LN_10, LOG2_E, LOG10_E, PI, SQRT_
 
 use crate::{
     ast::Expr,
-    error::Result,
+    error::{Error, Result},
     runtime::Context,
     runtime_numeric::number_to_uint32,
     value::{ObjectId, Value},
@@ -14,8 +14,9 @@ use super::{
     MATH_CLZ32_NAME, MATH_COS_NAME, MATH_COSH_NAME, MATH_EXP_NAME, MATH_EXPM1_NAME,
     MATH_FLOOR_NAME, MATH_FROUND_NAME, MATH_HYPOT_NAME, MATH_IMUL_NAME, MATH_LOG_NAME,
     MATH_LOG1P_NAME, MATH_LOG2_NAME, MATH_LOG10_NAME, MATH_MAX_NAME, MATH_MIN_NAME, MATH_NAME,
-    MATH_POW_NAME, MATH_ROUND_NAME, MATH_SIGN_NAME, MATH_SIN_NAME, MATH_SINH_NAME, MATH_SQRT_NAME,
-    MATH_TAN_NAME, MATH_TANH_NAME, MATH_TRUNC_NAME, NativeFunctionKind,
+    MATH_POW_NAME, MATH_RANDOM_NAME, MATH_ROUND_NAME, MATH_SIGN_NAME, MATH_SIN_NAME,
+    MATH_SINH_NAME, MATH_SQRT_NAME, MATH_TAN_NAME, MATH_TANH_NAME, MATH_TRUNC_NAME,
+    NativeFunctionKind,
 };
 
 const MATH_E_NAME: &str = "E";
@@ -26,6 +27,14 @@ const MATH_LOG2E_NAME: &str = "LOG2E";
 const MATH_PI_NAME: &str = "PI";
 const MATH_SQRT1_2_NAME: &str = "SQRT1_2";
 const MATH_SQRT2_NAME: &str = "SQRT2";
+const RANDOM_DENOMINATOR: f64 = 9_007_199_254_740_992.0;
+const RANDOM_FRACTION_BITS: u32 = 53;
+const RANDOM_HIGH_SCALE: f64 = 2_097_152.0;
+const RANDOM_LOW_BITS: u32 = 21;
+const RANDOM_LOW_MASK: u64 = (1_u64 << RANDOM_LOW_BITS) - 1;
+const RANDOM_XOR_SHIFT_A: u32 = 13;
+const RANDOM_XOR_SHIFT_B: u32 = 7;
+const RANDOM_XOR_SHIFT_C: u32 = 17;
 
 impl Context {
     pub(super) fn math_object_value(&mut self) -> Result<Value> {
@@ -73,6 +82,7 @@ impl Context {
         self.define_math_method(object, MATH_MAX_NAME, NativeFunctionKind::MathMax)?;
         self.define_math_method(object, MATH_MIN_NAME, NativeFunctionKind::MathMin)?;
         self.define_math_method(object, MATH_POW_NAME, NativeFunctionKind::MathPow)?;
+        self.define_math_method(object, MATH_RANDOM_NAME, NativeFunctionKind::MathRandom)?;
         self.define_math_method(object, MATH_ROUND_NAME, NativeFunctionKind::MathRound)?;
         self.define_math_method(object, MATH_SIGN_NAME, NativeFunctionKind::MathSign)?;
         self.define_math_method(object, MATH_SIN_NAME, NativeFunctionKind::MathSin)?;
@@ -253,6 +263,12 @@ impl Context {
         Ok(Value::Number(base.powf(exponent)))
     }
 
+    pub(super) fn eval_math_random(&mut self, args: &[Expr]) -> Result<Value> {
+        let values = self.eval_math_args(args)?;
+        drop(values);
+        Ok(Value::Number(self.next_math_random()?))
+    }
+
     pub(super) fn eval_math_round(&mut self, args: &[Expr]) -> Result<Value> {
         let values = self.eval_math_args(args)?;
         Ok(Value::Number(Self::round_to_nearest_toward_positive(
@@ -341,6 +357,21 @@ impl Context {
 
     fn fround_to_number(value: f64) -> f64 {
         f64::from(Self::round_to_binary32(value))
+    }
+
+    fn next_math_random(&mut self) -> Result<f64> {
+        let mut state = self.random_state;
+        state ^= state << RANDOM_XOR_SHIFT_A;
+        state ^= state >> RANDOM_XOR_SHIFT_B;
+        state ^= state << RANDOM_XOR_SHIFT_C;
+        self.random_state = state;
+
+        let fraction_bits = state >> (u64::BITS - RANDOM_FRACTION_BITS);
+        let high = u32::try_from(fraction_bits >> RANDOM_LOW_BITS)
+            .map_err(|_| Error::runtime("Math.random high bits conversion overflowed"))?;
+        let low = u32::try_from(fraction_bits & RANDOM_LOW_MASK)
+            .map_err(|_| Error::runtime("Math.random low bits conversion overflowed"))?;
+        Ok(f64::from(high).mul_add(RANDOM_HIGH_SCALE, f64::from(low)) / RANDOM_DENOMINATOR)
     }
 
     #[allow(clippy::cast_possible_truncation)]
