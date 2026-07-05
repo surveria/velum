@@ -113,6 +113,8 @@ const PATH_QUICKJS_STANDARD_ERROR_CONSTRUCTORS: &str =
     "tests/corpora/quickjs_differential/active/standard_error_constructors.js";
 const PATH_QUICKJS_BOOLEAN_BUILTIN: &str =
     "tests/corpora/quickjs_differential/active/boolean_builtin.js";
+const PATH_QUICKJS_OBJECT_DESCRIPTORS: &str =
+    "tests/corpora/quickjs_differential/active/object_descriptors.js";
 
 pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
     let mut cases = quickjs_language_cases();
@@ -370,6 +372,10 @@ fn quickjs_runtime_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "math_random",
             path: PATH_QUICKJS_MATH_RANDOM,
+        },
+        DifferentialCase {
+            id: "object_descriptors",
+            path: PATH_QUICKJS_OBJECT_DESCRIPTORS,
         },
         DifferentialCase {
             id: "standard_error_constructors",

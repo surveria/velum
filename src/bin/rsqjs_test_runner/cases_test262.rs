@@ -38,6 +38,8 @@ const PATH_TEST262_OBJECT_PROTOTYPE_ROOT: &str =
     "tests/corpora/test262/active/language/expressions/object_prototype_root.js";
 const PATH_TEST262_OBJECT_BUILTIN: &str =
     "tests/corpora/test262/active/language/expressions/object_builtin.js";
+const PATH_TEST262_OBJECT_DESCRIPTORS: &str =
+    "tests/corpora/test262/active/built-ins/Object/descriptors.js";
 const PATH_TEST262_NUMBER_BUILTIN: &str =
     "tests/corpora/test262/active/built-ins/Number/constructor.js";
 const PATH_TEST262_BOOLEAN_BUILTIN: &str =
@@ -389,6 +391,11 @@ fn test262_builtin_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "built-ins/Number/constructor",
             path: PATH_TEST262_NUMBER_BUILTIN,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Object/descriptors",
+            path: PATH_TEST262_OBJECT_DESCRIPTORS,
             expectation: Expectation::Value("42"),
         },
         EngineCase {

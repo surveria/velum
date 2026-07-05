@@ -13,6 +13,7 @@ const PATH_MATH_BUILTIN: &str = "tests/engine_cases/math_builtin.js";
 const PATH_MATH_INTEGER_METHODS: &str = "tests/engine_cases/math_integer_methods.js";
 const PATH_MATH_METHODS: &str = "tests/engine_cases/math_methods.js";
 const PATH_MATH_RANDOM: &str = "tests/engine_cases/math_random.js";
+const PATH_OBJECT_DESCRIPTORS: &str = "tests/engine_cases/object_descriptors.js";
 const PATH_STANDARD_ERROR_CONSTRUCTORS: &str = "tests/engine_cases/standard_error_constructors.js";
 
 pub(super) fn engine_runtime_cases() -> Vec<EngineCase> {
@@ -124,6 +125,19 @@ fn engine_builtin_runtime_cases() -> Vec<EngineCase> {
             path: PATH_MATH_RANDOM,
             expectation: Expectation::OutputAndValue {
                 output: &["true true true"],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "object_descriptors",
+            path: PATH_OBJECT_DESCRIPTORS,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "function getOwnPropertyDescriptor 2 function defineProperty 3 function keys 1 function hasOwn 2",
+                    "7 true false false 7 false",
+                    "9 false false false false undefined",
+                    "2 a fixed true false true true true keys:",
+                ],
                 value: "42",
             },
         },
