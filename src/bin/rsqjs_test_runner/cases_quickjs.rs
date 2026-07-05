@@ -54,6 +54,8 @@ const PATH_QUICKJS_ARRAY_LITERALS: &str =
     "tests/corpora/quickjs_differential/active/array_literals.js";
 const PATH_QUICKJS_ARRAY_BUILTIN: &str =
     "tests/corpora/quickjs_differential/active/array_builtin.js";
+const PATH_QUICKJS_ARRAY_PROTOTYPE_METHODS: &str =
+    "tests/corpora/quickjs_differential/active/array_prototype_methods.js";
 const PATH_QUICKJS_UNARY_OPERATORS: &str =
     "tests/corpora/quickjs_differential/active/unary_operators.js";
 const PATH_QUICKJS_UPDATE_EXPRESSIONS: &str =
@@ -205,6 +207,10 @@ fn quickjs_object_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "array_builtin",
             path: PATH_QUICKJS_ARRAY_BUILTIN,
+        },
+        DifferentialCase {
+            id: "array_prototype_methods",
+            path: PATH_QUICKJS_ARRAY_PROTOTYPE_METHODS,
         },
         DifferentialCase {
             id: "unary_operators",

@@ -233,6 +233,44 @@ impl ObjectHeap {
         Ok(prototype)
     }
 
+    pub(crate) fn array_push(
+        &mut self,
+        id: ObjectId,
+        values: Vec<Value>,
+        max_properties: usize,
+    ) -> Result<Value> {
+        let object = self.object_mut(id)?;
+        let mut length = object
+            .array_length
+            .ok_or_else(|| Error::runtime("Array.prototype.push requires an array receiver"))?;
+
+        for value in values {
+            let index = length.index()?;
+            object.set_ordinary(index.key(), value, max_properties)?;
+            length = index.next_length()?;
+        }
+        object.array_length = Some(length);
+        Ok(length.value())
+    }
+
+    pub(crate) fn array_pop(&mut self, id: ObjectId) -> Result<Value> {
+        let object = self.object_mut(id)?;
+        let Some(length) = object.array_length else {
+            return Err(Error::runtime(
+                "Array.prototype.pop requires an array receiver",
+            ));
+        };
+        let Some(index) = length.previous_index() else {
+            return Ok(Value::Undefined);
+        };
+
+        let key = index.key();
+        let value = object.get_own(&key).unwrap_or(Value::Undefined);
+        object.delete(&key);
+        object.array_length = Some(index.length());
+        Ok(value)
+    }
+
     pub(crate) fn define_non_enumerable(
         &mut self,
         id: ObjectId,
@@ -600,19 +638,34 @@ impl ArrayLength {
     const fn contains(self, index: ArrayIndex) -> bool {
         index.0 < self.0
     }
+
+    fn index(self) -> Result<ArrayIndex> {
+        ArrayIndex::from_u32(self.0)
+    }
+
+    const fn previous_index(self) -> Option<ArrayIndex> {
+        if self.0 == 0 {
+            return None;
+        }
+        Some(ArrayIndex(self.0 - 1))
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct ArrayIndex(u32);
 
 impl ArrayIndex {
-    fn from_usize(value: usize) -> Result<Self> {
-        let value = u32::try_from(value)
-            .map_err(|_| Error::limit("array index exceeded supported range"))?;
+    fn from_u32(value: u32) -> Result<Self> {
         if value == u32::MAX {
             return Err(Error::limit("array index exceeded supported range"));
         }
         Ok(Self(value))
+    }
+
+    fn from_usize(value: usize) -> Result<Self> {
+        let value = u32::try_from(value)
+            .map_err(|_| Error::limit("array index exceeded supported range"))?;
+        Self::from_u32(value)
     }
 
     fn parse(property: &str) -> Option<Self> {
@@ -632,5 +685,9 @@ impl ArrayIndex {
             .checked_add(1)
             .map(ArrayLength)
             .ok_or_else(|| Error::limit("array length exceeded supported range"))
+    }
+
+    const fn length(self) -> ArrayLength {
+        ArrayLength(self.0)
     }
 }

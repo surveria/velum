@@ -9,6 +9,12 @@ use crate::{
 use super::runtime_function::FunctionProperties;
 
 const OBJECT_CONSTRUCTOR_PROPERTY: &str = "constructor";
+const ARRAY_POP_FUNCTION_LENGTH: f64 = 0.0;
+const ARRAY_POP_NAME: &str = "pop";
+const ARRAY_PROTOTYPE_POP_PROPERTY: &str = "pop";
+const ARRAY_PROTOTYPE_PUSH_PROPERTY: &str = "push";
+const ARRAY_PUSH_FUNCTION_LENGTH: f64 = 1.0;
+const ARRAY_PUSH_NAME: &str = "push";
 const ARRAY_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_NAME: &str = "Array";
 const OBJECT_FUNCTION_LENGTH: f64 = 1.0;
@@ -35,6 +41,8 @@ impl NativeFunction {
     pub(super) const fn length(&self) -> f64 {
         match self.kind {
             NativeFunctionKind::Array => ARRAY_FUNCTION_LENGTH,
+            NativeFunctionKind::ArrayPop => ARRAY_POP_FUNCTION_LENGTH,
+            NativeFunctionKind::ArrayPush => ARRAY_PUSH_FUNCTION_LENGTH,
             NativeFunctionKind::Object => OBJECT_FUNCTION_LENGTH,
         }
     }
@@ -42,6 +50,8 @@ impl NativeFunction {
     pub(super) const fn name(&self) -> &'static str {
         match self.kind {
             NativeFunctionKind::Array => ARRAY_NAME,
+            NativeFunctionKind::ArrayPop => ARRAY_POP_NAME,
+            NativeFunctionKind::ArrayPush => ARRAY_PUSH_NAME,
             NativeFunctionKind::Object => OBJECT_NAME,
         }
     }
@@ -58,6 +68,8 @@ impl NativeFunction {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(super) enum NativeFunctionKind {
     Array,
+    ArrayPop,
+    ArrayPush,
     Object,
 }
 
@@ -81,10 +93,12 @@ impl Context {
         &mut self,
         id: NativeFunctionId,
         args: &[Expr],
-        _this_value: Value,
+        this_value: &Value,
     ) -> Result<Value> {
         match self.native_function(id)?.kind() {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
+            NativeFunctionKind::ArrayPop => self.eval_array_pop(args, this_value),
+            NativeFunctionKind::ArrayPush => self.eval_array_push(args, this_value),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
         }
     }
@@ -96,6 +110,9 @@ impl Context {
     ) -> Result<Value> {
         match self.native_function(id)?.kind() {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
+            NativeFunctionKind::ArrayPop | NativeFunctionKind::ArrayPush => {
+                Err(Error::runtime("native method is not a constructor"))
+            }
             NativeFunctionKind::Object => self.eval_object_constructor(args),
         }
     }
@@ -137,9 +154,11 @@ impl Context {
         self.object_constructor_value()?;
         let id = NativeFunctionId::new(self.native_functions.len());
         let constructor = Value::NativeFunction(id);
-        let prototype = self.array_prototype_id_with_constructor(constructor.clone())?;
+        let prototype_id = self.array_prototype_id_with_constructor(constructor.clone())?;
+        let prototype = Value::Object(prototype_id);
         self.native_functions
             .push(NativeFunction::new(NativeFunctionKind::Array, prototype));
+        self.install_array_prototype_methods(prototype_id)?;
         self.insert_global_builtin(ARRAY_NAME, constructor.clone())?;
         Ok(constructor)
     }
@@ -169,13 +188,37 @@ impl Context {
         Ok(Value::Object(prototype))
     }
 
-    fn array_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<Value> {
-        let prototype = self.objects.array_prototype_id_with_constructor(
+    fn array_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<ObjectId> {
+        self.objects.array_prototype_id_with_constructor(
             constructor,
             self.limits.max_objects,
             self.limits.max_object_properties,
+        )
+    }
+
+    fn install_array_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
+        let push = self.create_native_function(NativeFunctionKind::ArrayPush, Value::Undefined);
+        self.objects.define_non_enumerable(
+            prototype,
+            ARRAY_PROTOTYPE_PUSH_PROPERTY.to_owned(),
+            push,
+            self.limits.max_object_properties,
         )?;
-        Ok(Value::Object(prototype))
+
+        let pop = self.create_native_function(NativeFunctionKind::ArrayPop, Value::Undefined);
+        self.objects.define_non_enumerable(
+            prototype,
+            ARRAY_PROTOTYPE_POP_PROPERTY.to_owned(),
+            pop,
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn create_native_function(&mut self, kind: NativeFunctionKind, prototype: Value) -> Value {
+        let id = NativeFunctionId::new(self.native_functions.len());
+        self.native_functions
+            .push(NativeFunction::new(kind, prototype));
+        Value::NativeFunction(id)
     }
 
     fn native_function_id(&self, kind: NativeFunctionKind) -> Option<NativeFunctionId> {
@@ -225,6 +268,32 @@ impl Context {
             );
         }
         self.create_array_from_elements(values)
+    }
+
+    fn eval_array_push(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
+        let Value::Object(id) = this_value else {
+            return Err(Error::runtime(
+                "Array.prototype.push requires an array receiver",
+            ));
+        };
+        let values = args
+            .iter()
+            .map(|arg| self.eval_expr(arg))
+            .collect::<Result<Vec<_>>>()?;
+        self.objects
+            .array_push(*id, values, self.limits.max_object_properties)
+    }
+
+    fn eval_array_pop(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
+        args.iter()
+            .map(|arg| self.eval_expr(arg))
+            .collect::<Result<Vec<_>>>()?;
+        let Value::Object(id) = this_value else {
+            return Err(Error::runtime(
+                "Array.prototype.pop requires an array receiver",
+            ));
+        };
+        self.objects.array_pop(*id)
     }
 
     pub(crate) fn create_array_from_elements(&mut self, elements: Vec<Value>) -> Result<Value> {
