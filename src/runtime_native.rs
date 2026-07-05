@@ -18,11 +18,14 @@ const ARRAY_PROTOTYPE_JOIN_PROPERTY: &str = "join";
 const ARRAY_PROTOTYPE_POP_PROPERTY: &str = "pop";
 const ARRAY_PROTOTYPE_PUSH_PROPERTY: &str = "push";
 const ARRAY_PROTOTYPE_SHIFT_PROPERTY: &str = "shift";
+const ARRAY_PROTOTYPE_SLICE_PROPERTY: &str = "slice";
 const ARRAY_PROTOTYPE_UNSHIFT_PROPERTY: &str = "unshift";
 const ARRAY_PUSH_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_PUSH_NAME: &str = "push";
 const ARRAY_SHIFT_FUNCTION_LENGTH: f64 = 0.0;
 const ARRAY_SHIFT_NAME: &str = "shift";
+const ARRAY_SLICE_FUNCTION_LENGTH: f64 = 2.0;
+const ARRAY_SLICE_NAME: &str = "slice";
 const ARRAY_UNSHIFT_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_UNSHIFT_NAME: &str = "unshift";
 const ARRAY_FUNCTION_LENGTH: f64 = 1.0;
@@ -55,6 +58,7 @@ impl NativeFunction {
             NativeFunctionKind::ArrayPop => ARRAY_POP_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayPush => ARRAY_PUSH_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayShift => ARRAY_SHIFT_FUNCTION_LENGTH,
+            NativeFunctionKind::ArraySlice => ARRAY_SLICE_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_FUNCTION_LENGTH,
             NativeFunctionKind::Object => OBJECT_FUNCTION_LENGTH,
         }
@@ -67,6 +71,7 @@ impl NativeFunction {
             NativeFunctionKind::ArrayPop => ARRAY_POP_NAME,
             NativeFunctionKind::ArrayPush => ARRAY_PUSH_NAME,
             NativeFunctionKind::ArrayShift => ARRAY_SHIFT_NAME,
+            NativeFunctionKind::ArraySlice => ARRAY_SLICE_NAME,
             NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_NAME,
             NativeFunctionKind::Object => OBJECT_NAME,
         }
@@ -88,6 +93,7 @@ pub(super) enum NativeFunctionKind {
     ArrayPop,
     ArrayPush,
     ArrayShift,
+    ArraySlice,
     ArrayUnshift,
     Object,
 }
@@ -120,6 +126,7 @@ impl Context {
             NativeFunctionKind::ArrayPop => self.eval_array_pop(args, this_value),
             NativeFunctionKind::ArrayPush => self.eval_array_push(args, this_value),
             NativeFunctionKind::ArrayShift => self.eval_array_shift(args, this_value),
+            NativeFunctionKind::ArraySlice => self.eval_array_slice(args, this_value),
             NativeFunctionKind::ArrayUnshift => self.eval_array_unshift(args, this_value),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
         }
@@ -136,6 +143,7 @@ impl Context {
             | NativeFunctionKind::ArrayPop
             | NativeFunctionKind::ArrayPush
             | NativeFunctionKind::ArrayShift
+            | NativeFunctionKind::ArraySlice
             | NativeFunctionKind::ArrayUnshift => {
                 Err(Error::runtime("native method is not a constructor"))
             }
@@ -252,6 +260,14 @@ impl Context {
             prototype,
             ARRAY_PROTOTYPE_SHIFT_PROPERTY.to_owned(),
             shift,
+            self.limits.max_object_properties,
+        )?;
+
+        let slice = self.create_native_function(NativeFunctionKind::ArraySlice, Value::Undefined);
+        self.objects.define_non_enumerable(
+            prototype,
+            ARRAY_PROTOTYPE_SLICE_PROPERTY.to_owned(),
+            slice,
             self.limits.max_object_properties,
         )?;
 
@@ -385,6 +401,31 @@ impl Context {
             .array_shift(*id, self.limits.max_object_properties)
     }
 
+    fn eval_array_slice(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
+        let values = args
+            .iter()
+            .map(|arg| self.eval_expr(arg))
+            .collect::<Result<Vec<_>>>()?;
+        let Value::Object(id) = this_value else {
+            return Err(Error::runtime(
+                "Array.prototype.slice requires an array receiver",
+            ));
+        };
+
+        let length = self.objects.array_len_for_slice(*id)?;
+        let start = Self::array_slice_bound(values.first(), length, 0)?;
+        let end = Self::array_slice_bound(values.get(1), length, length)?.max(start);
+        let prototype = self.array_constructor_prototype()?;
+        self.objects.array_slice(
+            *id,
+            start,
+            end,
+            prototype,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )
+    }
+
     fn eval_array_unshift(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
         let values = args
             .iter()
@@ -426,6 +467,79 @@ impl Context {
         }
         joined.push_str(text);
         Ok(())
+    }
+
+    fn array_slice_bound(value: Option<&Value>, length: usize, default: usize) -> Result<usize> {
+        let Some(value) = value else {
+            return Ok(default);
+        };
+        if matches!(value, Value::Undefined) {
+            return Ok(default);
+        }
+
+        let number = Self::array_slice_bound_number(value);
+        Self::array_slice_bound_from_number(number, length)
+    }
+
+    fn array_slice_bound_number(value: &Value) -> f64 {
+        match value {
+            Value::Undefined
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::Object(_)
+            | Value::Error(_)
+            | Value::Null => 0.0,
+            Value::Bool(value) => {
+                if *value {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            Value::Number(value) => *value,
+            Value::String(value) => value.trim().parse::<f64>().unwrap_or(0.0),
+        }
+    }
+
+    fn array_slice_bound_from_number(number: f64, length: usize) -> Result<usize> {
+        if number.is_nan() || number == 0.0 {
+            return Ok(0);
+        }
+        if !number.is_finite() {
+            return if number.is_sign_negative() {
+                Ok(0)
+            } else {
+                Ok(length)
+            };
+        }
+
+        let length_f64 = Self::array_slice_length_as_f64(length)?;
+        let integer = if number.is_sign_negative() {
+            number.ceil()
+        } else {
+            number.floor()
+        };
+        let clamped = if integer < 0.0 {
+            (length_f64 + integer).clamp(0.0, length_f64)
+        } else {
+            integer.min(length_f64)
+        };
+        Self::array_slice_nonnegative_usize(clamped)
+    }
+
+    fn array_slice_length_as_f64(length: usize) -> Result<f64> {
+        let length = u32::try_from(length)
+            .map_err(|_| Error::limit("array length exceeded supported range"))?;
+        Ok(f64::from(length))
+    }
+
+    fn array_slice_nonnegative_usize(value: f64) -> Result<usize> {
+        if value == 0.0 {
+            return Ok(0);
+        }
+        format!("{value:.0}")
+            .parse::<usize>()
+            .map_err(|_| Error::limit("array index exceeded supported range"))
     }
 
     pub(crate) fn create_array_from_elements(&mut self, elements: Vec<Value>) -> Result<Value> {
