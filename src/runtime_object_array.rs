@@ -5,6 +5,7 @@ use crate::{
 
 use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ArrayLength, ObjectHeap};
 
+const ARRAY_INCLUDES_RECEIVER_ERROR: &str = "Array.prototype.includes requires an array receiver";
 const ARRAY_INDEX_OF_RECEIVER_ERROR: &str = "Array.prototype.indexOf requires an array receiver";
 const ARRAY_JOIN_RECEIVER_ERROR: &str = "Array.prototype.join requires an array receiver";
 const ARRAY_LAST_INDEX_OF_RECEIVER_ERROR: &str =
@@ -150,6 +151,11 @@ impl ObjectHeap {
             .to_usize()
     }
 
+    pub(crate) fn array_len_for_includes(&self, id: ObjectId) -> Result<usize> {
+        self.array_length_for_method(id, ARRAY_INCLUDES_RECEIVER_ERROR)?
+            .to_usize()
+    }
+
     pub(crate) fn array_len_for_last_index_of(&self, id: ObjectId) -> Result<usize> {
         self.array_length_for_method(id, ARRAY_LAST_INDEX_OF_RECEIVER_ERROR)?
             .to_usize()
@@ -178,6 +184,29 @@ impl ObjectHeap {
             }
         }
         Ok(Value::Number(INDEX_NOT_FOUND))
+    }
+
+    pub(crate) fn array_includes(
+        &self,
+        id: ObjectId,
+        search: &Value,
+        start: usize,
+    ) -> Result<Value> {
+        let length = self
+            .array_length_for_method(id, ARRAY_INCLUDES_RECEIVER_ERROR)?
+            .to_usize()?;
+        if start >= length {
+            return Ok(Value::Bool(false));
+        }
+
+        for index in start..length {
+            let key = ArrayIndex::from_usize(index)?.key();
+            let value = self.get(id, &key)?;
+            if Self::same_value_zero(&value, search) {
+                return Ok(Value::Bool(true));
+            }
+        }
+        Ok(Value::Bool(false))
     }
 
     pub(crate) fn array_last_index_of(
@@ -237,6 +266,21 @@ impl ObjectHeap {
     fn array_index_value(index: usize) -> Result<Value> {
         let index = u32::try_from(index).map_err(|_| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
         Ok(Value::Number(f64::from(index)))
+    }
+
+    fn same_value_zero(left: &Value, right: &Value) -> bool {
+        match (left, right) {
+            (Value::Number(left), Value::Number(right)) => {
+                (left.to_bits() == right.to_bits())
+                    || (left.is_nan() && right.is_nan())
+                    || (Self::number_is_zero(*left) && Self::number_is_zero(*right))
+            }
+            _ => left == right,
+        }
+    }
+
+    const fn number_is_zero(value: f64) -> bool {
+        matches!(value.classify(), std::num::FpCategory::Zero)
     }
 }
 
