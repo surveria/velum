@@ -30,7 +30,6 @@ mod runtime_function;
 #[path = "runtime_native.rs"]
 mod runtime_native;
 
-const BOOLEAN_NAME: &str = "Boolean";
 const HOST_PRINT_NAME: &str = "print";
 const TEST262_ERROR_NAME: &str = "Test262Error";
 
@@ -365,12 +364,10 @@ impl Context {
             return self.eval_assert_throws(args);
         }
 
-        if let Expr::Identifier(name) = callee {
-            match name.as_str() {
-                BOOLEAN_NAME => return self.eval_boolean_call(args),
-                HOST_PRINT_NAME => return self.eval_print_call(args),
-                _ => {}
-            }
+        if let Expr::Identifier(name) = callee
+            && name.as_str() == HOST_PRINT_NAME
+        {
+            return self.eval_print_call(args);
         }
 
         if let Some((callee, this_value)) = self.eval_call_reference(callee)? {
@@ -546,14 +543,6 @@ impl Context {
         self.check_string_len(&line)?;
         self.output.push(line);
         Ok(Value::Undefined)
-    }
-
-    fn eval_boolean_call(&mut self, args: &[Expr]) -> Result<Value> {
-        let Some(arg) = args.first() else {
-            return Ok(Value::Bool(false));
-        };
-        let value = self.eval_expr(arg)?;
-        Ok(Value::Bool(value.is_truthy()))
     }
 
     fn eval_new(&mut self, constructor: &str, args: &[Expr]) -> Result<Value> {

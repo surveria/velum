@@ -69,6 +69,7 @@ const PATH_BENCH_STRING: &str = "tests/corpora/benchmarks/active/string_concat.j
 const PATH_BENCH_STRING_ESCAPE_SEQUENCES: &str =
     "tests/corpora/benchmarks/active/string_escape_sequences.js";
 const PATH_BENCH_BOOLEAN: &str = "tests/corpora/benchmarks/active/boolean_conversion.js";
+const PATH_BENCH_BOOLEAN_BUILTIN: &str = "tests/corpora/benchmarks/active/boolean_builtin.js";
 const PATH_BENCH_VAR_HOISTING: &str = "tests/corpora/benchmarks/active/var_hoisting.js";
 const PATH_BENCH_TRY_CATCH: &str = "tests/corpora/benchmarks/active/try_catch.js";
 const PATH_BENCH_TRY_FINALLY: &str = "tests/corpora/benchmarks/active/try_finally.js";
@@ -286,6 +287,10 @@ fn benchmark_runtime_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "boolean_conversion",
             path: PATH_BENCH_BOOLEAN,
+        },
+        BenchmarkCase {
+            id: "boolean_builtin",
+            path: PATH_BENCH_BOOLEAN_BUILTIN,
         },
         BenchmarkCase {
             id: "var_hoisting",

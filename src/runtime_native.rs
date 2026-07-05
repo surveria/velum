@@ -11,6 +11,8 @@ use super::runtime_function::FunctionProperties;
 
 #[path = "runtime_native_array.rs"]
 mod runtime_native_array;
+#[path = "runtime_native_boolean.rs"]
+mod runtime_native_boolean;
 #[path = "runtime_native_number.rs"]
 mod runtime_native_number;
 #[path = "runtime_native_string.rs"]
@@ -41,6 +43,8 @@ const ARRAY_UNSHIFT_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_UNSHIFT_NAME: &str = "unshift";
 const ARRAY_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_NAME: &str = "Array";
+const BOOLEAN_FUNCTION_LENGTH: f64 = 1.0;
+const BOOLEAN_NAME: &str = "Boolean";
 const ERROR_FUNCTION_LENGTH: f64 = 1.0;
 const NUMBER_FUNCTION_LENGTH: f64 = 1.0;
 const NUMBER_NAME: &str = "Number";
@@ -81,6 +85,7 @@ impl NativeFunction {
             NativeFunctionKind::ArrayShift => ARRAY_SHIFT_FUNCTION_LENGTH,
             NativeFunctionKind::ArraySlice => ARRAY_SLICE_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_FUNCTION_LENGTH,
+            NativeFunctionKind::Boolean => BOOLEAN_FUNCTION_LENGTH,
             NativeFunctionKind::ErrorConstructor(_) => ERROR_FUNCTION_LENGTH,
             NativeFunctionKind::Number => NUMBER_FUNCTION_LENGTH,
             NativeFunctionKind::Object => OBJECT_FUNCTION_LENGTH,
@@ -102,6 +107,7 @@ impl NativeFunction {
             NativeFunctionKind::ArrayShift => ARRAY_SHIFT_NAME,
             NativeFunctionKind::ArraySlice => ARRAY_SLICE_NAME,
             NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_NAME,
+            NativeFunctionKind::Boolean => BOOLEAN_NAME,
             NativeFunctionKind::ErrorConstructor(name) => name.as_str(),
             NativeFunctionKind::Number => NUMBER_NAME,
             NativeFunctionKind::Object => OBJECT_NAME,
@@ -134,6 +140,7 @@ impl NativeFunction {
             | NativeFunctionKind::ArrayShift
             | NativeFunctionKind::ArraySlice
             | NativeFunctionKind::ArrayUnshift
+            | NativeFunctionKind::Boolean
             | NativeFunctionKind::ErrorConstructor(_)
             | NativeFunctionKind::Object
             | NativeFunctionKind::String => None,
@@ -159,6 +166,7 @@ pub(super) enum NativeFunctionKind {
     ArrayShift,
     ArraySlice,
     ArrayUnshift,
+    Boolean,
     ErrorConstructor(ErrorName),
     Number,
     Object,
@@ -169,6 +177,7 @@ impl Context {
     pub(crate) fn builtin_value(&mut self, name: &str) -> Result<Option<Value>> {
         match name {
             ARRAY_NAME => self.array_constructor_value().map(Some),
+            BOOLEAN_NAME => self.boolean_constructor_value().map(Some),
             NUMBER_NAME => self.number_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
             STRING_NAME => self.string_constructor_value().map(Some),
@@ -209,6 +218,7 @@ impl Context {
             NativeFunctionKind::ArrayShift => self.eval_array_shift(args, this_value),
             NativeFunctionKind::ArraySlice => self.eval_array_slice(args, this_value),
             NativeFunctionKind::ArrayUnshift => self.eval_array_unshift(args, this_value),
+            NativeFunctionKind::Boolean => self.eval_boolean_constructor(args),
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
             NativeFunctionKind::Number => self.eval_number_constructor(args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
@@ -236,6 +246,7 @@ impl Context {
             | NativeFunctionKind::ArrayUnshift => {
                 Err(Error::runtime("native method is not a constructor"))
             }
+            NativeFunctionKind::Boolean => self.construct_boolean_object(args),
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
             NativeFunctionKind::Number => self.construct_number_object(args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),

@@ -40,6 +40,8 @@ const PATH_TEST262_OBJECT_BUILTIN: &str =
     "tests/corpora/test262/active/language/expressions/object_builtin.js";
 const PATH_TEST262_NUMBER_BUILTIN: &str =
     "tests/corpora/test262/active/built-ins/Number/constructor.js";
+const PATH_TEST262_BOOLEAN_BUILTIN: &str =
+    "tests/corpora/test262/active/built-ins/Boolean/constructor.js";
 const PATH_TEST262_STRING_BUILTIN: &str =
     "tests/corpora/test262/active/built-ins/String/constructor.js";
 const PATH_TEST262_COMPUTED_PROPERTIES: &str =
@@ -341,6 +343,11 @@ fn test262_operator_expression_cases() -> Vec<EngineCase> {
 
 fn test262_builtin_cases() -> Vec<EngineCase> {
     vec![
+        EngineCase {
+            id: "built-ins/Boolean/constructor",
+            path: PATH_TEST262_BOOLEAN_BUILTIN,
+            expectation: Expectation::Value("42"),
+        },
         EngineCase {
             id: "built-ins/Number/constructor",
             path: PATH_TEST262_NUMBER_BUILTIN,
