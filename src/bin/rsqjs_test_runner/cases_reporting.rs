@@ -32,6 +32,8 @@ const PATH_QUICKJS_FUNCTION_CUSTOM_PROPERTIES: &str =
 const PATH_QUICKJS_METHOD_THIS: &str = "tests/corpora/quickjs_differential/active/method_this.js";
 const PATH_QUICKJS_CONSTRUCTOR_PROTOTYPES: &str =
     "tests/corpora/quickjs_differential/active/constructor_prototypes.js";
+const PATH_QUICKJS_PROTOTYPE_CONSTRUCTOR_PROPERTY: &str =
+    "tests/corpora/quickjs_differential/active/prototype_constructor_property.js";
 const PATH_QUICKJS_FUNCTION_RETURN: &str =
     "tests/corpora/quickjs_differential/active/function_return.js";
 const PATH_QUICKJS_FUNCTION_PARAMETERS_SCOPE: &str =
@@ -80,6 +82,8 @@ const PATH_BENCH_FUNCTION_CUSTOM_PROPERTIES: &str =
 const PATH_BENCH_METHOD_THIS: &str = "tests/corpora/benchmarks/active/method_this.js";
 const PATH_BENCH_CONSTRUCTOR_PROTOTYPES: &str =
     "tests/corpora/benchmarks/active/constructor_prototypes.js";
+const PATH_BENCH_PROTOTYPE_CONSTRUCTOR_PROPERTY: &str =
+    "tests/corpora/benchmarks/active/prototype_constructor_property.js";
 const PATH_BENCH_FUNCTION_RETURN: &str = "tests/corpora/benchmarks/active/function_return.js";
 const PATH_BENCH_FUNCTION_PARAMETERS_SCOPE: &str =
     "tests/corpora/benchmarks/active/function_parameters_scope.js";
@@ -195,6 +199,10 @@ fn quickjs_control_flow_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "constructor_prototypes",
             path: PATH_QUICKJS_CONSTRUCTOR_PROTOTYPES,
+        },
+        DifferentialCase {
+            id: "prototype_constructor_property",
+            path: PATH_QUICKJS_PROTOTYPE_CONSTRUCTOR_PROPERTY,
         },
         DifferentialCase {
             id: "function_return",
@@ -335,6 +343,10 @@ fn benchmark_function_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "constructor_prototypes",
             path: PATH_BENCH_CONSTRUCTOR_PROTOTYPES,
+        },
+        BenchmarkCase {
+            id: "prototype_constructor_property",
+            path: PATH_BENCH_PROTOTYPE_CONSTRUCTOR_PROPERTY,
         },
         BenchmarkCase {
             id: "function_return",

@@ -6,6 +6,18 @@ use crate::value::{ObjectId, Value};
 const ARRAY_LENGTH_PROPERTY: &str = "length";
 const PROTOTYPE_PROPERTY: &str = "__proto__";
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum PropertyEnumerable {
+    Yes,
+    No,
+}
+
+impl PropertyEnumerable {
+    const fn is_yes(self) -> bool {
+        matches!(self, Self::Yes)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ObjectHeap {
     objects: Vec<Object>,
@@ -69,6 +81,15 @@ impl ObjectHeap {
         prototype: Option<ObjectId>,
         max_objects: usize,
     ) -> Result<Value> {
+        self.create_with_prototype_id(prototype, max_objects)
+            .map(Value::Object)
+    }
+
+    pub(crate) fn create_with_prototype_id(
+        &mut self,
+        prototype: Option<ObjectId>,
+        max_objects: usize,
+    ) -> Result<ObjectId> {
         if self.objects.len() >= max_objects {
             return Err(Error::limit(format!("object count exceeded {max_objects}")));
         }
@@ -78,7 +99,29 @@ impl ObjectHeap {
 
         let id = ObjectId::new(self.objects.len());
         self.objects.push(object);
-        Ok(Value::Object(id))
+        Ok(id)
+    }
+
+    pub(crate) fn create_with_prototype_property(
+        &mut self,
+        prototype: Option<ObjectId>,
+        property: String,
+        value: Value,
+        enumerable: PropertyEnumerable,
+        max_objects: usize,
+        max_properties: usize,
+    ) -> Result<ObjectId> {
+        if self.objects.len() >= max_objects {
+            return Err(Error::limit(format!("object count exceeded {max_objects}")));
+        }
+
+        let mut object = Object::ordinary();
+        object.prototype = prototype;
+        object.define(property, value, enumerable, max_properties)?;
+
+        let id = ObjectId::new(self.objects.len());
+        self.objects.push(object);
+        Ok(id)
     }
 
     pub fn get(&self, id: ObjectId, property: &str) -> Result<Value> {
@@ -230,7 +273,7 @@ impl ObjectHeap {
 
 #[derive(Debug, Clone, Default)]
 struct Object {
-    properties: BTreeMap<String, Value>,
+    properties: BTreeMap<String, ObjectProperty>,
     property_order: Vec<String>,
     array_length: Option<ArrayLength>,
     prototype: Option<ObjectId>,
@@ -275,7 +318,7 @@ impl Object {
         {
             return Some(length.value());
         }
-        self.properties.get(property).cloned()
+        self.properties.get(property).map(ObjectProperty::value)
     }
 
     fn has_own(&self, property: &str) -> bool {
@@ -284,7 +327,15 @@ impl Object {
     }
 
     fn keys(&self) -> Vec<String> {
-        self.property_order.clone()
+        self.property_order
+            .iter()
+            .filter_map(|key| {
+                self.properties
+                    .get(key)
+                    .filter(|property| property.is_enumerable())
+                    .map(|_| key.clone())
+            })
+            .collect()
     }
 
     fn set(&mut self, property: String, value: Value, max_properties: usize) -> Result<()> {
@@ -305,18 +356,45 @@ impl Object {
         value: Value,
         max_properties: usize,
     ) -> Result<()> {
+        self.set_property_value(property, value, None, max_properties)
+    }
+
+    fn define(
+        &mut self,
+        property: String,
+        value: Value,
+        enumerable: PropertyEnumerable,
+        max_properties: usize,
+    ) -> Result<()> {
+        self.set_property_value(property, value, Some(enumerable), max_properties)
+    }
+
+    fn set_property_value(
+        &mut self,
+        property: String,
+        value: Value,
+        enumerable: Option<PropertyEnumerable>,
+        max_properties: usize,
+    ) -> Result<()> {
+        let property_count = self.properties.len();
         match self.properties.entry(property) {
             Entry::Occupied(mut entry) => {
-                entry.insert(value);
+                entry.get_mut().set_value(value);
+                if let Some(enumerable) = enumerable {
+                    entry.get_mut().set_enumerable(enumerable);
+                }
             }
             Entry::Vacant(entry) => {
-                if self.property_order.len() >= max_properties {
+                if property_count >= max_properties {
                     return Err(Error::limit(format!(
                         "object property count exceeded {max_properties}"
                     )));
                 }
                 self.property_order.push(entry.key().clone());
-                entry.insert(value);
+                entry.insert(ObjectProperty::new(
+                    value,
+                    enumerable.unwrap_or(PropertyEnumerable::Yes),
+                ));
             }
         }
         Ok(())
@@ -343,6 +421,34 @@ impl Object {
         }
         self.array_length = Some(index.next_length()?);
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ObjectProperty {
+    value: Value,
+    enumerable: PropertyEnumerable,
+}
+
+impl ObjectProperty {
+    const fn new(value: Value, enumerable: PropertyEnumerable) -> Self {
+        Self { value, enumerable }
+    }
+
+    fn value(&self) -> Value {
+        self.value.clone()
+    }
+
+    const fn is_enumerable(&self) -> bool {
+        self.enumerable.is_yes()
+    }
+
+    fn set_value(&mut self, value: Value) {
+        self.value = value;
+    }
+
+    const fn set_enumerable(&mut self, enumerable: PropertyEnumerable) {
+        self.enumerable = enumerable;
     }
 }
 
