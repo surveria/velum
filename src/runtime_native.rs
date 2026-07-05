@@ -46,6 +46,8 @@ const ARRAY_NAME: &str = "Array";
 const BOOLEAN_FUNCTION_LENGTH: f64 = 1.0;
 const BOOLEAN_NAME: &str = "Boolean";
 const ERROR_FUNCTION_LENGTH: f64 = 1.0;
+const INFINITY_NAME: &str = "Infinity";
+const NAN_NAME: &str = "NaN";
 const NUMBER_FUNCTION_LENGTH: f64 = 1.0;
 const NUMBER_NAME: &str = "Number";
 const OBJECT_FUNCTION_LENGTH: f64 = 1.0;
@@ -178,6 +180,12 @@ impl Context {
         match name {
             ARRAY_NAME => self.array_constructor_value().map(Some),
             BOOLEAN_NAME => self.boolean_constructor_value().map(Some),
+            INFINITY_NAME => self
+                .global_constant_value(INFINITY_NAME, Value::Number(f64::INFINITY))
+                .map(Some),
+            NAN_NAME => self
+                .global_constant_value(NAN_NAME, Value::Number(f64::NAN))
+                .map(Some),
             NUMBER_NAME => self.number_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
             STRING_NAME => self.string_constructor_value().map(Some),
@@ -190,6 +198,10 @@ impl Context {
                 self.error_constructor_value(name).map(Some)
             }
         }
+    }
+
+    pub(crate) fn materialize_builtin_binding(&mut self, name: &str) -> Result<bool> {
+        self.builtin_value(name).map(|value| value.is_some())
     }
 
     pub(crate) fn constructor_binding(&mut self, name: &str) -> Result<Option<Value>> {
@@ -299,14 +311,19 @@ impl Context {
         Ok(constructor)
     }
 
-    fn insert_global_builtin(&mut self, name: &str, constructor: Value) -> Result<()> {
+    fn global_constant_value(&mut self, name: &str, value: Value) -> Result<Value> {
+        self.insert_global_builtin(name, value.clone())?;
+        Ok(value)
+    }
+
+    fn insert_global_builtin(&mut self, name: &str, value: Value) -> Result<()> {
         let atom = self.intern_atom(name)?;
         if self.globals.contains(atom) {
             return Ok(());
         }
         self.ensure_extra_binding_capacity(1)?;
         self.globals
-            .insert(atom, BindingCell::new(constructor, false, DeclKind::Const));
+            .insert(atom, BindingCell::new(value, false, DeclKind::Const));
         Ok(())
     }
 

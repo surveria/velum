@@ -211,6 +211,7 @@ impl Context {
             } => self.eval_conditional(condition, consequent, alternate),
             Expr::Assignment { name, expr } => {
                 let value = self.eval_expr(expr)?;
+                self.materialize_builtin_binding(name)?;
                 self.assign(name, value.clone())?;
                 Ok(value)
             }

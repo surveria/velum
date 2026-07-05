@@ -101,6 +101,8 @@ const PATH_QUICKJS_REFERENCE_ERROR_CATCH: &str =
     "tests/corpora/quickjs_differential/active/reference_error_catch.js";
 const PATH_QUICKJS_ERROR_OBJECT_PROPERTIES: &str =
     "tests/corpora/quickjs_differential/active/error_object_properties.js";
+const PATH_QUICKJS_GLOBAL_NUMERIC_CONSTANTS: &str =
+    "tests/corpora/quickjs_differential/active/global_numeric_constants.js";
 const PATH_QUICKJS_STANDARD_ERROR_CONSTRUCTORS: &str =
     "tests/corpora/quickjs_differential/active/standard_error_constructors.js";
 const PATH_QUICKJS_BOOLEAN_BUILTIN: &str =
@@ -338,6 +340,10 @@ fn quickjs_runtime_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "error_object_properties",
             path: PATH_QUICKJS_ERROR_OBJECT_PROPERTIES,
+        },
+        DifferentialCase {
+            id: "global_numeric_constants",
+            path: PATH_QUICKJS_GLOBAL_NUMERIC_CONSTANTS,
         },
         DifferentialCase {
             id: "standard_error_constructors",
