@@ -9,8 +9,20 @@ on:
 jobs:
   rust:
     runs-on: ubuntu-latest
+    env:
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
     steps:
       - uses: actions/checkout@v4
+
+      - name: Configure private dependency access
+        env:
+          RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
+        run: |
+          if [[ -z "${RSQJS_DEPENDENCY_TOKEN}" ]]; then
+            echo "RSQJS_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
+            exit 1
+          fi
+          git config --global url."https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/".insteadOf "https://github.com/"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
