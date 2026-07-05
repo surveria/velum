@@ -27,6 +27,8 @@ use crate::value::{ErrorName, Value};
 mod runtime_declaration;
 #[path = "runtime_function.rs"]
 mod runtime_function;
+#[path = "runtime_function_intrinsic.rs"]
+mod runtime_function_intrinsic;
 #[path = "runtime_native.rs"]
 mod runtime_native;
 
