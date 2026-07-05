@@ -135,8 +135,7 @@ impl ObjectHeap {
                 .checked_add(offset)
                 .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
             let source_key = ArrayIndex::from_usize(source_index)?.key();
-            if self.has(id, &source_key)? {
-                let value = self.get(id, &source_key)?;
+            if let Some(value) = self.array_property_value(id, &source_key)? {
                 let target_key = ArrayIndex::from_usize(offset)?.key();
                 self.set(result_id, target_key, value, max_properties)?;
             }
@@ -239,11 +238,10 @@ impl ObjectHeap {
 
         for index in start..length {
             let key = ArrayIndex::from_usize(index)?.key();
-            if self.has(id, &key)? {
-                let value = self.get(id, &key)?;
-                if &value == search {
-                    return Self::array_index_value(index);
-                }
+            if let Some(value) = self.array_property_value(id, &key)?
+                && &value == search
+            {
+                return Self::array_index_value(index);
             }
         }
         Ok(Value::Number(INDEX_NOT_FOUND))
@@ -285,11 +283,10 @@ impl ObjectHeap {
 
         for index in (0..=start).rev() {
             let key = ArrayIndex::from_usize(index)?.key();
-            if self.has(id, &key)? {
-                let value = self.get(id, &key)?;
-                if &value == search {
-                    return Self::array_index_value(index);
-                }
+            if let Some(value) = self.array_property_value(id, &key)?
+                && &value == search
+            {
+                return Self::array_index_value(index);
             }
         }
         Ok(Value::Number(INDEX_NOT_FOUND))
@@ -318,8 +315,7 @@ impl ObjectHeap {
     ) -> Result<()> {
         let from_key = ArrayIndex::from_usize(from_index)?.key();
         let to_key = ArrayIndex::from_usize(to_index)?.key();
-        if self.has(id, &from_key)? {
-            let value = self.get(id, &from_key)?;
+        if let Some(value) = self.array_property_value(id, &from_key)? {
             return self.set(id, to_key, value, max_properties);
         }
         self.delete(id, &to_key)?;
@@ -357,14 +353,7 @@ impl ObjectHeap {
     }
 
     fn array_property_value(&self, id: ObjectId, key: &str) -> Result<Option<Value>> {
-        let object = self.object(id)?;
-        if let Some(value) = object.get_own(key) {
-            return Ok(Some(value));
-        }
-        if self.has(id, key)? {
-            return self.get(id, key).map(Some);
-        }
-        Ok(None)
+        self.property_value_in_chain(id, key)
     }
 
     fn array_length_if_array(&self, id: ObjectId) -> Result<Option<ArrayLength>> {
