@@ -14,10 +14,13 @@ const ARRAY_INDEX_OF_NAME: &str = "indexOf";
 const ARRAY_JOIN_DEFAULT_SEPARATOR: &str = ",";
 const ARRAY_JOIN_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_JOIN_NAME: &str = "join";
+const ARRAY_LAST_INDEX_OF_FUNCTION_LENGTH: f64 = 1.0;
+const ARRAY_LAST_INDEX_OF_NAME: &str = "lastIndexOf";
 const ARRAY_POP_FUNCTION_LENGTH: f64 = 0.0;
 const ARRAY_POP_NAME: &str = "pop";
 const ARRAY_PROTOTYPE_INDEX_OF_PROPERTY: &str = "indexOf";
 const ARRAY_PROTOTYPE_JOIN_PROPERTY: &str = "join";
+const ARRAY_PROTOTYPE_LAST_INDEX_OF_PROPERTY: &str = "lastIndexOf";
 const ARRAY_PROTOTYPE_POP_PROPERTY: &str = "pop";
 const ARRAY_PROTOTYPE_PUSH_PROPERTY: &str = "push";
 const ARRAY_PROTOTYPE_SHIFT_PROPERTY: &str = "shift";
@@ -59,6 +62,7 @@ impl NativeFunction {
             NativeFunctionKind::Array => ARRAY_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayIndexOf => ARRAY_INDEX_OF_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayJoin => ARRAY_JOIN_FUNCTION_LENGTH,
+            NativeFunctionKind::ArrayLastIndexOf => ARRAY_LAST_INDEX_OF_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayPop => ARRAY_POP_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayPush => ARRAY_PUSH_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayShift => ARRAY_SHIFT_FUNCTION_LENGTH,
@@ -73,6 +77,7 @@ impl NativeFunction {
             NativeFunctionKind::Array => ARRAY_NAME,
             NativeFunctionKind::ArrayIndexOf => ARRAY_INDEX_OF_NAME,
             NativeFunctionKind::ArrayJoin => ARRAY_JOIN_NAME,
+            NativeFunctionKind::ArrayLastIndexOf => ARRAY_LAST_INDEX_OF_NAME,
             NativeFunctionKind::ArrayPop => ARRAY_POP_NAME,
             NativeFunctionKind::ArrayPush => ARRAY_PUSH_NAME,
             NativeFunctionKind::ArrayShift => ARRAY_SHIFT_NAME,
@@ -96,6 +101,7 @@ pub(super) enum NativeFunctionKind {
     Array,
     ArrayIndexOf,
     ArrayJoin,
+    ArrayLastIndexOf,
     ArrayPop,
     ArrayPush,
     ArrayShift,
@@ -130,6 +136,7 @@ impl Context {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
             NativeFunctionKind::ArrayIndexOf => self.eval_array_index_of(args, this_value),
             NativeFunctionKind::ArrayJoin => self.eval_array_join(args, this_value),
+            NativeFunctionKind::ArrayLastIndexOf => self.eval_array_last_index_of(args, this_value),
             NativeFunctionKind::ArrayPop => self.eval_array_pop(args, this_value),
             NativeFunctionKind::ArrayPush => self.eval_array_push(args, this_value),
             NativeFunctionKind::ArrayShift => self.eval_array_shift(args, this_value),
@@ -148,6 +155,7 @@ impl Context {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
             NativeFunctionKind::ArrayIndexOf
             | NativeFunctionKind::ArrayJoin
+            | NativeFunctionKind::ArrayLastIndexOf
             | NativeFunctionKind::ArrayPop
             | NativeFunctionKind::ArrayPush
             | NativeFunctionKind::ArrayShift
@@ -245,6 +253,15 @@ impl Context {
             prototype,
             ARRAY_PROTOTYPE_INDEX_OF_PROPERTY.to_owned(),
             index_of,
+            self.limits.max_object_properties,
+        )?;
+
+        let last_index_of =
+            self.create_native_function(NativeFunctionKind::ArrayLastIndexOf, Value::Undefined);
+        self.objects.define_non_enumerable(
+            prototype,
+            ARRAY_PROTOTYPE_LAST_INDEX_OF_PROPERTY.to_owned(),
+            last_index_of,
             self.limits.max_object_properties,
         )?;
 
@@ -397,6 +414,25 @@ impl Context {
             .first()
             .map_or(Value::Undefined, std::clone::Clone::clone);
         self.objects.array_index_of(*id, &search, from_index)
+    }
+
+    fn eval_array_last_index_of(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
+        let values = args
+            .iter()
+            .map(|arg| self.eval_expr(arg))
+            .collect::<Result<Vec<_>>>()?;
+        let Value::Object(id) = this_value else {
+            return Err(Error::runtime(
+                "Array.prototype.lastIndexOf requires an array receiver",
+            ));
+        };
+
+        let length = self.objects.array_len_for_last_index_of(*id)?;
+        let from_index = Self::array_last_index_of_start(values.get(1), length)?;
+        let search = values
+            .first()
+            .map_or(Value::Undefined, std::clone::Clone::clone);
+        self.objects.array_last_index_of(*id, &search, from_index)
     }
 
     fn eval_array_join(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
@@ -576,6 +612,48 @@ impl Context {
         format!("{value:.0}")
             .parse::<usize>()
             .map_err(|_| Error::limit("array index exceeded supported range"))
+    }
+
+    fn array_last_index_of_start(value: Option<&Value>, length: usize) -> Result<Option<usize>> {
+        if length == 0 {
+            return Ok(None);
+        }
+        let Some(value) = value else {
+            return Ok(Some(length.saturating_sub(1)));
+        };
+
+        let number = Self::array_slice_bound_number(value);
+        Self::array_last_index_of_start_from_number(number, length)
+    }
+
+    fn array_last_index_of_start_from_number(number: f64, length: usize) -> Result<Option<usize>> {
+        if number.is_nan() || number == 0.0 {
+            return Ok(Some(0));
+        }
+        if !number.is_finite() {
+            return if number.is_sign_negative() {
+                Ok(None)
+            } else {
+                Ok(Some(length.saturating_sub(1)))
+            };
+        }
+
+        let length_f64 = Self::array_slice_length_as_f64(length)?;
+        let integer = if number.is_sign_negative() {
+            number.ceil()
+        } else {
+            number.floor()
+        };
+        if integer < 0.0 {
+            let index = length_f64 + integer;
+            if index < 0.0 {
+                return Ok(None);
+            }
+            return Self::array_slice_nonnegative_usize(index).map(Some);
+        }
+
+        let clamped = integer.min(length_f64 - 1.0);
+        Self::array_slice_nonnegative_usize(clamped).map(Some)
     }
 
     pub(crate) fn create_array_from_elements(&mut self, elements: Vec<Value>) -> Result<Value> {
