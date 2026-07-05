@@ -56,6 +56,8 @@ const PATH_QUICKJS_ARRAY_BUILTIN: &str =
     "tests/corpora/quickjs_differential/active/array_builtin.js";
 const PATH_QUICKJS_ARRAY_PROTOTYPE_METHODS: &str =
     "tests/corpora/quickjs_differential/active/array_prototype_methods.js";
+const PATH_QUICKJS_ARRAY_PROTOTYPE_INCLUDES: &str =
+    "tests/corpora/quickjs_differential/active/array_prototype_includes.js";
 const PATH_QUICKJS_ARRAY_PROTOTYPE_JOIN: &str =
     "tests/corpora/quickjs_differential/active/array_prototype_join.js";
 const PATH_QUICKJS_ARRAY_PROTOTYPE_INDEX_OF: &str =
@@ -225,6 +227,10 @@ fn quickjs_object_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "array_prototype_join",
             path: PATH_QUICKJS_ARRAY_PROTOTYPE_JOIN,
+        },
+        DifferentialCase {
+            id: "array_prototype_includes",
+            path: PATH_QUICKJS_ARRAY_PROTOTYPE_INCLUDES,
         },
         DifferentialCase {
             id: "array_prototype_index_of",

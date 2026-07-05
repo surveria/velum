@@ -77,6 +77,7 @@ const PATH_COMPUTED_PROPERTIES: &str = "tests/engine_cases/computed_properties.j
 const PATH_ARRAY_LITERALS: &str = "tests/engine_cases/array_literals.js";
 const PATH_ARRAY_BUILTIN: &str = "tests/engine_cases/array_builtin.js";
 const PATH_ARRAY_PROTOTYPE_METHODS: &str = "tests/engine_cases/array_prototype_methods.js";
+const PATH_ARRAY_PROTOTYPE_INCLUDES: &str = "tests/engine_cases/array_prototype_includes.js";
 const PATH_ARRAY_PROTOTYPE_JOIN: &str = "tests/engine_cases/array_prototype_join.js";
 const PATH_ARRAY_PROTOTYPE_INDEX_OF: &str = "tests/engine_cases/array_prototype_index_of.js";
 const PATH_ARRAY_PROTOTYPE_LAST_INDEX_OF: &str =
@@ -538,6 +539,23 @@ fn engine_array_prototype_core_cases() -> Vec<EngineCase> {
 
 fn engine_array_search_cases() -> Vec<EngineCase> {
     vec![
+        EngineCase {
+            id: "array_prototype_includes",
+            path: PATH_ARRAY_PROTOTYPE_INCLUDES,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "includes true true false false true true",
+                    "values true true true true true true true false",
+                    "sparse true true true true false",
+                    "inherited true true 42 true",
+                    "coerced true true true",
+                    "meta function includes 1",
+                    "keys:",
+                    "in true",
+                ],
+                value: "42",
+            },
+        },
         EngineCase {
             id: "array_prototype_index_of",
             path: PATH_ARRAY_PROTOTYPE_INDEX_OF,
