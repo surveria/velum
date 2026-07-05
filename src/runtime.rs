@@ -233,11 +233,7 @@ impl Context {
         for element in elements {
             values.push(self.eval_expr(element)?);
         }
-        self.objects.create_array(
-            values,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )
+        self.create_array_from_elements(values)
     }
 
     fn eval_conditional(

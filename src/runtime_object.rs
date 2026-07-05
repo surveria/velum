@@ -38,6 +38,7 @@ impl LiteralPrototype {
 pub struct ObjectHeap {
     objects: Vec<Object>,
     object_prototype: Option<ObjectId>,
+    array_prototype: Option<ObjectId>,
 }
 
 impl ObjectHeap {
@@ -45,6 +46,7 @@ impl ObjectHeap {
         Self {
             objects: Vec::new(),
             object_prototype: None,
+            array_prototype: None,
         }
     }
 
@@ -82,24 +84,31 @@ impl ObjectHeap {
     pub fn create_array(
         &mut self,
         elements: Vec<Value>,
+        prototype: ObjectId,
         max_objects: usize,
         max_properties: usize,
     ) -> Result<Value> {
         let length = ArrayLength::from_usize(elements.len())?;
         let mut object = Object::array(length);
-        object.prototype = Some(self.object_prototype_id(max_objects, max_properties)?);
+        object.prototype = Some(prototype);
         for (index, value) in elements.into_iter().enumerate() {
             let index = ArrayIndex::from_usize(index)?;
             object.set_ordinary(index.key(), value, max_properties)?;
         }
 
-        if self.objects.len() >= max_objects {
-            return Err(Error::limit(format!("object count exceeded {max_objects}")));
-        }
+        self.push_object(object, max_objects).map(Value::Object)
+    }
 
-        let id = ObjectId::new(self.objects.len());
-        self.objects.push(object);
-        Ok(Value::Object(id))
+    pub fn create_array_with_length(
+        &mut self,
+        length: usize,
+        prototype: ObjectId,
+        max_objects: usize,
+    ) -> Result<Value> {
+        let length = ArrayLength::from_usize(length)?;
+        let mut object = Object::array(length);
+        object.prototype = Some(prototype);
+        self.push_object(object, max_objects).map(Value::Object)
     }
 
     pub fn create_with_prototype(
@@ -191,6 +200,37 @@ impl ObjectHeap {
         self.objects.push(object);
         self.object_prototype = Some(id);
         Ok(id)
+    }
+
+    pub(crate) fn array_prototype_id_with_constructor(
+        &mut self,
+        constructor: Value,
+        max_objects: usize,
+        max_properties: usize,
+    ) -> Result<ObjectId> {
+        let prototype = if let Some(id) = self.array_prototype {
+            id
+        } else {
+            let object_prototype = self.object_prototype_id(max_objects, max_properties)?;
+            if self.objects.len() >= max_objects {
+                return Err(Error::limit(format!("object count exceeded {max_objects}")));
+            }
+
+            let mut object = Object::ordinary();
+            object.prototype = Some(object_prototype);
+            let id = ObjectId::new(self.objects.len());
+            self.objects.push(object);
+            self.array_prototype = Some(id);
+            id
+        };
+
+        self.define_non_enumerable(
+            prototype,
+            OBJECT_CONSTRUCTOR_PROPERTY.to_owned(),
+            constructor,
+            max_properties,
+        )?;
+        Ok(prototype)
     }
 
     pub(crate) fn define_non_enumerable(
@@ -348,6 +388,16 @@ impl ObjectHeap {
         self.objects
             .get_mut(id.index())
             .ok_or_else(|| Error::runtime("object id is not defined"))
+    }
+
+    fn push_object(&mut self, object: Object, max_objects: usize) -> Result<ObjectId> {
+        if self.objects.len() >= max_objects {
+            return Err(Error::limit(format!("object count exceeded {max_objects}")));
+        }
+
+        let id = ObjectId::new(self.objects.len());
+        self.objects.push(object);
+        Ok(id)
     }
 }
 
