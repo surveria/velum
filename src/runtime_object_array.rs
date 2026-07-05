@@ -7,6 +7,8 @@ use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ArrayLength, ObjectHeap};
 
 const ARRAY_INDEX_OF_RECEIVER_ERROR: &str = "Array.prototype.indexOf requires an array receiver";
 const ARRAY_JOIN_RECEIVER_ERROR: &str = "Array.prototype.join requires an array receiver";
+const ARRAY_LAST_INDEX_OF_RECEIVER_ERROR: &str =
+    "Array.prototype.lastIndexOf requires an array receiver";
 const ARRAY_POP_RECEIVER_ERROR: &str = "Array.prototype.pop requires an array receiver";
 const ARRAY_PUSH_RECEIVER_ERROR: &str = "Array.prototype.push requires an array receiver";
 const ARRAY_SHIFT_RECEIVER_ERROR: &str = "Array.prototype.shift requires an array receiver";
@@ -148,6 +150,11 @@ impl ObjectHeap {
             .to_usize()
     }
 
+    pub(crate) fn array_len_for_last_index_of(&self, id: ObjectId) -> Result<usize> {
+        self.array_length_for_method(id, ARRAY_LAST_INDEX_OF_RECEIVER_ERROR)?
+            .to_usize()
+    }
+
     pub(crate) fn array_index_of(
         &self,
         id: ObjectId,
@@ -162,6 +169,29 @@ impl ObjectHeap {
         }
 
         for index in start..length {
+            let key = ArrayIndex::from_usize(index)?.key();
+            if self.has(id, &key)? {
+                let value = self.get(id, &key)?;
+                if &value == search {
+                    return Self::array_index_value(index);
+                }
+            }
+        }
+        Ok(Value::Number(INDEX_NOT_FOUND))
+    }
+
+    pub(crate) fn array_last_index_of(
+        &self,
+        id: ObjectId,
+        search: &Value,
+        start: Option<usize>,
+    ) -> Result<Value> {
+        self.array_length_for_method(id, ARRAY_LAST_INDEX_OF_RECEIVER_ERROR)?;
+        let Some(start) = start else {
+            return Ok(Value::Number(INDEX_NOT_FOUND));
+        };
+
+        for index in (0..=start).rev() {
             let key = ArrayIndex::from_usize(index)?.key();
             if self.has(id, &key)? {
                 let value = self.get(id, &key)?;
