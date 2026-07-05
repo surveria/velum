@@ -37,6 +37,7 @@ const RUNNER_NAME: &str = "`rsqjs-test-runner`";
 const NO_FAILED_CASES: &str = "No failed cases.";
 const TEST262_FULL_CORPUS_NAME: &str = "Test262 full corpus";
 const FAILED_CASE_DETAIL_LIMIT: usize = 30;
+const FEATURE_AREA_ROW_LIMIT: usize = 40;
 const BASIS_POINTS_SCALE: usize = 10_000;
 const PERCENT_SCALE: usize = 100;
 const COVERAGE_SCALE: usize = 1_000_000;
@@ -47,6 +48,8 @@ const TEST262_ENV: &str = "RSQJS_TEST262_DIR";
 
 const REASON_MATCHED: &str = "matched expected behavior";
 const REASON_QUICKJS_ENV_MISSING: &str = "set RSQJS_QUICKJS=/path/to/qjs to enable";
+const OTHER_FEATURE_AREAS: &str = "other feature areas";
+const NO_SKIP_REASON: &str = "none";
 
 fn main() {
     if let Err(error) = run() {
@@ -124,6 +127,7 @@ struct CorpusReport {
     stats: CorpusStats,
     rows: Vec<CaseRow>,
     skip_reasons: Vec<SkipReasonRow>,
+    feature_areas: Vec<FeatureAreaRow>,
 }
 
 impl CorpusReport {
@@ -136,6 +140,7 @@ impl CorpusReport {
             stats,
             rows,
             skip_reasons,
+            feature_areas: Vec::new(),
         }
     }
 
@@ -228,6 +233,101 @@ struct CaseRow {
 struct SkipReasonRow {
     skipped: usize,
     reason: String,
+}
+
+#[derive(Debug, Clone, Tabled)]
+struct FeatureAreaRow {
+    feature_area: String,
+    total: usize,
+    executed: usize,
+    passed: String,
+    failed: String,
+    skipped: String,
+    pass_rate: String,
+    manifest_enabled: usize,
+    top_skip_reason: String,
+}
+
+#[derive(Debug, Clone)]
+struct FeatureAreaStats {
+    feature_area: String,
+    total: usize,
+    passed: usize,
+    failed: usize,
+    skipped: usize,
+    manifest_enabled: usize,
+    skip_reasons: BTreeMap<String, usize>,
+}
+
+impl FeatureAreaStats {
+    const fn new(feature_area: String) -> Self {
+        Self {
+            feature_area,
+            total: 0,
+            passed: 0,
+            failed: 0,
+            skipped: 0,
+            manifest_enabled: 0,
+            skip_reasons: BTreeMap::new(),
+        }
+    }
+
+    const fn record_passed(&mut self) {
+        self.total = self.total.saturating_add(1);
+        self.passed = self.passed.saturating_add(1);
+    }
+
+    const fn record_failed(&mut self) {
+        self.total = self.total.saturating_add(1);
+        self.failed = self.failed.saturating_add(1);
+    }
+
+    fn record_skipped(&mut self, reason: String) {
+        self.total = self.total.saturating_add(1);
+        self.skipped = self.skipped.saturating_add(1);
+        let count = self.skip_reasons.entry(reason).or_default();
+        *count = count.saturating_add(1);
+    }
+
+    const fn record_manifest_enabled(&mut self) {
+        self.manifest_enabled = self.manifest_enabled.saturating_add(1);
+    }
+
+    const fn executed(&self) -> usize {
+        self.passed.saturating_add(self.failed)
+    }
+
+    fn merge(&mut self, other: Self) {
+        self.total = self.total.saturating_add(other.total);
+        self.passed = self.passed.saturating_add(other.passed);
+        self.failed = self.failed.saturating_add(other.failed);
+        self.skipped = self.skipped.saturating_add(other.skipped);
+        self.manifest_enabled = self.manifest_enabled.saturating_add(other.manifest_enabled);
+        for (reason, skipped) in other.skip_reasons {
+            let count = self.skip_reasons.entry(reason).or_default();
+            *count = count.saturating_add(skipped);
+        }
+    }
+
+    fn top_skip_reason(&self) -> String {
+        let mut best = None::<(&String, usize)>;
+        for (reason, skipped) in &self.skip_reasons {
+            let skipped = *skipped;
+            let replace = match best {
+                None => true,
+                Some((best_reason, best_skipped)) => {
+                    skipped > best_skipped || skipped == best_skipped && reason < best_reason
+                }
+            };
+            if replace {
+                best = Some((reason, skipped));
+            }
+        }
+        if let Some((reason, skipped)) = best {
+            return format!("{skipped}: {reason}");
+        }
+        NO_SKIP_REASON.to_owned()
+    }
 }
 
 fn build_report(
@@ -472,6 +572,17 @@ fn render_report(report: &FullReport) -> String {
             sections.push(String::new());
             sections.push(fenced_table(&Table::new(&corpus.skip_reasons)));
         }
+        if !corpus.feature_areas.is_empty() {
+            sections.push(String::new());
+            sections.push("### Feature Map".to_owned());
+            sections.push(String::new());
+            sections.push(
+                "Feature areas aggregate Test262 variants by source path. Passed and skipped cases are summarized, not listed."
+                    .to_owned(),
+            );
+            sections.push(String::new());
+            sections.push(fenced_table(&Table::new(&corpus.feature_areas)));
+        }
         sections.push(String::new());
         let failed_rows = corpus.failed_rows();
         if corpus.name == TEST262_FULL_CORPUS_NAME {
@@ -547,6 +658,52 @@ fn skip_reason_rows(rows: &[CaseRow]) -> Vec<SkipReasonRow> {
         .into_iter()
         .map(|(reason, skipped)| SkipReasonRow { skipped, reason })
         .collect()
+}
+
+fn feature_area_rows(stats: Vec<FeatureAreaStats>) -> Vec<FeatureAreaRow> {
+    feature_area_rows_with_limit(stats, FEATURE_AREA_ROW_LIMIT)
+}
+
+fn feature_area_rows_with_limit(
+    mut stats: Vec<FeatureAreaStats>,
+    limit: usize,
+) -> Vec<FeatureAreaRow> {
+    stats.sort_by(|left, right| {
+        right
+            .total
+            .cmp(&left.total)
+            .then_with(|| right.failed.cmp(&left.failed))
+            .then_with(|| left.feature_area.cmp(&right.feature_area))
+    });
+
+    let mut rows = Vec::new();
+    let mut remainder = FeatureAreaStats::new(OTHER_FEATURE_AREAS.to_owned());
+    for (index, area) in stats.into_iter().enumerate() {
+        if index < limit {
+            rows.push(feature_area_row(&area));
+        } else {
+            remainder.merge(area);
+        }
+    }
+    if remainder.total > 0 {
+        rows.push(feature_area_row(&remainder));
+    }
+    rows
+}
+
+fn feature_area_row(stats: &FeatureAreaStats) -> FeatureAreaRow {
+    let executed = stats.executed();
+    FeatureAreaRow {
+        feature_area: stats.feature_area.clone(),
+        total: stats.total,
+        executed,
+        passed: format!("{} {}", stats.passed, STATUS_PASSED),
+        failed: format!("{} {}", stats.failed, STATUS_FAILED),
+        skipped: format!("{} {}", stats.skipped, STATUS_SKIPPED),
+        pass_rate: percent(stats.passed, executed),
+        manifest_enabled: stats.manifest_enabled,
+        top_skip_reason: stats.top_skip_reason(),
+    }
 }
 
 fn fenced_table(table: &Table) -> String {
