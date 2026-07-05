@@ -35,6 +35,7 @@ const PATH_VAR_HOISTING: &str = "tests/engine_cases/var_hoisting.js";
 const PATH_TRY_CATCH: &str = "tests/engine_cases/try_catch.js";
 const PATH_TRY_FINALLY: &str = "tests/engine_cases/try_finally.js";
 const PATH_CONDITIONAL_BITAND: &str = "tests/engine_cases/conditional_bitand.js";
+const PATH_UPDATE_EXPRESSIONS: &str = "tests/engine_cases/update_expressions.js";
 const PATH_WHILE_STATEMENTS: &str = "tests/engine_cases/while_statements.js";
 const PATH_BREAK_CONTINUE: &str = "tests/engine_cases/break_continue.js";
 const PATH_FOR_STATEMENTS: &str = "tests/engine_cases/for_statements.js";
@@ -71,6 +72,8 @@ const PATH_TEST262_ARRAY_LITERALS: &str =
     "tests/corpora/test262/active/language/expressions/array_literals.js";
 const PATH_TEST262_UNARY_OPERATORS: &str =
     "tests/corpora/test262/active/language/expressions/unary_operators.js";
+const PATH_TEST262_UPDATE_EXPRESSIONS: &str =
+    "tests/corpora/test262/active/language/expressions/update_expressions.js";
 const PATH_TEST262_LET_CONST: &str = "tests/corpora/test262/active/language/bindings/let_const.js";
 const PATH_TEST262_VAR_HOISTING: &str =
     "tests/corpora/test262/active/language/bindings/var_hoisting.js";
@@ -126,6 +129,8 @@ const PATH_QUICKJS_ARRAY_LITERALS: &str =
     "tests/corpora/quickjs_differential/active/array_literals.js";
 const PATH_QUICKJS_UNARY_OPERATORS: &str =
     "tests/corpora/quickjs_differential/active/unary_operators.js";
+const PATH_QUICKJS_UPDATE_EXPRESSIONS: &str =
+    "tests/corpora/quickjs_differential/active/update_expressions.js";
 const PATH_QUICKJS_REFERENCE_ERROR_CATCH: &str =
     "tests/corpora/quickjs_differential/active/reference_error_catch.js";
 const PATH_QUICKJS_ERROR_OBJECT_PROPERTIES: &str =
@@ -150,6 +155,7 @@ const PATH_BENCH_COMPUTED_PROPERTIES: &str =
     "tests/corpora/benchmarks/active/computed_properties.js";
 const PATH_BENCH_ARRAY_LITERALS: &str = "tests/corpora/benchmarks/active/array_literals.js";
 const PATH_BENCH_UNARY_OPERATORS: &str = "tests/corpora/benchmarks/active/unary_operators.js";
+const PATH_BENCH_UPDATE_EXPRESSIONS: &str = "tests/corpora/benchmarks/active/update_expressions.js";
 const PATH_BENCH_STRING: &str = "tests/corpora/benchmarks/active/string_concat.js";
 const PATH_BENCH_BOOLEAN: &str = "tests/corpora/benchmarks/active/boolean_conversion.js";
 const PATH_BENCH_VAR_HOISTING: &str = "tests/corpora/benchmarks/active/var_hoisting.js";
@@ -227,6 +233,14 @@ fn engine_control_flow_cases() -> Vec<EngineCase> {
             path: PATH_CONDITIONAL_BITAND,
             expectation: Expectation::OutputAndValue {
                 output: &["1"],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "update_expressions",
+            path: PATH_UPDATE_EXPRESSIONS,
+            expectation: Expectation::OutputAndValue {
+                output: &["40 42 42 40 40", "1 3 3", "1 3 2 3", "6 -1"],
                 value: "42",
             },
         },
@@ -433,6 +447,11 @@ fn test262_expression_cases() -> Vec<EngineCase> {
             path: PATH_TEST262_UNARY_OPERATORS,
             expectation: Expectation::Value("42"),
         },
+        EngineCase {
+            id: "language/expressions/update_expressions",
+            path: PATH_TEST262_UPDATE_EXPRESSIONS,
+            expectation: Expectation::Value("42"),
+        },
     ]
 }
 
@@ -584,6 +603,10 @@ pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
             path: PATH_QUICKJS_UNARY_OPERATORS,
         },
         DifferentialCase {
+            id: "update_expressions",
+            path: PATH_QUICKJS_UPDATE_EXPRESSIONS,
+        },
+        DifferentialCase {
             id: "reference_error_catch",
             path: PATH_QUICKJS_REFERENCE_ERROR_CATCH,
         },
@@ -655,6 +678,10 @@ pub fn benchmark_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "unary_operators",
             path: PATH_BENCH_UNARY_OPERATORS,
+        },
+        BenchmarkCase {
+            id: "update_expressions",
+            path: PATH_BENCH_UPDATE_EXPRESSIONS,
         },
         BenchmarkCase {
             id: "string_concat",
