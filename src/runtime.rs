@@ -1,4 +1,4 @@
-use crate::ast::{BinaryOp, DeclKind, Expr, ObjectProperty, Program, Stmt, UnaryOp};
+use crate::ast::{BinaryOp, DeclKind, Expr, ObjectProperty, Program, Stmt};
 use crate::error::{Error, Result};
 use crate::lexer;
 use crate::parser;
@@ -10,7 +10,7 @@ use crate::runtime_completion::Completion;
 use crate::runtime_limits::RuntimeLimits;
 use crate::runtime_numeric::{bitwise_and, compare_binary, numeric_binary};
 use crate::runtime_object::ObjectHeap;
-use crate::runtime_property::{get_property, property_key, set_property};
+use crate::runtime_property::{delete_property, get_property, property_key, set_property};
 use crate::runtime_scope::{BindingCell, BindingScope};
 use crate::value::{ErrorName, ErrorObject, FunctionId, Value};
 
@@ -261,10 +261,7 @@ impl Context {
                 .get_binding(name)
                 .map(|binding| binding.value())
                 .ok_or_else(|| reference_error_undefined(name)),
-            Expr::Unary { op, expr } => {
-                let value = self.eval_expr(expr)?;
-                Self::eval_unary(*op, &value)
-            }
+            Expr::Unary { op, expr } => self.eval_unary_expr(*op, expr),
             Expr::Binary { op, left, right } => self.eval_binary(*op, left, right),
             Expr::Conditional {
                 condition,
@@ -356,20 +353,6 @@ impl Context {
             }
         }
         Ok(Completion::Normal(last))
-    }
-
-    fn eval_unary(op: UnaryOp, value: &Value) -> Result<Value> {
-        match op {
-            UnaryOp::Not => Ok(Value::Bool(!value.is_truthy())),
-            UnaryOp::Negate => value
-                .as_number()
-                .map(|value| Value::Number(-value))
-                .ok_or_else(|| Error::runtime("unary '-' expects a number")),
-            UnaryOp::Plus => value
-                .as_number()
-                .map(Value::Number)
-                .ok_or_else(|| Error::runtime("unary '+' expects a number")),
-        }
     }
 
     fn eval_binary(&mut self, op: BinaryOp, left: &Expr, right: &Expr) -> Result<Value> {
@@ -523,11 +506,19 @@ impl Context {
         Ok(value)
     }
 
-    fn eval_property_key(&mut self, property: &Expr) -> Result<String> {
+    pub(crate) fn eval_property_key(&mut self, property: &Expr) -> Result<String> {
         let value = self.eval_expr(property)?;
         let key = property_key(&value);
         self.check_string_len(&key)?;
         Ok(key)
+    }
+
+    pub(crate) fn delete_property_value(
+        &mut self,
+        object: &Value,
+        property: &str,
+    ) -> Result<Value> {
+        delete_property(&mut self.objects, object, property).map(Value::Bool)
     }
 
     fn eval_print_call(&mut self, args: &[Expr]) -> Result<Value> {
@@ -705,7 +696,7 @@ impl Context {
         &mut self.globals
     }
 
-    fn get_binding(&self, name: &str) -> Option<BindingCell> {
+    pub(crate) fn get_binding(&self, name: &str) -> Option<BindingCell> {
         self.locals
             .iter()
             .rev()

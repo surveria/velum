@@ -75,6 +75,11 @@ impl ObjectHeap {
         object.set(property, value, max_properties)
     }
 
+    pub fn delete(&mut self, id: ObjectId, property: &str) -> Result<bool> {
+        let object = self.object_mut(id)?;
+        Ok(object.delete(property))
+    }
+
     fn object(&self, id: ObjectId) -> Result<&Object> {
         self.objects
             .get(id.index())
@@ -147,6 +152,17 @@ impl Object {
         }
         self.properties.insert(property, value);
         Ok(())
+    }
+
+    fn delete(&mut self, property: &str) -> bool {
+        if self.array_length.is_some() && property == ARRAY_LENGTH_PROPERTY {
+            return false;
+        }
+        let removed_property = self.properties.remove(property);
+        if removed_property.is_some() {
+            return true;
+        }
+        true
     }
 
     fn extend_array_length(&mut self, index: ArrayIndex) -> Result<()> {

@@ -443,6 +443,27 @@ impl Parser {
         if self.match_kind(&TokenKind::New) {
             return self.new_expr();
         }
+        if self.match_kind(&TokenKind::Typeof) {
+            let expr = self.unary()?;
+            return Ok(Expr::Unary {
+                op: UnaryOp::Typeof,
+                expr: Box::new(expr),
+            });
+        }
+        if self.match_kind(&TokenKind::Void) {
+            let expr = self.unary()?;
+            return Ok(Expr::Unary {
+                op: UnaryOp::Void,
+                expr: Box::new(expr),
+            });
+        }
+        if self.match_kind(&TokenKind::Delete) {
+            let expr = self.unary()?;
+            return Ok(Expr::Unary {
+                op: UnaryOp::Delete,
+                expr: Box::new(expr),
+            });
+        }
         if self.match_kind(&TokenKind::Bang) {
             let expr = self.unary()?;
             return Ok(Expr::Unary {
