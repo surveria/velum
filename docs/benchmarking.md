@@ -31,9 +31,9 @@ Track these against QuickJS on every supported device class:
 
 Set `RSQJS_QUICKJS_AUTO_SETUP=0` to disable automatic download and build. In that mode, differential checks and QuickJS benchmark columns are reported as skipped unless `RSQJS_QUICKJS` or `qjs` is available.
 
-The standard test script builds `target/release/rsqjs` and exposes it to the runner through `RSQJS_ENGINE`. Current benchmark rows compare the release `rsqjs` CLI with the QuickJS `qjs` CLI sequentially. Each row reports average CLI latency, peak process RSS when GNU `time` is available, latency ratio, memory ratio, and the current 1.10x budget status.
+The standard test script builds `target/release/rsqjs` and `target/release/rsqjs-test-runner`, then exposes the CLI engine to the runner through `RSQJS_ENGINE`. Current benchmark rows compare the release `rsqjs` CLI with the QuickJS `qjs` CLI sequentially. Each row reports average in-process cold eval latency for the Rust library, average CLI latency, peak process RSS when GNU `time` is available, latency ratio, memory ratio, and the current 1.10x budget status.
 
-CLI benchmarks are useful integration smoke tests, but they include process startup and argument handling. Optimization decisions should be based on in-process library benchmarks that separate parser, compiler, VM execution, host callback, and teardown costs.
+CLI benchmarks are useful integration smoke tests, but they include process startup and argument handling. The in-process column removes that CLI startup cost for rs-quickjs and should guide local optimization work. Future in-process rows should separate parser, compiler, VM execution, host callback, and teardown costs as those subsystems become explicit.
 
 ## Test262 Reference
 
