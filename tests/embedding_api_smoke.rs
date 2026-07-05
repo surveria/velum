@@ -1,6 +1,17 @@
-use rs_quickjs::{Engine, EngineConfig, Error, RuntimeLimits, Value, VmConfig, VmResourceUsage};
+use rs_quickjs::{
+    Engine, EngineConfig, Error, RuntimeLimits, Value, Vm, VmConfig, VmResourceUsage,
+};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+
+const ISOLATED_VM_LABELS: [&str; 8] = [
+    "front", "rear", "side", "gate", "lobby", "roof", "garage", "hall",
+];
+
+struct VmCase {
+    label: &'static str,
+    vm: Vm,
+}
 
 #[test]
 fn creates_isolated_vms_with_separate_globals_and_output() -> TestResult {
@@ -40,6 +51,64 @@ fn creates_isolated_vms_with_separate_globals_and_output() -> TestResult {
     let rear_again = rear_vm.context().eval("camera")?;
     ensure_value(&front_again, &Value::String("front".to_owned()))?;
     ensure_value(&rear_again, &Value::String("rear".to_owned()))
+}
+
+#[test]
+fn keeps_many_vms_isolated_after_one_vm_fails() -> TestResult {
+    let engine = Engine::new();
+    let mut cases = Vec::with_capacity(ISOLATED_VM_LABELS.len());
+
+    for label in ISOLATED_VM_LABELS {
+        let mut vm = engine.create_vm();
+        let source = format!(
+            r#"
+            let camera = "{label}";
+            print("ready", camera);
+            camera
+            "#
+        );
+        let value = vm.context().eval(&source)?;
+        ensure_value(&value, &Value::String(label.to_owned()))?;
+        cases.push(VmCase { label, vm });
+    }
+
+    let constrained_limits = RuntimeLimits {
+        max_runtime_steps: 1,
+        ..RuntimeLimits::default()
+    };
+    let mut failing_vm = Vm::with_config(VmConfig::with_limits(constrained_limits));
+    let Err(error) = failing_vm.context().eval("let value = 1 + 2; value") else {
+        return Err("expected isolated failing VM to hit a runtime step limit".into());
+    };
+    ensure_resource_limit(&error)?;
+
+    for case in &mut cases {
+        let expected_value = Value::String(case.label.to_owned());
+        let expected_output = [format!("ready {}", case.label)];
+        ensure_optional_value(
+            case.vm.context().get_global("camera").as_ref(),
+            &expected_value,
+        )?;
+        ensure_output(case.vm.context().output(), &expected_output)?;
+
+        let value = case.vm.context().eval("camera")?;
+        ensure_value(&value, &expected_value)?;
+    }
+
+    for case in cases {
+        let report = case.vm.finish();
+        ensure_positive(report.resources.runtime_steps, "runtime steps")?;
+        ensure_usage(
+            &report.resources,
+            &VmResourceUsage {
+                runtime_steps: report.resources.runtime_steps,
+                output_entries: 1,
+                global_bindings: 1,
+            },
+        )?;
+    }
+
+    Ok(())
 }
 
 #[test]
