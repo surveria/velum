@@ -12,6 +12,7 @@ use super::{
         MODE_NEGATIVE_PARSE, MODE_RUN, MODE_SKIP, ManifestCase, REASON_TEST262_DIR_MISSING,
         execute_manifest_case, execute_negative_parse_case, manifest_cases, source_label,
     },
+    test262_metadata::{Test262CaseResult, Test262Outcome, execute_test262_path},
 };
 
 const CORPUS_NAME: &str = "Test262 full corpus";
@@ -66,8 +67,40 @@ fn unavailable_report() -> CorpusReport {
 
 fn execute_full_corpus(test262_dir: &Path) -> anyhow::Result<CorpusReport> {
     let test_paths = discover_test_files(test262_dir)?;
+    if should_run_all() {
+        return Ok(execute_metadata_corpus(test262_dir, &test_paths));
+    }
+    execute_manifest_corpus(test262_dir, &test_paths)
+}
+
+fn execute_metadata_corpus(test262_dir: &Path, test_paths: &[String]) -> CorpusReport {
+    let mut rows = Vec::<CaseRow>::new();
+    let mut skip_reasons = BTreeMap::<String, usize>::new();
+    let mut stats = CorpusStats {
+        total: 0,
+        passed: 0,
+        failed: 0,
+        skipped: 0,
+    };
+
+    for path in test_paths {
+        run_discovered_case(test262_dir, path, &mut stats, &mut rows, &mut skip_reasons);
+    }
+
+    CorpusReport {
+        name: CORPUS_NAME,
+        required: false,
+        stats,
+        rows,
+        skip_reasons: skip_reason_rows(skip_reasons),
+    }
+}
+
+fn execute_manifest_corpus(
+    test262_dir: &Path,
+    test_paths: &[String],
+) -> anyhow::Result<CorpusReport> {
     let manifest = manifest_cases()?;
-    let run_all = should_run_all();
     let mut manifest_by_path = BTreeMap::<String, ManifestCase>::new();
     let mut rows = Vec::<CaseRow>::new();
     let mut stats = CorpusStats {
@@ -92,11 +125,9 @@ fn execute_full_corpus(test262_dir: &Path) -> anyhow::Result<CorpusReport> {
 
     let discovered = test_paths.iter().cloned().collect::<BTreeSet<_>>();
     let mut skip_reasons = BTreeMap::<String, usize>::new();
-    for path in &test_paths {
+    for path in test_paths {
         if let Some(case) = manifest_by_path.get(path) {
             run_enabled_case(test262_dir, case, &mut stats, &mut rows, &mut skip_reasons);
-        } else if run_all {
-            run_discovered_case(test262_dir, path, &mut stats, &mut rows);
         } else {
             record_skip(&mut stats, &mut skip_reasons, default_skip_reason(path));
         }
@@ -141,26 +172,52 @@ fn run_discovered_case(
     path: &str,
     stats: &mut CorpusStats,
     rows: &mut Vec<CaseRow>,
+    skip_reasons: &mut BTreeMap<String, usize>,
 ) {
-    let case = ManifestCase {
-        id: path.to_owned(),
-        path: path.to_owned(),
-        mode: MODE_RUN.to_owned(),
-        reason: "discovered by full Test262 corpus scan".to_owned(),
-    };
-    match execute_manifest_case(test262_dir, &case) {
-        Ok(()) => {
-            stats.passed = stats.passed.saturating_add(1);
+    match execute_test262_path(test262_dir, path) {
+        Ok(results) => {
+            for result in results {
+                record_discovered_result(path, result, stats, rows, skip_reasons);
+            }
         }
         Err(error) => {
+            stats.total = stats.total.saturating_add(1);
             stats.failed = stats.failed.saturating_add(1);
-            let source = source_label(&case.path);
             rows.push(CaseRow {
-                case: case.id,
+                case: path.to_owned(),
                 status: STATUS_FAILED.to_owned(),
-                source,
+                source: source_label(path),
                 detail: error.to_string(),
             });
+        }
+    }
+}
+
+fn record_discovered_result(
+    path: &str,
+    result: Test262CaseResult,
+    stats: &mut CorpusStats,
+    rows: &mut Vec<CaseRow>,
+    skip_reasons: &mut BTreeMap<String, usize>,
+) {
+    stats.total = stats.total.saturating_add(1);
+    match result.outcome {
+        Test262Outcome::Passed => {
+            stats.passed = stats.passed.saturating_add(1);
+        }
+        Test262Outcome::Failed(detail) => {
+            stats.failed = stats.failed.saturating_add(1);
+            rows.push(CaseRow {
+                case: result.id,
+                status: STATUS_FAILED.to_owned(),
+                source: source_label(path),
+                detail,
+            });
+        }
+        Test262Outcome::Skipped(reason) => {
+            stats.skipped = stats.skipped.saturating_add(1);
+            let count = skip_reasons.entry(reason).or_default();
+            *count = count.saturating_add(1);
         }
     }
 }

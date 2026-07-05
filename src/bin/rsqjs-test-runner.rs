@@ -17,6 +17,8 @@ mod cases;
 mod test262_external;
 #[path = "rsqjs_test_runner/test262_full.rs"]
 mod test262_full;
+#[path = "rsqjs_test_runner/test262_metadata.rs"]
+mod test262_metadata;
 
 use cases::{BenchmarkCase, DifferentialCase, EngineCase, Expectation};
 
@@ -587,6 +589,7 @@ fn render_report(report: &FullReport) -> String {
         String::new(),
         "Corpus detail sections list failed cases only. Passed and skipped cases are summarized to keep the report compact.".to_owned(),
         "The full Test262 corpus is progress-only; the active subset remains the CI gate.".to_owned(),
+        "The full Test262 corpus expands upstream files into metadata-driven default, strict, or raw variants.".to_owned(),
         String::new(),
         "## Corpus Summary".to_owned(),
         String::new(),
