@@ -36,6 +36,7 @@ const PATH_TRY_CATCH: &str = "tests/engine_cases/try_catch.js";
 const PATH_CONDITIONAL_BITAND: &str = "tests/engine_cases/conditional_bitand.js";
 const PATH_WHILE_STATEMENTS: &str = "tests/engine_cases/while_statements.js";
 const PATH_BREAK_CONTINUE: &str = "tests/engine_cases/break_continue.js";
+const PATH_FOR_STATEMENTS: &str = "tests/engine_cases/for_statements.js";
 const PATH_FUNCTION_EXPRESSION: &str = "tests/engine_cases/function_expression.js";
 const PATH_FUNCTION_RETURN: &str = "tests/engine_cases/function_return.js";
 const PATH_FUNCTION_PARAMETERS_SCOPE: &str = "tests/engine_cases/function_parameters_scope.js";
@@ -72,6 +73,7 @@ const PATH_TEST262_TRY_CATCH: &str =
 const PATH_TEST262_WHILE: &str = "tests/corpora/test262/active/language/statements/while.js";
 const PATH_TEST262_BREAK_CONTINUE: &str =
     "tests/corpora/test262/active/language/statements/break_continue.js";
+const PATH_TEST262_FOR: &str = "tests/corpora/test262/active/language/statements/for.js";
 const PATH_TEST262_ASSERT_THROWS_REFERENCE_ERROR: &str =
     "tests/corpora/test262/active/language/statements/assert_throws_reference_error.js";
 const PATH_TEST262_ERROR_OBJECT_PROPERTIES: &str =
@@ -90,6 +92,8 @@ const PATH_QUICKJS_WHILE_STATEMENTS: &str =
     "tests/corpora/quickjs_differential/active/while_statements.js";
 const PATH_QUICKJS_BREAK_CONTINUE: &str =
     "tests/corpora/quickjs_differential/active/break_continue.js";
+const PATH_QUICKJS_FOR_STATEMENTS: &str =
+    "tests/corpora/quickjs_differential/active/for_statements.js";
 const PATH_QUICKJS_FUNCTION_EXPRESSION: &str =
     "tests/corpora/quickjs_differential/active/function_expression.js";
 const PATH_QUICKJS_FUNCTION_RETURN: &str =
@@ -112,6 +116,7 @@ const PATH_BENCH_ARITHMETIC: &str = "tests/corpora/benchmarks/active/arithmetic_
 const PATH_BENCH_CONDITIONAL_BITAND: &str = "tests/corpora/benchmarks/active/conditional_bitand.js";
 const PATH_BENCH_WHILE_STATEMENTS: &str = "tests/corpora/benchmarks/active/while_statements.js";
 const PATH_BENCH_BREAK_CONTINUE: &str = "tests/corpora/benchmarks/active/break_continue.js";
+const PATH_BENCH_FOR_STATEMENTS: &str = "tests/corpora/benchmarks/active/for_statements.js";
 const PATH_BENCH_FUNCTION_EXPRESSION: &str =
     "tests/corpora/benchmarks/active/function_expression.js";
 const PATH_BENCH_FUNCTION_RETURN: &str = "tests/corpora/benchmarks/active/function_return.js";
@@ -207,6 +212,14 @@ fn engine_control_flow_cases() -> Vec<EngineCase> {
             path: PATH_BREAK_CONTINUE,
             expectation: Expectation::OutputAndValue {
                 output: &["3 42"],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "for_statements",
+            path: PATH_FOR_STATEMENTS,
+            expectation: Expectation::OutputAndValue {
+                output: &["5 1 42 5"],
                 value: "42",
             },
         },
@@ -368,6 +381,11 @@ pub fn test262_cases() -> Vec<EngineCase> {
             expectation: Expectation::Value("42"),
         },
         EngineCase {
+            id: "language/statements/for",
+            path: PATH_TEST262_FOR,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
             id: "language/statements/assert_throws_reference_error",
             path: PATH_TEST262_ASSERT_THROWS_REFERENCE_ERROR,
             expectation: Expectation::Value("42"),
@@ -413,6 +431,10 @@ pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "break_continue",
             path: PATH_QUICKJS_BREAK_CONTINUE,
+        },
+        DifferentialCase {
+            id: "for_statements",
+            path: PATH_QUICKJS_FOR_STATEMENTS,
         },
         DifferentialCase {
             id: "function_expression",
@@ -470,6 +492,10 @@ pub fn benchmark_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "break_continue",
             path: PATH_BENCH_BREAK_CONTINUE,
+        },
+        BenchmarkCase {
+            id: "for_statements",
+            path: PATH_BENCH_FOR_STATEMENTS,
         },
         BenchmarkCase {
             id: "function_expression",

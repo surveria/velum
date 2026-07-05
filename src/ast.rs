@@ -17,6 +17,12 @@ pub enum Stmt {
         condition: Expr,
         body: Box<Self>,
     },
+    For {
+        init: Option<Box<Self>>,
+        condition: Option<Expr>,
+        update: Option<Expr>,
+        body: Box<Self>,
+    },
     TryCatch {
         body: Vec<Self>,
         catch_param: String,

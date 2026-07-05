@@ -52,6 +52,9 @@ impl Parser {
         if self.match_kind(&TokenKind::While) {
             return self.while_statement();
         }
+        if self.match_kind(&TokenKind::For) {
+            return self.for_statement();
+        }
         if self.match_kind(&TokenKind::Try) {
             return self.try_statement();
         }
@@ -125,6 +128,48 @@ impl Parser {
         Ok(Stmt::While { condition, body })
     }
 
+    fn for_statement(&mut self) -> Result<Stmt> {
+        self.consume(&TokenKind::LParen, "expected '(' after 'for'")?;
+        let init = self.for_init()?;
+        let condition = if self.check(&TokenKind::Semicolon) {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+        self.consume(&TokenKind::Semicolon, "expected ';' after for condition")?;
+        let update = if self.check(&TokenKind::RParen) {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+        self.consume(&TokenKind::RParen, "expected ')' after for clauses")?;
+        let body = Box::new(self.statement()?);
+        Ok(Stmt::For {
+            init,
+            condition,
+            update,
+            body,
+        })
+    }
+
+    fn for_init(&mut self) -> Result<Option<Box<Stmt>>> {
+        if self.match_kind(&TokenKind::Semicolon) {
+            return Ok(None);
+        }
+        if self.match_kind(&TokenKind::Let) {
+            return self.for_var_decl(DeclKind::Let).map(Box::new).map(Some);
+        }
+        if self.match_kind(&TokenKind::Const) {
+            return self.for_var_decl(DeclKind::Const).map(Box::new).map(Some);
+        }
+        if self.match_kind(&TokenKind::Var) {
+            return self.for_var_decl(DeclKind::Var).map(Box::new).map(Some);
+        }
+        let expr = self.expression()?;
+        self.consume(&TokenKind::Semicolon, "expected ';' after for initializer")?;
+        Ok(Some(Box::new(Stmt::Expr(expr))))
+    }
+
     fn try_statement(&mut self) -> Result<Stmt> {
         self.consume(&TokenKind::LBrace, "expected '{' after 'try'")?;
         let body = self.block_statements()?;
@@ -160,6 +205,18 @@ impl Parser {
     }
 
     fn var_decl(&mut self, kind: DeclKind) -> Result<Stmt> {
+        let declarations = self.var_declarations(kind)?;
+        self.consume_optional_semicolon();
+        self.declarations_stmt(declarations)
+    }
+
+    fn for_var_decl(&mut self, kind: DeclKind) -> Result<Stmt> {
+        let declarations = self.var_declarations(kind)?;
+        self.consume(&TokenKind::Semicolon, "expected ';' after for initializer")?;
+        self.declarations_stmt(declarations)
+    }
+
+    fn var_declarations(&mut self, kind: DeclKind) -> Result<Vec<Stmt>> {
         let mut declarations = Vec::new();
         loop {
             let name = self.consume_identifier("expected binding name")?;
@@ -178,8 +235,10 @@ impl Parser {
                 break;
             }
         }
+        Ok(declarations)
+    }
 
-        self.consume_optional_semicolon();
+    fn declarations_stmt(&self, declarations: Vec<Stmt>) -> Result<Stmt> {
         if declarations.len() == 1 {
             let mut declarations = declarations.into_iter();
             let Some(declaration) = declarations.next() else {
