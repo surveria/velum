@@ -1,6 +1,6 @@
 use crate::value::Value;
 
-use super::{ARRAY_LENGTH_PROPERTY, ArrayIndex, Object, ObjectHeap};
+use super::{ARRAY_LENGTH_PROPERTY, ArrayIndex, Object, ObjectHeap, PropertyKey, PropertyLookup};
 use crate::error::Result;
 use crate::value::ObjectId;
 
@@ -196,7 +196,7 @@ impl ObjectHeap {
     pub fn own_property_descriptor(
         &self,
         id: ObjectId,
-        property: &str,
+        property: PropertyLookup<'_>,
     ) -> Result<Option<DataPropertyDescriptor>> {
         self.object(id)
             .map(|object| object.own_property_descriptor(property))
@@ -205,24 +205,28 @@ impl ObjectHeap {
     pub fn define_property(
         &mut self,
         id: ObjectId,
-        property: String,
+        property: PropertyKey,
+        property_name: &str,
         update: DataPropertyUpdate,
         max_properties: usize,
     ) -> Result<()> {
         let object = self.object_mut(id)?;
-        object.define_property(property, update, max_properties)
+        object.define_property(property, property_name, update, max_properties)
     }
 
-    pub fn has_own(&self, id: ObjectId, property: &str) -> Result<bool> {
+    pub fn has_own(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {
         self.object(id).map(|object| object.has_own(property))
     }
 }
 
 impl Object {
-    fn own_property_descriptor(&self, property: &str) -> Option<DataPropertyDescriptor> {
+    fn own_property_descriptor(
+        &self,
+        property: PropertyLookup<'_>,
+    ) -> Option<DataPropertyDescriptor> {
         if let Some(length) = self
             .array_length
-            .filter(|_| property == ARRAY_LENGTH_PROPERTY)
+            .filter(|_| property.name() == ARRAY_LENGTH_PROPERTY)
         {
             return Some(DataPropertyDescriptor::new(
                 length.value(),
@@ -232,33 +236,38 @@ impl Object {
             ));
         }
         if self.array_length.is_some()
-            && let Some(index) = ArrayIndex::parse(property)
+            && let Some(index) = ArrayIndex::parse(property.name())
             && let Some(descriptor) = self.array_element_descriptor(index)
         {
             return Some(descriptor);
         }
-        self.properties
-            .get(property)
-            .map(ObjectProperty::descriptor)
+        let key = property.key()?;
+        self.properties.get(&key).map(ObjectProperty::descriptor)
     }
 
     fn define_property(
         &mut self,
-        property: String,
+        property: PropertyKey,
+        property_name: &str,
         update: DataPropertyUpdate,
         max_properties: usize,
     ) -> Result<()> {
+        let index = ArrayIndex::parse(property_name);
         if self.array_length.is_some()
-            && let Some(index) = ArrayIndex::parse(&property)
+            && let Some(index) = index
         {
             return self.define_array_property(index, property, update, max_properties);
         }
-        self.define_named_property(property, update, max_properties)
+        self.define_named_property(property, update, max_properties)?;
+        if let Some(index) = index {
+            self.sparse_array_keys.insert(index, property);
+        }
+        Ok(())
     }
 
     fn define_named_property(
         &mut self,
-        property: String,
+        property: PropertyKey,
         update: DataPropertyUpdate,
         max_properties: usize,
     ) -> Result<()> {
@@ -276,7 +285,7 @@ impl Object {
                         "object property count exceeded {max_properties}"
                     )));
                 }
-                self.property_order.push(entry.key().clone());
+                self.property_order.push(*entry.key());
                 let property = ObjectProperty::from_descriptor(update.complete_for_new());
                 if property.is_enumerable() {
                     enumerable_update = Some((false, true));
@@ -293,11 +302,12 @@ impl Object {
     fn define_array_property(
         &mut self,
         index: ArrayIndex,
-        property: String,
+        property: PropertyKey,
         update: DataPropertyUpdate,
         max_properties: usize,
     ) -> Result<()> {
         let Some(position) = index.dense_position(max_properties)? else {
+            self.sparse_array_keys.insert(index, property);
             return self.define_named_property(property, update, max_properties);
         };
         if self.array_elements.get(position).is_none() {

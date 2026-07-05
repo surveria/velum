@@ -2,7 +2,7 @@ use crate::{
     ast::{DeclKind, Expr},
     error::{Error, Result},
     runtime::Context,
-    runtime_object::PropertyEnumerable,
+    runtime_object::{ObjectPropertyInit, PropertyEnumerable},
     runtime_scope::BindingCell,
     value::{ErrorName, ErrorObject, NativeFunctionId, Value},
 };
@@ -626,25 +626,32 @@ impl Context {
     }
 
     fn object_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<Value> {
-        let prototype = self
-            .objects
-            .object_prototype_id(self.limits.max_objects, self.limits.max_object_properties)?;
-        self.objects.define_non_enumerable(
-            prototype,
-            OBJECT_CONSTRUCTOR_PROPERTY.to_owned(),
-            constructor,
+        let constructor_key = self.object_constructor_property_key()?;
+        let prototype = self.objects.object_prototype_id(
+            constructor_key,
+            self.limits.max_objects,
             self.limits.max_object_properties,
+        )?;
+        self.define_non_enumerable_object_property(
+            prototype,
+            OBJECT_CONSTRUCTOR_PROPERTY,
+            constructor,
         )?;
         Ok(Value::Object(prototype))
     }
 
     fn error_prototype_with_constructor(&mut self, constructor: Value) -> Result<Value> {
+        let constructor_key = self.object_constructor_property_key()?;
         self.objects
             .create_with_prototype_property(
                 None,
-                OBJECT_CONSTRUCTOR_PROPERTY.to_owned(),
-                constructor,
-                PropertyEnumerable::No,
+                ObjectPropertyInit::new(
+                    constructor_key,
+                    OBJECT_CONSTRUCTOR_PROPERTY,
+                    constructor,
+                    PropertyEnumerable::No,
+                ),
+                constructor_key,
                 self.limits.max_objects,
                 self.limits.max_object_properties,
             )

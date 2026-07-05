@@ -65,12 +65,16 @@ impl Context {
         let descriptor_value = Self::argument_or_undefined(&values, 2);
         let descriptor = self.data_property_update_from_value(&descriptor_value)?;
         match &target {
-            Value::Object(id) => self.objects.define_property(
-                *id,
-                property,
-                descriptor,
-                self.limits.max_object_properties,
-            )?,
+            Value::Object(id) => {
+                let key = self.intern_property_key(&property)?;
+                self.objects.define_property(
+                    *id,
+                    key,
+                    &property,
+                    descriptor,
+                    self.limits.max_object_properties,
+                )?;
+            }
             Value::Function(id) => self.define_function_property(*id, property, descriptor)?,
             Value::NativeFunction(id) => {
                 self.define_native_function_property(*id, property, descriptor)?;
@@ -98,7 +102,9 @@ impl Context {
         let target = Self::argument_or_undefined(&values, 0);
         let property = self.object_property_key(&values, 1)?;
         let descriptor = match target {
-            Value::Object(id) => self.objects.own_property_descriptor(id, &property)?,
+            Value::Object(id) => self
+                .objects
+                .own_property_descriptor(id, self.property_lookup(&property))?,
             Value::Function(id) => self.function_own_property_descriptor(id, &property)?,
             Value::NativeFunction(id) => {
                 self.native_function_own_property_descriptor(id, &property)?
@@ -228,7 +234,7 @@ impl Context {
         descriptor: &Value,
         property: &str,
     ) -> Result<Option<Value>> {
-        if !has_property(&self.objects, descriptor, property)? {
+        if !has_property(&self.objects, descriptor, self.property_lookup(property))? {
             return Ok(None);
         }
         self.get_property_value(descriptor, property).map(Some)
@@ -256,7 +262,7 @@ impl Context {
     }
 
     fn optional_descriptor_bool(&self, descriptor: &Value, property: &str) -> Result<Option<bool>> {
-        if !has_property(&self.objects, descriptor, property)? {
+        if !has_property(&self.objects, descriptor, self.property_lookup(property))? {
             return Ok(None);
         }
         Ok(Some(
@@ -292,33 +298,47 @@ impl Context {
         &mut self,
         descriptor: &DataPropertyDescriptor,
     ) -> Result<Value> {
+        let properties = vec![
+            self.descriptor_object_property(DESCRIPTOR_VALUE_PROPERTY, descriptor.value())?,
+            self.descriptor_object_property(
+                DESCRIPTOR_WRITABLE_PROPERTY,
+                Value::Bool(descriptor.writable().is_yes()),
+            )?,
+            self.descriptor_object_property(
+                DESCRIPTOR_ENUMERABLE_PROPERTY,
+                Value::Bool(descriptor.enumerable().is_yes()),
+            )?,
+            self.descriptor_object_property(
+                DESCRIPTOR_CONFIGURABLE_PROPERTY,
+                Value::Bool(descriptor.configurable().is_yes()),
+            )?,
+        ];
+        let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_data_object(
-            vec![
-                (DESCRIPTOR_VALUE_PROPERTY.to_owned(), descriptor.value()),
-                (
-                    DESCRIPTOR_WRITABLE_PROPERTY.to_owned(),
-                    Value::Bool(descriptor.writable().is_yes()),
-                ),
-                (
-                    DESCRIPTOR_ENUMERABLE_PROPERTY.to_owned(),
-                    Value::Bool(descriptor.enumerable().is_yes()),
-                ),
-                (
-                    DESCRIPTOR_CONFIGURABLE_PROPERTY.to_owned(),
-                    Value::Bool(descriptor.configurable().is_yes()),
-                ),
-            ],
+            properties,
+            constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
         )
     }
 
+    fn descriptor_object_property(
+        &mut self,
+        name: &str,
+        value: Value,
+    ) -> Result<(crate::runtime_object::PropertyKey, String, Value)> {
+        let key = self.intern_property_key(name)?;
+        Ok((key, name.to_owned(), value))
+    }
+
     fn has_own_property_value(&self, target: &Value, property: &str) -> Result<bool> {
         match target {
-            Value::Object(id) => self.objects.has_own(*id, property),
+            Value::Object(id) => self.objects.has_own(*id, self.property_lookup(property)),
             Value::Function(id) => self.has_function_property(*id, property),
             Value::NativeFunction(id) => self.has_native_function_property(*id, property),
-            Value::Error(_) | Value::String(_) => has_property(&self.objects, target, property),
+            Value::Error(_) | Value::String(_) => {
+                has_property(&self.objects, target, self.property_lookup(property))
+            }
             Value::Bool(_) | Value::Number(_) => Ok(false),
             Value::Undefined | Value::Null | Value::HostFunction(_) => Err(Error::runtime(
                 "Object.hasOwn target cannot be converted to an object",
@@ -328,7 +348,7 @@ impl Context {
 
     fn own_enumerable_keys(&self, target: &Value) -> Result<Vec<String>> {
         match target {
-            Value::Object(id) => self.objects.own_keys(*id),
+            Value::Object(id) => self.objects.own_keys(*id, &self.atoms),
             Value::Function(id) => self.function_enumerable_keys(*id),
             Value::NativeFunction(id) => self.native_function_enumerable_keys(*id),
             Value::Error(_) | Value::String(_) => self.enumerable_keys(target),
@@ -340,8 +360,10 @@ impl Context {
     }
 
     fn create_object_from_constructor(&mut self) -> Result<Value> {
+        let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_with_prototype(
             None,
+            constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
         )

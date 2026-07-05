@@ -42,8 +42,10 @@ impl Context {
             return Ok(binding.value());
         }
 
+        let constructor_key = self.object_constructor_property_key()?;
         let object = self.objects.create_with_prototype_id(
             None,
+            constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
         )?;
@@ -313,12 +315,7 @@ impl Context {
     }
 
     fn define_math_constant(&mut self, object: ObjectId, name: &str, value: f64) -> Result<()> {
-        self.objects.define_non_enumerable(
-            object,
-            name.to_owned(),
-            Value::Number(value),
-            self.limits.max_object_properties,
-        )
+        self.define_non_enumerable_object_property(object, name, Value::Number(value))
     }
 
     fn define_math_method(
@@ -328,12 +325,7 @@ impl Context {
         kind: NativeFunctionKind,
     ) -> Result<()> {
         let function = self.create_native_function(kind, Value::Undefined);
-        self.objects.define_non_enumerable(
-            object,
-            name.to_owned(),
-            function,
-            self.limits.max_object_properties,
-        )
+        self.define_non_enumerable_object_property(object, name, function)
     }
 
     fn eval_math_args(&mut self, args: &[Expr]) -> Result<Vec<Value>> {

@@ -9,8 +9,8 @@ use crate::{
     runtime::Context,
     runtime_completion::Completion,
     runtime_object::{
-        DataPropertyDescriptor, DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable,
-        PropertyWritable,
+        DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
+        PropertyEnumerable, PropertyWritable,
     },
     runtime_scope::{BindingCell, BindingScope},
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
@@ -61,11 +61,16 @@ impl Context {
         let id = FunctionId::new(self.functions.len());
         let function = Value::Function(id);
         let prototype = if constructable {
+            let constructor_key = self.intern_property_key(PROTOTYPE_CONSTRUCTOR_PROPERTY)?;
             let prototype_id = self.objects.create_with_prototype_property(
                 None,
-                PROTOTYPE_CONSTRUCTOR_PROPERTY.to_owned(),
-                function.clone(),
-                PropertyEnumerable::No,
+                ObjectPropertyInit::new(
+                    constructor_key,
+                    PROTOTYPE_CONSTRUCTOR_PROPERTY,
+                    function.clone(),
+                    PropertyEnumerable::No,
+                ),
+                constructor_key,
                 self.limits.max_objects,
                 self.limits.max_object_properties,
             )?;

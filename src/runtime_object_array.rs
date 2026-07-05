@@ -566,8 +566,8 @@ impl Object {
         {
             return Some(value);
         }
-        let key = index.key();
-        self.properties.get(&key).map(super::ObjectProperty::value)
+        let key = self.sparse_array_keys.get(&index)?;
+        self.properties.get(key).map(super::ObjectProperty::value)
     }
 
     fn set_array_index(
@@ -584,10 +584,12 @@ impl Object {
         if self.array_length.is_some() && self.delete_array_element(index) {
             return true;
         }
-        let key = index.key();
+        let Some(key) = self.sparse_array_keys.remove(&index) else {
+            return true;
+        };
         let removed_property = self.properties.remove(&key);
         if removed_property.is_some() {
-            self.property_order.retain(|stored_key| stored_key != &key);
+            self.property_order.retain(|stored_key| *stored_key != key);
         }
         true
     }

@@ -2,11 +2,13 @@ use crate::{
     ast::Expr,
     error::{Error, Result},
     runtime::Context,
-    runtime_object::PropertyEnumerable,
+    runtime_object::{ObjectPropertyInit, PropertyEnumerable},
     value::{NativeFunctionId, ObjectId, Value},
 };
 
 use super::{NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, STRING_NAME};
+
+const STRING_LENGTH_PROPERTY: &str = "length";
 
 impl Context {
     pub(super) fn string_constructor_value(&mut self) -> Result<Value> {
@@ -32,20 +34,34 @@ impl Context {
     pub(super) fn construct_string_object(&mut self, args: &[Expr]) -> Result<Value> {
         let value = self.eval_string_argument(args)?;
         let prototype = self.string_constructor_prototype()?;
+        let length_key = self.intern_property_key(STRING_LENGTH_PROPERTY)?;
+        let mut character_properties = Vec::with_capacity(value.chars().count());
+        for (index, ch) in value.chars().enumerate() {
+            let name = index.to_string();
+            let key = self.intern_property_key(&name)?;
+            character_properties.push((key, name, Value::String(ch.to_string())));
+        }
         self.objects.create_string_object(
             &value,
             prototype,
+            length_key,
+            character_properties,
             self.limits.max_objects,
             self.limits.max_object_properties,
         )
     }
 
     fn string_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<ObjectId> {
+        let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_with_prototype_property(
             None,
-            OBJECT_CONSTRUCTOR_PROPERTY.to_owned(),
-            constructor,
-            PropertyEnumerable::No,
+            ObjectPropertyInit::new(
+                constructor_key,
+                OBJECT_CONSTRUCTOR_PROPERTY,
+                constructor,
+                PropertyEnumerable::No,
+            ),
+            constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
         )

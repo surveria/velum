@@ -278,8 +278,10 @@ impl Context {
     }
 
     fn array_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<ObjectId> {
+        let constructor_key = self.object_constructor_property_key()?;
         self.objects.array_prototype_id_with_constructor(
             constructor,
+            constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
         )
@@ -287,96 +289,73 @@ impl Context {
 
     fn install_array_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
         let concat = self.create_native_function(NativeFunctionKind::ArrayConcat, Value::Undefined);
-        self.objects.define_non_enumerable(
+        self.define_non_enumerable_object_property(
             prototype,
-            ARRAY_PROTOTYPE_CONCAT_PROPERTY.to_owned(),
+            ARRAY_PROTOTYPE_CONCAT_PROPERTY,
             concat,
-            self.limits.max_object_properties,
         )?;
 
         let includes =
             self.create_native_function(NativeFunctionKind::ArrayIncludes, Value::Undefined);
-        self.objects.define_non_enumerable(
+        self.define_non_enumerable_object_property(
             prototype,
-            ARRAY_PROTOTYPE_INCLUDES_PROPERTY.to_owned(),
+            ARRAY_PROTOTYPE_INCLUDES_PROPERTY,
             includes,
-            self.limits.max_object_properties,
         )?;
 
         let index_of =
             self.create_native_function(NativeFunctionKind::ArrayIndexOf, Value::Undefined);
-        self.objects.define_non_enumerable(
+        self.define_non_enumerable_object_property(
             prototype,
-            ARRAY_PROTOTYPE_INDEX_OF_PROPERTY.to_owned(),
+            ARRAY_PROTOTYPE_INDEX_OF_PROPERTY,
             index_of,
-            self.limits.max_object_properties,
         )?;
 
         let last_index_of =
             self.create_native_function(NativeFunctionKind::ArrayLastIndexOf, Value::Undefined);
-        self.objects.define_non_enumerable(
+        self.define_non_enumerable_object_property(
             prototype,
-            ARRAY_PROTOTYPE_LAST_INDEX_OF_PROPERTY.to_owned(),
+            ARRAY_PROTOTYPE_LAST_INDEX_OF_PROPERTY,
             last_index_of,
-            self.limits.max_object_properties,
         )?;
 
         let join = self.create_native_function(NativeFunctionKind::ArrayJoin, Value::Undefined);
-        self.objects.define_non_enumerable(
-            prototype,
-            ARRAY_PROTOTYPE_JOIN_PROPERTY.to_owned(),
-            join,
-            self.limits.max_object_properties,
-        )?;
+        self.define_non_enumerable_object_property(prototype, ARRAY_PROTOTYPE_JOIN_PROPERTY, join)?;
 
         let push = self.create_native_function(NativeFunctionKind::ArrayPush, Value::Undefined);
-        self.objects.define_non_enumerable(
-            prototype,
-            ARRAY_PROTOTYPE_PUSH_PROPERTY.to_owned(),
-            push,
-            self.limits.max_object_properties,
-        )?;
+        self.define_non_enumerable_object_property(prototype, ARRAY_PROTOTYPE_PUSH_PROPERTY, push)?;
 
         let reverse =
             self.create_native_function(NativeFunctionKind::ArrayReverse, Value::Undefined);
-        self.objects.define_non_enumerable(
+        self.define_non_enumerable_object_property(
             prototype,
-            ARRAY_PROTOTYPE_REVERSE_PROPERTY.to_owned(),
+            ARRAY_PROTOTYPE_REVERSE_PROPERTY,
             reverse,
-            self.limits.max_object_properties,
         )?;
 
         let pop = self.create_native_function(NativeFunctionKind::ArrayPop, Value::Undefined);
-        self.objects.define_non_enumerable(
-            prototype,
-            ARRAY_PROTOTYPE_POP_PROPERTY.to_owned(),
-            pop,
-            self.limits.max_object_properties,
-        )?;
+        self.define_non_enumerable_object_property(prototype, ARRAY_PROTOTYPE_POP_PROPERTY, pop)?;
 
         let shift = self.create_native_function(NativeFunctionKind::ArrayShift, Value::Undefined);
-        self.objects.define_non_enumerable(
+        self.define_non_enumerable_object_property(
             prototype,
-            ARRAY_PROTOTYPE_SHIFT_PROPERTY.to_owned(),
+            ARRAY_PROTOTYPE_SHIFT_PROPERTY,
             shift,
-            self.limits.max_object_properties,
         )?;
 
         let slice = self.create_native_function(NativeFunctionKind::ArraySlice, Value::Undefined);
-        self.objects.define_non_enumerable(
+        self.define_non_enumerable_object_property(
             prototype,
-            ARRAY_PROTOTYPE_SLICE_PROPERTY.to_owned(),
+            ARRAY_PROTOTYPE_SLICE_PROPERTY,
             slice,
-            self.limits.max_object_properties,
         )?;
 
         let unshift =
             self.create_native_function(NativeFunctionKind::ArrayUnshift, Value::Undefined);
-        self.objects.define_non_enumerable(
+        self.define_non_enumerable_object_property(
             prototype,
-            ARRAY_PROTOTYPE_UNSHIFT_PROPERTY.to_owned(),
+            ARRAY_PROTOTYPE_UNSHIFT_PROPERTY,
             unshift,
-            self.limits.max_object_properties,
         )
     }
 

@@ -1,29 +1,31 @@
 use crate::{
+    atom::AtomTable,
     error::{Error, Result},
     value::ObjectId,
 };
 
-use super::{ArrayIndex, Object, ObjectHeap};
+use super::{ArrayIndex, Object, ObjectHeap, PropertyKey};
 
 impl ObjectHeap {
-    pub fn keys(&self, id: ObjectId) -> Result<Vec<String>> {
+    pub fn keys(&self, id: ObjectId, atoms: &AtomTable) -> Result<Vec<String>> {
         let object = self.object(id)?;
         let mut keys = Vec::with_capacity(object.enumerable_key_count_hint());
         let mut visited = Vec::new();
-        self.collect_keys(id, &mut keys, &mut visited)?;
+        self.collect_keys(id, atoms, &mut keys, &mut visited)?;
         Ok(keys)
     }
 
-    pub(crate) fn own_keys(&self, id: ObjectId) -> Result<Vec<String>> {
+    pub(crate) fn own_keys(&self, id: ObjectId, atoms: &AtomTable) -> Result<Vec<String>> {
         let object = self.object(id)?;
         let mut keys = Vec::with_capacity(object.enumerable_key_count_hint());
-        object.extend_enumerable_keys(&mut keys);
+        object.extend_enumerable_keys(atoms, &mut keys)?;
         Ok(keys)
     }
 
     fn collect_keys(
         &self,
         id: ObjectId,
+        atoms: &AtomTable,
         keys: &mut Vec<String>,
         visited: &mut Vec<ObjectId>,
     ) -> Result<()> {
@@ -33,11 +35,11 @@ impl ObjectHeap {
         visited.push(id);
         let prototype = {
             let object = self.object(id)?;
-            object.extend_enumerable_keys(keys);
+            object.extend_enumerable_keys(atoms, keys)?;
             object.prototype
         };
         if let Some(prototype) = prototype {
-            self.collect_keys(prototype, keys, visited)?;
+            self.collect_keys(prototype, atoms, keys, visited)?;
         }
         Ok(())
     }
@@ -48,23 +50,29 @@ impl Object {
         self.enumerable_property_count
     }
 
-    fn extend_enumerable_keys(&self, keys: &mut Vec<String>) {
+    fn extend_enumerable_keys(&self, atoms: &AtomTable, keys: &mut Vec<String>) -> Result<()> {
         if !self.has_enumerable_own_keys() {
-            return;
+            return Ok(());
         }
         if self.array_length.is_none() {
-            self.extend_named_keys(keys, false);
-            return;
+            self.extend_named_keys(atoms, keys, false)?;
+            return Ok(());
         }
 
         self.extend_array_element_keys(keys);
-        self.extend_sparse_array_element_keys(keys);
-        self.extend_named_keys(keys, true);
+        self.extend_sparse_array_element_keys(atoms, keys)?;
+        self.extend_named_keys(atoms, keys, true)
     }
 
-    fn extend_named_keys(&self, keys: &mut Vec<String>, skip_array_indices: bool) {
+    fn extend_named_keys(
+        &self,
+        atoms: &AtomTable,
+        keys: &mut Vec<String>,
+        skip_array_indices: bool,
+    ) -> Result<()> {
         for key in &self.property_order {
-            if skip_array_indices && ArrayIndex::parse(key).is_some() {
+            let name = atoms.name(key.atom())?;
+            if skip_array_indices && ArrayIndex::parse(name).is_some() {
                 continue;
             }
             if self
@@ -72,9 +80,10 @@ impl Object {
                 .get(key)
                 .is_some_and(super::ObjectProperty::is_enumerable)
             {
-                push_unique_key(keys, key.clone());
+                push_unique_key(keys, name.to_owned());
             }
         }
+        Ok(())
     }
 
     fn extend_array_element_keys(&self, keys: &mut Vec<String>) {
@@ -88,25 +97,29 @@ impl Object {
         }
     }
 
-    fn extend_sparse_array_element_keys(&self, keys: &mut Vec<String>) {
-        if self.property_order.is_empty() {
-            return;
+    fn extend_sparse_array_element_keys(
+        &self,
+        atoms: &AtomTable,
+        keys: &mut Vec<String>,
+    ) -> Result<()> {
+        if self.sparse_array_keys.is_empty() {
+            return Ok(());
         }
-        let mut entries: Vec<(ArrayIndex, String)> = self
-            .property_order
-            .iter()
-            .filter_map(|key| {
-                let index = ArrayIndex::parse(key)?;
-                self.properties
-                    .get(key)
-                    .filter(|property| property.is_enumerable())
-                    .map(|_| (index, key.clone()))
-            })
-            .collect();
+        let mut entries: Vec<(ArrayIndex, PropertyKey)> = Vec::new();
+        for (index, key) in &self.sparse_array_keys {
+            if self
+                .properties
+                .get(key)
+                .is_some_and(super::ObjectProperty::is_enumerable)
+            {
+                entries.push((*index, *key));
+            }
+        }
         entries.sort_by_key(|(index, _)| *index);
         for (_, key) in entries {
-            push_unique_key(keys, key);
+            push_unique_key(keys, atoms.name(key.atom())?.to_owned());
         }
+        Ok(())
     }
 }
 

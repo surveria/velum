@@ -48,10 +48,6 @@ impl ArrayIndex {
         Some(Self(value))
     }
 
-    pub(super) fn key(self) -> String {
-        self.0.to_string()
-    }
-
     pub(super) fn position(self) -> Result<usize> {
         usize::try_from(self.0).map_err(|_| Error::limit(ARRAY_INDEX_LIMIT_ERROR))
     }
