@@ -67,6 +67,8 @@ const PATH_FUNCTION_EXPRESSION: &str = "tests/engine_cases/function_expression.j
 const PATH_FUNCTION_PROPERTIES: &str = "tests/engine_cases/function_properties.js";
 const PATH_FUNCTION_CUSTOM_PROPERTIES: &str = "tests/engine_cases/function_custom_properties.js";
 const PATH_FUNCTION_DESCRIPTORS: &str = "tests/engine_cases/function_descriptors.js";
+const PATH_FUNCTION_INTRINSIC_DESCRIPTORS: &str =
+    "tests/engine_cases/function_intrinsic_descriptors.js";
 const PATH_METHOD_THIS: &str = "tests/engine_cases/method_this.js";
 const PATH_CONSTRUCTOR_PROTOTYPES: &str = "tests/engine_cases/constructor_prototypes.js";
 const PATH_PROTOTYPE_CONSTRUCTOR_PROPERTY: &str =
@@ -381,6 +383,19 @@ fn engine_function_property_cases() -> Vec<EngineCase> {
                     "9 false namedCamera true 2 true",
                     "native 1 tag true false false false",
                     "keys true 1 true",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "function_intrinsic_descriptors",
+            path: PATH_FUNCTION_INTRINSIC_DESCRIPTORS,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "namedCamera true 2 true",
+                    "true false assigned 1 name",
+                    "11 true false 2 length",
+                    "TypeError 1 TypedAssigned true false 6 true false",
                 ],
                 value: "42",
             },

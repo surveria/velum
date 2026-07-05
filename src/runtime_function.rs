@@ -16,6 +16,8 @@ use crate::{
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
 };
 
+use super::runtime_function_intrinsic::{FunctionIntrinsicProperty, FunctionProperty};
+
 const FUNCTION_LENGTH_PROPERTY: &str = "length";
 const FUNCTION_NAME_PROPERTY: &str = "name";
 const FUNCTION_PROTOTYPE_PROPERTY: &str = "prototype";
@@ -24,6 +26,8 @@ const PROTOTYPE_CONSTRUCTOR_PROPERTY: &str = "constructor";
 #[derive(Debug, Clone)]
 pub(super) struct FunctionProperties {
     prototype: Value,
+    length: FunctionIntrinsicProperty,
+    name: FunctionIntrinsicProperty,
     properties: BTreeMap<String, FunctionProperty>,
     property_order: Vec<String>,
 }
@@ -146,12 +150,17 @@ impl Context {
 
     pub(crate) fn get_function_property(&self, id: FunctionId, property: &str) -> Result<Value> {
         let function = self.function(id)?;
-        let value = match property {
-            FUNCTION_LENGTH_PROPERTY => Value::Number(function.length()?),
-            FUNCTION_NAME_PROPERTY => Value::String(function.name.clone()),
-            FUNCTION_PROTOTYPE_PROPERTY => function.properties.prototype(),
-            _ => function.properties.get(property),
-        };
+        let value = function_default_intrinsic_descriptor(function, property)?.map_or_else(
+            || match property {
+                FUNCTION_PROTOTYPE_PROPERTY => function.properties.prototype(),
+                _ => function.properties.get(property),
+            },
+            |default_descriptor| {
+                function
+                    .properties
+                    .intrinsic_value_or_property(property, default_descriptor)
+            },
+        );
         self.checked_value(value)
     }
 
@@ -169,9 +178,13 @@ impl Context {
 
     pub(crate) fn has_function_property(&self, id: FunctionId, property: &str) -> Result<bool> {
         let function = self.function(id)?;
+        if matches!(property, FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY)
+            && function.properties.has_intrinsic(property)
+        {
+            return Ok(true);
+        }
         Ok(
-            matches!(property, FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY)
-                || (property == FUNCTION_PROTOTYPE_PROPERTY && function.constructable)
+            (property == FUNCTION_PROTOTYPE_PROPERTY && function.constructable)
                 || function.properties.has(property),
         )
     }
@@ -184,7 +197,10 @@ impl Context {
     ) -> Result<()> {
         let max_properties = self.limits.max_object_properties;
         let function = self.function_mut(id)?;
-        function.properties.set(property, value, max_properties)
+        let default_intrinsic = function_default_intrinsic_descriptor(function, &property)?;
+        function
+            .properties
+            .set(property, value, max_properties, default_intrinsic)
     }
 
     pub(crate) fn define_function_property(
@@ -195,9 +211,10 @@ impl Context {
     ) -> Result<()> {
         let max_properties = self.limits.max_object_properties;
         let function = self.function_mut(id)?;
+        let default_intrinsic = function_default_intrinsic_descriptor(function, &property)?;
         function
             .properties
-            .define_property(property, update, max_properties)
+            .define_property(property, update, max_properties, default_intrinsic)
     }
 
     pub(crate) fn delete_function_property(
@@ -206,11 +223,15 @@ impl Context {
         property: &str,
     ) -> Result<bool> {
         let function = self.function_mut(id)?;
-        Ok(function.properties.delete(property))
+        let default_intrinsic = function_default_intrinsic_descriptor(function, property)?;
+        Ok(function.properties.delete(property, default_intrinsic))
     }
 
     pub(crate) fn function_enumerable_keys(&self, id: FunctionId) -> Result<Vec<String>> {
-        self.function(id).map(|function| function.properties.keys())
+        let function = self.function(id)?;
+        let length = function_default_intrinsic_descriptor(function, FUNCTION_LENGTH_PROPERTY)?;
+        let name = function_default_intrinsic_descriptor(function, FUNCTION_NAME_PROPERTY)?;
+        Ok(function.properties.keys(length, name))
     }
 
     pub(crate) fn function_constructor_prototype(
@@ -253,14 +274,19 @@ impl Context {
         property: &str,
     ) -> Result<Value> {
         let function = self.native_function(id)?;
-        let value = match property {
-            FUNCTION_LENGTH_PROPERTY => Value::Number(function.length()),
-            FUNCTION_NAME_PROPERTY => Value::String(function.name().to_owned()),
-            FUNCTION_PROTOTYPE_PROPERTY => function.properties().prototype(),
-            _ => function
-                .intrinsic_property(property)
-                .unwrap_or_else(|| function.properties().get(property)),
-        };
+        let value = native_function_default_intrinsic_descriptor(function, property).map_or_else(
+            || match property {
+                FUNCTION_PROTOTYPE_PROPERTY => function.properties().prototype(),
+                _ => function
+                    .intrinsic_property(property)
+                    .unwrap_or_else(|| function.properties().get(property)),
+            },
+            |default_descriptor| {
+                function
+                    .properties()
+                    .intrinsic_value_or_property(property, default_descriptor)
+            },
+        );
         self.checked_value(value)
     }
 
@@ -290,10 +316,13 @@ impl Context {
         property: &str,
     ) -> Result<bool> {
         let function = self.native_function(id)?;
-        Ok(matches!(
-            property,
-            FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY | FUNCTION_PROTOTYPE_PROPERTY
-        ) || function.has_intrinsic_property(property)
+        if matches!(property, FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY)
+            && function.properties().has_intrinsic(property)
+        {
+            return Ok(true);
+        }
+        Ok((property == FUNCTION_PROTOTYPE_PROPERTY)
+            || function.has_intrinsic_property(property)
             || function.properties().has(property))
     }
 
@@ -307,6 +336,8 @@ impl Context {
             self.native_function(id)?;
             return Ok(());
         }
+        let default_intrinsic =
+            native_function_default_intrinsic_descriptor(self.native_function(id)?, &property);
         if self.native_function(id)?.has_intrinsic_property(&property) {
             return Ok(());
         }
@@ -314,7 +345,7 @@ impl Context {
         let function = self.native_function_mut(id)?;
         function
             .properties_mut()
-            .set(property, value, max_properties)
+            .set(property, value, max_properties, default_intrinsic)
     }
 
     pub(crate) fn define_native_function_property(
@@ -323,14 +354,19 @@ impl Context {
         property: String,
         update: DataPropertyUpdate,
     ) -> Result<()> {
+        let default_intrinsic =
+            native_function_default_intrinsic_descriptor(self.native_function(id)?, &property);
         if self.native_function(id)?.has_intrinsic_property(&property) {
             return Ok(());
         }
         let max_properties = self.limits.max_object_properties;
         let function = self.native_function_mut(id)?;
-        function
-            .properties_mut()
-            .define_property(property, update, max_properties)
+        function.properties_mut().define_property(
+            property,
+            update,
+            max_properties,
+            default_intrinsic,
+        )
     }
 
     pub(crate) fn delete_native_function_property(
@@ -338,19 +374,26 @@ impl Context {
         id: NativeFunctionId,
         property: &str,
     ) -> Result<bool> {
+        let default_intrinsic =
+            native_function_default_intrinsic_descriptor(self.native_function(id)?, property);
         if self.native_function(id)?.has_intrinsic_property(property) {
             return Ok(false);
         }
         let function = self.native_function_mut(id)?;
-        Ok(function.properties_mut().delete(property))
+        Ok(function
+            .properties_mut()
+            .delete(property, default_intrinsic))
     }
 
     pub(crate) fn native_function_enumerable_keys(
         &self,
         id: NativeFunctionId,
     ) -> Result<Vec<String>> {
-        self.native_function(id)
-            .map(|function| function.properties().keys())
+        let function = self.native_function(id)?;
+        let length =
+            native_function_default_intrinsic_descriptor(function, FUNCTION_LENGTH_PROPERTY);
+        let name = native_function_default_intrinsic_descriptor(function, FUNCTION_NAME_PROPERTY);
+        Ok(function.properties().keys(length, name))
     }
 
     fn eval_args(&mut self, args: &[Expr]) -> Result<Vec<Value>> {
@@ -381,6 +424,8 @@ impl FunctionProperties {
     pub(super) const fn new(prototype: Value) -> Self {
         Self {
             prototype,
+            length: FunctionIntrinsicProperty::new(),
+            name: FunctionIntrinsicProperty::new(),
             properties: BTreeMap::new(),
             property_order: Vec::new(),
         }
@@ -402,8 +447,32 @@ impl FunctionProperties {
             .map(FunctionProperty::descriptor)
     }
 
+    pub(super) fn intrinsic_descriptor(
+        &self,
+        property: &str,
+        default: DataPropertyDescriptor,
+    ) -> Option<DataPropertyDescriptor> {
+        self.intrinsic(property)
+            .and_then(|intrinsic| intrinsic.descriptor(default))
+    }
+
+    pub(super) fn intrinsic_value_or_property(
+        &self,
+        property: &str,
+        default: DataPropertyDescriptor,
+    ) -> Value {
+        self.intrinsic(property)
+            .and_then(|intrinsic| intrinsic.value(default))
+            .unwrap_or_else(|| self.get(property))
+    }
+
     pub(super) fn has(&self, property: &str) -> bool {
         self.properties.contains_key(property)
+    }
+
+    pub(super) fn has_intrinsic(&self, property: &str) -> bool {
+        self.intrinsic(property)
+            .is_some_and(FunctionIntrinsicProperty::has)
     }
 
     pub(super) fn set(
@@ -411,11 +480,11 @@ impl FunctionProperties {
         property: String,
         value: Value,
         max_properties: usize,
+        default_intrinsic: Option<DataPropertyDescriptor>,
     ) -> Result<()> {
-        if matches!(
-            property.as_str(),
-            FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY
-        ) {
+        if let Some(default) = default_intrinsic
+            && self.set_intrinsic_value(&property, default, value.clone())
+        {
             return Ok(());
         }
         if property == FUNCTION_PROTOTYPE_PROPERTY {
@@ -439,9 +508,15 @@ impl FunctionProperties {
         Ok(())
     }
 
-    pub(super) fn delete(&mut self, property: &str) -> bool {
-        if matches!(property, FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY) {
-            return false;
+    pub(super) fn delete(
+        &mut self,
+        property: &str,
+        default_intrinsic: Option<DataPropertyDescriptor>,
+    ) -> bool {
+        if let Some(default) = default_intrinsic
+            && let Some(deleted) = self.delete_intrinsic(property, default)
+        {
+            return deleted;
         }
         if property == FUNCTION_PROTOTYPE_PROPERTY {
             return false;
@@ -459,16 +534,21 @@ impl FunctionProperties {
         true
     }
 
-    pub(super) fn keys(&self) -> Vec<String> {
-        self.property_order
-            .iter()
-            .filter_map(|key| {
-                self.properties
-                    .get(key)
-                    .filter(|property| property.is_enumerable())
-                    .map(|_| key.clone())
-            })
-            .collect()
+    pub(super) fn keys(
+        &self,
+        length: Option<DataPropertyDescriptor>,
+        name: Option<DataPropertyDescriptor>,
+    ) -> Vec<String> {
+        let mut keys = Vec::new();
+        self.push_intrinsic_key(&mut keys, FUNCTION_LENGTH_PROPERTY, length);
+        self.push_intrinsic_key(&mut keys, FUNCTION_NAME_PROPERTY, name);
+        keys.extend(self.property_order.iter().filter_map(|key| {
+            self.properties
+                .get(key)
+                .filter(|property| property.is_enumerable())
+                .map(|_| key.clone())
+        }));
+        keys
     }
 
     pub(super) fn define_builtin(
@@ -494,11 +574,11 @@ impl FunctionProperties {
         property: String,
         update: DataPropertyUpdate,
         max_properties: usize,
+        default_intrinsic: Option<DataPropertyDescriptor>,
     ) -> Result<()> {
-        if matches!(
-            property.as_str(),
-            FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY
-        ) {
+        if let Some(default) = default_intrinsic
+            && self.define_intrinsic(&property, default, &update)
+        {
             return Ok(());
         }
         if property == FUNCTION_PROTOTYPE_PROPERTY {
@@ -523,79 +603,70 @@ impl FunctionProperties {
         }
         Ok(())
     }
-}
 
-#[derive(Debug, Clone)]
-struct FunctionProperty {
-    descriptor: DataPropertyDescriptor,
-}
-
-impl FunctionProperty {
-    const fn new(value: Value, enumerable: PropertyEnumerable) -> Self {
-        Self {
-            descriptor: DataPropertyDescriptor::new(
-                value,
-                PropertyWritable::Yes,
-                enumerable,
-                PropertyConfigurable::Yes,
-            ),
+    fn intrinsic(&self, property: &str) -> Option<&FunctionIntrinsicProperty> {
+        match property {
+            FUNCTION_LENGTH_PROPERTY => Some(&self.length),
+            FUNCTION_NAME_PROPERTY => Some(&self.name),
+            _ => None,
         }
     }
 
-    fn from_update(update: DataPropertyUpdate) -> Self {
-        Self {
-            descriptor: update.complete_for_new(),
+    fn intrinsic_mut(&mut self, property: &str) -> Option<&mut FunctionIntrinsicProperty> {
+        match property {
+            FUNCTION_LENGTH_PROPERTY => Some(&mut self.length),
+            FUNCTION_NAME_PROPERTY => Some(&mut self.name),
+            _ => None,
         }
     }
 
-    fn value(&self) -> Value {
-        self.descriptor.value()
+    fn set_intrinsic_value(
+        &mut self,
+        property: &str,
+        default: DataPropertyDescriptor,
+        value: Value,
+    ) -> bool {
+        let Some(intrinsic) = self.intrinsic_mut(property) else {
+            return false;
+        };
+        intrinsic.set_value(default, value)
     }
 
-    const fn is_configurable(&self) -> bool {
-        self.descriptor.configurable().is_yes()
+    fn define_intrinsic(
+        &mut self,
+        property: &str,
+        default: DataPropertyDescriptor,
+        update: &DataPropertyUpdate,
+    ) -> bool {
+        let Some(intrinsic) = self.intrinsic_mut(property) else {
+            return false;
+        };
+        intrinsic.define(default, update)
     }
 
-    const fn is_enumerable(&self) -> bool {
-        self.descriptor.enumerable().is_yes()
+    fn delete_intrinsic(
+        &mut self,
+        property: &str,
+        default: DataPropertyDescriptor,
+    ) -> Option<bool> {
+        self.intrinsic_mut(property)
+            .and_then(|intrinsic| intrinsic.delete(default))
     }
 
-    fn descriptor(&self) -> DataPropertyDescriptor {
-        self.descriptor.clone()
-    }
-
-    fn set_value(&mut self, value: Value) {
-        if self.descriptor.writable().is_yes() {
-            self.descriptor = DataPropertyDescriptor::new(
-                value,
-                self.descriptor.writable(),
-                self.descriptor.enumerable(),
-                self.descriptor.configurable(),
-            );
+    fn push_intrinsic_key(
+        &self,
+        keys: &mut Vec<String>,
+        property: &str,
+        descriptor: Option<DataPropertyDescriptor>,
+    ) {
+        let Some(descriptor) =
+            descriptor.and_then(|default| self.intrinsic_descriptor(property, default))
+        else {
+            return;
+        };
+        if descriptor.enumerable().is_yes() {
+            keys.push(property.to_owned());
         }
-    }
-
-    fn define(&mut self, update: &DataPropertyUpdate) {
-        let value = update.value().unwrap_or_else(|| self.descriptor.value());
-        let writable = update
-            .writable()
-            .unwrap_or_else(|| self.descriptor.writable());
-        let enumerable = update
-            .enumerable()
-            .unwrap_or_else(|| self.descriptor.enumerable());
-        let configurable = update
-            .configurable()
-            .unwrap_or_else(|| self.descriptor.configurable());
-        self.descriptor = DataPropertyDescriptor::new(value, writable, enumerable, configurable);
-    }
-
-    fn set_enumerable(&mut self, enumerable: PropertyEnumerable) {
-        self.descriptor = DataPropertyDescriptor::new(
-            self.descriptor.value(),
-            self.descriptor.writable(),
-            enumerable,
-            self.descriptor.configurable(),
-        );
     }
 }
 
@@ -608,6 +679,25 @@ impl super::Function {
 }
 
 fn function_intrinsic_descriptor(
+    function: &super::Function,
+    property: &str,
+) -> Result<Option<DataPropertyDescriptor>> {
+    if let Some(default) = function_default_intrinsic_descriptor(function, property)? {
+        return Ok(function.properties.intrinsic_descriptor(property, default));
+    }
+    let descriptor = match property {
+        FUNCTION_PROTOTYPE_PROPERTY if function.constructable => DataPropertyDescriptor::new(
+            function.properties.prototype(),
+            PropertyWritable::Yes,
+            PropertyEnumerable::No,
+            PropertyConfigurable::No,
+        ),
+        _ => return Ok(None),
+    };
+    Ok(Some(descriptor))
+}
+
+fn function_default_intrinsic_descriptor(
     function: &super::Function,
     property: &str,
 ) -> Result<Option<DataPropertyDescriptor>> {
@@ -624,18 +714,33 @@ fn function_intrinsic_descriptor(
             PropertyEnumerable::No,
             PropertyConfigurable::Yes,
         ),
-        FUNCTION_PROTOTYPE_PROPERTY if function.constructable => DataPropertyDescriptor::new(
-            function.properties.prototype(),
-            PropertyWritable::Yes,
-            PropertyEnumerable::No,
-            PropertyConfigurable::No,
-        ),
         _ => return Ok(None),
     };
     Ok(Some(descriptor))
 }
 
 fn native_function_intrinsic_descriptor(
+    function: &super::runtime_native::NativeFunction,
+    property: &str,
+) -> Option<DataPropertyDescriptor> {
+    if let Some(default) = native_function_default_intrinsic_descriptor(function, property) {
+        return function
+            .properties()
+            .intrinsic_descriptor(property, default);
+    }
+    let descriptor = match property {
+        FUNCTION_PROTOTYPE_PROPERTY => DataPropertyDescriptor::new(
+            function.properties().prototype(),
+            PropertyWritable::No,
+            PropertyEnumerable::No,
+            PropertyConfigurable::No,
+        ),
+        _ => return None,
+    };
+    Some(descriptor)
+}
+
+fn native_function_default_intrinsic_descriptor(
     function: &super::runtime_native::NativeFunction,
     property: &str,
 ) -> Option<DataPropertyDescriptor> {
@@ -651,12 +756,6 @@ fn native_function_intrinsic_descriptor(
             PropertyWritable::No,
             PropertyEnumerable::No,
             PropertyConfigurable::Yes,
-        ),
-        FUNCTION_PROTOTYPE_PROPERTY => DataPropertyDescriptor::new(
-            function.properties().prototype(),
-            PropertyWritable::No,
-            PropertyEnumerable::No,
-            PropertyConfigurable::No,
         ),
         _ => return None,
     };

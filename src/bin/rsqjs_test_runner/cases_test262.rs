@@ -18,6 +18,8 @@ const PATH_TEST262_FUNCTION_CUSTOM_PROPERTIES: &str =
     "tests/corpora/test262/active/language/expressions/function_custom_properties.js";
 const PATH_TEST262_FUNCTION_DESCRIPTORS: &str =
     "tests/corpora/test262/active/built-ins/Function/descriptors.js";
+const PATH_TEST262_FUNCTION_INTRINSIC_DESCRIPTORS: &str =
+    "tests/corpora/test262/active/built-ins/Function/intrinsic_descriptors.js";
 const PATH_TEST262_METHOD_THIS: &str =
     "tests/corpora/test262/active/language/expressions/method_this.js";
 const PATH_TEST262_CONSTRUCTOR_PROTOTYPES: &str =
@@ -188,6 +190,11 @@ fn test262_function_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "built-ins/Function/descriptors",
             path: PATH_TEST262_FUNCTION_DESCRIPTORS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Function/intrinsic_descriptors",
+            path: PATH_TEST262_FUNCTION_INTRINSIC_DESCRIPTORS,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
