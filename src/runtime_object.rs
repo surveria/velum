@@ -64,6 +64,11 @@ impl ObjectHeap {
         Ok(object.get(property))
     }
 
+    pub fn has(&self, id: ObjectId, property: &str) -> Result<bool> {
+        let object = self.object(id)?;
+        Ok(object.has(property))
+    }
+
     pub fn set(
         &mut self,
         id: ObjectId,
@@ -125,6 +130,11 @@ impl Object {
             .get(property)
             .cloned()
             .unwrap_or(Value::Undefined)
+    }
+
+    fn has(&self, property: &str) -> bool {
+        (self.array_length.is_some() && property == ARRAY_LENGTH_PROPERTY)
+            || self.properties.contains_key(property)
     }
 
     fn set(&mut self, property: String, value: Value, max_properties: usize) -> Result<()> {

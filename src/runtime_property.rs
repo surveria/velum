@@ -23,6 +23,17 @@ pub fn get_property(objects: &ObjectHeap, object: &Value, property: &str) -> Res
     }
 }
 
+pub fn has_property(objects: &ObjectHeap, object: &Value, property: &str) -> Result<bool> {
+    match object {
+        Value::Error(_) => Ok(matches!(property, "name" | "message")),
+        Value::Object(id) => objects.has(*id, property),
+        value => Err(Error::runtime(format!(
+            "operator 'in' is not supported for {}",
+            value.type_name()
+        ))),
+    }
+}
+
 pub fn set_property(
     objects: &mut ObjectHeap,
     object: &Value,
