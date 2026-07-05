@@ -13,6 +13,24 @@ built-ins, modules, async integration, resource controls, and observability.
 Runtime architecture, performance, and memory work support those product goals
 while keeping QuickJS-like size and speed as acceptance criteria.
 
+## Current Product Queue
+
+The default order for new work is:
+
+1. keep CI, reports, Test262, QuickJS differential checks, and benchmarks
+   reliable;
+2. keep the Rust library API useful for many isolated VMs, typed host
+   extensions, resource failures, teardown, and reusable compiled scripts;
+3. expand compatibility through narrow Test262-visible parser, runtime,
+   object, function, error, and built-in clusters;
+4. add practical built-ins by report evidence and embedding needs, starting
+   with JSON before broader object descriptors, arrays, functions, errors,
+   Date, RegExp, Map, and Set;
+5. improve diagnostics, modules, jobs, promises, async host callbacks, resource
+   controls, and observability;
+6. pull runtime data model work forward only when it supports the product path
+   above or addresses measured performance and memory debt.
+
 ## Phase 0: Repository And Guardrails
 
 - Safe-Rust crate with `unsafe_code = deny`.

@@ -19,6 +19,30 @@ production observability, and evolve runtime internals behind stable public
 interfaces. Performance and memory budgets are acceptance criteria for all of
 that work, with dedicated checkpoint tasks only when measurements show debt.
 
+## How To Read This Plan
+
+This document answers three different questions:
+
+1. What are we building?
+   A safe-Rust, embeddable JavaScript engine with many isolated VMs, typed host
+   extensions, async integration, resource controls, observability, and
+   QuickJS/Test262 validation.
+
+2. What do we do next?
+   Follow the default delivery order and the current delivery queue. Pick one
+   small branch that moves product capability or validation forward, then update
+   the task board with the evidence from that branch.
+
+3. How do we execute the branch?
+   Follow the branch protocol: refresh requirements, mark one task in progress,
+   implement narrowly, validate, record compatibility and performance evidence,
+   open a PR, wait for CI, squash-merge, update `main`, and remove the worktree.
+
+Runtime architecture notes are not the project goal by themselves. Atoms,
+slots, shapes, dense arrays, bytecode, inline caches, and GC are foundations
+that we pull forward when they unblock compatibility, embedding API behavior,
+resource accounting, observability, or measured performance and memory debt.
+
 ## Product Direction
 
 `rs-quickjs` is a library-first JavaScript engine for Rust applications that
@@ -68,50 +92,98 @@ cannot provide as cleanly:
   separate design review proves that a measured bottleneck cannot be solved in
   safe Rust.
 
-## Near-Term Product Order
+## Default Delivery Order
 
-When there is no stronger signal from the latest report, pick the next task in
-this order:
+Use this order for ordinary branch selection when the latest report does not
+show a stronger reason to do something else:
 
-1. Preserve repository trust.
+1. Preserve repository and measurement trust.
    CI, one-command validation, Test262 setup, QuickJS setup, compact reports,
    and benchmark reporting must keep working before feature work expands.
 
-2. Keep the library surface usable.
+2. Keep the library surface usable for embedders.
    Direct Rust API coverage should stay ahead of CLI-only behavior for isolated
-   VMs, resource limits, typed host functions, output separation, teardown, and
-   reusable compiled scripts.
+   VMs, resource limits, typed host functions, output separation, teardown, host
+   errors, and reusable compiled scripts.
 
 3. Expand compatibility by visible Test262 clusters.
    Parser, runtime semantics, object semantics, functions, errors, and built-ins
    should land in narrow branches that improve measured corpus progress.
 
 4. Add practical built-ins by usage and report evidence.
-   `Object`, `Array`, `String`, `Number`, `Math`, `Boolean`, `Function`, errors,
-   JSON, Date, RegExp, Map, and Set should be prioritized by missing-binding
-   counts, feature-area failures, and embedding needs.
+   Prioritize `Object`, `Array`, `String`, `Number`, `Math`, `Boolean`,
+   `Function`, standard errors, JSON, Date, RegExp, Map, and Set by
+   missing-binding counts, feature-area failures, and embedding needs.
 
 5. Improve diagnostics before errors become API debt.
    Syntax, runtime, host callback, and resource-limit errors should become
    stable enough for embedders to log, classify, and act on.
 
-6. Add modules, jobs, promises, and async host callbacks.
+6. Keep host extension support close to real embedding use.
+   Improve value conversion, VM-local callback ownership, examples, cancellation
+   points, and direct library benchmarks before adding advanced async behavior.
+
+7. Add modules, jobs, promises, and async host callbacks.
    These features should build on the synchronous embedding surface and keep the
    embedder in control of I/O policy and the outer executor.
 
-7. Expand resource control and observability.
+8. Expand resource control and observability.
    Heap, stack, atom, job, module, host callback, cancellation, event, profiling,
    and teardown data should become first-class library behavior.
 
-8. Change runtime data structures when they unblock product work or measured
+9. Change runtime data structures when they unblock product work or measured
    debt.
    Atoms, slots, shapes, dense arrays, indexed heaps, bytecode, inline caches,
    and GC are architecture work in service of compatibility, embedding,
    observability, resource control, performance, and memory footprint.
 
-Performance and memory checkpoint tasks can preempt this order only when the
-latest measurements show a regression or budget exception that blocks the next
-feature tranche, embedding API promise, or device-footprint target.
+10. Run performance and memory checkpoint tasks when evidence calls for them.
+    Checkpoints can preempt the order only when measurements show a regression
+    or budget exception that blocks the next feature tranche, embedding API
+    promise, or device-footprint target.
+
+## Current Delivery Queue
+
+This is the rough product order for the next branches. It is intentionally not
+an optimization queue; runtime architecture work appears here only where it
+protects the product path.
+
+1. Keep report triage current.
+   Before choosing each branch, summarize the newest Test262, QuickJS
+   differential, benchmark, and memory signals.
+
+2. Continue practical built-ins.
+   JSON is the next narrow built-in candidate because it is useful to embedders
+   and appears as a clear missing-binding cluster. Follow with object property
+   descriptors, more Array/String/Number/Function behavior, standard errors,
+   Date, RegExp, Map, and Set as the reports justify them.
+
+3. Fill core runtime semantics in coherent clusters.
+   Prioritize syntax, functions, lexical environments, `this`, exceptions,
+   equality, prototype behavior, iteration, and error semantics when they unlock
+   visible Test262 areas or built-in work.
+
+4. Tighten the embedding API and documentation.
+   Keep examples, crate docs, direct API tests, typed host functions,
+   multi-VM isolation, resource failures, teardown, and output behavior aligned
+   with the actual public API.
+
+5. Improve diagnostics and error classification.
+   Stabilize syntax, runtime, host callback, and resource-limit errors before
+   many more API surfaces depend on ad-hoc messages.
+
+6. Design modules, jobs, promises, and async callbacks.
+   The VM should own JavaScript jobs. Embedders should own I/O policy, module
+   loading policy, cancellation, and the outer executor.
+
+7. Expand resource control and observability.
+   Make heap, stack, atom, job, module, host callback, wall-clock cancellation,
+   structured events, profiling, and teardown data visible at the library API.
+
+8. Pull runtime foundations forward when they are needed.
+   Compiler-assigned slots, property-key atoms, shapes, dense arrays, indexed
+   heaps, bytecode, inline caches, and GC should be planned as foundation work
+   for the product queue above, not as isolated speed experiments.
 
 ## Workstreams
 
@@ -322,6 +394,11 @@ note about what changed, what was difficult, and what remains possible later.
 
 ## Task Board
 
+The board is both history and backlog. Completed rows record what a branch
+actually delivered; a completed tranche row does not mean the whole workstream
+is complete. Use unchecked rows plus the current delivery queue to choose the
+next branch.
+
 | Done | Status | Task | Workstream | Purpose | Current notes |
 | --- | --- | --- | --- | --- | --- |
 | [x] | Done | Establish persistent development plan | Planning | Create the general project plan, task board, and task protocol. | Replaces the earlier narrow plan with a broader development plan. Future branches should update this board when they start and finish work. |
@@ -342,9 +419,14 @@ note about what changed, what was difficult, and what remains possible later.
 | [x] | Done | Host value conversion layer | Embedding API | Add typed conversions between Rust values and JavaScript values for host functions. | Adds `IntoJsValue`, `FromJsValue`, generic `HostCall::argument<T>()`, and `Context::register_host_function_typed` while keeping the existing `Value`-returning callback API compatible. Direct embedding tests cover typed argument extraction, typed returns for `String`, `f64`, `bool`, and `()`, contextual host errors, VM-local callbacks, and VM-owned handle rejection. The README embedding example now uses the typed host API. Validation passed with `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T165400Z.md` keeps full Test262 at 9609 passed, active Test262 and QuickJS differential at 100%, and leaves existing benchmark exceptions to checkpoint tasks. |
 | [x] | Done | General product roadmap order | Planning | Make the canonical plan read as a whole-project delivery order, not as an optimization backlog. | Reframes the plan around repository reliability, embedding API, compatibility, built-ins, diagnostics, modules/jobs/async, resources, observability, and only then deeper runtime architecture. Performance and memory remain acceptance criteria and recurring checkpoint tasks rather than the main roadmap label. This documentation-only change was validated with `git diff --check`; full CI remains the merge gate. |
 | [x] | Done | Roadmap first-screen refresh | Planning | Make the top of the canonical plan show the whole-product order before optimization details. | Renames the document heading to a roadmap and execution plan, adds a near-term product order, and clarifies that atoms, slots, shapes, bytecode, inline caches, and GC are architecture work in service of compatibility, embedding, resources, observability, performance, and memory footprint. Documentation-only validation passed with `git diff --check`, README target file checks, and `cargo fmt --all -- --check`; full CI remains the merge gate. |
+| [x] | Done | Whole-project delivery queue | Planning | Make the plan show what the project will build and in what rough order, not only where optimization work may happen. | Adds explicit guidance for reading the plan, separates product delivery order from runtime foundation work, and adds a concrete near-term queue led by report triage, compatibility, built-ins, embedding API, diagnostics, async, resources, and observability. Documentation-only validation passed with `git diff --check` and `cargo fmt --all -- --check`; full CI remains the merge gate. |
 | [x] | Done | Engine case registry split | Testing / maintenance | Keep the engine fixture registry below the project file-size limit before adding more compatibility tranches. | Moves runtime/error/built-in engine fixture registration out of the central `cases.rs` file into `cases_engine_runtime.rs`, reducing `cases.rs` from 789 to 745 lines so future built-in cases can be added without pushing the main registry over 800 lines. Validation passed with `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T184709Z.md` keeps engine fixtures at 57/57, active Test262 at 57/57, full Test262 at 9782/102578, and QuickJS differential at 55/55. Benchmark counts are behavior-equivalent but show normal measurement noise with latency exceptions at 26 and memory exceptions at 2. |
 | [ ] | Backlog | Report triage cadence | Testing / planning | Keep the next work item grounded in the latest Test262, QuickJS differential, benchmark, and memory evidence. | Before selecting each compatibility or architecture tranche, summarize the newest report signals and record why the chosen task is next. |
 | [ ] | Backlog | Library API documentation pass | Embedding API / documentation | Keep crate docs, README examples, and direct library tests aligned with the current public API. | Do this whenever API shape changes enough that embedders could be confused by stale examples. |
+| [ ] | Backlog | JSON built-in tranche | Compatibility | Add the first useful `JSON` object surface for embedders and Test262 progress. | Start with `JSON.parse` and `JSON.stringify` for primitives, arrays, and plain objects. Keep reviver, replacer, spacing, `toJSON`, raw JSON, descriptors, and advanced error typing as follow-up work unless the branch can cover them narrowly. |
+| [ ] | Backlog | Object property and descriptor tranche | Compatibility | Improve object semantics that many built-ins and Test262 cases depend on. | Prioritize property attributes, descriptors, own-property queries, prototype queries, and operations needed by active Test262 and practical built-ins. Add benchmarks when property access or descriptor paths become hot. |
+| [ ] | Backlog | Array built-in tranche | Compatibility | Grow practical array behavior without prematurely rewriting storage. | Add high-value prototype methods and semantics in small clusters. Pull dense array storage forward only when the current representation blocks correctness, resource accounting, or measured hot paths. |
+| [ ] | Backlog | Function and standard error tranche | Compatibility / embedding API | Improve callability, constructor behavior, function metadata, and standard error objects. | This supports better Test262 behavior and more useful embedder diagnostics. Keep host callback errors and JavaScript error objects aligned where possible. |
 | [x] | Done | Parser and syntax compatibility tranches | Compatibility | Continue reducing Test262 parser and lexer failure clusters. | Adds the `no-substitution-template-literal` cluster: backtick string literals without `${...}` interpolation, including common escapes and line terminator normalization. Template substitutions now fail with an explicit unsupported-feature lexer error. Adds direct Rust smoke coverage, engine fixture, active Test262 fixture, upstream Test262 manifest row, and QuickJS differential coverage. Validation passed with `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T172449Z.md` raises full Test262 passes from 9609 to 9616, raises `language/expressions` passes from 4153 to 4157, raises active Test262 to 55/55, raises QuickJS differential to 53/53, and lowers the top `lexer: unexpected character` hint from 16369 to 6531. Some cases now advance from lexer failures into parser/runtime failure classes, which is expected until interpolation, tagged templates, BigInt, and related syntax are implemented. No new benchmark case was added because this is parser-only literal support; existing benchmark exceptions remain tracked in the report. |
 | [ ] | Backlog | Runtime semantics tranches | Compatibility | Expand statements, functions, lexical environments, `this`, exceptions, equality, iteration, and prototype behavior. | Each tranche should improve a visible Test262 feature area without mixing unrelated semantics. |
 | [x] | Done | Practical built-ins tranches | Compatibility | Expand `Object`, `Array`, `String`, `Number`, `Math`, `Boolean`, `Function`, errors, JSON, Date, RegExp, Map, Set, and other high-value built-ins. | Adds the basic `String` built-in: callable `String(value)` conversion, constructable `new String(value)` wrapper objects with `String.prototype`, non-enumerable `length`, enumerable character indices, primitive string `length`/index lookup, `in`, and `for...in` support. Adds direct Rust smoke coverage, engine fixture, active Test262 fixture, upstream Test262 manifest rows, QuickJS differential coverage, and a benchmark. Validation passed with `cargo fmt --all`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T173929Z.md` raises full Test262 passes from 9616 to 9722, raises `built-ins/String` passes from 4 to 62, raises active Test262 to 56/56, raises QuickJS differential to 54/54, and removes `String` from the top missing bindings table. The new `string_builtin` benchmark is tracked as a latency exception at `1.50x` while staying within memory budget at `1.07x`; full String prototype methods, wrapper internal primitive semantics, abstract equality/object-to-primitive coercion, and string Unicode code-unit accuracy remain follow-up work. |
