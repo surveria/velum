@@ -43,10 +43,13 @@ impl Context {
             return self.eval_typeof(expr);
         }
         if let Expr::Identifier(name) = expr {
-            let Some(binding) = self.get_binding(name) else {
-                return Ok(Value::String(Value::Undefined.type_name().to_owned()));
-            };
-            return Ok(Value::String(binding.value().type_name().to_owned()));
+            if let Some(binding) = self.get_binding(name) {
+                return Ok(Value::String(binding.value().type_name().to_owned()));
+            }
+            if let Some(value) = self.builtin_value(name)? {
+                return Ok(Value::String(value.type_name().to_owned()));
+            }
+            return Ok(Value::String(Value::Undefined.type_name().to_owned()));
         }
 
         let value = self.eval_expr(expr)?;

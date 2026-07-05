@@ -47,7 +47,11 @@ pub fn enumerable_property_keys(objects: &ObjectHeap, object: &Value) -> Result<
             ERROR_NAME_PROPERTY.to_owned(),
             ERROR_MESSAGE_PROPERTY.to_owned(),
         ]),
-        Value::Bool(_) | Value::Number(_) | Value::String(_) | Value::Function(_) => Ok(Vec::new()),
+        Value::Bool(_)
+        | Value::Number(_)
+        | Value::String(_)
+        | Value::Function(_)
+        | Value::NativeFunction(_) => Ok(Vec::new()),
     }
 }
 
@@ -75,6 +79,7 @@ pub fn delete_property(objects: &mut ObjectHeap, object: &Value, property: &str)
         | Value::Bool(_)
         | Value::Number(_)
         | Value::String(_)
-        | Value::Function(_) => Ok(true),
+        | Value::Function(_)
+        | Value::NativeFunction(_) => Ok(true),
     }
 }

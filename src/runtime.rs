@@ -24,6 +24,8 @@ use crate::value::{ErrorName, ErrorObject, Value};
 mod runtime_declaration;
 #[path = "runtime_function.rs"]
 mod runtime_function;
+#[path = "runtime_native.rs"]
+mod runtime_native;
 
 const BOOLEAN_NAME: &str = "Boolean";
 const HOST_PRINT_NAME: &str = "print";
@@ -35,6 +37,7 @@ pub struct Context {
     globals: BindingScope,
     locals: Vec<BindingScope>,
     functions: Vec<Function>,
+    native_functions: Vec<runtime_native::NativeFunction>,
     objects: ObjectHeap,
     this_values: Vec<Value>,
     output: Vec<String>,
@@ -58,6 +61,7 @@ impl Context {
             globals: BindingScope::new(),
             locals: Vec::new(),
             functions: Vec::new(),
+            native_functions: Vec::new(),
             objects: ObjectHeap::new(),
             this_values: Vec::new(),
             output: Vec::new(),
@@ -169,10 +173,7 @@ impl Context {
         match expr {
             Expr::Literal(value) => self.checked_value(value.clone()),
             Expr::This => self.current_this(),
-            Expr::Identifier(name) => self
-                .get_binding(name)
-                .map(|binding| binding.value())
-                .ok_or_else(|| reference_error_undefined(name)),
+            Expr::Identifier(name) => self.eval_identifier(name),
             Expr::Parenthesized(expr) => self.eval_expr(expr),
             Expr::Unary { op, expr } => self.eval_unary_expr(*op, expr),
             Expr::Update { op, prefix, expr } => self.eval_update_expr(*op, *prefix, expr),
@@ -349,12 +350,14 @@ impl Context {
         if let Some((callee, this_value)) = self.eval_call_reference(callee)? {
             return match callee {
                 Value::Function(id) => self.eval_function_with_this(id, args, this_value),
+                Value::NativeFunction(id) => self.eval_native_function(id, args, this_value),
                 value => Err(Error::runtime(format!("'{value}' is not callable"))),
             };
         }
 
         match self.eval_expr(callee)? {
             Value::Function(id) => self.eval_function(id, args),
+            Value::NativeFunction(id) => self.eval_native_function(id, args, Value::Undefined),
             value => Err(Error::runtime(format!("'{value}' is not callable"))),
         }
     }
@@ -435,6 +438,9 @@ impl Context {
         if let Value::Function(id) = object {
             return self.get_function_property(*id, property);
         }
+        if let Value::NativeFunction(id) = object {
+            return self.get_native_function_property(*id, property);
+        }
         self.checked_value(get_property(&self.objects, object, property)?)
     }
 
@@ -447,6 +453,9 @@ impl Context {
         self.checked_value(value.clone())?;
         if let Value::Function(id) = object {
             return self.set_function_property(*id, property, value);
+        }
+        if let Value::NativeFunction(id) = object {
+            return self.set_native_function_property(*id, property, value);
         }
         set_property(
             &mut self.objects,
@@ -467,12 +476,18 @@ impl Context {
                 .delete_function_property(*id, property)
                 .map(Value::Bool);
         }
+        if let Value::NativeFunction(id) = object {
+            return self
+                .delete_native_function_property(*id, property)
+                .map(Value::Bool);
+        }
         delete_property(&mut self.objects, object, property).map(Value::Bool)
     }
 
     fn has_property_value(&self, object: &Value, property: &str) -> Result<bool> {
         match object {
             Value::Function(id) => self.has_function_property(*id, property),
+            Value::NativeFunction(id) => self.has_native_function_property(*id, property),
             _ => has_property(&self.objects, object, property),
         }
     }
@@ -480,6 +495,9 @@ impl Context {
     pub(crate) fn enumerable_keys(&self, object: &Value) -> Result<Vec<String>> {
         if let Value::Function(id) = object {
             return self.function_enumerable_keys(*id);
+        }
+        if let Value::NativeFunction(id) = object {
+            return self.native_function_enumerable_keys(*id);
         }
         enumerable_property_keys(&self.objects, object)
     }
@@ -523,10 +541,12 @@ impl Context {
 
     fn eval_function_constructor(&mut self, constructor: &str, args: &[Expr]) -> Result<Value> {
         let value = self
-            .get_binding(constructor)
-            .map(|binding| binding.value())
+            .constructor_binding(constructor)?
             .ok_or_else(|| reference_error_undefined(constructor))?;
         let Value::Function(id) = value else {
+            if let Value::NativeFunction(id) = value {
+                return self.construct_native_function(id, args);
+            }
             return Err(Error::runtime(format!(
                 "'{constructor}' is not a constructor"
             )));
@@ -549,8 +569,16 @@ impl Context {
     const fn constructor_return_is_object(value: &Value) -> bool {
         matches!(
             value,
-            Value::Function(_) | Value::Object(_) | Value::Error(_)
+            Value::Function(_) | Value::NativeFunction(_) | Value::Object(_) | Value::Error(_)
         )
+    }
+
+    fn eval_identifier(&mut self, name: &str) -> Result<Value> {
+        if let Some(binding) = self.get_binding(name) {
+            return self.checked_value(binding.value());
+        }
+        self.builtin_value(name)?
+            .ok_or_else(|| reference_error_undefined(name))
     }
 
     pub(crate) fn push_lexical_scope(&mut self) {
@@ -582,6 +610,7 @@ impl Context {
             | Value::Bool(_)
             | Value::Number(_)
             | Value::Function(_)
+            | Value::NativeFunction(_)
             | Value::Object(_) => {}
         }
         Ok(value)

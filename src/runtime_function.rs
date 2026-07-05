@@ -7,7 +7,7 @@ use crate::{
     runtime_completion::Completion,
     runtime_object::PropertyEnumerable,
     runtime_scope::{BindingCell, BindingScope},
-    value::{FunctionId, ObjectId, Value},
+    value::{FunctionId, NativeFunctionId, ObjectId, Value},
 };
 
 const FUNCTION_LENGTH_PROPERTY: &str = "length";
@@ -163,6 +163,7 @@ impl Context {
             | Value::Number(_)
             | Value::String(_)
             | Value::Function(_)
+            | Value::NativeFunction(_)
             | Value::Error(_) => Ok(None),
         }
     }
@@ -177,6 +178,67 @@ impl Context {
         self.functions
             .get_mut(id.index())
             .ok_or_else(|| Error::runtime("function id is not defined"))
+    }
+
+    pub(crate) fn get_native_function_property(
+        &self,
+        id: NativeFunctionId,
+        property: &str,
+    ) -> Result<Value> {
+        let function = self.native_function(id)?;
+        let value = match property {
+            FUNCTION_LENGTH_PROPERTY => Value::Number(function.length()),
+            FUNCTION_NAME_PROPERTY => Value::String(function.name().to_owned()),
+            FUNCTION_PROTOTYPE_PROPERTY => function.properties().prototype(),
+            _ => function.properties().get(property),
+        };
+        self.checked_value(value)
+    }
+
+    pub(crate) fn has_native_function_property(
+        &self,
+        id: NativeFunctionId,
+        property: &str,
+    ) -> Result<bool> {
+        let function = self.native_function(id)?;
+        Ok(matches!(
+            property,
+            FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY | FUNCTION_PROTOTYPE_PROPERTY
+        ) || function.properties().has(property))
+    }
+
+    pub(crate) fn set_native_function_property(
+        &mut self,
+        id: NativeFunctionId,
+        property: String,
+        value: Value,
+    ) -> Result<()> {
+        if property == FUNCTION_PROTOTYPE_PROPERTY {
+            self.native_function(id)?;
+            return Ok(());
+        }
+        let max_properties = self.limits.max_object_properties;
+        let function = self.native_function_mut(id)?;
+        function
+            .properties_mut()
+            .set(property, value, max_properties)
+    }
+
+    pub(crate) fn delete_native_function_property(
+        &mut self,
+        id: NativeFunctionId,
+        property: &str,
+    ) -> Result<bool> {
+        let function = self.native_function_mut(id)?;
+        Ok(function.properties_mut().delete(property))
+    }
+
+    pub(crate) fn native_function_enumerable_keys(
+        &self,
+        id: NativeFunctionId,
+    ) -> Result<Vec<String>> {
+        self.native_function(id)
+            .map(|function| function.properties().keys())
     }
 
     fn eval_args(&mut self, args: &[Expr]) -> Result<Vec<Value>> {
@@ -199,7 +261,7 @@ impl Context {
 }
 
 impl FunctionProperties {
-    const fn new(prototype: Value) -> Self {
+    pub(super) const fn new(prototype: Value) -> Self {
         Self {
             prototype,
             properties: BTreeMap::new(),
@@ -207,22 +269,27 @@ impl FunctionProperties {
         }
     }
 
-    fn prototype(&self) -> Value {
+    pub(super) fn prototype(&self) -> Value {
         self.prototype.clone()
     }
 
-    fn get(&self, property: &str) -> Value {
+    pub(super) fn get(&self, property: &str) -> Value {
         self.properties
             .get(property)
             .cloned()
             .unwrap_or(Value::Undefined)
     }
 
-    fn has(&self, property: &str) -> bool {
+    pub(super) fn has(&self, property: &str) -> bool {
         self.properties.contains_key(property)
     }
 
-    fn set(&mut self, property: String, value: Value, max_properties: usize) -> Result<()> {
+    pub(super) fn set(
+        &mut self,
+        property: String,
+        value: Value,
+        max_properties: usize,
+    ) -> Result<()> {
         if matches!(
             property.as_str(),
             FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY
@@ -250,7 +317,7 @@ impl FunctionProperties {
         Ok(())
     }
 
-    fn delete(&mut self, property: &str) -> bool {
+    pub(super) fn delete(&mut self, property: &str) -> bool {
         if matches!(property, FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY) {
             return true;
         }
@@ -264,7 +331,7 @@ impl FunctionProperties {
         true
     }
 
-    fn keys(&self) -> Vec<String> {
+    pub(super) fn keys(&self) -> Vec<String> {
         self.property_order.clone()
     }
 }
