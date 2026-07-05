@@ -174,7 +174,14 @@ or measured performance and memory budgets.
    differential, benchmark, and memory signals. The latest report is the input
    to the next task, not a side artifact.
 
-2. Continue object semantics and practical built-ins.
+2. Profile runtime hot paths before broad runtime rewrites.
+   Recent benchmark reports show low compile times on many heavy rows while
+   compiled evaluation remains much larger. Treat arrays, property lookup,
+   prototype traversal, built-in calls, descriptor paths, and binding lookup as
+   the current measured runtime debt. Capture profiles by benchmark group
+   before changing shared data structures.
+
+3. Continue object semantics and practical built-ins.
    After the first JSON tranche, the next product need is the object property
    model: data-property attributes, descriptors, own-property queries,
    prototype behavior, and operations needed by `Object`, `Array`, `Function`,
@@ -182,40 +189,47 @@ or measured performance and memory budgets.
    Test262-visible behavior and add QuickJS differential coverage where
    reference behavior exists.
 
-3. Grow arrays, functions, and standard errors.
+4. Grow arrays, functions, and standard errors.
    Add high-value Array methods, function metadata/callability semantics, and
    standard error objects in narrow clusters. Pull dense array storage or faster
    call paths forward only when correctness, resource accounting, or measured
    hot paths justify it.
 
-4. Fill core runtime semantics in coherent clusters.
+5. Pull runtime data-model foundations forward when the profile supports them.
+   The likely order is complete atomization, compiler-assigned slots and
+   upvalues, shape-based object layouts, dense array storage, bytecode dispatch,
+   inline caches, and compact VM-owned heaps. Each step should preserve the
+   library API, VM isolation, direct embedding tests, QuickJS differential
+   coverage, and benchmark reports.
+
+6. Fill core runtime semantics in coherent clusters.
    Prioritize syntax, functions, lexical environments, `this`, exceptions,
    equality, prototype behavior, iteration, and coercion when they unlock
    visible Test262 areas, practical built-ins, or embedding API behavior.
 
-5. Tighten the embedding API and documentation.
+7. Tighten the embedding API and documentation.
    Keep examples, crate docs, direct API tests, typed host functions,
    multi-VM isolation, resource failures, teardown, compiled-script reuse, and
    output behavior aligned with the actual public API.
 
-6. Improve diagnostics and error classification.
+8. Improve diagnostics and error classification.
    Stabilize syntax, runtime, host callback, and resource-limit errors before
    many more API surfaces depend on ad-hoc messages.
 
-7. Design modules, jobs, promises, and async callbacks.
+9. Design modules, jobs, promises, and async callbacks.
    The VM should own JavaScript jobs. Embedders should own I/O policy, module
    loading policy, cancellation, job draining, and the outer executor.
 
-8. Expand resource control and observability.
+10. Expand resource control and observability.
    Make heap, stack, atom, job, module, host callback, wall-clock cancellation,
    structured events, profiling, and teardown data visible at the library API.
 
-9. Pull runtime foundations forward when they are needed.
+11. Pull runtime foundations forward when they are needed.
    Compiler-assigned slots, property-key atoms, shapes, dense arrays, indexed
    heaps, bytecode, inline caches, and GC are foundation work for the product
    queue above, not isolated speed experiments.
 
-10. Run performance and memory checkpoints continuously.
+12. Run performance and memory checkpoints continuously.
     Checkpoint branches are allowed when reports show a budget exception, but
     they should name the affected product path and leave compatibility coverage
     intact.
@@ -286,6 +300,13 @@ These tasks should be introduced when they unlock compatibility, resource
 control, observability, or measured performance and memory debt. They are not a
 separate product direction.
 
+Recent benchmark reviews point to runtime execution rather than parsing as the
+main measured debt. Many heavy rows now spend only a few microseconds in
+compile, while compiled evaluation stays in the hundreds of microseconds. The
+hot areas are arrays, descriptor-heavy objects, prototype traversal, built-in
+constructor/prototype calls, property lookup, `in`, `for...in`, and binding
+lookup.
+
 The major implementation directions are:
 
 - `CompiledScript` before bytecode
@@ -296,6 +317,21 @@ The major implementation directions are:
 - dense array fast paths
 - VM-owned indexed heaps instead of scattered small allocations
 - explicit heap accounting and a safe collection strategy
+
+Current architecture status:
+
+| Direction | Status | Next step |
+| --- | --- | --- |
+| `CompiledScript` | Partial. The public API exists and currently stores an AST plus usage counters. | Keep the API stable; replace the backing representation with bytecode only after runtime hot paths are profiled. |
+| Slot-based bindings | Partial. `BindingScope` stores cells in a `Vec` behind an atom-to-slot map. | Add compile-time scope layout with `LocalSlot`, `GlobalSlot`, and `UpvalueSlot`, then make ordinary local access index-based. |
+| Atom interner | Partial. VM-local atoms cover lexical/global binding names. | Extend atoms to property names, built-in names, function names, string literal keys, shapes, prototype lookup, and diagnostics so hot paths do not fall back to `String`. |
+| Shapes / hidden classes | Not started. Ordinary object and function properties still use string-keyed maps and property-order vectors. | Introduce `ShapeId`, shared shape tables, slot offsets, and explicit transitions for ordinary objects and prototypes. |
+| Inline caches | Not started. There is no bytecode site or shape cache yet. | After shapes and compiled instruction sites exist, cache property load/store/call and `in` lookups by shape and prototype version. |
+| Dense arrays | Partial semantics only. Arrays are modeled through object storage and indexed properties. | Add `Packed`, `Holey`, and `Sparse` storage with guarded fast paths for scan, copy, concat, join, reverse, shift, and unshift. |
+| Built-in intrinsics | Partial. Constructors and prototypes are lazily materialized per VM. | Separate immutable intrinsic metadata from mutable JS objects, pre-resolve atoms/shapes, and add direct native-call paths for common built-ins. |
+| Bytecode quickening | Not started. Compiled evaluation still executes the AST. | Add generic bytecode first, then safe quickening from generic operations to specialized number, property, and native-call instructions with fallback. |
+| Memory layout | Partial indexed handles for objects, functions, native functions, and host functions. `Value::String` still owns strings directly. | Add `StringId`, compact handles, Vec-backed heaps, free lists, boxed immutable constants, and captured-variable cells only where closures need them. |
+| Parallel execution model | Partial at the product/API level. Independent VMs can exist, but no parallel execution contract is documented for compiled scripts, pools, or cleanup. | Parallelize independent VMs and compilation jobs, share immutable compiled scripts, and avoid trying to parallelize one arbitrary JavaScript context. |
 
 ### Performance And Memory Guardrails
 
@@ -457,7 +493,9 @@ then choose one unchecked row that fits the latest report evidence.
 | [x] | Done | Whole-project delivery queue | Planning | Make the plan show what the project will build and in what rough order, not only where optimization work may happen. | Adds explicit guidance for reading the plan, separates product delivery order from runtime foundation work, and adds a concrete near-term queue led by report triage, compatibility, built-ins, embedding API, diagnostics, async, resources, and observability. Documentation-only validation passed with `git diff --check` and `cargo fmt --all -- --check`; full CI remains the merge gate. |
 | [x] | Done | Project-wide sequence refresh | Planning | Make the current plan read as the whole project order instead of an optimization-oriented queue. | Renames the document heading to `Project Development Plan`, adds an explicit plan-scope section, refreshes the current delivery queue after the JSON tranche, and clarifies that the task board is historical plus backlog rather than the priority order. Documentation-only validation passed with `git diff --check`; full CI remains the merge gate. |
 | [x] | Done | Engine case registry split | Testing / maintenance | Keep the engine fixture registry below the project file-size limit before adding more compatibility tranches. | Moves runtime/error/built-in engine fixture registration out of the central `cases.rs` file into `cases_engine_runtime.rs`, reducing `cases.rs` from 789 to 745 lines so future built-in cases can be added without pushing the main registry over 800 lines. Validation passed with `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T184709Z.md` keeps engine fixtures at 57/57, active Test262 at 57/57, full Test262 at 9782/102578, and QuickJS differential at 55/55. Benchmark counts are behavior-equivalent but show normal measurement noise with latency exceptions at 26 and memory exceptions at 2. |
+| [x] | Done | Runtime performance architecture review | Planning / runtime architecture | Incorporate the latest runtime-performance review into the general project plan without turning the plan into an optimization-only backlog. | Records that compile time is no longer the main measured debt for many heavy benchmarks, adds a status matrix for slots, atoms, shapes, inline caches, dense arrays, built-in intrinsics, bytecode quickening, memory layout, and parallel execution, and updates the delivery queue so profiling and runtime data-model work can be pulled forward when reports justify it. Documentation-only validation passed with `git diff --check` and `cargo fmt --all -- --check`; full CI remains the merge gate. |
 | [ ] | Backlog | Report triage cadence | Testing / planning | Keep the next work item grounded in the latest Test262, QuickJS differential, benchmark, and memory evidence. | Before selecting each compatibility or architecture tranche, summarize the newest report signals and record why the chosen task is next. |
+| [ ] | Backlog | Runtime hot-path profiling pass | Performance and memory / runtime architecture | Profile benchmark groups before broad runtime data-structure rewrites. | Capture where time is spent in arrays, descriptors, prototype traversal, built-in calls, `in`, `for...in`, binding lookup, and compiled evaluation. Use profiles alongside ratios so architecture branches target measured bottlenecks instead of assumptions. |
 | [ ] | Backlog | Library API documentation pass | Embedding API / documentation | Keep crate docs, README examples, and direct library tests aligned with the current public API. | Do this whenever API shape changes enough that embedders could be confused by stale examples. |
 | [x] | Done | JSON built-in tranche | Compatibility | Add the first useful `JSON` object surface for embedders and Test262 progress. | Adds `JSON.parse` and `JSON.stringify` for primitives, arrays, and plain objects, including non-enumerable `parse`/`stringify`, function metadata, array omission/null handling, object omission handling, non-finite numbers, and negative zero stringification. Adds direct Rust smoke coverage, engine fixture, active Test262 fixture, six upstream Test262 manifest rows, QuickJS differential coverage, and a benchmark. Validation passed with `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T203225Z.md` raises engine fixtures to 65/65, active Test262 to 63/63, QuickJS differential to 61/61, full Test262 passes from 10371 to 10432, and `built-ins/JSON` to 52/330 passed. The new `json_builtin` benchmark is tracked as a latency and memory exception at `1.60x` and `1.74x`; reviver, replacer, spacing, `toJSON`, raw JSON, SyntaxError typing, property descriptors, and global configurable delete semantics remain follow-up work. |
 | [x] | Done | Object property and descriptor tranche | Compatibility | Improve object semantics that many built-ins and Test262 cases depend on. | Adds data-property attributes, non-configurable delete behavior, non-writable assignment behavior, `Object.getOwnPropertyDescriptor`, `Object.defineProperty`, `Object.keys`, and `Object.hasOwn`, with non-enumerable built-in static methods that do not consume user property limits. Adds direct Rust smoke coverage, engine fixture, active Test262 fixture, five upstream Test262 manifest rows, QuickJS differential coverage, and a benchmark. Validation passed with `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T205739Z.md` raises engine fixtures to 66/66, active Test262 to 64/64, QuickJS differential to 62/62, full Test262 passes from 10432 to 10854, and `built-ins/Object` to 428/6802 passed. The new `object_descriptors` benchmark is tracked as a latency and memory exception at `2.21x` and `1.42x`; accessor descriptors, symbols, freeze/seal/preventExtensions, full global-object descriptors, function-object descriptors, and shape-based layout remain follow-up work. |
@@ -479,12 +517,16 @@ then choose one unchecked row that fits the latest report evidence.
 | [ ] | Backlog | Async host callbacks | Embedding API | Allow Rust host callbacks to complete asynchronously through embedder-owned executors. | Should build on the promise job queue and preserve VM isolation, cancellation, and resource accounting. |
 | [ ] | Backlog | Resource limit expansion | Resource control | Extend limits from source and runtime counters toward heap, stack, atom table, jobs, host callbacks, modules, and cancellation. | Every new limit needs library tests, error reporting, and teardown accounting. |
 | [ ] | Backlog | Observability hooks | Observability | Add structured execution events, profiling hooks, resource usage snapshots, and teardown reports. | Useful for production embedding, debugging, and future performance work. |
-| [ ] | Backlog | Slot-based local bindings | Runtime architecture / performance | Replace repeated name lookups for local variables with compiler-assigned local, global, and upvalue slots. | Requires scope analysis, closure/upvalue model, and migration tests for lexical bindings. |
-| [ ] | Backlog | Shape-based object layout | Runtime architecture / performance | Move ordinary objects toward shape plus slot storage instead of per-object key maps for stable layouts. | This supports compatibility and performance for object/prototype-heavy built-ins. |
-| [ ] | Backlog | Dense array fast paths | Runtime architecture / performance | Split array storage into packed, holey, and sparse representations. | Most array-heavy JavaScript needs packed or holey arrays to stay close to QuickJS. |
+| [ ] | Backlog | Full atomization hot path | Runtime architecture / performance | Extend atoms beyond binding names so hot runtime paths stop returning to owned strings. | Property names, built-in names, function names, string literal keys, shape transitions, prototype lookup, diagnostics, and future bytecode constants should use `AtomId`. Keep the table VM or engine owned without mutable process-global JS state. |
+| [ ] | Backlog | Compiler-assigned slots and upvalues | Runtime architecture / performance | Replace repeated runtime name lookup for locals, globals, and captured variables with checked slot indices. | The current `BindingScope` already stores cells in a `Vec` behind an atom-to-slot map. The next step is compile-time scope layout with `LocalSlot`, `GlobalSlot`, and `UpvalueSlot`, plus closure cells only for actually captured variables. |
+| [ ] | Backlog | Shape-based object and prototype layout | Runtime architecture / performance | Move ordinary objects and prototypes toward shared shapes plus slot storage instead of per-object string-keyed maps. | Add `ShapeId`, property offsets, explicit transitions, prototype versioning, descriptor compatibility, and migration coverage for object/prototype-heavy built-ins. |
+| [ ] | Backlog | Dense array storage model | Runtime architecture / performance | Split arrays into packed, holey, and sparse storage with guarded fast paths. | Target the measured array debt: `concat`, `slice`, `includes`, `indexOf`, `lastIndexOf`, `join`, `reverse`, `shift`, and `unshift`. Preserve fallback semantics when holes, sparse indices, descriptors, or prototype index properties can affect reads. |
+| [ ] | Backlog | Built-in intrinsic metadata and native-call fast paths | Runtime architecture / performance | Reduce repeated construction, lookup, and call overhead for built-in constructors, prototypes, and native functions. | Share immutable intrinsic metadata, lazily materialize mutable JS objects per VM, pre-resolve atoms and shapes, and add direct call paths for common built-ins without mutable global JavaScript state. |
 | [ ] | Backlog | VM-owned heap accounting and GC | Resource control / runtime architecture | Define mark/sweep or reference-counting plus cycle collection over indexed VM heaps. | Must preserve deterministic teardown, hard heap limits, host callback handles, queued jobs, and VM isolation. |
-| [ ] | Backlog | Bytecode VM | Runtime architecture / performance | Replace direct AST evaluation on hot paths with compact bytecode behind the `CompiledScript` API. | Start only after enough language coverage exists to benchmark honestly. |
-| [ ] | Backlog | Inline caches | Runtime architecture / performance | Cache stable property and call access paths after shapes and bytecode exist. | Keep fallback paths correct and keep all cache invalidation explicit. |
+| [ ] | Backlog | Bytecode VM and quickening | Runtime architecture / performance | Replace direct AST evaluation on hot paths with compact bytecode behind the `CompiledScript` API, then specialize hot instructions safely. | Start with generic bytecode. After profiles justify it, quicken operations such as numeric add, property load, property store, and native built-in calls with checked fallback to generic instructions. |
+| [ ] | Backlog | Inline caches | Runtime architecture / performance | Cache stable property, call, and `in` access paths after shapes and bytecode sites exist. | Cache shape id, slot offset, and prototype version where needed. Keep fallback paths correct, invalidation explicit, and cache storage checked through newtype indices. |
+| [ ] | Backlog | Compact values and heap strings | Runtime architecture / memory | Reduce scattered allocations and cloned strings without introducing unsafe allocator work first. | Add `StringId`, compact handles, Vec-backed heaps, free lists, boxed immutable constants, and memory accounting. Defer NaN boxing unless safer structural changes are exhausted. |
+| [ ] | Backlog | Parallel VM execution and compiled-script sharing | Embedding API / runtime architecture | Document and implement the realistic parallelism model for embedders. | Do not try to parallelize one arbitrary JavaScript context. Support independent VM execution, parallel compilation of different scripts, immutable compiled-script sharing, context pooling, async host callbacks through the job queue, and later background cleanup where safe. |
 | [ ] | Backlog | Performance and memory checkpoints | Performance and memory | Bring tracked benchmark exceptions back within the `1.10x` latency and memory budget where measurements are stable. | These are recurring checkpoint tasks driven by reports, not the whole project direction. Preserve semantics with engine tests and QuickJS differential cases. |
 
 ## Default Project Sequence
@@ -618,12 +660,24 @@ or bytecode. The first implementation should make repeated evaluation cheaper
 by reusing lexing and parsing output. Later bytecode can improve instruction
 dispatch, resource accounting, and cache locality behind the same API.
 
+Recent benchmark evidence suggests that parsing and compile are not the main
+cost for many heavy implemented cases anymore. Do not treat bytecode as only a
+parse-cache feature. The value of bytecode is a more compact dispatch model,
+explicit resource accounting, compiler-assigned operands, and a place to attach
+inline caches and quickened instructions.
+
 ### Slot-Based Locals
 
 String-keyed binding maps are simple but expensive. A compiler pass should
 assign local, global, and upvalue slots before execution. The runtime should
 then read and write `Vec<Value>` entries through checked newtype indices. This
 also gives the engine a natural place to account for stack and closure memory.
+
+The current runtime already moved scope storage one step in that direction:
+bindings are stored in a `Vec` and found through an atom-to-slot map. That is
+not the final design. The next slot branch should build lexical scope layout at
+compile time, assign stable `LocalSlot`, `GlobalSlot`, and `UpvalueSlot`
+operands, and leave name lookup for dynamic or fallback paths only.
 
 ### Atom Interner
 
@@ -638,6 +692,10 @@ missing binding lookups do not create atoms. Property keys, function metadata,
 string constants, compile-time atomization, and a hard atom-table budget remain
 future work.
 
+Full atomization means runtime object, function, built-in, and prototype paths
+should not repeatedly allocate, clone, or compare owned `String` values. String
+APIs can still accept `&str`; the hot representation should be `AtomId`.
+
 ### Shapes And Inline Caches
 
 Shapes describe object layouts. Object instances store values in slots, and
@@ -645,12 +703,43 @@ shape transitions describe property additions or layout changes. Once shapes
 exist, property access sites can cache `(ShapeId, offset)` and fall back to the
 generic lookup path when the shape does not match.
 
+Shapes must cover descriptor attributes and prototype behavior, not only plain
+`obj.foo` reads. Prototype chains need an explicit version or equivalent guard
+so cached prototype hits are invalidated when the chain changes. Inline caches
+should start as interpreter or bytecode data structures, not as JIT code.
+
 ### Dense Arrays
 
 Array storage should distinguish packed arrays, holey arrays, and sparse
 objects. Packed storage is the default fast path. Holey storage preserves
 JavaScript holes without forcing every array into dictionary mode. Sparse
 storage remains the fallback for large or unusual indices.
+
+Array fast paths should be guarded by layout and prototype facts. Packed arrays
+can make `includes`, `indexOf`, `lastIndexOf`, `join`, `reverse`, `slice`, and
+`concat` mostly linear `Vec` work. Holey arrays need explicit missing-element
+semantics. Sparse arrays and arrays affected by prototype index properties must
+fall back to the generic object/property path. `shift` and `unshift` should not
+force a full element move on every call once a better storage model exists.
+
+### Built-In Intrinsics And Native Calls
+
+Built-in constructors, prototypes, and native functions should not require
+repeated string lookup and object construction on hot paths. Shared immutable
+metadata can describe intrinsic names, property attributes, native function
+kinds, default prototypes, and method tables. Each VM still owns its mutable JS
+objects and descriptors. Direct native-call paths are allowed when they preserve
+observable semantics and fall back when user code shadows or redefines the
+built-in.
+
+### Bytecode Quickening
+
+Quickening is a safe-Rust alternative to JIT specialization. The engine can
+start with generic bytecode operations such as `Add`, `LoadProp`, `StoreProp`,
+and `Call`. After a successful generic execution, an instruction can be
+rewritten or annotated as `AddNumber`, `LoadPropCached`, or `CallNativeBuiltin`
+with checked guards. If the guard fails, execution falls back to the generic
+operation and updates or clears the cache.
 
 ### Promise Jobs And Async Host Functions
 
@@ -667,9 +756,26 @@ allocations. Handles such as `ObjectId`, `FunctionId`, `ShapeId`, `AtomId`, and
 future `StringId` values make ownership explicit, keep VM teardown simple, and
 support resource accounting without a custom unsafe allocator.
 
+The first memory-layout goal is structural: reduce scattered allocations and
+large clones through compact handles, heap strings, boxed immutable constants,
+shape sharing, and captured-variable cells only where closures need them. A
+custom global allocator or NaN boxing should not be the first move; both add
+complexity and are less likely to beat the gains from slots, atoms, shapes, and
+dense arrays.
+
 ### Garbage Collection
 
 The current indexed handle direction is compatible with a safe collector. A GC
 design should start from explicit VM roots, stack slots, globals, closures,
 objects, arrays, promises, and host callback handles. It must report memory
 usage and reclaim all VM-owned state during teardown.
+
+### Parallelism
+
+One arbitrary JavaScript context should not be the main parallelism target.
+Side effects, prototypes, getters, exceptions, and host callbacks make that
+model fragile. The product should instead support parallel compilation of
+different scripts, parallel execution of independent VMs, immutable
+compiled-script sharing, context pooling, async host callbacks through the job
+queue, and eventually background cleanup or collection when the root model is
+explicit.
