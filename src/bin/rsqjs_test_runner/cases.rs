@@ -77,6 +77,7 @@ const PATH_COMPUTED_PROPERTIES: &str = "tests/engine_cases/computed_properties.j
 const PATH_ARRAY_LITERALS: &str = "tests/engine_cases/array_literals.js";
 const PATH_ARRAY_BUILTIN: &str = "tests/engine_cases/array_builtin.js";
 const PATH_ARRAY_PROTOTYPE_METHODS: &str = "tests/engine_cases/array_prototype_methods.js";
+const PATH_ARRAY_PROTOTYPE_JOIN: &str = "tests/engine_cases/array_prototype_join.js";
 const PATH_UNARY_OPERATORS: &str = "tests/engine_cases/unary_operators.js";
 const PATH_ASSERT_THROWS_REFERENCE_ERROR: &str =
     "tests/engine_cases/assert_throws_reference_error.js";
@@ -489,6 +490,20 @@ fn engine_array_cases() -> Vec<EngineCase> {
                     "values 3 3 3 2 undefined 1 undefined 0 42",
                     "keys:|0;1;",
                     "in true true",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "array_prototype_join",
+            path: PATH_ARRAY_PROTOTYPE_JOIN,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "join 1,two,,,true 1-two---true 1null2",
+                    "sparse true |middle| 7 42 proto|",
+                    "meta function join 1",
+                    "keys:",
+                    "in true",
                 ],
                 value: "42",
             },

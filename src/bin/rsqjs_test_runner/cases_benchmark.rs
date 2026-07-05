@@ -36,6 +36,8 @@ const PATH_BENCH_ARRAY_LITERALS: &str = "tests/corpora/benchmarks/active/array_l
 const PATH_BENCH_ARRAY_BUILTIN: &str = "tests/corpora/benchmarks/active/array_builtin.js";
 const PATH_BENCH_ARRAY_PROTOTYPE_METHODS: &str =
     "tests/corpora/benchmarks/active/array_prototype_methods.js";
+const PATH_BENCH_ARRAY_PROTOTYPE_JOIN: &str =
+    "tests/corpora/benchmarks/active/array_prototype_join.js";
 const PATH_BENCH_UNARY_OPERATORS: &str = "tests/corpora/benchmarks/active/unary_operators.js";
 const PATH_BENCH_UPDATE_EXPRESSIONS: &str = "tests/corpora/benchmarks/active/update_expressions.js";
 const PATH_BENCH_COMPOUND_ASSIGNMENT: &str =
@@ -174,6 +176,10 @@ fn benchmark_object_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "array_prototype_methods",
             path: PATH_BENCH_ARRAY_PROTOTYPE_METHODS,
+        },
+        BenchmarkCase {
+            id: "array_prototype_join",
+            path: PATH_BENCH_ARRAY_PROTOTYPE_JOIN,
         },
         BenchmarkCase {
             id: "unary_operators",

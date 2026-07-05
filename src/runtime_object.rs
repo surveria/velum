@@ -271,6 +271,27 @@ impl ObjectHeap {
         Ok(value)
     }
 
+    pub(crate) fn array_len(&self, id: ObjectId) -> Result<usize> {
+        let object = self.object(id)?;
+        let Some(length) = object.array_length else {
+            return Err(Error::runtime(
+                "Array.prototype.join requires an array receiver",
+            ));
+        };
+        length.to_usize()
+    }
+
+    pub(crate) fn array_get_index(&self, id: ObjectId, index: usize) -> Result<Value> {
+        let object = self.object(id)?;
+        if object.array_length.is_none() {
+            return Err(Error::runtime(
+                "Array.prototype.join requires an array receiver",
+            ));
+        }
+        let index = ArrayIndex::from_usize(index)?;
+        self.get(id, &index.key())
+    }
+
     pub(crate) fn define_non_enumerable(
         &mut self,
         id: ObjectId,
@@ -633,6 +654,10 @@ impl ArrayLength {
 
     fn value(self) -> Value {
         Value::Number(f64::from(self.0))
+    }
+
+    fn to_usize(self) -> Result<usize> {
+        usize::try_from(self.0).map_err(|_| Error::limit("array length exceeded supported range"))
     }
 
     const fn contains(self, index: ArrayIndex) -> bool {

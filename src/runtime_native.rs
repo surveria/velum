@@ -9,8 +9,12 @@ use crate::{
 use super::runtime_function::FunctionProperties;
 
 const OBJECT_CONSTRUCTOR_PROPERTY: &str = "constructor";
+const ARRAY_JOIN_DEFAULT_SEPARATOR: &str = ",";
+const ARRAY_JOIN_FUNCTION_LENGTH: f64 = 1.0;
+const ARRAY_JOIN_NAME: &str = "join";
 const ARRAY_POP_FUNCTION_LENGTH: f64 = 0.0;
 const ARRAY_POP_NAME: &str = "pop";
+const ARRAY_PROTOTYPE_JOIN_PROPERTY: &str = "join";
 const ARRAY_PROTOTYPE_POP_PROPERTY: &str = "pop";
 const ARRAY_PROTOTYPE_PUSH_PROPERTY: &str = "push";
 const ARRAY_PUSH_FUNCTION_LENGTH: f64 = 1.0;
@@ -41,6 +45,7 @@ impl NativeFunction {
     pub(super) const fn length(&self) -> f64 {
         match self.kind {
             NativeFunctionKind::Array => ARRAY_FUNCTION_LENGTH,
+            NativeFunctionKind::ArrayJoin => ARRAY_JOIN_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayPop => ARRAY_POP_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayPush => ARRAY_PUSH_FUNCTION_LENGTH,
             NativeFunctionKind::Object => OBJECT_FUNCTION_LENGTH,
@@ -50,6 +55,7 @@ impl NativeFunction {
     pub(super) const fn name(&self) -> &'static str {
         match self.kind {
             NativeFunctionKind::Array => ARRAY_NAME,
+            NativeFunctionKind::ArrayJoin => ARRAY_JOIN_NAME,
             NativeFunctionKind::ArrayPop => ARRAY_POP_NAME,
             NativeFunctionKind::ArrayPush => ARRAY_PUSH_NAME,
             NativeFunctionKind::Object => OBJECT_NAME,
@@ -68,6 +74,7 @@ impl NativeFunction {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(super) enum NativeFunctionKind {
     Array,
+    ArrayJoin,
     ArrayPop,
     ArrayPush,
     Object,
@@ -97,6 +104,7 @@ impl Context {
     ) -> Result<Value> {
         match self.native_function(id)?.kind() {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
+            NativeFunctionKind::ArrayJoin => self.eval_array_join(args, this_value),
             NativeFunctionKind::ArrayPop => self.eval_array_pop(args, this_value),
             NativeFunctionKind::ArrayPush => self.eval_array_push(args, this_value),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
@@ -110,7 +118,9 @@ impl Context {
     ) -> Result<Value> {
         match self.native_function(id)?.kind() {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
-            NativeFunctionKind::ArrayPop | NativeFunctionKind::ArrayPush => {
+            NativeFunctionKind::ArrayJoin
+            | NativeFunctionKind::ArrayPop
+            | NativeFunctionKind::ArrayPush => {
                 Err(Error::runtime("native method is not a constructor"))
             }
             NativeFunctionKind::Object => self.eval_object_constructor(args),
@@ -197,6 +207,14 @@ impl Context {
     }
 
     fn install_array_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
+        let join = self.create_native_function(NativeFunctionKind::ArrayJoin, Value::Undefined);
+        self.objects.define_non_enumerable(
+            prototype,
+            ARRAY_PROTOTYPE_JOIN_PROPERTY.to_owned(),
+            join,
+            self.limits.max_object_properties,
+        )?;
+
         let push = self.create_native_function(NativeFunctionKind::ArrayPush, Value::Undefined);
         self.objects.define_non_enumerable(
             prototype,
@@ -294,6 +312,60 @@ impl Context {
             ));
         };
         self.objects.array_pop(*id)
+    }
+
+    fn eval_array_join(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
+        let values = args
+            .iter()
+            .map(|arg| self.eval_expr(arg))
+            .collect::<Result<Vec<_>>>()?;
+        let separator = Self::array_join_separator(values.first());
+        let Value::Object(id) = this_value else {
+            return Err(Error::runtime(
+                "Array.prototype.join requires an array receiver",
+            ));
+        };
+
+        let length = self.objects.array_len(*id)?;
+        let mut joined = String::new();
+        for index in 0..length {
+            if index > 0 {
+                self.push_join_text(&mut joined, &separator)?;
+            }
+            let value = self.objects.array_get_index(*id, index)?;
+            let text = Self::array_join_element_text(&value);
+            self.push_join_text(&mut joined, &text)?;
+        }
+        Ok(Value::String(joined))
+    }
+
+    fn array_join_separator(value: Option<&Value>) -> String {
+        match value {
+            None | Some(Value::Undefined) => ARRAY_JOIN_DEFAULT_SEPARATOR.to_owned(),
+            Some(value) => value.display_for_concat(),
+        }
+    }
+
+    fn array_join_element_text(value: &Value) -> String {
+        match value {
+            Value::Undefined | Value::Null => String::new(),
+            _ => value.display_for_concat(),
+        }
+    }
+
+    fn push_join_text(&self, joined: &mut String, text: &str) -> Result<()> {
+        let length = joined
+            .len()
+            .checked_add(text.len())
+            .ok_or_else(|| Error::limit("string length exceeded supported range"))?;
+        if length > self.limits.max_string_len {
+            return Err(Error::limit(format!(
+                "string length {} exceeded {}",
+                length, self.limits.max_string_len
+            )));
+        }
+        joined.push_str(text);
+        Ok(())
     }
 
     pub(crate) fn create_array_from_elements(&mut self, elements: Vec<Value>) -> Result<Value> {
