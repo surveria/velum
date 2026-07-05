@@ -1,4 +1,4 @@
-use crate::ast::{BinaryOp, DeclKind, Expr, Program, Stmt, UnaryOp};
+use crate::ast::{BinaryOp, DeclKind, Expr, ObjectProperty, Program, Stmt, UnaryOp};
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
 use crate::runtime::RuntimeLimits;
@@ -180,14 +180,19 @@ impl Parser {
         let expr = self.conditional()?;
         if self.match_kind(&TokenKind::Equal) {
             let offset = self.previous_offset();
-            let Expr::Identifier(name) = expr else {
-                return Err(Error::parse("invalid assignment target", offset));
-            };
             let value = self.assignment()?;
-            return Ok(Expr::Assignment {
-                name,
-                expr: Box::new(value),
-            });
+            return match expr {
+                Expr::Identifier(name) => Ok(Expr::Assignment {
+                    name,
+                    expr: Box::new(value),
+                }),
+                Expr::Member { object, property } => Ok(Expr::PropertyAssignment {
+                    object,
+                    property,
+                    expr: Box::new(value),
+                }),
+                _ => Err(Error::parse("invalid assignment target", offset)),
+            };
         }
         Ok(expr)
     }
@@ -362,6 +367,7 @@ impl Parser {
             TokenKind::Undefined => Expr::Literal(Value::Undefined),
             TokenKind::Identifier(name) => Expr::Identifier(name),
             TokenKind::Function => self.function_expression()?,
+            TokenKind::LBrace => self.object_literal()?,
             TokenKind::LParen => {
                 let expr = self.expression()?;
                 self.consume(&TokenKind::RParen, "expected ')' after expression")?;
@@ -370,6 +376,39 @@ impl Parser {
             _ => return Err(Error::parse("expected expression", token.offset)),
         };
         Ok(expr)
+    }
+
+    fn object_literal(&mut self) -> Result<Expr> {
+        let mut properties = Vec::new();
+        if self.match_kind(&TokenKind::RBrace) {
+            return Ok(Expr::Object(properties));
+        }
+
+        loop {
+            let key = self.object_property_key()?;
+            self.consume(&TokenKind::Colon, "expected ':' after object property name")?;
+            let value = self.expression()?;
+            properties.push(ObjectProperty { key, value });
+            if !self.match_kind(&TokenKind::Comma) {
+                break;
+            }
+            if self.match_kind(&TokenKind::RBrace) {
+                return Ok(Expr::Object(properties));
+            }
+        }
+
+        self.consume(&TokenKind::RBrace, "expected '}' after object literal")?;
+        Ok(Expr::Object(properties))
+    }
+
+    fn object_property_key(&mut self) -> Result<String> {
+        let token = self
+            .advance()
+            .ok_or_else(|| Error::parse("expected object property name", self.offset()))?;
+        match token.kind {
+            TokenKind::Identifier(name) | TokenKind::String(name) => Ok(name),
+            _ => Err(Error::parse("expected object property name", token.offset)),
+        }
     }
 
     fn function_expression(&mut self) -> Result<Expr> {

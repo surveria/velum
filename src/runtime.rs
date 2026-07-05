@@ -8,6 +8,7 @@ use crate::runtime_assertions::{
 };
 use crate::runtime_completion::Completion;
 use crate::runtime_numeric::{bitwise_and, compare_binary, numeric_binary};
+use crate::runtime_object::ObjectHeap;
 use crate::runtime_scope::{BindingCell, BindingScope};
 use crate::value::{ErrorName, ErrorObject, FunctionId, Value};
 
@@ -17,6 +18,8 @@ const DEFAULT_MAX_EXPRESSION_DEPTH: usize = 256;
 const DEFAULT_MAX_RUNTIME_STEPS: usize = 100_000;
 const DEFAULT_MAX_STRING_LEN: usize = 65_536;
 const DEFAULT_MAX_BINDINGS: usize = 4_096;
+const DEFAULT_MAX_OBJECTS: usize = 4_096;
+const DEFAULT_MAX_OBJECT_PROPERTIES: usize = 4_096;
 const BOOLEAN_NAME: &str = "Boolean";
 const HOST_PRINT_NAME: &str = "print";
 const TEST262_ERROR_NAME: &str = "Test262Error";
@@ -29,6 +32,8 @@ pub struct RuntimeLimits {
     pub max_runtime_steps: usize,
     pub max_string_len: usize,
     pub max_bindings: usize,
+    pub max_objects: usize,
+    pub max_object_properties: usize,
 }
 
 impl Default for RuntimeLimits {
@@ -40,6 +45,8 @@ impl Default for RuntimeLimits {
             max_runtime_steps: DEFAULT_MAX_RUNTIME_STEPS,
             max_string_len: DEFAULT_MAX_STRING_LEN,
             max_bindings: DEFAULT_MAX_BINDINGS,
+            max_objects: DEFAULT_MAX_OBJECTS,
+            max_object_properties: DEFAULT_MAX_OBJECT_PROPERTIES,
         }
     }
 }
@@ -85,6 +92,7 @@ pub struct Context {
     globals: BindingScope,
     locals: Vec<BindingScope>,
     functions: Vec<Function>,
+    objects: ObjectHeap,
     output: Vec<String>,
     runtime_steps: usize,
 }
@@ -104,6 +112,7 @@ impl Context {
             globals: BindingScope::new(),
             locals: Vec::new(),
             functions: Vec::new(),
+            objects: ObjectHeap::new(),
             output: Vec::new(),
             runtime_steps: 0,
         }
@@ -304,11 +313,30 @@ impl Context {
                 self.assign(name, value.clone())?;
                 Ok(value)
             }
+            Expr::PropertyAssignment {
+                object,
+                property,
+                expr,
+            } => self.eval_property_assignment(object, property, expr),
             Expr::Member { object, property } => self.eval_member(object, property),
             Expr::Call { callee, args } => self.eval_call(callee, args),
             Expr::Function { params, body } => Ok(self.create_function(params, body)),
+            Expr::Object(properties) => self.eval_object_literal(properties),
             Expr::New { constructor, args } => self.eval_new(constructor, args),
         }
+    }
+
+    fn eval_object_literal(&mut self, properties: &[crate::ast::ObjectProperty]) -> Result<Value> {
+        let mut values = Vec::new();
+        for property in properties {
+            let value = self.eval_expr(&property.value)?;
+            values.push((property.key.clone(), value));
+        }
+        self.objects.create(
+            values,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )
     }
 
     fn eval_conditional(
@@ -503,11 +531,36 @@ impl Context {
         let object = self.eval_expr(object)?;
         match object {
             Value::Error(error) => self.checked_value(error_property(&error, property)),
+            Value::Object(id) => self.objects.get(id, property),
             value => Err(Error::runtime(format!(
                 "member access '{property}' is not supported for {}",
                 value.type_name()
             ))),
         }
+    }
+
+    fn eval_property_assignment(
+        &mut self,
+        object: &Expr,
+        property: &str,
+        expr: &Expr,
+    ) -> Result<Value> {
+        let object = self.eval_expr(object)?;
+        let value = self.eval_expr(expr)?;
+        self.checked_value(value.clone())?;
+        let Value::Object(id) = object else {
+            return Err(Error::runtime(format!(
+                "property assignment '{property}' is not supported for {}",
+                object.type_name()
+            )));
+        };
+        self.objects.set(
+            id,
+            property.to_owned(),
+            value.clone(),
+            self.limits.max_object_properties,
+        )?;
+        Ok(value)
     }
 
     fn eval_print_call(&mut self, args: &[Expr]) -> Result<Value> {
@@ -713,7 +766,8 @@ impl Context {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
-            | Value::Function(_) => {}
+            | Value::Function(_)
+            | Value::Object(_) => {}
         }
         Ok(value)
     }

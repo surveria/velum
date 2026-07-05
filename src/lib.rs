@@ -9,6 +9,7 @@ mod runtime;
 mod runtime_assertions;
 mod runtime_completion;
 mod runtime_numeric;
+mod runtime_object;
 mod runtime_scope;
 mod value;
 

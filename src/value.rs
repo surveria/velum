@@ -14,6 +14,19 @@ impl FunctionId {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ObjectId(usize);
+
+impl ObjectId {
+    pub(crate) const fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    pub(crate) const fn index(self) -> usize {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ErrorName {
     ReferenceError,
     Test262Error,
@@ -59,6 +72,7 @@ pub enum Value {
     Number(f64),
     String(String),
     Function(FunctionId),
+    Object(ObjectId),
     Error(ErrorObject),
 }
 
@@ -70,7 +84,7 @@ impl Value {
             Self::Bool(value) => *value,
             Self::Number(value) => *value != 0.0 && !value.is_nan(),
             Self::String(value) => !value.is_empty(),
-            Self::Function(_) | Self::Error(_) => true,
+            Self::Function(_) | Self::Object(_) | Self::Error(_) => true,
         }
     }
 
@@ -78,7 +92,7 @@ impl Value {
     pub const fn type_name(&self) -> &'static str {
         match self {
             Self::Undefined => "undefined",
-            Self::Null | Self::Error(_) => "object",
+            Self::Null | Self::Object(_) | Self::Error(_) => "object",
             Self::Bool(_) => "boolean",
             Self::Number(_) => "number",
             Self::String(_) => "string",
@@ -116,6 +130,7 @@ impl fmt::Display for Value {
             }
             Self::String(value) => f.write_str(value),
             Self::Function(_) => f.write_str("function()"),
+            Self::Object(_) => f.write_str("[object Object]"),
             Self::Error(error) => {
                 if error.message().is_empty() {
                     f.write_str(error.name().as_str())
