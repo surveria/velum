@@ -80,6 +80,7 @@ const PATH_ARRAY_PROTOTYPE_METHODS: &str = "tests/engine_cases/array_prototype_m
 const PATH_ARRAY_PROTOTYPE_JOIN: &str = "tests/engine_cases/array_prototype_join.js";
 const PATH_ARRAY_PROTOTYPE_SHIFT_UNSHIFT: &str =
     "tests/engine_cases/array_prototype_shift_unshift.js";
+const PATH_ARRAY_PROTOTYPE_SLICE: &str = "tests/engine_cases/array_prototype_slice.js";
 const PATH_UNARY_OPERATORS: &str = "tests/engine_cases/unary_operators.js";
 const PATH_ASSERT_THROWS_REFERENCE_ERROR: &str =
     "tests/engine_cases/assert_throws_reference_error.js";
@@ -524,6 +525,23 @@ fn engine_array_cases() -> Vec<EngineCase> {
                     "meta function shift 0 function unshift 1",
                     "keys:",
                     "in true true",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "array_prototype_slice",
+            path: PATH_ARRAY_PROTOTYPE_SLICE,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "slice 2|3 2|3 3|4 0 0",
+                    "source 4 1 2 3 4",
+                    "sparse 3 one false undefined three one||three |one||three",
+                    "inherited 3 undefined proto-one tail true",
+                    "coerced 1|2 1 42 7",
+                    "meta function slice 2",
+                    "keys:",
+                    "in true",
                 ],
                 value: "42",
             },

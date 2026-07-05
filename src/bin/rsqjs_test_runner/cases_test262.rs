@@ -42,6 +42,8 @@ const PATH_TEST262_ARRAY_PROTOTYPE_JOIN: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_join.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_SHIFT_UNSHIFT: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_shift_unshift.js";
+const PATH_TEST262_ARRAY_PROTOTYPE_SLICE: &str =
+    "tests/corpora/test262/active/language/expressions/array_prototype_slice.js";
 const PATH_TEST262_UNARY_OPERATORS: &str =
     "tests/corpora/test262/active/language/expressions/unary_operators.js";
 const PATH_TEST262_UPDATE_EXPRESSIONS: &str =
@@ -210,6 +212,11 @@ fn test262_object_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/array_prototype_shift_unshift",
             path: PATH_TEST262_ARRAY_PROTOTYPE_SHIFT_UNSHIFT,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/array_prototype_slice",
+            path: PATH_TEST262_ARRAY_PROTOTYPE_SLICE,
             expectation: Expectation::Value("42"),
         },
     ]
