@@ -1,0 +1,12 @@
+let values = [1, 2, 3, 4];
+values[0] = values[0] + values[1];
+values[1] = values[0] + values[2];
+values[2] = values[1] + values[3];
+values[3] = values[2] + values[0];
+values[4] = values[3] + values[1];
+values[5] = values[4] + values[2];
+values[6] = values[5] + values[3];
+values[7] = values[6] + values[4];
+values[8] = values[7] + values.length;
+values[9] = values[8] + values[0];
+values[9];

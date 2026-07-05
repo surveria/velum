@@ -40,6 +40,7 @@ const PATH_FUNCTION_PARAMETERS_SCOPE: &str = "tests/engine_cases/function_parame
 const PATH_CLOSURE_ENVIRONMENTS: &str = "tests/engine_cases/closure_environments.js";
 const PATH_OBJECT_LITERALS: &str = "tests/engine_cases/object_literals.js";
 const PATH_COMPUTED_PROPERTIES: &str = "tests/engine_cases/computed_properties.js";
+const PATH_ARRAY_LITERALS: &str = "tests/engine_cases/array_literals.js";
 const PATH_ASSERT_THROWS_REFERENCE_ERROR: &str =
     "tests/engine_cases/assert_throws_reference_error.js";
 const PATH_ERROR_OBJECT_PROPERTIES: &str = "tests/engine_cases/error_object_properties.js";
@@ -59,6 +60,8 @@ const PATH_TEST262_OBJECT_LITERALS: &str =
     "tests/corpora/test262/active/language/expressions/object_literals.js";
 const PATH_TEST262_COMPUTED_PROPERTIES: &str =
     "tests/corpora/test262/active/language/expressions/computed_properties.js";
+const PATH_TEST262_ARRAY_LITERALS: &str =
+    "tests/corpora/test262/active/language/expressions/array_literals.js";
 const PATH_TEST262_LET_CONST: &str = "tests/corpora/test262/active/language/bindings/let_const.js";
 const PATH_TEST262_VAR_HOISTING: &str =
     "tests/corpora/test262/active/language/bindings/var_hoisting.js";
@@ -90,6 +93,8 @@ const PATH_QUICKJS_OBJECT_LITERALS: &str =
     "tests/corpora/quickjs_differential/active/object_literals.js";
 const PATH_QUICKJS_COMPUTED_PROPERTIES: &str =
     "tests/corpora/quickjs_differential/active/computed_properties.js";
+const PATH_QUICKJS_ARRAY_LITERALS: &str =
+    "tests/corpora/quickjs_differential/active/array_literals.js";
 const PATH_QUICKJS_REFERENCE_ERROR_CATCH: &str =
     "tests/corpora/quickjs_differential/active/reference_error_catch.js";
 const PATH_QUICKJS_ERROR_OBJECT_PROPERTIES: &str =
@@ -106,6 +111,7 @@ const PATH_BENCH_CLOSURE_ENVIRONMENTS: &str =
 const PATH_BENCH_OBJECT_LITERALS: &str = "tests/corpora/benchmarks/active/object_literals.js";
 const PATH_BENCH_COMPUTED_PROPERTIES: &str =
     "tests/corpora/benchmarks/active/computed_properties.js";
+const PATH_BENCH_ARRAY_LITERALS: &str = "tests/corpora/benchmarks/active/array_literals.js";
 const PATH_BENCH_STRING: &str = "tests/corpora/benchmarks/active/string_concat.js";
 const PATH_BENCH_BOOLEAN: &str = "tests/corpora/benchmarks/active/boolean_conversion.js";
 const PATH_BENCH_VAR_HOISTING: &str = "tests/corpora/benchmarks/active/var_hoisting.js";
@@ -117,6 +123,7 @@ const PATH_BENCH_ERROR_OBJECT_PROPERTIES: &str =
 
 pub fn engine_cases() -> Vec<EngineCase> {
     let mut cases = engine_language_cases();
+    cases.extend(engine_object_cases());
     cases.extend(engine_runtime_cases());
     cases
 }
@@ -202,6 +209,11 @@ fn engine_language_cases() -> Vec<EngineCase> {
                 value: "42",
             },
         },
+    ]
+}
+
+fn engine_object_cases() -> Vec<EngineCase> {
+    vec![
         EngineCase {
             id: "object_literals",
             path: PATH_OBJECT_LITERALS,
@@ -215,6 +227,14 @@ fn engine_language_cases() -> Vec<EngineCase> {
             path: PATH_COMPUTED_PROPERTIES,
             expectation: Expectation::OutputAndValue {
                 output: &["front-door undefined", "42", "42"],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "array_literals",
+            path: PATH_ARRAY_LITERALS,
+            expectation: Expectation::OutputAndValue {
+                output: &["4 2 undefined", "7 4", "0 2"],
                 value: "42",
             },
         },
@@ -282,6 +302,11 @@ pub fn test262_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/computed_properties",
             path: PATH_TEST262_COMPUTED_PROPERTIES,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/array_literals",
+            path: PATH_TEST262_ARRAY_LITERALS,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
@@ -363,6 +388,10 @@ pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
             path: PATH_QUICKJS_COMPUTED_PROPERTIES,
         },
         DifferentialCase {
+            id: "array_literals",
+            path: PATH_QUICKJS_ARRAY_LITERALS,
+        },
+        DifferentialCase {
             id: "reference_error_catch",
             path: PATH_QUICKJS_REFERENCE_ERROR_CATCH,
         },
@@ -406,6 +435,10 @@ pub fn benchmark_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "computed_properties",
             path: PATH_BENCH_COMPUTED_PROPERTIES,
+        },
+        BenchmarkCase {
+            id: "array_literals",
+            path: PATH_BENCH_ARRAY_LITERALS,
         },
         BenchmarkCase {
             id: "string_concat",
