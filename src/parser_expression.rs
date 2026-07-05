@@ -130,7 +130,11 @@ impl Parser {
     fn new_expr(&mut self) -> Result<Expr> {
         let constructor = self.consume_identifier("expected constructor name after 'new'")?;
         self.consume(&TokenKind::LParen, "expected '(' after constructor name")?;
-        let args = self.arguments()?;
+        let args = if self.check(&TokenKind::RParen) {
+            Vec::new()
+        } else {
+            self.arguments()?
+        };
         self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
         Ok(Expr::New { constructor, args })
     }

@@ -60,6 +60,7 @@ const PATH_FUNCTION_EXPRESSION: &str = "tests/engine_cases/function_expression.j
 const PATH_FUNCTION_PROPERTIES: &str = "tests/engine_cases/function_properties.js";
 const PATH_FUNCTION_CUSTOM_PROPERTIES: &str = "tests/engine_cases/function_custom_properties.js";
 const PATH_METHOD_THIS: &str = "tests/engine_cases/method_this.js";
+const PATH_CONSTRUCTOR_PROTOTYPES: &str = "tests/engine_cases/constructor_prototypes.js";
 const PATH_FUNCTION_RETURN: &str = "tests/engine_cases/function_return.js";
 const PATH_FUNCTION_PARAMETERS_SCOPE: &str = "tests/engine_cases/function_parameters_scope.js";
 const PATH_CLOSURE_ENVIRONMENTS: &str = "tests/engine_cases/closure_environments.js";
@@ -83,6 +84,8 @@ const PATH_TEST262_FUNCTION_CUSTOM_PROPERTIES: &str =
     "tests/corpora/test262/active/language/expressions/function_custom_properties.js";
 const PATH_TEST262_METHOD_THIS: &str =
     "tests/corpora/test262/active/language/expressions/method_this.js";
+const PATH_TEST262_CONSTRUCTOR_PROTOTYPES: &str =
+    "tests/corpora/test262/active/language/expressions/constructor_prototypes.js";
 const PATH_TEST262_FUNCTION_RETURN: &str =
     "tests/corpora/test262/active/language/statements/function_return.js";
 const PATH_TEST262_FUNCTION_PARAMETERS_SCOPE: &str =
@@ -399,6 +402,19 @@ fn engine_function_cases() -> Vec<EngineCase> {
             },
         },
         EngineCase {
+            id: "constructor_prototypes",
+            path: PATH_CONSTRUCTOR_PROTOTYPES,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "front side camera 42 42",
+                    "true true true",
+                    "name;count;kind;read;",
+                    "42 42",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
             id: "function_return",
             path: PATH_FUNCTION_RETURN,
             expectation: Expectation::OutputAndValue {
@@ -550,6 +566,11 @@ fn test262_function_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/method_this",
             path: PATH_TEST262_METHOD_THIS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/constructor_prototypes",
+            path: PATH_TEST262_CONSTRUCTOR_PROTOTYPES,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
