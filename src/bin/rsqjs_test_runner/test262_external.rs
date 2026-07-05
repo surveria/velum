@@ -3,42 +3,23 @@ use std::{fs, path::Path};
 use anyhow::{Context as _, bail};
 use rs_quickjs::{Error, Runtime};
 
-use super::{CaseRow, STATUS_FAILED, STATUS_PASSED, STATUS_SKIPPED};
-
 const MANIFEST_PATH: &str = "tests/corpora/test262/manifest.tsv";
-const REASON_TEST262_DIR_MISSING: &str =
+pub const REASON_TEST262_DIR_MISSING: &str =
     "set RSQJS_TEST262_DIR or enable scripts/prepare-test262.sh";
-const REASON_UPSTREAM_MATCHED: &str = "official upstream Test262 case passed";
-const REASON_NEGATIVE_PARSE_MATCHED: &str = "official upstream negative parse case failed to parse";
-const MODE_RUN: &str = "run";
-const MODE_SKIP: &str = "skip";
-const MODE_NEGATIVE_PARSE: &str = "negative-parse";
+pub const MODE_RUN: &str = "run";
+pub const MODE_SKIP: &str = "skip";
+pub const MODE_NEGATIVE_PARSE: &str = "negative-parse";
 const COLUMN_COUNT: usize = 4;
 
 #[derive(Debug)]
-struct ManifestCase {
-    id: String,
-    path: String,
-    mode: String,
-    reason: String,
+pub struct ManifestCase {
+    pub id: String,
+    pub path: String,
+    pub mode: String,
+    pub reason: String,
 }
 
-pub fn run(test262_dir: Option<&Path>) -> Vec<CaseRow> {
-    match manifest_cases() {
-        Ok(cases) => cases
-            .iter()
-            .map(|case| run_manifest_case(case, test262_dir))
-            .collect(),
-        Err(error) => vec![CaseRow {
-            case: "manifest".to_owned(),
-            status: STATUS_FAILED.to_owned(),
-            source: MANIFEST_PATH.to_owned(),
-            detail: error.to_string(),
-        }],
-    }
-}
-
-fn manifest_cases() -> anyhow::Result<Vec<ManifestCase>> {
+pub fn manifest_cases() -> anyhow::Result<Vec<ManifestCase>> {
     let manifest = fs::read_to_string(MANIFEST_PATH)
         .with_context(|| format!("failed to read Test262 manifest '{MANIFEST_PATH}'"))?;
     manifest
@@ -93,31 +74,7 @@ const fn display_line(index: usize) -> usize {
     index.saturating_add(1)
 }
 
-fn run_manifest_case(case: &ManifestCase, test262_dir: Option<&Path>) -> CaseRow {
-    if case.mode == MODE_SKIP {
-        return skipped(case, &case.reason);
-    }
-    let Some(test262_dir) = test262_dir else {
-        return skipped(case, REASON_TEST262_DIR_MISSING);
-    };
-
-    if case.mode == MODE_RUN {
-        return match execute_manifest_case(test262_dir, case) {
-            Ok(()) => passed(case, REASON_UPSTREAM_MATCHED),
-            Err(error) => failed(case, error.to_string()),
-        };
-    }
-    if case.mode == MODE_NEGATIVE_PARSE {
-        return match execute_negative_parse_case(test262_dir, case) {
-            Ok(()) => passed(case, REASON_NEGATIVE_PARSE_MATCHED),
-            Err(error) => failed(case, error.to_string()),
-        };
-    }
-
-    failed(case, format!("unknown manifest mode '{}'", case.mode))
-}
-
-fn execute_manifest_case(test262_dir: &Path, case: &ManifestCase) -> anyhow::Result<()> {
+pub fn execute_manifest_case(test262_dir: &Path, case: &ManifestCase) -> anyhow::Result<()> {
     let path = test262_dir.join(&case.path);
     let source = fs::read_to_string(&path)
         .with_context(|| format!("failed to read upstream Test262 case '{}'", case.path))?;
@@ -132,7 +89,7 @@ fn execute_manifest_case(test262_dir: &Path, case: &ManifestCase) -> anyhow::Res
     Ok(())
 }
 
-fn execute_negative_parse_case(test262_dir: &Path, case: &ManifestCase) -> anyhow::Result<()> {
+pub fn execute_negative_parse_case(test262_dir: &Path, case: &ManifestCase) -> anyhow::Result<()> {
     let path = test262_dir.join(&case.path);
     let source = fs::read_to_string(&path)
         .with_context(|| format!("failed to read upstream Test262 case '{}'", case.path))?;
@@ -164,34 +121,7 @@ fn ensure_negative_parse_failure(
     }
 }
 
-fn passed(case: &ManifestCase, detail: &str) -> CaseRow {
-    CaseRow {
-        case: case.id.clone(),
-        status: STATUS_PASSED.to_owned(),
-        source: source_label(&case.path),
-        detail: detail.to_owned(),
-    }
-}
-
-fn skipped(case: &ManifestCase, detail: &str) -> CaseRow {
-    CaseRow {
-        case: case.id.clone(),
-        status: STATUS_SKIPPED.to_owned(),
-        source: source_label(&case.path),
-        detail: detail.to_owned(),
-    }
-}
-
-fn failed(case: &ManifestCase, detail: String) -> CaseRow {
-    CaseRow {
-        case: case.id.clone(),
-        status: STATUS_FAILED.to_owned(),
-        source: source_label(&case.path),
-        detail,
-    }
-}
-
-fn source_label(path: &str) -> String {
+pub fn source_label(path: &str) -> String {
     format!("test262:{path}")
 }
 

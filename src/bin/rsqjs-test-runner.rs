@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     env, fmt, fs,
     path::{Path, PathBuf},
     process,
@@ -14,6 +15,8 @@ use tabled::{Table, Tabled};
 mod cases;
 #[path = "rsqjs_test_runner/test262_external.rs"]
 mod test262_external;
+#[path = "rsqjs_test_runner/test262_full.rs"]
+mod test262_full;
 
 use cases::{BenchmarkCase, DifferentialCase, EngineCase, Expectation};
 
@@ -25,8 +28,11 @@ const STATUS_MEASURED: &str = "✅ measured";
 const STATUS_NOT_CONFIGURED: &str = "🟡 not configured";
 const REPORT_TITLE: &str = "# rs-quickjs Test Report";
 const RUNNER_NAME: &str = "`rsqjs-test-runner`";
+const NO_FAILED_CASES: &str = "No failed cases.";
 const BASIS_POINTS_SCALE: usize = 10_000;
 const PERCENT_SCALE: usize = 100;
+const COVERAGE_SCALE: usize = 1_000_000;
+const COVERAGE_MINOR_SCALE: usize = 10_000;
 const BENCH_ITERATIONS: usize = 50;
 const NANOS_PER_MICROSECOND: u128 = 1_000;
 const NANOS_PER_MILLISECOND: u128 = 1_000_000;
@@ -110,33 +116,85 @@ impl FullReport {
 #[derive(Debug)]
 struct CorpusReport {
     name: &'static str,
+    stats: CorpusStats,
     rows: Vec<CaseRow>,
+    skip_reasons: Vec<SkipReasonRow>,
 }
 
 impl CorpusReport {
+    fn from_rows(name: &'static str, rows: Vec<CaseRow>) -> Self {
+        let stats = CorpusStats::from_rows(&rows);
+        let skip_reasons = skip_reason_rows(&rows);
+        Self {
+            name,
+            stats,
+            rows,
+            skip_reasons,
+        }
+    }
+
     const fn total(&self) -> usize {
-        self.rows.len()
+        self.stats.total
     }
 
-    fn passed(&self) -> usize {
-        self.rows
-            .iter()
-            .filter(|row| row.status == STATUS_PASSED)
-            .count()
+    const fn executed(&self) -> usize {
+        self.stats.executed()
     }
 
-    fn failed(&self) -> usize {
+    const fn passed(&self) -> usize {
+        self.stats.passed
+    }
+
+    const fn failed(&self) -> usize {
+        self.stats.failed
+    }
+
+    const fn skipped(&self) -> usize {
+        self.stats.skipped
+    }
+
+    fn failed_rows(&self) -> Vec<CaseRow> {
         self.rows
             .iter()
             .filter(|row| row.status == STATUS_FAILED)
-            .count()
+            .cloned()
+            .collect()
     }
+}
 
-    fn skipped(&self) -> usize {
-        self.rows
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct CorpusStats {
+    total: usize,
+    passed: usize,
+    failed: usize,
+    skipped: usize,
+}
+
+impl CorpusStats {
+    fn from_rows(rows: &[CaseRow]) -> Self {
+        let total = rows.len();
+        let passed = rows
+            .iter()
+            .filter(|row| row.status == STATUS_PASSED)
+            .count();
+        let failed = rows
+            .iter()
+            .filter(|row| row.status == STATUS_FAILED)
+            .count();
+        let skipped = rows
             .iter()
             .filter(|row| row.status == STATUS_SKIPPED)
-            .count()
+            .count();
+        Self {
+            total,
+            passed,
+            failed,
+            skipped,
+        }
+    }
+
+    const fn executed(self) -> usize {
+        self.passed.saturating_add(self.failed)
     }
 }
 
@@ -144,18 +202,26 @@ impl CorpusReport {
 struct CorpusSummaryRow {
     corpus: String,
     total: usize,
+    executed: usize,
     passed: String,
     failed: String,
     skipped: String,
+    coverage: String,
     pass_rate: String,
 }
 
-#[derive(Debug, Tabled)]
+#[derive(Debug, Clone, Tabled)]
 struct CaseRow {
     case: String,
     status: String,
     source: String,
     detail: String,
+}
+
+#[derive(Debug, Clone, Tabled)]
+struct SkipReasonRow {
+    skipped: usize,
+    reason: String,
 }
 
 #[derive(Debug)]
@@ -186,7 +252,7 @@ fn build_report(
     let corpora = vec![
         run_engine_corpus(),
         run_test262_corpus(),
-        run_test262_upstream_corpus(test262),
+        run_test262_full_corpus(test262),
         run_quickjs_corpus(quickjs),
     ];
     let benchmarks = run_benchmarks(quickjs, engine);
@@ -199,26 +265,17 @@ fn build_report(
 fn run_engine_corpus() -> CorpusReport {
     let cases = cases::engine_cases();
     let rows = cases.iter().map(run_engine_case).collect();
-    CorpusReport {
-        name: "Engine fixtures",
-        rows,
-    }
+    CorpusReport::from_rows("Engine fixtures", rows)
 }
 
 fn run_test262_corpus() -> CorpusReport {
     let cases = cases::test262_cases();
     let rows = cases.iter().map(run_engine_case).collect();
-    CorpusReport {
-        name: "Test262 active subset",
-        rows,
-    }
+    CorpusReport::from_rows("Test262 active subset", rows)
 }
 
-fn run_test262_upstream_corpus(test262: Option<&Path>) -> CorpusReport {
-    CorpusReport {
-        name: "Test262 upstream manifest",
-        rows: test262_external::run(test262),
-    }
+fn run_test262_full_corpus(test262: Option<&Path>) -> CorpusReport {
+    test262_full::run(test262)
 }
 
 fn run_quickjs_corpus(quickjs: Option<&Path>) -> CorpusReport {
@@ -226,10 +283,7 @@ fn run_quickjs_corpus(quickjs: Option<&Path>) -> CorpusReport {
         .into_iter()
         .map(|case| run_differential_case(&case, quickjs))
         .collect();
-    CorpusReport {
-        name: "QuickJS differential",
-        rows,
-    }
+    CorpusReport::from_rows("QuickJS differential", rows)
 }
 
 fn run_engine_case(case: &EngineCase) -> CaseRow {
@@ -527,6 +581,8 @@ fn render_report(report: &FullReport) -> String {
         String::new(),
         format!("Generated by {RUNNER_NAME}."),
         String::new(),
+        "Corpus detail sections list failed cases only. Passed and skipped cases are summarized to keep the report compact.".to_owned(),
+        String::new(),
         "## Corpus Summary".to_owned(),
         String::new(),
         fenced_table(&Table::new(corpus_summary_rows(report))),
@@ -534,7 +590,31 @@ fn render_report(report: &FullReport) -> String {
     for corpus in &report.corpora {
         sections.push(format!("## {}", corpus.name));
         sections.push(String::new());
-        sections.push(fenced_table(&Table::new(&corpus.rows)));
+        sections.push(format!(
+            "- Total: {}\n- Executed: {}\n- Passed: {}\n- Failed: {}\n- Skipped: {}\n- Coverage: {}\n- Pass rate: {}",
+            corpus.total(),
+            corpus.executed(),
+            corpus.passed(),
+            corpus.failed(),
+            corpus.skipped(),
+            coverage_percent(corpus.executed(), corpus.total()),
+            percent(corpus.passed(), corpus.executed()),
+        ));
+        if !corpus.skip_reasons.is_empty() {
+            sections.push(String::new());
+            sections.push("### Skip Reasons".to_owned());
+            sections.push(String::new());
+            sections.push(fenced_table(&Table::new(&corpus.skip_reasons)));
+        }
+        sections.push(String::new());
+        sections.push("### Failed Cases".to_owned());
+        sections.push(String::new());
+        let failed_rows = corpus.failed_rows();
+        if failed_rows.is_empty() {
+            sections.push(NO_FAILED_CASES.to_owned());
+        } else {
+            sections.push(fenced_table(&Table::new(&failed_rows)));
+        }
     }
     sections.push("## Benchmarks".to_owned());
     sections.push(String::new());
@@ -555,11 +635,27 @@ fn corpus_summary_rows(report: &FullReport) -> Vec<CorpusSummaryRow> {
         .map(|corpus| CorpusSummaryRow {
             corpus: corpus.name.to_owned(),
             total: corpus.total(),
+            executed: corpus.executed(),
             passed: format!("{} {}", corpus.passed(), STATUS_PASSED),
             failed: format!("{} {}", corpus.failed(), STATUS_FAILED),
             skipped: format!("{} {}", corpus.skipped(), STATUS_SKIPPED),
-            pass_rate: percent(corpus.passed(), corpus.total()),
+            coverage: coverage_percent(corpus.executed(), corpus.total()),
+            pass_rate: percent(corpus.passed(), corpus.executed()),
         })
+        .collect()
+}
+
+fn skip_reason_rows(rows: &[CaseRow]) -> Vec<SkipReasonRow> {
+    let mut reasons = BTreeMap::<String, usize>::new();
+    for row in rows {
+        if row.status == STATUS_SKIPPED {
+            let count = reasons.entry(row.detail.clone()).or_default();
+            *count = count.saturating_add(1);
+        }
+    }
+    reasons
+        .into_iter()
+        .map(|(reason, skipped)| SkipReasonRow { skipped, reason })
         .collect()
 }
 
@@ -575,6 +671,16 @@ fn percent(part: usize, total: usize) -> String {
     let major = basis_points / PERCENT_SCALE;
     let minor = basis_points % PERCENT_SCALE;
     format!("{major}.{minor:02}%")
+}
+
+fn coverage_percent(part: usize, total: usize) -> String {
+    if total == 0 {
+        return "0.0000%".to_owned();
+    }
+    let scaled = part.saturating_mul(COVERAGE_SCALE) / total;
+    let major = scaled / COVERAGE_MINOR_SCALE;
+    let minor = scaled % COVERAGE_MINOR_SCALE;
+    format!("{major}.{minor:04}%")
 }
 
 fn format_duration(duration: Duration) -> String {
@@ -629,7 +735,7 @@ impl fmt::Display for DisplayText<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::ratio;
+    use super::{coverage_percent, ratio};
     use std::time::Duration;
 
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -648,6 +754,11 @@ mod tests {
             &ratio(Duration::from_micros(250), Duration::from_micros(100)),
             "2.50x",
         )
+    }
+
+    #[test]
+    fn formats_small_coverage_with_four_decimals() -> TestResult {
+        ensure_text(&coverage_percent(4, 53_683), "0.0074%")
     }
 
     fn ensure_text(actual: &str, expected: &str) -> TestResult {
