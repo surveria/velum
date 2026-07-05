@@ -59,6 +59,7 @@ const PATH_BLOCK_LEXICAL_SCOPE: &str = "tests/engine_cases/block_lexical_scope.j
 const PATH_FUNCTION_EXPRESSION: &str = "tests/engine_cases/function_expression.js";
 const PATH_FUNCTION_PROPERTIES: &str = "tests/engine_cases/function_properties.js";
 const PATH_FUNCTION_CUSTOM_PROPERTIES: &str = "tests/engine_cases/function_custom_properties.js";
+const PATH_METHOD_THIS: &str = "tests/engine_cases/method_this.js";
 const PATH_FUNCTION_RETURN: &str = "tests/engine_cases/function_return.js";
 const PATH_FUNCTION_PARAMETERS_SCOPE: &str = "tests/engine_cases/function_parameters_scope.js";
 const PATH_CLOSURE_ENVIRONMENTS: &str = "tests/engine_cases/closure_environments.js";
@@ -79,6 +80,8 @@ const PATH_TEST262_FUNCTION_PROPERTIES: &str =
     "tests/corpora/test262/active/language/expressions/function_properties.js";
 const PATH_TEST262_FUNCTION_CUSTOM_PROPERTIES: &str =
     "tests/corpora/test262/active/language/expressions/function_custom_properties.js";
+const PATH_TEST262_METHOD_THIS: &str =
+    "tests/corpora/test262/active/language/expressions/method_this.js";
 const PATH_TEST262_FUNCTION_RETURN: &str =
     "tests/corpora/test262/active/language/statements/function_return.js";
 const PATH_TEST262_FUNCTION_PARAMETERS_SCOPE: &str =
@@ -385,6 +388,14 @@ fn engine_function_cases() -> Vec<EngineCase> {
             },
         },
         EngineCase {
+            id: "method_this",
+            path: PATH_METHOD_THIS,
+            expectation: Expectation::OutputAndValue {
+                output: &["42 42 42 42 keyword"],
+                value: "42",
+            },
+        },
+        EngineCase {
             id: "function_return",
             path: PATH_FUNCTION_RETURN,
             expectation: Expectation::OutputAndValue {
@@ -481,6 +492,14 @@ pub fn test262_cases() -> Vec<EngineCase> {
 }
 
 fn test262_expression_cases() -> Vec<EngineCase> {
+    let mut cases = test262_basic_expression_cases();
+    cases.extend(test262_function_expression_cases());
+    cases.extend(test262_object_expression_cases());
+    cases.extend(test262_operator_expression_cases());
+    cases
+}
+
+fn test262_basic_expression_cases() -> Vec<EngineCase> {
     vec![
         EngineCase {
             id: "language/expressions/arithmetic",
@@ -492,6 +511,11 @@ fn test262_expression_cases() -> Vec<EngineCase> {
             path: PATH_TEST262_CONDITIONAL_BITAND,
             expectation: Expectation::Value("42"),
         },
+    ]
+}
+
+fn test262_function_expression_cases() -> Vec<EngineCase> {
+    vec![
         EngineCase {
             id: "language/expressions/function_expression",
             path: PATH_TEST262_FUNCTION_EXPRESSION,
@@ -505,6 +529,11 @@ fn test262_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/function_custom_properties",
             path: PATH_TEST262_FUNCTION_CUSTOM_PROPERTIES,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/method_this",
+            path: PATH_TEST262_METHOD_THIS,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
@@ -522,6 +551,11 @@ fn test262_expression_cases() -> Vec<EngineCase> {
             path: PATH_TEST262_CLOSURE_ENVIRONMENTS,
             expectation: Expectation::Value("42"),
         },
+    ]
+}
+
+fn test262_object_expression_cases() -> Vec<EngineCase> {
+    vec![
         EngineCase {
             id: "language/expressions/object_literals",
             path: PATH_TEST262_OBJECT_LITERALS,
@@ -537,6 +571,11 @@ fn test262_expression_cases() -> Vec<EngineCase> {
             path: PATH_TEST262_ARRAY_LITERALS,
             expectation: Expectation::Value("42"),
         },
+    ]
+}
+
+fn test262_operator_expression_cases() -> Vec<EngineCase> {
+    vec![
         EngineCase {
             id: "language/expressions/unary_operators",
             path: PATH_TEST262_UNARY_OPERATORS,

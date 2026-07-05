@@ -29,6 +29,7 @@ const PATH_QUICKJS_FUNCTION_PROPERTIES: &str =
     "tests/corpora/quickjs_differential/active/function_properties.js";
 const PATH_QUICKJS_FUNCTION_CUSTOM_PROPERTIES: &str =
     "tests/corpora/quickjs_differential/active/function_custom_properties.js";
+const PATH_QUICKJS_METHOD_THIS: &str = "tests/corpora/quickjs_differential/active/method_this.js";
 const PATH_QUICKJS_FUNCTION_RETURN: &str =
     "tests/corpora/quickjs_differential/active/function_return.js";
 const PATH_QUICKJS_FUNCTION_PARAMETERS_SCOPE: &str =
@@ -72,6 +73,7 @@ const PATH_BENCH_FUNCTION_PROPERTIES: &str =
     "tests/corpora/benchmarks/active/function_properties.js";
 const PATH_BENCH_FUNCTION_CUSTOM_PROPERTIES: &str =
     "tests/corpora/benchmarks/active/function_custom_properties.js";
+const PATH_BENCH_METHOD_THIS: &str = "tests/corpora/benchmarks/active/method_this.js";
 const PATH_BENCH_FUNCTION_RETURN: &str = "tests/corpora/benchmarks/active/function_return.js";
 const PATH_BENCH_FUNCTION_PARAMETERS_SCOPE: &str =
     "tests/corpora/benchmarks/active/function_parameters_scope.js";
@@ -178,6 +180,10 @@ fn quickjs_control_flow_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "function_custom_properties",
             path: PATH_QUICKJS_FUNCTION_CUSTOM_PROPERTIES,
+        },
+        DifferentialCase {
+            id: "method_this",
+            path: PATH_QUICKJS_METHOD_THIS,
         },
         DifferentialCase {
             id: "function_return",
@@ -306,6 +312,10 @@ fn benchmark_function_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "function_custom_properties",
             path: PATH_BENCH_FUNCTION_CUSTOM_PROPERTIES,
+        },
+        BenchmarkCase {
+            id: "method_this",
+            path: PATH_BENCH_METHOD_THIS,
         },
         BenchmarkCase {
             id: "function_return",
