@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use crate::ast::{BinaryOp, Expr, ObjectProperty, Program, Stmt};
 use crate::error::{Error, Result};
+use crate::host::HostFunction;
 use crate::lexer;
 use crate::parser;
 use crate::runtime_assertions::{
@@ -40,6 +41,7 @@ pub struct Context {
     locals: Vec<BindingScope>,
     functions: Vec<Function>,
     native_functions: Vec<runtime_native::NativeFunction>,
+    pub(crate) host_functions: Vec<HostFunction>,
     objects: ObjectHeap,
     this_values: Vec<Value>,
     output: Vec<String>,
@@ -65,6 +67,7 @@ impl Context {
             locals: Vec::new(),
             functions: Vec::new(),
             native_functions: Vec::new(),
+            host_functions: Vec::new(),
             objects: ObjectHeap::new(),
             this_values: Vec::new(),
             output: Vec::new(),
@@ -357,6 +360,7 @@ impl Context {
             return match callee {
                 Value::Function(id) => self.eval_function_with_this(id, args, this_value),
                 Value::NativeFunction(id) => self.eval_native_function(id, args, &this_value),
+                Value::HostFunction(id) => self.eval_host_function(id, args),
                 value => Err(Error::runtime(format!("'{value}' is not callable"))),
             };
         }
@@ -364,6 +368,7 @@ impl Context {
         match self.eval_expr(callee)? {
             Value::Function(id) => self.eval_function(id, args),
             Value::NativeFunction(id) => self.eval_native_function(id, args, &Value::Undefined),
+            Value::HostFunction(id) => self.eval_host_function(id, args),
             value => Err(Error::runtime(format!("'{value}' is not callable"))),
         }
     }
@@ -571,7 +576,11 @@ impl Context {
     const fn constructor_return_is_object(value: &Value) -> bool {
         matches!(
             value,
-            Value::Function(_) | Value::NativeFunction(_) | Value::Object(_) | Value::Error(_)
+            Value::Function(_)
+                | Value::NativeFunction(_)
+                | Value::HostFunction(_)
+                | Value::Object(_)
+                | Value::Error(_)
         )
     }
 
@@ -617,6 +626,7 @@ impl Context {
             | Value::Number(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
+            | Value::HostFunction(_)
             | Value::Object(_) => {}
         }
         Ok(value)
@@ -626,7 +636,7 @@ impl Context {
         self.checked_value(self.this_values.last().cloned().unwrap_or(Value::Undefined))
     }
 
-    fn check_string_len(&self, text: &str) -> Result<()> {
+    pub(crate) fn check_string_len(&self, text: &str) -> Result<()> {
         if text.len() > self.limits.max_string_len {
             return Err(Error::limit(format!(
                 "string length {} exceeded {}",

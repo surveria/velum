@@ -202,6 +202,7 @@ impl Context {
             | Value::String(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
+            | Value::HostFunction(_)
             | Value::Error(_) => Ok(None),
         }
     }

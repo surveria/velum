@@ -308,9 +308,11 @@ impl Context {
         };
 
         match value {
-            Value::Object(_) | Value::Function(_) | Value::NativeFunction(_) | Value::Error(_) => {
-                Ok(value.clone())
-            }
+            Value::Object(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_)
+            | Value::Error(_) => Ok(value.clone()),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
