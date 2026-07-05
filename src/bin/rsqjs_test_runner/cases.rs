@@ -64,6 +64,7 @@ const PATH_FUNCTION_RETURN: &str = "tests/engine_cases/function_return.js";
 const PATH_FUNCTION_PARAMETERS_SCOPE: &str = "tests/engine_cases/function_parameters_scope.js";
 const PATH_CLOSURE_ENVIRONMENTS: &str = "tests/engine_cases/closure_environments.js";
 const PATH_OBJECT_LITERALS: &str = "tests/engine_cases/object_literals.js";
+const PATH_OBJECT_PROTOTYPES: &str = "tests/engine_cases/object_prototypes.js";
 const PATH_COMPUTED_PROPERTIES: &str = "tests/engine_cases/computed_properties.js";
 const PATH_ARRAY_LITERALS: &str = "tests/engine_cases/array_literals.js";
 const PATH_UNARY_OPERATORS: &str = "tests/engine_cases/unary_operators.js";
@@ -90,6 +91,8 @@ const PATH_TEST262_CLOSURE_ENVIRONMENTS: &str =
     "tests/corpora/test262/active/language/expressions/closure_environments.js";
 const PATH_TEST262_OBJECT_LITERALS: &str =
     "tests/corpora/test262/active/language/expressions/object_literals.js";
+const PATH_TEST262_OBJECT_PROTOTYPES: &str =
+    "tests/corpora/test262/active/language/expressions/object_prototypes.js";
 const PATH_TEST262_COMPUTED_PROPERTIES: &str =
     "tests/corpora/test262/active/language/expressions/computed_properties.js";
 const PATH_TEST262_ARRAY_LITERALS: &str =
@@ -433,6 +436,19 @@ fn engine_object_cases() -> Vec<EngineCase> {
             },
         },
         EngineCase {
+            id: "object_prototypes",
+            path: PATH_OBJECT_PROTOTYPES,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "40 42 41 40",
+                    "true true false",
+                    "own;duplicate;shared;read;",
+                    "undefined",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
             id: "computed_properties",
             path: PATH_COMPUTED_PROPERTIES,
             expectation: Expectation::OutputAndValue {
@@ -559,6 +575,11 @@ fn test262_object_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/object_literals",
             path: PATH_TEST262_OBJECT_LITERALS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/object_prototypes",
+            path: PATH_TEST262_OBJECT_PROTOTYPES,
             expectation: Expectation::Value("42"),
         },
         EngineCase {

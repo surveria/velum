@@ -38,6 +38,8 @@ const PATH_QUICKJS_CLOSURE_ENVIRONMENTS: &str =
     "tests/corpora/quickjs_differential/active/closure_environments.js";
 const PATH_QUICKJS_OBJECT_LITERALS: &str =
     "tests/corpora/quickjs_differential/active/object_literals.js";
+const PATH_QUICKJS_OBJECT_PROTOTYPES: &str =
+    "tests/corpora/quickjs_differential/active/object_prototypes.js";
 const PATH_QUICKJS_COMPUTED_PROPERTIES: &str =
     "tests/corpora/quickjs_differential/active/computed_properties.js";
 const PATH_QUICKJS_ARRAY_LITERALS: &str =
@@ -80,6 +82,7 @@ const PATH_BENCH_FUNCTION_PARAMETERS_SCOPE: &str =
 const PATH_BENCH_CLOSURE_ENVIRONMENTS: &str =
     "tests/corpora/benchmarks/active/closure_environments.js";
 const PATH_BENCH_OBJECT_LITERALS: &str = "tests/corpora/benchmarks/active/object_literals.js";
+const PATH_BENCH_OBJECT_PROTOTYPES: &str = "tests/corpora/benchmarks/active/object_prototypes.js";
 const PATH_BENCH_COMPUTED_PROPERTIES: &str =
     "tests/corpora/benchmarks/active/computed_properties.js";
 const PATH_BENCH_ARRAY_LITERALS: &str = "tests/corpora/benchmarks/active/array_literals.js";
@@ -205,6 +208,10 @@ fn quickjs_object_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "object_literals",
             path: PATH_QUICKJS_OBJECT_LITERALS,
+        },
+        DifferentialCase {
+            id: "object_prototypes",
+            path: PATH_QUICKJS_OBJECT_PROTOTYPES,
         },
         DifferentialCase {
             id: "computed_properties",
@@ -337,6 +344,10 @@ fn benchmark_object_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "object_literals",
             path: PATH_BENCH_OBJECT_LITERALS,
+        },
+        BenchmarkCase {
+            id: "object_prototypes",
+            path: PATH_BENCH_OBJECT_PROTOTYPES,
         },
         BenchmarkCase {
             id: "computed_properties",
