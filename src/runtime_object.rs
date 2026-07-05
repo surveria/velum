@@ -4,6 +4,7 @@ use crate::error::{Error, Result};
 use crate::value::{ObjectId, Value};
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
+const OBJECT_CONSTRUCTOR_PROPERTY: &str = "constructor";
 const PROTOTYPE_PROPERTY: &str = "__proto__";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -18,15 +19,32 @@ impl PropertyEnumerable {
     }
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum LiteralPrototype {
+    Object(ObjectId),
+    Null,
+}
+
+impl LiteralPrototype {
+    const fn into_object_id(self) -> Option<ObjectId> {
+        match self {
+            Self::Object(id) => Some(id),
+            Self::Null => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ObjectHeap {
     objects: Vec<Object>,
+    object_prototype: Option<ObjectId>,
 }
 
 impl ObjectHeap {
     pub const fn new() -> Self {
         Self {
             objects: Vec::new(),
+            object_prototype: None,
         }
     }
 
@@ -36,17 +54,24 @@ impl ObjectHeap {
         max_objects: usize,
         max_properties: usize,
     ) -> Result<Value> {
-        if self.objects.len() >= max_objects {
-            return Err(Error::limit(format!("object count exceeded {max_objects}")));
-        }
-
         let mut object = Object::ordinary();
+        let mut literal_prototype = None;
         for (key, value) in properties {
             if key == PROTOTYPE_PROPERTY {
-                object.set_literal_prototype(&value);
+                if let Some(prototype) = Object::literal_prototype(&value) {
+                    literal_prototype = Some(prototype);
+                }
             } else {
                 object.set(key, value, max_properties)?;
             }
+        }
+        object.prototype = match literal_prototype {
+            Some(prototype) => prototype.into_object_id(),
+            None => Some(self.object_prototype_id(max_objects, max_properties)?),
+        };
+
+        if self.objects.len() >= max_objects {
+            return Err(Error::limit(format!("object count exceeded {max_objects}")));
         }
 
         let id = ObjectId::new(self.objects.len());
@@ -60,15 +85,16 @@ impl ObjectHeap {
         max_objects: usize,
         max_properties: usize,
     ) -> Result<Value> {
-        if self.objects.len() >= max_objects {
-            return Err(Error::limit(format!("object count exceeded {max_objects}")));
-        }
-
         let length = ArrayLength::from_usize(elements.len())?;
         let mut object = Object::array(length);
+        object.prototype = Some(self.object_prototype_id(max_objects, max_properties)?);
         for (index, value) in elements.into_iter().enumerate() {
             let index = ArrayIndex::from_usize(index)?;
             object.set_ordinary(index.key(), value, max_properties)?;
+        }
+
+        if self.objects.len() >= max_objects {
+            return Err(Error::limit(format!("object count exceeded {max_objects}")));
         }
 
         let id = ObjectId::new(self.objects.len());
@@ -80,8 +106,9 @@ impl ObjectHeap {
         &mut self,
         prototype: Option<ObjectId>,
         max_objects: usize,
+        max_properties: usize,
     ) -> Result<Value> {
-        self.create_with_prototype_id(prototype, max_objects)
+        self.create_with_prototype_id(prototype, max_objects, max_properties)
             .map(Value::Object)
     }
 
@@ -89,7 +116,9 @@ impl ObjectHeap {
         &mut self,
         prototype: Option<ObjectId>,
         max_objects: usize,
+        max_properties: usize,
     ) -> Result<ObjectId> {
+        let prototype = self.resolve_default_prototype(prototype, max_objects, max_properties)?;
         if self.objects.len() >= max_objects {
             return Err(Error::limit(format!("object count exceeded {max_objects}")));
         }
@@ -111,6 +140,7 @@ impl ObjectHeap {
         max_objects: usize,
         max_properties: usize,
     ) -> Result<ObjectId> {
+        let prototype = self.resolve_default_prototype(prototype, max_objects, max_properties)?;
         if self.objects.len() >= max_objects {
             return Err(Error::limit(format!("object count exceeded {max_objects}")));
         }
@@ -121,6 +151,45 @@ impl ObjectHeap {
 
         let id = ObjectId::new(self.objects.len());
         self.objects.push(object);
+        Ok(id)
+    }
+
+    fn resolve_default_prototype(
+        &mut self,
+        prototype: Option<ObjectId>,
+        max_objects: usize,
+        max_properties: usize,
+    ) -> Result<Option<ObjectId>> {
+        if prototype.is_some() {
+            return Ok(prototype);
+        }
+        self.object_prototype_id(max_objects, max_properties)
+            .map(Some)
+    }
+
+    fn object_prototype_id(
+        &mut self,
+        max_objects: usize,
+        max_properties: usize,
+    ) -> Result<ObjectId> {
+        if let Some(id) = self.object_prototype {
+            return Ok(id);
+        }
+        if self.objects.len() >= max_objects {
+            return Err(Error::limit(format!("object count exceeded {max_objects}")));
+        }
+
+        let mut object = Object::ordinary();
+        object.define(
+            OBJECT_CONSTRUCTOR_PROPERTY.to_owned(),
+            Value::String("Object".to_owned()),
+            PropertyEnumerable::No,
+            max_properties,
+        )?;
+
+        let id = ObjectId::new(self.objects.len());
+        self.objects.push(object);
+        self.object_prototype = Some(id);
         Ok(id)
     }
 
@@ -298,16 +367,16 @@ impl Object {
         }
     }
 
-    const fn set_literal_prototype(&mut self, value: &Value) {
+    const fn literal_prototype(value: &Value) -> Option<LiteralPrototype> {
         match value {
-            Value::Object(prototype) => self.prototype = Some(*prototype),
-            Value::Null => self.prototype = None,
+            Value::Object(prototype) => Some(LiteralPrototype::Object(*prototype)),
+            Value::Null => Some(LiteralPrototype::Null),
             Value::Undefined
             | Value::Bool(_)
             | Value::Number(_)
             | Value::String(_)
             | Value::Function(_)
-            | Value::Error(_) => {}
+            | Value::Error(_) => None,
         }
     }
 
