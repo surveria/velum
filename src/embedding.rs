@@ -1,7 +1,9 @@
 use crate::compiled_script::CompiledScript;
 use crate::error::Result;
+use crate::host::{HostCall, IntoJsValue};
 use crate::runtime::Context;
 use crate::runtime_limits::RuntimeLimits;
+use crate::value::Value;
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
 pub struct EngineConfig {
@@ -101,6 +103,12 @@ impl Vm {
     }
 
     /// # Errors
+    /// Fails when lexing, parsing, evaluation, or configured resource limits fail.
+    pub fn eval(&mut self, source: &str) -> Result<Value> {
+        self.context.eval(source)
+    }
+
+    /// # Errors
     /// Fails when lexing, parsing, or configured compile-time resource limits fail.
     pub fn compile(&self, source: &str) -> Result<CompiledScript> {
         self.context.compile(source)
@@ -110,6 +118,46 @@ impl Vm {
     /// Fails when the compiled script exceeds this VM's limits or evaluation fails.
     pub fn eval_compiled(&mut self, script: &CompiledScript) -> Result<crate::Value> {
         self.context.eval_compiled(script)
+    }
+
+    #[must_use]
+    pub fn output(&self) -> &[String] {
+        self.context.output()
+    }
+
+    #[must_use]
+    pub fn take_output(&mut self) -> Vec<String> {
+        self.context.take_output()
+    }
+
+    #[must_use]
+    pub fn get_global(&self, name: &str) -> Option<Value> {
+        self.context.get_global(name)
+    }
+
+    /// # Errors
+    /// Fails when the name is empty, exceeds string limits, duplicates an
+    /// existing binding, or would exceed the binding limit.
+    pub fn register_host_function<F>(&mut self, name: impl Into<String>, callback: F) -> Result<()>
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<Value> + 'static,
+    {
+        self.context.register_host_function(name, callback)
+    }
+
+    /// # Errors
+    /// Fails when the name is empty, exceeds string limits, duplicates an
+    /// existing binding, or would exceed the binding limit.
+    pub fn register_host_function_typed<F, R>(
+        &mut self,
+        name: impl Into<String>,
+        callback: F,
+    ) -> Result<()>
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<R> + 'static,
+        R: IntoJsValue + 'static,
+    {
+        self.context.register_host_function_typed(name, callback)
     }
 
     #[must_use]

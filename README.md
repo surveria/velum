@@ -41,15 +41,15 @@ fn main() -> rs_quickjs::Result<()> {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
 
-    vm.context().register_host_function_typed("cameraLabel", |call| {
+    vm.register_host_function_typed("cameraLabel", |call| {
         let name: &str = call.argument(0, "name")?;
         Ok(format!("camera:{name}"))
     })?;
 
-    vm.context().eval(r#"let camera = cameraLabel("front");"#)?;
+    vm.eval(r#"let camera = cameraLabel("front");"#)?;
     let script = vm.compile("print(camera); camera")?;
     let value = vm.eval_compiled(&script)?;
-    let output = vm.context().take_output();
+    let output = vm.take_output();
 
     let report = vm.finish();
     println!("value: {value}");
