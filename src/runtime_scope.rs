@@ -9,18 +9,20 @@ use crate::value::Value;
 
 #[derive(Debug, Clone, Default)]
 pub struct BindingScope {
-    bindings: BTreeMap<AtomId, BindingCell>,
+    slots: Vec<BindingCell>,
+    bindings: BTreeMap<AtomId, BindingSlot>,
 }
 
 impl BindingScope {
     pub const fn new() -> Self {
         Self {
+            slots: Vec::new(),
             bindings: BTreeMap::new(),
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.bindings.len()
+    pub const fn len(&self) -> usize {
+        self.slots.len()
     }
 
     pub(crate) fn contains(&self, atom: AtomId) -> bool {
@@ -28,7 +30,8 @@ impl BindingScope {
     }
 
     pub(crate) fn get(&self, atom: AtomId) -> Option<BindingCell> {
-        self.bindings.get(&atom).cloned()
+        let slot = self.bindings.get(&atom)?;
+        self.cell(*slot).cloned()
     }
 
     pub(crate) fn insert(&mut self, atom: AtomId, binding: BindingCell) {
@@ -36,16 +39,52 @@ impl BindingScope {
     }
 
     pub(crate) fn insert_or_replace(&mut self, atom: AtomId, binding: BindingCell) {
-        if let Some(existing) = self.bindings.get_mut(&atom) {
+        if let Some(slot) = self.bindings.get(&atom).copied()
+            && let Some(existing) = self.cell_mut(slot)
+        {
             *existing = binding;
             return;
         }
-        self.bindings.insert(atom, binding);
+        let slot = BindingSlot::from_index(self.slots.len());
+        self.slots.push(binding);
+        self.bindings.insert(atom, slot);
     }
 
     pub(crate) fn retain_only(&mut self, atom: AtomId) {
-        self.bindings
-            .retain(|binding_atom, _| *binding_atom == atom);
+        let Some(binding) = self.get(atom) else {
+            self.slots.clear();
+            self.bindings.clear();
+            return;
+        };
+        self.slots.clear();
+        self.bindings.clear();
+        self.slots.push(binding);
+        self.bindings.insert(atom, BindingSlot::zero());
+    }
+
+    fn cell(&self, slot: BindingSlot) -> Option<&BindingCell> {
+        self.slots.get(slot.index())
+    }
+
+    fn cell_mut(&mut self, slot: BindingSlot) -> Option<&mut BindingCell> {
+        self.slots.get_mut(slot.index())
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+struct BindingSlot(usize);
+
+impl BindingSlot {
+    const fn from_index(index: usize) -> Self {
+        Self(index)
+    }
+
+    const fn zero() -> Self {
+        Self(0)
+    }
+
+    const fn index(self) -> usize {
+        self.0
     }
 }
 
