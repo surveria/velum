@@ -68,9 +68,18 @@ pub enum Expr {
         property: String,
         expr: Box<Self>,
     },
+    ComputedPropertyAssignment {
+        object: Box<Self>,
+        property: Box<Self>,
+        expr: Box<Self>,
+    },
     Member {
         object: Box<Self>,
         property: String,
+    },
+    ComputedMember {
+        object: Box<Self>,
+        property: Box<Self>,
     },
     Call {
         callee: Box<Self>,
