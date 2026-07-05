@@ -23,6 +23,10 @@ pub enum Stmt {
         update: Option<Expr>,
         body: Box<Self>,
     },
+    Switch {
+        discriminant: Expr,
+        cases: Vec<SwitchCase>,
+    },
     TryCatch {
         body: Vec<Self>,
         catch_param: String,
@@ -51,6 +55,12 @@ pub enum DeclKind {
 pub struct ObjectProperty {
     pub key: String,
     pub value: Expr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SwitchCase {
+    pub test: Option<Expr>,
+    pub statements: Vec<Stmt>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
