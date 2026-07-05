@@ -46,6 +46,7 @@ struct Function {
     params: Vec<String>,
     body: Vec<Stmt>,
     captures: Vec<BindingScope>,
+    properties: runtime_function::FunctionProperties,
 }
 
 impl Context {
@@ -416,6 +417,9 @@ impl Context {
         value: Value,
     ) -> Result<()> {
         self.checked_value(value.clone())?;
+        if let Value::Function(id) = object {
+            return self.set_function_property(*id, property, value);
+        }
         set_property(
             &mut self.objects,
             object,
@@ -430,6 +434,11 @@ impl Context {
         object: &Value,
         property: &str,
     ) -> Result<Value> {
+        if let Value::Function(id) = object {
+            return self
+                .delete_function_property(*id, property)
+                .map(Value::Bool);
+        }
         delete_property(&mut self.objects, object, property).map(Value::Bool)
     }
 
