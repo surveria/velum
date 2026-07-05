@@ -4,11 +4,18 @@ const HEX_ESCAPE_DIGITS: usize = 2;
 const UNICODE_ESCAPE_DIGITS: usize = 4;
 const MAX_BRACED_UNICODE_ESCAPE_DIGITS: usize = 6;
 const MAX_UNICODE_CODE_POINT: u32 = 0x10_FFFF;
+const RADIX_BINARY: u32 = 2;
+const RADIX_OCTAL: u32 = 8;
+const RADIX_DECIMAL: u32 = 10;
+const RADIX_HEX: u32 = 16;
 const ASCII_BACKSPACE: char = '\u{0008}';
 const ASCII_FORM_FEED: char = '\u{000c}';
 const ASCII_VERTICAL_TAB: char = '\u{000b}';
 const LINE_SEPARATOR: char = '\u{2028}';
 const PARAGRAPH_SEPARATOR: char = '\u{2029}';
+const DECIMAL_POINT: char = '.';
+const NUMERIC_SEPARATOR: char = '_';
+const BIGINT_SUFFIX: char = 'n';
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
@@ -140,6 +147,9 @@ impl<'a> Lexer<'a> {
                 '%' => self.simple_or_equal(offset, TokenKind::Percent, TokenKind::PercentEqual),
                 '?' => self.simple(TokenKind::Question),
                 ':' => self.simple(TokenKind::Colon),
+                '.' if matches!(self.peek_next_char(), Some('0'..='9')) => {
+                    self.leading_decimal_number(offset)?;
+                }
                 '.' => self.simple(TokenKind::Dot),
                 '(' => self.simple(TokenKind::LParen),
                 ')' => self.simple(TokenKind::RParen),
@@ -208,25 +218,147 @@ impl<'a> Lexer<'a> {
     }
 
     fn number(&mut self, offset: usize) -> Result<()> {
-        let start = self.cursor;
-        while matches!(self.peek_char(), Some('0'..='9')) {
+        if self.peek_char() == Some('0')
+            && let Some((radix, description)) = self.numeric_prefix()
+        {
+            return self.prefixed_number(offset, radix, description);
+        }
+        self.decimal_number(offset)
+    }
+
+    fn numeric_prefix(&self) -> Option<(u32, &'static str)> {
+        match self.peek_next_char()? {
+            'b' | 'B' => Some((RADIX_BINARY, "binary numeric literal")),
+            'o' | 'O' => Some((RADIX_OCTAL, "octal numeric literal")),
+            'x' | 'X' => Some((RADIX_HEX, "hexadecimal numeric literal")),
+            _ => None,
+        }
+    }
+
+    fn prefixed_number(&mut self, offset: usize, radix: u32, description: &str) -> Result<()> {
+        self.advance();
+        self.advance();
+        let digits = self.digit_sequence(radix, offset, description)?;
+        self.reject_bigint_suffix(description)?;
+        let value = digits_to_number(&digits, radix, offset, description)?;
+        self.push(TokenKind::Number(value), offset);
+        Ok(())
+    }
+
+    fn decimal_number(&mut self, offset: usize) -> Result<()> {
+        let mut text = self.digit_sequence(RADIX_DECIMAL, offset, "decimal numeric literal")?;
+
+        if self.peek_char() == Some(DECIMAL_POINT)
+            && matches!(self.peek_next_char(), Some('0'..='9'))
+        {
             self.advance();
+            text.push(DECIMAL_POINT);
+            let fraction =
+                self.digit_sequence(RADIX_DECIMAL, offset, "decimal fraction literal")?;
+            text.push_str(&fraction);
         }
 
-        if self.peek_char() == Some('.') && matches!(self.peek_next_char(), Some('0'..='9')) {
-            self.advance();
-            while matches!(self.peek_char(), Some('0'..='9')) {
-                self.advance();
-            }
+        if self.peek_char().is_some_and(is_exponent_marker) {
+            self.decimal_exponent(&mut text, offset)?;
         }
 
-        let start_offset = self.char_offset(start, offset, "number")?;
-        let end_offset = self.current_offset();
-        let text = self.source_slice(start_offset, end_offset, offset, "number")?;
+        self.reject_bigint_suffix("decimal numeric literal")?;
         let value = text
             .parse::<f64>()
-            .map_err(|_| Error::lex("invalid number literal", offset))?;
+            .map_err(|_| Error::lex("invalid decimal numeric literal", offset))?;
         self.push(TokenKind::Number(value), offset);
+        Ok(())
+    }
+
+    fn leading_decimal_number(&mut self, offset: usize) -> Result<()> {
+        self.advance();
+        let mut text = "0.".to_owned();
+        let fraction = self.digit_sequence(RADIX_DECIMAL, offset, "decimal fraction literal")?;
+        text.push_str(&fraction);
+
+        if self.peek_char().is_some_and(is_exponent_marker) {
+            self.decimal_exponent(&mut text, offset)?;
+        }
+
+        self.reject_bigint_suffix("decimal numeric literal")?;
+        let value = text
+            .parse::<f64>()
+            .map_err(|_| Error::lex("invalid decimal numeric literal", offset))?;
+        self.push(TokenKind::Number(value), offset);
+        Ok(())
+    }
+
+    fn decimal_exponent(&mut self, text: &mut String, offset: usize) -> Result<()> {
+        let Some((exponent_offset, marker)) = self.peek() else {
+            return Err(Error::lex("decimal exponent requires marker", offset));
+        };
+        self.advance();
+        text.push(marker);
+        if let Some(sign @ ('+' | '-')) = self.peek_char() {
+            self.advance();
+            text.push(sign);
+        }
+        let digits =
+            self.digit_sequence(RADIX_DECIMAL, exponent_offset, "decimal exponent literal")?;
+        text.push_str(&digits);
+        Ok(())
+    }
+
+    fn digit_sequence(&mut self, radix: u32, offset: usize, description: &str) -> Result<String> {
+        let mut output = String::new();
+        let mut seen_digit = false;
+        let mut previous_separator = false;
+
+        while let Some((current_offset, ch)) = self.peek() {
+            if ch == NUMERIC_SEPARATOR {
+                if !seen_digit || previous_separator {
+                    return Err(Error::lex(
+                        format!("{description} has misplaced numeric separator"),
+                        current_offset,
+                    ));
+                }
+                let Some(next) = self.peek_next_char() else {
+                    return Err(Error::lex(
+                        format!("{description} separator must be followed by a digit"),
+                        current_offset,
+                    ));
+                };
+                if digit_value(next, radix).is_none() {
+                    return Err(Error::lex(
+                        format!("{description} separator must be followed by a digit"),
+                        current_offset,
+                    ));
+                }
+                previous_separator = true;
+                self.advance();
+                continue;
+            }
+            if digit_value(ch, radix).is_some() {
+                seen_digit = true;
+                previous_separator = false;
+                output.push(ch);
+                self.advance();
+                continue;
+            }
+            break;
+        }
+
+        if seen_digit {
+            return Ok(output);
+        }
+        Err(Error::lex(
+            format!("{description} requires at least one digit"),
+            offset,
+        ))
+    }
+
+    fn reject_bigint_suffix(&self, description: &str) -> Result<()> {
+        if self.peek_char() == Some(BIGINT_SUFFIX) {
+            return Err(Error::lex(
+                format!("{description} cannot use BigInt suffix without BigInt support"),
+                self.current_offset(),
+            ));
+        }
         Ok(())
     }
 
@@ -629,6 +761,29 @@ fn checked_hex_accumulate(value: u32, digit: u32, offset: usize, description: &s
         .checked_mul(16)
         .and_then(|value| value.checked_add(digit))
         .ok_or_else(|| Error::lex(format!("{description} value overflow"), offset))
+}
+
+fn digits_to_number(digits: &str, radix: u32, offset: usize, description: &str) -> Result<f64> {
+    let mut value = 0.0f64;
+    let radix_value = f64::from(radix);
+    for ch in digits.chars() {
+        let Some(digit) = digit_value(ch, radix) else {
+            return Err(Error::lex(
+                format!("{description} has invalid digit '{ch}'"),
+                offset,
+            ));
+        };
+        value = value.mul_add(radix_value, f64::from(digit));
+    }
+    Ok(value)
+}
+
+const fn digit_value(ch: char, radix: u32) -> Option<u32> {
+    ch.to_digit(radix)
+}
+
+const fn is_exponent_marker(ch: char) -> bool {
+    matches!(ch, 'e' | 'E')
 }
 
 fn unicode_char(value: u32, offset: usize, description: &str) -> Result<char> {

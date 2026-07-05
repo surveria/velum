@@ -2,6 +2,8 @@ use super::{EngineCase, Expectation};
 
 const PATH_TEST262_ARITHMETIC: &str =
     "tests/corpora/test262/active/language/expressions/arithmetic.js";
+const PATH_TEST262_NUMERIC_LITERALS: &str =
+    "tests/corpora/test262/active/language/expressions/numeric_literals.js";
 const PATH_TEST262_CONDITIONAL_BITAND: &str =
     "tests/corpora/test262/active/language/expressions/conditional_bitand.js";
 const PATH_TEST262_STRING_ESCAPE_SEQUENCES: &str =
@@ -119,6 +121,11 @@ fn test262_basic_expression_cases() -> Vec<EngineCase> {
             id: "language/expressions/arithmetic",
             path: PATH_TEST262_ARITHMETIC,
             expectation: Expectation::Value("5"),
+        },
+        EngineCase {
+            id: "language/expressions/numeric_literals",
+            path: PATH_TEST262_NUMERIC_LITERALS,
+            expectation: Expectation::Value("42"),
         },
         EngineCase {
             id: "language/expressions/conditional_bitand",
