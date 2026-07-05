@@ -46,6 +46,8 @@ const PATH_TEST262_ARRAY_PROTOTYPE_INDEX_OF: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_index_of.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_LAST_INDEX_OF: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_last_index_of.js";
+const PATH_TEST262_ARRAY_PROTOTYPE_REVERSE: &str =
+    "tests/corpora/test262/active/language/expressions/array_prototype_reverse.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_SHIFT_UNSHIFT: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_shift_unshift.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_SLICE: &str =
@@ -228,6 +230,11 @@ fn test262_object_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/array_prototype_last_index_of",
             path: PATH_TEST262_ARRAY_PROTOTYPE_LAST_INDEX_OF,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/array_prototype_reverse",
+            path: PATH_TEST262_ARRAY_PROTOTYPE_REVERSE,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
