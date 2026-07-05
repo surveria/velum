@@ -103,10 +103,10 @@ impl Context {
         let Some(value) = value else {
             return 0.0;
         };
-        Self::to_number(value)
+        Self::value_to_number(value)
     }
 
-    fn to_number(value: &Value) -> f64 {
+    pub(super) fn value_to_number(value: &Value) -> f64 {
         match value {
             Value::Null => 0.0,
             Value::Bool(value) => f64::from(u8::from(*value)),

@@ -13,6 +13,8 @@ use super::runtime_function::FunctionProperties;
 mod runtime_native_array;
 #[path = "runtime_native_boolean.rs"]
 mod runtime_native_boolean;
+#[path = "runtime_native_math.rs"]
+mod runtime_native_math;
 #[path = "runtime_native_number.rs"]
 mod runtime_native_number;
 #[path = "runtime_native_string.rs"]
@@ -47,6 +49,18 @@ const BOOLEAN_FUNCTION_LENGTH: f64 = 1.0;
 const BOOLEAN_NAME: &str = "Boolean";
 const ERROR_FUNCTION_LENGTH: f64 = 1.0;
 const INFINITY_NAME: &str = "Infinity";
+const MATH_ABS_NAME: &str = "abs";
+const MATH_CEIL_NAME: &str = "ceil";
+const MATH_FLOOR_NAME: &str = "floor";
+const MATH_FUNCTION_LENGTH_ONE: f64 = 1.0;
+const MATH_FUNCTION_LENGTH_TWO: f64 = 2.0;
+const MATH_MAX_NAME: &str = "max";
+const MATH_MIN_NAME: &str = "min";
+const MATH_NAME: &str = "Math";
+const MATH_POW_NAME: &str = "pow";
+const MATH_ROUND_NAME: &str = "round";
+const MATH_SQRT_NAME: &str = "sqrt";
+const MATH_TRUNC_NAME: &str = "trunc";
 const NAN_NAME: &str = "NaN";
 const NUMBER_FUNCTION_LENGTH: f64 = 1.0;
 const NUMBER_NAME: &str = "Number";
@@ -89,6 +103,15 @@ impl NativeFunction {
             NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_FUNCTION_LENGTH,
             NativeFunctionKind::Boolean => BOOLEAN_FUNCTION_LENGTH,
             NativeFunctionKind::ErrorConstructor(_) => ERROR_FUNCTION_LENGTH,
+            NativeFunctionKind::MathAbs
+            | NativeFunctionKind::MathCeil
+            | NativeFunctionKind::MathFloor
+            | NativeFunctionKind::MathRound
+            | NativeFunctionKind::MathSqrt
+            | NativeFunctionKind::MathTrunc => MATH_FUNCTION_LENGTH_ONE,
+            NativeFunctionKind::MathMax
+            | NativeFunctionKind::MathMin
+            | NativeFunctionKind::MathPow => MATH_FUNCTION_LENGTH_TWO,
             NativeFunctionKind::Number => NUMBER_FUNCTION_LENGTH,
             NativeFunctionKind::Object => OBJECT_FUNCTION_LENGTH,
             NativeFunctionKind::String => STRING_FUNCTION_LENGTH,
@@ -111,6 +134,15 @@ impl NativeFunction {
             NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_NAME,
             NativeFunctionKind::Boolean => BOOLEAN_NAME,
             NativeFunctionKind::ErrorConstructor(name) => name.as_str(),
+            NativeFunctionKind::MathAbs => MATH_ABS_NAME,
+            NativeFunctionKind::MathCeil => MATH_CEIL_NAME,
+            NativeFunctionKind::MathFloor => MATH_FLOOR_NAME,
+            NativeFunctionKind::MathMax => MATH_MAX_NAME,
+            NativeFunctionKind::MathMin => MATH_MIN_NAME,
+            NativeFunctionKind::MathPow => MATH_POW_NAME,
+            NativeFunctionKind::MathRound => MATH_ROUND_NAME,
+            NativeFunctionKind::MathSqrt => MATH_SQRT_NAME,
+            NativeFunctionKind::MathTrunc => MATH_TRUNC_NAME,
             NativeFunctionKind::Number => NUMBER_NAME,
             NativeFunctionKind::Object => OBJECT_NAME,
             NativeFunctionKind::String => STRING_NAME,
@@ -144,6 +176,15 @@ impl NativeFunction {
             | NativeFunctionKind::ArrayUnshift
             | NativeFunctionKind::Boolean
             | NativeFunctionKind::ErrorConstructor(_)
+            | NativeFunctionKind::MathAbs
+            | NativeFunctionKind::MathCeil
+            | NativeFunctionKind::MathFloor
+            | NativeFunctionKind::MathMax
+            | NativeFunctionKind::MathMin
+            | NativeFunctionKind::MathPow
+            | NativeFunctionKind::MathRound
+            | NativeFunctionKind::MathSqrt
+            | NativeFunctionKind::MathTrunc
             | NativeFunctionKind::Object
             | NativeFunctionKind::String => None,
         }
@@ -170,6 +211,15 @@ pub(super) enum NativeFunctionKind {
     ArrayUnshift,
     Boolean,
     ErrorConstructor(ErrorName),
+    MathAbs,
+    MathCeil,
+    MathFloor,
+    MathMax,
+    MathMin,
+    MathPow,
+    MathRound,
+    MathSqrt,
+    MathTrunc,
     Number,
     Object,
     String,
@@ -183,6 +233,7 @@ impl Context {
             INFINITY_NAME => self
                 .global_constant_value(INFINITY_NAME, Value::Number(f64::INFINITY))
                 .map(Some),
+            MATH_NAME => self.math_object_value().map(Some),
             NAN_NAME => self
                 .global_constant_value(NAN_NAME, Value::Number(f64::NAN))
                 .map(Some),
@@ -232,6 +283,15 @@ impl Context {
             NativeFunctionKind::ArrayUnshift => self.eval_array_unshift(args, this_value),
             NativeFunctionKind::Boolean => self.eval_boolean_constructor(args),
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
+            NativeFunctionKind::MathAbs => self.eval_math_abs(args),
+            NativeFunctionKind::MathCeil => self.eval_math_ceil(args),
+            NativeFunctionKind::MathFloor => self.eval_math_floor(args),
+            NativeFunctionKind::MathMax => self.eval_math_max(args),
+            NativeFunctionKind::MathMin => self.eval_math_min(args),
+            NativeFunctionKind::MathPow => self.eval_math_pow(args),
+            NativeFunctionKind::MathRound => self.eval_math_round(args),
+            NativeFunctionKind::MathSqrt => self.eval_math_sqrt(args),
+            NativeFunctionKind::MathTrunc => self.eval_math_trunc(args),
             NativeFunctionKind::Number => self.eval_number_constructor(args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
             NativeFunctionKind::String => self.eval_string_constructor(args),
@@ -255,7 +315,16 @@ impl Context {
             | NativeFunctionKind::ArrayReverse
             | NativeFunctionKind::ArrayShift
             | NativeFunctionKind::ArraySlice
-            | NativeFunctionKind::ArrayUnshift => {
+            | NativeFunctionKind::ArrayUnshift
+            | NativeFunctionKind::MathAbs
+            | NativeFunctionKind::MathCeil
+            | NativeFunctionKind::MathFloor
+            | NativeFunctionKind::MathMax
+            | NativeFunctionKind::MathMin
+            | NativeFunctionKind::MathPow
+            | NativeFunctionKind::MathRound
+            | NativeFunctionKind::MathSqrt
+            | NativeFunctionKind::MathTrunc => {
                 Err(Error::runtime("native method is not a constructor"))
             }
             NativeFunctionKind::Boolean => self.construct_boolean_object(args),

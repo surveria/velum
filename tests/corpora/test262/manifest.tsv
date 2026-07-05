@@ -12,3 +12,9 @@ boolean-constructor-numeric-values	test/built-ins/Boolean/S15.6.1.1_A1_T2.js	run
 boolean-constructor-new	test/built-ins/Boolean/S15.6.2.1_A1.js	run	official Test262 Boolean constructor smoke
 boolean-prototype-constructor	test/built-ins/Boolean/prototype/constructor/S15.6.4.1_A1.js	run	official Test262 Boolean prototype constructor smoke
 global-value-properties	test/built-ins/global/S10.2.3_A1.2_T1.js	run	official Test262 global value properties smoke
+math-pi-value	test/built-ins/Math/PI/value.js	run	official Test262 Math.PI value smoke
+math-abs-nan	test/built-ins/Math/abs/S15.8.2.1_A1.js	run	official Test262 Math.abs NaN smoke
+math-abs-negative-zero	test/built-ins/Math/abs/S15.8.2.1_A2.js	run	official Test262 Math.abs negative zero smoke
+math-max-no-args	test/built-ins/Math/max/S15.8.2.11_A1.js	run	official Test262 Math.max no-args smoke
+math-pow-nan-exponent	test/built-ins/Math/pow/applying-the-exp-operator_A1.js	run	official Test262 Math.pow NaN exponent smoke
+math-sqrt-nan	test/built-ins/Math/sqrt/S15.8.2.17_A1.js	run	official Test262 Math.sqrt NaN smoke
