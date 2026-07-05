@@ -51,6 +51,8 @@ pub enum TokenKind {
     RParen,
     LBrace,
     RBrace,
+    LBracket,
+    RBracket,
     Semicolon,
     Comma,
     Eof,
@@ -100,6 +102,8 @@ impl<'a> Lexer<'a> {
                 ')' => self.simple(TokenKind::RParen),
                 '{' => self.simple(TokenKind::LBrace),
                 '}' => self.simple(TokenKind::RBrace),
+                '[' => self.simple(TokenKind::LBracket),
+                ']' => self.simple(TokenKind::RBracket),
                 ';' => self.simple(TokenKind::Semicolon),
                 ',' => self.simple(TokenKind::Comma),
                 '!' => {

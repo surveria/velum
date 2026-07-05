@@ -1,55 +1,22 @@
-use crate::ast::{BinaryOp, DeclKind, Expr, Program, Stmt, UnaryOp};
+use crate::ast::{BinaryOp, DeclKind, Expr, ObjectProperty, Program, Stmt, UnaryOp};
 use crate::error::{Error, Result};
 use crate::lexer;
 use crate::parser;
 use crate::runtime_assertions::{
-    error_property, expected_error_name, is_assert_throws_call, reference_error_undefined,
-    runtime_exception_value, thrown_value_matches,
+    expected_error_name, is_assert_throws_call, reference_error_undefined, runtime_exception_value,
+    thrown_value_matches,
 };
 use crate::runtime_completion::Completion;
+use crate::runtime_limits::RuntimeLimits;
 use crate::runtime_numeric::{bitwise_and, compare_binary, numeric_binary};
 use crate::runtime_object::ObjectHeap;
+use crate::runtime_property::{get_property, property_key, set_property};
 use crate::runtime_scope::{BindingCell, BindingScope};
 use crate::value::{ErrorName, ErrorObject, FunctionId, Value};
 
-const DEFAULT_MAX_SOURCE_LEN: usize = 65_536;
-const DEFAULT_MAX_STATEMENTS: usize = 4_096;
-const DEFAULT_MAX_EXPRESSION_DEPTH: usize = 256;
-const DEFAULT_MAX_RUNTIME_STEPS: usize = 100_000;
-const DEFAULT_MAX_STRING_LEN: usize = 65_536;
-const DEFAULT_MAX_BINDINGS: usize = 4_096;
-const DEFAULT_MAX_OBJECTS: usize = 4_096;
-const DEFAULT_MAX_OBJECT_PROPERTIES: usize = 4_096;
 const BOOLEAN_NAME: &str = "Boolean";
 const HOST_PRINT_NAME: &str = "print";
 const TEST262_ERROR_NAME: &str = "Test262Error";
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct RuntimeLimits {
-    pub max_source_len: usize,
-    pub max_statements: usize,
-    pub max_expression_depth: usize,
-    pub max_runtime_steps: usize,
-    pub max_string_len: usize,
-    pub max_bindings: usize,
-    pub max_objects: usize,
-    pub max_object_properties: usize,
-}
-
-impl Default for RuntimeLimits {
-    fn default() -> Self {
-        Self {
-            max_source_len: DEFAULT_MAX_SOURCE_LEN,
-            max_statements: DEFAULT_MAX_STATEMENTS,
-            max_expression_depth: DEFAULT_MAX_EXPRESSION_DEPTH,
-            max_runtime_steps: DEFAULT_MAX_RUNTIME_STEPS,
-            max_string_len: DEFAULT_MAX_STRING_LEN,
-            max_bindings: DEFAULT_MAX_BINDINGS,
-            max_objects: DEFAULT_MAX_OBJECTS,
-            max_object_properties: DEFAULT_MAX_OBJECT_PROPERTIES,
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct Runtime {
@@ -318,7 +285,15 @@ impl Context {
                 property,
                 expr,
             } => self.eval_property_assignment(object, property, expr),
+            Expr::ComputedPropertyAssignment {
+                object,
+                property,
+                expr,
+            } => self.eval_computed_property_assignment(object, property, expr),
             Expr::Member { object, property } => self.eval_member(object, property),
+            Expr::ComputedMember { object, property } => {
+                self.eval_computed_member(object, property)
+            }
             Expr::Call { callee, args } => self.eval_call(callee, args),
             Expr::Function { params, body } => Ok(self.create_function(params, body)),
             Expr::Object(properties) => self.eval_object_literal(properties),
@@ -326,7 +301,7 @@ impl Context {
         }
     }
 
-    fn eval_object_literal(&mut self, properties: &[crate::ast::ObjectProperty]) -> Result<Value> {
+    fn eval_object_literal(&mut self, properties: &[ObjectProperty]) -> Result<Value> {
         let mut values = Vec::new();
         for property in properties {
             let value = self.eval_expr(&property.value)?;
@@ -529,14 +504,13 @@ impl Context {
 
     fn eval_member(&mut self, object: &Expr, property: &str) -> Result<Value> {
         let object = self.eval_expr(object)?;
-        match object {
-            Value::Error(error) => self.checked_value(error_property(&error, property)),
-            Value::Object(id) => self.objects.get(id, property),
-            value => Err(Error::runtime(format!(
-                "member access '{property}' is not supported for {}",
-                value.type_name()
-            ))),
-        }
+        self.checked_value(get_property(&self.objects, &object, property)?)
+    }
+
+    fn eval_computed_member(&mut self, object: &Expr, property: &Expr) -> Result<Value> {
+        let object = self.eval_expr(object)?;
+        let property = self.eval_property_key(property)?;
+        self.checked_value(get_property(&self.objects, &object, &property)?)
     }
 
     fn eval_property_assignment(
@@ -548,19 +522,41 @@ impl Context {
         let object = self.eval_expr(object)?;
         let value = self.eval_expr(expr)?;
         self.checked_value(value.clone())?;
-        let Value::Object(id) = object else {
-            return Err(Error::runtime(format!(
-                "property assignment '{property}' is not supported for {}",
-                object.type_name()
-            )));
-        };
-        self.objects.set(
-            id,
+        set_property(
+            &mut self.objects,
+            &object,
             property.to_owned(),
             value.clone(),
             self.limits.max_object_properties,
         )?;
         Ok(value)
+    }
+
+    fn eval_computed_property_assignment(
+        &mut self,
+        object: &Expr,
+        property: &Expr,
+        expr: &Expr,
+    ) -> Result<Value> {
+        let object = self.eval_expr(object)?;
+        let property = self.eval_property_key(property)?;
+        let value = self.eval_expr(expr)?;
+        self.checked_value(value.clone())?;
+        set_property(
+            &mut self.objects,
+            &object,
+            property,
+            value.clone(),
+            self.limits.max_object_properties,
+        )?;
+        Ok(value)
+    }
+
+    fn eval_property_key(&mut self, property: &Expr) -> Result<String> {
+        let value = self.eval_expr(property)?;
+        let key = property_key(&value);
+        self.check_string_len(&key)?;
+        Ok(key)
     }
 
     fn eval_print_call(&mut self, args: &[Expr]) -> Result<Value> {

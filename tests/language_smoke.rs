@@ -382,6 +382,65 @@ fn supports_object_literals_and_properties() -> TestResult {
 }
 
 #[test]
+fn supports_computed_properties() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let camera = {
+            name: "front-door",
+            count: 40,
+            nested: { value: 2 },
+        };
+        let key = "count";
+        let assigned = camera[key] = camera[key] + camera["nested"].value;
+        camera[1] = assigned;
+        camera[true] = camera["1"];
+        print(camera["name"], camera["missing"]);
+        assigned + camera[true] - 42
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(context.output(), &["front-door undefined".to_owned()])?;
+
+    expect_value(
+        r#"
+        let order = "";
+        let object = {};
+        let key = function() {
+            order = order + "k";
+            return "value";
+        };
+        let payload = function() {
+            order = order + "v";
+            return 42;
+        };
+        object[key()] = payload();
+        order + ":" + object.value
+        "#,
+        &Value::String("kv:42".to_owned()),
+    )?;
+
+    expect_value(
+        r#"
+        try {
+            missing = missing;
+        } catch (error) {
+            error["name"] + ":" + error["message"]
+        }
+        "#,
+        &Value::String("ReferenceError:'missing' is not defined".to_owned()),
+    )?;
+
+    let Err(error) = eval("let value = 1; value['name'] = 2;") else {
+        return Err("expected computed property assignment on non-object to fail".into());
+    };
+    ensure_error_contains(&error, "property assignment")
+}
+
+#[test]
 fn supports_assert_throws_and_reference_errors() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

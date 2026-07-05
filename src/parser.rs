@@ -1,7 +1,7 @@
 use crate::ast::{BinaryOp, DeclKind, Expr, ObjectProperty, Program, Stmt, UnaryOp};
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
-use crate::runtime::RuntimeLimits;
+use crate::runtime_limits::RuntimeLimits;
 use crate::value::Value;
 
 pub fn parse(tokens: Vec<Token>, limits: RuntimeLimits) -> Result<Program> {
@@ -191,6 +191,11 @@ impl Parser {
                     property,
                     expr: Box::new(value),
                 }),
+                Expr::ComputedMember { object, property } => Ok(Expr::ComputedPropertyAssignment {
+                    object,
+                    property,
+                    expr: Box::new(value),
+                }),
                 _ => Err(Error::parse("invalid assignment target", offset)),
             };
         }
@@ -320,6 +325,19 @@ impl Parser {
                 expr = Expr::Member {
                     object: Box::new(expr),
                     property,
+                };
+                continue;
+            }
+
+            if self.match_kind(&TokenKind::LBracket) {
+                let property = self.expression()?;
+                self.consume(
+                    &TokenKind::RBracket,
+                    "expected ']' after property expression",
+                )?;
+                expr = Expr::ComputedMember {
+                    object: Box::new(expr),
+                    property: Box::new(property),
                 };
                 continue;
             }
