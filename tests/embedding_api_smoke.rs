@@ -215,6 +215,44 @@ fn preserves_binding_slot_updates_and_shadowing() -> TestResult {
 }
 
 #[test]
+fn exposes_vm_level_embedding_helpers() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    vm.register_host_function_typed("cameraLabel", |call| {
+        let name: &str = call.argument(0, "name")?;
+        Ok(format!("camera:{name}"))
+    })?;
+    vm.register_host_function("legacyAdd", |call| {
+        let left = call.number(0, "left")?;
+        let right = call.number(1, "right")?;
+        Ok(Value::Number(left + right))
+    })?;
+
+    let camera = vm.eval(
+        r#"
+        let camera = cameraLabel("front");
+        print(camera);
+        camera
+        "#,
+    )?;
+    ensure_value(&camera, &Value::String("camera:front".to_owned()))?;
+    ensure_optional_value(
+        vm.get_global("camera").as_ref(),
+        &Value::String("camera:front".to_owned()),
+    )?;
+
+    let script = vm.compile("legacyAdd(20, 22)")?;
+    let sum = vm.eval_compiled(&script)?;
+    ensure_value(&sum, &Value::Number(42.0))?;
+    ensure_output(vm.output(), &["camera:front".to_owned()])?;
+
+    let output = vm.take_output();
+    ensure_output(&output, &["camera:front".to_owned()])?;
+    ensure_output(vm.output(), &[])
+}
+
+#[test]
 fn evaluates_compiled_script_repeatedly_in_one_vm() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
