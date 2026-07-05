@@ -497,8 +497,9 @@ fn render_report(report: &FullReport) -> String {
     sections.push("## Benchmarks".to_owned());
     sections.push(String::new());
     sections.push(format!(
-        "- Measured: {}\n- Failed: {}\n- Skipped reference: {}\n- Over latency budget ({}): {}\n- Over memory budget ({}): {}",
+        "- CLI measured: {}\n- In-process measured: {}\n- Failed: {}\n- Skipped reference: {}\n- Over latency budget ({}): {}\n- Over memory budget ({}): {}",
         report.benchmarks.measured,
+        report.benchmarks.in_process_measured,
         report.benchmarks.failed,
         report.benchmarks.skipped,
         benchmarks::BUDGET_LABEL,
