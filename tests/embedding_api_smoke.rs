@@ -225,6 +225,47 @@ fn tracks_atoms_for_object_property_keys_without_interning_missing_properties() 
 }
 
 #[test]
+fn tracks_atoms_for_function_property_keys_without_interning_missing_properties() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let value = vm
+        .context()
+        .eval("let local = function local() {}; let abs = Math.abs;")?;
+    ensure_value(&value, &Value::Undefined)?;
+    let function_atoms = vm.resource_usage().atom_count;
+
+    let value = vm.context().eval("local.missing; abs.missing")?;
+    ensure_value(&value, &Value::Undefined)?;
+    ensure_usize(vm.resource_usage().atom_count, function_atoms)?;
+
+    let value = vm.context().eval(
+        r#"
+        local.custom = 1;
+        abs.nativeCustom = 2;
+        let localKeys = "";
+        for (let key in local) {
+            localKeys = localKeys + key + ":";
+        }
+        let nativeKeys = "";
+        for (let key in abs) {
+            nativeKeys = nativeKeys + key + ":";
+        }
+        localKeys + "|" + nativeKeys + "|" + local.custom + ":" + abs.nativeCustom
+        "#,
+    )?;
+    ensure_value(
+        &value,
+        &Value::String("custom:|nativeCustom:|1:2".to_owned()),
+    )?;
+    ensure_greater_than(
+        vm.resource_usage().atom_count,
+        function_atoms,
+        "function property atoms",
+    )
+}
+
+#[test]
 fn preserves_binding_slot_updates_and_shadowing() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();

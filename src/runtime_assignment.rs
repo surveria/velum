@@ -18,7 +18,7 @@ impl Context {
     ) -> Result<Value> {
         let object = self.eval_expr(object)?;
         let value = self.eval_expr(expr)?;
-        self.set_property_value(&object, property.to_owned(), value.clone())?;
+        self.set_property_value(&object, property, value.clone())?;
         Ok(value)
     }
 
@@ -31,7 +31,7 @@ impl Context {
         let object = self.eval_expr(object)?;
         let property = self.eval_property_key(property)?;
         let value = self.eval_expr(expr)?;
-        self.set_property_value(&object, property, value.clone())?;
+        self.set_property_value(&object, &property, value.clone())?;
         Ok(value)
     }
 
@@ -83,7 +83,7 @@ impl Context {
         let old_value = self.get_property_value(object, property)?;
         let right = self.eval_expr(expr)?;
         let value = self.eval_compound_value(op, &old_value, &right)?;
-        self.set_property_value(object, property.to_owned(), value.clone())?;
+        self.set_property_value(object, property, value.clone())?;
         Ok(value)
     }
 

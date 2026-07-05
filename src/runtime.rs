@@ -29,6 +29,8 @@ mod runtime_declaration;
 mod runtime_function;
 #[path = "runtime_function_intrinsic.rs"]
 mod runtime_function_intrinsic;
+#[path = "runtime_function_properties.rs"]
+mod runtime_function_properties;
 #[path = "runtime_native.rs"]
 mod runtime_native;
 
@@ -58,7 +60,7 @@ struct Function {
     params: Rc<[String]>,
     body: Rc<[Stmt]>,
     captures: Vec<BindingScope>,
-    properties: runtime_function::FunctionProperties,
+    properties: runtime_function_properties::FunctionProperties,
     constructable: bool,
 }
 
@@ -511,7 +513,7 @@ impl Context {
     pub(crate) fn set_property_value(
         &mut self,
         object: &Value,
-        property: String,
+        property: &str,
         value: Value,
     ) -> Result<()> {
         self.checked_value(value.clone())?;
@@ -521,12 +523,12 @@ impl Context {
         if let Value::NativeFunction(id) = object {
             return self.set_native_function_property(*id, property, value);
         }
-        let key = self.intern_property_key(&property)?;
+        let key = self.intern_property_key(property)?;
         set_property(
             &mut self.objects,
             object,
             key,
-            &property,
+            property,
             value,
             self.limits.max_object_properties,
         )

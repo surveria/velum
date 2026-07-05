@@ -7,7 +7,7 @@ use crate::{
     value::{ErrorName, ErrorObject, NativeFunctionId, Value},
 };
 
-use super::runtime_function::FunctionProperties;
+use super::runtime_function_properties::FunctionProperties;
 
 #[path = "runtime_native_array.rs"]
 mod runtime_native_array;
