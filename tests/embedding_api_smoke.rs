@@ -357,6 +357,43 @@ fn preserves_binding_slot_updates_and_shadowing() -> TestResult {
 }
 
 #[test]
+fn preserves_out_of_order_binding_lookup_with_vector_index() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let value = vm.context().eval(
+        r"
+        let zeta = 1;
+        let alpha = 2;
+        let middle = 3;
+        zeta = zeta + alpha;
+        {
+            let alpha = 10;
+            middle = middle + alpha;
+        }
+        let sum = function(right, left) {
+            return left + right;
+        };
+        sum(zeta, middle)
+        ",
+    )?;
+
+    ensure_value(&value, &Value::Number(16.0))?;
+    ensure_optional_value(
+        vm.context().get_global("zeta").as_ref(),
+        &Value::Number(3.0),
+    )?;
+    ensure_optional_value(
+        vm.context().get_global("alpha").as_ref(),
+        &Value::Number(2.0),
+    )?;
+    ensure_optional_value(
+        vm.context().get_global("middle").as_ref(),
+        &Value::Number(13.0),
+    )
+}
+
+#[test]
 fn exposes_vm_level_embedding_helpers() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
