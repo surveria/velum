@@ -336,6 +336,7 @@ impl Parser {
             .expression_depth
             .checked_add(1)
             .ok_or_else(|| Error::limit("expression nesting overflowed"))?;
+        self.max_expression_depth = self.max_expression_depth.max(self.expression_depth);
         if self.expression_depth > self.limits.max_expression_depth {
             self.expression_depth = self.expression_depth.saturating_sub(1);
             return Err(Error::limit(format!(

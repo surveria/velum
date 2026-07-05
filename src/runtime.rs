@@ -1,10 +1,9 @@
 use std::rc::Rc;
 
 use crate::ast::{BinaryOp, Expr, ObjectProperty, Program, Stmt};
+use crate::compiled_script::CompiledScript;
 use crate::error::{Error, Result};
 use crate::host::HostFunction;
-use crate::lexer;
-use crate::parser;
 use crate::runtime_assertions::{
     expected_error_name, is_assert_throws_call, reference_error_undefined, runtime_exception_value,
     thrown_value_matches,
@@ -78,10 +77,21 @@ impl Context {
     /// # Errors
     /// Fails when lexing, parsing, evaluation, or configured resource limits fail.
     pub fn eval(&mut self, source: &str) -> Result<Value> {
-        self.check_source(source)?;
-        let tokens = lexer::lex(source)?;
-        let program = parser::parse(tokens, self.limits)?;
-        self.eval_program(&program)
+        let script = self.compile(source)?;
+        self.eval_compiled(&script)
+    }
+
+    /// # Errors
+    /// Fails when lexing, parsing, or configured compile-time resource limits fail.
+    pub fn compile(&self, source: &str) -> Result<CompiledScript> {
+        CompiledScript::compile(source, self.limits)
+    }
+
+    /// # Errors
+    /// Fails when the compiled script exceeds this context's limits or evaluation fails.
+    pub fn eval_compiled(&mut self, script: &CompiledScript) -> Result<Value> {
+        script.ensure_within_limits(self.limits)?;
+        self.eval_program(script.program())
     }
 
     #[must_use]
@@ -106,17 +116,6 @@ impl Context {
 
     pub(crate) fn global_binding_count(&self) -> usize {
         self.globals.len()
-    }
-
-    fn check_source(&self, source: &str) -> Result<()> {
-        if source.len() > self.limits.max_source_len {
-            return Err(Error::limit(format!(
-                "source length {} exceeded {}",
-                source.len(),
-                self.limits.max_source_len
-            )));
-        }
-        Ok(())
     }
 
     fn eval_program(&mut self, program: &Program) -> Result<Value> {

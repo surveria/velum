@@ -1,3 +1,5 @@
+use crate::compiled_script::CompiledScript;
+use crate::error::Result;
 use crate::runtime::Context;
 use crate::runtime_limits::RuntimeLimits;
 
@@ -96,6 +98,18 @@ impl Vm {
     #[must_use]
     pub const fn context(&mut self) -> &mut Context {
         &mut self.context
+    }
+
+    /// # Errors
+    /// Fails when lexing, parsing, or configured compile-time resource limits fail.
+    pub fn compile(&self, source: &str) -> Result<CompiledScript> {
+        self.context.compile(source)
+    }
+
+    /// # Errors
+    /// Fails when the compiled script exceeds this VM's limits or evaluation fails.
+    pub fn eval_compiled(&mut self, script: &CompiledScript) -> Result<crate::Value> {
+        self.context.eval_compiled(script)
     }
 
     #[must_use]

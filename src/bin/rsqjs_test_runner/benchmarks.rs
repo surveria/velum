@@ -56,6 +56,8 @@ pub struct BenchmarkRow {
     source: String,
     iterations: usize,
     rsqjs_in_process_avg: String,
+    rsqjs_compile_avg: String,
+    rsqjs_compiled_eval_avg: String,
     rsqjs_cli_avg: String,
     quickjs_cli_avg: String,
     latency_ratio: String,
@@ -81,6 +83,13 @@ struct BenchmarkCounts {
     skipped: usize,
     over_latency_budget: usize,
     over_memory_budget: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct InProcessMeasurements {
+    cold_eval: Duration,
+    compile: Duration,
+    compiled_eval: Duration,
 }
 
 #[derive(Debug, Clone)]
@@ -132,7 +141,7 @@ fn run_benchmark_case(
     engine: Option<&Path>,
 ) -> BenchmarkOutcome {
     let in_process = match measure_in_process(case.path, BENCH_ITERATIONS) {
-        Ok(duration) => duration,
+        Ok(measurements) => measurements,
         Err(error) => return failed_outcome(case, &error.to_string()),
     };
 
@@ -151,7 +160,7 @@ fn benchmark_with_ours(
     quickjs: Option<&Path>,
     engine: &Path,
     ours: Duration,
-    in_process: Duration,
+    in_process: InProcessMeasurements,
 ) -> BenchmarkOutcome {
     let ours_memory = measure_peak_rss(engine, case.path, "rsqjs", case.id);
     let Some(quickjs) = quickjs else {
@@ -179,7 +188,7 @@ fn benchmark_with_ours(
 fn measured_without_reference(
     case: &BenchmarkCase,
     ours: Duration,
-    in_process: Duration,
+    in_process: InProcessMeasurements,
     ours_memory: &MemoryMeasurement,
 ) -> BenchmarkOutcome {
     BenchmarkOutcome {
@@ -188,7 +197,9 @@ fn measured_without_reference(
             status: STATUS_MEASURED.to_owned(),
             source: case.path.to_owned(),
             iterations: BENCH_ITERATIONS,
-            rsqjs_in_process_avg: format_duration(in_process),
+            rsqjs_in_process_avg: format_duration(in_process.cold_eval),
+            rsqjs_compile_avg: format_duration(in_process.compile),
+            rsqjs_compiled_eval_avg: format_duration(in_process.compiled_eval),
             rsqjs_cli_avg: format_duration(ours),
             quickjs_cli_avg: STATUS_NOT_CONFIGURED.to_owned(),
             latency_ratio: "-".to_owned(),
@@ -211,7 +222,7 @@ fn measured_without_reference(
 fn measured_with_reference(
     case: &BenchmarkCase,
     ours: Duration,
-    in_process: Duration,
+    in_process: InProcessMeasurements,
     quickjs: Duration,
     ours_memory: &MemoryMeasurement,
     quickjs_memory: &MemoryMeasurement,
@@ -228,7 +239,9 @@ fn measured_with_reference(
             status: benchmark_status(over_latency_budget, over_memory_budget).to_owned(),
             source: case.path.to_owned(),
             iterations: BENCH_ITERATIONS,
-            rsqjs_in_process_avg: format_duration(in_process),
+            rsqjs_in_process_avg: format_duration(in_process.cold_eval),
+            rsqjs_compile_avg: format_duration(in_process.compile),
+            rsqjs_compiled_eval_avg: format_duration(in_process.compiled_eval),
             rsqjs_cli_avg: format_duration(ours),
             quickjs_cli_avg: format_duration(quickjs),
             latency_ratio: ratio_values(ours.as_nanos(), quickjs.as_nanos()),
@@ -257,6 +270,8 @@ fn failed_outcome(case: &BenchmarkCase, detail: &str) -> BenchmarkOutcome {
             source: case.path.to_owned(),
             iterations: BENCH_ITERATIONS,
             rsqjs_in_process_avg: "-".to_owned(),
+            rsqjs_compile_avg: "-".to_owned(),
+            rsqjs_compiled_eval_avg: "-".to_owned(),
             rsqjs_cli_avg: STATUS_FAILED.to_owned(),
             quickjs_cli_avg: "-".to_owned(),
             latency_ratio: "-".to_owned(),
@@ -276,7 +291,7 @@ fn failed_outcome(case: &BenchmarkCase, detail: &str) -> BenchmarkOutcome {
 
 fn failed_outcome_with_in_process(
     case: &BenchmarkCase,
-    in_process: Duration,
+    in_process: InProcessMeasurements,
     detail: &str,
 ) -> BenchmarkOutcome {
     BenchmarkOutcome {
@@ -285,7 +300,9 @@ fn failed_outcome_with_in_process(
             status: STATUS_FAILED.to_owned(),
             source: case.path.to_owned(),
             iterations: BENCH_ITERATIONS,
-            rsqjs_in_process_avg: format_duration(in_process),
+            rsqjs_in_process_avg: format_duration(in_process.cold_eval),
+            rsqjs_compile_avg: format_duration(in_process.compile),
+            rsqjs_compiled_eval_avg: format_duration(in_process.compiled_eval),
             rsqjs_cli_avg: STATUS_FAILED.to_owned(),
             quickjs_cli_avg: "-".to_owned(),
             latency_ratio: "-".to_owned(),
@@ -307,7 +324,7 @@ fn failed_outcome_with_in_process(
 fn failed_outcome_with_ours(
     case: &BenchmarkCase,
     ours: Duration,
-    in_process: Duration,
+    in_process: InProcessMeasurements,
     ours_memory: &MemoryMeasurement,
     detail: &str,
 ) -> BenchmarkOutcome {
@@ -317,7 +334,9 @@ fn failed_outcome_with_ours(
             status: STATUS_FAILED.to_owned(),
             source: case.path.to_owned(),
             iterations: BENCH_ITERATIONS,
-            rsqjs_in_process_avg: format_duration(in_process),
+            rsqjs_in_process_avg: format_duration(in_process.cold_eval),
+            rsqjs_compile_avg: format_duration(in_process.compile),
+            rsqjs_compiled_eval_avg: format_duration(in_process.compiled_eval),
             rsqjs_cli_avg: format_duration(ours),
             quickjs_cli_avg: STATUS_FAILED.to_owned(),
             latency_ratio: "-".to_owned(),
@@ -336,13 +355,25 @@ fn failed_outcome_with_ours(
     }
 }
 
-fn measure_in_process(path: &str, iterations: usize) -> anyhow::Result<Duration> {
+fn measure_in_process(path: &str, iterations: usize) -> anyhow::Result<InProcessMeasurements> {
     let source = fs::read_to_string(path)
         .with_context(|| format!("failed to read in-process benchmark source '{path}'"))?;
     measure_in_process_source(&source, iterations, path)
 }
 
 fn measure_in_process_source(
+    source: &str,
+    iterations: usize,
+    label: &str,
+) -> anyhow::Result<InProcessMeasurements> {
+    Ok(InProcessMeasurements {
+        cold_eval: measure_cold_eval_source(source, iterations, label)?,
+        compile: measure_compile_source(source, iterations, label)?,
+        compiled_eval: measure_compiled_eval_source(source, iterations, label)?,
+    })
+}
+
+fn measure_cold_eval_source(
     source: &str,
     iterations: usize,
     label: &str,
@@ -354,6 +385,43 @@ fn measure_in_process_source(
         let value = context
             .eval(source)
             .with_context(|| format!("in-process benchmark '{label}' failed"))?;
+        black_box(value);
+        black_box(context.output().len());
+    }
+    avg_duration(start.elapsed(), iterations)
+}
+
+fn measure_compile_source(
+    source: &str,
+    iterations: usize,
+    label: &str,
+) -> anyhow::Result<Duration> {
+    let runtime = Runtime::new();
+    let start = Instant::now();
+    for _ in 0..iterations {
+        let script = runtime
+            .compile(source)
+            .with_context(|| format!("compile benchmark '{label}' failed"))?;
+        black_box(script.usage());
+    }
+    avg_duration(start.elapsed(), iterations)
+}
+
+fn measure_compiled_eval_source(
+    source: &str,
+    iterations: usize,
+    label: &str,
+) -> anyhow::Result<Duration> {
+    let runtime = Runtime::new();
+    let script = runtime
+        .compile(source)
+        .with_context(|| format!("compile step for compiled-eval benchmark '{label}' failed"))?;
+    let start = Instant::now();
+    for _ in 0..iterations {
+        let mut context = runtime.context();
+        let value = context
+            .eval_compiled(&script)
+            .with_context(|| format!("compiled-eval benchmark '{label}' failed"))?;
         black_box(value);
         black_box(context.output().len());
     }
@@ -676,10 +744,18 @@ mod tests {
 
     #[test]
     fn measures_in_process_source() -> TestResult {
-        let duration = measure_in_process_source("let value = 40 + 2; value", 1, "unit-test")?;
+        let measurements = measure_in_process_source("let value = 40 + 2; value", 1, "unit-test")?;
         ensure_bool(
-            duration <= Duration::from_secs(1),
-            "in-process source should finish quickly",
+            measurements.cold_eval <= Duration::from_secs(1),
+            "in-process cold eval should finish quickly",
+        )?;
+        ensure_bool(
+            measurements.compile <= Duration::from_secs(1),
+            "in-process compile should finish quickly",
+        )?;
+        ensure_bool(
+            measurements.compiled_eval <= Duration::from_secs(1),
+            "in-process compiled eval should finish quickly",
         )
     }
 

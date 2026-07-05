@@ -77,6 +77,8 @@ const PATH_BENCH_ERROR_OBJECT_PROPERTIES: &str =
     "tests/corpora/benchmarks/active/error_object_properties.js";
 const PATH_BENCH_STANDARD_ERROR_CONSTRUCTORS: &str =
     "tests/corpora/benchmarks/active/standard_error_constructors.js";
+const PATH_BENCH_COMPILED_SCRIPT_REUSE: &str =
+    "tests/corpora/benchmarks/active/compiled_script_reuse.js";
 
 pub fn benchmark_cases() -> Vec<BenchmarkCase> {
     let mut cases = benchmark_control_flow_cases();
@@ -302,6 +304,10 @@ fn benchmark_runtime_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "standard_error_constructors",
             path: PATH_BENCH_STANDARD_ERROR_CONSTRUCTORS,
+        },
+        BenchmarkCase {
+            id: "compiled_script_reuse",
+            path: PATH_BENCH_COMPILED_SCRIPT_REUSE,
         },
     ]
 }
