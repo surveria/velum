@@ -7,6 +7,8 @@ use crate::lexer::{Token, TokenKind};
 use crate::runtime_limits::RuntimeLimits;
 use crate::value::Value;
 
+const THIS_PROPERTY_NAME: &str = "this";
+
 #[path = "parser_assignment.rs"]
 mod parser_assignment;
 #[path = "parser_binary.rs"]
@@ -468,7 +470,7 @@ impl Parser {
         let mut expr = self.primary()?;
         loop {
             if self.match_kind(&TokenKind::Dot) {
-                let property = self.consume_identifier("expected property name after '.'")?;
+                let property = self.consume_property_name("expected property name after '.'")?;
                 expr = Expr::Member {
                     object: Box::new(expr),
                     property,
@@ -550,6 +552,7 @@ impl Parser {
             TokenKind::False => Expr::Literal(Value::Bool(false)),
             TokenKind::Null => Expr::Literal(Value::Null),
             TokenKind::Undefined => Expr::Literal(Value::Undefined),
+            TokenKind::This => Expr::This,
             TokenKind::Identifier(name) => Expr::Identifier(name),
             TokenKind::Function => self.function_expression()?,
             TokenKind::LBrace => self.object_literal()?,
@@ -613,6 +616,7 @@ impl Parser {
             .ok_or_else(|| Error::parse("expected object property name", self.offset()))?;
         match token.kind {
             TokenKind::Identifier(name) | TokenKind::String(name) => Ok(name),
+            TokenKind::This => Ok(THIS_PROPERTY_NAME.to_owned()),
             _ => Err(Error::parse("expected object property name", token.offset)),
         }
     }
@@ -674,6 +678,17 @@ impl Parser {
             .ok_or_else(|| Error::parse(message, self.offset()))?;
         match token.kind {
             TokenKind::Identifier(name) => Ok(name),
+            _ => Err(Error::parse(message, token.offset)),
+        }
+    }
+
+    fn consume_property_name(&mut self, message: &str) -> Result<String> {
+        let token = self
+            .advance()
+            .ok_or_else(|| Error::parse(message, self.offset()))?;
+        match token.kind {
+            TokenKind::Identifier(name) => Ok(name),
+            TokenKind::This => Ok(THIS_PROPERTY_NAME.to_owned()),
             _ => Err(Error::parse(message, token.offset)),
         }
     }

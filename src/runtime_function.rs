@@ -37,8 +37,17 @@ impl Context {
     }
 
     pub(crate) fn eval_function(&mut self, id: FunctionId, args: &[Expr]) -> Result<Value> {
+        self.eval_function_with_this(id, args, Value::Undefined)
+    }
+
+    pub(crate) fn eval_function_with_this(
+        &mut self,
+        id: FunctionId,
+        args: &[Expr],
+        this_value: Value,
+    ) -> Result<Value> {
         let value = self
-            .eval_function_completion(id, args)?
+            .eval_function_completion_with_this(id, args, this_value)?
             .into_function_result()?;
         self.checked_value(value)
     }
@@ -47,6 +56,15 @@ impl Context {
         &mut self,
         id: FunctionId,
         args: &[Expr],
+    ) -> Result<Completion> {
+        self.eval_function_completion_with_this(id, args, Value::Undefined)
+    }
+
+    pub(crate) fn eval_function_completion_with_this(
+        &mut self,
+        id: FunctionId,
+        args: &[Expr],
+        this_value: Value,
     ) -> Result<Completion> {
         let function = self.function(id)?.clone();
         let args = self.eval_args(args)?;
@@ -59,11 +77,16 @@ impl Context {
             }
         };
         self.locals.push(scope);
+        self.this_values.push(this_value);
         let result = self
             .hoist_var_declarations(&function.body)
             .and_then(|()| self.eval_block(&function.body));
+        let removed_this = self.this_values.pop();
         let removed = self.locals.pop();
         self.locals = caller_locals;
+        if removed_this.is_none() {
+            return Err(Error::runtime("function this binding disappeared"));
+        }
         if removed.is_none() {
             return Err(Error::runtime("function scope disappeared"));
         }
