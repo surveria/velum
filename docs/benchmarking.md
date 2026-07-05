@@ -7,10 +7,16 @@ The target is not to beat desktop JIT engines. The target is to stay close to Qu
 Track these against QuickJS on every supported device class:
 
 - hello-world resident memory
-- runtime creation and teardown latency
+- engine, VM, and context creation and teardown latency
 - cold eval latency
+- parse-only latency
+- eval of a precompiled script
 - arithmetic loops
 - object and array allocation
+- property lookup
+- function calls
+- synchronous host callbacks
+- asynchronous host callbacks once the promise/job model exists
 - string concatenation
 - JSON parse and stringify when implemented
 - selected `bench-v8` cases when coverage is sufficient
@@ -25,24 +31,37 @@ Track these against QuickJS on every supported device class:
 
 Set `RSQJS_QUICKJS_AUTO_SETUP=0` to disable automatic download and build. In that mode, differential checks and QuickJS benchmark columns are reported as skipped unless `RSQJS_QUICKJS` or `qjs` is available.
 
-The standard test script builds `target/release/rsqjs` and exposes it to the runner through `RSQJS_ENGINE`. Benchmark rows compare the release `rsqjs` CLI with the QuickJS `qjs` CLI sequentially.
+The standard test script builds `target/release/rsqjs` and exposes it to the runner through `RSQJS_ENGINE`. Current benchmark rows compare the release `rsqjs` CLI with the QuickJS `qjs` CLI sequentially.
+
+CLI benchmarks are useful integration smoke tests, but they include process startup and argument handling. Optimization decisions should be based on in-process library benchmarks that separate parser, compiler, VM execution, host callback, and teardown costs.
 
 ## Test262 Reference
 
-`scripts/test-all.sh` also prepares a pinned subset of the official Test262 corpus before running the Rust test runner. The setup order is:
+`scripts/test-all.sh` also prepares a pinned checkout of the official Test262 corpus before running the Rust test runner. The setup order is:
 
 1. use `RSQJS_TEST262_DIR` when it points to a directory;
-2. download the files listed in `tests/corpora/test262/manifest.tsv` from Test262 commit `64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1` into `target/test262`.
+2. materialize Test262 commit `64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1` under `target/test262`.
 
-Set `RSQJS_TEST262_AUTO_SETUP=0` to disable automatic materialization. In that mode, upstream manifest rows that need source files are reported as skipped.
+Set `RSQJS_TEST262_AUTO_SETUP=0` to disable automatic materialization. In that mode, upstream rows that need source files are reported as skipped.
 
-## Initial Targets
+## Performance Targets
 
-- hello-world memory: within roughly 2x QuickJS on ARM Linux devices
-- startup latency: within roughly 2x QuickJS for small scripts
+- implemented benchmark cases should run within 1.10x of QuickJS on the same device class
+- hello-world resident memory should stay within 1.10x of QuickJS once memory measurement is available
+- VM creation and teardown latency should stay within 1.10x of QuickJS once in-process measurements are available
 - no unbounded allocations without a runtime limit path
 
-These targets are directional until a repeatable benchmark harness exists in the repository.
+The 1.10x budget applies to features that are implemented locally and have comparable QuickJS behavior. A slower result is allowed only when the report marks it as a tracked exception with the suspected cause, affected benchmark, and follow-up work.
+
+Memory reporting should track both peak resident memory and engine-owned heap counters where available. The first implementation can use process-level measurements for CLI parity, but the long-term target is VM-level accounting exposed through the library API.
+
+## Coverage Expectations
+
+- Every implemented feature should have project-specific engine tests.
+- Every implemented feature with relevant ECMAScript semantics should be represented in Test262 reporting.
+- Every performance-sensitive feature should have a benchmark case.
+- Benchmark cases should compare rs-quickjs and QuickJS whenever QuickJS supports the same behavior.
+- Embedding features need benchmarks for both direct Rust API use and CLI smoke coverage when applicable.
 
 ## Measurement Rules
 
@@ -51,3 +70,5 @@ These targets are directional until a repeatable benchmark harness exists in the
 - Report both median and tail latency.
 - Separate parser, compiler, VM, and host callback costs where possible.
 - Compare release builds only.
+- Run benchmark cases sequentially.
+- Report memory alongside latency once memory measurement is implemented.

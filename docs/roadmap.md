@@ -14,27 +14,39 @@
 - Add objects, arrays, property lookup, and prototypes.
 - Add a minimal standard library surface needed by embedding use cases.
 - Start differential tests against QuickJS for every implemented feature.
+- Add project-specific engine tests for every implemented behavior, including resource-limit and embedding edge cases that Test262 does not cover.
+- Add benchmark cases for implemented language and runtime features, with QuickJS comparison wherever the feature exists in QuickJS.
 
-## Phase 2: Compact VM
+## Phase 2: Embedding API
+
+- Define the public library API around isolated virtual machines rather than the CLI runner.
+- Support many independent VM instances in one Rust process without shared mutable JavaScript state.
+- Add a host function registration API for synchronous Rust callbacks.
+- Design the async host callback contract around VM-owned jobs and embedder-owned executors.
+- Add explicit teardown reports, resource usage snapshots, and structured execution events.
+- Keep the API compatible with a future bytecode backend by introducing a `CompiledScript` abstraction before bytecode is required for performance.
+
+## Phase 3: Compact VM
 
 - Introduce bytecode only after the interpreter has enough language coverage to benchmark honestly.
 - Keep opcodes compact and cache-friendly.
 - Measure startup time, bytecode size, peak memory, and steady-state runtime.
 - Keep interpreter fallback tests so bytecode generation has an oracle.
 
-## Phase 3: Garbage Collection
+## Phase 4: Garbage Collection
 
 - Start with a safe ownership model for values and objects.
 - Evaluate reference counting plus cycle collection, mirroring the memory predictability that makes QuickJS attractive.
 - Add hard heap limits and deterministic teardown reporting.
 
-## Phase 4: ECMAScript Coverage
+## Phase 5: ECMAScript Coverage
 
-- Add modules, promises, async functions, generators, regular expressions, typed arrays, and BigInt based on product need.
+- Add promises and the job queue early enough to support async host functions.
+- Add modules, async functions, generators, regular expressions, typed arrays, and BigInt based on product need.
 - Track Test262 pass rate per feature instead of reporting a single misleading total.
 - Keep unsupported features explicit in docs and errors.
 
-## Phase 5: Embedding Extensions
+## Phase 6: Observability Extensions
 
 - Profiling hooks.
 - Structured event logging.
