@@ -33,6 +33,7 @@ const PATH_CONST_ASSIGNMENT: &str = "tests/engine_cases/const_assignment_error.j
 const PATH_SHORT_CIRCUIT: &str = "tests/engine_cases/short_circuit.js";
 const PATH_VAR_HOISTING: &str = "tests/engine_cases/var_hoisting.js";
 const PATH_TRY_CATCH: &str = "tests/engine_cases/try_catch.js";
+const PATH_TRY_FINALLY: &str = "tests/engine_cases/try_finally.js";
 const PATH_CONDITIONAL_BITAND: &str = "tests/engine_cases/conditional_bitand.js";
 const PATH_WHILE_STATEMENTS: &str = "tests/engine_cases/while_statements.js";
 const PATH_BREAK_CONTINUE: &str = "tests/engine_cases/break_continue.js";
@@ -71,6 +72,8 @@ const PATH_TEST262_VAR_HOISTING: &str =
     "tests/corpora/test262/active/language/bindings/var_hoisting.js";
 const PATH_TEST262_TRY_CATCH: &str =
     "tests/corpora/test262/active/language/statements/try_catch.js";
+const PATH_TEST262_TRY_FINALLY: &str =
+    "tests/corpora/test262/active/language/statements/try_finally.js";
 const PATH_TEST262_WHILE: &str = "tests/corpora/test262/active/language/statements/while.js";
 const PATH_TEST262_BREAK_CONTINUE: &str =
     "tests/corpora/test262/active/language/statements/break_continue.js";
@@ -88,6 +91,7 @@ const PATH_QUICKJS_BOOLEAN_CONVERSION: &str =
     "tests/corpora/quickjs_differential/active/boolean_conversion.js";
 const PATH_QUICKJS_VAR_HOISTING: &str = "tests/corpora/quickjs_differential/active/var_hoisting.js";
 const PATH_QUICKJS_TRY_CATCH: &str = "tests/corpora/quickjs_differential/active/try_catch.js";
+const PATH_QUICKJS_TRY_FINALLY: &str = "tests/corpora/quickjs_differential/active/try_finally.js";
 const PATH_QUICKJS_CONDITIONAL_BITAND: &str =
     "tests/corpora/quickjs_differential/active/conditional_bitand.js";
 const PATH_QUICKJS_WHILE_STATEMENTS: &str =
@@ -137,6 +141,7 @@ const PATH_BENCH_STRING: &str = "tests/corpora/benchmarks/active/string_concat.j
 const PATH_BENCH_BOOLEAN: &str = "tests/corpora/benchmarks/active/boolean_conversion.js";
 const PATH_BENCH_VAR_HOISTING: &str = "tests/corpora/benchmarks/active/var_hoisting.js";
 const PATH_BENCH_TRY_CATCH: &str = "tests/corpora/benchmarks/active/try_catch.js";
+const PATH_BENCH_TRY_FINALLY: &str = "tests/corpora/benchmarks/active/try_finally.js";
 const PATH_BENCH_REFERENCE_ERROR_CATCH: &str =
     "tests/corpora/benchmarks/active/reference_error_catch.js";
 const PATH_BENCH_ERROR_OBJECT_PROPERTIES: &str =
@@ -188,6 +193,14 @@ fn engine_language_cases() -> Vec<EngineCase> {
             path: PATH_TRY_CATCH,
             expectation: Expectation::OutputAndValue {
                 output: &["boom"],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "try_finally",
+            path: PATH_TRY_FINALLY,
+            expectation: Expectation::OutputAndValue {
+                output: &["42 finally try 42"],
                 value: "42",
             },
         },
@@ -384,6 +397,11 @@ pub fn test262_cases() -> Vec<EngineCase> {
             expectation: Expectation::Value("42"),
         },
         EngineCase {
+            id: "language/statements/try_finally",
+            path: PATH_TEST262_TRY_FINALLY,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
             id: "language/statements/while",
             path: PATH_TEST262_WHILE,
             expectation: Expectation::Value("42"),
@@ -437,6 +455,10 @@ pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "try_catch",
             path: PATH_QUICKJS_TRY_CATCH,
+        },
+        DifferentialCase {
+            id: "try_finally",
+            path: PATH_QUICKJS_TRY_FINALLY,
         },
         DifferentialCase {
             id: "conditional_bitand",
@@ -566,6 +588,10 @@ pub fn benchmark_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "try_catch",
             path: PATH_BENCH_TRY_CATCH,
+        },
+        BenchmarkCase {
+            id: "try_finally",
+            path: PATH_BENCH_TRY_FINALLY,
         },
         BenchmarkCase {
             id: "reference_error_catch",
