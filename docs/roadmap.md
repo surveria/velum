@@ -28,8 +28,14 @@ The default order for new work is:
    the first JSON tranche;
 5. improve diagnostics, modules, jobs, promises, async host callbacks, resource
    controls, and observability;
-6. pull runtime data model work forward only when it supports the product path
+6. add runtime profiling when it is needed to choose an architecture branch;
+7. pull runtime data model work forward only when it supports the product path
    above or addresses measured performance and memory debt.
+
+Runtime profiling, atomization, slots, shapes, dense arrays, bytecode, inline
+caches, heap compaction, and collection are implementation methods. They are
+important, but they should normally be selected because they unblock the queue
+above or protect a measured latency or memory budget.
 
 ## Phase 0: Repository And Guardrails
 

@@ -174,60 +174,61 @@ or measured performance and memory budgets.
    differential, benchmark, and memory signals. The latest report is the input
    to the next task, not a side artifact.
 
-2. Profile runtime hot paths before broad runtime rewrites.
-   Recent benchmark reports show low compile times on many heavy rows while
-   compiled evaluation remains much larger. Treat arrays, property lookup,
-   prototype traversal, built-in calls, descriptor paths, and binding lookup as
-   the current measured runtime debt. Capture profiles by benchmark group
-   before changing shared data structures.
-
-3. Continue object semantics and practical built-ins.
-   After the first JSON tranche, the next product need is the object property
-   model: data-property attributes, descriptors, own-property queries,
-   prototype behavior, and operations needed by `Object`, `Array`, `Function`,
-   errors, JSON, Date, RegExp, Map, and Set. These branches should improve
-   Test262-visible behavior and add QuickJS differential coverage where
-   reference behavior exists.
-
-4. Grow arrays, functions, and standard errors.
-   Add high-value Array methods, function metadata/callability semantics, and
-   standard error objects in narrow clusters. Pull dense array storage or faster
-   call paths forward only when correctness, resource accounting, or measured
-   hot paths justify it.
-
-5. Pull runtime data-model foundations forward when the profile supports them.
-   The likely order is complete atomization, compiler-assigned slots and
-   upvalues, shape-based object layouts, dense array storage, bytecode dispatch,
-   inline caches, and compact VM-owned heaps. Each step should preserve the
-   library API, VM isolation, direct embedding tests, QuickJS differential
-   coverage, and benchmark reports.
-
-6. Fill core runtime semantics in coherent clusters.
+2. Keep compatibility moving in visible clusters.
    Prioritize syntax, functions, lexical environments, `this`, exceptions,
    equality, prototype behavior, iteration, and coercion when they unlock
    visible Test262 areas, practical built-ins, or embedding API behavior.
 
-7. Tighten the embedding API and documentation.
+3. Continue object, function, and error semantics.
+   The current product need is still the object/function property model:
+   descriptors, own-property queries, prototype behavior, function metadata,
+   standard errors, and operations needed by `Object`, `Array`, `Function`,
+   errors, JSON, Date, RegExp, Map, and Set. These branches should improve
+   Test262-visible behavior and add QuickJS differential coverage where
+   reference behavior exists.
+
+4. Grow arrays and practical built-ins.
+   Add high-value Array methods, function callability semantics, standard error
+   objects, and remaining practical built-ins in narrow clusters. Pull dense
+   array storage or faster call paths forward only when correctness, resource
+   accounting, or measured hot paths justify it.
+
+5. Tighten the embedding API and documentation.
    Keep examples, crate docs, direct API tests, typed host functions,
    multi-VM isolation, resource failures, teardown, compiled-script reuse, and
    output behavior aligned with the actual public API.
 
-8. Improve diagnostics and error classification.
+6. Improve diagnostics and error classification.
    Stabilize syntax, runtime, host callback, and resource-limit errors before
    many more API surfaces depend on ad-hoc messages.
 
-9. Design modules, jobs, promises, and async callbacks.
+7. Design modules, jobs, promises, and async callbacks.
    The VM should own JavaScript jobs. Embedders should own I/O policy, module
    loading policy, cancellation, job draining, and the outer executor.
 
-10. Expand resource control and observability.
+8. Expand resource control and observability.
    Make heap, stack, atom, job, module, host callback, wall-clock cancellation,
    structured events, profiling, and teardown data visible at the library API.
 
-11. Pull runtime foundations forward when they are needed.
-   Compiler-assigned slots, property-key atoms, shapes, dense arrays, indexed
-   heaps, bytecode, inline caches, and GC are foundation work for the product
-   queue above, not isolated speed experiments.
+9. Profile runtime hot paths when architecture work is being selected.
+   Recent benchmark reports show low compile times on many heavy rows while
+   compiled evaluation remains much larger. Treat arrays, property lookup,
+   prototype traversal, built-in calls, descriptor paths, and binding lookup as
+   measured runtime debt, but capture profiles as evidence for a concrete
+   product or compatibility branch rather than as the roadmap by itself.
+
+10. Pull runtime data-model foundations forward when they are needed.
+    Compiler-assigned slots, property-key atoms, shapes, dense arrays, indexed
+    heaps, bytecode, inline caches, and GC are foundation work for the product
+    queue above, not isolated speed experiments. The likely order is complete
+    atomization, compiler-assigned slots and upvalues, shape-based object
+    layouts, dense array storage, bytecode dispatch, inline caches, and compact
+    VM-owned heaps.
+
+11. Add bytecode and heap collection after enough semantics exist.
+    Bytecode should stay behind the `CompiledScript` API. Heap accounting and a
+    safe collection strategy should preserve host callbacks, queued jobs,
+    deterministic teardown, hard limits, and many isolated VMs.
 
 12. Run performance and memory checkpoints continuously.
     Checkpoint branches are allowed when reports show a budget exception, but
@@ -494,8 +495,9 @@ then choose one unchecked row that fits the latest report evidence.
 | [x] | Done | Project-wide sequence refresh | Planning | Make the current plan read as the whole project order instead of an optimization-oriented queue. | Renames the document heading to `Project Development Plan`, adds an explicit plan-scope section, refreshes the current delivery queue after the JSON tranche, and clarifies that the task board is historical plus backlog rather than the priority order. Documentation-only validation passed with `git diff --check`; full CI remains the merge gate. |
 | [x] | Done | Engine case registry split | Testing / maintenance | Keep the engine fixture registry below the project file-size limit before adding more compatibility tranches. | Moves runtime/error/built-in engine fixture registration out of the central `cases.rs` file into `cases_engine_runtime.rs`, reducing `cases.rs` from 789 to 745 lines so future built-in cases can be added without pushing the main registry over 800 lines. Validation passed with `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T184709Z.md` keeps engine fixtures at 57/57, active Test262 at 57/57, full Test262 at 9782/102578, and QuickJS differential at 55/55. Benchmark counts are behavior-equivalent but show normal measurement noise with latency exceptions at 26 and memory exceptions at 2. |
 | [x] | Done | Runtime performance architecture review | Planning / runtime architecture | Incorporate the latest runtime-performance review into the general project plan without turning the plan into an optimization-only backlog. | Records that compile time is no longer the main measured debt for many heavy benchmarks, adds a status matrix for slots, atoms, shapes, inline caches, dense arrays, built-in intrinsics, bytecode quickening, memory layout, and parallel execution, and updates the delivery queue so profiling and runtime data-model work can be pulled forward when reports justify it. Documentation-only validation passed with `git diff --check` and `cargo fmt --all -- --check`; full CI remains the merge gate. |
+| [x] | Done | Whole-project sequence correction | Planning | Keep the canonical plan organized around the whole project order rather than the latest optimization discussion. | Reorders the current delivery queue around compatibility, built-ins, embedding API, diagnostics, async, resources, observability, runtime foundations, and recurring performance checkpoints. Keeps the architecture review details, but makes profiling a supporting evidence step rather than the apparent next mandatory project goal. Documentation-only validation passed with `git diff --check` and `cargo fmt --all -- --check`; full CI remains the merge gate. |
 | [ ] | Backlog | Report triage cadence | Testing / planning | Keep the next work item grounded in the latest Test262, QuickJS differential, benchmark, and memory evidence. | Before selecting each compatibility or architecture tranche, summarize the newest report signals and record why the chosen task is next. |
-| [ ] | Backlog | Runtime hot-path profiling pass | Performance and memory / runtime architecture | Profile benchmark groups before broad runtime data-structure rewrites. | Capture where time is spent in arrays, descriptors, prototype traversal, built-in calls, `in`, `for...in`, binding lookup, and compiled evaluation. Use profiles alongside ratios so architecture branches target measured bottlenecks instead of assumptions. |
+| [ ] | Backlog | Runtime hot-path profiling pass | Performance and memory / runtime architecture | Profile benchmark groups before broad runtime data-structure rewrites. | Use after the next selected product or compatibility branch needs runtime architecture evidence. The current benchmark table shows debt in descriptors, object/prototype traversal, arrays, built-ins, `in`, and compiled evaluation, but profiling is an evidence step for broader work rather than the whole project direction. |
 | [ ] | Backlog | Library API documentation pass | Embedding API / documentation | Keep crate docs, README examples, and direct library tests aligned with the current public API. | Do this whenever API shape changes enough that embedders could be confused by stale examples. |
 | [x] | Done | JSON built-in tranche | Compatibility | Add the first useful `JSON` object surface for embedders and Test262 progress. | Adds `JSON.parse` and `JSON.stringify` for primitives, arrays, and plain objects, including non-enumerable `parse`/`stringify`, function metadata, array omission/null handling, object omission handling, non-finite numbers, and negative zero stringification. Adds direct Rust smoke coverage, engine fixture, active Test262 fixture, six upstream Test262 manifest rows, QuickJS differential coverage, and a benchmark. Validation passed with `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T203225Z.md` raises engine fixtures to 65/65, active Test262 to 63/63, QuickJS differential to 61/61, full Test262 passes from 10371 to 10432, and `built-ins/JSON` to 52/330 passed. The new `json_builtin` benchmark is tracked as a latency and memory exception at `1.60x` and `1.74x`; reviver, replacer, spacing, `toJSON`, raw JSON, SyntaxError typing, property descriptors, and global configurable delete semantics remain follow-up work. |
 | [x] | Done | Object property and descriptor tranche | Compatibility | Improve object semantics that many built-ins and Test262 cases depend on. | Adds data-property attributes, non-configurable delete behavior, non-writable assignment behavior, `Object.getOwnPropertyDescriptor`, `Object.defineProperty`, `Object.keys`, and `Object.hasOwn`, with non-enumerable built-in static methods that do not consume user property limits. Adds direct Rust smoke coverage, engine fixture, active Test262 fixture, five upstream Test262 manifest rows, QuickJS differential coverage, and a benchmark. Validation passed with `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T205739Z.md` raises engine fixtures to 66/66, active Test262 to 64/64, QuickJS differential to 62/62, full Test262 passes from 10432 to 10854, and `built-ins/Object` to 428/6802 passed. The new `object_descriptors` benchmark is tracked as a latency and memory exception at `2.21x` and `1.42x`; accessor descriptors, symbols, freeze/seal/preventExtensions, full global-object descriptors, function-object descriptors, and shape-based layout remain follow-up work. |
