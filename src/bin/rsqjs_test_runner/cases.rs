@@ -38,6 +38,7 @@ pub use cases_test262::test262_cases;
 const PATH_ARITHMETIC: &str = "tests/engine_cases/arithmetic_precedence.js";
 const PATH_HOST_PRINT: &str = "tests/engine_cases/host_print.js";
 const PATH_STRING_ESCAPE_SEQUENCES: &str = "tests/engine_cases/string_escape_sequences.js";
+const PATH_TEMPLATE_LITERALS: &str = "tests/engine_cases/template_literals.js";
 const PATH_CONST_ASSIGNMENT: &str = "tests/engine_cases/const_assignment_error.js";
 const PATH_SHORT_CIRCUIT: &str = "tests/engine_cases/short_circuit.js";
 const PATH_VAR_HOISTING: &str = "tests/engine_cases/var_hoisting.js";
@@ -128,6 +129,11 @@ fn engine_language_cases() -> Vec<EngineCase> {
                 output: &["ABC \"'\\ frontdoor"],
                 value: "42",
             },
+        },
+        EngineCase {
+            id: "template_literals",
+            path: PATH_TEMPLATE_LITERALS,
+            expectation: Expectation::Value("42"),
         },
         EngineCase {
             id: "const_assignment_error",

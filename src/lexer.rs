@@ -1,21 +1,14 @@
-use crate::error::{Error, Result};
-
-const HEX_ESCAPE_DIGITS: usize = 2;
-const UNICODE_ESCAPE_DIGITS: usize = 4;
-const MAX_BRACED_UNICODE_ESCAPE_DIGITS: usize = 6;
-const MAX_UNICODE_CODE_POINT: u32 = 0x10_FFFF;
-const RADIX_BINARY: u32 = 2;
-const RADIX_OCTAL: u32 = 8;
-const RADIX_DECIMAL: u32 = 10;
-const RADIX_HEX: u32 = 16;
-const ASCII_BACKSPACE: char = '\u{0008}';
-const ASCII_FORM_FEED: char = '\u{000c}';
-const ASCII_VERTICAL_TAB: char = '\u{000b}';
-const LINE_SEPARATOR: char = '\u{2028}';
-const PARAGRAPH_SEPARATOR: char = '\u{2029}';
-const DECIMAL_POINT: char = '.';
-const NUMERIC_SEPARATOR: char = '_';
-const BIGINT_SUFFIX: char = 'n';
+use crate::{
+    error::{Error, Result},
+    lexer_support::{
+        ASCII_BACKSPACE, ASCII_FORM_FEED, ASCII_VERTICAL_TAB, BIGINT_SUFFIX, DECIMAL_POINT,
+        HEX_ESCAPE_DIGITS, LINE_SEPARATOR, MAX_BRACED_UNICODE_ESCAPE_DIGITS,
+        MAX_UNICODE_CODE_POINT, NUMERIC_SEPARATOR, PARAGRAPH_SEPARATOR, RADIX_BINARY,
+        RADIX_DECIMAL, RADIX_HEX, RADIX_OCTAL, TEMPLATE_SUBSTITUTION_START, UNICODE_ESCAPE_DIGITS,
+        checked_hex_accumulate, digit_value, digits_to_number, is_exponent_marker,
+        is_identifier_part, is_identifier_start, unicode_char,
+    },
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
@@ -119,6 +112,12 @@ struct Lexer<'a> {
     tokens: Vec<Token>,
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum EscapeContext {
+    String,
+    Template,
+}
+
 impl<'a> Lexer<'a> {
     fn new(source: &'a str) -> Self {
         Self {
@@ -139,6 +138,7 @@ impl<'a> Lexer<'a> {
                 '/' if self.peek_next_char() == Some('*') => self.block_comment(offset)?,
                 '0'..='9' => self.number(offset)?,
                 '"' | '\'' => self.string(offset, ch)?,
+                '`' => self.template_literal(offset)?,
                 ch if is_identifier_start(ch) => self.identifier(offset)?,
                 '+' => self.plus_or_increment(offset),
                 '-' => self.minus_or_decrement(offset),
@@ -383,6 +383,52 @@ impl<'a> Lexer<'a> {
     }
 
     fn string_escape(&mut self, slash_offset: usize, output: &mut String) -> Result<()> {
+        self.escape_sequence(slash_offset, output, EscapeContext::String)
+    }
+
+    fn template_literal(&mut self, offset: usize) -> Result<()> {
+        self.advance();
+        let mut output = String::new();
+
+        while let Some((current_offset, ch)) = self.peek() {
+            self.advance();
+            match ch {
+                '`' => {
+                    self.push(TokenKind::String(output), offset);
+                    return Ok(());
+                }
+                '$' if self.peek_char() == Some(TEMPLATE_SUBSTITUTION_START) => {
+                    return Err(Error::lex(
+                        "template literal substitutions are not supported",
+                        current_offset,
+                    ));
+                }
+                '\\' => self.template_escape(current_offset, &mut output)?,
+                '\n' => output.push('\n'),
+                '\r' => {
+                    if self.peek_char() == Some('\n') {
+                        self.advance();
+                    }
+                    output.push('\n');
+                }
+                LINE_SEPARATOR | PARAGRAPH_SEPARATOR => output.push(ch),
+                other => output.push(other),
+            }
+        }
+
+        Err(Error::lex("unterminated template literal", offset))
+    }
+
+    fn template_escape(&mut self, slash_offset: usize, output: &mut String) -> Result<()> {
+        self.escape_sequence(slash_offset, output, EscapeContext::Template)
+    }
+
+    fn escape_sequence(
+        &mut self,
+        slash_offset: usize,
+        output: &mut String,
+        context: EscapeContext,
+    ) -> Result<()> {
         let Some((escape_offset, escaped)) = self.peek() else {
             return Err(Error::lex("unterminated escape sequence", slash_offset));
         };
@@ -404,6 +450,8 @@ impl<'a> Lexer<'a> {
             '\\' => output.push('\\'),
             '"' => output.push('"'),
             '\'' => output.push('\''),
+            '`' if context == EscapeContext::Template => output.push('`'),
+            '$' if context == EscapeContext::Template => output.push('$'),
             '\n' | LINE_SEPARATOR | PARAGRAPH_SEPARATOR => {}
             '\r' => {
                 if self.peek_char() == Some('\n') {
@@ -746,46 +794,4 @@ impl<'a> Lexer<'a> {
             .get(start..end)
             .ok_or_else(|| Error::lex(format!("invalid {description} span"), offset))
     }
-}
-
-const fn is_identifier_start(ch: char) -> bool {
-    ch == '_' || ch == '$' || ch.is_ascii_alphabetic()
-}
-
-const fn is_identifier_part(ch: char) -> bool {
-    is_identifier_start(ch) || ch.is_ascii_digit()
-}
-
-fn checked_hex_accumulate(value: u32, digit: u32, offset: usize, description: &str) -> Result<u32> {
-    value
-        .checked_mul(16)
-        .and_then(|value| value.checked_add(digit))
-        .ok_or_else(|| Error::lex(format!("{description} value overflow"), offset))
-}
-
-fn digits_to_number(digits: &str, radix: u32, offset: usize, description: &str) -> Result<f64> {
-    let mut value = 0.0f64;
-    let radix_value = f64::from(radix);
-    for ch in digits.chars() {
-        let Some(digit) = digit_value(ch, radix) else {
-            return Err(Error::lex(
-                format!("{description} has invalid digit '{ch}'"),
-                offset,
-            ));
-        };
-        value = value.mul_add(radix_value, f64::from(digit));
-    }
-    Ok(value)
-}
-
-const fn digit_value(ch: char, radix: u32) -> Option<u32> {
-    ch.to_digit(radix)
-}
-
-const fn is_exponent_marker(ch: char) -> bool {
-    matches!(ch, 'e' | 'E')
-}
-
-fn unicode_char(value: u32, offset: usize, description: &str) -> Result<char> {
-    char::from_u32(value).ok_or_else(|| Error::lex(format!("{description} is invalid"), offset))
 }

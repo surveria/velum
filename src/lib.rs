@@ -8,6 +8,7 @@ mod embedding;
 mod error;
 mod host;
 mod lexer;
+mod lexer_support;
 mod parser;
 mod runtime;
 mod runtime_assertions;
