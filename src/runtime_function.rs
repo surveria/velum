@@ -229,7 +229,9 @@ impl Context {
             FUNCTION_LENGTH_PROPERTY => Value::Number(function.length()),
             FUNCTION_NAME_PROPERTY => Value::String(function.name().to_owned()),
             FUNCTION_PROTOTYPE_PROPERTY => function.properties().prototype(),
-            _ => function.properties().get(property),
+            _ => function
+                .intrinsic_property(property)
+                .unwrap_or_else(|| function.properties().get(property)),
         };
         self.checked_value(value)
     }
@@ -243,7 +245,8 @@ impl Context {
         Ok(matches!(
             property,
             FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY | FUNCTION_PROTOTYPE_PROPERTY
-        ) || function.properties().has(property))
+        ) || function.has_intrinsic_property(property)
+            || function.properties().has(property))
     }
 
     pub(crate) fn set_native_function_property(
@@ -254,6 +257,9 @@ impl Context {
     ) -> Result<()> {
         if property == FUNCTION_PROTOTYPE_PROPERTY {
             self.native_function(id)?;
+            return Ok(());
+        }
+        if self.native_function(id)?.has_intrinsic_property(&property) {
             return Ok(());
         }
         let max_properties = self.limits.max_object_properties;
@@ -268,6 +274,9 @@ impl Context {
         id: NativeFunctionId,
         property: &str,
     ) -> Result<bool> {
+        if self.native_function(id)?.has_intrinsic_property(property) {
+            return Ok(false);
+        }
         let function = self.native_function_mut(id)?;
         Ok(function.properties_mut().delete(property))
     }

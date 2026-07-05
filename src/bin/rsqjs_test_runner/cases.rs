@@ -76,6 +76,7 @@ const PATH_OBJECT_LITERAL_SHORTHAND_METHODS: &str =
 const PATH_OBJECT_PROTOTYPES: &str = "tests/engine_cases/object_prototypes.js";
 const PATH_OBJECT_PROTOTYPE_ROOT: &str = "tests/engine_cases/object_prototype_root.js";
 const PATH_OBJECT_BUILTIN: &str = "tests/engine_cases/object_builtin.js";
+const PATH_NUMBER_BUILTIN: &str = "tests/engine_cases/number_builtin.js";
 const PATH_COMPUTED_PROPERTIES: &str = "tests/engine_cases/computed_properties.js";
 const PATH_ARRAY_LITERALS: &str = "tests/engine_cases/array_literals.js";
 const PATH_ARRAY_BUILTIN: &str = "tests/engine_cases/array_builtin.js";
@@ -471,6 +472,19 @@ fn engine_plain_object_cases() -> Vec<EngineCase> {
                 output: &[
                     "function Object 1 true",
                     "true true true true true",
+                    "keys:|",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "number_builtin",
+            path: PATH_NUMBER_BUILTIN,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "function Number 1 true",
+                    "0 0 1 0 42 100 16 5 8",
+                    "Infinity -Infinity NaN",
                     "keys:|",
                 ],
                 value: "42",

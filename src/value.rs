@@ -184,7 +184,13 @@ impl fmt::Display for Value {
             Self::Null => f.write_str("null"),
             Self::Bool(value) => write!(f, "{value}"),
             Self::Number(value) => {
-                if value.fract() == 0.0 && value.is_finite() {
+                if value.is_nan() {
+                    f.write_str("NaN")
+                } else if *value == f64::INFINITY {
+                    f.write_str("Infinity")
+                } else if *value == f64::NEG_INFINITY {
+                    f.write_str("-Infinity")
+                } else if value.fract() == 0.0 && value.is_finite() {
                     write!(f, "{value:.0}")
                 } else {
                     write!(f, "{value}")

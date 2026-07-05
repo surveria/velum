@@ -36,6 +36,8 @@ const PATH_TEST262_OBJECT_PROTOTYPE_ROOT: &str =
     "tests/corpora/test262/active/language/expressions/object_prototype_root.js";
 const PATH_TEST262_OBJECT_BUILTIN: &str =
     "tests/corpora/test262/active/language/expressions/object_builtin.js";
+const PATH_TEST262_NUMBER_BUILTIN: &str =
+    "tests/corpora/test262/active/built-ins/Number/constructor.js";
 const PATH_TEST262_COMPUTED_PROPERTIES: &str =
     "tests/corpora/test262/active/language/expressions/computed_properties.js";
 const PATH_TEST262_ARRAY_LITERALS: &str =
@@ -104,6 +106,7 @@ const PATH_TEST262_STANDARD_ERROR_CONSTRUCTORS: &str =
 
 pub fn test262_cases() -> Vec<EngineCase> {
     let mut cases = test262_expression_cases();
+    cases.extend(test262_builtin_cases());
     cases.extend(test262_binding_cases());
     cases.extend(test262_statement_cases());
     cases
@@ -325,6 +328,14 @@ fn test262_operator_expression_cases() -> Vec<EngineCase> {
             expectation: Expectation::ErrorContains("operator 'in'"),
         },
     ]
+}
+
+fn test262_builtin_cases() -> Vec<EngineCase> {
+    vec![EngineCase {
+        id: "built-ins/Number/constructor",
+        path: PATH_TEST262_NUMBER_BUILTIN,
+        expectation: Expectation::Value("42"),
+    }]
 }
 
 fn test262_binding_cases() -> Vec<EngineCase> {
