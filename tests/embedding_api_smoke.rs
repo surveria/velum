@@ -106,6 +106,7 @@ fn keeps_many_vms_isolated_after_one_vm_fails() -> TestResult {
                 runtime_steps: report.resources.runtime_steps,
                 output_entries: 1,
                 global_bindings: 1,
+                atom_count: report.resources.atom_count,
             },
         )?;
     }
@@ -157,11 +158,36 @@ fn reports_vm_resource_usage_at_teardown() -> TestResult {
             runtime_steps: report.resources.runtime_steps,
             output_entries: 1,
             global_bindings: 1,
+            atom_count: report.resources.atom_count,
         },
     )?;
 
     let finished = vm.finish();
     ensure_usage(&finished.resources, &report.resources)
+}
+
+#[test]
+fn tracks_atoms_for_bindings_without_interning_missing_names() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let initial_atoms = vm.resource_usage().atom_count;
+    let Err(error) = vm.context().eval("missingBinding") else {
+        return Err("expected missing binding lookup to fail".into());
+    };
+    ensure_runtime_error(&error)?;
+    ensure_usize(vm.resource_usage().atom_count, initial_atoms)?;
+
+    let value = vm
+        .context()
+        .eval("let camera = 41; camera = camera + 1; camera")?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    let declared_atoms = vm.resource_usage().atom_count;
+    ensure_positive(declared_atoms, "atom count after declaration")?;
+
+    let value = vm.context().eval("camera")?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_usize(vm.resource_usage().atom_count, declared_atoms)
 }
 
 #[test]
@@ -296,6 +322,13 @@ fn ensure_parse_error(error: &Error) -> TestResult {
         return Ok(());
     }
     Err(format!("expected parse error, got {error}").into())
+}
+
+fn ensure_runtime_error(error: &Error) -> TestResult {
+    if matches!(error, Error::Runtime { .. }) {
+        return Ok(());
+    }
+    Err(format!("expected runtime error, got {error}").into())
 }
 
 fn ensure_positive(actual: usize, label: &str) -> TestResult {
