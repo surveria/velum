@@ -5,10 +5,10 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 
 test262_commit="64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1"
-manifest_path="${repo_root}/tests/corpora/test262/manifest.tsv"
 cache_dir="${RSQJS_TEST262_CACHE_DIR:-${repo_root}/target/test262}"
 test262_dir="${cache_dir}/test262-${test262_commit}"
-raw_base_url="https://raw.githubusercontent.com/tc39/test262/${test262_commit}"
+tmp_dir="${cache_dir}/.test262-${test262_commit}.tmp"
+test262_url="https://github.com/tc39/test262.git"
 
 log() {
   printf '%s\n' "$*" >&2
@@ -33,35 +33,33 @@ if [[ -n "${RSQJS_TEST262_DIR:-}" ]]; then
 fi
 
 if [[ "${RSQJS_TEST262_AUTO_SETUP:-1}" == "0" ]]; then
-  log "Test262 auto setup is disabled; upstream manifest rows will be skipped."
+  log "Test262 auto setup is disabled; full corpus rows will be skipped."
   exit 0
 fi
 
-require_tool curl
+require_tool git
 
-if [[ ! -f "${manifest_path}" ]]; then
-  log "Test262 manifest is missing: ${manifest_path}"
-  exit 1
+if [[ -d "${test262_dir}/test" && -d "${test262_dir}/harness" ]]; then
+  printf '%s\n' "${test262_dir}"
+  exit 0
 fi
 
 mkdir -p "${test262_dir}"
+rm -rf "${tmp_dir}"
+mkdir -p "${tmp_dir}"
 
-while IFS=$'\t' read -r case_id relative_path mode reason; do
-  if [[ -z "${case_id}" || "${case_id}" == \#* ]]; then
-    continue
-  fi
-  if [[ -z "${relative_path}" || -z "${mode}" || -z "${reason}" ]]; then
-    log "Invalid Test262 manifest row for case: ${case_id}"
-    exit 1
-  fi
+log "Fetching Test262 ${test262_commit} from ${test262_url}"
+git -C "${tmp_dir}" init -q
+git -C "${tmp_dir}" remote add origin "${test262_url}"
+git -C "${tmp_dir}" fetch --depth 1 origin "${test262_commit}" >/dev/null
+git -C "${tmp_dir}" checkout --detach FETCH_HEAD >/dev/null
 
-  target_path="${test262_dir}/${relative_path}"
-  if [[ -f "${target_path}" ]]; then
-    continue
-  fi
+if [[ ! -d "${tmp_dir}/test" || ! -d "${tmp_dir}/harness" ]]; then
+  log "Test262 checkout is incomplete: ${tmp_dir}"
+  exit 1
+fi
 
-  mkdir -p "$(dirname "${target_path}")"
-  curl -fsSL "${raw_base_url}/${relative_path}" -o "${target_path}"
-done <"${manifest_path}"
+rm -rf "${test262_dir}"
+mv "${tmp_dir}" "${test262_dir}"
 
 printf '%s\n' "${test262_dir}"
