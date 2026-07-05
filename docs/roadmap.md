@@ -1,8 +1,8 @@
 # Product Roadmap
 
 The operational task board and branch protocol live in
-[Project Roadmap And Execution Plan](project-plan.md). Update that document in
-the same branch that starts or completes a compatibility, embedding, testing,
+[Project Development Plan](project-plan.md). Update that document in the same
+branch that starts or completes a compatibility, embedding, testing,
 runtime-architecture, resource-control, observability, performance, or memory
 task.
 
@@ -23,9 +23,9 @@ The default order for new work is:
    extensions, resource failures, teardown, and reusable compiled scripts;
 3. expand compatibility through narrow Test262-visible parser, runtime,
    object, function, error, and built-in clusters;
-4. add practical built-ins by report evidence and embedding needs, starting
-   with JSON before broader object descriptors, arrays, functions, errors,
-   Date, RegExp, Map, and Set;
+4. add practical built-ins by report evidence and embedding needs, with object
+   descriptors, arrays, functions, errors, Date, RegExp, Map, and Set following
+   the first JSON tranche;
 5. improve diagnostics, modules, jobs, promises, async host callbacks, resource
    controls, and observability;
 6. pull runtime data model work forward only when it supports the product path

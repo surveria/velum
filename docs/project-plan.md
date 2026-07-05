@@ -1,4 +1,4 @@
-# Project Roadmap And Execution Plan
+# Project Development Plan
 
 This document is the canonical product roadmap and execution plan for growing
 `rs-quickjs` into a safe-Rust, embeddable JavaScript engine. It describes what
@@ -11,11 +11,11 @@ runtime-architecture, performance, or memory task should update this document
 in the same branch that implements the task. Future work should resume from
 repository state instead of relying on conversation history.
 
-This is a whole-project roadmap, not an optimization backlog. Read it as a
-delivery order for the engine: keep the validation base reliable, keep the Rust
-library API useful for embedders, expand language compatibility, add practical
-built-ins, design modules and async jobs, expand resource control, add
-production observability, and evolve runtime internals behind stable public
+This is a whole-project development plan, not an optimization backlog. Read it
+as the delivery order for the engine: keep the validation base reliable, keep
+the Rust library API useful for embedders, expand language compatibility, add
+practical built-ins, design modules and async jobs, expand resource control,
+add production observability, and evolve runtime internals behind stable public
 interfaces. Performance and memory budgets are acceptance criteria for all of
 that work, with dedicated checkpoint tasks only when measurements show debt.
 
@@ -30,8 +30,9 @@ This document answers three different questions:
 
 2. What do we do next?
    Follow the default delivery order and the current delivery queue. Pick one
-   small branch that moves product capability or validation forward, then update
-   the task board with the evidence from that branch.
+   small branch that moves product capability, compatibility, embedding support,
+   reliability, resource control, observability, or measured performance
+   forward, then update the task board with the evidence from that branch.
 
 3. How do we execute the branch?
    Follow the branch protocol: refresh requirements, mark one task in progress,
@@ -42,6 +43,25 @@ Runtime architecture notes are not the project goal by themselves. Atoms,
 slots, shapes, dense arrays, bytecode, inline caches, and GC are foundations
 that we pull forward when they unblock compatibility, embedding API behavior,
 resource accounting, observability, or measured performance and memory debt.
+
+## Plan Scope
+
+This document intentionally covers the whole project, not only speed work:
+
+- product surface: library API, VM isolation, host functions, async callbacks,
+  resource limits, teardown, and observability
+- compatibility: parser, runtime semantics, object model, functions, errors,
+  built-ins, Test262 progress, and QuickJS differential behavior
+- infrastructure: CI, one-command validation, corpus management, reports, and
+  benchmark reliability
+- runtime foundations: atoms, slots, shapes, arrays, bytecode, inline caches,
+  indexed heaps, and collection strategy when they support the product path
+- performance and memory: continuous budgets plus explicit checkpoint tasks
+  when a report shows measured debt
+
+When a task is mainly an internal architecture or performance task, it must
+still explain which product capability, compatibility cluster, resource-control
+need, observability feature, or measured budget exception it protects.
 
 ## Product Direction
 
@@ -145,45 +165,60 @@ show a stronger reason to do something else:
 ## Current Delivery Queue
 
 This is the rough product order for the next branches. It is intentionally not
-an optimization queue; runtime architecture work appears here only where it
-protects the product path.
+an optimization queue. Runtime architecture work appears here only when it
+protects compatibility, embedding behavior, resource accounting, observability,
+or measured performance and memory budgets.
 
 1. Keep report triage current.
    Before choosing each branch, summarize the newest Test262, QuickJS
-   differential, benchmark, and memory signals.
+   differential, benchmark, and memory signals. The latest report is the input
+   to the next task, not a side artifact.
 
-2. Continue practical built-ins.
-   JSON is the next narrow built-in candidate because it is useful to embedders
-   and appears as a clear missing-binding cluster. Follow with object property
-   descriptors, more Array/String/Number/Function behavior, standard errors,
-   Date, RegExp, Map, and Set as the reports justify them.
+2. Continue object semantics and practical built-ins.
+   After the first JSON tranche, the next product need is the object property
+   model: data-property attributes, descriptors, own-property queries,
+   prototype behavior, and operations needed by `Object`, `Array`, `Function`,
+   errors, JSON, Date, RegExp, Map, and Set. These branches should improve
+   Test262-visible behavior and add QuickJS differential coverage where
+   reference behavior exists.
 
-3. Fill core runtime semantics in coherent clusters.
+3. Grow arrays, functions, and standard errors.
+   Add high-value Array methods, function metadata/callability semantics, and
+   standard error objects in narrow clusters. Pull dense array storage or faster
+   call paths forward only when correctness, resource accounting, or measured
+   hot paths justify it.
+
+4. Fill core runtime semantics in coherent clusters.
    Prioritize syntax, functions, lexical environments, `this`, exceptions,
-   equality, prototype behavior, iteration, and error semantics when they unlock
-   visible Test262 areas or built-in work.
+   equality, prototype behavior, iteration, and coercion when they unlock
+   visible Test262 areas, practical built-ins, or embedding API behavior.
 
-4. Tighten the embedding API and documentation.
+5. Tighten the embedding API and documentation.
    Keep examples, crate docs, direct API tests, typed host functions,
-   multi-VM isolation, resource failures, teardown, and output behavior aligned
-   with the actual public API.
+   multi-VM isolation, resource failures, teardown, compiled-script reuse, and
+   output behavior aligned with the actual public API.
 
-5. Improve diagnostics and error classification.
+6. Improve diagnostics and error classification.
    Stabilize syntax, runtime, host callback, and resource-limit errors before
    many more API surfaces depend on ad-hoc messages.
 
-6. Design modules, jobs, promises, and async callbacks.
+7. Design modules, jobs, promises, and async callbacks.
    The VM should own JavaScript jobs. Embedders should own I/O policy, module
-   loading policy, cancellation, and the outer executor.
+   loading policy, cancellation, job draining, and the outer executor.
 
-7. Expand resource control and observability.
+8. Expand resource control and observability.
    Make heap, stack, atom, job, module, host callback, wall-clock cancellation,
    structured events, profiling, and teardown data visible at the library API.
 
-8. Pull runtime foundations forward when they are needed.
+9. Pull runtime foundations forward when they are needed.
    Compiler-assigned slots, property-key atoms, shapes, dense arrays, indexed
-   heaps, bytecode, inline caches, and GC should be planned as foundation work
-   for the product queue above, not as isolated speed experiments.
+   heaps, bytecode, inline caches, and GC are foundation work for the product
+   queue above, not isolated speed experiments.
+
+10. Run performance and memory checkpoints continuously.
+    Checkpoint branches are allowed when reports show a budget exception, but
+    they should name the affected product path and leave compatibility coverage
+    intact.
 
 ## Workstreams
 
@@ -394,10 +429,10 @@ note about what changed, what was difficult, and what remains possible later.
 
 ## Task Board
 
-The board is both history and backlog. Completed rows record what a branch
-actually delivered; a completed tranche row does not mean the whole workstream
-is complete. Use unchecked rows plus the current delivery queue to choose the
-next branch.
+The board is both history and backlog. It is not sorted by priority. Completed
+rows record what a branch actually delivered; a completed tranche row does not
+mean the whole workstream is complete. Use the current delivery queue first,
+then choose one unchecked row that fits the latest report evidence.
 
 | Done | Status | Task | Workstream | Purpose | Current notes |
 | --- | --- | --- | --- | --- | --- |
@@ -420,6 +455,7 @@ next branch.
 | [x] | Done | General product roadmap order | Planning | Make the canonical plan read as a whole-project delivery order, not as an optimization backlog. | Reframes the plan around repository reliability, embedding API, compatibility, built-ins, diagnostics, modules/jobs/async, resources, observability, and only then deeper runtime architecture. Performance and memory remain acceptance criteria and recurring checkpoint tasks rather than the main roadmap label. This documentation-only change was validated with `git diff --check`; full CI remains the merge gate. |
 | [x] | Done | Roadmap first-screen refresh | Planning | Make the top of the canonical plan show the whole-product order before optimization details. | Renames the document heading to a roadmap and execution plan, adds a near-term product order, and clarifies that atoms, slots, shapes, bytecode, inline caches, and GC are architecture work in service of compatibility, embedding, resources, observability, performance, and memory footprint. Documentation-only validation passed with `git diff --check`, README target file checks, and `cargo fmt --all -- --check`; full CI remains the merge gate. |
 | [x] | Done | Whole-project delivery queue | Planning | Make the plan show what the project will build and in what rough order, not only where optimization work may happen. | Adds explicit guidance for reading the plan, separates product delivery order from runtime foundation work, and adds a concrete near-term queue led by report triage, compatibility, built-ins, embedding API, diagnostics, async, resources, and observability. Documentation-only validation passed with `git diff --check` and `cargo fmt --all -- --check`; full CI remains the merge gate. |
+| [x] | Done | Project-wide sequence refresh | Planning | Make the current plan read as the whole project order instead of an optimization-oriented queue. | Renames the document heading to `Project Development Plan`, adds an explicit plan-scope section, refreshes the current delivery queue after the JSON tranche, and clarifies that the task board is historical plus backlog rather than the priority order. Documentation-only validation passed with `git diff --check`; full CI remains the merge gate. |
 | [x] | Done | Engine case registry split | Testing / maintenance | Keep the engine fixture registry below the project file-size limit before adding more compatibility tranches. | Moves runtime/error/built-in engine fixture registration out of the central `cases.rs` file into `cases_engine_runtime.rs`, reducing `cases.rs` from 789 to 745 lines so future built-in cases can be added without pushing the main registry over 800 lines. Validation passed with `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T184709Z.md` keeps engine fixtures at 57/57, active Test262 at 57/57, full Test262 at 9782/102578, and QuickJS differential at 55/55. Benchmark counts are behavior-equivalent but show normal measurement noise with latency exceptions at 26 and memory exceptions at 2. |
 | [ ] | Backlog | Report triage cadence | Testing / planning | Keep the next work item grounded in the latest Test262, QuickJS differential, benchmark, and memory evidence. | Before selecting each compatibility or architecture tranche, summarize the newest report signals and record why the chosen task is next. |
 | [ ] | Backlog | Library API documentation pass | Embedding API / documentation | Keep crate docs, README examples, and direct library tests aligned with the current public API. | Do this whenever API shape changes enough that embedders could be confused by stale examples. |
