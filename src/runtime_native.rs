@@ -11,6 +11,8 @@ use super::runtime_function::FunctionProperties;
 
 #[path = "runtime_native_array.rs"]
 mod runtime_native_array;
+#[path = "runtime_native_number.rs"]
+mod runtime_native_number;
 
 const OBJECT_CONSTRUCTOR_PROPERTY: &str = "constructor";
 const ARRAY_CONCAT_FUNCTION_LENGTH: f64 = 1.0;
@@ -38,6 +40,8 @@ const ARRAY_UNSHIFT_NAME: &str = "unshift";
 const ARRAY_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_NAME: &str = "Array";
 const ERROR_FUNCTION_LENGTH: f64 = 1.0;
+const NUMBER_FUNCTION_LENGTH: f64 = 1.0;
+const NUMBER_NAME: &str = "Number";
 const OBJECT_FUNCTION_LENGTH: f64 = 1.0;
 const OBJECT_NAME: &str = "Object";
 
@@ -74,6 +78,7 @@ impl NativeFunction {
             NativeFunctionKind::ArraySlice => ARRAY_SLICE_FUNCTION_LENGTH,
             NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_FUNCTION_LENGTH,
             NativeFunctionKind::ErrorConstructor(_) => ERROR_FUNCTION_LENGTH,
+            NativeFunctionKind::Number => NUMBER_FUNCTION_LENGTH,
             NativeFunctionKind::Object => OBJECT_FUNCTION_LENGTH,
         }
     }
@@ -93,6 +98,7 @@ impl NativeFunction {
             NativeFunctionKind::ArraySlice => ARRAY_SLICE_NAME,
             NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_NAME,
             NativeFunctionKind::ErrorConstructor(name) => name.as_str(),
+            NativeFunctionKind::Number => NUMBER_NAME,
             NativeFunctionKind::Object => OBJECT_NAME,
         }
     }
@@ -103,6 +109,32 @@ impl NativeFunction {
 
     pub(super) const fn properties_mut(&mut self) -> &mut FunctionProperties {
         &mut self.properties
+    }
+
+    pub(super) fn intrinsic_property(&self, property: &str) -> Option<Value> {
+        match self.kind {
+            NativeFunctionKind::Number => {
+                runtime_native_number::number_intrinsic_property(property)
+            }
+            NativeFunctionKind::Array
+            | NativeFunctionKind::ArrayConcat
+            | NativeFunctionKind::ArrayIncludes
+            | NativeFunctionKind::ArrayIndexOf
+            | NativeFunctionKind::ArrayJoin
+            | NativeFunctionKind::ArrayLastIndexOf
+            | NativeFunctionKind::ArrayPop
+            | NativeFunctionKind::ArrayPush
+            | NativeFunctionKind::ArrayReverse
+            | NativeFunctionKind::ArrayShift
+            | NativeFunctionKind::ArraySlice
+            | NativeFunctionKind::ArrayUnshift
+            | NativeFunctionKind::ErrorConstructor(_)
+            | NativeFunctionKind::Object => None,
+        }
+    }
+
+    pub(super) fn has_intrinsic_property(&self, property: &str) -> bool {
+        self.intrinsic_property(property).is_some()
     }
 }
 
@@ -121,6 +153,7 @@ pub(super) enum NativeFunctionKind {
     ArraySlice,
     ArrayUnshift,
     ErrorConstructor(ErrorName),
+    Number,
     Object,
 }
 
@@ -128,6 +161,7 @@ impl Context {
     pub(crate) fn builtin_value(&mut self, name: &str) -> Result<Option<Value>> {
         match name {
             ARRAY_NAME => self.array_constructor_value().map(Some),
+            NUMBER_NAME => self.number_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
             _ => {
                 let Some(name) =
@@ -167,6 +201,7 @@ impl Context {
             NativeFunctionKind::ArraySlice => self.eval_array_slice(args, this_value),
             NativeFunctionKind::ArrayUnshift => self.eval_array_unshift(args, this_value),
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
+            NativeFunctionKind::Number => self.eval_number_constructor(args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
         }
     }
@@ -192,6 +227,7 @@ impl Context {
                 Err(Error::runtime("native method is not a constructor"))
             }
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
+            NativeFunctionKind::Number => self.construct_number_object(args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
         }
     }
