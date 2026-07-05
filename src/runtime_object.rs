@@ -587,7 +587,13 @@ impl Object {
         if self.array_length.is_some()
             && let Some(index) = ArrayIndex::parse(&property)
         {
-            self.set_array_property_value(index, property, value, enumerable, max_properties)?;
+            self.set_array_property_value(
+                index,
+                Some(property),
+                value,
+                enumerable,
+                max_properties,
+            )?;
             return self.extend_array_length(index);
         }
 
@@ -628,12 +634,13 @@ impl Object {
     fn set_array_property_value(
         &mut self,
         index: ArrayIndex,
-        property: String,
+        property: Option<String>,
         value: Value,
         enumerable: Option<PropertyEnumerable>,
         max_properties: usize,
     ) -> Result<()> {
         let Some(position) = index.dense_position(max_properties)? else {
+            let property = property.unwrap_or_else(|| index.key());
             return self.set_named_property_value(property, value, enumerable, max_properties);
         };
 

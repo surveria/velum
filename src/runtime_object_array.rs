@@ -39,7 +39,7 @@ impl ObjectHeap {
 
         for value in values {
             let index = length.index()?;
-            object.set_ordinary(index.key(), value, max_properties)?;
+            object.set_array_index(index, value, max_properties)?;
             length = index.next_length()?;
         }
         object.array_length = Some(length);
@@ -55,9 +55,10 @@ impl ObjectHeap {
             return Ok(Value::Undefined);
         };
 
-        let key = index.key();
-        let value = object.get_own(&key).unwrap_or(Value::Undefined);
-        object.delete(&key);
+        let value = object
+            .get_own_array_index(index)
+            .unwrap_or(Value::Undefined);
+        object.delete_array_index(index);
         object.array_length = Some(index.length());
         Ok(value)
     }
@@ -68,7 +69,7 @@ impl ObjectHeap {
             return Ok(Value::Undefined);
         };
 
-        let first_value = self.get(id, &first_index.key())?;
+        let first_value = self.get_array_index(id, first_index)?;
         let length_usize = length.to_usize()?;
         for index in 1..length_usize {
             self.move_array_index(id, index, index.saturating_sub(1), max_properties)?;
@@ -77,7 +78,7 @@ impl ObjectHeap {
         let Some(last_index) = length.previous_index() else {
             return Ok(first_value);
         };
-        self.delete(id, &last_index.key())?;
+        self.delete_array_index(id, last_index)?;
         self.object_mut(id)?.array_length = Some(last_index.length());
         Ok(first_value)
     }
@@ -105,8 +106,8 @@ impl ObjectHeap {
         }
 
         for (index, value) in values.into_iter().enumerate() {
-            let key = ArrayIndex::from_usize(index)?.key();
-            self.set(id, key, value, max_properties)?;
+            let index = ArrayIndex::from_usize(index)?;
+            self.set_array_index(id, index, value, max_properties)?;
         }
         self.object_mut(id)?.array_length = Some(new_length);
         Ok(new_length.value())
@@ -134,10 +135,10 @@ impl ObjectHeap {
             let source_index = start
                 .checked_add(offset)
                 .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
-            let source_key = ArrayIndex::from_usize(source_index)?.key();
-            if let Some(value) = self.array_property_value(id, &source_key)? {
-                let target_key = ArrayIndex::from_usize(offset)?.key();
-                self.set(result_id, target_key, value, max_properties)?;
+            let source_index = ArrayIndex::from_usize(source_index)?;
+            if let Some(value) = self.array_property_value_by_index(id, source_index)? {
+                let target_index = ArrayIndex::from_usize(offset)?;
+                self.set_array_index(result_id, target_index, value, max_properties)?;
             }
         }
         Ok(Value::Object(result_id))
@@ -236,12 +237,12 @@ impl ObjectHeap {
             return Ok(Value::Number(INDEX_NOT_FOUND));
         }
 
-        for index in start..length {
-            let key = ArrayIndex::from_usize(index)?.key();
-            if let Some(value) = self.array_property_value(id, &key)?
+        for position in start..length {
+            let index = ArrayIndex::from_usize(position)?;
+            if let Some(value) = self.array_property_value_by_index(id, index)?
                 && &value == search
             {
-                return Self::array_index_value(index);
+                return Self::array_index_value(position);
             }
         }
         Ok(Value::Number(INDEX_NOT_FOUND))
@@ -261,8 +262,8 @@ impl ObjectHeap {
         }
 
         for index in start..length {
-            let key = ArrayIndex::from_usize(index)?.key();
-            let value = self.get(id, &key)?;
+            let index = ArrayIndex::from_usize(index)?;
+            let value = self.get_array_index(id, index)?;
             if Self::same_value_zero(&value, search) {
                 return Ok(Value::Bool(true));
             }
@@ -281,12 +282,12 @@ impl ObjectHeap {
             return Ok(Value::Number(INDEX_NOT_FOUND));
         };
 
-        for index in (0..=start).rev() {
-            let key = ArrayIndex::from_usize(index)?.key();
-            if let Some(value) = self.array_property_value(id, &key)?
+        for position in (0..=start).rev() {
+            let index = ArrayIndex::from_usize(position)?;
+            if let Some(value) = self.array_property_value_by_index(id, index)?
                 && &value == search
             {
-                return Self::array_index_value(index);
+                return Self::array_index_value(position);
             }
         }
         Ok(Value::Number(INDEX_NOT_FOUND))
@@ -298,7 +299,54 @@ impl ObjectHeap {
             return Err(Error::runtime(ARRAY_JOIN_RECEIVER_ERROR));
         }
         let index = ArrayIndex::from_usize(index)?;
-        self.get(id, &index.key())
+        self.get_array_index(id, index)
+    }
+
+    fn get_array_index(&self, id: ObjectId, index: ArrayIndex) -> Result<Value> {
+        if let Some(value) = self.array_property_value_by_index(id, index)? {
+            return Ok(value);
+        }
+        Ok(Value::Undefined)
+    }
+
+    fn set_array_index(
+        &mut self,
+        id: ObjectId,
+        index: ArrayIndex,
+        value: Value,
+        max_properties: usize,
+    ) -> Result<()> {
+        let object = self.object_mut(id)?;
+        if object.array_length.is_none() {
+            return Err(Error::runtime("array index receiver is not an array"));
+        }
+        object.set_array_index(index, value, max_properties)
+    }
+
+    fn delete_array_index(&mut self, id: ObjectId, index: ArrayIndex) -> Result<bool> {
+        let object = self.object_mut(id)?;
+        Ok(object.delete_array_index(index))
+    }
+
+    fn array_property_value_by_index(
+        &self,
+        id: ObjectId,
+        index: ArrayIndex,
+    ) -> Result<Option<Value>> {
+        let mut current = Some(id);
+        let mut visited = Vec::new();
+        while let Some(current_id) = current {
+            if visited.contains(&current_id) {
+                return Err(Error::runtime("prototype cycle detected"));
+            }
+            visited.push(current_id);
+            let object = self.object(current_id)?;
+            if let Some(value) = object.get_own_array_index(index) {
+                return Ok(Some(value));
+            }
+            current = object.prototype;
+        }
+        Ok(None)
     }
 
     fn array_length_for_method(&self, id: ObjectId, error: &str) -> Result<ArrayLength> {
@@ -313,12 +361,12 @@ impl ObjectHeap {
         to_index: usize,
         max_properties: usize,
     ) -> Result<()> {
-        let from_key = ArrayIndex::from_usize(from_index)?.key();
-        let to_key = ArrayIndex::from_usize(to_index)?.key();
-        if let Some(value) = self.array_property_value(id, &from_key)? {
-            return self.set(id, to_key, value, max_properties);
+        let from_index = ArrayIndex::from_usize(from_index)?;
+        let to_index = ArrayIndex::from_usize(to_index)?;
+        if let Some(value) = self.array_property_value_by_index(id, from_index)? {
+            return self.set_array_index(id, to_index, value, max_properties);
         }
-        self.delete(id, &to_key)?;
+        self.delete_array_index(id, to_index)?;
         Ok(())
     }
 
@@ -329,31 +377,27 @@ impl ObjectHeap {
         upper_index: usize,
         max_properties: usize,
     ) -> Result<()> {
-        let lower_key = ArrayIndex::from_usize(lower_index)?.key();
-        let upper_key = ArrayIndex::from_usize(upper_index)?.key();
-        let lower_value = self.array_property_value(id, &lower_key)?;
-        let upper_value = self.array_property_value(id, &upper_key)?;
+        let lower_index = ArrayIndex::from_usize(lower_index)?;
+        let upper_index = ArrayIndex::from_usize(upper_index)?;
+        let lower_value = self.array_property_value_by_index(id, lower_index)?;
+        let upper_value = self.array_property_value_by_index(id, upper_index)?;
 
         match (lower_value, upper_value) {
             (Some(lower_value), Some(upper_value)) => {
-                self.set(id, lower_key, upper_value, max_properties)?;
-                self.set(id, upper_key, lower_value, max_properties)?;
+                self.set_array_index(id, lower_index, upper_value, max_properties)?;
+                self.set_array_index(id, upper_index, lower_value, max_properties)?;
             }
             (None, Some(upper_value)) => {
-                self.set(id, lower_key, upper_value, max_properties)?;
-                self.delete(id, &upper_key)?;
+                self.set_array_index(id, lower_index, upper_value, max_properties)?;
+                self.delete_array_index(id, upper_index)?;
             }
             (Some(lower_value), None) => {
-                self.delete(id, &lower_key)?;
-                self.set(id, upper_key, lower_value, max_properties)?;
+                self.delete_array_index(id, lower_index)?;
+                self.set_array_index(id, upper_index, lower_value, max_properties)?;
             }
             (None, None) => {}
         }
         Ok(())
-    }
-
-    fn array_property_value(&self, id: ObjectId, key: &str) -> Result<Option<Value>> {
-        self.property_value_in_chain(id, key)
     }
 
     fn array_length_if_array(&self, id: ObjectId) -> Result<Option<ArrayLength>> {
@@ -380,8 +424,8 @@ impl ObjectHeap {
         *next_index = progress.next_index;
 
         for source_index in progress.source_index..length {
-            let source_key = ArrayIndex::from_usize(source_index)?.key();
-            if let Some(value) = self.array_property_value(source_id, &source_key)? {
+            let source_index = ArrayIndex::from_usize(source_index)?;
+            if let Some(value) = self.array_property_value_by_index(source_id, source_index)? {
                 self.set_concat_result_index(result_id, *next_index, value, max_properties)?;
             }
             *next_index = Self::next_concat_index(*next_index)?;
@@ -402,16 +446,16 @@ impl ObjectHeap {
             return Err(Error::runtime("array concat result is not an array"));
         }
         let mut next_index = start_index;
-        for source_index in 0..length {
-            let source_key = ArrayIndex::from_usize(source_index)?.key();
-            let Some(value) = source.get_own(&source_key) else {
+        for source_position in 0..length {
+            let source_index = ArrayIndex::from_usize(source_position)?;
+            let Some(value) = source.get_own_array_index(source_index) else {
                 return Ok(ArrayCopyProgress {
                     next_index,
-                    source_index,
+                    source_index: source_position,
                 });
             };
             let target_index = ArrayIndex::from_usize(next_index)?;
-            result.set_ordinary(target_index.key(), value, max_properties)?;
+            result.set_array_index(target_index, value, max_properties)?;
             next_index = Self::next_concat_index(next_index)?;
         }
         Ok(ArrayCopyProgress {
@@ -478,7 +522,7 @@ impl ObjectHeap {
         if object.array_length.is_none() {
             return Err(Error::runtime("array concat result is not an array"));
         }
-        object.set_ordinary(index.key(), value, max_properties)
+        object.set_array_index(index, value, max_properties)
     }
 
     fn next_concat_index(index: usize) -> Result<usize> {
@@ -505,6 +549,40 @@ impl ObjectHeap {
 
     const fn number_is_zero(value: f64) -> bool {
         matches!(value.classify(), std::num::FpCategory::Zero)
+    }
+}
+
+impl Object {
+    fn get_own_array_index(&self, index: ArrayIndex) -> Option<Value> {
+        if self.array_length.is_some()
+            && let Some(value) = self.array_element_value(index)
+        {
+            return Some(value);
+        }
+        let key = index.key();
+        self.properties.get(&key).map(super::ObjectProperty::value)
+    }
+
+    fn set_array_index(
+        &mut self,
+        index: ArrayIndex,
+        value: Value,
+        max_properties: usize,
+    ) -> Result<()> {
+        self.set_array_property_value(index, None, value, None, max_properties)?;
+        self.extend_array_length(index)
+    }
+
+    fn delete_array_index(&mut self, index: ArrayIndex) -> bool {
+        if self.array_length.is_some() && self.delete_array_element(index) {
+            return true;
+        }
+        let key = index.key();
+        let removed_property = self.properties.remove(&key);
+        if removed_property.is_some() {
+            self.property_order.retain(|stored_key| stored_key != &key);
+        }
+        true
     }
 }
 
