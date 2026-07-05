@@ -79,6 +79,7 @@ const PATH_BENCH_ERROR_OBJECT_PROPERTIES: &str =
     "tests/corpora/benchmarks/active/error_object_properties.js";
 const PATH_BENCH_GLOBAL_NUMERIC_CONSTANTS: &str =
     "tests/corpora/benchmarks/active/global_numeric_constants.js";
+const PATH_BENCH_MATH_BUILTIN: &str = "tests/corpora/benchmarks/active/math_builtin.js";
 const PATH_BENCH_STANDARD_ERROR_CONSTRUCTORS: &str =
     "tests/corpora/benchmarks/active/standard_error_constructors.js";
 const PATH_BENCH_COMPILED_SCRIPT_REUSE: &str =
@@ -317,6 +318,10 @@ fn benchmark_runtime_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "global_numeric_constants",
             path: PATH_BENCH_GLOBAL_NUMERIC_CONSTANTS,
+        },
+        BenchmarkCase {
+            id: "math_builtin",
+            path: PATH_BENCH_MATH_BUILTIN,
         },
         BenchmarkCase {
             id: "standard_error_constructors",

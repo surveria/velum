@@ -8,6 +8,7 @@ const PATH_GLOBAL_INFINITY_COMPOUND_ASSIGNMENT_ERROR: &str =
     "tests/engine_cases/global_infinity_compound_assignment_error.js";
 const PATH_GLOBAL_NAN_ASSIGNMENT_ERROR: &str = "tests/engine_cases/global_nan_assignment_error.js";
 const PATH_GLOBAL_NUMERIC_CONSTANTS: &str = "tests/engine_cases/global_numeric_constants.js";
+const PATH_MATH_BUILTIN: &str = "tests/engine_cases/math_builtin.js";
 const PATH_STANDARD_ERROR_CONSTRUCTORS: &str = "tests/engine_cases/standard_error_constructors.js";
 
 pub(super) fn engine_runtime_cases() -> Vec<EngineCase> {
@@ -58,6 +59,19 @@ pub(super) fn engine_runtime_cases() -> Vec<EngineCase> {
             id: "global_infinity_compound_assignment_error",
             path: PATH_GLOBAL_INFINITY_COMPOUND_ASSIGNMENT_ERROR,
             expectation: Expectation::ErrorContains("assignment to constant 'Infinity'"),
+        },
+        EngineCase {
+            id: "math_builtin",
+            path: PATH_MATH_BUILTIN,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "object true true true abs 2 2",
+                    "7 2 1 -1 2 -1 9 32 7 -2",
+                    "-Infinity Infinity true true true",
+                    "true true keys: 42",
+                ],
+                value: "42",
+            },
         },
         EngineCase {
             id: "standard_error_constructors",
