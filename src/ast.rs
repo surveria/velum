@@ -66,6 +66,7 @@ pub enum Expr {
         args: Vec<Self>,
     },
     Function {
+        params: Vec<String>,
         body: Vec<Stmt>,
     },
     New {

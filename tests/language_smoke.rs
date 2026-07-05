@@ -132,17 +132,17 @@ fn supports_function_expressions() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))?;
     ensure_optional_value(context.get_global("first"), &Value::Undefined)?;
 
-    let Err(error) = eval(
+    let extra = context.eval(
         r"
-        let update = function() {
-            1;
+        let observed = 0;
+        let pick = function(value) {
+            return value;
         };
-        update(1);
+        pick(7, observed = 42);
+        observed
         ",
-    ) else {
-        return Err("expected function arguments to fail".into());
-    };
-    ensure_error_kind(&error, "runtime")
+    )?;
+    ensure_value(&extra, &Value::Number(42.0))
 }
 
 #[test]
@@ -189,6 +189,50 @@ fn supports_function_return_statements() -> TestResult {
         return Err("expected top-level return to fail".into());
     };
     ensure_error_contains(&error, "return statement outside function")
+}
+
+#[test]
+fn supports_function_parameters_and_local_scope() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r"
+        let global = 1;
+        let add = function(left, right) {
+            var local = left + right;
+            return local;
+        };
+        let missing = function(value) {
+            return value;
+        };
+        let bump = function(delta) {
+            global = global + delta;
+            return global;
+        };
+        let result = add(40, 2);
+        let absent = missing();
+        let total = bump(41);
+        result
+        ",
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_optional_value(context.get_global("global"), &Value::Number(42.0))?;
+    ensure_optional_value(context.get_global("result"), &Value::Number(42.0))?;
+    ensure_optional_value(context.get_global("absent"), &Value::Undefined)?;
+    ensure_optional_value(context.get_global("total"), &Value::Number(42.0))?;
+    ensure_missing_global(context.get_global("local"), "local")?;
+
+    expect_value(
+        r"
+        let duplicate = function(value, value) {
+            return value;
+        };
+        duplicate(1, 2)
+        ",
+        &Value::Number(2.0),
+    )
 }
 
 #[test]
@@ -375,6 +419,14 @@ fn ensure_optional_value(actual: Option<&Value>, expected: &Value) -> TestResult
     }
 
     Err(format!("expected global value {expected:?}, got {actual:?}").into())
+}
+
+fn ensure_missing_global(actual: Option<&Value>, name: &str) -> TestResult {
+    if actual.is_none() {
+        return Ok(());
+    }
+
+    Err(format!("expected global '{name}' to be missing, got {actual:?}").into())
 }
 
 fn ensure_output(actual: &[String], expected: &[String]) -> TestResult {

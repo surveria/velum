@@ -9,6 +9,7 @@ use crate::runtime_assertions::{
     runtime_exception_value, thrown_value_matches,
 };
 use crate::runtime_completion::Completion;
+use crate::runtime_numeric::{bitwise_and, compare_binary, numeric_binary};
 use crate::value::{ErrorName, ErrorObject, FunctionId, Value};
 
 const DEFAULT_MAX_SOURCE_LEN: usize = 65_536;
@@ -20,9 +21,6 @@ const DEFAULT_MAX_BINDINGS: usize = 4_096;
 const BOOLEAN_NAME: &str = "Boolean";
 const HOST_PRINT_NAME: &str = "print";
 const TEST262_ERROR_NAME: &str = "Test262Error";
-const TO_INT32_MODULUS: f64 = 4_294_967_296.0;
-const TO_INT32_SIGN_BOUNDARY: u64 = 2_147_483_648;
-const TO_INT32_SIGN_OFFSET: i64 = 4_294_967_296;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct RuntimeLimits {
@@ -86,6 +84,7 @@ impl Default for Runtime {
 pub struct Context {
     limits: RuntimeLimits,
     globals: BTreeMap<String, Binding>,
+    locals: Vec<BTreeMap<String, Binding>>,
     functions: Vec<Function>,
     output: Vec<String>,
     runtime_steps: usize,
@@ -100,6 +99,7 @@ struct Binding {
 
 #[derive(Debug, Clone)]
 struct Function {
+    params: Vec<String>,
     body: Vec<Stmt>,
 }
 
@@ -109,6 +109,7 @@ impl Context {
         Self {
             limits,
             globals: BTreeMap::new(),
+            locals: Vec::new(),
             functions: Vec::new(),
             output: Vec::new(),
             runtime_steps: 0,
@@ -235,7 +236,7 @@ impl Context {
     }
 
     fn hoist_var(&mut self, name: &str) -> Result<()> {
-        if let Some(binding) = self.globals.get(name) {
+        if let Some(binding) = self.active_bindings().get(name) {
             if binding.kind == DeclKind::Var {
                 return Ok(());
             }
@@ -245,7 +246,7 @@ impl Context {
         }
 
         self.ensure_binding_capacity(name)?;
-        self.globals.insert(
+        self.active_bindings_mut().insert(
             name.to_owned(),
             Binding {
                 value: Value::Undefined,
@@ -296,8 +297,7 @@ impl Context {
         match expr {
             Expr::Literal(value) => self.checked_value(value.clone()),
             Expr::Identifier(name) => self
-                .globals
-                .get(name)
+                .get_binding(name)
                 .map(|binding| binding.value.clone())
                 .ok_or_else(|| reference_error_undefined(name)),
             Expr::Unary { op, expr } => {
@@ -317,7 +317,7 @@ impl Context {
             }
             Expr::Member { object, property } => self.eval_member(object, property),
             Expr::Call { callee, args } => self.eval_call(callee, args),
-            Expr::Function { body } => Ok(self.create_function(body)),
+            Expr::Function { params, body } => Ok(self.create_function(params, body)),
             Expr::New { constructor, args } => self.eval_new(constructor, args),
         }
     }
@@ -377,12 +377,12 @@ impl Context {
         value: Value,
         catch_body: &[Stmt],
     ) -> Result<Completion> {
-        let previous = self.globals.remove(catch_param);
+        let previous = self.active_bindings_mut().remove(catch_param);
         if previous.is_none() {
             self.ensure_binding_capacity(catch_param)?;
         }
         self.checked_value(value.clone())?;
-        self.globals.insert(
+        self.active_bindings_mut().insert(
             catch_param.to_owned(),
             Binding {
                 value,
@@ -391,12 +391,13 @@ impl Context {
             },
         );
         let result = self.eval_block(catch_body);
-        let removed = self.globals.remove(catch_param);
+        let removed = self.active_bindings_mut().remove(catch_param);
         if removed.is_none() {
             return Err(Error::runtime("catch binding disappeared"));
         }
         if let Some(previous) = previous {
-            self.globals.insert(catch_param.to_owned(), previous);
+            self.active_bindings_mut()
+                .insert(catch_param.to_owned(), previous);
         }
         result
     }
@@ -453,7 +454,7 @@ impl Context {
             BinaryOp::GreaterEqual => {
                 compare_binary(&left, &right, ">=", |left, right| left >= right)?
             }
-            BinaryOp::BitAnd => Self::bitwise_and(&left, &right)?,
+            BinaryOp::BitAnd => bitwise_and(&left, &right)?,
             BinaryOp::LogicalAnd | BinaryOp::LogicalOr => {
                 return Err(Error::runtime("logical operator reached eager evaluation"));
             }
@@ -474,12 +475,8 @@ impl Context {
             }
         }
 
-        if !args.is_empty() {
-            return Err(Error::runtime("function arguments are not supported yet"));
-        }
-
         match self.eval_expr(callee)? {
-            Value::Function(id) => self.eval_function(id),
+            Value::Function(id) => self.eval_function(id, args),
             value => Err(Error::runtime(format!("'{value}' is not callable"))),
         }
     }
@@ -504,7 +501,7 @@ impl Context {
             return Err(Error::runtime("assert.throws callback must be a function"));
         };
 
-        match self.eval_function_completion(id)? {
+        match self.eval_function_completion(id, &[])? {
             Completion::Throw(value) if thrown_value_matches(&value, expected_name) => {
                 Ok(Value::Undefined)
             }
@@ -567,32 +564,73 @@ impl Context {
         )))
     }
 
-    fn create_function(&mut self, body: &[Stmt]) -> Value {
+    fn create_function(&mut self, params: &[String], body: &[Stmt]) -> Value {
         let id = FunctionId::new(self.functions.len());
         self.functions.push(Function {
+            params: params.to_vec(),
             body: body.to_vec(),
         });
         Value::Function(id)
     }
 
-    fn eval_function(&mut self, id: FunctionId) -> Result<Value> {
-        let value = self.eval_function_completion(id)?.into_function_result()?;
+    fn eval_function(&mut self, id: FunctionId, args: &[Expr]) -> Result<Value> {
+        let value = self
+            .eval_function_completion(id, args)?
+            .into_function_result()?;
         self.checked_value(value)
     }
 
-    fn eval_function_completion(&mut self, id: FunctionId) -> Result<Completion> {
-        let body = self
+    fn eval_function_completion(&mut self, id: FunctionId, args: &[Expr]) -> Result<Completion> {
+        let function = self
             .functions
             .get(id.index())
-            .map(|function| function.body.clone())
+            .cloned()
             .ok_or_else(|| Error::runtime("function id is not defined"))?;
-        self.hoist_var_declarations(&body)?;
-        self.eval_block(&body)
+        let args = self.eval_args(args)?;
+        let scope = self.function_scope(&function.params, args)?;
+        self.locals.push(scope);
+        let result = self
+            .hoist_var_declarations(&function.body)
+            .and_then(|()| self.eval_block(&function.body));
+        let removed = self.locals.pop();
+        if removed.is_none() {
+            return Err(Error::runtime("function scope disappeared"));
+        }
+        result
+    }
+
+    fn eval_args(&mut self, args: &[Expr]) -> Result<Vec<Value>> {
+        args.iter().map(|arg| self.eval_expr(arg)).collect()
+    }
+
+    fn function_scope(
+        &self,
+        params: &[String],
+        args: Vec<Value>,
+    ) -> Result<BTreeMap<String, Binding>> {
+        let mut scope = BTreeMap::new();
+        let mut args = args.into_iter();
+        for param in params {
+            if !scope.contains_key(param) {
+                self.ensure_extra_binding_capacity(scope.len())?;
+            }
+            let value = args.next().unwrap_or(Value::Undefined);
+            self.checked_value(value.clone())?;
+            scope.insert(
+                param.clone(),
+                Binding {
+                    value,
+                    mutable: true,
+                    kind: DeclKind::Var,
+                },
+            );
+        }
+        Ok(scope)
     }
 
     fn define(&mut self, name: &str, value: Value, kind: DeclKind) -> Result<()> {
         self.ensure_binding_capacity(name)?;
-        if self.globals.contains_key(name) {
+        if self.active_bindings().contains_key(name) {
             return Err(Error::runtime(format!(
                 "'{name}' has already been declared"
             )));
@@ -600,7 +638,7 @@ impl Context {
 
         self.checked_value(value.clone())?;
         let mutable = kind != DeclKind::Const;
-        self.globals.insert(
+        self.active_bindings_mut().insert(
             name.to_owned(),
             Binding {
                 value,
@@ -612,7 +650,10 @@ impl Context {
     }
 
     fn ensure_binding_capacity(&self, name: &str) -> Result<()> {
-        if self.globals.len() >= self.limits.max_bindings && !self.globals.contains_key(name) {
+        if self.active_bindings().contains_key(name) {
+            return Ok(());
+        }
+        if self.binding_count()? >= self.limits.max_bindings {
             return Err(Error::limit(format!(
                 "binding count exceeded {}",
                 self.limits.max_bindings
@@ -621,9 +662,33 @@ impl Context {
         Ok(())
     }
 
+    fn ensure_extra_binding_capacity(&self, extra_bindings: usize) -> Result<()> {
+        let projected = self
+            .binding_count()?
+            .checked_add(extra_bindings)
+            .ok_or_else(|| Error::limit("binding count overflowed"))?;
+        if projected >= self.limits.max_bindings {
+            return Err(Error::limit(format!(
+                "binding count exceeded {}",
+                self.limits.max_bindings
+            )));
+        }
+        Ok(())
+    }
+
+    fn binding_count(&self) -> Result<usize> {
+        self.locals
+            .iter()
+            .try_fold(self.globals.len(), |count, scope| {
+                count
+                    .checked_add(scope.len())
+                    .ok_or_else(|| Error::limit("binding count overflowed"))
+            })
+    }
+
     fn assign(&mut self, name: &str, value: Value) -> Result<()> {
         self.checked_value(value.clone())?;
-        let Some(binding) = self.globals.get_mut(name) else {
+        let Some(binding) = self.get_binding_mut(name) else {
             return Err(reference_error_undefined(name));
         };
 
@@ -633,6 +698,40 @@ impl Context {
 
         binding.value = value;
         Ok(())
+    }
+
+    fn active_bindings(&self) -> &BTreeMap<String, Binding> {
+        if let Some(scope) = self.locals.last() {
+            return scope;
+        }
+        &self.globals
+    }
+
+    fn active_bindings_mut(&mut self) -> &mut BTreeMap<String, Binding> {
+        if let Some(scope) = self.locals.last_mut() {
+            return scope;
+        }
+        &mut self.globals
+    }
+
+    fn get_binding(&self, name: &str) -> Option<&Binding> {
+        self.locals
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(name))
+            .or_else(|| self.globals.get(name))
+    }
+
+    fn get_binding_mut(&mut self, name: &str) -> Option<&mut Binding> {
+        if let Some(scope) = self
+            .locals
+            .iter_mut()
+            .rev()
+            .find(|scope| scope.contains_key(name))
+        {
+            return scope.get_mut(name);
+        }
+        self.globals.get_mut(name)
     }
 
     fn add(&self, left: &Value, right: &Value) -> Result<Value> {
@@ -645,12 +744,6 @@ impl Context {
             }
             _ => Err(Error::runtime("operator '+' expects numbers or strings")),
         }
-    }
-
-    fn bitwise_and(left: &Value, right: &Value) -> Result<Value> {
-        let left = bitwise_i32(left)?;
-        let right = bitwise_i32(right)?;
-        Ok(Value::Number(f64::from(left & right)))
     }
 
     fn checked_value(&self, value: Value) -> Result<Value> {
@@ -690,83 +783,4 @@ impl Context {
         }
         Ok(())
     }
-}
-
-fn numeric_binary(
-    left: &Value,
-    right: &Value,
-    op: &str,
-    apply: impl FnOnce(f64, f64) -> f64,
-) -> Result<Value> {
-    let Some(left) = left.as_number() else {
-        return Err(Error::runtime(format!("operator '{op}' expects numbers")));
-    };
-    let Some(right) = right.as_number() else {
-        return Err(Error::runtime(format!("operator '{op}' expects numbers")));
-    };
-    Ok(Value::Number(apply(left, right)))
-}
-
-fn compare_binary(
-    left: &Value,
-    right: &Value,
-    op: &str,
-    apply: impl FnOnce(f64, f64) -> bool,
-) -> Result<Value> {
-    let Some(left) = left.as_number() else {
-        return Err(Error::runtime(format!("operator '{op}' expects numbers")));
-    };
-    let Some(right) = right.as_number() else {
-        return Err(Error::runtime(format!("operator '{op}' expects numbers")));
-    };
-    Ok(Value::Bool(apply(left, right)))
-}
-
-fn bitwise_i32(value: &Value) -> Result<i32> {
-    match value {
-        Value::Undefined | Value::Null | Value::Function(_) | Value::Error(_) => Ok(0),
-        Value::Bool(value) => Ok(i32::from(*value)),
-        Value::Number(value) => number_to_i32(*value),
-        Value::String(value) => string_to_i32(value),
-    }
-}
-
-fn string_to_i32(value: &str) -> Result<i32> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return Ok(0);
-    }
-    let Ok(value) = trimmed.parse::<f64>() else {
-        return Ok(0);
-    };
-    number_to_i32(value)
-}
-
-fn number_to_i32(value: f64) -> Result<i32> {
-    if !value.is_finite() || value == 0.0 {
-        return Ok(0);
-    }
-
-    let truncated = if value.is_sign_negative() {
-        value.ceil()
-    } else {
-        value.floor()
-    };
-    let modulo = truncated.rem_euclid(TO_INT32_MODULUS);
-    let unsigned = format!("{modulo:.0}")
-        .parse::<u64>()
-        .map_err(|_| Error::runtime("bitwise '&' failed to convert number to uint32"))?;
-    let signed = if unsigned >= TO_INT32_SIGN_BOUNDARY {
-        let unsigned = i64::try_from(unsigned)
-            .map_err(|_| Error::runtime("bitwise '&' uint32 conversion overflowed"))?;
-        unsigned
-            .checked_sub(TO_INT32_SIGN_OFFSET)
-            .ok_or_else(|| Error::runtime("bitwise '&' int32 conversion overflowed"))?
-    } else {
-        i64::try_from(unsigned)
-            .map_err(|_| Error::runtime("bitwise '&' uint32 conversion overflowed"))?
-    };
-
-    i32::try_from(signed)
-        .map_err(|_| Error::runtime("bitwise '&' failed to convert number to int32"))
 }

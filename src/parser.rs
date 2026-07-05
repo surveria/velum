@@ -374,16 +374,28 @@ impl Parser {
 
     fn function_expression(&mut self) -> Result<Expr> {
         self.consume(&TokenKind::LParen, "expected '(' after 'function'")?;
-        if !self.check(&TokenKind::RParen) {
-            return Err(Error::parse(
-                "function parameters are not supported yet",
-                self.offset(),
-            ));
-        }
+        let params = self.function_parameters()?;
         self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
         let body = self.block_statements()?;
-        Ok(Expr::Function { body })
+        Ok(Expr::Function { params, body })
+    }
+
+    fn function_parameters(&mut self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        if self.check(&TokenKind::RParen) {
+            return Ok(params);
+        }
+
+        loop {
+            let name = self.consume_identifier("expected function parameter name")?;
+            params.push(name);
+            if !self.match_kind(&TokenKind::Comma) {
+                break;
+            }
+        }
+
+        Ok(params)
     }
 
     fn left_assoc(

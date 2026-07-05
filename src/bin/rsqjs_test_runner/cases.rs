@@ -36,6 +36,7 @@ const PATH_TRY_CATCH: &str = "tests/engine_cases/try_catch.js";
 const PATH_CONDITIONAL_BITAND: &str = "tests/engine_cases/conditional_bitand.js";
 const PATH_FUNCTION_EXPRESSION: &str = "tests/engine_cases/function_expression.js";
 const PATH_FUNCTION_RETURN: &str = "tests/engine_cases/function_return.js";
+const PATH_FUNCTION_PARAMETERS_SCOPE: &str = "tests/engine_cases/function_parameters_scope.js";
 const PATH_ASSERT_THROWS_REFERENCE_ERROR: &str =
     "tests/engine_cases/assert_throws_reference_error.js";
 const PATH_ERROR_OBJECT_PROPERTIES: &str = "tests/engine_cases/error_object_properties.js";
@@ -47,6 +48,8 @@ const PATH_TEST262_FUNCTION_EXPRESSION: &str =
     "tests/corpora/test262/active/language/expressions/function_expression.js";
 const PATH_TEST262_FUNCTION_RETURN: &str =
     "tests/corpora/test262/active/language/statements/function_return.js";
+const PATH_TEST262_FUNCTION_PARAMETERS_SCOPE: &str =
+    "tests/corpora/test262/active/language/statements/function_parameters_scope.js";
 const PATH_TEST262_LET_CONST: &str = "tests/corpora/test262/active/language/bindings/let_const.js";
 const PATH_TEST262_VAR_HOISTING: &str =
     "tests/corpora/test262/active/language/bindings/var_hoisting.js";
@@ -70,6 +73,8 @@ const PATH_QUICKJS_FUNCTION_EXPRESSION: &str =
     "tests/corpora/quickjs_differential/active/function_expression.js";
 const PATH_QUICKJS_FUNCTION_RETURN: &str =
     "tests/corpora/quickjs_differential/active/function_return.js";
+const PATH_QUICKJS_FUNCTION_PARAMETERS_SCOPE: &str =
+    "tests/corpora/quickjs_differential/active/function_parameters_scope.js";
 const PATH_QUICKJS_REFERENCE_ERROR_CATCH: &str =
     "tests/corpora/quickjs_differential/active/reference_error_catch.js";
 const PATH_QUICKJS_ERROR_OBJECT_PROPERTIES: &str =
@@ -79,6 +84,8 @@ const PATH_BENCH_CONDITIONAL_BITAND: &str = "tests/corpora/benchmarks/active/con
 const PATH_BENCH_FUNCTION_EXPRESSION: &str =
     "tests/corpora/benchmarks/active/function_expression.js";
 const PATH_BENCH_FUNCTION_RETURN: &str = "tests/corpora/benchmarks/active/function_return.js";
+const PATH_BENCH_FUNCTION_PARAMETERS_SCOPE: &str =
+    "tests/corpora/benchmarks/active/function_parameters_scope.js";
 const PATH_BENCH_STRING: &str = "tests/corpora/benchmarks/active/string_concat.js";
 const PATH_BENCH_BOOLEAN: &str = "tests/corpora/benchmarks/active/boolean_conversion.js";
 const PATH_BENCH_VAR_HOISTING: &str = "tests/corpora/benchmarks/active/var_hoisting.js";
@@ -154,6 +161,14 @@ pub fn engine_cases() -> Vec<EngineCase> {
             },
         },
         EngineCase {
+            id: "function_parameters_scope",
+            path: PATH_FUNCTION_PARAMETERS_SCOPE,
+            expectation: Expectation::OutputAndValue {
+                output: &["42", "undefined", "7", "99", "2", "42"],
+                value: "42",
+            },
+        },
+        EngineCase {
             id: "assert_throws_reference_error",
             path: PATH_ASSERT_THROWS_REFERENCE_ERROR,
             expectation: Expectation::OutputAndValue {
@@ -192,6 +207,11 @@ pub fn test262_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/statements/function_return",
             path: PATH_TEST262_FUNCTION_RETURN,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/statements/function_parameters_scope",
+            path: PATH_TEST262_FUNCTION_PARAMETERS_SCOPE,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
@@ -257,6 +277,10 @@ pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
             path: PATH_QUICKJS_FUNCTION_RETURN,
         },
         DifferentialCase {
+            id: "function_parameters_scope",
+            path: PATH_QUICKJS_FUNCTION_PARAMETERS_SCOPE,
+        },
+        DifferentialCase {
             id: "reference_error_catch",
             path: PATH_QUICKJS_REFERENCE_ERROR_CATCH,
         },
@@ -284,6 +308,10 @@ pub fn benchmark_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "function_return",
             path: PATH_BENCH_FUNCTION_RETURN,
+        },
+        BenchmarkCase {
+            id: "function_parameters_scope",
+            path: PATH_BENCH_FUNCTION_PARAMETERS_SCOPE,
         },
         BenchmarkCase {
             id: "string_concat",
