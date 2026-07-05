@@ -386,6 +386,7 @@ impl Parser {
             TokenKind::Identifier(name) => Expr::Identifier(name),
             TokenKind::Function => self.function_expression()?,
             TokenKind::LBrace => self.object_literal()?,
+            TokenKind::LBracket => self.array_literal()?,
             TokenKind::LParen => {
                 let expr = self.expression()?;
                 self.consume(&TokenKind::RParen, "expected ')' after expression")?;
@@ -417,6 +418,26 @@ impl Parser {
 
         self.consume(&TokenKind::RBrace, "expected '}' after object literal")?;
         Ok(Expr::Object(properties))
+    }
+
+    fn array_literal(&mut self) -> Result<Expr> {
+        let mut elements = Vec::new();
+        if self.match_kind(&TokenKind::RBracket) {
+            return Ok(Expr::Array(elements));
+        }
+
+        loop {
+            elements.push(self.expression()?);
+            if !self.match_kind(&TokenKind::Comma) {
+                break;
+            }
+            if self.match_kind(&TokenKind::RBracket) {
+                return Ok(Expr::Array(elements));
+            }
+        }
+
+        self.consume(&TokenKind::RBracket, "expected ']' after array literal")?;
+        Ok(Expr::Array(elements))
     }
 
     fn object_property_key(&mut self) -> Result<String> {

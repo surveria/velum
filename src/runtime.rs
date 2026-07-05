@@ -19,41 +19,6 @@ const HOST_PRINT_NAME: &str = "print";
 const TEST262_ERROR_NAME: &str = "Test262Error";
 
 #[derive(Debug, Clone)]
-pub struct Runtime {
-    limits: RuntimeLimits,
-}
-
-impl Runtime {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            limits: RuntimeLimits::default(),
-        }
-    }
-
-    #[must_use]
-    pub const fn with_limits(limits: RuntimeLimits) -> Self {
-        Self { limits }
-    }
-
-    #[must_use]
-    pub const fn limits(&self) -> RuntimeLimits {
-        self.limits
-    }
-
-    #[must_use]
-    pub const fn context(&self) -> Context {
-        Context::new(self.limits)
-    }
-}
-
-impl Default for Runtime {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct Context {
     limits: RuntimeLimits,
     globals: BindingScope,
@@ -297,6 +262,7 @@ impl Context {
             Expr::Call { callee, args } => self.eval_call(callee, args),
             Expr::Function { params, body } => Ok(self.create_function(params, body)),
             Expr::Object(properties) => self.eval_object_literal(properties),
+            Expr::Array(elements) => self.eval_array_literal(elements),
             Expr::New { constructor, args } => self.eval_new(constructor, args),
         }
     }
@@ -308,6 +274,18 @@ impl Context {
             values.push((property.key.clone(), value));
         }
         self.objects.create(
+            values,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn eval_array_literal(&mut self, elements: &[Expr]) -> Result<Value> {
+        let mut values = Vec::new();
+        for element in elements {
+            values.push(self.eval_expr(element)?);
+        }
+        self.objects.create_array(
             values,
             self.limits.max_objects,
             self.limits.max_object_properties,

@@ -90,6 +90,7 @@ pub enum Expr {
         body: Vec<Stmt>,
     },
     Object(Vec<ObjectProperty>),
+    Array(Vec<Self>),
     New {
         constructor: String,
         args: Vec<Self>,

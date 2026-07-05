@@ -441,6 +441,57 @@ fn supports_computed_properties() -> TestResult {
 }
 
 #[test]
+fn supports_array_literals_and_index_properties() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let values = [40, 1, 2];
+        let assigned = values[1] = values[0] + values[2];
+        values[3] = assigned;
+        values["01"] = 7;
+        print(values.length, values[2], values[9]);
+        print(values["01"], values.length);
+        values.length + values[3] - 4
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(
+        context.output(),
+        &["4 2 undefined".to_owned(), "7 4".to_owned()],
+    )?;
+    ensure_global_type(context.get_global("values").as_ref(), "object", "values")?;
+
+    expect_value("let empty = []; empty.length", &Value::Number(0.0))?;
+    expect_value(
+        "let trailing = [40, 2,]; trailing.length",
+        &Value::Number(2.0),
+    )?;
+    expect_value(
+        r"
+        let make = function() {
+            let values = [40];
+            return function() {
+                values[0] = values[0] + 1;
+                return values[0];
+            };
+        };
+        let next = make();
+        next();
+        next()
+        ",
+        &Value::Number(42.0),
+    )?;
+
+    let Err(error) = eval("let values = [1, 2]; values.length = 1;") else {
+        return Err("expected array length assignment to fail".into());
+    };
+    ensure_error_contains(&error, "array length assignment")
+}
+
+#[test]
 fn supports_assert_throws_and_reference_errors() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
