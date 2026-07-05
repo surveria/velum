@@ -5,10 +5,11 @@ The operational task board and branch protocol live in
 starts or completes a compatibility, embedding, testing, runtime-architecture,
 resource-control, observability, performance, or memory task.
 
-This roadmap is a short product-level view. The engine must become a safe,
-embeddable Rust library first, then grow compatibility, runtime architecture,
-resource controls, and observability while keeping QuickJS-like size and speed
-as acceptance criteria.
+This roadmap is a short product-level view. It is not an optimization plan.
+The engine must become a safe, embeddable Rust library first, then grow
+compatibility, built-ins, modules, async integration, resource controls, and
+observability. Runtime architecture, performance, and memory work support those
+product goals while keeping QuickJS-like size and speed as acceptance criteria.
 
 ## Phase 0: Repository And Guardrails
 
@@ -61,7 +62,14 @@ as acceptance criteria.
 - Separate parse, compile, execute, host-callback, and teardown measurements.
 - Keep the API stable enough for a later bytecode backend.
 
-## Phase 6: Modules, Jobs, And Async
+## Phase 6: Diagnostics And Error Model
+
+- Make syntax, runtime, host callback, and resource-limit errors precise.
+- Preserve contextual error chains for embedders.
+- Report enough source, feature, and resource context for production logs.
+- Keep diagnostics stable enough that applications can act on them.
+
+## Phase 7: Modules, Jobs, And Async
 
 - Design module loading around embedder-owned I/O and policy.
 - Add promises and the JavaScript job queue.
@@ -69,14 +77,14 @@ as acceptance criteria.
 - Add async Rust host callbacks through explicit job-draining APIs.
 - Keep the embedding application in control of the outer executor.
 
-## Phase 7: Resource Control
+## Phase 8: Resource Control
 
 - Expand hard limits from source and runtime counters toward heap, stack, atom,
   job, module, host callback, and wall-clock controls.
 - Make every limit visible through the library API.
 - Preserve deterministic teardown reporting.
 
-## Phase 8: Production Observability
+## Phase 9: Production Observability
 
 - Add structured execution events.
 - Add profiling hooks and resource snapshots.
@@ -84,7 +92,7 @@ as acceptance criteria.
 - Add interrupt hooks for watchdogs.
 - Add feature gates for constrained devices.
 
-## Phase 9: Runtime Data Model
+## Phase 10: Runtime Data Model
 
 - Add atom ids for identifiers, property keys, function names, and reusable
   string constants.
@@ -93,16 +101,23 @@ as acceptance criteria.
 - Split array storage into packed, holey, and sparse representations.
 - Prefer VM-owned indexed heaps over scattered small allocations.
 
-## Phase 10: Bytecode And Dispatch
+## Phase 11: Bytecode And Dispatch
 
 - Add bytecode after enough language coverage exists to benchmark honestly.
 - Keep opcodes compact and cache-friendly.
 - Preserve interpreter fallback tests so bytecode generation has an oracle.
 - Add inline property caches after shapes exist.
 
-## Phase 11: Heap Management And Collection
+## Phase 12: Heap Management And Collection
 
 - Grow indexed VM ownership into deterministic heap accounting.
 - Evaluate a safe collector design over explicit VM roots.
 - Keep collection compatible with host callbacks, promises, queued jobs, hard
   limits, and many isolated VMs.
+
+## Continuous: Performance And Memory Guardrails
+
+- Keep implemented comparable benchmarks within the current project budget.
+- Add benchmarks when a feature creates a hot path.
+- Treat performance and memory regressions as measured checkpoint tasks.
+- Record exceptions in reports and the project plan instead of hiding them.
