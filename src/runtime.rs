@@ -5,10 +5,10 @@ use crate::error::{Error, Result};
 use crate::lexer;
 use crate::parser;
 use crate::runtime_assertions::{
-    expected_error_name, is_assert_throws_call, reference_error_undefined, runtime_exception_value,
-    thrown_value_matches,
+    error_property, expected_error_name, is_assert_throws_call, reference_error_undefined,
+    runtime_exception_value, thrown_value_matches,
 };
-use crate::value::{FunctionId, Value};
+use crate::value::{ErrorName, ErrorObject, FunctionId, Value};
 
 const DEFAULT_MAX_SOURCE_LEN: usize = 65_536;
 const DEFAULT_MAX_STATEMENTS: usize = 4_096;
@@ -325,9 +325,7 @@ impl Context {
                 self.assign(name, value.clone())?;
                 Ok(value)
             }
-            Expr::Member { property, .. } => Err(Error::runtime(format!(
-                "member access '{property}' is not supported outside host calls"
-            ))),
+            Expr::Member { object, property } => self.eval_member(object, property),
             Expr::Call { callee, args } => self.eval_call(callee, args),
             Expr::Function { body } => Ok(self.create_function(body)),
             Expr::New { constructor, args } => self.eval_new(constructor, args),
@@ -527,6 +525,17 @@ impl Context {
         }
     }
 
+    fn eval_member(&mut self, object: &Expr, property: &str) -> Result<Value> {
+        let object = self.eval_expr(object)?;
+        match object {
+            Value::Error(error) => self.checked_value(error_property(&error, property)),
+            value => Err(Error::runtime(format!(
+                "member access '{property}' is not supported for {}",
+                value.type_name()
+            ))),
+        }
+    }
+
     fn eval_print_call(&mut self, args: &[Expr]) -> Result<Value> {
         let values = args
             .iter()
@@ -557,10 +566,13 @@ impl Context {
             )));
         }
         let Some(message) = args.first() else {
-            return Ok(Value::String(TEST262_ERROR_NAME.to_owned()));
+            return Ok(Value::Error(ErrorObject::new(ErrorName::Test262Error, "")));
         };
         let message = self.eval_expr(message)?;
-        Ok(Value::String(message.display_for_concat()))
+        Ok(Value::Error(ErrorObject::new(
+            ErrorName::Test262Error,
+            message.display_for_concat(),
+        )))
     }
 
     fn create_function(&mut self, body: &[Stmt]) -> Value {
@@ -650,8 +662,14 @@ impl Context {
     }
 
     fn checked_value(&self, value: Value) -> Result<Value> {
-        if let Value::String(text) = &value {
-            self.check_string_len(text)?;
+        match &value {
+            Value::String(text) => self.check_string_len(text)?,
+            Value::Error(error) => self.check_string_len(error.message())?,
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::Function(_) => {}
         }
         Ok(value)
     }
@@ -714,7 +732,7 @@ fn compare_binary(
 
 fn bitwise_i32(value: &Value) -> Result<i32> {
     match value {
-        Value::Undefined | Value::Null | Value::Function(_) => Ok(0),
+        Value::Undefined | Value::Null | Value::Function(_) | Value::Error(_) => Ok(0),
         Value::Bool(value) => Ok(i32::from(*value)),
         Value::Number(value) => number_to_i32(*value),
         Value::String(value) => string_to_i32(value),

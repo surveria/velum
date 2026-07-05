@@ -1,7 +1,7 @@
 use crate::{
     ast::Expr,
     error::{Error, Result},
-    value::Value,
+    value::{ErrorName, ErrorObject, Value},
 };
 
 const ASSERT_NAME: &str = "assert";
@@ -32,25 +32,35 @@ pub fn expected_error_name(expr: &Expr) -> Result<&'static str> {
 pub fn thrown_value_matches(value: &Value, expected_name: &str) -> bool {
     matches!(
         (value, expected_name),
-        (Value::String(message), REFERENCE_ERROR_NAME)
-            if message.starts_with(REFERENCE_ERROR_PREFIX)
+        (Value::Error(error), REFERENCE_ERROR_NAME)
+            if error.name() == ErrorName::ReferenceError
     )
+}
+
+pub fn error_property(error: &ErrorObject, property: &str) -> Value {
+    match property {
+        "name" => Value::String(error.name().as_str().to_owned()),
+        "message" => Value::String(error.message().to_owned()),
+        _ => Value::Undefined,
+    }
 }
 
 pub fn runtime_exception_value(error: &Error) -> Option<Value> {
     match error {
-        Error::Runtime { message } if message.starts_with(REFERENCE_ERROR_PREFIX) => {
-            Some(Value::String(message.clone()))
-        }
-        Error::Lex { .. }
-        | Error::Parse { .. }
-        | Error::Runtime { .. }
-        | Error::ResourceLimit { .. } => None,
+        Error::Runtime { message } => reference_error_message(message)
+            .map(|message| Value::Error(ErrorObject::new(ErrorName::ReferenceError, message))),
+        Error::Lex { .. } | Error::Parse { .. } | Error::ResourceLimit { .. } => None,
     }
 }
 
 pub fn reference_error_undefined(name: &str) -> Error {
     Error::runtime(format!("{REFERENCE_ERROR_NAME}: '{name}' is not defined"))
+}
+
+fn reference_error_message(message: &str) -> Option<&str> {
+    message
+        .strip_prefix(REFERENCE_ERROR_PREFIX)?
+        .strip_prefix(' ')
 }
 
 fn is_identifier(expr: &Expr, expected: &str) -> bool {

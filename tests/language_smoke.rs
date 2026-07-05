@@ -153,6 +153,8 @@ fn supports_assert_throws_and_reference_errors() -> TestResult {
     let value = context.eval(
         r"
         var first, second = 40, third = second + 2;
+        let caught_name;
+        let caught_message;
 
         assert.throws(ReferenceError, function() {
             absent = absent;
@@ -161,6 +163,8 @@ fn supports_assert_throws_and_reference_errors() -> TestResult {
         try {
             missing = missing;
         } catch (error) {
+            caught_name = error.name;
+            caught_message = error.message;
             print(error);
         }
 
@@ -170,6 +174,14 @@ fn supports_assert_throws_and_reference_errors() -> TestResult {
 
     ensure_value(&value, &Value::Number(42.0))?;
     ensure_optional_value(context.get_global("first"), &Value::Undefined)?;
+    ensure_optional_value(
+        context.get_global("caught_name"),
+        &Value::String("ReferenceError".to_owned()),
+    )?;
+    ensure_optional_value(
+        context.get_global("caught_message"),
+        &Value::String("'missing' is not defined".to_owned()),
+    )?;
     ensure_output(
         context.output(),
         &["ReferenceError: 'missing' is not defined".to_owned()],
@@ -190,6 +202,31 @@ fn supports_assert_throws_and_reference_errors() -> TestResult {
         return Err("expected missing identifier to fail".into());
     };
     ensure_error_contains(&error, "ReferenceError: 'missing' is not defined")
+}
+
+#[test]
+fn supports_error_object_properties() -> TestResult {
+    expect_value(
+        r#"
+        try {
+            missing = missing;
+        } catch (error) {
+            error.name + ":" + error.message
+        }
+        "#,
+        &Value::String("ReferenceError:'missing' is not defined".to_owned()),
+    )?;
+
+    expect_value(
+        r#"
+        try {
+            throw new Test262Error("bad value");
+        } catch (error) {
+            error.name + ":" + error.message
+        }
+        "#,
+        &Value::String("Test262Error:bad value".to_owned()),
+    )
 }
 
 #[test]
