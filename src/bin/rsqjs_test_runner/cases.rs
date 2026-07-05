@@ -36,6 +36,7 @@ const PATH_TRY_CATCH: &str = "tests/engine_cases/try_catch.js";
 const PATH_TRY_FINALLY: &str = "tests/engine_cases/try_finally.js";
 const PATH_CONDITIONAL_BITAND: &str = "tests/engine_cases/conditional_bitand.js";
 const PATH_UPDATE_EXPRESSIONS: &str = "tests/engine_cases/update_expressions.js";
+const PATH_COMPOUND_ASSIGNMENT: &str = "tests/engine_cases/compound_assignment.js";
 const PATH_WHILE_STATEMENTS: &str = "tests/engine_cases/while_statements.js";
 const PATH_BREAK_CONTINUE: &str = "tests/engine_cases/break_continue.js";
 const PATH_FOR_STATEMENTS: &str = "tests/engine_cases/for_statements.js";
@@ -74,6 +75,8 @@ const PATH_TEST262_UNARY_OPERATORS: &str =
     "tests/corpora/test262/active/language/expressions/unary_operators.js";
 const PATH_TEST262_UPDATE_EXPRESSIONS: &str =
     "tests/corpora/test262/active/language/expressions/update_expressions.js";
+const PATH_TEST262_COMPOUND_ASSIGNMENT: &str =
+    "tests/corpora/test262/active/language/expressions/compound_assignment.js";
 const PATH_TEST262_LET_CONST: &str = "tests/corpora/test262/active/language/bindings/let_const.js";
 const PATH_TEST262_VAR_HOISTING: &str =
     "tests/corpora/test262/active/language/bindings/var_hoisting.js";
@@ -131,6 +134,8 @@ const PATH_QUICKJS_UNARY_OPERATORS: &str =
     "tests/corpora/quickjs_differential/active/unary_operators.js";
 const PATH_QUICKJS_UPDATE_EXPRESSIONS: &str =
     "tests/corpora/quickjs_differential/active/update_expressions.js";
+const PATH_QUICKJS_COMPOUND_ASSIGNMENT: &str =
+    "tests/corpora/quickjs_differential/active/compound_assignment.js";
 const PATH_QUICKJS_REFERENCE_ERROR_CATCH: &str =
     "tests/corpora/quickjs_differential/active/reference_error_catch.js";
 const PATH_QUICKJS_ERROR_OBJECT_PROPERTIES: &str =
@@ -156,6 +161,8 @@ const PATH_BENCH_COMPUTED_PROPERTIES: &str =
 const PATH_BENCH_ARRAY_LITERALS: &str = "tests/corpora/benchmarks/active/array_literals.js";
 const PATH_BENCH_UNARY_OPERATORS: &str = "tests/corpora/benchmarks/active/unary_operators.js";
 const PATH_BENCH_UPDATE_EXPRESSIONS: &str = "tests/corpora/benchmarks/active/update_expressions.js";
+const PATH_BENCH_COMPOUND_ASSIGNMENT: &str =
+    "tests/corpora/benchmarks/active/compound_assignment.js";
 const PATH_BENCH_STRING: &str = "tests/corpora/benchmarks/active/string_concat.js";
 const PATH_BENCH_BOOLEAN: &str = "tests/corpora/benchmarks/active/boolean_conversion.js";
 const PATH_BENCH_VAR_HOISTING: &str = "tests/corpora/benchmarks/active/var_hoisting.js";
@@ -169,6 +176,7 @@ const PATH_BENCH_ERROR_OBJECT_PROPERTIES: &str =
 pub fn engine_cases() -> Vec<EngineCase> {
     let mut cases = engine_language_cases();
     cases.extend(engine_control_flow_cases());
+    cases.extend(engine_function_cases());
     cases.extend(engine_object_cases());
     cases.extend(engine_runtime_cases());
     cases
@@ -245,6 +253,20 @@ fn engine_control_flow_cases() -> Vec<EngineCase> {
             },
         },
         EngineCase {
+            id: "compound_assignment",
+            path: PATH_COMPOUND_ASSIGNMENT,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "15 12 48 24 3 2 2",
+                    "cam-01",
+                    "15 12 12",
+                    "10 2 2",
+                    "kr 42 42",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
             id: "while_statements",
             path: PATH_WHILE_STATEMENTS,
             expectation: Expectation::OutputAndValue {
@@ -291,6 +313,11 @@ fn engine_control_flow_cases() -> Vec<EngineCase> {
                 value: "42",
             },
         },
+    ]
+}
+
+fn engine_function_cases() -> Vec<EngineCase> {
+    vec![
         EngineCase {
             id: "function_expression",
             path: PATH_FUNCTION_EXPRESSION,
@@ -452,6 +479,11 @@ fn test262_expression_cases() -> Vec<EngineCase> {
             path: PATH_TEST262_UPDATE_EXPRESSIONS,
             expectation: Expectation::Value("42"),
         },
+        EngineCase {
+            id: "language/expressions/compound_assignment",
+            path: PATH_TEST262_COMPOUND_ASSIGNMENT,
+            expectation: Expectation::Value("42"),
+        },
     ]
 }
 
@@ -607,6 +639,10 @@ pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
             path: PATH_QUICKJS_UPDATE_EXPRESSIONS,
         },
         DifferentialCase {
+            id: "compound_assignment",
+            path: PATH_QUICKJS_COMPOUND_ASSIGNMENT,
+        },
+        DifferentialCase {
             id: "reference_error_catch",
             path: PATH_QUICKJS_REFERENCE_ERROR_CATCH,
         },
@@ -682,6 +718,10 @@ pub fn benchmark_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "update_expressions",
             path: PATH_BENCH_UPDATE_EXPRESSIONS,
+        },
+        BenchmarkCase {
+            id: "compound_assignment",
+            path: PATH_BENCH_COMPOUND_ASSIGNMENT,
         },
         BenchmarkCase {
             id: "string_concat",
