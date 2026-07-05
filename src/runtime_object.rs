@@ -64,6 +64,23 @@ impl ObjectHeap {
         Ok(Value::Object(id))
     }
 
+    pub fn create_with_prototype(
+        &mut self,
+        prototype: Option<ObjectId>,
+        max_objects: usize,
+    ) -> Result<Value> {
+        if self.objects.len() >= max_objects {
+            return Err(Error::limit(format!("object count exceeded {max_objects}")));
+        }
+
+        let mut object = Object::ordinary();
+        object.prototype = prototype;
+
+        let id = ObjectId::new(self.objects.len());
+        self.objects.push(object);
+        Ok(Value::Object(id))
+    }
+
     pub fn get(&self, id: ObjectId, property: &str) -> Result<Value> {
         self.get_in_chain(id, property)
     }

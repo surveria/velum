@@ -6,14 +6,16 @@ use crate::{
     runtime::Context,
     runtime_completion::Completion,
     runtime_scope::{BindingCell, BindingScope},
-    value::{FunctionId, Value},
+    value::{FunctionId, ObjectId, Value},
 };
 
 const FUNCTION_LENGTH_PROPERTY: &str = "length";
 const FUNCTION_NAME_PROPERTY: &str = "name";
+const FUNCTION_PROTOTYPE_PROPERTY: &str = "prototype";
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub(super) struct FunctionProperties {
+    prototype: Value,
     properties: BTreeMap<String, Value>,
     property_order: Vec<String>,
 }
@@ -24,16 +26,20 @@ impl Context {
         name: Option<&str>,
         params: &[String],
         body: &[Stmt],
-    ) -> Value {
+    ) -> Result<Value> {
         let id = FunctionId::new(self.functions.len());
+        let function = Value::Function(id);
+        let prototype = self
+            .objects
+            .create_with_prototype(None, self.limits.max_objects)?;
         self.functions.push(super::Function {
             name: name.unwrap_or_default().to_owned(),
             params: params.to_vec(),
             body: body.to_vec(),
             captures: self.locals.clone(),
-            properties: FunctionProperties::new(),
+            properties: FunctionProperties::new(prototype),
         });
-        Value::Function(id)
+        Ok(function)
     }
 
     pub(crate) fn eval_function(&mut self, id: FunctionId, args: &[Expr]) -> Result<Value> {
@@ -98,6 +104,7 @@ impl Context {
         let value = match property {
             FUNCTION_LENGTH_PROPERTY => Value::Number(function.length()?),
             FUNCTION_NAME_PROPERTY => Value::String(function.name.clone()),
+            FUNCTION_PROTOTYPE_PROPERTY => function.properties.prototype(),
             _ => function.properties.get(property),
         };
         self.checked_value(value)
@@ -105,10 +112,10 @@ impl Context {
 
     pub(crate) fn has_function_property(&self, id: FunctionId, property: &str) -> Result<bool> {
         let function = self.function(id)?;
-        Ok(
-            matches!(property, FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY)
-                || function.properties.has(property),
-        )
+        Ok(matches!(
+            property,
+            FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY | FUNCTION_PROTOTYPE_PROPERTY
+        ) || function.properties.has(property))
     }
 
     pub(crate) fn set_function_property(
@@ -133,6 +140,23 @@ impl Context {
 
     pub(crate) fn function_enumerable_keys(&self, id: FunctionId) -> Result<Vec<String>> {
         self.function(id).map(|function| function.properties.keys())
+    }
+
+    pub(crate) fn function_constructor_prototype(
+        &self,
+        id: FunctionId,
+    ) -> Result<Option<ObjectId>> {
+        let function = self.function(id)?;
+        match function.properties.prototype() {
+            Value::Object(id) => Ok(Some(id)),
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::Function(_)
+            | Value::Error(_) => Ok(None),
+        }
     }
 
     fn function(&self, id: FunctionId) -> Result<&super::Function> {
@@ -167,11 +191,16 @@ impl Context {
 }
 
 impl FunctionProperties {
-    const fn new() -> Self {
+    const fn new(prototype: Value) -> Self {
         Self {
+            prototype,
             properties: BTreeMap::new(),
             property_order: Vec::new(),
         }
+    }
+
+    fn prototype(&self) -> Value {
+        self.prototype.clone()
     }
 
     fn get(&self, property: &str) -> Value {
@@ -190,6 +219,10 @@ impl FunctionProperties {
             property.as_str(),
             FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY
         ) {
+            return Ok(());
+        }
+        if property == FUNCTION_PROTOTYPE_PROPERTY {
+            self.prototype = value;
             return Ok(());
         }
         match self.properties.entry(property) {
@@ -212,6 +245,9 @@ impl FunctionProperties {
     fn delete(&mut self, property: &str) -> bool {
         if matches!(property, FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY) {
             return true;
+        }
+        if property == FUNCTION_PROTOTYPE_PROPERTY {
+            return false;
         }
         let removed_property = self.properties.remove(property);
         if removed_property.is_some() {

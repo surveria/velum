@@ -206,7 +206,7 @@ impl Context {
             }
             Expr::Call { callee, args } => self.eval_call(callee, args),
             Expr::Function { name, params, body } => {
-                Ok(self.create_function(name.as_deref(), params, body))
+                self.create_function(name.as_deref(), params, body)
             }
             Expr::Object(properties) => self.eval_object_literal(properties),
             Expr::Array(elements) => self.eval_array_literal(elements),
@@ -509,9 +509,7 @@ impl Context {
 
     fn eval_new(&mut self, constructor: &str, args: &[Expr]) -> Result<Value> {
         if constructor != TEST262_ERROR_NAME {
-            return Err(Error::runtime(format!(
-                "constructor '{constructor}' is not supported"
-            )));
+            return self.eval_function_constructor(constructor, args);
         }
         let Some(message) = args.first() else {
             return Ok(Value::Error(ErrorObject::new(ErrorName::Test262Error, "")));
@@ -521,6 +519,36 @@ impl Context {
             ErrorName::Test262Error,
             message.display_for_concat(),
         )))
+    }
+
+    fn eval_function_constructor(&mut self, constructor: &str, args: &[Expr]) -> Result<Value> {
+        let value = self
+            .get_binding(constructor)
+            .map(|binding| binding.value())
+            .ok_or_else(|| reference_error_undefined(constructor))?;
+        let Value::Function(id) = value else {
+            return Err(Error::runtime(format!(
+                "'{constructor}' is not a constructor"
+            )));
+        };
+        let prototype = self.function_constructor_prototype(id)?;
+        let object = self
+            .objects
+            .create_with_prototype(prototype, self.limits.max_objects)?;
+        match self.eval_function_completion_with_this(id, args, object.clone())? {
+            Completion::Return(value) if Self::constructor_return_is_object(&value) => Ok(value),
+            Completion::Normal(_) | Completion::Return(_) => Ok(object),
+            Completion::Throw(value) => Err(Error::runtime(format!("uncaught throw: {value}"))),
+            Completion::Break => Err(Error::runtime("break statement outside loop")),
+            Completion::Continue => Err(Error::runtime("continue statement outside loop")),
+        }
+    }
+
+    const fn constructor_return_is_object(value: &Value) -> bool {
+        matches!(
+            value,
+            Value::Function(_) | Value::Object(_) | Value::Error(_)
+        )
     }
 
     pub(crate) fn push_lexical_scope(&mut self) {
