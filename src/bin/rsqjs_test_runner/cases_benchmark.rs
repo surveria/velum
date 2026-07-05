@@ -70,6 +70,8 @@ const PATH_BENCH_REFERENCE_ERROR_CATCH: &str =
     "tests/corpora/benchmarks/active/reference_error_catch.js";
 const PATH_BENCH_ERROR_OBJECT_PROPERTIES: &str =
     "tests/corpora/benchmarks/active/error_object_properties.js";
+const PATH_BENCH_STANDARD_ERROR_CONSTRUCTORS: &str =
+    "tests/corpora/benchmarks/active/standard_error_constructors.js";
 
 pub fn benchmark_cases() -> Vec<BenchmarkCase> {
     let mut cases = benchmark_control_flow_cases();
@@ -279,6 +281,10 @@ fn benchmark_runtime_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "error_object_properties",
             path: PATH_BENCH_ERROR_OBJECT_PROPERTIES,
+        },
+        BenchmarkCase {
+            id: "standard_error_constructors",
+            path: PATH_BENCH_STANDARD_ERROR_CONSTRUCTORS,
         },
     ]
 }

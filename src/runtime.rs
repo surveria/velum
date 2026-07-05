@@ -18,7 +18,7 @@ use crate::runtime_property::{
     set_property,
 };
 use crate::runtime_scope::BindingScope;
-use crate::value::{ErrorName, ErrorObject, Value};
+use crate::value::{ErrorName, Value};
 
 #[path = "runtime_declaration.rs"]
 mod runtime_declaration;
@@ -384,14 +384,17 @@ impl Context {
         let Some(callback) = args.next() else {
             return Err(Error::runtime("assert.throws requires a callback"));
         };
+        let message = args.next();
         if args.next().is_some() {
             return Err(Error::runtime(
-                "assert.throws supports exactly two arguments",
+                "assert.throws supports at most three arguments",
             ));
         }
-
         let expected_name = expected_error_name(expected)?;
         let callback = self.eval_expr(callback)?;
+        if let Some(message) = message {
+            self.eval_expr(message)?;
+        }
         let Value::Function(id) = callback else {
             return Err(Error::runtime("assert.throws callback must be a function"));
         };
@@ -525,14 +528,7 @@ impl Context {
         if constructor != TEST262_ERROR_NAME {
             return self.eval_function_constructor(constructor, args);
         }
-        let Some(message) = args.first() else {
-            return Ok(Value::Error(ErrorObject::new(ErrorName::Test262Error, "")));
-        };
-        let message = self.eval_expr(message)?;
-        Ok(Value::Error(ErrorObject::new(
-            ErrorName::Test262Error,
-            message.display_for_concat(),
-        )))
+        self.eval_error_constructor(ErrorName::Test262Error, args)
     }
 
     fn eval_function_constructor(&mut self, constructor: &str, args: &[Expr]) -> Result<Value> {

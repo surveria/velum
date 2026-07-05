@@ -19,10 +19,13 @@ pub fn is_assert_throws_call(callee: &Expr) -> bool {
 
 pub fn expected_error_name(expr: &Expr) -> Result<&'static str> {
     match expr {
-        Expr::Identifier(name) if name == REFERENCE_ERROR_NAME => Ok(REFERENCE_ERROR_NAME),
-        Expr::Identifier(name) => Err(Error::runtime(format!(
-            "assert.throws error constructor '{name}' is not supported"
-        ))),
+        Expr::Identifier(name) => ErrorName::from_constructor_name(name)
+            .map(ErrorName::as_str)
+            .ok_or_else(|| {
+                Error::runtime(format!(
+                    "assert.throws error constructor '{name}' is not supported"
+                ))
+            }),
         _ => Err(Error::runtime(
             "assert.throws first argument must be an error constructor",
         )),
@@ -30,11 +33,16 @@ pub fn expected_error_name(expr: &Expr) -> Result<&'static str> {
 }
 
 pub fn thrown_value_matches(value: &Value, expected_name: &str) -> bool {
-    matches!(
-        (value, expected_name),
-        (Value::Error(error), REFERENCE_ERROR_NAME)
-            if error.name() == ErrorName::ReferenceError
-    )
+    let Some(expected) = ErrorName::from_constructor_name(expected_name) else {
+        return false;
+    };
+    let Value::Error(error) = value else {
+        return false;
+    };
+    if expected == ErrorName::Base {
+        return error.name().is_standard();
+    }
+    error.name() == expected
 }
 
 pub fn error_property(error: &ErrorObject, property: &str) -> Value {
