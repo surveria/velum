@@ -1,4 +1,4 @@
-# Development Plan
+# Project Development Plan
 
 This document is the working plan for growing `rs-quickjs` into a safe-Rust,
 embeddable JavaScript engine. It describes what we are building, the rough
@@ -8,6 +8,11 @@ The plan is intentionally operational. Each feature, compatibility,
 embedding, memory, testing, or optimization task should update this document in
 the same branch that implements the task. Future work should resume from
 repository state instead of relying on conversation history.
+
+This is not an optimization-only backlog. Performance and memory budgets are
+guardrails for every implemented feature, while the project plan also covers
+the library API, language compatibility, host extensions, resource control,
+observability, and long-term runtime architecture.
 
 ## Product Direction
 
@@ -37,6 +42,12 @@ cannot provide as cleanly:
 
 ## Targets
 
+- Make the Rust library API the primary product surface before treating the CLI
+  as more than a validation tool.
+- Support many independent VM instances in one Rust process without mutable
+  process-global JavaScript state.
+- Provide typed host extensions and an async-host-callback path that can be
+  driven by an embedder-owned executor.
 - Keep implemented, comparable benchmark cases within `1.10x` QuickJS latency.
 - Keep implemented, comparable memory measurements within `1.10x` QuickJS
   memory use when the report has a reliable reference measurement.
@@ -93,7 +104,8 @@ important than listing every passing or intentionally skipped case.
 ### Performance And Memory
 
 Performance work keeps implemented behavior close to QuickJS instead of
-letting compatibility progress accumulate hidden debt.
+letting compatibility progress accumulate hidden debt. It is a continuous
+constraint on feature work, not the only purpose of the roadmap.
 
 The major directions are:
 
@@ -139,13 +151,18 @@ note about what changed, what was difficult, and what remains possible later.
 | Done | Status | Task | Workstream | Purpose | Current notes |
 | --- | --- | --- | --- | --- | --- |
 | [x] | Done | Establish persistent development plan | Planning | Create the general project plan, task board, and task protocol. | Replaces the optimization-only plan with a broader development plan. Future branches should update this board when they start and finish work. |
-| [ ] | Backlog | Object and prototype benchmark debt | Performance and memory | Bring `object_prototype_root`, `prototype_constructor_property`, and `object_builtin` within the `1.10x` latency and memory budget where measurements are stable. | Start from the latest report and preserve semantics with engine tests and QuickJS differential cases. |
+| [x] | Done | Generalize project roadmap scope | Planning | Rebalance the plan around product development order instead of an optimization-first backlog. | Clarifies that performance and memory are recurring guardrails, while embedding API, compatibility, host extensions, resource control, and observability are first-class roadmap tracks. |
 | [ ] | Backlog | Embedding API skeleton | Embedding API | Introduce the public direction for `Engine`, isolated `Vm`, execution `Context`, and embedder-owned configuration. | Must include direct library API tests for multiple isolated VMs, output separation, resource failures, and teardown behavior. |
-| [ ] | Backlog | `CompiledScript` AST wrapper | Embedding API / performance | Add a reusable compiled representation before bytecode, so embedders can parse once and evaluate repeatedly. | Must include direct library API tests and benchmarks that separate parse cost from eval cost. |
+| [ ] | Backlog | Multi-VM isolation fixtures | Embedding API / testing | Prove that many VMs can run in one Rust process with isolated globals, output, limits, errors, and teardown. | This is the first product-level proof that the engine is a library, not only a CLI interpreter. |
+| [ ] | Backlog | Host function API skeleton | Embedding API | Add the first typed Rust host function registration path. | Must return contextual `Result` errors and avoid VM-crossing value leaks. Async support comes later through the job queue task. |
+| [ ] | Backlog | Test262 feature map | Compatibility / testing | Convert full Test262 results into a feature-oriented progress map. | Reports should show total corpus progress, enabled areas, skipped areas with reasons, and top failure classes without listing every passing case. |
 | [ ] | Backlog | Parser and lexer Test262 cluster | Compatibility | Reduce top parser and lexer failure categories in full Test262 reports. | Select a narrow syntax cluster per branch and add focused engine fixtures. |
+| [ ] | Backlog | Runtime semantics cluster | Compatibility | Expand coherent statement, expression, scope, function, and error semantics. | Prefer clusters that unlock many Test262 cases without blocking the future `CompiledScript` model. |
 | [ ] | Backlog | Basic built-ins expansion | Compatibility | Expand high-value `Object`, `Array`, `String`, `Number`, and `Math` behavior. | Each built-in method needs engine fixtures, Test262 mapping, QuickJS differential coverage when practical, and benchmarks for hot paths. |
+| [ ] | Backlog | `CompiledScript` AST wrapper | Embedding API / performance | Add a reusable compiled representation before bytecode, so embedders can parse once and evaluate repeatedly. | Must include direct library API tests and benchmarks that separate parse cost from eval cost. |
 | [ ] | Backlog | Atom interner | Performance and memory | Store identifiers, property keys, function names, and reusable string constants as compact atom ids. | The table should be engine-owned or VM-owned without mutable process-global state. |
 | [ ] | Backlog | Slot-based local bindings | Performance and memory | Replace repeated string lookups for local variables with compiler-assigned local, global, and upvalue slots. | Requires scope analysis, closure/upvalue model, and migration tests for lexical bindings. |
+| [ ] | Backlog | Object and prototype performance checkpoint | Performance and memory | Bring `object_prototype_root`, `prototype_constructor_property`, and `object_builtin` within the `1.10x` latency and memory budget where measurements are stable. | This is a checkpoint task driven by reports, not the whole project direction. Preserve semantics with engine tests and QuickJS differential cases. |
 | [ ] | Backlog | Shape-based object layout | Performance and memory | Move ordinary objects toward shape plus slot storage instead of per-object key maps for stable layouts. | This unlocks faster property access and lower allocation pressure. |
 | [ ] | Backlog | Dense array fast paths | Performance and memory | Split array storage into packed, holey, and sparse representations. | Most array-heavy benchmarks need packed or holey arrays to stay close to QuickJS. |
 | [ ] | Backlog | Promise job queue and async host callbacks | Embedding API / compatibility | Add the job model needed by promises and async Rust host functions. | The embedding application must own the outer executor; the VM owns queued JavaScript jobs. |
@@ -155,57 +172,62 @@ note about what changed, what was difficult, and what remains possible later.
 
 ## Preferred Order
 
-The order below is the default direction. It can change when the latest report
-shows a clearer bottleneck or compatibility gap, but branches should document
-why they changed priority.
+The order below is the default project direction. It can change when the
+latest report shows a clearer bottleneck, compatibility gap, or embedding API
+need, but branches should document why they changed priority.
 
 1. Keep the repository and reports trustworthy.
    Guardrails, CI, test reports, QuickJS setup, Test262 setup, and benchmark
    reporting are part of the product. Do not let them drift.
 
-2. Stabilize current hot paths.
-   Object/prototype and array benchmark exceptions should be reduced before
-   widening language coverage too aggressively. This keeps performance debt
-   visible and prevents future features from depending on slow layouts.
-
-3. Strengthen the embedding API.
+2. Strengthen the embedding API.
    Add direct library tests for many VMs in one process, isolation, resource
    failures, teardown, and host output. Keep CLI behavior as smoke coverage, not
    the only proof.
 
-4. Introduce `CompiledScript` before bytecode.
-   The first reusable compilation layer can wrap the current AST. It should
-   prove the public API shape, separate parse cost from execution cost, and give
-   embedders a stable contract before the evaluator is replaced.
+3. Add the first host extension path.
+   Typed synchronous host functions should land before async callbacks. This
+   proves argument conversion, contextual host errors, output separation, and
+   VM-boundary rules.
 
-5. Expand compatibility in narrow clusters.
+4. Expand compatibility in narrow clusters.
    Use Test262 failure classifications to pick parser, runtime, and built-in
    clusters. Each branch should close a coherent area rather than mixing
    unrelated syntax and runtime changes.
 
-6. Add atoms and slot-based locals.
+5. Introduce `CompiledScript` before bytecode.
+   The first reusable compilation layer can wrap the current AST. It should
+   prove the public API shape, separate parse cost from execution cost, and give
+   embedders a stable contract before the evaluator is replaced.
+
+6. Keep performance checkpoints close behind feature work.
+   Benchmark exceptions should be handled as recurring checkpoint tasks, not as
+   the only roadmap. When a feature makes a hot path slower, either fix it in
+   the same branch or record a measured exception with a follow-up task.
+
+7. Add atoms and slot-based locals.
    Atoms reduce repeated string allocation, cloning, and comparison. Slot-based
    locals turn variable access into checked index operations and prepare the
    runtime for bytecode.
 
-7. Add shape-based objects and dense arrays.
+8. Add shape-based objects and dense arrays.
    Object and array layout work should happen before large built-in expansion
    makes slow storage harder to replace.
 
-8. Add promises, job queue, and async host callbacks.
+9. Add promises, job queue, and async host callbacks.
    Promise semantics and async host integration are product-critical, but they
    need the embedding model and job ownership to be clear first.
 
-9. Add bytecode and inline caches.
+10. Add bytecode and inline caches.
    Bytecode should preserve the `CompiledScript` API. Inline caches become most
    valuable after shapes and bytecode exist.
 
-10. Add explicit VM heap accounting and GC.
+11. Add explicit VM heap accounting and GC.
     The indexed heap model should grow into deterministic accounting and a safe
     collection strategy compatible with host callbacks, promises, queued jobs,
     and many isolated VMs.
 
-11. Add observability and production controls.
+12. Add observability and production controls.
     Profiling hooks, structured events, resource snapshots, and feature gates
     should become part of the embeddable engine surface.
 
