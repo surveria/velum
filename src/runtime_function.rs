@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     ast::{DeclKind, Expr, Stmt},
+    atom::AtomId,
     error::{Error, Result},
     runtime::Context,
     runtime_completion::Completion,
@@ -64,9 +65,11 @@ impl Context {
         } else {
             Value::Undefined
         };
+        let param_atoms = self.function_param_atoms(params)?;
         self.functions.push(super::Function {
             name: name.unwrap_or_default().to_owned(),
             params: Rc::clone(params),
+            param_atoms,
             body: Rc::clone(body),
             captures: self.locals.clone(),
             properties: FunctionProperties::new(prototype),
@@ -105,17 +108,17 @@ impl Context {
         args: &[Expr],
         this_value: Value,
     ) -> Result<Completion> {
-        let (params, body, captures) = {
+        let (param_atoms, body, captures) = {
             let function = self.function(id)?;
             (
-                Rc::clone(&function.params),
+                Rc::clone(&function.param_atoms),
                 Rc::clone(&function.body),
                 function.captures.clone(),
             )
         };
         let args = self.eval_args(args)?;
         let caller_locals = std::mem::replace(&mut self.locals, captures);
-        let scope = match self.function_scope(&params, args) {
+        let scope = match self.function_scope(&param_atoms, args) {
             Ok(scope) => scope,
             Err(error) => {
                 self.locals = caller_locals;
@@ -423,17 +426,24 @@ impl Context {
         Ok(values)
     }
 
-    fn function_scope(&mut self, params: &[String], args: Vec<Value>) -> Result<BindingScope> {
+    fn function_param_atoms(&mut self, params: &[String]) -> Result<Rc<[AtomId]>> {
+        let mut atoms = Vec::with_capacity(params.len());
+        for param in params {
+            atoms.push(self.intern_atom(param)?);
+        }
+        Ok(atoms.into())
+    }
+
+    fn function_scope(&self, params: &[AtomId], args: Vec<Value>) -> Result<BindingScope> {
         let mut scope = BindingScope::new();
         let mut args = args.into_iter();
-        for param in params {
-            let atom = self.intern_atom(param)?;
-            if !scope.contains(atom) {
+        for atom in params {
+            if !scope.contains(*atom) {
                 self.ensure_extra_binding_capacity(scope.len())?;
             }
             let value = args.next().unwrap_or(Value::Undefined);
             self.checked_value(value.clone())?;
-            scope.insert(atom, BindingCell::new(value, true, DeclKind::Var));
+            scope.insert(*atom, BindingCell::new(value, true, DeclKind::Var));
         }
         Ok(scope)
     }

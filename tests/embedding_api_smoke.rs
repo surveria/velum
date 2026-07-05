@@ -266,6 +266,30 @@ fn tracks_atoms_for_function_property_keys_without_interning_missing_properties(
 }
 
 #[test]
+fn tracks_atoms_for_function_parameters_before_calls() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let value = vm.context().eval(
+        r"
+        let add = function add(left, right) {
+            return left + right;
+        };
+        ",
+    )?;
+    ensure_value(&value, &Value::Undefined)?;
+    let function_atoms = vm.resource_usage().atom_count;
+
+    let value = vm.context().eval("add(20, 22)")?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_usize(vm.resource_usage().atom_count, function_atoms)?;
+
+    let value = vm.context().eval("add(1, 2)")?;
+    ensure_value(&value, &Value::Number(3.0))?;
+    ensure_usize(vm.resource_usage().atom_count, function_atoms)
+}
+
+#[test]
 fn preserves_binding_slot_updates_and_shadowing() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
