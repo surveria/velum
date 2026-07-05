@@ -84,6 +84,59 @@ fn enumerates_and_deletes_custom_function_properties() -> TestResult {
 }
 
 #[test]
+fn preserves_out_of_order_function_property_lookup_with_vector_index() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let fn = function namedCamera() {
+            return 42;
+        };
+        fn.zeta = 1;
+        fn.alpha = 2;
+        fn.middle = 3;
+        fn.zeta = fn.zeta + fn.alpha;
+        Object.defineProperty(fn, "middle", {
+            value: fn.middle + fn.zeta,
+            enumerable: true,
+            writable: true,
+            configurable: true
+        });
+        let alphaDescriptor = Object.getOwnPropertyDescriptor(fn, "alpha");
+        let deleteAlpha = delete fn.alpha;
+        fn.alpha = 20;
+
+        let seen = "";
+        for (let key in fn) {
+            seen = seen + key + ":" + fn[key] + ";";
+        }
+        print(seen);
+        print(alphaDescriptor.value, deleteAlpha, "middle" in fn);
+
+        seen === "zeta:3;middle:6;alpha:20;" &&
+            alphaDescriptor.value === 2 &&
+            deleteAlpha === true &&
+            ("zeta" in fn) &&
+            ("alpha" in fn) &&
+            ("middle" in fn) &&
+            fn.zeta === 3 &&
+            fn.alpha === 20 &&
+            fn.middle === 6 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(
+        context.output(),
+        &[
+            "zeta:3;middle:6;alpha:20;".to_owned(),
+            "2 true true".to_owned(),
+        ],
+    )
+}
+
+#[test]
 fn keeps_builtin_function_metadata_read_only() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

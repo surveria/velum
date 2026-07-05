@@ -1,5 +1,3 @@
-use std::collections::{BTreeMap, btree_map::Entry};
-
 use crate::{
     atom::AtomTable,
     error::{Error, Result},
@@ -21,8 +19,32 @@ pub(super) struct FunctionProperties {
     prototype: Value,
     length: FunctionIntrinsicProperty,
     name: FunctionIntrinsicProperty,
-    properties: BTreeMap<PropertyKey, FunctionProperty>,
+    properties: Vec<FunctionPropertyEntry>,
     property_order: Vec<PropertyKey>,
+}
+
+#[derive(Debug, Clone)]
+struct FunctionPropertyEntry {
+    key: PropertyKey,
+    property: FunctionProperty,
+}
+
+impl FunctionPropertyEntry {
+    const fn new(key: PropertyKey, property: FunctionProperty) -> Self {
+        Self { key, property }
+    }
+
+    const fn key(&self) -> PropertyKey {
+        self.key
+    }
+
+    const fn property(&self) -> &FunctionProperty {
+        &self.property
+    }
+
+    const fn property_mut(&mut self) -> &mut FunctionProperty {
+        &mut self.property
+    }
 }
 
 impl FunctionProperties {
@@ -31,7 +53,7 @@ impl FunctionProperties {
             prototype,
             length: FunctionIntrinsicProperty::new(),
             name: FunctionIntrinsicProperty::new(),
-            properties: BTreeMap::new(),
+            properties: Vec::new(),
             property_order: Vec::new(),
         }
     }
@@ -44,8 +66,7 @@ impl FunctionProperties {
         let Some(key) = property.key() else {
             return Value::Undefined;
         };
-        self.properties
-            .get(&key)
+        self.function_property(key)
             .map_or(Value::Undefined, FunctionProperty::value)
     }
 
@@ -54,7 +75,8 @@ impl FunctionProperties {
         property: PropertyLookup<'_>,
     ) -> Option<DataPropertyDescriptor> {
         let key = property.key()?;
-        self.properties.get(&key).map(FunctionProperty::descriptor)
+        self.function_property(key)
+            .map(FunctionProperty::descriptor)
     }
 
     pub(super) fn intrinsic_descriptor(
@@ -80,7 +102,7 @@ impl FunctionProperties {
     pub(super) fn has(&self, property: PropertyLookup<'_>) -> bool {
         property
             .key()
-            .is_some_and(|key| self.properties.contains_key(&key))
+            .is_some_and(|key| self.contains_function_property(key))
     }
 
     pub(super) fn has_intrinsic(&self, property: &str) -> bool {
@@ -105,20 +127,19 @@ impl FunctionProperties {
             self.prototype = value;
             return Ok(());
         }
-        match self.properties.entry(property) {
-            Entry::Occupied(mut entry) => {
-                entry.get_mut().set_value(value);
-            }
-            Entry::Vacant(entry) => {
-                if self.property_order.len() >= max_properties {
-                    return Err(Error::limit(format!(
-                        "function property count exceeded {max_properties}"
-                    )));
-                }
-                self.property_order.push(*entry.key());
-                entry.insert(FunctionProperty::new(value, PropertyEnumerable::Yes));
-            }
+        if let Some(existing) = self.function_property_mut(property) {
+            existing.set_value(value);
+            return Ok(());
         }
+        if self.property_order.len() >= max_properties {
+            return Err(Error::limit(format!(
+                "function property count exceeded {max_properties}"
+            )));
+        }
+        self.push_function_property(
+            property,
+            FunctionProperty::new(value, PropertyEnumerable::Yes),
+        );
         Ok(())
     }
 
@@ -138,13 +159,13 @@ impl FunctionProperties {
         let Some(key) = property.key() else {
             return true;
         };
-        let Some(existing_property) = self.properties.get(&key) else {
+        let Some(existing_property) = self.function_property(key) else {
             return true;
         };
         if !existing_property.is_configurable() {
             return false;
         }
-        let Some(_) = self.properties.remove(&key) else {
+        let Some(_) = self.remove_function_property(key) else {
             return true;
         };
         self.property_order.retain(|stored_key| *stored_key != key);
@@ -162,8 +183,7 @@ impl FunctionProperties {
         self.push_intrinsic_key(&mut keys, FUNCTION_NAME_PROPERTY, name);
         for key in &self.property_order {
             if self
-                .properties
-                .get(key)
+                .function_property(*key)
                 .is_some_and(FunctionProperty::is_enumerable)
             {
                 keys.push(atoms.name(key.atom())?.to_owned());
@@ -178,16 +198,12 @@ impl FunctionProperties {
         value: Value,
         enumerable: PropertyEnumerable,
     ) {
-        match self.properties.entry(property) {
-            Entry::Occupied(mut entry) => {
-                entry.get_mut().set_value(value);
-                entry.get_mut().set_enumerable(enumerable);
-            }
-            Entry::Vacant(entry) => {
-                self.property_order.push(*entry.key());
-                entry.insert(FunctionProperty::new(value, enumerable));
-            }
+        if let Some(existing) = self.function_property_mut(property) {
+            existing.set_value(value);
+            existing.set_enumerable(enumerable);
+            return;
         }
+        self.push_function_property(property, FunctionProperty::new(value, enumerable));
     }
 
     pub(super) fn define_property(
@@ -209,20 +225,16 @@ impl FunctionProperties {
             }
             return Ok(());
         }
-        match self.properties.entry(property) {
-            Entry::Occupied(mut entry) => {
-                entry.get_mut().define(&update);
-            }
-            Entry::Vacant(entry) => {
-                if self.property_order.len() >= max_properties {
-                    return Err(Error::limit(format!(
-                        "function property count exceeded {max_properties}"
-                    )));
-                }
-                self.property_order.push(*entry.key());
-                entry.insert(FunctionProperty::from_update(update));
-            }
+        if let Some(existing) = self.function_property_mut(property) {
+            existing.define(&update);
+            return Ok(());
         }
+        if self.property_order.len() >= max_properties {
+            return Err(Error::limit(format!(
+                "function property count exceeded {max_properties}"
+            )));
+        }
+        self.push_function_property(property, FunctionProperty::from_update(update));
         Ok(())
     }
 
@@ -289,5 +301,46 @@ impl FunctionProperties {
         if descriptor.enumerable().is_yes() {
             keys.push(property.to_owned());
         }
+    }
+
+    fn contains_function_property(&self, property: PropertyKey) -> bool {
+        self.property_position(property).is_ok()
+    }
+
+    fn function_property(&self, property: PropertyKey) -> Option<&FunctionProperty> {
+        let position = self.property_position(property).ok()?;
+        self.properties
+            .get(position)
+            .map(FunctionPropertyEntry::property)
+    }
+
+    fn function_property_mut(&mut self, property: PropertyKey) -> Option<&mut FunctionProperty> {
+        let position = self.property_position(property).ok()?;
+        self.properties
+            .get_mut(position)
+            .map(FunctionPropertyEntry::property_mut)
+    }
+
+    fn push_function_property(&mut self, property: PropertyKey, value: FunctionProperty) {
+        let Err(position) = self.property_position(property) else {
+            return;
+        };
+        self.property_order.push(property);
+        self.properties
+            .insert(position, FunctionPropertyEntry::new(property, value));
+    }
+
+    fn remove_function_property(&mut self, property: PropertyKey) -> Option<FunctionProperty> {
+        let position = self.property_position(property).ok()?;
+        let entry = self.properties.get(position)?;
+        if entry.key() != property {
+            return None;
+        }
+        Some(self.properties.remove(position).property)
+    }
+
+    fn property_position(&self, property: PropertyKey) -> std::result::Result<usize, usize> {
+        self.properties
+            .binary_search_by(|entry| entry.key().cmp(&property))
     }
 }
