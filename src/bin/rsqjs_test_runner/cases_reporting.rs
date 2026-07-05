@@ -17,6 +17,8 @@ const PATH_QUICKJS_BREAK_CONTINUE: &str =
     "tests/corpora/quickjs_differential/active/break_continue.js";
 const PATH_QUICKJS_FOR_STATEMENTS: &str =
     "tests/corpora/quickjs_differential/active/for_statements.js";
+const PATH_QUICKJS_FOR_IN_STATEMENTS: &str =
+    "tests/corpora/quickjs_differential/active/for_in_statements.js";
 const PATH_QUICKJS_SWITCH_STATEMENTS: &str =
     "tests/corpora/quickjs_differential/active/switch_statements.js";
 const PATH_QUICKJS_BLOCK_LEXICAL_SCOPE: &str =
@@ -56,6 +58,7 @@ const PATH_BENCH_CONDITIONAL_BITAND: &str = "tests/corpora/benchmarks/active/con
 const PATH_BENCH_WHILE_STATEMENTS: &str = "tests/corpora/benchmarks/active/while_statements.js";
 const PATH_BENCH_BREAK_CONTINUE: &str = "tests/corpora/benchmarks/active/break_continue.js";
 const PATH_BENCH_FOR_STATEMENTS: &str = "tests/corpora/benchmarks/active/for_statements.js";
+const PATH_BENCH_FOR_IN_STATEMENTS: &str = "tests/corpora/benchmarks/active/for_in_statements.js";
 const PATH_BENCH_SWITCH_STATEMENTS: &str = "tests/corpora/benchmarks/active/switch_statements.js";
 const PATH_BENCH_BLOCK_LEXICAL_SCOPE: &str =
     "tests/corpora/benchmarks/active/block_lexical_scope.js";
@@ -143,6 +146,10 @@ fn quickjs_control_flow_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "for_statements",
             path: PATH_QUICKJS_FOR_STATEMENTS,
+        },
+        DifferentialCase {
+            id: "for_in_statements",
+            path: PATH_QUICKJS_FOR_IN_STATEMENTS,
         },
         DifferentialCase {
             id: "switch_statements",
@@ -254,6 +261,10 @@ fn benchmark_control_flow_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "for_statements",
             path: PATH_BENCH_FOR_STATEMENTS,
+        },
+        BenchmarkCase {
+            id: "for_in_statements",
+            path: PATH_BENCH_FOR_IN_STATEMENTS,
         },
         BenchmarkCase {
             id: "switch_statements",
