@@ -103,6 +103,8 @@ const PATH_QUICKJS_ERROR_OBJECT_PROPERTIES: &str =
     "tests/corpora/quickjs_differential/active/error_object_properties.js";
 const PATH_QUICKJS_STANDARD_ERROR_CONSTRUCTORS: &str =
     "tests/corpora/quickjs_differential/active/standard_error_constructors.js";
+const PATH_QUICKJS_BOOLEAN_BUILTIN: &str =
+    "tests/corpora/quickjs_differential/active/boolean_builtin.js";
 
 pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
     let mut cases = quickjs_language_cases();
@@ -340,6 +342,10 @@ fn quickjs_runtime_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "standard_error_constructors",
             path: PATH_QUICKJS_STANDARD_ERROR_CONSTRUCTORS,
+        },
+        DifferentialCase {
+            id: "boolean_builtin",
+            path: PATH_QUICKJS_BOOLEAN_BUILTIN,
         },
         DifferentialCase {
             id: "string_builtin",

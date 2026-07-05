@@ -7,3 +7,6 @@ template-literal-no-substitution	test/language/expressions/template-literal/no-s
 string-constructor-call-undefined	test/built-ins/String/S15.5.1.1_A1_T1.js	run	official Test262 String function undefined conversion smoke
 string-constructor-call-null	test/built-ins/String/S15.5.1.1_A1_T2.js	run	official Test262 String function null conversion smoke
 string-constructor-length	test/built-ins/String/S15.5.3_A1.js	run	official Test262 String.length smoke
+boolean-constructor-call	test/built-ins/Boolean/S15.6.1.1_A1_T1.js	run	official Test262 Boolean function conversion smoke
+boolean-constructor-new	test/built-ins/Boolean/S15.6.2.1_A1.js	run	official Test262 Boolean constructor smoke
+boolean-prototype-constructor	test/built-ins/Boolean/prototype/constructor/S15.6.4.1_A1.js	run	official Test262 Boolean prototype constructor smoke
