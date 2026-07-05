@@ -44,6 +44,8 @@ const PATH_QUICKJS_OBJECT_LITERALS: &str =
     "tests/corpora/quickjs_differential/active/object_literals.js";
 const PATH_QUICKJS_OBJECT_PROTOTYPES: &str =
     "tests/corpora/quickjs_differential/active/object_prototypes.js";
+const PATH_QUICKJS_OBJECT_PROTOTYPE_ROOT: &str =
+    "tests/corpora/quickjs_differential/active/object_prototype_root.js";
 const PATH_QUICKJS_COMPUTED_PROPERTIES: &str =
     "tests/corpora/quickjs_differential/active/computed_properties.js";
 const PATH_QUICKJS_ARRAY_LITERALS: &str =
@@ -179,6 +181,10 @@ fn quickjs_object_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "object_prototypes",
             path: PATH_QUICKJS_OBJECT_PROTOTYPES,
+        },
+        DifferentialCase {
+            id: "object_prototype_root",
+            path: PATH_QUICKJS_OBJECT_PROTOTYPE_ROOT,
         },
         DifferentialCase {
             id: "computed_properties",
