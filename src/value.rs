@@ -13,6 +13,44 @@ impl FunctionId {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ErrorName {
+    ReferenceError,
+    Test262Error,
+}
+
+impl ErrorName {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::ReferenceError => "ReferenceError",
+            Self::Test262Error => "Test262Error",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ErrorObject {
+    name: ErrorName,
+    message: String,
+}
+
+impl ErrorObject {
+    pub(crate) fn new(name: ErrorName, message: impl Into<String>) -> Self {
+        Self {
+            name,
+            message: message.into(),
+        }
+    }
+
+    pub(crate) const fn name(&self) -> ErrorName {
+        self.name
+    }
+
+    pub(crate) const fn message(&self) -> &str {
+        self.message.as_str()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Undefined,
@@ -21,6 +59,7 @@ pub enum Value {
     Number(f64),
     String(String),
     Function(FunctionId),
+    Error(ErrorObject),
 }
 
 impl Value {
@@ -31,7 +70,7 @@ impl Value {
             Self::Bool(value) => *value,
             Self::Number(value) => *value != 0.0 && !value.is_nan(),
             Self::String(value) => !value.is_empty(),
-            Self::Function(_) => true,
+            Self::Function(_) | Self::Error(_) => true,
         }
     }
 
@@ -39,7 +78,7 @@ impl Value {
     pub const fn type_name(&self) -> &'static str {
         match self {
             Self::Undefined => "undefined",
-            Self::Null => "object",
+            Self::Null | Self::Error(_) => "object",
             Self::Bool(_) => "boolean",
             Self::Number(_) => "number",
             Self::String(_) => "string",
@@ -77,6 +116,13 @@ impl fmt::Display for Value {
             }
             Self::String(value) => f.write_str(value),
             Self::Function(_) => f.write_str("function()"),
+            Self::Error(error) => {
+                if error.message().is_empty() {
+                    f.write_str(error.name().as_str())
+                } else {
+                    write!(f, "{}: {}", error.name().as_str(), error.message())
+                }
+            }
         }
     }
 }

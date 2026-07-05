@@ -37,6 +37,7 @@ const PATH_CONDITIONAL_BITAND: &str = "tests/engine_cases/conditional_bitand.js"
 const PATH_FUNCTION_EXPRESSION: &str = "tests/engine_cases/function_expression.js";
 const PATH_ASSERT_THROWS_REFERENCE_ERROR: &str =
     "tests/engine_cases/assert_throws_reference_error.js";
+const PATH_ERROR_OBJECT_PROPERTIES: &str = "tests/engine_cases/error_object_properties.js";
 const PATH_TEST262_ARITHMETIC: &str =
     "tests/corpora/test262/active/language/expressions/arithmetic.js";
 const PATH_TEST262_CONDITIONAL_BITAND: &str =
@@ -50,6 +51,8 @@ const PATH_TEST262_TRY_CATCH: &str =
     "tests/corpora/test262/active/language/statements/try_catch.js";
 const PATH_TEST262_ASSERT_THROWS_REFERENCE_ERROR: &str =
     "tests/corpora/test262/active/language/statements/assert_throws_reference_error.js";
+const PATH_TEST262_ERROR_OBJECT_PROPERTIES: &str =
+    "tests/corpora/test262/active/language/statements/error_object_properties.js";
 const PATH_QUICKJS_PRINT_ARITHMETIC: &str =
     "tests/corpora/quickjs_differential/active/print_arithmetic.js";
 const PATH_QUICKJS_PRINT_BINDING: &str =
@@ -64,6 +67,8 @@ const PATH_QUICKJS_FUNCTION_EXPRESSION: &str =
     "tests/corpora/quickjs_differential/active/function_expression.js";
 const PATH_QUICKJS_REFERENCE_ERROR_CATCH: &str =
     "tests/corpora/quickjs_differential/active/reference_error_catch.js";
+const PATH_QUICKJS_ERROR_OBJECT_PROPERTIES: &str =
+    "tests/corpora/quickjs_differential/active/error_object_properties.js";
 const PATH_BENCH_ARITHMETIC: &str = "tests/corpora/benchmarks/active/arithmetic_chain.js";
 const PATH_BENCH_CONDITIONAL_BITAND: &str = "tests/corpora/benchmarks/active/conditional_bitand.js";
 const PATH_BENCH_FUNCTION_EXPRESSION: &str =
@@ -74,6 +79,8 @@ const PATH_BENCH_VAR_HOISTING: &str = "tests/corpora/benchmarks/active/var_hoist
 const PATH_BENCH_TRY_CATCH: &str = "tests/corpora/benchmarks/active/try_catch.js";
 const PATH_BENCH_REFERENCE_ERROR_CATCH: &str =
     "tests/corpora/benchmarks/active/reference_error_catch.js";
+const PATH_BENCH_ERROR_OBJECT_PROPERTIES: &str =
+    "tests/corpora/benchmarks/active/error_object_properties.js";
 
 pub fn engine_cases() -> Vec<EngineCase> {
     vec![
@@ -140,6 +147,14 @@ pub fn engine_cases() -> Vec<EngineCase> {
                 value: "42",
             },
         },
+        EngineCase {
+            id: "error_object_properties",
+            path: PATH_ERROR_OBJECT_PROPERTIES,
+            expectation: Expectation::OutputAndValue {
+                output: &["ReferenceError", "'missing' is not defined"],
+                value: "42",
+            },
+        },
     ]
 }
 
@@ -180,6 +195,11 @@ pub fn test262_cases() -> Vec<EngineCase> {
             path: PATH_TEST262_ASSERT_THROWS_REFERENCE_ERROR,
             expectation: Expectation::Value("42"),
         },
+        EngineCase {
+            id: "language/statements/error_object_properties",
+            path: PATH_TEST262_ERROR_OBJECT_PROPERTIES,
+            expectation: Expectation::Value("42"),
+        },
     ]
 }
 
@@ -217,6 +237,10 @@ pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
             id: "reference_error_catch",
             path: PATH_QUICKJS_REFERENCE_ERROR_CATCH,
         },
+        DifferentialCase {
+            id: "error_object_properties",
+            path: PATH_QUICKJS_ERROR_OBJECT_PROPERTIES,
+        },
     ]
 }
 
@@ -253,6 +277,10 @@ pub fn benchmark_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "reference_error_catch",
             path: PATH_BENCH_REFERENCE_ERROR_CATCH,
+        },
+        BenchmarkCase {
+            id: "error_object_properties",
+            path: PATH_BENCH_ERROR_OBJECT_PROPERTIES,
         },
     ]
 }
