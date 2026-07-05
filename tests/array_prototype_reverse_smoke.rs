@@ -1,0 +1,149 @@
+use rs_quickjs::{Runtime, Value};
+
+type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+
+const REVERSE_SOURCE: &str = r#"
+let values = [1, 2, 3, 4];
+let returned = values.reverse();
+let sameObject = returned === values;
+
+let odd = [1, 2, 3];
+let oddReturned = odd.reverse();
+
+let side = 0;
+let marker = function() {
+    side = 42;
+    return "ignored";
+};
+let sideCopy = [7];
+let sideReturn = sideCopy.reverse(marker());
+
+let sparse = Array(4);
+sparse[1] = "one";
+sparse[3] = "three";
+let sparseReturn = sparse.reverse();
+
+Array.prototype[2] = "proto-two";
+let inheritedUpper = Array(3);
+let inheritedUpperReturn = inheritedUpper.reverse();
+delete Array.prototype[2];
+
+Array.prototype[0] = "proto-zero";
+let inheritedLower = Array(3);
+let inheritedLowerReturn = inheritedLower.reverse();
+delete Array.prototype[0];
+
+let prototypeKeys = "";
+for (let key in Array.prototype) {
+    prototypeKeys = prototypeKeys + key + ";";
+}
+
+print("reverse", sameObject, values.join("|"), values.length, oddReturned === odd, odd.join("|"));
+print("side", side, sideReturn === sideCopy, sideCopy.join("|"));
+print("sparse", sparse.length, sparse[0], "1" in sparse, sparse[2], "3" in sparse, sparse.join("|"), sparseReturn === sparse);
+print("inherited-upper", inheritedUpperReturn === inheritedUpper, inheritedUpper[0], "0" in inheritedUpper, inheritedUpper[2], "2" in inheritedUpper);
+print("inherited-lower", inheritedLowerReturn === inheritedLower, inheritedLower[0], "0" in inheritedLower, inheritedLower[2], "2" in inheritedLower);
+print("meta", typeof Array.prototype.reverse, Array.prototype.reverse.name, Array.prototype.reverse.length);
+print("keys:" + prototypeKeys);
+print("in", "reverse" in values);
+
+sameObject &&
+    values.join("|") === "4|3|2|1" &&
+    values.length === 4 &&
+    oddReturned === odd &&
+    odd.join("|") === "3|2|1" &&
+    side === 42 &&
+    sideReturn === sideCopy &&
+    sideCopy.join("|") === "7" &&
+    sparse.length === 4 &&
+    sparse[0] === "three" &&
+    !("1" in sparse) &&
+    sparse[2] === "one" &&
+    !("3" in sparse) &&
+    sparse.join("|") === "three||one|" &&
+    sparseReturn === sparse &&
+    inheritedUpperReturn === inheritedUpper &&
+    inheritedUpper[0] === "proto-two" &&
+    ("0" in inheritedUpper) &&
+    inheritedUpper[2] === undefined &&
+    !("2" in inheritedUpper) &&
+    inheritedLowerReturn === inheritedLower &&
+    inheritedLower[0] === undefined &&
+    !("0" in inheritedLower) &&
+    inheritedLower[2] === "proto-zero" &&
+    ("2" in inheritedLower) &&
+    typeof Array.prototype.reverse === "function" &&
+    Array.prototype.reverse.name === "reverse" &&
+    Array.prototype.reverse.length === 0 &&
+    prototypeKeys === "" &&
+    ("reverse" in values) ? 42 : 0
+"#;
+
+const REVERSE_OUTPUT: &[&str] = &[
+    "reverse true 4|3|2|1 4 true 3|2|1",
+    "side 42 true 7",
+    "sparse 4 three false one false three||one| true",
+    "inherited-upper true proto-two true undefined false",
+    "inherited-lower true undefined false proto-zero true",
+    "meta function reverse 0",
+    "keys:",
+    "in true",
+];
+
+#[test]
+fn supports_array_reverse_method() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(REVERSE_SOURCE)?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(context.output(), REVERSE_OUTPUT)
+}
+
+#[test]
+fn rejects_array_reverse_on_non_array_receiver() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let Err(error) = context.eval(
+        r"
+        let object = {};
+        object.reverse = Array.prototype.reverse;
+        object.reverse();
+        ",
+    ) else {
+        return Err("expected Array.prototype.reverse on non-array receiver to fail".into());
+    };
+    ensure_error_contains(&error, "requires an array receiver")
+}
+
+fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
+    if actual == expected {
+        return Ok(());
+    }
+
+    Err(format!("expected value {expected:?}, got {actual:?}").into())
+}
+
+fn ensure_output(actual: &[String], expected: &[&str]) -> TestResult {
+    if actual.len() != expected.len() {
+        return Err(format!("expected output {expected:?}, got {actual:?}").into());
+    }
+
+    for (actual_line, expected_line) in actual.iter().zip(expected.iter()) {
+        if actual_line != expected_line {
+            return Err(format!("expected output {expected:?}, got {actual:?}").into());
+        }
+    }
+    Ok(())
+}
+
+fn ensure_error_contains(error: &rs_quickjs::Error, text: &str) -> TestResult {
+    let message = error.to_string();
+    if message.contains(text) {
+        return Ok(());
+    }
+
+    Err(format!("expected error containing '{text}', got '{message}'").into())
+}

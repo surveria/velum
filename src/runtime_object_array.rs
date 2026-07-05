@@ -12,6 +12,7 @@ const ARRAY_LAST_INDEX_OF_RECEIVER_ERROR: &str =
     "Array.prototype.lastIndexOf requires an array receiver";
 const ARRAY_POP_RECEIVER_ERROR: &str = "Array.prototype.pop requires an array receiver";
 const ARRAY_PUSH_RECEIVER_ERROR: &str = "Array.prototype.push requires an array receiver";
+const ARRAY_REVERSE_RECEIVER_ERROR: &str = "Array.prototype.reverse requires an array receiver";
 const ARRAY_SHIFT_RECEIVER_ERROR: &str = "Array.prototype.shift requires an array receiver";
 const ARRAY_SLICE_RECEIVER_ERROR: &str = "Array.prototype.slice requires an array receiver";
 const ARRAY_UNSHIFT_RECEIVER_ERROR: &str = "Array.prototype.unshift requires an array receiver";
@@ -134,6 +135,25 @@ impl ObjectHeap {
             }
         }
         Ok(Value::Object(result_id))
+    }
+
+    pub(crate) fn array_reverse(&mut self, id: ObjectId, max_properties: usize) -> Result<Value> {
+        let length = self
+            .array_length_for_method(id, ARRAY_REVERSE_RECEIVER_ERROR)?
+            .to_usize()?;
+        if length <= 1 {
+            return Ok(Value::Object(id));
+        }
+
+        let middle = length / 2;
+        for lower_index in 0..middle {
+            let upper_index = length
+                .checked_sub(lower_index)
+                .and_then(|index| index.checked_sub(1))
+                .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
+            self.reverse_array_pair(id, lower_index, upper_index, max_properties)?;
+        }
+        Ok(Value::Object(id))
     }
 
     pub(crate) fn array_len(&self, id: ObjectId) -> Result<usize> {
@@ -261,6 +281,43 @@ impl ObjectHeap {
         }
         self.delete(id, &to_key)?;
         Ok(())
+    }
+
+    fn reverse_array_pair(
+        &mut self,
+        id: ObjectId,
+        lower_index: usize,
+        upper_index: usize,
+        max_properties: usize,
+    ) -> Result<()> {
+        let lower_key = ArrayIndex::from_usize(lower_index)?.key();
+        let upper_key = ArrayIndex::from_usize(upper_index)?.key();
+        let lower_value = self.array_property_value(id, &lower_key)?;
+        let upper_value = self.array_property_value(id, &upper_key)?;
+
+        match (lower_value, upper_value) {
+            (Some(lower_value), Some(upper_value)) => {
+                self.set(id, lower_key, upper_value, max_properties)?;
+                self.set(id, upper_key, lower_value, max_properties)?;
+            }
+            (None, Some(upper_value)) => {
+                self.set(id, lower_key, upper_value, max_properties)?;
+                self.delete(id, &upper_key)?;
+            }
+            (Some(lower_value), None) => {
+                self.delete(id, &lower_key)?;
+                self.set(id, upper_key, lower_value, max_properties)?;
+            }
+            (None, None) => {}
+        }
+        Ok(())
+    }
+
+    fn array_property_value(&self, id: ObjectId, key: &str) -> Result<Option<Value>> {
+        if self.has(id, key)? {
+            return self.get(id, key).map(Some);
+        }
+        Ok(None)
     }
 
     fn array_index_value(index: usize) -> Result<Value> {
