@@ -237,6 +237,161 @@ fn limits_infinite_for_loops() -> TestResult {
 }
 
 #[test]
+fn supports_switch_statements() -> TestResult {
+    expect_value(
+        r#"
+        let value = "camera";
+        let total = 0;
+        switch (value) {
+            case "sensor":
+                total = 1;
+                break;
+            case "camera":
+                total = total + 20;
+            case "lens":
+                total = total + 22;
+                break;
+            default:
+                total = 0;
+        }
+        total
+        "#,
+        &Value::Number(42.0),
+    )?;
+
+    expect_value(
+        r#"
+        let selected = "none";
+        switch (2) {
+            case 1:
+                selected = "one";
+                break;
+            default:
+                selected = "default";
+                break;
+            case 2:
+                selected = "two";
+                break;
+        }
+        selected
+        "#,
+        &Value::String("two".to_owned()),
+    )?;
+
+    expect_value(
+        r#"
+        let total = 0;
+        switch ("missing") {
+            case "camera":
+                total = 1;
+                break;
+            default:
+                total = 20;
+            case "lens":
+                total = total + 22;
+                break;
+        }
+        total
+        "#,
+        &Value::Number(42.0),
+    )?;
+
+    expect_value(
+        r"
+        switch (0) {
+            case 1:
+                var hoisted = 42;
+        }
+        hoisted
+        ",
+        &Value::Undefined,
+    )
+}
+
+#[test]
+fn propagates_switch_completion() -> TestResult {
+    expect_value(
+        r"
+        let pick = function(value) {
+            switch (value) {
+                case 1:
+                    return 42;
+                default:
+                    return 0;
+            }
+        };
+        pick(1)
+        ",
+        &Value::Number(42.0),
+    )?;
+
+    expect_value(
+        r#"
+        let caught = "none";
+        try {
+            switch (1) {
+                case 1:
+                    throw "boom";
+            }
+        } catch (error) {
+            caught = error;
+        }
+        caught
+        "#,
+        &Value::String("boom".to_owned()),
+    )?;
+
+    expect_value(
+        r"
+        let total = 0;
+        switch (1) {
+            case 1:
+                total = 42;
+                break;
+                total = 0;
+        }
+        total
+        ",
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
+fn propagates_switch_continue_to_outer_loop() -> TestResult {
+    expect_value(
+        r"
+        let total = 0;
+        for (let index = 0; index < 5; index = index + 1) {
+            switch (index) {
+                case 1:
+                    continue;
+                case 3:
+                    break;
+                default:
+                    total = total + index;
+            }
+            total = total + 10;
+        }
+        total
+        ",
+        &Value::Number(46.0),
+    )
+}
+
+#[test]
+fn rejects_invalid_switch_control_flow() -> TestResult {
+    let Err(error) = eval("switch (1) { case 1: continue; }") else {
+        return Err("expected top-level switch continue to fail".into());
+    };
+    ensure_error_contains(&error, "continue statement outside loop")?;
+
+    let Err(error) = eval("switch (1) { default: break; default: break; }") else {
+        return Err("expected duplicate default labels to fail".into());
+    };
+    ensure_error_contains(&error, "multiple defaults")
+}
+
+#[test]
 fn rejects_break_and_continue_outside_loops() -> TestResult {
     let Err(error) = eval("break;") else {
         return Err("expected top-level break to fail".into());

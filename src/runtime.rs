@@ -119,6 +119,10 @@ impl Context {
                 update,
                 body,
             } => self.eval_for(init.as_deref(), condition.as_ref(), update.as_ref(), body),
+            Stmt::Switch {
+                discriminant,
+                cases,
+            } => self.eval_switch(discriminant, cases),
             Stmt::TryCatch {
                 body,
                 catch_param,
@@ -139,7 +143,7 @@ impl Context {
         }
     }
 
-    fn hoist_var_declarations(&mut self, statements: &[Stmt]) -> Result<()> {
+    pub(crate) fn hoist_var_declarations(&mut self, statements: &[Stmt]) -> Result<()> {
         for statement in statements {
             self.hoist_statement_vars(statement)?;
         }
@@ -167,6 +171,7 @@ impl Context {
                 }
                 self.hoist_statement_vars(body)
             }
+            Stmt::Switch { cases, .. } => self.hoist_switch_vars(cases),
             Stmt::TryCatch {
                 body, catch_body, ..
             } => {
@@ -323,7 +328,7 @@ impl Context {
         self.eval_expr(alternate)
     }
 
-    fn eval_block(&mut self, statements: &[Stmt]) -> Result<Completion> {
+    pub(crate) fn eval_block(&mut self, statements: &[Stmt]) -> Result<Completion> {
         let mut last = Value::Undefined;
         for statement in statements {
             self.step()?;

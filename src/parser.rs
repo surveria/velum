@@ -1,4 +1,4 @@
-use crate::ast::{BinaryOp, DeclKind, Expr, ObjectProperty, Program, Stmt, UnaryOp};
+use crate::ast::{BinaryOp, DeclKind, Expr, ObjectProperty, Program, Stmt, SwitchCase, UnaryOp};
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
 use crate::runtime_limits::RuntimeLimits;
@@ -54,6 +54,9 @@ impl Parser {
         }
         if self.match_kind(&TokenKind::For) {
             return self.for_statement();
+        }
+        if self.match_kind(&TokenKind::Switch) {
+            return self.switch_statement();
         }
         if self.match_kind(&TokenKind::Try) {
             return self.try_statement();
@@ -168,6 +171,61 @@ impl Parser {
         let expr = self.expression()?;
         self.consume(&TokenKind::Semicolon, "expected ';' after for initializer")?;
         Ok(Some(Box::new(Stmt::Expr(expr))))
+    }
+
+    fn switch_statement(&mut self) -> Result<Stmt> {
+        self.consume(&TokenKind::LParen, "expected '(' after 'switch'")?;
+        let discriminant = self.expression()?;
+        self.consume(&TokenKind::RParen, "expected ')' after switch discriminant")?;
+        self.consume(&TokenKind::LBrace, "expected '{' before switch body")?;
+
+        let mut cases = Vec::new();
+        let mut default_seen = false;
+        while !self.check(&TokenKind::RBrace) {
+            if self.match_kind(&TokenKind::Case) {
+                let test = self.expression()?;
+                cases.push(self.switch_case(Some(test))?);
+                continue;
+            }
+            if self.match_kind(&TokenKind::Default) {
+                if default_seen {
+                    return Err(Error::parse(
+                        "switch contains multiple defaults",
+                        self.offset(),
+                    ));
+                }
+                default_seen = true;
+                cases.push(self.switch_case(None)?);
+                continue;
+            }
+            return Err(Error::parse(
+                "expected 'case', 'default', or '}' in switch",
+                self.offset(),
+            ));
+        }
+        self.consume(&TokenKind::RBrace, "expected '}' after switch body")?;
+        Ok(Stmt::Switch {
+            discriminant,
+            cases,
+        })
+    }
+
+    fn switch_case(&mut self, test: Option<Expr>) -> Result<SwitchCase> {
+        self.consume(&TokenKind::Colon, "expected ':' after switch label")?;
+        let mut statements = Vec::new();
+        while !self.check(&TokenKind::Case)
+            && !self.check(&TokenKind::Default)
+            && !self.check(&TokenKind::RBrace)
+        {
+            if self.at_end() {
+                return Err(Error::parse(
+                    "expected '}' after switch body",
+                    self.offset(),
+                ));
+            }
+            statements.push(self.statement()?);
+        }
+        Ok(SwitchCase { test, statements })
     }
 
     fn try_statement(&mut self) -> Result<Stmt> {
