@@ -5,6 +5,8 @@ use crate::value::{ObjectId, Value};
 
 #[path = "runtime_object_array.rs"]
 mod runtime_object_array;
+#[path = "runtime_object_data.rs"]
+mod runtime_object_data;
 #[path = "runtime_object_index.rs"]
 mod runtime_object_index;
 #[path = "runtime_object_keys.rs"]
@@ -276,7 +278,7 @@ impl ObjectHeap {
         value: Value,
         max_properties: usize,
     ) -> Result<()> {
-        if property == PROTOTYPE_PROPERTY {
+        if property == PROTOTYPE_PROPERTY && !self.object(id)?.has_own(&property) {
             return self.set_prototype(id, &value);
         }
         let object = self.object_mut(id)?;
@@ -285,7 +287,10 @@ impl ObjectHeap {
 
     pub fn delete(&mut self, id: ObjectId, property: &str) -> Result<bool> {
         if property == PROTOTYPE_PROPERTY {
-            self.object(id)?;
+            if self.object(id)?.has_own(property) {
+                let object = self.object_mut(id)?;
+                return Ok(object.delete(property));
+            }
             return Ok(true);
         }
         let object = self.object_mut(id)?;
@@ -293,11 +298,11 @@ impl ObjectHeap {
     }
 
     fn get_in_chain(&self, id: ObjectId, property: &str) -> Result<Value> {
-        if property == PROTOTYPE_PROPERTY {
-            return self.prototype_value(id);
-        }
         if let Some(value) = self.property_value_in_chain(id, property)? {
             return Ok(value);
+        }
+        if property == PROTOTYPE_PROPERTY {
+            return self.prototype_value(id);
         }
         Ok(Value::Undefined)
     }

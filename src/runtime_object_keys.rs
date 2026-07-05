@@ -14,6 +14,13 @@ impl ObjectHeap {
         Ok(keys)
     }
 
+    pub(crate) fn own_keys(&self, id: ObjectId) -> Result<Vec<String>> {
+        let object = self.object(id)?;
+        let mut keys = Vec::with_capacity(object.enumerable_key_count_hint());
+        object.extend_enumerable_keys(&mut keys);
+        Ok(keys)
+    }
+
     fn collect_keys(
         &self,
         id: ObjectId,
