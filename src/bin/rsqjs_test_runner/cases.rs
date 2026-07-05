@@ -66,6 +66,7 @@ const PATH_BLOCK_LEXICAL_SCOPE: &str = "tests/engine_cases/block_lexical_scope.j
 const PATH_FUNCTION_EXPRESSION: &str = "tests/engine_cases/function_expression.js";
 const PATH_FUNCTION_PROPERTIES: &str = "tests/engine_cases/function_properties.js";
 const PATH_FUNCTION_CUSTOM_PROPERTIES: &str = "tests/engine_cases/function_custom_properties.js";
+const PATH_FUNCTION_DESCRIPTORS: &str = "tests/engine_cases/function_descriptors.js";
 const PATH_METHOD_THIS: &str = "tests/engine_cases/method_this.js";
 const PATH_CONSTRUCTOR_PROTOTYPES: &str = "tests/engine_cases/constructor_prototypes.js";
 const PATH_PROTOTYPE_CONSTRUCTOR_PROPERTY: &str =
@@ -329,6 +330,12 @@ fn engine_expression_cases() -> Vec<EngineCase> {
 }
 
 fn engine_function_cases() -> Vec<EngineCase> {
+    let mut cases = engine_function_property_cases();
+    cases.extend(engine_function_call_cases());
+    cases
+}
+
+fn engine_function_property_cases() -> Vec<EngineCase> {
     vec![
         EngineCase {
             id: "function_expression",
@@ -365,6 +372,24 @@ fn engine_function_cases() -> Vec<EngineCase> {
                 value: "42",
             },
         },
+        EngineCase {
+            id: "function_descriptors",
+            path: PATH_FUNCTION_DESCRIPTORS,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "camera 1 tag true false false false",
+                    "9 false namedCamera true 2 true",
+                    "native 1 tag true false false false",
+                    "keys true 1 true",
+                ],
+                value: "42",
+            },
+        },
+    ]
+}
+
+fn engine_function_call_cases() -> Vec<EngineCase> {
+    vec![
         EngineCase {
             id: "method_this",
             path: PATH_METHOD_THIS,
