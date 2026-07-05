@@ -5,7 +5,11 @@ type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 const HOST_ADD_NAME: &str = "hostAdd";
 const HOST_ECHO_NAME: &str = "hostEcho";
 const HOST_FAIL_NAME: &str = "hostFail";
+const HOST_FORMAT_NAME: &str = "hostFormat";
 const HOST_LEAK_NAME: &str = "hostLeak";
+const HOST_NOOP_NAME: &str = "hostNoop";
+const HOST_SCORE_NAME: &str = "hostScore";
+const HOST_READY_NAME: &str = "hostReady";
 
 #[test]
 fn registers_typed_host_functions() -> TestResult {
@@ -34,6 +38,48 @@ fn reports_contextual_host_argument_errors() -> TestResult {
     ensure_error_contains(
         &error,
         "host function 'hostAdd': argument 'left' at index 0 expected number, got string",
+    )
+}
+
+#[test]
+fn supports_host_value_conversion_helpers() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.context()
+        .register_host_function_typed(HOST_FORMAT_NAME, host_format)?;
+    vm.context()
+        .register_host_function_typed(HOST_SCORE_NAME, |_call| Ok(42.0))?;
+    vm.context()
+        .register_host_function_typed(HOST_READY_NAME, |_call| Ok(true))?;
+    vm.context()
+        .register_host_function_typed(HOST_NOOP_NAME, |_call| Ok(()))?;
+
+    let formatted = vm.context().eval(r#"hostFormat(true, "front", 7)"#)?;
+    ensure_value(&formatted, &Value::String("front:7:true".to_owned()))?;
+
+    let score = vm.context().eval("hostScore()")?;
+    ensure_value(&score, &Value::Number(42.0))?;
+
+    let ready = vm.context().eval("hostReady()")?;
+    ensure_value(&ready, &Value::Bool(true))?;
+
+    let noop_type = vm.context().eval("typeof hostNoop()")?;
+    ensure_value(&noop_type, &Value::String("undefined".to_owned()))
+}
+
+#[test]
+fn reports_contextual_generic_host_argument_errors() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.context()
+        .register_host_function_typed(HOST_FORMAT_NAME, host_format)?;
+
+    let Err(error) = vm.context().eval(r"hostFormat(true, 7, 2)") else {
+        return Err("expected generic host argument type error".into());
+    };
+    ensure_error_contains(
+        &error,
+        "host function 'hostFormat': argument 'label' at index 1 expected string, got number",
     )
 }
 
@@ -112,6 +158,13 @@ fn host_add(call: HostCall<'_>) -> rs_quickjs::Result<Value> {
 fn host_echo(call: HostCall<'_>) -> rs_quickjs::Result<Value> {
     let value = call.string(0, "value")?;
     Ok(Value::String(value.to_owned()))
+}
+
+fn host_format(call: HostCall<'_>) -> rs_quickjs::Result<String> {
+    let enabled: bool = call.argument(0, "enabled")?;
+    let label: &str = call.argument(1, "label")?;
+    let count: f64 = call.argument(2, "count")?;
+    Ok(format!("{label}:{count:.0}:{enabled}"))
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

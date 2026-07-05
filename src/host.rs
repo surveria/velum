@@ -13,6 +13,98 @@ const HOST_FUNCTION_HANDLE_RETURN_ERROR: &str =
 
 type HostCallback = dyn for<'call> Fn(HostCall<'call>) -> Result<Value>;
 
+pub trait IntoJsValue {
+    /// # Errors
+    /// Fails when conversion cannot produce a JavaScript value.
+    fn into_js_value(self) -> Result<Value>;
+}
+
+impl IntoJsValue for Value {
+    fn into_js_value(self) -> Result<Value> {
+        Ok(self)
+    }
+}
+
+impl IntoJsValue for () {
+    fn into_js_value(self) -> Result<Value> {
+        Ok(Value::Undefined)
+    }
+}
+
+impl IntoJsValue for bool {
+    fn into_js_value(self) -> Result<Value> {
+        Ok(Value::Bool(self))
+    }
+}
+
+impl IntoJsValue for f64 {
+    fn into_js_value(self) -> Result<Value> {
+        Ok(Value::Number(self))
+    }
+}
+
+impl IntoJsValue for String {
+    fn into_js_value(self) -> Result<Value> {
+        Ok(Value::String(self))
+    }
+}
+
+impl IntoJsValue for &str {
+    fn into_js_value(self) -> Result<Value> {
+        Ok(Value::String(self.to_owned()))
+    }
+}
+
+pub trait FromJsValue<'value>: Sized {
+    const EXPECTED_TYPE: &'static str;
+
+    fn from_js_value(value: &'value Value) -> Option<Self>;
+}
+
+impl FromJsValue<'_> for bool {
+    const EXPECTED_TYPE: &'static str = "boolean";
+
+    fn from_js_value(value: &Value) -> Option<Self> {
+        match value {
+            Value::Bool(value) => Some(*value),
+            _ => None,
+        }
+    }
+}
+
+impl FromJsValue<'_> for f64 {
+    const EXPECTED_TYPE: &'static str = "number";
+
+    fn from_js_value(value: &Value) -> Option<Self> {
+        match value {
+            Value::Number(value) => Some(*value),
+            _ => None,
+        }
+    }
+}
+
+impl<'value> FromJsValue<'value> for &'value str {
+    const EXPECTED_TYPE: &'static str = "string";
+
+    fn from_js_value(value: &'value Value) -> Option<Self> {
+        match value {
+            Value::String(value) => Some(value.as_str()),
+            _ => None,
+        }
+    }
+}
+
+impl FromJsValue<'_> for String {
+    const EXPECTED_TYPE: &'static str = "string";
+
+    fn from_js_value(value: &Value) -> Option<Self> {
+        match value {
+            Value::String(value) => Some(value.clone()),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct HostFunction {
     name: String,
@@ -28,6 +120,14 @@ impl HostFunction {
             name,
             callback: Rc::new(callback),
         }
+    }
+
+    fn new_typed<F, R>(name: String, callback: F) -> Self
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<R> + 'static,
+        R: IntoJsValue + 'static,
+    {
+        Self::new(name, move |call| callback(call)?.into_js_value())
     }
 
     fn call(&self, args: &[Value]) -> Result<Value> {
@@ -91,28 +191,32 @@ impl<'call> HostCall<'call> {
     /// # Errors
     /// Fails when the argument is missing or is not a JavaScript number.
     pub fn number(self, index: usize, label: &str) -> Result<f64> {
-        match self.required_value(index, label)? {
-            Value::Number(value) => Ok(*value),
-            value => Err(Self::type_error(index, label, "number", value)),
-        }
+        self.argument(index, label)
     }
 
     /// # Errors
     /// Fails when the argument is missing or is not a JavaScript string.
     pub fn string(self, index: usize, label: &str) -> Result<&'call str> {
-        match self.required_value(index, label)? {
-            Value::String(value) => Ok(value.as_str()),
-            value => Err(Self::type_error(index, label, "string", value)),
-        }
+        self.argument(index, label)
     }
 
     /// # Errors
     /// Fails when the argument is missing or is not a JavaScript boolean.
     pub fn boolean(self, index: usize, label: &str) -> Result<bool> {
-        match self.required_value(index, label)? {
-            Value::Bool(value) => Ok(*value),
-            value => Err(Self::type_error(index, label, "boolean", value)),
-        }
+        self.argument(index, label)
+    }
+
+    /// # Errors
+    /// Fails when the argument is missing or cannot be converted into `T`.
+    pub fn argument<T>(self, index: usize, label: &str) -> Result<T>
+    where
+        T: FromJsValue<'call>,
+    {
+        let value = self.required_value(index, label)?;
+        let Some(converted) = T::from_js_value(value) else {
+            return Err(Self::type_error(index, label, T::EXPECTED_TYPE, value));
+        };
+        Ok(converted)
     }
 
     fn missing_argument(index: usize, label: &str) -> Error {
@@ -135,16 +239,43 @@ impl Context {
     where
         F: for<'call> Fn(HostCall<'call>) -> Result<Value> + 'static,
     {
-        let name = name.into();
+        self.register_host_callback(name.into(), HostFunction::new, callback)
+    }
+
+    /// # Errors
+    /// Fails when the name is empty, exceeds string limits, duplicates an
+    /// existing binding, or would exceed the binding limit.
+    pub fn register_host_function_typed<F, R>(
+        &mut self,
+        name: impl Into<String>,
+        callback: F,
+    ) -> Result<()>
+    where
+        F: for<'call> Fn(HostCall<'call>) -> Result<R> + 'static,
+        R: IntoJsValue + 'static,
+    {
+        self.register_host_callback(name.into(), HostFunction::new_typed, callback)
+    }
+
+    fn register_host_callback<F, C>(
+        &mut self,
+        name: String,
+        create_host_function: C,
+        callback: F,
+    ) -> Result<()>
+    where
+        C: FnOnce(String, F) -> HostFunction,
+    {
         if name.is_empty() {
             return Err(Error::runtime(EMPTY_HOST_FUNCTION_NAME_ERROR));
         }
         self.check_string_len(&name)?;
 
         let id = HostFunctionId::new(self.host_functions.len());
+        let binding_name = name.clone();
         self.host_functions
-            .push(HostFunction::new(name.clone(), callback));
-        let result = self.define(&name, Value::HostFunction(id), DeclKind::Const);
+            .push(create_host_function(name, callback));
+        let result = self.define(&binding_name, Value::HostFunction(id), DeclKind::Const);
         if let Err(error) = result {
             let removed = self.host_functions.pop();
             if removed.is_none() {

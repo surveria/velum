@@ -30,7 +30,7 @@ mod value;
 pub use crate::compiled_script::{CompiledScript, CompiledScriptUsage};
 pub use crate::embedding::{Engine, EngineConfig, Vm, VmConfig, VmResourceUsage, VmTeardownReport};
 pub use crate::error::{Error, Result};
-pub use crate::host::HostCall;
+pub use crate::host::{FromJsValue, HostCall, IntoJsValue};
 pub use crate::runtime::Context;
 pub use crate::runtime_engine::Runtime;
 pub use crate::runtime_limits::RuntimeLimits;

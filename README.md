@@ -35,15 +35,15 @@ cargo run --bin rsqjs -- -e 'let x = 40 + 2; print("answer", x); x'
 ## Library Embedding
 
 ```rust
-use rs_quickjs::{Engine, Value};
+use rs_quickjs::Engine;
 
 fn main() -> rs_quickjs::Result<()> {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
 
-    vm.context().register_host_function("cameraLabel", |call| {
-        let name = call.string(0, "name")?;
-        Ok(Value::String(format!("camera:{name}")))
+    vm.context().register_host_function_typed("cameraLabel", |call| {
+        let name: &str = call.argument(0, "name")?;
+        Ok(format!("camera:{name}"))
     })?;
 
     vm.context().eval(r#"let camera = cameraLabel("front");"#)?;
