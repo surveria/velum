@@ -583,6 +583,10 @@ impl Context {
         self.locals.push(BindingScope::new());
     }
 
+    pub(crate) fn push_lexical_scope_with(&mut self, scope: BindingScope) {
+        self.locals.push(scope);
+    }
+
     pub(crate) fn pop_lexical_scope(&mut self) -> Option<BindingScope> {
         self.locals.pop()
     }

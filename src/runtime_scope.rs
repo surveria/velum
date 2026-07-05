@@ -33,6 +33,18 @@ impl BindingScope {
     pub fn insert(&mut self, name: String, binding: BindingCell) -> Option<BindingCell> {
         self.bindings.insert(name, binding)
     }
+
+    pub fn insert_or_replace(&mut self, name: &str, binding: BindingCell) {
+        if let Some(existing) = self.bindings.get_mut(name) {
+            *existing = binding;
+            return;
+        }
+        self.bindings.insert(name.to_owned(), binding);
+    }
+
+    pub fn retain_only(&mut self, name: &str) {
+        self.bindings.retain(|binding_name, _| binding_name == name);
+    }
 }
 
 #[derive(Debug, Clone)]

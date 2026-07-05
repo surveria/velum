@@ -7,6 +7,8 @@ use crate::value::{ObjectId, Value};
 mod runtime_object_array;
 #[path = "runtime_object_index.rs"]
 mod runtime_object_index;
+#[path = "runtime_object_keys.rs"]
+mod runtime_object_keys;
 
 use runtime_object_index::{ArrayIndex, ArrayLength};
 
@@ -265,13 +267,6 @@ impl ObjectHeap {
         self.has_in_chain(id, property)
     }
 
-    pub fn keys(&self, id: ObjectId) -> Result<Vec<String>> {
-        let mut keys = Vec::new();
-        let mut visited = Vec::new();
-        self.collect_keys(id, &mut keys, &mut visited)?;
-        Ok(keys)
-    }
-
     pub fn set(
         &mut self,
         id: ObjectId,
@@ -306,8 +301,13 @@ impl ObjectHeap {
     }
 
     fn property_value_in_chain(&self, id: ObjectId, property: &str) -> Result<Option<Value>> {
-        let mut current = Some(id);
+        let object = self.object(id)?;
+        if let Some(value) = object.get_own(property) {
+            return Ok(Some(value));
+        }
+        let mut current = object.prototype;
         let mut visited = Vec::new();
+        visited.push(id);
         while let Some(current_id) = current {
             if visited.contains(&current_id) {
                 return Err(Error::runtime("prototype cycle detected"));
@@ -323,8 +323,13 @@ impl ObjectHeap {
     }
 
     fn has_in_chain(&self, id: ObjectId, property: &str) -> Result<bool> {
-        let mut current = Some(id);
+        let object = self.object(id)?;
+        if object.has_own(property) {
+            return Ok(true);
+        }
+        let mut current = object.prototype;
         let mut visited = Vec::new();
+        visited.push(id);
         while let Some(current_id) = current {
             if visited.contains(&current_id) {
                 return Err(Error::runtime("prototype cycle detected"));
@@ -337,28 +342,6 @@ impl ObjectHeap {
             current = object.prototype;
         }
         Ok(false)
-    }
-
-    fn collect_keys(
-        &self,
-        id: ObjectId,
-        keys: &mut Vec<String>,
-        visited: &mut Vec<ObjectId>,
-    ) -> Result<()> {
-        if visited.contains(&id) {
-            return Err(Error::runtime("prototype cycle detected"));
-        }
-        visited.push(id);
-        let object = self.object(id)?;
-        for key in object.keys() {
-            if !keys.iter().any(|existing| existing == &key) {
-                keys.push(key);
-            }
-        }
-        if let Some(prototype) = object.prototype {
-            self.collect_keys(prototype, keys, visited)?;
-        }
-        Ok(())
     }
 
     fn set_prototype(&mut self, id: ObjectId, value: &Value) -> Result<()> {
@@ -427,6 +410,7 @@ struct Object {
     property_order: Vec<String>,
     array_elements: Vec<Option<ObjectProperty>>,
     array_property_count: usize,
+    enumerable_property_count: usize,
     array_length: Option<ArrayLength>,
     prototype: Option<ObjectId>,
 }
@@ -438,6 +422,7 @@ impl Object {
             property_order: Vec::new(),
             array_elements: Vec::new(),
             array_property_count: 0,
+            enumerable_property_count: 0,
             array_length: None,
             prototype: None,
         }
@@ -449,6 +434,7 @@ impl Object {
             property_order: Vec::with_capacity(capacity),
             array_elements: Vec::new(),
             array_property_count: 0,
+            enumerable_property_count: 0,
             array_length: None,
             prototype: None,
         }
@@ -460,6 +446,7 @@ impl Object {
             property_order: Vec::new(),
             array_elements: Vec::new(),
             array_property_count: 0,
+            enumerable_property_count: 0,
             array_length: Some(length),
             prototype: None,
         }
@@ -500,61 +487,6 @@ impl Object {
             || (self.array_length.is_some()
                 && ArrayIndex::parse(property).is_some_and(|index| self.has_array_element(index)))
             || self.properties.contains_key(property)
-    }
-
-    fn keys(&self) -> Vec<String> {
-        if self.array_length.is_none() {
-            return self.enumerable_named_keys(false);
-        }
-
-        let mut keys = self.array_element_keys();
-        keys.extend(self.sparse_array_element_keys());
-        keys.extend(self.enumerable_named_keys(true));
-        keys
-    }
-
-    fn enumerable_named_keys(&self, skip_array_indices: bool) -> Vec<String> {
-        self.property_order
-            .iter()
-            .filter_map(|key| {
-                if skip_array_indices && ArrayIndex::parse(key).is_some() {
-                    return None;
-                }
-                self.properties
-                    .get(key)
-                    .filter(|property| property.is_enumerable())
-                    .map(|_| key.clone())
-            })
-            .collect()
-    }
-
-    fn array_element_keys(&self) -> Vec<String> {
-        self.array_elements
-            .iter()
-            .enumerate()
-            .filter_map(|(index, property)| {
-                property
-                    .as_ref()
-                    .filter(|property| property.is_enumerable())
-                    .map(|_| index.to_string())
-            })
-            .collect()
-    }
-
-    fn sparse_array_element_keys(&self) -> Vec<String> {
-        let mut entries: Vec<(ArrayIndex, String)> = self
-            .property_order
-            .iter()
-            .filter_map(|key| {
-                let index = ArrayIndex::parse(key)?;
-                self.properties
-                    .get(key)
-                    .filter(|property| property.is_enumerable())
-                    .map(|_| (index, key.clone()))
-            })
-            .collect();
-        entries.sort_by_key(|(index, _)| *index);
-        entries.into_iter().map(|(_, key)| key).collect()
     }
 
     fn set(&mut self, property: String, value: Value, max_properties: usize) -> Result<()> {
@@ -619,12 +551,15 @@ impl Object {
         max_properties: usize,
     ) -> Result<()> {
         let property_count = self.property_count();
+        let mut enumerable_update = None;
         match self.properties.entry(property) {
             Entry::Occupied(mut entry) => {
+                let was_enumerable = entry.get().is_enumerable();
                 entry.get_mut().set_value(value);
                 if let Some(enumerable) = enumerable {
                     entry.get_mut().set_enumerable(enumerable);
                 }
+                enumerable_update = Some((was_enumerable, entry.get().is_enumerable()));
             }
             Entry::Vacant(entry) => {
                 if property_count >= max_properties {
@@ -633,11 +568,16 @@ impl Object {
                     )));
                 }
                 self.property_order.push(entry.key().clone());
-                entry.insert(ObjectProperty::new(
-                    value,
-                    enumerable.unwrap_or(PropertyEnumerable::Yes),
-                ));
+                let property =
+                    ObjectProperty::new(value, enumerable.unwrap_or(PropertyEnumerable::Yes));
+                if property.is_enumerable() {
+                    enumerable_update = Some((false, true));
+                }
+                entry.insert(property);
             }
+        }
+        if let Some((was_enumerable, is_enumerable)) = enumerable_update {
+            self.update_enumerable_property_count(was_enumerable, is_enumerable);
         }
         Ok(())
     }
@@ -670,10 +610,13 @@ impl Object {
             let Some(property) = slot else {
                 return Err(Error::runtime("array index storage is not initialized"));
             };
+            let was_enumerable = property.is_enumerable();
             property.set_value(value);
             if let Some(enumerable) = enumerable {
                 property.set_enumerable(enumerable);
             }
+            let is_enumerable = property.is_enumerable();
+            self.update_enumerable_property_count(was_enumerable, is_enumerable);
             return Ok(());
         }
 
@@ -686,10 +629,11 @@ impl Object {
             .array_elements
             .get_mut(position)
             .ok_or_else(|| Error::runtime("array index storage is not available"))?;
-        *slot = Some(ObjectProperty::new(
-            value,
-            enumerable.unwrap_or(PropertyEnumerable::Yes),
-        ));
+        let property = ObjectProperty::new(value, enumerable.unwrap_or(PropertyEnumerable::Yes));
+        if property.is_enumerable() {
+            self.enumerable_property_count = self.enumerable_property_count.saturating_add(1);
+        }
+        *slot = Some(property);
         self.array_property_count = self.array_property_count.saturating_add(1);
         Ok(())
     }
@@ -705,7 +649,10 @@ impl Object {
             return true;
         }
         let removed_property = self.properties.remove(property);
-        if removed_property.is_some() {
+        if let Some(removed_property) = removed_property {
+            if removed_property.is_enumerable() {
+                self.enumerable_property_count = self.enumerable_property_count.saturating_sub(1);
+            }
             self.property_order.retain(|key| key != property);
             return true;
         }
@@ -748,11 +695,34 @@ impl Object {
         let Some(slot) = self.array_elements.get_mut(position) else {
             return false;
         };
-        if slot.take().is_some() {
+        if let Some(property) = slot.take() {
+            if property.is_enumerable() {
+                self.enumerable_property_count = self.enumerable_property_count.saturating_sub(1);
+            }
             self.array_property_count = self.array_property_count.saturating_sub(1);
             return true;
         }
         false
+    }
+
+    const fn has_enumerable_own_keys(&self) -> bool {
+        self.enumerable_property_count > 0
+    }
+
+    const fn update_enumerable_property_count(
+        &mut self,
+        was_enumerable: bool,
+        is_enumerable: bool,
+    ) {
+        match (was_enumerable, is_enumerable) {
+            (false, true) => {
+                self.enumerable_property_count = self.enumerable_property_count.saturating_add(1);
+            }
+            (true, false) => {
+                self.enumerable_property_count = self.enumerable_property_count.saturating_sub(1);
+            }
+            (true, true) | (false, false) => {}
+        }
     }
 
     fn property_count(&self) -> usize {

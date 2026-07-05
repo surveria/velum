@@ -127,6 +127,36 @@ fn creates_fresh_const_binding_per_for_in_iteration() -> TestResult {
 }
 
 #[test]
+fn creates_fresh_let_binding_per_for_in_iteration() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let first = function() { return "none"; };
+        let second = function() { return "none"; };
+        let index = 0;
+
+        for (let key in { left: 1, right: 2 }) {
+            if (index === 0) {
+                first = function() { return key; };
+            }
+            if (index === 1) {
+                second = function() { return key; };
+            }
+            index = index + 1;
+        }
+
+        print(first(), second(), typeof key);
+        first() === "left" && second() === "right" ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(context.output(), &["left right undefined".to_owned()])
+}
+
+#[test]
 fn rejects_for_in_over_nullish_values() -> TestResult {
     ensure_error_contains("for (let key in null) {}", "Cannot convert")?;
     ensure_error_contains("for (let key in undefined) {}", "Cannot convert")

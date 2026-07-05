@@ -3,6 +3,7 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime_completion::Completion,
+    runtime_scope::{BindingCell, BindingScope},
     value::Value,
 };
 
@@ -74,12 +75,24 @@ impl Context {
         body: &Stmt,
     ) -> Result<Completion> {
         let mut last = Value::Undefined;
+        self.ensure_extra_binding_capacity(0)?;
+        let mutable = kind != DeclKind::Const;
+        let mut scope = BindingScope::new();
+        let cleanup_scope = !matches!(body, Stmt::Block(_));
         for key in keys {
             self.step()?;
-            let completion = self.with_lexical_scope(|context| {
-                context.define(name, Value::String(key), kind)?;
-                context.eval_statement(body)
-            })?;
+            let value = self.checked_value(Value::String(key))?;
+            scope.insert_or_replace(name, BindingCell::new(value, mutable, kind));
+            self.push_lexical_scope_with(scope);
+            let completion = self.eval_statement(body);
+            let Some(mut removed_scope) = self.pop_lexical_scope() else {
+                return Err(Error::runtime("lexical scope disappeared"));
+            };
+            if cleanup_scope {
+                removed_scope.retain_only(name);
+            }
+            scope = removed_scope;
+            let completion = completion?;
             if let Some(completion) = loop_completion(&mut last, completion) {
                 return Ok(completion);
             }
