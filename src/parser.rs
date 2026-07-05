@@ -55,6 +55,14 @@ impl Parser {
         if self.match_kind(&TokenKind::Try) {
             return self.try_statement();
         }
+        if self.match_kind(&TokenKind::Break) {
+            self.consume_optional_semicolon();
+            return Ok(Stmt::Break);
+        }
+        if self.match_kind(&TokenKind::Continue) {
+            self.consume_optional_semicolon();
+            return Ok(Stmt::Continue);
+        }
         if self.match_kind(&TokenKind::Throw) {
             return self.throw_statement();
         }

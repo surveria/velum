@@ -22,6 +22,8 @@ pub enum Stmt {
         catch_param: String,
         catch_body: Vec<Self>,
     },
+    Break,
+    Continue,
     Throw(Expr),
     Return(Option<Expr>),
     VarDecl {

@@ -50,11 +50,8 @@ impl Context {
         }
     }
 
-    /// Evaluates source text in this context.
-    ///
     /// # Errors
-    ///
-    /// Returns an error when lexing, parsing, evaluation, or configured resource limits fail.
+    /// Fails when lexing, parsing, evaluation, or configured resource limits fail.
     pub fn eval(&mut self, source: &str) -> Result<Value> {
         self.check_source(source)?;
         let tokens = lexer::lex(source)?;
@@ -121,6 +118,8 @@ impl Context {
                 catch_param,
                 catch_body,
             } => self.eval_try_catch(body, catch_param, catch_body),
+            Stmt::Break => Ok(Completion::Break),
+            Stmt::Continue => Ok(Completion::Continue),
             Stmt::Throw(expr) => {
                 let value = self.eval_expr(expr)?;
                 Ok(Completion::Throw(value))
@@ -167,7 +166,12 @@ impl Context {
                 kind: DeclKind::Var,
                 ..
             } => self.hoist_var(name),
-            Stmt::Throw(_) | Stmt::Return(_) | Stmt::VarDecl { .. } | Stmt::Expr(_) => Ok(()),
+            Stmt::Break
+            | Stmt::Continue
+            | Stmt::Throw(_)
+            | Stmt::Return(_)
+            | Stmt::VarDecl { .. }
+            | Stmt::Expr(_) => Ok(()),
         }
     }
 
@@ -313,8 +317,11 @@ impl Context {
             self.step()?;
             match self.eval_statement(body)? {
                 Completion::Normal(value) => last = value,
-                Completion::Throw(value) => return Ok(Completion::Throw(value)),
-                Completion::Return(value) => return Ok(Completion::Return(value)),
+                completion @ (Completion::Throw(_) | Completion::Return(_)) => {
+                    return Ok(completion);
+                }
+                Completion::Break => return Ok(Completion::Normal(last)),
+                Completion::Continue => {}
             }
         }
         Ok(Completion::Normal(last))
@@ -336,8 +343,7 @@ impl Context {
             };
             match completion {
                 Completion::Normal(value) => last = value,
-                Completion::Throw(value) => return Ok(Completion::Throw(value)),
-                Completion::Return(value) => return Ok(Completion::Return(value)),
+                completion => return Ok(completion),
             }
         }
         Ok(Completion::Normal(last))
@@ -352,7 +358,7 @@ impl Context {
         match self.eval_block(body)? {
             Completion::Normal(value) => Ok(Completion::Normal(value)),
             Completion::Throw(value) => self.eval_catch(catch_param, value, catch_body),
-            Completion::Return(value) => Ok(Completion::Return(value)),
+            completion => Ok(completion),
         }
     }
 
@@ -492,6 +498,9 @@ impl Context {
             Completion::Normal(_) | Completion::Return(_) => Err(Error::runtime(format!(
                 "assert.throws expected {expected_name}, but no exception was thrown"
             ))),
+            completion @ (Completion::Break | Completion::Continue) => {
+                completion.into_function_result()
+            }
         }
     }
 
