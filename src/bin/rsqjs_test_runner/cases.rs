@@ -76,6 +76,7 @@ const PATH_OBJECT_BUILTIN: &str = "tests/engine_cases/object_builtin.js";
 const PATH_COMPUTED_PROPERTIES: &str = "tests/engine_cases/computed_properties.js";
 const PATH_ARRAY_LITERALS: &str = "tests/engine_cases/array_literals.js";
 const PATH_ARRAY_BUILTIN: &str = "tests/engine_cases/array_builtin.js";
+const PATH_ARRAY_PROTOTYPE_METHODS: &str = "tests/engine_cases/array_prototype_methods.js";
 const PATH_UNARY_OPERATORS: &str = "tests/engine_cases/unary_operators.js";
 const PATH_ASSERT_THROWS_REFERENCE_ERROR: &str =
     "tests/engine_cases/assert_throws_reference_error.js";
@@ -392,6 +393,13 @@ fn engine_function_cases() -> Vec<EngineCase> {
 }
 
 fn engine_object_cases() -> Vec<EngineCase> {
+    let mut cases = engine_plain_object_cases();
+    cases.extend(engine_array_cases());
+    cases.extend(engine_unary_cases());
+    cases
+}
+
+fn engine_plain_object_cases() -> Vec<EngineCase> {
     vec![
         EngineCase {
             id: "object_literals",
@@ -446,6 +454,11 @@ fn engine_object_cases() -> Vec<EngineCase> {
                 value: "42",
             },
         },
+    ]
+}
+
+fn engine_array_cases() -> Vec<EngineCase> {
+    vec![
         EngineCase {
             id: "array_literals",
             path: PATH_ARRAY_LITERALS,
@@ -468,18 +481,34 @@ fn engine_object_cases() -> Vec<EngineCase> {
             },
         },
         EngineCase {
-            id: "unary_operators",
-            path: PATH_UNARY_OPERATORS,
+            id: "array_prototype_methods",
+            path: PATH_ARRAY_PROTOTYPE_METHODS,
             expectation: Expectation::OutputAndValue {
                 output: &[
-                    "true true true false false true",
-                    "object undefined undefined undefined function",
-                    "2 42 undefined",
+                    "methods function push 1 function pop 0",
+                    "values 3 3 3 2 undefined 1 undefined 0 42",
+                    "keys:|0;1;",
+                    "in true true",
                 ],
                 value: "42",
             },
         },
     ]
+}
+
+fn engine_unary_cases() -> Vec<EngineCase> {
+    vec![EngineCase {
+        id: "unary_operators",
+        path: PATH_UNARY_OPERATORS,
+        expectation: Expectation::OutputAndValue {
+            output: &[
+                "true true true false false true",
+                "object undefined undefined undefined function",
+                "2 42 undefined",
+            ],
+            value: "42",
+        },
+    }]
 }
 
 fn engine_runtime_cases() -> Vec<EngineCase> {
