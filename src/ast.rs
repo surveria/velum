@@ -56,6 +56,10 @@ pub enum Expr {
         name: String,
         expr: Box<Self>,
     },
+    Member {
+        object: Box<Self>,
+        property: String,
+    },
     Call {
         callee: Box<Self>,
         args: Vec<Self>,

@@ -4,6 +4,10 @@ use crate::ast::{BinaryOp, DeclKind, Expr, Program, Stmt, UnaryOp};
 use crate::error::{Error, Result};
 use crate::lexer;
 use crate::parser;
+use crate::runtime_assertions::{
+    expected_error_name, is_assert_throws_call, reference_error_undefined, runtime_exception_value,
+    thrown_value_matches,
+};
 use crate::value::{FunctionId, Value};
 
 const DEFAULT_MAX_SOURCE_LEN: usize = 65_536;
@@ -305,7 +309,7 @@ impl Context {
                 .globals
                 .get(name)
                 .map(|binding| binding.value.clone())
-                .ok_or_else(|| Error::runtime(format!("'{name}' is not defined"))),
+                .ok_or_else(|| reference_error_undefined(name)),
             Expr::Unary { op, expr } => {
                 let value = self.eval_expr(expr)?;
                 Self::eval_unary(*op, &value)
@@ -321,6 +325,9 @@ impl Context {
                 self.assign(name, value.clone())?;
                 Ok(value)
             }
+            Expr::Member { property, .. } => Err(Error::runtime(format!(
+                "member access '{property}' is not supported outside host calls"
+            ))),
             Expr::Call { callee, args } => self.eval_call(callee, args),
             Expr::Function { body } => Ok(self.create_function(body)),
             Expr::New { constructor, args } => self.eval_new(constructor, args),
@@ -344,7 +351,17 @@ impl Context {
         let mut last = Value::Undefined;
         for statement in statements {
             self.step()?;
-            match self.eval_statement(statement)? {
+            let completion = match self.eval_statement(statement) {
+                Ok(completion) => completion,
+                Err(error) => {
+                    if let Some(value) = runtime_exception_value(&error) {
+                        self.checked_value(value.clone())?;
+                        return Ok(Completion::Throw(value));
+                    }
+                    return Err(error);
+                }
+            };
+            match completion {
                 Completion::Normal(value) => last = value,
                 Completion::Throw(value) => return Ok(Completion::Throw(value)),
             }
@@ -455,6 +472,10 @@ impl Context {
     }
 
     fn eval_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<Value> {
+        if is_assert_throws_call(callee) {
+            return self.eval_assert_throws(args);
+        }
+
         if let Expr::Identifier(name) = callee {
             match name.as_str() {
                 BOOLEAN_NAME => return self.eval_boolean_call(args),
@@ -470,6 +491,39 @@ impl Context {
         match self.eval_expr(callee)? {
             Value::Function(id) => self.eval_function(id),
             value => Err(Error::runtime(format!("'{value}' is not callable"))),
+        }
+    }
+
+    fn eval_assert_throws(&mut self, args: &[Expr]) -> Result<Value> {
+        let mut args = args.iter();
+        let Some(expected) = args.next() else {
+            return Err(Error::runtime("assert.throws requires an expected error"));
+        };
+        let Some(callback) = args.next() else {
+            return Err(Error::runtime("assert.throws requires a callback"));
+        };
+        if args.next().is_some() {
+            return Err(Error::runtime(
+                "assert.throws supports exactly two arguments",
+            ));
+        }
+
+        let expected_name = expected_error_name(expected)?;
+        let callback = self.eval_expr(callback)?;
+        let Value::Function(id) = callback else {
+            return Err(Error::runtime("assert.throws callback must be a function"));
+        };
+
+        match self.eval_function_completion(id)? {
+            Completion::Throw(value) if thrown_value_matches(&value, expected_name) => {
+                Ok(Value::Undefined)
+            }
+            Completion::Throw(value) => Err(Error::runtime(format!(
+                "assert.throws expected {expected_name}, got {value}"
+            ))),
+            Completion::Normal(_) => Err(Error::runtime(format!(
+                "assert.throws expected {expected_name}, but no exception was thrown"
+            ))),
         }
     }
 
@@ -518,14 +572,18 @@ impl Context {
     }
 
     fn eval_function(&mut self, id: FunctionId) -> Result<Value> {
+        self.eval_function_completion(id)?.into_result()?;
+        Ok(Value::Undefined)
+    }
+
+    fn eval_function_completion(&mut self, id: FunctionId) -> Result<Completion> {
         let body = self
             .functions
             .get(id.index())
             .map(|function| function.body.clone())
             .ok_or_else(|| Error::runtime("function id is not defined"))?;
         self.hoist_var_declarations(&body)?;
-        self.eval_block(&body)?.into_result()?;
-        Ok(Value::Undefined)
+        self.eval_block(&body)
     }
 
     fn define(&mut self, name: &str, value: Value, kind: DeclKind) -> Result<()> {
@@ -562,7 +620,7 @@ impl Context {
     fn assign(&mut self, name: &str, value: Value) -> Result<()> {
         self.checked_value(value.clone())?;
         let Some(binding) = self.globals.get_mut(name) else {
-            return Err(Error::runtime(format!("'{name}' is not defined")));
+            return Err(reference_error_undefined(name));
         };
 
         if !binding.mutable {
