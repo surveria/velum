@@ -58,6 +58,7 @@ pub struct Context {
 struct Function {
     name: String,
     params: Rc<[String]>,
+    param_atoms: Rc<[AtomId]>,
     body: Rc<[Stmt]>,
     captures: Vec<BindingScope>,
     properties: runtime_function_properties::FunctionProperties,
