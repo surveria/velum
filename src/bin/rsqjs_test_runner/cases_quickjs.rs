@@ -58,6 +58,8 @@ const PATH_QUICKJS_ARRAY_PROTOTYPE_METHODS: &str =
     "tests/corpora/quickjs_differential/active/array_prototype_methods.js";
 const PATH_QUICKJS_ARRAY_PROTOTYPE_JOIN: &str =
     "tests/corpora/quickjs_differential/active/array_prototype_join.js";
+const PATH_QUICKJS_ARRAY_PROTOTYPE_SHIFT_UNSHIFT: &str =
+    "tests/corpora/quickjs_differential/active/array_prototype_shift_unshift.js";
 const PATH_QUICKJS_UNARY_OPERATORS: &str =
     "tests/corpora/quickjs_differential/active/unary_operators.js";
 const PATH_QUICKJS_UPDATE_EXPRESSIONS: &str =
@@ -217,6 +219,10 @@ fn quickjs_object_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "array_prototype_join",
             path: PATH_QUICKJS_ARRAY_PROTOTYPE_JOIN,
+        },
+        DifferentialCase {
+            id: "array_prototype_shift_unshift",
+            path: PATH_QUICKJS_ARRAY_PROTOTYPE_SHIFT_UNSHIFT,
         },
         DifferentialCase {
             id: "unary_operators",
