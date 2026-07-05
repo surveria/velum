@@ -8,7 +8,7 @@ This repository is intentionally starting small. It is not a drop-in replacement
 
 - Safe Rust core: no `unsafe` blocks in the engine crate.
 - Small footprint: keep startup and hello-world memory use close to the `QuickJS` class of engines.
-- Predictable embedding: expose explicit resource limits, deterministic teardown, isolated virtual machines, host extensions, and inspectable execution state.
+- Predictable library embedding: make the Rust API the primary product surface, with many isolated virtual machines per process, explicit resource limits, deterministic teardown, typed host extensions, async host-callback support, and inspectable execution state.
 - Reference-driven compatibility: use `QuickJS` behavior, focused Test262 subsets, and full-corpus Test262 progress reports instead of inventing a new language.
 - Device-oriented performance: optimize for ARM Linux systems with tens of megabytes of RAM, and keep implemented benchmark cases within 1.10x of `QuickJS` unless a tracked exception explains the gap.
 

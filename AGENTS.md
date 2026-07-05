@@ -32,6 +32,15 @@ These rules are mandatory for humans and agents working in any part of this repo
 - Use only this model. Every new source file or tracked directory must be explicitly allowed, otherwise it may be silently omitted from commits and CI can fail because files are missing.
 - Whenever adding a new kind of file, add the matching whitelist rule in the same change.
 
+## Product Architecture
+
+- `rs-quickjs` is an embeddable Rust library first. The CLI, test runner, and scripts are support surfaces for smoke testing, differential checks, and benchmark orchestration.
+- Public API decisions must optimize for Rust applications that run many isolated JavaScript virtual machines in one process.
+- Do not introduce mutable global JavaScript state. Shared engine data must be immutable or guarded by explicit synchronization and resource accounting.
+- Every VM-facing feature must define how it behaves across independent VM instances, including resource limits, teardown, errors, queued jobs, and host callbacks.
+- Host extensions are part of the core product surface. New runtime work must preserve a path for typed Rust host functions, contextual `Result` errors, async callbacks, and embedder-owned executors.
+- Do not make the CLI the only way to exercise a feature. If a feature affects embedders, add or plan direct library API tests and benchmarks in addition to CLI smoke coverage.
+
 ## Rust Development Rules
 
 - Write idiomatic Rust.
@@ -72,6 +81,7 @@ These rules are mandatory for humans and agents working in any part of this repo
 - Future benchmark reports should follow the same pattern: one command, Rust-owned execution, tracked report files, and clear comparison against QuickJS where possible.
 - Benchmark cases must run sequentially, not in parallel, so measurements do not interfere with each other.
 - Benchmark reports must separate local engine measurements from QuickJS measurements and mark unavailable reference runs as skipped with a concrete reason.
+- Embedding-facing benchmark cases must include direct library measurements where possible, not only CLI process measurements.
 
 ## Rust Lints
 
