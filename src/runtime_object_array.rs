@@ -3,7 +3,7 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ArrayLength, Object, ObjectHeap, ObjectProperty};
+use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ArrayLength, Object, ObjectHeap};
 
 const ARRAY_CONCAT_RECEIVER_ERROR: &str = "Array.prototype.concat requires an array receiver";
 const ARRAY_INCLUDES_RECEIVER_ERROR: &str = "Array.prototype.includes requires an array receiver";
@@ -404,11 +404,7 @@ impl ObjectHeap {
         let mut next_index = start_index;
         for source_index in 0..length {
             let source_key = ArrayIndex::from_usize(source_index)?.key();
-            let Some(value) = source
-                .properties
-                .get(&source_key)
-                .map(ObjectProperty::value)
-            else {
+            let Some(value) = source.get_own(&source_key) else {
                 return Ok(ArrayCopyProgress {
                     next_index,
                     source_index,

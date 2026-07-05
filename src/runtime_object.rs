@@ -5,6 +5,10 @@ use crate::value::{ObjectId, Value};
 
 #[path = "runtime_object_array.rs"]
 mod runtime_object_array;
+#[path = "runtime_object_index.rs"]
+mod runtime_object_index;
+
+use runtime_object_index::{ArrayIndex, ArrayLength};
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
 const ARRAY_INDEX_LIMIT_ERROR: &str = "array index exceeded supported range";
@@ -421,6 +425,8 @@ impl ObjectHeap {
 struct Object {
     properties: BTreeMap<String, ObjectProperty>,
     property_order: Vec<String>,
+    array_elements: Vec<Option<ObjectProperty>>,
+    array_property_count: usize,
     array_length: Option<ArrayLength>,
     prototype: Option<ObjectId>,
 }
@@ -430,6 +436,8 @@ impl Object {
         Self {
             properties: BTreeMap::new(),
             property_order: Vec::new(),
+            array_elements: Vec::new(),
+            array_property_count: 0,
             array_length: None,
             prototype: None,
         }
@@ -439,6 +447,8 @@ impl Object {
         Self {
             properties: BTreeMap::new(),
             property_order: Vec::new(),
+            array_elements: Vec::new(),
+            array_property_count: 0,
             array_length: Some(length),
             prototype: None,
         }
@@ -465,24 +475,75 @@ impl Object {
         {
             return Some(length.value());
         }
+        if self.array_length.is_some()
+            && let Some(index) = ArrayIndex::parse(property)
+            && let Some(value) = self.array_element_value(index)
+        {
+            return Some(value);
+        }
         self.properties.get(property).map(ObjectProperty::value)
     }
 
     fn has_own(&self, property: &str) -> bool {
         (self.array_length.is_some() && property == ARRAY_LENGTH_PROPERTY)
+            || (self.array_length.is_some()
+                && ArrayIndex::parse(property).is_some_and(|index| self.has_array_element(index)))
             || self.properties.contains_key(property)
     }
 
     fn keys(&self) -> Vec<String> {
+        if self.array_length.is_none() {
+            return self.enumerable_named_keys(false);
+        }
+
+        let mut keys = self.array_element_keys();
+        keys.extend(self.sparse_array_element_keys());
+        keys.extend(self.enumerable_named_keys(true));
+        keys
+    }
+
+    fn enumerable_named_keys(&self, skip_array_indices: bool) -> Vec<String> {
         self.property_order
             .iter()
             .filter_map(|key| {
+                if skip_array_indices && ArrayIndex::parse(key).is_some() {
+                    return None;
+                }
                 self.properties
                     .get(key)
                     .filter(|property| property.is_enumerable())
                     .map(|_| key.clone())
             })
             .collect()
+    }
+
+    fn array_element_keys(&self) -> Vec<String> {
+        self.array_elements
+            .iter()
+            .enumerate()
+            .filter_map(|(index, property)| {
+                property
+                    .as_ref()
+                    .filter(|property| property.is_enumerable())
+                    .map(|_| index.to_string())
+            })
+            .collect()
+    }
+
+    fn sparse_array_element_keys(&self) -> Vec<String> {
+        let mut entries: Vec<(ArrayIndex, String)> = self
+            .property_order
+            .iter()
+            .filter_map(|key| {
+                let index = ArrayIndex::parse(key)?;
+                self.properties
+                    .get(key)
+                    .filter(|property| property.is_enumerable())
+                    .map(|_| (index, key.clone()))
+            })
+            .collect();
+        entries.sort_by_key(|(index, _)| *index);
+        entries.into_iter().map(|(_, key)| key).collect()
     }
 
     fn set(&mut self, property: String, value: Value, max_properties: usize) -> Result<()> {
@@ -523,7 +584,24 @@ impl Object {
         enumerable: Option<PropertyEnumerable>,
         max_properties: usize,
     ) -> Result<()> {
-        let property_count = self.properties.len();
+        if self.array_length.is_some()
+            && let Some(index) = ArrayIndex::parse(&property)
+        {
+            self.set_array_property_value(index, property, value, enumerable, max_properties)?;
+            return self.extend_array_length(index);
+        }
+
+        self.set_named_property_value(property, value, enumerable, max_properties)
+    }
+
+    fn set_named_property_value(
+        &mut self,
+        property: String,
+        value: Value,
+        enumerable: Option<PropertyEnumerable>,
+        max_properties: usize,
+    ) -> Result<()> {
+        let property_count = self.property_count();
         match self.properties.entry(property) {
             Entry::Occupied(mut entry) => {
                 entry.get_mut().set_value(value);
@@ -547,9 +625,66 @@ impl Object {
         Ok(())
     }
 
+    fn set_array_property_value(
+        &mut self,
+        index: ArrayIndex,
+        property: String,
+        value: Value,
+        enumerable: Option<PropertyEnumerable>,
+        max_properties: usize,
+    ) -> Result<()> {
+        let Some(position) = index.dense_position(max_properties)? else {
+            return self.set_named_property_value(property, value, enumerable, max_properties);
+        };
+
+        if self.array_elements.get(position).is_none() {
+            let new_len = position
+                .checked_add(1)
+                .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
+            self.array_elements.resize_with(new_len, || None);
+        }
+
+        if self.has_array_element(index) {
+            let slot = self
+                .array_elements
+                .get_mut(position)
+                .ok_or_else(|| Error::runtime("array index storage is not available"))?;
+            let Some(property) = slot else {
+                return Err(Error::runtime("array index storage is not initialized"));
+            };
+            property.set_value(value);
+            if let Some(enumerable) = enumerable {
+                property.set_enumerable(enumerable);
+            }
+            return Ok(());
+        }
+
+        if self.property_count() >= max_properties {
+            return Err(Error::limit(format!(
+                "object property count exceeded {max_properties}"
+            )));
+        }
+        let slot = self
+            .array_elements
+            .get_mut(position)
+            .ok_or_else(|| Error::runtime("array index storage is not available"))?;
+        *slot = Some(ObjectProperty::new(
+            value,
+            enumerable.unwrap_or(PropertyEnumerable::Yes),
+        ));
+        self.array_property_count = self.array_property_count.saturating_add(1);
+        Ok(())
+    }
+
     fn delete(&mut self, property: &str) -> bool {
         if self.array_length.is_some() && property == ARRAY_LENGTH_PROPERTY {
             return false;
+        }
+        if self.array_length.is_some()
+            && let Some(index) = ArrayIndex::parse(property)
+            && self.delete_array_element(index)
+        {
+            return true;
         }
         let removed_property = self.properties.remove(property);
         if removed_property.is_some() {
@@ -568,6 +703,44 @@ impl Object {
         }
         self.array_length = Some(index.next_length()?);
         Ok(())
+    }
+
+    fn array_element_value(&self, index: ArrayIndex) -> Option<Value> {
+        let position = index.position().ok()?;
+        self.array_elements
+            .get(position)
+            .and_then(Option::as_ref)
+            .map(ObjectProperty::value)
+    }
+
+    fn has_array_element(&self, index: ArrayIndex) -> bool {
+        let Ok(position) = index.position() else {
+            return false;
+        };
+        self.array_elements
+            .get(position)
+            .and_then(Option::as_ref)
+            .is_some()
+    }
+
+    fn delete_array_element(&mut self, index: ArrayIndex) -> bool {
+        let Ok(position) = index.position() else {
+            return false;
+        };
+        let Some(slot) = self.array_elements.get_mut(position) else {
+            return false;
+        };
+        if slot.take().is_some() {
+            self.array_property_count = self.array_property_count.saturating_sub(1);
+            return true;
+        }
+        false
+    }
+
+    fn property_count(&self) -> usize {
+        self.properties
+            .len()
+            .saturating_add(self.array_property_count)
     }
 }
 
@@ -596,64 +769,5 @@ impl ObjectProperty {
 
     const fn set_enumerable(&mut self, enumerable: PropertyEnumerable) {
         self.enumerable = enumerable;
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-struct ArrayLength(u32);
-
-impl ArrayLength {
-    fn from_usize(value: usize) -> Result<Self> {
-        let value = u32::try_from(value)
-            .map_err(|_| Error::limit("array length exceeded supported range"))?;
-        Ok(Self(value))
-    }
-
-    fn value(self) -> Value {
-        Value::Number(f64::from(self.0))
-    }
-
-    const fn contains(self, index: ArrayIndex) -> bool {
-        index.0 < self.0
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-struct ArrayIndex(u32);
-
-impl ArrayIndex {
-    fn from_u32(value: u32) -> Result<Self> {
-        if value == u32::MAX {
-            return Err(Error::limit(ARRAY_INDEX_LIMIT_ERROR));
-        }
-        Ok(Self(value))
-    }
-
-    fn from_usize(value: usize) -> Result<Self> {
-        let value = u32::try_from(value).map_err(|_| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
-        Self::from_u32(value)
-    }
-
-    fn parse(property: &str) -> Option<Self> {
-        let value = property.parse::<u32>().ok()?;
-        if value == u32::MAX || value.to_string() != property {
-            return None;
-        }
-        Some(Self(value))
-    }
-
-    fn key(self) -> String {
-        self.0.to_string()
-    }
-
-    fn next_length(self) -> Result<ArrayLength> {
-        self.0
-            .checked_add(1)
-            .map(ArrayLength)
-            .ok_or_else(|| Error::limit("array length exceeded supported range"))
-    }
-
-    const fn length(self) -> ArrayLength {
-        ArrayLength(self.0)
     }
 }
