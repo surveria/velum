@@ -4,17 +4,19 @@ This document is the canonical project plan for growing `rs-quickjs` into a
 safe-Rust, embeddable JavaScript engine. It describes what we are building, the
 rough order of work, and the protocol every branch should follow.
 
-The plan is intentionally operational. Each feature, compatibility, embedding,
-memory, testing, runtime-architecture, resource-control, or observability task
-should update this document in the same branch that implements the task. Future
-work should resume from repository state instead of relying on conversation
-history.
+The plan is intentionally operational. Each repository, embedding API,
+compatibility, built-in, async, testing, resource-control, observability,
+runtime-architecture, performance, or memory task should update this document
+in the same branch that implements the task. Future work should resume from
+repository state instead of relying on conversation history.
 
-This is a product roadmap, not a single-workstream backlog. The primary
-sequence is product delivery: library surface, VM isolation, host extension
-APIs, language compatibility, built-ins, async integration, resource control,
-and observability. Performance and memory budgets are acceptance criteria for
-that work, with dedicated checkpoint tasks when measurements show debt.
+This is a whole-project roadmap, not an optimization roadmap. The default
+sequence is product delivery: keep the validation base reliable, keep the Rust
+library API usable for embedders, expand language compatibility, add practical
+built-ins, design modules and async jobs, expand resource control, add
+production observability, and evolve runtime internals behind stable public
+interfaces. Performance and memory budgets are acceptance criteria for all of
+that work, with dedicated checkpoint tasks only when measurements show debt.
 
 ## Product Direction
 
@@ -67,6 +69,17 @@ cannot provide as cleanly:
 
 ## Workstreams
 
+### Repository And Validation
+
+Repository work keeps the project reliable enough to measure progress. CI,
+`scripts/test-all.sh`, Test262, the QuickJS reference setup, benchmark
+orchestration, report generation, and documentation links are product
+infrastructure, not side work.
+
+Every branch should preserve one-command validation and compact reports. A
+feature that cannot be measured, compared, or reproduced should be treated as
+incomplete.
+
 ### Compatibility
 
 Compatibility work grows the supported JavaScript language and built-in
@@ -103,12 +116,22 @@ detailed reports:
 Reports should stay compact: summaries and failure classifications are more
 important than listing every passing or intentionally skipped case.
 
-### Runtime Architecture, Performance, And Memory
+### Modules, Jobs, And Async
 
-Runtime architecture work keeps implemented behavior close to QuickJS while the
-engine grows into a complete embeddable library. Performance and memory are
-continuous acceptance criteria for feature work, not the only purpose of the
-roadmap.
+Modules, promises, the JavaScript job queue, async functions, and async Rust
+host callbacks are product features for embedders. The VM owns JavaScript jobs,
+while embedding applications own I/O policy, module loading policy, executor
+choice, cancellation, and job-draining policy.
+
+This work should happen after the synchronous embedding surface and enough core
+runtime semantics exist to make async behavior meaningful.
+
+### Runtime Architecture
+
+Runtime architecture work changes the internal model behind the public API.
+These tasks should be introduced when they unlock compatibility, resource
+control, observability, or measured performance and memory debt. They are not a
+separate product direction.
 
 The major implementation directions are:
 
@@ -120,6 +143,17 @@ The major implementation directions are:
 - dense array fast paths
 - VM-owned indexed heaps instead of scattered small allocations
 - explicit heap accounting and a safe collection strategy
+
+### Performance And Memory Guardrails
+
+Performance and memory guardrails keep implemented behavior close to QuickJS
+while the engine grows into a complete embeddable library. They are continuous
+acceptance criteria for feature work, not the only purpose of the roadmap.
+
+Performance or memory branches should be checkpoint tasks with measured
+baselines and a clear target. Ordinary compatibility and embedding branches
+should still add benchmarks for hot paths and record measured exceptions when a
+new feature exceeds the budget.
 
 ### Resource Control
 
@@ -176,42 +210,56 @@ functions, and other high-value built-ins based on Test262 failure clusters and
 embedding use cases. Built-ins should not hide slow storage decisions; add
 benchmarks for hot methods as they land.
 
-### 6. Reusable Compilation API
+### 6. Diagnostics And Error Model
+
+Make syntax, runtime, host callback, and resource-limit errors precise and
+stable enough for embedders. Good diagnostics are part of the library contract,
+not just developer convenience.
+
+### 7. Reusable Compilation API
 
 Introduce `CompiledScript` while it can still wrap the current AST. This gives
 embedders a parse-once/evaluate-many contract and creates a stable boundary for
 later bytecode work.
 
-### 7. Runtime Data Model
+### 8. Modules, Jobs, And Async
+
+Design module loading around embedder-owned I/O and policy. Add the JavaScript
+job queue before promises, async functions, and async Rust host callbacks. The
+VM should own JavaScript jobs, while the embedding application owns the outer
+executor and job-draining policy.
+
+### 9. Resource Control
+
+Turn limits into a complete library API: heap budgets, atom table budgets,
+stack budgets, queued jobs, module loading, host callback quotas, and
+wall-clock cancellation hooks. Every new limit must appear in tests and
+teardown/resource reports.
+
+### 10. Observability
+
+Add structured execution events, profiling hooks, resource snapshots, teardown
+reports, cancellation hooks, and feature gates for constrained devices. This is
+part of the product surface, not only debug tooling.
+
+### 11. Runtime Data Model
 
 Add atoms, slot-based locals, shape-based objects, dense array storage, indexed
 VM-owned heaps, and explicit resource accounting. These changes support both
 compatibility and performance, but they should be introduced as product
 architecture work rather than isolated micro-optimizations.
 
-### 8. Async JavaScript And Jobs
-
-Add promises, the JavaScript job queue, async functions, and async Rust host
-callbacks. The VM should own JavaScript jobs, while the embedding application
-owns the outer executor and job-draining policy.
-
-### 9. Bytecode And Dispatch
+### 12. Bytecode And Dispatch
 
 Add bytecode after enough language coverage exists to benchmark honestly.
 Bytecode, inline caches, and compact dispatch should stay behind the
 `CompiledScript` API so ordinary embedder code does not need to change.
 
-### 10. Heap Management And Hard Limits
+### 13. Heap Management And Collection
 
 Grow the indexed ownership model into deterministic heap accounting and a safe
 collection strategy. Hard limits, teardown, queued jobs, host callbacks, and
 many isolated VMs must remain part of the design.
-
-### 11. Production Observability
-
-Add structured execution events, profiling hooks, resource snapshots, teardown
-reports, cancellation hooks, and feature gates for constrained devices. This is
-part of the product surface, not only debug tooling.
 
 ## Status Legend
 
@@ -246,6 +294,9 @@ note about what changed, what was difficult, and what remains possible later.
 | [x] | Done | Binding slot storage foundation | Runtime architecture / performance | Move runtime binding storage from map-held cells toward slot-indexed storage before compiler-assigned slots. | Adds a checked `BindingSlot` newtype and makes each `BindingScope` store `BindingCell` values in a `Vec`, with the atom map acting as an atom-to-slot index. Direct embedding coverage verifies assignment updates and lexical shadowing through the slot-backed scope. Full compiler-assigned local, global, and upvalue slots remain the follow-up `Slot-based local bindings` task. Validation passed with `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T164512Z.md` keeps full Test262 at 9609 passed, active Test262 and QuickJS differential at 100%, `compiled_script_reuse` within budget at `1.08x`, and `atomized_bindings` as a tracked latency exception at `1.15x`. |
 | [x] | Done | Embedding API stability pass | Embedding API | Review `Engine`, `Vm`, `Context`, `CompiledScript`, configuration, teardown, and error surfaces before more features depend on them. | Adds VM-level wrappers for common embedder operations so ordinary callers do not need to route through `Context` for eval, globals, output, or host registration. The README and direct embedding test now exercise `Vm::register_host_function_typed`, `Vm::register_host_function`, `Vm::eval`, `Vm::compile`, `Vm::eval_compiled`, `Vm::get_global`, `Vm::output`, and `Vm::take_output`. `Context` remains available for lower-level control. Validation passed with `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T170105Z.md` keeps full Test262 at 9609 passed, active Test262 and QuickJS differential at 100%, and leaves existing benchmark exceptions to checkpoint tasks. |
 | [x] | Done | Host value conversion layer | Embedding API | Add typed conversions between Rust values and JavaScript values for host functions. | Adds `IntoJsValue`, `FromJsValue`, generic `HostCall::argument<T>()`, and `Context::register_host_function_typed` while keeping the existing `Value`-returning callback API compatible. Direct embedding tests cover typed argument extraction, typed returns for `String`, `f64`, `bool`, and `()`, contextual host errors, VM-local callbacks, and VM-owned handle rejection. The README embedding example now uses the typed host API. Validation passed with `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features`, `cargo test`, and `scripts/test-all.sh`; report `rsqjs-test-report-20260705T165400Z.md` keeps full Test262 at 9609 passed, active Test262 and QuickJS differential at 100%, and leaves existing benchmark exceptions to checkpoint tasks. |
+| [x] | Done | General product roadmap order | Planning | Make the canonical plan read as a whole-project delivery order, not as an optimization backlog. | Reframes the plan around repository reliability, embedding API, compatibility, built-ins, diagnostics, modules/jobs/async, resources, observability, and only then deeper runtime architecture. Performance and memory remain acceptance criteria and recurring checkpoint tasks rather than the main roadmap label. This documentation-only change was validated with `git diff --check`; full CI remains the merge gate. |
+| [ ] | Backlog | Report triage cadence | Testing / planning | Keep the next work item grounded in the latest Test262, QuickJS differential, benchmark, and memory evidence. | Before selecting each compatibility or architecture tranche, summarize the newest report signals and record why the chosen task is next. |
+| [ ] | Backlog | Library API documentation pass | Embedding API / documentation | Keep crate docs, README examples, and direct library tests aligned with the current public API. | Do this whenever API shape changes enough that embedders could be confused by stale examples. |
 | [ ] | Backlog | Parser and syntax compatibility tranches | Compatibility | Continue reducing Test262 parser and lexer failure clusters. | Pick coherent clusters from the full report, then add engine, active Test262, and QuickJS differential cases where relevant. |
 | [ ] | Backlog | Runtime semantics tranches | Compatibility | Expand statements, functions, lexical environments, `this`, exceptions, equality, iteration, and prototype behavior. | Each tranche should improve a visible Test262 feature area without mixing unrelated semantics. |
 | [ ] | Backlog | Practical built-ins tranches | Compatibility | Expand `Object`, `Array`, `String`, `Number`, `Math`, `Boolean`, `Function`, errors, JSON, Date, RegExp, Map, Set, and other high-value built-ins. | Prioritize by Test262 failure maps, embedding use cases, and QuickJS differential evidence. Add benchmarks for hot methods as they land. |
@@ -306,7 +357,8 @@ but branches should document why they changed priority.
    Structured events, profiling hooks, resource snapshots, and execution reports
    should be designed for production embedders, not only for local debugging.
 
-9. Improve runtime data structures when they unblock features or measured debt.
+9. Improve runtime data structures when they unblock features, resource
+   accounting, observability, or measured debt.
    Atoms, slot-based locals, shape-based objects, dense arrays, and indexed
    heaps are architecture tasks. They should support compatibility and resource
    control while keeping QuickJS-like speed and footprint.
@@ -321,9 +373,10 @@ but branches should document why they changed priority.
     and many isolated VMs.
 
 12. Run performance and memory checkpoint tasks continuously.
-    Benchmark exceptions should be handled as recurring checkpoint tasks. When
-    a feature makes a hot path slower, either fix it in the same branch or
-    record a measured exception with a follow-up task.
+    Benchmark exceptions should be handled as recurring checkpoint tasks, but
+    they do not define the whole roadmap. When a feature makes a hot path
+    slower, either fix it in the same branch or record a measured exception
+    with a follow-up task.
 
 ## Branch Execution Protocol
 
