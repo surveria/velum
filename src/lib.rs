@@ -6,6 +6,7 @@ mod error;
 mod lexer;
 mod parser;
 mod runtime;
+mod runtime_assertions;
 mod value;
 
 pub use crate::error::{Error, Result};

@@ -126,20 +126,35 @@ impl Parser {
     }
 
     fn var_decl(&mut self, kind: DeclKind) -> Result<Stmt> {
-        let name = self.consume_identifier("expected binding name")?;
-        let init = if self.match_kind(&TokenKind::Equal) {
-            Some(self.expression()?)
-        } else if kind == DeclKind::Const {
-            return Err(Error::parse(
-                "const declaration requires an initializer",
-                self.offset(),
-            ));
-        } else {
-            None
-        };
+        let mut declarations = Vec::new();
+        loop {
+            let name = self.consume_identifier("expected binding name")?;
+            let init = if self.match_kind(&TokenKind::Equal) {
+                Some(self.expression()?)
+            } else if kind == DeclKind::Const {
+                return Err(Error::parse(
+                    "const declaration requires an initializer",
+                    self.offset(),
+                ));
+            } else {
+                None
+            };
+            declarations.push(Stmt::VarDecl { name, kind, init });
+            if !self.match_kind(&TokenKind::Comma) {
+                break;
+            }
+        }
 
         self.consume_optional_semicolon();
-        Ok(Stmt::VarDecl { name, kind, init })
+        if declarations.len() == 1 {
+            let mut declarations = declarations.into_iter();
+            let Some(declaration) = declarations.next() else {
+                return Err(Error::parse("expected binding declaration", self.offset()));
+            };
+            Ok(declaration)
+        } else {
+            Ok(Stmt::Block(declarations))
+        }
     }
 
     fn expression(&mut self) -> Result<Expr> {
@@ -280,6 +295,15 @@ impl Parser {
     fn call(&mut self) -> Result<Expr> {
         let mut expr = self.primary()?;
         loop {
+            if self.match_kind(&TokenKind::Dot) {
+                let property = self.consume_identifier("expected property name after '.'")?;
+                expr = Expr::Member {
+                    object: Box::new(expr),
+                    property,
+                };
+                continue;
+            }
+
             if !self.match_kind(&TokenKind::LParen) {
                 break;
             }

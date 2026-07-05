@@ -146,6 +146,53 @@ fn supports_function_expressions() -> TestResult {
 }
 
 #[test]
+fn supports_assert_throws_and_reference_errors() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r"
+        var first, second = 40, third = second + 2;
+
+        assert.throws(ReferenceError, function() {
+            absent = absent;
+        });
+
+        try {
+            missing = missing;
+        } catch (error) {
+            print(error);
+        }
+
+        third
+        ",
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_optional_value(context.get_global("first"), &Value::Undefined)?;
+    ensure_output(
+        context.output(),
+        &["ReferenceError: 'missing' is not defined".to_owned()],
+    )?;
+
+    let Err(error) = eval(
+        r"
+        assert.throws(ReferenceError, function() {
+            1;
+        });
+        ",
+    ) else {
+        return Err("expected assert.throws without an exception to fail".into());
+    };
+    ensure_error_contains(&error, "no exception was thrown")?;
+
+    let Err(error) = eval("missing") else {
+        return Err("expected missing identifier to fail".into());
+    };
+    ensure_error_contains(&error, "ReferenceError: 'missing' is not defined")
+}
+
+#[test]
 fn evaluates_if_blocks_and_throw_statements() -> TestResult {
     expect_value(
         r#"
@@ -266,4 +313,13 @@ fn ensure_error_kind(error: &Error, expected: &str) -> TestResult {
     }
 
     Err(format!("expected {expected} error, got {error:?}").into())
+}
+
+fn ensure_error_contains(error: &Error, expected: &str) -> TestResult {
+    let message = error.to_string();
+    if message.contains(expected) {
+        return Ok(());
+    }
+
+    Err(format!("expected error '{message}' to contain '{expected}'").into())
 }
