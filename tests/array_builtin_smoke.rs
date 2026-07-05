@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use rs_quickjs::{Error, Runtime, RuntimeLimits, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -106,6 +106,100 @@ fn array_intrinsic_does_not_overwrite_user_globals() -> TestResult {
     ensure_output(context.output(), &["7 9 Array false".to_owned()])
 }
 
+#[test]
+fn preserves_dense_array_element_semantics() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let values = [];
+        values[2] = "two";
+        values[0] = "zero";
+        delete values[2];
+        values[1] = "one";
+        values.extra = 7;
+
+        let seen = "";
+        for (let key in values) {
+            seen = seen + key + ":" + values[key] + ";";
+        }
+
+        print(seen);
+        print(values.length, "2" in values, values[2]);
+
+        seen === "0:zero;1:one;extra:7;" &&
+            values.length === 3 &&
+            !("2" in values) &&
+            values[2] === undefined ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(
+        context.output(),
+        &[
+            "0:zero;1:one;extra:7;".to_owned(),
+            "3 false undefined".to_owned(),
+        ],
+    )
+}
+
+#[test]
+fn supports_sparse_array_indices_without_dense_growth() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let values = [];
+        values.extra = "side";
+        values[4097] = "tail";
+
+        let seen = "";
+        for (let key in values) {
+            seen = seen + key + ":" + values[key] + ";";
+        }
+
+        print(values.length, values[4097], "4097" in values);
+        print(seen);
+        values.length === 4098 &&
+            values[4097] === "tail" &&
+            ("4097" in values) &&
+            seen === "4097:tail;extra:side;" ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(
+        context.output(),
+        &[
+            "4098 tail true".to_owned(),
+            "4097:tail;extra:side;".to_owned(),
+        ],
+    )
+}
+
+#[test]
+fn counts_dense_array_elements_toward_property_limit() -> TestResult {
+    let runtime = Runtime::with_limits(RuntimeLimits {
+        max_object_properties: 1,
+        ..RuntimeLimits::default()
+    });
+    let mut context = runtime.context();
+
+    let Err(error) = context.eval(
+        r"
+        let values = [];
+        values[0] = 1;
+        values[1] = 2;
+        ",
+    ) else {
+        return Err("expected dense array property limit to fail".into());
+    };
+    ensure_error_contains(&error, "object property count exceeded 1")
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
@@ -120,4 +214,13 @@ fn ensure_output(actual: &[String], expected: &[String]) -> TestResult {
     }
 
     Err(format!("expected output {expected:?}, got {actual:?}").into())
+}
+
+fn ensure_error_contains(error: &Error, expected: &str) -> TestResult {
+    let message = error.to_string();
+    if message.contains(expected) {
+        return Ok(());
+    }
+
+    Err(format!("expected error '{message}' to contain '{expected}'").into())
 }
