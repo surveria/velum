@@ -97,7 +97,8 @@ impl Context {
 
     pub(crate) fn eval_statement(&mut self, statement: &Stmt) -> Result<Completion> {
         match statement {
-            Stmt::Block(statements) => self.eval_block(statements),
+            Stmt::Block(statements) => self.eval_scoped_block(statements),
+            Stmt::DeclList(declarations) => self.eval_declaration_list(declarations),
             Stmt::If {
                 condition,
                 consequent,
@@ -152,7 +153,9 @@ impl Context {
 
     fn hoist_statement_vars(&mut self, statement: &Stmt) -> Result<()> {
         match statement {
-            Stmt::Block(statements) => self.hoist_var_declarations(statements),
+            Stmt::Block(statements) | Stmt::DeclList(statements) => {
+                self.hoist_var_declarations(statements)
+            }
             Stmt::If {
                 consequent,
                 alternate,
@@ -694,6 +697,14 @@ impl Context {
             return scope;
         }
         &mut self.globals
+    }
+
+    pub(crate) fn push_lexical_scope(&mut self) {
+        self.locals.push(BindingScope::new());
+    }
+
+    pub(crate) fn pop_lexical_scope(&mut self) -> Option<BindingScope> {
+        self.locals.pop()
     }
 
     pub(crate) fn get_binding(&self, name: &str) -> Option<BindingCell> {
