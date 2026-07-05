@@ -9,6 +9,11 @@ use super::Parser;
 
 const THIS_PROPERTY_NAME: &str = "this";
 
+struct ObjectPropertyName {
+    key: String,
+    shorthand_binding: Option<String>,
+}
+
 impl Parser {
     pub(super) fn expression(&mut self) -> Result<Expr> {
         self.with_expression_depth(Self::assignment)
@@ -193,10 +198,7 @@ impl Parser {
         }
 
         loop {
-            let key = self.object_property_key()?;
-            self.consume(&TokenKind::Colon, "expected ':' after object property name")?;
-            let value = self.expression()?;
-            properties.push(ObjectProperty { key, value });
+            properties.push(self.object_literal_property()?);
             if !self.match_kind(&TokenKind::Comma) {
                 break;
             }
@@ -207,6 +209,42 @@ impl Parser {
 
         self.consume(&TokenKind::RBrace, "expected '}' after object literal")?;
         Ok(Expr::Object(properties))
+    }
+
+    fn object_literal_property(&mut self) -> Result<ObjectProperty> {
+        let name = self.object_property_key()?;
+        if self.match_kind(&TokenKind::Colon) {
+            let value = self.expression()?;
+            return Ok(ObjectProperty {
+                key: name.key,
+                value,
+            });
+        }
+        if self.match_kind(&TokenKind::LParen) {
+            let params = self.function_parameters()?.into();
+            self.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
+            self.consume(&TokenKind::LBrace, "expected '{' before method body")?;
+            let body = self.block_statements()?.into();
+            let value = Expr::MethodFunction {
+                name: name.key.clone(),
+                params,
+                body,
+            };
+            return Ok(ObjectProperty {
+                key: name.key,
+                value,
+            });
+        }
+        if let Some(binding) = name.shorthand_binding {
+            return Ok(ObjectProperty {
+                key: name.key,
+                value: Expr::Identifier(binding),
+            });
+        }
+        Err(Error::parse(
+            "expected ':' after object property name",
+            self.offset(),
+        ))
     }
 
     fn array_literal(&mut self) -> Result<Expr> {
@@ -229,14 +267,33 @@ impl Parser {
         Ok(Expr::Array(elements))
     }
 
-    fn object_property_key(&mut self) -> Result<String> {
+    fn object_property_key(&mut self) -> Result<ObjectPropertyName> {
         let token = self
             .advance()
             .ok_or_else(|| Error::parse("expected object property name", self.offset()))?;
         match token.kind {
-            TokenKind::Identifier(name) | TokenKind::String(name) => Ok(name),
-            TokenKind::This => Ok(THIS_PROPERTY_NAME.to_owned()),
-            _ => Err(Error::parse("expected object property name", token.offset)),
+            TokenKind::Identifier(name) => Ok(ObjectPropertyName {
+                key: name.clone(),
+                shorthand_binding: Some(name),
+            }),
+            TokenKind::String(name) => Ok(ObjectPropertyName {
+                key: name,
+                shorthand_binding: None,
+            }),
+            TokenKind::Number(value) => Ok(ObjectPropertyName {
+                key: Value::Number(value).to_string(),
+                shorthand_binding: None,
+            }),
+            kind => keyword_property_name(&kind)
+                .map(Self::keyword_property_name)
+                .ok_or_else(|| Error::parse("expected object property name", token.offset)),
+        }
+    }
+
+    fn keyword_property_name(name: &str) -> ObjectPropertyName {
+        ObjectPropertyName {
+            key: name.to_owned(),
+            shorthand_binding: None,
         }
     }
 
@@ -247,10 +304,10 @@ impl Parser {
             None
         };
         self.consume(&TokenKind::LParen, "expected '(' after 'function'")?;
-        let params = self.function_parameters()?;
+        let params = self.function_parameters()?.into();
         self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
-        let body = self.block_statements()?;
+        let body = self.block_statements()?.into();
         Ok(Expr::Function { name, params, body })
     }
 
@@ -297,8 +354,43 @@ impl Parser {
             .ok_or_else(|| Error::parse(message, self.offset()))?;
         match token.kind {
             TokenKind::Identifier(name) => Ok(name),
-            TokenKind::This => Ok(THIS_PROPERTY_NAME.to_owned()),
-            _ => Err(Error::parse(message, token.offset)),
+            kind => keyword_property_name(&kind)
+                .map(str::to_owned)
+                .ok_or_else(|| Error::parse(message, token.offset)),
         }
+    }
+}
+
+const fn keyword_property_name(kind: &TokenKind) -> Option<&'static str> {
+    match kind {
+        TokenKind::This => Some(THIS_PROPERTY_NAME),
+        TokenKind::Let => Some("let"),
+        TokenKind::Const => Some("const"),
+        TokenKind::Var => Some("var"),
+        TokenKind::If => Some("if"),
+        TokenKind::Else => Some("else"),
+        TokenKind::While => Some("while"),
+        TokenKind::For => Some("for"),
+        TokenKind::Switch => Some("switch"),
+        TokenKind::Case => Some("case"),
+        TokenKind::Default => Some("default"),
+        TokenKind::Break => Some("break"),
+        TokenKind::Continue => Some("continue"),
+        TokenKind::Try => Some("try"),
+        TokenKind::Catch => Some("catch"),
+        TokenKind::Finally => Some("finally"),
+        TokenKind::Throw => Some("throw"),
+        TokenKind::Return => Some("return"),
+        TokenKind::Function => Some("function"),
+        TokenKind::New => Some("new"),
+        TokenKind::In => Some("in"),
+        TokenKind::Typeof => Some("typeof"),
+        TokenKind::Void => Some("void"),
+        TokenKind::Delete => Some("delete"),
+        TokenKind::True => Some("true"),
+        TokenKind::False => Some("false"),
+        TokenKind::Null => Some("null"),
+        TokenKind::Undefined => Some("undefined"),
+        _ => None,
     }
 }

@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, btree_map::Entry};
+use std::{
+    collections::{BTreeMap, btree_map::Entry},
+    rc::Rc,
+};
 
 use crate::{
     ast::{DeclKind, Expr, Stmt},
@@ -26,26 +29,50 @@ impl Context {
     pub(crate) fn create_function(
         &mut self,
         name: Option<&str>,
-        params: &[String],
-        body: &[Stmt],
+        params: &Rc<[String]>,
+        body: &Rc<[Stmt]>,
+    ) -> Result<Value> {
+        self.create_function_with_properties(name, params, body, true)
+    }
+
+    pub(crate) fn create_method_function(
+        &mut self,
+        name: &str,
+        params: &Rc<[String]>,
+        body: &Rc<[Stmt]>,
+    ) -> Result<Value> {
+        self.create_function_with_properties(Some(name), params, body, false)
+    }
+
+    fn create_function_with_properties(
+        &mut self,
+        name: Option<&str>,
+        params: &Rc<[String]>,
+        body: &Rc<[Stmt]>,
+        constructable: bool,
     ) -> Result<Value> {
         let id = FunctionId::new(self.functions.len());
         let function = Value::Function(id);
-        let prototype_id = self.objects.create_with_prototype_property(
-            None,
-            PROTOTYPE_CONSTRUCTOR_PROPERTY.to_owned(),
-            function.clone(),
-            PropertyEnumerable::No,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )?;
-        let prototype = Value::Object(prototype_id);
+        let prototype = if constructable {
+            let prototype_id = self.objects.create_with_prototype_property(
+                None,
+                PROTOTYPE_CONSTRUCTOR_PROPERTY.to_owned(),
+                function.clone(),
+                PropertyEnumerable::No,
+                self.limits.max_objects,
+                self.limits.max_object_properties,
+            )?;
+            Value::Object(prototype_id)
+        } else {
+            Value::Undefined
+        };
         self.functions.push(super::Function {
             name: name.unwrap_or_default().to_owned(),
-            params: params.to_vec(),
-            body: body.to_vec(),
+            params: Rc::clone(params),
+            body: Rc::clone(body),
             captures: self.locals.clone(),
             properties: FunctionProperties::new(prototype),
+            constructable,
         });
         Ok(function)
     }
@@ -80,10 +107,17 @@ impl Context {
         args: &[Expr],
         this_value: Value,
     ) -> Result<Completion> {
-        let function = self.function(id)?.clone();
+        let (params, body, captures) = {
+            let function = self.function(id)?;
+            (
+                Rc::clone(&function.params),
+                Rc::clone(&function.body),
+                function.captures.clone(),
+            )
+        };
         let args = self.eval_args(args)?;
-        let caller_locals = std::mem::replace(&mut self.locals, function.captures);
-        let scope = match self.function_scope(&function.params, args) {
+        let caller_locals = std::mem::replace(&mut self.locals, captures);
+        let scope = match self.function_scope(&params, args) {
             Ok(scope) => scope,
             Err(error) => {
                 self.locals = caller_locals;
@@ -93,8 +127,8 @@ impl Context {
         self.locals.push(scope);
         self.this_values.push(this_value);
         let result = self
-            .hoist_var_declarations(&function.body)
-            .and_then(|()| self.eval_block(&function.body));
+            .hoist_var_declarations(&body)
+            .and_then(|()| self.eval_block(&body));
         let removed_this = self.this_values.pop();
         let removed = self.locals.pop();
         self.locals = caller_locals;
@@ -120,10 +154,11 @@ impl Context {
 
     pub(crate) fn has_function_property(&self, id: FunctionId, property: &str) -> Result<bool> {
         let function = self.function(id)?;
-        Ok(matches!(
-            property,
-            FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY | FUNCTION_PROTOTYPE_PROPERTY
-        ) || function.properties.has(property))
+        Ok(
+            matches!(property, FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY)
+                || (property == FUNCTION_PROTOTYPE_PROPERTY && function.constructable)
+                || function.properties.has(property),
+        )
     }
 
     pub(crate) fn set_function_property(
@@ -155,6 +190,9 @@ impl Context {
         id: FunctionId,
     ) -> Result<Option<ObjectId>> {
         let function = self.function(id)?;
+        if !function.constructable {
+            return Err(Error::runtime("function is not a constructor"));
+        }
         match function.properties.prototype() {
             Value::Object(id) => Ok(Some(id)),
             Value::Undefined
@@ -242,7 +280,11 @@ impl Context {
     }
 
     fn eval_args(&mut self, args: &[Expr]) -> Result<Vec<Value>> {
-        args.iter().map(|arg| self.eval_expr(arg)).collect()
+        let mut values = Vec::with_capacity(args.len());
+        for arg in args {
+            values.push(self.eval_expr(arg)?);
+        }
+        Ok(values)
     }
 
     fn function_scope(&self, params: &[String], args: Vec<Value>) -> Result<BindingScope> {

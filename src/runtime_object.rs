@@ -64,7 +64,7 @@ impl ObjectHeap {
         max_objects: usize,
         max_properties: usize,
     ) -> Result<Value> {
-        let mut object = Object::ordinary();
+        let mut object = Object::ordinary_with_property_capacity(properties.len());
         let mut literal_prototype = None;
         for (key, value) in properties {
             if key == PROTOTYPE_PROPERTY {
@@ -436,6 +436,17 @@ impl Object {
         Self {
             properties: BTreeMap::new(),
             property_order: Vec::new(),
+            array_elements: Vec::new(),
+            array_property_count: 0,
+            array_length: None,
+            prototype: None,
+        }
+    }
+
+    fn ordinary_with_property_capacity(capacity: usize) -> Self {
+        Self {
+            properties: BTreeMap::new(),
+            property_order: Vec::with_capacity(capacity),
             array_elements: Vec::new(),
             array_property_count: 0,
             array_length: None,

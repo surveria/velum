@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::value::Value;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -139,8 +141,13 @@ pub enum Expr {
     },
     Function {
         name: Option<String>,
-        params: Vec<String>,
-        body: Vec<Stmt>,
+        params: Rc<[String]>,
+        body: Rc<[Stmt]>,
+    },
+    MethodFunction {
+        name: String,
+        params: Rc<[String]>,
+        body: Rc<[Stmt]>,
     },
     Object(Vec<ObjectProperty>),
     Array(Vec<Self>),
