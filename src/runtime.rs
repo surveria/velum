@@ -532,9 +532,11 @@ impl Context {
             )));
         };
         let prototype = self.function_constructor_prototype(id)?;
-        let object = self
-            .objects
-            .create_with_prototype(prototype, self.limits.max_objects)?;
+        let object = self.objects.create_with_prototype(
+            prototype,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
         match self.eval_function_completion_with_this(id, args, object.clone())? {
             Completion::Return(value) if Self::constructor_return_is_object(&value) => Ok(value),
             Completion::Normal(_) | Completion::Return(_) => Ok(object),
