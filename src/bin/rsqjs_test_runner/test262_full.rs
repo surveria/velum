@@ -18,6 +18,7 @@ use super::{
 const CORPUS_NAME: &str = "Test262 full corpus";
 const TEST262_TEST_ROOT: &str = "test";
 const TEST262_RUN_ALL_ENV: &str = "RSQJS_TEST262_RUN_ALL";
+const MODULE_FIXTURE_MARKER: &str = "_FIXTURE";
 const UNKNOWN_AREA: &str = "unknown";
 
 pub fn run(test262_dir: Option<&Path>) -> CorpusReport {
@@ -75,7 +76,6 @@ fn execute_full_corpus(test262_dir: &Path) -> anyhow::Result<CorpusReport> {
 
 fn execute_metadata_corpus(test262_dir: &Path, test_paths: &[String]) -> CorpusReport {
     let mut rows = Vec::<CaseRow>::new();
-    let mut skip_reasons = BTreeMap::<String, usize>::new();
     let mut stats = CorpusStats {
         total: 0,
         passed: 0,
@@ -84,7 +84,7 @@ fn execute_metadata_corpus(test262_dir: &Path, test_paths: &[String]) -> CorpusR
     };
 
     for path in test_paths {
-        run_discovered_case(test262_dir, path, &mut stats, &mut rows, &mut skip_reasons);
+        run_discovered_case(test262_dir, path, &mut stats, &mut rows);
     }
 
     CorpusReport {
@@ -92,7 +92,7 @@ fn execute_metadata_corpus(test262_dir: &Path, test_paths: &[String]) -> CorpusR
         required: false,
         stats,
         rows,
-        skip_reasons: skip_reason_rows(skip_reasons),
+        skip_reasons: Vec::new(),
     }
 }
 
@@ -172,12 +172,11 @@ fn run_discovered_case(
     path: &str,
     stats: &mut CorpusStats,
     rows: &mut Vec<CaseRow>,
-    skip_reasons: &mut BTreeMap<String, usize>,
 ) {
     match execute_test262_path(test262_dir, path) {
         Ok(results) => {
             for result in results {
-                record_discovered_result(path, result, stats, rows, skip_reasons);
+                record_discovered_result(path, result, stats, rows);
             }
         }
         Err(error) => {
@@ -198,7 +197,6 @@ fn record_discovered_result(
     result: Test262CaseResult,
     stats: &mut CorpusStats,
     rows: &mut Vec<CaseRow>,
-    skip_reasons: &mut BTreeMap<String, usize>,
 ) {
     stats.total = stats.total.saturating_add(1);
     match result.outcome {
@@ -213,11 +211,6 @@ fn record_discovered_result(
                 source: source_label(path),
                 detail,
             });
-        }
-        Test262Outcome::Skipped(reason) => {
-            stats.skipped = stats.skipped.saturating_add(1);
-            let count = skip_reasons.entry(reason).or_default();
-            *count = count.saturating_add(1);
         }
     }
 }
@@ -302,15 +295,25 @@ fn collect_js_files(
             .with_context(|| format!("failed to inspect '{}'", path.display()))?;
         if file_type.is_dir() {
             collect_js_files(&path, test262_dir, paths)?;
-        } else if is_js_file(&path) {
+        } else if is_standalone_js_test_file(&path) {
             paths.push(relative_test_path(test262_dir, &path)?);
         }
     }
     Ok(())
 }
 
+fn is_standalone_js_test_file(path: &Path) -> bool {
+    is_js_file(path) && !is_module_fixture(path)
+}
+
 fn is_js_file(path: &Path) -> bool {
     path.extension().is_some_and(|extension| extension == "js")
+}
+
+fn is_module_fixture(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.contains(MODULE_FIXTURE_MARKER))
 }
 
 fn relative_test_path(test262_dir: &Path, path: &Path) -> anyhow::Result<String> {
@@ -356,7 +359,9 @@ fn skip_reason_rows(reasons: BTreeMap<String, usize>) -> Vec<SkipReasonRow> {
 
 #[cfg(test)]
 mod tests {
-    use super::{default_skip_reason, test262_area};
+    use std::path::Path;
+
+    use super::{default_skip_reason, is_standalone_js_test_file, test262_area};
 
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -381,10 +386,27 @@ mod tests {
         )
     }
 
+    #[test]
+    fn rejects_module_fixture_files_as_standalone_tests() -> TestResult {
+        ensure_bool(!is_standalone_js_test_file(Path::new(
+            "test/language/module-code/dep_FIXTURE.js",
+        )))?;
+        ensure_bool(is_standalone_js_test_file(Path::new(
+            "test/language/module-code/import-default.js",
+        )))
+    }
+
     fn ensure_text(actual: &str, expected: &str) -> TestResult {
         if actual == expected {
             return Ok(());
         }
         Err(format!("expected '{expected}', got '{actual}'").into())
+    }
+
+    fn ensure_bool(value: bool) -> TestResult {
+        if value {
+            return Ok(());
+        }
+        Err("expected true".into())
     }
 }
