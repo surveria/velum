@@ -6,6 +6,7 @@ use crate::value::Value;
 const NULLISH_PROPERTY_DELETE_ERROR: &str = "Cannot convert undefined or null to object";
 const ERROR_NAME_PROPERTY: &str = "name";
 const ERROR_MESSAGE_PROPERTY: &str = "message";
+const STRING_LENGTH_PROPERTY: &str = "length";
 
 pub fn property_key(value: &Value) -> String {
     match value {
@@ -18,6 +19,7 @@ pub fn get_property(objects: &ObjectHeap, object: &Value, property: &str) -> Res
     match object {
         Value::Error(error) => Ok(error_property(error, property)),
         Value::Object(id) => objects.get(*id, property),
+        Value::String(value) => string_property(value, property),
         value => Err(Error::runtime(format!(
             "member access '{property}' is not supported for {}",
             value.type_name()
@@ -32,6 +34,7 @@ pub fn has_property(objects: &ObjectHeap, object: &Value, property: &str) -> Res
             ERROR_NAME_PROPERTY | ERROR_MESSAGE_PROPERTY
         )),
         Value::Object(id) => objects.has(*id, property),
+        Value::String(value) => string_has_property(value, property),
         value => Err(Error::runtime(format!(
             "operator 'in' is not supported for {}",
             value.type_name()
@@ -47,9 +50,9 @@ pub fn enumerable_property_keys(objects: &ObjectHeap, object: &Value) -> Result<
             ERROR_NAME_PROPERTY.to_owned(),
             ERROR_MESSAGE_PROPERTY.to_owned(),
         ]),
+        Value::String(value) => string_enumerable_keys(value),
         Value::Bool(_)
         | Value::Number(_)
-        | Value::String(_)
         | Value::Function(_)
         | Value::NativeFunction(_)
         | Value::HostFunction(_) => Ok(Vec::new()),
@@ -84,4 +87,59 @@ pub fn delete_property(objects: &mut ObjectHeap, object: &Value, property: &str)
         | Value::NativeFunction(_)
         | Value::HostFunction(_) => Ok(true),
     }
+}
+
+fn string_property(value: &str, property: &str) -> Result<Value> {
+    if property == STRING_LENGTH_PROPERTY {
+        return string_length(value).map(Value::Number);
+    }
+    Ok(string_index_value(value, property).unwrap_or(Value::Undefined))
+}
+
+fn string_has_property(value: &str, property: &str) -> Result<bool> {
+    if property == STRING_LENGTH_PROPERTY {
+        return Ok(true);
+    }
+    let Some(index) = string_property_index(property) else {
+        return Ok(false);
+    };
+    Ok(index < string_len(value)?)
+}
+
+fn string_enumerable_keys(value: &str) -> Result<Vec<String>> {
+    let len = string_len(value)?;
+    let mut keys = Vec::with_capacity(len);
+    for index in 0..len {
+        keys.push(index.to_string());
+    }
+    Ok(keys)
+}
+
+fn string_index_value(value: &str, property: &str) -> Option<Value> {
+    let index = string_property_index(property)?;
+    value
+        .chars()
+        .nth(index)
+        .map(|ch| Value::String(ch.to_string()))
+}
+
+fn string_property_index(property: &str) -> Option<usize> {
+    let index = property.parse::<usize>().ok()?;
+    if index.to_string() == property {
+        return Some(index);
+    }
+    None
+}
+
+fn string_length(value: &str) -> Result<f64> {
+    let len = u32::try_from(string_len(value)?)
+        .map_err(|_| Error::limit("string length exceeded supported property range"))?;
+    Ok(f64::from(len))
+}
+
+fn string_len(value: &str) -> Result<usize> {
+    let len = value.chars().count();
+    u32::try_from(len)
+        .map_err(|_| Error::limit("string length exceeded supported property range"))
+        .map(|_| len)
 }

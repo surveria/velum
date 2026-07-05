@@ -78,6 +78,7 @@ const PATH_OBJECT_PROTOTYPES: &str = "tests/engine_cases/object_prototypes.js";
 const PATH_OBJECT_PROTOTYPE_ROOT: &str = "tests/engine_cases/object_prototype_root.js";
 const PATH_OBJECT_BUILTIN: &str = "tests/engine_cases/object_builtin.js";
 const PATH_NUMBER_BUILTIN: &str = "tests/engine_cases/number_builtin.js";
+const PATH_STRING_BUILTIN: &str = "tests/engine_cases/string_builtin.js";
 const PATH_COMPUTED_PROPERTIES: &str = "tests/engine_cases/computed_properties.js";
 const PATH_ARRAY_LITERALS: &str = "tests/engine_cases/array_literals.js";
 const PATH_ARRAY_BUILTIN: &str = "tests/engine_cases/array_builtin.js";
@@ -492,6 +493,19 @@ fn engine_plain_object_cases() -> Vec<EngineCase> {
                     "0 0 1 0 42 100 16 5 8",
                     "Infinity -Infinity NaN",
                     "keys:|",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "string_builtin",
+            path: PATH_STRING_BUILTIN,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "function String 1 true",
+                    " null undefined true false 42 [object Object]",
+                    "6 c a 0 5 r",
+                    "keys:||0;1;2;3;4;5;|0;1;",
                 ],
                 value: "42",
             },

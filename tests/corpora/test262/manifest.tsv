@@ -4,3 +4,6 @@ boolean-literal-constructor	test/language/literals/boolean/S7.8.2_A1_T1.js	run	o
 variable-hoisting	test/language/statements/variable/S12.2_A1.js	run	official Test262 var hoisting and ReferenceError smoke
 string-negative-parse	test/language/literals/string/S7.8.4_A1.1_T1.js	negative-parse	official Test262 negative parse smoke
 template-literal-no-substitution	test/language/expressions/template-literal/no-sub.js	run	official Test262 no-substitution template literal smoke
+string-constructor-call-undefined	test/built-ins/String/S15.5.1.1_A1_T1.js	run	official Test262 String function undefined conversion smoke
+string-constructor-call-null	test/built-ins/String/S15.5.1.1_A1_T2.js	run	official Test262 String function null conversion smoke
+string-constructor-length	test/built-ins/String/S15.5.3_A1.js	run	official Test262 String.length smoke

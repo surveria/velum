@@ -33,6 +33,7 @@ const PATH_BENCH_OBJECT_PROTOTYPE_ROOT: &str =
     "tests/corpora/benchmarks/active/object_prototype_root.js";
 const PATH_BENCH_OBJECT_BUILTIN: &str = "tests/corpora/benchmarks/active/object_builtin.js";
 const PATH_BENCH_NUMBER_BUILTIN: &str = "tests/corpora/benchmarks/active/number_builtin.js";
+const PATH_BENCH_STRING_BUILTIN: &str = "tests/corpora/benchmarks/active/string_builtin.js";
 const PATH_BENCH_COMPUTED_PROPERTIES: &str =
     "tests/corpora/benchmarks/active/computed_properties.js";
 const PATH_BENCH_ARRAY_LITERALS: &str = "tests/corpora/benchmarks/active/array_literals.js";
@@ -277,6 +278,10 @@ fn benchmark_runtime_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "string_escape_sequences",
             path: PATH_BENCH_STRING_ESCAPE_SEQUENCES,
+        },
+        BenchmarkCase {
+            id: "string_builtin",
+            path: PATH_BENCH_STRING_BUILTIN,
         },
         BenchmarkCase {
             id: "boolean_conversion",

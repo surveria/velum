@@ -9,6 +9,8 @@ mod runtime_object_array;
 mod runtime_object_index;
 #[path = "runtime_object_keys.rs"]
 mod runtime_object_keys;
+#[path = "runtime_object_string.rs"]
+mod runtime_object_string;
 
 use runtime_object_index::{ArrayIndex, ArrayLength};
 
