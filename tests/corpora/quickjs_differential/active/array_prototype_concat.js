@@ -21,6 +21,14 @@ inherited[1] = "own-one";
 let inheritedResult = [].concat(inherited);
 delete Array.prototype[0];
 
+Array.prototype[2] = "proto-two";
+let prefixFallback = Array(4);
+prefixFallback[0] = "own-zero";
+prefixFallback[1] = "own-one";
+prefixFallback[3] = "own-three";
+let prefixFallbackResult = [].concat(prefixFallback);
+delete Array.prototype[2];
+
 let plain = {};
 plain[0] = "plain-zero";
 plain.length = 1;
@@ -36,6 +44,7 @@ print("source", values.length, values.join("|"), tail.join("|"));
 print("side", side, sideResult.join("|"));
 print("sparse", sparseResult.length, sparseResult[0], "1" in sparseResult, sparseResult[1], sparseResult[2], "3" in sparseResult, sparseResult[3], sparseResult[4], sparseResult[5], sparseResult.join("|"));
 print("inherited", inheritedResult.length, inheritedResult[0], "0" in inheritedResult, inheritedResult[1]);
+print("prefix", prefixFallbackResult.length, prefixFallbackResult[0], prefixFallbackResult[1], prefixFallbackResult[2], "2" in prefixFallbackResult, prefixFallbackResult[3], prefixFallbackResult.join("|"));
 print("plain", plainResult.length, plainResult[0], plainResult[1] === plain);
 print("meta", typeof Array.prototype.concat, Array.prototype.concat.name, Array.prototype.concat.length);
 print("keys:" + prototypeKeys);

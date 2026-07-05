@@ -647,6 +647,7 @@ fn engine_array_copy_cases() -> Vec<EngineCase> {
                     "side 42 7|8|9",
                     "sparse 6 zero false undefined one false undefined three tail zero||one||three|tail",
                     "inherited 2 proto-zero true own-one",
+                    "prefix 4 own-zero own-one proto-two true own-three own-zero|own-one|proto-two|own-three",
                     "plain 2 1 true",
                     "meta function concat 1",
                     "keys:",
