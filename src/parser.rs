@@ -618,12 +618,17 @@ impl Parser {
     }
 
     fn function_expression(&mut self) -> Result<Expr> {
+        let name = if self.next_is_identifier() {
+            Some(self.consume_identifier("expected function name")?)
+        } else {
+            None
+        };
         self.consume(&TokenKind::LParen, "expected '(' after 'function'")?;
         let params = self.function_parameters()?;
         self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
         let body = self.block_statements()?;
-        Ok(Expr::Function { params, body })
+        Ok(Expr::Function { name, params, body })
     }
 
     fn function_parameters(&mut self) -> Result<Vec<String>> {
@@ -671,6 +676,11 @@ impl Parser {
             TokenKind::Identifier(name) => Ok(name),
             _ => Err(Error::parse(message, token.offset)),
         }
+    }
+
+    fn next_is_identifier(&self) -> bool {
+        self.peek()
+            .is_some_and(|token| matches!(&token.kind, TokenKind::Identifier(_)))
     }
 
     fn consume(&mut self, expected: &TokenKind, message: &str) -> Result<()> {
