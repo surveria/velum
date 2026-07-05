@@ -107,7 +107,7 @@ fn bitwise_u32(value: &Value, op: &str) -> Result<u32> {
         | Value::Object(_)
         | Value::Error(_) => Ok(0),
         Value::Bool(value) => Ok(u32::from(*value)),
-        Value::Number(value) => number_to_u32(*value, op),
+        Value::Number(value) => number_to_uint32(*value, op),
         Value::String(value) => string_to_u32(value, op),
     }
 }
@@ -125,10 +125,10 @@ fn string_to_u32(value: &str, op: &str) -> Result<u32> {
     let Ok(value) = trimmed.parse::<f64>() else {
         return Ok(0);
     };
-    number_to_u32(value, op)
+    number_to_uint32(value, op)
 }
 
-fn number_to_u32(value: f64, op: &str) -> Result<u32> {
+pub fn number_to_uint32(value: f64, context: &str) -> Result<u32> {
     if !value.is_finite() || value == 0.0 {
         return Ok(0);
     }
@@ -139,11 +139,11 @@ fn number_to_u32(value: f64, op: &str) -> Result<u32> {
         value.floor()
     };
     let modulo = truncated.rem_euclid(TO_INT32_MODULUS);
-    modulo_to_u32(modulo, op)
+    modulo_to_u32(modulo, context)
 }
 
 fn number_to_i32(value: f64, op: &str) -> Result<i32> {
-    let unsigned = number_to_u32(value, op)?;
+    let unsigned = number_to_uint32(value, op)?;
     uint32_to_int32(unsigned, op)
 }
 
@@ -166,20 +166,20 @@ fn modulo_to_u32(value: f64, op: &str) -> Result<u32> {
     }
     if !(0.0..TO_INT32_MODULUS).contains(&value) {
         return Err(Error::runtime(format!(
-            "bitwise '{op}' uint32 conversion overflowed"
+            "numeric '{op}' uint32 conversion overflowed"
         )));
     }
 
     let bits = value.to_bits();
     let exponent_bits = u16::try_from((bits >> F64_EXPONENT_SHIFT) & F64_EXPONENT_MASK)
-        .map_err(|_| Error::runtime(format!("bitwise '{op}' exponent conversion overflowed")))?;
+        .map_err(|_| Error::runtime(format!("numeric '{op}' exponent conversion overflowed")))?;
     if exponent_bits == 0 {
         return Ok(0);
     }
 
     let exponent = i32::from(exponent_bits)
         .checked_sub(F64_EXPONENT_BIAS)
-        .ok_or_else(|| Error::runtime(format!("bitwise '{op}' exponent conversion overflowed")))?;
+        .ok_or_else(|| Error::runtime(format!("numeric '{op}' exponent conversion overflowed")))?;
     if exponent < 0 {
         return Ok(0);
     }
@@ -192,20 +192,20 @@ fn modulo_to_u32(value: f64, op: &str) -> Result<u32> {
                 .checked_sub(F64_SIGNIFICAND_BITS)
                 .ok_or_else(|| Error::runtime("bitwise exponent shift underflowed"))?,
         )
-        .map_err(|_| Error::runtime(format!("bitwise '{op}' shift conversion overflowed")))?;
+        .map_err(|_| Error::runtime(format!("numeric '{op}' shift conversion overflowed")))?;
         significand
             .checked_shl(shift)
-            .ok_or_else(|| Error::runtime(format!("bitwise '{op}' significand overflowed")))?
+            .ok_or_else(|| Error::runtime(format!("numeric '{op}' significand overflowed")))?
     } else {
         let shift = u32::try_from(
             F64_SIGNIFICAND_BITS
                 .checked_sub(exponent)
                 .ok_or_else(|| Error::runtime("bitwise exponent shift underflowed"))?,
         )
-        .map_err(|_| Error::runtime(format!("bitwise '{op}' shift conversion overflowed")))?;
+        .map_err(|_| Error::runtime(format!("numeric '{op}' shift conversion overflowed")))?;
         significand >> shift
     };
 
     u32::try_from(unsigned)
-        .map_err(|_| Error::runtime(format!("bitwise '{op}' failed to convert number to uint32")))
+        .map_err(|_| Error::runtime(format!("numeric '{op}' failed to convert number to uint32")))
 }

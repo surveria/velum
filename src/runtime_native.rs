@@ -59,14 +59,17 @@ const MATH_ATAN2_NAME: &str = "atan2";
 const MATH_ATANH_NAME: &str = "atanh";
 const MATH_CBRT_NAME: &str = "cbrt";
 const MATH_CEIL_NAME: &str = "ceil";
+const MATH_CLZ32_NAME: &str = "clz32";
 const MATH_COS_NAME: &str = "cos";
 const MATH_COSH_NAME: &str = "cosh";
 const MATH_EXP_NAME: &str = "exp";
 const MATH_EXPM1_NAME: &str = "expm1";
 const MATH_FLOOR_NAME: &str = "floor";
+const MATH_FROUND_NAME: &str = "fround";
 const MATH_FUNCTION_LENGTH_ONE: f64 = 1.0;
 const MATH_FUNCTION_LENGTH_TWO: f64 = 2.0;
 const MATH_HYPOT_NAME: &str = "hypot";
+const MATH_IMUL_NAME: &str = "imul";
 const MATH_LOG_NAME: &str = "log";
 const MATH_LOG10_NAME: &str = "log10";
 const MATH_LOG1P_NAME: &str = "log1p";
@@ -134,11 +137,13 @@ impl NativeFunction {
             | NativeFunctionKind::MathAtanh
             | NativeFunctionKind::MathCbrt
             | NativeFunctionKind::MathCeil
+            | NativeFunctionKind::MathClz32
             | NativeFunctionKind::MathCos
             | NativeFunctionKind::MathCosh
             | NativeFunctionKind::MathExp
             | NativeFunctionKind::MathExpm1
             | NativeFunctionKind::MathFloor
+            | NativeFunctionKind::MathFround
             | NativeFunctionKind::MathLog
             | NativeFunctionKind::MathLog10
             | NativeFunctionKind::MathLog1p
@@ -153,6 +158,7 @@ impl NativeFunction {
             | NativeFunctionKind::MathTrunc => MATH_FUNCTION_LENGTH_ONE,
             NativeFunctionKind::MathAtan2
             | NativeFunctionKind::MathHypot
+            | NativeFunctionKind::MathImul
             | NativeFunctionKind::MathMax
             | NativeFunctionKind::MathMin
             | NativeFunctionKind::MathPow => MATH_FUNCTION_LENGTH_TWO,
@@ -188,12 +194,15 @@ impl NativeFunction {
             NativeFunctionKind::MathAtanh => MATH_ATANH_NAME,
             NativeFunctionKind::MathCbrt => MATH_CBRT_NAME,
             NativeFunctionKind::MathCeil => MATH_CEIL_NAME,
+            NativeFunctionKind::MathClz32 => MATH_CLZ32_NAME,
             NativeFunctionKind::MathCos => MATH_COS_NAME,
             NativeFunctionKind::MathCosh => MATH_COSH_NAME,
             NativeFunctionKind::MathExp => MATH_EXP_NAME,
             NativeFunctionKind::MathExpm1 => MATH_EXPM1_NAME,
             NativeFunctionKind::MathFloor => MATH_FLOOR_NAME,
+            NativeFunctionKind::MathFround => MATH_FROUND_NAME,
             NativeFunctionKind::MathHypot => MATH_HYPOT_NAME,
+            NativeFunctionKind::MathImul => MATH_IMUL_NAME,
             NativeFunctionKind::MathLog => MATH_LOG_NAME,
             NativeFunctionKind::MathLog10 => MATH_LOG10_NAME,
             NativeFunctionKind::MathLog1p => MATH_LOG1P_NAME,
@@ -252,12 +261,15 @@ impl NativeFunction {
             | NativeFunctionKind::MathAtanh
             | NativeFunctionKind::MathCbrt
             | NativeFunctionKind::MathCeil
+            | NativeFunctionKind::MathClz32
             | NativeFunctionKind::MathCos
             | NativeFunctionKind::MathCosh
             | NativeFunctionKind::MathExp
             | NativeFunctionKind::MathExpm1
             | NativeFunctionKind::MathFloor
+            | NativeFunctionKind::MathFround
             | NativeFunctionKind::MathHypot
+            | NativeFunctionKind::MathImul
             | NativeFunctionKind::MathLog
             | NativeFunctionKind::MathLog10
             | NativeFunctionKind::MathLog1p
@@ -309,12 +321,15 @@ pub(super) enum NativeFunctionKind {
     MathAtanh,
     MathCbrt,
     MathCeil,
+    MathClz32,
     MathCos,
     MathCosh,
     MathExp,
     MathExpm1,
     MathFloor,
+    MathFround,
     MathHypot,
+    MathImul,
     MathLog,
     MathLog10,
     MathLog1p,
@@ -403,12 +418,15 @@ impl Context {
             NativeFunctionKind::MathAtanh => self.eval_math_atanh(args),
             NativeFunctionKind::MathCbrt => self.eval_math_cbrt(args),
             NativeFunctionKind::MathCeil => self.eval_math_ceil(args),
+            NativeFunctionKind::MathClz32 => self.eval_math_clz32(args),
             NativeFunctionKind::MathCos => self.eval_math_cos(args),
             NativeFunctionKind::MathCosh => self.eval_math_cosh(args),
             NativeFunctionKind::MathExp => self.eval_math_exp(args),
             NativeFunctionKind::MathExpm1 => self.eval_math_expm1(args),
             NativeFunctionKind::MathFloor => self.eval_math_floor(args),
+            NativeFunctionKind::MathFround => self.eval_math_fround(args),
             NativeFunctionKind::MathHypot => self.eval_math_hypot(args),
+            NativeFunctionKind::MathImul => self.eval_math_imul(args),
             NativeFunctionKind::MathLog => self.eval_math_log(args),
             NativeFunctionKind::MathLog10 => self.eval_math_log10(args),
             NativeFunctionKind::MathLog1p => self.eval_math_log1p(args),
@@ -458,12 +476,15 @@ impl Context {
             | NativeFunctionKind::MathAtanh
             | NativeFunctionKind::MathCbrt
             | NativeFunctionKind::MathCeil
+            | NativeFunctionKind::MathClz32
             | NativeFunctionKind::MathCos
             | NativeFunctionKind::MathCosh
             | NativeFunctionKind::MathExp
             | NativeFunctionKind::MathExpm1
             | NativeFunctionKind::MathFloor
+            | NativeFunctionKind::MathFround
             | NativeFunctionKind::MathHypot
+            | NativeFunctionKind::MathImul
             | NativeFunctionKind::MathLog
             | NativeFunctionKind::MathLog10
             | NativeFunctionKind::MathLog1p

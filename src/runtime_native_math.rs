@@ -4,17 +4,18 @@ use crate::{
     ast::Expr,
     error::Result,
     runtime::Context,
+    runtime_numeric::number_to_uint32,
     value::{ObjectId, Value},
 };
 
 use super::{
     MATH_ABS_NAME, MATH_ACOS_NAME, MATH_ACOSH_NAME, MATH_ASIN_NAME, MATH_ASINH_NAME,
     MATH_ATAN_NAME, MATH_ATAN2_NAME, MATH_ATANH_NAME, MATH_CBRT_NAME, MATH_CEIL_NAME,
-    MATH_COS_NAME, MATH_COSH_NAME, MATH_EXP_NAME, MATH_EXPM1_NAME, MATH_FLOOR_NAME,
-    MATH_HYPOT_NAME, MATH_LOG_NAME, MATH_LOG1P_NAME, MATH_LOG2_NAME, MATH_LOG10_NAME,
-    MATH_MAX_NAME, MATH_MIN_NAME, MATH_NAME, MATH_POW_NAME, MATH_ROUND_NAME, MATH_SIGN_NAME,
-    MATH_SIN_NAME, MATH_SINH_NAME, MATH_SQRT_NAME, MATH_TAN_NAME, MATH_TANH_NAME, MATH_TRUNC_NAME,
-    NativeFunctionKind,
+    MATH_CLZ32_NAME, MATH_COS_NAME, MATH_COSH_NAME, MATH_EXP_NAME, MATH_EXPM1_NAME,
+    MATH_FLOOR_NAME, MATH_FROUND_NAME, MATH_HYPOT_NAME, MATH_IMUL_NAME, MATH_LOG_NAME,
+    MATH_LOG1P_NAME, MATH_LOG2_NAME, MATH_LOG10_NAME, MATH_MAX_NAME, MATH_MIN_NAME, MATH_NAME,
+    MATH_POW_NAME, MATH_ROUND_NAME, MATH_SIGN_NAME, MATH_SIN_NAME, MATH_SINH_NAME, MATH_SQRT_NAME,
+    MATH_TAN_NAME, MATH_TANH_NAME, MATH_TRUNC_NAME, NativeFunctionKind,
 };
 
 const MATH_E_NAME: &str = "E";
@@ -56,12 +57,15 @@ impl Context {
         self.define_math_method(object, MATH_ATANH_NAME, NativeFunctionKind::MathAtanh)?;
         self.define_math_method(object, MATH_CBRT_NAME, NativeFunctionKind::MathCbrt)?;
         self.define_math_method(object, MATH_CEIL_NAME, NativeFunctionKind::MathCeil)?;
+        self.define_math_method(object, MATH_CLZ32_NAME, NativeFunctionKind::MathClz32)?;
         self.define_math_method(object, MATH_COS_NAME, NativeFunctionKind::MathCos)?;
         self.define_math_method(object, MATH_COSH_NAME, NativeFunctionKind::MathCosh)?;
         self.define_math_method(object, MATH_EXP_NAME, NativeFunctionKind::MathExp)?;
         self.define_math_method(object, MATH_EXPM1_NAME, NativeFunctionKind::MathExpm1)?;
         self.define_math_method(object, MATH_FLOOR_NAME, NativeFunctionKind::MathFloor)?;
+        self.define_math_method(object, MATH_FROUND_NAME, NativeFunctionKind::MathFround)?;
         self.define_math_method(object, MATH_HYPOT_NAME, NativeFunctionKind::MathHypot)?;
+        self.define_math_method(object, MATH_IMUL_NAME, NativeFunctionKind::MathImul)?;
         self.define_math_method(object, MATH_LOG_NAME, NativeFunctionKind::MathLog)?;
         self.define_math_method(object, MATH_LOG10_NAME, NativeFunctionKind::MathLog10)?;
         self.define_math_method(object, MATH_LOG1P_NAME, NativeFunctionKind::MathLog1p)?;
@@ -126,6 +130,12 @@ impl Context {
         self.eval_math_unary(args, f64::ceil)
     }
 
+    pub(super) fn eval_math_clz32(&mut self, args: &[Expr]) -> Result<Value> {
+        let values = self.eval_math_args(args)?;
+        let unsigned = number_to_uint32(Self::math_arg_or_nan(values.first()), MATH_CLZ32_NAME)?;
+        Ok(Value::Number(f64::from(unsigned.leading_zeros())))
+    }
+
     pub(super) fn eval_math_cos(&mut self, args: &[Expr]) -> Result<Value> {
         self.eval_math_unary(args, f64::cos)
     }
@@ -144,6 +154,13 @@ impl Context {
 
     pub(super) fn eval_math_floor(&mut self, args: &[Expr]) -> Result<Value> {
         self.eval_math_unary(args, f64::floor)
+    }
+
+    pub(super) fn eval_math_fround(&mut self, args: &[Expr]) -> Result<Value> {
+        let values = self.eval_math_args(args)?;
+        Ok(Value::Number(Self::fround_to_number(
+            Self::math_arg_or_nan(values.first()),
+        )))
     }
 
     pub(super) fn eval_math_hypot(&mut self, args: &[Expr]) -> Result<Value> {
@@ -168,6 +185,19 @@ impl Context {
             return Ok(Value::Number(f64::NAN));
         }
         Ok(Value::Number(magnitude))
+    }
+
+    pub(super) fn eval_math_imul(&mut self, args: &[Expr]) -> Result<Value> {
+        let values = self.eval_math_args(args)?;
+        let left = number_to_uint32(Self::math_arg_or_nan(values.first()), MATH_IMUL_NAME)?;
+        let right = number_to_uint32(
+            values.get(1).map_or(f64::NAN, Self::value_to_number),
+            MATH_IMUL_NAME,
+        )?;
+        let product = left.wrapping_mul(right);
+        Ok(Value::Number(f64::from(i32::from_ne_bytes(
+            product.to_ne_bytes(),
+        ))))
     }
 
     pub(super) fn eval_math_log(&mut self, args: &[Expr]) -> Result<Value> {
@@ -307,6 +337,16 @@ impl Context {
 
     fn math_arg_or_nan(value: Option<&Value>) -> f64 {
         value.map_or(f64::NAN, Self::value_to_number)
+    }
+
+    fn fround_to_number(value: f64) -> f64 {
+        f64::from(Self::round_to_binary32(value))
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    const fn round_to_binary32(value: f64) -> f32 {
+        // This cast is the Rust standard-library path for ECMAScript binary32 rounding.
+        value as f32
     }
 
     fn round_to_nearest_toward_positive(value: f64) -> f64 {
