@@ -45,6 +45,7 @@ const PATH_QUICKJS_COMPOUND_ASSIGNMENT_EXTENDED: &str =
     "tests/corpora/quickjs_differential/active/compound_assignment_extended.js";
 const PATH_QUICKJS_EXPONENTIATION_PARENTHESES: &str =
     "tests/corpora/quickjs_differential/active/exponentiation_parentheses.js";
+const PATH_QUICKJS_IN_OPERATOR: &str = "tests/corpora/quickjs_differential/active/in_operator.js";
 const PATH_QUICKJS_REFERENCE_ERROR_CATCH: &str =
     "tests/corpora/quickjs_differential/active/reference_error_catch.js";
 const PATH_QUICKJS_ERROR_OBJECT_PROPERTIES: &str =
@@ -77,6 +78,7 @@ const PATH_BENCH_COMPOUND_ASSIGNMENT_EXTENDED: &str =
     "tests/corpora/benchmarks/active/compound_assignment_extended.js";
 const PATH_BENCH_EXPONENTIATION_PARENTHESES: &str =
     "tests/corpora/benchmarks/active/exponentiation_parentheses.js";
+const PATH_BENCH_IN_OPERATOR: &str = "tests/corpora/benchmarks/active/in_operator.js";
 const PATH_BENCH_STRING: &str = "tests/corpora/benchmarks/active/string_concat.js";
 const PATH_BENCH_BOOLEAN: &str = "tests/corpora/benchmarks/active/boolean_conversion.js";
 const PATH_BENCH_VAR_HOISTING: &str = "tests/corpora/benchmarks/active/var_hoisting.js";
@@ -203,6 +205,10 @@ fn quickjs_object_cases() -> Vec<DifferentialCase> {
             id: "exponentiation_parentheses",
             path: PATH_QUICKJS_EXPONENTIATION_PARENTHESES,
         },
+        DifferentialCase {
+            id: "in_operator",
+            path: PATH_QUICKJS_IN_OPERATOR,
+        },
     ]
 }
 
@@ -314,6 +320,10 @@ fn benchmark_object_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "exponentiation_parentheses",
             path: PATH_BENCH_EXPONENTIATION_PARENTHESES,
+        },
+        BenchmarkCase {
+            id: "in_operator",
+            path: PATH_BENCH_IN_OPERATOR,
         },
     ]
 }

@@ -47,6 +47,8 @@ const PATH_COMPOUND_ASSIGNMENT_EXTENDED: &str =
 const PATH_EXPONENTIATION_PARENTHESES: &str = "tests/engine_cases/exponentiation_parentheses.js";
 const PATH_EXPONENTIATION_UNARY_LEFT_ERROR: &str =
     "tests/engine_cases/exponentiation_unary_left_error.js";
+const PATH_IN_OPERATOR: &str = "tests/engine_cases/in_operator.js";
+const PATH_IN_OPERATOR_RHS_ERROR: &str = "tests/engine_cases/in_operator_rhs_error.js";
 const PATH_WHILE_STATEMENTS: &str = "tests/engine_cases/while_statements.js";
 const PATH_BREAK_CONTINUE: &str = "tests/engine_cases/break_continue.js";
 const PATH_FOR_STATEMENTS: &str = "tests/engine_cases/for_statements.js";
@@ -93,6 +95,10 @@ const PATH_TEST262_EXPONENTIATION_PARENTHESES: &str =
     "tests/corpora/test262/active/language/expressions/exponentiation_parentheses.js";
 const PATH_TEST262_EXPONENTIATION_UNARY_LEFT_ERROR: &str =
     "tests/corpora/test262/active/language/expressions/exponentiation_unary_left_error.js";
+const PATH_TEST262_IN_OPERATOR: &str =
+    "tests/corpora/test262/active/language/expressions/in_operator.js";
+const PATH_TEST262_IN_OPERATOR_RHS_ERROR: &str =
+    "tests/corpora/test262/active/language/expressions/in_operator_rhs_error.js";
 const PATH_TEST262_LET_CONST: &str = "tests/corpora/test262/active/language/bindings/let_const.js";
 const PATH_TEST262_VAR_HOISTING: &str =
     "tests/corpora/test262/active/language/bindings/var_hoisting.js";
@@ -291,6 +297,24 @@ fn engine_expression_cases() -> Vec<EngineCase> {
             path: PATH_EXPONENTIATION_UNARY_LEFT_ERROR,
             expectation: Expectation::ErrorContains("unary expression cannot be the left operand"),
         },
+        EngineCase {
+            id: "in_operator",
+            path: PATH_IN_OPERATOR,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "true true false",
+                    "false",
+                    "true true false true true",
+                    "true true true",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "in_operator_rhs_error",
+            path: PATH_IN_OPERATOR_RHS_ERROR,
+            expectation: Expectation::ErrorContains("operator 'in'"),
+        },
     ]
 }
 
@@ -476,6 +500,16 @@ fn test262_expression_cases() -> Vec<EngineCase> {
             id: "language/expressions/exponentiation_unary_left_error",
             path: PATH_TEST262_EXPONENTIATION_UNARY_LEFT_ERROR,
             expectation: Expectation::ErrorContains("unary expression cannot be the left operand"),
+        },
+        EngineCase {
+            id: "language/expressions/in_operator",
+            path: PATH_TEST262_IN_OPERATOR,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/in_operator_rhs_error",
+            path: PATH_TEST262_IN_OPERATOR_RHS_ERROR,
+            expectation: Expectation::ErrorContains("operator 'in'"),
         },
     ]
 }

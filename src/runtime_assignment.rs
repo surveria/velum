@@ -108,6 +108,7 @@ impl Context {
             | BinaryOp::LessEqual
             | BinaryOp::Greater
             | BinaryOp::GreaterEqual
+            | BinaryOp::In
             | BinaryOp::LogicalAnd
             | BinaryOp::LogicalOr => {
                 return Err(Error::runtime("invalid compound assignment operator"));

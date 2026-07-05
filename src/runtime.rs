@@ -13,7 +13,9 @@ use crate::runtime_numeric::{
     shift_right_unsigned,
 };
 use crate::runtime_object::ObjectHeap;
-use crate::runtime_property::{delete_property, get_property, property_key, set_property};
+use crate::runtime_property::{
+    delete_property, get_property, has_property, property_key, set_property,
+};
 use crate::runtime_scope::{BindingCell, BindingScope};
 use crate::value::{ErrorName, ErrorObject, FunctionId, Value};
 
@@ -405,6 +407,7 @@ impl Context {
             BinaryOp::GreaterEqual => {
                 compare_binary(&left, &right, ">=", |left, right| left >= right)?
             }
+            BinaryOp::In => self.eval_in(&left, &right)?,
             BinaryOp::BitAnd => bitwise_and(&left, &right)?,
             BinaryOp::BitOr => bitwise_or(&left, &right)?,
             BinaryOp::BitXor => bitwise_xor(&left, &right)?,
@@ -416,6 +419,12 @@ impl Context {
             }
         };
         self.checked_value(value)
+    }
+
+    fn eval_in(&self, left: &Value, right: &Value) -> Result<Value> {
+        let property = property_key(left);
+        self.check_string_len(&property)?;
+        has_property(&self.objects, right, &property).map(Value::Bool)
     }
 
     fn eval_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<Value> {
