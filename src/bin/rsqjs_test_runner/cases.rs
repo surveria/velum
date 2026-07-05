@@ -79,6 +79,8 @@ const PATH_ARRAY_BUILTIN: &str = "tests/engine_cases/array_builtin.js";
 const PATH_ARRAY_PROTOTYPE_METHODS: &str = "tests/engine_cases/array_prototype_methods.js";
 const PATH_ARRAY_PROTOTYPE_JOIN: &str = "tests/engine_cases/array_prototype_join.js";
 const PATH_ARRAY_PROTOTYPE_INDEX_OF: &str = "tests/engine_cases/array_prototype_index_of.js";
+const PATH_ARRAY_PROTOTYPE_LAST_INDEX_OF: &str =
+    "tests/engine_cases/array_prototype_last_index_of.js";
 const PATH_ARRAY_PROTOTYPE_SHIFT_UNSHIFT: &str =
     "tests/engine_cases/array_prototype_shift_unshift.js";
 const PATH_ARRAY_PROTOTYPE_SLICE: &str = "tests/engine_cases/array_prototype_slice.js";
@@ -495,6 +497,14 @@ fn engine_array_core_cases() -> Vec<EngineCase> {
 }
 
 fn engine_array_prototype_cases() -> Vec<EngineCase> {
+    let mut cases = engine_array_prototype_core_cases();
+    cases.extend(engine_array_search_cases());
+    cases.extend(engine_array_mutation_cases());
+    cases.extend(engine_array_copy_cases());
+    cases
+}
+
+fn engine_array_prototype_core_cases() -> Vec<EngineCase> {
     vec![
         EngineCase {
             id: "array_prototype_methods",
@@ -523,6 +533,11 @@ fn engine_array_prototype_cases() -> Vec<EngineCase> {
                 value: "42",
             },
         },
+    ]
+}
+
+fn engine_array_search_cases() -> Vec<EngineCase> {
+    vec![
         EngineCase {
             id: "array_prototype_index_of",
             path: PATH_ARRAY_PROTOTYPE_INDEX_OF,
@@ -541,34 +556,16 @@ fn engine_array_prototype_cases() -> Vec<EngineCase> {
             },
         },
         EngineCase {
-            id: "array_prototype_shift_unshift",
-            path: PATH_ARRAY_PROTOTYPE_SHIFT_UNSHIFT,
+            id: "array_prototype_last_index_of",
+            path: PATH_ARRAY_PROTOTYPE_LAST_INDEX_OF,
             expectation: Expectation::OutputAndValue {
                 output: &[
-                    "shift 1 2 2 3 undefined 42",
-                    "sparse undefined 2 false undefined tail",
-                    "inherited undefined 1 proto-one",
-                    "unshift 3 3 3 1 2 3",
-                    "holes 3 false a||b",
-                    "inherited-unshift 2 head|proto-zero undefined",
-                    "meta function shift 0 function unshift 1",
-                    "keys:",
-                    "in true true",
-                ],
-                value: "42",
-            },
-        },
-        EngineCase {
-            id: "array_prototype_slice",
-            path: PATH_ARRAY_PROTOTYPE_SLICE,
-            expectation: Expectation::OutputAndValue {
-                output: &[
-                    "slice 2|3 2|3 3|4 0 0",
-                    "source 4 1 2 3 4",
-                    "sparse 3 one false undefined three one||three |one||three",
-                    "inherited 3 undefined proto-one tail true",
-                    "coerced 1|2 1 42 7",
-                    "meta function slice 2",
+                    "lastIndexOf 3 1 3 -1 0 6",
+                    "values 4 5 1 1 -1 -1",
+                    "sparse -1 2 -1 2 1",
+                    "inherited 1 -1 42 0",
+                    "coerced 1 0 0",
+                    "meta function lastIndexOf 1",
                     "keys:",
                     "in true",
                 ],
@@ -576,6 +573,47 @@ fn engine_array_prototype_cases() -> Vec<EngineCase> {
             },
         },
     ]
+}
+
+fn engine_array_mutation_cases() -> Vec<EngineCase> {
+    vec![EngineCase {
+        id: "array_prototype_shift_unshift",
+        path: PATH_ARRAY_PROTOTYPE_SHIFT_UNSHIFT,
+        expectation: Expectation::OutputAndValue {
+            output: &[
+                "shift 1 2 2 3 undefined 42",
+                "sparse undefined 2 false undefined tail",
+                "inherited undefined 1 proto-one",
+                "unshift 3 3 3 1 2 3",
+                "holes 3 false a||b",
+                "inherited-unshift 2 head|proto-zero undefined",
+                "meta function shift 0 function unshift 1",
+                "keys:",
+                "in true true",
+            ],
+            value: "42",
+        },
+    }]
+}
+
+fn engine_array_copy_cases() -> Vec<EngineCase> {
+    vec![EngineCase {
+        id: "array_prototype_slice",
+        path: PATH_ARRAY_PROTOTYPE_SLICE,
+        expectation: Expectation::OutputAndValue {
+            output: &[
+                "slice 2|3 2|3 3|4 0 0",
+                "source 4 1 2 3 4",
+                "sparse 3 one false undefined three one||three |one||three",
+                "inherited 3 undefined proto-one tail true",
+                "coerced 1|2 1 42 7",
+                "meta function slice 2",
+                "keys:",
+                "in true",
+            ],
+            value: "42",
+        },
+    }]
 }
 
 fn engine_unary_cases() -> Vec<EngineCase> {
