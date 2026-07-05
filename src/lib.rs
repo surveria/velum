@@ -2,6 +2,7 @@
 #![doc = include_str!("../README.md")]
 
 mod ast;
+mod atom;
 mod compiled_script;
 mod embedding;
 mod error;

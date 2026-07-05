@@ -278,14 +278,13 @@ impl Context {
     }
 
     fn insert_global_builtin(&mut self, name: &str, constructor: Value) -> Result<()> {
-        if self.globals.contains(name) {
+        let atom = self.intern_atom(name)?;
+        if self.globals.contains(atom) {
             return Ok(());
         }
         self.ensure_extra_binding_capacity(1)?;
-        self.globals.insert(
-            name.to_owned(),
-            BindingCell::new(constructor, false, DeclKind::Const),
-        );
+        self.globals
+            .insert(atom, BindingCell::new(constructor, false, DeclKind::Const));
         Ok(())
     }
 

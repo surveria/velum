@@ -79,6 +79,7 @@ const PATH_BENCH_STANDARD_ERROR_CONSTRUCTORS: &str =
     "tests/corpora/benchmarks/active/standard_error_constructors.js";
 const PATH_BENCH_COMPILED_SCRIPT_REUSE: &str =
     "tests/corpora/benchmarks/active/compiled_script_reuse.js";
+const PATH_BENCH_ATOMIZED_BINDINGS: &str = "tests/corpora/benchmarks/active/atomized_bindings.js";
 
 pub fn benchmark_cases() -> Vec<BenchmarkCase> {
     let mut cases = benchmark_control_flow_cases();
@@ -308,6 +309,10 @@ fn benchmark_runtime_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "compiled_script_reuse",
             path: PATH_BENCH_COMPILED_SCRIPT_REUSE,
+        },
+        BenchmarkCase {
+            id: "atomized_bindings",
+            path: PATH_BENCH_ATOMIZED_BINDINGS,
         },
     ]
 }

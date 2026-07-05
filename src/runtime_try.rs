@@ -52,12 +52,10 @@ impl Context {
         param: &str,
         value: Value,
     ) -> Result<Completion> {
-        self.ensure_binding_capacity(param)?;
+        let atom = self.ensure_binding_capacity(param)?;
         self.checked_value(value.clone())?;
-        self.active_bindings_mut().insert(
-            param.to_owned(),
-            BindingCell::new(value, true, DeclKind::Let),
-        );
+        self.active_bindings_mut()
+            .insert(atom, BindingCell::new(value, true, DeclKind::Let));
         self.eval_scoped_block(&catch.body)
     }
 }

@@ -1,5 +1,6 @@
 use crate::{
     ast::{DeclKind, Expr, ForInTarget, Stmt},
+    atom::AtomId,
     error::{Error, Result},
     runtime::Context,
     runtime_assertions::reference_error_undefined,
@@ -79,7 +80,8 @@ impl Context {
     }
 
     fn hoist_var(&mut self, name: &str) -> Result<()> {
-        if let Some(binding) = self.active_bindings().get(name) {
+        let atom = self.intern_atom(name)?;
+        if let Some(binding) = self.active_bindings().get(atom) {
             if binding.kind() == DeclKind::Var {
                 return Ok(());
             }
@@ -88,9 +90,9 @@ impl Context {
             )));
         }
 
-        self.ensure_binding_capacity(name)?;
+        self.ensure_binding_capacity_for_atom(atom)?;
         self.active_bindings_mut().insert(
-            name.to_owned(),
+            atom,
             BindingCell::new(Value::Undefined, true, DeclKind::Var),
         );
         Ok(())
@@ -132,22 +134,29 @@ impl Context {
     }
 
     pub(crate) fn define(&mut self, name: &str, value: Value, kind: DeclKind) -> Result<()> {
-        self.ensure_binding_capacity(name)?;
-        if self.active_bindings().contains(name) {
+        let atom = self.intern_atom(name)?;
+        if self.active_bindings().contains(atom) {
             return Err(Error::runtime(format!(
                 "'{name}' has already been declared"
             )));
         }
+        self.ensure_binding_capacity_for_atom(atom)?;
 
         self.checked_value(value.clone())?;
         let mutable = kind != DeclKind::Const;
         self.active_bindings_mut()
-            .insert(name.to_owned(), BindingCell::new(value, mutable, kind));
+            .insert(atom, BindingCell::new(value, mutable, kind));
         Ok(())
     }
 
-    pub(crate) fn ensure_binding_capacity(&self, name: &str) -> Result<()> {
-        if self.active_bindings().contains(name) {
+    pub(crate) fn ensure_binding_capacity(&mut self, name: &str) -> Result<AtomId> {
+        let atom = self.intern_atom(name)?;
+        self.ensure_binding_capacity_for_atom(atom)?;
+        Ok(atom)
+    }
+
+    fn ensure_binding_capacity_for_atom(&self, atom: AtomId) -> Result<()> {
+        if self.active_bindings().contains(atom) {
             return Ok(());
         }
         if self.binding_count()? >= self.limits.max_bindings {
@@ -206,10 +215,15 @@ impl Context {
     }
 
     pub(crate) fn get_binding(&self, name: &str) -> Option<BindingCell> {
+        let atom = self.atom(name)?;
+        self.get_binding_by_atom(atom)
+    }
+
+    pub(crate) fn get_binding_by_atom(&self, atom: AtomId) -> Option<BindingCell> {
         self.locals
             .iter()
             .rev()
-            .find_map(|scope| scope.get(name))
-            .or_else(|| self.globals.get(name))
+            .find_map(|scope| scope.get(atom))
+            .or_else(|| self.globals.get(atom))
     }
 }

@@ -118,6 +118,7 @@ impl Vm {
             runtime_steps: self.context.runtime_steps(),
             output_entries: self.context.output().len(),
             global_bindings: self.context.global_binding_count(),
+            atom_count: self.context.atom_count(),
         }
     }
 
@@ -145,6 +146,7 @@ pub struct VmResourceUsage {
     pub runtime_steps: usize,
     pub output_entries: usize,
     pub global_bindings: usize,
+    pub atom_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

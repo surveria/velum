@@ -3,12 +3,13 @@ use std::{collections::BTreeMap, rc::Rc};
 use parking_lot::Mutex;
 
 use crate::ast::DeclKind;
+use crate::atom::AtomId;
 use crate::error::{Error, Result};
 use crate::value::Value;
 
 #[derive(Debug, Clone, Default)]
 pub struct BindingScope {
-    bindings: BTreeMap<String, BindingCell>,
+    bindings: BTreeMap<AtomId, BindingCell>,
 }
 
 impl BindingScope {
@@ -22,28 +23,29 @@ impl BindingScope {
         self.bindings.len()
     }
 
-    pub fn contains(&self, name: &str) -> bool {
-        self.bindings.contains_key(name)
+    pub(crate) fn contains(&self, atom: AtomId) -> bool {
+        self.bindings.contains_key(&atom)
     }
 
-    pub fn get(&self, name: &str) -> Option<BindingCell> {
-        self.bindings.get(name).cloned()
+    pub(crate) fn get(&self, atom: AtomId) -> Option<BindingCell> {
+        self.bindings.get(&atom).cloned()
     }
 
-    pub fn insert(&mut self, name: String, binding: BindingCell) -> Option<BindingCell> {
-        self.bindings.insert(name, binding)
+    pub(crate) fn insert(&mut self, atom: AtomId, binding: BindingCell) {
+        self.insert_or_replace(atom, binding);
     }
 
-    pub fn insert_or_replace(&mut self, name: &str, binding: BindingCell) {
-        if let Some(existing) = self.bindings.get_mut(name) {
+    pub(crate) fn insert_or_replace(&mut self, atom: AtomId, binding: BindingCell) {
+        if let Some(existing) = self.bindings.get_mut(&atom) {
             *existing = binding;
             return;
         }
-        self.bindings.insert(name.to_owned(), binding);
+        self.bindings.insert(atom, binding);
     }
 
-    pub fn retain_only(&mut self, name: &str) {
-        self.bindings.retain(|binding_name, _| binding_name == name);
+    pub(crate) fn retain_only(&mut self, atom: AtomId) {
+        self.bindings
+            .retain(|binding_atom, _| *binding_atom == atom);
     }
 }
 

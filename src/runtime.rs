@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use crate::ast::{BinaryOp, Expr, ObjectProperty, Program, Stmt};
+use crate::atom::{AtomId, AtomTable};
 use crate::compiled_script::CompiledScript;
 use crate::error::{Error, Result};
 use crate::host::HostFunction;
@@ -36,6 +37,7 @@ const TEST262_ERROR_NAME: &str = "Test262Error";
 #[derive(Debug, Clone)]
 pub struct Context {
     limits: RuntimeLimits,
+    atoms: AtomTable,
     globals: BindingScope,
     locals: Vec<BindingScope>,
     functions: Vec<Function>,
@@ -62,6 +64,7 @@ impl Context {
     pub const fn new(limits: RuntimeLimits) -> Self {
         Self {
             limits,
+            atoms: AtomTable::new(),
             globals: BindingScope::new(),
             locals: Vec::new(),
             functions: Vec::new(),
@@ -106,7 +109,8 @@ impl Context {
 
     #[must_use]
     pub fn get_global(&self, name: &str) -> Option<Value> {
-        self.globals.get(name).map(|binding| binding.value())
+        let atom = self.atom(name)?;
+        self.globals.get(atom).map(|binding| binding.value())
     }
 
     #[must_use]
@@ -114,8 +118,22 @@ impl Context {
         self.runtime_steps
     }
 
+    #[must_use]
+    pub const fn atom_count(&self) -> usize {
+        self.atoms.len()
+    }
+
     pub(crate) fn global_binding_count(&self) -> usize {
         self.globals.len()
+    }
+
+    pub(crate) fn intern_atom(&mut self, name: &str) -> Result<AtomId> {
+        self.check_string_len(name)?;
+        self.atoms.intern(name)
+    }
+
+    pub(crate) fn atom(&self, name: &str) -> Option<AtomId> {
+        self.atoms.get(name)
     }
 
     fn eval_program(&mut self, program: &Program) -> Result<Value> {

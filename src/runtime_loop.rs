@@ -76,20 +76,21 @@ impl Context {
     ) -> Result<Completion> {
         let mut last = Value::Undefined;
         self.ensure_extra_binding_capacity(0)?;
+        let atom = self.intern_atom(name)?;
         let mutable = kind != DeclKind::Const;
         let mut scope = BindingScope::new();
         let cleanup_scope = !matches!(body, Stmt::Block(_));
         for key in keys {
             self.step()?;
             let value = self.checked_value(Value::String(key))?;
-            scope.insert_or_replace(name, BindingCell::new(value, mutable, kind));
+            scope.insert_or_replace(atom, BindingCell::new(value, mutable, kind));
             self.push_lexical_scope_with(scope);
             let completion = self.eval_statement(body);
             let Some(mut removed_scope) = self.pop_lexical_scope() else {
                 return Err(Error::runtime("lexical scope disappeared"));
             };
             if cleanup_scope {
-                removed_scope.retain_only(name);
+                removed_scope.retain_only(atom);
             }
             scope = removed_scope;
             let completion = completion?;

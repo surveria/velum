@@ -89,6 +89,7 @@ Current limits cover:
 - runtime evaluation steps
 - string length
 - number of global bindings
+- number of interned atoms as a reported usage metric
 
 Future limits should cover heap budgets, atom table budgets, stack budgets, module loading, and host callback quotas.
 

@@ -297,16 +297,17 @@ impl Context {
         Ok(values)
     }
 
-    fn function_scope(&self, params: &[String], args: Vec<Value>) -> Result<BindingScope> {
+    fn function_scope(&mut self, params: &[String], args: Vec<Value>) -> Result<BindingScope> {
         let mut scope = BindingScope::new();
         let mut args = args.into_iter();
         for param in params {
-            if !scope.contains(param) {
+            let atom = self.intern_atom(param)?;
+            if !scope.contains(atom) {
                 self.ensure_extra_binding_capacity(scope.len())?;
             }
             let value = args.next().unwrap_or(Value::Undefined);
             self.checked_value(value.clone())?;
-            scope.insert(param.clone(), BindingCell::new(value, true, DeclKind::Var));
+            scope.insert(atom, BindingCell::new(value, true, DeclKind::Var));
         }
         Ok(scope)
     }
