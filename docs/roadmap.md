@@ -1,5 +1,10 @@
 # Roadmap
 
+The operational task board and optimization sequence live in
+[Optimization Execution Plan](optimization-execution-plan.md). Update that
+document in the same branch that starts or completes an optimization or feature
+task.
+
 ## Phase 0: Repository and Guardrails
 
 - Safe-Rust crate with `unsafe_code = forbid`.
