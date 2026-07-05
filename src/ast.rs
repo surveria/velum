@@ -36,6 +36,12 @@ pub enum DeclKind {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct ObjectProperty {
+    pub key: String,
+    pub value: Expr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Literal(Value),
     Identifier(String),
@@ -57,6 +63,11 @@ pub enum Expr {
         name: String,
         expr: Box<Self>,
     },
+    PropertyAssignment {
+        object: Box<Self>,
+        property: String,
+        expr: Box<Self>,
+    },
     Member {
         object: Box<Self>,
         property: String,
@@ -69,6 +80,7 @@ pub enum Expr {
         params: Vec<String>,
         body: Vec<Stmt>,
     },
+    Object(Vec<ObjectProperty>),
     New {
         constructor: String,
         args: Vec<Self>,

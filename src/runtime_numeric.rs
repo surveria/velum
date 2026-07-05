@@ -43,7 +43,11 @@ pub fn bitwise_and(left: &Value, right: &Value) -> Result<Value> {
 
 fn bitwise_i32(value: &Value) -> Result<i32> {
     match value {
-        Value::Undefined | Value::Null | Value::Function(_) | Value::Error(_) => Ok(0),
+        Value::Undefined
+        | Value::Null
+        | Value::Function(_)
+        | Value::Object(_)
+        | Value::Error(_) => Ok(0),
         Value::Bool(value) => Ok(i32::from(*value)),
         Value::Number(value) => number_to_i32(*value),
         Value::String(value) => string_to_i32(value),

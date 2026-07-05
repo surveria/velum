@@ -325,6 +325,63 @@ fn supports_escaping_closures() -> TestResult {
 }
 
 #[test]
+fn supports_object_literals_and_properties() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let camera = {
+            name: "front-door",
+            count: 40,
+            nested: { value: 2 },
+            duplicate: 1,
+            duplicate: 41,
+        };
+        let assigned = camera.count = camera.count + camera.nested.value;
+        camera.extra = camera.duplicate + 1;
+        print(camera.name, camera.missing);
+        assigned + camera.extra - 42
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(context.output(), &["front-door undefined".to_owned()])?;
+    ensure_global_type(context.get_global("camera").as_ref(), "object", "camera")?;
+
+    expect_value(
+        r"
+        let shared = {};
+        let same = shared === shared;
+        let different = shared === {};
+        same && !different ? 42 : 0
+        ",
+        &Value::Number(42.0),
+    )?;
+
+    expect_value(
+        r"
+        let make = function() {
+            let state = { value: 40 };
+            return function() {
+                state.value = state.value + 1;
+                return state.value;
+            };
+        };
+        let next = make();
+        next();
+        next()
+        ",
+        &Value::Number(42.0),
+    )?;
+
+    let Err(error) = eval("let value = 1; value.name = 2;") else {
+        return Err("expected property assignment on non-object to fail".into());
+    };
+    ensure_error_contains(&error, "property assignment")
+}
+
+#[test]
 fn supports_assert_throws_and_reference_errors() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
@@ -486,7 +543,30 @@ fn enforces_resource_limits() -> TestResult {
         return Err("expected resource limit to fail".into());
     };
     ensure_error_kind(&error, "resource limit")?;
-    Ok(())
+
+    let limits = RuntimeLimits {
+        max_objects: 0,
+        ..RuntimeLimits::default()
+    };
+    let runtime = Runtime::with_limits(limits);
+    let mut context = runtime.context();
+
+    let Err(error) = context.eval("let value = {};") else {
+        return Err("expected object count limit to fail".into());
+    };
+    ensure_error_kind(&error, "resource limit")?;
+
+    let limits = RuntimeLimits {
+        max_object_properties: 1,
+        ..RuntimeLimits::default()
+    };
+    let runtime = Runtime::with_limits(limits);
+    let mut context = runtime.context();
+
+    let Err(error) = context.eval("let value = { first: 1, second: 2 };") else {
+        return Err("expected object property count limit to fail".into());
+    };
+    ensure_error_kind(&error, "resource limit")
 }
 
 fn expect_value(source: &str, expected: &Value) -> TestResult {
@@ -516,6 +596,21 @@ fn ensure_missing_global(actual: Option<&Value>, name: &str) -> TestResult {
     }
 
     Err(format!("expected global '{name}' to be missing, got {actual:?}").into())
+}
+
+fn ensure_global_type(actual: Option<&Value>, expected: &str, name: &str) -> TestResult {
+    let Some(actual) = actual else {
+        return Err(format!("expected global '{name}' to exist").into());
+    };
+    if actual.type_name() == expected {
+        return Ok(());
+    }
+
+    Err(format!(
+        "expected global '{name}' to have type '{expected}', got '{}'",
+        actual.type_name()
+    )
+    .into())
 }
 
 fn ensure_output(actual: &[String], expected: &[String]) -> TestResult {
