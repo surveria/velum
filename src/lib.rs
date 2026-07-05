@@ -10,6 +10,7 @@ mod runtime_assertions;
 mod runtime_completion;
 mod runtime_engine;
 mod runtime_limits;
+mod runtime_loop;
 mod runtime_numeric;
 mod runtime_object;
 mod runtime_property;

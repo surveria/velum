@@ -95,7 +95,7 @@ impl Context {
         self.eval_block(&program.statements)?.into_result()
     }
 
-    fn eval_statement(&mut self, statement: &Stmt) -> Result<Completion> {
+    pub(crate) fn eval_statement(&mut self, statement: &Stmt) -> Result<Completion> {
         match statement {
             Stmt::Block(statements) => self.eval_block(statements),
             Stmt::If {
@@ -113,6 +113,12 @@ impl Context {
                 }
             }
             Stmt::While { condition, body } => self.eval_while(condition, body),
+            Stmt::For {
+                init,
+                condition,
+                update,
+                body,
+            } => self.eval_for(init.as_deref(), condition.as_ref(), update.as_ref(), body),
             Stmt::TryCatch {
                 body,
                 catch_param,
@@ -155,6 +161,12 @@ impl Context {
                 Ok(())
             }
             Stmt::While { body, .. } => self.hoist_statement_vars(body),
+            Stmt::For { init, body, .. } => {
+                if let Some(init) = init {
+                    self.hoist_statement_vars(init)?;
+                }
+                self.hoist_statement_vars(body)
+            }
             Stmt::TryCatch {
                 body, catch_body, ..
             } => {
@@ -228,7 +240,7 @@ impl Context {
         Ok(Value::Undefined)
     }
 
-    fn eval_expr(&mut self, expr: &Expr) -> Result<Value> {
+    pub(crate) fn eval_expr(&mut self, expr: &Expr) -> Result<Value> {
         self.step()?;
         match expr {
             Expr::Literal(value) => self.checked_value(value.clone()),
@@ -309,22 +321,6 @@ impl Context {
             return self.eval_expr(consequent);
         }
         self.eval_expr(alternate)
-    }
-
-    fn eval_while(&mut self, condition: &Expr, body: &Stmt) -> Result<Completion> {
-        let mut last = Value::Undefined;
-        while self.eval_expr(condition)?.is_truthy() {
-            self.step()?;
-            match self.eval_statement(body)? {
-                Completion::Normal(value) => last = value,
-                completion @ (Completion::Throw(_) | Completion::Return(_)) => {
-                    return Ok(completion);
-                }
-                Completion::Break => return Ok(Completion::Normal(last)),
-                Completion::Continue => {}
-            }
-        }
-        Ok(Completion::Normal(last))
     }
 
     fn eval_block(&mut self, statements: &[Stmt]) -> Result<Completion> {
@@ -781,7 +777,7 @@ impl Context {
         Ok(())
     }
 
-    fn step(&mut self) -> Result<()> {
+    pub(crate) fn step(&mut self) -> Result<()> {
         self.runtime_steps = self
             .runtime_steps
             .checked_add(1)
