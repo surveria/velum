@@ -35,6 +35,7 @@ const PATH_VAR_HOISTING: &str = "tests/engine_cases/var_hoisting.js";
 const PATH_TRY_CATCH: &str = "tests/engine_cases/try_catch.js";
 const PATH_CONDITIONAL_BITAND: &str = "tests/engine_cases/conditional_bitand.js";
 const PATH_WHILE_STATEMENTS: &str = "tests/engine_cases/while_statements.js";
+const PATH_BREAK_CONTINUE: &str = "tests/engine_cases/break_continue.js";
 const PATH_FUNCTION_EXPRESSION: &str = "tests/engine_cases/function_expression.js";
 const PATH_FUNCTION_RETURN: &str = "tests/engine_cases/function_return.js";
 const PATH_FUNCTION_PARAMETERS_SCOPE: &str = "tests/engine_cases/function_parameters_scope.js";
@@ -69,6 +70,8 @@ const PATH_TEST262_VAR_HOISTING: &str =
 const PATH_TEST262_TRY_CATCH: &str =
     "tests/corpora/test262/active/language/statements/try_catch.js";
 const PATH_TEST262_WHILE: &str = "tests/corpora/test262/active/language/statements/while.js";
+const PATH_TEST262_BREAK_CONTINUE: &str =
+    "tests/corpora/test262/active/language/statements/break_continue.js";
 const PATH_TEST262_ASSERT_THROWS_REFERENCE_ERROR: &str =
     "tests/corpora/test262/active/language/statements/assert_throws_reference_error.js";
 const PATH_TEST262_ERROR_OBJECT_PROPERTIES: &str =
@@ -85,6 +88,8 @@ const PATH_QUICKJS_CONDITIONAL_BITAND: &str =
     "tests/corpora/quickjs_differential/active/conditional_bitand.js";
 const PATH_QUICKJS_WHILE_STATEMENTS: &str =
     "tests/corpora/quickjs_differential/active/while_statements.js";
+const PATH_QUICKJS_BREAK_CONTINUE: &str =
+    "tests/corpora/quickjs_differential/active/break_continue.js";
 const PATH_QUICKJS_FUNCTION_EXPRESSION: &str =
     "tests/corpora/quickjs_differential/active/function_expression.js";
 const PATH_QUICKJS_FUNCTION_RETURN: &str =
@@ -106,6 +111,7 @@ const PATH_QUICKJS_ERROR_OBJECT_PROPERTIES: &str =
 const PATH_BENCH_ARITHMETIC: &str = "tests/corpora/benchmarks/active/arithmetic_chain.js";
 const PATH_BENCH_CONDITIONAL_BITAND: &str = "tests/corpora/benchmarks/active/conditional_bitand.js";
 const PATH_BENCH_WHILE_STATEMENTS: &str = "tests/corpora/benchmarks/active/while_statements.js";
+const PATH_BENCH_BREAK_CONTINUE: &str = "tests/corpora/benchmarks/active/break_continue.js";
 const PATH_BENCH_FUNCTION_EXPRESSION: &str =
     "tests/corpora/benchmarks/active/function_expression.js";
 const PATH_BENCH_FUNCTION_RETURN: &str = "tests/corpora/benchmarks/active/function_return.js";
@@ -128,6 +134,7 @@ const PATH_BENCH_ERROR_OBJECT_PROPERTIES: &str =
 
 pub fn engine_cases() -> Vec<EngineCase> {
     let mut cases = engine_language_cases();
+    cases.extend(engine_control_flow_cases());
     cases.extend(engine_object_cases());
     cases.extend(engine_runtime_cases());
     cases
@@ -174,6 +181,11 @@ fn engine_language_cases() -> Vec<EngineCase> {
                 value: "42",
             },
         },
+    ]
+}
+
+fn engine_control_flow_cases() -> Vec<EngineCase> {
+    vec![
         EngineCase {
             id: "conditional_bitand",
             path: PATH_CONDITIONAL_BITAND,
@@ -187,6 +199,14 @@ fn engine_language_cases() -> Vec<EngineCase> {
             path: PATH_WHILE_STATEMENTS,
             expectation: Expectation::OutputAndValue {
                 output: &["4 42"],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "break_continue",
+            path: PATH_BREAK_CONTINUE,
+            expectation: Expectation::OutputAndValue {
+                output: &["3 42"],
                 value: "42",
             },
         },
@@ -343,6 +363,11 @@ pub fn test262_cases() -> Vec<EngineCase> {
             expectation: Expectation::Value("42"),
         },
         EngineCase {
+            id: "language/statements/break_continue",
+            path: PATH_TEST262_BREAK_CONTINUE,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
             id: "language/statements/assert_throws_reference_error",
             path: PATH_TEST262_ASSERT_THROWS_REFERENCE_ERROR,
             expectation: Expectation::Value("42"),
@@ -384,6 +409,10 @@ pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "while_statements",
             path: PATH_QUICKJS_WHILE_STATEMENTS,
+        },
+        DifferentialCase {
+            id: "break_continue",
+            path: PATH_QUICKJS_BREAK_CONTINUE,
         },
         DifferentialCase {
             id: "function_expression",
@@ -437,6 +466,10 @@ pub fn benchmark_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "while_statements",
             path: PATH_BENCH_WHILE_STATEMENTS,
+        },
+        BenchmarkCase {
+            id: "break_continue",
+            path: PATH_BENCH_BREAK_CONTINUE,
         },
         BenchmarkCase {
             id: "function_expression",
