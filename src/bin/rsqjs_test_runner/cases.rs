@@ -57,6 +57,7 @@ const PATH_FOR_IN_NULLISH_ERROR: &str = "tests/engine_cases/for_in_nullish_error
 const PATH_SWITCH_STATEMENTS: &str = "tests/engine_cases/switch_statements.js";
 const PATH_BLOCK_LEXICAL_SCOPE: &str = "tests/engine_cases/block_lexical_scope.js";
 const PATH_FUNCTION_EXPRESSION: &str = "tests/engine_cases/function_expression.js";
+const PATH_FUNCTION_PROPERTIES: &str = "tests/engine_cases/function_properties.js";
 const PATH_FUNCTION_RETURN: &str = "tests/engine_cases/function_return.js";
 const PATH_FUNCTION_PARAMETERS_SCOPE: &str = "tests/engine_cases/function_parameters_scope.js";
 const PATH_CLOSURE_ENVIRONMENTS: &str = "tests/engine_cases/closure_environments.js";
@@ -73,6 +74,8 @@ const PATH_TEST262_CONDITIONAL_BITAND: &str =
     "tests/corpora/test262/active/language/expressions/conditional_bitand.js";
 const PATH_TEST262_FUNCTION_EXPRESSION: &str =
     "tests/corpora/test262/active/language/expressions/function_expression.js";
+const PATH_TEST262_FUNCTION_PROPERTIES: &str =
+    "tests/corpora/test262/active/language/expressions/function_properties.js";
 const PATH_TEST262_FUNCTION_RETURN: &str =
     "tests/corpora/test262/active/language/statements/function_return.js";
 const PATH_TEST262_FUNCTION_PARAMETERS_SCOPE: &str =
@@ -352,6 +355,19 @@ fn engine_function_cases() -> Vec<EngineCase> {
             },
         },
         EngineCase {
+            id: "function_properties",
+            path: PATH_FUNCTION_PROPERTIES,
+            expectation: Expectation::OutputAndValue {
+                output: &[
+                    "2 namedCamera 42",
+                    "3 true",
+                    "true true false true",
+                    " 2 namedCamera",
+                ],
+                value: "42",
+            },
+        },
+        EngineCase {
             id: "function_return",
             path: PATH_FUNCTION_RETURN,
             expectation: Expectation::OutputAndValue {
@@ -462,6 +478,11 @@ fn test262_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/function_expression",
             path: PATH_TEST262_FUNCTION_EXPRESSION,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/function_properties",
+            path: PATH_TEST262_FUNCTION_PROPERTIES,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
