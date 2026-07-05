@@ -346,14 +346,14 @@ impl Context {
         if let Some((callee, this_value)) = self.eval_call_reference(callee)? {
             return match callee {
                 Value::Function(id) => self.eval_function_with_this(id, args, this_value),
-                Value::NativeFunction(id) => self.eval_native_function(id, args, this_value),
+                Value::NativeFunction(id) => self.eval_native_function(id, args, &this_value),
                 value => Err(Error::runtime(format!("'{value}' is not callable"))),
             };
         }
 
         match self.eval_expr(callee)? {
             Value::Function(id) => self.eval_function(id, args),
-            Value::NativeFunction(id) => self.eval_native_function(id, args, Value::Undefined),
+            Value::NativeFunction(id) => self.eval_native_function(id, args, &Value::Undefined),
             value => Err(Error::runtime(format!("'{value}' is not callable"))),
         }
     }
