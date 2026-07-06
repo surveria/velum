@@ -93,11 +93,14 @@ impl Context {
     }
 
     pub(crate) fn property_lookup<'a>(&self, name: &'a str) -> PropertyLookup<'a> {
-        let key = self
-            .well_known_properties
-            .lookup(name)
-            .or_else(|| self.atom(name).map(PropertyKey::new));
+        let key = self.known_property_key(name);
         PropertyLookup::new(name, key)
+    }
+
+    pub(crate) fn known_property_key(&self, name: &str) -> Option<PropertyKey> {
+        self.well_known_properties
+            .lookup(name)
+            .or_else(|| self.atom(name).map(PropertyKey::new))
     }
 
     pub(crate) fn object_constructor_property_key(&mut self) -> Result<PropertyKey> {

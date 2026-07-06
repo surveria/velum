@@ -2,6 +2,7 @@ use crate::{
     ast::{Expr, StaticBinding, StaticName, UpdateOp},
     error::{Error, Result},
     runtime::Context,
+    runtime_property::DynamicPropertyKey,
     value::Value,
 };
 
@@ -21,7 +22,7 @@ impl Context {
             Expr::ComputedMember { object, property } => {
                 let object = self.eval_expr(object)?;
                 let property = self.eval_property_key(property)?;
-                self.update_dynamic_property(&object, &property, op, prefix)
+                self.update_dynamic_property(&object, property, op, prefix)
             }
             _ => Err(Error::runtime("invalid update target")),
         }
@@ -54,13 +55,13 @@ impl Context {
     fn update_dynamic_property(
         &mut self,
         object: &Value,
-        property: &str,
+        mut property: DynamicPropertyKey,
         op: UpdateOp,
         prefix: bool,
     ) -> Result<Value> {
-        let old_value = self.get_property_value(object, property)?;
+        let old_value = self.get_dynamic_property_value(object, &property)?;
         let new_value = Self::updated_number(&old_value, op)?;
-        self.set_property_value(object, property, new_value.clone())?;
+        self.set_dynamic_property_value(object, &mut property, new_value.clone())?;
         Ok(if prefix { new_value } else { old_value })
     }
 

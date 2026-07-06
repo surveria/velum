@@ -16,6 +16,37 @@ pub fn property_key(value: &Value) -> String {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct DynamicPropertyKey {
+    name: String,
+    key: Option<PropertyKey>,
+}
+
+impl DynamicPropertyKey {
+    pub(crate) const fn new(name: String, key: Option<PropertyKey>) -> Self {
+        Self { name, key }
+    }
+
+    pub(crate) const fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    pub(crate) const fn key(&self) -> Option<PropertyKey> {
+        self.key
+    }
+
+    pub(crate) const fn lookup(&self) -> PropertyLookup<'_> {
+        if let Some(key) = self.key {
+            return PropertyLookup::from_key(self.name(), key);
+        }
+        PropertyLookup::new(self.name(), None)
+    }
+
+    pub(crate) const fn remember_key(&mut self, key: PropertyKey) {
+        self.key = Some(key);
+    }
+}
+
 pub fn get_property(
     objects: &ObjectHeap,
     object: &Value,

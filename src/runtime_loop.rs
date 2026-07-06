@@ -137,8 +137,8 @@ impl Context {
             }
             Expr::ComputedMember { object, property } => {
                 let object = self.eval_expr(object)?;
-                let property = self.eval_property_key(property)?;
-                self.set_property_value(&object, &property, value)
+                let mut property = self.eval_property_key(property)?;
+                self.set_dynamic_property_value(&object, &mut property, value)
             }
             Expr::Parenthesized(expr) => self.assign_for_in_target(expr, value),
             _ => Err(Error::runtime("invalid for-in assignment target")),
