@@ -32,8 +32,6 @@ use crate::value::{ErrorName, Value};
 mod runtime_declaration;
 #[path = "runtime_function.rs"]
 mod runtime_function;
-#[path = "runtime_function_capture.rs"]
-mod runtime_function_capture;
 #[path = "runtime_function_intrinsic.rs"]
 mod runtime_function_intrinsic;
 #[path = "runtime_function_properties.rs"]
@@ -99,6 +97,21 @@ struct Function {
 }
 
 type FunctionUpvalues = Rc<[Option<BindingCell>]>;
+
+#[derive(Debug, Clone)]
+struct CapturedFunctionUpvalues {
+    cells: FunctionUpvalues,
+    needs_legacy_scope_fallback: bool,
+}
+
+impl CapturedFunctionUpvalues {
+    const fn new(cells: FunctionUpvalues, needs_legacy_scope_fallback: bool) -> Self {
+        Self {
+            cells,
+            needs_legacy_scope_fallback,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Default)]
 struct FunctionCaptures {
@@ -320,12 +333,18 @@ impl Context {
                 self.eval_computed_member(object, property)
             }
             Expr::Call { callee, args } => self.eval_call(callee, args),
-            Expr::Function { name, params, body } => {
-                self.create_function(name.as_ref(), params, body)
-            }
-            Expr::MethodFunction { name, params, body } => {
-                self.create_method_function(name, params, body)
-            }
+            Expr::Function {
+                id,
+                name,
+                params,
+                body,
+            } => self.create_function(*id, name.as_ref(), params, body),
+            Expr::MethodFunction {
+                id,
+                name,
+                params,
+                body,
+            } => self.create_method_function(*id, name, params, body),
             Expr::Object(properties) => self.eval_object_literal(properties),
             Expr::Array(elements) => self.eval_array_literal(elements),
             Expr::New { constructor, args } => self.eval_new(constructor, args),

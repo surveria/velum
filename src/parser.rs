@@ -1,4 +1,6 @@
-use crate::ast::{Program, StaticBinding, StaticBindingId, StaticName, StaticNameId};
+use crate::ast::{
+    Program, StaticBinding, StaticBindingId, StaticFunctionId, StaticName, StaticNameId,
+};
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
 use crate::runtime_limits::RuntimeLimits;
@@ -26,6 +28,7 @@ pub struct ParseUsage {
     pub max_expression_depth: usize,
     pub static_name_count: usize,
     pub static_binding_count: usize,
+    pub static_function_count: usize,
 }
 
 struct Parser {
@@ -36,6 +39,7 @@ struct Parser {
     max_expression_depth: usize,
     static_names: StaticNameTable,
     static_bindings: StaticBindingTable,
+    static_functions: StaticFunctionTable,
 }
 
 impl Parser {
@@ -48,6 +52,7 @@ impl Parser {
             max_expression_depth: 0,
             static_names: StaticNameTable::new(),
             static_bindings: StaticBindingTable::new(),
+            static_functions: StaticFunctionTable::new(),
         }
     }
 
@@ -70,6 +75,7 @@ impl Parser {
             max_expression_depth: self.max_expression_depth,
             static_name_count: self.static_names.len(),
             static_binding_count: self.static_bindings.len(),
+            static_function_count: self.static_functions.len(),
         };
         Ok(ParsedProgram {
             program: Program { statements },
@@ -103,6 +109,10 @@ impl Parser {
     pub(super) fn static_binding_name(&mut self, name: String) -> Result<StaticBinding> {
         let name = self.static_name(name)?;
         self.static_binding(name)
+    }
+
+    pub(super) fn static_function(&mut self) -> Result<StaticFunctionId> {
+        self.static_functions.intern()
     }
 
     pub(super) fn borrowed_static_name(&mut self, name: &str) -> Result<StaticName> {
@@ -298,6 +308,30 @@ impl StaticBindingTable {
             .checked_add(1)
             .ok_or_else(|| Error::limit("static binding count overflowed"))?;
         Ok(StaticBinding::new(id, name))
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct StaticFunctionTable {
+    count: usize,
+}
+
+impl StaticFunctionTable {
+    const fn new() -> Self {
+        Self { count: 0 }
+    }
+
+    const fn len(&self) -> usize {
+        self.count
+    }
+
+    fn intern(&mut self) -> Result<StaticFunctionId> {
+        let id = StaticFunctionId::from_index(self.count)?;
+        self.count = self
+            .count
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("static function count overflowed"))?;
+        Ok(id)
     }
 }
 

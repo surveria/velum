@@ -226,7 +226,9 @@ impl Parser {
             self.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
             self.consume(&TokenKind::LBrace, "expected '{' before method body")?;
             let body = self.block_statements()?.into();
+            let id = self.static_function()?;
             let value = Expr::MethodFunction {
+                id,
                 name: name.key.clone(),
                 params,
                 body,
@@ -316,7 +318,13 @@ impl Parser {
         self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
         let body = self.block_statements()?.into();
-        Ok(Expr::Function { name, params, body })
+        let id = self.static_function()?;
+        Ok(Expr::Function {
+            id,
+            name,
+            params,
+            body,
+        })
     }
 
     fn function_parameters(&mut self) -> Result<Vec<StaticBinding>> {

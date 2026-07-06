@@ -102,6 +102,7 @@ impl Parser {
         let expression_depth = self.expression_depth;
         let static_names = self.static_names.clone();
         let static_bindings = self.static_bindings.clone();
+        let static_functions = self.static_functions.clone();
         if let Some((target, object)) = self.for_in_header()? {
             self.consume(&TokenKind::RParen, "expected ')' after for-in expression")?;
             let body = Box::new(self.statement()?);
@@ -115,6 +116,7 @@ impl Parser {
         self.expression_depth = expression_depth;
         self.static_names = static_names;
         self.static_bindings = static_bindings;
+        self.static_functions = static_functions;
 
         let init = self.for_init()?;
         let condition = if self.check(&TokenKind::Semicolon) {

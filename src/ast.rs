@@ -34,6 +34,22 @@ impl StaticBindingId {
     }
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub struct StaticFunctionId(u32);
+
+impl StaticFunctionId {
+    pub fn from_index(index: usize) -> Result<Self> {
+        let id = u32::try_from(index)
+            .map_err(|_| Error::limit("static function table exceeded supported range"))?;
+        Ok(Self(id))
+    }
+
+    pub fn index(self) -> Result<usize> {
+        usize::try_from(self.0)
+            .map_err(|_| Error::limit("static function id exceeded addressable range"))
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StaticName {
     id: StaticNameId,
@@ -254,11 +270,13 @@ pub enum Expr {
         args: Vec<Self>,
     },
     Function {
+        id: StaticFunctionId,
         name: Option<StaticName>,
         params: Rc<[StaticBinding]>,
         body: Rc<[Stmt]>,
     },
     MethodFunction {
+        id: StaticFunctionId,
         name: StaticName,
         params: Rc<[StaticBinding]>,
         body: Rc<[Stmt]>,

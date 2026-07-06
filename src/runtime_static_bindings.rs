@@ -4,7 +4,8 @@ use std::rc::Rc;
 use crate::{
     ast::{StaticBinding, StaticBindingId},
     atom::AtomId,
-    binding_layout_types::{BindingOperand, ScopeId},
+    binding_layout::BindingLayout,
+    binding_layout_types::{BindingOperand, DeclarationRef, FunctionScopeId, ScopeId},
     error::{Error, Result},
     runtime::Context,
     runtime_assertions::reference_error_undefined,
@@ -304,6 +305,27 @@ impl Context {
         self.binding_at_location(location)
     }
 
+    pub(crate) fn resolve_runtime_static_declaration(
+        &self,
+        layout: &BindingLayout,
+        owner_function: FunctionScopeId,
+        declaration: DeclarationRef,
+        binding: &StaticBinding,
+    ) -> Result<Option<BindingCell>> {
+        let Some(atom) = self.lookup_static_name_atom(binding.name())? else {
+            return Ok(None);
+        };
+        if let Some(cell) = self.compiled_declaration_static_binding(layout, declaration, atom)? {
+            return Ok(Some(cell));
+        }
+        if let Some(cell) =
+            self.compiled_parent_upvalue_static_binding(layout, owner_function, declaration, atom)?
+        {
+            return Ok(Some(cell));
+        }
+        self.resolve_runtime_static_binding(binding)
+    }
+
     pub(crate) fn remember_active_static_binding(
         &self,
         binding: &StaticBinding,
@@ -390,6 +412,62 @@ impl Context {
             return Ok(None);
         };
         Ok(Some((location, cell)))
+    }
+
+    fn compiled_declaration_static_binding(
+        &self,
+        layout: &BindingLayout,
+        declaration: DeclarationRef,
+        atom: AtomId,
+    ) -> Result<Option<BindingCell>> {
+        let Some(operand) = layout.declaration_operand(declaration)? else {
+            return Ok(None);
+        };
+        match operand {
+            BindingOperand::Global { slot } => {
+                let location =
+                    BindingLocation::global(atom, BindingSlot::from_index(slot.index()?)).exact();
+                self.binding_at_location(location)
+            }
+            BindingOperand::Local { scope, slot } => {
+                self.compiled_declaration_local_binding(atom, scope, slot)
+            }
+            BindingOperand::Upvalue { .. } | BindingOperand::Unresolved => Ok(None),
+        }
+    }
+
+    fn compiled_declaration_local_binding(
+        &self,
+        atom: AtomId,
+        scope: ScopeId,
+        slot: crate::binding_layout_types::LocalSlot,
+    ) -> Result<Option<BindingCell>> {
+        let slot = BindingSlot::from_index(slot.index()?);
+        for (index, frame) in self.locals.iter().enumerate().rev() {
+            if frame.compiled_scope() != Some(scope) {
+                continue;
+            }
+            let location = BindingLocation::local(atom, LocalScopeIndex::new(index), slot).exact();
+            return self.binding_at_location(location);
+        }
+        Ok(None)
+    }
+
+    fn compiled_parent_upvalue_static_binding(
+        &self,
+        layout: &BindingLayout,
+        owner_function: FunctionScopeId,
+        declaration: DeclarationRef,
+        atom: AtomId,
+    ) -> Result<Option<BindingCell>> {
+        let Some(parent) = layout.parent_function(owner_function)? else {
+            return Ok(None);
+        };
+        let Some(slot) = layout.upvalue_slot_for_declaration(parent, declaration)? else {
+            return Ok(None);
+        };
+        let location = BindingLocation::upvalue(atom, BindingSlot::from_index(slot.index()?));
+        self.binding_at_location(location)
     }
 
     fn compiled_active_static_binding(

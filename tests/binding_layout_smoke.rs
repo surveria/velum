@@ -118,6 +118,19 @@ var right = makeCounter(100);
 left(1) + left(2) + right(3) + left(4);
 ";
 
+const TRANSITIVE_UPVALUE_FRAME_SOURCE: &str = r"
+var outer = function outer(a) {
+    return function middle(b) {
+        return function inner(c) {
+            return a + b + c;
+        };
+    };
+};
+var middle = outer(20);
+var inner = middle(20);
+inner(2);
+";
+
 const STATIC_BINDING_MATERIALIZATION_GUARD_SOURCE: &str = r"
 var make = function make(seed) {
     var total = seed;
@@ -371,6 +384,27 @@ fn compiled_upvalue_frames_skip_legacy_capture_snapshots() -> TestResult {
     ensure_usize(usage.captured_scope_count, 0)?;
     ensure_usize(usage.captured_binding_count, 0)?;
     ensure_greater_than(usage.upvalue_cell_count, 0, "upvalue cells")
+}
+
+#[test]
+fn compiled_upvalue_frames_lift_transitive_captures() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(TRANSITIVE_UPVALUE_FRAME_SOURCE)?;
+    let usage = script.usage();
+
+    ensure_usize(usage.global_binding_slot_count(), 3)?;
+    ensure_usize(usage.local_binding_slot_count(), 3)?;
+    ensure_usize(usage.upvalue_binding_slot_count(), 3)?;
+    ensure_usize(usage.unresolved_static_binding_count(), 0)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    let usage = vm.resource_usage();
+
+    ensure_usize(usage.captured_scope_count, 0)?;
+    ensure_usize(usage.captured_binding_count, 0)?;
+    ensure_greater_than(usage.upvalue_cell_count, 1, "upvalue cells")
 }
 
 #[test]
