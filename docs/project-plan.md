@@ -39,10 +39,41 @@ This document answers three different questions:
    implement narrowly, validate, record compatibility and performance evidence,
    open a PR, wait for CI, squash-merge, update `main`, and remove the worktree.
 
+4. How do runtime optimization ideas fit into the roadmap?
+   Treat them as implementation methods. A branch starts from a product,
+   compatibility, embedding, resource-control, observability, memory, or
+   measured-performance need, then chooses atoms, slots, shapes, dense arrays,
+   bytecode, caches, or heap work only when that method is the right tool for
+   the selected need.
+
 Runtime architecture notes are not the project goal by themselves. Atoms,
 slots, shapes, dense arrays, bytecode, inline caches, and GC are foundations
 that we pull forward when they unblock compatibility, embedding API behavior,
 resource accounting, observability, or measured performance and memory debt.
+
+## Roadmap Layers
+
+Read this plan in three layers:
+
+1. Product delivery.
+   The engine must become a safe Rust library for many isolated VMs, host
+   extensions, async integration, resource controls, diagnostics,
+   observability, Test262-visible compatibility, and practical built-ins.
+   This layer decides what users and embedders can rely on.
+
+2. Runtime foundations.
+   Atoms, slot-based bindings, shapes, dense arrays, bytecode, inline caches,
+   indexed heaps, and GC are the internal methods used to deliver the product
+   layer without losing the QuickJS-like footprint and latency budget.
+
+3. Evidence loop.
+   Test reports, QuickJS differential results, benchmark ratios, memory
+   reports, and direct embedding tests decide when a runtime foundation task
+   should preempt ordinary compatibility or API work.
+
+When these layers conflict, prefer a narrow branch that preserves product
+direction and records the measured trade-off. Do not let the task board become
+a queue of standalone runtime experiments.
 
 ## Plan Scope
 
@@ -169,6 +200,10 @@ an optimization queue. Runtime architecture work appears here only when it
 protects compatibility, embedding behavior, resource accounting, observability,
 or measured performance and memory budgets.
 
+Choose branches from this queue before reading the task board as a priority
+list. The board records history and known work; the queue below decides the
+default direction.
+
 1. Keep report triage current.
    Before choosing each branch, summarize the newest Test262, QuickJS
    differential, benchmark, and memory signals. The latest report is the input
@@ -234,6 +269,23 @@ or measured performance and memory budgets.
     Checkpoint branches are allowed when reports show a budget exception, but
     they should name the affected product path and leave compatibility coverage
     intact.
+
+## Product Capability Backlog
+
+Use this backlog to translate the product direction into branch-sized work.
+Architecture methods are listed only as likely implementation tools.
+
+| Product area | Next capabilities | Likely architecture support | Required evidence |
+| --- | --- | --- | --- |
+| Embedding API | Many isolated VMs, direct API examples, resource-limit failures, teardown reports, typed host functions, host callback errors, compiled-script reuse. | Stable `Engine`/`Vm`/`CompiledScript` API, VM-local registries, immutable shared metadata, explicit resource counters. | Direct library tests, embedding examples, QuickJS differential checks only where behavior is comparable, benchmark rows for API hot paths. |
+| Core compatibility | Syntax, lexical scopes, functions, `this`, equality, exceptions, prototype behavior, iteration, coercion, and standard error behavior. | Slot-based bindings, better diagnostics, shape/prototype correctness, bytecode-ready operands where runtime lookup becomes blocking debt. | Test262 progress by feature area, project fixtures, QuickJS differential cases, compact failure summaries. |
+| Objects and functions | Descriptors, own-property queries, prototype traversal, callability, function metadata, constructors, and method `this` binding. | Atomized property keys, shapes, descriptor-aware shape transitions, prototype guards, per-site caches. | Engine object/function fixtures, QuickJS differential object cases, benchmark rows for property/prototype/call paths. |
+| Arrays and built-ins | High-value `Array`, `Object`, `String`, `Number`, `Math`, `Boolean`, `Function`, errors, JSON, Date, RegExp, Map, and Set coverage. | Packed/holey/sparse storage, intrinsic metadata, direct native-call paths, bytecode/native loops, atomized built-in names. | Test262 built-in clusters, QuickJS differential cases, sequential benchmarks for hot built-ins. |
+| Diagnostics | Stable syntax, runtime, host, and resource-limit error classes with source and context where available. | Error enums, contextual `Result` chains, structured report fields, atom/string heap boundaries for diagnostic text. | Direct error tests, report snapshots, embedding-facing API tests. |
+| Modules and async | Module loading policy, job queue, promises, async functions, and async Rust host callbacks through embedder-owned executors. | VM-owned job queue, immutable module records, callback handles, cancellation/resource accounting. | Direct API tests, event/job reports, future differential coverage where comparable. |
+| Resource control | Heap, stack, atom, job, module, host callback, runtime-step, source-size, and wall-clock limits. | Indexed VM heaps, atom budgets, stack/job accounting, safe collection strategy, explicit cancellation points. | Limit tests, teardown/resource reports, memory benchmark rows. |
+| Observability | Structured events, profiling hooks, resource snapshots, callback/module/job accounting, and feature gates for constrained devices. | Stable event model, VM-local counters, profiling spans, compact report fields. | Direct observability tests, tracked reports, benchmark metadata. |
+| Runtime foundations | Atoms, slots, shapes, dense arrays, bytecode, inline caches, heap strings, indexed heaps, GC, and parallel VM execution. | These are the methods themselves; select them only when they support one of the product areas above or a measured budget exception. | Latest report signal, baseline measurement, targeted regression tests, benchmark or memory delta when applicable. |
 
 ## Workstreams
 
@@ -470,9 +522,12 @@ The board is both history and backlog. It is not sorted by priority. Completed
 rows record what a branch actually delivered; a completed tranche row does not
 mean the whole workstream is complete. Use the current delivery queue first,
 then choose one unchecked row that fits the latest report evidence.
+Because recent history contains many runtime tranches, the top of the board can
+look optimization-heavy. Do not infer roadmap priority from row order.
 
 | Done | Status | Task | Workstream | Purpose | Current notes |
 | --- | --- | --- | --- | --- | --- |
+| [x] | Done | Whole-project plan framing | Documentation / project planning | Reframe the project plan as a product and compatibility roadmap instead of a standalone optimization backlog. | Adds explicit roadmap layers, a product capability backlog, and a branch-selection rule that starts from embedding, compatibility, built-ins, diagnostics, async, resource control, observability, memory, or measured-performance needs. Runtime methods from the benchmark review remain documented as architecture tools, with current implementation status tracked separately so future work can choose them deliberately instead of treating them as the whole roadmap. Validation was limited to documentation review and `git diff --check` because this branch changes no code. |
 | [x] | Done | Typed context-free property string results tranche | Runtime architecture / memory | Stop context-free property and object fallback code from constructing temporary owned `Value::String` values for diagnostic text and virtual string characters. | Adds `runtime_property::PropertyValue` and `runtime_object::ObjectPropertyValue`, so generic property reads can return ordinary values, borrowed diagnostic text, or virtual string characters without allocating an owned string. `Context::runtime_property_value` is now the single materialization boundary for those typed reads, routing text and characters through the VM `StringHeap`. `ObjectHeap::get` and prototype traversal now carry virtual string characters as typed results; `ObjectHeap::own_property_descriptor` no longer has a context-free string-wrapper descriptor value fallback because the context-aware `Object.getOwnPropertyDescriptor` path already materializes those descriptor values as heap strings. Direct coverage in `string_heap_smoke.rs` verifies inherited string-wrapper index reads through a prototype chain return heap-backed strings and do not grow heap usage on repeated reads. The root engine crate version was bumped to `0.2.2`; the runner crate was unchanged. Validation passed with `cargo fmt --all -- --check`, `cargo check --all-targets`, `cargo test --test string_heap_smoke`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test --quiet`, `git diff --check`, and `scripts/test-all.sh`. Report `rsqjs-test-report-20260706T150245Z.md` keeps engine fixtures at 68/68, active Test262 at 66/66, full Test262 at 10872/102578, and QuickJS differential at 64/64. Benchmarks measured 63 rows with 34 latency exceptions and no memory-budget exceptions in the current in-process mode; aggregate performance is `0.68x`, memory comparison is unavailable in this benchmark mode. Remaining compact-value work includes public host conversion compatibility, other externalized string producers, handle compaction, Vec-backed heaps/free lists, boxed immutable constants, and eventual bytecode constants behind `CompiledScript`. |
 | [x] | Done | Script-local string literal constants tranche | Runtime architecture / memory | Move parser-known string and template literals out of owned `Value::String` AST nodes and into script-local constants before broader compact-value work. | Adds `StaticStringId` and `StaticString`, a parser-owned `StaticStringTable`, and `CompiledScriptUsage::static_string_count()`. `TokenKind::String` now parses to `Expr::StringLiteral`, runtime evaluation materializes it directly through `Context::heap_string_value(&str)`, and side-effect-free computed keys such as `holder["camera"]` still normalize to static property operands without creating a runtime heap string for the property name. Direct coverage in `string_heap_smoke.rs` verifies repeated compiled string literals are counted as two script-local constants for `"front"` and `"camera"`, materialize only `"front"` into the VM string heap, and do not grow heap usage on repeated compiled evaluation. The root engine crate version was bumped to `0.2.1`; the runner crate was unchanged. Validation passed with `cargo fmt --all -- --check`, `cargo check --all-targets`, targeted string heap tests, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test --quiet`, and `scripts/test-all.sh`. Report `rsqjs-test-report-20260706T144425Z.md` keeps engine fixtures at 68/68, active Test262 at 66/66, full Test262 at 10872/102578, and QuickJS differential at 64/64. Benchmarks measured 63 rows with 35 latency exceptions and no memory-budget exceptions in the current in-process mode; aggregate performance is `0.67x`, memory comparison is unavailable in this benchmark mode. Remaining compact-value work includes context-free diagnostic/property fallbacks, other externalized string producers, handle compaction, Vec-backed heaps/free lists, boxed immutable constants, and eventually replacing AST evaluation with bytecode constants behind `CompiledScript`. |
 | [x] | Done | Computed property access-site cache tranche | Runtime architecture / performance | Extend checked per-occurrence property cache slots from static member reads and writes into non-literal computed property reads and writes without changing array index semantics. | `Expr::ComputedMember` and `Expr::ComputedPropertyAssignment` now carry `StaticPropertyAccessId`, so dynamic bracket reads, writes, compound assignments, updates, computed method calls, and computed `for...in` assignment targets can reuse the same guarded cache machinery as static property sites. Cacheable lookup snapshots now remember the requested `PropertyKey`, so one dynamic site such as `holder[key]` can safely see different keys across calls or loop iterations; computed object caches also bypass arrays to keep numeric indices on `ArrayStorage`. The branch removes the old string-only generic dynamic get/set helpers, routes dynamic property paths through `get_cached_dynamic_property_value` and `set_cached_dynamic_property_value`, and adds regression coverage for repeated compiled computed operations, method-call `this` binding, same-site different keys, and array index semantics. The root engine crate version was bumped to `0.1.1`; the runner crate was unchanged. Validation passed with `cargo fmt --all -- --check`, targeted dynamic/static/array/binding cache tests, `cargo check --all-targets`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test --quiet`, `git diff --check`, and `scripts/test-all.sh`. Report `rsqjs-test-report-20260706T141931Z.md` keeps engine fixtures at 68/68, active Test262 at 66/66, full Test262 at 10872/102578, and QuickJS differential at 64/64. Benchmarks measured 63 rows with 38 latency exceptions and no memory-budget exceptions in the in-process mode; aggregate performance is `0.69x`, memory comparison is unavailable in the current benchmark mode, and `computed_properties` is within latency budget at `0.24x`. Remaining cache work includes descriptor-sensitive writes, broader function/native dispatch, deletes where profitable, bytecode property operands, and moving new runtime logic out of `runtime.rs` before it exceeds the file-size limit. |

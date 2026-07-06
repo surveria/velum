@@ -13,6 +13,12 @@ built-ins, modules, async integration, resource controls, and observability.
 Runtime architecture, performance, and memory work support those product goals
 while keeping QuickJS-like size and speed as acceptance criteria.
 
+Read runtime ideas from benchmark reviews as methods, not as the product
+queue. A branch should normally start from a compatibility, embedding,
+built-in, diagnostics, async, resource-control, observability, memory, or
+measured-performance need, then choose atoms, slots, shapes, dense arrays,
+bytecode, inline caches, or heap work only when they are the right tool.
+
 ## Current Product Queue
 
 The default order for new work is:
@@ -36,6 +42,11 @@ Runtime profiling, atomization, slots, shapes, dense arrays, bytecode, inline
 caches, heap compaction, and collection are implementation methods. They are
 important, but they should normally be selected because they unblock the queue
 above or protect a measured latency or memory budget.
+
+The detailed project plan also keeps a product capability backlog. Use that
+backlog to choose the next branch before treating the task board as a priority
+list; the board records history and known work, so recent runtime-heavy rows do
+not define the whole roadmap.
 
 ## Phase 0: Repository And Guardrails
 
