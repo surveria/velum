@@ -609,24 +609,8 @@ impl Context {
                 native,
                 arg_count,
             } => {
-                let args = state.stack.tail(*arg_count)?;
-                let this_value = state.stack.value_before_tail(*arg_count, 0)?.clone();
-                let callee = self.get_static_property_value(
-                    &this_value,
-                    property.name(),
-                    property.access(),
-                )?;
-                let value = if let Some(target) = *native {
-                    self.eval_direct_native_property_call(
-                        target,
-                        property.access(),
-                        callee,
-                        args,
-                        this_value,
-                    )?
-                } else {
-                    self.eval_call_value(callee, args, this_value)?
-                };
+                let value =
+                    self.eval_bytecode_static_member_call(state, property, *native, *arg_count)?;
                 state.stack.drop_tail(*arg_count)?;
                 state.stack.pop()?;
                 state.stack.push(value);
@@ -686,10 +670,10 @@ impl Context {
         arg_count: usize,
     ) -> Result<Value> {
         let args = state.stack.tail(arg_count)?;
-        let property = state.stack.value_before_tail(arg_count, 0)?.clone();
-        let this_value = state.stack.value_before_tail(arg_count, 1)?.clone();
-        let key = self.dynamic_property_key(&property)?;
-        let callee = self.get_cached_dynamic_property_value(&this_value, &key, operand.access())?;
+        let property = state.stack.value_before_tail(arg_count, 0)?;
+        let this_value = state.stack.value_before_tail(arg_count, 1)?;
+        let key = self.dynamic_property_key(property)?;
+        let callee = self.get_cached_dynamic_property_value(this_value, &key, operand.access())?;
         let value = if let Some(target) = native {
             self.eval_direct_native_property_call(
                 target,
@@ -699,12 +683,46 @@ impl Context {
                 this_value,
             )?
         } else {
-            self.eval_call_value(callee, args, this_value)?
+            self.eval_call_value(callee, args, this_value.clone())?
         };
         state.stack.drop_tail(arg_count)?;
         state.stack.pop()?;
         state.stack.pop()?;
         Ok(value)
+    }
+
+    fn eval_bytecode_static_member_call(
+        &mut self,
+        state: &BytecodeState,
+        property: &BytecodeProperty,
+        native: Option<NativeCallTarget>,
+        arg_count: usize,
+    ) -> Result<Value> {
+        let args = state.stack.tail(arg_count)?;
+        let this_value = state.stack.value_before_tail(arg_count, 0)?;
+        if let Some(target) = native {
+            if let Some(value) = self.eval_cached_direct_native_static_member_call(
+                target,
+                property.name(),
+                property.access(),
+                args,
+                this_value,
+            )? {
+                return Ok(value);
+            }
+            let callee =
+                self.get_static_property_value(this_value, property.name(), property.access())?;
+            return self.eval_direct_native_property_call(
+                target,
+                property.access(),
+                callee,
+                args,
+                this_value,
+            );
+        }
+        let callee =
+            self.get_static_property_value(this_value, property.name(), property.access())?;
+        self.eval_call_value(callee, args, this_value.clone())
     }
 
     fn eval_bytecode_creation_instruction(

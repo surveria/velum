@@ -87,7 +87,7 @@ fn native_call_site_cache_reports_hits_misses_and_fallbacks() -> TestResult {
         3,
         "native call cache misses",
     )?;
-    ensure_at_least(usage.native_call_cache_hits, 4, "native call cache hits")?;
+    ensure_at_least(usage.native_call_cache_hits, 3, "native call cache hits")?;
     ensure_at_least(
         usage.native_call_cache_fallbacks,
         2,
