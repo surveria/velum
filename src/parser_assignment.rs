@@ -67,10 +67,13 @@ impl Parser {
                 expr: Box::new(value),
             }),
             Expr::Member {
-                object, property, ..
+                object,
+                property,
+                access,
             } => Ok(Expr::PropertyAssignment {
                 object,
                 property,
+                access,
                 expr: Box::new(value),
             }),
             Expr::ComputedMember { object, property } => Ok(Expr::ComputedPropertyAssignment {

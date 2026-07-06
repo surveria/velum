@@ -41,6 +41,7 @@ use runtime_object_index::{ArrayIndex, ArrayLength};
 pub use runtime_object_key::{ObjectPropertyInit, PropertyKey, PropertyLookup};
 pub use runtime_object_lookup::{
     CacheablePropertyLookup, CacheablePropertyPresence, CacheablePropertyValue,
+    CacheablePropertyWrite,
 };
 use runtime_object_shape::{ShapeId, ShapeTable};
 

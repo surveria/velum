@@ -328,8 +328,9 @@ impl Context {
             Expr::PropertyAssignment {
                 object,
                 property,
+                access,
                 expr,
-            } => self.eval_property_assignment(object, property, expr),
+            } => self.eval_property_assignment(object, property, *access, expr),
             Expr::ComputedPropertyAssignment {
                 object,
                 property,

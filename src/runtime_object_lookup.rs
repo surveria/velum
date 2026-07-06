@@ -133,6 +133,12 @@ pub enum CacheablePropertyPresence {
     Uncacheable,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum CacheablePropertyWrite {
+    Updated,
+    Uncacheable,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(super) struct PrototypeTraversalBudget {
     remaining: usize,
@@ -235,6 +241,29 @@ impl ObjectHeap {
         self.read_valid_cacheable_property_presence(lookup)
     }
 
+    pub(crate) fn write_cacheable_own_property_value_for(
+        &mut self,
+        id: ObjectId,
+        lookup: CacheablePropertyLookup,
+        value: Value,
+    ) -> Result<CacheablePropertyWrite> {
+        if !lookup.guard.is_valid_for(self, id)? {
+            return Ok(CacheablePropertyWrite::Uncacheable);
+        }
+        let CacheablePropertyLookupResult::Hit(hit) = lookup.result else {
+            return Ok(CacheablePropertyWrite::Uncacheable);
+        };
+        if hit.owner != id {
+            return Ok(CacheablePropertyWrite::Uncacheable);
+        }
+        let object = self.object_mut(hit.owner)?;
+        if object.shape != hit.owner_shape || object.array_length.is_some() {
+            return Ok(CacheablePropertyWrite::Uncacheable);
+        }
+        object.update_named_property_at_slot(hit.slot, value)?;
+        Ok(CacheablePropertyWrite::Updated)
+    }
+
     fn read_cacheable_property_value(
         &self,
         lookup: CacheablePropertyLookup,
@@ -321,6 +350,16 @@ impl Object {
             .get(slot.index())
             .map(super::runtime_object_slot::NamedProperty::property)
             .ok_or_else(|| Error::runtime("object property slot is not available"))
+    }
+
+    fn update_named_property_at_slot(&mut self, slot: PropertySlot, value: Value) -> Result<()> {
+        let property = self
+            .named_properties
+            .get_mut(slot.index())
+            .map(super::runtime_object_slot::NamedProperty::property_mut)
+            .ok_or_else(|| Error::runtime("object property slot is not available"))?;
+        property.set_value(value);
+        Ok(())
     }
 
     fn has_uncacheable_own_property(&self, property: PropertyLookup<'_>) -> bool {
