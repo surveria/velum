@@ -3,6 +3,8 @@ use crate::value::{ObjectId, Value};
 
 #[path = "runtime_object_array.rs"]
 mod runtime_object_array;
+#[path = "runtime_object_array_bulk.rs"]
+mod runtime_object_array_bulk;
 #[path = "runtime_object_array_fast.rs"]
 mod runtime_object_array_fast;
 #[path = "runtime_object_array_front.rs"]
@@ -98,10 +100,7 @@ impl ObjectHeap {
         let length = ArrayLength::from_usize(elements.len())?;
         let mut object = Object::array(length);
         object.prototype = Some(prototype);
-        for (index, value) in elements.into_iter().enumerate() {
-            let index = ArrayIndex::from_usize(index)?;
-            object.set_array_property_value(index, None, value, None, None, max_properties)?;
-        }
+        object.append_packed_default_values(elements, max_properties)?;
 
         self.push_object(object, max_objects).map(Value::Object)
     }

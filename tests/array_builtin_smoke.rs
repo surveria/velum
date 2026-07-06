@@ -237,6 +237,20 @@ fn counts_dense_array_elements_toward_property_limit() -> TestResult {
 }
 
 #[test]
+fn counts_packed_array_literals_toward_property_limit() -> TestResult {
+    let runtime = Runtime::with_limits(RuntimeLimits {
+        max_object_properties: 1,
+        ..RuntimeLimits::default()
+    });
+    let mut context = runtime.context();
+
+    let Err(error) = context.eval("[1, 2]") else {
+        return Err("expected packed array literal property limit to fail".into());
+    };
+    ensure_error_contains(&error, "object property count exceeded 1")
+}
+
+#[test]
 fn preserves_index_access_across_array_methods_and_prototypes() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

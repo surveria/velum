@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use rs_quickjs::{Runtime, RuntimeLimits, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -136,6 +136,20 @@ fn rejects_array_concat_on_non_array_receiver() -> TestResult {
         return Err("expected Array.prototype.concat on non-array receiver to fail".into());
     };
     ensure_error_contains(&error, "requires an array receiver")
+}
+
+#[test]
+fn counts_packed_concat_result_toward_property_limit() -> TestResult {
+    let runtime = Runtime::with_limits(RuntimeLimits {
+        max_object_properties: 3,
+        ..RuntimeLimits::default()
+    });
+    let mut context = runtime.context();
+
+    let Err(error) = context.eval("[1, 2].concat([3, 4])") else {
+        return Err("expected packed Array.prototype.concat result limit to fail".into());
+    };
+    ensure_error_contains(&error, "object property count exceeded 3")
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
