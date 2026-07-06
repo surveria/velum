@@ -10,7 +10,7 @@ use crate::{
     runtime_completion::Completion,
     runtime_object::{
         DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
-        PropertyEnumerable, PropertyWritable,
+        PropertyEnumerable, PropertyKey, PropertyLookup, PropertyWritable,
     },
     runtime_scope::{BindingCell, BindingScope},
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
@@ -197,20 +197,25 @@ impl Context {
         result
     }
 
-    pub(crate) fn get_function_property(&self, id: FunctionId, property: &str) -> Result<Value> {
+    pub(crate) fn get_function_property_lookup(
+        &self,
+        id: FunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<Value> {
         let function = self.function(id)?;
+        let property_name = property.name();
         if let Some(default_descriptor) =
-            function_default_intrinsic_descriptor(function, &self.atoms, property)?
+            function_default_intrinsic_descriptor(function, &self.atoms, property_name)?
             && let Some(value) = function
                 .properties
-                .intrinsic_value(property, default_descriptor)
+                .intrinsic_value(property_name, default_descriptor)
         {
             return self.checked_value(value);
         }
 
-        let value = match property {
+        let value = match property_name {
             FUNCTION_PROTOTYPE_PROPERTY => function.properties.prototype(),
-            _ => function.properties.get(self.property_lookup(property)),
+            _ => function.properties.get(property),
         };
         self.checked_value(value)
     }
@@ -220,32 +225,52 @@ impl Context {
         id: FunctionId,
         property: &str,
     ) -> Result<Option<DataPropertyDescriptor>> {
+        self.function_own_property_descriptor_lookup(id, self.property_lookup(property))
+    }
+
+    pub(crate) fn function_own_property_descriptor_lookup(
+        &self,
+        id: FunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<Option<DataPropertyDescriptor>> {
         let function = self.function(id)?;
-        if let Some(descriptor) = function_intrinsic_descriptor(function, &self.atoms, property)? {
+        if let Some(descriptor) =
+            function_intrinsic_descriptor(function, &self.atoms, property.name())?
+        {
             return Ok(Some(descriptor));
         }
-        Ok(function
-            .properties
-            .own_property_descriptor(self.property_lookup(property)))
+        Ok(function.properties.own_property_descriptor(property))
     }
 
     pub(crate) fn has_function_property(&self, id: FunctionId, property: &str) -> Result<bool> {
+        self.has_function_property_lookup(id, self.property_lookup(property))
+    }
+
+    pub(crate) fn has_function_property_lookup(
+        &self,
+        id: FunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<bool> {
         let function = self.function(id)?;
-        if matches!(property, FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY)
-            && function.properties.has_intrinsic(property)
+        let property_name = property.name();
+        if matches!(
+            property_name,
+            FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY
+        ) && function.properties.has_intrinsic(property_name)
         {
             return Ok(true);
         }
         Ok(
-            (property == FUNCTION_PROTOTYPE_PROPERTY && function.constructable)
-                || function.properties.has(self.property_lookup(property)),
+            (property_name == FUNCTION_PROTOTYPE_PROPERTY && function.constructable)
+                || function.properties.has(property),
         )
     }
 
-    pub(crate) fn set_function_property(
+    pub(crate) fn set_function_property_key(
         &mut self,
         id: FunctionId,
         property: &str,
+        key: PropertyKey,
         value: Value,
     ) -> Result<()> {
         let max_properties = self.limits.max_object_properties;
@@ -253,7 +278,6 @@ impl Context {
             let function = self.function(id)?;
             function_default_intrinsic_descriptor(function, &self.atoms, property)?
         };
-        let key = self.intern_property_key(property)?;
         let function = self.function_mut(id)?;
         function
             .properties
@@ -282,18 +306,17 @@ impl Context {
         )
     }
 
-    pub(crate) fn delete_function_property(
+    pub(crate) fn delete_function_property_lookup(
         &mut self,
         id: FunctionId,
-        property: &str,
+        property: PropertyLookup<'_>,
     ) -> Result<bool> {
         let default_intrinsic = {
             let function = self.function(id)?;
-            function_default_intrinsic_descriptor(function, &self.atoms, property)?
+            function_default_intrinsic_descriptor(function, &self.atoms, property.name())?
         };
-        let lookup = self.property_lookup(property);
         let function = self.function_mut(id)?;
-        Ok(function.properties.delete(lookup, default_intrinsic))
+        Ok(function.properties.delete(property, default_intrinsic))
     }
 
     pub(crate) fn function_enumerable_keys(&self, id: FunctionId) -> Result<Vec<String>> {
@@ -339,26 +362,27 @@ impl Context {
             .ok_or_else(|| Error::runtime("function id is not defined"))
     }
 
-    pub(crate) fn get_native_function_property(
+    pub(crate) fn get_native_function_property_lookup(
         &self,
         id: NativeFunctionId,
-        property: &str,
+        property: PropertyLookup<'_>,
     ) -> Result<Value> {
         let function = self.native_function(id)?;
+        let property_name = property.name();
         if let Some(default_descriptor) =
-            native_function_default_intrinsic_descriptor(function, property)
+            native_function_default_intrinsic_descriptor(function, property_name)
             && let Some(value) = function
                 .properties()
-                .intrinsic_value(property, default_descriptor)
+                .intrinsic_value(property_name, default_descriptor)
         {
             return self.checked_value(value);
         }
 
-        let value = match property {
+        let value = match property_name {
             FUNCTION_PROTOTYPE_PROPERTY => function.properties().prototype(),
             _ => function
-                .intrinsic_property(property)
-                .unwrap_or_else(|| function.properties().get(self.property_lookup(property))),
+                .intrinsic_property(property_name)
+                .unwrap_or_else(|| function.properties().get(property)),
         };
         self.checked_value(value)
     }
@@ -368,11 +392,20 @@ impl Context {
         id: NativeFunctionId,
         property: &str,
     ) -> Result<Option<DataPropertyDescriptor>> {
+        self.native_function_own_property_descriptor_lookup(id, self.property_lookup(property))
+    }
+
+    pub(crate) fn native_function_own_property_descriptor_lookup(
+        &self,
+        id: NativeFunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<Option<DataPropertyDescriptor>> {
         let function = self.native_function(id)?;
-        if let Some(descriptor) = native_function_intrinsic_descriptor(function, property) {
+        let property_name = property.name();
+        if let Some(descriptor) = native_function_intrinsic_descriptor(function, property_name) {
             return Ok(Some(descriptor));
         }
-        if let Some(value) = function.intrinsic_property(property) {
+        if let Some(value) = function.intrinsic_property(property_name) {
             return Ok(Some(DataPropertyDescriptor::new(
                 value,
                 PropertyWritable::No,
@@ -380,9 +413,7 @@ impl Context {
                 PropertyConfigurable::No,
             )));
         }
-        Ok(function
-            .properties()
-            .own_property_descriptor(self.property_lookup(property)))
+        Ok(function.properties().own_property_descriptor(property))
     }
 
     pub(crate) fn has_native_function_property(
@@ -390,21 +421,33 @@ impl Context {
         id: NativeFunctionId,
         property: &str,
     ) -> Result<bool> {
+        self.has_native_function_property_lookup(id, self.property_lookup(property))
+    }
+
+    pub(crate) fn has_native_function_property_lookup(
+        &self,
+        id: NativeFunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<bool> {
         let function = self.native_function(id)?;
-        if matches!(property, FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY)
-            && function.properties().has_intrinsic(property)
+        let property_name = property.name();
+        if matches!(
+            property_name,
+            FUNCTION_LENGTH_PROPERTY | FUNCTION_NAME_PROPERTY
+        ) && function.properties().has_intrinsic(property_name)
         {
             return Ok(true);
         }
-        Ok((property == FUNCTION_PROTOTYPE_PROPERTY)
-            || function.has_intrinsic_property(property)
-            || function.properties().has(self.property_lookup(property)))
+        Ok((property_name == FUNCTION_PROTOTYPE_PROPERTY)
+            || function.has_intrinsic_property(property_name)
+            || function.properties().has(property))
     }
 
-    pub(crate) fn set_native_function_property(
+    pub(crate) fn set_native_function_property_key(
         &mut self,
         id: NativeFunctionId,
         property: &str,
+        key: PropertyKey,
         value: Value,
     ) -> Result<()> {
         if property == FUNCTION_PROTOTYPE_PROPERTY {
@@ -417,7 +460,6 @@ impl Context {
             return Ok(());
         }
         let max_properties = self.limits.max_object_properties;
-        let key = self.intern_property_key(property)?;
         let function = self.native_function_mut(id)?;
         function
             .properties_mut()
@@ -447,19 +489,24 @@ impl Context {
         )
     }
 
-    pub(crate) fn delete_native_function_property(
+    pub(crate) fn delete_native_function_property_lookup(
         &mut self,
         id: NativeFunctionId,
-        property: &str,
+        property: PropertyLookup<'_>,
     ) -> Result<bool> {
+        let property_name = property.name();
         let default_intrinsic =
-            native_function_default_intrinsic_descriptor(self.native_function(id)?, property);
-        if self.native_function(id)?.has_intrinsic_property(property) {
+            native_function_default_intrinsic_descriptor(self.native_function(id)?, property_name);
+        if self
+            .native_function(id)?
+            .has_intrinsic_property(property_name)
+        {
             return Ok(false);
         }
-        let lookup = self.property_lookup(property);
         let function = self.native_function_mut(id)?;
-        Ok(function.properties_mut().delete(lookup, default_intrinsic))
+        Ok(function
+            .properties_mut()
+            .delete(property, default_intrinsic))
     }
 
     pub(crate) fn native_function_enumerable_keys(
