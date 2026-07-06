@@ -1,10 +1,8 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{
-        BinaryOp, DeclKind, StaticBinding, StaticName, StaticPropertyAccessId, UnaryOp, UpdateOp,
-    },
-    bytecode::BytecodeAssignmentTarget,
+    ast::{BinaryOp, DeclKind, StaticName, StaticPropertyAccessId, UnaryOp, UpdateOp},
+    bytecode::{BytecodeAssignmentTarget, BytecodeBinding},
     error::{Error, Result},
     runtime::Context,
     runtime::assertions::thrown_value_matches,
@@ -22,42 +20,46 @@ use crate::{
 impl Context {
     pub(super) fn eval_bytecode_declaration(
         &mut self,
-        name: &StaticBinding,
+        name: &BytecodeBinding,
         kind: DeclKind,
         value: Option<Value>,
     ) -> Result<()> {
         match kind {
             DeclKind::Var => {
                 if let Some(value) = value {
-                    self.assign_static(name, value)?;
+                    self.assign_bytecode(name, value)?;
                 }
             }
             DeclKind::Let => {
-                self.define_static(name, value.unwrap_or(Value::Undefined), DeclKind::Let)?;
+                self.define_static(
+                    name.name(),
+                    value.unwrap_or(Value::Undefined),
+                    DeclKind::Let,
+                )?;
             }
             DeclKind::Const => {
                 let Some(value) = value else {
                     return Err(Error::runtime("const declaration requires an initializer"));
                 };
-                self.define_static(name, value, DeclKind::Const)?;
+                self.define_static(name.name(), value, DeclKind::Const)?;
             }
         }
         Ok(())
     }
 
-    pub(super) fn eval_bytecode_identifier(&mut self, name: &StaticBinding) -> Result<Value> {
-        if let Some(binding) = self.get_binding_static(name)? {
+    pub(super) fn eval_bytecode_identifier(&mut self, name: &BytecodeBinding) -> Result<Value> {
+        if let Some(binding) = self.get_binding_bytecode(name)? {
             return self.runtime_value(binding.value());
         }
-        self.builtin_value(name.name())?
-            .ok_or_else(|| crate::runtime::assertions::reference_error_undefined(name))
+        self.builtin_value(name.name().name())?
+            .ok_or_else(|| crate::runtime::assertions::reference_error_undefined(name.name()))
     }
 
-    pub(super) fn eval_bytecode_typeof_binding(&mut self, name: &StaticBinding) -> Result<Value> {
-        if let Some(binding) = self.get_binding_static(name)? {
+    pub(super) fn eval_bytecode_typeof_binding(&mut self, name: &BytecodeBinding) -> Result<Value> {
+        if let Some(binding) = self.get_binding_bytecode(name)? {
             return self.heap_string_value(binding.value().type_name());
         }
-        if let Some(value) = self.builtin_value(name.name())? {
+        if let Some(value) = self.builtin_value(name.name().name())? {
             return self.heap_string_value(value.type_name());
         }
         self.heap_string_value(Value::Undefined.type_name())
@@ -137,17 +139,17 @@ impl Context {
 
     pub(super) fn eval_bytecode_update_binding(
         &self,
-        name: &StaticBinding,
+        name: &BytecodeBinding,
         op: UpdateOp,
         prefix: bool,
     ) -> Result<Value> {
         let binding = self
-            .get_binding_static(name)?
+            .get_binding_bytecode(name)?
             .ok_or_else(|| Error::runtime(format!("ReferenceError: '{name}' is not defined")))?;
         let old_value = binding.value();
         let new_value = Self::updated_bytecode_number(&old_value, op)?;
         self.checked_value(new_value.clone())?;
-        binding.assign(name, new_value.clone())?;
+        binding.assign(name.name(), new_value.clone())?;
         Ok(if prefix { new_value } else { old_value })
     }
 
@@ -193,15 +195,15 @@ impl Context {
     pub(super) fn eval_bytecode_binding_compound_assignment(
         &mut self,
         op: BinaryOp,
-        name: &StaticBinding,
+        name: &BytecodeBinding,
         right: &Value,
     ) -> Result<Value> {
         let binding = self
-            .get_or_materialize_binding_static(name)?
+            .get_or_materialize_binding_bytecode(name)?
             .ok_or_else(|| Error::runtime(format!("ReferenceError: '{name}' is not defined")))?;
         let old_value = binding.value();
         let value = self.eval_bytecode_compound_value(op, &old_value, right)?;
-        binding.assign(name, value.clone())?;
+        binding.assign(name.name(), value.clone())?;
         Ok(value)
     }
 
@@ -275,7 +277,7 @@ impl Context {
         value: Value,
     ) -> Result<()> {
         match target {
-            BytecodeAssignmentTarget::Binding(name) => self.assign_static(name, value),
+            BytecodeAssignmentTarget::Binding(name) => self.assign_bytecode(name, value),
             BytecodeAssignmentTarget::StaticProperty {
                 object,
                 property,

@@ -80,6 +80,24 @@ var add = make(10);
 add(5);
 ";
 
+const BYTECODE_DIRECT_BINDING_OPERANDS_SOURCE: &str = r"
+var Box = function Box(value) {
+    this.value = value;
+};
+var make = function make(seed) {
+    let total = seed;
+    return function add(delta) {
+        total = total + delta;
+        total += 1;
+        total++;
+        return total;
+    };
+};
+var add = make(3);
+var made = new Box(add(4));
+made.value + add(1);
+";
+
 #[test]
 fn compiled_script_exposes_bytecode_instruction_count() -> TestResult {
     let engine = Engine::new();
@@ -177,6 +195,28 @@ fn bytecode_functions_capture_closure_upvalues_without_ast_body() -> TestResult 
 
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(17.0))
+}
+
+#[test]
+fn bytecode_carries_direct_binding_operands_for_hot_binding_paths() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(BYTECODE_DIRECT_BINDING_OPERANDS_SOURCE)?;
+    let usage = script.usage();
+
+    ensure_usize(usage.unresolved_static_binding_count(), 0)?;
+    ensure_positive(
+        usage.bytecode_binding_operand_count(),
+        "bytecode binding operands",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(21.0))?;
+    let atoms = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(21.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atoms)
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

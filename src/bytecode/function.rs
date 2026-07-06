@@ -2,15 +2,16 @@ use std::rc::Rc;
 
 use crate::{
     ast::{CatchClause, Expr, ForInTarget, ObjectProperty, StaticBinding, Stmt, SwitchCase},
+    binding_layout::BindingLayout,
     error::Result,
 };
 
 use super::{BytecodeBlock, BytecodeFunction, BytecodeHoistPlan, StatementValue};
 
 impl BytecodeFunction {
-    pub fn compile(statements: &[Stmt]) -> Result<Self> {
+    pub fn compile(statements: &[Stmt], layout: &BindingLayout) -> Result<Self> {
         Ok(Self::new(
-            BytecodeBlock::compile_statements(statements, StatementValue::Store)?,
+            BytecodeBlock::compile_statements(statements, StatementValue::Store, layout)?,
             BytecodeHoistPlan::compile(statements),
             CaptureBindingCollector::collect(statements),
         ))

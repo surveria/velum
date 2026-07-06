@@ -6,7 +6,7 @@ use crate::{
 
 use super::{BytecodeCompiler, BytecodeInstruction};
 
-impl BytecodeCompiler {
+impl BytecodeCompiler<'_> {
     pub(super) fn compile_call_expr(&mut self, callee: &Expr, args: &[Expr]) -> Result<()> {
         if let Some(expected) = assert_throws_expected_error(callee, args)? {
             let callback = args
@@ -39,7 +39,7 @@ impl BytecodeCompiler {
             Expr::Identifier(name) => {
                 self.compile_args(args)?;
                 self.emit(BytecodeInstruction::CallBinding {
-                    callee: name.clone(),
+                    callee: self.compile_binding(name)?,
                     arg_count: args.len(),
                 });
                 Ok(())

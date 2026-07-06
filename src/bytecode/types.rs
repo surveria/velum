@@ -1,10 +1,11 @@
-use std::rc::Rc;
+use std::{fmt, rc::Rc};
 
 use crate::{
     ast::{
         BinaryOp, DeclKind, StaticBinding, StaticName, StaticPropertyAccessId, StaticString,
         UnaryOp, UpdateOp,
     },
+    binding_layout::{BindingLayout, BindingOperand},
     bytecode::BytecodeHoistPlan,
     error::{Error, Result},
     value::{ErrorName, Value},
@@ -27,6 +28,10 @@ impl BytecodeProgram {
 
     pub fn instruction_count(&self) -> usize {
         self.block.instruction_count()
+    }
+
+    pub fn binding_operand_count(&self) -> usize {
+        self.block.binding_operand_count()
     }
 
     pub const fn hoist_plan(&self) -> &BytecodeHoistPlan {
@@ -69,6 +74,10 @@ impl BytecodeFunction {
     pub fn instruction_count(&self) -> usize {
         self.body.instruction_count()
     }
+
+    pub fn binding_operand_count(&self) -> usize {
+        self.body.binding_operand_count()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -104,17 +113,63 @@ impl BytecodeBlock {
             .sum::<usize>();
         self.instructions.len().saturating_add(nested)
     }
+
+    pub fn binding_operand_count(&self) -> usize {
+        self.instructions
+            .iter()
+            .map(BytecodeInstruction::binding_operand_count)
+            .sum()
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BytecodeBinding {
+    name: StaticBinding,
+    operand: BindingOperand,
+}
+
+impl BytecodeBinding {
+    pub(crate) fn compile(name: &StaticBinding, layout: &BindingLayout) -> Result<Self> {
+        let operand = layout
+            .operand_for_binding_id(name.id())?
+            .unwrap_or(BindingOperand::Unresolved);
+        Ok(Self {
+            name: name.clone(),
+            operand,
+        })
+    }
+
+    pub const fn name(&self) -> &StaticBinding {
+        &self.name
+    }
+
+    pub const fn operand(&self) -> BindingOperand {
+        self.operand
+    }
+
+    const fn has_direct_operand(&self) -> bool {
+        !matches!(self.operand, BindingOperand::Unresolved)
+    }
+}
+
+impl fmt::Display for BytecodeBinding {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.name.fmt(formatter)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BytecodeForInTarget {
-    Binding { name: StaticBinding, kind: DeclKind },
+    Binding {
+        name: BytecodeBinding,
+        kind: DeclKind,
+    },
     Assignment(BytecodeAssignmentTarget),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BytecodeAssignmentTarget {
-    Binding(StaticBinding),
+    Binding(BytecodeBinding),
     StaticProperty {
         object: BytecodeBlock,
         property: StaticName,
@@ -135,7 +190,7 @@ pub struct BytecodeSwitchCase {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeCatch {
-    pub param: Option<StaticBinding>,
+    pub param: Option<BytecodeBinding>,
     pub body: BytecodeBlock,
 }
 
@@ -145,26 +200,26 @@ pub enum BytecodeInstruction {
     PushString(StaticString),
     PushUndefined,
     LoadThis,
-    LoadBinding(StaticBinding),
-    StoreBinding(StaticBinding),
+    LoadBinding(BytecodeBinding),
+    StoreBinding(BytecodeBinding),
     DeclareBinding {
-        name: StaticBinding,
+        name: BytecodeBinding,
         kind: DeclKind,
         has_init: bool,
     },
     StoreLast,
     Pop,
     Unary(UnaryOp),
-    TypeOfBinding(StaticBinding),
+    TypeOfBinding(BytecodeBinding),
     TypeOfValue,
-    DeleteBinding(StaticBinding),
+    DeleteBinding(BytecodeBinding),
     DeleteStaticProperty {
         property: StaticName,
     },
     DeleteComputedProperty,
     DeleteValue,
     UpdateBinding {
-        name: StaticBinding,
+        name: BytecodeBinding,
         op: UpdateOp,
         prefix: bool,
     },
@@ -184,7 +239,7 @@ pub enum BytecodeInstruction {
         property_access: Option<StaticPropertyAccessId>,
     },
     CompoundStoreBinding {
-        name: StaticBinding,
+        name: BytecodeBinding,
         op: BinaryOp,
     },
     CompoundStaticProperty {
@@ -211,7 +266,7 @@ pub enum BytecodeInstruction {
         access: StaticPropertyAccessId,
     },
     CallBinding {
-        callee: StaticBinding,
+        callee: BytecodeBinding,
         arg_count: usize,
     },
     CallValue {
@@ -234,7 +289,7 @@ pub enum BytecodeInstruction {
         has_message: bool,
     },
     Construct {
-        constructor: StaticBinding,
+        constructor: BytecodeBinding,
         arg_count: usize,
     },
     CreateFunction {
@@ -289,6 +344,93 @@ pub enum BytecodeInstruction {
 }
 
 impl BytecodeInstruction {
+    fn binding_operand_count(&self) -> usize {
+        match self {
+            Self::LoadBinding(binding)
+            | Self::StoreBinding(binding)
+            | Self::TypeOfBinding(binding)
+            | Self::DeleteBinding(binding) => binding.direct_operand_count(),
+            Self::DeclareBinding { name, .. } => name.direct_operand_count(),
+            Self::UpdateBinding { name, .. } | Self::CompoundStoreBinding { name, .. } => {
+                name.direct_operand_count()
+            }
+            Self::CallBinding { callee, .. } => callee.direct_operand_count(),
+            Self::Construct { constructor, .. } => constructor.direct_operand_count(),
+            Self::If {
+                condition,
+                consequent,
+                alternate,
+            } => condition
+                .binding_operand_count()
+                .saturating_add(consequent.binding_operand_count())
+                .saturating_add(
+                    alternate
+                        .as_ref()
+                        .map_or(0, BytecodeBlock::binding_operand_count),
+                ),
+            Self::While { condition, body } => condition
+                .binding_operand_count()
+                .saturating_add(body.binding_operand_count()),
+            Self::For {
+                init,
+                condition,
+                update,
+                body,
+                ..
+            } => init
+                .as_ref()
+                .map_or(0, BytecodeBlock::binding_operand_count)
+                .saturating_add(
+                    condition
+                        .as_ref()
+                        .map_or(0, BytecodeBlock::binding_operand_count),
+                )
+                .saturating_add(
+                    update
+                        .as_ref()
+                        .map_or(0, BytecodeBlock::binding_operand_count),
+                )
+                .saturating_add(body.binding_operand_count()),
+            Self::ForIn {
+                target,
+                object,
+                body,
+            } => target
+                .binding_operand_count()
+                .saturating_add(object.binding_operand_count())
+                .saturating_add(body.binding_operand_count()),
+            Self::Switch {
+                discriminant,
+                cases,
+            } => discriminant.binding_operand_count().saturating_add(
+                cases
+                    .iter()
+                    .map(BytecodeSwitchCase::binding_operand_count)
+                    .sum::<usize>(),
+            ),
+            Self::Try {
+                body,
+                catch,
+                finally_body,
+            } => body
+                .binding_operand_count()
+                .saturating_add(
+                    catch
+                        .as_ref()
+                        .map_or(0, BytecodeCatch::binding_operand_count),
+                )
+                .saturating_add(
+                    finally_body
+                        .as_ref()
+                        .map_or(0, BytecodeBlock::binding_operand_count),
+                ),
+            Self::ScopedBlock(block) => block.binding_operand_count(),
+            Self::CreateFunction { bytecode, .. } => bytecode.binding_operand_count(),
+            instruction if instruction.is_leaf_instruction() => 0,
+            _ => 0,
+        }
+    }
+
     fn nested_instruction_count(&self) -> usize {
         match self {
             Self::If {
@@ -406,7 +548,20 @@ impl BytecodeInstruction {
     }
 }
 
+impl BytecodeBinding {
+    const fn direct_operand_count(&self) -> usize {
+        if self.has_direct_operand() { 1 } else { 0 }
+    }
+}
+
 impl BytecodeForInTarget {
+    fn binding_operand_count(&self) -> usize {
+        match self {
+            Self::Binding { name, .. } => name.direct_operand_count(),
+            Self::Assignment(target) => target.binding_operand_count(),
+        }
+    }
+
     fn nested_instruction_count(&self) -> usize {
         match self {
             Self::Binding { .. } => 0,
@@ -416,6 +571,18 @@ impl BytecodeForInTarget {
 }
 
 impl BytecodeAssignmentTarget {
+    fn binding_operand_count(&self) -> usize {
+        match self {
+            Self::Binding(binding) => binding.direct_operand_count(),
+            Self::StaticProperty { object, .. } => object.binding_operand_count(),
+            Self::ComputedProperty {
+                object, property, ..
+            } => object
+                .binding_operand_count()
+                .saturating_add(property.binding_operand_count()),
+        }
+    }
+
     fn nested_instruction_count(&self) -> usize {
         match self {
             Self::Binding(_) => 0,
@@ -426,6 +593,24 @@ impl BytecodeAssignmentTarget {
                 .instruction_count()
                 .saturating_add(property.instruction_count()),
         }
+    }
+}
+
+impl BytecodeSwitchCase {
+    fn binding_operand_count(&self) -> usize {
+        self.test
+            .as_ref()
+            .map_or(0, BytecodeBlock::binding_operand_count)
+            .saturating_add(self.body.binding_operand_count())
+    }
+}
+
+impl BytecodeCatch {
+    fn binding_operand_count(&self) -> usize {
+        self.param
+            .as_ref()
+            .map_or(0, BytecodeBinding::direct_operand_count)
+            .saturating_add(self.body.binding_operand_count())
     }
 }
 

@@ -1,5 +1,6 @@
 use crate::{
-    ast::{DeclKind, StaticBinding},
+    ast::DeclKind,
+    bytecode::BytecodeBinding,
     error::{Error, Result},
     runtime::Context,
     runtime::call_args::RuntimeCallArgs,
@@ -437,11 +438,11 @@ impl Context {
         }
     }
 
-    pub(crate) fn constructor_binding_static(
+    pub(crate) fn constructor_binding_bytecode(
         &mut self,
-        name: &StaticBinding,
+        name: &BytecodeBinding,
     ) -> Result<Option<Value>> {
-        if let Some(binding) = self.get_or_materialize_binding_static(name)? {
+        if let Some(binding) = self.get_or_materialize_binding_bytecode(name)? {
             return Ok(Some(binding.value()));
         }
         Ok(None)
