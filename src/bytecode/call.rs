@@ -1,6 +1,7 @@
 use crate::{
     ast::Expr,
     error::{Error, Result},
+    native_call::NativeCallTarget,
     value::ErrorName,
 };
 
@@ -40,6 +41,7 @@ impl BytecodeCompiler<'_> {
                 self.compile_args(args)?;
                 self.emit(BytecodeInstruction::CallBinding {
                     callee: self.compile_binding(name)?,
+                    native: NativeCallTarget::from_binding_name(name.as_str()),
                     arg_count: args.len(),
                 });
                 Ok(())
@@ -52,8 +54,8 @@ impl BytecodeCompiler<'_> {
                 self.compile_expr(object)?;
                 self.compile_args(args)?;
                 self.emit(BytecodeInstruction::CallStaticMember {
-                    property: property.clone(),
-                    access: *access,
+                    property: Self::compile_property(property, *access),
+                    native: NativeCallTarget::from_property_name(property.as_str()),
                     arg_count: args.len(),
                 });
                 Ok(())

@@ -78,6 +78,7 @@ impl Context {
             | BytecodeInstruction::UpdateStaticProperty { .. }
             | BytecodeInstruction::UpdateComputedProperty { .. }
             | BytecodeInstruction::Binary { .. }
+            | BytecodeInstruction::NumberBinary(_)
             | BytecodeInstruction::CompoundStoreBinding { .. }
             | BytecodeInstruction::CompoundStaticProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. }
@@ -217,7 +218,8 @@ impl Context {
             | BytecodeInstruction::UpdateBinding { .. }
             | BytecodeInstruction::UpdateStaticProperty { .. }
             | BytecodeInstruction::UpdateComputedProperty { .. }
-            | BytecodeInstruction::Binary { .. } => {
+            | BytecodeInstruction::Binary { .. }
+            | BytecodeInstruction::NumberBinary(_) => {
                 self.eval_bytecode_mutation_instruction(state, instruction, next)
             }
             BytecodeInstruction::CompoundStoreBinding { .. }
@@ -250,7 +252,7 @@ impl Context {
                 let object = state.stack.pop()?;
                 state
                     .stack
-                    .push(self.delete_static_property_value(&object, property)?);
+                    .push(self.delete_static_property_value(&object, property.name())?);
                 state.pc = next;
                 Ok(None)
             }
@@ -279,13 +281,16 @@ impl Context {
             }
             BytecodeInstruction::UpdateStaticProperty {
                 property,
-                access,
                 op,
                 prefix,
             } => {
                 let object = state.stack.pop()?;
                 state.stack.push(self.eval_bytecode_update_static_property(
-                    &object, property, *access, *op, *prefix,
+                    &object,
+                    property.name(),
+                    property.access(),
+                    *op,
+                    *prefix,
                 )?);
                 state.pc = next;
                 Ok(None)
@@ -312,6 +317,15 @@ impl Context {
                     &right,
                     *property_access,
                 )?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::NumberBinary(op) => {
+                let right = state.stack.pop()?;
+                let left = state.stack.pop()?;
+                state
+                    .stack
+                    .push(self.eval_bytecode_number_binary(*op, &left, &right)?);
                 state.pc = next;
                 Ok(None)
             }
@@ -342,17 +356,17 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::CompoundStaticProperty {
-                property,
-                access,
-                op,
-            } => {
+            BytecodeInstruction::CompoundStaticProperty { property, op } => {
                 let right = state.stack.pop()?;
                 let object = state.stack.pop()?;
                 state
                     .stack
                     .push(self.eval_bytecode_static_compound_assignment(
-                        *op, &object, property, *access, &right,
+                        *op,
+                        &object,
+                        property.name(),
+                        property.access(),
+                        &right,
                     )?);
                 state.pc = next;
                 Ok(None)
@@ -370,11 +384,13 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::StaticMember { property, access } => {
+            BytecodeInstruction::StaticMember { property } => {
                 let object = state.stack.pop()?;
-                state
-                    .stack
-                    .push(self.get_static_property_value(&object, property, *access)?);
+                state.stack.push(self.get_static_property_value(
+                    &object,
+                    property.name(),
+                    property.access(),
+                )?);
                 state.pc = next;
                 Ok(None)
             }
@@ -388,10 +404,15 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::StaticPropertyAssign { property, access } => {
+            BytecodeInstruction::StaticPropertyAssign { property } => {
                 let value = state.stack.pop()?;
                 let object = state.stack.pop()?;
-                self.set_static_property_value(&object, property, *access, value.clone())?;
+                self.set_static_property_value(
+                    &object,
+                    property.name(),
+                    property.access(),
+                    value.clone(),
+                )?;
                 state.stack.push(value);
                 state.pc = next;
                 Ok(None)
@@ -447,11 +468,15 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         match instruction {
-            BytecodeInstruction::CallBinding { callee, arg_count } => {
+            BytecodeInstruction::CallBinding {
+                callee,
+                native,
+                arg_count,
+            } => {
                 let args = state.stack.pop_many(*arg_count)?;
                 state
                     .stack
-                    .push(self.eval_bytecode_identifier_call_value(callee, &args)?);
+                    .push(self.eval_bytecode_identifier_call_value(callee, *native, &args)?);
                 state.pc = next;
                 Ok(None)
             }
@@ -466,15 +491,22 @@ impl Context {
             }
             BytecodeInstruction::CallStaticMember {
                 property,
-                access,
+                native,
                 arg_count,
             } => {
                 let args = state.stack.pop_many(*arg_count)?;
                 let this_value = state.stack.pop()?;
-                let callee = self.get_static_property_value(&this_value, property, *access)?;
-                state
-                    .stack
-                    .push(self.eval_call_value(callee, &args, this_value)?);
+                let callee = self.get_static_property_value(
+                    &this_value,
+                    property.name(),
+                    property.access(),
+                )?;
+                let value = if let Some(target) = *native {
+                    self.eval_direct_native_call(target, callee, &args, this_value)?
+                } else {
+                    self.eval_call_value(callee, &args, this_value)?
+                };
+                state.stack.push(value);
                 state.pc = next;
                 Ok(None)
             }

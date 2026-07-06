@@ -17,16 +17,20 @@ impl<'a> RuntimeCallArgs<'a> {
     }
 
     pub fn unary_value(self) -> Option<Value> {
-        let values = self.evaluate();
-        values.first().cloned()
+        match self {
+            Self::Values(args) => args.first().cloned(),
+        }
     }
 
     pub fn binary_values(self) -> (Option<Value>, Option<Value>) {
-        let values = self.evaluate();
-        (values.first().cloned(), values.get(1).cloned())
+        match self {
+            Self::Values(args) => (args.first().cloned(), args.get(1).cloned()),
+        }
     }
 
-    pub fn discard(self) {
-        self.evaluate();
+    pub const fn discard(self) {
+        match self {
+            Self::Values(_) => {}
+        }
     }
 }

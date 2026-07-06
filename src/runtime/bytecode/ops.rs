@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     ast::{BinaryOp, DeclKind, StaticName, StaticPropertyAccessId, UnaryOp, UpdateOp},
-    bytecode::{BytecodeAssignmentTarget, BytecodeBinding},
+    bytecode::{BytecodeAssignmentTarget, BytecodeBinding, BytecodeNumericBinaryOp},
     error::{Error, Result},
     runtime::Context,
     runtime::assertions::thrown_value_matches,
@@ -119,6 +119,25 @@ impl Context {
             }
         };
         self.checked_value(value)
+    }
+
+    pub(super) fn eval_bytecode_number_binary(
+        &mut self,
+        op: BytecodeNumericBinaryOp,
+        left: &Value,
+        right: &Value,
+    ) -> Result<Value> {
+        if let (Value::Number(left), Value::Number(right)) = (left, right) {
+            let value = match op {
+                BytecodeNumericBinaryOp::Sub => left - right,
+                BytecodeNumericBinaryOp::Mul => left * right,
+                BytecodeNumericBinaryOp::Div => left / right,
+                BytecodeNumericBinaryOp::Rem => left % right,
+                BytecodeNumericBinaryOp::Pow => left.powf(*right),
+            };
+            return self.checked_value(Value::Number(value));
+        }
+        self.eval_bytecode_binary(op.fallback_binary(), left, right, None)
     }
 
     fn eval_bytecode_in(
@@ -278,13 +297,9 @@ impl Context {
     ) -> Result<()> {
         match target {
             BytecodeAssignmentTarget::Binding(name) => self.assign_bytecode(name, value),
-            BytecodeAssignmentTarget::StaticProperty {
-                object,
-                property,
-                access,
-            } => {
+            BytecodeAssignmentTarget::StaticProperty { object, property } => {
                 let object = self.eval_bytecode_expression(object)?;
-                self.set_static_property_value(&object, property, *access, value)
+                self.set_static_property_value(&object, property.name(), property.access(), value)
             }
             BytecodeAssignmentTarget::ComputedProperty {
                 object,

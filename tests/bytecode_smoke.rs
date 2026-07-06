@@ -98,6 +98,19 @@ var made = new Box(add(4));
 made.value + add(1);
 ";
 
+const BYTECODE_PROPERTY_NATIVE_NUMERIC_SOURCE: &str = r"
+var values = Array(1, 2, 3);
+values.push(4);
+var obj = { value: 6 };
+var fake = {
+    max: function(left, right) {
+        return left - right;
+    }
+};
+var number = obj.value * 7;
+Math.max(number, Math.abs(-3)) + fake.max(9, 4) + values.length;
+";
+
 #[test]
 fn compiled_script_exposes_bytecode_instruction_count() -> TestResult {
     let engine = Engine::new();
@@ -216,6 +229,39 @@ fn bytecode_carries_direct_binding_operands_for_hot_binding_paths() -> TestResul
 
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(21.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atoms)
+}
+
+#[test]
+fn bytecode_carries_property_native_and_numeric_operands() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(BYTECODE_PROPERTY_NATIVE_NUMERIC_SOURCE)?;
+    let usage = script.usage();
+
+    ensure_positive(
+        usage.bytecode_property_operand_count(),
+        "bytecode property operands",
+    )?;
+    ensure_positive(
+        usage.bytecode_direct_native_call_count(),
+        "bytecode direct native calls",
+    )?;
+    ensure_positive(
+        usage.bytecode_array_native_call_count(),
+        "bytecode array native calls",
+    )?;
+    ensure_positive(
+        usage.bytecode_numeric_instruction_count(),
+        "bytecode numeric instructions",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(51.0))?;
+    let atoms = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(51.0))?;
     ensure_usize(vm.resource_usage().atom_count, atoms)
 }
 

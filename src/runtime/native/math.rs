@@ -350,7 +350,7 @@ impl Context {
         args.binary_values()
     }
 
-    fn eval_math_discard_args(args: RuntimeCallArgs<'_>) {
+    const fn eval_math_discard_args(args: RuntimeCallArgs<'_>) {
         args.discard();
     }
 
