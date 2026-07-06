@@ -169,6 +169,9 @@ impl Vm {
             atom_count: self.context.atom_count(),
             shape_count: self.context.shape_count(),
             prototype_lookup_version: self.context.prototype_lookup_version(),
+            captured_scope_count: self.context.captured_scope_count(),
+            captured_binding_count: self.context.captured_binding_count(),
+            upvalue_cell_count: self.context.upvalue_cell_count(),
         }
     }
 
@@ -199,6 +202,9 @@ pub struct VmResourceUsage {
     pub atom_count: usize,
     pub shape_count: usize,
     pub prototype_lookup_version: u64,
+    pub captured_scope_count: usize,
+    pub captured_binding_count: usize,
+    pub upvalue_cell_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

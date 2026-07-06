@@ -50,6 +50,30 @@ impl Context {
         self.objects.prototype_lookup_version()
     }
 
+    pub(crate) fn captured_scope_count(&self) -> usize {
+        self.functions.iter().fold(0usize, |count, function| {
+            count.saturating_add(function.captures.scope_count())
+        })
+    }
+
+    pub(crate) fn captured_binding_count(&self) -> usize {
+        self.functions.iter().fold(0usize, |count, function| {
+            count.saturating_add(function.captures.binding_count())
+        })
+    }
+
+    pub(crate) fn upvalue_cell_count(&self) -> usize {
+        self.functions.iter().fold(0usize, |count, function| {
+            count.saturating_add(
+                function
+                    .upvalues
+                    .iter()
+                    .filter(|cell| cell.is_some())
+                    .count(),
+            )
+        })
+    }
+
     pub(crate) fn intern_atom(&mut self, name: &str) -> Result<AtomId> {
         self.check_string_len(name)?;
         self.atoms.intern(name)
