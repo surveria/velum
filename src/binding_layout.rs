@@ -157,8 +157,10 @@ impl LayoutBuilder {
         var_scope: ScopeId,
     ) -> Result<()> {
         for statement in statements {
-            self.collect_direct_declaration(statement, scope, var_scope)?;
             self.collect_hoisted_vars(statement, var_scope)?;
+        }
+        for statement in statements {
+            self.collect_direct_declaration(statement, scope, var_scope)?;
         }
         Ok(())
     }

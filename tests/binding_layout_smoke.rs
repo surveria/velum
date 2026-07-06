@@ -89,6 +89,17 @@ var made = new Box(total);
 made.value;
 ";
 
+const GLOBAL_HOISTED_SLOT_ORDER_SOURCE: &str = r"
+let outer = 1;
+let total = 0;
+{
+    var hoisted = 40;
+}
+var later = 2;
+total = outer + hoisted + later;
+total;
+";
+
 const EXACT_GLOBAL_SLOT_SHADOWING_SOURCE: &str = r"
 var counter = 1;
 var base = 5;
@@ -340,6 +351,26 @@ fn compiled_global_slot_operands_drive_binding_operations() -> TestResult {
     ensure_value(&value, &Value::Number(4.0))?;
     ensure_optional_value(vm.get_global("total").as_ref(), &Value::Number(4.0))?;
     ensure_usize(vm.resource_usage().atom_count, atom_count)
+}
+
+#[test]
+fn compiled_global_slots_follow_runtime_var_hoist_order() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(GLOBAL_HOISTED_SLOT_ORDER_SOURCE)?;
+    let usage = script.usage();
+
+    ensure_usize(usage.global_binding_slot_count(), 4)?;
+    ensure_usize(usage.local_binding_slot_count(), 0)?;
+    ensure_usize(usage.upvalue_binding_slot_count(), 0)?;
+    ensure_usize(usage.unresolved_static_binding_count(), 0)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(43.0))?;
+    ensure_optional_value(vm.get_global("outer").as_ref(), &Value::Number(1.0))?;
+    ensure_optional_value(vm.get_global("total").as_ref(), &Value::Number(43.0))?;
+    ensure_optional_value(vm.get_global("hoisted").as_ref(), &Value::Number(40.0))?;
+    ensure_optional_value(vm.get_global("later").as_ref(), &Value::Number(2.0))
 }
 
 #[test]
