@@ -129,9 +129,10 @@ impl Context {
         };
 
         let length = self.objects.array_len_for_includes(*id)?;
-        let from_index = Self::array_slice_bound(from_index.as_ref(), length, 0)?;
-        let search = search.unwrap_or(Value::Undefined);
-        self.objects.array_includes(*id, &search, from_index)
+        let from_index = Self::array_slice_bound(from_index, length, 0)?;
+        let default_search = Value::Undefined;
+        let search = search.unwrap_or(&default_search);
+        self.objects.array_includes(*id, search, from_index)
     }
 
     pub(super) fn eval_array_index_of(
@@ -147,9 +148,10 @@ impl Context {
         };
 
         let length = self.objects.array_len_for_index_of(*id)?;
-        let from_index = Self::array_slice_bound(from_index.as_ref(), length, 0)?;
-        let search = search.unwrap_or(Value::Undefined);
-        self.objects.array_index_of(*id, &search, from_index)
+        let from_index = Self::array_slice_bound(from_index, length, 0)?;
+        let default_search = Value::Undefined;
+        let search = search.unwrap_or(&default_search);
+        self.objects.array_index_of(*id, search, from_index)
     }
 
     pub(super) fn eval_array_last_index_of(
@@ -165,9 +167,10 @@ impl Context {
         };
 
         let length = self.objects.array_len_for_last_index_of(*id)?;
-        let from_index = Self::array_last_index_of_start(from_index.as_ref(), length)?;
-        let search = search.unwrap_or(Value::Undefined);
-        self.objects.array_last_index_of(*id, &search, from_index)
+        let from_index = Self::array_last_index_of_start(from_index, length)?;
+        let default_search = Value::Undefined;
+        let search = search.unwrap_or(&default_search);
+        self.objects.array_last_index_of(*id, search, from_index)
     }
 
     pub(super) fn eval_array_join(
@@ -176,7 +179,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let separator = Self::eval_array_unary_value(args);
-        let separator = Self::array_join_separator(separator.as_ref());
+        let separator = Self::array_join_separator(separator);
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.join requires an array receiver",
@@ -230,8 +233,8 @@ impl Context {
         };
 
         let length = self.objects.array_len_for_slice(*id)?;
-        let start = Self::array_slice_bound(start.as_ref(), length, 0)?;
-        let end = Self::array_slice_bound(end.as_ref(), length, length)?.max(start);
+        let start = Self::array_slice_bound(start, length, 0)?;
+        let end = Self::array_slice_bound(end, length, length)?.max(start);
         let prototype = self.existing_array_constructor_prototype()?;
         self.objects.array_slice(
             *id,
@@ -421,12 +424,13 @@ impl Context {
         }
     }
 
-    fn eval_array_unary_value(args: RuntimeCallArgs<'_>) -> Option<Value> {
-        args.unary_value()
+    const fn eval_array_unary_value(args: RuntimeCallArgs<'_>) -> Option<&Value> {
+        args.as_slice().first()
     }
 
-    fn eval_array_binary_values(args: RuntimeCallArgs<'_>) -> (Option<Value>, Option<Value>) {
-        args.binary_values()
+    fn eval_array_binary_values(args: RuntimeCallArgs<'_>) -> (Option<&Value>, Option<&Value>) {
+        let args = args.as_slice();
+        (args.first(), args.get(1))
     }
 
     const fn eval_array_discard_args(args: RuntimeCallArgs<'_>) {

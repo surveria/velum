@@ -506,19 +506,20 @@ impl Context {
                 native,
                 arg_count,
             } => {
-                let args = state.stack.pop_many(*arg_count)?;
-                state
-                    .stack
-                    .push(self.eval_bytecode_identifier_call_value(callee, *native, &args)?);
+                let args = state.stack.tail(*arg_count)?;
+                let value = self.eval_bytecode_identifier_call_value(callee, *native, args)?;
+                state.stack.drop_tail(*arg_count)?;
+                state.stack.push(value);
                 state.pc = next;
                 Ok(None)
             }
             BytecodeInstruction::CallValue { arg_count } => {
-                let args = state.stack.pop_many(*arg_count)?;
-                let callee = state.stack.pop()?;
-                state
-                    .stack
-                    .push(self.eval_call_value(callee, &args, Value::Undefined)?);
+                let args = state.stack.tail(*arg_count)?;
+                let callee = state.stack.value_before_tail(*arg_count, 0)?.clone();
+                let value = self.eval_call_value(callee, args, Value::Undefined)?;
+                state.stack.drop_tail(*arg_count)?;
+                state.stack.pop()?;
+                state.stack.push(value);
                 state.pc = next;
                 Ok(None)
             }
@@ -527,18 +528,20 @@ impl Context {
                 native,
                 arg_count,
             } => {
-                let args = state.stack.pop_many(*arg_count)?;
-                let this_value = state.stack.pop()?;
+                let args = state.stack.tail(*arg_count)?;
+                let this_value = state.stack.value_before_tail(*arg_count, 0)?.clone();
                 let callee = self.get_static_property_value(
                     &this_value,
                     property.name(),
                     property.access(),
                 )?;
                 let value = if let Some(target) = *native {
-                    self.eval_direct_native_call(target, callee, &args, this_value)?
+                    self.eval_direct_native_call(target, callee, args, this_value)?
                 } else {
-                    self.eval_call_value(callee, &args, this_value)?
+                    self.eval_call_value(callee, args, this_value)?
                 };
+                state.stack.drop_tail(*arg_count)?;
+                state.stack.pop()?;
                 state.stack.push(value);
                 state.pc = next;
                 Ok(None)
@@ -560,10 +563,10 @@ impl Context {
                 Ok(None)
             }
             BytecodeInstruction::Print { arg_count } => {
-                let args = state.stack.pop_many(*arg_count)?;
-                state
-                    .stack
-                    .push(self.eval_print_call(RuntimeCallArgs::values(&args))?);
+                let args = state.stack.tail(*arg_count)?;
+                let value = self.eval_print_call(RuntimeCallArgs::values(args))?;
+                state.stack.drop_tail(*arg_count)?;
+                state.stack.push(value);
                 state.pc = next;
                 Ok(None)
             }
@@ -604,10 +607,10 @@ impl Context {
                 constructor,
                 arg_count,
             } => {
-                let args = state.stack.pop_many(*arg_count)?;
-                state
-                    .stack
-                    .push(self.eval_bytecode_new_value(constructor, &args)?);
+                let args = state.stack.tail(*arg_count)?;
+                let value = self.eval_bytecode_new_value(constructor, args)?;
+                state.stack.drop_tail(*arg_count)?;
+                state.stack.push(value);
                 state.pc = next;
                 Ok(None)
             }

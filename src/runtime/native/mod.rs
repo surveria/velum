@@ -765,8 +765,8 @@ impl Context {
         name: ErrorName,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let values = args.evaluate();
-        let message = values
+        let message = args
+            .as_slice()
             .first()
             .map_or_else(String::new, Value::display_for_concat);
         self.check_string_len(&message)?;

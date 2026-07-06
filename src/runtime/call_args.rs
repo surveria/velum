@@ -10,22 +10,18 @@ impl<'a> RuntimeCallArgs<'a> {
         Self::Values(args)
     }
 
-    pub fn evaluate(self) -> Vec<Value> {
+    pub const fn as_slice(self) -> &'a [Value] {
         match self {
-            Self::Values(args) => args.to_vec(),
+            Self::Values(args) => args,
         }
+    }
+
+    pub fn evaluate(self) -> Vec<Value> {
+        self.as_slice().to_vec()
     }
 
     pub fn unary_value(self) -> Option<Value> {
-        match self {
-            Self::Values(args) => args.first().cloned(),
-        }
-    }
-
-    pub fn binary_values(self) -> (Option<Value>, Option<Value>) {
-        match self {
-            Self::Values(args) => (args.first().cloned(), args.get(1).cloned()),
-        }
+        self.as_slice().first().cloned()
     }
 
     pub const fn discard(self) {

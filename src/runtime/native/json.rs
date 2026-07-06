@@ -46,8 +46,8 @@ impl Context {
     }
 
     pub(super) fn eval_json_parse(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let values = Self::eval_json_args(args);
-        let text = values
+        let text = args
+            .as_slice()
             .first()
             .map_or_else(|| Value::Undefined.to_string(), ToString::to_string);
         self.check_string_len(&text)?;
@@ -57,8 +57,7 @@ impl Context {
     }
 
     pub(super) fn eval_json_stringify(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let values = Self::eval_json_args(args);
-        let Some(value) = values.first() else {
+        let Some(value) = args.as_slice().first() else {
             return Ok(Value::Undefined);
         };
 
@@ -77,10 +76,6 @@ impl Context {
     ) -> Result<()> {
         let function = self.create_native_function(kind, Value::Undefined)?;
         self.define_non_enumerable_object_property(object, name, function)
-    }
-
-    fn eval_json_args(args: RuntimeCallArgs<'_>) -> Vec<Value> {
-        args.evaluate()
     }
 
     fn value_from_json(&mut self, value: JsonValue) -> Result<Value> {

@@ -125,8 +125,8 @@ impl Context {
 
     pub(super) fn eval_math_atan2(&self, args: RuntimeCallArgs<'_>) -> Result<Value> {
         let (y, x) = Self::eval_math_binary_values(args);
-        let y = Self::math_arg_or_nan(y.as_ref());
-        let x = x.as_ref().map_or(f64::NAN, Self::value_to_number);
+        let y = Self::math_arg_or_nan(y);
+        let x = x.map_or(f64::NAN, Self::value_to_number);
         self.checked_value(Value::Number(y.atan2(x)))
     }
 
@@ -144,7 +144,7 @@ impl Context {
 
     pub(super) fn eval_math_clz32(&self, args: RuntimeCallArgs<'_>) -> Result<Value> {
         let value = Self::eval_math_unary_value(args);
-        let unsigned = number_to_uint32(Self::math_arg_or_nan(value.as_ref()), MATH_CLZ32_NAME)?;
+        let unsigned = number_to_uint32(Self::math_arg_or_nan(value), MATH_CLZ32_NAME)?;
         self.checked_value(Value::Number(f64::from(unsigned.leading_zeros())))
     }
 
@@ -171,7 +171,7 @@ impl Context {
     pub(super) fn eval_math_fround(&self, args: RuntimeCallArgs<'_>) -> Result<Value> {
         let value = Self::eval_math_unary_value(args);
         self.checked_value(Value::Number(Self::fround_to_number(
-            Self::math_arg_or_nan(value.as_ref()),
+            Self::math_arg_or_nan(value),
         )))
     }
 
@@ -181,7 +181,7 @@ impl Context {
         let mut has_nan = false;
         let mut magnitude = 0.0_f64;
         for value in values {
-            let value = Self::value_to_number(&value);
+            let value = Self::value_to_number(value);
             if value.is_infinite() {
                 has_infinity = true;
             } else if value.is_nan() {
@@ -201,9 +201,9 @@ impl Context {
 
     pub(super) fn eval_math_imul(&self, args: RuntimeCallArgs<'_>) -> Result<Value> {
         let (left, right) = Self::eval_math_binary_values(args);
-        let left = number_to_uint32(Self::math_arg_or_nan(left.as_ref()), MATH_IMUL_NAME)?;
+        let left = number_to_uint32(Self::math_arg_or_nan(left), MATH_IMUL_NAME)?;
         let right = number_to_uint32(
-            right.as_ref().map_or(f64::NAN, Self::value_to_number),
+            right.map_or(f64::NAN, Self::value_to_number),
             MATH_IMUL_NAME,
         )?;
         let product = left.wrapping_mul(right);
@@ -232,7 +232,7 @@ impl Context {
         let values = Self::eval_math_args(args);
         let mut maximum = f64::NEG_INFINITY;
         for value in values {
-            let value = Self::value_to_number(&value);
+            let value = Self::value_to_number(value);
             if value.is_nan() {
                 return self.checked_value(Value::Number(f64::NAN));
             }
@@ -247,7 +247,7 @@ impl Context {
         let values = Self::eval_math_args(args);
         let mut minimum = f64::INFINITY;
         for value in values {
-            let value = Self::value_to_number(&value);
+            let value = Self::value_to_number(value);
             if value.is_nan() {
                 return self.checked_value(Value::Number(f64::NAN));
             }
@@ -260,8 +260,8 @@ impl Context {
 
     pub(super) fn eval_math_pow(&self, args: RuntimeCallArgs<'_>) -> Result<Value> {
         let (base, exponent) = Self::eval_math_binary_values(args);
-        let base = Self::math_arg_or_nan(base.as_ref());
-        let exponent = exponent.as_ref().map_or(f64::NAN, Self::value_to_number);
+        let base = Self::math_arg_or_nan(base);
+        let exponent = exponent.map_or(f64::NAN, Self::value_to_number);
         self.checked_value(Value::Number(base.powf(exponent)))
     }
 
@@ -273,13 +273,13 @@ impl Context {
     pub(super) fn eval_math_round(&self, args: RuntimeCallArgs<'_>) -> Result<Value> {
         let value = Self::eval_math_unary_value(args);
         self.checked_value(Value::Number(Self::round_to_nearest_toward_positive(
-            Self::math_arg_or_nan(value.as_ref()),
+            Self::math_arg_or_nan(value),
         )))
     }
 
     pub(super) fn eval_math_sign(&self, args: RuntimeCallArgs<'_>) -> Result<Value> {
         let value = Self::eval_math_unary_value(args);
-        let value = Self::math_arg_or_nan(value.as_ref());
+        let value = Self::math_arg_or_nan(value);
         if value.is_nan() || value == 0.0 {
             return self.checked_value(Value::Number(value));
         }
@@ -327,8 +327,8 @@ impl Context {
         self.define_non_enumerable_object_property(object, name, function)
     }
 
-    fn eval_math_args(args: RuntimeCallArgs<'_>) -> Vec<Value> {
-        args.evaluate()
+    const fn eval_math_args(args: RuntimeCallArgs<'_>) -> &[Value] {
+        args.as_slice()
     }
 
     fn eval_math_unary(
@@ -337,17 +337,16 @@ impl Context {
         operation: fn(f64) -> f64,
     ) -> Result<Value> {
         let value = Self::eval_math_unary_value(args);
-        self.checked_value(Value::Number(operation(Self::math_arg_or_nan(
-            value.as_ref(),
-        ))))
+        self.checked_value(Value::Number(operation(Self::math_arg_or_nan(value))))
     }
 
-    fn eval_math_unary_value(args: RuntimeCallArgs<'_>) -> Option<Value> {
-        args.unary_value()
+    const fn eval_math_unary_value(args: RuntimeCallArgs<'_>) -> Option<&Value> {
+        args.as_slice().first()
     }
 
-    fn eval_math_binary_values(args: RuntimeCallArgs<'_>) -> (Option<Value>, Option<Value>) {
-        args.binary_values()
+    fn eval_math_binary_values(args: RuntimeCallArgs<'_>) -> (Option<&Value>, Option<&Value>) {
+        let args = args.as_slice();
+        (args.first(), args.get(1))
     }
 
     const fn eval_math_discard_args(args: RuntimeCallArgs<'_>) {
