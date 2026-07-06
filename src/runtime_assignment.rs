@@ -28,12 +28,13 @@ impl Context {
         &mut self,
         object: &Expr,
         property: &Expr,
+        access: StaticPropertyAccessId,
         expr: &Expr,
     ) -> Result<Value> {
         let object = self.eval_expr(object)?;
         let mut property = self.eval_property_key(property)?;
         let value = self.eval_expr(expr)?;
-        self.set_dynamic_property_value(&object, &mut property, value.clone())?;
+        self.set_cached_dynamic_property_value(&object, &mut property, access, value.clone())?;
         Ok(value)
     }
 
@@ -53,10 +54,14 @@ impl Context {
                 let object = self.eval_expr(object)?;
                 self.eval_property_compound_assignment(op, &object, property, *access, expr)
             }
-            Expr::ComputedMember { object, property } => {
+            Expr::ComputedMember {
+                object,
+                property,
+                access,
+            } => {
                 let object = self.eval_expr(object)?;
                 let property = self.eval_property_key(property)?;
-                self.eval_dynamic_property_compound_assignment(op, &object, property, expr)
+                self.eval_dynamic_property_compound_assignment(op, &object, property, *access, expr)
             }
             _ => Err(Error::runtime("invalid compound assignment target")),
         }
@@ -98,12 +103,13 @@ impl Context {
         op: BinaryOp,
         object: &Value,
         mut property: DynamicPropertyKey,
+        access: StaticPropertyAccessId,
         expr: &Expr,
     ) -> Result<Value> {
-        let old_value = self.get_dynamic_property_value(object, &property)?;
+        let old_value = self.get_cached_dynamic_property_value(object, &property, access)?;
         let right = self.eval_expr(expr)?;
         let value = self.eval_compound_value(op, &old_value, &right)?;
-        self.set_dynamic_property_value(object, &mut property, value.clone())?;
+        self.set_cached_dynamic_property_value(object, &mut property, access, value.clone())?;
         Ok(value)
     }
 

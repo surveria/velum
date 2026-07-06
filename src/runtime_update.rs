@@ -23,10 +23,14 @@ impl Context {
                 let object = self.eval_expr(object)?;
                 self.update_property(&object, property, *access, op, prefix)
             }
-            Expr::ComputedMember { object, property } => {
+            Expr::ComputedMember {
+                object,
+                property,
+                access,
+            } => {
                 let object = self.eval_expr(object)?;
                 let property = self.eval_property_key(property)?;
-                self.update_dynamic_property(&object, property, op, prefix)
+                self.update_dynamic_property(&object, property, *access, op, prefix)
             }
             _ => Err(Error::runtime("invalid update target")),
         }
@@ -61,12 +65,13 @@ impl Context {
         &mut self,
         object: &Value,
         mut property: DynamicPropertyKey,
+        access: StaticPropertyAccessId,
         op: UpdateOp,
         prefix: bool,
     ) -> Result<Value> {
-        let old_value = self.get_dynamic_property_value(object, &property)?;
+        let old_value = self.get_cached_dynamic_property_value(object, &property, access)?;
         let new_value = Self::updated_number(&old_value, op)?;
-        self.set_dynamic_property_value(object, &mut property, new_value.clone())?;
+        self.set_cached_dynamic_property_value(object, &mut property, access, new_value.clone())?;
         Ok(if prefix { new_value } else { old_value })
     }
 

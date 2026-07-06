@@ -106,9 +106,11 @@ impl Parser {
                     };
                     continue;
                 }
+                let access = self.static_property_access()?;
                 expr = Expr::ComputedMember {
                     object: Box::new(expr),
                     property: Box::new(property),
+                    access,
                 };
                 continue;
             }

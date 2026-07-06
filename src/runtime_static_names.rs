@@ -234,7 +234,7 @@ impl Context {
         if let Value::Object(id) = object
             && property.as_str() != PROTOTYPE_PROPERTY
         {
-            return self.get_cached_static_object_property_value(*id, access, lookup);
+            return self.get_cached_object_property_value(*id, access, lookup);
         }
         let value = get_property(&self.objects, object, lookup)?;
         self.runtime_value(value)
@@ -265,7 +265,7 @@ impl Context {
         cache.remember_native_call(access, function, kind)
     }
 
-    fn get_cached_static_object_property_value(
+    fn get_cached_object_property_value(
         &mut self,
         object: ObjectId,
         access: StaticPropertyAccessId,
@@ -275,7 +275,9 @@ impl Context {
             let value = get_property(&self.objects, &Value::Object(object), lookup)?;
             return self.runtime_value(value);
         };
-        if let Some(cached_lookup) = cache.property_lookup(access)? {
+        if let Some(cached_lookup) = cache.property_lookup(access)?
+            && cached_lookup.matches_property(lookup)
+        {
             match self
                 .objects
                 .read_cacheable_property_value_for(object, cached_lookup)?
@@ -306,6 +308,42 @@ impl Context {
         }
     }
 
+    pub(crate) fn get_cached_dynamic_property_value(
+        &mut self,
+        object: &Value,
+        property: &DynamicPropertyKey,
+        access: StaticPropertyAccessId,
+    ) -> Result<Value> {
+        if let Value::Function(id) = object {
+            return self.get_function_property_lookup(*id, property.lookup());
+        }
+        if let Value::NativeFunction(id) = object {
+            return self.get_native_function_property_lookup(*id, property.lookup());
+        }
+        if let Value::Error(error) = object {
+            return self.get_error_property_value(error, property.name());
+        }
+        if let Value::String(value) = object {
+            return self.get_string_property_value(value, property.name());
+        }
+        if let Value::HeapString(value) = object {
+            return self.get_string_property_value(value.as_str(), property.name());
+        }
+        if let Value::Object(id) = object
+            && let Some(value) = self.get_string_object_property_value(*id, property.name())?
+        {
+            return Ok(value);
+        }
+        if let Value::Object(id) = object
+            && property.name() != PROTOTYPE_PROPERTY
+            && self.objects.array_len_if_array(*id)?.is_none()
+        {
+            return self.get_cached_object_property_value(*id, access, property.lookup());
+        }
+        let value = get_property(&self.objects, object, property.lookup())?;
+        self.runtime_value(value)
+    }
+
     pub(crate) fn has_cached_dynamic_property_value(
         &self,
         object: &Value,
@@ -331,7 +369,9 @@ impl Context {
         let Some(cache) = self.current_static_name_atom_cache() else {
             return has_property(&self.objects, &Value::Object(object), property.lookup());
         };
-        if let Some(cached_lookup) = cache.property_lookup(access)? {
+        if let Some(cached_lookup) = cache.property_lookup(access)?
+            && cached_lookup.matches_property(property.lookup())
+        {
             match self
                 .objects
                 .read_cacheable_property_presence_for(object, cached_lookup)?
@@ -380,11 +420,10 @@ impl Context {
         }
         if let Value::Object(id) = object
             && property.as_str() != PROTOTYPE_PROPERTY
-            && self.set_cached_static_object_property_value(
+            && self.set_cached_object_property_value(
                 *id,
                 access,
-                property,
-                key,
+                PropertyLookup::from_key(property.as_str(), key),
                 value.clone(),
             )?
         {
@@ -400,19 +439,57 @@ impl Context {
         )
     }
 
-    fn set_cached_static_object_property_value(
+    pub(crate) fn set_cached_dynamic_property_value(
+        &mut self,
+        object: &Value,
+        property: &mut DynamicPropertyKey,
+        access: StaticPropertyAccessId,
+        value: Value,
+    ) -> Result<()> {
+        let value = self.runtime_value(value)?;
+        if let Value::Function(id) = object {
+            let key = self.intern_dynamic_property_key(property)?;
+            return self.set_function_property_key(*id, property.name(), key, value);
+        }
+        if let Value::NativeFunction(id) = object {
+            let key = self.intern_dynamic_property_key(property)?;
+            return self.set_native_function_property_key(*id, property.name(), key, value);
+        }
+        let key = self.intern_dynamic_property_key(property)?;
+        if let Value::Object(id) = object
+            && property.name() != PROTOTYPE_PROPERTY
+            && self.objects.array_len_if_array(*id)?.is_none()
+            && self.set_cached_object_property_value(
+                *id,
+                access,
+                PropertyLookup::from_key(property.name(), key),
+                value.clone(),
+            )?
+        {
+            return Ok(());
+        }
+        set_property(
+            &mut self.objects,
+            object,
+            key,
+            property.name(),
+            value,
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn set_cached_object_property_value(
         &mut self,
         object: ObjectId,
         access: StaticPropertyAccessId,
-        property: &StaticName,
-        key: PropertyKey,
+        lookup: PropertyLookup<'_>,
         value: Value,
     ) -> Result<bool> {
-        let lookup = PropertyLookup::from_key(property.as_str(), key);
         let Some(cache) = self.current_static_name_atom_cache() else {
             return Ok(false);
         };
         if let Some(cached_lookup) = cache.property_lookup(access)?
+            && cached_lookup.matches_property(lookup)
             && self.objects.write_cacheable_own_property_value_for(
                 object,
                 cached_lookup,

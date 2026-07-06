@@ -46,20 +46,23 @@ impl PropertyLookupGuard {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct CacheablePropertyLookup {
     guard: PropertyLookupGuard,
+    key: Option<PropertyKey>,
     result: CacheablePropertyLookupResult,
 }
 
 impl CacheablePropertyLookup {
-    const fn hit(guard: PropertyLookupGuard, hit: CacheablePropertyHit) -> Self {
+    const fn hit(guard: PropertyLookupGuard, key: PropertyKey, hit: CacheablePropertyHit) -> Self {
         Self {
             guard,
+            key: Some(key),
             result: CacheablePropertyLookupResult::Hit(hit),
         }
     }
 
-    const fn missing(guard: PropertyLookupGuard) -> Self {
+    const fn missing(guard: PropertyLookupGuard, key: PropertyKey) -> Self {
         Self {
             guard,
+            key: Some(key),
             result: CacheablePropertyLookupResult::Missing,
         }
     }
@@ -67,7 +70,15 @@ impl CacheablePropertyLookup {
     const fn uncacheable(guard: PropertyLookupGuard) -> Self {
         Self {
             guard,
+            key: None,
             result: CacheablePropertyLookupResult::Uncacheable,
+        }
+    }
+
+    pub(crate) fn matches_property(self, property: PropertyLookup<'_>) -> bool {
+        match (self.key, property.key()) {
+            (Some(cached), Some(current)) => cached == current,
+            _ => false,
         }
     }
 }
@@ -201,13 +212,13 @@ impl ObjectHeap {
             if let Some(hit) =
                 object.cacheable_property_hit(current_id, key, depth, &self.shapes)?
             {
-                return Ok(CacheablePropertyLookup::hit(guard, hit));
+                return Ok(CacheablePropertyLookup::hit(guard, key, hit));
             }
             current = object.prototype;
             depth = depth.next()?;
         }
 
-        Ok(CacheablePropertyLookup::missing(guard))
+        Ok(CacheablePropertyLookup::missing(guard, key))
     }
 
     fn lookup_guard(&self, receiver: ObjectId) -> Result<PropertyLookupGuard> {

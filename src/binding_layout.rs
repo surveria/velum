@@ -519,13 +519,16 @@ impl LayoutBuilder {
                 object,
                 property,
                 expr,
+                ..
             } => {
                 self.analyze_expr(object, scope, function)?;
                 self.analyze_expr(property, scope, function)?;
                 self.analyze_expr(expr, scope, function)
             }
             Expr::Member { object, .. } => self.analyze_expr(object, scope, function),
-            Expr::ComputedMember { object, property } => {
+            Expr::ComputedMember {
+                object, property, ..
+            } => {
                 self.analyze_expr(object, scope, function)?;
                 self.analyze_expr(property, scope, function)
             }
