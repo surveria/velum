@@ -4,11 +4,11 @@ use std::rc::Rc;
 use crate::{
     ast::{StaticBinding, StaticBindingId},
     atom::AtomId,
-    binding_layout_types::BindingOperand,
+    binding_layout_types::{BindingOperand, ScopeId},
     error::{Error, Result},
     runtime::Context,
     runtime_assertions::reference_error_undefined,
-    runtime_scope::{BindingCell, BindingSlot},
+    runtime_scope::{BindingCell, BindingScope, BindingSlot},
     value::Value,
 };
 
@@ -115,6 +115,33 @@ impl LocalScopeIndex {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct CompiledBindingFrame {
+    scope: Option<ScopeId>,
+    slot: BindingSlot,
+}
+
+impl CompiledBindingFrame {
+    pub const fn global(slot: BindingSlot) -> Self {
+        Self { scope: None, slot }
+    }
+
+    pub const fn local(scope: ScopeId, slot: BindingSlot) -> Self {
+        Self {
+            scope: Some(scope),
+            slot,
+        }
+    }
+
+    pub const fn scope(self) -> Option<ScopeId> {
+        self.scope
+    }
+
+    pub const fn slot(self) -> BindingSlot {
+        self.slot
+    }
+}
+
 impl Context {
     pub(crate) fn current_static_binding_cache(&self) -> Option<StaticBindingCacheHandle> {
         self.static_binding_caches.last().cloned()
@@ -126,32 +153,62 @@ impl Context {
         self.static_binding_layouts.last().cloned()
     }
 
-    pub(crate) fn compiled_local_binding_slot(
+    pub(crate) fn compiled_local_binding_frame(
         &self,
         binding: &StaticBinding,
-    ) -> Result<Option<BindingSlot>> {
+    ) -> Result<Option<CompiledBindingFrame>> {
         match self.compiled_binding_operand(binding.id())? {
-            BindingOperand::Local { slot, .. } => Ok(Some(BindingSlot::from_index(slot.index()?))),
+            BindingOperand::Local { scope, slot } => Ok(Some(CompiledBindingFrame::local(
+                scope,
+                BindingSlot::from_index(slot.index()?),
+            ))),
             BindingOperand::Global { .. }
             | BindingOperand::Upvalue { .. }
             | BindingOperand::Unresolved => Ok(None),
         }
     }
 
-    pub(crate) fn compiled_active_binding_slot(
+    pub(crate) fn compiled_active_binding_frame(
         &self,
         binding: &StaticBinding,
-    ) -> Result<Option<BindingSlot>> {
+    ) -> Result<Option<CompiledBindingFrame>> {
         if self.locals.last().is_some() {
-            return self.compiled_local_binding_slot(binding);
+            return self.compiled_local_binding_frame(binding);
         }
         match self.compiled_binding_operand(binding.id())? {
-            BindingOperand::Global { slot } => Ok(Some(BindingSlot::from_index(slot.index()?))),
+            BindingOperand::Global { slot } => Ok(Some(CompiledBindingFrame::global(
+                BindingSlot::from_index(slot.index()?),
+            ))),
             BindingOperand::Local { .. } | BindingOperand::Upvalue { .. } => {
                 Err(Error::runtime("global binding layout is not a global slot"))
             }
             BindingOperand::Unresolved => Ok(None),
         }
+    }
+
+    pub(crate) fn mark_active_binding_frame_slot(
+        &mut self,
+        frame: Option<CompiledBindingFrame>,
+        inserted: BindingSlot,
+    ) -> Result<()> {
+        let Some(frame) = frame else {
+            return Ok(());
+        };
+        Self::mark_binding_scope_frame_slot(self.active_bindings_mut(), frame, inserted)
+    }
+
+    pub(crate) fn mark_binding_scope_frame_slot(
+        scope: &mut BindingScope,
+        frame: CompiledBindingFrame,
+        inserted: BindingSlot,
+    ) -> Result<()> {
+        if frame.slot() != inserted {
+            return Ok(());
+        }
+        let Some(scope_id) = frame.scope() else {
+            return Ok(());
+        };
+        scope.mark_compiled_scope(scope_id)
     }
 
     pub(crate) fn get_binding_static(
@@ -165,6 +222,10 @@ impl Context {
             return Ok(Some(cell));
         }
         if let Some((location, cell)) = self.compiled_global_static_binding(binding, atom)? {
+            self.remember_static_binding(binding, location)?;
+            return Ok(Some(cell));
+        }
+        if let Some((location, cell)) = self.compiled_local_static_binding(binding, atom)? {
             self.remember_static_binding(binding, location)?;
             return Ok(Some(cell));
         }
@@ -230,6 +291,29 @@ impl Context {
             return Ok(None);
         };
         Ok(Some((location, cell)))
+    }
+
+    fn compiled_local_static_binding(
+        &self,
+        binding: &StaticBinding,
+        atom: AtomId,
+    ) -> Result<Option<(BindingLocation, BindingCell)>> {
+        let BindingOperand::Local { scope, slot } = self.compiled_binding_operand(binding.id())?
+        else {
+            return Ok(None);
+        };
+        let slot = BindingSlot::from_index(slot.index()?);
+        for (index, frame) in self.locals.iter().enumerate().rev() {
+            if frame.compiled_scope() != Some(scope) {
+                continue;
+            }
+            let location = BindingLocation::local(atom, LocalScopeIndex::new(index), slot);
+            let Some(cell) = self.binding_at_location(location)? else {
+                return Ok(None);
+            };
+            return Ok(Some((location, cell)));
+        }
+        Ok(None)
     }
 
     fn compiled_active_static_binding(

@@ -1,7 +1,7 @@
 use crate::{
     ast::{DeclKind, Expr, ForInTarget, StaticBinding, Stmt},
     error::{Error, Result},
-    runtime::Context,
+    runtime::{CompiledBindingFrame, Context},
     runtime_completion::Completion,
     runtime_scope::{BindingCell, BindingScope},
     value::Value,
@@ -77,18 +77,21 @@ impl Context {
         let mut last = Value::Undefined;
         self.ensure_extra_binding_capacity(0)?;
         let atom = self.intern_static_name_atom(name.name())?;
-        let slot = self.compiled_local_binding_slot(name)?;
+        let frame = self.compiled_local_binding_frame(name)?;
         let mutable = kind != DeclKind::Const;
         let mut scope = BindingScope::new();
         let cleanup_scope = !matches!(body, Stmt::Block(_));
         for key in keys {
             self.step()?;
             let value = self.checked_value(Value::String(key))?;
-            scope.insert_or_replace_at_optional_slot(
+            let inserted = scope.insert_or_replace_at_optional_slot(
                 atom,
                 BindingCell::new(value, mutable, kind),
-                slot,
+                frame.map(CompiledBindingFrame::slot),
             )?;
+            if let Some(frame) = frame {
+                Self::mark_binding_scope_frame_slot(&mut scope, frame, inserted)?;
+            }
             self.push_lexical_scope_with(scope);
             self.remember_active_static_binding(name, atom)?;
             let completion = self.eval_statement(body);

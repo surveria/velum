@@ -4,6 +4,7 @@ use parking_lot::Mutex;
 
 use crate::ast::DeclKind;
 use crate::atom::AtomId;
+use crate::binding_layout_types::ScopeId;
 use crate::error::{Error, Result};
 use crate::value::Value;
 
@@ -12,6 +13,7 @@ pub struct BindingScope {
     slots: Vec<BindingCell>,
     slot_atoms: Vec<AtomId>,
     bindings: Vec<BindingEntry>,
+    compiled_scope: Option<ScopeId>,
 }
 
 impl BindingScope {
@@ -20,6 +22,7 @@ impl BindingScope {
             slots: Vec::new(),
             slot_atoms: Vec::new(),
             bindings: Vec::new(),
+            compiled_scope: None,
         }
     }
 
@@ -34,6 +37,21 @@ impl BindingScope {
     pub(crate) fn get(&self, atom: AtomId) -> Option<BindingCell> {
         let slot = self.slot_of(atom)?;
         self.cell(slot).cloned()
+    }
+
+    pub(crate) const fn compiled_scope(&self) -> Option<ScopeId> {
+        self.compiled_scope
+    }
+
+    pub(crate) fn mark_compiled_scope(&mut self, scope: ScopeId) -> Result<()> {
+        if let Some(existing) = self.compiled_scope {
+            if existing != scope {
+                return Err(Error::runtime("binding frame layout scope mismatch"));
+            }
+            return Ok(());
+        }
+        self.compiled_scope = Some(scope);
+        Ok(())
     }
 
     pub(crate) fn slot_of(&self, atom: AtomId) -> Option<BindingSlot> {

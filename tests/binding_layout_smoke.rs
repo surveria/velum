@@ -89,6 +89,22 @@ var made = new Box(total);
 made.value;
 ";
 
+const LOCAL_FRAME_METADATA_SOURCE: &str = r"
+var run = function run(seed) {
+    let total = seed;
+    {
+        let delta = 2;
+        total = total + delta;
+    }
+    {
+        let delta = 5;
+        total = total + delta;
+    }
+    return total;
+};
+run(3) + run(4);
+";
+
 #[test]
 fn compiled_layout_counts_global_local_and_upvalue_slots() -> TestResult {
     let engine = Engine::new();
@@ -264,6 +280,27 @@ fn compiled_global_slot_operands_drive_binding_operations() -> TestResult {
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(4.0))?;
     ensure_optional_value(vm.get_global("total").as_ref(), &Value::Number(4.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atom_count)
+}
+
+#[test]
+fn compiled_local_frame_metadata_separates_same_slot_blocks() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(LOCAL_FRAME_METADATA_SOURCE)?;
+    let usage = script.usage();
+
+    ensure_usize(usage.global_binding_slot_count(), 1)?;
+    ensure_usize(usage.local_binding_slot_count(), 4)?;
+    ensure_usize(usage.upvalue_binding_slot_count(), 0)?;
+    ensure_usize(usage.unresolved_static_binding_count(), 0)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(21.0))?;
+    let atom_count = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(21.0))?;
     ensure_usize(vm.resource_usage().atom_count, atom_count)
 }
 
