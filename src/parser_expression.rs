@@ -177,7 +177,7 @@ impl Parser {
             TokenKind::Null => Expr::Literal(Value::Null),
             TokenKind::Undefined => Expr::Literal(Value::Undefined),
             TokenKind::This => Expr::This,
-            TokenKind::Identifier(name) => Expr::Identifier(StaticName::new(name)),
+            TokenKind::Identifier(name) => Expr::Identifier(self.static_name(name)?),
             TokenKind::Function => self.function_expression()?,
             TokenKind::LBrace => self.object_literal()?,
             TokenKind::LBracket => self.array_literal()?,
@@ -273,31 +273,34 @@ impl Parser {
             .ok_or_else(|| Error::parse("expected object property name", self.offset()))?;
         match token.kind {
             TokenKind::Identifier(name) => {
-                let name = StaticName::new(name);
+                let name = self.static_name(name)?;
                 Ok(ObjectPropertyName {
                     key: name.clone(),
                     shorthand_binding: Some(name),
                 })
             }
             TokenKind::String(name) => Ok(ObjectPropertyName {
-                key: StaticName::new(name),
+                key: self.static_name(name)?,
                 shorthand_binding: None,
             }),
             TokenKind::Number(value) => Ok(ObjectPropertyName {
-                key: StaticName::new(Value::Number(value).to_string()),
+                key: self.static_name(Value::Number(value).to_string())?,
                 shorthand_binding: None,
             }),
-            kind => keyword_property_name(&kind)
-                .map(Self::keyword_property_name)
-                .ok_or_else(|| Error::parse("expected object property name", token.offset)),
+            kind => {
+                let Some(name) = keyword_property_name(&kind) else {
+                    return Err(Error::parse("expected object property name", token.offset));
+                };
+                self.keyword_property_name(name)
+            }
         }
     }
 
-    fn keyword_property_name(name: &str) -> ObjectPropertyName {
-        ObjectPropertyName {
-            key: StaticName::borrowed(name),
+    fn keyword_property_name(&mut self, name: &str) -> Result<ObjectPropertyName> {
+        Ok(ObjectPropertyName {
+            key: self.borrowed_static_name(name)?,
             shorthand_binding: None,
-        }
+        })
     }
 
     fn function_expression(&mut self) -> Result<Expr> {
@@ -357,10 +360,13 @@ impl Parser {
             .advance()
             .ok_or_else(|| Error::parse(message, self.offset()))?;
         match token.kind {
-            TokenKind::Identifier(name) => Ok(StaticName::new(name)),
-            kind => keyword_property_name(&kind)
-                .map(StaticName::borrowed)
-                .ok_or_else(|| Error::parse(message, token.offset)),
+            TokenKind::Identifier(name) => self.static_name(name),
+            kind => {
+                let Some(name) = keyword_property_name(&kind) else {
+                    return Err(Error::parse(message, token.offset));
+                };
+                self.borrowed_static_name(name)
+            }
         }
     }
 }
