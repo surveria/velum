@@ -27,11 +27,8 @@
 !/src/**/
 !/src/**/*.rs
 
-!/runner/
-!/runner/Cargo.toml
-!/runner/src/
-!/runner/src/**/
-!/runner/src/**/*.rs
+!/.gitmodules
+!/runner
 
 !/tests/
 !/tests/**/
