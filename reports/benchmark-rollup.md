@@ -17,7 +17,7 @@ Artifacts:
 Latest report:
 
 - `rsqjs-test-report-20260706T133250Z.md`
-- Task: rsqjs-test-report-20260706T133250Z.md
+- Task: Exact global binding cache tranche: Split binding cache location metadata and safely introduce atom-free top-level global cache hits where runtime and compiled slots are proven aligned.
 - Performance: 1.29x (46/63 >1.00x)
 - Memory: 1.09x (58/63 >1.00x)
 - Full Test262: 10872 passed / 91706 failed (10.60%)
@@ -187,4 +187,4 @@ Latest report:
 | `20260706T125009Z` `f273777` String descriptor heap fallback tranche: Close a remaining string-wrapper descriptor path where virtual indexed character values could escape as owned `Value::String` instead of VM-owned heap strings. | 1.29x (48/63 >1.00x) | 1.08x (59/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T130038Z` `a792e21` Direct string descriptor heap materialization tranche: Avoid the remaining context-free owned-string fallback when `Object.getOwnPropertyDescriptor` materializes virtual string-wrapper index descriptors. | 1.30x (48/63 >1.00x) | 1.08x (58/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T131317Z` `b67f950` Native function registry tranche: Replace linear native-function kind rediscovery with a VM-local checked registry before broader intrinsic metadata and native-call bytecode operands. | 1.28x (46/63 >1.00x) | 1.07x (58/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
-| `20260706T133250Z` rsqjs-test-report-20260706T133250Z.md | 1.29x (46/63 >1.00x) | 1.09x (58/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
+| `20260706T133250Z` `62bc34e` Exact global binding cache tranche: Split binding cache location metadata and safely introduce atom-free top-level global cache hits where runtime and compiled slots are proven aligned. | 1.29x (46/63 >1.00x) | 1.09x (58/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
