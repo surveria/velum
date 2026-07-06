@@ -42,38 +42,7 @@ jobs:
           cargo fmt --version
           cargo clippy --version
 
-      - name: Verify engine version bump
-        if: github.event_name == 'pull_request'
-        env:
-          RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
-        run: |
-          export GIT_CONFIG_COUNT=2
-          export GIT_CONFIG_KEY_0="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
-          export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
-          export GIT_CONFIG_KEY_1="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/surveria/.insteadOf"
-          export GIT_CONFIG_VALUE_1="https://github.com/surveria/"
-          git fetch --no-tags --quiet origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
-          ./scripts/check-version-bump.sh "origin/${{ github.base_ref }}"
-
-      - name: Clippy
-        env:
-          RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
-        run: |
-          # Token rewrites for private git access: chertov (Rust deps such as
-          # human-yaml) and surveria (the rs-quickjs-testing runner submodule).
-          export GIT_CONFIG_COUNT=2
-          export GIT_CONFIG_KEY_0="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
-          export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
-          export GIT_CONFIG_KEY_1="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/surveria/.insteadOf"
-          export GIT_CONFIG_VALUE_1="https://github.com/surveria/"
-          git submodule update --init --recursive
-          # Fail the pipeline early on any clippy error, before the full suite.
-          # Engine crate, then the runner (its git engine dependency overridden
-          # with this checkout so the local engine is linted).
-          cargo clippy --all-targets --all-features -- -D warnings
-          cargo clippy --manifest-path runner/Cargo.toml --config "paths=['${PWD}']" --all-targets --all-features -- -D warnings
-
-      - name: Test all
+      - name: CI checks
         env:
           RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
         run: |
@@ -88,4 +57,12 @@ jobs:
           export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
           export GIT_CONFIG_KEY_1="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/surveria/.insteadOf"
           export GIT_CONFIG_VALUE_1="https://github.com/surveria/"
+          # On a pull request GITHUB_BASE_REF names the base branch; fetch it and
+          # turn on the engine version-bump gate against it.
+          if [[ -n "${GITHUB_BASE_REF:-}" ]]; then
+            git fetch --no-tags --quiet origin "${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
+            export RSQJS_BASE_REF="origin/${GITHUB_BASE_REF}"
+          fi
+          # One runner, one checkout, one sequence: version gate -> fmt -> clippy
+          # -> tests -> docs -> build -> benchmarks, all inside test-all.sh.
           ./scripts/test-all.sh
