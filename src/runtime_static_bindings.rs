@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use crate::{
-    ast::StaticBinding,
+    ast::{StaticBinding, StaticBindingId},
     atom::AtomId,
     error::{Error, Result},
     runtime::Context,
@@ -30,10 +30,10 @@ impl StaticBindingCacheHandle {
             .ok_or_else(|| Error::runtime("static binding cache slot is not defined"))
     }
 
-    fn remember(&self, binding: &StaticBinding, location: BindingLocation) -> Result<()> {
+    fn remember_id(&self, binding: StaticBindingId, location: BindingLocation) -> Result<()> {
         let slot = self
             .0
-            .get(binding.id().index()?)
+            .get(binding.index()?)
             .ok_or_else(|| Error::runtime("static binding cache slot is not defined"))?;
         slot.set(Some(location));
         Ok(())
@@ -89,6 +89,12 @@ impl Context {
         self.static_binding_caches.last().cloned()
     }
 
+    pub(crate) fn current_static_binding_layout(
+        &self,
+    ) -> Option<crate::binding_layout::BindingLayout> {
+        self.static_binding_layouts.last().cloned()
+    }
+
     pub(crate) fn get_binding_static(
         &self,
         binding: &StaticBinding,
@@ -119,13 +125,21 @@ impl Context {
         binding: &StaticBinding,
         atom: AtomId,
     ) -> Result<()> {
+        self.remember_active_static_binding_id(binding.id(), atom)
+    }
+
+    pub(crate) fn remember_active_static_binding_id(
+        &self,
+        binding: StaticBindingId,
+        atom: AtomId,
+    ) -> Result<()> {
         let Some(cache) = self.current_static_binding_cache() else {
             return Ok(());
         };
         let Some(location) = self.resolve_binding_location(atom) else {
             return Ok(());
         };
-        cache.remember(binding, location)
+        self.remember_layout_static_binding_id(&cache, binding, location)
     }
 
     fn cached_static_binding(&self, binding: &StaticBinding) -> Result<Option<BindingCell>> {
@@ -146,7 +160,28 @@ impl Context {
         let Some(cache) = self.current_static_binding_cache() else {
             return Ok(());
         };
-        cache.remember(binding, location)
+        self.remember_layout_static_bindings(&cache, binding, location)
+    }
+
+    fn remember_layout_static_bindings(
+        &self,
+        cache: &StaticBindingCacheHandle,
+        binding: &StaticBinding,
+        location: BindingLocation,
+    ) -> Result<()> {
+        self.remember_layout_static_binding_id(cache, binding.id(), location)
+    }
+
+    fn remember_layout_static_binding_id(
+        &self,
+        cache: &StaticBindingCacheHandle,
+        binding: StaticBindingId,
+        location: BindingLocation,
+    ) -> Result<()> {
+        let Some(layout) = self.current_static_binding_layout() else {
+            return cache.remember_id(binding, location);
+        };
+        layout.for_each_matching_operand_id(binding, |binding| cache.remember_id(binding, location))
     }
 
     fn resolve_binding_location(&self, atom: AtomId) -> Option<BindingLocation> {

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{DeclKind, Expr, StaticBinding, StaticName, Stmt},
+    ast::{DeclKind, Expr, StaticBinding, StaticBindingId, StaticName, Stmt},
     atom::AtomId,
     error::{Error, Result},
     runtime::Context,
@@ -69,14 +69,17 @@ impl Context {
         let param_atoms = self.function_param_atoms(params)?;
         let static_name_atom_cache = self.current_static_name_atom_cache();
         let static_binding_cache = self.current_static_binding_cache();
+        let static_binding_layout = self.current_static_binding_layout();
         self.functions.push(super::Function {
             name: function_name,
             arity: super::FunctionArity::new(params.len()),
+            param_binding_ids: function_param_binding_ids(params),
             param_atoms,
             body: Rc::clone(body),
             captures: self.locals.clone(),
             static_name_atom_cache,
             static_binding_cache,
+            static_binding_layout,
             properties: FunctionProperties::new(prototype),
             constructable,
         });
@@ -113,14 +116,24 @@ impl Context {
         args: &[Expr],
         this_value: Value,
     ) -> Result<Completion> {
-        let (param_atoms, body, captures, static_name_atom_cache, static_binding_cache) = {
+        let (
+            param_atoms,
+            param_binding_ids,
+            body,
+            captures,
+            static_name_atom_cache,
+            static_binding_cache,
+            static_binding_layout,
+        ) = {
             let function = self.function(id)?;
             (
                 Rc::clone(&function.param_atoms),
+                Rc::clone(&function.param_binding_ids),
                 Rc::clone(&function.body),
                 function.captures.clone(),
                 function.static_name_atom_cache.clone(),
                 function.static_binding_cache.clone(),
+                function.static_binding_layout.clone(),
             )
         };
         let args = self.eval_args(args)?;
@@ -134,7 +147,14 @@ impl Context {
         };
         self.locals.push(scope);
         self.this_values.push(this_value);
-        let result = self.eval_function_body(static_name_atom_cache, static_binding_cache, &body);
+        let result = self.eval_function_body(
+            static_name_atom_cache,
+            static_binding_cache,
+            static_binding_layout,
+            &param_binding_ids,
+            &param_atoms,
+            &body,
+        );
         let removed_this = self.this_values.pop();
         let removed = self.locals.pop();
         self.locals = caller_locals;
@@ -462,31 +482,69 @@ impl Context {
         Ok(scope)
     }
 
+    fn remember_function_params(
+        &self,
+        binding_ids: &[StaticBindingId],
+        atoms: &[AtomId],
+    ) -> Result<()> {
+        if binding_ids.len() != atoms.len() {
+            return Err(Error::runtime("function parameter layout length mismatch"));
+        }
+        for (binding, atom) in binding_ids.iter().copied().zip(atoms.iter().copied()) {
+            self.remember_active_static_binding_id(binding, atom)?;
+        }
+        Ok(())
+    }
+
     fn eval_function_body(
         &mut self,
         static_name_atom_cache: Option<super::StaticNameAtomCacheHandle>,
         static_binding_cache: Option<super::StaticBindingCacheHandle>,
+        static_binding_layout: Option<crate::binding_layout::BindingLayout>,
+        param_binding_ids: &[StaticBindingId],
+        param_atoms: &[AtomId],
         body: &[Stmt],
     ) -> Result<Completion> {
-        match (static_name_atom_cache, static_binding_cache) {
-            (Some(static_name_atom_cache), Some(static_binding_cache)) => self
-                .with_static_name_caches(static_name_atom_cache, static_binding_cache, |context| {
+        match (
+            static_name_atom_cache,
+            static_binding_cache,
+            static_binding_layout,
+        ) {
+            (
+                Some(static_name_atom_cache),
+                Some(static_binding_cache),
+                Some(static_binding_layout),
+            ) => self.with_static_name_caches(
+                static_name_atom_cache,
+                static_binding_cache,
+                static_binding_layout,
+                |context| {
+                    context.remember_function_params(param_binding_ids, param_atoms)?;
                     context
                         .hoist_var_declarations(body)
                         .and_then(|()| context.eval_block(body))
-                }),
-            (Some(static_name_atom_cache), None) => {
+                },
+            ),
+            (Some(static_name_atom_cache), None, _) => {
                 self.with_static_name_atom_cache(static_name_atom_cache, |context| {
                     context
                         .hoist_var_declarations(body)
                         .and_then(|()| context.eval_block(body))
                 })
             }
-            (None, _) => self
+            (None, _, _) | (Some(_), Some(_), None) => self
                 .hoist_var_declarations(body)
                 .and_then(|()| self.eval_block(body)),
         }
     }
+}
+
+fn function_param_binding_ids(params: &[StaticBinding]) -> Rc<[StaticBindingId]> {
+    params
+        .iter()
+        .map(StaticBinding::id)
+        .collect::<Vec<_>>()
+        .into()
 }
 
 impl super::Function {

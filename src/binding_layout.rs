@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use crate::{
     ast::{
-        CatchClause, DeclKind, Expr, ForInTarget, Program, StaticBinding, StaticNameId, Stmt,
-        SwitchCase,
+        CatchClause, DeclKind, Expr, ForInTarget, Program, StaticBinding, StaticBindingId,
+        StaticNameId, Stmt, SwitchCase,
     },
     binding_layout_types::{
         BindingOperand, Declaration, DeclarationRef, FunctionScope, FunctionScopeId, GlobalSlot,
@@ -49,6 +49,35 @@ impl BindingLayout {
 
     pub fn resolved_count(&self) -> usize {
         self.operands.len().saturating_sub(self.unresolved_count)
+    }
+
+    pub fn for_each_matching_operand_id(
+        &self,
+        binding: StaticBindingId,
+        mut visit: impl FnMut(StaticBindingId) -> Result<()>,
+    ) -> Result<()> {
+        let Some(target) = self.operand_id(binding)? else {
+            return Ok(());
+        };
+        for (index, operand) in self.operands.iter().enumerate() {
+            if *operand != target {
+                continue;
+            }
+            visit(StaticBindingId::from_index(index)?)?;
+        }
+        Ok(())
+    }
+
+    fn operand_id(&self, binding: StaticBindingId) -> Result<Option<BindingOperand>> {
+        let operand = self
+            .operands
+            .get(binding.index()?)
+            .copied()
+            .ok_or_else(|| Error::runtime("binding layout operand slot is not defined"))?;
+        if operand == BindingOperand::Unresolved {
+            return Ok(None);
+        }
+        Ok(Some(operand))
     }
 }
 

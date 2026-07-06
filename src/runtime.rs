@@ -1,7 +1,10 @@
 use std::rc::Rc;
 
-use crate::ast::{BinaryOp, Expr, ObjectProperty, Program, StaticBinding, StaticName, Stmt};
+use crate::ast::{
+    BinaryOp, Expr, ObjectProperty, Program, StaticBinding, StaticBindingId, StaticName, Stmt,
+};
 use crate::atom::{AtomId, AtomTable};
+use crate::binding_layout::BindingLayout;
 use crate::compiled_script::CompiledScript;
 use crate::error::{Error, Result};
 use crate::host::HostFunction;
@@ -55,6 +58,7 @@ pub struct Context {
     well_known_properties: WellKnownPropertyKeys,
     static_name_atom_caches: Vec<StaticNameAtomCacheHandle>,
     static_binding_caches: Vec<StaticBindingCacheHandle>,
+    static_binding_layouts: Vec<BindingLayout>,
     globals: BindingScope,
     locals: Vec<BindingScope>,
     functions: Vec<Function>,
@@ -71,11 +75,13 @@ pub struct Context {
 struct Function {
     name: FunctionName,
     arity: FunctionArity,
+    param_binding_ids: Rc<[StaticBindingId]>,
     param_atoms: Rc<[AtomId]>,
     body: Rc<[Stmt]>,
     captures: Vec<BindingScope>,
     static_name_atom_cache: Option<StaticNameAtomCacheHandle>,
     static_binding_cache: Option<StaticBindingCacheHandle>,
+    static_binding_layout: Option<BindingLayout>,
     properties: runtime_function_properties::FunctionProperties,
     constructable: bool,
 }
@@ -122,6 +128,7 @@ impl Context {
             well_known_properties: WellKnownPropertyKeys::new(),
             static_name_atom_caches: Vec::new(),
             static_binding_caches: Vec::new(),
+            static_binding_layouts: Vec::new(),
             globals: BindingScope::new(),
             locals: Vec::new(),
             functions: Vec::new(),
@@ -154,9 +161,12 @@ impl Context {
         script.ensure_within_limits(self.limits)?;
         let static_name_cache = StaticNameAtomCacheHandle::new(script.usage().static_name_count());
         let binding_cache = StaticBindingCacheHandle::new(script.binding_layout().operand_count());
-        self.with_static_name_caches(static_name_cache, binding_cache, |context| {
-            context.eval_program(script.program())
-        })
+        self.with_static_name_caches(
+            static_name_cache,
+            binding_cache,
+            script.binding_layout().clone(),
+            |context| context.eval_program(script.program()),
+        )
     }
 
     #[must_use]

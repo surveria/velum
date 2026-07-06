@@ -25,6 +25,15 @@ value;
 
 const UNRESOLVED_LAYOUT_SOURCE: &str = "missingValue + 1;";
 
+const FOR_IN_LAYOUT_SOURCE: &str = r"
+var record = { alpha: 1, beta: 2 };
+var total = 0;
+for (let key in record) {
+    total = total + record[key];
+}
+total;
+";
+
 #[test]
 fn compiled_layout_counts_global_local_and_upvalue_slots() -> TestResult {
     let engine = Engine::new();
@@ -73,6 +82,21 @@ fn compiled_layout_keeps_missing_bindings_unresolved() -> TestResult {
     ensure_usize(usage.upvalue_binding_slot_count(), 0)?;
     ensure_usize(usage.unresolved_static_binding_count(), 1)?;
     ensure_usize(usage.resolved_static_binding_count(), 0)
+}
+
+#[test]
+fn compiled_layout_cache_preserves_for_in_lexical_bindings() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(FOR_IN_LAYOUT_SOURCE)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(3.0))?;
+    let atom_count = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(3.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atom_count)
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
