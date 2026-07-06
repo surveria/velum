@@ -14,7 +14,7 @@ These rules are mandatory for humans and agents working in any part of this repo
 - Create a separate git worktree for every task under `.claude/worktrees/<task>`.
 - Create a separate branch for every task from a fresh `origin/main`.
 - Do not delete task branches after completion, either locally or on GitHub. Branch history is part of the work record.
-- Remove the task worktree after the task is complete with `git worktree remove <path>`.
+- Remove the task worktree after the task is complete with `git worktree remove <path>`. Git refuses to remove a worktree that has the `runner/` submodule checked out (which happens once `scripts/test-all.sh` has run in it); in that case remove it with `rm -rf <path>` followed by `git worktree prune`.
 
 ## Pull Requests And Merge
 
