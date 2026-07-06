@@ -40,7 +40,7 @@ impl Context {
     }
 
     pub(super) fn eval_object_constructor(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let values = Self::eval_native_args(args);
+        let values = args.as_slice();
         let Some(value) = values.first() else {
             return self.create_object_from_constructor();
         };
@@ -64,10 +64,10 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let values = Self::eval_native_args(args);
-        let target = Self::argument_or_undefined(&values, 0);
-        let property = self.object_property_key(&values, 1)?;
-        let descriptor_value = Self::argument_or_undefined(&values, 2);
+        let values = args.as_slice();
+        let target = Self::argument_or_undefined(values.first());
+        let property = self.object_property_key(values.get(1))?;
+        let descriptor_value = Self::argument_or_undefined(values.get(2));
         let descriptor = self.data_property_update_from_value(&descriptor_value)?;
         match &target {
             Value::Object(id) => {
@@ -104,23 +104,23 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let values = Self::eval_native_args(args);
-        let target = Self::argument_or_undefined(&values, 0);
-        let property = self.object_property_key(&values, 1)?;
-        let descriptor = match target {
+        let values = args.as_slice();
+        let target = Self::argument_or_undefined(values.first());
+        let property = self.object_property_key(values.get(1))?;
+        let descriptor = match &target {
             Value::Object(id) => {
                 if let Some(descriptor) =
-                    self.string_object_own_property_descriptor(id, &property)?
+                    self.string_object_own_property_descriptor(*id, &property)?
                 {
                     Some(descriptor)
                 } else {
                     self.objects
-                        .own_property_descriptor(id, self.property_lookup(&property))?
+                        .own_property_descriptor(*id, self.property_lookup(&property))?
                 }
             }
-            Value::Function(id) => self.function_own_property_descriptor(id, &property)?,
+            Value::Function(id) => self.function_own_property_descriptor(*id, &property)?,
             Value::NativeFunction(id) => {
-                self.native_function_own_property_descriptor(id, &property)?
+                self.native_function_own_property_descriptor(*id, &property)?
             }
             Value::Undefined
             | Value::Null
@@ -159,16 +159,16 @@ impl Context {
     }
 
     pub(super) fn eval_object_has_own(&self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let values = Self::eval_native_args(args);
-        let target = Self::argument_or_undefined(&values, 0);
-        let property = self.object_property_key(&values, 1)?;
+        let values = args.as_slice();
+        let target = Self::argument_or_undefined(values.first());
+        let property = self.object_property_key(values.get(1))?;
         self.has_own_property_value(&target, &property)
             .map(Value::Bool)
     }
 
     pub(super) fn eval_object_keys(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let values = Self::eval_native_args(args);
-        let target = Self::argument_or_undefined(&values, 0);
+        let values = args.as_slice();
+        let target = Self::argument_or_undefined(values.first());
         let keys = self.own_enumerable_keys(&target)?;
         self.array_constructor_value()?;
         let prototype = self.objects.existing_array_prototype_id()?;
@@ -221,16 +221,12 @@ impl Context {
         Ok(())
     }
 
-    fn eval_native_args(args: RuntimeCallArgs<'_>) -> Vec<Value> {
-        args.evaluate()
+    fn argument_or_undefined(value: Option<&Value>) -> Value {
+        value.cloned().unwrap_or(Value::Undefined)
     }
 
-    fn argument_or_undefined(values: &[Value], index: usize) -> Value {
-        values.get(index).cloned().unwrap_or(Value::Undefined)
-    }
-
-    fn object_property_key(&self, values: &[Value], index: usize) -> Result<String> {
-        let key = property_key(&Self::argument_or_undefined(values, index));
+    fn object_property_key(&self, value: Option<&Value>) -> Result<String> {
+        let key = value.map_or_else(|| property_key(&Value::Undefined), property_key);
         self.check_string_len(&key)?;
         Ok(key)
     }

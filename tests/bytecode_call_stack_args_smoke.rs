@@ -15,12 +15,20 @@ var cachedBindingOk = call(mark("c", "side"), mark("d", "unused")) === "side";
 var staticMemberOk = Math.max(mark("e", 3), mark("f", 8), mark("g", 1)) === 8;
 var object = new String(mark("h", "go"), mark("i", "unused"));
 print(mark("j", "line"), mark("k", "tail"));
+var computedReceiver = {
+    value: "stack",
+    read: function (prefix, suffix) {
+        return this.value + prefix + suffix;
+    }
+};
+var computedOk = computedReceiver[mark("l", "read")](mark("m", "-"), mark("n", "tail")) === "stack-tail";
 
 directBindingOk &&
     cachedBindingOk &&
     staticMemberOk &&
     object.length === 2 &&
-    order === "abcdefghijk" ? 42 : 0;
+    computedOk &&
+    order === "abcdefghijklmn" ? 42 : 0;
 "#;
 
 #[test]

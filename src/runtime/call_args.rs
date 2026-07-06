@@ -20,10 +20,6 @@ impl<'a> RuntimeCallArgs<'a> {
         self.as_slice().to_vec()
     }
 
-    pub fn unary_value(self) -> Option<Value> {
-        self.as_slice().first().cloned()
-    }
-
     pub const fn discard(self) {
         match self {
             Self::Values(_) => {}

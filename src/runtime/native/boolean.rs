@@ -69,6 +69,6 @@ impl Context {
 
     fn eval_boolean_argument(args: RuntimeCallArgs<'_>) -> bool {
         let value = Self::eval_native_unary_argument_value(args);
-        value.as_ref().is_some_and(Value::is_truthy)
+        value.is_some_and(Value::is_truthy)
     }
 }

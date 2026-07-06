@@ -550,15 +550,17 @@ impl Context {
                 property: operand,
                 arg_count,
             } => {
-                let args = state.stack.pop_many(*arg_count)?;
-                let property = state.stack.pop()?;
-                let this_value = state.stack.pop()?;
+                let args = state.stack.tail(*arg_count)?;
+                let property = state.stack.value_before_tail(*arg_count, 0)?.clone();
+                let this_value = state.stack.value_before_tail(*arg_count, 1)?.clone();
                 let key = self.dynamic_property_key(&property)?;
                 let callee =
                     self.get_cached_dynamic_property_value(&this_value, &key, operand.access())?;
-                state
-                    .stack
-                    .push(self.eval_call_value(callee, &args, this_value)?);
+                let value = self.eval_call_value(callee, args, this_value)?;
+                state.stack.drop_tail(*arg_count)?;
+                state.stack.pop()?;
+                state.stack.pop()?;
+                state.stack.push(value);
                 state.pc = next;
                 Ok(None)
             }

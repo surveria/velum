@@ -74,7 +74,7 @@ impl Context {
 
     fn eval_string_argument(&self, args: RuntimeCallArgs<'_>) -> Result<String> {
         let value = Self::eval_native_unary_argument_value(args);
-        let value = Self::string_argument_value(value.as_ref());
+        let value = Self::string_argument_value(value);
         self.check_string_len(&value)?;
         Ok(value)
     }
