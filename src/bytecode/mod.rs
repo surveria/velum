@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
+    api::native_call::NativeCallTarget,
     ast::{
         BinaryOp, DeclKind, Expr, ObjectProperty, Program, StaticBinding, StaticName,
         StaticPropertyAccessId, Stmt, UnaryOp, UpdateOp,
@@ -368,6 +369,7 @@ impl<'a> BytecodeCompiler<'a> {
         self.compile_args(args)?;
         self.emit(BytecodeInstruction::Construct {
             constructor: self.compile_binding(constructor)?,
+            native: NativeCallTarget::from_binding_name(constructor.as_str()),
             arg_count: args.len(),
         });
         Ok(())
