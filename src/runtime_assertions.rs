@@ -8,6 +8,8 @@ const ASSERT_NAME: &str = "assert";
 const ASSERT_THROWS_NAME: &str = "throws";
 const REFERENCE_ERROR_NAME: &str = "ReferenceError";
 const REFERENCE_ERROR_PREFIX: &str = "ReferenceError:";
+const ERROR_NAME_PROPERTY: &str = "name";
+const ERROR_MESSAGE_PROPERTY: &str = "message";
 
 pub fn is_assert_throws_call(callee: &Expr) -> bool {
     matches!(
@@ -48,10 +50,15 @@ pub fn thrown_value_matches(value: &Value, expected_name: &str) -> bool {
 }
 
 pub fn error_property(error: &ErrorObject, property: &str) -> Value {
+    error_property_text(error, property)
+        .map_or(Value::Undefined, |value| Value::String(value.to_owned()))
+}
+
+pub fn error_property_text<'a>(error: &'a ErrorObject, property: &str) -> Option<&'a str> {
     match property {
-        "name" => Value::String(error.name().as_str().to_owned()),
-        "message" => Value::String(error.message().to_owned()),
-        _ => Value::Undefined,
+        ERROR_NAME_PROPERTY => Some(error.name().as_str()),
+        ERROR_MESSAGE_PROPERTY => Some(error.message()),
+        _ => None,
     }
 }
 

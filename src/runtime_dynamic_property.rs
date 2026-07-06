@@ -1,6 +1,7 @@
 use crate::{
     ast::Expr,
     error::Result,
+    runtime_assertions::error_property_text,
     runtime_object::PropertyKey,
     runtime_property::{
         DynamicPropertyKey, StringPropertyValue, delete_property, get_property, has_property,
@@ -34,6 +35,9 @@ impl Context {
         if let Value::NativeFunction(id) = object {
             return self.get_native_function_property_lookup(*id, lookup);
         }
+        if let Value::Error(error) = object {
+            return self.get_error_property_value(error, property);
+        }
         if let Value::String(value) = object {
             return self.get_string_property_value(value, property);
         }
@@ -54,6 +58,9 @@ impl Context {
         if let Value::NativeFunction(id) = object {
             return self.get_native_function_property_lookup(*id, property.lookup());
         }
+        if let Value::Error(error) = object {
+            return self.get_error_property_value(error, property.name());
+        }
         if let Value::String(value) = object {
             return self.get_string_property_value(value, property.name());
         }
@@ -61,6 +68,17 @@ impl Context {
             return self.get_string_property_value(value.as_str(), property.name());
         }
         self.checked_value(get_property(&self.objects, object, property.lookup())?)
+    }
+
+    pub(super) fn get_error_property_value(
+        &mut self,
+        error: &crate::value::ErrorObject,
+        property: &str,
+    ) -> Result<Value> {
+        if let Some(value) = error_property_text(error, property) {
+            return self.heap_string_value(value);
+        }
+        Ok(Value::Undefined)
     }
 
     pub(super) fn get_string_property_value(
