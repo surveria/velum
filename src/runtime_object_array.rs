@@ -566,8 +566,8 @@ impl Object {
         {
             return Some(value);
         }
-        let key = self.sparse_array_keys.get(&index)?;
-        self.named_property(*key).map(super::ObjectProperty::value)
+        let key = self.array_storage.sparse_key(index)?;
+        self.named_property(key).map(super::ObjectProperty::value)
     }
 
     fn set_array_index(
@@ -584,7 +584,7 @@ impl Object {
         if self.array_length.is_some() && self.delete_array_element(index) {
             return true;
         }
-        let Some(key) = self.sparse_array_keys.remove(&index) else {
+        let Some(key) = self.array_storage.remove_sparse_key(index) else {
             return true;
         };
         if let Some(property) = self.remove_named_property(key)

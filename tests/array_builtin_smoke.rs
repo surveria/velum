@@ -146,6 +146,42 @@ fn preserves_dense_array_element_semantics() -> TestResult {
 }
 
 #[test]
+fn preserves_packed_array_semantics_after_hole_transition() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let values = [0, 1, 2, 3];
+        delete values[1];
+        let before = values.join("|");
+        values[1] = "one";
+        let after = values.join("|");
+        delete values[3];
+
+        let seen = "";
+        for (let key in values) {
+            seen = seen + key + ":" + values[key] + ";";
+        }
+
+        print(before, after, seen, values.length, "1" in values, "3" in values);
+        before === "0||2|3" &&
+            after === "0|one|2|3" &&
+            seen === "0:0;1:one;2:2;" &&
+            values.length === 4 &&
+            ("1" in values) &&
+            !("3" in values) ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(
+        context.output(),
+        &["0||2|3 0|one|2|3 0:0;1:one;2:2; 4 true false".to_owned()],
+    )
+}
+
+#[test]
 fn supports_sparse_array_indices_without_dense_growth() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

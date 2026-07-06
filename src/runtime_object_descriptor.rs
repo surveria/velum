@@ -260,7 +260,7 @@ impl Object {
         }
         self.define_named_property(property, update, max_properties)?;
         if let Some(index) = index {
-            self.sparse_array_keys.insert(index, property);
+            self.array_storage.insert_sparse_key(index, property);
         }
         Ok(())
     }
@@ -301,52 +301,41 @@ impl Object {
         update: DataPropertyUpdate,
         max_properties: usize,
     ) -> Result<()> {
-        let Some(position) = index.dense_position(max_properties)? else {
-            self.sparse_array_keys.insert(index, property);
+        if index.dense_position(max_properties)?.is_none() {
+            self.array_storage.insert_sparse_key(index, property);
             return self.define_named_property(property, update, max_properties);
-        };
-        if self.array_elements.get(position).is_none() {
-            let new_len = position
-                .checked_add(1)
-                .ok_or_else(|| crate::error::Error::limit(super::ARRAY_INDEX_LIMIT_ERROR))?;
-            self.array_elements.resize_with(new_len, || None);
         }
 
-        let has_existing = self
-            .array_elements
-            .get(position)
-            .and_then(Option::as_ref)
-            .is_some();
+        let has_existing = self.array_storage.dense_property(index).is_some();
         if !has_existing && self.property_count() >= max_properties {
             return Err(crate::error::Error::limit(format!(
                 "object property count exceeded {max_properties}"
             )));
         }
-        let slot = self
-            .array_elements
-            .get_mut(position)
-            .ok_or_else(|| crate::error::Error::runtime("array index storage is not available"))?;
-        if let Some(existing) = slot {
+        if let Some(existing) = self.array_storage.dense_property_mut(index)? {
             let was_enumerable = existing.is_enumerable();
             existing.define(update);
             let is_enumerable = existing.is_enumerable();
             self.update_enumerable_property_count(was_enumerable, is_enumerable);
         } else {
             let property = ObjectProperty::from_descriptor(update.complete_for_new());
-            if property.is_enumerable() {
+            let is_enumerable = property.is_enumerable();
+            let previous = self.array_storage.insert_dense_property(index, property)?;
+            if previous.is_some() {
+                return Err(crate::error::Error::runtime(
+                    "array index storage replaced existing slot",
+                ));
+            }
+            if is_enumerable {
                 self.enumerable_property_count = self.enumerable_property_count.saturating_add(1);
             }
-            *slot = Some(property);
-            self.array_property_count = self.array_property_count.saturating_add(1);
         }
         self.extend_array_length(index)
     }
 
     fn array_element_descriptor(&self, index: ArrayIndex) -> Option<DataPropertyDescriptor> {
-        let position = index.position().ok()?;
-        self.array_elements
-            .get(position)
-            .and_then(Option::as_ref)
+        self.array_storage
+            .dense_property(index)
             .map(ObjectProperty::descriptor)
     }
 }

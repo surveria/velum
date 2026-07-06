@@ -84,9 +84,10 @@ impl Object {
     }
 
     fn extend_array_element_keys(&self, keys: &mut Vec<String>) {
-        for (index, property) in self.array_elements.iter().enumerate() {
-            if property
-                .as_ref()
+        for index in 0..self.array_storage.dense_len() {
+            if self
+                .array_storage
+                .dense_property_at_position(index)
                 .is_some_and(super::ObjectProperty::is_enumerable)
             {
                 push_unique_key(keys, index.to_string());
@@ -99,11 +100,11 @@ impl Object {
         atoms: &AtomTable,
         keys: &mut Vec<String>,
     ) -> Result<()> {
-        if self.sparse_array_keys.is_empty() {
+        if !self.array_storage.has_sparse_keys() {
             return Ok(());
         }
         let mut entries: Vec<(ArrayIndex, PropertyKey)> = Vec::new();
-        for (index, key) in &self.sparse_array_keys {
+        for (index, key) in self.array_storage.sparse_keys() {
             if self
                 .named_property(*key)
                 .is_some_and(super::ObjectProperty::is_enumerable)

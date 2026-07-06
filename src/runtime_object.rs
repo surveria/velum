@@ -1,10 +1,10 @@
-use std::collections::BTreeMap;
-
 use crate::error::{Error, Result};
 use crate::value::{ObjectId, Value};
 
 #[path = "runtime_object_array.rs"]
 mod runtime_object_array;
+#[path = "runtime_object_array_storage.rs"]
+mod runtime_object_array_storage;
 #[path = "runtime_object_base.rs"]
 mod runtime_object_base;
 #[path = "runtime_object_data.rs"]
@@ -22,6 +22,7 @@ mod runtime_object_slot;
 #[path = "runtime_object_string.rs"]
 mod runtime_object_string;
 
+use runtime_object_array_storage::ArrayStorage;
 use runtime_object_base::LiteralPrototype;
 pub use runtime_object_base::ObjectHeap;
 pub use runtime_object_descriptor::{
@@ -425,9 +426,7 @@ impl ObjectHeap {
 struct Object {
     properties: Vec<runtime_object_slot::PropertyIndexEntry>,
     named_properties: Vec<runtime_object_slot::NamedProperty>,
-    array_elements: Vec<Option<ObjectProperty>>,
-    sparse_array_keys: BTreeMap<ArrayIndex, PropertyKey>,
-    array_property_count: usize,
+    array_storage: ArrayStorage,
     enumerable_property_count: usize,
     array_length: Option<ArrayLength>,
     prototype: Option<ObjectId>,
@@ -438,9 +437,7 @@ impl Object {
         Self {
             properties: Vec::new(),
             named_properties: Vec::new(),
-            array_elements: Vec::new(),
-            sparse_array_keys: BTreeMap::new(),
-            array_property_count: 0,
+            array_storage: ArrayStorage::new(),
             enumerable_property_count: 0,
             array_length: None,
             prototype: None,
@@ -451,9 +448,7 @@ impl Object {
         Self {
             properties: Vec::with_capacity(capacity),
             named_properties: Vec::with_capacity(capacity),
-            array_elements: Vec::new(),
-            sparse_array_keys: BTreeMap::new(),
-            array_property_count: 0,
+            array_storage: ArrayStorage::new(),
             enumerable_property_count: 0,
             array_length: None,
             prototype: None,
@@ -464,9 +459,7 @@ impl Object {
         Self {
             properties: Vec::new(),
             named_properties: Vec::new(),
-            array_elements: Vec::new(),
-            sparse_array_keys: BTreeMap::new(),
-            array_property_count: 0,
+            array_storage: ArrayStorage::new(),
             enumerable_property_count: 0,
             array_length: Some(length),
             prototype: None,
@@ -584,7 +577,7 @@ impl Object {
 
         self.set_named_property_value(property, value, enumerable, max_properties)?;
         if let Some(index) = index {
-            self.sparse_array_keys.insert(index, property);
+            self.array_storage.insert_sparse_key(index, property);
         }
         Ok(())
     }
@@ -631,29 +624,15 @@ impl Object {
         enumerable: Option<PropertyEnumerable>,
         max_properties: usize,
     ) -> Result<()> {
-        let Some(position) = index.dense_position(max_properties)? else {
+        if index.dense_position(max_properties)?.is_none() {
             let Some((property, _)) = property else {
                 return Err(Error::runtime("sparse array property key is not available"));
             };
-            self.sparse_array_keys.insert(index, property);
+            self.array_storage.insert_sparse_key(index, property);
             return self.set_named_property_value(property, value, enumerable, max_properties);
-        };
-
-        if self.array_elements.get(position).is_none() {
-            let new_len = position
-                .checked_add(1)
-                .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
-            self.array_elements.resize_with(new_len, || None);
         }
 
-        if self.has_array_element(index) {
-            let slot = self
-                .array_elements
-                .get_mut(position)
-                .ok_or_else(|| Error::runtime("array index storage is not available"))?;
-            let Some(property) = slot else {
-                return Err(Error::runtime("array index storage is not initialized"));
-            };
+        if let Some(property) = self.array_storage.dense_property_mut(index)? {
             let was_enumerable = property.is_enumerable();
             property.set_value(value);
             if let Some(enumerable) = enumerable {
@@ -669,17 +648,16 @@ impl Object {
                 "object property count exceeded {max_properties}"
             )));
         }
-        let slot = self
-            .array_elements
-            .get_mut(position)
-            .ok_or_else(|| Error::runtime("array index storage is not available"))?;
         let property =
             ObjectProperty::ordinary(value, enumerable.unwrap_or(PropertyEnumerable::Yes));
-        if property.is_enumerable() {
+        let is_enumerable = property.is_enumerable();
+        let previous = self.array_storage.insert_dense_property(index, property)?;
+        if previous.is_some() {
+            return Err(Error::runtime("array index storage replaced existing slot"));
+        }
+        if is_enumerable {
             self.enumerable_property_count = self.enumerable_property_count.saturating_add(1);
         }
-        *slot = Some(property);
-        self.array_property_count = self.array_property_count.saturating_add(1);
         Ok(())
     }
 
@@ -709,7 +687,7 @@ impl Object {
             self.enumerable_property_count = self.enumerable_property_count.saturating_sub(1);
         }
         if let Some(index) = ArrayIndex::parse(property.name()) {
-            self.sparse_array_keys.remove(&index);
+            self.array_storage.remove_sparse_key(index);
         }
         true
     }
@@ -727,40 +705,26 @@ impl Object {
 
     fn array_element_value(&self, index: ArrayIndex) -> Option<Value> {
         let position = index.position().ok()?;
-        self.array_elements
-            .get(position)
-            .and_then(Option::as_ref)
+        self.array_storage
+            .dense_property_at_position(position)
             .map(ObjectProperty::value)
     }
 
     fn has_array_element(&self, index: ArrayIndex) -> bool {
-        let Ok(position) = index.position() else {
-            return false;
-        };
-        self.array_elements
-            .get(position)
-            .and_then(Option::as_ref)
-            .is_some()
+        self.array_storage.dense_property(index).is_some()
     }
 
     fn delete_array_element(&mut self, index: ArrayIndex) -> bool {
-        let Ok(position) = index.position() else {
-            return false;
-        };
-        let Some(slot) = self.array_elements.get_mut(position) else {
-            return false;
-        };
-        let Some(property) = slot.as_ref() else {
+        let Some(property) = self.array_storage.dense_property(index) else {
             return false;
         };
         if !property.is_configurable() {
             return false;
         }
-        if let Some(property) = slot.take() {
+        if let Ok(Some(property)) = self.array_storage.remove_dense_property(index) {
             if property.is_enumerable() {
                 self.enumerable_property_count = self.enumerable_property_count.saturating_sub(1);
             }
-            self.array_property_count = self.array_property_count.saturating_sub(1);
             return true;
         }
         false
@@ -789,6 +753,6 @@ impl Object {
     const fn property_count(&self) -> usize {
         self.properties
             .len()
-            .saturating_add(self.array_property_count)
+            .saturating_add(self.array_storage.property_count())
     }
 }
