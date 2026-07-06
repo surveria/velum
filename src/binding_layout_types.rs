@@ -1,0 +1,180 @@
+use crate::{
+    ast::StaticNameId,
+    error::{Error, Result},
+};
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BindingOperand {
+    Unresolved,
+    Global {
+        slot: GlobalSlot,
+    },
+    Local {
+        scope: ScopeId,
+        slot: LocalSlot,
+    },
+    Upvalue {
+        function: FunctionScopeId,
+        slot: UpvalueSlot,
+    },
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub struct GlobalSlot(u32);
+
+impl GlobalSlot {
+    pub fn from_index(index: usize) -> Result<Self> {
+        let slot = u32::try_from(index)
+            .map_err(|_| Error::limit("global binding slot exceeded supported range"))?;
+        Ok(Self(slot))
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub struct LocalSlot(u32);
+
+impl LocalSlot {
+    pub fn from_index(index: usize) -> Result<Self> {
+        let slot = u32::try_from(index)
+            .map_err(|_| Error::limit("local binding slot exceeded supported range"))?;
+        Ok(Self(slot))
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub struct UpvalueSlot(u32);
+
+impl UpvalueSlot {
+    pub fn from_index(index: usize) -> Result<Self> {
+        let slot = u32::try_from(index)
+            .map_err(|_| Error::limit("upvalue binding slot exceeded supported range"))?;
+        Ok(Self(slot))
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub struct ScopeId(usize);
+
+impl ScopeId {
+    pub const fn from_index(index: usize) -> Self {
+        Self(index)
+    }
+
+    pub const fn index(self) -> usize {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub struct FunctionScopeId(usize);
+
+impl FunctionScopeId {
+    pub const fn from_index(index: usize) -> Self {
+        Self(index)
+    }
+
+    pub const fn index(self) -> usize {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ScopeKind {
+    Global,
+    Local,
+}
+
+#[derive(Debug, Clone)]
+pub struct Scope {
+    pub parent: Option<ScopeId>,
+    pub function: FunctionScopeId,
+    pub kind: ScopeKind,
+    pub declarations: Vec<Declaration>,
+}
+
+impl Scope {
+    pub const fn new(parent: Option<ScopeId>, function: FunctionScopeId, kind: ScopeKind) -> Self {
+        Self {
+            parent,
+            function,
+            kind,
+            declarations: Vec::new(),
+        }
+    }
+
+    pub fn declaration(&self, name: StaticNameId) -> Option<Declaration> {
+        let position = self.declaration_position(name).ok()?;
+        self.declarations.get(position).copied()
+    }
+
+    pub fn declaration_position(&self, name: StaticNameId) -> std::result::Result<usize, usize> {
+        self.declarations
+            .binary_search_by(|declaration| declaration.name.cmp(&name))
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct Declaration {
+    pub name: StaticNameId,
+    pub scope: ScopeId,
+    pub operand: BindingOperand,
+}
+
+impl Declaration {
+    pub const fn new(name: StaticNameId, scope: ScopeId, operand: BindingOperand) -> Self {
+        Self {
+            name,
+            scope,
+            operand,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionScope {
+    pub upvalues: Vec<DeclarationRef>,
+}
+
+impl FunctionScope {
+    pub const fn new() -> Self {
+        Self {
+            upvalues: Vec::new(),
+        }
+    }
+
+    pub fn upvalue_position(
+        &self,
+        declaration: DeclarationRef,
+    ) -> std::result::Result<usize, usize> {
+        self.upvalues.binary_search(&declaration)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub struct DeclarationRef {
+    pub scope: ScopeId,
+    pub name: StaticNameId,
+}
+
+impl DeclarationRef {
+    pub const fn new(scope: ScopeId, name: StaticNameId) -> Self {
+        Self { scope, name }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ScopeContext {
+    pub scope: ScopeId,
+    pub var_scope: ScopeId,
+    pub function: FunctionScopeId,
+}
+
+impl ScopeContext {
+    pub const fn new(scope: ScopeId, var_scope: ScopeId, function: FunctionScopeId) -> Self {
+        Self {
+            scope,
+            var_scope,
+            function,
+        }
+    }
+}

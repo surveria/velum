@@ -153,7 +153,7 @@ impl Context {
     pub fn eval_compiled(&mut self, script: &CompiledScript) -> Result<Value> {
         script.ensure_within_limits(self.limits)?;
         let static_name_cache = StaticNameAtomCacheHandle::new(script.usage().static_name_count());
-        let binding_cache = StaticBindingCacheHandle::new(script.usage().static_binding_count());
+        let binding_cache = StaticBindingCacheHandle::new(script.binding_layout().operand_count());
         self.with_static_name_caches(static_name_cache, binding_cache, |context| {
             context.eval_program(script.program())
         })
