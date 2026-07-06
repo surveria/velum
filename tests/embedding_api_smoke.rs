@@ -333,6 +333,45 @@ fn tracks_atoms_for_function_names_without_repeated_name_reads() -> TestResult {
 }
 
 #[test]
+fn reuses_well_known_property_atoms_across_builtin_paths() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let value = vm.context().eval(
+        r#"
+        let wellKnownFunction = function UniqueWellKnown(left, right) {
+            return left + right;
+        };
+        let wellKnownArray = [1, 2, 3];
+        let wellKnownString = new String("camera");
+        var wellKnownTotal = 0;
+        var wellKnownStep = 0;
+        wellKnownFunction.length + wellKnownArray.length + wellKnownString.length
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(11.0))?;
+    let materialized_atoms = vm.resource_usage().atom_count;
+
+    let value = vm.context().eval(
+        r#"
+        wellKnownTotal = 0;
+        for (wellKnownStep = 0; wellKnownStep < 8; wellKnownStep++) {
+            wellKnownTotal = wellKnownTotal +
+                wellKnownFunction.length +
+                wellKnownArray.length +
+                wellKnownString.length;
+            if (wellKnownFunction.name === "UniqueWellKnown") {
+                wellKnownTotal = wellKnownTotal + 1;
+            }
+        }
+        wellKnownTotal
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(96.0))?;
+    ensure_usize(vm.resource_usage().atom_count, materialized_atoms)
+}
+
+#[test]
 fn preserves_binding_slot_updates_and_shadowing() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();

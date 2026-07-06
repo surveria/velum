@@ -88,15 +88,13 @@ impl FunctionProperties {
             .and_then(|intrinsic| intrinsic.descriptor(default))
     }
 
-    pub(super) fn intrinsic_value_or_property(
+    pub(super) fn intrinsic_value(
         &self,
         property: &str,
-        lookup: PropertyLookup<'_>,
         default: DataPropertyDescriptor,
-    ) -> Value {
+    ) -> Option<Value> {
         self.intrinsic(property)
             .and_then(|intrinsic| intrinsic.value(default))
-            .unwrap_or_else(|| self.get(lookup))
     }
 
     pub(super) fn has(&self, property: PropertyLookup<'_>) -> bool {

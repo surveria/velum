@@ -145,21 +145,19 @@ impl Context {
 
     pub(crate) fn get_function_property(&self, id: FunctionId, property: &str) -> Result<Value> {
         let function = self.function(id)?;
-        let lookup = self.property_lookup(property);
-        let value = function_default_intrinsic_descriptor(function, &self.atoms, property)?
-            .map_or_else(
-                || match property {
-                    FUNCTION_PROTOTYPE_PROPERTY => function.properties.prototype(),
-                    _ => function.properties.get(lookup),
-                },
-                |default_descriptor| {
-                    function.properties.intrinsic_value_or_property(
-                        property,
-                        lookup,
-                        default_descriptor,
-                    )
-                },
-            );
+        if let Some(default_descriptor) =
+            function_default_intrinsic_descriptor(function, &self.atoms, property)?
+            && let Some(value) = function
+                .properties
+                .intrinsic_value(property, default_descriptor)
+        {
+            return self.checked_value(value);
+        }
+
+        let value = match property {
+            FUNCTION_PROTOTYPE_PROPERTY => function.properties.prototype(),
+            _ => function.properties.get(self.property_lookup(property)),
+        };
         self.checked_value(value)
     }
 
@@ -293,22 +291,21 @@ impl Context {
         property: &str,
     ) -> Result<Value> {
         let function = self.native_function(id)?;
-        let lookup = self.property_lookup(property);
-        let value = native_function_default_intrinsic_descriptor(function, property).map_or_else(
-            || match property {
-                FUNCTION_PROTOTYPE_PROPERTY => function.properties().prototype(),
-                _ => function
-                    .intrinsic_property(property)
-                    .unwrap_or_else(|| function.properties().get(lookup)),
-            },
-            |default_descriptor| {
-                function.properties().intrinsic_value_or_property(
-                    property,
-                    lookup,
-                    default_descriptor,
-                )
-            },
-        );
+        if let Some(default_descriptor) =
+            native_function_default_intrinsic_descriptor(function, property)
+            && let Some(value) = function
+                .properties()
+                .intrinsic_value(property, default_descriptor)
+        {
+            return self.checked_value(value);
+        }
+
+        let value = match property {
+            FUNCTION_PROTOTYPE_PROPERTY => function.properties().prototype(),
+            _ => function
+                .intrinsic_property(property)
+                .unwrap_or_else(|| function.properties().get(self.property_lookup(property))),
+        };
         self.checked_value(value)
     }
 
