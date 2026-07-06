@@ -28,13 +28,34 @@ fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestRe
         after_typeof.string_bytes,
     )?;
 
+    let literal_value = vm.context().eval(r#""front""#)?;
+    ensure_value(&literal_value, &Value::String("front".to_owned()))?;
+    let after_literal = vm.resource_usage();
+    ensure_usize(after_literal.string_count, 2)?;
+    ensure_usize(
+        after_literal.string_bytes,
+        "undefined".len() + "front".len(),
+    )?;
+
+    let repeated_literal = vm.context().eval("`front`")?;
+    ensure_value(&repeated_literal, &Value::String("front".to_owned()))?;
+    let after_repeated_literal = vm.resource_usage();
+    ensure_usize(
+        after_repeated_literal.string_count,
+        after_literal.string_count,
+    )?;
+    ensure_usize(
+        after_repeated_literal.string_bytes,
+        after_literal.string_bytes,
+    )?;
+
     let concat_value = vm.context().eval(r#""front" + "-door""#)?;
     ensure_value(&concat_value, &Value::String("front-door".to_owned()))?;
     let after_concat = vm.resource_usage();
-    ensure_usize(after_concat.string_count, 2)?;
+    ensure_usize(after_concat.string_count, 4)?;
     ensure_usize(
         after_concat.string_bytes,
-        "undefined".len() + "front-door".len(),
+        "undefined".len() + "front".len() + "-door".len() + "front-door".len(),
     )?;
 
     let repeated_concat = vm.context().eval(r#""front" + "-door""#)?;

@@ -5,6 +5,22 @@ use crate::{
 };
 
 impl Context {
+    pub(crate) fn literal_value(&mut self, value: &Value) -> Result<Value> {
+        match value {
+            Value::String(text) => self.heap_string_value(text),
+            Value::HeapString(text) => self.heap_string_value(text.as_str()),
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_)
+            | Value::Object(_)
+            | Value::Error(_) => self.checked_value(value.clone()),
+        }
+    }
+
     pub(crate) fn add(&mut self, left: &Value, right: &Value) -> Result<Value> {
         match (left, right) {
             (Value::Number(left), Value::Number(right)) => Ok(Value::Number(left + right)),

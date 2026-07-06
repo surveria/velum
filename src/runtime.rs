@@ -296,7 +296,7 @@ impl Context {
     pub(crate) fn eval_expr(&mut self, expr: &Expr) -> Result<Value> {
         self.step()?;
         match expr {
-            Expr::Literal(value) => self.checked_value(value.clone()),
+            Expr::Literal(value) => self.literal_value(value),
             Expr::This => self.current_this(),
             Expr::Identifier(name) => self.eval_identifier(name),
             Expr::Parenthesized(expr) => self.eval_expr(expr),
