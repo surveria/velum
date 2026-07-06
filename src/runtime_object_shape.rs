@@ -15,6 +15,46 @@ impl PropertySlot {
     }
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(super) struct ShapePropertyAttributes {
+    writable: bool,
+    enumerable: bool,
+    configurable: bool,
+}
+
+impl ShapePropertyAttributes {
+    pub(super) const fn new(writable: bool, enumerable: bool, configurable: bool) -> Self {
+        Self {
+            writable,
+            enumerable,
+            configurable,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct ShapePropertyLayout {
+    key: PropertyKey,
+    attributes: ShapePropertyAttributes,
+}
+
+impl ShapePropertyLayout {
+    const fn new(key: PropertyKey, attributes: ShapePropertyAttributes) -> Self {
+        Self { key, attributes }
+    }
+
+    const fn key(self) -> PropertyKey {
+        self.key
+    }
+
+    const fn with_attributes(self, attributes: ShapePropertyAttributes) -> Self {
+        Self {
+            key: self.key,
+            attributes,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub(super) struct ShapeId(u32);
 
@@ -65,21 +105,51 @@ impl ShapeTable {
         &mut self,
         current: ShapeId,
         key: PropertyKey,
+        attributes: ShapePropertyAttributes,
     ) -> Result<ShapeId> {
-        let current_keys = self.keys(current)?;
-        if current_keys.contains(&key) {
-            return Ok(current);
+        let current_properties = self.properties(current)?;
+        if current_properties
+            .iter()
+            .any(|property| property.key() == key)
+        {
+            return self.transition_after_update(current, key, attributes);
         }
 
-        let mut keys = Vec::with_capacity(
-            current_keys
+        let mut properties = Vec::with_capacity(
+            current_properties
                 .len()
                 .checked_add(1)
                 .ok_or_else(|| Error::limit("shape property count overflowed"))?,
         );
-        keys.extend_from_slice(current_keys);
-        keys.push(key);
-        self.shape_for_keys(&keys)
+        properties.extend_from_slice(current_properties);
+        properties.push(ShapePropertyLayout::new(key, attributes));
+        self.shape_for_properties(&properties)
+    }
+
+    pub(super) fn transition_after_update(
+        &mut self,
+        current: ShapeId,
+        key: PropertyKey,
+        attributes: ShapePropertyAttributes,
+    ) -> Result<ShapeId> {
+        let current_properties = self.properties(current)?;
+        let mut properties = Vec::with_capacity(current_properties.len());
+        let mut changed = false;
+
+        for property in current_properties.iter().copied() {
+            if property.key() == key {
+                let updated = property.with_attributes(attributes);
+                changed = changed || updated != property;
+                properties.push(updated);
+            } else {
+                properties.push(property);
+            }
+        }
+
+        if !changed {
+            return Ok(current);
+        }
+        self.shape_for_properties(&properties)
     }
 
     pub(super) fn property_slot(
@@ -102,70 +172,77 @@ impl ShapeTable {
         current: ShapeId,
         key: PropertyKey,
     ) -> Result<ShapeId> {
-        let current_keys = self.keys(current)?;
-        if !current_keys.contains(&key) {
+        let current_properties = self.properties(current)?;
+        if !current_properties
+            .iter()
+            .any(|property| property.key() == key)
+        {
             return Ok(current);
         }
 
-        let mut keys = Vec::with_capacity(current_keys.len().saturating_sub(1));
-        for existing_key in current_keys {
-            if *existing_key != key {
-                keys.push(*existing_key);
+        let mut properties = Vec::with_capacity(current_properties.len().saturating_sub(1));
+        for property in current_properties {
+            if property.key() != key {
+                properties.push(*property);
             }
         }
-        self.shape_for_keys(&keys)
+        self.shape_for_properties(&properties)
     }
 
-    fn shape_for_keys(&mut self, keys: &[PropertyKey]) -> Result<ShapeId> {
-        if keys.is_empty() {
+    fn shape_for_properties(&mut self, properties: &[ShapePropertyLayout]) -> Result<ShapeId> {
+        if properties.is_empty() {
             return Ok(ShapeId::root());
         }
 
-        if let Some(position) = self.shapes.iter().position(|shape| shape.keys() == keys) {
+        if let Some(position) = self
+            .shapes
+            .iter()
+            .position(|shape| shape.properties() == properties)
+        {
             return ShapeId::from_storage_index(position);
         }
 
         let id = ShapeId::from_storage_index(self.shapes.len())?;
-        self.shapes.push(Shape::from_keys(keys));
+        self.shapes.push(Shape::from_properties(properties));
         Ok(id)
     }
 
-    fn keys(&self, id: ShapeId) -> Result<&[PropertyKey]> {
+    fn properties(&self, id: ShapeId) -> Result<&[ShapePropertyLayout]> {
         if id == ShapeId::root() {
             return Ok(&[]);
         }
         let index = id.storage_index()?;
         self.shapes
             .get(index)
-            .map(Shape::keys)
+            .map(Shape::properties)
             .ok_or_else(|| Error::runtime("shape id is not defined"))
     }
 }
 
 #[derive(Debug, Clone)]
 struct Shape {
-    keys: Box<[PropertyKey]>,
+    properties: Box<[ShapePropertyLayout]>,
     offsets: Box<[ShapePropertyOffset]>,
 }
 
 impl Shape {
-    fn from_keys(keys: &[PropertyKey]) -> Self {
-        let mut offsets = Vec::with_capacity(keys.len());
-        for (index, key) in keys.iter().copied().enumerate() {
+    fn from_properties(properties: &[ShapePropertyLayout]) -> Self {
+        let mut offsets = Vec::with_capacity(properties.len());
+        for (index, property) in properties.iter().copied().enumerate() {
             offsets.push(ShapePropertyOffset::new(
-                key,
+                property.key(),
                 PropertySlot::from_index(index),
             ));
         }
         offsets.sort_by_key(ShapePropertyOffset::key);
         Self {
-            keys: keys.into(),
+            properties: properties.into(),
             offsets: offsets.into(),
         }
     }
 
-    fn keys(&self) -> &[PropertyKey] {
-        &self.keys
+    fn properties(&self) -> &[ShapePropertyLayout] {
+        &self.properties
     }
 
     fn property_slot(&self, key: PropertyKey) -> Option<PropertySlot> {
