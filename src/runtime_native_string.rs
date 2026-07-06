@@ -78,11 +78,8 @@ impl Context {
     }
 
     fn eval_string_argument(&mut self, args: &[Expr]) -> Result<String> {
-        let values = args
-            .iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
-        let value = Self::string_argument_value(values.first());
+        let value = self.eval_native_unary_argument_value(args)?;
+        let value = Self::string_argument_value(value.as_ref());
         self.check_string_len(&value)?;
         Ok(value)
     }

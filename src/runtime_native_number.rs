@@ -53,19 +53,13 @@ impl Context {
     }
 
     pub(super) fn eval_number_constructor(&mut self, args: &[Expr]) -> Result<Value> {
-        let values = args
-            .iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
-        Ok(Value::Number(Self::number_argument_value(values.first())))
+        let value = self.eval_native_unary_argument_value(args)?;
+        Ok(Value::Number(Self::number_argument_value(value.as_ref())))
     }
 
     pub(super) fn construct_number_object(&mut self, args: &[Expr]) -> Result<Value> {
-        let values = args
-            .iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
-        let _number_value = Self::number_argument_value(values.first());
+        let value = self.eval_native_unary_argument_value(args)?;
+        let _number_value = Self::number_argument_value(value.as_ref());
         let prototype = self.number_constructor_prototype()?;
         let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_with_prototype(
