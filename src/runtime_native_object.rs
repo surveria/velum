@@ -12,8 +12,8 @@ use crate::{
 
 use super::super::runtime_well_known::DescriptorPropertyKeys;
 use super::{
-    NativeFunction, NativeFunctionKind, OBJECT_DEFINE_PROPERTY_NAME,
-    OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME, OBJECT_HAS_OWN_NAME, OBJECT_KEYS_NAME, OBJECT_NAME,
+    NativeFunctionKind, OBJECT_DEFINE_PROPERTY_NAME, OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
+    OBJECT_HAS_OWN_NAME, OBJECT_KEYS_NAME, OBJECT_NAME,
 };
 
 const DESCRIPTOR_CONFIGURABLE_PROPERTY: &str = "configurable";
@@ -29,15 +29,11 @@ impl Context {
             return Ok(Value::NativeFunction(id));
         }
 
-        let id = NativeFunctionId::new(self.native_functions.len());
+        let id = self.next_native_function_id();
         let constructor = Value::NativeFunction(id);
         let prototype = self.object_prototype_id_with_constructor(constructor.clone())?;
         let name = self.native_function_name_value(NativeFunctionKind::Object)?;
-        self.native_functions.push(NativeFunction::new(
-            NativeFunctionKind::Object,
-            prototype,
-            name,
-        ));
+        self.push_native_function_with_id(id, NativeFunctionKind::Object, prototype, name)?;
         self.install_object_static_methods(id)?;
         self.insert_global_builtin(OBJECT_NAME, constructor.clone())?;
         Ok(constructor)

@@ -42,6 +42,8 @@ mod runtime_function_upvalues;
 mod runtime_globals;
 #[path = "runtime_native.rs"]
 mod runtime_native;
+#[path = "runtime_native_registry.rs"]
+mod runtime_native_registry;
 #[path = "runtime_static_bindings.rs"]
 mod runtime_static_bindings;
 #[path = "runtime_static_names.rs"]
@@ -51,6 +53,7 @@ mod runtime_values;
 #[path = "runtime_well_known.rs"]
 mod runtime_well_known;
 
+use runtime_native_registry::NativeFunctionRegistry;
 pub use runtime_static_bindings::CompiledBindingFrame;
 use runtime_static_bindings::StaticBindingCacheHandle;
 use runtime_static_names::StaticNameAtomCacheHandle;
@@ -76,6 +79,7 @@ pub struct Context {
     upvalue_frames: Vec<FunctionUpvalues>,
     functions: Vec<Function>,
     native_functions: Vec<runtime_native::NativeFunction>,
+    native_function_registry: NativeFunctionRegistry,
     pub(crate) host_functions: Vec<HostFunction>,
     objects: ObjectHeap,
     this_values: Vec<Value>,
@@ -195,6 +199,7 @@ impl Context {
             upvalue_frames: Vec::new(),
             functions: Vec::new(),
             native_functions: Vec::new(),
+            native_function_registry: NativeFunctionRegistry::new(),
             host_functions: Vec::new(),
             objects: ObjectHeap::new(),
             this_values: Vec::new(),

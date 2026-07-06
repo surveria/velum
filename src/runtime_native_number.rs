@@ -3,10 +3,10 @@ use crate::{
     error::Result,
     runtime::Context,
     runtime_object::{ObjectPropertyInit, PropertyEnumerable},
-    value::{NativeFunctionId, ObjectId, Value},
+    value::{ObjectId, Value},
 };
 
-use super::{NUMBER_NAME, NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY};
+use super::{NUMBER_NAME, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY};
 
 const NUMBER_EPSILON_PROPERTY: &str = "EPSILON";
 const NUMBER_MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
@@ -42,16 +42,12 @@ impl Context {
         }
 
         self.object_constructor_value()?;
-        let id = NativeFunctionId::new(self.native_functions.len());
+        let id = self.next_native_function_id();
         let constructor = Value::NativeFunction(id);
         let prototype_id = self.number_prototype_id_with_constructor(constructor.clone())?;
         let prototype = Value::Object(prototype_id);
         let name = self.native_function_name_value(NativeFunctionKind::Number)?;
-        self.native_functions.push(NativeFunction::new(
-            NativeFunctionKind::Number,
-            prototype,
-            name,
-        ));
+        self.push_native_function_with_id(id, NativeFunctionKind::Number, prototype, name)?;
         self.insert_global_builtin(NUMBER_NAME, constructor.clone())?;
         Ok(constructor)
     }

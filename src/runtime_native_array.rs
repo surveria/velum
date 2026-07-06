@@ -2,10 +2,10 @@ use crate::{
     ast::Expr,
     error::{Error, Result},
     runtime::Context,
-    value::{NativeFunctionId, ObjectId, Value},
+    value::{ObjectId, Value},
 };
 
-use super::{ARRAY_NAME, NativeFunction, NativeFunctionKind};
+use super::{ARRAY_NAME, NativeFunctionKind};
 
 const ARRAY_JOIN_DEFAULT_SEPARATOR: &str = ",";
 const ARRAY_PROTOTYPE_CONCAT_PROPERTY: &str = "concat";
@@ -27,16 +27,12 @@ impl Context {
         }
 
         self.object_constructor_value()?;
-        let id = NativeFunctionId::new(self.native_functions.len());
+        let id = self.next_native_function_id();
         let constructor = Value::NativeFunction(id);
         let prototype_id = self.array_prototype_id_with_constructor(constructor.clone())?;
         let prototype = Value::Object(prototype_id);
         let name = self.native_function_name_value(NativeFunctionKind::Array)?;
-        self.native_functions.push(NativeFunction::new(
-            NativeFunctionKind::Array,
-            prototype,
-            name,
-        ));
+        self.push_native_function_with_id(id, NativeFunctionKind::Array, prototype, name)?;
         self.install_array_prototype_methods(prototype_id)?;
         self.insert_global_builtin(ARRAY_NAME, constructor.clone())?;
         Ok(constructor)
