@@ -6,7 +6,7 @@ use crate::{
     ast::UpdateOp,
     bytecode::{
         BytecodeAddress, BytecodeBlock, BytecodeDynamicProperty, BytecodeInstruction,
-        BytecodeProgram,
+        BytecodeProgram, BytecodeProperty,
     },
     error::{Error, Result},
     native_call::NativeCallTarget,
@@ -88,6 +88,7 @@ impl Context {
             | BytecodeInstruction::CompoundStaticProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. }
             | BytecodeInstruction::StaticMember { .. }
+            | BytecodeInstruction::ArrayLength { .. }
             | BytecodeInstruction::ComputedMember { .. }
             | BytecodeInstruction::StaticPropertyAssign { .. }
             | BytecodeInstruction::ComputedPropertyAssign { .. } => {
@@ -231,6 +232,7 @@ impl Context {
             | BytecodeInstruction::CompoundStaticProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. }
             | BytecodeInstruction::StaticMember { .. }
+            | BytecodeInstruction::ArrayLength { .. }
             | BytecodeInstruction::ComputedMember { .. }
             | BytecodeInstruction::StaticPropertyAssign { .. }
             | BytecodeInstruction::ComputedPropertyAssign { .. } => {
@@ -420,12 +422,13 @@ impl Context {
                 Ok(None)
             }
             BytecodeInstruction::StaticMember { property } => {
+                self.eval_bytecode_static_member_instruction(state, property, next)
+            }
+            BytecodeInstruction::ArrayLength { property } => {
                 let object = state.stack.pop()?;
-                state.stack.push(self.get_static_property_value(
-                    &object,
-                    property.name(),
-                    property.access(),
-                )?);
+                state
+                    .stack
+                    .push(self.eval_bytecode_array_length(&object, property)?);
                 state.pc = next;
                 Ok(None)
             }
@@ -471,6 +474,33 @@ impl Context {
             }
             _ => Err(Error::runtime("bytecode member instruction mismatch")),
         }
+    }
+
+    fn eval_bytecode_static_member_instruction(
+        &mut self,
+        state: &mut BytecodeState,
+        property: &BytecodeProperty,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let object = state.stack.pop()?;
+        state.stack.push(self.get_static_property_value(
+            &object,
+            property.name(),
+            property.access(),
+        )?);
+        state.pc = next;
+        Ok(None)
+    }
+
+    fn eval_bytecode_array_length(
+        &mut self,
+        object: &Value,
+        property: &BytecodeProperty,
+    ) -> Result<Value> {
+        if let Some(value) = self.get_array_length_property_value(object)? {
+            return Ok(value);
+        }
+        self.get_static_property_value(object, property.name(), property.access())
     }
 
     fn eval_bytecode_call_instruction(

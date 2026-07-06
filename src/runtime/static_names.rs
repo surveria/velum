@@ -193,6 +193,13 @@ impl Context {
         self.runtime_property_value(value)
     }
 
+    pub(crate) fn get_array_length_property_value(&self, object: &Value) -> Result<Option<Value>> {
+        let Value::Object(id) = object else {
+            return Ok(None);
+        };
+        self.objects.array_length_value_if_array(*id)
+    }
+
     fn get_cached_object_property_value(
         &mut self,
         object: ObjectId,

@@ -131,6 +131,7 @@ impl Context {
     ) -> Result<Value> {
         if let (Value::Number(left), Value::Number(right)) = (left, right) {
             let value = match op {
+                BytecodeNumericBinaryOp::Add => left + right,
                 BytecodeNumericBinaryOp::Sub => left - right,
                 BytecodeNumericBinaryOp::Mul => left * right,
                 BytecodeNumericBinaryOp::Div => left / right,
