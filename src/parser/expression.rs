@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expr, ObjectProperty, StaticBinding, StaticName, UnaryOp, UpdateOp},
+    ast::{Expr, FunctionParam, ObjectProperty, StaticName, UnaryOp, UpdateOp},
     error::{Error, Result},
     lexer::TokenKind,
     value::Value,
@@ -238,9 +238,10 @@ impl Parser {
             )?;
         }
         let params = match signature.parameters {
-            ArrowParameters::Single => {
-                vec![self.consume_binding_identifier("expected arrow function parameter")?]
-            }
+            ArrowParameters::Single => vec![FunctionParam::new(
+                self.consume_binding_identifier("expected arrow function parameter")?,
+                None,
+            )],
             ArrowParameters::Parenthesized => {
                 self.consume(&TokenKind::LParen, "expected '(' before arrow parameters")?;
                 let params = self.function_parameters()?;
@@ -478,7 +479,7 @@ impl Parser {
         })
     }
 
-    pub(super) fn function_parameters(&mut self) -> Result<Vec<StaticBinding>> {
+    pub(super) fn function_parameters(&mut self) -> Result<Vec<FunctionParam>> {
         let mut params = Vec::new();
         if self.check(&TokenKind::RParen) {
             return Ok(params);
@@ -489,7 +490,12 @@ impl Parser {
                 break;
             }
             let name = self.consume_binding_identifier("expected function parameter name")?;
-            params.push(name);
+            let default = if self.match_kind(&TokenKind::Equal) {
+                Some(self.assignment()?)
+            } else {
+                None
+            };
+            params.push(FunctionParam::new(name, default));
             if !self.match_kind(&TokenKind::Comma) {
                 break;
             }

@@ -1,7 +1,10 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{CatchClause, Expr, ForInTarget, ObjectProperty, StaticBinding, Stmt, SwitchCase},
+    ast::{
+        CatchClause, Expr, ForInTarget, FunctionParam, ObjectProperty, StaticBinding, Stmt,
+        SwitchCase,
+    },
     binding_layout::BindingLayout,
     error::Result,
 };
@@ -9,13 +12,35 @@ use crate::{
 use super::{BytecodeBlock, BytecodeFunction, BytecodeHoistPlan, StatementValue};
 
 impl BytecodeFunction {
-    pub fn compile(statements: &[Stmt], layout: &BindingLayout) -> Result<Self> {
+    pub fn compile(
+        params: &[FunctionParam],
+        statements: &[Stmt],
+        layout: &BindingLayout,
+    ) -> Result<Self> {
         Ok(Self::new(
+            compile_param_defaults(params, layout)?,
             BytecodeBlock::compile_statements(statements, StatementValue::Store, layout)?,
             BytecodeHoistPlan::compile(statements, layout)?,
-            CaptureBindingCollector::collect(statements),
+            CaptureBindingCollector::collect_function(params, statements),
         ))
     }
+}
+
+fn compile_param_defaults(
+    params: &[FunctionParam],
+    layout: &BindingLayout,
+) -> Result<std::rc::Rc<[Option<BytecodeBlock>]>> {
+    params
+        .iter()
+        .map(|param| {
+            param
+                .default
+                .as_ref()
+                .map(|expr| BytecodeBlock::compile_expression(expr, layout))
+                .transpose()
+        })
+        .collect::<Result<Vec<_>>>()
+        .map(Into::into)
 }
 
 #[derive(Debug, Default)]
@@ -24,10 +49,19 @@ struct CaptureBindingCollector {
 }
 
 impl CaptureBindingCollector {
-    fn collect(statements: &[Stmt]) -> Rc<[StaticBinding]> {
+    fn collect_function(params: &[FunctionParam], statements: &[Stmt]) -> Rc<[StaticBinding]> {
         let mut collector = Self::default();
+        collector.collect_param_defaults(params);
         collector.collect_statements(statements);
         Rc::from(collector.bindings.into_boxed_slice())
+    }
+
+    fn collect_param_defaults(&mut self, params: &[FunctionParam]) {
+        for param in params {
+            if let Some(default) = &param.default {
+                self.collect_expr(default);
+            }
+        }
     }
 
     fn collect_statements(&mut self, statements: &[Stmt]) {
@@ -108,7 +142,7 @@ impl CaptureBindingCollector {
                     self.collect_expr(expr);
                 }
             }
-            Stmt::FunctionDecl { body, .. } => self.collect_statements(body),
+            Stmt::FunctionDecl { params, body, .. } => self.collect_function_body(params, body),
             Stmt::VarDecl { init, .. } => {
                 if let Some(init) = init {
                     self.collect_expr(init);
@@ -141,11 +175,9 @@ impl CaptureBindingCollector {
     fn collect_expr(&mut self, expr: &Expr) {
         match expr {
             Expr::Literal(_) | Expr::StringLiteral(_) | Expr::This => {}
-            Expr::Function { body, .. }
-            | Expr::ArrowFunction { body, .. }
-            | Expr::MethodFunction { body, .. } => {
-                self.collect_statements(body);
-            }
+            Expr::Function { params, body, .. }
+            | Expr::ArrowFunction { params, body, .. }
+            | Expr::MethodFunction { params, body, .. } => self.collect_function_body(params, body),
             Expr::Identifier(binding)
             | Expr::New {
                 constructor: binding,
@@ -223,6 +255,11 @@ impl CaptureBindingCollector {
         for expr in exprs {
             self.collect_expr(expr);
         }
+    }
+
+    fn collect_function_body(&mut self, params: &[FunctionParam], body: &[Stmt]) {
+        self.collect_param_defaults(params);
+        self.collect_statements(body);
     }
 
     fn collect_binding(&mut self, binding: &StaticBinding) {

@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use crate::{
     ast::{
-        CatchClause, DeclKind, Expr, ForInTarget, Program, StaticBinding, StaticBindingId,
-        StaticFunctionId, StaticNameId, Stmt, SwitchCase,
+        CatchClause, DeclKind, Expr, ForInTarget, FunctionParam, Program, StaticBinding,
+        StaticBindingId, StaticFunctionId, StaticNameId, Stmt, SwitchCase,
     },
     binding_layout::types::{
         Declaration, FunctionScope, GlobalSlot, Scope, ScopeContext, ScopeKind,
@@ -580,7 +580,7 @@ impl LayoutBuilder {
     fn analyze_function(
         &mut self,
         id: StaticFunctionId,
-        params: &[StaticBinding],
+        params: &[FunctionParam],
         body: &[Stmt],
         parent_scope: ScopeId,
         parent_function: FunctionScopeId,
@@ -589,7 +589,12 @@ impl LayoutBuilder {
         self.record_static_function(id, function)?;
         let function_scope = self.add_scope(Some(parent_scope), function, ScopeKind::Local);
         for param in params {
-            self.declare(function_scope, param)?;
+            self.declare(function_scope, &param.name)?;
+        }
+        for param in params {
+            if let Some(default) = &param.default {
+                self.analyze_expr(default, function_scope, function)?;
+            }
         }
         self.analyze_statements(body, function_scope, function_scope, function)
     }
