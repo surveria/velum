@@ -81,6 +81,52 @@ fn bytecode_quickens_static_array_index_reads_and_writes_with_fallbacks() -> Tes
     ensure_usize(vm.resource_usage().atom_count, atoms)
 }
 
+#[test]
+fn bytecode_quickens_dynamic_array_index_reads_and_writes_with_fallbacks() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r#"
+        var values = [4, 5, 6];
+        var index = 1;
+        var first = values[index];
+        values[index + 1] = first + 10;
+
+        var key = "0";
+        var fromStringKey = values[key];
+
+        var far = 100000;
+        values[far] = 7;
+
+        var plain = {};
+        plain[index] = 8;
+
+        var text = "hi";
+        var zero = 0;
+
+        first === 5 &&
+            values[2] === 15 &&
+            fromStringKey === 4 &&
+            values[far] === 7 &&
+            plain[1] === 8 &&
+            text[zero] === "h" ? 42 : 0
+        "#,
+    )?;
+    ensure_at_least(
+        script.usage().bytecode_property_operand_count(),
+        9,
+        "bytecode property operands",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    let atoms = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atoms)
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
