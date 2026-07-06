@@ -24,17 +24,14 @@ impl Context {
     }
 
     pub(crate) fn get_property_value(&self, object: &Value, property: &str) -> Result<Value> {
+        let lookup = self.property_lookup(property);
         if let Value::Function(id) = object {
-            return self.get_function_property(*id, property);
+            return self.get_function_property_lookup(*id, lookup);
         }
         if let Value::NativeFunction(id) = object {
-            return self.get_native_function_property(*id, property);
+            return self.get_native_function_property_lookup(*id, lookup);
         }
-        self.checked_value(get_property(
-            &self.objects,
-            object,
-            self.property_lookup(property),
-        )?)
+        self.checked_value(get_property(&self.objects, object, lookup)?)
     }
 
     pub(crate) fn get_dynamic_property_value(
@@ -43,10 +40,10 @@ impl Context {
         property: &DynamicPropertyKey,
     ) -> Result<Value> {
         if let Value::Function(id) = object {
-            return self.get_function_property(*id, property.name());
+            return self.get_function_property_lookup(*id, property.lookup());
         }
         if let Value::NativeFunction(id) = object {
-            return self.get_native_function_property(*id, property.name());
+            return self.get_native_function_property_lookup(*id, property.lookup());
         }
         self.checked_value(get_property(&self.objects, object, property.lookup())?)
     }
@@ -59,10 +56,12 @@ impl Context {
     ) -> Result<()> {
         self.checked_value(value.clone())?;
         if let Value::Function(id) = object {
-            return self.set_function_property(*id, property.name(), value);
+            let key = self.intern_dynamic_property_key(property)?;
+            return self.set_function_property_key(*id, property.name(), key, value);
         }
         if let Value::NativeFunction(id) = object {
-            return self.set_native_function_property(*id, property.name(), value);
+            let key = self.intern_dynamic_property_key(property)?;
+            return self.set_native_function_property_key(*id, property.name(), key, value);
         }
         let key = self.intern_dynamic_property_key(property)?;
         set_property(
@@ -82,12 +81,12 @@ impl Context {
     ) -> Result<Value> {
         if let Value::Function(id) = object {
             return self
-                .delete_function_property(*id, property.name())
+                .delete_function_property_lookup(*id, property.lookup())
                 .map(Value::Bool);
         }
         if let Value::NativeFunction(id) = object {
             return self
-                .delete_native_function_property(*id, property.name())
+                .delete_native_function_property_lookup(*id, property.lookup())
                 .map(Value::Bool);
         }
         delete_property(&mut self.objects, object, property.lookup()).map(Value::Bool)
@@ -99,8 +98,10 @@ impl Context {
         property: &DynamicPropertyKey,
     ) -> Result<bool> {
         match object {
-            Value::Function(id) => self.has_function_property(*id, property.name()),
-            Value::NativeFunction(id) => self.has_native_function_property(*id, property.name()),
+            Value::Function(id) => self.has_function_property_lookup(*id, property.lookup()),
+            Value::NativeFunction(id) => {
+                self.has_native_function_property_lookup(*id, property.lookup())
+            }
             _ => has_property(&self.objects, object, property.lookup()),
         }
     }

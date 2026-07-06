@@ -122,17 +122,14 @@ impl Context {
         object: &Value,
         property: &StaticName,
     ) -> Result<Value> {
+        let lookup = self.static_property_lookup(property)?;
         if let Value::Function(id) = object {
-            return self.get_function_property(*id, property);
+            return self.get_function_property_lookup(*id, lookup);
         }
         if let Value::NativeFunction(id) = object {
-            return self.get_native_function_property(*id, property);
+            return self.get_native_function_property_lookup(*id, lookup);
         }
-        self.checked_value(get_property(
-            &self.objects,
-            object,
-            self.static_property_lookup(property)?,
-        )?)
+        self.checked_value(get_property(&self.objects, object, lookup)?)
     }
 
     pub(crate) fn set_static_property_value(
@@ -142,13 +139,13 @@ impl Context {
         value: Value,
     ) -> Result<()> {
         self.checked_value(value.clone())?;
+        let key = self.intern_static_property_key(property)?;
         if let Value::Function(id) = object {
-            return self.set_function_property(*id, property, value);
+            return self.set_function_property_key(*id, property, key, value);
         }
         if let Value::NativeFunction(id) = object {
-            return self.set_native_function_property(*id, property, value);
+            return self.set_native_function_property_key(*id, property, key, value);
         }
-        let key = self.intern_static_property_key(property)?;
         set_property(
             &mut self.objects,
             object,
@@ -164,17 +161,17 @@ impl Context {
         object: &Value,
         property: &StaticName,
     ) -> Result<Value> {
+        let lookup = self.static_property_lookup(property)?;
         if let Value::Function(id) = object {
             return self
-                .delete_function_property(*id, property)
+                .delete_function_property_lookup(*id, lookup)
                 .map(Value::Bool);
         }
         if let Value::NativeFunction(id) = object {
             return self
-                .delete_native_function_property(*id, property)
+                .delete_native_function_property_lookup(*id, lookup)
                 .map(Value::Bool);
         }
-        let lookup = self.static_property_lookup(property)?;
         delete_property(&mut self.objects, object, lookup).map(Value::Bool)
     }
 
