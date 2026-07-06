@@ -177,6 +177,10 @@ impl Context {
         self.objects.shape_count()
     }
 
+    pub(crate) const fn prototype_lookup_version(&self) -> u64 {
+        self.objects.prototype_lookup_version()
+    }
+
     pub(crate) fn intern_atom(&mut self, name: &str) -> Result<AtomId> {
         self.check_string_len(name)?;
         self.atoms.intern(name)

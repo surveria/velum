@@ -35,34 +35,29 @@ impl ObjectHeap {
         values: Vec<Value>,
         max_properties: usize,
     ) -> Result<Value> {
-        let object = self.object_mut(id)?;
-        let mut length = object
-            .array_length
-            .ok_or_else(|| Error::runtime(ARRAY_PUSH_RECEIVER_ERROR))?;
+        let mut length = self.array_length_for_method(id, ARRAY_PUSH_RECEIVER_ERROR)?;
 
         for value in values {
             let index = length.index()?;
-            object.set_array_index(index, value, max_properties)?;
+            self.set_array_index(id, index, value, max_properties)?;
             length = index.next_length()?;
         }
-        object.array_length = Some(length);
+        self.object_mut(id)?.array_length = Some(length);
         Ok(length.value())
     }
 
     pub(crate) fn array_pop(&mut self, id: ObjectId) -> Result<Value> {
-        let (object, shapes) = self.object_mut_with_shapes(id)?;
-        let Some(length) = object.array_length else {
-            return Err(Error::runtime(ARRAY_POP_RECEIVER_ERROR));
-        };
+        let length = self.array_length_for_method(id, ARRAY_POP_RECEIVER_ERROR)?;
         let Some(index) = length.previous_index() else {
             return Ok(Value::Undefined);
         };
 
-        let value = object
-            .get_own_array_index(shapes, index)?
+        let value = self
+            .object(id)?
+            .get_own_array_index(&self.shapes, index)?
             .unwrap_or(Value::Undefined);
-        object.delete_array_index(index, shapes)?;
-        object.array_length = Some(index.length());
+        self.delete_array_index(id, index)?;
+        self.object_mut(id)?.array_length = Some(index.length());
         Ok(value)
     }
 
@@ -366,16 +361,21 @@ impl ObjectHeap {
         value: Value,
         max_properties: usize,
     ) -> Result<()> {
+        let before = self.object(id)?.structure_snapshot();
         let object = self.object_mut(id)?;
         if object.array_length.is_none() {
             return Err(Error::runtime("array index receiver is not an array"));
         }
-        object.set_array_index(index, value, max_properties)
+        object.set_array_index(index, value, max_properties)?;
+        self.bump_if_structure_changed(id, before)
     }
 
     fn delete_array_index(&mut self, id: ObjectId, index: ArrayIndex) -> Result<bool> {
+        let before = self.object(id)?.structure_snapshot();
         let (object, shapes) = self.object_mut_with_shapes(id)?;
-        object.delete_array_index(index, shapes)
+        let deleted = object.delete_array_index(index, shapes)?;
+        self.bump_if_structure_changed(id, before)?;
+        Ok(deleted)
     }
 
     fn array_property_value_by_index(

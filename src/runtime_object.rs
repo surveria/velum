@@ -265,6 +265,7 @@ impl ObjectHeap {
         value: Value,
         max_properties: usize,
     ) -> Result<()> {
+        let before = self.object(id)?.structure_snapshot();
         let (object, shapes) = self.object_mut_with_shapes(id)?;
         object.define(
             property,
@@ -273,7 +274,8 @@ impl ObjectHeap {
             PropertyEnumerable::No,
             shapes,
             max_properties,
-        )
+        )?;
+        self.bump_if_structure_changed(id, before)
     }
 
     pub fn get(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<Value> {
@@ -296,20 +298,28 @@ impl ObjectHeap {
         if property_name == PROTOTYPE_PROPERTY && !self.object(id)?.has_own(lookup, &self.shapes)? {
             return self.set_prototype(id, &value);
         }
+        let before = self.object(id)?.structure_snapshot();
         let (object, shapes) = self.object_mut_with_shapes(id)?;
-        object.set(property, property_name, value, shapes, max_properties)
+        object.set(property, property_name, value, shapes, max_properties)?;
+        self.bump_if_structure_changed(id, before)
     }
 
     pub fn delete(&mut self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {
         if property.name() == PROTOTYPE_PROPERTY {
             if self.object(id)?.has_own(property, &self.shapes)? {
+                let before = self.object(id)?.structure_snapshot();
                 let (object, shapes) = self.object_mut_with_shapes(id)?;
-                return object.delete(property, shapes);
+                let deleted = object.delete(property, shapes)?;
+                self.bump_if_structure_changed(id, before)?;
+                return Ok(deleted);
             }
             return Ok(true);
         }
+        let before = self.object(id)?.structure_snapshot();
         let (object, shapes) = self.object_mut_with_shapes(id)?;
-        object.delete(property, shapes)
+        let deleted = object.delete(property, shapes)?;
+        self.bump_if_structure_changed(id, before)?;
+        Ok(deleted)
     }
 
     fn get_in_chain(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<Value> {
@@ -348,6 +358,17 @@ impl ObjectHeap {
         self.shapes.len()
     }
 
+    fn bump_if_structure_changed(
+        &mut self,
+        id: ObjectId,
+        before: ObjectStructureSnapshot,
+    ) -> Result<()> {
+        if self.object(id)?.structure_snapshot() == before {
+            return Ok(());
+        }
+        self.bump_prototype_lookup_version()
+    }
+
     fn push_object(&mut self, object: Object, max_objects: usize) -> Result<ObjectId> {
         if self.objects.len() >= max_objects {
             return Err(Error::limit(format!("object count exceeded {max_objects}")));
@@ -366,6 +387,14 @@ struct Object {
     shape: ShapeId,
     enumerable_property_count: usize,
     array_length: Option<ArrayLength>,
+    prototype: Option<ObjectId>,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct ObjectStructureSnapshot {
+    shape: ShapeId,
+    property_count: usize,
+    enumerable_property_count: usize,
     prototype: Option<ObjectId>,
 }
 
@@ -415,6 +444,15 @@ impl Object {
             | Value::NativeFunction(_)
             | Value::HostFunction(_)
             | Value::Error(_) => None,
+        }
+    }
+
+    const fn structure_snapshot(&self) -> ObjectStructureSnapshot {
+        ObjectStructureSnapshot {
+            shape: self.shape,
+            property_count: self.property_count(),
+            enumerable_property_count: self.enumerable_property_count,
+            prototype: self.prototype,
         }
     }
 

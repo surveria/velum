@@ -108,6 +108,7 @@ fn keeps_many_vms_isolated_after_one_vm_fails() -> TestResult {
                 global_bindings: 1,
                 atom_count: report.resources.atom_count,
                 shape_count: report.resources.shape_count,
+                prototype_lookup_version: report.resources.prototype_lookup_version,
             },
         )?;
     }
@@ -161,6 +162,7 @@ fn reports_vm_resource_usage_at_teardown() -> TestResult {
             global_bindings: 1,
             atom_count: report.resources.atom_count,
             shape_count: report.resources.shape_count,
+            prototype_lookup_version: report.resources.prototype_lookup_version,
         },
     )?;
 
@@ -270,6 +272,66 @@ fn reuses_shape_layouts_for_matching_object_properties() -> TestResult {
     let value = vm.context().eval("delete first.gamma; first.gamma")?;
     ensure_value(&value, &Value::Undefined)?;
     ensure_usize(vm.resource_usage().shape_count, compact_shapes)
+}
+
+#[test]
+fn tracks_prototype_lookup_version_for_structural_changes() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let initial_version = vm.resource_usage().prototype_lookup_version;
+    ensure_positive_u64(initial_version, "initial prototype lookup version")?;
+
+    let value = vm.context().eval(
+        r"
+        let proto = { shared: 1 };
+        let child = {};
+        child.__proto__ = proto;
+        child.shared
+        ",
+    )?;
+    ensure_value(&value, &Value::Number(1.0))?;
+    let linked_version = vm.resource_usage().prototype_lookup_version;
+    ensure_greater_than_u64(
+        linked_version,
+        initial_version,
+        "prototype link lookup version",
+    )?;
+
+    let value = vm.context().eval("child.own = 2; child.own")?;
+    ensure_value(&value, &Value::Number(2.0))?;
+    let own_property_version = vm.resource_usage().prototype_lookup_version;
+    ensure_greater_than_u64(
+        own_property_version,
+        linked_version,
+        "own property lookup version",
+    )?;
+
+    let value = vm.context().eval("child.own = 3; child.own")?;
+    ensure_value(&value, &Value::Number(3.0))?;
+    ensure_u64(
+        vm.resource_usage().prototype_lookup_version,
+        own_property_version,
+    )?;
+
+    let value = vm
+        .context()
+        .eval("delete child.own; child.own === undefined ? 1 : 0")?;
+    ensure_value(&value, &Value::Number(1.0))?;
+    let deleted_property_version = vm.resource_usage().prototype_lookup_version;
+    ensure_greater_than_u64(
+        deleted_property_version,
+        own_property_version,
+        "deleted property lookup version",
+    )?;
+
+    let value = vm.context().eval("child.__proto__ = null; child.shared")?;
+    ensure_value(&value, &Value::Undefined)?;
+    ensure_greater_than_u64(
+        vm.resource_usage().prototype_lookup_version,
+        deleted_property_version,
+        "cleared prototype lookup version",
+    )
 }
 
 #[test]
@@ -666,6 +728,13 @@ fn ensure_positive(actual: usize, label: &str) -> TestResult {
     Err(format!("expected positive {label}, got {actual}").into())
 }
 
+fn ensure_positive_u64(actual: u64, label: &str) -> TestResult {
+    if actual > 0 {
+        return Ok(());
+    }
+    Err(format!("expected positive {label}, got {actual}").into())
+}
+
 fn ensure_greater_than(actual: usize, minimum: usize, label: &str) -> TestResult {
     if actual > minimum {
         return Ok(());
@@ -673,7 +742,21 @@ fn ensure_greater_than(actual: usize, minimum: usize, label: &str) -> TestResult
     Err(format!("expected {label} greater than {minimum}, got {actual}").into())
 }
 
+fn ensure_greater_than_u64(actual: u64, minimum: u64, label: &str) -> TestResult {
+    if actual > minimum {
+        return Ok(());
+    }
+    Err(format!("expected {label} greater than {minimum}, got {actual}").into())
+}
+
 fn ensure_usize(actual: usize, expected: usize) -> TestResult {
+    if actual == expected {
+        return Ok(());
+    }
+    Err(format!("expected {expected}, got {actual}").into())
+}
+
+fn ensure_u64(actual: u64, expected: u64) -> TestResult {
     if actual == expected {
         return Ok(());
     }
