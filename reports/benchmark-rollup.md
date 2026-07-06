@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260706T202039Z.md`
-- Task: rsqjs-test-report-20260706T202039Z.md
-- Performance: 0.81x (42/63 >1.00x)
+- `rsqjs-test-report-20260706T203450Z.md`
+- Task: `67b5255` Computed member and native borrowed argument tranche: Close the remaining bytecode computed-member call argument allocation and remove obvious full-argument clones from read-only native helper paths.
+- Performance: 0.80x (42/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 10890 passed / 91688 failed (10.62%)
 
@@ -201,4 +201,5 @@ Latest report:
 | `20260706T192856Z` `e60745b` Bytecode property/native/numeric/array operand tranche: Extend the bytecode operand model beyond bindings so property access, native calls, numeric arithmetic, and guarded array-native dispatch have explicit specialized execution points. | 0.82x (43/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
 | `20260706T194510Z` `30270ec` Computed dynamic bytecode property operand tranche: Replace raw computed property cache-site ids in bytecode with an explicit dynamic property operand so computed paths match the static property operand model. | 0.82x (42/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
 | `20260706T200246Z` `ef843cf` Descriptor-aware delete inline-cache tranche: Add guarded bytecode delete fast paths for ordinary own object properties while preserving generic delete semantics for arrays, prototypes, functions, and stale cache sites. | 0.82x (40/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
-| `20260706T202039Z` rsqjs-test-report-20260706T202039Z.md | 0.81x (42/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
+| `20260706T202039Z` `d2847f1` Borrowed bytecode call argument tranche: Avoid allocating owned argument vectors on hot bytecode call paths where the callee only needs a borrowed view of already-evaluated stack values. | 0.81x (42/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
+| `20260706T203450Z` `67b5255` Computed member and native borrowed argument tranche: Close the remaining bytecode computed-member call argument allocation and remove obvious full-argument clones from read-only native helper paths. | 0.80x (42/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
