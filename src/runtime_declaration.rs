@@ -1,6 +1,7 @@
 use crate::{
     ast::{DeclKind, Expr, ForInTarget, StaticBinding, Stmt},
     atom::AtomId,
+    bytecode_hoist::BytecodeHoistPlan,
     error::{Error, Result},
     runtime::Context,
     runtime_completion::Completion,
@@ -11,6 +12,16 @@ use crate::{
 use super::runtime_static_bindings::CompiledBindingFrame;
 
 impl Context {
+    pub(crate) fn hoist_bytecode_var_declarations(
+        &mut self,
+        plan: &BytecodeHoistPlan,
+    ) -> Result<()> {
+        for binding in plan.var_declarations() {
+            self.hoist_var(binding)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn hoist_var_declarations(&mut self, statements: &[Stmt]) -> Result<()> {
         for statement in statements {
             self.hoist_statement_vars(statement)?;

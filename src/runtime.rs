@@ -240,7 +240,7 @@ impl Context {
             binding_cache,
             script.binding_layout().clone(),
             |context| {
-                context.hoist_var_declarations(&script.program().statements)?;
+                context.hoist_bytecode_var_declarations(script.bytecode().hoist_plan())?;
                 context
                     .eval_bytecode_program(script.bytecode())
                     .and_then(Completion::into_result)
