@@ -26,6 +26,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          # Full history so the version-bump gate can find the merge base.
+          fetch-depth: 0
 
       - name: Check self-hosted runner
         run: |
@@ -39,6 +41,19 @@ jobs:
           cargo --version
           cargo fmt --version
           cargo clippy --version
+
+      - name: Verify engine version bump
+        if: github.event_name == 'pull_request'
+        env:
+          RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
+        run: |
+          export GIT_CONFIG_COUNT=2
+          export GIT_CONFIG_KEY_0="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
+          export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
+          export GIT_CONFIG_KEY_1="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/surveria/.insteadOf"
+          export GIT_CONFIG_VALUE_1="https://github.com/surveria/"
+          git fetch --no-tags --quiet origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+          ./scripts/check-version-bump.sh "origin/${{ github.base_ref }}"
 
       - name: Test all
         env:
