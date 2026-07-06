@@ -716,10 +716,11 @@ impl Context {
         match instruction {
             BytecodeInstruction::Construct {
                 constructor,
+                native,
                 arg_count,
             } => {
                 let args = state.stack.tail(*arg_count)?;
-                let value = self.eval_bytecode_new_value(constructor, args)?;
+                let value = self.eval_bytecode_new_value(constructor, *native, args)?;
                 state.stack.drop_tail(*arg_count)?;
                 state.stack.push(value);
                 state.pc = next;

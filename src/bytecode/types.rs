@@ -433,6 +433,7 @@ pub enum BytecodeInstruction {
     },
     Construct {
         constructor: BytecodeBinding,
+        native: Option<NativeCallTarget>,
         arg_count: usize,
     },
     CreateFunction {

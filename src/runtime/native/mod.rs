@@ -643,7 +643,15 @@ impl Context {
         id: NativeFunctionId,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        match self.native_function(id)?.kind() {
+        self.construct_native_function_kind(self.native_function(id)?.kind(), args)
+    }
+
+    pub(super) fn construct_native_function_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        match kind {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
             NativeFunctionKind::ArrayConcat
             | NativeFunctionKind::ArrayIncludes

@@ -111,6 +111,26 @@ var number = obj.value * 7;
 Math.max(number, Math.abs(-3)) + fake.max(9, 4) + values.length;
 ";
 
+const BYTECODE_DIRECT_NATIVE_CONSTRUCTORS_SOURCE: &str = r#"
+var directArray = new Array(1, 2, 3);
+var directString = new String("hi");
+var directNumber = new Number("7");
+var directBoolean = new Boolean("");
+var directError = new Error("boom");
+directArray.length + directString.length
+    + Number(typeof directNumber === "object")
+    + Number(typeof directBoolean === "object")
+    + Number(directError.message == "boom")
+"#;
+
+const BYTECODE_SHADOWED_NATIVE_CONSTRUCTOR_SOURCE: &str = r"
+var Array = function Array(value) {
+    this.value = value;
+};
+var made = new Array(11);
+made.value;
+";
+
 #[test]
 fn compiled_script_exposes_bytecode_instruction_count() -> TestResult {
     let engine = Engine::new();
@@ -265,6 +285,35 @@ fn bytecode_carries_property_native_and_numeric_operands() -> TestResult {
     ensure_usize(vm.resource_usage().atom_count, atoms)
 }
 
+#[test]
+fn bytecode_carries_direct_native_constructor_operands() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(BYTECODE_DIRECT_NATIVE_CONSTRUCTORS_SOURCE)?;
+    let usage = script.usage();
+
+    ensure_at_least(
+        usage.bytecode_direct_native_call_count(),
+        5,
+        "bytecode direct native calls",
+    )?;
+    ensure_usize(usage.bytecode_array_native_call_count(), 1)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(8.0))?;
+    let atoms = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(8.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atoms)?;
+
+    let shadowed = vm.compile(BYTECODE_SHADOWED_NATIVE_CONSTRUCTOR_SOURCE)?;
+    ensure_usize(shadowed.usage().bytecode_direct_native_call_count(), 1)?;
+    ensure_usize(shadowed.usage().bytecode_array_native_call_count(), 1)?;
+    let value = vm.eval_compiled(&shadowed)?;
+    ensure_value(&value, &Value::Number(11.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual != expected {
         return Err(format!("expected {expected:?}, got {actual:?}").into());
@@ -275,6 +324,13 @@ fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
 fn ensure_positive(value: usize, label: &str) -> TestResult {
     if value == 0 {
         return Err(format!("expected positive {label}, got {value}").into());
+    }
+    Ok(())
+}
+
+fn ensure_at_least(value: usize, minimum: usize, label: &str) -> TestResult {
+    if value < minimum {
+        return Err(format!("expected {label} >= {minimum}, got {value}").into());
     }
     Ok(())
 }

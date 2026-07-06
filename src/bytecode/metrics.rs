@@ -238,7 +238,8 @@ impl BytecodeInstruction {
         match self {
             Self::CallBinding { native, .. }
             | Self::CallStaticMember { native, .. }
-            | Self::CallComputedMember { native, .. } => usize::from(native.is_some()),
+            | Self::CallComputedMember { native, .. }
+            | Self::Construct { native, .. } => usize::from(native.is_some()),
             Self::If {
                 condition,
                 consequent,
@@ -304,7 +305,8 @@ impl BytecodeInstruction {
         match self {
             Self::CallBinding { native, .. }
             | Self::CallStaticMember { native, .. }
-            | Self::CallComputedMember { native, .. } => {
+            | Self::CallComputedMember { native, .. }
+            | Self::Construct { native, .. } => {
                 native.map_or(0, |target| usize::from(target.is_array_target()))
             }
             Self::If {

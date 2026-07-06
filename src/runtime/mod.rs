@@ -349,11 +349,15 @@ impl Context {
     pub(crate) fn eval_bytecode_new_value(
         &mut self,
         constructor: &BytecodeBinding,
+        native: Option<NativeCallTarget>,
         args: &[Value],
     ) -> Result<Value> {
         if constructor.name().as_str() != TEST262_ERROR_NAME {
-            return self
-                .eval_bytecode_function_constructor(constructor, RuntimeCallArgs::values(args));
+            return self.eval_bytecode_function_constructor(
+                constructor,
+                native,
+                RuntimeCallArgs::values(args),
+            );
         }
         self.eval_error_constructor(ErrorName::Test262Error, RuntimeCallArgs::values(args))
     }
@@ -361,6 +365,7 @@ impl Context {
     fn eval_bytecode_function_constructor(
         &mut self,
         constructor: &BytecodeBinding,
+        native: Option<NativeCallTarget>,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let value = self
@@ -368,6 +373,11 @@ impl Context {
             .ok_or_else(|| reference_error_undefined(constructor.name()))?;
         let Value::Function(id) = value else {
             if let Value::NativeFunction(id) = value {
+                if let Some(target) = native
+                    && let Some(kind) = self.direct_native_call_kind(id, target)
+                {
+                    return self.construct_native_function_kind(kind, args);
+                }
                 return self.construct_native_function(id, args);
             }
             return Err(Error::runtime(format!(
