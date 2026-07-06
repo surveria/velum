@@ -26,6 +26,8 @@ use crate::runtime_scope::{BindingCell, BindingScope};
 use crate::string_heap::StringHeap;
 use crate::value::{ErrorName, Value};
 
+#[path = "runtime_binding_location.rs"]
+mod runtime_binding_location;
 #[path = "runtime_declaration.rs"]
 mod runtime_declaration;
 #[path = "runtime_dynamic_property.rs"]
