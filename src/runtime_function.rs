@@ -68,6 +68,7 @@ impl Context {
         let function_name = self.function_name(name)?;
         let param_atoms = self.function_param_atoms(params)?;
         let static_name_atom_cache = self.current_static_name_atom_cache();
+        let static_binding_cache = self.current_static_binding_cache();
         self.functions.push(super::Function {
             name: function_name,
             arity: super::FunctionArity::new(params.len()),
@@ -75,6 +76,7 @@ impl Context {
             body: Rc::clone(body),
             captures: self.locals.clone(),
             static_name_atom_cache,
+            static_binding_cache,
             properties: FunctionProperties::new(prototype),
             constructable,
         });
@@ -111,13 +113,14 @@ impl Context {
         args: &[Expr],
         this_value: Value,
     ) -> Result<Completion> {
-        let (param_atoms, body, captures, static_name_atom_cache) = {
+        let (param_atoms, body, captures, static_name_atom_cache, static_binding_cache) = {
             let function = self.function(id)?;
             (
                 Rc::clone(&function.param_atoms),
                 Rc::clone(&function.body),
                 function.captures.clone(),
                 function.static_name_atom_cache.clone(),
+                function.static_binding_cache.clone(),
             )
         };
         let args = self.eval_args(args)?;
@@ -131,7 +134,7 @@ impl Context {
         };
         self.locals.push(scope);
         self.this_values.push(this_value);
-        let result = self.eval_function_body(static_name_atom_cache, &body);
+        let result = self.eval_function_body(static_name_atom_cache, static_binding_cache, &body);
         let removed_this = self.this_values.pop();
         let removed = self.locals.pop();
         self.locals = caller_locals;
@@ -462,18 +465,27 @@ impl Context {
     fn eval_function_body(
         &mut self,
         static_name_atom_cache: Option<super::StaticNameAtomCacheHandle>,
+        static_binding_cache: Option<super::StaticBindingCacheHandle>,
         body: &[Stmt],
     ) -> Result<Completion> {
-        let Some(static_name_atom_cache) = static_name_atom_cache else {
-            return self
+        match (static_name_atom_cache, static_binding_cache) {
+            (Some(static_name_atom_cache), Some(static_binding_cache)) => self
+                .with_static_name_caches(static_name_atom_cache, static_binding_cache, |context| {
+                    context
+                        .hoist_var_declarations(body)
+                        .and_then(|()| context.eval_block(body))
+                }),
+            (Some(static_name_atom_cache), None) => {
+                self.with_static_name_atom_cache(static_name_atom_cache, |context| {
+                    context
+                        .hoist_var_declarations(body)
+                        .and_then(|()| context.eval_block(body))
+                })
+            }
+            (None, _) => self
                 .hoist_var_declarations(body)
-                .and_then(|()| self.eval_block(body));
-        };
-        self.with_static_name_atom_cache(static_name_atom_cache, |context| {
-            context
-                .hoist_var_declarations(body)
-                .and_then(|()| context.eval_block(body))
-        })
+                .and_then(|()| self.eval_block(body)),
+        }
     }
 }
 

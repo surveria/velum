@@ -33,11 +33,14 @@ mod runtime_function_intrinsic;
 mod runtime_function_properties;
 #[path = "runtime_native.rs"]
 mod runtime_native;
+#[path = "runtime_static_bindings.rs"]
+mod runtime_static_bindings;
 #[path = "runtime_static_names.rs"]
 mod runtime_static_names;
 #[path = "runtime_well_known.rs"]
 mod runtime_well_known;
 
+use runtime_static_bindings::StaticBindingCacheHandle;
 use runtime_static_names::StaticNameAtomCacheHandle;
 use runtime_well_known::WellKnownPropertyKeys;
 
@@ -51,6 +54,7 @@ pub struct Context {
     atoms: AtomTable,
     well_known_properties: WellKnownPropertyKeys,
     static_name_atom_caches: Vec<StaticNameAtomCacheHandle>,
+    static_binding_caches: Vec<StaticBindingCacheHandle>,
     globals: BindingScope,
     locals: Vec<BindingScope>,
     functions: Vec<Function>,
@@ -71,6 +75,7 @@ struct Function {
     body: Rc<[Stmt]>,
     captures: Vec<BindingScope>,
     static_name_atom_cache: Option<StaticNameAtomCacheHandle>,
+    static_binding_cache: Option<StaticBindingCacheHandle>,
     properties: runtime_function_properties::FunctionProperties,
     constructable: bool,
 }
@@ -116,6 +121,7 @@ impl Context {
             atoms: AtomTable::new(),
             well_known_properties: WellKnownPropertyKeys::new(),
             static_name_atom_caches: Vec::new(),
+            static_binding_caches: Vec::new(),
             globals: BindingScope::new(),
             locals: Vec::new(),
             functions: Vec::new(),
@@ -146,8 +152,11 @@ impl Context {
     /// Fails when the compiled script exceeds this context's limits or evaluation fails.
     pub fn eval_compiled(&mut self, script: &CompiledScript) -> Result<Value> {
         script.ensure_within_limits(self.limits)?;
-        let cache = StaticNameAtomCacheHandle::new(script.usage().static_name_count());
-        self.with_static_name_atom_cache(cache, |context| context.eval_program(script.program()))
+        let static_name_cache = StaticNameAtomCacheHandle::new(script.usage().static_name_count());
+        let binding_cache = StaticBindingCacheHandle::new(script.usage().static_name_count());
+        self.with_static_name_caches(static_name_cache, binding_cache, |context| {
+            context.eval_program(script.program())
+        })
     }
 
     #[must_use]

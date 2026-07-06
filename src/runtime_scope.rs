@@ -10,6 +10,7 @@ use crate::value::Value;
 #[derive(Debug, Clone, Default)]
 pub struct BindingScope {
     slots: Vec<BindingCell>,
+    slot_atoms: Vec<AtomId>,
     bindings: Vec<BindingEntry>,
 }
 
@@ -17,6 +18,7 @@ impl BindingScope {
     pub const fn new() -> Self {
         Self {
             slots: Vec::new(),
+            slot_atoms: Vec::new(),
             bindings: Vec::new(),
         }
     }
@@ -30,30 +32,46 @@ impl BindingScope {
     }
 
     pub(crate) fn get(&self, atom: AtomId) -> Option<BindingCell> {
+        let slot = self.slot_of(atom)?;
+        self.cell(slot).cloned()
+    }
+
+    pub(crate) fn slot_of(&self, atom: AtomId) -> Option<BindingSlot> {
         let position = self.binding_position(atom).ok()?;
-        let entry = self.bindings.get(position)?;
-        self.cell(entry.slot()).cloned()
+        self.bindings.get(position).map(|entry| entry.slot())
     }
 
-    pub(crate) fn insert(&mut self, atom: AtomId, binding: BindingCell) {
-        self.insert_or_replace(atom, binding);
+    pub(crate) fn cell_for_slot(&self, atom: AtomId, slot: BindingSlot) -> Option<BindingCell> {
+        let slot_atom = self.slot_atoms.get(slot.index()).copied()?;
+        if slot_atom != atom {
+            return None;
+        }
+        self.cell(slot).cloned()
     }
 
-    pub(crate) fn insert_or_replace(&mut self, atom: AtomId, binding: BindingCell) {
+    pub(crate) fn insert(&mut self, atom: AtomId, binding: BindingCell) -> BindingSlot {
+        self.insert_or_replace(atom, binding)
+    }
+
+    pub(crate) fn insert_or_replace(&mut self, atom: AtomId, binding: BindingCell) -> BindingSlot {
         match self.binding_position(atom) {
             Ok(position) => {
                 let Some(entry) = self.bindings.get(position) else {
-                    return;
+                    return BindingSlot::from_index(self.slots.len());
                 };
-                if let Some(existing) = self.cell_mut(entry.slot()) {
+                let slot = entry.slot();
+                if let Some(existing) = self.cell_mut(slot) {
                     *existing = binding;
                 }
+                slot
             }
             Err(position) => {
                 let slot = BindingSlot::from_index(self.slots.len());
                 self.slots.push(binding);
+                self.slot_atoms.push(atom);
                 self.bindings
                     .insert(position, BindingEntry::new(atom, slot));
+                slot
             }
         }
     }
@@ -61,12 +79,15 @@ impl BindingScope {
     pub(crate) fn retain_only(&mut self, atom: AtomId) {
         let Some(binding) = self.get(atom) else {
             self.slots.clear();
+            self.slot_atoms.clear();
             self.bindings.clear();
             return;
         };
         self.slots.clear();
+        self.slot_atoms.clear();
         self.bindings.clear();
         self.slots.push(binding);
+        self.slot_atoms.push(atom);
         self.bindings
             .push(BindingEntry::new(atom, BindingSlot::zero()));
     }
@@ -106,7 +127,7 @@ impl BindingEntry {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
-struct BindingSlot(usize);
+pub struct BindingSlot(usize);
 
 impl BindingSlot {
     const fn from_index(index: usize) -> Self {
@@ -117,7 +138,7 @@ impl BindingSlot {
         Self(0)
     }
 
-    const fn index(self) -> usize {
+    pub const fn index(self) -> usize {
         self.0
     }
 }
