@@ -8,6 +8,9 @@ use super::Parser;
 
 impl Parser {
     pub(super) fn assignment(&mut self) -> Result<Expr> {
+        if let Some(function) = self.arrow_function()? {
+            return Ok(function);
+        }
         let target = self.conditional()?;
         let Some((operator, offset)) = self.assignment_operator() else {
             return Ok(target);

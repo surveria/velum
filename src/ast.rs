@@ -359,6 +359,12 @@ pub enum Expr {
         body: Rc<[Stmt]>,
         is_async: bool,
     },
+    ArrowFunction {
+        id: StaticFunctionId,
+        params: Rc<[StaticBinding]>,
+        body: Rc<[Stmt]>,
+        is_async: bool,
+    },
     MethodFunction {
         id: StaticFunctionId,
         name: StaticName,

@@ -141,7 +141,9 @@ impl CaptureBindingCollector {
     fn collect_expr(&mut self, expr: &Expr) {
         match expr {
             Expr::Literal(_) | Expr::StringLiteral(_) | Expr::This => {}
-            Expr::Function { body, .. } | Expr::MethodFunction { body, .. } => {
+            Expr::Function { body, .. }
+            | Expr::ArrowFunction { body, .. }
+            | Expr::MethodFunction { body, .. } => {
                 self.collect_statements(body);
             }
             Expr::Identifier(binding)

@@ -260,6 +260,12 @@ impl<'a> BytecodeCompiler<'a> {
                 body,
                 is_async,
             } => self.compile_function_expr(*id, name.clone(), params, body, true, *is_async)?,
+            Expr::ArrowFunction {
+                id,
+                params,
+                body,
+                is_async,
+            } => self.compile_function_expr(*id, None, params, body, false, *is_async)?,
             Expr::MethodFunction {
                 id,
                 name,

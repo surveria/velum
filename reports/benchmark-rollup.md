@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260706T224011Z.md`
-- Task: rsqjs-test-report-20260706T224011Z.md
-- Performance: 0.80x (41/63 >1.00x)
+- `rsqjs-test-report-20260706T225304Z.md`
+- Task: rsqjs-test-report-20260706T225304Z.md
+- Performance: 0.79x (40/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 11617 passed / 90961 failed (11.33%)
+- Full Test262: 11647 passed / 90931 failed (11.35%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -211,4 +211,5 @@ Latest report:
 | `20260706T221054Z` `dfa1787` Dynamic array-index bytecode quickening tranche: Route computed `array[index]` reads and dense writes through a guarded array-index path before dynamic property-key materialization. | 0.81x (41/63 >1.00x) | - (0/63 >1.00x) | 11145 passed / 91433 failed (10.86%) |
 | `20260706T222432Z` `4369f79` Reorganize source module hierarchy | 0.78x (38/63 >1.00x) | - (0/63 >1.00x) | 11145 passed / 91433 failed (10.86%) |
 | `20260706T223254Z` `3b9ba0e` Add Promise and async-await execution support | 0.79x (39/63 >1.00x) | - (0/63 >1.00x) | 11617 passed / 90961 failed (11.33%) |
-| `20260706T224011Z` rsqjs-test-report-20260706T224011Z.md | 0.80x (41/63 >1.00x) | - (0/63 >1.00x) | 11617 passed / 90961 failed (11.33%) |
+| `20260706T224011Z` `e4e40a5` Add direct native constructor operands | 0.80x (41/63 >1.00x) | - (0/63 >1.00x) | 11617 passed / 90961 failed (11.33%) |
+| `20260706T225304Z` rsqjs-test-report-20260706T225304Z.md | 0.79x (40/63 >1.00x) | - (0/63 >1.00x) | 11647 passed / 90931 failed (11.35%) |

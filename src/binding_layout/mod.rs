@@ -545,6 +545,9 @@ impl LayoutBuilder {
             Expr::Function {
                 id, params, body, ..
             }
+            | Expr::ArrowFunction {
+                id, params, body, ..
+            }
             | Expr::MethodFunction {
                 id, params, body, ..
             } => self.analyze_function(*id, params, body, scope, function),
