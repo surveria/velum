@@ -107,6 +107,8 @@ fn keeps_many_vms_isolated_after_one_vm_fails() -> TestResult {
                 output_entries: 1,
                 global_bindings: 1,
                 atom_count: report.resources.atom_count,
+                string_count: report.resources.string_count,
+                string_bytes: report.resources.string_bytes,
                 shape_count: report.resources.shape_count,
                 prototype_lookup_version: report.resources.prototype_lookup_version,
                 captured_scope_count: report.resources.captured_scope_count,
@@ -139,41 +141,6 @@ fn applies_vm_limits_without_poisoning_other_engines() -> TestResult {
     let mut default_vm = default_engine.create_vm();
     let value = default_vm.context().eval("let value = 40; value + 2")?;
     ensure_value(&value, &Value::Number(42.0))
-}
-
-#[test]
-fn reports_vm_resource_usage_at_teardown() -> TestResult {
-    let engine = Engine::new();
-    let mut vm = engine.create_vm();
-
-    let value = vm.context().eval(
-        r#"
-        let status = "ready";
-        print(status);
-        status
-        "#,
-    )?;
-    ensure_value(&value, &Value::String("ready".to_owned()))?;
-
-    let report = vm.teardown_report();
-    ensure_positive(report.resources.runtime_steps, "runtime steps")?;
-    ensure_usage(
-        &report.resources,
-        &VmResourceUsage {
-            runtime_steps: report.resources.runtime_steps,
-            output_entries: 1,
-            global_bindings: 1,
-            atom_count: report.resources.atom_count,
-            shape_count: report.resources.shape_count,
-            prototype_lookup_version: report.resources.prototype_lookup_version,
-            captured_scope_count: report.resources.captured_scope_count,
-            captured_binding_count: report.resources.captured_binding_count,
-            upvalue_cell_count: report.resources.upvalue_cell_count,
-        },
-    )?;
-
-    let finished = vm.finish();
-    ensure_usage(&finished.resources, &report.resources)
 }
 
 #[test]

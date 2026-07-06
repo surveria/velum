@@ -31,8 +31,12 @@ impl Context {
         let constructor = Value::NativeFunction(id);
         let prototype_id = self.array_prototype_id_with_constructor(constructor.clone())?;
         let prototype = Value::Object(prototype_id);
-        self.native_functions
-            .push(NativeFunction::new(NativeFunctionKind::Array, prototype));
+        let name = self.native_function_name_value(NativeFunctionKind::Array)?;
+        self.native_functions.push(NativeFunction::new(
+            NativeFunctionKind::Array,
+            prototype,
+            name,
+        ));
         self.install_array_prototype_methods(prototype_id)?;
         self.insert_global_builtin(ARRAY_NAME, constructor.clone())?;
         Ok(constructor)
@@ -179,7 +183,7 @@ impl Context {
             self.objects
                 .packed_array_join(*id, &separator, self.limits.max_string_len)?
         {
-            return Ok(Value::String(joined));
+            return self.heap_string_value(&joined);
         }
 
         let length = self.objects.array_len(*id)?;
@@ -192,7 +196,7 @@ impl Context {
             let text = Self::array_join_element_text(&value);
             self.push_join_text(&mut joined, &text)?;
         }
-        Ok(Value::String(joined))
+        self.heap_string_value(&joined)
     }
 
     pub(super) fn eval_array_shift(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
@@ -267,7 +271,8 @@ impl Context {
     }
 
     fn install_array_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
-        let concat = self.create_native_function(NativeFunctionKind::ArrayConcat, Value::Undefined);
+        let concat =
+            self.create_native_function(NativeFunctionKind::ArrayConcat, Value::Undefined)?;
         self.define_non_enumerable_object_property(
             prototype,
             ARRAY_PROTOTYPE_CONCAT_PROPERTY,
@@ -275,7 +280,7 @@ impl Context {
         )?;
 
         let includes =
-            self.create_native_function(NativeFunctionKind::ArrayIncludes, Value::Undefined);
+            self.create_native_function(NativeFunctionKind::ArrayIncludes, Value::Undefined)?;
         self.define_non_enumerable_object_property(
             prototype,
             ARRAY_PROTOTYPE_INCLUDES_PROPERTY,
@@ -283,7 +288,7 @@ impl Context {
         )?;
 
         let index_of =
-            self.create_native_function(NativeFunctionKind::ArrayIndexOf, Value::Undefined);
+            self.create_native_function(NativeFunctionKind::ArrayIndexOf, Value::Undefined)?;
         self.define_non_enumerable_object_property(
             prototype,
             ARRAY_PROTOTYPE_INDEX_OF_PROPERTY,
@@ -291,38 +296,40 @@ impl Context {
         )?;
 
         let last_index_of =
-            self.create_native_function(NativeFunctionKind::ArrayLastIndexOf, Value::Undefined);
+            self.create_native_function(NativeFunctionKind::ArrayLastIndexOf, Value::Undefined)?;
         self.define_non_enumerable_object_property(
             prototype,
             ARRAY_PROTOTYPE_LAST_INDEX_OF_PROPERTY,
             last_index_of,
         )?;
 
-        let join = self.create_native_function(NativeFunctionKind::ArrayJoin, Value::Undefined);
+        let join = self.create_native_function(NativeFunctionKind::ArrayJoin, Value::Undefined)?;
         self.define_non_enumerable_object_property(prototype, ARRAY_PROTOTYPE_JOIN_PROPERTY, join)?;
 
-        let push = self.create_native_function(NativeFunctionKind::ArrayPush, Value::Undefined);
+        let push = self.create_native_function(NativeFunctionKind::ArrayPush, Value::Undefined)?;
         self.define_non_enumerable_object_property(prototype, ARRAY_PROTOTYPE_PUSH_PROPERTY, push)?;
 
         let reverse =
-            self.create_native_function(NativeFunctionKind::ArrayReverse, Value::Undefined);
+            self.create_native_function(NativeFunctionKind::ArrayReverse, Value::Undefined)?;
         self.define_non_enumerable_object_property(
             prototype,
             ARRAY_PROTOTYPE_REVERSE_PROPERTY,
             reverse,
         )?;
 
-        let pop = self.create_native_function(NativeFunctionKind::ArrayPop, Value::Undefined);
+        let pop = self.create_native_function(NativeFunctionKind::ArrayPop, Value::Undefined)?;
         self.define_non_enumerable_object_property(prototype, ARRAY_PROTOTYPE_POP_PROPERTY, pop)?;
 
-        let shift = self.create_native_function(NativeFunctionKind::ArrayShift, Value::Undefined);
+        let shift =
+            self.create_native_function(NativeFunctionKind::ArrayShift, Value::Undefined)?;
         self.define_non_enumerable_object_property(
             prototype,
             ARRAY_PROTOTYPE_SHIFT_PROPERTY,
             shift,
         )?;
 
-        let slice = self.create_native_function(NativeFunctionKind::ArraySlice, Value::Undefined);
+        let slice =
+            self.create_native_function(NativeFunctionKind::ArraySlice, Value::Undefined)?;
         self.define_non_enumerable_object_property(
             prototype,
             ARRAY_PROTOTYPE_SLICE_PROPERTY,
@@ -330,7 +337,7 @@ impl Context {
         )?;
 
         let unshift =
-            self.create_native_function(NativeFunctionKind::ArrayUnshift, Value::Undefined);
+            self.create_native_function(NativeFunctionKind::ArrayUnshift, Value::Undefined)?;
         self.define_non_enumerable_object_property(
             prototype,
             ARRAY_PROTOTYPE_UNSHIFT_PROPERTY,
@@ -477,6 +484,7 @@ impl Context {
             }
             Value::Number(value) => *value,
             Value::String(value) => value.trim().parse::<f64>().unwrap_or(0.0),
+            Value::HeapString(value) => value.as_str().trim().parse::<f64>().unwrap_or(0.0),
         }
     }
 

@@ -16,10 +16,10 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260706T104244Z.md`
-- Task: Holey array no-prototype-index fast paths: Continue the Dense Arrays direction by adding safe direct holey-storage reads when prototype-chain indexed properties cannot affect observable results.
-- Performance: 1.24x (46/63 >1.00x)
-- Memory: 1.07x (60/63 >1.00x)
+- `rsqjs-test-report-20260706T111020Z.md`
+- Task: String heap foundation tranche: Introduce VM-owned heap strings and resource accounting before the broader compact `Value` and `StringId` migration.
+- Performance: 1.25x (44/63 >1.00x)
+- Memory: 1.09x (59/63 >1.00x)
 - Full Test262: 10872 passed / 91706 failed (10.60%)
 
 | PR / task | Performance | Memory | Full Test262 |
@@ -175,4 +175,5 @@ Latest report:
 | `20260706T101053Z` `66cff54` Primitive constructor argument fast path tranche: Avoid temporary argument-vector allocation in fixed-arity primitive constructors while preserving JavaScript argument side effects. | 1.24x (44/63 >1.00x) | 1.08x (51/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T102500Z` `bc870ac` Static binding native-call cache tranche: Extend direct native-call metadata from static member call sites to static identifier call sites. | 1.24x (44/63 >1.00x) | 1.07x (53/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T103630Z` `679a9e8` Enforce QuickJS parity benchmark budget | 1.19x (44/63 >1.00x) | 1.07x (54/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
-| `20260706T104244Z` Holey array no-prototype-index fast paths: Continue the Dense Arrays direction by adding safe direct holey-storage reads when prototype-chain indexed properties cannot affect observable results. | 1.24x (46/63 >1.00x) | 1.07x (60/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
+| `20260706T104244Z` `21f7cb2` Holey array no-prototype-index fast paths: Continue the Dense Arrays direction by adding safe direct holey-storage reads when prototype-chain indexed properties cannot affect observable results. | 1.24x (46/63 >1.00x) | 1.07x (60/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
+| `20260706T111020Z` String heap foundation tranche: Introduce VM-owned heap strings and resource accounting before the broader compact `Value` and `StringId` migration. | 1.25x (44/63 >1.00x) | 1.09x (59/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |

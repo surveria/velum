@@ -123,7 +123,7 @@ pub(super) struct NativeFunction {
 }
 
 impl NativeFunction {
-    fn new(kind: NativeFunctionKind, prototype: Value) -> Self {
+    fn new(kind: NativeFunctionKind, prototype: Value, name: Value) -> Self {
         let prototype_default = DataPropertyDescriptor::new(
             prototype.clone(),
             PropertyWritable::No,
@@ -132,7 +132,7 @@ impl NativeFunction {
         );
         let intrinsic_defaults = FunctionIntrinsicDefaults::new(
             Value::Number(kind.length()),
-            Value::String(kind.name().to_owned()),
+            name,
             Some(prototype_default),
         );
         Self {
@@ -624,10 +624,10 @@ impl Context {
         let id = NativeFunctionId::new(self.native_functions.len());
         let constructor = Value::NativeFunction(id);
         let prototype = self.error_prototype_with_constructor(constructor.clone())?;
-        self.native_functions.push(NativeFunction::new(
-            NativeFunctionKind::ErrorConstructor(name),
-            prototype,
-        ));
+        let function_kind = NativeFunctionKind::ErrorConstructor(name);
+        let function_name = self.native_function_name_value(function_kind)?;
+        self.native_functions
+            .push(NativeFunction::new(function_kind, prototype, function_name));
         self.insert_global_builtin(name.as_str(), constructor.clone())?;
         Ok(constructor)
     }
@@ -681,11 +681,20 @@ impl Context {
             .map(Value::Object)
     }
 
-    fn create_native_function(&mut self, kind: NativeFunctionKind, prototype: Value) -> Value {
+    fn create_native_function(
+        &mut self,
+        kind: NativeFunctionKind,
+        prototype: Value,
+    ) -> Result<Value> {
+        let name = self.native_function_name_value(kind)?;
         let id = NativeFunctionId::new(self.native_functions.len());
         self.native_functions
-            .push(NativeFunction::new(kind, prototype));
-        Value::NativeFunction(id)
+            .push(NativeFunction::new(kind, prototype, name));
+        Ok(Value::NativeFunction(id))
+    }
+
+    fn native_function_name_value(&mut self, kind: NativeFunctionKind) -> Result<Value> {
+        self.heap_string_value(kind.name())
     }
 
     fn native_function_id(&self, kind: NativeFunctionKind) -> Option<NativeFunctionId> {

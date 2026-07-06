@@ -46,8 +46,12 @@ impl Context {
         let constructor = Value::NativeFunction(id);
         let prototype_id = self.number_prototype_id_with_constructor(constructor.clone())?;
         let prototype = Value::Object(prototype_id);
-        self.native_functions
-            .push(NativeFunction::new(NativeFunctionKind::Number, prototype));
+        let name = self.native_function_name_value(NativeFunctionKind::Number)?;
+        self.native_functions.push(NativeFunction::new(
+            NativeFunctionKind::Number,
+            prototype,
+            name,
+        ));
         self.insert_global_builtin(NUMBER_NAME, constructor.clone())?;
         Ok(constructor)
     }
@@ -113,6 +117,7 @@ impl Context {
             Value::Bool(value) => f64::from(u8::from(*value)),
             Value::Number(value) => *value,
             Value::String(value) => Self::string_to_number(value),
+            Value::HeapString(value) => Self::string_to_number(value.as_str()),
             Value::Undefined
             | Value::Function(_)
             | Value::NativeFunction(_)

@@ -19,8 +19,12 @@ impl Context {
         let constructor = Value::NativeFunction(id);
         let prototype_id = self.boolean_prototype_id_with_constructor(constructor.clone())?;
         let prototype = Value::Object(prototype_id);
-        self.native_functions
-            .push(NativeFunction::new(NativeFunctionKind::Boolean, prototype));
+        let name = self.native_function_name_value(NativeFunctionKind::Boolean)?;
+        self.native_functions.push(NativeFunction::new(
+            NativeFunctionKind::Boolean,
+            prototype,
+            name,
+        ));
         self.insert_global_builtin(BOOLEAN_NAME, constructor.clone())?;
         Ok(constructor)
     }
