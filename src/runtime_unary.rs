@@ -43,7 +43,7 @@ impl Context {
             return self.eval_typeof(expr);
         }
         if let Expr::Identifier(name) = expr {
-            if let Some(binding) = self.get_binding(name) {
+            if let Some(binding) = self.get_binding_static(name)? {
                 return Ok(Value::String(binding.value().type_name().to_owned()));
             }
             if let Some(value) = self.builtin_value(name)? {
@@ -60,13 +60,13 @@ impl Context {
         match expr {
             Expr::Parenthesized(expr) => self.eval_delete(expr),
             Expr::Identifier(name) => {
-                let binding_exists =
-                    self.get_binding(name).is_some() || self.materialize_builtin_binding(name)?;
+                let binding_exists = self.get_binding_static(name)?.is_some()
+                    || self.materialize_builtin_binding(name)?;
                 Ok(Value::Bool(!binding_exists))
             }
             Expr::Member { object, property } => {
                 let object = self.eval_expr(object)?;
-                self.delete_property_value(&object, property)
+                self.delete_static_property_value(&object, property)
             }
             Expr::ComputedMember { object, property } => {
                 let object = self.eval_expr(object)?;

@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expr, UpdateOp},
+    ast::{Expr, StaticName, UpdateOp},
     error::{Error, Result},
     runtime::Context,
     value::Value,
@@ -21,23 +21,36 @@ impl Context {
             Expr::ComputedMember { object, property } => {
                 let object = self.eval_expr(object)?;
                 let property = self.eval_property_key(property)?;
-                self.update_property(&object, &property, op, prefix)
+                self.update_dynamic_property(&object, &property, op, prefix)
             }
             _ => Err(Error::runtime("invalid update target")),
         }
     }
 
-    fn update_binding(&self, name: &str, op: UpdateOp, prefix: bool) -> Result<Value> {
+    fn update_binding(&self, name: &StaticName, op: UpdateOp, prefix: bool) -> Result<Value> {
         let old_value = self
-            .get_binding(name)
+            .get_binding_static(name)?
             .map(|binding| binding.value())
             .ok_or_else(|| Error::runtime(format!("ReferenceError: '{name}' is not defined")))?;
         let new_value = Self::updated_number(&old_value, op)?;
-        self.assign(name, new_value.clone())?;
+        self.assign_static(name, new_value.clone())?;
         Ok(if prefix { new_value } else { old_value })
     }
 
     fn update_property(
+        &mut self,
+        object: &Value,
+        property: &StaticName,
+        op: UpdateOp,
+        prefix: bool,
+    ) -> Result<Value> {
+        let old_value = self.get_static_property_value(object, property)?;
+        let new_value = Self::updated_number(&old_value, op)?;
+        self.set_static_property_value(object, property, new_value.clone())?;
+        Ok(if prefix { new_value } else { old_value })
+    }
+
+    fn update_dynamic_property(
         &mut self,
         object: &Value,
         property: &str,

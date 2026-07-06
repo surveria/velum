@@ -1,5 +1,5 @@
 use crate::{
-    ast::{CatchClause, DeclKind, Stmt},
+    ast::{CatchClause, DeclKind, StaticName, Stmt},
     error::Result,
     runtime::Context,
     runtime_completion::Completion,
@@ -49,10 +49,10 @@ impl Context {
     fn eval_catch_scope(
         &mut self,
         catch: &CatchClause,
-        param: &str,
+        param: &StaticName,
         value: Value,
     ) -> Result<Completion> {
-        let atom = self.ensure_binding_capacity(param)?;
+        let atom = self.ensure_binding_capacity_static(param)?;
         self.checked_value(value.clone())?;
         self.active_bindings_mut()
             .insert(atom, BindingCell::new(value, true, DeclKind::Let));

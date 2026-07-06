@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::ast::{BinaryOp, Expr, ObjectProperty, Program, Stmt};
+use crate::ast::{BinaryOp, Expr, ObjectProperty, Program, StaticName, Stmt};
 use crate::atom::{AtomId, AtomTable};
 use crate::compiled_script::CompiledScript;
 use crate::error::{Error, Result};
@@ -33,9 +33,12 @@ mod runtime_function_intrinsic;
 mod runtime_function_properties;
 #[path = "runtime_native.rs"]
 mod runtime_native;
+#[path = "runtime_static_names.rs"]
+mod runtime_static_names;
 #[path = "runtime_well_known.rs"]
 mod runtime_well_known;
 
+use runtime_static_names::StaticNameAtomCacheHandle;
 use runtime_well_known::WellKnownPropertyKeys;
 
 const HOST_PRINT_NAME: &str = "print";
@@ -47,6 +50,7 @@ pub struct Context {
     limits: RuntimeLimits,
     atoms: AtomTable,
     well_known_properties: WellKnownPropertyKeys,
+    static_name_atom_caches: Vec<StaticNameAtomCacheHandle>,
     globals: BindingScope,
     locals: Vec<BindingScope>,
     functions: Vec<Function>,
@@ -66,6 +70,7 @@ struct Function {
     param_atoms: Rc<[AtomId]>,
     body: Rc<[Stmt]>,
     captures: Vec<BindingScope>,
+    static_name_atom_cache: Option<StaticNameAtomCacheHandle>,
     properties: runtime_function_properties::FunctionProperties,
     constructable: bool,
 }
@@ -110,6 +115,7 @@ impl Context {
             limits,
             atoms: AtomTable::new(),
             well_known_properties: WellKnownPropertyKeys::new(),
+            static_name_atom_caches: Vec::new(),
             globals: BindingScope::new(),
             locals: Vec::new(),
             functions: Vec::new(),
@@ -140,7 +146,8 @@ impl Context {
     /// Fails when the compiled script exceeds this context's limits or evaluation fails.
     pub fn eval_compiled(&mut self, script: &CompiledScript) -> Result<Value> {
         script.ensure_within_limits(self.limits)?;
-        self.eval_program(script.program())
+        let cache = StaticNameAtomCacheHandle::new(script.usage().static_name_count());
+        self.with_static_name_atom_cache(cache, |context| context.eval_program(script.program()))
     }
 
     #[must_use]
@@ -299,7 +306,7 @@ impl Context {
             Expr::Assignment { name, expr } => {
                 let value = self.eval_expr(expr)?;
                 self.materialize_builtin_binding(name)?;
-                self.assign(name, value.clone())?;
+                self.assign_static(name, value.clone())?;
                 Ok(value)
             }
             Expr::CompoundAssignment { op, target, expr } => {
@@ -321,7 +328,7 @@ impl Context {
             }
             Expr::Call { callee, args } => self.eval_call(callee, args),
             Expr::Function { name, params, body } => {
-                self.create_function(name.as_deref(), params, body)
+                self.create_function(name.as_ref(), params, body)
             }
             Expr::MethodFunction { name, params, body } => {
                 self.create_method_function(name, params, body)
@@ -336,7 +343,7 @@ impl Context {
         let mut values = Vec::with_capacity(properties.len());
         for property in properties {
             let value = self.eval_expr(&property.value)?;
-            let key = self.intern_property_key(&property.key)?;
+            let key = self.intern_static_property_key(&property.key)?;
             values.push((key, property.key.as_str().to_owned(), value));
         }
         let constructor_key = self.intern_property_key(OBJECT_CONSTRUCTOR_PROPERTY)?;
@@ -535,9 +542,9 @@ impl Context {
         }
     }
 
-    fn eval_member(&mut self, object: &Expr, property: &str) -> Result<Value> {
+    fn eval_member(&mut self, object: &Expr, property: &StaticName) -> Result<Value> {
         let object = self.eval_expr(object)?;
-        self.get_property_value(&object, property)
+        self.get_static_property_value(&object, property)
     }
 
     fn eval_computed_member(&mut self, object: &Expr, property: &Expr) -> Result<Value> {
@@ -643,16 +650,20 @@ impl Context {
         Ok(Value::Undefined)
     }
 
-    fn eval_new(&mut self, constructor: &str, args: &[Expr]) -> Result<Value> {
-        if constructor != TEST262_ERROR_NAME {
+    fn eval_new(&mut self, constructor: &StaticName, args: &[Expr]) -> Result<Value> {
+        if constructor.as_str() != TEST262_ERROR_NAME {
             return self.eval_function_constructor(constructor, args);
         }
         self.eval_error_constructor(ErrorName::Test262Error, args)
     }
 
-    fn eval_function_constructor(&mut self, constructor: &str, args: &[Expr]) -> Result<Value> {
+    fn eval_function_constructor(
+        &mut self,
+        constructor: &StaticName,
+        args: &[Expr],
+    ) -> Result<Value> {
         let value = self
-            .constructor_binding(constructor)?
+            .constructor_binding_static(constructor)?
             .ok_or_else(|| reference_error_undefined(constructor))?;
         let Value::Function(id) = value else {
             if let Value::NativeFunction(id) = value {
@@ -690,8 +701,8 @@ impl Context {
         )
     }
 
-    fn eval_identifier(&mut self, name: &str) -> Result<Value> {
-        if let Some(binding) = self.get_binding(name) {
+    fn eval_identifier(&mut self, name: &StaticName) -> Result<Value> {
+        if let Some(binding) = self.get_binding_static(name)? {
             return self.checked_value(binding.value());
         }
         self.builtin_value(name)?

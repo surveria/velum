@@ -1,9 +1,8 @@
 use crate::{
-    ast::{DeclKind, Expr, ForInTarget, Stmt},
+    ast::{DeclKind, Expr, ForInTarget, StaticName, Stmt},
     atom::AtomId,
     error::{Error, Result},
     runtime::Context,
-    runtime_assertions::reference_error_undefined,
     runtime_completion::Completion,
     runtime_scope::{BindingCell, BindingScope},
     value::Value,
@@ -79,8 +78,8 @@ impl Context {
         }
     }
 
-    fn hoist_var(&mut self, name: &str) -> Result<()> {
-        let atom = self.intern_atom(name)?;
+    fn hoist_var(&mut self, name: &StaticName) -> Result<()> {
+        let atom = self.intern_static_name_atom(name)?;
         if let Some(binding) = self.active_bindings().get(atom) {
             if binding.kind() == DeclKind::Var {
                 return Ok(());
@@ -100,7 +99,7 @@ impl Context {
 
     pub(crate) fn eval_declaration(
         &mut self,
-        name: &str,
+        name: &StaticName,
         kind: DeclKind,
         init: Option<&Expr>,
     ) -> Result<Completion> {
@@ -108,19 +107,19 @@ impl Context {
             DeclKind::Var => {
                 if let Some(init) = init {
                     let value = self.eval_expr(init)?;
-                    self.assign(name, value)?;
+                    self.assign_static(name, value)?;
                 }
             }
             DeclKind::Let => {
                 let value = self.eval_optional_init(init)?;
-                self.define(name, value, DeclKind::Let)?;
+                self.define_static(name, value, DeclKind::Let)?;
             }
             DeclKind::Const => {
                 let Some(init) = init else {
                     return Err(Error::runtime("const declaration requires an initializer"));
                 };
                 let value = self.eval_expr(init)?;
-                self.define(name, value, DeclKind::Const)?;
+                self.define_static(name, value, DeclKind::Const)?;
             }
         }
         Ok(Completion::Normal(Value::Undefined))
@@ -135,6 +134,26 @@ impl Context {
 
     pub(crate) fn define(&mut self, name: &str, value: Value, kind: DeclKind) -> Result<()> {
         let atom = self.intern_atom(name)?;
+        self.define_atom(atom, name, value, kind)
+    }
+
+    pub(crate) fn define_static(
+        &mut self,
+        name: &StaticName,
+        value: Value,
+        kind: DeclKind,
+    ) -> Result<()> {
+        let atom = self.intern_static_name_atom(name)?;
+        self.define_atom(atom, name, value, kind)
+    }
+
+    fn define_atom(
+        &mut self,
+        atom: AtomId,
+        name: &str,
+        value: Value,
+        kind: DeclKind,
+    ) -> Result<()> {
         if self.active_bindings().contains(atom) {
             return Err(Error::runtime(format!(
                 "'{name}' has already been declared"
@@ -149,8 +168,8 @@ impl Context {
         Ok(())
     }
 
-    pub(crate) fn ensure_binding_capacity(&mut self, name: &str) -> Result<AtomId> {
-        let atom = self.intern_atom(name)?;
+    pub(crate) fn ensure_binding_capacity_static(&mut self, name: &StaticName) -> Result<AtomId> {
+        let atom = self.intern_static_name_atom(name)?;
         self.ensure_binding_capacity_for_atom(atom)?;
         Ok(atom)
     }
@@ -190,14 +209,6 @@ impl Context {
                     .checked_add(scope.len())
                     .ok_or_else(|| Error::limit("binding count overflowed"))
             })
-    }
-
-    pub(crate) fn assign(&self, name: &str, value: Value) -> Result<()> {
-        self.checked_value(value.clone())?;
-        let Some(binding) = self.get_binding(name) else {
-            return Err(reference_error_undefined(name));
-        };
-        binding.assign(name, value)
     }
 
     fn active_bindings(&self) -> &BindingScope {
