@@ -91,11 +91,7 @@ impl Context {
         }
 
         self.ensure_binding_capacity_for_atom(atom)?;
-        let slot = if self.locals.last().is_some() {
-            self.compiled_local_binding_slot(name)?
-        } else {
-            None
-        };
+        let slot = self.compiled_active_binding_slot(name)?;
         self.active_bindings_mut()
             .insert_or_replace_at_optional_slot(
                 atom,
@@ -153,11 +149,7 @@ impl Context {
         kind: DeclKind,
     ) -> Result<()> {
         let atom = self.intern_static_name_atom(name.name())?;
-        let slot = if self.locals.last().is_some() {
-            self.compiled_local_binding_slot(name)?
-        } else {
-            None
-        };
+        let slot = self.compiled_active_binding_slot(name)?;
         self.define_atom(atom, name, value, kind, slot)?;
         self.remember_active_static_binding(name, atom)
     }
@@ -225,13 +217,16 @@ impl Context {
     }
 
     fn binding_count(&self) -> Result<usize> {
-        self.locals
-            .iter()
-            .try_fold(self.globals.len(), |count, scope| {
-                count
-                    .checked_add(scope.len())
-                    .ok_or_else(|| Error::limit("binding count overflowed"))
-            })
+        let global_count = self
+            .globals
+            .len()
+            .checked_add(self.builtin_globals.len())
+            .ok_or_else(|| Error::limit("binding count overflowed"))?;
+        self.locals.iter().try_fold(global_count, |count, scope| {
+            count
+                .checked_add(scope.len())
+                .ok_or_else(|| Error::limit("binding count overflowed"))
+        })
     }
 
     fn active_bindings(&self) -> &BindingScope {
@@ -259,5 +254,6 @@ impl Context {
             .rev()
             .find_map(|scope| scope.get(atom))
             .or_else(|| self.globals.get(atom))
+            .or_else(|| self.builtin_globals.get(atom))
     }
 }

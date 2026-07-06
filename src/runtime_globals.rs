@@ -1,0 +1,93 @@
+use crate::{
+    atom::AtomId,
+    error::Result,
+    runtime::Context,
+    runtime_object::{OBJECT_CONSTRUCTOR_PROPERTY, PropertyKey, PropertyLookup},
+    value::{ObjectId, Value},
+};
+
+impl Context {
+    #[must_use]
+    pub fn output(&self) -> &[String] {
+        &self.output
+    }
+
+    #[must_use]
+    pub fn take_output(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.output)
+    }
+
+    #[must_use]
+    pub fn get_global(&self, name: &str) -> Option<Value> {
+        let atom = self.atom(name)?;
+        self.globals
+            .get(atom)
+            .or_else(|| self.builtin_globals.get(atom))
+            .map(|binding| binding.value())
+    }
+
+    #[must_use]
+    pub const fn runtime_steps(&self) -> usize {
+        self.runtime_steps
+    }
+
+    #[must_use]
+    pub const fn atom_count(&self) -> usize {
+        self.atoms.len()
+    }
+
+    pub(crate) const fn global_binding_count(&self) -> usize {
+        self.globals
+            .len()
+            .saturating_add(self.builtin_globals.len())
+    }
+
+    pub(crate) const fn shape_count(&self) -> usize {
+        self.objects.shape_count()
+    }
+
+    pub(crate) const fn prototype_lookup_version(&self) -> u64 {
+        self.objects.prototype_lookup_version()
+    }
+
+    pub(crate) fn intern_atom(&mut self, name: &str) -> Result<AtomId> {
+        self.check_string_len(name)?;
+        self.atoms.intern(name)
+    }
+
+    pub(crate) fn atom(&self, name: &str) -> Option<AtomId> {
+        self.atoms.get(name)
+    }
+
+    pub(crate) fn intern_property_key(&mut self, name: &str) -> Result<PropertyKey> {
+        if let Some(key) = self.well_known_properties.lookup(name) {
+            return Ok(key);
+        }
+        let key = self.intern_atom(name).map(PropertyKey::new)?;
+        self.well_known_properties.remember(name, key);
+        Ok(key)
+    }
+
+    pub(crate) fn property_lookup<'a>(&self, name: &'a str) -> PropertyLookup<'a> {
+        let key = self
+            .well_known_properties
+            .lookup(name)
+            .or_else(|| self.atom(name).map(PropertyKey::new));
+        PropertyLookup::new(name, key)
+    }
+
+    pub(crate) fn object_constructor_property_key(&mut self) -> Result<PropertyKey> {
+        self.intern_property_key(OBJECT_CONSTRUCTOR_PROPERTY)
+    }
+
+    pub(crate) fn define_non_enumerable_object_property(
+        &mut self,
+        id: ObjectId,
+        name: &str,
+        value: Value,
+    ) -> Result<()> {
+        let key = self.intern_property_key(name)?;
+        self.objects
+            .define_non_enumerable(id, key, name, value, self.limits.max_object_properties)
+    }
+}

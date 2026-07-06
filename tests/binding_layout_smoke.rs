@@ -70,6 +70,14 @@ var run = function run(alpha) {
 run(3) + run(4);
 ";
 
+const GLOBAL_FRAME_AFTER_BUILTINS_SOURCE: &str = r#"
+var zeta = Number("1");
+var alpha = 2;
+var middle = 3;
+zeta = zeta + alpha + middle;
+zeta;
+"#;
+
 #[test]
 fn compiled_layout_counts_global_local_and_upvalue_slots() -> TestResult {
     let engine = Engine::new();
@@ -198,6 +206,33 @@ fn compiled_layout_drives_hoisted_var_frame_slots() -> TestResult {
     ensure_usize(vm.resource_usage().atom_count, atom_count)
 }
 
+#[test]
+fn compiled_global_slots_are_separate_from_builtins() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.eval("Number; Array; Object")?;
+    let builtin_bindings = vm.resource_usage().global_bindings;
+    ensure_greater_than(builtin_bindings, 0, "builtin global bindings")?;
+
+    let script = vm.compile(GLOBAL_FRAME_AFTER_BUILTINS_SOURCE)?;
+    let usage = script.usage();
+
+    ensure_usize(usage.global_binding_slot_count(), 3)?;
+    ensure_usize(usage.local_binding_slot_count(), 0)?;
+    ensure_usize(usage.upvalue_binding_slot_count(), 0)?;
+    ensure_usize(usage.unresolved_static_binding_count(), 1)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(6.0))?;
+    ensure_optional_value(vm.get_global("zeta").as_ref(), &Value::Number(6.0))?;
+    ensure_optional_value(vm.get_global("alpha").as_ref(), &Value::Number(2.0))?;
+    ensure_optional_value(vm.get_global("middle").as_ref(), &Value::Number(3.0))?;
+    ensure_usize(
+        vm.resource_usage().global_bindings,
+        builtin_bindings.saturating_add(3),
+    )
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
@@ -205,9 +240,23 @@ fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     Err(format!("expected value {expected:?}, got {actual:?}").into())
 }
 
+fn ensure_optional_value(actual: Option<&Value>, expected: &Value) -> TestResult {
+    let Some(actual) = actual else {
+        return Err(format!("expected value {expected:?}, got no binding").into());
+    };
+    ensure_value(actual, expected)
+}
+
 fn ensure_usize(actual: usize, expected: usize) -> TestResult {
     if actual == expected {
         return Ok(());
     }
     Err(format!("expected {expected}, got {actual}").into())
+}
+
+fn ensure_greater_than(actual: usize, minimum: usize, label: &str) -> TestResult {
+    if actual > minimum {
+        return Ok(());
+    }
+    Err(format!("expected {label} above {minimum}, got {actual}").into())
 }
