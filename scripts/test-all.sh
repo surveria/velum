@@ -29,16 +29,20 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets --all-features
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
 
-# Runner crate (its own workspace inside the `runner/` submodule).
+# Runner crate (its own workspace inside the `runner/` submodule). Override its
+# git dependency on the engine with THIS checkout, addressed by an absolute
+# path, so a nested worktree measures its own branch rather than the main
+# checkout that cargo would otherwise pick up via its upward config search.
+engine_override=(--config "paths=['${repo_root}']")
 cargo fmt --manifest-path runner/Cargo.toml --all -- --check
-cargo clippy --manifest-path runner/Cargo.toml --all-targets --all-features -- -D warnings
-cargo test --manifest-path runner/Cargo.toml --all-targets --all-features
-RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path runner/Cargo.toml --no-deps --all-features
+cargo clippy --manifest-path runner/Cargo.toml "${engine_override[@]}" --all-targets --all-features -- -D warnings
+cargo test --manifest-path runner/Cargo.toml "${engine_override[@]}" --all-targets --all-features
+RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path runner/Cargo.toml "${engine_override[@]}" --no-deps --all-features
 
 # Build the engine CLI, then run the report/benchmarks through the runner, which
 # drives everything in-process and compares against an embedded QuickJS
 # reference behind the `reference-quickjs` feature.
 cargo build --release --bin rsqjs
-cargo run --release --manifest-path runner/Cargo.toml --features reference-quickjs -- --report "${report_path}"
+cargo run --release --manifest-path runner/Cargo.toml "${engine_override[@]}" --features reference-quickjs -- --report "${report_path}"
 
 printf 'test report: %s\n' "${report_path}"
