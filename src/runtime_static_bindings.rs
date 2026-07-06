@@ -59,6 +59,15 @@ impl BindingLocation {
         }
     }
 
+    const fn builtin_global(atom: AtomId, slot: BindingSlot) -> Self {
+        Self {
+            atom,
+            scope: BindingScopeLocation::BuiltinGlobal,
+            slot,
+            validation: BindingLocationValidation::Guarded,
+        }
+    }
+
     const fn local(atom: AtomId, scope: LocalScopeIndex, slot: BindingSlot) -> Self {
         Self {
             atom,
@@ -89,6 +98,7 @@ enum BindingLocationValidation {
 #[derive(Debug, Clone, Copy)]
 enum BindingScopeLocation {
     Global,
+    BuiltinGlobal,
     Local(LocalScopeIndex),
 }
 
@@ -131,6 +141,28 @@ impl Context {
             BindingOperand::Global { .. }
             | BindingOperand::Upvalue { .. }
             | BindingOperand::Unresolved => Ok(None),
+        }
+    }
+
+    pub(crate) fn compiled_active_binding_slot(
+        &self,
+        binding: &StaticBinding,
+    ) -> Result<Option<BindingSlot>> {
+        if self.locals.last().is_some() {
+            return self.compiled_local_binding_slot(binding);
+        }
+        let Some(layout) = self.current_static_binding_layout() else {
+            return Ok(None);
+        };
+        let Some(operand) = layout.operand_for_binding_id(binding.id())? else {
+            return Ok(None);
+        };
+        match operand {
+            BindingOperand::Global { slot } => Ok(Some(BindingSlot::from_index(slot.index()?))),
+            BindingOperand::Local { .. } | BindingOperand::Upvalue { .. } => {
+                Err(Error::runtime("global binding layout is not a global slot"))
+            }
+            BindingOperand::Unresolved => Ok(None),
         }
     }
 
@@ -240,11 +272,19 @@ impl Context {
         self.globals
             .slot_of(atom)
             .map(|slot| BindingLocation::global(atom, slot))
+            .or_else(|| {
+                self.builtin_globals
+                    .slot_of(atom)
+                    .map(|slot| BindingLocation::builtin_global(atom, slot))
+            })
     }
 
     fn binding_at_location(&self, location: BindingLocation) -> Result<Option<BindingCell>> {
         match location.scope {
             BindingScopeLocation::Global => Ok(self.global_binding_at_location(location)),
+            BindingScopeLocation::BuiltinGlobal => {
+                Ok(self.builtin_global_binding_at_location(location))
+            }
             BindingScopeLocation::Local(index) => self.local_binding_at_location(index, location),
         }
     }
@@ -254,6 +294,16 @@ impl Context {
             return None;
         }
         self.globals.cell_for_slot(location.atom, location.slot)
+    }
+
+    fn builtin_global_binding_at_location(&self, location: BindingLocation) -> Option<BindingCell> {
+        if self.globals.contains(location.atom)
+            || (location.needs_shadow_guard() && self.scope_above_has_binding(0, location.atom))
+        {
+            return None;
+        }
+        self.builtin_globals
+            .cell_for_slot(location.atom, location.slot)
     }
 
     fn local_binding_at_location(

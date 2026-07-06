@@ -19,15 +19,14 @@ use crate::runtime_numeric::{
     shift_right_unsigned,
 };
 use crate::runtime_object::{
-    OBJECT_CONSTRUCTOR_PROPERTY, ObjectHeap, ObjectPropertyInit, PropertyEnumerable, PropertyKey,
-    PropertyLookup,
+    OBJECT_CONSTRUCTOR_PROPERTY, ObjectHeap, ObjectPropertyInit, PropertyEnumerable,
 };
 use crate::runtime_property::{
     delete_property, enumerable_property_keys, get_property, has_property, property_key,
     set_property,
 };
 use crate::runtime_scope::BindingScope;
-use crate::value::{ErrorName, ObjectId, Value};
+use crate::value::{ErrorName, Value};
 
 #[path = "runtime_declaration.rs"]
 mod runtime_declaration;
@@ -37,6 +36,8 @@ mod runtime_function;
 mod runtime_function_intrinsic;
 #[path = "runtime_function_properties.rs"]
 mod runtime_function_properties;
+#[path = "runtime_globals.rs"]
+mod runtime_globals;
 #[path = "runtime_native.rs"]
 mod runtime_native;
 #[path = "runtime_static_bindings.rs"]
@@ -63,6 +64,7 @@ pub struct Context {
     static_binding_caches: Vec<StaticBindingCacheHandle>,
     static_binding_layouts: Vec<BindingLayout>,
     globals: BindingScope,
+    builtin_globals: BindingScope,
     locals: Vec<BindingScope>,
     functions: Vec<Function>,
     native_functions: Vec<runtime_native::NativeFunction>,
@@ -133,6 +135,7 @@ impl Context {
             static_binding_caches: Vec::new(),
             static_binding_layouts: Vec::new(),
             globals: BindingScope::new(),
+            builtin_globals: BindingScope::new(),
             locals: Vec::new(),
             functions: Vec::new(),
             native_functions: Vec::new(),
@@ -170,85 +173,6 @@ impl Context {
             script.binding_layout().clone(),
             |context| context.eval_program(script.program()),
         )
-    }
-
-    #[must_use]
-    pub fn output(&self) -> &[String] {
-        &self.output
-    }
-
-    #[must_use]
-    pub fn take_output(&mut self) -> Vec<String> {
-        std::mem::take(&mut self.output)
-    }
-
-    #[must_use]
-    pub fn get_global(&self, name: &str) -> Option<Value> {
-        let atom = self.atom(name)?;
-        self.globals.get(atom).map(|binding| binding.value())
-    }
-
-    #[must_use]
-    pub const fn runtime_steps(&self) -> usize {
-        self.runtime_steps
-    }
-
-    #[must_use]
-    pub const fn atom_count(&self) -> usize {
-        self.atoms.len()
-    }
-
-    pub(crate) const fn global_binding_count(&self) -> usize {
-        self.globals.len()
-    }
-
-    pub(crate) const fn shape_count(&self) -> usize {
-        self.objects.shape_count()
-    }
-
-    pub(crate) const fn prototype_lookup_version(&self) -> u64 {
-        self.objects.prototype_lookup_version()
-    }
-
-    pub(crate) fn intern_atom(&mut self, name: &str) -> Result<AtomId> {
-        self.check_string_len(name)?;
-        self.atoms.intern(name)
-    }
-
-    pub(crate) fn atom(&self, name: &str) -> Option<AtomId> {
-        self.atoms.get(name)
-    }
-
-    pub(crate) fn intern_property_key(&mut self, name: &str) -> Result<PropertyKey> {
-        if let Some(key) = self.well_known_properties.lookup(name) {
-            return Ok(key);
-        }
-        let key = self.intern_atom(name).map(PropertyKey::new)?;
-        self.well_known_properties.remember(name, key);
-        Ok(key)
-    }
-
-    pub(crate) fn property_lookup<'a>(&self, name: &'a str) -> PropertyLookup<'a> {
-        let key = self
-            .well_known_properties
-            .lookup(name)
-            .or_else(|| self.atom(name).map(PropertyKey::new));
-        PropertyLookup::new(name, key)
-    }
-
-    pub(crate) fn object_constructor_property_key(&mut self) -> Result<PropertyKey> {
-        self.intern_property_key(OBJECT_CONSTRUCTOR_PROPERTY)
-    }
-
-    pub(crate) fn define_non_enumerable_object_property(
-        &mut self,
-        id: ObjectId,
-        name: &str,
-        value: Value,
-    ) -> Result<()> {
-        let key = self.intern_property_key(name)?;
-        self.objects
-            .define_non_enumerable(id, key, name, value, self.limits.max_object_properties)
     }
 
     fn eval_program(&mut self, program: &Program) -> Result<Value> {

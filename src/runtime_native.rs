@@ -619,11 +619,11 @@ impl Context {
 
     fn insert_global_builtin(&mut self, name: &str, value: Value) -> Result<()> {
         let atom = self.intern_atom(name)?;
-        if self.globals.contains(atom) {
+        if self.builtin_globals.contains(atom) {
             return Ok(());
         }
         self.ensure_extra_binding_capacity(1)?;
-        self.globals
+        self.builtin_globals
             .insert(atom, BindingCell::new(value, false, DeclKind::Const));
         Ok(())
     }
