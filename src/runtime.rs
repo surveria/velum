@@ -81,8 +81,6 @@ pub struct Context {
 
 #[derive(Debug, Clone)]
 struct Function {
-    name: FunctionName,
-    arity: FunctionArity,
     param_binding_ids: Rc<[StaticBindingId]>,
     param_atoms: Rc<[AtomId]>,
     body: Rc<[Stmt]>,
