@@ -62,9 +62,8 @@ impl Context {
         name: &StaticBinding,
         expr: &Expr,
     ) -> Result<Value> {
-        self.materialize_builtin_binding(name)?;
         let binding = self
-            .get_binding_static(name)?
+            .get_or_materialize_binding_static(name)?
             .ok_or_else(|| Error::runtime(format!("ReferenceError: '{name}' is not defined")))?;
         let old_value = binding.value();
         let right = self.eval_expr(expr)?;

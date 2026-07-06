@@ -258,6 +258,39 @@ impl Context {
         cell.assign(binding, value)
     }
 
+    pub(crate) fn assign_static_or_builtin(
+        &mut self,
+        binding: &StaticBinding,
+        value: Value,
+    ) -> Result<()> {
+        self.checked_value(value.clone())?;
+        let Some(cell) = self.get_or_materialize_binding_static(binding)? else {
+            return Err(reference_error_undefined(binding));
+        };
+        cell.assign(binding, value)
+    }
+
+    pub(crate) fn get_or_materialize_binding_static(
+        &mut self,
+        binding: &StaticBinding,
+    ) -> Result<Option<BindingCell>> {
+        if let Some(cell) = self.get_binding_static(binding)? {
+            return Ok(Some(cell));
+        }
+        if self.builtin_value(binding.name())?.is_none() {
+            return Ok(None);
+        }
+        self.get_binding_static(binding)
+    }
+
+    pub(crate) fn binding_exists_or_materialize_static(
+        &mut self,
+        binding: &StaticBinding,
+    ) -> Result<bool> {
+        self.get_or_materialize_binding_static(binding)
+            .map(|binding| binding.is_some())
+    }
+
     pub(crate) fn resolve_runtime_static_binding(
         &self,
         binding: &StaticBinding,
