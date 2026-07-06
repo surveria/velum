@@ -458,7 +458,17 @@ impl Context {
         args: &[Expr],
         this_value: &Value,
     ) -> Result<Value> {
-        match self.native_function(id)?.kind() {
+        let kind = self.native_function(id)?.kind();
+        self.eval_native_function_kind(kind, args, this_value)
+    }
+
+    pub(super) fn eval_native_function_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: &[Expr],
+        this_value: &Value,
+    ) -> Result<Value> {
+        match kind {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
             NativeFunctionKind::ArrayConcat => self.eval_array_concat(args, this_value),
             NativeFunctionKind::ArrayIncludes => self.eval_array_includes(args, this_value),
