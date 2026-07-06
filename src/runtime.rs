@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::ast::{BinaryOp, Expr, ObjectProperty, Program, StaticName, Stmt};
+use crate::ast::{BinaryOp, Expr, ObjectProperty, Program, StaticBinding, StaticName, Stmt};
 use crate::atom::{AtomId, AtomTable};
 use crate::compiled_script::CompiledScript;
 use crate::error::{Error, Result};
@@ -153,7 +153,7 @@ impl Context {
     pub fn eval_compiled(&mut self, script: &CompiledScript) -> Result<Value> {
         script.ensure_within_limits(self.limits)?;
         let static_name_cache = StaticNameAtomCacheHandle::new(script.usage().static_name_count());
-        let binding_cache = StaticBindingCacheHandle::new(script.usage().static_name_count());
+        let binding_cache = StaticBindingCacheHandle::new(script.usage().static_binding_count());
         self.with_static_name_caches(static_name_cache, binding_cache, |context| {
             context.eval_program(script.program())
         })
@@ -659,7 +659,7 @@ impl Context {
         Ok(Value::Undefined)
     }
 
-    fn eval_new(&mut self, constructor: &StaticName, args: &[Expr]) -> Result<Value> {
+    fn eval_new(&mut self, constructor: &StaticBinding, args: &[Expr]) -> Result<Value> {
         if constructor.as_str() != TEST262_ERROR_NAME {
             return self.eval_function_constructor(constructor, args);
         }
@@ -668,7 +668,7 @@ impl Context {
 
     fn eval_function_constructor(
         &mut self,
-        constructor: &StaticName,
+        constructor: &StaticBinding,
         args: &[Expr],
     ) -> Result<Value> {
         let value = self
@@ -710,11 +710,11 @@ impl Context {
         )
     }
 
-    fn eval_identifier(&mut self, name: &StaticName) -> Result<Value> {
+    fn eval_identifier(&mut self, name: &StaticBinding) -> Result<Value> {
         if let Some(binding) = self.get_binding_static(name)? {
             return self.checked_value(binding.value());
         }
-        self.builtin_value(name)?
+        self.builtin_value(name.name())?
             .ok_or_else(|| reference_error_undefined(name))
     }
 

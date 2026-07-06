@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{DeclKind, Expr, StaticName, Stmt},
+    ast::{DeclKind, Expr, StaticBinding, StaticName, Stmt},
     atom::AtomId,
     error::{Error, Result},
     runtime::Context,
@@ -23,7 +23,7 @@ impl Context {
     pub(crate) fn create_function(
         &mut self,
         name: Option<&StaticName>,
-        params: &Rc<[StaticName]>,
+        params: &Rc<[StaticBinding]>,
         body: &Rc<[Stmt]>,
     ) -> Result<Value> {
         self.create_function_with_properties(name, params, body, true)
@@ -32,7 +32,7 @@ impl Context {
     pub(crate) fn create_method_function(
         &mut self,
         name: &StaticName,
-        params: &Rc<[StaticName]>,
+        params: &Rc<[StaticBinding]>,
         body: &Rc<[Stmt]>,
     ) -> Result<Value> {
         self.create_function_with_properties(Some(name), params, body, false)
@@ -41,7 +41,7 @@ impl Context {
     fn create_function_with_properties(
         &mut self,
         name: Option<&StaticName>,
-        params: &Rc<[StaticName]>,
+        params: &Rc<[StaticBinding]>,
         body: &Rc<[Stmt]>,
         constructable: bool,
     ) -> Result<Value> {
@@ -431,10 +431,10 @@ impl Context {
         Ok(values)
     }
 
-    fn function_param_atoms(&mut self, params: &[StaticName]) -> Result<Rc<[AtomId]>> {
+    fn function_param_atoms(&mut self, params: &[StaticBinding]) -> Result<Rc<[AtomId]>> {
         let mut atoms = Vec::with_capacity(params.len());
         for param in params {
-            atoms.push(self.intern_static_name_atom(param)?);
+            atoms.push(self.intern_static_name_atom(param.name())?);
         }
         Ok(atoms.into())
     }

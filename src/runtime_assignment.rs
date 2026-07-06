@@ -1,5 +1,5 @@
 use crate::{
-    ast::{BinaryOp, Expr, StaticName},
+    ast::{BinaryOp, Expr, StaticBinding, StaticName},
     error::{Error, Result},
     runtime::Context,
     runtime_numeric::{
@@ -59,7 +59,7 @@ impl Context {
     fn eval_binding_compound_assignment(
         &mut self,
         op: BinaryOp,
-        name: &StaticName,
+        name: &StaticBinding,
         expr: &Expr,
     ) -> Result<Value> {
         self.materialize_builtin_binding(name)?;

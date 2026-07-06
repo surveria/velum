@@ -1,5 +1,5 @@
 use crate::{
-    ast::{DeclKind, Expr, StaticName},
+    ast::{DeclKind, Expr, StaticBinding},
     error::{Error, Result},
     runtime::Context,
     runtime_object::{ObjectPropertyInit, PropertyEnumerable},
@@ -434,12 +434,12 @@ impl Context {
 
     pub(crate) fn constructor_binding_static(
         &mut self,
-        name: &StaticName,
+        name: &StaticBinding,
     ) -> Result<Option<Value>> {
         if let Some(binding) = self.get_binding_static(name)? {
             return Ok(Some(binding.value()));
         }
-        self.builtin_value(name)
+        self.builtin_value(name.name())
     }
 
     pub(crate) fn eval_native_function(

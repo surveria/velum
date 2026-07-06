@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expr, StaticName, UpdateOp},
+    ast::{Expr, StaticBinding, StaticName, UpdateOp},
     error::{Error, Result},
     runtime::Context,
     value::Value,
@@ -27,7 +27,7 @@ impl Context {
         }
     }
 
-    fn update_binding(&self, name: &StaticName, op: UpdateOp, prefix: bool) -> Result<Value> {
+    fn update_binding(&self, name: &StaticBinding, op: UpdateOp, prefix: bool) -> Result<Value> {
         let old_value = self
             .get_binding_static(name)?
             .map(|binding| binding.value())

@@ -18,6 +18,22 @@ impl StaticNameId {
     }
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub struct StaticBindingId(u32);
+
+impl StaticBindingId {
+    pub fn from_index(index: usize) -> Result<Self> {
+        let id = u32::try_from(index)
+            .map_err(|_| Error::limit("static binding table exceeded supported range"))?;
+        Ok(Self(id))
+    }
+
+    pub fn index(self) -> Result<usize> {
+        usize::try_from(self.0)
+            .map_err(|_| Error::limit("static binding id exceeded supported range"))
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StaticName {
     id: StaticNameId,
@@ -55,6 +71,44 @@ impl std::fmt::Display for StaticName {
 }
 
 impl std::ops::Deref for StaticName {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct StaticBinding {
+    id: StaticBindingId,
+    name: StaticName,
+}
+
+impl StaticBinding {
+    pub const fn new(id: StaticBindingId, name: StaticName) -> Self {
+        Self { id, name }
+    }
+
+    pub const fn id(&self) -> StaticBindingId {
+        self.id
+    }
+
+    pub const fn name(&self) -> &StaticName {
+        &self.name
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.name.as_str()
+    }
+}
+
+impl std::fmt::Display for StaticBinding {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+impl std::ops::Deref for StaticBinding {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
@@ -105,7 +159,7 @@ pub enum Stmt {
     Throw(Expr),
     Return(Option<Expr>),
     VarDecl {
-        name: StaticName,
+        name: StaticBinding,
         kind: DeclKind,
         init: Option<Expr>,
     },
@@ -121,7 +175,7 @@ pub enum DeclKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ForInTarget {
-    Binding { name: StaticName, kind: DeclKind },
+    Binding { name: StaticBinding, kind: DeclKind },
     Assignment(Expr),
 }
 
@@ -139,7 +193,7 @@ pub struct SwitchCase {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CatchClause {
-    pub param: Option<StaticName>,
+    pub param: Option<StaticBinding>,
     pub body: Vec<Stmt>,
 }
 
@@ -147,7 +201,7 @@ pub struct CatchClause {
 pub enum Expr {
     Literal(Value),
     This,
-    Identifier(StaticName),
+    Identifier(StaticBinding),
     Parenthesized(Box<Self>),
     Unary {
         op: UnaryOp,
@@ -169,7 +223,7 @@ pub enum Expr {
         alternate: Box<Self>,
     },
     Assignment {
-        name: StaticName,
+        name: StaticBinding,
         expr: Box<Self>,
     },
     CompoundAssignment {
@@ -201,18 +255,18 @@ pub enum Expr {
     },
     Function {
         name: Option<StaticName>,
-        params: Rc<[StaticName]>,
+        params: Rc<[StaticBinding]>,
         body: Rc<[Stmt]>,
     },
     MethodFunction {
         name: StaticName,
-        params: Rc<[StaticName]>,
+        params: Rc<[StaticBinding]>,
         body: Rc<[Stmt]>,
     },
     Object(Vec<ObjectProperty>),
     Array(Vec<Self>),
     New {
-        constructor: StaticName,
+        constructor: StaticBinding,
         args: Vec<Self>,
     },
 }

@@ -1,4 +1,4 @@
-use crate::ast::{Program, StaticName, StaticNameId};
+use crate::ast::{Program, StaticBinding, StaticBindingId, StaticName, StaticNameId};
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
 use crate::runtime_limits::RuntimeLimits;
@@ -25,6 +25,7 @@ pub struct ParseUsage {
     pub top_level_statement_count: usize,
     pub max_expression_depth: usize,
     pub static_name_count: usize,
+    pub static_binding_count: usize,
 }
 
 struct Parser {
@@ -34,6 +35,7 @@ struct Parser {
     expression_depth: usize,
     max_expression_depth: usize,
     static_names: StaticNameTable,
+    static_bindings: StaticBindingTable,
 }
 
 impl Parser {
@@ -45,6 +47,7 @@ impl Parser {
             expression_depth: 0,
             max_expression_depth: 0,
             static_names: StaticNameTable::new(),
+            static_bindings: StaticBindingTable::new(),
         }
     }
 
@@ -66,6 +69,7 @@ impl Parser {
             top_level_statement_count: statements.len(),
             max_expression_depth: self.max_expression_depth,
             static_name_count: self.static_names.len(),
+            static_binding_count: self.static_bindings.len(),
         };
         Ok(ParsedProgram {
             program: Program { statements },
@@ -83,8 +87,22 @@ impl Parser {
         }
     }
 
+    pub(super) fn consume_binding_identifier(&mut self, message: &str) -> Result<StaticBinding> {
+        let name = self.consume_identifier(message)?;
+        self.static_binding(name)
+    }
+
     pub(super) fn static_name(&mut self, name: String) -> Result<StaticName> {
         self.static_name_at(name, self.previous_offset())
+    }
+
+    pub(super) fn static_binding(&mut self, name: StaticName) -> Result<StaticBinding> {
+        self.static_bindings.intern(name)
+    }
+
+    pub(super) fn static_binding_name(&mut self, name: String) -> Result<StaticBinding> {
+        let name = self.static_name(name)?;
+        self.static_binding(name)
     }
 
     pub(super) fn borrowed_static_name(&mut self, name: &str) -> Result<StaticName> {
@@ -256,6 +274,30 @@ impl StaticNameIndexEntry {
 
     const fn id(&self) -> StaticNameId {
         self.name.id()
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct StaticBindingTable {
+    count: usize,
+}
+
+impl StaticBindingTable {
+    const fn new() -> Self {
+        Self { count: 0 }
+    }
+
+    const fn len(&self) -> usize {
+        self.count
+    }
+
+    fn intern(&mut self, name: StaticName) -> Result<StaticBinding> {
+        let id = StaticBindingId::from_index(self.count)?;
+        self.count = self
+            .count
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("static binding count overflowed"))?;
+        Ok(StaticBinding::new(id, name))
     }
 }
 
