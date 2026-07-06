@@ -225,6 +225,10 @@ impl Context {
         if let Some(cell) = self.cached_static_binding(binding)? {
             return Ok(Some(cell));
         }
+        if let Some((location, cell)) = self.direct_compiled_static_binding(binding)? {
+            self.remember_static_binding(binding, location)?;
+            return Ok(Some(cell));
+        }
         let Some(atom) = self.lookup_static_name_atom(binding.name())? else {
             return Ok(None);
         };
@@ -344,6 +348,48 @@ impl Context {
         Ok(layout
             .operand_for_binding_id(binding)?
             .unwrap_or(BindingOperand::Unresolved))
+    }
+
+    fn direct_compiled_static_binding(
+        &self,
+        binding: &StaticBinding,
+    ) -> Result<Option<(BindingLocation, BindingCell)>> {
+        match self.compiled_binding_operand(binding.id())? {
+            BindingOperand::Local { scope, slot } => {
+                self.direct_compiled_local_static_binding(scope, slot)
+            }
+            BindingOperand::Upvalue { slot, .. } => {
+                let location = BindingLocation::upvalue(BindingSlot::from_index(slot.index()?));
+                let Some(cell) = self.binding_at_location(location)? else {
+                    return Ok(None);
+                };
+                Ok(Some((location, cell)))
+            }
+            BindingOperand::Global { .. } | BindingOperand::Unresolved => Ok(None),
+        }
+    }
+
+    fn direct_compiled_local_static_binding(
+        &self,
+        scope: ScopeId,
+        slot: crate::binding_layout_types::LocalSlot,
+    ) -> Result<Option<(BindingLocation, BindingCell)>> {
+        let slot = BindingSlot::from_index(slot.index()?);
+        for (index, frame) in self.locals.iter().enumerate().rev() {
+            if frame.compiled_scope() != Some(scope) {
+                continue;
+            }
+            let location = BindingLocation::ExactLocal {
+                frame: LocalScopeIndex::new(index),
+                compiled_scope: scope,
+                slot,
+            };
+            let Some(cell) = self.binding_at_location(location)? else {
+                return Ok(None);
+            };
+            return Ok(Some((location, cell)));
+        }
+        Ok(None)
     }
 
     fn compiled_global_static_binding(

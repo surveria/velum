@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260706T150245Z.md`
-- Task: Typed context-free property string results tranche: Stop context-free property and object fallback code from constructing temporary owned `Value::String` values for diagnostic text and virtual string characters.
-- Performance: 0.68x (34/63 >1.00x)
+- `rsqjs-test-report-20260706T161206Z.md`
+- Task: Bytecode VM foundation tranche: Put compiled execution on a generic bytecode interpreter behind the stable `CompiledScript` API before specializing hot instructions.
+- Performance: 0.70x (37/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 10872 passed / 91706 failed (10.60%)
 
@@ -192,4 +192,5 @@ Latest report:
 | `20260706T135425Z` `c6353f8` Cached binding before atom lookup tranche: Move repeated proven binding hits closer to bytecode-ready direct slot operands by avoiding static-name atom lookup when a cached runtime location is already valid. | 0.68x (36/63 >1.00x) | - (0/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T141931Z` `21b3f7e` Computed property access-site cache tranche: Extend checked per-occurrence property cache slots from static member reads and writes into non-literal computed property reads and writes without changing array index semantics. | 0.69x (38/63 >1.00x) | - (0/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T144425Z` `301b8f6` Script-local string literal constants tranche: Move parser-known string and template literals out of owned `Value::String` AST nodes and into script-local constants before broader compact-value work. | 0.67x (35/63 >1.00x) | - (0/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
-| `20260706T150245Z` Typed context-free property string results tranche: Stop context-free property and object fallback code from constructing temporary owned `Value::String` values for diagnostic text and virtual string characters. | 0.68x (34/63 >1.00x) | - (0/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
+| `20260706T150245Z` `78fd866` Typed context-free property string results tranche: Stop context-free property and object fallback code from constructing temporary owned `Value::String` values for diagnostic text and virtual string characters. | 0.68x (34/63 >1.00x) | - (0/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
+| `20260706T161206Z` `241fa0f` Bytecode VM foundation tranche: Put compiled execution on a generic bytecode interpreter behind the stable `CompiledScript` API before specializing hot instructions. | 0.70x (37/63 >1.00x) | - (0/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
