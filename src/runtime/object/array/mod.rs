@@ -4,6 +4,7 @@ use crate::{
 };
 
 mod bulk;
+mod bytecode;
 mod fast;
 mod front;
 mod storage;

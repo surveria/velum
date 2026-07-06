@@ -5,8 +5,8 @@ mod state;
 use crate::{
     ast::UpdateOp,
     bytecode::{
-        BytecodeAddress, BytecodeBlock, BytecodeDynamicProperty, BytecodeInstruction,
-        BytecodeProgram, BytecodeProperty,
+        BytecodeAddress, BytecodeArrayIndex, BytecodeBlock, BytecodeDynamicProperty,
+        BytecodeInstruction, BytecodeProgram, BytecodeProperty,
     },
     error::{Error, Result},
     native_call::NativeCallTarget,
@@ -89,8 +89,10 @@ impl Context {
             | BytecodeInstruction::CompoundComputedProperty { .. }
             | BytecodeInstruction::StaticMember { .. }
             | BytecodeInstruction::ArrayLength { .. }
+            | BytecodeInstruction::ArrayIndexMember { .. }
             | BytecodeInstruction::ComputedMember { .. }
             | BytecodeInstruction::StaticPropertyAssign { .. }
+            | BytecodeInstruction::ArrayIndexAssign { .. }
             | BytecodeInstruction::ComputedPropertyAssign { .. } => {
                 self.eval_bytecode_property_instruction(state, instruction, next)
             }
@@ -233,8 +235,10 @@ impl Context {
             | BytecodeInstruction::CompoundComputedProperty { .. }
             | BytecodeInstruction::StaticMember { .. }
             | BytecodeInstruction::ArrayLength { .. }
+            | BytecodeInstruction::ArrayIndexMember { .. }
             | BytecodeInstruction::ComputedMember { .. }
             | BytecodeInstruction::StaticPropertyAssign { .. }
+            | BytecodeInstruction::ArrayIndexAssign { .. }
             | BytecodeInstruction::ComputedPropertyAssign { .. } => {
                 self.eval_bytecode_member_instruction(state, instruction, next)
             }
@@ -432,6 +436,14 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
+            BytecodeInstruction::ArrayIndexMember { property, index } => {
+                let object = state.stack.pop()?;
+                state
+                    .stack
+                    .push(self.eval_bytecode_array_index_member(&object, property, *index)?);
+                state.pc = next;
+                Ok(None)
+            }
             BytecodeInstruction::ComputedMember { property: operand } => {
                 let property = state.stack.pop()?;
                 let object = state.stack.pop()?;
@@ -444,6 +456,22 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
+            BytecodeInstruction::StaticPropertyAssign { .. }
+            | BytecodeInstruction::ArrayIndexAssign { .. }
+            | BytecodeInstruction::ComputedPropertyAssign { .. } => {
+                self.eval_bytecode_property_assign_instruction(state, instruction, next)
+            }
+            _ => Err(Error::runtime("bytecode member instruction mismatch")),
+        }
+    }
+
+    fn eval_bytecode_property_assign_instruction(
+        &mut self,
+        state: &mut BytecodeState,
+        instruction: &BytecodeInstruction,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        match instruction {
             BytecodeInstruction::StaticPropertyAssign { property } => {
                 let value = state.stack.pop()?;
                 let object = state.stack.pop()?;
@@ -454,8 +482,12 @@ impl Context {
                     value.clone(),
                 )?;
                 state.stack.push(value);
-                state.pc = next;
-                Ok(None)
+            }
+            BytecodeInstruction::ArrayIndexAssign { property, index } => {
+                let value = state.stack.pop()?;
+                let object = state.stack.pop()?;
+                self.set_bytecode_array_index_property(&object, property, *index, value.clone())?;
+                state.stack.push(value);
             }
             BytecodeInstruction::ComputedPropertyAssign { property: operand } => {
                 let value = state.stack.pop()?;
@@ -469,11 +501,11 @@ impl Context {
                     value.clone(),
                 )?;
                 state.stack.push(value);
-                state.pc = next;
-                Ok(None)
             }
-            _ => Err(Error::runtime("bytecode member instruction mismatch")),
+            _ => return Err(Error::runtime("bytecode property assignment mismatch")),
         }
+        state.pc = next;
+        Ok(None)
     }
 
     fn eval_bytecode_static_member_instruction(
@@ -501,6 +533,43 @@ impl Context {
             return Ok(value);
         }
         self.get_static_property_value(object, property.name(), property.access())
+    }
+
+    fn eval_bytecode_array_index_member(
+        &mut self,
+        object: &Value,
+        property: &BytecodeProperty,
+        index: BytecodeArrayIndex,
+    ) -> Result<Value> {
+        if let Value::Object(id) = object
+            && let Some(value) = self
+                .objects
+                .array_index_value_if_array(*id, index.index()?)?
+        {
+            return self.runtime_value(value);
+        }
+        self.get_static_property_value(object, property.name(), property.access())
+    }
+
+    fn set_bytecode_array_index_property(
+        &mut self,
+        object: &Value,
+        property: &BytecodeProperty,
+        index: BytecodeArrayIndex,
+        value: Value,
+    ) -> Result<()> {
+        let value = self.runtime_value(value)?;
+        if let Value::Object(id) = object
+            && self.objects.set_array_index_if_array(
+                *id,
+                index.index()?,
+                value.clone(),
+                self.limits.max_object_properties,
+            )?
+        {
+            return Ok(());
+        }
+        self.set_static_property_value(object, property.name(), property.access(), value)
     }
 
     fn eval_bytecode_call_instruction(

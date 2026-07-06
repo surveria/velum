@@ -40,6 +40,47 @@ fn bytecode_quickens_numeric_add_and_array_length_with_fallbacks() -> TestResult
     ensure_usize(vm.resource_usage().atom_count, atoms)
 }
 
+#[test]
+fn bytecode_quickens_static_array_index_reads_and_writes_with_fallbacks() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r#"
+        var values = [10, 20];
+        var first = values[0];
+        values[1] = first + 2;
+        var missing = values[3];
+        values[3] = 99;
+
+        var plain = {};
+        plain[0] = 5;
+        plain[0] = plain[0] + 1;
+
+        var text = "go";
+        first === 10 &&
+            values[1] === 12 &&
+            missing === undefined &&
+            values.length === 4 &&
+            values[3] === 99 &&
+            plain[0] === 6 &&
+            text[0] === "g" ? 42 : 0
+        "#,
+    )?;
+    ensure_at_least(
+        script.usage().bytecode_property_operand_count(),
+        8,
+        "bytecode property operands",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    let atoms = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atoms)
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

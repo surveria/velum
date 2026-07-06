@@ -18,10 +18,10 @@ mod types;
 
 pub use hoist::BytecodeHoistPlan;
 pub use types::{
-    BytecodeAddress, BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock, BytecodeCatch,
-    BytecodeCompletion, BytecodeDynamicProperty, BytecodeForInTarget, BytecodeFunction,
-    BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeProgram, BytecodeProperty,
-    BytecodeSwitchCase,
+    BytecodeAddress, BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock,
+    BytecodeCatch, BytecodeCompletion, BytecodeDynamicProperty, BytecodeForInTarget,
+    BytecodeFunction, BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeProgram,
+    BytecodeProperty, BytecodeSwitchCase,
 };
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
@@ -80,6 +80,10 @@ impl<'a> BytecodeCompiler<'a> {
 
     fn compile_property(property: &StaticName, access: StaticPropertyAccessId) -> BytecodeProperty {
         BytecodeProperty::new(property.clone(), access)
+    }
+
+    fn compile_array_index(property: &BytecodeProperty) -> Option<BytecodeArrayIndex> {
+        BytecodeArrayIndex::parse(property)
     }
 
     const fn compile_dynamic_property(access: StaticPropertyAccessId) -> BytecodeDynamicProperty {
@@ -277,9 +281,12 @@ impl<'a> BytecodeCompiler<'a> {
     ) -> Result<()> {
         self.compile_expr(object)?;
         self.compile_expr(expr)?;
-        self.emit(BytecodeInstruction::StaticPropertyAssign {
-            property: Self::compile_property(property, access),
-        });
+        let property = Self::compile_property(property, access);
+        if let Some(index) = Self::compile_array_index(&property) {
+            self.emit(BytecodeInstruction::ArrayIndexAssign { property, index });
+        } else {
+            self.emit(BytecodeInstruction::StaticPropertyAssign { property });
+        }
         Ok(())
     }
 
@@ -309,6 +316,8 @@ impl<'a> BytecodeCompiler<'a> {
         let property = Self::compile_property(property, access);
         if property.name().as_str() == ARRAY_LENGTH_PROPERTY {
             self.emit(BytecodeInstruction::ArrayLength { property });
+        } else if let Some(index) = Self::compile_array_index(&property) {
+            self.emit(BytecodeInstruction::ArrayIndexMember { property, index });
         } else {
             self.emit(BytecodeInstruction::StaticMember { property });
         }
@@ -658,8 +667,10 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::CompoundComputedProperty { .. }
             | BytecodeInstruction::StaticMember { .. }
             | BytecodeInstruction::ArrayLength { .. }
+            | BytecodeInstruction::ArrayIndexMember { .. }
             | BytecodeInstruction::ComputedMember { .. }
             | BytecodeInstruction::StaticPropertyAssign { .. }
+            | BytecodeInstruction::ArrayIndexAssign { .. }
             | BytecodeInstruction::ComputedPropertyAssign { .. }
             | BytecodeInstruction::CallBinding { .. }
             | BytecodeInstruction::CallValue { .. }
