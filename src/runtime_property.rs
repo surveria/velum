@@ -66,6 +66,13 @@ pub fn get_property(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum StringPropertyValue {
+    Length(f64),
+    Character(char),
+    Missing,
+}
+
 pub fn has_property(
     objects: &ObjectHeap,
     object: &Value,
@@ -145,10 +152,19 @@ pub fn delete_property(
 }
 
 fn string_property(value: &str, property: &str) -> Result<Value> {
-    if property == STRING_LENGTH_PROPERTY {
-        return string_length(value).map(Value::Number);
+    match string_property_value(value, property)? {
+        StringPropertyValue::Length(value) => Ok(Value::Number(value)),
+        StringPropertyValue::Character(ch) => Ok(Value::String(ch.to_string())),
+        StringPropertyValue::Missing => Ok(Value::Undefined),
     }
-    Ok(string_index_value(value, property).unwrap_or(Value::Undefined))
+}
+
+pub fn string_property_value(value: &str, property: &str) -> Result<StringPropertyValue> {
+    if property == STRING_LENGTH_PROPERTY {
+        return string_length(value).map(StringPropertyValue::Length);
+    }
+    Ok(string_index_value(value, property)
+        .map_or(StringPropertyValue::Missing, StringPropertyValue::Character))
 }
 
 fn string_has_property(value: &str, property: &str) -> Result<bool> {
@@ -170,12 +186,9 @@ fn string_enumerable_keys(value: &str) -> Result<Vec<String>> {
     Ok(keys)
 }
 
-fn string_index_value(value: &str, property: &str) -> Option<Value> {
+fn string_index_value(value: &str, property: &str) -> Option<char> {
     let index = string_property_index(property)?;
-    value
-        .chars()
-        .nth(index)
-        .map(|ch| Value::String(ch.to_string()))
+    value.chars().nth(index)
 }
 
 fn string_property_index(property: &str) -> Option<usize> {

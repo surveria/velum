@@ -135,7 +135,7 @@ impl Context {
     }
 
     fn stringify_json_value(
-        &self,
+        &mut self,
         value: &Value,
         stack: &mut Vec<ObjectId>,
     ) -> Result<Option<String>> {
@@ -154,7 +154,7 @@ impl Context {
         }
     }
 
-    fn stringify_json_object(&self, id: ObjectId, stack: &mut Vec<ObjectId>) -> Result<String> {
+    fn stringify_json_object(&mut self, id: ObjectId, stack: &mut Vec<ObjectId>) -> Result<String> {
         if let Some(length) = self.objects.array_len_if_array(id)? {
             return self.stringify_json_array(id, length, stack);
         }
@@ -162,7 +162,7 @@ impl Context {
     }
 
     fn stringify_json_array(
-        &self,
+        &mut self,
         id: ObjectId,
         length: usize,
         stack: &mut Vec<ObjectId>,
@@ -188,7 +188,7 @@ impl Context {
     }
 
     fn stringify_plain_json_object(
-        &self,
+        &mut self,
         id: ObjectId,
         stack: &mut Vec<ObjectId>,
     ) -> Result<String> {
