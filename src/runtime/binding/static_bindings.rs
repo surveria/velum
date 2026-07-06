@@ -329,10 +329,7 @@ impl Context {
         {
             return Ok(Some(cell));
         }
-        let Some(location) = self.resolve_binding_location(atom) else {
-            return Ok(None);
-        };
-        self.binding_at_location(location)
+        Ok(None)
     }
 
     pub(crate) fn remember_active_static_binding(
@@ -737,7 +734,7 @@ impl Context {
         self.upvalue_frames
             .last()
             .and_then(|frame| frame.get(slot.index()))
-            .and_then(Clone::clone)
+            .cloned()
     }
 
     fn scope_above_has_binding(&self, start: usize, atom: AtomId) -> bool {

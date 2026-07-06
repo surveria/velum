@@ -85,7 +85,6 @@ struct Function {
     param_binding_ids: Rc<[StaticBindingId]>,
     param_atoms: Rc<[AtomId]>,
     bytecode: BytecodeFunction,
-    captures: FunctionCaptures,
     upvalues: FunctionUpvalues,
     static_name_atom_cache: Option<StaticNameAtomCacheHandle>,
     static_binding_cache: Option<StaticBindingCacheHandle>,
@@ -95,26 +94,17 @@ struct Function {
     is_async: bool,
 }
 
-type FunctionUpvalues = Rc<[Option<BindingCell>]>;
+type FunctionUpvalues = Rc<[BindingCell]>;
 
 #[derive(Debug, Clone)]
 struct CapturedFunctionUpvalues {
     cells: FunctionUpvalues,
-    needs_legacy_scope_fallback: bool,
 }
 
 impl CapturedFunctionUpvalues {
-    const fn new(cells: FunctionUpvalues, needs_legacy_scope_fallback: bool) -> Self {
-        Self {
-            cells,
-            needs_legacy_scope_fallback,
-        }
+    const fn new(cells: FunctionUpvalues) -> Self {
+        Self { cells }
     }
-}
-
-#[derive(Debug, Clone, Default)]
-struct FunctionCaptures {
-    scopes: Vec<BindingScope>,
 }
 
 enum CallReference {
@@ -126,39 +116,6 @@ enum CallReference {
         kind: native::NativeFunctionKind,
         this_value: Value,
     },
-}
-
-impl FunctionCaptures {
-    fn from_current_locals(
-        locals: &[BindingScope],
-        has_compiled_layout: bool,
-        upvalues: &FunctionUpvalues,
-        needs_legacy_scope_fallback: bool,
-    ) -> Self {
-        if has_compiled_layout
-            && !needs_legacy_scope_fallback
-            && upvalues.iter().all(Option::is_some)
-        {
-            return Self::default();
-        }
-        Self {
-            scopes: locals.to_vec(),
-        }
-    }
-
-    fn call_locals(&self) -> Vec<BindingScope> {
-        self.scopes.clone()
-    }
-
-    const fn scope_count(&self) -> usize {
-        self.scopes.len()
-    }
-
-    fn binding_count(&self) -> usize {
-        self.scopes
-            .iter()
-            .fold(0usize, |count, scope| count.saturating_add(scope.len()))
-    }
 }
 
 #[derive(Debug, Clone, Copy)]

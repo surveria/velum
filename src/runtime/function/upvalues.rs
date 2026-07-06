@@ -16,22 +16,16 @@ impl Context {
         capture_bindings: &[StaticBinding],
         layout: Option<&BindingLayout>,
     ) -> Result<super::super::CapturedFunctionUpvalues> {
-        let Some(layout) = layout else {
-            return Ok(super::super::CapturedFunctionUpvalues::new(
-                Rc::from(Vec::new().into_boxed_slice()),
-                true,
-            ));
-        };
-        let Some(function) = layout.function_for_static_id(id)? else {
-            return Ok(super::super::CapturedFunctionUpvalues::new(
-                Rc::from(Vec::new().into_boxed_slice()),
-                true,
-            ));
-        };
+        let layout = layout.ok_or_else(|| {
+            Error::runtime("compiled function cannot capture upvalues without a binding layout")
+        })?;
+        let function = layout.function_for_static_id(id)?.ok_or_else(|| {
+            Error::runtime("compiled function is missing from the binding layout")
+        })?;
         let expected_cell_count = layout.upvalue_count_for_function(function)?;
         let mut collector = UpvalueCollector::new(self, layout, function, expected_cell_count);
         collector.collect_bindings(capture_bindings)?;
-        Ok(collector.finish())
+        collector.finish()
     }
 }
 
@@ -41,7 +35,6 @@ struct UpvalueCollector<'a> {
     function: FunctionScopeId,
     expected_cell_count: usize,
     cells: Vec<Option<BindingCell>>,
-    needs_legacy_scope_fallback: bool,
 }
 
 impl<'a> UpvalueCollector<'a> {
@@ -57,18 +50,23 @@ impl<'a> UpvalueCollector<'a> {
             function,
             expected_cell_count,
             cells: Vec::new(),
-            needs_legacy_scope_fallback: false,
         }
     }
 
-    fn finish(mut self) -> super::super::CapturedFunctionUpvalues {
+    fn finish(mut self) -> Result<super::super::CapturedFunctionUpvalues> {
         self.cells.resize_with(self.expected_cell_count, || None);
-        let needs_legacy_scope_fallback =
-            self.needs_legacy_scope_fallback || self.cells.iter().any(Option::is_none);
-        super::super::CapturedFunctionUpvalues::new(
-            Rc::from(self.cells.into_boxed_slice()),
-            needs_legacy_scope_fallback,
-        )
+        let mut cells = Vec::with_capacity(self.cells.len());
+        for cell in self.cells {
+            let Some(cell) = cell else {
+                return Err(Error::runtime(
+                    "compiled function upvalue layout did not resolve every captured cell",
+                ));
+            };
+            cells.push(cell);
+        }
+        Ok(super::super::CapturedFunctionUpvalues::new(Rc::from(
+            cells.into_boxed_slice(),
+        )))
     }
 
     fn collect_bindings(&mut self, bindings: &[StaticBinding]) -> Result<()> {
@@ -84,10 +82,10 @@ impl<'a> UpvalueCollector<'a> {
         else {
             return Ok(());
         };
-        let Some(declaration) = self.layout.upvalue_declaration(function, slot)? else {
-            self.needs_legacy_scope_fallback = true;
-            return Ok(());
-        };
+        let declaration = self
+            .layout
+            .upvalue_declaration(function, slot)?
+            .ok_or_else(|| Error::runtime("compiled upvalue declaration is not defined"))?;
         let Some(current_slot) = self
             .layout
             .upvalue_slot_for_declaration(self.function, declaration)?
@@ -108,10 +106,10 @@ impl<'a> UpvalueCollector<'a> {
             declaration,
             binding,
         )?;
-        if cell.is_none() {
-            self.needs_legacy_scope_fallback = true;
-        }
-        *target = cell;
+        let cell = cell.ok_or_else(|| {
+            Error::runtime("compiled upvalue declaration did not resolve to a runtime cell")
+        })?;
+        *target = Some(cell);
         Ok(())
     }
 
