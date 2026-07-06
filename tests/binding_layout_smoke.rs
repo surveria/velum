@@ -78,6 +78,17 @@ zeta = zeta + alpha + middle;
 zeta;
 "#;
 
+const GLOBAL_SLOT_OPERAND_OPERATIONS_SOURCE: &str = r"
+var Box = function Box(value) {
+    this.value = value;
+};
+var total = 1;
+total += 2;
+total++;
+var made = new Box(total);
+made.value;
+";
+
 #[test]
 fn compiled_layout_counts_global_local_and_upvalue_slots() -> TestResult {
     let engine = Engine::new();
@@ -231,6 +242,29 @@ fn compiled_global_slots_are_separate_from_builtins() -> TestResult {
         vm.resource_usage().global_bindings,
         builtin_bindings.saturating_add(3),
     )
+}
+
+#[test]
+fn compiled_global_slot_operands_drive_binding_operations() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(GLOBAL_SLOT_OPERAND_OPERATIONS_SOURCE)?;
+    let usage = script.usage();
+
+    ensure_usize(usage.global_binding_slot_count(), 3)?;
+    ensure_usize(usage.local_binding_slot_count(), 1)?;
+    ensure_usize(usage.upvalue_binding_slot_count(), 0)?;
+    ensure_usize(usage.unresolved_static_binding_count(), 0)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(4.0))?;
+    ensure_optional_value(vm.get_global("total").as_ref(), &Value::Number(4.0))?;
+    let atom_count = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(4.0))?;
+    ensure_optional_value(vm.get_global("total").as_ref(), &Value::Number(4.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atom_count)
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

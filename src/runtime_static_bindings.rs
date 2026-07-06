@@ -130,13 +130,7 @@ impl Context {
         &self,
         binding: &StaticBinding,
     ) -> Result<Option<BindingSlot>> {
-        let Some(layout) = self.current_static_binding_layout() else {
-            return Ok(None);
-        };
-        let Some(operand) = layout.operand_for_binding_id(binding.id())? else {
-            return Ok(None);
-        };
-        match operand {
+        match self.compiled_binding_operand(binding.id())? {
             BindingOperand::Local { slot, .. } => Ok(Some(BindingSlot::from_index(slot.index()?))),
             BindingOperand::Global { .. }
             | BindingOperand::Upvalue { .. }
@@ -151,13 +145,7 @@ impl Context {
         if self.locals.last().is_some() {
             return self.compiled_local_binding_slot(binding);
         }
-        let Some(layout) = self.current_static_binding_layout() else {
-            return Ok(None);
-        };
-        let Some(operand) = layout.operand_for_binding_id(binding.id())? else {
-            return Ok(None);
-        };
-        match operand {
+        match self.compiled_binding_operand(binding.id())? {
             BindingOperand::Global { slot } => Ok(Some(BindingSlot::from_index(slot.index()?))),
             BindingOperand::Local { .. } | BindingOperand::Upvalue { .. } => {
                 Err(Error::runtime("global binding layout is not a global slot"))
@@ -174,6 +162,10 @@ impl Context {
             return Ok(None);
         };
         if let Some(cell) = self.cached_static_binding(binding)? {
+            return Ok(Some(cell));
+        }
+        if let Some((location, cell)) = self.compiled_global_static_binding(binding, atom)? {
+            self.remember_static_binding(binding, location)?;
             return Ok(Some(cell));
         }
         let Some(location) = self.resolve_binding_location(atom) else {
@@ -207,10 +199,76 @@ impl Context {
         let Some(cache) = self.current_static_binding_cache() else {
             return Ok(());
         };
-        let Some(location) = self.resolve_binding_location(atom) else {
-            return Ok(());
+        if let Some(location) = self.compiled_active_static_binding(binding, atom)? {
+            return self.remember_layout_static_binding_id(&cache, binding, location);
+        }
+        if let Some(location) = self.resolve_binding_location(atom) {
+            return self.remember_layout_static_binding_id(&cache, binding, location);
+        }
+        Ok(())
+    }
+
+    fn compiled_binding_operand(&self, binding: StaticBindingId) -> Result<BindingOperand> {
+        let Some(layout) = self.current_static_binding_layout() else {
+            return Ok(BindingOperand::Unresolved);
         };
-        self.remember_layout_static_binding_id(&cache, binding, location)
+        Ok(layout
+            .operand_for_binding_id(binding)?
+            .unwrap_or(BindingOperand::Unresolved))
+    }
+
+    fn compiled_global_static_binding(
+        &self,
+        binding: &StaticBinding,
+        atom: AtomId,
+    ) -> Result<Option<(BindingLocation, BindingCell)>> {
+        let BindingOperand::Global { slot } = self.compiled_binding_operand(binding.id())? else {
+            return Ok(None);
+        };
+        let location = BindingLocation::global(atom, BindingSlot::from_index(slot.index()?));
+        let Some(cell) = self.binding_at_location(location)? else {
+            return Ok(None);
+        };
+        Ok(Some((location, cell)))
+    }
+
+    fn compiled_active_static_binding(
+        &self,
+        binding: StaticBindingId,
+        atom: AtomId,
+    ) -> Result<Option<BindingLocation>> {
+        let operand = self.compiled_binding_operand(binding)?;
+        if self.locals.last().is_some() {
+            return Self::compiled_active_local_binding(atom, operand, self.locals.len());
+        }
+        match operand {
+            BindingOperand::Global { slot } => Ok(Some(BindingLocation::global(
+                atom,
+                BindingSlot::from_index(slot.index()?),
+            ))),
+            BindingOperand::Local { .. } | BindingOperand::Upvalue { .. } => {
+                Err(Error::runtime("global binding layout is not a global slot"))
+            }
+            BindingOperand::Unresolved => Ok(None),
+        }
+    }
+
+    fn compiled_active_local_binding(
+        atom: AtomId,
+        operand: BindingOperand,
+        local_count: usize,
+    ) -> Result<Option<BindingLocation>> {
+        let BindingOperand::Local { slot, .. } = operand else {
+            return Ok(None);
+        };
+        let Some(index) = local_count.checked_sub(1) else {
+            return Ok(None);
+        };
+        Ok(Some(BindingLocation::local(
+            atom,
+            LocalScopeIndex::new(index),
+            BindingSlot::from_index(slot.index()?),
+        )))
     }
 
     fn cached_static_binding(&self, binding: &StaticBinding) -> Result<Option<BindingCell>> {
