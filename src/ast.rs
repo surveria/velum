@@ -248,6 +248,7 @@ pub enum Expr {
         op: BinaryOp,
         left: Box<Self>,
         right: Box<Self>,
+        property_access: Option<StaticPropertyAccessId>,
     },
     Conditional {
         condition: Box<Self>,

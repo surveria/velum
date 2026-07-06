@@ -125,6 +125,7 @@ impl Parser {
             op: BinaryOp::Pow,
             left: Box::new(left),
             right: Box::new(right),
+            property_access: None,
         })
     }
 
@@ -140,10 +141,16 @@ impl Parser {
                 return Err(Error::parse("expected operator", self.offset()));
             }
             let right = next(self)?;
+            let property_access = if op == BinaryOp::In {
+                Some(self.static_property_access()?)
+            } else {
+                None
+            };
             expr = Expr::Binary {
                 op,
                 left: Box::new(expr),
                 right: Box::new(right),
+                property_access,
             };
         }
         Ok(expr)

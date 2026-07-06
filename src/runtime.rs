@@ -306,7 +306,12 @@ impl Context {
             Expr::Parenthesized(expr) => self.eval_expr(expr),
             Expr::Unary { op, expr } => self.eval_unary_expr(*op, expr),
             Expr::Update { op, prefix, expr } => self.eval_update_expr(*op, *prefix, expr),
-            Expr::Binary { op, left, right } => self.eval_binary(*op, left, right),
+            Expr::Binary {
+                op,
+                left,
+                right,
+                property_access,
+            } => self.eval_binary(*op, left, right, *property_access),
             Expr::Conditional {
                 condition,
                 consequent,
@@ -421,7 +426,13 @@ impl Context {
         Ok(Completion::Normal(last))
     }
 
-    fn eval_binary(&mut self, op: BinaryOp, left: &Expr, right: &Expr) -> Result<Value> {
+    fn eval_binary(
+        &mut self,
+        op: BinaryOp,
+        left: &Expr,
+        right: &Expr,
+        property_access: Option<crate::ast::StaticPropertyAccessId>,
+    ) -> Result<Value> {
         if op == BinaryOp::LogicalAnd {
             let left = self.eval_expr(left)?;
             return if left.is_truthy() {
@@ -460,7 +471,7 @@ impl Context {
             BinaryOp::GreaterEqual => {
                 compare_binary(&left, &right, ">=", |left, right| left >= right)?
             }
-            BinaryOp::In => self.eval_in(&left, &right)?,
+            BinaryOp::In => self.eval_in(&left, &right, property_access)?,
             BinaryOp::BitAnd => bitwise_and(&left, &right)?,
             BinaryOp::BitOr => bitwise_or(&left, &right)?,
             BinaryOp::BitXor => bitwise_xor(&left, &right)?,
@@ -474,8 +485,18 @@ impl Context {
         self.checked_value(value)
     }
 
-    fn eval_in(&self, left: &Value, right: &Value) -> Result<Value> {
+    fn eval_in(
+        &self,
+        left: &Value,
+        right: &Value,
+        property_access: Option<crate::ast::StaticPropertyAccessId>,
+    ) -> Result<Value> {
         let property = self.dynamic_property_key(left)?;
+        if let Some(access) = property_access {
+            return self
+                .has_cached_dynamic_property_value(right, &property, access)
+                .map(Value::Bool);
+        }
         self.has_dynamic_property_value(right, &property)
             .map(Value::Bool)
     }
