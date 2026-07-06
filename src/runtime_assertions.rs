@@ -12,7 +12,9 @@ const REFERENCE_ERROR_PREFIX: &str = "ReferenceError:";
 pub fn is_assert_throws_call(callee: &Expr) -> bool {
     matches!(
         callee,
-        Expr::Member { object, property }
+        Expr::Member {
+            object, property, ..
+        }
             if is_identifier(object, ASSERT_NAME) && property.as_str() == ASSERT_THROWS_NAME
     )
 }

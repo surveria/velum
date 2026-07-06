@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expr, StaticBinding, StaticName, UpdateOp},
+    ast::{Expr, StaticBinding, StaticName, StaticPropertyAccessId, UpdateOp},
     error::{Error, Result},
     runtime::Context,
     runtime_property::DynamicPropertyKey,
@@ -15,9 +15,13 @@ impl Context {
     ) -> Result<Value> {
         match expr {
             Expr::Identifier(name) => self.update_binding(name, op, prefix),
-            Expr::Member { object, property } => {
+            Expr::Member {
+                object,
+                property,
+                access,
+            } => {
                 let object = self.eval_expr(object)?;
-                self.update_property(&object, property, op, prefix)
+                self.update_property(&object, property, *access, op, prefix)
             }
             Expr::ComputedMember { object, property } => {
                 let object = self.eval_expr(object)?;
@@ -43,10 +47,11 @@ impl Context {
         &mut self,
         object: &Value,
         property: &StaticName,
+        access: StaticPropertyAccessId,
         op: UpdateOp,
         prefix: bool,
     ) -> Result<Value> {
-        let old_value = self.get_static_property_value(object, property)?;
+        let old_value = self.get_static_property_value(object, property, access)?;
         let new_value = Self::updated_number(&old_value, op)?;
         self.set_static_property_value(object, property, new_value.clone())?;
         Ok(if prefix { new_value } else { old_value })

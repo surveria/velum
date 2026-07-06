@@ -66,7 +66,9 @@ impl Parser {
                 name,
                 expr: Box::new(value),
             }),
-            Expr::Member { object, property } => Ok(Expr::PropertyAssignment {
+            Expr::Member {
+                object, property, ..
+            } => Ok(Expr::PropertyAssignment {
                 object,
                 property,
                 expr: Box::new(value),

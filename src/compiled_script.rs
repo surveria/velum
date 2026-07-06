@@ -31,6 +31,7 @@ impl CompiledScript {
                 max_expression_depth: parsed.usage.max_expression_depth,
                 static_name_count: parsed.usage.static_name_count,
                 static_binding_count: parsed.usage.static_binding_count,
+                static_property_access_count: parsed.usage.static_property_access_count,
                 resolved_static_binding_count: binding_layout.resolved_count(),
                 unresolved_static_binding_count: binding_layout.unresolved_count(),
                 global_binding_slot_count: binding_layout.global_slot_count(),
@@ -79,6 +80,7 @@ pub struct CompiledScriptUsage {
     max_expression_depth: usize,
     static_name_count: usize,
     static_binding_count: usize,
+    static_property_access_count: usize,
     resolved_static_binding_count: usize,
     unresolved_static_binding_count: usize,
     global_binding_slot_count: usize,
@@ -110,6 +112,11 @@ impl CompiledScriptUsage {
     #[must_use]
     pub const fn static_binding_count(self) -> usize {
         self.static_binding_count
+    }
+
+    #[must_use]
+    pub const fn static_property_access_count(self) -> usize {
+        self.static_property_access_count
     }
 
     #[must_use]

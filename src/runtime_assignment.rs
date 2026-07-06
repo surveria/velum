@@ -1,5 +1,5 @@
 use crate::{
-    ast::{BinaryOp, Expr, StaticBinding, StaticName},
+    ast::{BinaryOp, Expr, StaticBinding, StaticName, StaticPropertyAccessId},
     error::{Error, Result},
     runtime::Context,
     runtime_numeric::{
@@ -44,9 +44,13 @@ impl Context {
     ) -> Result<Value> {
         match target {
             Expr::Identifier(name) => self.eval_binding_compound_assignment(op, name, expr),
-            Expr::Member { object, property } => {
+            Expr::Member {
+                object,
+                property,
+                access,
+            } => {
                 let object = self.eval_expr(object)?;
-                self.eval_property_compound_assignment(op, &object, property, expr)
+                self.eval_property_compound_assignment(op, &object, property, *access, expr)
             }
             Expr::ComputedMember { object, property } => {
                 let object = self.eval_expr(object)?;
@@ -78,9 +82,10 @@ impl Context {
         op: BinaryOp,
         object: &Value,
         property: &StaticName,
+        access: StaticPropertyAccessId,
         expr: &Expr,
     ) -> Result<Value> {
-        let old_value = self.get_static_property_value(object, property)?;
+        let old_value = self.get_static_property_value(object, property, access)?;
         let right = self.eval_expr(expr)?;
         let value = self.eval_compound_value(op, &old_value, &right)?;
         self.set_static_property_value(object, property, value.clone())?;

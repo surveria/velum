@@ -83,9 +83,11 @@ impl Parser {
         loop {
             if self.match_kind(&TokenKind::Dot) {
                 let property = self.consume_property_name("expected property name after '.'")?;
+                let access = self.static_property_access()?;
                 expr = Expr::Member {
                     object: Box::new(expr),
                     property,
+                    access,
                 };
                 continue;
             }

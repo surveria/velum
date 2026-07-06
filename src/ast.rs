@@ -50,6 +50,22 @@ impl StaticFunctionId {
     }
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub struct StaticPropertyAccessId(u32);
+
+impl StaticPropertyAccessId {
+    pub fn from_index(index: usize) -> Result<Self> {
+        let id = u32::try_from(index)
+            .map_err(|_| Error::limit("static property access table exceeded supported range"))?;
+        Ok(Self(id))
+    }
+
+    pub fn index(self) -> Result<usize> {
+        usize::try_from(self.0)
+            .map_err(|_| Error::limit("static property access id exceeded supported range"))
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StaticName {
     id: StaticNameId,
@@ -260,6 +276,7 @@ pub enum Expr {
     Member {
         object: Box<Self>,
         property: StaticName,
+        access: StaticPropertyAccessId,
     },
     ComputedMember {
         object: Box<Self>,

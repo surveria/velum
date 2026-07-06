@@ -225,7 +225,10 @@ impl Context {
     /// Fails when the compiled script exceeds this context's limits or evaluation fails.
     pub fn eval_compiled(&mut self, script: &CompiledScript) -> Result<Value> {
         script.ensure_within_limits(self.limits)?;
-        let static_name_cache = StaticNameAtomCacheHandle::new(script.usage().static_name_count());
+        let static_name_cache = StaticNameAtomCacheHandle::new(
+            script.usage().static_name_count(),
+            script.usage().static_property_access_count(),
+        );
         let binding_cache = StaticBindingCacheHandle::new(script.binding_layout().operand_count());
         self.with_static_name_caches(
             static_name_cache,
@@ -327,7 +330,11 @@ impl Context {
                 property,
                 expr,
             } => self.eval_computed_property_assignment(object, property, expr),
-            Expr::Member { object, property } => self.eval_member(object, property),
+            Expr::Member {
+                object,
+                property,
+                access,
+            } => self.eval_member(object, property, *access),
             Expr::ComputedMember { object, property } => {
                 self.eval_computed_member(object, property)
             }
@@ -503,9 +510,13 @@ impl Context {
 
     fn eval_call_reference(&mut self, callee: &Expr) -> Result<Option<(Value, Value)>> {
         match callee {
-            Expr::Member { object, property } => {
+            Expr::Member {
+                object,
+                property,
+                access,
+            } => {
                 let this_value = self.eval_expr(object)?;
-                let function = self.get_property_value(&this_value, property)?;
+                let function = self.get_static_property_value(&this_value, property, *access)?;
                 Ok(Some((function, this_value)))
             }
             Expr::ComputedMember { object, property } => {
@@ -558,9 +569,14 @@ impl Context {
         }
     }
 
-    fn eval_member(&mut self, object: &Expr, property: &StaticName) -> Result<Value> {
+    fn eval_member(
+        &mut self,
+        object: &Expr,
+        property: &StaticName,
+        access: crate::ast::StaticPropertyAccessId,
+    ) -> Result<Value> {
         let object = self.eval_expr(object)?;
-        self.get_static_property_value(&object, property)
+        self.get_static_property_value(&object, property, access)
     }
 
     fn eval_computed_member(&mut self, object: &Expr, property: &Expr) -> Result<Value> {

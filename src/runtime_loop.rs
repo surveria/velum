@@ -131,7 +131,9 @@ impl Context {
     fn assign_for_in_target(&mut self, target: &Expr, value: Value) -> Result<()> {
         match target {
             Expr::Identifier(name) => self.assign_static(name, value),
-            Expr::Member { object, property } => {
+            Expr::Member {
+                object, property, ..
+            } => {
                 let object = self.eval_expr(object)?;
                 self.set_static_property_value(&object, property, value)
             }
