@@ -34,10 +34,17 @@ impl PropertyLookupGuard {
         Ok(object.shape == self.receiver_shape
             && objects.prototype_lookup_version() == self.prototype_lookup_version)
     }
+
+    fn is_valid_for(self, objects: &ObjectHeap, receiver: ObjectId) -> Result<bool> {
+        if self.receiver != receiver {
+            return Ok(false);
+        }
+        self.is_valid(objects)
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) struct CacheablePropertyLookup {
+pub struct CacheablePropertyLookup {
     guard: PropertyLookupGuard,
     result: CacheablePropertyLookupResult,
 }
@@ -113,7 +120,7 @@ impl PrototypeLookupDepth {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(super) enum CacheablePropertyValue {
+pub enum CacheablePropertyValue {
     Hit(Value),
     Missing,
     Uncacheable,
@@ -166,7 +173,7 @@ impl ObjectHeap {
         self.read_cacheable_property_presence(lookup)
     }
 
-    fn cacheable_property_lookup(
+    pub(crate) fn cacheable_property_lookup(
         &self,
         id: ObjectId,
         property: PropertyLookup<'_>,
@@ -206,6 +213,17 @@ impl ObjectHeap {
         ))
     }
 
+    pub(crate) fn read_cacheable_property_value_for(
+        &self,
+        id: ObjectId,
+        lookup: CacheablePropertyLookup,
+    ) -> Result<CacheablePropertyValue> {
+        if !lookup.guard.is_valid_for(self, id)? {
+            return Ok(CacheablePropertyValue::Uncacheable);
+        }
+        self.read_valid_cacheable_property_value(lookup)
+    }
+
     fn read_cacheable_property_value(
         &self,
         lookup: CacheablePropertyLookup,
@@ -213,6 +231,13 @@ impl ObjectHeap {
         if !lookup.guard.is_valid(self)? {
             return Ok(CacheablePropertyValue::Uncacheable);
         }
+        self.read_valid_cacheable_property_value(lookup)
+    }
+
+    fn read_valid_cacheable_property_value(
+        &self,
+        lookup: CacheablePropertyLookup,
+    ) -> Result<CacheablePropertyValue> {
         match lookup.result {
             CacheablePropertyLookupResult::Hit(hit) => self
                 .cacheable_hit_value(hit)
