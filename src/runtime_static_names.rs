@@ -205,7 +205,7 @@ impl Context {
     }
 
     pub(crate) fn get_static_property_value(
-        &self,
+        &mut self,
         object: &Value,
         property: &StaticName,
         access: StaticPropertyAccessId,
@@ -216,6 +216,12 @@ impl Context {
         }
         if let Value::NativeFunction(id) = object {
             return self.get_native_function_property_lookup(*id, lookup);
+        }
+        if let Value::String(value) = object {
+            return self.get_string_property_value(value, property.as_str());
+        }
+        if let Value::HeapString(value) = object {
+            return self.get_string_property_value(value.as_str(), property.as_str());
         }
         if let Value::Object(id) = object
             && property.as_str() != PROTOTYPE_PROPERTY

@@ -16,10 +16,10 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260706T112845Z.md`
-- Task: Host return heap-string tranche: Move host callback string returns onto the VM-owned string heap while preserving the public host conversion API.
-- Performance: 1.27x (46/63 >1.00x)
-- Memory: 1.07x (57/63 >1.00x)
+- `rsqjs-test-report-20260706T114324Z.md`
+- Task: String index heap-string tranche: Move primitive string index-property reads onto the VM-owned string heap.
+- Performance: 1.21x (41/63 >1.00x)
+- Memory: 1.07x (56/63 >1.00x)
 - Full Test262: 10872 passed / 91706 failed (10.60%)
 
 | PR / task | Performance | Memory | Full Test262 |
@@ -177,5 +177,6 @@ Latest report:
 | `20260706T103630Z` `679a9e8` Enforce QuickJS parity benchmark budget | 1.19x (44/63 >1.00x) | 1.07x (54/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T104244Z` `21f7cb2` Holey array no-prototype-index fast paths: Continue the Dense Arrays direction by adding safe direct holey-storage reads when prototype-chain indexed properties cannot affect observable results. | 1.24x (46/63 >1.00x) | 1.07x (60/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T111020Z` `5e80d17` String heap foundation tranche: Introduce VM-owned heap strings and resource accounting before the broader compact `Value` and `StringId` migration. | 1.25x (44/63 >1.00x) | 1.09x (59/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
-| `20260706T111831Z` Parser literal heap-string tranche: Move parser-produced string and template literal execution onto the VM-owned string heap without changing the parser or public AST compatibility boundary. | 1.26x (45/63 >1.00x) | 1.07x (57/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
-| `20260706T112845Z` Host return heap-string tranche: Move host callback string returns onto the VM-owned string heap while preserving the public host conversion API. | 1.27x (46/63 >1.00x) | 1.07x (57/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
+| `20260706T111831Z` `970e3f4` Parser literal heap-string tranche: Move parser-produced string and template literal execution onto the VM-owned string heap without changing the parser or public AST compatibility boundary. | 1.26x (45/63 >1.00x) | 1.07x (57/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
+| `20260706T112845Z` `b1e5fd5` Host return heap-string tranche: Move host callback string returns onto the VM-owned string heap while preserving the public host conversion API. | 1.27x (46/63 >1.00x) | 1.07x (57/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
+| `20260706T114324Z` String index heap-string tranche: Move primitive string index-property reads onto the VM-owned string heap. | 1.21x (41/63 >1.00x) | 1.07x (56/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |

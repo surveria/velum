@@ -3,12 +3,15 @@ use crate::{
     error::Result,
     runtime_object::PropertyKey,
     runtime_property::{
-        DynamicPropertyKey, delete_property, get_property, has_property, property_key, set_property,
+        DynamicPropertyKey, StringPropertyValue, delete_property, get_property, has_property,
+        property_key, set_property, string_property_value,
     },
     value::Value,
 };
 
 use super::Context;
+
+const MAX_UTF8_CHAR_BYTES: usize = 4;
 
 impl Context {
     pub(crate) fn eval_property_key(&mut self, property: &Expr) -> Result<DynamicPropertyKey> {
@@ -23,7 +26,7 @@ impl Context {
         Ok(DynamicPropertyKey::new(name, key))
     }
 
-    pub(crate) fn get_property_value(&self, object: &Value, property: &str) -> Result<Value> {
+    pub(crate) fn get_property_value(&mut self, object: &Value, property: &str) -> Result<Value> {
         let lookup = self.property_lookup(property);
         if let Value::Function(id) = object {
             return self.get_function_property_lookup(*id, lookup);
@@ -31,11 +34,17 @@ impl Context {
         if let Value::NativeFunction(id) = object {
             return self.get_native_function_property_lookup(*id, lookup);
         }
+        if let Value::String(value) = object {
+            return self.get_string_property_value(value, property);
+        }
+        if let Value::HeapString(value) = object {
+            return self.get_string_property_value(value.as_str(), property);
+        }
         self.checked_value(get_property(&self.objects, object, lookup)?)
     }
 
     pub(crate) fn get_dynamic_property_value(
-        &self,
+        &mut self,
         object: &Value,
         property: &DynamicPropertyKey,
     ) -> Result<Value> {
@@ -45,7 +54,28 @@ impl Context {
         if let Value::NativeFunction(id) = object {
             return self.get_native_function_property_lookup(*id, property.lookup());
         }
+        if let Value::String(value) = object {
+            return self.get_string_property_value(value, property.name());
+        }
+        if let Value::HeapString(value) = object {
+            return self.get_string_property_value(value.as_str(), property.name());
+        }
         self.checked_value(get_property(&self.objects, object, property.lookup())?)
+    }
+
+    pub(super) fn get_string_property_value(
+        &mut self,
+        value: &str,
+        property: &str,
+    ) -> Result<Value> {
+        match string_property_value(value, property)? {
+            StringPropertyValue::Length(value) => Ok(Value::Number(value)),
+            StringPropertyValue::Character(ch) => {
+                let mut buffer = [0_u8; MAX_UTF8_CHAR_BYTES];
+                self.heap_string_value(ch.encode_utf8(&mut buffer))
+            }
+            StringPropertyValue::Missing => Ok(Value::Undefined),
+        }
     }
 
     pub(crate) fn set_dynamic_property_value(

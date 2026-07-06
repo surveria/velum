@@ -68,6 +68,48 @@ fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestRe
     ensure_usize(
         after_repeated_concat.string_bytes,
         after_concat.string_bytes,
+    )?;
+
+    let static_index = vm.context().eval(r#""front"[1]"#)?;
+    ensure_value(&static_index, &Value::String("r".to_owned()))?;
+    let after_static_index = vm.resource_usage();
+    ensure_usize(after_static_index.string_count, 5)?;
+    ensure_usize(
+        after_static_index.string_bytes,
+        after_concat.string_bytes + "r".len(),
+    )?;
+
+    let repeated_static_index = vm.context().eval(r#""front"[1]"#)?;
+    ensure_value(&repeated_static_index, &Value::String("r".to_owned()))?;
+    let after_repeated_static_index = vm.resource_usage();
+    ensure_usize(
+        after_repeated_static_index.string_count,
+        after_static_index.string_count,
+    )?;
+    ensure_usize(
+        after_repeated_static_index.string_bytes,
+        after_static_index.string_bytes,
+    )?;
+
+    let dynamic_index = vm.context().eval(r#"let i = 1; "front"[i]"#)?;
+    ensure_value(&dynamic_index, &Value::String("r".to_owned()))?;
+    let after_dynamic_index = vm.resource_usage();
+    ensure_usize(
+        after_dynamic_index.string_count,
+        after_static_index.string_count,
+    )?;
+    ensure_usize(
+        after_dynamic_index.string_bytes,
+        after_static_index.string_bytes,
+    )?;
+
+    let unicode_index = vm.context().eval(r#""\u00e9x"[0]"#)?;
+    ensure_value(&unicode_index, &Value::String("\u{00e9}".to_owned()))?;
+    let after_unicode_index = vm.resource_usage();
+    ensure_usize(after_unicode_index.string_count, 7)?;
+    ensure_usize(
+        after_unicode_index.string_bytes,
+        after_static_index.string_bytes + "\u{00e9}x".len() + "\u{00e9}".len(),
     )
 }
 

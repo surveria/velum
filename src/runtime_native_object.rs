@@ -212,7 +212,7 @@ impl Context {
         Ok(key)
     }
 
-    fn data_property_update_from_value(&self, value: &Value) -> Result<DataPropertyUpdate> {
+    fn data_property_update_from_value(&mut self, value: &Value) -> Result<DataPropertyUpdate> {
         if !matches!(value, Value::Object(_)) {
             return Err(Error::runtime("property descriptor must be an object"));
         }
@@ -225,7 +225,7 @@ impl Context {
         ))
     }
 
-    fn reject_accessor_descriptor(&self, descriptor: &Value) -> Result<()> {
+    fn reject_accessor_descriptor(&mut self, descriptor: &Value) -> Result<()> {
         if !matches!(
             self.get_property_value(descriptor, DESCRIPTOR_GET_PROPERTY)?,
             Value::Undefined
@@ -242,7 +242,7 @@ impl Context {
     }
 
     fn optional_descriptor_value(
-        &self,
+        &mut self,
         descriptor: &Value,
         property: &str,
     ) -> Result<Option<Value>> {
@@ -252,13 +252,16 @@ impl Context {
         self.get_property_value(descriptor, property).map(Some)
     }
 
-    fn optional_descriptor_writable(&self, descriptor: &Value) -> Result<Option<PropertyWritable>> {
+    fn optional_descriptor_writable(
+        &mut self,
+        descriptor: &Value,
+    ) -> Result<Option<PropertyWritable>> {
         self.optional_descriptor_bool(descriptor, DESCRIPTOR_WRITABLE_PROPERTY)
             .map(|value| value.map(Self::property_writable))
     }
 
     fn optional_descriptor_enumerable(
-        &self,
+        &mut self,
         descriptor: &Value,
     ) -> Result<Option<PropertyEnumerable>> {
         self.optional_descriptor_bool(descriptor, DESCRIPTOR_ENUMERABLE_PROPERTY)
@@ -266,14 +269,18 @@ impl Context {
     }
 
     fn optional_descriptor_configurable(
-        &self,
+        &mut self,
         descriptor: &Value,
     ) -> Result<Option<PropertyConfigurable>> {
         self.optional_descriptor_bool(descriptor, DESCRIPTOR_CONFIGURABLE_PROPERTY)
             .map(|value| value.map(Self::property_configurable))
     }
 
-    fn optional_descriptor_bool(&self, descriptor: &Value, property: &str) -> Result<Option<bool>> {
+    fn optional_descriptor_bool(
+        &mut self,
+        descriptor: &Value,
+        property: &str,
+    ) -> Result<Option<bool>> {
         if !has_property(&self.objects, descriptor, self.property_lookup(property))? {
             return Ok(None);
         }
