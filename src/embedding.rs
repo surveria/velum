@@ -2,7 +2,7 @@ use crate::compiled_script::CompiledScript;
 use crate::error::Result;
 use crate::host::{HostCall, IntoJsValue};
 use crate::runtime::Context;
-use crate::runtime_limits::RuntimeLimits;
+use crate::runtime::limits::RuntimeLimits;
 use crate::value::Value;
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]

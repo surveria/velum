@@ -3,7 +3,7 @@ use crate::{
     bytecode::BytecodeProgram,
     error::{Error, Result},
     lexer, parser,
-    runtime_limits::RuntimeLimits,
+    runtime::limits::RuntimeLimits,
 };
 
 #[derive(Debug, Clone, PartialEq)]
