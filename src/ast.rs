@@ -2,6 +2,43 @@ use std::rc::Rc;
 
 use crate::value::Value;
 
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub struct StaticName(Rc<str>);
+
+impl StaticName {
+    pub fn new(name: String) -> Self {
+        Self(Rc::from(name.into_boxed_str()))
+    }
+
+    pub fn borrowed(name: &str) -> Self {
+        Self(Rc::from(name))
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl std::fmt::Display for StaticName {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+impl std::ops::Deref for StaticName {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl From<String> for StaticName {
+    fn from(name: String) -> Self {
+        Self::new(name)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
     pub statements: Vec<Stmt>,
@@ -45,7 +82,7 @@ pub enum Stmt {
     Throw(Expr),
     Return(Option<Expr>),
     VarDecl {
-        name: String,
+        name: StaticName,
         kind: DeclKind,
         init: Option<Expr>,
     },
@@ -61,13 +98,13 @@ pub enum DeclKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ForInTarget {
-    Binding { name: String, kind: DeclKind },
+    Binding { name: StaticName, kind: DeclKind },
     Assignment(Expr),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjectProperty {
-    pub key: String,
+    pub key: StaticName,
     pub value: Expr,
 }
 
@@ -79,7 +116,7 @@ pub struct SwitchCase {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CatchClause {
-    pub param: Option<String>,
+    pub param: Option<StaticName>,
     pub body: Vec<Stmt>,
 }
 
@@ -87,7 +124,7 @@ pub struct CatchClause {
 pub enum Expr {
     Literal(Value),
     This,
-    Identifier(String),
+    Identifier(StaticName),
     Parenthesized(Box<Self>),
     Unary {
         op: UnaryOp,
@@ -109,7 +146,7 @@ pub enum Expr {
         alternate: Box<Self>,
     },
     Assignment {
-        name: String,
+        name: StaticName,
         expr: Box<Self>,
     },
     CompoundAssignment {
@@ -119,7 +156,7 @@ pub enum Expr {
     },
     PropertyAssignment {
         object: Box<Self>,
-        property: String,
+        property: StaticName,
         expr: Box<Self>,
     },
     ComputedPropertyAssignment {
@@ -129,7 +166,7 @@ pub enum Expr {
     },
     Member {
         object: Box<Self>,
-        property: String,
+        property: StaticName,
     },
     ComputedMember {
         object: Box<Self>,
@@ -140,19 +177,19 @@ pub enum Expr {
         args: Vec<Self>,
     },
     Function {
-        name: Option<String>,
-        params: Rc<[String]>,
+        name: Option<StaticName>,
+        params: Rc<[StaticName]>,
         body: Rc<[Stmt]>,
     },
     MethodFunction {
-        name: String,
-        params: Rc<[String]>,
+        name: StaticName,
+        params: Rc<[StaticName]>,
         body: Rc<[Stmt]>,
     },
     Object(Vec<ObjectProperty>),
     Array(Vec<Self>),
     New {
-        constructor: String,
+        constructor: StaticName,
         args: Vec<Self>,
     },
 }

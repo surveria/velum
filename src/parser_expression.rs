@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expr, ObjectProperty, UnaryOp, UpdateOp},
+    ast::{Expr, ObjectProperty, StaticName, UnaryOp, UpdateOp},
     error::{Error, Result},
     lexer::TokenKind,
     value::Value,
@@ -10,8 +10,8 @@ use super::Parser;
 const THIS_PROPERTY_NAME: &str = "this";
 
 struct ObjectPropertyName {
-    key: String,
-    shorthand_binding: Option<String>,
+    key: StaticName,
+    shorthand_binding: Option<StaticName>,
 }
 
 impl Parser {
@@ -177,7 +177,7 @@ impl Parser {
             TokenKind::Null => Expr::Literal(Value::Null),
             TokenKind::Undefined => Expr::Literal(Value::Undefined),
             TokenKind::This => Expr::This,
-            TokenKind::Identifier(name) => Expr::Identifier(name),
+            TokenKind::Identifier(name) => Expr::Identifier(StaticName::new(name)),
             TokenKind::Function => self.function_expression()?,
             TokenKind::LBrace => self.object_literal()?,
             TokenKind::LBracket => self.array_literal()?,
@@ -272,16 +272,19 @@ impl Parser {
             .advance()
             .ok_or_else(|| Error::parse("expected object property name", self.offset()))?;
         match token.kind {
-            TokenKind::Identifier(name) => Ok(ObjectPropertyName {
-                key: name.clone(),
-                shorthand_binding: Some(name),
-            }),
+            TokenKind::Identifier(name) => {
+                let name = StaticName::new(name);
+                Ok(ObjectPropertyName {
+                    key: name.clone(),
+                    shorthand_binding: Some(name),
+                })
+            }
             TokenKind::String(name) => Ok(ObjectPropertyName {
-                key: name,
+                key: StaticName::new(name),
                 shorthand_binding: None,
             }),
             TokenKind::Number(value) => Ok(ObjectPropertyName {
-                key: Value::Number(value).to_string(),
+                key: StaticName::new(Value::Number(value).to_string()),
                 shorthand_binding: None,
             }),
             kind => keyword_property_name(&kind)
@@ -292,7 +295,7 @@ impl Parser {
 
     fn keyword_property_name(name: &str) -> ObjectPropertyName {
         ObjectPropertyName {
-            key: name.to_owned(),
+            key: StaticName::borrowed(name),
             shorthand_binding: None,
         }
     }
@@ -311,7 +314,7 @@ impl Parser {
         Ok(Expr::Function { name, params, body })
     }
 
-    fn function_parameters(&mut self) -> Result<Vec<String>> {
+    fn function_parameters(&mut self) -> Result<Vec<StaticName>> {
         let mut params = Vec::new();
         if self.check(&TokenKind::RParen) {
             return Ok(params);
@@ -349,14 +352,14 @@ impl Parser {
         result
     }
 
-    fn consume_property_name(&mut self, message: &str) -> Result<String> {
+    fn consume_property_name(&mut self, message: &str) -> Result<StaticName> {
         let token = self
             .advance()
             .ok_or_else(|| Error::parse(message, self.offset()))?;
         match token.kind {
-            TokenKind::Identifier(name) => Ok(name),
+            TokenKind::Identifier(name) => Ok(StaticName::new(name)),
             kind => keyword_property_name(&kind)
-                .map(str::to_owned)
+                .map(StaticName::borrowed)
                 .ok_or_else(|| Error::parse(message, token.offset)),
         }
     }

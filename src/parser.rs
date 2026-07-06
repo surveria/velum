@@ -1,4 +1,4 @@
-use crate::ast::Program;
+use crate::ast::{Program, StaticName};
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
 use crate::runtime_limits::RuntimeLimits;
@@ -69,12 +69,12 @@ impl Parser {
         })
     }
 
-    pub(super) fn consume_identifier(&mut self, message: &str) -> Result<String> {
+    pub(super) fn consume_identifier(&mut self, message: &str) -> Result<StaticName> {
         let token = self
             .advance()
             .ok_or_else(|| Error::parse(message, self.offset()))?;
         match token.kind {
-            TokenKind::Identifier(name) => Ok(name),
+            TokenKind::Identifier(name) => Ok(StaticName::new(name)),
             _ => Err(Error::parse(message, token.offset)),
         }
     }
