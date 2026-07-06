@@ -570,7 +570,13 @@ impl Context {
                     property.access(),
                 )?;
                 let value = if let Some(target) = *native {
-                    self.eval_direct_native_call(target, callee, args, this_value)?
+                    self.eval_direct_native_property_call(
+                        target,
+                        property.access(),
+                        callee,
+                        args,
+                        this_value,
+                    )?
                 } else {
                     self.eval_call_value(callee, args, this_value)?
                 };
@@ -638,7 +644,13 @@ impl Context {
         let key = self.dynamic_property_key(&property)?;
         let callee = self.get_cached_dynamic_property_value(&this_value, &key, operand.access())?;
         let value = if let Some(target) = native {
-            self.eval_direct_native_call(target, callee, args, this_value)?
+            self.eval_direct_native_property_call(
+                target,
+                operand.access(),
+                callee,
+                args,
+                this_value,
+            )?
         } else {
             self.eval_call_value(callee, args, this_value)?
         };

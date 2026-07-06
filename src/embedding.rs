@@ -175,6 +175,9 @@ impl Vm {
             captured_scope_count: self.context.captured_scope_count(),
             captured_binding_count: self.context.captured_binding_count(),
             upvalue_cell_count: self.context.upvalue_cell_count(),
+            native_call_cache_hits: self.context.native_call_cache_hits(),
+            native_call_cache_misses: self.context.native_call_cache_misses(),
+            native_call_cache_fallbacks: self.context.native_call_cache_fallbacks(),
         }
     }
 
@@ -211,6 +214,9 @@ pub struct VmResourceUsage {
     pub captured_scope_count: usize,
     pub captured_binding_count: usize,
     pub upvalue_cell_count: usize,
+    pub native_call_cache_hits: usize,
+    pub native_call_cache_misses: usize,
+    pub native_call_cache_fallbacks: usize,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

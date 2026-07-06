@@ -71,6 +71,9 @@ pub struct Context {
     output: Vec<String>,
     random_state: u64,
     runtime_steps: usize,
+    native_call_cache_hits: usize,
+    native_call_cache_misses: usize,
+    native_call_cache_fallbacks: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -191,6 +194,9 @@ impl Context {
             output: Vec::new(),
             random_state: INITIAL_RANDOM_STATE,
             runtime_steps: 0,
+            native_call_cache_hits: 0,
+            native_call_cache_misses: 0,
+            native_call_cache_fallbacks: 0,
         }
     }
 

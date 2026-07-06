@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use rs_quickjs::{Engine, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -32,6 +32,30 @@ firstAbs === 7 &&
     values[0] === 12 ? 42 : 0
 ";
 
+const NATIVE_CALL_SITE_COUNTER_SCRIPT: &str = r#"
+var runNative = function(values, marker) {
+    return Math.abs(-4) + Math["max"](1, 2) + values.push(marker);
+};
+
+var values = [];
+var first = runNative(values, 1);
+var second = runNative(values, 2);
+
+Math.abs = function(value) {
+    return value + 100;
+};
+Array.prototype.push = function(value) {
+    this[0] = value + 10;
+    return 77;
+};
+
+var third = runNative(values, 3);
+first === 7 &&
+    second === 8 &&
+    third === 175 &&
+    values[0] === 13 ? 42 : 0
+"#;
+
 #[test]
 fn cached_native_call_sites_follow_property_mutations() -> TestResult {
     let runtime = Runtime::new();
@@ -43,10 +67,45 @@ fn cached_native_call_sites_follow_property_mutations() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))
 }
 
+#[test]
+fn native_call_site_cache_reports_hits_misses_and_fallbacks() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(NATIVE_CALL_SITE_COUNTER_SCRIPT)?;
+    ensure_at_least(
+        script.usage().bytecode_direct_native_call_count(),
+        3,
+        "direct native call operands",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+
+    let usage = vm.resource_usage();
+    ensure_at_least(
+        usage.native_call_cache_misses,
+        3,
+        "native call cache misses",
+    )?;
+    ensure_at_least(usage.native_call_cache_hits, 4, "native call cache hits")?;
+    ensure_at_least(
+        usage.native_call_cache_fallbacks,
+        2,
+        "native call cache fallbacks",
+    )
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
     }
 
     Err(format!("expected value {expected:?}, got {actual:?}").into())
+}
+
+fn ensure_at_least(actual: usize, expected: usize, label: &str) -> TestResult {
+    if actual >= expected {
+        return Ok(());
+    }
+    Err(format!("expected {label} >= {expected}, got {actual}").into())
 }

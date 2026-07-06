@@ -14,15 +14,17 @@ use crate::{
     runtime::property::{
         DynamicPropertyKey, delete_property, get_property, has_property, set_property,
     },
-    value::{ObjectId, Value},
+    value::{NativeFunctionId, ObjectId, Value},
 };
 
+use super::native::NativeFunctionKind;
 use super::static_bindings::StaticBindingCacheHandle;
 
 #[derive(Debug, Clone)]
 pub struct StaticNameAtomCacheHandle {
     atoms: Rc<[Cell<Option<AtomId>>]>,
     property_lookups: Rc<[Cell<Option<CacheablePropertyLookup>>]>,
+    native_calls: Rc<[Cell<Option<StaticPropertyNativeCallCache>>]>,
 }
 
 impl StaticNameAtomCacheHandle {
@@ -35,9 +37,14 @@ impl StaticNameAtomCacheHandle {
         for _ in 0..static_property_access_count {
             property_lookups.push(Cell::new(None));
         }
+        let mut native_calls = Vec::with_capacity(static_property_access_count);
+        for _ in 0..static_property_access_count {
+            native_calls.push(Cell::new(None));
+        }
         Self {
             atoms: Rc::from(atoms.into_boxed_slice()),
             property_lookups: Rc::from(property_lookups.into_boxed_slice()),
+            native_calls: Rc::from(native_calls.into_boxed_slice()),
         }
     }
 
@@ -79,6 +86,48 @@ impl StaticNameAtomCacheHandle {
         slot.set(Some(lookup));
         Ok(())
     }
+
+    fn native_call(
+        &self,
+        access: StaticPropertyAccessId,
+    ) -> Result<Option<StaticPropertyNativeCallCache>> {
+        self.native_calls
+            .get(access.index()?)
+            .map(Cell::get)
+            .ok_or_else(|| Error::runtime("static property native call cache slot is not defined"))
+    }
+
+    fn remember_native_call(
+        &self,
+        access: StaticPropertyAccessId,
+        function: NativeFunctionId,
+        kind: NativeFunctionKind,
+    ) -> Result<()> {
+        let slot = self.native_calls.get(access.index()?).ok_or_else(|| {
+            Error::runtime("static property native call cache slot is not defined")
+        })?;
+        slot.set(Some(StaticPropertyNativeCallCache::new(function, kind)));
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct StaticPropertyNativeCallCache {
+    function: NativeFunctionId,
+    kind: NativeFunctionKind,
+}
+
+impl StaticPropertyNativeCallCache {
+    const fn new(function: NativeFunctionId, kind: NativeFunctionKind) -> Self {
+        Self { function, kind }
+    }
+
+    fn kind_if_current(self, function: NativeFunctionId) -> Option<NativeFunctionKind> {
+        if self.function == function {
+            return Some(self.kind);
+        }
+        None
+    }
 }
 
 const PROTOTYPE_PROPERTY: &str = "__proto__";
@@ -114,6 +163,31 @@ impl Context {
 
     pub(crate) fn current_static_name_atom_cache(&self) -> Option<StaticNameAtomCacheHandle> {
         self.static_name_atom_caches.last().cloned()
+    }
+
+    pub(super) fn cached_static_property_native_call_kind(
+        &self,
+        access: StaticPropertyAccessId,
+        function: NativeFunctionId,
+    ) -> Result<Option<NativeFunctionKind>> {
+        let Some(cache) = self.current_static_name_atom_cache() else {
+            return Ok(None);
+        };
+        Ok(cache
+            .native_call(access)?
+            .and_then(|cached| cached.kind_if_current(function)))
+    }
+
+    pub(super) fn remember_static_property_native_call_kind(
+        &self,
+        access: StaticPropertyAccessId,
+        function: NativeFunctionId,
+        kind: NativeFunctionKind,
+    ) -> Result<()> {
+        let Some(cache) = self.current_static_name_atom_cache() else {
+            return Ok(());
+        };
+        cache.remember_native_call(access, function, kind)
     }
 
     pub(crate) fn lookup_static_name_atom(&self, name: &StaticName) -> Result<Option<AtomId>> {
