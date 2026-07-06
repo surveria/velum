@@ -245,6 +245,14 @@ impl Object {
         property: PropertyLookup<'_>,
         shapes: &ShapeTable,
     ) -> Result<Option<DataPropertyDescriptor>> {
+        if let Some(value) = self.virtual_string_property_value(property)? {
+            return Ok(Some(DataPropertyDescriptor::new(
+                value,
+                PropertyWritable::No,
+                PropertyEnumerable::Yes,
+                PropertyConfigurable::No,
+            )));
+        }
         if let Some(length) = self
             .array_length
             .filter(|_| property.name() == ARRAY_LENGTH_PROPERTY)
@@ -278,6 +286,9 @@ impl Object {
         max_properties: usize,
     ) -> Result<()> {
         let index = ArrayIndex::parse(property_name);
+        if self.has_virtual_string_property_name(property_name)? {
+            return Ok(());
+        }
         if self.array_length.is_some()
             && let Some(index) = index
         {

@@ -195,7 +195,7 @@ impl ObjectHeap {
         while let Some(current_id) = current {
             budget.enter_next()?;
             let object = self.object(current_id)?;
-            if object.has_uncacheable_own_property(property) {
+            if object.has_uncacheable_own_property(property)? {
                 return Ok(CacheablePropertyLookup::uncacheable(guard));
             }
             if let Some(hit) =
@@ -362,13 +362,16 @@ impl Object {
         Ok(())
     }
 
-    fn has_uncacheable_own_property(&self, property: PropertyLookup<'_>) -> bool {
+    fn has_uncacheable_own_property(&self, property: PropertyLookup<'_>) -> Result<bool> {
+        if self.has_virtual_string_property(property)? {
+            return Ok(true);
+        }
         if self.array_length.is_none() {
-            return false;
+            return Ok(false);
         }
         if property.name() == ARRAY_LENGTH_PROPERTY {
-            return true;
+            return Ok(true);
         }
-        ArrayIndex::parse(property.name()).is_some_and(|index| self.has_array_element(index))
+        Ok(ArrayIndex::parse(property.name()).is_some_and(|index| self.has_array_element(index)))
     }
 }

@@ -7,7 +7,7 @@ use crate::{
         DynamicPropertyKey, StringPropertyValue, delete_property, get_property, has_property,
         property_key, set_property, string_property_value,
     },
-    value::Value,
+    value::{ObjectId, Value},
 };
 
 use super::Context;
@@ -44,6 +44,11 @@ impl Context {
         if let Value::HeapString(value) = object {
             return self.get_string_property_value(value.as_str(), property);
         }
+        if let Value::Object(id) = object
+            && let Some(value) = self.get_string_object_property_value(*id, property)?
+        {
+            return Ok(value);
+        }
         self.checked_value(get_property(&self.objects, object, lookup)?)
     }
 
@@ -66,6 +71,11 @@ impl Context {
         }
         if let Value::HeapString(value) = object {
             return self.get_string_property_value(value.as_str(), property.name());
+        }
+        if let Value::Object(id) = object
+            && let Some(value) = self.get_string_object_property_value(*id, property.name())?
+        {
+            return Ok(value);
         }
         self.checked_value(get_property(&self.objects, object, property.lookup())?)
     }
@@ -94,6 +104,19 @@ impl Context {
             }
             StringPropertyValue::Missing => Ok(Value::Undefined),
         }
+    }
+
+    pub(super) fn get_string_object_property_value(
+        &mut self,
+        id: ObjectId,
+        property: &str,
+    ) -> Result<Option<Value>> {
+        let Some(ch) = self.objects.string_object_character(id, property)? else {
+            return Ok(None);
+        };
+        let mut buffer = [0_u8; MAX_UTF8_CHAR_BYTES];
+        self.heap_string_value(ch.encode_utf8(&mut buffer))
+            .map(Some)
     }
 
     pub(crate) fn set_dynamic_property_value(
