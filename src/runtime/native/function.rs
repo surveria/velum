@@ -65,6 +65,7 @@ impl NativeFunction {
             | NativeFunctionKind::ArraySlice
             | NativeFunctionKind::ArrayUnshift
             | NativeFunctionKind::Boolean
+            | NativeFunctionKind::Eval
             | NativeFunctionKind::ErrorConstructor(_)
             | NativeFunctionKind::JsonParse
             | NativeFunctionKind::JsonStringify

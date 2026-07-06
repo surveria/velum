@@ -10,9 +10,9 @@ use crate::{
 };
 
 use super::{
-    ARRAY_NAME, BOOLEAN_NAME, INFINITY_NAME, JSON_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME,
-    NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PROMISE_NAME,
-    STRING_NAME,
+    ARRAY_NAME, BOOLEAN_NAME, EVAL_NAME, INFINITY_NAME, JSON_NAME, MATH_NAME, NAN_NAME,
+    NUMBER_NAME, NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME,
+    PROMISE_NAME, STRING_NAME,
 };
 
 impl Context {
@@ -20,6 +20,7 @@ impl Context {
         match name {
             ARRAY_NAME => self.array_constructor_value().map(Some),
             BOOLEAN_NAME => self.boolean_constructor_value().map(Some),
+            EVAL_NAME => self.eval_function_value().map(Some),
             INFINITY_NAME => self
                 .global_constant_value(INFINITY_NAME, Value::Number(f64::INFINITY))
                 .map(Some),
@@ -79,6 +80,7 @@ impl Context {
             | NativeFunctionKind::ArrayShift
             | NativeFunctionKind::ArraySlice
             | NativeFunctionKind::ArrayUnshift
+            | NativeFunctionKind::Eval
             | NativeFunctionKind::JsonParse
             | NativeFunctionKind::JsonStringify
             | NativeFunctionKind::MathAbs

@@ -75,7 +75,8 @@ const PROMISE_RESOLVE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(66);
 const PROMISE_REJECT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(67);
 const PROMISE_THEN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(68);
 const PROMISE_CATCH_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(69);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 70;
+const EVAL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(70);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 71;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -144,6 +145,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::ArraySlice => Some(ARRAY_SLICE_SLOT),
         NativeFunctionKind::ArrayUnshift => Some(ARRAY_UNSHIFT_SLOT),
         NativeFunctionKind::Boolean => Some(BOOLEAN_SLOT),
+        NativeFunctionKind::Eval => Some(EVAL_SLOT),
         NativeFunctionKind::ErrorConstructor(name) => Some(error_constructor_slot(name)),
         NativeFunctionKind::JsonParse => Some(JSON_PARSE_SLOT),
         NativeFunctionKind::JsonStringify => Some(JSON_STRINGIFY_SLOT),
