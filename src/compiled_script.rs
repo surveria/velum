@@ -18,8 +18,11 @@ impl CompiledScript {
         check_source_len(source, limits)?;
         let tokens = lexer::lex(source)?;
         let parsed = parser::parse_with_usage(tokens, limits)?;
-        let binding_layout =
-            BindingLayout::build(&parsed.program, parsed.usage.static_binding_count)?;
+        let binding_layout = BindingLayout::build(
+            &parsed.program,
+            parsed.usage.static_binding_count,
+            parsed.usage.static_function_count,
+        )?;
         Ok(Self {
             program: parsed.program,
             usage: CompiledScriptUsage {

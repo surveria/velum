@@ -99,7 +99,7 @@ pub enum ScopeKind {
     Local,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Scope {
     pub parent: Option<ScopeId>,
     pub function: FunctionScopeId,
@@ -145,14 +145,16 @@ impl Declaration {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FunctionScope {
+    pub parent: Option<FunctionScopeId>,
     pub upvalues: Vec<DeclarationRef>,
 }
 
 impl FunctionScope {
-    pub const fn new() -> Self {
+    pub const fn new(parent: Option<FunctionScopeId>) -> Self {
         Self {
+            parent,
             upvalues: Vec::new(),
         }
     }
@@ -161,7 +163,14 @@ impl FunctionScope {
         &self,
         declaration: DeclarationRef,
     ) -> std::result::Result<usize, usize> {
-        self.upvalues.binary_search(&declaration)
+        if let Some(position) = self
+            .upvalues
+            .iter()
+            .position(|upvalue| *upvalue == declaration)
+        {
+            return Ok(position);
+        }
+        Err(self.upvalues.len())
     }
 }
 

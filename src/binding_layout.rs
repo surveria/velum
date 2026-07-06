@@ -3,18 +3,26 @@ use std::rc::Rc;
 use crate::{
     ast::{
         CatchClause, DeclKind, Expr, ForInTarget, Program, StaticBinding, StaticBindingId,
-        StaticNameId, Stmt, SwitchCase,
+        StaticFunctionId, StaticNameId, Stmt, SwitchCase,
     },
     binding_layout_types::{
-        BindingOperand, Declaration, DeclarationRef, FunctionScope, FunctionScopeId, GlobalSlot,
-        LocalSlot, Scope, ScopeContext, ScopeId, ScopeKind, UpvalueSlot,
+        BindingOperand, Declaration, FunctionScope, FunctionScopeId, GlobalSlot, LocalSlot, Scope,
+        ScopeContext, ScopeId, ScopeKind,
     },
     error::{Error, Result},
 };
 
+#[path = "binding_layout_metadata.rs"]
+mod binding_layout_metadata;
+#[path = "binding_layout_upvalues.rs"]
+mod binding_layout_upvalues;
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BindingLayout {
     operands: Rc<[BindingOperand]>,
+    static_functions: Rc<[Option<FunctionScopeId>]>,
+    scopes: Rc<[Scope]>,
+    functions: Rc<[FunctionScope]>,
     global_slot_count: usize,
     local_slot_count: usize,
     upvalue_slot_count: usize,
@@ -22,8 +30,12 @@ pub struct BindingLayout {
 }
 
 impl BindingLayout {
-    pub fn build(program: &Program, static_binding_count: usize) -> Result<Self> {
-        let mut builder = LayoutBuilder::new(static_binding_count);
+    pub fn build(
+        program: &Program,
+        static_binding_count: usize,
+        static_function_count: usize,
+    ) -> Result<Self> {
+        let mut builder = LayoutBuilder::new(static_binding_count, static_function_count);
         builder.build(program)
     }
 
@@ -86,6 +98,7 @@ impl BindingLayout {
 
 struct LayoutBuilder {
     operands: Vec<BindingOperand>,
+    static_functions: Vec<Option<FunctionScopeId>>,
     scopes: Vec<Scope>,
     functions: Vec<FunctionScope>,
     global_slot_count: usize,
@@ -94,9 +107,10 @@ struct LayoutBuilder {
 }
 
 impl LayoutBuilder {
-    fn new(static_binding_count: usize) -> Self {
+    fn new(static_binding_count: usize, static_function_count: usize) -> Self {
         Self {
             operands: vec![BindingOperand::Unresolved; static_binding_count],
+            static_functions: vec![None; static_function_count],
             scopes: Vec::new(),
             functions: Vec::new(),
             global_slot_count: 0,
@@ -106,12 +120,15 @@ impl LayoutBuilder {
     }
 
     fn build(&mut self, program: &Program) -> Result<BindingLayout> {
-        let root_function = self.add_function();
+        let root_function = self.add_function(None);
         let root_scope = self.add_scope(None, root_function, ScopeKind::Global);
         self.analyze_statements(&program.statements, root_scope, root_scope, root_function)?;
         let unresolved_count = self.unresolved_count();
         Ok(BindingLayout {
             operands: Rc::from(self.operands.clone().into_boxed_slice()),
+            static_functions: Rc::from(self.static_functions.clone().into_boxed_slice()),
+            scopes: Rc::from(self.scopes.clone().into_boxed_slice()),
+            functions: Rc::from(self.functions.clone().into_boxed_slice()),
             global_slot_count: self.global_slot_count,
             local_slot_count: self.local_slot_count,
             upvalue_slot_count: self.upvalue_slot_count,
@@ -514,9 +531,12 @@ impl LayoutBuilder {
                 self.analyze_expr(callee, scope, function)?;
                 self.analyze_exprs(args, scope, function)
             }
-            Expr::Function { params, body, .. } | Expr::MethodFunction { params, body, .. } => {
-                self.analyze_function(params, body, scope)
+            Expr::Function {
+                id, params, body, ..
             }
+            | Expr::MethodFunction {
+                id, params, body, ..
+            } => self.analyze_function(*id, params, body, scope, function),
             Expr::Object(properties) => {
                 for property in properties {
                     self.analyze_expr(&property.value, scope, function)?;
@@ -545,11 +565,14 @@ impl LayoutBuilder {
 
     fn analyze_function(
         &mut self,
+        id: StaticFunctionId,
         params: &[StaticBinding],
         body: &[Stmt],
         parent_scope: ScopeId,
+        parent_function: FunctionScopeId,
     ) -> Result<()> {
-        let function = self.add_function();
+        let function = self.add_function(Some(parent_function));
+        self.record_static_function(id, function)?;
         let function_scope = self.add_scope(Some(parent_scope), function, ScopeKind::Local);
         for param in params {
             self.declare(function_scope, param)?;
@@ -636,32 +659,6 @@ impl LayoutBuilder {
         Ok(None)
     }
 
-    fn upvalue_operand(
-        &mut self,
-        function: FunctionScopeId,
-        declaration: Declaration,
-    ) -> Result<BindingOperand> {
-        let reference = DeclarationRef::new(declaration.scope, declaration.name);
-        let position = match self.function(function)?.upvalue_position(reference) {
-            Ok(position) | Err(position) => position,
-        };
-        let slot = UpvalueSlot::from_index(position)?;
-        if self
-            .function(function)?
-            .upvalue_position(reference)
-            .is_err()
-        {
-            self.function_mut(function)?
-                .upvalues
-                .insert(position, reference);
-            self.upvalue_slot_count = self
-                .upvalue_slot_count
-                .checked_add(1)
-                .ok_or_else(|| Error::limit("upvalue binding slot count overflowed"))?;
-        }
-        Ok(BindingOperand::Upvalue { function, slot })
-    }
-
     fn set_operand(&mut self, binding: &StaticBinding, operand: BindingOperand) -> Result<()> {
         let index = binding.id().index()?;
         let Some(slot) = self.operands.get_mut(index) else {
@@ -671,10 +668,23 @@ impl LayoutBuilder {
         Ok(())
     }
 
-    fn add_function(&mut self) -> FunctionScopeId {
+    fn add_function(&mut self, parent: Option<FunctionScopeId>) -> FunctionScopeId {
         let id = FunctionScopeId::from_index(self.functions.len());
-        self.functions.push(FunctionScope::new());
+        self.functions.push(FunctionScope::new(parent));
         id
+    }
+
+    fn record_static_function(
+        &mut self,
+        id: StaticFunctionId,
+        function: FunctionScopeId,
+    ) -> Result<()> {
+        let index = id.index()?;
+        let Some(slot) = self.static_functions.get_mut(index) else {
+            return Err(Error::runtime("static function layout slot is not defined"));
+        };
+        *slot = Some(function);
+        Ok(())
     }
 
     fn add_scope(

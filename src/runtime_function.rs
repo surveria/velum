@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{DeclKind, Expr, StaticBinding, StaticBindingId, StaticName, Stmt},
+    ast::{DeclKind, Expr, StaticBinding, StaticBindingId, StaticFunctionId, StaticName, Stmt},
     atom::AtomId,
     binding_layout::BindingLayout,
     binding_layout_types::BindingOperand,
@@ -16,7 +16,6 @@ use crate::{
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
 };
 
-use super::runtime_function_capture::statements_contain_nested_function;
 use super::runtime_function_properties::{
     FUNCTION_LENGTH_PROPERTY, FUNCTION_NAME_PROPERTY, FUNCTION_PROTOTYPE_PROPERTY,
     FunctionProperties, PROTOTYPE_CONSTRUCTOR_PROPERTY,
@@ -26,24 +25,27 @@ use super::runtime_static_bindings::CompiledBindingFrame;
 impl Context {
     pub(crate) fn create_function(
         &mut self,
+        id: StaticFunctionId,
         name: Option<&StaticName>,
         params: &Rc<[StaticBinding]>,
         body: &Rc<[Stmt]>,
     ) -> Result<Value> {
-        self.create_function_with_properties(name, params, body, true)
+        self.create_function_with_properties(id, name, params, body, true)
     }
 
     pub(crate) fn create_method_function(
         &mut self,
+        id: StaticFunctionId,
         name: &StaticName,
         params: &Rc<[StaticBinding]>,
         body: &Rc<[Stmt]>,
     ) -> Result<Value> {
-        self.create_function_with_properties(Some(name), params, body, false)
+        self.create_function_with_properties(id, Some(name), params, body, false)
     }
 
     fn create_function_with_properties(
         &mut self,
+        static_function_id: StaticFunctionId,
         name: Option<&StaticName>,
         params: &Rc<[StaticBinding]>,
         body: &Rc<[Stmt]>,
@@ -74,12 +76,16 @@ impl Context {
         let static_name_atom_cache = self.current_static_name_atom_cache();
         let static_binding_cache = self.current_static_binding_cache();
         let static_binding_layout = self.current_static_binding_layout();
-        let upvalues = self.capture_function_upvalues(body, static_binding_layout.as_ref())?;
+        let upvalues = self.capture_function_upvalues(
+            static_function_id,
+            body,
+            static_binding_layout.as_ref(),
+        )?;
         let captures = super::FunctionCaptures::from_current_locals(
             &self.locals,
             static_binding_layout.is_some(),
-            &upvalues,
-            statements_contain_nested_function(body),
+            &upvalues.cells,
+            upvalues.needs_legacy_scope_fallback,
         );
         self.functions.push(super::Function {
             name: function_name,
@@ -88,7 +94,7 @@ impl Context {
             param_atoms,
             body: Rc::clone(body),
             captures,
-            upvalues,
+            upvalues: upvalues.cells,
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
