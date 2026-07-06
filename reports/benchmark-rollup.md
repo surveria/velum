@@ -16,10 +16,10 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260706T111020Z.md`
-- Task: String heap foundation tranche: Introduce VM-owned heap strings and resource accounting before the broader compact `Value` and `StringId` migration.
-- Performance: 1.25x (44/63 >1.00x)
-- Memory: 1.09x (59/63 >1.00x)
+- `rsqjs-test-report-20260706T111831Z.md`
+- Task: Parser literal heap-string tranche: Move parser-produced string and template literal execution onto the VM-owned string heap without changing the parser or public AST compatibility boundary.
+- Performance: 1.26x (45/63 >1.00x)
+- Memory: 1.07x (57/63 >1.00x)
 - Full Test262: 10872 passed / 91706 failed (10.60%)
 
 | PR / task | Performance | Memory | Full Test262 |
@@ -176,4 +176,5 @@ Latest report:
 | `20260706T102500Z` `bc870ac` Static binding native-call cache tranche: Extend direct native-call metadata from static member call sites to static identifier call sites. | 1.24x (44/63 >1.00x) | 1.07x (53/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T103630Z` `679a9e8` Enforce QuickJS parity benchmark budget | 1.19x (44/63 >1.00x) | 1.07x (54/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T104244Z` `21f7cb2` Holey array no-prototype-index fast paths: Continue the Dense Arrays direction by adding safe direct holey-storage reads when prototype-chain indexed properties cannot affect observable results. | 1.24x (46/63 >1.00x) | 1.07x (60/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
-| `20260706T111020Z` String heap foundation tranche: Introduce VM-owned heap strings and resource accounting before the broader compact `Value` and `StringId` migration. | 1.25x (44/63 >1.00x) | 1.09x (59/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
+| `20260706T111020Z` `5e80d17` String heap foundation tranche: Introduce VM-owned heap strings and resource accounting before the broader compact `Value` and `StringId` migration. | 1.25x (44/63 >1.00x) | 1.09x (59/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
+| `20260706T111831Z` Parser literal heap-string tranche: Move parser-produced string and template literal execution onto the VM-owned string heap without changing the parser or public AST compatibility boundary. | 1.26x (45/63 >1.00x) | 1.07x (57/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
