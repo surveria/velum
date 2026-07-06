@@ -63,13 +63,13 @@ impl Context {
         expr: &Expr,
     ) -> Result<Value> {
         self.materialize_builtin_binding(name)?;
-        let old_value = self
+        let binding = self
             .get_binding_static(name)?
-            .map(|binding| binding.value())
             .ok_or_else(|| Error::runtime(format!("ReferenceError: '{name}' is not defined")))?;
+        let old_value = binding.value();
         let right = self.eval_expr(expr)?;
         let value = self.eval_compound_value(op, &old_value, &right)?;
-        self.assign_static(name, value.clone())?;
+        binding.assign(name, value.clone())?;
         Ok(value)
     }
 

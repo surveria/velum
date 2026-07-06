@@ -28,12 +28,13 @@ impl Context {
     }
 
     fn update_binding(&self, name: &StaticBinding, op: UpdateOp, prefix: bool) -> Result<Value> {
-        let old_value = self
+        let binding = self
             .get_binding_static(name)?
-            .map(|binding| binding.value())
             .ok_or_else(|| Error::runtime(format!("ReferenceError: '{name}' is not defined")))?;
+        let old_value = binding.value();
         let new_value = Self::updated_number(&old_value, op)?;
-        self.assign_static(name, new_value.clone())?;
+        self.checked_value(new_value.clone())?;
+        binding.assign(name, new_value.clone())?;
         Ok(if prefix { new_value } else { old_value })
     }
 
