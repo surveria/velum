@@ -3,13 +3,14 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime_object::{
-        DataPropertyDescriptor, DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable,
-        PropertyWritable,
+        DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
+        PropertyEnumerable, PropertyKey, PropertyWritable,
     },
     runtime_property::{has_property, property_key},
     value::{NativeFunctionId, Value},
 };
 
+use super::super::runtime_well_known::DescriptorPropertyKeys;
 use super::{
     NativeFunction, NativeFunctionKind, OBJECT_DEFINE_PROPERTY_NAME,
     OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME, OBJECT_HAS_OWN_NAME, OBJECT_KEYS_NAME, OBJECT_NAME,
@@ -299,20 +300,28 @@ impl Context {
         &mut self,
         descriptor: &DataPropertyDescriptor,
     ) -> Result<Value> {
+        let keys = self.descriptor_property_keys()?;
         let properties = vec![
-            self.descriptor_object_property(DESCRIPTOR_VALUE_PROPERTY, descriptor.value())?,
-            self.descriptor_object_property(
+            Self::descriptor_object_property(
+                keys.value(),
+                DESCRIPTOR_VALUE_PROPERTY,
+                descriptor.value(),
+            ),
+            Self::descriptor_object_property(
+                keys.writable(),
                 DESCRIPTOR_WRITABLE_PROPERTY,
                 Value::Bool(descriptor.writable().is_yes()),
-            )?,
-            self.descriptor_object_property(
+            ),
+            Self::descriptor_object_property(
+                keys.enumerable(),
                 DESCRIPTOR_ENUMERABLE_PROPERTY,
                 Value::Bool(descriptor.enumerable().is_yes()),
-            )?,
-            self.descriptor_object_property(
+            ),
+            Self::descriptor_object_property(
+                keys.configurable(),
                 DESCRIPTOR_CONFIGURABLE_PROPERTY,
                 Value::Bool(descriptor.configurable().is_yes()),
-            )?,
+            ),
         ];
         let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_data_object(
@@ -323,13 +332,26 @@ impl Context {
         )
     }
 
-    fn descriptor_object_property(
-        &mut self,
-        name: &str,
+    const fn descriptor_object_property(
+        key: PropertyKey,
+        name: &'static str,
         value: Value,
-    ) -> Result<(crate::runtime_object::PropertyKey, String, Value)> {
-        let key = self.intern_property_key(name)?;
-        Ok((key, name.to_owned(), value))
+    ) -> ObjectPropertyInit<'static> {
+        ObjectPropertyInit::new(key, name, value, PropertyEnumerable::Yes)
+    }
+
+    fn descriptor_property_keys(&mut self) -> Result<DescriptorPropertyKeys> {
+        if let Some(keys) = self.descriptor_property_keys {
+            return Ok(keys);
+        }
+        let keys = DescriptorPropertyKeys::new(
+            self.intern_property_key(DESCRIPTOR_VALUE_PROPERTY)?,
+            self.intern_property_key(DESCRIPTOR_WRITABLE_PROPERTY)?,
+            self.intern_property_key(DESCRIPTOR_ENUMERABLE_PROPERTY)?,
+            self.intern_property_key(DESCRIPTOR_CONFIGURABLE_PROPERTY)?,
+        );
+        self.descriptor_property_keys = Some(keys);
+        Ok(keys)
     }
 
     fn has_own_property_value(&self, target: &Value, property: &str) -> Result<bool> {

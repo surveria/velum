@@ -131,6 +131,52 @@ fn supports_data_property_descriptors() -> TestResult {
 }
 
 #[test]
+fn reuses_descriptor_property_keys_and_shape_layout() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let value = vm.context().eval(
+        r#"
+        let object = {};
+        let first = undefined;
+        let second = undefined;
+        let third = undefined;
+        Object.defineProperty(object, "slot", {
+            value: 7,
+            enumerable: true,
+            writable: false,
+            configurable: false
+        });
+        first = Object.getOwnPropertyDescriptor(object, "slot");
+        first.value === 7 &&
+            first.enumerable === true &&
+            first.writable === false &&
+            first.configurable === false ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    let descriptor_atoms = vm.resource_usage().atom_count;
+    let descriptor_shapes = vm.resource_usage().shape_count;
+
+    let value = vm.context().eval(
+        r#"
+        first = Object.getOwnPropertyDescriptor(object, "slot");
+        second = Object.getOwnPropertyDescriptor(object, "slot");
+        third = Object.getOwnPropertyDescriptor(object, "slot");
+        first.value === 7 &&
+            second.value === 7 &&
+            third.value === 7 &&
+            first.enumerable === true &&
+            second.writable === false &&
+            third.configurable === false ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_usize(vm.resource_usage().atom_count, descriptor_atoms)?;
+    ensure_usize(vm.resource_usage().shape_count, descriptor_shapes)
+}
+
+#[test]
 fn preserves_descriptor_slots_after_delete_and_reinsert() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
