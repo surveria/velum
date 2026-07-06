@@ -135,6 +135,6 @@ impl Context {
                 return Err(Error::runtime("invalid compound assignment operator"));
             }
         };
-        self.checked_value(value)
+        self.runtime_value(value)
     }
 }

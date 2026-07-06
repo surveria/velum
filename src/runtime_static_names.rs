@@ -236,7 +236,8 @@ impl Context {
         {
             return self.get_cached_static_object_property_value(*id, access, lookup);
         }
-        self.checked_value(get_property(&self.objects, object, lookup)?)
+        let value = get_property(&self.objects, object, lookup)?;
+        self.runtime_value(value)
     }
 
     pub(super) fn cached_static_native_call_kind(
@@ -265,24 +266,21 @@ impl Context {
     }
 
     fn get_cached_static_object_property_value(
-        &self,
+        &mut self,
         object: ObjectId,
         access: StaticPropertyAccessId,
         lookup: PropertyLookup<'_>,
     ) -> Result<Value> {
         let Some(cache) = self.current_static_name_atom_cache() else {
-            return self.checked_value(get_property(
-                &self.objects,
-                &Value::Object(object),
-                lookup,
-            )?);
+            let value = get_property(&self.objects, &Value::Object(object), lookup)?;
+            return self.runtime_value(value);
         };
         if let Some(cached_lookup) = cache.property_lookup(access)? {
             match self
                 .objects
                 .read_cacheable_property_value_for(object, cached_lookup)?
             {
-                CacheablePropertyValue::Hit(value) => return self.checked_value(value),
+                CacheablePropertyValue::Hit(value) => return self.runtime_value(value),
                 CacheablePropertyValue::Missing => return Ok(Value::Undefined),
                 CacheablePropertyValue::Uncacheable => {}
             }
@@ -295,14 +293,15 @@ impl Context {
         {
             CacheablePropertyValue::Hit(value) => {
                 cache.remember_property_lookup(access, candidate)?;
-                self.checked_value(value)
+                self.runtime_value(value)
             }
             CacheablePropertyValue::Missing => {
                 cache.remember_property_lookup(access, candidate)?;
                 Ok(Value::Undefined)
             }
             CacheablePropertyValue::Uncacheable => {
-                self.checked_value(get_property(&self.objects, &Value::Object(object), lookup)?)
+                let value = get_property(&self.objects, &Value::Object(object), lookup)?;
+                self.runtime_value(value)
             }
         }
     }
@@ -371,7 +370,7 @@ impl Context {
         access: StaticPropertyAccessId,
         value: Value,
     ) -> Result<()> {
-        self.checked_value(value.clone())?;
+        let value = self.runtime_value(value)?;
         let key = self.intern_static_property_key(property)?;
         if let Value::Function(id) = object {
             return self.set_function_property_key(*id, property, key, value);

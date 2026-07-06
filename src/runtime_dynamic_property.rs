@@ -49,7 +49,8 @@ impl Context {
         {
             return Ok(value);
         }
-        self.checked_value(get_property(&self.objects, object, lookup)?)
+        let value = get_property(&self.objects, object, lookup)?;
+        self.runtime_value(value)
     }
 
     pub(crate) fn get_dynamic_property_value(
@@ -77,7 +78,8 @@ impl Context {
         {
             return Ok(value);
         }
-        self.checked_value(get_property(&self.objects, object, property.lookup())?)
+        let value = get_property(&self.objects, object, property.lookup())?;
+        self.runtime_value(value)
     }
 
     pub(super) fn get_error_property_value(
@@ -125,7 +127,7 @@ impl Context {
         property: &mut DynamicPropertyKey,
         value: Value,
     ) -> Result<()> {
-        self.checked_value(value.clone())?;
+        let value = self.runtime_value(value)?;
         if let Value::Function(id) = object {
             let key = self.intern_dynamic_property_key(property)?;
             return self.set_function_property_key(*id, property.name(), key, value);

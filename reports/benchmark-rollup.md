@@ -16,10 +16,10 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260706T121052Z.md`
-- Task: String wrapper heap-storage tranche: Store `new String(...)` wrapper payloads as VM-owned heap strings and expose character indices as virtual object properties.
-- Performance: 1.28x (47/63 >1.00x)
-- Memory: 1.09x (60/63 >1.00x)
+- `rsqjs-test-report-20260706T122435Z.md`
+- Task: Context string normalization tranche: Normalize owned string values at `Context` storage and return boundaries without making every expression dispatch pay for heap checks.
+- Performance: 1.30x (45/63 >1.00x)
+- Memory: 1.08x (54/63 >1.00x)
 - Full Test262: 10872 passed / 91706 failed (10.60%)
 
 | PR / task | Performance | Memory | Full Test262 |
@@ -181,4 +181,5 @@ Latest report:
 | `20260706T112845Z` `b1e5fd5` Host return heap-string tranche: Move host callback string returns onto the VM-owned string heap while preserving the public host conversion API. | 1.27x (46/63 >1.00x) | 1.07x (57/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T114324Z` `fe75922` String index heap-string tranche: Move primitive string index-property reads onto the VM-owned string heap. | 1.21x (41/63 >1.00x) | 1.07x (56/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T115430Z` `b26711d` Error property heap-string tranche: Move context-aware error `name` and `message` property reads onto the VM-owned string heap. | 1.28x (46/63 >1.00x) | 1.08x (58/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
-| `20260706T121052Z` String wrapper heap-storage tranche: Store `new String(...)` wrapper payloads as VM-owned heap strings and expose character indices as virtual object properties. | 1.28x (47/63 >1.00x) | 1.09x (60/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
+| `20260706T121052Z` `251c7d3` String wrapper heap-storage tranche: Store `new String(...)` wrapper payloads as VM-owned heap strings and expose character indices as virtual object properties. | 1.28x (47/63 >1.00x) | 1.09x (60/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
+| `20260706T122435Z` Context string normalization tranche: Normalize owned string values at `Context` storage and return boundaries without making every expression dispatch pay for heap checks. | 1.30x (45/63 >1.00x) | 1.08x (54/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |

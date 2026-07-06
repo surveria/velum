@@ -126,7 +126,7 @@ impl Context {
         let value = self
             .eval_function_completion_with_this(id, args, this_value)?
             .into_function_result()?;
-        self.checked_value(value)
+        self.runtime_value(value)
     }
 
     pub(crate) fn eval_function_completion(
@@ -511,7 +511,7 @@ impl Context {
     }
 
     fn function_scope(
-        &self,
+        &mut self,
         params: &[AtomId],
         binding_ids: &[StaticBindingId],
         layout: Option<&BindingLayout>,
@@ -526,8 +526,7 @@ impl Context {
             if !scope.contains(atom) {
                 self.ensure_extra_binding_capacity(scope.len())?;
             }
-            let value = args.next().unwrap_or(Value::Undefined);
-            self.checked_value(value.clone())?;
+            let value = self.runtime_value(args.next().unwrap_or(Value::Undefined))?;
             let cell = BindingCell::new(value, true, DeclKind::Var);
             if let Some(frame) = function_param_frame(binding, layout)? {
                 let inserted = scope.insert_or_replace_at_slot(atom, cell, frame.slot())?;

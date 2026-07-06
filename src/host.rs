@@ -319,7 +319,7 @@ impl Context {
             | Value::Bool(_)
             | Value::Number(_)
             | Value::HeapString(_)
-            | Value::Error(_) => self.checked_value(value),
+            | Value::Error(_) => self.runtime_value(value),
         }
     }
 }

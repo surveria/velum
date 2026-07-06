@@ -8,6 +8,16 @@ const ERROR_MESSAGE_PROPERTY: &str = "message";
 const CAMERA_LABEL: &str = "camera";
 const CAMERA_FIRST_CHAR: &str = "c";
 const CAMERA_KEYS: &str = "0;1;2;3;4;5;";
+const HOLDER_LABEL_SCRIPT: &str = r#"
+var holder = {};
+holder.label = "camera";
+holder.label
+"#;
+const ECHO_LABEL_SCRIPT: &str = r#"
+(function(value) {
+    return value;
+})("camera")
+"#;
 
 #[test]
 fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestResult {
@@ -256,11 +266,58 @@ fn keeps_string_wrapper_indices_virtual_and_heap_backed() -> TestResult {
     )
 }
 
+#[test]
+fn normalizes_context_owned_strings_after_storage_boundaries() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let retained = vm.context().eval(r#"var retained = "camera"; retained"#)?;
+    ensure_heap_string(&retained, CAMERA_LABEL)?;
+    let after_retained = vm.resource_usage();
+    ensure_usize(after_retained.string_count, 1)?;
+    ensure_usize(after_retained.string_bytes, CAMERA_LABEL.len())?;
+
+    let repeated = vm.context().eval("retained")?;
+    ensure_heap_string(&repeated, CAMERA_LABEL)?;
+    let after_repeated = vm.resource_usage();
+    ensure_usize(after_repeated.string_count, after_retained.string_count)?;
+    ensure_usize(after_repeated.string_bytes, after_retained.string_bytes)?;
+
+    let property = vm.context().eval(HOLDER_LABEL_SCRIPT)?;
+    ensure_heap_string(&property, CAMERA_LABEL)?;
+    let after_property = vm.resource_usage();
+    ensure_usize(after_property.string_count, after_retained.string_count)?;
+    ensure_usize(after_property.string_bytes, after_retained.string_bytes)?;
+
+    let parameter = vm.context().eval(ECHO_LABEL_SCRIPT)?;
+    ensure_heap_string(&parameter, CAMERA_LABEL)?;
+    let after_parameter = vm.resource_usage();
+    ensure_usize(
+        after_parameter.string_count,
+        after_retained.string_count.saturating_add(1),
+    )?;
+    ensure_usize(after_parameter.string_bytes, after_retained.string_bytes)
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
     }
     Err(format!("expected value {expected:?}, got {actual:?}").into())
+}
+
+fn ensure_heap_string(actual: &Value, expected: &str) -> TestResult {
+    let Value::HeapString(value) = actual else {
+        return Err(format!("expected heap string {expected:?}, got {actual:?}").into());
+    };
+    if value.as_str() == expected {
+        return Ok(());
+    }
+    Err(format!(
+        "expected heap string {expected:?}, got {:?}",
+        value.as_str()
+    )
+    .into())
 }
 
 fn ensure_usize(actual: usize, expected: usize) -> TestResult {

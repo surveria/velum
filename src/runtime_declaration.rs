@@ -173,7 +173,7 @@ impl Context {
         }
         self.ensure_binding_capacity_for_atom(atom)?;
 
-        self.checked_value(value.clone())?;
+        let value = self.runtime_value(value)?;
         let mutable = kind != DeclKind::Const;
         let inserted = self
             .active_bindings_mut()
