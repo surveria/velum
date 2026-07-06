@@ -66,13 +66,42 @@ impl BytecodeStack {
             .ok_or_else(|| Error::runtime("bytecode stack underflowed"))
     }
 
+    pub(super) fn tail(&self, count: usize) -> Result<&[Value]> {
+        let start = self.tail_start(count)?;
+        self.values
+            .get(start..)
+            .ok_or_else(|| Error::runtime("bytecode stack tail is not available"))
+    }
+
+    pub(super) fn value_before_tail(&self, count: usize, offset: usize) -> Result<&Value> {
+        let tail_start = self.tail_start(count)?;
+        let before_tail = offset
+            .checked_add(1)
+            .ok_or_else(|| Error::runtime("bytecode stack offset overflowed"))?;
+        let index = tail_start
+            .checked_sub(before_tail)
+            .ok_or_else(|| Error::runtime("bytecode stack underflowed"))?;
+        self.values
+            .get(index)
+            .ok_or_else(|| Error::runtime("bytecode stack value is not available"))
+    }
+
+    pub(super) fn drop_tail(&mut self, count: usize) -> Result<()> {
+        let start = self.tail_start(count)?;
+        self.values.truncate(start);
+        Ok(())
+    }
+
     pub(super) fn pop_many(&mut self, count: usize) -> Result<Vec<Value>> {
-        let start = self
-            .values
+        let start = self.tail_start(count)?;
+        Ok(self.values.split_off(start))
+    }
+
+    fn tail_start(&self, count: usize) -> Result<usize> {
+        self.values
             .len()
             .checked_sub(count)
-            .ok_or_else(|| Error::runtime("bytecode stack underflowed"))?;
-        Ok(self.values.split_off(start))
+            .ok_or_else(|| Error::runtime("bytecode stack underflowed"))
     }
 
     fn pop_single(&mut self) -> Result<Value> {

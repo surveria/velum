@@ -320,8 +320,8 @@ impl Context {
     }
 
     pub(crate) fn eval_print_call(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let values = args.evaluate();
-        let line = values
+        let line = args
+            .as_slice()
             .iter()
             .map(ToString::to_string)
             .collect::<Vec<_>>()
