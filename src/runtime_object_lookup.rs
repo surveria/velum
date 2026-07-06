@@ -127,7 +127,7 @@ pub enum CacheablePropertyValue {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) enum CacheablePropertyPresence {
+pub enum CacheablePropertyPresence {
     Hit,
     Missing,
     Uncacheable,
@@ -224,6 +224,17 @@ impl ObjectHeap {
         self.read_valid_cacheable_property_value(lookup)
     }
 
+    pub(crate) fn read_cacheable_property_presence_for(
+        &self,
+        id: ObjectId,
+        lookup: CacheablePropertyLookup,
+    ) -> Result<CacheablePropertyPresence> {
+        if !lookup.guard.is_valid_for(self, id)? {
+            return Ok(CacheablePropertyPresence::Uncacheable);
+        }
+        self.read_valid_cacheable_property_presence(lookup)
+    }
+
     fn read_cacheable_property_value(
         &self,
         lookup: CacheablePropertyLookup,
@@ -254,6 +265,13 @@ impl ObjectHeap {
         if !lookup.guard.is_valid(self)? {
             return Ok(CacheablePropertyPresence::Uncacheable);
         }
+        self.read_valid_cacheable_property_presence(lookup)
+    }
+
+    fn read_valid_cacheable_property_presence(
+        &self,
+        lookup: CacheablePropertyLookup,
+    ) -> Result<CacheablePropertyPresence> {
         match lookup.result {
             CacheablePropertyLookupResult::Hit(hit) => self
                 .ensure_cacheable_hit(hit)

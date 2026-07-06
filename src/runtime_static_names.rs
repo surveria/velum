@@ -8,9 +8,12 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime_object::{
-        CacheablePropertyLookup, CacheablePropertyValue, PropertyKey, PropertyLookup,
+        CacheablePropertyLookup, CacheablePropertyPresence, CacheablePropertyValue, PropertyKey,
+        PropertyLookup,
     },
-    runtime_property::{delete_property, get_property, set_property},
+    runtime_property::{
+        DynamicPropertyKey, delete_property, get_property, has_property, set_property,
+    },
     value::{ObjectId, Value},
 };
 
@@ -214,6 +217,63 @@ impl Context {
             }
             CacheablePropertyValue::Uncacheable => {
                 self.checked_value(get_property(&self.objects, &Value::Object(object), lookup)?)
+            }
+        }
+    }
+
+    pub(crate) fn has_cached_dynamic_property_value(
+        &self,
+        object: &Value,
+        property: &DynamicPropertyKey,
+        access: StaticPropertyAccessId,
+    ) -> Result<bool> {
+        match object {
+            Value::Function(id) => self.has_function_property_lookup(*id, property.lookup()),
+            Value::NativeFunction(id) => {
+                self.has_native_function_property_lookup(*id, property.lookup())
+            }
+            Value::Object(id) => self.has_cached_object_property_value(*id, property, access),
+            _ => has_property(&self.objects, object, property.lookup()),
+        }
+    }
+
+    fn has_cached_object_property_value(
+        &self,
+        object: ObjectId,
+        property: &DynamicPropertyKey,
+        access: StaticPropertyAccessId,
+    ) -> Result<bool> {
+        let Some(cache) = self.current_static_name_atom_cache() else {
+            return has_property(&self.objects, &Value::Object(object), property.lookup());
+        };
+        if let Some(cached_lookup) = cache.property_lookup(access)? {
+            match self
+                .objects
+                .read_cacheable_property_presence_for(object, cached_lookup)?
+            {
+                CacheablePropertyPresence::Hit => return Ok(true),
+                CacheablePropertyPresence::Missing => return Ok(false),
+                CacheablePropertyPresence::Uncacheable => {}
+            }
+        }
+
+        let candidate = self
+            .objects
+            .cacheable_property_lookup(object, property.lookup())?;
+        match self
+            .objects
+            .read_cacheable_property_presence_for(object, candidate)?
+        {
+            CacheablePropertyPresence::Hit => {
+                cache.remember_property_lookup(access, candidate)?;
+                Ok(true)
+            }
+            CacheablePropertyPresence::Missing => {
+                cache.remember_property_lookup(access, candidate)?;
+                Ok(false)
+            }
+            CacheablePropertyPresence::Uncacheable => {
+                has_property(&self.objects, &Value::Object(object), property.lookup())
             }
         }
     }
