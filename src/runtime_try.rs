@@ -54,7 +54,7 @@ impl Context {
     ) -> Result<Completion> {
         let atom = self.ensure_binding_capacity_static(param)?;
         let frame = self.compiled_local_binding_frame(param)?;
-        self.checked_value(value.clone())?;
+        let value = self.runtime_value(value)?;
         let inserted = self
             .active_bindings_mut()
             .insert_or_replace_at_optional_slot(

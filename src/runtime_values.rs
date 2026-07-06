@@ -6,19 +6,14 @@ use crate::{
 
 impl Context {
     pub(crate) fn literal_value(&mut self, value: &Value) -> Result<Value> {
-        match value {
-            Value::String(text) => self.heap_string_value(text),
-            Value::HeapString(text) => self.heap_string_value(text.as_str()),
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Object(_)
-            | Value::Error(_) => self.checked_value(value.clone()),
+        self.runtime_value(value.clone())
+    }
+
+    pub(crate) fn runtime_value(&mut self, value: Value) -> Result<Value> {
+        if let Value::String(text) = value {
+            return self.heap_string_value(&text);
         }
+        self.checked_value(value)
     }
 
     pub(crate) fn add(&mut self, left: &Value, right: &Value) -> Result<Value> {

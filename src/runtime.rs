@@ -741,7 +741,7 @@ impl Context {
 
     fn eval_identifier(&mut self, name: &StaticBinding) -> Result<Value> {
         if let Some(binding) = self.get_binding_static(name)? {
-            return self.checked_value(binding.value());
+            return self.runtime_value(binding.value());
         }
         self.builtin_value(name.name())?
             .ok_or_else(|| reference_error_undefined(name))

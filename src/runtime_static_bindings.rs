@@ -357,8 +357,8 @@ impl Context {
         self.binding_at_location(location)
     }
 
-    pub(crate) fn assign_static(&self, binding: &StaticBinding, value: Value) -> Result<()> {
-        self.checked_value(value.clone())?;
+    pub(crate) fn assign_static(&mut self, binding: &StaticBinding, value: Value) -> Result<()> {
+        let value = self.runtime_value(value)?;
         let Some(cell) = self.get_binding_static(binding)? else {
             return Err(reference_error_undefined(binding));
         };
@@ -370,7 +370,7 @@ impl Context {
         binding: &StaticBinding,
         value: Value,
     ) -> Result<()> {
-        self.checked_value(value.clone())?;
+        let value = self.runtime_value(value)?;
         let Some(cell) = self.get_or_materialize_binding_static(binding)? else {
             return Err(reference_error_undefined(binding));
         };
