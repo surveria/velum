@@ -59,6 +59,11 @@ pub enum NativeCallTarget {
     ObjectGetOwnPropertyDescriptor,
     ObjectHasOwn,
     ObjectKeys,
+    Promise,
+    PromiseResolve,
+    PromiseReject,
+    PromiseThen,
+    PromiseCatch,
     String,
 }
 
@@ -87,6 +92,7 @@ impl NativeCallTarget {
             "Boolean" => Some(Self::Boolean),
             "Number" => Some(Self::Number),
             "Object" => Some(Self::Object),
+            "Promise" => Some(Self::Promise),
             "String" => Some(Self::String),
             _ => ErrorName::from_constructor_name(name)
                 .filter(|name| name.is_standard())
@@ -133,10 +139,14 @@ impl NativeCallTarget {
             "parse" => Some(Self::JsonParse),
             "pop" => Some(Self::ArrayPop),
             "pow" => Some(Self::MathPow),
+            "reject" => Some(Self::PromiseReject),
             "push" => Some(Self::ArrayPush),
             "random" => Some(Self::MathRandom),
             "reverse" => Some(Self::ArrayReverse),
             "round" => Some(Self::MathRound),
+            "then" => Some(Self::PromiseThen),
+            "catch" => Some(Self::PromiseCatch),
+            "resolve" => Some(Self::PromiseResolve),
             "shift" => Some(Self::ArrayShift),
             "sign" => Some(Self::MathSign),
             "sin" => Some(Self::MathSin),

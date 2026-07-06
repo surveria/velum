@@ -72,6 +72,7 @@ pub struct BytecodeFunctionDeclaration {
     function_name: StaticName,
     params: Rc<[StaticBinding]>,
     bytecode: BytecodeFunction,
+    is_async: bool,
 }
 
 impl BytecodeFunctionDeclaration {
@@ -81,6 +82,7 @@ impl BytecodeFunctionDeclaration {
         function_name: StaticName,
         params: Rc<[StaticBinding]>,
         bytecode: BytecodeFunction,
+        is_async: bool,
     ) -> Self {
         Self {
             name,
@@ -88,6 +90,7 @@ impl BytecodeFunctionDeclaration {
             function_name,
             params,
             bytecode,
+            is_async,
         }
     }
 
@@ -109,6 +112,10 @@ impl BytecodeFunctionDeclaration {
 
     pub const fn bytecode(&self) -> &BytecodeFunction {
         &self.bytecode
+    }
+
+    pub const fn is_async(&self) -> bool {
+        self.is_async
     }
 }
 
@@ -333,6 +340,7 @@ pub enum BytecodeInstruction {
     StoreLast,
     Pop,
     Unary(UnaryOp),
+    Await,
     TypeOfBinding(BytecodeBinding),
     TypeOfValue,
     DeleteBinding(BytecodeBinding),
@@ -433,6 +441,7 @@ pub enum BytecodeInstruction {
         params: Rc<[StaticBinding]>,
         bytecode: BytecodeFunction,
         constructable: bool,
+        is_async: bool,
     },
     ArrayLiteral {
         len: usize,

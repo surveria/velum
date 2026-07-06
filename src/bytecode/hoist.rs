@@ -130,6 +130,7 @@ impl<'a> HoistCollector<'a> {
                 id,
                 params,
                 body,
+                is_async,
             } => {
                 self.var_declarations.push(name.clone());
                 let declaration = BytecodeFunctionDeclaration::new(
@@ -138,6 +139,7 @@ impl<'a> HoistCollector<'a> {
                     name.name().clone(),
                     Rc::clone(params),
                     BytecodeFunction::compile(body, self.layout)?,
+                    *is_async,
                 );
                 self.function_declarations.push(declaration);
                 Ok(())

@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::VecDeque, rc::Rc};
 
 use crate::api::host::HostFunction;
 use crate::api::native_call::NativeCallTarget;
@@ -29,6 +29,7 @@ pub mod limits;
 pub mod native;
 pub mod numeric;
 pub mod object;
+pub mod promise;
 pub mod property;
 pub mod values;
 
@@ -36,6 +37,7 @@ pub use binding::static_bindings::CompiledBindingFrame;
 use binding::static_bindings::StaticBindingCacheHandle;
 use call_args::RuntimeCallArgs;
 use native::NativeFunctionRegistry;
+use promise::{Promise, PromiseId, PromiseJob};
 use property::static_names::StaticNameAtomCacheHandle;
 use property::well_known::{DescriptorPropertyKeys, WellKnownPropertyKeys};
 
@@ -61,6 +63,10 @@ pub struct Context {
     native_function_registry: NativeFunctionRegistry,
     pub(crate) host_functions: Vec<HostFunction>,
     objects: ObjectHeap,
+    promises: Vec<Promise>,
+    promise_object_slots: Vec<Option<PromiseId>>,
+    promise_jobs: VecDeque<PromiseJob>,
+    promise_prototype: Option<crate::value::ObjectId>,
     this_values: Vec<Value>,
     output: Vec<String>,
     random_state: u64,
@@ -83,6 +89,7 @@ struct Function {
     static_binding_layout: Option<BindingLayout>,
     properties: function::FunctionProperties,
     constructable: bool,
+    is_async: bool,
 }
 
 type FunctionUpvalues = Rc<[Option<BindingCell>]>;
@@ -185,6 +192,10 @@ impl Context {
             native_function_registry: NativeFunctionRegistry::new(),
             host_functions: Vec::new(),
             objects: ObjectHeap::new(),
+            promises: Vec::new(),
+            promise_object_slots: Vec::new(),
+            promise_jobs: VecDeque::new(),
+            promise_prototype: None,
             this_values: Vec::new(),
             output: Vec::new(),
             random_state: INITIAL_RANDOM_STATE,
@@ -224,9 +235,11 @@ impl Context {
             script.binding_layout().clone(),
             |context| {
                 context.hoist_bytecode_declarations(script.bytecode().hoist_plan())?;
-                context
+                let value = context
                     .eval_bytecode_program(script.bytecode())
-                    .and_then(Completion::into_result)
+                    .and_then(Completion::into_result)?;
+                context.drain_promise_jobs()?;
+                Ok(value)
             },
         )
     }

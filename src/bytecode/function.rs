@@ -154,7 +154,10 @@ impl CaptureBindingCollector {
                     self.collect_exprs(args);
                 }
             }
-            Expr::Parenthesized(expr) | Expr::Unary { expr, .. } | Expr::Update { expr, .. } => {
+            Expr::Parenthesized(expr)
+            | Expr::Unary { expr, .. }
+            | Expr::Update { expr, .. }
+            | Expr::Await(expr) => {
                 self.collect_expr(expr);
             }
             Expr::Binary { left, right, .. } => {

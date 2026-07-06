@@ -72,6 +72,7 @@ impl Context {
             | BytecodeInstruction::StoreLast
             | BytecodeInstruction::Pop
             | BytecodeInstruction::Unary(_)
+            | BytecodeInstruction::Await
             | BytecodeInstruction::TypeOfBinding(_)
             | BytecodeInstruction::TypeOfValue => {
                 self.eval_bytecode_stack_instruction(state, instruction, next)
@@ -195,6 +196,20 @@ impl Context {
                 state.stack.push(Self::eval_bytecode_unary(*op, &value)?);
                 state.pc = next;
                 Ok(None)
+            }
+            BytecodeInstruction::Await => {
+                let value = state.stack.pop()?;
+                match self.eval_bytecode_await(value)? {
+                    Completion::Normal(value) => {
+                        state.stack.push(value);
+                        state.pc = next;
+                        Ok(None)
+                    }
+                    Completion::Throw(value) => Ok(Some(Completion::Throw(value))),
+                    completion @ (Completion::Return(_)
+                    | Completion::Break
+                    | Completion::Continue) => completion.into_result().map(|_| None),
+                }
             }
             BytecodeInstruction::TypeOfBinding(binding) => {
                 state
@@ -716,6 +731,7 @@ impl Context {
                 params,
                 bytecode,
                 constructable,
+                is_async,
             } => {
                 let function = self.create_bytecode_function(
                     *id,
@@ -723,6 +739,7 @@ impl Context {
                     params,
                     bytecode,
                     *constructable,
+                    *is_async,
                 )?;
                 state.stack.push(function);
                 state.pc = next;
