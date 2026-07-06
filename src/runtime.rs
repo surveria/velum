@@ -524,18 +524,13 @@ impl Context {
             return self.eval_print_call(args);
         }
 
+        if let Expr::Identifier(name) = callee {
+            let reference = self.eval_identifier_call_reference(name)?;
+            return self.eval_call_reference_result(reference, args);
+        }
+
         if let Some(reference) = self.eval_call_reference(callee)? {
-            return match reference {
-                CallReference::Native { kind, this_value } => {
-                    self.eval_native_function_kind(kind, args, &this_value)
-                }
-                CallReference::Generic { callee, this_value } => match callee {
-                    Value::Function(id) => self.eval_function_with_this(id, args, this_value),
-                    Value::NativeFunction(id) => self.eval_native_function(id, args, &this_value),
-                    Value::HostFunction(id) => self.eval_host_function(id, args),
-                    value => Err(Error::runtime(format!("'{value}' is not callable"))),
-                },
-            };
+            return self.eval_call_reference_result(reference, args);
         }
 
         match self.eval_expr(callee)? {
@@ -544,6 +539,49 @@ impl Context {
             Value::HostFunction(id) => self.eval_host_function(id, args),
             value => Err(Error::runtime(format!("'{value}' is not callable"))),
         }
+    }
+
+    fn eval_call_reference_result(
+        &mut self,
+        reference: CallReference,
+        args: &[Expr],
+    ) -> Result<Value> {
+        match reference {
+            CallReference::Native { kind, this_value } => {
+                self.eval_native_function_kind(kind, args, &this_value)
+            }
+            CallReference::Generic { callee, this_value } => match callee {
+                Value::Function(id) => self.eval_function_with_this(id, args, this_value),
+                Value::NativeFunction(id) => self.eval_native_function(id, args, &this_value),
+                Value::HostFunction(id) => self.eval_host_function(id, args),
+                value => Err(Error::runtime(format!("'{value}' is not callable"))),
+            },
+        }
+    }
+
+    fn eval_identifier_call_reference(&mut self, callee: &StaticBinding) -> Result<CallReference> {
+        let Some(binding) = self.get_or_materialize_binding_static(callee)? else {
+            return Err(reference_error_undefined(callee));
+        };
+        let function = binding.value();
+        if let Value::NativeFunction(id) = function {
+            let kind =
+                if let Some(kind) = self.cached_static_binding_native_call_kind(callee, id)? {
+                    kind
+                } else {
+                    let kind = self.native_function(id)?.kind();
+                    self.remember_static_binding_native_call_kind(callee, id, kind)?;
+                    kind
+                };
+            return Ok(CallReference::Native {
+                kind,
+                this_value: Value::Undefined,
+            });
+        }
+        Ok(CallReference::Generic {
+            callee: function,
+            this_value: Value::Undefined,
+        })
     }
 
     fn eval_call_reference(&mut self, callee: &Expr) -> Result<Option<CallReference>> {

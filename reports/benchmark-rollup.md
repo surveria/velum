@@ -16,10 +16,10 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260706T101053Z.md`
-- Task: Primitive constructor argument fast path tranche: Avoid temporary argument-vector allocation in fixed-arity primitive constructors while preserving JavaScript argument side effects.
-- Performance: 1.24x (40/63 >1.10x)
-- Memory: 1.08x (24/63 >1.10x)
+- `rsqjs-test-report-20260706T102500Z.md`
+- Task: Static binding native-call cache tranche: Extend direct native-call metadata from static member call sites to static identifier call sites.
+- Performance: 1.24x (42/63 >1.10x)
+- Memory: 1.07x (17/63 >1.10x)
 - Full Test262: 10872 passed / 91706 failed (10.60%)
 
 | PR / task | Performance | Memory | Full Test262 |
@@ -173,3 +173,4 @@ Latest report:
 | `20260706T095002Z` `a56a308` Native call-site cache tranche: Extend per-site static member caches into native-function dispatch without bypassing JavaScript property mutation semantics. | 1.24x (42/63 >1.10x) | 1.08x (23/63 >1.10x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T100032Z` `da55609` Array native argument fast path tranche: Remove temporary argument-vector allocation from fixed-arity array native methods while preserving argument side effects. | 1.23x (41/63 >1.10x) | 1.07x (21/63 >1.10x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T101053Z` `66cff54` Primitive constructor argument fast path tranche: Avoid temporary argument-vector allocation in fixed-arity primitive constructors while preserving JavaScript argument side effects. | 1.24x (40/63 >1.10x) | 1.08x (24/63 >1.10x) | 10872 passed / 91706 failed (10.60%) |
+| `20260706T102500Z` Static binding native-call cache tranche: Extend direct native-call metadata from static member call sites to static identifier call sites. | 1.24x (42/63 >1.10x) | 1.07x (17/63 >1.10x) | 10872 passed / 91706 failed (10.60%) |
