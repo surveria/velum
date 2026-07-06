@@ -222,12 +222,12 @@ impl Context {
         &self,
         binding: &StaticBinding,
     ) -> Result<Option<BindingCell>> {
-        let Some(atom) = self.lookup_static_name_atom(binding.name())? else {
-            return Ok(None);
-        };
         if let Some(cell) = self.cached_static_binding(binding)? {
             return Ok(Some(cell));
         }
+        let Some(atom) = self.lookup_static_name_atom(binding.name())? else {
+            return Ok(None);
+        };
         if let Some((location, cell)) = self.compiled_global_static_binding(binding, atom)? {
             self.remember_static_binding(binding, location)?;
             return Ok(Some(cell));
