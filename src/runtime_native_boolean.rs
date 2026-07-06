@@ -68,10 +68,7 @@ impl Context {
     }
 
     fn eval_boolean_argument(&mut self, args: &[Expr]) -> Result<bool> {
-        let Some(arg) = args.first() else {
-            return Ok(false);
-        };
-        let value = self.eval_expr(arg)?;
-        Ok(value.is_truthy())
+        let value = self.eval_native_unary_argument_value(args)?;
+        Ok(value.as_ref().is_some_and(Value::is_truthy))
     }
 }

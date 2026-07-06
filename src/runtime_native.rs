@@ -700,6 +700,27 @@ impl Context {
             })
     }
 
+    fn eval_native_unary_argument_value(&mut self, args: &[Expr]) -> Result<Option<Value>> {
+        let mut args = args.iter();
+        let value = if let Some(arg) = args.next() {
+            Some(self.eval_expr(arg)?)
+        } else {
+            None
+        };
+        self.eval_native_remaining_args(args)?;
+        Ok(value)
+    }
+
+    fn eval_native_remaining_args<'a>(
+        &mut self,
+        args: impl Iterator<Item = &'a Expr>,
+    ) -> Result<()> {
+        for arg in args {
+            self.eval_expr(arg)?;
+        }
+        Ok(())
+    }
+
     pub(super) fn eval_error_constructor(
         &mut self,
         name: ErrorName,
