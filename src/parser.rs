@@ -24,6 +24,7 @@ pub struct ParsedProgram {
 pub struct ParseUsage {
     pub top_level_statement_count: usize,
     pub max_expression_depth: usize,
+    pub static_name_count: usize,
 }
 
 struct Parser {
@@ -32,6 +33,7 @@ struct Parser {
     limits: RuntimeLimits,
     expression_depth: usize,
     max_expression_depth: usize,
+    static_names: StaticNameTable,
 }
 
 impl Parser {
@@ -42,6 +44,7 @@ impl Parser {
             limits,
             expression_depth: 0,
             max_expression_depth: 0,
+            static_names: StaticNameTable::new(),
         }
     }
 
@@ -62,6 +65,7 @@ impl Parser {
         let usage = ParseUsage {
             top_level_statement_count: statements.len(),
             max_expression_depth: self.max_expression_depth,
+            static_name_count: self.static_names.len(),
         };
         Ok(ParsedProgram {
             program: Program { statements },
@@ -74,9 +78,22 @@ impl Parser {
             .advance()
             .ok_or_else(|| Error::parse(message, self.offset()))?;
         match token.kind {
-            TokenKind::Identifier(name) => Ok(StaticName::new(name)),
+            TokenKind::Identifier(name) => self.static_name_at(name, token.offset),
             _ => Err(Error::parse(message, token.offset)),
         }
+    }
+
+    pub(super) fn static_name(&mut self, name: String) -> Result<StaticName> {
+        self.static_name_at(name, self.previous_offset())
+    }
+
+    pub(super) fn borrowed_static_name(&mut self, name: &str) -> Result<StaticName> {
+        self.static_names
+            .intern_borrowed(name, self.previous_offset())
+    }
+
+    fn static_name_at(&mut self, name: String, offset: usize) -> Result<StaticName> {
+        self.static_names.intern_owned(name, offset)
     }
 
     pub(super) fn next_is_identifier(&self) -> bool {
@@ -141,6 +158,72 @@ impl Parser {
             .checked_sub(1)
             .and_then(|cursor| self.tokens.get(cursor))
             .map_or_else(|| self.offset(), |token| token.offset)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct StaticNameTable {
+    names: Vec<StaticName>,
+}
+
+impl StaticNameTable {
+    const fn new() -> Self {
+        Self { names: Vec::new() }
+    }
+
+    const fn len(&self) -> usize {
+        self.names.len()
+    }
+
+    fn intern_owned(&mut self, name: String, offset: usize) -> Result<StaticName> {
+        let position = self.static_name_position(&name);
+        let position = match position {
+            Ok(position) => {
+                return self
+                    .names
+                    .get(position)
+                    .cloned()
+                    .ok_or_else(|| Error::parse("static name entry is not available", offset));
+            }
+            Err(position) => position,
+        };
+        if position > self.names.len() {
+            return Err(Error::parse(
+                "static name insert position is out of range",
+                offset,
+            ));
+        }
+        let name = StaticName::new(name);
+        self.names.insert(position, name.clone());
+        Ok(name)
+    }
+
+    fn intern_borrowed(&mut self, name: &str, offset: usize) -> Result<StaticName> {
+        let position = self.static_name_position(name);
+        let position = match position {
+            Ok(position) => {
+                return self
+                    .names
+                    .get(position)
+                    .cloned()
+                    .ok_or_else(|| Error::parse("static name entry is not available", offset));
+            }
+            Err(position) => position,
+        };
+        if position > self.names.len() {
+            return Err(Error::parse(
+                "static name insert position is out of range",
+                offset,
+            ));
+        }
+        let name = StaticName::borrowed(name);
+        self.names.insert(position, name.clone());
+        Ok(name)
+    }
+
+    fn static_name_position(&self, name: &str) -> std::result::Result<usize, usize> {
+        self.names
+            .binary_search_by(|entry| entry.as_str().cmp(name))
     }
 }
 
