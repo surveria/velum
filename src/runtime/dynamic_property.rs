@@ -3,8 +3,8 @@ use crate::{
     runtime::assertions::error_property_text,
     runtime::object::PropertyKey,
     runtime::property::{
-        DynamicPropertyKey, PropertyValue, StringPropertyValue, delete_property, get_property,
-        has_property, property_key, string_property_value,
+        DynamicPropertyKey, PropertyValue, StringPropertyValue, get_property, has_property,
+        property_key, string_property_value,
     },
     value::{ObjectId, Value},
 };
@@ -92,24 +92,6 @@ impl Context {
             return Ok(None);
         };
         self.heap_string_char_value(ch).map(Some)
-    }
-
-    pub(crate) fn delete_dynamic_property_value(
-        &mut self,
-        object: &Value,
-        property: &DynamicPropertyKey,
-    ) -> Result<Value> {
-        if let Value::Function(id) = object {
-            return self
-                .delete_function_property_lookup(*id, property.lookup())
-                .map(Value::Bool);
-        }
-        if let Value::NativeFunction(id) = object {
-            return self
-                .delete_native_function_property_lookup(*id, property.lookup())
-                .map(Value::Bool);
-        }
-        delete_property(&mut self.objects, object, property.lookup()).map(Value::Bool)
     }
 
     pub(super) fn has_dynamic_property_value(

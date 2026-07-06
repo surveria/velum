@@ -8,8 +8,8 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime::object::{
-        CacheablePropertyLookup, CacheablePropertyPresence, CacheablePropertyValue,
-        CacheablePropertyWrite, PropertyKey, PropertyLookup,
+        CacheablePropertyDelete, CacheablePropertyLookup, CacheablePropertyPresence,
+        CacheablePropertyValue, CacheablePropertyWrite, PropertyKey, PropertyLookup,
     },
     runtime::property::{
         DynamicPropertyKey, delete_property, get_property, has_property, set_property,
@@ -445,6 +445,7 @@ impl Context {
         &mut self,
         object: &Value,
         property: &StaticName,
+        access: StaticPropertyAccessId,
     ) -> Result<Value> {
         let lookup = self.static_property_lookup(property)?;
         if let Value::Function(id) = object {
@@ -457,7 +458,86 @@ impl Context {
                 .delete_native_function_property_lookup(*id, lookup)
                 .map(Value::Bool);
         }
+        if let Value::Object(id) = object
+            && property.as_str() != PROTOTYPE_PROPERTY
+            && self.objects.array_len_if_array(*id)?.is_none()
+        {
+            return self
+                .delete_cached_object_property_value(*id, access, lookup)
+                .map(Value::Bool);
+        }
         delete_property(&mut self.objects, object, lookup).map(Value::Bool)
+    }
+
+    pub(crate) fn delete_cached_dynamic_property_value(
+        &mut self,
+        object: &Value,
+        property: &DynamicPropertyKey,
+        access: StaticPropertyAccessId,
+    ) -> Result<Value> {
+        if let Value::Function(id) = object {
+            return self
+                .delete_function_property_lookup(*id, property.lookup())
+                .map(Value::Bool);
+        }
+        if let Value::NativeFunction(id) = object {
+            return self
+                .delete_native_function_property_lookup(*id, property.lookup())
+                .map(Value::Bool);
+        }
+        if let Value::Object(id) = object
+            && property.name() != PROTOTYPE_PROPERTY
+            && self.objects.array_len_if_array(*id)?.is_none()
+        {
+            return self
+                .delete_cached_object_property_value(*id, access, property.lookup())
+                .map(Value::Bool);
+        }
+        delete_property(&mut self.objects, object, property.lookup()).map(Value::Bool)
+    }
+
+    fn delete_cached_object_property_value(
+        &mut self,
+        object: ObjectId,
+        access: StaticPropertyAccessId,
+        lookup: PropertyLookup<'_>,
+    ) -> Result<bool> {
+        let Some(cache) = self.current_static_name_atom_cache() else {
+            return delete_property(&mut self.objects, &Value::Object(object), lookup);
+        };
+        if let Some(cached_lookup) = cache.property_lookup(access)?
+            && cached_lookup.matches_property(lookup)
+        {
+            match self
+                .objects
+                .delete_cacheable_own_property_for(object, cached_lookup)?
+            {
+                CacheablePropertyDelete::Deleted | CacheablePropertyDelete::Missing => {
+                    return Ok(true);
+                }
+                CacheablePropertyDelete::NotConfigurable => return Ok(false),
+                CacheablePropertyDelete::Uncacheable => {}
+            }
+        }
+
+        let candidate = self.objects.cacheable_property_lookup(object, lookup)?;
+        match self
+            .objects
+            .delete_cacheable_own_property_for(object, candidate)?
+        {
+            CacheablePropertyDelete::Deleted => Ok(true),
+            CacheablePropertyDelete::Missing => {
+                cache.remember_property_lookup(access, candidate)?;
+                Ok(true)
+            }
+            CacheablePropertyDelete::NotConfigurable => {
+                cache.remember_property_lookup(access, candidate)?;
+                Ok(false)
+            }
+            CacheablePropertyDelete::Uncacheable => {
+                delete_property(&mut self.objects, &Value::Object(object), lookup)
+            }
+        }
     }
 
     fn remember_static_name_atom(&self, name: &StaticName, atom: AtomId) -> Result<()> {
