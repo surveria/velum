@@ -34,14 +34,17 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         if let Value::NativeFunction(id) = callee {
-            if let Some(kind) = self.cached_static_property_native_call_kind(access, id)? {
+            if self
+                .cached_static_property_native_call_kind(access, id)?
+                .is_some()
+            {
                 self.record_native_call_cache_hit();
-                return self.eval_direct_native_function_kind(target, kind, args, this_value);
+                return self.eval_direct_native_call_target(target, args, this_value);
             }
             if let Some(kind) = self.direct_native_call_kind(id, target) {
                 self.record_native_call_cache_miss();
                 self.remember_static_property_native_call_kind(access, id, kind)?;
-                return self.eval_direct_native_function_kind(target, kind, args, this_value);
+                return self.eval_direct_native_call_target(target, args, this_value);
             }
         }
         self.record_native_call_cache_fallback();
@@ -64,12 +67,13 @@ impl Context {
         }
 
         let lookup = self.static_property_lookup(property)?;
-        if let Some(kind) =
-            self.cached_static_object_property_native_call_kind(access, *object, lookup)?
+        if self
+            .cached_static_object_property_native_call_kind(access, *object, lookup)?
+            .is_some()
         {
             self.record_native_call_cache_hit();
             return self
-                .eval_direct_native_function_kind(target, kind, args, this_value)
+                .eval_direct_native_call_target(target, args, this_value)
                 .map(Some);
         }
 
@@ -93,7 +97,7 @@ impl Context {
                         access, candidate, version, function, kind,
                     )?;
                     return self
-                        .eval_direct_native_function_kind(target, kind, args, this_value)
+                        .eval_direct_native_call_target(target, args, this_value)
                         .map(Some);
                 }
                 self.record_native_call_cache_fallback();
@@ -114,21 +118,80 @@ impl Context {
         }
     }
 
-    fn eval_direct_native_function_kind(
+    fn eval_direct_native_call_target(
         &mut self,
         target: NativeCallTarget,
-        kind: NativeFunctionKind,
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        if target.is_array_target() {
-            return self.eval_array_native_function_kind(
-                kind,
-                RuntimeCallArgs::values(args),
-                this_value,
-            );
+        let args = RuntimeCallArgs::values(args);
+        match target {
+            NativeCallTarget::Array => self.eval_array_constructor(args),
+            NativeCallTarget::ArrayConcat => self.eval_array_concat(args, this_value),
+            NativeCallTarget::ArrayIncludes => self.eval_array_includes(args, this_value),
+            NativeCallTarget::ArrayIndexOf => self.eval_array_index_of(args, this_value),
+            NativeCallTarget::ArrayJoin => self.eval_array_join(args, this_value),
+            NativeCallTarget::ArrayLastIndexOf => self.eval_array_last_index_of(args, this_value),
+            NativeCallTarget::ArrayPop => self.eval_array_pop(args, this_value),
+            NativeCallTarget::ArrayPush => self.eval_array_push(args, this_value),
+            NativeCallTarget::ArrayReverse => self.eval_array_reverse(args, this_value),
+            NativeCallTarget::ArrayShift => self.eval_array_shift(args, this_value),
+            NativeCallTarget::ArraySlice => self.eval_array_slice(args, this_value),
+            NativeCallTarget::ArrayUnshift => self.eval_array_unshift(args, this_value),
+            NativeCallTarget::Boolean => self.eval_boolean_constructor(args),
+            NativeCallTarget::ErrorConstructor(name) => self.eval_error_constructor(name, args),
+            NativeCallTarget::JsonParse => self.eval_json_parse(args),
+            NativeCallTarget::JsonStringify => self.eval_json_stringify(args),
+            NativeCallTarget::MathAbs => Self::eval_math_abs(args),
+            NativeCallTarget::MathAcos => Self::eval_math_acos(args),
+            NativeCallTarget::MathAcosh => Self::eval_math_acosh(args),
+            NativeCallTarget::MathAsin => Self::eval_math_asin(args),
+            NativeCallTarget::MathAsinh => Self::eval_math_asinh(args),
+            NativeCallTarget::MathAtan => Self::eval_math_atan(args),
+            NativeCallTarget::MathAtan2 => Self::eval_math_atan2(args),
+            NativeCallTarget::MathAtanh => Self::eval_math_atanh(args),
+            NativeCallTarget::MathCbrt => Self::eval_math_cbrt(args),
+            NativeCallTarget::MathCeil => Self::eval_math_ceil(args),
+            NativeCallTarget::MathClz32 => Self::eval_math_clz32(args),
+            NativeCallTarget::MathCos => Self::eval_math_cos(args),
+            NativeCallTarget::MathCosh => Self::eval_math_cosh(args),
+            NativeCallTarget::MathExp => Self::eval_math_exp(args),
+            NativeCallTarget::MathExpm1 => Self::eval_math_expm1(args),
+            NativeCallTarget::MathFloor => Self::eval_math_floor(args),
+            NativeCallTarget::MathFround => Self::eval_math_fround(args),
+            NativeCallTarget::MathHypot => Self::eval_math_hypot(args),
+            NativeCallTarget::MathImul => Self::eval_math_imul(args),
+            NativeCallTarget::MathLog => Self::eval_math_log(args),
+            NativeCallTarget::MathLog10 => Self::eval_math_log10(args),
+            NativeCallTarget::MathLog1p => Self::eval_math_log1p(args),
+            NativeCallTarget::MathLog2 => Self::eval_math_log2(args),
+            NativeCallTarget::MathMax => Self::eval_math_max(args),
+            NativeCallTarget::MathMin => Self::eval_math_min(args),
+            NativeCallTarget::MathPow => Self::eval_math_pow(args),
+            NativeCallTarget::MathRandom => self.eval_math_random(args),
+            NativeCallTarget::MathRound => Self::eval_math_round(args),
+            NativeCallTarget::MathSign => Self::eval_math_sign(args),
+            NativeCallTarget::MathSin => Self::eval_math_sin(args),
+            NativeCallTarget::MathSinh => Self::eval_math_sinh(args),
+            NativeCallTarget::MathSqrt => Self::eval_math_sqrt(args),
+            NativeCallTarget::MathTan => Self::eval_math_tan(args),
+            NativeCallTarget::MathTanh => Self::eval_math_tanh(args),
+            NativeCallTarget::MathTrunc => Self::eval_math_trunc(args),
+            NativeCallTarget::Number => self.eval_number_constructor(args),
+            NativeCallTarget::Object => self.eval_object_constructor(args),
+            NativeCallTarget::ObjectDefineProperty => self.eval_object_define_property(args),
+            NativeCallTarget::ObjectGetOwnPropertyDescriptor => {
+                self.eval_object_get_own_property_descriptor(args)
+            }
+            NativeCallTarget::ObjectHasOwn => self.eval_object_has_own(args),
+            NativeCallTarget::ObjectKeys => self.eval_object_keys(args),
+            NativeCallTarget::Promise => self.eval_promise_constructor(args),
+            NativeCallTarget::PromiseResolve => self.eval_promise_resolve(args),
+            NativeCallTarget::PromiseReject => self.eval_promise_reject(args),
+            NativeCallTarget::PromiseThen => self.eval_promise_then(args, this_value),
+            NativeCallTarget::PromiseCatch => self.eval_promise_catch(args, this_value),
+            NativeCallTarget::String => self.eval_string_constructor(args),
         }
-        self.eval_native_function_kind(kind, RuntimeCallArgs::values(args), this_value)
     }
 
     pub(in crate::runtime) fn direct_native_call_kind(
