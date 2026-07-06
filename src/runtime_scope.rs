@@ -76,6 +76,30 @@ impl BindingScope {
         }
     }
 
+    pub(crate) fn insert_or_replace_at_slot(
+        &mut self,
+        atom: AtomId,
+        binding: BindingCell,
+        slot: BindingSlot,
+    ) -> Result<BindingSlot> {
+        match self.binding_position(atom) {
+            Ok(position) => {
+                let Some(entry) = self.bindings.get(position) else {
+                    return Err(Error::runtime("binding frame index disappeared"));
+                };
+                if entry.slot() != slot {
+                    return Err(Error::runtime("binding frame slot mismatch"));
+                }
+                let Some(existing) = self.cell_mut(slot) else {
+                    return Err(Error::runtime("binding frame slot is not defined"));
+                };
+                *existing = binding;
+                Ok(slot)
+            }
+            Err(position) => self.insert_new_at_slot(position, atom, binding, slot),
+        }
+    }
+
     pub(crate) fn retain_only(&mut self, atom: AtomId) {
         let Some(binding) = self.get(atom) else {
             self.slots.clear();
@@ -98,6 +122,27 @@ impl BindingScope {
 
     fn cell_mut(&mut self, slot: BindingSlot) -> Option<&mut BindingCell> {
         self.slots.get_mut(slot.index())
+    }
+
+    fn insert_new_at_slot(
+        &mut self,
+        position: usize,
+        atom: AtomId,
+        binding: BindingCell,
+        slot: BindingSlot,
+    ) -> Result<BindingSlot> {
+        let slot_index = slot.index();
+        if slot_index < self.slots.len() {
+            return Err(Error::runtime("binding frame slot is already occupied"));
+        }
+        if slot_index > self.slots.len() {
+            return Err(Error::runtime("binding frame slot gap is not supported"));
+        }
+        self.slots.push(binding);
+        self.slot_atoms.push(atom);
+        self.bindings
+            .insert(position, BindingEntry::new(atom, slot));
+        Ok(slot)
     }
 
     fn binding_position(&self, atom: AtomId) -> std::result::Result<usize, usize> {
@@ -130,7 +175,7 @@ impl BindingEntry {
 pub struct BindingSlot(usize);
 
 impl BindingSlot {
-    const fn from_index(index: usize) -> Self {
+    pub(crate) const fn from_index(index: usize) -> Self {
         Self(index)
     }
 

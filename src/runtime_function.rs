@@ -3,6 +3,8 @@ use std::rc::Rc;
 use crate::{
     ast::{DeclKind, Expr, StaticBinding, StaticBindingId, StaticName, Stmt},
     atom::AtomId,
+    binding_layout::BindingLayout,
+    binding_layout_types::BindingOperand,
     error::{Error, Result},
     runtime::Context,
     runtime_completion::Completion,
@@ -10,7 +12,7 @@ use crate::{
         DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
         PropertyEnumerable, PropertyWritable,
     },
-    runtime_scope::{BindingCell, BindingScope},
+    runtime_scope::{BindingCell, BindingScope, BindingSlot},
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
 };
 
@@ -138,7 +140,12 @@ impl Context {
         };
         let args = self.eval_args(args)?;
         let caller_locals = std::mem::replace(&mut self.locals, captures);
-        let scope = match self.function_scope(&param_atoms, args) {
+        let scope = match self.function_scope(
+            &param_atoms,
+            &param_binding_ids,
+            static_binding_layout.as_ref(),
+            args,
+        ) {
             Ok(scope) => scope,
             Err(error) => {
                 self.locals = caller_locals;
@@ -468,16 +475,30 @@ impl Context {
         ))
     }
 
-    fn function_scope(&self, params: &[AtomId], args: Vec<Value>) -> Result<BindingScope> {
+    fn function_scope(
+        &self,
+        params: &[AtomId],
+        binding_ids: &[StaticBindingId],
+        layout: Option<&BindingLayout>,
+        args: Vec<Value>,
+    ) -> Result<BindingScope> {
+        if params.len() != binding_ids.len() {
+            return Err(Error::runtime("function parameter layout length mismatch"));
+        }
         let mut scope = BindingScope::new();
         let mut args = args.into_iter();
-        for atom in params {
-            if !scope.contains(*atom) {
+        for (atom, binding) in params.iter().copied().zip(binding_ids.iter().copied()) {
+            if !scope.contains(atom) {
                 self.ensure_extra_binding_capacity(scope.len())?;
             }
             let value = args.next().unwrap_or(Value::Undefined);
             self.checked_value(value.clone())?;
-            scope.insert(*atom, BindingCell::new(value, true, DeclKind::Var));
+            let cell = BindingCell::new(value, true, DeclKind::Var);
+            if let Some(slot) = function_param_slot(binding, layout)? {
+                scope.insert_or_replace_at_slot(atom, cell, slot)?;
+            } else {
+                scope.insert(atom, cell);
+            }
         }
         Ok(scope)
     }
@@ -545,6 +566,25 @@ fn function_param_binding_ids(params: &[StaticBinding]) -> Rc<[StaticBindingId]>
         .map(StaticBinding::id)
         .collect::<Vec<_>>()
         .into()
+}
+
+fn function_param_slot(
+    binding: StaticBindingId,
+    layout: Option<&BindingLayout>,
+) -> Result<Option<BindingSlot>> {
+    let Some(layout) = layout else {
+        return Ok(None);
+    };
+    let Some(operand) = layout.operand_for_binding_id(binding)? else {
+        return Ok(None);
+    };
+    match operand {
+        BindingOperand::Local { slot, .. } => Ok(Some(BindingSlot::from_index(slot.index()?))),
+        BindingOperand::Global { .. } | BindingOperand::Upvalue { .. } => Err(Error::runtime(
+            "function parameter binding layout is not a local slot",
+        )),
+        BindingOperand::Unresolved => Ok(None),
+    }
 }
 
 impl super::Function {

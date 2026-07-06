@@ -4,6 +4,7 @@ use std::rc::Rc;
 use crate::{
     ast::{StaticBinding, StaticBindingId},
     atom::AtomId,
+    binding_layout_types::BindingOperand,
     error::{Error, Result},
     runtime::Context,
     runtime_assertions::reference_error_undefined,
@@ -45,6 +46,7 @@ struct BindingLocation {
     atom: AtomId,
     scope: BindingScopeLocation,
     slot: BindingSlot,
+    validation: BindingLocationValidation,
 }
 
 impl BindingLocation {
@@ -53,6 +55,7 @@ impl BindingLocation {
             atom,
             scope: BindingScopeLocation::Global,
             slot,
+            validation: BindingLocationValidation::Guarded,
         }
     }
 
@@ -61,8 +64,26 @@ impl BindingLocation {
             atom,
             scope: BindingScopeLocation::Local(scope),
             slot,
+            validation: BindingLocationValidation::Guarded,
         }
     }
+
+    const fn exact(self) -> Self {
+        Self {
+            validation: BindingLocationValidation::Exact,
+            ..self
+        }
+    }
+
+    const fn needs_shadow_guard(self) -> bool {
+        matches!(self.validation, BindingLocationValidation::Guarded)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum BindingLocationValidation {
+    Guarded,
+    Exact,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -181,6 +202,10 @@ impl Context {
         let Some(layout) = self.current_static_binding_layout() else {
             return cache.remember_id(binding, location);
         };
+        let Some(operand) = layout.operand_for_binding_id(binding)? else {
+            return Ok(());
+        };
+        let location = location.for_compiled_operand(operand);
         layout.for_each_matching_operand_id(binding, |binding| cache.remember_id(binding, location))
     }
 
@@ -201,14 +226,16 @@ impl Context {
 
     fn binding_at_location(&self, location: BindingLocation) -> Result<Option<BindingCell>> {
         match location.scope {
-            BindingScopeLocation::Global => {
-                if self.scope_above_has_binding(0, location.atom) {
-                    return Ok(None);
-                }
-                Ok(self.globals.cell_for_slot(location.atom, location.slot))
-            }
+            BindingScopeLocation::Global => Ok(self.global_binding_at_location(location)),
             BindingScopeLocation::Local(index) => self.local_binding_at_location(index, location),
         }
+    }
+
+    fn global_binding_at_location(&self, location: BindingLocation) -> Option<BindingCell> {
+        if location.needs_shadow_guard() && self.scope_above_has_binding(0, location.atom) {
+            return None;
+        }
+        self.globals.cell_for_slot(location.atom, location.slot)
     }
 
     fn local_binding_at_location(
@@ -226,7 +253,7 @@ impl Context {
             .index()
             .checked_add(1)
             .ok_or_else(|| Error::limit("local scope index overflowed"))?;
-        if self.scope_above_has_binding(start, location.atom) {
+        if location.needs_shadow_guard() && self.scope_above_has_binding(start, location.atom) {
             return Ok(None);
         }
         Ok(Some(binding))
@@ -239,5 +266,17 @@ impl Context {
             }
         }
         false
+    }
+}
+
+impl BindingLocation {
+    const fn for_compiled_operand(self, operand: BindingOperand) -> Self {
+        match (operand, self.scope) {
+            (
+                BindingOperand::Local { .. } | BindingOperand::Upvalue { .. },
+                BindingScopeLocation::Local(_),
+            ) => self.exact(),
+            _ => self,
+        }
     }
 }
