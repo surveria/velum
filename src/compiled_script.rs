@@ -43,6 +43,7 @@ impl CompiledScript {
                 static_string_count: parsed.usage.static_string_count,
                 static_binding_count: parsed.usage.static_binding_count,
                 static_property_access_count: parsed.usage.static_property_access_count,
+                static_call_site_count: parsed.usage.static_call_site_count,
                 resolved_static_binding_count: binding_layout.resolved_count(),
                 unresolved_static_binding_count: binding_layout.unresolved_count(),
                 global_binding_slot_count: binding_layout.global_slot_count(),
@@ -101,6 +102,7 @@ pub struct CompiledScriptUsage {
     static_string_count: usize,
     static_binding_count: usize,
     static_property_access_count: usize,
+    static_call_site_count: usize,
     resolved_static_binding_count: usize,
     unresolved_static_binding_count: usize,
     global_binding_slot_count: usize,
@@ -150,6 +152,11 @@ impl CompiledScriptUsage {
     #[must_use]
     pub const fn static_property_access_count(self) -> usize {
         self.static_property_access_count
+    }
+
+    #[must_use]
+    pub const fn static_call_site_count(self) -> usize {
+        self.static_call_site_count
     }
 
     #[must_use]

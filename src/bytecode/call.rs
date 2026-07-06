@@ -1,14 +1,19 @@
 use crate::{
     api::native_call::NativeCallTarget,
-    ast::Expr,
+    ast::{Expr, StaticCallSiteId},
     error::{Error, Result},
     value::{ErrorName, Value},
 };
 
-use super::{BytecodeCompiler, BytecodeInstruction};
+use super::{BytecodeCallSite, BytecodeCompiler, BytecodeInstruction};
 
 impl BytecodeCompiler<'_> {
-    pub(super) fn compile_call_expr(&mut self, callee: &Expr, args: &[Expr]) -> Result<()> {
+    pub(super) fn compile_call_expr(
+        &mut self,
+        callee: &Expr,
+        site: StaticCallSiteId,
+        args: &[Expr],
+    ) -> Result<()> {
         if let Some(expected) = assert_throws_expected_error(callee, args)? {
             let callback = args
                 .get(1)
@@ -75,11 +80,12 @@ impl BytecodeCompiler<'_> {
                 });
                 Ok(())
             }
-            Expr::Parenthesized(callee) => self.compile_call_expr(callee, args),
+            Expr::Parenthesized(callee) => self.compile_call_expr(callee, site, args),
             callee => {
                 self.compile_expr(callee)?;
                 self.compile_args(args)?;
                 self.emit(BytecodeInstruction::CallValue {
+                    site: BytecodeCallSite::new(site),
                     arg_count: args.len(),
                 });
                 Ok(())

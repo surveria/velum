@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use crate::{
-    ast::{StaticName, StaticPropertyAccessId},
+    ast::{StaticCallSiteId, StaticName, StaticPropertyAccessId},
     binding_layout::BindingLayout,
     error::{Error, Result},
     runtime::Context,
@@ -16,7 +16,7 @@ use crate::{
         DynamicPropertyKey, delete_property, get_property, has_property, set_property,
     },
     storage::atom::AtomId,
-    value::{NativeFunctionId, ObjectId, Value},
+    value::{FunctionId, HostFunctionId, NativeFunctionId, ObjectId, Value},
 };
 
 #[derive(Debug, Clone)]
@@ -24,12 +24,14 @@ pub struct StaticNameAtomCacheHandle {
     atoms: Rc<[Cell<Option<AtomId>>]>,
     property_lookups: Rc<[Cell<Option<CacheablePropertyLookup>>]>,
     native_calls: Rc<[Cell<Option<StaticPropertyNativeCallCache>>]>,
+    call_values: Rc<[Cell<Option<CallValueCache>>]>,
 }
 
 impl StaticNameAtomCacheHandle {
     pub(in crate::runtime) fn new(
         static_name_count: usize,
         static_property_access_count: usize,
+        static_call_site_count: usize,
     ) -> Self {
         let mut atoms = Vec::with_capacity(static_name_count);
         for _ in 0..static_name_count {
@@ -43,10 +45,15 @@ impl StaticNameAtomCacheHandle {
         for _ in 0..static_property_access_count {
             native_calls.push(Cell::new(None));
         }
+        let mut call_values = Vec::with_capacity(static_call_site_count);
+        for _ in 0..static_call_site_count {
+            call_values.push(Cell::new(None));
+        }
         Self {
             atoms: Rc::from(atoms.into_boxed_slice()),
             property_lookups: Rc::from(property_lookups.into_boxed_slice()),
             native_calls: Rc::from(native_calls.into_boxed_slice()),
+            call_values: Rc::from(call_values.into_boxed_slice()),
         }
     }
 
@@ -111,6 +118,22 @@ impl StaticNameAtomCacheHandle {
         slot.set(Some(StaticPropertyNativeCallCache::new(function, kind)));
         Ok(())
     }
+
+    fn call_value(&self, site: StaticCallSiteId) -> Result<Option<CallValueCache>> {
+        self.call_values
+            .get(site.index()?)
+            .map(Cell::get)
+            .ok_or_else(|| Error::runtime("static call value cache slot is not defined"))
+    }
+
+    fn remember_call_value(&self, site: StaticCallSiteId, cache: CallValueCache) -> Result<()> {
+        let slot = self
+            .call_values
+            .get(site.index()?)
+            .ok_or_else(|| Error::runtime("static call value cache slot is not defined"))?;
+        slot.set(Some(cache));
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -129,6 +152,54 @@ impl StaticPropertyNativeCallCache {
             return Some(self.kind);
         }
         None
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(in crate::runtime) enum CallValueCache {
+    Function(FunctionId),
+    NativeFunction {
+        function: NativeFunctionId,
+        kind: NativeFunctionKind,
+    },
+    HostFunction(HostFunctionId),
+}
+
+impl CallValueCache {
+    pub(in crate::runtime) fn from_callee(
+        callee: &Value,
+        native_kind: Option<NativeFunctionKind>,
+    ) -> Option<Self> {
+        match callee {
+            Value::Function(id) => Some(Self::Function(*id)),
+            Value::NativeFunction(function) => native_kind.map(|kind| Self::NativeFunction {
+                function: *function,
+                kind,
+            }),
+            Value::HostFunction(id) => Some(Self::HostFunction(*id)),
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::HeapString(_)
+            | Value::Object(_)
+            | Value::Error(_) => None,
+        }
+    }
+
+    pub(in crate::runtime) const fn matches_callee(self, callee: &Value) -> bool {
+        matches!(
+            (self, callee),
+            (Self::Function(expected), Value::Function(actual)) if expected.index() == actual.index()
+        ) || matches!(
+            (self, callee),
+            (Self::NativeFunction { function: expected, .. }, Value::NativeFunction(actual))
+                if expected.index() == actual.index()
+        ) || matches!(
+            (self, callee),
+            (Self::HostFunction(expected), Value::HostFunction(actual)) if expected.index() == actual.index()
+        )
     }
 }
 
@@ -190,6 +261,27 @@ impl Context {
             return Ok(());
         };
         cache.remember_native_call(access, function, kind)
+    }
+
+    pub(in crate::runtime) fn cached_call_value(
+        &self,
+        site: StaticCallSiteId,
+    ) -> Result<Option<CallValueCache>> {
+        let Some(cache) = self.current_static_name_atom_cache() else {
+            return Ok(None);
+        };
+        cache.call_value(site)
+    }
+
+    pub(in crate::runtime) fn remember_call_value(
+        &self,
+        site: StaticCallSiteId,
+        cache_value: CallValueCache,
+    ) -> Result<()> {
+        let Some(cache) = self.current_static_name_atom_cache() else {
+            return Ok(());
+        };
+        cache.remember_call_value(site, cache_value)
     }
 
     pub(crate) fn lookup_static_name_atom(&self, name: &StaticName) -> Result<Option<AtomId>> {

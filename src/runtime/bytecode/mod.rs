@@ -594,10 +594,10 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::CallValue { arg_count } => {
+            BytecodeInstruction::CallValue { site, arg_count } => {
                 let args = state.stack.tail(*arg_count)?;
                 let callee = state.stack.value_before_tail(*arg_count, 0)?.clone();
-                let value = self.eval_call_value(callee, args, Value::Undefined)?;
+                let value = self.eval_cached_call_value(*site, callee, args, Value::Undefined)?;
                 state.stack.drop_tail(*arg_count)?;
                 state.stack.pop()?;
                 state.stack.push(value);

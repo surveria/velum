@@ -178,6 +178,9 @@ impl Vm {
             native_call_cache_hits: self.context.native_call_cache_hits(),
             native_call_cache_misses: self.context.native_call_cache_misses(),
             native_call_cache_fallbacks: self.context.native_call_cache_fallbacks(),
+            call_value_cache_hits: self.context.call_value_cache_hits(),
+            call_value_cache_misses: self.context.call_value_cache_misses(),
+            call_value_cache_fallbacks: self.context.call_value_cache_fallbacks(),
         }
     }
 
@@ -217,6 +220,9 @@ pub struct VmResourceUsage {
     pub native_call_cache_hits: usize,
     pub native_call_cache_misses: usize,
     pub native_call_cache_fallbacks: usize,
+    pub call_value_cache_hits: usize,
+    pub call_value_cache_misses: usize,
+    pub call_value_cache_fallbacks: usize,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

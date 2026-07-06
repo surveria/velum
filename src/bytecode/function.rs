@@ -204,7 +204,7 @@ impl CaptureBindingCollector {
                 self.collect_expr(object);
                 self.collect_expr(property);
             }
-            Expr::Call { callee, args } => {
+            Expr::Call { callee, args, .. } => {
                 self.collect_expr(callee);
                 self.collect_exprs(args);
             }
