@@ -76,7 +76,8 @@ impl Object {
         if self.contains_named_property(shapes, key)? {
             return Err(Error::runtime("object property slot replaced existing key"));
         }
-        let shape = shapes.transition_after_add(self.shape, key)?;
+        let attributes = property.shape_attributes();
+        let shape = shapes.transition_after_add(self.shape, key, attributes)?;
         let Some(slot) = shapes.property_slot(shape, key)? else {
             return Err(Error::runtime("shape property slot is not defined"));
         };

@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use rs_quickjs::{Engine, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -189,6 +189,71 @@ fn preserves_descriptor_slots_after_delete_and_reinsert() -> TestResult {
 }
 
 #[test]
+fn tracks_descriptor_attributes_in_shape_layouts() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let value = vm.context().eval(
+        r#"
+        let fixedDescriptor = {
+            value: 1,
+            enumerable: true,
+            writable: false,
+            configurable: false
+        };
+        let openDescriptor = {
+            value: 3,
+            enumerable: true,
+            writable: true,
+            configurable: true
+        };
+        let closeDescriptor = {
+            writable: false,
+            configurable: false
+        };
+        let warmup = {};
+        Object.defineProperty(warmup, "slot", fixedDescriptor);
+        warmup.slot
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(1.0))?;
+    let fixed_shapes = vm.resource_usage().shape_count;
+    ensure_positive(fixed_shapes, "fixed descriptor shapes")?;
+
+    let value = vm.context().eval(
+        r#"
+        fixedDescriptor.value = 2;
+        let second = {};
+        Object.defineProperty(second, "slot", fixedDescriptor);
+        second.slot
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(2.0))?;
+    ensure_usize(vm.resource_usage().shape_count, fixed_shapes)?;
+
+    let value = vm.context().eval(
+        r#"
+        let third = {};
+        Object.defineProperty(third, "slot", openDescriptor);
+        third.slot
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(3.0))?;
+    let open_shapes = vm.resource_usage().shape_count;
+    ensure_greater_than(open_shapes, fixed_shapes, "open descriptor shapes")?;
+
+    let value = vm.context().eval(
+        r#"
+        Object.defineProperty(third, "slot", closeDescriptor);
+        third.slot = 4;
+        third.slot
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(3.0))?;
+    ensure_usize(vm.resource_usage().shape_count, open_shapes)
+}
+
+#[test]
 fn preserves_out_of_order_property_lookup_with_vector_index() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
@@ -261,4 +326,25 @@ fn ensure_output(actual: &[String], expected: &[&str]) -> TestResult {
     }
 
     Err(format!("expected output {expected:?}, got {actual:?}").into())
+}
+
+fn ensure_positive(actual: usize, label: &str) -> TestResult {
+    if actual > 0 {
+        return Ok(());
+    }
+    Err(format!("expected positive {label}, got {actual}").into())
+}
+
+fn ensure_greater_than(actual: usize, minimum: usize, label: &str) -> TestResult {
+    if actual > minimum {
+        return Ok(());
+    }
+    Err(format!("expected {label} greater than {minimum}, got {actual}").into())
+}
+
+fn ensure_usize(actual: usize, expected: usize) -> TestResult {
+    if actual == expected {
+        return Ok(());
+    }
+    Err(format!("expected {expected}, got {actual}").into())
 }

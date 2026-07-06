@@ -582,13 +582,21 @@ impl Object {
     ) -> Result<()> {
         let property_count = self.property_count();
         let enumerable_update = if self.contains_named_property(shapes, property)? {
-            let existing = self.named_property_mut(shapes, property)?;
-            let was_enumerable = existing.is_enumerable();
-            existing.set_value(value);
-            if let Some(enumerable) = enumerable {
-                existing.set_enumerable(enumerable);
-            }
-            Some((was_enumerable, existing.is_enumerable()))
+            let (was_enumerable, is_enumerable, attributes) = {
+                let existing = self.named_property_mut(shapes, property)?;
+                let was_enumerable = existing.is_enumerable();
+                existing.set_value(value);
+                if let Some(enumerable) = enumerable {
+                    existing.set_enumerable(enumerable);
+                }
+                (
+                    was_enumerable,
+                    existing.is_enumerable(),
+                    existing.shape_attributes(),
+                )
+            };
+            self.shape = shapes.transition_after_update(self.shape, property, attributes)?;
+            Some((was_enumerable, is_enumerable))
         } else {
             if property_count >= max_properties {
                 return Err(Error::limit(format!(

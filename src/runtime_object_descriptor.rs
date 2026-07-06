@@ -1,5 +1,6 @@
 use crate::value::Value;
 
+use super::runtime_object_shape::ShapePropertyAttributes;
 use super::{
     ARRAY_LENGTH_PROPERTY, ArrayIndex, Object, ObjectHeap, PropertyKey, PropertyLookup, ShapeTable,
 };
@@ -168,6 +169,14 @@ impl ObjectProperty {
         self.descriptor.clone()
     }
 
+    pub(super) const fn shape_attributes(&self) -> ShapePropertyAttributes {
+        ShapePropertyAttributes::new(
+            self.descriptor.writable().is_yes(),
+            self.descriptor.enumerable().is_yes(),
+            self.descriptor.configurable().is_yes(),
+        )
+    }
+
     pub fn set_value(&mut self, value: Value) {
         if self.descriptor.writable().is_yes() {
             self.descriptor.value = value;
@@ -284,10 +293,18 @@ impl Object {
     ) -> Result<()> {
         let property_count = self.property_count();
         let enumerable_update = if self.contains_named_property(shapes, property)? {
-            let existing = self.named_property_mut(shapes, property)?;
-            let was_enumerable = existing.is_enumerable();
-            existing.define(update);
-            Some((was_enumerable, existing.is_enumerable()))
+            let (was_enumerable, is_enumerable, attributes) = {
+                let existing = self.named_property_mut(shapes, property)?;
+                let was_enumerable = existing.is_enumerable();
+                existing.define(update);
+                (
+                    was_enumerable,
+                    existing.is_enumerable(),
+                    existing.shape_attributes(),
+                )
+            };
+            self.shape = shapes.transition_after_update(self.shape, property, attributes)?;
+            Some((was_enumerable, is_enumerable))
         } else {
             if property_count >= max_properties {
                 return Err(crate::error::Error::limit(format!(
