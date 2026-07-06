@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
@@ -19,14 +17,14 @@ impl AtomId {
 
 #[derive(Debug, Clone, Default)]
 pub struct AtomTable {
-    ids: BTreeMap<String, AtomId>,
+    entries: Vec<AtomEntry>,
     names: Vec<String>,
 }
 
 impl AtomTable {
     pub const fn new() -> Self {
         Self {
-            ids: BTreeMap::new(),
+            entries: Vec::new(),
             names: Vec::new(),
         }
     }
@@ -36,22 +34,31 @@ impl AtomTable {
     }
 
     pub fn intern(&mut self, name: &str) -> Result<AtomId> {
-        if let Some(id) = self.ids.get(name) {
-            return Ok(*id);
-        }
+        let position = self.atom_position(name);
+        let position = match position {
+            Ok(position) => {
+                return self
+                    .entries
+                    .get(position)
+                    .map(AtomEntry::id)
+                    .ok_or_else(|| Error::runtime("atom index entry is not available"));
+            }
+            Err(position) => position,
+        };
 
         let id = AtomId::from_index(self.names.len())?;
+        if position > self.entries.len() {
+            return Err(Error::runtime("atom index insert position is out of range"));
+        }
         let name = name.to_owned();
         self.names.push(name.clone());
-        let previous = self.ids.insert(name, id);
-        if previous.is_some() {
-            return Err(Error::runtime("atom table insert raced with existing atom"));
-        }
+        self.entries.insert(position, AtomEntry::new(name, id));
         Ok(id)
     }
 
     pub fn get(&self, name: &str) -> Option<AtomId> {
-        self.ids.get(name).copied()
+        let position = self.atom_position(name).ok()?;
+        self.entries.get(position).map(AtomEntry::id)
     }
 
     pub fn name(&self, id: AtomId) -> Result<&str> {
@@ -59,5 +66,30 @@ impl AtomTable {
             .get(id.index()?)
             .map(String::as_str)
             .ok_or_else(|| Error::runtime("atom id is not defined"))
+    }
+
+    fn atom_position(&self, name: &str) -> std::result::Result<usize, usize> {
+        self.entries
+            .binary_search_by(|entry| entry.name().cmp(name))
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct AtomEntry {
+    name: String,
+    id: AtomId,
+}
+
+impl AtomEntry {
+    const fn new(name: String, id: AtomId) -> Self {
+        Self { name, id }
+    }
+
+    const fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    const fn id(&self) -> AtomId {
+        self.id
     }
 }
