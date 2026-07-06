@@ -25,7 +25,7 @@ use crate::runtime_property::{
     delete_property, enumerable_property_keys, get_property, has_property, property_key,
     set_property,
 };
-use crate::runtime_scope::BindingScope;
+use crate::runtime_scope::{BindingCell, BindingScope};
 use crate::value::{ErrorName, Value};
 
 #[path = "runtime_declaration.rs"]
@@ -36,6 +36,8 @@ mod runtime_function;
 mod runtime_function_intrinsic;
 #[path = "runtime_function_properties.rs"]
 mod runtime_function_properties;
+#[path = "runtime_function_upvalues.rs"]
+mod runtime_function_upvalues;
 #[path = "runtime_globals.rs"]
 mod runtime_globals;
 #[path = "runtime_native.rs"]
@@ -67,6 +69,7 @@ pub struct Context {
     globals: BindingScope,
     builtin_globals: BindingScope,
     locals: Vec<BindingScope>,
+    upvalue_frames: Vec<FunctionUpvalues>,
     functions: Vec<Function>,
     native_functions: Vec<runtime_native::NativeFunction>,
     pub(crate) host_functions: Vec<HostFunction>,
@@ -85,12 +88,15 @@ struct Function {
     param_atoms: Rc<[AtomId]>,
     body: Rc<[Stmt]>,
     captures: Vec<BindingScope>,
+    upvalues: FunctionUpvalues,
     static_name_atom_cache: Option<StaticNameAtomCacheHandle>,
     static_binding_cache: Option<StaticBindingCacheHandle>,
     static_binding_layout: Option<BindingLayout>,
     properties: runtime_function_properties::FunctionProperties,
     constructable: bool,
 }
+
+type FunctionUpvalues = Rc<[Option<BindingCell>]>;
 
 #[derive(Debug, Clone, Copy)]
 struct FunctionName(Option<AtomId>);
@@ -138,6 +144,7 @@ impl Context {
             globals: BindingScope::new(),
             builtin_globals: BindingScope::new(),
             locals: Vec::new(),
+            upvalue_frames: Vec::new(),
             functions: Vec::new(),
             native_functions: Vec::new(),
             host_functions: Vec::new(),
