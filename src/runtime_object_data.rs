@@ -3,12 +3,12 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-use super::{Object, ObjectHeap, PropertyKey};
+use super::{Object, ObjectHeap, ObjectPropertyInit, PropertyKey};
 
 impl ObjectHeap {
     pub(crate) fn create_data_object(
         &mut self,
-        properties: Vec<(PropertyKey, String, Value)>,
+        properties: Vec<ObjectPropertyInit<'_>>,
         constructor_key: PropertyKey,
         max_objects: usize,
         max_properties: usize,
@@ -16,8 +16,15 @@ impl ObjectHeap {
         let mut object = Object::ordinary_with_property_capacity(properties.len());
         object.prototype =
             Some(self.object_prototype_id(constructor_key, max_objects, max_properties)?);
-        for (key, name, value) in properties {
-            object.set_ordinary(key, &name, value, &mut self.shapes, max_properties)?;
+        for property in properties {
+            object.define(
+                property.key,
+                property.name,
+                property.value,
+                property.enumerable,
+                &mut self.shapes,
+                max_properties,
+            )?;
         }
         self.push_object(object, max_objects).map(Value::Object)
     }

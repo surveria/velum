@@ -4,6 +4,7 @@ use crate::{
     ast::Expr,
     error::{Error, Result},
     runtime::Context,
+    runtime_object::{ObjectPropertyInit, PropertyEnumerable},
     value::{ObjectId, Value},
 };
 
@@ -113,12 +114,21 @@ impl Context {
     }
 
     fn object_from_json(&mut self, object: JsonMap<String, JsonValue>) -> Result<Value> {
-        let mut properties = Vec::with_capacity(object.len());
+        let mut names = Vec::with_capacity(object.len());
+        let mut values = Vec::with_capacity(object.len());
         for (key, value) in object {
             self.check_string_len(&key)?;
             let property = self.intern_property_key(&key)?;
-            properties.push((property, key, self.value_from_json(value)?));
+            names.push(key);
+            values.push((property, self.value_from_json(value)?));
         }
+        let properties = names
+            .iter()
+            .zip(values)
+            .map(|(name, (property, value))| {
+                ObjectPropertyInit::new(property, name.as_str(), value, PropertyEnumerable::Yes)
+            })
+            .collect();
         let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_data_object(
             properties,

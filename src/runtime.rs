@@ -51,7 +51,7 @@ mod runtime_well_known;
 pub use runtime_static_bindings::CompiledBindingFrame;
 use runtime_static_bindings::StaticBindingCacheHandle;
 use runtime_static_names::StaticNameAtomCacheHandle;
-use runtime_well_known::WellKnownPropertyKeys;
+use runtime_well_known::{DescriptorPropertyKeys, WellKnownPropertyKeys};
 
 const HOST_PRINT_NAME: &str = "print";
 const INITIAL_RANDOM_STATE: u64 = 0x9e37_79b9_7f4a_7c15;
@@ -62,6 +62,7 @@ pub struct Context {
     limits: RuntimeLimits,
     atoms: AtomTable,
     well_known_properties: WellKnownPropertyKeys,
+    descriptor_property_keys: Option<DescriptorPropertyKeys>,
     static_name_atom_caches: Vec<StaticNameAtomCacheHandle>,
     static_binding_caches: Vec<StaticBindingCacheHandle>,
     static_binding_layouts: Vec<BindingLayout>,
@@ -188,6 +189,7 @@ impl Context {
             limits,
             atoms: AtomTable::new(),
             well_known_properties: WellKnownPropertyKeys::new(),
+            descriptor_property_keys: None,
             static_name_atom_caches: Vec::new(),
             static_binding_caches: Vec::new(),
             static_binding_layouts: Vec::new(),
