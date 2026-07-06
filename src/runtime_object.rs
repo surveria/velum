@@ -17,6 +17,8 @@ mod runtime_object_index;
 mod runtime_object_key;
 #[path = "runtime_object_keys.rs"]
 mod runtime_object_keys;
+#[path = "runtime_object_prototype.rs"]
+mod runtime_object_prototype;
 #[path = "runtime_object_slot.rs"]
 mod runtime_object_slot;
 #[path = "runtime_object_string.rs"]
@@ -305,98 +307,15 @@ impl ObjectHeap {
     }
 
     fn get_in_chain(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<Value> {
-        if let Some(value) = self.property_value_in_chain(id, property)? {
-            return Ok(value);
-        }
-        if property.name() == PROTOTYPE_PROPERTY {
-            return self.prototype_value(id);
-        }
-        Ok(Value::Undefined)
-    }
-
-    fn property_value_in_chain(
-        &self,
-        id: ObjectId,
-        property: PropertyLookup<'_>,
-    ) -> Result<Option<Value>> {
-        let object = self.object(id)?;
-        if let Some(value) = object.get_own(property) {
-            return Ok(Some(value));
-        }
-        let mut current = object.prototype;
-        let mut visited = Vec::new();
-        visited.push(id);
-        while let Some(current_id) = current {
-            if visited.contains(&current_id) {
-                return Err(Error::runtime("prototype cycle detected"));
-            }
-            visited.push(current_id);
-            let object = self.object(current_id)?;
-            if let Some(value) = object.get_own(property) {
-                return Ok(Some(value));
-            }
-            current = object.prototype;
-        }
-        Ok(None)
+        self.prototype_get_in_chain(id, property)
     }
 
     fn has_in_chain(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {
-        let object = self.object(id)?;
-        if object.has_own(property) {
-            return Ok(true);
-        }
-        let mut current = object.prototype;
-        let mut visited = Vec::new();
-        visited.push(id);
-        while let Some(current_id) = current {
-            if visited.contains(&current_id) {
-                return Err(Error::runtime("prototype cycle detected"));
-            }
-            visited.push(current_id);
-            let object = self.object(current_id)?;
-            if object.has_own(property) {
-                return Ok(true);
-            }
-            current = object.prototype;
-        }
-        Ok(false)
+        self.prototype_has_in_chain(id, property)
     }
 
     fn set_prototype(&mut self, id: ObjectId, value: &Value) -> Result<()> {
-        let prototype = match value {
-            Value::Object(prototype) => Some(*prototype),
-            Value::Null => None,
-            _ => return Ok(()),
-        };
-        if let Some(prototype) = prototype
-            && self.prototype_chain_contains(prototype, id)?
-        {
-            return Err(Error::runtime("prototype cycle is not allowed"));
-        }
-        let object = self.object_mut(id)?;
-        object.prototype = prototype;
-        Ok(())
-    }
-
-    fn prototype_chain_contains(&self, start: ObjectId, target: ObjectId) -> Result<bool> {
-        let mut current = Some(start);
-        let mut visited = Vec::new();
-        while let Some(current_id) = current {
-            if current_id == target {
-                return Ok(true);
-            }
-            if visited.contains(&current_id) {
-                return Err(Error::runtime("prototype cycle detected"));
-            }
-            visited.push(current_id);
-            current = self.object(current_id)?.prototype;
-        }
-        Ok(false)
-    }
-
-    fn prototype_value(&self, id: ObjectId) -> Result<Value> {
-        let object = self.object(id)?;
-        Ok(object.prototype.map_or(Value::Null, Value::Object))
+        self.set_prototype_value(id, value)
     }
 
     fn object(&self, id: ObjectId) -> Result<&Object> {
