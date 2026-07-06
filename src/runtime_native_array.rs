@@ -93,9 +93,7 @@ impl Context {
         args: &[Expr],
         this_value: &Value,
     ) -> Result<Value> {
-        args.iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
+        self.eval_array_discard_args(args)?;
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.reverse requires an array receiver",
@@ -106,9 +104,7 @@ impl Context {
     }
 
     pub(super) fn eval_array_pop(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
-        args.iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
+        self.eval_array_discard_args(args)?;
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.pop requires an array receiver",
@@ -122,10 +118,7 @@ impl Context {
         args: &[Expr],
         this_value: &Value,
     ) -> Result<Value> {
-        let values = args
-            .iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
+        let (search, from_index) = self.eval_array_binary_values(args)?;
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.includes requires an array receiver",
@@ -133,10 +126,8 @@ impl Context {
         };
 
         let length = self.objects.array_len_for_includes(*id)?;
-        let from_index = Self::array_slice_bound(values.get(1), length, 0)?;
-        let search = values
-            .first()
-            .map_or(Value::Undefined, std::clone::Clone::clone);
+        let from_index = Self::array_slice_bound(from_index.as_ref(), length, 0)?;
+        let search = search.unwrap_or(Value::Undefined);
         self.objects.array_includes(*id, &search, from_index)
     }
 
@@ -145,10 +136,7 @@ impl Context {
         args: &[Expr],
         this_value: &Value,
     ) -> Result<Value> {
-        let values = args
-            .iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
+        let (search, from_index) = self.eval_array_binary_values(args)?;
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.indexOf requires an array receiver",
@@ -156,10 +144,8 @@ impl Context {
         };
 
         let length = self.objects.array_len_for_index_of(*id)?;
-        let from_index = Self::array_slice_bound(values.get(1), length, 0)?;
-        let search = values
-            .first()
-            .map_or(Value::Undefined, std::clone::Clone::clone);
+        let from_index = Self::array_slice_bound(from_index.as_ref(), length, 0)?;
+        let search = search.unwrap_or(Value::Undefined);
         self.objects.array_index_of(*id, &search, from_index)
     }
 
@@ -168,10 +154,7 @@ impl Context {
         args: &[Expr],
         this_value: &Value,
     ) -> Result<Value> {
-        let values = args
-            .iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
+        let (search, from_index) = self.eval_array_binary_values(args)?;
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.lastIndexOf requires an array receiver",
@@ -179,19 +162,14 @@ impl Context {
         };
 
         let length = self.objects.array_len_for_last_index_of(*id)?;
-        let from_index = Self::array_last_index_of_start(values.get(1), length)?;
-        let search = values
-            .first()
-            .map_or(Value::Undefined, std::clone::Clone::clone);
+        let from_index = Self::array_last_index_of_start(from_index.as_ref(), length)?;
+        let search = search.unwrap_or(Value::Undefined);
         self.objects.array_last_index_of(*id, &search, from_index)
     }
 
     pub(super) fn eval_array_join(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
-        let values = args
-            .iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
-        let separator = Self::array_join_separator(values.first());
+        let separator = self.eval_array_unary_value(args)?;
+        let separator = Self::array_join_separator(separator.as_ref());
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.join requires an array receiver",
@@ -218,9 +196,7 @@ impl Context {
     }
 
     pub(super) fn eval_array_shift(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
-        args.iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
+        self.eval_array_discard_args(args)?;
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.shift requires an array receiver",
@@ -231,10 +207,7 @@ impl Context {
     }
 
     pub(super) fn eval_array_slice(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
-        let values = args
-            .iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
+        let (start, end) = self.eval_array_binary_values(args)?;
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.slice requires an array receiver",
@@ -242,8 +215,8 @@ impl Context {
         };
 
         let length = self.objects.array_len_for_slice(*id)?;
-        let start = Self::array_slice_bound(values.first(), length, 0)?;
-        let end = Self::array_slice_bound(values.get(1), length, length)?.max(start);
+        let start = Self::array_slice_bound(start.as_ref(), length, 0)?;
+        let end = Self::array_slice_bound(end.as_ref(), length, length)?.max(start);
         let prototype = self.existing_array_constructor_prototype()?;
         self.objects.array_slice(
             *id,
@@ -406,6 +379,50 @@ impl Context {
             None | Some(Value::Undefined) => ARRAY_JOIN_DEFAULT_SEPARATOR.to_owned(),
             Some(value) => value.display_for_concat(),
         }
+    }
+
+    fn eval_array_unary_value(&mut self, args: &[Expr]) -> Result<Option<Value>> {
+        let mut args = args.iter();
+        let value = if let Some(arg) = args.next() {
+            Some(self.eval_expr(arg)?)
+        } else {
+            None
+        };
+        self.eval_array_remaining_args(args)?;
+        Ok(value)
+    }
+
+    fn eval_array_binary_values(
+        &mut self,
+        args: &[Expr],
+    ) -> Result<(Option<Value>, Option<Value>)> {
+        let mut args = args.iter();
+        let left = if let Some(arg) = args.next() {
+            Some(self.eval_expr(arg)?)
+        } else {
+            None
+        };
+        let right = if let Some(arg) = args.next() {
+            Some(self.eval_expr(arg)?)
+        } else {
+            None
+        };
+        self.eval_array_remaining_args(args)?;
+        Ok((left, right))
+    }
+
+    fn eval_array_discard_args(&mut self, args: &[Expr]) -> Result<()> {
+        self.eval_array_remaining_args(args.iter())
+    }
+
+    fn eval_array_remaining_args<'a>(
+        &mut self,
+        args: impl Iterator<Item = &'a Expr>,
+    ) -> Result<()> {
+        for arg in args {
+            self.eval_expr(arg)?;
+        }
+        Ok(())
     }
 
     fn array_join_element_text(value: &Value) -> String {
