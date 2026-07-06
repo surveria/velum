@@ -97,6 +97,15 @@ impl Parser {
                     &TokenKind::RBracket,
                     "expected ']' after property expression",
                 )?;
+                if let Some(property) = self.static_computed_property_key(&property)? {
+                    let access = self.static_property_access()?;
+                    expr = Expr::Member {
+                        object: Box::new(expr),
+                        property,
+                        access,
+                    };
+                    continue;
+                }
                 expr = Expr::ComputedMember {
                     object: Box::new(expr),
                     property: Box::new(property),
@@ -380,6 +389,17 @@ impl Parser {
                 self.borrowed_static_name(name)
             }
         }
+    }
+
+    fn static_computed_property_key(&mut self, property: &Expr) -> Result<Option<StaticName>> {
+        let name = match property {
+            Expr::Literal(Value::String(value)) => value.clone(),
+            Expr::Literal(
+                value @ (Value::Undefined | Value::Null | Value::Bool(_) | Value::Number(_)),
+            ) => value.to_string(),
+            _ => return Ok(None),
+        };
+        self.static_name(name).map(Some)
     }
 }
 
