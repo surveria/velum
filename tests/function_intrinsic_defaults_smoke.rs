@@ -56,6 +56,67 @@ fn intrinsic_function_defaults_are_reused_for_descriptors() -> TestResult {
     ensure_usize(vm.resource_usage().atom_count, first_descriptor_atoms)
 }
 
+#[test]
+fn intrinsic_prototype_defaults_are_reused_for_descriptors() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let value = vm.context().eval(
+        r"
+        let Constructor = function Constructor() {};
+        let replacement = {};
+        let native = Math.max;
+        0
+        ",
+    )?;
+    ensure_value(&value, &Value::Number(0.0))?;
+
+    let value = vm.context().eval(
+        r"
+        let constructorDescriptor =
+            Object.getOwnPropertyDescriptor(Constructor, 'prototype');
+        let nativeDescriptor = Object.getOwnPropertyDescriptor(native, 'prototype');
+        let constructorBeforeMutation =
+            constructorDescriptor.value === Constructor.prototype &&
+            constructorDescriptor.configurable === false &&
+            constructorDescriptor.enumerable === false &&
+            constructorDescriptor.writable === true;
+        let nativeBeforeMutation =
+            nativeDescriptor.value === native.prototype &&
+            nativeDescriptor.configurable === false &&
+            nativeDescriptor.enumerable === false &&
+            nativeDescriptor.writable === false;
+        Constructor.prototype = replacement;
+        native.prototype = {};
+        let updatedConstructorDescriptor =
+            Object.getOwnPropertyDescriptor(Constructor, 'prototype');
+        let updatedNativeDescriptor = Object.getOwnPropertyDescriptor(native, 'prototype');
+        constructorBeforeMutation &&
+            nativeBeforeMutation &&
+            updatedConstructorDescriptor.value === replacement &&
+            updatedConstructorDescriptor.configurable === false &&
+            updatedConstructorDescriptor.enumerable === false &&
+            updatedConstructorDescriptor.writable === true &&
+            updatedNativeDescriptor.value === nativeDescriptor.value &&
+            updatedNativeDescriptor.configurable === false &&
+            updatedNativeDescriptor.enumerable === false &&
+            updatedNativeDescriptor.writable === false
+        ",
+    )?;
+    ensure_value(&value, &Value::Bool(true))?;
+    let first_descriptor_atoms = vm.resource_usage().atom_count;
+
+    let value = vm.context().eval(
+        r"
+        Object.getOwnPropertyDescriptor(Constructor, 'prototype').value;
+        Object.getOwnPropertyDescriptor(native, 'prototype').value;
+        0
+        ",
+    )?;
+    ensure_value(&value, &Value::Number(0.0))?;
+    ensure_usize(vm.resource_usage().atom_count, first_descriptor_atoms)
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
