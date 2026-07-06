@@ -1,6 +1,6 @@
 use crate::ast::{
     Program, StaticBinding, StaticBindingId, StaticFunctionId, StaticName, StaticNameId,
-    StaticPropertyAccessId,
+    StaticPropertyAccessId, StaticString, StaticStringId,
 };
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
@@ -28,6 +28,7 @@ pub struct ParseUsage {
     pub top_level_statement_count: usize,
     pub max_expression_depth: usize,
     pub static_name_count: usize,
+    pub static_string_count: usize,
     pub static_binding_count: usize,
     pub static_function_count: usize,
     pub static_property_access_count: usize,
@@ -40,6 +41,7 @@ struct Parser {
     expression_depth: usize,
     max_expression_depth: usize,
     static_names: StaticNameTable,
+    static_strings: StaticStringTable,
     static_bindings: StaticBindingTable,
     static_functions: StaticFunctionTable,
     static_property_access_count: usize,
@@ -54,6 +56,7 @@ impl Parser {
             expression_depth: 0,
             max_expression_depth: 0,
             static_names: StaticNameTable::new(),
+            static_strings: StaticStringTable::new(),
             static_bindings: StaticBindingTable::new(),
             static_functions: StaticFunctionTable::new(),
             static_property_access_count: 0,
@@ -78,6 +81,7 @@ impl Parser {
             top_level_statement_count: statements.len(),
             max_expression_depth: self.max_expression_depth,
             static_name_count: self.static_names.len(),
+            static_string_count: self.static_strings.len(),
             static_binding_count: self.static_bindings.len(),
             static_function_count: self.static_functions.len(),
             static_property_access_count: self.static_property_access_count,
@@ -114,6 +118,11 @@ impl Parser {
     pub(super) fn static_binding_name(&mut self, name: String) -> Result<StaticBinding> {
         let name = self.static_name(name)?;
         self.static_binding(name)
+    }
+
+    pub(super) fn static_string(&mut self, value: String) -> Result<StaticString> {
+        self.static_strings
+            .intern_owned(value, self.previous_offset())
     }
 
     pub(super) fn static_function(&mut self) -> Result<StaticFunctionId> {
@@ -200,6 +209,88 @@ impl Parser {
             .checked_sub(1)
             .and_then(|cursor| self.tokens.get(cursor))
             .map_or_else(|| self.offset(), |token| token.offset)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct StaticStringTable {
+    strings: Vec<StaticString>,
+    index: Vec<StaticStringIndexEntry>,
+}
+
+impl StaticStringTable {
+    const fn new() -> Self {
+        Self {
+            strings: Vec::new(),
+            index: Vec::new(),
+        }
+    }
+
+    const fn len(&self) -> usize {
+        self.strings.len()
+    }
+
+    fn intern_owned(&mut self, value: String, offset: usize) -> Result<StaticString> {
+        let position = self.static_string_position(&value);
+        let position = match position {
+            Ok(position) => return self.static_string_at_index_position(position, offset),
+            Err(position) => position,
+        };
+        if position > self.index.len() {
+            return Err(Error::parse(
+                "static string insert position is out of range",
+                offset,
+            ));
+        }
+        let id = StaticStringId::from_index(self.strings.len())?;
+        let value = StaticString::new(id, value);
+        self.strings.push(value.clone());
+        self.index
+            .insert(position, StaticStringIndexEntry::new(value.clone()));
+        Ok(value)
+    }
+
+    fn static_string_at_index_position(
+        &self,
+        position: usize,
+        offset: usize,
+    ) -> Result<StaticString> {
+        let entry = self
+            .index
+            .get(position)
+            .ok_or_else(|| Error::parse("static string index entry is not available", offset))?;
+        self.static_string_by_id(entry.id(), offset)
+    }
+
+    fn static_string_by_id(&self, id: StaticStringId, offset: usize) -> Result<StaticString> {
+        self.strings
+            .get(id.index()?)
+            .cloned()
+            .ok_or_else(|| Error::parse("static string id is not defined", offset))
+    }
+
+    fn static_string_position(&self, value: &str) -> std::result::Result<usize, usize> {
+        self.index
+            .binary_search_by(|entry| entry.as_str().cmp(value))
+    }
+}
+
+#[derive(Debug, Clone)]
+struct StaticStringIndexEntry {
+    value: StaticString,
+}
+
+impl StaticStringIndexEntry {
+    const fn new(value: StaticString) -> Self {
+        Self { value }
+    }
+
+    fn as_str(&self) -> &str {
+        self.value.as_str()
+    }
+
+    const fn id(&self) -> StaticStringId {
+        self.value.id()
     }
 }
 

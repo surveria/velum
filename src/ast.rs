@@ -19,6 +19,22 @@ impl StaticNameId {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub struct StaticStringId(u32);
+
+impl StaticStringId {
+    pub fn from_index(index: usize) -> Result<Self> {
+        let id = u32::try_from(index)
+            .map_err(|_| Error::limit("static string table exceeded supported range"))?;
+        Ok(Self(id))
+    }
+
+    pub fn index(self) -> Result<usize> {
+        usize::try_from(self.0)
+            .map_err(|_| Error::limit("static string id exceeded supported range"))
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub struct StaticBindingId(u32);
 
 impl StaticBindingId {
@@ -103,6 +119,43 @@ impl std::fmt::Display for StaticName {
 }
 
 impl std::ops::Deref for StaticName {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct StaticString {
+    id: StaticStringId,
+    text: Rc<str>,
+}
+
+impl StaticString {
+    pub fn new(id: StaticStringId, value: String) -> Self {
+        Self {
+            id,
+            text: Rc::from(value.into_boxed_str()),
+        }
+    }
+
+    pub const fn id(&self) -> StaticStringId {
+        self.id
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.text.as_ref()
+    }
+}
+
+impl std::fmt::Display for StaticString {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
+impl std::ops::Deref for StaticString {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
@@ -232,6 +285,7 @@ pub struct CatchClause {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Literal(Value),
+    StringLiteral(StaticString),
     This,
     Identifier(StaticBinding),
     Parenthesized(Box<Self>),

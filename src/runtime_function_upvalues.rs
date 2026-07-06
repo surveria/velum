@@ -186,7 +186,7 @@ impl<'a> UpvalueCollector<'a> {
 
     fn collect_expr(&mut self, expr: &Expr) -> Result<()> {
         match expr {
-            Expr::Literal(_) | Expr::This => Ok(()),
+            Expr::Literal(_) | Expr::StringLiteral(_) | Expr::This => Ok(()),
             Expr::Function { body, .. } | Expr::MethodFunction { body, .. } => {
                 self.collect_statements(body)
             }
