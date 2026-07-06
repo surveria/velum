@@ -4,7 +4,7 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime_completion::Completion,
-    runtime_scope::{BindingCell, BindingScope},
+    runtime_scope::{BindingCell, BindingScope, BindingSlot},
     value::Value,
 };
 
@@ -136,7 +136,7 @@ impl Context {
 
     pub(crate) fn define(&mut self, name: &str, value: Value, kind: DeclKind) -> Result<()> {
         let atom = self.intern_atom(name)?;
-        self.define_atom(atom, name, value, kind)
+        self.define_atom(atom, name, value, kind, None)
     }
 
     pub(crate) fn define_static(
@@ -146,7 +146,12 @@ impl Context {
         kind: DeclKind,
     ) -> Result<()> {
         let atom = self.intern_static_name_atom(name.name())?;
-        self.define_atom(atom, name, value, kind)?;
+        let slot = if self.locals.last().is_some() {
+            self.compiled_local_binding_slot(name)?
+        } else {
+            None
+        };
+        self.define_atom(atom, name, value, kind, slot)?;
         self.remember_active_static_binding(name, atom)
     }
 
@@ -156,6 +161,7 @@ impl Context {
         name: &str,
         value: Value,
         kind: DeclKind,
+        slot: Option<BindingSlot>,
     ) -> Result<()> {
         if self.active_bindings().contains(atom) {
             return Err(Error::runtime(format!(
@@ -167,7 +173,11 @@ impl Context {
         self.checked_value(value.clone())?;
         let mutable = kind != DeclKind::Const;
         self.active_bindings_mut()
-            .insert(atom, BindingCell::new(value, mutable, kind));
+            .insert_or_replace_at_optional_slot(
+                atom,
+                BindingCell::new(value, mutable, kind),
+                slot,
+            )?;
         Ok(())
     }
 

@@ -53,9 +53,14 @@ impl Context {
         value: Value,
     ) -> Result<Completion> {
         let atom = self.ensure_binding_capacity_static(param)?;
+        let slot = self.compiled_local_binding_slot(param)?;
         self.checked_value(value.clone())?;
         self.active_bindings_mut()
-            .insert(atom, BindingCell::new(value, true, DeclKind::Let));
+            .insert_or_replace_at_optional_slot(
+                atom,
+                BindingCell::new(value, true, DeclKind::Let),
+                slot,
+            )?;
         self.remember_active_static_binding(param, atom)?;
         self.eval_scoped_block(&catch.body)
     }

@@ -46,6 +46,17 @@ var run = function run(zeta, alpha, middle) {
 run(1, 2, 3) + run(4, 5, 6);
 ";
 
+const CATCH_LAYOUT_SOURCE: &str = r"
+var value = 0;
+try {
+    throw 4;
+} catch (error) {
+    let offset = 3;
+    value = error + offset;
+}
+value;
+";
+
 #[test]
 fn compiled_layout_counts_global_local_and_upvalue_slots() -> TestResult {
     let engine = Engine::new();
@@ -116,6 +127,12 @@ fn compiled_layout_drives_function_parameter_frame_slots() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
     let script = vm.compile(PARAM_FRAME_LAYOUT_SOURCE)?;
+    let usage = script.usage();
+
+    ensure_usize(usage.global_binding_slot_count(), 1)?;
+    ensure_usize(usage.local_binding_slot_count(), 5)?;
+    ensure_usize(usage.upvalue_binding_slot_count(), 0)?;
+    ensure_usize(usage.unresolved_static_binding_count(), 0)?;
 
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(1003.0))?;
@@ -123,6 +140,27 @@ fn compiled_layout_drives_function_parameter_frame_slots() -> TestResult {
 
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(1003.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atom_count)
+}
+
+#[test]
+fn compiled_layout_drives_catch_and_body_lexical_slots() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(CATCH_LAYOUT_SOURCE)?;
+    let usage = script.usage();
+
+    ensure_usize(usage.global_binding_slot_count(), 1)?;
+    ensure_usize(usage.local_binding_slot_count(), 2)?;
+    ensure_usize(usage.upvalue_binding_slot_count(), 0)?;
+    ensure_usize(usage.unresolved_static_binding_count(), 0)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(7.0))?;
+    let atom_count = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(7.0))?;
     ensure_usize(vm.resource_usage().atom_count, atom_count)
 }
 
