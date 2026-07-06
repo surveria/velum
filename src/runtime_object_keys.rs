@@ -18,7 +18,7 @@ impl ObjectHeap {
     pub(crate) fn own_keys(&self, id: ObjectId, atoms: &AtomTable) -> Result<Vec<String>> {
         let object = self.object(id)?;
         let mut keys = Vec::with_capacity(object.enumerable_key_count_hint());
-        object.extend_enumerable_keys(atoms, &mut keys)?;
+        object.extend_enumerable_keys(atoms, &self.shapes, &mut keys)?;
         Ok(keys)
     }
 
@@ -35,7 +35,7 @@ impl ObjectHeap {
         visited.push(id);
         let prototype = {
             let object = self.object(id)?;
-            object.extend_enumerable_keys(atoms, keys)?;
+            object.extend_enumerable_keys(atoms, &self.shapes, keys)?;
             object.prototype
         };
         if let Some(prototype) = prototype {
@@ -50,7 +50,12 @@ impl Object {
         self.enumerable_property_count
     }
 
-    fn extend_enumerable_keys(&self, atoms: &AtomTable, keys: &mut Vec<String>) -> Result<()> {
+    fn extend_enumerable_keys(
+        &self,
+        atoms: &AtomTable,
+        shapes: &super::ShapeTable,
+        keys: &mut Vec<String>,
+    ) -> Result<()> {
         if !self.has_enumerable_own_keys() {
             return Ok(());
         }
@@ -60,7 +65,7 @@ impl Object {
         }
 
         self.extend_array_element_keys(keys);
-        self.extend_sparse_array_element_keys(atoms, keys)?;
+        self.extend_sparse_array_element_keys(atoms, shapes, keys)?;
         self.extend_named_keys(atoms, keys, true)
     }
 
@@ -98,6 +103,7 @@ impl Object {
     fn extend_sparse_array_element_keys(
         &self,
         atoms: &AtomTable,
+        shapes: &super::ShapeTable,
         keys: &mut Vec<String>,
     ) -> Result<()> {
         if !self.array_storage.has_sparse_keys() {
@@ -106,7 +112,7 @@ impl Object {
         let mut entries: Vec<(ArrayIndex, PropertyKey)> = Vec::new();
         for (index, key) in self.array_storage.sparse_keys() {
             if self
-                .named_property(*key)
+                .named_property(shapes, *key)?
                 .is_some_and(super::ObjectProperty::is_enumerable)
             {
                 entries.push((*index, *key));

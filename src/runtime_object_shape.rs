@@ -2,6 +2,19 @@ use crate::error::{Error, Result};
 
 use super::PropertyKey;
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(super) struct PropertySlot(usize);
+
+impl PropertySlot {
+    pub(super) const fn from_index(index: usize) -> Self {
+        Self(index)
+    }
+
+    pub(super) const fn index(self) -> usize {
+        self.0
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub(super) struct ShapeId(u32);
 
@@ -69,6 +82,21 @@ impl ShapeTable {
         self.shape_for_keys(&keys)
     }
 
+    pub(super) fn property_slot(
+        &self,
+        shape: ShapeId,
+        key: PropertyKey,
+    ) -> Result<Option<PropertySlot>> {
+        if shape == ShapeId::root() {
+            return Ok(None);
+        }
+        let index = shape.storage_index()?;
+        let Some(shape) = self.shapes.get(index) else {
+            return Err(Error::runtime("shape id is not defined"));
+        };
+        Ok(shape.property_slot(key))
+    }
+
     pub(super) fn transition_after_remove(
         &mut self,
         current: ShapeId,
@@ -117,14 +145,56 @@ impl ShapeTable {
 #[derive(Debug, Clone)]
 struct Shape {
     keys: Box<[PropertyKey]>,
+    offsets: Box<[ShapePropertyOffset]>,
 }
 
 impl Shape {
     fn from_keys(keys: &[PropertyKey]) -> Self {
-        Self { keys: keys.into() }
+        let mut offsets = Vec::with_capacity(keys.len());
+        for (index, key) in keys.iter().copied().enumerate() {
+            offsets.push(ShapePropertyOffset::new(
+                key,
+                PropertySlot::from_index(index),
+            ));
+        }
+        offsets.sort_by_key(ShapePropertyOffset::key);
+        Self {
+            keys: keys.into(),
+            offsets: offsets.into(),
+        }
     }
 
     fn keys(&self) -> &[PropertyKey] {
         &self.keys
+    }
+
+    fn property_slot(&self, key: PropertyKey) -> Option<PropertySlot> {
+        let position = self
+            .offsets
+            .binary_search_by_key(&key, ShapePropertyOffset::key);
+        let Ok(position) = position else {
+            return None;
+        };
+        self.offsets.get(position).map(ShapePropertyOffset::slot)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ShapePropertyOffset {
+    key: PropertyKey,
+    slot: PropertySlot,
+}
+
+impl ShapePropertyOffset {
+    const fn new(key: PropertyKey, slot: PropertySlot) -> Self {
+        Self { key, slot }
+    }
+
+    const fn key(&self) -> PropertyKey {
+        self.key
+    }
+
+    const fn slot(&self) -> PropertySlot {
+        self.slot
     }
 }

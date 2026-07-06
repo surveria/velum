@@ -201,7 +201,7 @@ impl ObjectHeap {
         property: PropertyLookup<'_>,
     ) -> Result<Option<DataPropertyDescriptor>> {
         self.object(id)
-            .map(|object| object.own_property_descriptor(property))
+            .and_then(|object| object.own_property_descriptor(property, &self.shapes))
     }
 
     pub fn define_property(
@@ -217,7 +217,8 @@ impl ObjectHeap {
     }
 
     pub fn has_own(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {
-        self.object(id).map(|object| object.has_own(property))
+        self.object(id)
+            .and_then(|object| object.has_own(property, &self.shapes))
     }
 }
 
@@ -225,26 +226,30 @@ impl Object {
     fn own_property_descriptor(
         &self,
         property: PropertyLookup<'_>,
-    ) -> Option<DataPropertyDescriptor> {
+        shapes: &ShapeTable,
+    ) -> Result<Option<DataPropertyDescriptor>> {
         if let Some(length) = self
             .array_length
             .filter(|_| property.name() == ARRAY_LENGTH_PROPERTY)
         {
-            return Some(DataPropertyDescriptor::new(
+            return Ok(Some(DataPropertyDescriptor::new(
                 length.value(),
                 PropertyWritable::Yes,
                 PropertyEnumerable::No,
                 PropertyConfigurable::No,
-            ));
+            )));
         }
         if self.array_length.is_some()
             && let Some(index) = ArrayIndex::parse(property.name())
             && let Some(descriptor) = self.array_element_descriptor(index)
         {
-            return Some(descriptor);
+            return Ok(Some(descriptor));
         }
-        let key = property.key()?;
-        self.named_property(key).map(ObjectProperty::descriptor)
+        let Some(key) = property.key() else {
+            return Ok(None);
+        };
+        self.named_property(shapes, key)
+            .map(|property| property.map(ObjectProperty::descriptor))
     }
 
     fn define_property(
@@ -276,8 +281,8 @@ impl Object {
         max_properties: usize,
     ) -> Result<()> {
         let property_count = self.property_count();
-        let enumerable_update = if self.contains_named_property(property) {
-            let existing = self.named_property_mut(property)?;
+        let enumerable_update = if self.contains_named_property(shapes, property)? {
+            let existing = self.named_property_mut(shapes, property)?;
             let was_enumerable = existing.is_enumerable();
             existing.define(update);
             Some((was_enumerable, existing.is_enumerable()))
