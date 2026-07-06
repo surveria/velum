@@ -33,6 +33,10 @@ mod runtime_function_intrinsic;
 mod runtime_function_properties;
 #[path = "runtime_native.rs"]
 mod runtime_native;
+#[path = "runtime_well_known.rs"]
+mod runtime_well_known;
+
+use runtime_well_known::WellKnownPropertyKeys;
 
 const HOST_PRINT_NAME: &str = "print";
 const INITIAL_RANDOM_STATE: u64 = 0x9e37_79b9_7f4a_7c15;
@@ -42,6 +46,7 @@ const TEST262_ERROR_NAME: &str = "Test262Error";
 pub struct Context {
     limits: RuntimeLimits,
     atoms: AtomTable,
+    well_known_properties: WellKnownPropertyKeys,
     globals: BindingScope,
     locals: Vec<BindingScope>,
     functions: Vec<Function>,
@@ -104,6 +109,7 @@ impl Context {
         Self {
             limits,
             atoms: AtomTable::new(),
+            well_known_properties: WellKnownPropertyKeys::new(),
             globals: BindingScope::new(),
             locals: Vec::new(),
             functions: Vec::new(),
@@ -177,11 +183,20 @@ impl Context {
     }
 
     pub(crate) fn intern_property_key(&mut self, name: &str) -> Result<PropertyKey> {
-        self.intern_atom(name).map(PropertyKey::new)
+        if let Some(key) = self.well_known_properties.lookup(name) {
+            return Ok(key);
+        }
+        let key = self.intern_atom(name).map(PropertyKey::new)?;
+        self.well_known_properties.remember(name, key);
+        Ok(key)
     }
 
     pub(crate) fn property_lookup<'a>(&self, name: &'a str) -> PropertyLookup<'a> {
-        PropertyLookup::new(name, self.atom(name).map(PropertyKey::new))
+        let key = self
+            .well_known_properties
+            .lookup(name)
+            .or_else(|| self.atom(name).map(PropertyKey::new));
+        PropertyLookup::new(name, key)
     }
 
     pub(crate) fn object_constructor_property_key(&mut self) -> Result<PropertyKey> {
