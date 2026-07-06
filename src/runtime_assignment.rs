@@ -15,11 +15,12 @@ impl Context {
         &mut self,
         object: &Expr,
         property: &StaticName,
+        access: StaticPropertyAccessId,
         expr: &Expr,
     ) -> Result<Value> {
         let object = self.eval_expr(object)?;
         let value = self.eval_expr(expr)?;
-        self.set_static_property_value(&object, property, value.clone())?;
+        self.set_static_property_value(&object, property, access, value.clone())?;
         Ok(value)
     }
 
@@ -88,7 +89,7 @@ impl Context {
         let old_value = self.get_static_property_value(object, property, access)?;
         let right = self.eval_expr(expr)?;
         let value = self.eval_compound_value(op, &old_value, &right)?;
-        self.set_static_property_value(object, property, value.clone())?;
+        self.set_static_property_value(object, property, access, value.clone())?;
         Ok(value)
     }
 

@@ -267,6 +267,7 @@ pub enum Expr {
     PropertyAssignment {
         object: Box<Self>,
         property: StaticName,
+        access: StaticPropertyAccessId,
         expr: Box<Self>,
     },
     ComputedPropertyAssignment {

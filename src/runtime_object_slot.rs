@@ -21,6 +21,10 @@ impl NamedProperty {
     pub(super) const fn property(&self) -> &ObjectProperty {
         &self.property
     }
+
+    pub(super) const fn property_mut(&mut self) -> &mut ObjectProperty {
+        &mut self.property
+    }
 }
 
 impl Object {

@@ -8,8 +8,8 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime_object::{
-        CacheablePropertyLookup, CacheablePropertyPresence, CacheablePropertyValue, PropertyKey,
-        PropertyLookup,
+        CacheablePropertyLookup, CacheablePropertyPresence, CacheablePropertyValue,
+        CacheablePropertyWrite, PropertyKey, PropertyLookup,
     },
     runtime_property::{
         DynamicPropertyKey, delete_property, get_property, has_property, set_property,
@@ -282,6 +282,7 @@ impl Context {
         &mut self,
         object: &Value,
         property: &StaticName,
+        access: StaticPropertyAccessId,
         value: Value,
     ) -> Result<()> {
         self.checked_value(value.clone())?;
@@ -292,6 +293,18 @@ impl Context {
         if let Value::NativeFunction(id) = object {
             return self.set_native_function_property_key(*id, property, key, value);
         }
+        if let Value::Object(id) = object
+            && property.as_str() != PROTOTYPE_PROPERTY
+            && self.set_cached_static_object_property_value(
+                *id,
+                access,
+                property,
+                key,
+                value.clone(),
+            )?
+        {
+            return Ok(());
+        }
         set_property(
             &mut self.objects,
             object,
@@ -300,6 +313,40 @@ impl Context {
             value,
             self.limits.max_object_properties,
         )
+    }
+
+    fn set_cached_static_object_property_value(
+        &mut self,
+        object: ObjectId,
+        access: StaticPropertyAccessId,
+        property: &StaticName,
+        key: PropertyKey,
+        value: Value,
+    ) -> Result<bool> {
+        let lookup = PropertyLookup::from_key(property.as_str(), key);
+        let Some(cache) = self.current_static_name_atom_cache() else {
+            return Ok(false);
+        };
+        if let Some(cached_lookup) = cache.property_lookup(access)?
+            && self.objects.write_cacheable_own_property_value_for(
+                object,
+                cached_lookup,
+                value.clone(),
+            )? == CacheablePropertyWrite::Updated
+        {
+            return Ok(true);
+        }
+
+        let candidate = self.objects.cacheable_property_lookup(object, lookup)?;
+        if self
+            .objects
+            .write_cacheable_own_property_value_for(object, candidate, value)?
+            == CacheablePropertyWrite::Updated
+        {
+            cache.remember_property_lookup(access, candidate)?;
+            return Ok(true);
+        }
+        Ok(false)
     }
 
     pub(crate) fn delete_static_property_value(

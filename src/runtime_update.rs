@@ -53,7 +53,7 @@ impl Context {
     ) -> Result<Value> {
         let old_value = self.get_static_property_value(object, property, access)?;
         let new_value = Self::updated_number(&old_value, op)?;
-        self.set_static_property_value(object, property, new_value.clone())?;
+        self.set_static_property_value(object, property, access, new_value.clone())?;
         Ok(if prefix { new_value } else { old_value })
     }
 

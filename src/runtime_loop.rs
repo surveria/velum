@@ -132,10 +132,12 @@ impl Context {
         match target {
             Expr::Identifier(name) => self.assign_static(name, value),
             Expr::Member {
-                object, property, ..
+                object,
+                property,
+                access,
             } => {
                 let object = self.eval_expr(object)?;
-                self.set_static_property_value(&object, property, value)
+                self.set_static_property_value(&object, property, *access, value)
             }
             Expr::ComputedMember { object, property } => {
                 let object = self.eval_expr(object)?;
