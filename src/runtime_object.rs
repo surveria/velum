@@ -47,20 +47,23 @@ const PROTOTYPE_PROPERTY: &str = "__proto__";
 impl ObjectHeap {
     pub fn create(
         &mut self,
-        properties: Vec<(PropertyKey, String, Value)>,
+        properties: Vec<ObjectPropertyInit<'_>>,
         constructor_key: PropertyKey,
         max_objects: usize,
         max_properties: usize,
     ) -> Result<Value> {
         let mut object = Object::ordinary_with_property_capacity(properties.len());
         let mut literal_prototype = None;
-        for (key, name, value) in properties {
+        for property in properties {
+            let ObjectPropertyInit {
+                key, name, value, ..
+            } = property;
             if name == PROTOTYPE_PROPERTY {
                 if let Some(prototype) = Object::literal_prototype(&value) {
                     literal_prototype = Some(prototype);
                 }
             } else {
-                object.set(key, &name, value, &mut self.shapes, max_properties)?;
+                object.set(key, name, value, &mut self.shapes, max_properties)?;
             }
         }
         object.prototype = match literal_prototype {
