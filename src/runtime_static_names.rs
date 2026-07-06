@@ -4,6 +4,7 @@ use std::rc::Rc;
 use crate::{
     ast::StaticName,
     atom::AtomId,
+    binding_layout::BindingLayout,
     error::{Error, Result},
     runtime::Context,
     runtime_object::{PropertyKey, PropertyLookup},
@@ -58,11 +59,14 @@ impl Context {
         &mut self,
         atom_cache: StaticNameAtomCacheHandle,
         binding_cache: StaticBindingCacheHandle,
+        binding_layout: BindingLayout,
         evaluate: impl FnOnce(&mut Self) -> Result<T>,
     ) -> Result<T> {
         self.static_name_atom_caches.push(atom_cache);
         self.static_binding_caches.push(binding_cache);
+        self.static_binding_layouts.push(binding_layout);
         let result = evaluate(self);
+        self.pop_static_binding_layout()?;
         self.pop_static_binding_cache()?;
         self.pop_static_name_atom_cache()?;
         result
@@ -193,5 +197,12 @@ impl Context {
             return Ok(());
         }
         Err(Error::runtime("static binding cache disappeared"))
+    }
+
+    fn pop_static_binding_layout(&mut self) -> Result<()> {
+        if self.static_binding_layouts.pop().is_some() {
+            return Ok(());
+        }
+        Err(Error::runtime("static binding layout disappeared"))
     }
 }

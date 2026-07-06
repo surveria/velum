@@ -85,6 +85,7 @@ impl Context {
             let value = self.checked_value(Value::String(key))?;
             scope.insert_or_replace(atom, BindingCell::new(value, mutable, kind));
             self.push_lexical_scope_with(scope);
+            self.remember_active_static_binding(name, atom)?;
             let completion = self.eval_statement(body);
             let Some(mut removed_scope) = self.pop_lexical_scope() else {
                 return Err(Error::runtime("lexical scope disappeared"));
