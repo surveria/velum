@@ -165,6 +165,7 @@ impl BytecodeInstruction {
             | Self::CompoundStaticProperty { .. }
             | Self::CompoundComputedProperty { .. }
             | Self::StaticMember { .. }
+            | Self::ArrayLength { .. }
             | Self::ComputedMember { .. }
             | Self::StaticPropertyAssign { .. }
             | Self::ComputedPropertyAssign { .. }
@@ -527,6 +528,7 @@ impl BytecodeInstruction {
                 | Self::Binary { .. }
                 | Self::NumberBinary(_)
                 | Self::StaticMember { .. }
+                | Self::ArrayLength { .. }
                 | Self::ComputedMember { .. }
                 | Self::StaticPropertyAssign { .. }
                 | Self::ComputedPropertyAssign { .. }

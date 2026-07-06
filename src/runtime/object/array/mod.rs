@@ -191,6 +191,10 @@ impl ObjectHeap {
         length.to_usize().map(Some)
     }
 
+    pub(crate) fn array_length_value_if_array(&self, id: ObjectId) -> Result<Option<Value>> {
+        Ok(self.array_length_if_array(id)?.map(ArrayLength::value))
+    }
+
     pub(crate) fn array_len_for_slice(&self, id: ObjectId) -> Result<usize> {
         self.array_length_for_method(id, ARRAY_SLICE_RECEIVER_ERROR)?
             .to_usize()

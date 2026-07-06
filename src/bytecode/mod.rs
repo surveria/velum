@@ -24,6 +24,8 @@ pub use types::{
     BytecodeSwitchCase,
 };
 
+const ARRAY_LENGTH_PROPERTY: &str = "length";
+
 impl BytecodeProgram {
     pub fn compile(program: &Program, layout: &BindingLayout) -> Result<Self> {
         Ok(Self::new(
@@ -304,9 +306,12 @@ impl<'a> BytecodeCompiler<'a> {
         access: StaticPropertyAccessId,
     ) -> Result<()> {
         self.compile_expr(object)?;
-        self.emit(BytecodeInstruction::StaticMember {
-            property: Self::compile_property(property, access),
-        });
+        let property = Self::compile_property(property, access);
+        if property.name().as_str() == ARRAY_LENGTH_PROPERTY {
+            self.emit(BytecodeInstruction::ArrayLength { property });
+        } else {
+            self.emit(BytecodeInstruction::StaticMember { property });
+        }
         Ok(())
     }
 
@@ -652,6 +657,7 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::CompoundStaticProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. }
             | BytecodeInstruction::StaticMember { .. }
+            | BytecodeInstruction::ArrayLength { .. }
             | BytecodeInstruction::ComputedMember { .. }
             | BytecodeInstruction::StaticPropertyAssign { .. }
             | BytecodeInstruction::ComputedPropertyAssign { .. }

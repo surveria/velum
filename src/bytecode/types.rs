@@ -164,6 +164,7 @@ impl BytecodeDynamicProperty {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BytecodeNumericBinaryOp {
+    Add,
     Sub,
     Mul,
     Div,
@@ -174,13 +175,13 @@ pub enum BytecodeNumericBinaryOp {
 impl BytecodeNumericBinaryOp {
     pub(crate) const fn from_binary(op: BinaryOp) -> Option<Self> {
         match op {
+            BinaryOp::Add => Some(Self::Add),
             BinaryOp::Sub => Some(Self::Sub),
             BinaryOp::Mul => Some(Self::Mul),
             BinaryOp::Div => Some(Self::Div),
             BinaryOp::Rem => Some(Self::Rem),
             BinaryOp::Pow => Some(Self::Pow),
-            BinaryOp::Add
-            | BinaryOp::Equal
+            BinaryOp::Equal
             | BinaryOp::NotEqual
             | BinaryOp::StrictEqual
             | BinaryOp::StrictNotEqual
@@ -202,6 +203,7 @@ impl BytecodeNumericBinaryOp {
 
     pub(crate) const fn fallback_binary(self) -> BinaryOp {
         match self {
+            Self::Add => BinaryOp::Add,
             Self::Sub => BinaryOp::Sub,
             Self::Mul => BinaryOp::Mul,
             Self::Div => BinaryOp::Div,
@@ -305,6 +307,9 @@ pub enum BytecodeInstruction {
         op: BinaryOp,
     },
     StaticMember {
+        property: BytecodeProperty,
+    },
+    ArrayLength {
         property: BytecodeProperty,
     },
     ComputedMember {
