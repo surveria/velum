@@ -233,13 +233,16 @@ impl<'a> UpvalueCollector<'a> {
                 object,
                 property,
                 expr,
+                ..
             } => {
                 self.collect_expr(object)?;
                 self.collect_expr(property)?;
                 self.collect_expr(expr)
             }
             Expr::Member { object, .. } => self.collect_expr(object),
-            Expr::ComputedMember { object, property } => {
+            Expr::ComputedMember {
+                object, property, ..
+            } => {
                 self.collect_expr(object)?;
                 self.collect_expr(property)
             }

@@ -141,10 +141,14 @@ impl Context {
                 let object = self.eval_expr(object)?;
                 self.set_static_property_value(&object, property, *access, value)
             }
-            Expr::ComputedMember { object, property } => {
+            Expr::ComputedMember {
+                object,
+                property,
+                access,
+            } => {
                 let object = self.eval_expr(object)?;
                 let mut property = self.eval_property_key(property)?;
-                self.set_dynamic_property_value(&object, &mut property, value)
+                self.set_cached_dynamic_property_value(&object, &mut property, *access, value)
             }
             Expr::Parenthesized(expr) => self.assign_for_in_target(expr, value),
             _ => Err(Error::runtime("invalid for-in assignment target")),

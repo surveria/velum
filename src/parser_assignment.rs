@@ -76,9 +76,14 @@ impl Parser {
                 access,
                 expr: Box::new(value),
             }),
-            Expr::ComputedMember { object, property } => Ok(Expr::ComputedPropertyAssignment {
+            Expr::ComputedMember {
                 object,
                 property,
+                access,
+            } => Ok(Expr::ComputedPropertyAssignment {
+                object,
+                property,
+                access,
                 expr: Box::new(value),
             }),
             _ => Err(Error::parse("invalid assignment target", offset)),

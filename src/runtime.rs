@@ -337,16 +337,19 @@ impl Context {
             Expr::ComputedPropertyAssignment {
                 object,
                 property,
+                access,
                 expr,
-            } => self.eval_computed_property_assignment(object, property, expr),
+            } => self.eval_computed_property_assignment(object, property, *access, expr),
             Expr::Member {
                 object,
                 property,
                 access,
             } => self.eval_member(object, property, *access),
-            Expr::ComputedMember { object, property } => {
-                self.eval_computed_member(object, property)
-            }
+            Expr::ComputedMember {
+                object,
+                property,
+                access,
+            } => self.eval_computed_member(object, property, *access),
             Expr::Call { callee, args } => self.eval_call(callee, args),
             Expr::Function {
                 id,
@@ -601,10 +604,26 @@ impl Context {
                     this_value,
                 }))
             }
-            Expr::ComputedMember { object, property } => {
+            Expr::ComputedMember {
+                object,
+                property,
+                access,
+            } => {
                 let this_value = self.eval_expr(object)?;
                 let property = self.eval_property_key(property)?;
-                let function = self.get_dynamic_property_value(&this_value, &property)?;
+                let function =
+                    self.get_cached_dynamic_property_value(&this_value, &property, *access)?;
+                if let Value::NativeFunction(id) = function {
+                    let kind =
+                        if let Some(kind) = self.cached_static_native_call_kind(*access, id)? {
+                            kind
+                        } else {
+                            let kind = self.native_function(id)?.kind();
+                            self.remember_static_native_call_kind(*access, id, kind)?;
+                            kind
+                        };
+                    return Ok(Some(CallReference::Native { kind, this_value }));
+                }
                 Ok(Some(CallReference::Generic {
                     callee: function,
                     this_value,
@@ -664,10 +683,15 @@ impl Context {
         self.get_static_property_value(&object, property, access)
     }
 
-    fn eval_computed_member(&mut self, object: &Expr, property: &Expr) -> Result<Value> {
+    fn eval_computed_member(
+        &mut self,
+        object: &Expr,
+        property: &Expr,
+        access: crate::ast::StaticPropertyAccessId,
+    ) -> Result<Value> {
         let object = self.eval_expr(object)?;
         let property = self.eval_property_key(property)?;
-        self.get_dynamic_property_value(&object, &property)
+        self.get_cached_dynamic_property_value(&object, &property, access)
     }
 
     pub(crate) fn enumerable_keys(&self, object: &Value) -> Result<Vec<String>> {

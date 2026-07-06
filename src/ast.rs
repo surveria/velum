@@ -273,6 +273,7 @@ pub enum Expr {
     ComputedPropertyAssignment {
         object: Box<Self>,
         property: Box<Self>,
+        access: StaticPropertyAccessId,
         expr: Box<Self>,
     },
     Member {
@@ -283,6 +284,7 @@ pub enum Expr {
     ComputedMember {
         object: Box<Self>,
         property: Box<Self>,
+        access: StaticPropertyAccessId,
     },
     Call {
         callee: Box<Self>,

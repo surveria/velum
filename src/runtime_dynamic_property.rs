@@ -5,7 +5,7 @@ use crate::{
     runtime_object::PropertyKey,
     runtime_property::{
         DynamicPropertyKey, StringPropertyValue, delete_property, get_property, has_property,
-        property_key, set_property, string_property_value,
+        property_key, string_property_value,
     },
     value::{ObjectId, Value},
 };
@@ -53,35 +53,6 @@ impl Context {
         self.runtime_value(value)
     }
 
-    pub(crate) fn get_dynamic_property_value(
-        &mut self,
-        object: &Value,
-        property: &DynamicPropertyKey,
-    ) -> Result<Value> {
-        if let Value::Function(id) = object {
-            return self.get_function_property_lookup(*id, property.lookup());
-        }
-        if let Value::NativeFunction(id) = object {
-            return self.get_native_function_property_lookup(*id, property.lookup());
-        }
-        if let Value::Error(error) = object {
-            return self.get_error_property_value(error, property.name());
-        }
-        if let Value::String(value) = object {
-            return self.get_string_property_value(value, property.name());
-        }
-        if let Value::HeapString(value) = object {
-            return self.get_string_property_value(value.as_str(), property.name());
-        }
-        if let Value::Object(id) = object
-            && let Some(value) = self.get_string_object_property_value(*id, property.name())?
-        {
-            return Ok(value);
-        }
-        let value = get_property(&self.objects, object, property.lookup())?;
-        self.runtime_value(value)
-    }
-
     pub(super) fn get_error_property_value(
         &mut self,
         error: &crate::value::ErrorObject,
@@ -121,32 +92,6 @@ impl Context {
         self.heap_string_char_value(ch).map(Some)
     }
 
-    pub(crate) fn set_dynamic_property_value(
-        &mut self,
-        object: &Value,
-        property: &mut DynamicPropertyKey,
-        value: Value,
-    ) -> Result<()> {
-        let value = self.runtime_value(value)?;
-        if let Value::Function(id) = object {
-            let key = self.intern_dynamic_property_key(property)?;
-            return self.set_function_property_key(*id, property.name(), key, value);
-        }
-        if let Value::NativeFunction(id) = object {
-            let key = self.intern_dynamic_property_key(property)?;
-            return self.set_native_function_property_key(*id, property.name(), key, value);
-        }
-        let key = self.intern_dynamic_property_key(property)?;
-        set_property(
-            &mut self.objects,
-            object,
-            key,
-            property.name(),
-            value,
-            self.limits.max_object_properties,
-        )
-    }
-
     pub(crate) fn delete_dynamic_property_value(
         &mut self,
         object: &Value,
@@ -179,7 +124,7 @@ impl Context {
         }
     }
 
-    fn intern_dynamic_property_key(
+    pub(super) fn intern_dynamic_property_key(
         &mut self,
         property: &mut DynamicPropertyKey,
     ) -> Result<PropertyKey> {
