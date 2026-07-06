@@ -1,6 +1,6 @@
 use crate::ast::{
-    Program, StaticBinding, StaticBindingId, StaticFunctionId, StaticName, StaticNameId,
-    StaticPropertyAccessId, StaticString, StaticStringId,
+    Program, StaticBinding, StaticBindingId, StaticCallSiteId, StaticFunctionId, StaticName,
+    StaticNameId, StaticPropertyAccessId, StaticString, StaticStringId,
 };
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
@@ -28,6 +28,7 @@ pub struct ParseUsage {
     pub static_binding_count: usize,
     pub static_function_count: usize,
     pub static_property_access_count: usize,
+    pub static_call_site_count: usize,
 }
 
 struct Parser {
@@ -42,6 +43,7 @@ struct Parser {
     static_bindings: StaticBindingTable,
     static_functions: StaticFunctionTable,
     static_property_access_count: usize,
+    static_call_site_count: usize,
 }
 
 impl Parser {
@@ -58,6 +60,7 @@ impl Parser {
             static_bindings: StaticBindingTable::new(),
             static_functions: StaticFunctionTable::new(),
             static_property_access_count: 0,
+            static_call_site_count: 0,
         }
     }
 
@@ -83,6 +86,7 @@ impl Parser {
             static_binding_count: self.static_bindings.len(),
             static_function_count: self.static_functions.len(),
             static_property_access_count: self.static_property_access_count,
+            static_call_site_count: self.static_call_site_count,
         };
         Ok(ParsedProgram {
             program: Program { statements },
@@ -134,6 +138,15 @@ impl Parser {
             .checked_add(1)
             .ok_or_else(|| Error::limit("static property access count overflowed"))?;
         Ok(access)
+    }
+
+    pub(super) fn static_call_site(&mut self) -> Result<StaticCallSiteId> {
+        let site = StaticCallSiteId::from_index(self.static_call_site_count)?;
+        self.static_call_site_count = self
+            .static_call_site_count
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("static call site count overflowed"))?;
+        Ok(site)
     }
 
     pub(super) fn borrowed_static_name(&mut self, name: &str) -> Result<StaticName> {

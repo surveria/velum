@@ -44,6 +44,18 @@ impl Context {
         self.native_call_cache_fallbacks
     }
 
+    pub(crate) const fn call_value_cache_hits(&self) -> usize {
+        self.call_value_cache_hits
+    }
+
+    pub(crate) const fn call_value_cache_misses(&self) -> usize {
+        self.call_value_cache_misses
+    }
+
+    pub(crate) const fn call_value_cache_fallbacks(&self) -> usize {
+        self.call_value_cache_fallbacks
+    }
+
     pub(super) const fn record_native_call_cache_hit(&mut self) {
         self.native_call_cache_hits = self.native_call_cache_hits.saturating_add(1);
     }
@@ -54,6 +66,18 @@ impl Context {
 
     pub(super) const fn record_native_call_cache_fallback(&mut self) {
         self.native_call_cache_fallbacks = self.native_call_cache_fallbacks.saturating_add(1);
+    }
+
+    pub(super) const fn record_call_value_cache_hit(&mut self) {
+        self.call_value_cache_hits = self.call_value_cache_hits.saturating_add(1);
+    }
+
+    pub(super) const fn record_call_value_cache_miss(&mut self) {
+        self.call_value_cache_misses = self.call_value_cache_misses.saturating_add(1);
+    }
+
+    pub(super) const fn record_call_value_cache_fallback(&mut self) {
+        self.call_value_cache_fallbacks = self.call_value_cache_fallbacks.saturating_add(1);
     }
 
     #[must_use]

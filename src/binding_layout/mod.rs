@@ -538,7 +538,7 @@ impl LayoutBuilder {
                 self.analyze_expr(object, scope, function)?;
                 self.analyze_expr(property, scope, function)
             }
-            Expr::Call { callee, args } => {
+            Expr::Call { callee, args, .. } => {
                 self.analyze_expr(callee, scope, function)?;
                 self.analyze_exprs(args, scope, function)
             }

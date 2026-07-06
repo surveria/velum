@@ -20,9 +20,9 @@ mod types;
 pub use hoist::BytecodeHoistPlan;
 pub use types::{
     BytecodeAddress, BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock,
-    BytecodeCatch, BytecodeCompletion, BytecodeDynamicProperty, BytecodeForInTarget,
-    BytecodeFunction, BytecodeFunctionDeclaration, BytecodeInstruction, BytecodeNumericBinaryOp,
-    BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
+    BytecodeCallSite, BytecodeCatch, BytecodeCompletion, BytecodeDynamicProperty,
+    BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeInstruction,
+    BytecodeNumericBinaryOp, BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
 };
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
@@ -252,7 +252,9 @@ impl<'a> BytecodeCompiler<'a> {
             Expr::CompoundAssignment { op, target, expr } => {
                 return self.compile_compound_assignment(*op, target, expr);
             }
-            Expr::Call { callee, args } => return self.compile_call_expr(callee, args),
+            Expr::Call { callee, site, args } => {
+                return self.compile_call_expr(callee, *site, args);
+            }
             Expr::Function {
                 id,
                 name,

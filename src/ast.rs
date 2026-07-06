@@ -82,6 +82,22 @@ impl StaticPropertyAccessId {
     }
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub struct StaticCallSiteId(u32);
+
+impl StaticCallSiteId {
+    pub fn from_index(index: usize) -> Result<Self> {
+        let id = u32::try_from(index)
+            .map_err(|_| Error::limit("static call site table exceeded supported range"))?;
+        Ok(Self(id))
+    }
+
+    pub fn index(self) -> Result<usize> {
+        usize::try_from(self.0)
+            .map_err(|_| Error::limit("static call site id exceeded supported range"))
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StaticName {
     id: StaticNameId,
@@ -350,6 +366,7 @@ pub enum Expr {
     },
     Call {
         callee: Box<Self>,
+        site: StaticCallSiteId,
         args: Vec<Self>,
     },
     Function {

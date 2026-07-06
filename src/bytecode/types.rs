@@ -3,8 +3,8 @@ use std::{fmt, rc::Rc};
 use crate::{
     api::native_call::NativeCallTarget,
     ast::{
-        BinaryOp, DeclKind, StaticBinding, StaticFunctionId, StaticName, StaticPropertyAccessId,
-        StaticString, UnaryOp, UpdateOp,
+        BinaryOp, DeclKind, StaticBinding, StaticCallSiteId, StaticFunctionId, StaticName,
+        StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
     },
     binding_layout::{BindingLayout, BindingOperand},
     bytecode::BytecodeHoistPlan,
@@ -239,6 +239,21 @@ impl BytecodeDynamicProperty {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct BytecodeCallSite {
+    site: StaticCallSiteId,
+}
+
+impl BytecodeCallSite {
+    pub(crate) const fn new(site: StaticCallSiteId) -> Self {
+        Self { site }
+    }
+
+    pub const fn site(self) -> StaticCallSiteId {
+        self.site
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BytecodeNumericBinaryOp {
     Add,
     Sub,
@@ -412,6 +427,7 @@ pub enum BytecodeInstruction {
         arg_count: usize,
     },
     CallValue {
+        site: BytecodeCallSite,
         arg_count: usize,
     },
     CallStaticMember {

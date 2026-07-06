@@ -4,7 +4,7 @@ use crate::api::host::HostFunction;
 use crate::api::native_call::NativeCallTarget;
 use crate::ast::StaticBindingId;
 use crate::binding_layout::BindingLayout;
-use crate::bytecode::{BytecodeBinding, BytecodeFunction};
+use crate::bytecode::{BytecodeBinding, BytecodeCallSite, BytecodeFunction};
 use crate::compiled_script::CompiledScript;
 use crate::error::{Error, Result};
 use crate::runtime::assertions::reference_error_undefined;
@@ -38,7 +38,7 @@ use binding::static_bindings::StaticBindingCacheHandle;
 use call_args::RuntimeCallArgs;
 use native::NativeFunctionRegistry;
 use promise::{Promise, PromiseId, PromiseJob};
-use property::static_names::StaticNameAtomCacheHandle;
+use property::static_names::{CallValueCache, StaticNameAtomCacheHandle};
 use property::well_known::{DescriptorPropertyKeys, WellKnownPropertyKeys};
 
 const INITIAL_RANDOM_STATE: u64 = 0x9e37_79b9_7f4a_7c15;
@@ -75,6 +75,9 @@ pub struct Context {
     native_call_cache_hits: usize,
     native_call_cache_misses: usize,
     native_call_cache_fallbacks: usize,
+    call_value_cache_hits: usize,
+    call_value_cache_misses: usize,
+    call_value_cache_fallbacks: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -204,6 +207,9 @@ impl Context {
             native_call_cache_hits: 0,
             native_call_cache_misses: 0,
             native_call_cache_fallbacks: 0,
+            call_value_cache_hits: 0,
+            call_value_cache_misses: 0,
+            call_value_cache_fallbacks: 0,
         }
     }
 
@@ -227,6 +233,7 @@ impl Context {
         let static_name_cache = StaticNameAtomCacheHandle::new(
             script.usage().static_name_count(),
             script.usage().static_property_access_count(),
+            script.usage().static_call_site_count(),
         );
         let binding_cache = StaticBindingCacheHandle::new(script.binding_layout().operand_count());
         self.with_static_name_caches(
@@ -259,6 +266,59 @@ impl Context {
             }
             Value::HostFunction(id) => self.eval_host_function(id, RuntimeCallArgs::values(args)),
             value => Err(Error::runtime(format!("'{value}' is not callable"))),
+        }
+    }
+
+    pub(crate) fn eval_cached_call_value(
+        &mut self,
+        site: BytecodeCallSite,
+        callee: Value,
+        args: &[Value],
+        this_value: Value,
+    ) -> Result<Value> {
+        let site = site.site();
+        if let Some(cache) = self.cached_call_value(site)? {
+            if cache.matches_callee(&callee) {
+                self.record_call_value_cache_hit();
+                return self.eval_call_value_cache(cache, args, this_value);
+            }
+            self.record_call_value_cache_fallback();
+        } else {
+            self.record_call_value_cache_miss();
+        }
+
+        let Some(cache) = self.cacheable_call_value(&callee)? else {
+            return self.eval_call_value(callee, args, this_value);
+        };
+        self.remember_call_value(site, cache)?;
+        self.eval_call_value_cache(cache, args, this_value)
+    }
+
+    fn cacheable_call_value(&self, callee: &Value) -> Result<Option<CallValueCache>> {
+        let native_kind = if let Value::NativeFunction(id) = callee {
+            Some(self.native_function(*id)?.kind())
+        } else {
+            None
+        };
+        Ok(CallValueCache::from_callee(callee, native_kind))
+    }
+
+    fn eval_call_value_cache(
+        &mut self,
+        cache: CallValueCache,
+        args: &[Value],
+        this_value: Value,
+    ) -> Result<Value> {
+        match cache {
+            CallValueCache::Function(id) => {
+                self.eval_function_with_this(id, RuntimeCallArgs::values(args), this_value)
+            }
+            CallValueCache::NativeFunction { kind, .. } => {
+                self.eval_native_function_kind(kind, RuntimeCallArgs::values(args), &this_value)
+            }
+            CallValueCache::HostFunction(id) => {
+                self.eval_host_function(id, RuntimeCallArgs::values(args))
+            }
         }
     }
 

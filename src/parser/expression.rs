@@ -139,8 +139,10 @@ impl Parser {
                 self.arguments()?
             };
             self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
+            let site = self.static_call_site()?;
             expr = Expr::Call {
                 callee: Box::new(expr),
+                site,
                 args,
             };
         }

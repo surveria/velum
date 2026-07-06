@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260706T225304Z.md`
-- Task: rsqjs-test-report-20260706T225304Z.md
-- Performance: 0.79x (40/63 >1.00x)
+- `rsqjs-test-report-20260706T230625Z.md`
+- Task: rsqjs-test-report-20260706T230625Z.md
+- Performance: 0.80x (40/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 11647 passed / 90931 failed (11.35%)
 
@@ -212,4 +212,6 @@ Latest report:
 | `20260706T222432Z` `4369f79` Reorganize source module hierarchy | 0.78x (38/63 >1.00x) | - (0/63 >1.00x) | 11145 passed / 91433 failed (10.86%) |
 | `20260706T223254Z` `3b9ba0e` Add Promise and async-await execution support | 0.79x (39/63 >1.00x) | - (0/63 >1.00x) | 11617 passed / 90961 failed (11.33%) |
 | `20260706T224011Z` `e4e40a5` Add direct native constructor operands | 0.80x (41/63 >1.00x) | - (0/63 >1.00x) | 11617 passed / 90961 failed (11.33%) |
-| `20260706T225304Z` rsqjs-test-report-20260706T225304Z.md | 0.79x (40/63 >1.00x) | - (0/63 >1.00x) | 11647 passed / 90931 failed (11.35%) |
+| `20260706T225304Z` `3ec3a16` Support async arrow functions | 0.79x (40/63 >1.00x) | - (0/63 >1.00x) | 11647 passed / 90931 failed (11.35%) |
+| `20260706T225826Z` `bff5e53` CallValue inline-cache tranche: Cache arbitrary bytecode value-call dispatch after direct binding/property/native operands so returned JS, native, and host functions no longer re-run generic callable classification on warm call sites. | 0.79x (39/63 >1.00x) | - (0/63 >1.00x) | 11617 passed / 90961 failed (11.33%) |
+| `20260706T230625Z` rsqjs-test-report-20260706T230625Z.md | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 11647 passed / 90931 failed (11.35%) |
