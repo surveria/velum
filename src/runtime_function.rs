@@ -71,7 +71,7 @@ impl Context {
         } else {
             Value::Undefined
         };
-        let function_name = self.function_name(name)?;
+        let function_name = self.function_name_value(name)?;
         let arity = super::FunctionArity::new(params.len());
         let prototype_default = constructable.then(|| {
             DataPropertyDescriptor::new(
@@ -81,11 +81,8 @@ impl Context {
                 PropertyConfigurable::No,
             )
         });
-        let intrinsic_defaults = FunctionIntrinsicDefaults::new(
-            arity.value()?,
-            function_name.value(&self.atoms)?,
-            prototype_default,
-        );
+        let intrinsic_defaults =
+            FunctionIntrinsicDefaults::new(arity.value()?, function_name, prototype_default);
         let param_atoms = self.function_param_atoms(params)?;
         let static_name_atom_cache = self.current_static_name_atom_cache();
         let static_binding_cache = self.current_static_binding_cache();
@@ -329,6 +326,7 @@ impl Context {
             | Value::Bool(_)
             | Value::Number(_)
             | Value::String(_)
+            | Value::HeapString(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
             | Value::HostFunction(_)
@@ -505,13 +503,11 @@ impl Context {
         Ok(atoms.into())
     }
 
-    fn function_name(&mut self, name: Option<&StaticName>) -> Result<super::FunctionName> {
+    fn function_name_value(&mut self, name: Option<&StaticName>) -> Result<Value> {
         let Some(name) = name.filter(|name| !name.as_str().is_empty()) else {
-            return Ok(super::FunctionName::anonymous());
+            return self.heap_string_value("");
         };
-        Ok(super::FunctionName::new(
-            self.intern_static_name_atom(name)?,
-        ))
+        self.heap_string_value(name.as_str())
     }
 
     fn function_scope(

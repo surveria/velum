@@ -28,6 +28,7 @@ mod runtime_switch;
 mod runtime_try;
 mod runtime_unary;
 mod runtime_update;
+mod string_heap;
 mod value;
 
 pub use crate::compiled_script::{CompiledScript, CompiledScriptUsage};
@@ -37,4 +38,5 @@ pub use crate::host::{FromJsValue, HostCall, IntoJsValue};
 pub use crate::runtime::Context;
 pub use crate::runtime_engine::Runtime;
 pub use crate::runtime_limits::RuntimeLimits;
+pub use crate::string_heap::{JsString, StringId};
 pub use crate::value::Value;

@@ -21,14 +21,19 @@ impl Context {
         let constructor = Value::NativeFunction(id);
         let prototype_id = self.string_prototype_id_with_constructor(constructor.clone())?;
         let prototype = Value::Object(prototype_id);
-        self.native_functions
-            .push(NativeFunction::new(NativeFunctionKind::String, prototype));
+        let name = self.native_function_name_value(NativeFunctionKind::String)?;
+        self.native_functions.push(NativeFunction::new(
+            NativeFunctionKind::String,
+            prototype,
+            name,
+        ));
         self.insert_global_builtin(STRING_NAME, constructor.clone())?;
         Ok(constructor)
     }
 
     pub(super) fn eval_string_constructor(&mut self, args: &[Expr]) -> Result<Value> {
-        self.eval_string_argument(args).map(Value::String)
+        let value = self.eval_string_argument(args)?;
+        self.heap_string_value(&value)
     }
 
     pub(super) fn construct_string_object(&mut self, args: &[Expr]) -> Result<Value> {
@@ -39,7 +44,8 @@ impl Context {
         for (index, ch) in value.chars().enumerate() {
             let name = index.to_string();
             let key = self.intern_property_key(&name)?;
-            character_properties.push((key, name, Value::String(ch.to_string())));
+            let value = self.heap_string_value(&ch.to_string())?;
+            character_properties.push((key, name, value));
         }
         self.objects.create_string_object(
             &value,

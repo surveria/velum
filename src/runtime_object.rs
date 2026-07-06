@@ -453,6 +453,7 @@ impl Object {
             | Value::Bool(_)
             | Value::Number(_)
             | Value::String(_)
+            | Value::HeapString(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
             | Value::HostFunction(_)

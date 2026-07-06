@@ -57,11 +57,13 @@ impl Context {
                 name,
                 kind: DeclKind::Var,
             } => self.eval_for_in_assignment_loop(keys, body, |context, key| {
-                context.assign_static(name, Value::String(key))
+                let value = context.heap_string_value(&key)?;
+                context.assign_static(name, value)
             }),
             ForInTarget::Assignment(target) => {
                 self.eval_for_in_assignment_loop(keys, body, |context, key| {
-                    context.assign_for_in_target(target, Value::String(key))
+                    let value = context.heap_string_value(&key)?;
+                    context.assign_for_in_target(target, value)
                 })
             }
         }
@@ -83,7 +85,7 @@ impl Context {
         let cleanup_scope = !matches!(body, Stmt::Block(_));
         for key in keys {
             self.step()?;
-            let value = self.checked_value(Value::String(key))?;
+            let value = self.heap_string_value(&key)?;
             let inserted = scope.insert_or_replace_at_optional_slot(
                 atom,
                 BindingCell::new(value, mutable, kind),

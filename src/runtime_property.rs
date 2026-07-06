@@ -12,6 +12,7 @@ const STRING_LENGTH_PROPERTY: &str = "length";
 pub fn property_key(value: &Value) -> String {
     match value {
         Value::String(value) => value.clone(),
+        Value::HeapString(value) => value.as_str().to_owned(),
         _ => value.to_string(),
     }
 }
@@ -56,6 +57,7 @@ pub fn get_property(
         Value::Error(error) => Ok(error_property(error, property.name())),
         Value::Object(id) => objects.get(*id, property),
         Value::String(value) => string_property(value, property.name()),
+        Value::HeapString(value) => string_property(value.as_str(), property.name()),
         value => Err(Error::runtime(format!(
             "member access '{}' is not supported for {}",
             property.name(),
@@ -76,6 +78,7 @@ pub fn has_property(
         )),
         Value::Object(id) => objects.has(*id, property),
         Value::String(value) => string_has_property(value, property.name()),
+        Value::HeapString(value) => string_has_property(value.as_str(), property.name()),
         value => Err(Error::runtime(format!(
             "operator 'in' is not supported for {}",
             value.type_name()
@@ -96,6 +99,7 @@ pub fn enumerable_property_keys(
             ERROR_MESSAGE_PROPERTY.to_owned(),
         ]),
         Value::String(value) => string_enumerable_keys(value),
+        Value::HeapString(value) => string_enumerable_keys(value.as_str()),
         Value::Bool(_)
         | Value::Number(_)
         | Value::Function(_)
@@ -133,6 +137,7 @@ pub fn delete_property(
         | Value::Bool(_)
         | Value::Number(_)
         | Value::String(_)
+        | Value::HeapString(_)
         | Value::Function(_)
         | Value::NativeFunction(_)
         | Value::HostFunction(_) => Ok(true),

@@ -44,16 +44,16 @@ impl Context {
         }
         if let Expr::Identifier(name) = expr {
             if let Some(binding) = self.get_binding_static(name)? {
-                return Ok(Value::String(binding.value().type_name().to_owned()));
+                return self.heap_string_value(binding.value().type_name());
             }
             if let Some(value) = self.builtin_value(name.name())? {
-                return Ok(Value::String(value.type_name().to_owned()));
+                return self.heap_string_value(value.type_name());
             }
-            return Ok(Value::String(Value::Undefined.type_name().to_owned()));
+            return self.heap_string_value(Value::Undefined.type_name());
         }
 
         let value = self.eval_expr(expr)?;
-        Ok(Value::String(value.type_name().to_owned()))
+        self.heap_string_value(value.type_name())
     }
 
     fn eval_delete(&mut self, expr: &Expr) -> Result<Value> {

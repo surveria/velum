@@ -3,6 +3,7 @@ use crate::{
     error::Result,
     runtime::Context,
     runtime_object::{OBJECT_CONSTRUCTOR_PROPERTY, PropertyKey, PropertyLookup},
+    string_heap::JsString,
     value::{ObjectId, Value},
 };
 
@@ -34,6 +35,16 @@ impl Context {
     #[must_use]
     pub const fn atom_count(&self) -> usize {
         self.atoms.len()
+    }
+
+    #[must_use]
+    pub const fn string_count(&self) -> usize {
+        self.strings.len()
+    }
+
+    #[must_use]
+    pub const fn string_bytes(&self) -> usize {
+        self.strings.bytes()
     }
 
     pub(crate) const fn global_binding_count(&self) -> usize {
@@ -77,6 +88,15 @@ impl Context {
     pub(crate) fn intern_atom(&mut self, name: &str) -> Result<AtomId> {
         self.check_string_len(name)?;
         self.atoms.intern(name)
+    }
+
+    pub(crate) fn intern_heap_string(&mut self, text: &str) -> Result<JsString> {
+        self.check_string_len(text)?;
+        self.strings.intern(text)
+    }
+
+    pub(crate) fn heap_string_value(&mut self, text: &str) -> Result<Value> {
+        self.intern_heap_string(text).map(Value::HeapString)
     }
 
     pub(crate) fn atom(&self, name: &str) -> Option<AtomId> {

@@ -66,8 +66,7 @@ impl Context {
         let Some(text) = self.stringify_json_value(value, &mut stack)? else {
             return Ok(Value::Undefined);
         };
-        self.check_string_len(&text)?;
-        Ok(Value::String(text))
+        self.heap_string_value(&text)
     }
 
     fn define_json_method(
@@ -76,7 +75,7 @@ impl Context {
         name: &str,
         kind: NativeFunctionKind,
     ) -> Result<()> {
-        let function = self.create_native_function(kind, Value::Undefined);
+        let function = self.create_native_function(kind, Value::Undefined)?;
         self.define_non_enumerable_object_property(object, name, function)
     }
 
@@ -96,10 +95,7 @@ impl Context {
                 .as_f64()
                 .map(Value::Number)
                 .ok_or_else(|| Error::runtime(JSON_UNSUPPORTED_NUMBER)),
-            JsonValue::String(value) => {
-                self.check_string_len(&value)?;
-                Ok(Value::String(value))
-            }
+            JsonValue::String(value) => self.heap_string_value(&value),
             JsonValue::Array(values) => self.array_from_json(values),
             JsonValue::Object(object) => self.object_from_json(object),
         }
@@ -152,6 +148,7 @@ impl Context {
             Value::Bool(value) => Ok(Some(Self::stringify_json_bool(*value))),
             Value::Number(value) => Ok(Some(Self::stringify_json_number(*value))),
             Value::String(value) => self.stringify_json_string(value).map(Some),
+            Value::HeapString(value) => self.stringify_json_string(value.as_str()).map(Some),
             Value::Object(id) => self.stringify_json_object(*id, stack).map(Some),
             Value::Error(_) => Ok(Some(self.stringify_empty_json_object()?)),
         }

@@ -323,7 +323,7 @@ impl Context {
         name: &str,
         kind: NativeFunctionKind,
     ) -> Result<()> {
-        let function = self.create_native_function(kind, Value::Undefined);
+        let function = self.create_native_function(kind, Value::Undefined)?;
         self.define_non_enumerable_object_property(object, name, function)
     }
 

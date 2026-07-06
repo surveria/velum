@@ -23,6 +23,7 @@ use crate::runtime_object::{
 };
 use crate::runtime_property::enumerable_property_keys;
 use crate::runtime_scope::{BindingCell, BindingScope};
+use crate::string_heap::StringHeap;
 use crate::value::{ErrorName, Value};
 
 #[path = "runtime_declaration.rs"]
@@ -45,6 +46,8 @@ mod runtime_native;
 mod runtime_static_bindings;
 #[path = "runtime_static_names.rs"]
 mod runtime_static_names;
+#[path = "runtime_values.rs"]
+mod runtime_values;
 #[path = "runtime_well_known.rs"]
 mod runtime_well_known;
 
@@ -61,6 +64,7 @@ const TEST262_ERROR_NAME: &str = "Test262Error";
 pub struct Context {
     limits: RuntimeLimits,
     atoms: AtomTable,
+    strings: StringHeap,
     well_known_properties: WellKnownPropertyKeys,
     descriptor_property_keys: Option<DescriptorPropertyKeys>,
     static_name_atom_caches: Vec<StaticNameAtomCacheHandle>,
@@ -161,26 +165,6 @@ impl FunctionCaptures {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct FunctionName(Option<AtomId>);
-
-impl FunctionName {
-    const fn anonymous() -> Self {
-        Self(None)
-    }
-
-    const fn new(atom: AtomId) -> Self {
-        Self(Some(atom))
-    }
-
-    fn value(self, atoms: &AtomTable) -> Result<Value> {
-        let Some(atom) = self.0 else {
-            return Ok(Value::String(String::new()));
-        };
-        Ok(Value::String(atoms.name(atom)?.to_owned()))
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
 struct FunctionArity(usize);
 
 impl FunctionArity {
@@ -199,6 +183,7 @@ impl Context {
         Self {
             limits,
             atoms: AtomTable::new(),
+            strings: StringHeap::new(),
             well_known_properties: WellKnownPropertyKeys::new(),
             descriptor_property_keys: None,
             static_name_atom_caches: Vec::new(),
@@ -772,62 +757,5 @@ impl Context {
 
     pub(crate) fn pop_lexical_scope(&mut self) -> Option<BindingScope> {
         self.locals.pop()
-    }
-
-    pub(crate) fn add(&self, left: &Value, right: &Value) -> Result<Value> {
-        match (left, right) {
-            (Value::Number(left), Value::Number(right)) => Ok(Value::Number(left + right)),
-            (Value::String(_), _) | (_, Value::String(_)) => {
-                let value = left.display_for_concat() + &right.display_for_concat();
-                self.check_string_len(&value)?;
-                Ok(Value::String(value))
-            }
-            _ => Err(Error::runtime("operator '+' expects numbers or strings")),
-        }
-    }
-
-    pub(crate) fn checked_value(&self, value: Value) -> Result<Value> {
-        match &value {
-            Value::String(text) => self.check_string_len(text)?,
-            Value::Error(error) => self.check_string_len(error.message())?,
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Object(_) => {}
-        }
-        Ok(value)
-    }
-
-    pub(crate) fn current_this(&self) -> Result<Value> {
-        self.checked_value(self.this_values.last().cloned().unwrap_or(Value::Undefined))
-    }
-
-    pub(crate) fn check_string_len(&self, text: &str) -> Result<()> {
-        if text.len() > self.limits.max_string_len {
-            return Err(Error::limit(format!(
-                "string length {} exceeded {}",
-                text.len(),
-                self.limits.max_string_len
-            )));
-        }
-        Ok(())
-    }
-
-    pub(crate) fn step(&mut self) -> Result<()> {
-        self.runtime_steps = self
-            .runtime_steps
-            .checked_add(1)
-            .ok_or_else(|| Error::limit("runtime steps overflowed"))?;
-        if self.runtime_steps > self.limits.max_runtime_steps {
-            return Err(Error::limit(format!(
-                "runtime steps exceeded {}",
-                self.limits.max_runtime_steps
-            )));
-        }
-        Ok(())
     }
 }

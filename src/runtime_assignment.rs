@@ -107,7 +107,7 @@ impl Context {
         Ok(value)
     }
 
-    fn eval_compound_value(&self, op: BinaryOp, left: &Value, right: &Value) -> Result<Value> {
+    fn eval_compound_value(&mut self, op: BinaryOp, left: &Value, right: &Value) -> Result<Value> {
         let value = match op {
             BinaryOp::Add => self.add(left, right)?,
             BinaryOp::Sub => numeric_binary(left, right, "-=", |left, right| left - right)?,

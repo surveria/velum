@@ -32,8 +32,12 @@ impl Context {
         let id = NativeFunctionId::new(self.native_functions.len());
         let constructor = Value::NativeFunction(id);
         let prototype = self.object_prototype_id_with_constructor(constructor.clone())?;
-        self.native_functions
-            .push(NativeFunction::new(NativeFunctionKind::Object, prototype));
+        let name = self.native_function_name_value(NativeFunctionKind::Object)?;
+        self.native_functions.push(NativeFunction::new(
+            NativeFunctionKind::Object,
+            prototype,
+            name,
+        ));
         self.install_object_static_methods(id)?;
         self.insert_global_builtin(OBJECT_NAME, constructor.clone())?;
         Ok(constructor)
@@ -55,7 +59,8 @@ impl Context {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
-            | Value::String(_) => self.create_object_from_constructor(),
+            | Value::String(_)
+            | Value::HeapString(_) => self.create_object_from_constructor(),
         }
     }
 
@@ -85,6 +90,7 @@ impl Context {
             | Value::Bool(_)
             | Value::Number(_)
             | Value::String(_)
+            | Value::HeapString(_)
             | Value::HostFunction(_)
             | Value::Error(_) => {
                 return Err(Error::runtime(
@@ -115,6 +121,7 @@ impl Context {
             | Value::Bool(_)
             | Value::Number(_)
             | Value::String(_)
+            | Value::HeapString(_)
             | Value::HostFunction(_)
             | Value::Error(_) => {
                 return Err(Error::runtime(
@@ -142,7 +149,10 @@ impl Context {
         let keys = self.own_enumerable_keys(&target)?;
         self.array_constructor_value()?;
         let prototype = self.objects.existing_array_prototype_id()?;
-        let elements = keys.into_iter().map(Value::String).collect();
+        let mut elements = Vec::with_capacity(keys.len());
+        for key in keys {
+            elements.push(self.heap_string_value(&key)?);
+        }
         self.objects.create_array(
             elements,
             prototype,
@@ -180,7 +190,7 @@ impl Context {
         name: &str,
         kind: NativeFunctionKind,
     ) -> Result<()> {
-        let function = self.create_native_function(kind, Value::Undefined);
+        let function = self.create_native_function(kind, Value::Undefined)?;
         let key = self.intern_property_key(name)?;
         self.native_function_mut(constructor)?
             .properties_mut()
@@ -359,7 +369,7 @@ impl Context {
             Value::Object(id) => self.objects.has_own(*id, self.property_lookup(property)),
             Value::Function(id) => self.has_function_property(*id, property),
             Value::NativeFunction(id) => self.has_native_function_property(*id, property),
-            Value::Error(_) | Value::String(_) => {
+            Value::Error(_) | Value::String(_) | Value::HeapString(_) => {
                 has_property(&self.objects, target, self.property_lookup(property))
             }
             Value::Bool(_) | Value::Number(_) => Ok(false),
@@ -374,7 +384,9 @@ impl Context {
             Value::Object(id) => self.objects.own_keys(*id, &self.atoms),
             Value::Function(id) => self.function_enumerable_keys(*id),
             Value::NativeFunction(id) => self.native_function_enumerable_keys(*id),
-            Value::Error(_) | Value::String(_) => self.enumerable_keys(target),
+            Value::Error(_) | Value::String(_) | Value::HeapString(_) => {
+                self.enumerable_keys(target)
+            }
             Value::Bool(_) | Value::Number(_) => Ok(Vec::new()),
             Value::Undefined | Value::Null | Value::HostFunction(_) => Err(Error::runtime(
                 "Object.keys target cannot be converted to an object",
