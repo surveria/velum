@@ -61,6 +61,42 @@ impl ArrayStorage {
         }
     }
 
+    pub(super) fn holey_properties_for_len(&self, len: usize) -> Option<&[Option<ObjectProperty>]> {
+        if self.has_sparse_keys() {
+            return None;
+        }
+        match &self.elements {
+            ArrayElements::Holey(elements) if elements.len() == len => Some(elements),
+            ArrayElements::Packed(_) | ArrayElements::Holey(_) => None,
+        }
+    }
+
+    pub(super) fn has_dense_property_in_range(&self, start: usize, end: usize) -> bool {
+        if end <= start {
+            return false;
+        }
+        match &self.elements {
+            ArrayElements::Packed(elements) => start < end.min(elements.len()),
+            ArrayElements::Holey(elements) => {
+                let count = end.saturating_sub(start);
+                elements.iter().skip(start).take(count).any(Option::is_some)
+            }
+        }
+    }
+
+    pub(super) fn has_sparse_key_in_range(&self, start: usize, end: usize) -> Result<bool> {
+        if end <= start {
+            return Ok(false);
+        }
+        for index in self.sparse_keys.keys() {
+            let position = index.position()?;
+            if position >= start && position < end {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     pub(super) fn reverse_packed_for_len_if_default(&mut self, len: usize) -> bool {
         if self.has_sparse_keys() {
             return false;
