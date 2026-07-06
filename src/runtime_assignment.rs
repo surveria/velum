@@ -1,5 +1,5 @@
 use crate::{
-    ast::{BinaryOp, Expr},
+    ast::{BinaryOp, Expr, StaticName},
     error::{Error, Result},
     runtime::Context,
     runtime_numeric::{
@@ -13,12 +13,12 @@ impl Context {
     pub(crate) fn eval_property_assignment(
         &mut self,
         object: &Expr,
-        property: &str,
+        property: &StaticName,
         expr: &Expr,
     ) -> Result<Value> {
         let object = self.eval_expr(object)?;
         let value = self.eval_expr(expr)?;
-        self.set_property_value(&object, property, value.clone())?;
+        self.set_static_property_value(&object, property, value.clone())?;
         Ok(value)
     }
 
@@ -50,7 +50,7 @@ impl Context {
             Expr::ComputedMember { object, property } => {
                 let object = self.eval_expr(object)?;
                 let property = self.eval_property_key(property)?;
-                self.eval_property_compound_assignment(op, &object, &property, expr)
+                self.eval_dynamic_property_compound_assignment(op, &object, &property, expr)
             }
             _ => Err(Error::runtime("invalid compound assignment target")),
         }
@@ -59,21 +59,35 @@ impl Context {
     fn eval_binding_compound_assignment(
         &mut self,
         op: BinaryOp,
-        name: &str,
+        name: &StaticName,
         expr: &Expr,
     ) -> Result<Value> {
         self.materialize_builtin_binding(name)?;
         let old_value = self
-            .get_binding(name)
+            .get_binding_static(name)?
             .map(|binding| binding.value())
             .ok_or_else(|| Error::runtime(format!("ReferenceError: '{name}' is not defined")))?;
         let right = self.eval_expr(expr)?;
         let value = self.eval_compound_value(op, &old_value, &right)?;
-        self.assign(name, value.clone())?;
+        self.assign_static(name, value.clone())?;
         Ok(value)
     }
 
     fn eval_property_compound_assignment(
+        &mut self,
+        op: BinaryOp,
+        object: &Value,
+        property: &StaticName,
+        expr: &Expr,
+    ) -> Result<Value> {
+        let old_value = self.get_static_property_value(object, property)?;
+        let right = self.eval_expr(expr)?;
+        let value = self.eval_compound_value(op, &old_value, &right)?;
+        self.set_static_property_value(object, property, value.clone())?;
+        Ok(value)
+    }
+
+    fn eval_dynamic_property_compound_assignment(
         &mut self,
         op: BinaryOp,
         object: &Value,

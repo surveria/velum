@@ -22,7 +22,7 @@ use super::runtime_function_properties::{
 impl Context {
     pub(crate) fn create_function(
         &mut self,
-        name: Option<&str>,
+        name: Option<&StaticName>,
         params: &Rc<[StaticName]>,
         body: &Rc<[Stmt]>,
     ) -> Result<Value> {
@@ -31,7 +31,7 @@ impl Context {
 
     pub(crate) fn create_method_function(
         &mut self,
-        name: &str,
+        name: &StaticName,
         params: &Rc<[StaticName]>,
         body: &Rc<[Stmt]>,
     ) -> Result<Value> {
@@ -40,7 +40,7 @@ impl Context {
 
     fn create_function_with_properties(
         &mut self,
-        name: Option<&str>,
+        name: Option<&StaticName>,
         params: &Rc<[StaticName]>,
         body: &Rc<[Stmt]>,
         constructable: bool,
@@ -67,12 +67,14 @@ impl Context {
         };
         let function_name = self.function_name(name)?;
         let param_atoms = self.function_param_atoms(params)?;
+        let static_name_atom_cache = self.current_static_name_atom_cache();
         self.functions.push(super::Function {
             name: function_name,
             arity: super::FunctionArity::new(params.len()),
             param_atoms,
             body: Rc::clone(body),
             captures: self.locals.clone(),
+            static_name_atom_cache,
             properties: FunctionProperties::new(prototype),
             constructable,
         });
@@ -109,12 +111,13 @@ impl Context {
         args: &[Expr],
         this_value: Value,
     ) -> Result<Completion> {
-        let (param_atoms, body, captures) = {
+        let (param_atoms, body, captures, static_name_atom_cache) = {
             let function = self.function(id)?;
             (
                 Rc::clone(&function.param_atoms),
                 Rc::clone(&function.body),
                 function.captures.clone(),
+                function.static_name_atom_cache.clone(),
             )
         };
         let args = self.eval_args(args)?;
@@ -128,9 +131,7 @@ impl Context {
         };
         self.locals.push(scope);
         self.this_values.push(this_value);
-        let result = self
-            .hoist_var_declarations(&body)
-            .and_then(|()| self.eval_block(&body));
+        let result = self.eval_function_body(static_name_atom_cache, &body);
         let removed_this = self.this_values.pop();
         let removed = self.locals.pop();
         self.locals = caller_locals;
@@ -430,16 +431,18 @@ impl Context {
     fn function_param_atoms(&mut self, params: &[StaticName]) -> Result<Rc<[AtomId]>> {
         let mut atoms = Vec::with_capacity(params.len());
         for param in params {
-            atoms.push(self.intern_atom(param)?);
+            atoms.push(self.intern_static_name_atom(param)?);
         }
         Ok(atoms.into())
     }
 
-    fn function_name(&mut self, name: Option<&str>) -> Result<super::FunctionName> {
-        let Some(name) = name.filter(|name| !name.is_empty()) else {
+    fn function_name(&mut self, name: Option<&StaticName>) -> Result<super::FunctionName> {
+        let Some(name) = name.filter(|name| !name.as_str().is_empty()) else {
             return Ok(super::FunctionName::anonymous());
         };
-        Ok(super::FunctionName::new(self.intern_atom(name)?))
+        Ok(super::FunctionName::new(
+            self.intern_static_name_atom(name)?,
+        ))
     }
 
     fn function_scope(&self, params: &[AtomId], args: Vec<Value>) -> Result<BindingScope> {
@@ -454,6 +457,23 @@ impl Context {
             scope.insert(*atom, BindingCell::new(value, true, DeclKind::Var));
         }
         Ok(scope)
+    }
+
+    fn eval_function_body(
+        &mut self,
+        static_name_atom_cache: Option<super::StaticNameAtomCacheHandle>,
+        body: &[Stmt],
+    ) -> Result<Completion> {
+        let Some(static_name_atom_cache) = static_name_atom_cache else {
+            return self
+                .hoist_var_declarations(body)
+                .and_then(|()| self.eval_block(body));
+        };
+        self.with_static_name_atom_cache(static_name_atom_cache, |context| {
+            context
+                .hoist_var_declarations(body)
+                .and_then(|()| context.eval_block(body))
+        })
     }
 }
 

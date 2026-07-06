@@ -1,5 +1,5 @@
 use crate::{
-    ast::{DeclKind, Expr},
+    ast::{DeclKind, Expr, StaticName},
     error::{Error, Result},
     runtime::Context,
     runtime_object::{ObjectPropertyInit, PropertyEnumerable},
@@ -432,8 +432,11 @@ impl Context {
         self.builtin_value(name).map(|value| value.is_some())
     }
 
-    pub(crate) fn constructor_binding(&mut self, name: &str) -> Result<Option<Value>> {
-        if let Some(binding) = self.get_binding(name) {
+    pub(crate) fn constructor_binding_static(
+        &mut self,
+        name: &StaticName,
+    ) -> Result<Option<Value>> {
+        if let Some(binding) = self.get_binding_static(name)? {
             return Ok(Some(binding.value()));
         }
         self.builtin_value(name)

@@ -1,5 +1,5 @@
 use crate::{
-    ast::{DeclKind, Expr, ForInTarget, Stmt},
+    ast::{DeclKind, Expr, ForInTarget, StaticName, Stmt},
     error::{Error, Result},
     runtime::Context,
     runtime_completion::Completion,
@@ -57,7 +57,7 @@ impl Context {
                 name,
                 kind: DeclKind::Var,
             } => self.eval_for_in_assignment_loop(keys, body, |context, key| {
-                context.assign(name, Value::String(key))
+                context.assign_static(name, Value::String(key))
             }),
             ForInTarget::Assignment(target) => {
                 self.eval_for_in_assignment_loop(keys, body, |context, key| {
@@ -69,14 +69,14 @@ impl Context {
 
     fn eval_for_in_lexical_binding(
         &mut self,
-        name: &str,
+        name: &StaticName,
         kind: DeclKind,
         keys: Vec<String>,
         body: &Stmt,
     ) -> Result<Completion> {
         let mut last = Value::Undefined;
         self.ensure_extra_binding_capacity(0)?;
-        let atom = self.intern_atom(name)?;
+        let atom = self.intern_static_name_atom(name)?;
         let mutable = kind != DeclKind::Const;
         let mut scope = BindingScope::new();
         let cleanup_scope = !matches!(body, Stmt::Block(_));
@@ -121,10 +121,10 @@ impl Context {
 
     fn assign_for_in_target(&mut self, target: &Expr, value: Value) -> Result<()> {
         match target {
-            Expr::Identifier(name) => self.assign(name, value),
+            Expr::Identifier(name) => self.assign_static(name, value),
             Expr::Member { object, property } => {
                 let object = self.eval_expr(object)?;
-                self.set_property_value(&object, property, value)
+                self.set_static_property_value(&object, property, value)
             }
             Expr::ComputedMember { object, property } => {
                 let object = self.eval_expr(object)?;
