@@ -39,6 +39,11 @@ impl LocalSlot {
             .map_err(|_| Error::limit("local binding slot exceeded supported range"))?;
         Ok(Self(slot))
     }
+
+    pub fn index(self) -> Result<usize> {
+        usize::try_from(self.0)
+            .map_err(|_| Error::limit("local binding slot exceeded addressable range"))
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]

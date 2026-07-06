@@ -56,7 +56,7 @@ impl BindingLayout {
         binding: StaticBindingId,
         mut visit: impl FnMut(StaticBindingId) -> Result<()>,
     ) -> Result<()> {
-        let Some(target) = self.operand_id(binding)? else {
+        let Some(target) = self.operand_for_binding_id(binding)? else {
             return Ok(());
         };
         for (index, operand) in self.operands.iter().enumerate() {
@@ -68,7 +68,10 @@ impl BindingLayout {
         Ok(())
     }
 
-    fn operand_id(&self, binding: StaticBindingId) -> Result<Option<BindingOperand>> {
+    pub fn operand_for_binding_id(
+        &self,
+        binding: StaticBindingId,
+    ) -> Result<Option<BindingOperand>> {
         let operand = self
             .operands
             .get(binding.index()?)

@@ -34,6 +34,18 @@ for (let key in record) {
 total;
 ";
 
+const PARAM_FRAME_LAYOUT_SOURCE: &str = r"
+var run = function run(zeta, alpha, middle) {
+    let total = zeta + alpha * 10 + middle * 100;
+    {
+        let alpha = 7;
+        total = total + alpha;
+    }
+    return total + zeta + middle;
+};
+run(1, 2, 3) + run(4, 5, 6);
+";
+
 #[test]
 fn compiled_layout_counts_global_local_and_upvalue_slots() -> TestResult {
     let engine = Engine::new();
@@ -96,6 +108,21 @@ fn compiled_layout_cache_preserves_for_in_lexical_bindings() -> TestResult {
 
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(3.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atom_count)
+}
+
+#[test]
+fn compiled_layout_drives_function_parameter_frame_slots() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(PARAM_FRAME_LAYOUT_SOURCE)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(1003.0))?;
+    let atom_count = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(1003.0))?;
     ensure_usize(vm.resource_usage().atom_count, atom_count)
 }
 
