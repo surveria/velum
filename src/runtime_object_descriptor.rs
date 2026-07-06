@@ -1,6 +1,8 @@
 use crate::value::Value;
 
-use super::{ARRAY_LENGTH_PROPERTY, ArrayIndex, Object, ObjectHeap, PropertyKey, PropertyLookup};
+use super::{
+    ARRAY_LENGTH_PROPERTY, ArrayIndex, Object, ObjectHeap, PropertyKey, PropertyLookup, ShapeTable,
+};
 use crate::error::Result;
 use crate::value::ObjectId;
 
@@ -210,8 +212,8 @@ impl ObjectHeap {
         update: DataPropertyUpdate,
         max_properties: usize,
     ) -> Result<()> {
-        let object = self.object_mut(id)?;
-        object.define_property(property, property_name, update, max_properties)
+        let (object, shapes) = self.object_mut_with_shapes(id)?;
+        object.define_property(property, property_name, update, shapes, max_properties)
     }
 
     pub fn has_own(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {
@@ -250,15 +252,16 @@ impl Object {
         property: PropertyKey,
         property_name: &str,
         update: DataPropertyUpdate,
+        shapes: &mut ShapeTable,
         max_properties: usize,
     ) -> Result<()> {
         let index = ArrayIndex::parse(property_name);
         if self.array_length.is_some()
             && let Some(index) = index
         {
-            return self.define_array_property(index, property, update, max_properties);
+            return self.define_array_property(index, property, update, shapes, max_properties);
         }
-        self.define_named_property(property, update, max_properties)?;
+        self.define_named_property(property, update, shapes, max_properties)?;
         if let Some(index) = index {
             self.array_storage.insert_sparse_key(index, property);
         }
@@ -269,6 +272,7 @@ impl Object {
         &mut self,
         property: PropertyKey,
         update: DataPropertyUpdate,
+        shapes: &mut ShapeTable,
         max_properties: usize,
     ) -> Result<()> {
         let property_count = self.property_count();
@@ -285,7 +289,7 @@ impl Object {
             }
             let named_property = ObjectProperty::from_descriptor(update.complete_for_new());
             let enumerable_update = named_property.is_enumerable().then_some((false, true));
-            self.push_named_property(property, named_property)?;
+            self.push_named_property(shapes, property, named_property)?;
             enumerable_update
         };
         if let Some((was_enumerable, is_enumerable)) = enumerable_update {
@@ -299,11 +303,12 @@ impl Object {
         index: ArrayIndex,
         property: PropertyKey,
         update: DataPropertyUpdate,
+        shapes: &mut ShapeTable,
         max_properties: usize,
     ) -> Result<()> {
         if index.dense_position(max_properties)?.is_none() {
             self.array_storage.insert_sparse_key(index, property);
-            return self.define_named_property(property, update, max_properties);
+            return self.define_named_property(property, update, shapes, max_properties);
         }
 
         let has_existing = self.array_storage.dense_property(index).is_some();

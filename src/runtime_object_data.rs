@@ -17,7 +17,7 @@ impl ObjectHeap {
         object.prototype =
             Some(self.object_prototype_id(constructor_key, max_objects, max_properties)?);
         for (key, name, value) in properties {
-            object.set_ordinary(key, &name, value, max_properties)?;
+            object.set_ordinary(key, &name, value, &mut self.shapes, max_properties)?;
         }
         self.push_object(object, max_objects).map(Value::Object)
     }

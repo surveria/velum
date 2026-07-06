@@ -167,6 +167,7 @@ impl Vm {
             output_entries: self.context.output().len(),
             global_bindings: self.context.global_binding_count(),
             atom_count: self.context.atom_count(),
+            shape_count: self.context.shape_count(),
         }
     }
 
@@ -195,6 +196,7 @@ pub struct VmResourceUsage {
     pub output_entries: usize,
     pub global_bindings: usize,
     pub atom_count: usize,
+    pub shape_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

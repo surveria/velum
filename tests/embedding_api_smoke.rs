@@ -107,6 +107,7 @@ fn keeps_many_vms_isolated_after_one_vm_fails() -> TestResult {
                 output_entries: 1,
                 global_bindings: 1,
                 atom_count: report.resources.atom_count,
+                shape_count: report.resources.shape_count,
             },
         )?;
     }
@@ -159,6 +160,7 @@ fn reports_vm_resource_usage_at_teardown() -> TestResult {
             output_entries: 1,
             global_bindings: 1,
             atom_count: report.resources.atom_count,
+            shape_count: report.resources.shape_count,
         },
     )?;
 
@@ -222,6 +224,39 @@ fn tracks_atoms_for_object_property_keys_without_interning_missing_properties() 
         object_atoms,
         "mutated object property atoms",
     )
+}
+
+#[test]
+fn reuses_shape_layouts_for_matching_object_properties() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let initial_shapes = vm.resource_usage().shape_count;
+    ensure_positive(initial_shapes, "initial shape count")?;
+
+    let value = vm
+        .context()
+        .eval("let first = { alpha: 1, beta: 2 }; first.alpha + first.beta")?;
+    ensure_value(&value, &Value::Number(3.0))?;
+    let first_shapes = vm.resource_usage().shape_count;
+    ensure_greater_than(first_shapes, initial_shapes, "first object shapes")?;
+
+    let value = vm
+        .context()
+        .eval("let second = { alpha: 3, beta: 4 }; second.alpha + second.beta")?;
+    ensure_value(&value, &Value::Number(7.0))?;
+    ensure_usize(vm.resource_usage().shape_count, first_shapes)?;
+
+    let value = vm
+        .context()
+        .eval("first.gamma = 5; first.alpha + first.gamma")?;
+    ensure_value(&value, &Value::Number(6.0))?;
+    let extended_shapes = vm.resource_usage().shape_count;
+    ensure_greater_than(extended_shapes, first_shapes, "extended object shapes")?;
+
+    let value = vm.context().eval("delete first.gamma; first.gamma")?;
+    ensure_value(&value, &Value::Undefined)?;
+    ensure_usize(vm.resource_usage().shape_count, extended_shapes)
 }
 
 #[test]

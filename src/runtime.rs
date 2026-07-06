@@ -173,6 +173,10 @@ impl Context {
         self.globals.len()
     }
 
+    pub(crate) const fn shape_count(&self) -> usize {
+        self.objects.shape_count()
+    }
+
     pub(crate) fn intern_atom(&mut self, name: &str) -> Result<AtomId> {
         self.check_string_len(name)?;
         self.atoms.intern(name)
