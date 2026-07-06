@@ -62,6 +62,7 @@ impl Context {
             | BytecodeInstruction::PushString(_)
             | BytecodeInstruction::PushUndefined
             | BytecodeInstruction::LoadThis
+            | BytecodeInstruction::LoadNewTarget
             | BytecodeInstruction::LoadBinding(_)
             | BytecodeInstruction::StoreBinding(_)
             | BytecodeInstruction::DeclareBinding { .. }
@@ -150,6 +151,11 @@ impl Context {
             }
             BytecodeInstruction::LoadThis => {
                 state.stack.push(self.current_this()?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::LoadNewTarget => {
+                state.stack.push(self.current_new_target()?);
                 state.pc = next;
                 Ok(None)
             }

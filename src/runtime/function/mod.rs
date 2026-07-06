@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::{
     ast::{DeclKind, FunctionParam, StaticBindingId, StaticFunctionId, StaticName},
     binding_layout::{BindingLayout, BindingOperand},
-    bytecode::{BytecodeBlock, BytecodeFunction},
+    bytecode::{BytecodeBlock, BytecodeFunction, BytecodeNewTargetMode},
     error::{Error, Result},
     runtime::Context,
     runtime::binding::scope::{BindingCell, BindingScope},
@@ -26,21 +26,27 @@ mod upvalues;
 use crate::runtime::native::NativeFunctionKind;
 pub(super) use properties::{FunctionIntrinsicDefaults, FunctionProperties};
 
+use super::FunctionNewTarget;
 use properties::{FunctionPropertyKind, PROTOTYPE_CONSTRUCTOR_PROPERTY};
 
+pub(super) struct BytecodeFunctionInit<'a> {
+    pub(super) static_function_id: StaticFunctionId,
+    pub(super) name: Option<&'a StaticName>,
+    pub(super) params: &'a Rc<[FunctionParam]>,
+    pub(super) bytecode: &'a BytecodeFunction,
+    pub(super) constructable: bool,
+    pub(super) is_async: bool,
+    pub(super) new_target_mode: BytecodeNewTargetMode,
+}
+
 impl Context {
-    pub(crate) fn create_bytecode_function(
+    pub(super) fn create_bytecode_function(
         &mut self,
-        static_function_id: StaticFunctionId,
-        name: Option<&StaticName>,
-        params: &Rc<[FunctionParam]>,
-        bytecode: &BytecodeFunction,
-        constructable: bool,
-        is_async: bool,
+        init: &BytecodeFunctionInit<'_>,
     ) -> Result<Value> {
         let id = FunctionId::new(self.functions.len());
         let function = Value::Function(id);
-        let prototype = if constructable {
+        let prototype = if init.constructable {
             let constructor_key = self.intern_property_key(PROTOTYPE_CONSTRUCTOR_PROPERTY)?;
             let prototype_id = self.objects.create_with_prototype_property(
                 None,
@@ -58,9 +64,9 @@ impl Context {
         } else {
             Value::Undefined
         };
-        let function_name = self.function_name_value(name)?;
-        let arity = function_arity(params);
-        let prototype_default = constructable.then(|| {
+        let function_name = self.function_name_value(init.name)?;
+        let arity = function_arity(init.params);
+        let prototype_default = init.constructable.then(|| {
             DataPropertyDescriptor::new(
                 prototype.clone(),
                 PropertyWritable::Yes,
@@ -70,26 +76,30 @@ impl Context {
         });
         let intrinsic_defaults =
             FunctionIntrinsicDefaults::new(arity.value()?, function_name, prototype_default);
-        let param_atoms = self.function_param_atoms(params)?;
+        let param_atoms = self.function_param_atoms(init.params)?;
         let static_name_atom_cache = self.current_static_name_atom_cache();
         let static_binding_cache = self.current_static_binding_cache();
         let static_binding_layout = self.current_static_binding_layout();
         let upvalues = self.capture_function_upvalues(
-            static_function_id,
-            bytecode.capture_bindings(),
+            init.static_function_id,
+            init.bytecode.capture_bindings(),
             static_binding_layout.as_ref(),
         )?;
         self.functions.push(super::Function {
-            param_binding_ids: function_param_binding_ids(params),
+            param_binding_ids: function_param_binding_ids(init.params),
             param_atoms,
-            bytecode: bytecode.clone(),
+            bytecode: init.bytecode.clone(),
             upvalues: upvalues.cells,
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
             properties: FunctionProperties::new(prototype, intrinsic_defaults),
-            constructable,
-            is_async,
+            constructable: init.constructable,
+            is_async: init.is_async,
+            new_target: FunctionNewTarget::from_mode(
+                init.new_target_mode,
+                self.current_new_target()?,
+            ),
         });
         Ok(function)
     }
@@ -100,11 +110,12 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: Value,
     ) -> Result<Value> {
+        let new_target = self.function_direct_call_new_target(id)?;
         if self.function(id)?.is_async {
-            return self.eval_async_function_with_this(id, args, this_value);
+            return self.eval_async_function_with_this(id, args, this_value, new_target);
         }
         let value = self
-            .eval_function_completion_with_this(id, args, this_value)?
+            .eval_function_completion_with_this_and_new_target(id, args, this_value, new_target)?
             .into_function_result()?;
         self.runtime_value(value)
     }
@@ -123,6 +134,17 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: Value,
     ) -> Result<Completion> {
+        let new_target = self.function_direct_call_new_target(id)?;
+        self.eval_function_completion_with_this_and_new_target(id, args, this_value, new_target)
+    }
+
+    pub(crate) fn eval_function_completion_with_this_and_new_target(
+        &mut self,
+        id: FunctionId,
+        args: RuntimeCallArgs<'_>,
+        this_value: Value,
+        new_target: Value,
+    ) -> Result<Completion> {
         self.call_depth = self
             .call_depth
             .checked_add(1)
@@ -134,9 +156,17 @@ impl Context {
                 self.limits.max_expression_depth
             )));
         }
-        let result = self.eval_function_completion_with_this_inner(id, args, this_value);
+        let result =
+            self.eval_function_completion_with_this_inner(id, args, this_value, new_target);
         self.call_depth = self.call_depth.saturating_sub(1);
         result
+    }
+
+    fn function_direct_call_new_target(&self, id: FunctionId) -> Result<Value> {
+        match &self.function(id)?.new_target {
+            FunctionNewTarget::Own => Ok(Value::Undefined),
+            FunctionNewTarget::Lexical(value) => Ok(value.clone()),
+        }
     }
 
     fn eval_function_completion_with_this_inner(
@@ -144,6 +174,7 @@ impl Context {
         id: FunctionId,
         args: RuntimeCallArgs<'_>,
         this_value: Value,
+        new_target: Value,
     ) -> Result<Completion> {
         let (
             param_atoms,
@@ -182,6 +213,7 @@ impl Context {
         self.locals.push(scope);
         self.upvalue_frames.push(upvalues);
         self.this_values.push(this_value);
+        self.new_target_values.push(new_target);
         let result = self.eval_function_body(
             static_name_atom_cache,
             static_binding_cache,
@@ -190,12 +222,16 @@ impl Context {
             &param_atoms,
             &bytecode,
         );
+        let removed_new_target = self.new_target_values.pop();
         let removed_this = self.this_values.pop();
         let removed_upvalues = self.upvalue_frames.pop();
         let removed = self.locals.pop();
         self.locals = caller_locals;
         if removed_this.is_none() {
             return Err(Error::runtime("function this binding disappeared"));
+        }
+        if removed_new_target.is_none() {
+            return Err(Error::runtime("function new.target binding disappeared"));
         }
         if removed_upvalues.is_none() {
             return Err(Error::runtime("function upvalue frame disappeared"));

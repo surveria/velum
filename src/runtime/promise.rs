@@ -212,9 +212,12 @@ impl Context {
         id: FunctionId,
         args: RuntimeCallArgs<'_>,
         this_value: Value,
+        new_target: Value,
     ) -> Result<Value> {
         let (promise, object) = self.create_pending_promise()?;
-        match self.eval_function_completion_with_this(id, args, this_value)? {
+        match self
+            .eval_function_completion_with_this_and_new_target(id, args, this_value, new_target)?
+        {
             Completion::Normal(_) => self.resolve_promise(promise, Value::Undefined)?,
             Completion::Return(value) => self.resolve_promise(promise, value)?,
             Completion::Throw(value) => self.reject_promise(promise, value)?,

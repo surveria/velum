@@ -72,6 +72,12 @@ impl BytecodeFunction {
     }
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BytecodeNewTargetMode {
+    Own,
+    Lexical,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeFunctionDeclaration {
     name: BytecodeBinding,
@@ -481,6 +487,7 @@ pub enum BytecodeInstruction {
     PushString(StaticString),
     PushUndefined,
     LoadThis,
+    LoadNewTarget,
     LoadBinding(BytecodeBinding),
     StoreBinding(BytecodeBinding),
     DeclareBinding {
@@ -598,6 +605,7 @@ pub enum BytecodeInstruction {
         bytecode: BytecodeFunction,
         constructable: bool,
         is_async: bool,
+        new_target_mode: BytecodeNewTargetMode,
     },
     ArrayLiteral {
         len: usize,

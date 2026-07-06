@@ -1,9 +1,10 @@
 use crate::{
     ast::{DeclKind, StaticBinding},
-    bytecode::BytecodeHoistPlan,
+    bytecode::{BytecodeHoistPlan, BytecodeNewTargetMode},
     error::{Error, Result},
     runtime::Context,
     runtime::binding::scope::{BindingCell, BindingScope},
+    runtime::function::BytecodeFunctionInit,
     storage::atom::AtomId,
     value::Value,
 };
@@ -26,14 +27,15 @@ impl Context {
         declaration: &crate::bytecode::BytecodeFunctionDeclaration,
     ) -> Result<()> {
         self.hoist_var(declaration.name().name())?;
-        let function = self.create_bytecode_function(
-            declaration.id(),
-            Some(declaration.function_name()),
-            declaration.params(),
-            declaration.bytecode(),
-            !declaration.is_async(),
-            declaration.is_async(),
-        )?;
+        let function = self.create_bytecode_function(&BytecodeFunctionInit {
+            static_function_id: declaration.id(),
+            name: Some(declaration.function_name()),
+            params: declaration.params(),
+            bytecode: declaration.bytecode(),
+            constructable: !declaration.is_async(),
+            is_async: declaration.is_async(),
+            new_target_mode: BytecodeNewTargetMode::Own,
+        })?;
         self.assign_bytecode(declaration.name(), function)
     }
 

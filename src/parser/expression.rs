@@ -8,6 +8,7 @@ use crate::{
 use super::Parser;
 
 const THIS_PROPERTY_NAME: &str = "this";
+const NEW_TARGET_PROPERTY_NAME: &str = "target";
 
 struct ObjectPropertyName {
     key: StaticName,
@@ -95,7 +96,11 @@ impl Parser {
     }
 
     pub(super) fn call(&mut self) -> Result<Expr> {
-        let mut expr = self.primary()?;
+        let expr = self.primary()?;
+        self.call_suffix(expr)
+    }
+
+    fn call_suffix(&mut self, mut expr: Expr) -> Result<Expr> {
         loop {
             if self.match_kind(&TokenKind::Dot) {
                 let property = self.consume_property_name("expected property name after '.'")?;
@@ -164,6 +169,11 @@ impl Parser {
     }
 
     fn new_expr(&mut self) -> Result<Expr> {
+        let new_offset = self.previous_offset();
+        if self.match_kind(&TokenKind::Dot) {
+            let expr = self.new_target_expr(new_offset)?;
+            return self.call_suffix(expr);
+        }
         let constructor =
             self.consume_binding_identifier("expected constructor name after 'new'")?;
         self.consume(&TokenKind::LParen, "expected '(' after constructor name")?;
@@ -174,6 +184,25 @@ impl Parser {
         };
         self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
         Ok(Expr::New { constructor, args })
+    }
+
+    fn new_target_expr(&mut self, new_offset: usize) -> Result<Expr> {
+        let token = self
+            .advance()
+            .ok_or_else(|| Error::parse("expected 'target' after 'new.'", self.offset()))?;
+        let TokenKind::Identifier(name) = token.kind else {
+            return Err(Error::parse("expected 'target' after 'new.'", token.offset));
+        };
+        if name != NEW_TARGET_PROPERTY_NAME {
+            return Err(Error::parse("expected 'target' after 'new.'", token.offset));
+        }
+        if !self.allows_new_target() {
+            return Err(Error::parse(
+                "new.target is only valid inside functions",
+                new_offset,
+            ));
+        }
+        Ok(Expr::NewTarget)
     }
 
     fn update_expr(op: UpdateOp, prefix: bool, expr: Expr, offset: usize) -> Result<Expr> {
@@ -382,7 +411,7 @@ impl Parser {
             let params = self.function_parameters()?.into();
             self.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
             self.consume(&TokenKind::LBrace, "expected '{' before method body")?;
-            let body = self.block_statements()?.into();
+            let body = self.with_new_target_scope(Self::block_statements)?.into();
             let id = self.static_function()?;
             let value = Expr::MethodFunction {
                 id,
@@ -474,7 +503,7 @@ impl Parser {
         let params = self.function_parameters()?.into();
         self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
-        let body = self.block_statements()?.into();
+        let body = self.with_new_target_scope(Self::block_statements)?.into();
         let id = self.static_function()?;
         Ok(Expr::Function {
             id,

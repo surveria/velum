@@ -4,7 +4,7 @@ use crate::api::host::HostFunction;
 use crate::api::native_call::NativeCallTarget;
 use crate::ast::StaticBindingId;
 use crate::binding_layout::BindingLayout;
-use crate::bytecode::{BytecodeBinding, BytecodeCallSite, BytecodeFunction};
+use crate::bytecode::{BytecodeBinding, BytecodeCallSite, BytecodeFunction, BytecodeNewTargetMode};
 use crate::compiled_script::CompiledScript;
 use crate::error::{Error, Result};
 use crate::runtime::assertions::reference_error_undefined;
@@ -70,6 +70,7 @@ pub struct Context {
     promise_jobs: VecDeque<PromiseJob>,
     promise_prototype: Option<crate::value::ObjectId>,
     this_values: Vec<Value>,
+    new_target_values: Vec<Value>,
     output: Vec<String>,
     random_state: u64,
     runtime_steps: usize,
@@ -94,9 +95,25 @@ struct Function {
     properties: function::FunctionProperties,
     constructable: bool,
     is_async: bool,
+    new_target: FunctionNewTarget,
 }
 
 type FunctionUpvalues = Rc<[BindingCell]>;
+
+#[derive(Debug, Clone)]
+enum FunctionNewTarget {
+    Own,
+    Lexical(Value),
+}
+
+impl FunctionNewTarget {
+    fn from_mode(mode: BytecodeNewTargetMode, lexical_value: Value) -> Self {
+        match mode {
+            BytecodeNewTargetMode::Own => Self::Own,
+            BytecodeNewTargetMode::Lexical => Self::Lexical(lexical_value),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 struct CapturedFunctionUpvalues {
@@ -164,6 +181,7 @@ impl Context {
             promise_jobs: VecDeque::new(),
             promise_prototype: None,
             this_values: Vec::new(),
+            new_target_values: Vec::new(),
             output: Vec::new(),
             random_state: INITIAL_RANDOM_STATE,
             runtime_steps: 0,
@@ -429,7 +447,12 @@ impl Context {
             self.limits.max_objects,
             self.limits.max_object_properties,
         )?;
-        match self.eval_function_completion_with_this(id, args, object.clone())? {
+        match self.eval_function_completion_with_this_and_new_target(
+            id,
+            args,
+            object.clone(),
+            Value::Function(id),
+        )? {
             Completion::Return(value) if Self::constructor_return_is_object(&value) => Ok(value),
             Completion::Normal(_) | Completion::Return(_) => Ok(object),
             Completion::Throw(value) => Err(Error::runtime(format!("uncaught throw: {value}"))),

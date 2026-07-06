@@ -4,7 +4,7 @@ use crate::{
     api::native_call::NativeCallTarget,
     ast::{
         BinaryOp, DeclKind, Expr, FunctionParam, ObjectProperty, Program, StaticBinding,
-        StaticName, StaticPropertyAccessId, Stmt, UnaryOp, UpdateOp,
+        StaticFunctionId, StaticName, StaticPropertyAccessId, Stmt, UnaryOp, UpdateOp,
     },
     binding_layout::BindingLayout,
     error::{Error, Result},
@@ -22,8 +22,9 @@ pub use types::{
     BytecodeAddress, BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock,
     BytecodeCallSite, BytecodeCatch, BytecodeCompletion, BytecodeDynamicProperty,
     BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeInstruction,
-    BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
-    BytecodeNumericUnaryOp, BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
+    BytecodeNewTargetMode, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
+    BytecodeNumericEqualityOp, BytecodeNumericUnaryOp, BytecodeProgram, BytecodeProperty,
+    BytecodeSwitchCase,
 };
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
@@ -66,6 +67,16 @@ enum StatementValue {
 struct BytecodeCompiler<'a> {
     layout: &'a BindingLayout,
     instructions: Vec<BytecodeInstruction>,
+}
+
+struct FunctionCompileSpec<'a> {
+    id: StaticFunctionId,
+    name: Option<StaticName>,
+    params: &'a Rc<[FunctionParam]>,
+    body: &'a [Stmt],
+    constructable: bool,
+    is_async: bool,
+    new_target_mode: BytecodeNewTargetMode,
 }
 
 impl<'a> BytecodeCompiler<'a> {
@@ -198,6 +209,9 @@ impl<'a> BytecodeCompiler<'a> {
             Expr::This => {
                 self.emit(BytecodeInstruction::LoadThis);
             }
+            Expr::NewTarget => {
+                self.emit(BytecodeInstruction::LoadNewTarget);
+            }
             Expr::Identifier(name) => {
                 self.emit(BytecodeInstruction::LoadBinding(
                     self.compile_binding(name)?,
@@ -256,27 +270,9 @@ impl<'a> BytecodeCompiler<'a> {
             Expr::Call { callee, site, args } => {
                 return self.compile_call_expr(callee, *site, args);
             }
-            Expr::Function {
-                id,
-                name,
-                params,
-                body,
-                is_async,
-            } => {
-                self.compile_function_expr(*id, name.clone(), params, body, !*is_async, *is_async)?;
+            Expr::Function { .. } | Expr::ArrowFunction { .. } | Expr::MethodFunction { .. } => {
+                return self.compile_function_literal(expr);
             }
-            Expr::ArrowFunction {
-                id,
-                params,
-                body,
-                is_async,
-            } => self.compile_function_expr(*id, None, params, body, false, *is_async)?,
-            Expr::MethodFunction {
-                id,
-                name,
-                params,
-                body,
-            } => self.compile_function_expr(*id, Some(name.clone()), params, body, false, false)?,
             Expr::New { constructor, args } => self.compile_new_expr(constructor, args)?,
         }
         Ok(())
@@ -356,22 +352,20 @@ impl<'a> BytecodeCompiler<'a> {
         Ok(())
     }
 
-    fn compile_function_expr(
-        &mut self,
-        id: crate::ast::StaticFunctionId,
-        name: Option<crate::ast::StaticName>,
-        params: &Rc<[FunctionParam]>,
-        body: &[Stmt],
-        constructable: bool,
-        is_async: bool,
-    ) -> Result<()> {
+    fn compile_function_literal(&mut self, expr: &Expr) -> Result<()> {
+        let spec = function_compile_spec(expr)?;
+        self.compile_function_expr(spec)
+    }
+
+    fn compile_function_expr(&mut self, spec: FunctionCompileSpec<'_>) -> Result<()> {
         self.emit(BytecodeInstruction::CreateFunction {
-            id,
-            name,
-            params: Rc::clone(params),
-            bytecode: BytecodeFunction::compile(params, body, self.layout)?,
-            constructable,
-            is_async,
+            id: spec.id,
+            name: spec.name,
+            params: Rc::clone(spec.params),
+            bytecode: BytecodeFunction::compile(spec.params, spec.body, self.layout)?,
+            constructable: spec.constructable,
+            is_async: spec.is_async,
+            new_target_mode: spec.new_target_mode,
         });
         Ok(())
     }
@@ -678,6 +672,7 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::PushString(_)
             | BytecodeInstruction::PushUndefined
             | BytecodeInstruction::LoadThis
+            | BytecodeInstruction::LoadNewTarget
             | BytecodeInstruction::LoadBinding(_)
             | BytecodeInstruction::StoreBinding(_)
             | BytecodeInstruction::DeclareBinding { .. }
@@ -740,6 +735,55 @@ impl<'a> BytecodeCompiler<'a> {
 
     const fn current_address(&self) -> BytecodeAddress {
         BytecodeAddress::new(self.instructions.len())
+    }
+}
+
+fn function_compile_spec(expr: &Expr) -> Result<FunctionCompileSpec<'_>> {
+    match expr {
+        Expr::Function {
+            id,
+            name,
+            params,
+            body,
+            is_async,
+        } => Ok(FunctionCompileSpec {
+            id: *id,
+            name: name.clone(),
+            params,
+            body,
+            constructable: true,
+            is_async: *is_async,
+            new_target_mode: BytecodeNewTargetMode::Own,
+        }),
+        Expr::ArrowFunction {
+            id,
+            params,
+            body,
+            is_async,
+        } => Ok(FunctionCompileSpec {
+            id: *id,
+            name: None,
+            params,
+            body,
+            constructable: false,
+            is_async: *is_async,
+            new_target_mode: BytecodeNewTargetMode::Lexical,
+        }),
+        Expr::MethodFunction {
+            id,
+            name,
+            params,
+            body,
+        } => Ok(FunctionCompileSpec {
+            id: *id,
+            name: Some(name.clone()),
+            params,
+            body,
+            constructable: false,
+            is_async: false,
+            new_target_mode: BytecodeNewTargetMode::Own,
+        }),
+        _ => Err(Error::runtime("expected function expression")),
     }
 }
 
