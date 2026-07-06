@@ -91,10 +91,17 @@ impl Context {
         }
 
         self.ensure_binding_capacity_for_atom(atom)?;
-        self.active_bindings_mut().insert(
-            atom,
-            BindingCell::new(Value::Undefined, true, DeclKind::Var),
-        );
+        let slot = if self.locals.last().is_some() {
+            self.compiled_local_binding_slot(name)?
+        } else {
+            None
+        };
+        self.active_bindings_mut()
+            .insert_or_replace_at_optional_slot(
+                atom,
+                BindingCell::new(Value::Undefined, true, DeclKind::Var),
+                slot,
+            )?;
         self.remember_active_static_binding(name, atom)?;
         Ok(())
     }
