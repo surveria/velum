@@ -14,7 +14,7 @@ This repository is intentionally starting small. It is not a drop-in replacement
 - Small footprint: keep startup and hello-world memory use close to the `QuickJS` class of engines.
 - Predictable library embedding: make the Rust API the primary product surface, with many isolated virtual machines per process, explicit resource limits, deterministic teardown, typed host extensions, async host-callback support, and inspectable execution state.
 - Reference-driven compatibility: use `QuickJS` behavior, focused Test262 subsets, and full-corpus Test262 progress reports instead of inventing a new language.
-- Device-oriented performance: optimize for ARM Linux systems with tens of megabytes of RAM, and keep implemented benchmark cases within 1.10x of `QuickJS` unless a tracked exception explains the gap.
+- Device-oriented performance: optimize for ARM Linux systems with tens of megabytes of RAM, and keep implemented benchmark cases at `QuickJS` parity (`1.00x`) unless a tracked exception explains the gap.
 
 ## Current MVP
 

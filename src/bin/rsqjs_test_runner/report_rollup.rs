@@ -18,6 +18,8 @@ const ROLLUP_FILE: &str = "benchmark-rollup.md";
 const SUMMARY_CHART_FILE: &str = "benchmark-summary.jpg";
 const PLAN_PATH: &str = "docs/project-plan.md";
 const TEST262_FULL_SECTION: &str = "Test262 full corpus";
+const BUDGET_LABEL: &str = "1.00x";
+const BUDGET_RATIO: f64 = 1.00;
 
 #[derive(Debug)]
 pub struct RollupOutputs {
@@ -187,10 +189,10 @@ fn parse_benchmark_metrics(text: &str) -> ParsedBenchmarks {
     let mut in_benchmarks = false;
     let mut latency_index = None;
     let mut memory_index = None;
-    let mut latency_budget_index = None;
-    let mut memory_budget_index = None;
     let mut summary_latency_over = None;
     let mut summary_memory_over = None;
+    let latency_summary_label = format!("Over latency budget ({BUDGET_LABEL})");
+    let memory_summary_label = format!("Over memory budget ({BUDGET_LABEL})");
 
     for line in text.lines() {
         if line == "## Benchmarks" {
@@ -206,10 +208,10 @@ fn parse_benchmark_metrics(text: &str) -> ParsedBenchmarks {
         if let Some(count) = parse_summary_count(line, "CLI measured") {
             parsed.benchmark_count = count;
         }
-        if let Some(count) = parse_summary_count(line, "Over latency budget (1.10x)") {
+        if let Some(count) = parse_summary_count(line, &latency_summary_label) {
             summary_latency_over = Some(count);
         }
-        if let Some(count) = parse_summary_count(line, "Over memory budget (1.10x)") {
+        if let Some(count) = parse_summary_count(line, &memory_summary_label) {
             summary_memory_over = Some(count);
         }
         if !line.starts_with('|') {
@@ -220,28 +222,18 @@ fn parse_benchmark_metrics(text: &str) -> ParsedBenchmarks {
         if cells.iter().any(|cell| cell == "benchmark") {
             latency_index = cells.iter().position(|cell| cell == "latency_ratio");
             memory_index = cells.iter().position(|cell| cell == "memory_ratio");
-            latency_budget_index = cells.iter().position(|cell| cell == "latency_budget");
-            memory_budget_index = cells.iter().position(|cell| cell == "memory_budget");
             continue;
         }
         record_benchmark_row(&mut parsed, &cells, latency_index, memory_index);
-        count_budget_row(
-            &mut parsed,
-            &cells,
-            latency_budget_index,
-            memory_budget_index,
-        );
     }
 
     if parsed.benchmark_count == 0 {
         parsed.benchmark_count = parsed.latency_values.len();
     }
-    if let Some(count) = summary_latency_over {
-        parsed.latency_over = count;
-    }
-    if let Some(count) = summary_memory_over {
-        parsed.memory_over = count;
-    }
+    parsed.latency_over =
+        summary_latency_over.unwrap_or_else(|| count_over_budget(&parsed.latency_values));
+    parsed.memory_over =
+        summary_memory_over.unwrap_or_else(|| count_over_budget(&parsed.memory_values));
     parsed
 }
 
@@ -265,22 +257,8 @@ fn record_benchmark_row(
     }
 }
 
-fn count_budget_row(
-    parsed: &mut ParsedBenchmarks,
-    cells: &[String],
-    latency_budget_index: Option<usize>,
-    memory_budget_index: Option<usize>,
-) {
-    if let Some(cell) = latency_budget_index.and_then(|index| cells.get(index))
-        && cell.contains("> 1.10x")
-    {
-        parsed.latency_over = parsed.latency_over.saturating_add(1);
-    }
-    if let Some(cell) = memory_budget_index.and_then(|index| cells.get(index))
-        && cell.contains("> 1.10x")
-    {
-        parsed.memory_over = parsed.memory_over.saturating_add(1);
-    }
+fn count_over_budget(values: &[f64]) -> usize {
+    values.iter().filter(|value| **value > BUDGET_RATIO).count()
 }
 
 fn split_table_row(line: &str) -> Vec<String> {
@@ -520,7 +498,9 @@ fn render_markdown(records: &[ReportRecord]) -> String {
             .to_owned(),
         "- `1.00x` means QuickJS parity; lower performance and memory ratios are better."
             .to_owned(),
-        "- Parentheses show `rows over the 1.10x budget / measured benchmark rows`.".to_owned(),
+        format!(
+            "- Parentheses show `rows over the {BUDGET_LABEL} budget / measured benchmark rows`."
+        ),
         String::new(),
         "Artifacts:".to_owned(),
         String::new(),
@@ -606,7 +586,7 @@ fn record_title(record: &ReportRecord) -> String {
 
 fn metric_text(value: Option<f64>, over: usize, total: usize) -> String {
     let ratio = value.map_or_else(|| "-".to_owned(), |value| format!("{value:.2}x"));
-    format!("{ratio} ({over}/{total} >1.10x)")
+    format!("{ratio} ({over}/{total} >{BUDGET_LABEL})")
 }
 
 fn percent_text(value: Option<f64>) -> String {
@@ -645,13 +625,13 @@ mod tests {
 ## Benchmarks
 
 - CLI measured: 2
-- Over latency budget (1.10x): 1
-- Over memory budget (1.10x): 1
+- Over latency budget (legacy): 0
+- Over memory budget (legacy): 0
 
 ```text
 | benchmark | latency_ratio | latency_budget | memory_ratio | memory_budget |
-| alpha | 1.21x | 🟡 > 1.10x | 0.98x | ✅ <= 1.10x |
-| beta | 0.95x | ✅ <= 1.10x | 1.11x | 🟡 > 1.10x |
+| alpha | 1.21x | 🟡 > 1.00x | 0.98x | ✅ <= 1.00x |
+| beta | 1.00x | ✅ <= 1.00x | 1.11x | 🟡 > 1.00x |
 ```
 ";
         let parsed = parse_benchmark_metrics(text);
@@ -660,6 +640,28 @@ mod tests {
         ensure_usize(parsed.memory_over, 1)?;
         ensure_usize(parsed.latency_values.len(), 2)?;
         ensure_usize(parsed.memory_values.len(), 2)
+    }
+
+    #[test]
+    fn prefers_current_budget_summary_counts() -> TestResult {
+        let text = r"# rs-quickjs Test Report
+
+## Benchmarks
+
+- CLI measured: 2
+- Over latency budget (1.00x): 2
+- Over memory budget (1.00x): 1
+
+```text
+| benchmark | latency_ratio | latency_budget | memory_ratio | memory_budget |
+| alpha | 1.00x | 🟡 > 1.00x | 1.00x | 🟡 > 1.00x |
+| beta | 1.00x | 🟡 > 1.00x | 1.00x | ✅ <= 1.00x |
+```
+";
+        let parsed = parse_benchmark_metrics(text);
+        ensure_usize(parsed.benchmark_count, 2)?;
+        ensure_usize(parsed.latency_over, 2)?;
+        ensure_usize(parsed.memory_over, 1)
     }
 
     #[test]

@@ -31,7 +31,7 @@ Track these against QuickJS on every supported device class:
 
 Set `RSQJS_QUICKJS_AUTO_SETUP=0` to disable automatic download and build. In that mode, differential checks and QuickJS benchmark columns are reported as skipped unless `RSQJS_QUICKJS` or `qjs` is available.
 
-The standard test script builds `target/release/rsqjs` and `target/release/rsqjs-test-runner`, then exposes the CLI engine to the runner through `RSQJS_ENGINE`. Current benchmark rows compare the release `rsqjs` CLI with the QuickJS `qjs` CLI sequentially. Each row reports average in-process cold eval latency for the Rust library, compile-only latency, eval latency for a reused `CompiledScript`, average CLI latency, peak process RSS when GNU `time` is available, latency ratio, memory ratio, and the current 1.10x budget status.
+The standard test script builds `target/release/rsqjs` and `target/release/rsqjs-test-runner`, then exposes the CLI engine to the runner through `RSQJS_ENGINE`. Current benchmark rows compare the release `rsqjs` CLI with the QuickJS `qjs` CLI sequentially. Each row reports average in-process cold eval latency for the Rust library, compile-only latency, eval latency for a reused `CompiledScript`, average CLI latency, peak process RSS when GNU `time` is available, latency ratio, memory ratio, and the current QuickJS parity budget status.
 
 CLI benchmarks are useful integration smoke tests, but they include process startup and argument handling. The in-process column removes that CLI startup cost for rs-quickjs and should guide local optimization work. Future in-process rows should separate parser, compiler, VM execution, host callback, and teardown costs as those subsystems become explicit.
 
@@ -46,12 +46,12 @@ Set `RSQJS_TEST262_AUTO_SETUP=0` to disable automatic materialization. In that m
 
 ## Performance Targets
 
-- implemented benchmark cases should run within 1.10x of QuickJS on the same device class
-- hello-world resident memory should stay within 1.10x of QuickJS once memory measurement is available
-- VM creation and teardown latency should stay within 1.10x of QuickJS once in-process measurements are available
+- implemented benchmark cases should run at or below 1.00x of QuickJS on the same device class
+- hello-world resident memory should stay at or below 1.00x of QuickJS once memory measurement is available
+- VM creation and teardown latency should stay at or below 1.00x of QuickJS once in-process measurements are available
 - no unbounded allocations without a runtime limit path
 
-The 1.10x budget applies to features that are implemented locally and have comparable QuickJS behavior. A slower result is allowed only when the report marks it as a tracked exception with the suspected cause, affected benchmark, and follow-up work. The current CI report records over-budget benchmark rows as tracked exceptions rather than hard failures until the baseline is below the target; once that happens, the same metrics should become a regression gate.
+The 1.00x budget applies to features that are implemented locally and have comparable QuickJS behavior. A slower result is allowed only when the report marks it as a tracked exception with the suspected cause, affected benchmark, and follow-up work. The current CI report records over-budget benchmark rows as tracked exceptions rather than hard failures until the baseline is below the target; once that happens, the same metrics should become a regression gate.
 
 Memory reporting should track both peak resident memory and engine-owned heap counters where available. The current report uses process-level maximum resident set size for CLI parity. The long-term target is VM-level accounting exposed through the library API.
 

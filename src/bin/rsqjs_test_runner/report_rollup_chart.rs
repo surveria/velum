@@ -12,7 +12,7 @@ use plotters::{
 
 use super::ReportRecord;
 
-const BUDGET_RATIO: f64 = 1.10;
+const BUDGET_RATIO: f64 = 1.00;
 const CHART_WIDTH: u32 = 1400;
 const CHART_HEIGHT: u32 = 900;
 const RGB_CHANNELS: usize = 3;
@@ -111,7 +111,7 @@ fn draw_budget_line(
             RED.stroke_width(2),
         ))
         .map_err(|error| anyhow!("failed to draw budget line: {error:?}"))?
-        .label("1.10x budget")
+        .label("1.00x budget")
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 24, y)], RED.stroke_width(2)));
     Ok(())
 }
