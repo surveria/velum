@@ -6,6 +6,7 @@ use crate::{
         bitwise_and, bitwise_or, bitwise_xor, numeric_binary, shift_left, shift_right,
         shift_right_unsigned,
     },
+    runtime_property::DynamicPropertyKey,
     value::Value,
 };
 
@@ -29,9 +30,9 @@ impl Context {
         expr: &Expr,
     ) -> Result<Value> {
         let object = self.eval_expr(object)?;
-        let property = self.eval_property_key(property)?;
+        let mut property = self.eval_property_key(property)?;
         let value = self.eval_expr(expr)?;
-        self.set_property_value(&object, &property, value.clone())?;
+        self.set_dynamic_property_value(&object, &mut property, value.clone())?;
         Ok(value)
     }
 
@@ -50,7 +51,7 @@ impl Context {
             Expr::ComputedMember { object, property } => {
                 let object = self.eval_expr(object)?;
                 let property = self.eval_property_key(property)?;
-                self.eval_dynamic_property_compound_assignment(op, &object, &property, expr)
+                self.eval_dynamic_property_compound_assignment(op, &object, property, expr)
             }
             _ => Err(Error::runtime("invalid compound assignment target")),
         }
@@ -90,13 +91,13 @@ impl Context {
         &mut self,
         op: BinaryOp,
         object: &Value,
-        property: &str,
+        mut property: DynamicPropertyKey,
         expr: &Expr,
     ) -> Result<Value> {
-        let old_value = self.get_property_value(object, property)?;
+        let old_value = self.get_dynamic_property_value(object, &property)?;
         let right = self.eval_expr(expr)?;
         let value = self.eval_compound_value(op, &old_value, &right)?;
-        self.set_property_value(object, property, value.clone())?;
+        self.set_dynamic_property_value(object, &mut property, value.clone())?;
         Ok(value)
     }
 

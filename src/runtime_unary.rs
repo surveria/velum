@@ -70,7 +70,7 @@ impl Context {
             Expr::ComputedMember { object, property } => {
                 let object = self.eval_expr(object)?;
                 let property = self.eval_property_key(property)?;
-                self.delete_property_value(&object, &property)
+                self.delete_dynamic_property_value(&object, &property)
             }
             expr => {
                 self.eval_expr(expr)?;

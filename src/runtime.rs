@@ -21,15 +21,14 @@ use crate::runtime_numeric::{
 use crate::runtime_object::{
     OBJECT_CONSTRUCTOR_PROPERTY, ObjectHeap, ObjectPropertyInit, PropertyEnumerable,
 };
-use crate::runtime_property::{
-    delete_property, enumerable_property_keys, get_property, has_property, property_key,
-    set_property,
-};
+use crate::runtime_property::enumerable_property_keys;
 use crate::runtime_scope::{BindingCell, BindingScope};
 use crate::value::{ErrorName, Value};
 
 #[path = "runtime_declaration.rs"]
 mod runtime_declaration;
+#[path = "runtime_dynamic_property.rs"]
+mod runtime_dynamic_property;
 #[path = "runtime_function.rs"]
 mod runtime_function;
 #[path = "runtime_function_intrinsic.rs"]
@@ -469,9 +468,9 @@ impl Context {
     }
 
     fn eval_in(&self, left: &Value, right: &Value) -> Result<Value> {
-        let property = property_key(left);
-        self.check_string_len(&property)?;
-        self.has_property_value(right, &property).map(Value::Bool)
+        let property = self.dynamic_property_key(left)?;
+        self.has_dynamic_property_value(right, &property)
+            .map(Value::Bool)
     }
 
     fn eval_call(&mut self, callee: &Expr, args: &[Expr]) -> Result<Value> {
@@ -512,7 +511,7 @@ impl Context {
             Expr::ComputedMember { object, property } => {
                 let this_value = self.eval_expr(object)?;
                 let property = self.eval_property_key(property)?;
-                let function = self.get_property_value(&this_value, &property)?;
+                let function = self.get_dynamic_property_value(&this_value, &property)?;
                 Ok(Some((function, this_value)))
             }
             Expr::Parenthesized(expr) => self.eval_call_reference(expr),
@@ -567,79 +566,7 @@ impl Context {
     fn eval_computed_member(&mut self, object: &Expr, property: &Expr) -> Result<Value> {
         let object = self.eval_expr(object)?;
         let property = self.eval_property_key(property)?;
-        self.get_property_value(&object, &property)
-    }
-
-    pub(crate) fn eval_property_key(&mut self, property: &Expr) -> Result<String> {
-        let value = self.eval_expr(property)?;
-        let key = property_key(&value);
-        self.check_string_len(&key)?;
-        Ok(key)
-    }
-
-    pub(crate) fn get_property_value(&self, object: &Value, property: &str) -> Result<Value> {
-        if let Value::Function(id) = object {
-            return self.get_function_property(*id, property);
-        }
-        if let Value::NativeFunction(id) = object {
-            return self.get_native_function_property(*id, property);
-        }
-        self.checked_value(get_property(
-            &self.objects,
-            object,
-            self.property_lookup(property),
-        )?)
-    }
-
-    pub(crate) fn set_property_value(
-        &mut self,
-        object: &Value,
-        property: &str,
-        value: Value,
-    ) -> Result<()> {
-        self.checked_value(value.clone())?;
-        if let Value::Function(id) = object {
-            return self.set_function_property(*id, property, value);
-        }
-        if let Value::NativeFunction(id) = object {
-            return self.set_native_function_property(*id, property, value);
-        }
-        let key = self.intern_property_key(property)?;
-        set_property(
-            &mut self.objects,
-            object,
-            key,
-            property,
-            value,
-            self.limits.max_object_properties,
-        )
-    }
-
-    pub(crate) fn delete_property_value(
-        &mut self,
-        object: &Value,
-        property: &str,
-    ) -> Result<Value> {
-        if let Value::Function(id) = object {
-            return self
-                .delete_function_property(*id, property)
-                .map(Value::Bool);
-        }
-        if let Value::NativeFunction(id) = object {
-            return self
-                .delete_native_function_property(*id, property)
-                .map(Value::Bool);
-        }
-        let lookup = self.property_lookup(property);
-        delete_property(&mut self.objects, object, lookup).map(Value::Bool)
-    }
-
-    fn has_property_value(&self, object: &Value, property: &str) -> Result<bool> {
-        match object {
-            Value::Function(id) => self.has_function_property(*id, property),
-            Value::NativeFunction(id) => self.has_native_function_property(*id, property),
-            _ => has_property(&self.objects, object, self.property_lookup(property)),
-        }
+        self.get_dynamic_property_value(&object, &property)
     }
 
     pub(crate) fn enumerable_keys(&self, object: &Value) -> Result<Vec<String>> {
