@@ -6,7 +6,7 @@ use crate::{
 use super::runtime_object_lookup::{
     CacheablePropertyPresence, CacheablePropertyValue, PrototypeTraversalBudget,
 };
-use super::{ObjectHeap, PROTOTYPE_PROPERTY, PropertyLookup};
+use super::{ObjectHeap, ObjectPropertyValue, PROTOTYPE_PROPERTY, PropertyLookup};
 
 const PROTOTYPE_CYCLE_SET_ERROR: &str = "prototype cycle is not allowed";
 
@@ -15,14 +15,14 @@ impl ObjectHeap {
         &self,
         id: ObjectId,
         property: PropertyLookup<'_>,
-    ) -> Result<Value> {
+    ) -> Result<ObjectPropertyValue> {
         match self.cacheable_property_value(id, property)? {
-            CacheablePropertyValue::Hit(value) => return Ok(value),
+            CacheablePropertyValue::Hit(value) => return Ok(ObjectPropertyValue::Value(value)),
             CacheablePropertyValue::Missing => {
                 if property.name() == PROTOTYPE_PROPERTY {
-                    return self.prototype_value(id);
+                    return self.prototype_value(id).map(ObjectPropertyValue::Value);
                 }
-                return Ok(Value::Undefined);
+                return Ok(ObjectPropertyValue::Value(Value::Undefined));
             }
             CacheablePropertyValue::Uncacheable => {}
         }
@@ -30,9 +30,9 @@ impl ObjectHeap {
             return Ok(value);
         }
         if property.name() == PROTOTYPE_PROPERTY {
-            return self.prototype_value(id);
+            return self.prototype_value(id).map(ObjectPropertyValue::Value);
         }
-        Ok(Value::Undefined)
+        Ok(ObjectPropertyValue::Value(Value::Undefined))
     }
 
     pub(super) fn prototype_has_in_chain(
@@ -87,7 +87,7 @@ impl ObjectHeap {
         &self,
         id: ObjectId,
         property: PropertyLookup<'_>,
-    ) -> Result<Option<Value>> {
+    ) -> Result<Option<ObjectPropertyValue>> {
         let object = self.object(id)?;
         if let Some(value) = object.get_own(property, &self.shapes)? {
             return Ok(Some(value));

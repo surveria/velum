@@ -54,6 +54,18 @@ const ARRAY_INDEX_LIMIT_ERROR: &str = "array index exceeded supported range";
 pub const OBJECT_CONSTRUCTOR_PROPERTY: &str = "constructor";
 const PROTOTYPE_PROPERTY: &str = "__proto__";
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum ObjectPropertyValue {
+    Value(Value),
+    StringCharacter(char),
+}
+
+impl ObjectPropertyValue {
+    const fn value(value: Value) -> Self {
+        Self::Value(value)
+    }
+}
+
 impl ObjectHeap {
     pub fn create(
         &mut self,
@@ -290,7 +302,7 @@ impl ObjectHeap {
         self.bump_if_structure_changed(id, before)
     }
 
-    pub fn get(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<Value> {
+    pub fn get(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<ObjectPropertyValue> {
         self.get_in_chain(id, property)
     }
 
@@ -334,7 +346,11 @@ impl ObjectHeap {
         Ok(deleted)
     }
 
-    fn get_in_chain(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<Value> {
+    fn get_in_chain(
+        &self,
+        id: ObjectId,
+        property: PropertyLookup<'_>,
+    ) -> Result<ObjectPropertyValue> {
         self.prototype_get_in_chain(id, property)
     }
 
@@ -473,27 +489,31 @@ impl Object {
         }
     }
 
-    fn get_own(&self, property: PropertyLookup<'_>, shapes: &ShapeTable) -> Result<Option<Value>> {
-        if let Some(value) = self.virtual_string_property_value(property)? {
-            return Ok(Some(value));
+    fn get_own(
+        &self,
+        property: PropertyLookup<'_>,
+        shapes: &ShapeTable,
+    ) -> Result<Option<ObjectPropertyValue>> {
+        if let Some(ch) = self.virtual_string_character(property.name())? {
+            return Ok(Some(ObjectPropertyValue::StringCharacter(ch)));
         }
         if let Some(length) = self
             .array_length
             .filter(|_| property.name() == ARRAY_LENGTH_PROPERTY)
         {
-            return Ok(Some(length.value()));
+            return Ok(Some(ObjectPropertyValue::value(length.value())));
         }
         if self.array_length.is_some()
             && let Some(index) = ArrayIndex::parse(property.name())
             && let Some(value) = self.array_element_value(index)
         {
-            return Ok(Some(value));
+            return Ok(Some(ObjectPropertyValue::value(value)));
         }
         let Some(key) = property.key() else {
             return Ok(None);
         };
         self.named_property(shapes, key)
-            .map(|property| property.map(ObjectProperty::value))
+            .map(|property| property.map(|property| ObjectPropertyValue::value(property.value())))
     }
 
     fn has_own(&self, property: PropertyLookup<'_>, shapes: &ShapeTable) -> Result<bool> {

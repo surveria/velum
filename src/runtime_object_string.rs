@@ -55,14 +55,6 @@ impl Object {
         }
     }
 
-    pub(super) fn virtual_string_property_value(
-        &self,
-        property: super::PropertyLookup<'_>,
-    ) -> Result<Option<Value>> {
-        self.virtual_string_character(property.name())
-            .map(|value| value.map(|ch| Value::String(ch.to_string())))
-    }
-
     pub(super) fn has_virtual_string_property(
         &self,
         property: super::PropertyLookup<'_>,

@@ -4,8 +4,8 @@ use crate::{
     runtime_assertions::error_property_text,
     runtime_object::PropertyKey,
     runtime_property::{
-        DynamicPropertyKey, StringPropertyValue, delete_property, get_property, has_property,
-        property_key, string_property_value,
+        DynamicPropertyKey, PropertyValue, StringPropertyValue, delete_property, get_property,
+        has_property, property_key, string_property_value,
     },
     value::{ObjectId, Value},
 };
@@ -50,7 +50,7 @@ impl Context {
             return Ok(value);
         }
         let value = get_property(&self.objects, object, lookup)?;
-        self.runtime_value(value)
+        self.runtime_property_value(value)
     }
 
     pub(super) fn get_error_property_value(
@@ -62,6 +62,14 @@ impl Context {
             return self.heap_string_value(value);
         }
         Ok(Value::Undefined)
+    }
+
+    pub(super) fn runtime_property_value(&mut self, value: PropertyValue<'_>) -> Result<Value> {
+        match value {
+            PropertyValue::Value(value) => self.runtime_value(value),
+            PropertyValue::Text(value) => self.heap_string_value(value),
+            PropertyValue::Character(ch) => self.heap_string_char_value(ch),
+        }
     }
 
     pub(super) fn get_string_property_value(

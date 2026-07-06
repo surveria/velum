@@ -237,7 +237,7 @@ impl Context {
             return self.get_cached_object_property_value(*id, access, lookup);
         }
         let value = get_property(&self.objects, object, lookup)?;
-        self.runtime_value(value)
+        self.runtime_property_value(value)
     }
 
     pub(super) fn cached_static_native_call_kind(
@@ -272,8 +272,9 @@ impl Context {
         lookup: PropertyLookup<'_>,
     ) -> Result<Value> {
         let Some(cache) = self.current_static_name_atom_cache() else {
-            let value = get_property(&self.objects, &Value::Object(object), lookup)?;
-            return self.runtime_value(value);
+            let object_value = Value::Object(object);
+            let value = get_property(&self.objects, &object_value, lookup)?;
+            return self.runtime_property_value(value);
         };
         if let Some(cached_lookup) = cache.property_lookup(access)?
             && cached_lookup.matches_property(lookup)
@@ -302,8 +303,9 @@ impl Context {
                 Ok(Value::Undefined)
             }
             CacheablePropertyValue::Uncacheable => {
-                let value = get_property(&self.objects, &Value::Object(object), lookup)?;
-                self.runtime_value(value)
+                let object_value = Value::Object(object);
+                let value = get_property(&self.objects, &object_value, lookup)?;
+                self.runtime_property_value(value)
             }
         }
     }
@@ -341,7 +343,7 @@ impl Context {
             return self.get_cached_object_property_value(*id, access, property.lookup());
         }
         let value = get_property(&self.objects, object, property.lookup())?;
-        self.runtime_value(value)
+        self.runtime_property_value(value)
     }
 
     pub(crate) fn has_cached_dynamic_property_value(
