@@ -57,6 +57,19 @@ try {
 value;
 ";
 
+const HOISTED_VAR_LAYOUT_SOURCE: &str = r"
+var run = function run(alpha) {
+    var total;
+    {
+        var beta = alpha + 2;
+        let shadow = beta + 1;
+        total = shadow + alpha;
+    }
+    return total;
+};
+run(3) + run(4);
+";
+
 #[test]
 fn compiled_layout_counts_global_local_and_upvalue_slots() -> TestResult {
     let engine = Engine::new();
@@ -161,6 +174,27 @@ fn compiled_layout_drives_catch_and_body_lexical_slots() -> TestResult {
 
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(7.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atom_count)
+}
+
+#[test]
+fn compiled_layout_drives_hoisted_var_frame_slots() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(HOISTED_VAR_LAYOUT_SOURCE)?;
+    let usage = script.usage();
+
+    ensure_usize(usage.global_binding_slot_count(), 1)?;
+    ensure_usize(usage.local_binding_slot_count(), 4)?;
+    ensure_usize(usage.upvalue_binding_slot_count(), 0)?;
+    ensure_usize(usage.unresolved_static_binding_count(), 0)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(20.0))?;
+    let atom_count = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(20.0))?;
     ensure_usize(vm.resource_usage().atom_count, atom_count)
 }
 
