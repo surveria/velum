@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260706T234403Z.md`
-- Task: rsqjs-test-report-20260706T234403Z.md
-- Performance: 0.80x (40/63 >1.00x)
+- `rsqjs-test-report-20260706T235328Z.md`
+- Task: rsqjs-test-report-20260706T235328Z.md
+- Performance: 0.77x (39/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 11647 passed / 90931 failed (11.35%)
+- Full Test262: 12000 passed / 90578 failed (11.70%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -216,4 +216,5 @@ Latest report:
 | `20260706T230625Z` `2b56396` CallValue inline-cache tranche: Cache arbitrary bytecode value-call dispatch after direct binding/property/native operands so returned JS, native, and host functions no longer re-run generic callable classification on warm call sites. | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 11647 passed / 90931 failed (11.35%) |
 | `20260706T232510Z` `c97a161` Reorganize lexer and native modules | 0.81x (39/63 >1.00x) | - (0/63 >1.00x) | 11647 passed / 90931 failed (11.35%) |
 | `20260706T233428Z` `5963e41` Remove legacy function capture snapshots | 0.81x (40/63 >1.00x) | - (0/63 >1.00x) | 11647 passed / 90931 failed (11.35%) |
-| `20260706T234403Z` rsqjs-test-report-20260706T234403Z.md | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 11647 passed / 90931 failed (11.35%) |
+| `20260706T234403Z` `4af96dc` Optimize direct native member calls | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 11647 passed / 90931 failed (11.35%) |
+| `20260706T235328Z` rsqjs-test-report-20260706T235328Z.md | 0.77x (39/63 >1.00x) | - (0/63 >1.00x) | 12000 passed / 90578 failed (11.70%) |

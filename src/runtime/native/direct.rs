@@ -162,6 +162,7 @@ impl Context {
             NativeFunctionKind::ArraySlice => self.eval_array_slice(args, this_value),
             NativeFunctionKind::ArrayUnshift => self.eval_array_unshift(args, this_value),
             NativeFunctionKind::Boolean => self.eval_boolean_constructor(args),
+            NativeFunctionKind::Eval => self.eval_eval_function(args),
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
             NativeFunctionKind::JsonParse => self.eval_json_parse(args),
             NativeFunctionKind::JsonStringify => self.eval_json_stringify(args),
