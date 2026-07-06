@@ -3,6 +3,7 @@ use crate::{
     value::{ObjectId, Value},
 };
 
+use super::runtime_object_array_fast::ArrayCopyLimits;
 use super::{
     ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ArrayLength, Object, ObjectHeap, ObjectProperty,
     ShapeTable,
@@ -21,9 +22,9 @@ const ARRAY_SLICE_RECEIVER_ERROR: &str = "Array.prototype.slice requires an arra
 const INDEX_NOT_FOUND: f64 = -1.0;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-struct ArrayCopyProgress {
-    next_index: usize,
-    source_index: usize,
+pub(super) struct ArrayCopyProgress {
+    pub(super) next_index: usize,
+    pub(super) source_index: usize,
 }
 
 impl ObjectHeap {
@@ -76,6 +77,16 @@ impl ObjectHeap {
             .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
         if let Some(values) = self.packed_array_value_range(id, length, start, count)? {
             return self.create_array(values, prototype, max_objects, max_properties);
+        }
+        if let Some(value) = self.holey_array_slice_without_indexed_prototype(
+            id,
+            length,
+            start,
+            count,
+            prototype,
+            ArrayCopyLimits::new(max_objects, max_properties),
+        )? {
+            return Ok(value);
         }
 
         let result = self.create_array_with_length(count, prototype, max_objects)?;
@@ -205,6 +216,11 @@ impl ObjectHeap {
         if let Some(properties) = self.packed_array_properties(id, length)? {
             return Self::packed_array_index_of(properties, search, start);
         }
+        if let Some(value) =
+            self.holey_array_index_of_without_indexed_prototype(id, length, search, start)?
+        {
+            return Ok(value);
+        }
 
         for position in start..length {
             let index = ArrayIndex::from_usize(position)?;
@@ -232,6 +248,11 @@ impl ObjectHeap {
         if let Some(properties) = self.packed_array_properties(id, length)? {
             return Ok(Self::packed_array_includes(properties, search, start));
         }
+        if let Some(value) =
+            self.holey_array_includes_without_indexed_prototype(id, length, search, start)?
+        {
+            return Ok(value);
+        }
 
         for index in start..length {
             let index = ArrayIndex::from_usize(index)?;
@@ -257,6 +278,11 @@ impl ObjectHeap {
         };
         if let Some(properties) = self.packed_array_properties(id, length)? {
             return Self::packed_array_last_index_of(properties, search, start);
+        }
+        if let Some(value) =
+            self.holey_array_last_index_of_without_indexed_prototype(id, length, search, start)?
+        {
+            return Ok(value);
         }
 
         for position in (0..=start).rev() {
@@ -288,7 +314,12 @@ impl ObjectHeap {
         let length = self.array_length_for_method(id, ARRAY_JOIN_RECEIVER_ERROR)?;
         let length = length.to_usize()?;
         let Some(properties) = self.packed_array_properties(id, length)? else {
-            return Ok(None);
+            return self.holey_array_join_without_indexed_prototype(
+                id,
+                length,
+                separator,
+                max_string_len,
+            );
         };
         let mut joined = String::new();
         for (index, property) in properties.iter().enumerate() {
@@ -471,6 +502,16 @@ impl ObjectHeap {
         length: usize,
         max_properties: usize,
     ) -> Result<ArrayCopyProgress> {
+        if let Some(progress) = self.holey_concat_array_prefix_without_indexed_prototype(
+            result_id,
+            start_index,
+            source_id,
+            length,
+            max_properties,
+        )? {
+            return Ok(progress);
+        }
+
         let shapes = &self.shapes;
         let (source, result) =
             Self::object_pair_for_concat(self.objects.as_mut_slice(), source_id, result_id)?;
@@ -575,12 +616,12 @@ impl ObjectHeap {
             .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))
     }
 
-    fn array_index_value(index: usize) -> Result<Value> {
+    pub(super) fn array_index_value(index: usize) -> Result<Value> {
         let index = u32::try_from(index).map_err(|_| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
         Ok(Value::Number(f64::from(index)))
     }
 
-    fn same_value_zero(left: &Value, right: &Value) -> bool {
+    pub(super) fn same_value_zero(left: &Value, right: &Value) -> bool {
         match (left, right) {
             (Value::Number(left), Value::Number(right)) => {
                 (left.to_bits() == right.to_bits())
@@ -595,14 +636,18 @@ impl ObjectHeap {
         matches!(value.classify(), std::num::FpCategory::Zero)
     }
 
-    fn array_join_element_text(value: &Value) -> String {
+    pub(super) fn array_join_element_text(value: &Value) -> String {
         match value {
             Value::Undefined | Value::Null => String::new(),
             _ => value.display_for_concat(),
         }
     }
 
-    fn push_join_text(joined: &mut String, text: &str, max_string_len: usize) -> Result<()> {
+    pub(super) fn push_join_text(
+        joined: &mut String,
+        text: &str,
+        max_string_len: usize,
+    ) -> Result<()> {
         let length = joined
             .len()
             .checked_add(text.len())
@@ -680,7 +725,7 @@ impl Object {
             .map(|property| property.map(super::ObjectProperty::value))
     }
 
-    fn set_array_index(
+    pub(super) fn set_array_index(
         &mut self,
         index: ArrayIndex,
         value: Value,
