@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260706T232510Z.md`
-- Task: rsqjs-test-report-20260706T232510Z.md
-- Performance: 0.81x (39/63 >1.00x)
+- `rsqjs-test-report-20260706T233428Z.md`
+- Task: rsqjs-test-report-20260706T233428Z.md
+- Performance: 0.81x (40/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 11647 passed / 90931 failed (11.35%)
 
@@ -214,4 +214,5 @@ Latest report:
 | `20260706T224011Z` `e4e40a5` Add direct native constructor operands | 0.80x (41/63 >1.00x) | - (0/63 >1.00x) | 11617 passed / 90961 failed (11.33%) |
 | `20260706T225304Z` `3ec3a16` Support async arrow functions | 0.79x (40/63 >1.00x) | - (0/63 >1.00x) | 11647 passed / 90931 failed (11.35%) |
 | `20260706T230625Z` `2b56396` CallValue inline-cache tranche: Cache arbitrary bytecode value-call dispatch after direct binding/property/native operands so returned JS, native, and host functions no longer re-run generic callable classification on warm call sites. | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 11647 passed / 90931 failed (11.35%) |
-| `20260706T232510Z` rsqjs-test-report-20260706T232510Z.md | 0.81x (39/63 >1.00x) | - (0/63 >1.00x) | 11647 passed / 90931 failed (11.35%) |
+| `20260706T232510Z` `c97a161` Reorganize lexer and native modules | 0.81x (39/63 >1.00x) | - (0/63 >1.00x) | 11647 passed / 90931 failed (11.35%) |
+| `20260706T233428Z` rsqjs-test-report-20260706T233428Z.md | 0.81x (40/63 >1.00x) | - (0/63 >1.00x) | 11647 passed / 90931 failed (11.35%) |
