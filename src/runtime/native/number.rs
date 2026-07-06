@@ -54,12 +54,12 @@ impl Context {
 
     pub(super) fn eval_number_constructor(&self, args: RuntimeCallArgs<'_>) -> Result<Value> {
         let value = Self::eval_native_unary_argument_value(args);
-        self.checked_value(Value::Number(Self::number_argument_value(value.as_ref())))
+        self.checked_value(Value::Number(Self::number_argument_value(value)))
     }
 
     pub(super) fn construct_number_object(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
         let value = Self::eval_native_unary_argument_value(args);
-        let _number_value = Self::number_argument_value(value.as_ref());
+        let _number_value = Self::number_argument_value(value);
         let prototype = self.number_constructor_prototype()?;
         let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_with_prototype(

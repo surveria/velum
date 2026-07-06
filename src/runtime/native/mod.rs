@@ -756,8 +756,10 @@ impl Context {
         self.native_function_registry.get(kind)
     }
 
-    pub(super) fn eval_native_unary_argument_value(args: RuntimeCallArgs<'_>) -> Option<Value> {
-        args.unary_value()
+    pub(super) const fn eval_native_unary_argument_value(
+        args: RuntimeCallArgs<'_>,
+    ) -> Option<&Value> {
+        args.as_slice().first()
     }
 
     pub(super) fn eval_error_constructor(
