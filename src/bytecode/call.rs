@@ -2,7 +2,7 @@ use crate::{
     ast::Expr,
     error::{Error, Result},
     native_call::NativeCallTarget,
-    value::ErrorName,
+    value::{ErrorName, Value},
 };
 
 use super::{BytecodeCompiler, BytecodeInstruction};
@@ -70,6 +70,7 @@ impl BytecodeCompiler<'_> {
                 self.compile_args(args)?;
                 self.emit(BytecodeInstruction::CallComputedMember {
                     property: Self::compile_dynamic_property(*access),
+                    native: computed_property_native_target(property),
                     arg_count: args.len(),
                 });
                 Ok(())
@@ -91,6 +92,16 @@ impl BytecodeCompiler<'_> {
             self.compile_expr(arg)?;
         }
         Ok(())
+    }
+}
+
+fn computed_property_native_target(property: &Expr) -> Option<NativeCallTarget> {
+    match property {
+        Expr::StringLiteral(value) => NativeCallTarget::from_property_name(value.as_str()),
+        Expr::Literal(
+            value @ (Value::Undefined | Value::Null | Value::Bool(_) | Value::Number(_)),
+        ) => NativeCallTarget::from_property_name(&value.to_string()),
+        _ => None,
     }
 }
 

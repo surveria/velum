@@ -233,9 +233,9 @@ impl BytecodeInstruction {
 
     fn direct_native_call_count(&self) -> usize {
         match self {
-            Self::CallBinding { native, .. } | Self::CallStaticMember { native, .. } => {
-                usize::from(native.is_some())
-            }
+            Self::CallBinding { native, .. }
+            | Self::CallStaticMember { native, .. }
+            | Self::CallComputedMember { native, .. } => usize::from(native.is_some()),
             Self::If {
                 condition,
                 consequent,
@@ -299,7 +299,9 @@ impl BytecodeInstruction {
 
     fn array_native_call_count(&self) -> usize {
         match self {
-            Self::CallBinding { native, .. } | Self::CallStaticMember { native, .. } => {
+            Self::CallBinding { native, .. }
+            | Self::CallStaticMember { native, .. }
+            | Self::CallComputedMember { native, .. } => {
                 native.map_or(0, |target| usize::from(target.is_array_target()))
             }
             Self::If {
