@@ -3,6 +3,8 @@ use crate::value::{ObjectId, Value};
 
 #[path = "runtime_object_array.rs"]
 mod runtime_object_array;
+#[path = "runtime_object_array_front.rs"]
+mod runtime_object_array_front;
 #[path = "runtime_object_array_storage.rs"]
 mod runtime_object_array_storage;
 #[path = "runtime_object_base.rs"]

@@ -1,8 +1,9 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
 use crate::error::{Error, Result};
+use crate::value::Value;
 
-use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ObjectProperty, PropertyKey};
+use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ObjectProperty, PropertyEnumerable, PropertyKey};
 
 #[derive(Debug, Clone)]
 pub(super) struct ArrayStorage {
@@ -14,7 +15,7 @@ pub(super) struct ArrayStorage {
 impl ArrayStorage {
     pub(super) const fn new() -> Self {
         Self {
-            elements: ArrayElements::Packed(Vec::new()),
+            elements: ArrayElements::Packed(VecDeque::new()),
             sparse_keys: BTreeMap::new(),
             property_count: 0,
         }
@@ -52,41 +53,91 @@ impl ArrayStorage {
             return None;
         }
         match &self.elements {
-            ArrayElements::Packed(elements) if elements.len() == len => Some(elements.as_slice()),
-            ArrayElements::Packed(_) | ArrayElements::Holey(_) => None,
-        }
-    }
-
-    pub(super) fn packed_properties_for_len_mut(
-        &mut self,
-        len: usize,
-    ) -> Option<&mut [ObjectProperty]> {
-        if self.has_sparse_keys() {
-            return None;
-        }
-        match &mut self.elements {
             ArrayElements::Packed(elements) if elements.len() == len => {
-                Some(elements.as_mut_slice())
+                let (front, back) = elements.as_slices();
+                back.is_empty().then_some(front)
             }
             ArrayElements::Packed(_) | ArrayElements::Holey(_) => None,
         }
     }
 
     pub(super) fn reverse_packed_for_len_if_default(&mut self, len: usize) -> bool {
-        let Some(properties) = self.packed_properties_for_len_mut(len) else {
+        if self.has_sparse_keys() {
+            return false;
+        }
+        match &mut self.elements {
+            ArrayElements::Packed(elements) if elements.len() == len => {
+                if !elements
+                    .iter()
+                    .all(ObjectProperty::has_default_array_attributes)
+                {
+                    return false;
+                }
+                elements.make_contiguous().reverse();
+                true
+            }
+            ArrayElements::Packed(_) | ArrayElements::Holey(_) => false,
+        }
+    }
+
+    pub(super) fn shift_packed_for_len_if_default(&mut self, len: usize) -> Option<ObjectProperty> {
+        if self.has_sparse_keys() {
+            return None;
+        }
+        let ArrayElements::Packed(elements) = &mut self.elements else {
+            return None;
+        };
+        if elements.len() != len
+            || !elements
+                .iter()
+                .all(ObjectProperty::has_default_array_attributes)
+        {
+            return None;
+        }
+        let removed = elements.pop_front()?;
+        self.property_count = self.property_count.saturating_sub(1);
+        Some(removed)
+    }
+
+    pub(super) fn unshift_packed_for_len_if_default(
+        &mut self,
+        len: usize,
+        values: &[Value],
+        max_properties: usize,
+    ) -> bool {
+        if self.has_sparse_keys() {
+            return false;
+        }
+        let Some(new_property_count) = self.property_count.checked_add(values.len()) else {
             return false;
         };
-        if !properties
-            .iter()
-            .all(ObjectProperty::has_default_array_attributes)
+        let Some(new_len) = len.checked_add(values.len()) else {
+            return false;
+        };
+        if new_property_count > max_properties || new_len > max_properties {
+            return false;
+        }
+        let ArrayElements::Packed(elements) = &mut self.elements else {
+            return false;
+        };
+        if elements.len() != len
+            || !elements
+                .iter()
+                .all(ObjectProperty::has_default_array_attributes)
         {
             return false;
         }
-        properties.reverse();
+        for value in values.iter().rev() {
+            elements.push_front(ObjectProperty::ordinary(
+                value.clone(),
+                PropertyEnumerable::Yes,
+            ));
+        }
+        self.property_count = new_property_count;
         true
     }
 
-    pub(super) const fn dense_len(&self) -> usize {
+    pub(super) fn dense_len(&self) -> usize {
         match &self.elements {
             ArrayElements::Packed(elements) => elements.len(),
             ArrayElements::Holey(elements) => elements.len(),
@@ -105,7 +156,7 @@ impl ArrayStorage {
                     return Ok(Some(std::mem::replace(existing, property)));
                 }
                 if position == elements.len() {
-                    elements.push(property);
+                    elements.push_back(property);
                     self.property_count = self.property_count.saturating_add(1);
                     return Ok(None);
                 }
@@ -147,7 +198,7 @@ impl ArrayStorage {
                     return Ok(None);
                 }
                 if position.checked_add(1) == Some(elements.len()) {
-                    elements.pop()
+                    elements.pop_back()
                 } else {
                     let mut holey = Vec::with_capacity(elements.len());
                     holey.extend(elements.drain(..).map(Some));
@@ -206,6 +257,6 @@ impl Default for ArrayStorage {
 enum ArrayElements {
     // Packed means the materialized dense prefix has no holes; callers must still
     // compare storage length with the JavaScript array length before full fast paths.
-    Packed(Vec<ObjectProperty>),
+    Packed(VecDeque<ObjectProperty>),
     Holey(Vec<Option<ObjectProperty>>),
 }
