@@ -89,6 +89,19 @@ var made = new Box(total);
 made.value;
 ";
 
+const EXACT_GLOBAL_SLOT_SHADOWING_SOURCE: &str = r"
+var counter = 1;
+var base = 5;
+var adjust = function adjust(counter) {
+    counter = counter + 10;
+    return counter;
+};
+counter = counter + 1;
+var local = adjust(30);
+counter = counter + 1;
+counter + local + base;
+";
+
 const LOCAL_FRAME_METADATA_SOURCE: &str = r"
 var run = function run(seed) {
     let total = seed;
@@ -326,6 +339,29 @@ fn compiled_global_slot_operands_drive_binding_operations() -> TestResult {
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(4.0))?;
     ensure_optional_value(vm.get_global("total").as_ref(), &Value::Number(4.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atom_count)
+}
+
+#[test]
+fn compiled_top_level_global_slots_preserve_function_shadowing() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(EXACT_GLOBAL_SLOT_SHADOWING_SOURCE)?;
+    let usage = script.usage();
+
+    ensure_usize(usage.global_binding_slot_count(), 4)?;
+    ensure_usize(usage.local_binding_slot_count(), 1)?;
+    ensure_usize(usage.upvalue_binding_slot_count(), 0)?;
+    ensure_usize(usage.unresolved_static_binding_count(), 0)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(48.0))?;
+    ensure_optional_value(vm.get_global("counter").as_ref(), &Value::Number(3.0))?;
+    let atom_count = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(48.0))?;
+    ensure_optional_value(vm.get_global("counter").as_ref(), &Value::Number(3.0))?;
     ensure_usize(vm.resource_usage().atom_count, atom_count)
 }
 

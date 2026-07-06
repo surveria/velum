@@ -13,6 +13,7 @@ use crate::{
     value::{NativeFunctionId, Value},
 };
 
+use super::runtime_binding_location::{BindingLocation, LocalScopeIndex};
 use super::runtime_native::NativeFunctionKind;
 
 #[derive(Debug, Clone)]
@@ -93,117 +94,6 @@ impl StaticBindingNativeCallCache {
             return Some(self.kind);
         }
         None
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum BindingLocation {
-    Global {
-        atom: AtomId,
-        slot: BindingSlot,
-        validation: BindingLocationValidation,
-    },
-    BuiltinGlobal {
-        atom: AtomId,
-        slot: BindingSlot,
-        validation: BindingLocationValidation,
-    },
-    Local {
-        atom: AtomId,
-        scope: LocalScopeIndex,
-        slot: BindingSlot,
-        validation: BindingLocationValidation,
-    },
-    ExactLocal {
-        frame: LocalScopeIndex,
-        compiled_scope: ScopeId,
-        slot: BindingSlot,
-    },
-    Upvalue {
-        slot: BindingSlot,
-    },
-}
-
-impl BindingLocation {
-    const fn global(atom: AtomId, slot: BindingSlot) -> Self {
-        Self::Global {
-            atom,
-            slot,
-            validation: BindingLocationValidation::Guarded,
-        }
-    }
-
-    const fn builtin_global(atom: AtomId, slot: BindingSlot) -> Self {
-        Self::BuiltinGlobal {
-            atom,
-            slot,
-            validation: BindingLocationValidation::Guarded,
-        }
-    }
-
-    const fn local(atom: AtomId, scope: LocalScopeIndex, slot: BindingSlot) -> Self {
-        Self::Local {
-            atom,
-            scope,
-            slot,
-            validation: BindingLocationValidation::Guarded,
-        }
-    }
-
-    const fn upvalue(slot: BindingSlot) -> Self {
-        Self::Upvalue { slot }
-    }
-
-    const fn exact(self) -> Self {
-        match self {
-            Self::Global { atom, slot, .. } => Self::Global {
-                atom,
-                slot,
-                validation: BindingLocationValidation::Exact,
-            },
-            Self::BuiltinGlobal { atom, slot, .. } => Self::BuiltinGlobal {
-                atom,
-                slot,
-                validation: BindingLocationValidation::Exact,
-            },
-            Self::Local { .. } | Self::ExactLocal { .. } => self,
-            Self::Upvalue { slot } => Self::Upvalue { slot },
-        }
-    }
-
-    const fn needs_shadow_guard(self) -> bool {
-        matches!(
-            self,
-            Self::Global {
-                validation: BindingLocationValidation::Guarded,
-                ..
-            } | Self::BuiltinGlobal {
-                validation: BindingLocationValidation::Guarded,
-                ..
-            } | Self::Local {
-                validation: BindingLocationValidation::Guarded,
-                ..
-            }
-        )
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum BindingLocationValidation {
-    Guarded,
-    Exact,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct LocalScopeIndex(usize);
-
-impl LocalScopeIndex {
-    const fn new(index: usize) -> Self {
-        Self(index)
-    }
-
-    const fn index(self) -> usize {
-        self.0
     }
 }
 
@@ -398,19 +288,6 @@ impl Context {
             .map(|binding| binding.is_some())
     }
 
-    pub(crate) fn resolve_runtime_static_binding(
-        &self,
-        binding: &StaticBinding,
-    ) -> Result<Option<BindingCell>> {
-        let Some(atom) = self.lookup_static_name_atom(binding.name())? else {
-            return Ok(None);
-        };
-        let Some(location) = self.resolve_binding_location(atom) else {
-            return Ok(None);
-        };
-        self.binding_at_location(location)
-    }
-
     pub(crate) fn resolve_runtime_static_declaration(
         &self,
         layout: &BindingLayout,
@@ -429,7 +306,10 @@ impl Context {
         {
             return Ok(Some(cell));
         }
-        self.resolve_runtime_static_binding(binding)
+        let Some(location) = self.resolve_binding_location(atom) else {
+            return Ok(None);
+        };
+        self.binding_at_location(location)
     }
 
     pub(crate) fn remember_active_static_binding(
@@ -474,7 +354,8 @@ impl Context {
         let BindingOperand::Global { slot } = self.compiled_binding_operand(binding.id())? else {
             return Ok(None);
         };
-        let location = BindingLocation::global(atom, BindingSlot::from_index(slot.index()?));
+        let slot = BindingSlot::from_index(slot.index()?);
+        let location = self.compiled_global_location(atom, slot);
         let Some(cell) = self.binding_at_location(location)? else {
             return Ok(None);
         };
@@ -531,7 +412,7 @@ impl Context {
         match operand {
             BindingOperand::Global { slot } => {
                 let location =
-                    BindingLocation::global(atom, BindingSlot::from_index(slot.index()?)).exact();
+                    self.compiled_global_location(atom, BindingSlot::from_index(slot.index()?));
                 self.binding_at_location(location)
             }
             BindingOperand::Local { scope, slot } => {
@@ -587,10 +468,9 @@ impl Context {
             return Self::compiled_active_local_binding(atom, operand, self.locals.len());
         }
         match operand {
-            BindingOperand::Global { slot } => Ok(Some(BindingLocation::global(
-                atom,
-                BindingSlot::from_index(slot.index()?),
-            ))),
+            BindingOperand::Global { slot } => Ok(Some(
+                self.compiled_global_location(atom, BindingSlot::from_index(slot.index()?)),
+            )),
             BindingOperand::Local { .. } | BindingOperand::Upvalue { .. } => {
                 Err(Error::runtime("global binding layout is not a global slot"))
             }
@@ -614,6 +494,13 @@ impl Context {
             LocalScopeIndex::new(index),
             BindingSlot::from_index(slot.index()?),
         )))
+    }
+
+    fn compiled_global_location(&self, atom: AtomId, slot: BindingSlot) -> BindingLocation {
+        if self.locals.last().is_none() && self.globals.cell_for_slot(atom, slot).is_some() {
+            return BindingLocation::exact_global(slot);
+        }
+        BindingLocation::global(atom, slot)
     }
 
     fn cached_static_binding(&self, binding: &StaticBinding) -> Result<Option<BindingCell>> {
@@ -687,6 +574,9 @@ impl Context {
             BindingLocation::Global { atom, slot, .. } => {
                 Ok(self.global_binding_at_location(location, atom, slot))
             }
+            BindingLocation::ExactGlobal { slot } => {
+                Ok(self.exact_global_binding_at_location(slot))
+            }
             BindingLocation::BuiltinGlobal { atom, slot, .. } => {
                 Ok(self.builtin_global_binding_at_location(location, atom, slot))
             }
@@ -712,6 +602,13 @@ impl Context {
             return None;
         }
         self.globals.cell_for_slot(atom, slot)
+    }
+
+    fn exact_global_binding_at_location(&self, slot: BindingSlot) -> Option<BindingCell> {
+        if self.locals.last().is_some() {
+            return None;
+        }
+        self.globals.cell_at_slot(slot)
     }
 
     fn builtin_global_binding_at_location(
@@ -778,28 +675,5 @@ impl Context {
             }
         }
         false
-    }
-}
-
-impl BindingLocation {
-    const fn for_compiled_operand(self, operand: BindingOperand) -> Self {
-        match (operand, self) {
-            (
-                BindingOperand::Local {
-                    scope: compiled_scope,
-                    ..
-                },
-                Self::Local {
-                    scope: frame, slot, ..
-                },
-            ) => Self::ExactLocal {
-                frame,
-                compiled_scope,
-                slot,
-            },
-            (BindingOperand::Local { .. }, Self::ExactLocal { .. }) => self,
-            (BindingOperand::Upvalue { .. }, Self::Upvalue { slot }) => Self::Upvalue { slot },
-            (_, location) => location,
-        }
     }
 }
