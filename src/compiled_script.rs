@@ -32,6 +32,7 @@ impl CompiledScript {
         let bytecode_array_native_call_count = bytecode.array_native_call_count();
         let bytecode_numeric_instruction_count = bytecode.numeric_instruction_count();
         let bytecode_hoisted_var_count = bytecode.hoist_plan().var_declaration_count();
+        let bytecode_hoisted_function_count = bytecode.hoist_plan().function_declaration_count();
         Ok(Self {
             bytecode,
             usage: CompiledScriptUsage {
@@ -54,6 +55,7 @@ impl CompiledScript {
                 bytecode_array_native_call_count,
                 bytecode_numeric_instruction_count,
                 bytecode_hoisted_var_count,
+                bytecode_hoisted_function_count,
             },
             binding_layout,
         })
@@ -111,6 +113,7 @@ pub struct CompiledScriptUsage {
     bytecode_array_native_call_count: usize,
     bytecode_numeric_instruction_count: usize,
     bytecode_hoisted_var_count: usize,
+    bytecode_hoisted_function_count: usize,
 }
 
 impl CompiledScriptUsage {
@@ -207,6 +210,11 @@ impl CompiledScriptUsage {
     #[must_use]
     pub const fn bytecode_hoisted_var_count(self) -> usize {
         self.bytecode_hoisted_var_count
+    }
+
+    #[must_use]
+    pub const fn bytecode_hoisted_function_count(self) -> usize {
+        self.bytecode_hoisted_function_count
     }
 }
 

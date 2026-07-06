@@ -126,6 +126,28 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: Value,
     ) -> Result<Completion> {
+        self.call_depth = self
+            .call_depth
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("call stack depth overflowed"))?;
+        if self.call_depth > self.limits.max_expression_depth {
+            self.call_depth = self.call_depth.saturating_sub(1);
+            return Err(Error::limit(format!(
+                "call stack depth exceeded {}",
+                self.limits.max_expression_depth
+            )));
+        }
+        let result = self.eval_function_completion_with_this_inner(id, args, this_value);
+        self.call_depth = self.call_depth.saturating_sub(1);
+        result
+    }
+
+    fn eval_function_completion_with_this_inner(
+        &mut self,
+        id: FunctionId,
+        args: RuntimeCallArgs<'_>,
+        this_value: Value,
+    ) -> Result<Completion> {
         let (
             param_atoms,
             param_binding_ids,
@@ -552,19 +574,19 @@ impl Context {
                 |context| {
                     context.remember_function_params(param_binding_ids, param_atoms)?;
                     context
-                        .hoist_bytecode_var_declarations(bytecode.hoist_plan())
+                        .hoist_bytecode_declarations(bytecode.hoist_plan())
                         .and_then(|()| context.eval_bytecode_block(bytecode.body()))
                 },
             ),
             (Some(static_name_atom_cache), None, _) => {
                 self.with_static_name_atom_cache(static_name_atom_cache, |context| {
                     context
-                        .hoist_bytecode_var_declarations(bytecode.hoist_plan())
+                        .hoist_bytecode_declarations(bytecode.hoist_plan())
                         .and_then(|()| context.eval_bytecode_block(bytecode.body()))
                 })
             }
             (None, _, _) | (Some(_), Some(_), None) => self
-                .hoist_bytecode_var_declarations(bytecode.hoist_plan())
+                .hoist_bytecode_declarations(bytecode.hoist_plan())
                 .and_then(|()| self.eval_bytecode_block(bytecode.body())),
         }
     }

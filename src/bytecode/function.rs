@@ -12,7 +12,7 @@ impl BytecodeFunction {
     pub fn compile(statements: &[Stmt], layout: &BindingLayout) -> Result<Self> {
         Ok(Self::new(
             BytecodeBlock::compile_statements(statements, StatementValue::Store, layout)?,
-            BytecodeHoistPlan::compile(statements),
+            BytecodeHoistPlan::compile(statements, layout)?,
             CaptureBindingCollector::collect(statements),
         ))
     }
@@ -108,6 +108,7 @@ impl CaptureBindingCollector {
                     self.collect_expr(expr);
                 }
             }
+            Stmt::FunctionDecl { body, .. } => self.collect_statements(body),
             Stmt::VarDecl { init, .. } => {
                 if let Some(init) = init {
                     self.collect_expr(init);

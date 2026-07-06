@@ -340,7 +340,7 @@ impl Parser {
         })
     }
 
-    fn function_parameters(&mut self) -> Result<Vec<StaticBinding>> {
+    pub(super) fn function_parameters(&mut self) -> Result<Vec<StaticBinding>> {
         let mut params = Vec::new();
         if self.check(&TokenKind::RParen) {
             return Ok(params);
