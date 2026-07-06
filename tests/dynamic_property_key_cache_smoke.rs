@@ -75,6 +75,7 @@ fn compiled_dynamic_computed_operations_have_access_site_slots() -> TestResult {
     )?;
 
     ensure_usize(script.usage().static_property_access_count(), 5)?;
+    ensure_usize(script.usage().bytecode_property_operand_count(), 5)?;
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(5.0))?;
     let atom_count = vm.resource_usage().atom_count;
@@ -102,6 +103,7 @@ fn compiled_dynamic_computed_calls_preserve_this_binding() -> TestResult {
     )?;
 
     ensure_usize(script.usage().static_property_access_count(), 2)?;
+    ensure_usize(script.usage().bytecode_property_operand_count(), 2)?;
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(42.0))?;
     let value = vm.eval_compiled(&script)?;
@@ -123,6 +125,7 @@ fn compiled_dynamic_access_site_uses_current_property_key() -> TestResult {
     )?;
 
     ensure_usize(script.usage().static_property_access_count(), 1)?;
+    ensure_usize(script.usage().bytecode_property_operand_count(), 1)?;
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(12.0))?;
     let value = vm.eval_compiled(&script)?;
@@ -143,10 +146,34 @@ fn compiled_dynamic_array_indices_keep_array_semantics() -> TestResult {
     )?;
 
     ensure_usize(script.usage().static_property_access_count(), 2)?;
+    ensure_usize(script.usage().bytecode_property_operand_count(), 2)?;
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(42.0))?;
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn compiled_dynamic_delete_and_in_have_bytecode_property_operands() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r#"
+        var holder = { slot: 1 };
+        var key = "slot";
+        var before = key in holder;
+        var removed = delete holder[key];
+        var after = key in holder;
+        before && removed && !after ? 17 : 0;
+        "#,
+    )?;
+
+    ensure_usize(script.usage().static_property_access_count(), 3)?;
+    ensure_usize(script.usage().bytecode_property_operand_count(), 3)?;
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(17.0))?;
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(17.0))
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

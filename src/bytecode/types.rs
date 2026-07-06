@@ -148,6 +148,21 @@ impl BytecodeProperty {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct BytecodeDynamicProperty {
+    access: StaticPropertyAccessId,
+}
+
+impl BytecodeDynamicProperty {
+    pub(crate) const fn new(access: StaticPropertyAccessId) -> Self {
+        Self { access }
+    }
+
+    pub const fn access(self) -> StaticPropertyAccessId {
+        self.access
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BytecodeNumericBinaryOp {
     Sub,
     Mul,
@@ -215,7 +230,7 @@ pub enum BytecodeAssignmentTarget {
     ComputedProperty {
         object: BytecodeBlock,
         property: BytecodeBlock,
-        access: StaticPropertyAccessId,
+        operand: BytecodeDynamicProperty,
     },
 }
 
@@ -253,7 +268,9 @@ pub enum BytecodeInstruction {
     DeleteStaticProperty {
         property: BytecodeProperty,
     },
-    DeleteComputedProperty,
+    DeleteComputedProperty {
+        property: BytecodeDynamicProperty,
+    },
     DeleteValue,
     UpdateBinding {
         name: BytecodeBinding,
@@ -266,13 +283,13 @@ pub enum BytecodeInstruction {
         prefix: bool,
     },
     UpdateComputedProperty {
-        access: StaticPropertyAccessId,
+        property: BytecodeDynamicProperty,
         op: UpdateOp,
         prefix: bool,
     },
     Binary {
         op: BinaryOp,
-        property_access: Option<StaticPropertyAccessId>,
+        property_access: Option<BytecodeDynamicProperty>,
     },
     NumberBinary(BytecodeNumericBinaryOp),
     CompoundStoreBinding {
@@ -284,20 +301,20 @@ pub enum BytecodeInstruction {
         op: BinaryOp,
     },
     CompoundComputedProperty {
-        access: StaticPropertyAccessId,
+        property: BytecodeDynamicProperty,
         op: BinaryOp,
     },
     StaticMember {
         property: BytecodeProperty,
     },
     ComputedMember {
-        access: StaticPropertyAccessId,
+        property: BytecodeDynamicProperty,
     },
     StaticPropertyAssign {
         property: BytecodeProperty,
     },
     ComputedPropertyAssign {
-        access: StaticPropertyAccessId,
+        property: BytecodeDynamicProperty,
     },
     CallBinding {
         callee: BytecodeBinding,
@@ -313,7 +330,7 @@ pub enum BytecodeInstruction {
         arg_count: usize,
     },
     CallComputedMember {
-        access: StaticPropertyAccessId,
+        property: BytecodeDynamicProperty,
         arg_count: usize,
     },
     Print {

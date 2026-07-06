@@ -19,8 +19,9 @@ mod types;
 pub use hoist::BytecodeHoistPlan;
 pub use types::{
     BytecodeAddress, BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock, BytecodeCatch,
-    BytecodeCompletion, BytecodeForInTarget, BytecodeFunction, BytecodeInstruction,
-    BytecodeNumericBinaryOp, BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
+    BytecodeCompletion, BytecodeDynamicProperty, BytecodeForInTarget, BytecodeFunction,
+    BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeProgram, BytecodeProperty,
+    BytecodeSwitchCase,
 };
 
 impl BytecodeProgram {
@@ -77,6 +78,10 @@ impl<'a> BytecodeCompiler<'a> {
 
     fn compile_property(property: &StaticName, access: StaticPropertyAccessId) -> BytecodeProperty {
         BytecodeProperty::new(property.clone(), access)
+    }
+
+    const fn compile_dynamic_property(access: StaticPropertyAccessId) -> BytecodeDynamicProperty {
+        BytecodeDynamicProperty::new(access)
     }
 
     fn compile_statements(&mut self, statements: &[Stmt], value: StatementValue) -> Result<()> {
@@ -286,7 +291,9 @@ impl<'a> BytecodeCompiler<'a> {
         self.compile_expr(object)?;
         self.compile_expr(property)?;
         self.compile_expr(expr)?;
-        self.emit(BytecodeInstruction::ComputedPropertyAssign { access });
+        self.emit(BytecodeInstruction::ComputedPropertyAssign {
+            property: Self::compile_dynamic_property(access),
+        });
         Ok(())
     }
 
@@ -311,7 +318,9 @@ impl<'a> BytecodeCompiler<'a> {
     ) -> Result<()> {
         self.compile_expr(object)?;
         self.compile_expr(property)?;
-        self.emit(BytecodeInstruction::ComputedMember { access });
+        self.emit(BytecodeInstruction::ComputedMember {
+            property: Self::compile_dynamic_property(access),
+        });
         Ok(())
     }
 
@@ -392,11 +401,15 @@ impl<'a> BytecodeCompiler<'a> {
                 Ok(())
             }
             Expr::ComputedMember {
-                object, property, ..
+                object,
+                property,
+                access,
             } => {
                 self.compile_expr(object)?;
                 self.compile_expr(property)?;
-                self.emit(BytecodeInstruction::DeleteComputedProperty);
+                self.emit(BytecodeInstruction::DeleteComputedProperty {
+                    property: Self::compile_dynamic_property(*access),
+                });
                 Ok(())
             }
             expr => {
@@ -427,7 +440,7 @@ impl<'a> BytecodeCompiler<'a> {
                 } else {
                     self.emit(BytecodeInstruction::Binary {
                         op,
-                        property_access,
+                        property_access: property_access.map(Self::compile_dynamic_property),
                     });
                 }
                 Ok(())
@@ -484,7 +497,7 @@ impl<'a> BytecodeCompiler<'a> {
                 self.compile_expr(object)?;
                 self.compile_expr(property)?;
                 self.emit(BytecodeInstruction::UpdateComputedProperty {
-                    access: *access,
+                    property: Self::compile_dynamic_property(*access),
                     op,
                     prefix,
                 });
@@ -532,7 +545,7 @@ impl<'a> BytecodeCompiler<'a> {
                 self.compile_expr(property)?;
                 self.compile_expr(expr)?;
                 self.emit(BytecodeInstruction::CompoundComputedProperty {
-                    access: *access,
+                    property: Self::compile_dynamic_property(*access),
                     op,
                 });
                 Ok(())
@@ -628,7 +641,7 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::TypeOfValue
             | BytecodeInstruction::DeleteBinding(_)
             | BytecodeInstruction::DeleteStaticProperty { .. }
-            | BytecodeInstruction::DeleteComputedProperty
+            | BytecodeInstruction::DeleteComputedProperty { .. }
             | BytecodeInstruction::DeleteValue
             | BytecodeInstruction::UpdateBinding { .. }
             | BytecodeInstruction::UpdateStaticProperty { .. }

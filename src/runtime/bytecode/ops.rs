@@ -2,7 +2,9 @@ use std::rc::Rc;
 
 use crate::{
     ast::{BinaryOp, DeclKind, StaticName, StaticPropertyAccessId, UnaryOp, UpdateOp},
-    bytecode::{BytecodeAssignmentTarget, BytecodeBinding, BytecodeNumericBinaryOp},
+    bytecode::{
+        BytecodeAssignmentTarget, BytecodeBinding, BytecodeDynamicProperty, BytecodeNumericBinaryOp,
+    },
     error::{Error, Result},
     runtime::Context,
     runtime::assertions::thrown_value_matches,
@@ -88,7 +90,7 @@ impl Context {
         op: BinaryOp,
         left: &Value,
         right: &Value,
-        property_access: Option<StaticPropertyAccessId>,
+        property_access: Option<BytecodeDynamicProperty>,
     ) -> Result<Value> {
         let value = match op {
             BinaryOp::Add => self.add(left, right)?,
@@ -144,12 +146,12 @@ impl Context {
         &self,
         left: &Value,
         right: &Value,
-        property_access: Option<StaticPropertyAccessId>,
+        property_access: Option<BytecodeDynamicProperty>,
     ) -> Result<Value> {
         let property = self.dynamic_property_key(left)?;
         if let Some(access) = property_access {
             return self
-                .has_cached_dynamic_property_value(right, &property, access)
+                .has_cached_dynamic_property_value(right, &property, access.access())
                 .map(Value::Bool);
         }
         self.has_dynamic_property_value(right, &property)
@@ -304,12 +306,17 @@ impl Context {
             BytecodeAssignmentTarget::ComputedProperty {
                 object,
                 property,
-                access,
+                operand,
             } => {
                 let object = self.eval_bytecode_expression(object)?;
                 let property = self.eval_bytecode_expression(property)?;
                 let mut property = self.dynamic_property_key(&property)?;
-                self.set_cached_dynamic_property_value(&object, &mut property, *access, value)
+                self.set_cached_dynamic_property_value(
+                    &object,
+                    &mut property,
+                    operand.access(),
+                    value,
+                )
             }
         }
     }
