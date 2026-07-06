@@ -47,6 +47,16 @@ impl ArrayStorage {
         }
     }
 
+    pub(super) fn packed_properties_for_len(&self, len: usize) -> Option<&[ObjectProperty]> {
+        if self.has_sparse_keys() {
+            return None;
+        }
+        match &self.elements {
+            ArrayElements::Packed(elements) if elements.len() == len => Some(elements.as_slice()),
+            ArrayElements::Packed(_) | ArrayElements::Holey(_) => None,
+        }
+    }
+
     pub(super) const fn dense_len(&self) -> usize {
         match &self.elements {
             ArrayElements::Packed(elements) => elements.len(),

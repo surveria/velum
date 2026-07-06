@@ -3,7 +3,7 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ArrayLength, Object, ObjectHeap};
+use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ArrayLength, Object, ObjectHeap, ObjectProperty};
 
 const ARRAY_CONCAT_RECEIVER_ERROR: &str = "Array.prototype.concat requires an array receiver";
 const ARRAY_INCLUDES_RECEIVER_ERROR: &str = "Array.prototype.includes requires an array receiver";
@@ -122,10 +122,16 @@ impl ObjectHeap {
         max_objects: usize,
         max_properties: usize,
     ) -> Result<Value> {
-        self.array_length_for_method(id, ARRAY_SLICE_RECEIVER_ERROR)?;
+        let length = self
+            .array_length_for_method(id, ARRAY_SLICE_RECEIVER_ERROR)?
+            .to_usize()?;
         let count = end
             .checked_sub(start)
             .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
+        if let Some(values) = self.packed_array_value_range(id, length, start, count)? {
+            return self.create_array(values, prototype, max_objects, max_properties);
+        }
+
         let result = self.create_array_with_length(count, prototype, max_objects)?;
         let Value::Object(result_id) = result else {
             return Err(Error::runtime("array slice result is not an object"));
@@ -243,6 +249,9 @@ impl ObjectHeap {
         if start >= length {
             return Ok(Value::Number(INDEX_NOT_FOUND));
         }
+        if let Some(properties) = self.packed_array_properties(id, length)? {
+            return Self::packed_array_index_of(properties, search, start);
+        }
 
         for position in start..length {
             let index = ArrayIndex::from_usize(position)?;
@@ -267,6 +276,9 @@ impl ObjectHeap {
         if start >= length {
             return Ok(Value::Bool(false));
         }
+        if let Some(properties) = self.packed_array_properties(id, length)? {
+            return Ok(Self::packed_array_includes(properties, search, start));
+        }
 
         for index in start..length {
             let index = ArrayIndex::from_usize(index)?;
@@ -284,10 +296,15 @@ impl ObjectHeap {
         search: &Value,
         start: Option<usize>,
     ) -> Result<Value> {
-        self.array_length_for_method(id, ARRAY_LAST_INDEX_OF_RECEIVER_ERROR)?;
+        let length = self
+            .array_length_for_method(id, ARRAY_LAST_INDEX_OF_RECEIVER_ERROR)?
+            .to_usize()?;
         let Some(start) = start else {
             return Ok(Value::Number(INDEX_NOT_FOUND));
         };
+        if let Some(properties) = self.packed_array_properties(id, length)? {
+            return Self::packed_array_last_index_of(properties, search, start);
+        }
 
         for position in (0..=start).rev() {
             let index = ArrayIndex::from_usize(position)?;
@@ -307,6 +324,29 @@ impl ObjectHeap {
         }
         let index = ArrayIndex::from_usize(index)?;
         self.get_array_index(id, index)
+    }
+
+    pub(crate) fn packed_array_join(
+        &self,
+        id: ObjectId,
+        separator: &str,
+        max_string_len: usize,
+    ) -> Result<Option<String>> {
+        let length = self.array_length_for_method(id, ARRAY_JOIN_RECEIVER_ERROR)?;
+        let length = length.to_usize()?;
+        let Some(properties) = self.packed_array_properties(id, length)? else {
+            return Ok(None);
+        };
+        let mut joined = String::new();
+        for (index, property) in properties.iter().enumerate() {
+            if index > 0 {
+                Self::push_join_text(&mut joined, separator, max_string_len)?;
+            }
+            let value = property.value();
+            let text = Self::array_join_element_text(&value);
+            Self::push_join_text(&mut joined, &text, max_string_len)?;
+        }
+        Ok(Some(joined))
     }
 
     fn get_array_index(&self, id: ObjectId, index: ArrayIndex) -> Result<Value> {
@@ -354,6 +394,31 @@ impl ObjectHeap {
             current = object.prototype;
         }
         Ok(None)
+    }
+
+    fn packed_array_properties(
+        &self,
+        id: ObjectId,
+        length: usize,
+    ) -> Result<Option<&[ObjectProperty]>> {
+        Ok(self.object(id)?.packed_array_properties(length))
+    }
+
+    fn packed_array_value_range(
+        &self,
+        id: ObjectId,
+        length: usize,
+        start: usize,
+        count: usize,
+    ) -> Result<Option<Vec<Value>>> {
+        let Some(properties) = self.packed_array_properties(id, length)? else {
+            return Ok(None);
+        };
+        let mut values = Vec::with_capacity(count);
+        for property in properties.iter().skip(start).take(count) {
+            values.push(property.value());
+        }
+        Ok(Some(values))
     }
 
     fn array_length_for_method(&self, id: ObjectId, error: &str) -> Result<ArrayLength> {
@@ -451,6 +516,18 @@ impl ObjectHeap {
         let (source, result) = self.object_pair_for_concat(source_id, result_id)?;
         if result.array_length.is_none() {
             return Err(Error::runtime("array concat result is not an array"));
+        }
+        if let Some(properties) = source.packed_array_properties(length) {
+            let mut next_index = start_index;
+            for property in properties {
+                let target_index = ArrayIndex::from_usize(next_index)?;
+                result.set_array_index(target_index, property.value(), max_properties)?;
+                next_index = Self::next_concat_index(next_index)?;
+            }
+            return Ok(ArrayCopyProgress {
+                next_index,
+                source_index: length,
+            });
         }
         let mut next_index = start_index;
         for source_position in 0..length {
@@ -557,9 +634,79 @@ impl ObjectHeap {
     const fn number_is_zero(value: f64) -> bool {
         matches!(value.classify(), std::num::FpCategory::Zero)
     }
+
+    fn array_join_element_text(value: &Value) -> String {
+        match value {
+            Value::Undefined | Value::Null => String::new(),
+            _ => value.display_for_concat(),
+        }
+    }
+
+    fn push_join_text(joined: &mut String, text: &str, max_string_len: usize) -> Result<()> {
+        let length = joined
+            .len()
+            .checked_add(text.len())
+            .ok_or_else(|| Error::limit("string length exceeded supported range"))?;
+        if length > max_string_len {
+            return Err(Error::limit(format!(
+                "string length {length} exceeded {max_string_len}"
+            )));
+        }
+        joined.push_str(text);
+        Ok(())
+    }
+
+    fn packed_array_index_of(
+        properties: &[ObjectProperty],
+        search: &Value,
+        start: usize,
+    ) -> Result<Value> {
+        for (position, property) in properties.iter().enumerate().skip(start) {
+            let value = property.value();
+            if &value == search {
+                return Self::array_index_value(position);
+            }
+        }
+        Ok(Value::Number(INDEX_NOT_FOUND))
+    }
+
+    fn packed_array_includes(properties: &[ObjectProperty], search: &Value, start: usize) -> Value {
+        for property in properties.iter().skip(start) {
+            if Self::same_value_zero(&property.value(), search) {
+                return Value::Bool(true);
+            }
+        }
+        Value::Bool(false)
+    }
+
+    fn packed_array_last_index_of(
+        properties: &[ObjectProperty],
+        search: &Value,
+        start: usize,
+    ) -> Result<Value> {
+        if properties.is_empty() {
+            return Ok(Value::Number(INDEX_NOT_FOUND));
+        }
+        let upper = start.min(properties.len().saturating_sub(1));
+        let count = upper
+            .checked_add(1)
+            .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
+        for (position, property) in properties.iter().enumerate().take(count).rev() {
+            let value = property.value();
+            if &value == search {
+                return Self::array_index_value(position);
+            }
+        }
+        Ok(Value::Number(INDEX_NOT_FOUND))
+    }
 }
 
 impl Object {
+    fn packed_array_properties(&self, length: usize) -> Option<&[ObjectProperty]> {
+        self.array_length?;
+        self.array_storage.packed_properties_for_len(length)
+    }
+
     fn get_own_array_index(&self, index: ArrayIndex) -> Option<Value> {
         if self.array_length.is_some()
             && let Some(value) = self.array_element_value(index)
