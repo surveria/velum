@@ -10,11 +10,16 @@ use crate::{
     runtime::Context,
     runtime_assertions::reference_error_undefined,
     runtime_scope::{BindingCell, BindingScope, BindingSlot},
-    value::Value,
+    value::{NativeFunctionId, Value},
 };
 
+use super::runtime_native::NativeFunctionKind;
+
 #[derive(Debug, Clone)]
-pub struct StaticBindingCacheHandle(Rc<[Cell<Option<BindingLocation>>]>);
+pub struct StaticBindingCacheHandle {
+    locations: Rc<[Cell<Option<BindingLocation>>]>,
+    native_calls: Rc<[Cell<Option<StaticBindingNativeCallCache>>]>,
+}
 
 impl StaticBindingCacheHandle {
     pub(super) fn new(slot_count: usize) -> Self {
@@ -22,11 +27,18 @@ impl StaticBindingCacheHandle {
         for _ in 0..slot_count {
             bindings.push(Cell::new(None));
         }
-        Self(Rc::from(bindings.into_boxed_slice()))
+        let mut native_calls = Vec::with_capacity(slot_count);
+        for _ in 0..slot_count {
+            native_calls.push(Cell::new(None));
+        }
+        Self {
+            locations: Rc::from(bindings.into_boxed_slice()),
+            native_calls: Rc::from(native_calls.into_boxed_slice()),
+        }
     }
 
     fn location(&self, binding: &StaticBinding) -> Result<Option<BindingLocation>> {
-        self.0
+        self.locations
             .get(binding.id().index()?)
             .map(Cell::get)
             .ok_or_else(|| Error::runtime("static binding cache slot is not defined"))
@@ -34,11 +46,53 @@ impl StaticBindingCacheHandle {
 
     fn remember_id(&self, binding: StaticBindingId, location: BindingLocation) -> Result<()> {
         let slot = self
-            .0
+            .locations
             .get(binding.index()?)
             .ok_or_else(|| Error::runtime("static binding cache slot is not defined"))?;
         slot.set(Some(location));
         Ok(())
+    }
+
+    fn native_call(&self, binding: &StaticBinding) -> Result<Option<StaticBindingNativeCallCache>> {
+        self.native_calls
+            .get(binding.id().index()?)
+            .map(Cell::get)
+            .ok_or_else(|| Error::runtime("static binding native call cache slot is not defined"))
+    }
+
+    fn remember_native_call(
+        &self,
+        binding: &StaticBinding,
+        function: NativeFunctionId,
+        kind: NativeFunctionKind,
+    ) -> Result<()> {
+        let slot = self
+            .native_calls
+            .get(binding.id().index()?)
+            .ok_or_else(|| {
+                Error::runtime("static binding native call cache slot is not defined")
+            })?;
+        slot.set(Some(StaticBindingNativeCallCache::new(function, kind)));
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct StaticBindingNativeCallCache {
+    function: NativeFunctionId,
+    kind: NativeFunctionKind,
+}
+
+impl StaticBindingNativeCallCache {
+    const fn new(function: NativeFunctionId, kind: NativeFunctionKind) -> Self {
+        Self { function, kind }
+    }
+
+    fn kind_if_current(self, function: NativeFunctionId) -> Option<NativeFunctionKind> {
+        if self.function == function {
+            return Some(self.kind);
+        }
+        None
     }
 }
 
@@ -183,6 +237,31 @@ impl CompiledBindingFrame {
 impl Context {
     pub(crate) fn current_static_binding_cache(&self) -> Option<StaticBindingCacheHandle> {
         self.static_binding_caches.last().cloned()
+    }
+
+    pub(super) fn cached_static_binding_native_call_kind(
+        &self,
+        binding: &StaticBinding,
+        function: NativeFunctionId,
+    ) -> Result<Option<NativeFunctionKind>> {
+        let Some(cache) = self.current_static_binding_cache() else {
+            return Ok(None);
+        };
+        Ok(cache
+            .native_call(binding)?
+            .and_then(|cached| cached.kind_if_current(function)))
+    }
+
+    pub(super) fn remember_static_binding_native_call_kind(
+        &self,
+        binding: &StaticBinding,
+        function: NativeFunctionId,
+        kind: NativeFunctionKind,
+    ) -> Result<()> {
+        let Some(cache) = self.current_static_binding_cache() else {
+            return Ok(());
+        };
+        cache.remember_native_call(binding, function, kind)
     }
 
     pub(crate) fn current_static_binding_layout(
