@@ -7,27 +7,37 @@ use crate::{
     binding_layout::BindingLayout,
     error::{Error, Result},
     runtime::Context,
-    runtime_object::{PropertyKey, PropertyLookup},
+    runtime_object::{
+        CacheablePropertyLookup, CacheablePropertyValue, PropertyKey, PropertyLookup,
+    },
     runtime_property::{delete_property, get_property, set_property},
-    value::Value,
+    value::{ObjectId, Value},
 };
 
 use super::runtime_static_bindings::StaticBindingCacheHandle;
 
 #[derive(Debug, Clone)]
-pub struct StaticNameAtomCacheHandle(Rc<[Cell<Option<AtomId>>]>);
+pub struct StaticNameAtomCacheHandle {
+    atoms: Rc<[Cell<Option<AtomId>>]>,
+    property_lookups: Rc<[Cell<Option<CacheablePropertyLookup>>]>,
+}
 
 impl StaticNameAtomCacheHandle {
     pub(super) fn new(slot_count: usize) -> Self {
         let mut atoms = Vec::with_capacity(slot_count);
+        let mut property_lookups = Vec::with_capacity(slot_count);
         for _ in 0..slot_count {
             atoms.push(Cell::new(None));
+            property_lookups.push(Cell::new(None));
         }
-        Self(Rc::from(atoms.into_boxed_slice()))
+        Self {
+            atoms: Rc::from(atoms.into_boxed_slice()),
+            property_lookups: Rc::from(property_lookups.into_boxed_slice()),
+        }
     }
 
     fn atom(&self, name: &StaticName) -> Result<Option<AtomId>> {
-        self.0
+        self.atoms
             .get(name.id().index()?)
             .map(Cell::get)
             .ok_or_else(|| Error::runtime("static name atom cache slot is not defined"))
@@ -35,13 +45,35 @@ impl StaticNameAtomCacheHandle {
 
     fn remember(&self, name: &StaticName, atom: AtomId) -> Result<()> {
         let slot = self
-            .0
+            .atoms
             .get(name.id().index()?)
             .ok_or_else(|| Error::runtime("static name atom cache slot is not defined"))?;
         slot.set(Some(atom));
         Ok(())
     }
+
+    fn property_lookup(&self, name: &StaticName) -> Result<Option<CacheablePropertyLookup>> {
+        self.property_lookups
+            .get(name.id().index()?)
+            .map(Cell::get)
+            .ok_or_else(|| Error::runtime("static property cache slot is not defined"))
+    }
+
+    fn remember_property_lookup(
+        &self,
+        name: &StaticName,
+        lookup: CacheablePropertyLookup,
+    ) -> Result<()> {
+        let slot = self
+            .property_lookups
+            .get(name.id().index()?)
+            .ok_or_else(|| Error::runtime("static property cache slot is not defined"))?;
+        slot.set(Some(lookup));
+        Ok(())
+    }
 }
+
+const PROTOTYPE_PROPERTY: &str = "__proto__";
 
 impl Context {
     pub(crate) fn with_static_name_atom_cache<T>(
@@ -129,7 +161,55 @@ impl Context {
         if let Value::NativeFunction(id) = object {
             return self.get_native_function_property_lookup(*id, lookup);
         }
+        if let Value::Object(id) = object
+            && property.as_str() != PROTOTYPE_PROPERTY
+        {
+            return self.get_cached_static_object_property_value(*id, property, lookup);
+        }
         self.checked_value(get_property(&self.objects, object, lookup)?)
+    }
+
+    fn get_cached_static_object_property_value(
+        &self,
+        object: ObjectId,
+        property: &StaticName,
+        lookup: PropertyLookup<'_>,
+    ) -> Result<Value> {
+        let Some(cache) = self.current_static_name_atom_cache() else {
+            return self.checked_value(get_property(
+                &self.objects,
+                &Value::Object(object),
+                lookup,
+            )?);
+        };
+        if let Some(cached_lookup) = cache.property_lookup(property)? {
+            match self
+                .objects
+                .read_cacheable_property_value_for(object, cached_lookup)?
+            {
+                CacheablePropertyValue::Hit(value) => return self.checked_value(value),
+                CacheablePropertyValue::Missing => return Ok(Value::Undefined),
+                CacheablePropertyValue::Uncacheable => {}
+            }
+        }
+
+        let candidate = self.objects.cacheable_property_lookup(object, lookup)?;
+        match self
+            .objects
+            .read_cacheable_property_value_for(object, candidate)?
+        {
+            CacheablePropertyValue::Hit(value) => {
+                cache.remember_property_lookup(property, candidate)?;
+                self.checked_value(value)
+            }
+            CacheablePropertyValue::Missing => {
+                cache.remember_property_lookup(property, candidate)?;
+                Ok(Value::Undefined)
+            }
+            CacheablePropertyValue::Uncacheable => {
+                self.checked_value(get_property(&self.objects, &Value::Object(object), lookup)?)
+            }
+        }
     }
 
     pub(crate) fn set_static_property_value(

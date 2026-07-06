@@ -39,6 +39,7 @@ pub use runtime_object_descriptor::{
 };
 use runtime_object_index::{ArrayIndex, ArrayLength};
 pub use runtime_object_key::{ObjectPropertyInit, PropertyKey, PropertyLookup};
+pub use runtime_object_lookup::{CacheablePropertyLookup, CacheablePropertyValue};
 use runtime_object_shape::{ShapeId, ShapeTable};
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
