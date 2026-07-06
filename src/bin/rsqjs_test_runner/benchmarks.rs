@@ -13,10 +13,10 @@ use tabled::Tabled;
 
 use super::cases::{self, BenchmarkCase};
 
-pub const BUDGET_LABEL: &str = "1.10x";
+pub const BUDGET_LABEL: &str = "1.00x";
 
 const BENCH_ITERATIONS: usize = 50;
-const BUDGET_NUMERATOR: u128 = 110;
+const BUDGET_NUMERATOR: u128 = 100;
 const BUDGET_DENOMINATOR: u128 = 100;
 const GNU_TIME_PATH: &str = "/usr/bin/time";
 const MEMORY_UNIT: &str = "KiB";
@@ -32,8 +32,8 @@ const STATUS_TRACKED_EXCEPTION: &str = "🟡 tracked exception";
 const STATUS_WITHIN_BUDGET: &str = "✅ within budget";
 const BUDGET_NOT_CONFIGURED: &str = "🟡 no reference";
 const BUDGET_NOT_AVAILABLE: &str = "🟡 unavailable";
-const BUDGET_OVER: &str = "🟡 > 1.10x";
-const BUDGET_WITHIN: &str = "✅ <= 1.10x";
+const BUDGET_OVER: &str = "🟡 > 1.00x";
+const BUDGET_WITHIN: &str = "✅ <= 1.00x";
 const DETAIL_COMPLETED: &str = "sequential benchmark completed";
 const DETAIL_LATENCY_EXCEPTION: &str = "latency budget exception tracked";
 const DETAIL_MEMORY_EXCEPTION: &str = "memory budget exception tracked";
@@ -725,14 +725,14 @@ mod tests {
 
     #[test]
     fn marks_exact_budget_as_within_budget() -> TestResult {
-        let check = budget_check(110, 100);
+        let check = budget_check(100, 100);
         ensure_bool(!check.over_budget, "exact budget must be accepted")?;
         ensure_text(check.label, BUDGET_WITHIN)
     }
 
     #[test]
     fn marks_above_budget_as_tracked_exception() -> TestResult {
-        let check = budget_check(111, 100);
+        let check = budget_check(101, 100);
         ensure_bool(check.over_budget, "above budget must be tracked")?;
         ensure_text(check.label, BUDGET_OVER)
     }
