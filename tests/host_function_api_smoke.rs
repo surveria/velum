@@ -6,10 +6,13 @@ const HOST_ADD_NAME: &str = "hostAdd";
 const HOST_ECHO_NAME: &str = "hostEcho";
 const HOST_FAIL_NAME: &str = "hostFail";
 const HOST_FORMAT_NAME: &str = "hostFormat";
+const HOST_LABEL_NAME: &str = "hostLabel";
 const HOST_LEAK_NAME: &str = "hostLeak";
 const HOST_NOOP_NAME: &str = "hostNoop";
+const HOST_OWNED_NAME: &str = "hostOwned";
 const HOST_SCORE_NAME: &str = "hostScore";
 const HOST_READY_NAME: &str = "hostReady";
+const CAMERA_LABEL: &str = "camera";
 
 #[test]
 fn registers_typed_host_functions() -> TestResult {
@@ -65,6 +68,57 @@ fn supports_host_value_conversion_helpers() -> TestResult {
 
     let noop_type = vm.context().eval("typeof hostNoop()")?;
     ensure_value(&noop_type, &Value::String("undefined".to_owned()))
+}
+
+#[test]
+fn interns_host_returned_strings_in_vm_heap() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.context().register_host_function_typed(
+        HOST_LABEL_NAME,
+        |_call| -> rs_quickjs::Result<&'static str> { Ok(CAMERA_LABEL) },
+    )?;
+    vm.context()
+        .register_host_function_typed(HOST_OWNED_NAME, |_call| -> rs_quickjs::Result<String> {
+            Ok(CAMERA_LABEL.to_owned())
+        })?;
+    vm.context()
+        .register_host_function(HOST_ECHO_NAME, |_call| {
+            Ok(Value::String(CAMERA_LABEL.to_owned()))
+        })?;
+
+    ensure_usize(vm.resource_usage().string_count, 0)?;
+    ensure_usize(vm.resource_usage().string_bytes, 0)?;
+
+    let static_label = vm.context().eval("hostLabel()")?;
+    ensure_value(&static_label, &Value::String(CAMERA_LABEL.to_owned()))?;
+    let after_static_label = vm.resource_usage();
+    ensure_usize(after_static_label.string_count, 1)?;
+    ensure_usize(after_static_label.string_bytes, CAMERA_LABEL.len())?;
+
+    let owned_label = vm.context().eval("hostOwned()")?;
+    ensure_value(&owned_label, &Value::String(CAMERA_LABEL.to_owned()))?;
+    let after_owned_label = vm.resource_usage();
+    ensure_usize(
+        after_owned_label.string_count,
+        after_static_label.string_count,
+    )?;
+    ensure_usize(
+        after_owned_label.string_bytes,
+        after_static_label.string_bytes,
+    )?;
+
+    let legacy_label = vm.context().eval("hostEcho()")?;
+    ensure_value(&legacy_label, &Value::String(CAMERA_LABEL.to_owned()))?;
+    let after_legacy_label = vm.resource_usage();
+    ensure_usize(
+        after_legacy_label.string_count,
+        after_static_label.string_count,
+    )?;
+    ensure_usize(
+        after_legacy_label.string_bytes,
+        after_static_label.string_bytes,
+    )
 }
 
 #[test]
@@ -180,4 +234,11 @@ fn ensure_error_contains(error: &Error, expected: &str) -> TestResult {
         return Ok(());
     }
     Err(format!("expected error containing {expected:?}, got {actual:?}").into())
+}
+
+fn ensure_usize(actual: usize, expected: usize) -> TestResult {
+    if actual == expected {
+        return Ok(());
+    }
+    Err(format!("expected {expected}, got {actual}").into())
 }

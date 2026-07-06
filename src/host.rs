@@ -307,17 +307,17 @@ impl Context {
             .ok_or_else(|| Error::runtime("host function id is not defined"))
     }
 
-    fn checked_host_return_value(&self, value: Value) -> Result<Value> {
+    fn checked_host_return_value(&mut self, value: Value) -> Result<Value> {
         match value {
             Value::Function(_)
             | Value::NativeFunction(_)
             | Value::HostFunction(_)
             | Value::Object(_) => Err(Error::runtime(HOST_FUNCTION_HANDLE_RETURN_ERROR)),
+            Value::String(value) => self.heap_string_value(&value),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
-            | Value::String(_)
             | Value::HeapString(_)
             | Value::Error(_) => self.checked_value(value),
         }
