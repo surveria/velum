@@ -254,9 +254,22 @@ fn reuses_shape_layouts_for_matching_object_properties() -> TestResult {
     let extended_shapes = vm.resource_usage().shape_count;
     ensure_greater_than(extended_shapes, first_shapes, "extended object shapes")?;
 
+    let value = vm
+        .context()
+        .eval("let compact = { alpha: 7, gamma: 8 }; compact.alpha + compact.gamma")?;
+    ensure_value(&value, &Value::Number(15.0))?;
+    let compact_shapes = vm.resource_usage().shape_count;
+    ensure_greater_than(compact_shapes, extended_shapes, "compact object shapes")?;
+
+    let value = vm.context().eval(
+        "delete first.beta; first.alpha + first.gamma + (first.beta === undefined ? 10 : 0)",
+    )?;
+    ensure_value(&value, &Value::Number(16.0))?;
+    ensure_usize(vm.resource_usage().shape_count, compact_shapes)?;
+
     let value = vm.context().eval("delete first.gamma; first.gamma")?;
     ensure_value(&value, &Value::Undefined)?;
-    ensure_usize(vm.resource_usage().shape_count, extended_shapes)
+    ensure_usize(vm.resource_usage().shape_count, compact_shapes)
 }
 
 #[test]

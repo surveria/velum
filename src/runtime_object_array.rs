@@ -59,7 +59,7 @@ impl ObjectHeap {
         };
 
         let value = object
-            .get_own_array_index(index)
+            .get_own_array_index(shapes, index)?
             .unwrap_or(Value::Undefined);
         object.delete_array_index(index, shapes)?;
         object.array_length = Some(index.length());
@@ -391,7 +391,7 @@ impl ObjectHeap {
             }
             visited.push(current_id);
             let object = self.object(current_id)?;
-            if let Some(value) = object.get_own_array_index(index) {
+            if let Some(value) = object.get_own_array_index(&self.shapes, index)? {
                 return Ok(Some(value));
             }
             current = object.prototype;
@@ -516,7 +516,9 @@ impl ObjectHeap {
         length: usize,
         max_properties: usize,
     ) -> Result<ArrayCopyProgress> {
-        let (source, result) = self.object_pair_for_concat(source_id, result_id)?;
+        let shapes = &self.shapes;
+        let (source, result) =
+            Self::object_pair_for_concat(self.objects.as_mut_slice(), source_id, result_id)?;
         if result.array_length.is_none() {
             return Err(Error::runtime("array concat result is not an array"));
         }
@@ -535,7 +537,7 @@ impl ObjectHeap {
         let mut next_index = start_index;
         for source_position in 0..length {
             let source_index = ArrayIndex::from_usize(source_position)?;
-            let Some(value) = source.get_own_array_index(source_index) else {
+            let Some(value) = source.get_own_array_index(shapes, source_index)? else {
                 return Ok(ArrayCopyProgress {
                     next_index,
                     source_index: source_position,
@@ -552,7 +554,7 @@ impl ObjectHeap {
     }
 
     fn object_pair_for_concat(
-        &mut self,
+        objects: &mut [Object],
         source_id: ObjectId,
         result_id: ObjectId,
     ) -> Result<(&Object, &mut Object)> {
@@ -561,11 +563,11 @@ impl ObjectHeap {
         }
         let source_index = source_id.index();
         let result_index = result_id.index();
-        if source_index >= self.objects.len() || result_index >= self.objects.len() {
+        if source_index >= objects.len() || result_index >= objects.len() {
             return Err(Error::runtime("object id is not defined"));
         }
         if source_index < result_index {
-            let (left, right) = self.objects.split_at_mut(result_index);
+            let (left, right) = objects.split_at_mut(result_index);
             let source = left
                 .get(source_index)
                 .ok_or_else(|| Error::runtime("object id is not defined"))?;
@@ -575,7 +577,7 @@ impl ObjectHeap {
             return Ok((source, result));
         }
 
-        let (left, right) = self.objects.split_at_mut(source_index);
+        let (left, right) = objects.split_at_mut(source_index);
         let result = left
             .get_mut(result_index)
             .ok_or_else(|| Error::runtime("object id is not defined"))?;
@@ -710,14 +712,17 @@ impl Object {
         self.array_storage.packed_properties_for_len(length)
     }
 
-    fn get_own_array_index(&self, index: ArrayIndex) -> Option<Value> {
+    fn get_own_array_index(&self, shapes: &ShapeTable, index: ArrayIndex) -> Result<Option<Value>> {
         if self.array_length.is_some()
             && let Some(value) = self.array_element_value(index)
         {
-            return Some(value);
+            return Ok(Some(value));
         }
-        let key = self.array_storage.sparse_key(index)?;
-        self.named_property(key).map(super::ObjectProperty::value)
+        let Some(key) = self.array_storage.sparse_key(index) else {
+            return Ok(None);
+        };
+        self.named_property(shapes, key)
+            .map(|property| property.map(super::ObjectProperty::value))
     }
 
     fn set_array_index(

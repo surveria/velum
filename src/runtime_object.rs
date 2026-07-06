@@ -293,7 +293,7 @@ impl ObjectHeap {
         max_properties: usize,
     ) -> Result<()> {
         let lookup = PropertyLookup::from_key(property_name, property);
-        if property_name == PROTOTYPE_PROPERTY && !self.object(id)?.has_own(lookup) {
+        if property_name == PROTOTYPE_PROPERTY && !self.object(id)?.has_own(lookup, &self.shapes)? {
             return self.set_prototype(id, &value);
         }
         let (object, shapes) = self.object_mut_with_shapes(id)?;
@@ -302,7 +302,7 @@ impl ObjectHeap {
 
     pub fn delete(&mut self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {
         if property.name() == PROTOTYPE_PROPERTY {
-            if self.object(id)?.has_own(property) {
+            if self.object(id)?.has_own(property, &self.shapes)? {
                 let (object, shapes) = self.object_mut_with_shapes(id)?;
                 return object.delete(property, shapes);
             }
@@ -361,7 +361,6 @@ impl ObjectHeap {
 
 #[derive(Debug, Clone, Default)]
 struct Object {
-    properties: Vec<runtime_object_slot::PropertyIndexEntry>,
     named_properties: Vec<runtime_object_slot::NamedProperty>,
     array_storage: ArrayStorage,
     shape: ShapeId,
@@ -373,7 +372,6 @@ struct Object {
 impl Object {
     const fn ordinary() -> Self {
         Self {
-            properties: Vec::new(),
             named_properties: Vec::new(),
             array_storage: ArrayStorage::new(),
             shape: ShapeId::root(),
@@ -385,7 +383,6 @@ impl Object {
 
     fn ordinary_with_property_capacity(capacity: usize) -> Self {
         Self {
-            properties: Vec::with_capacity(capacity),
             named_properties: Vec::with_capacity(capacity),
             array_storage: ArrayStorage::new(),
             shape: ShapeId::root(),
@@ -397,7 +394,6 @@ impl Object {
 
     const fn array(length: ArrayLength) -> Self {
         Self {
-            properties: Vec::new(),
             named_properties: Vec::new(),
             array_storage: ArrayStorage::new(),
             shape: ShapeId::root(),
@@ -422,31 +418,40 @@ impl Object {
         }
     }
 
-    fn get_own(&self, property: PropertyLookup<'_>) -> Option<Value> {
+    fn get_own(&self, property: PropertyLookup<'_>, shapes: &ShapeTable) -> Result<Option<Value>> {
         if let Some(length) = self
             .array_length
             .filter(|_| property.name() == ARRAY_LENGTH_PROPERTY)
         {
-            return Some(length.value());
+            return Ok(Some(length.value()));
         }
         if self.array_length.is_some()
             && let Some(index) = ArrayIndex::parse(property.name())
             && let Some(value) = self.array_element_value(index)
         {
-            return Some(value);
+            return Ok(Some(value));
         }
-        let key = property.key()?;
-        self.named_property(key).map(ObjectProperty::value)
+        let Some(key) = property.key() else {
+            return Ok(None);
+        };
+        self.named_property(shapes, key)
+            .map(|property| property.map(ObjectProperty::value))
     }
 
-    fn has_own(&self, property: PropertyLookup<'_>) -> bool {
-        (self.array_length.is_some() && property.name() == ARRAY_LENGTH_PROPERTY)
-            || (self.array_length.is_some()
-                && ArrayIndex::parse(property.name())
-                    .is_some_and(|index| self.has_array_element(index)))
-            || property
-                .key()
-                .is_some_and(|key| self.named_property(key).is_some())
+    fn has_own(&self, property: PropertyLookup<'_>, shapes: &ShapeTable) -> Result<bool> {
+        if self.array_length.is_some() && property.name() == ARRAY_LENGTH_PROPERTY {
+            return Ok(true);
+        }
+        if self.array_length.is_some()
+            && ArrayIndex::parse(property.name()).is_some_and(|index| self.has_array_element(index))
+        {
+            return Ok(true);
+        }
+        let Some(key) = property.key() else {
+            return Ok(false);
+        };
+        self.named_property(shapes, key)
+            .map(|property| property.is_some())
     }
 
     fn set(
@@ -538,8 +543,8 @@ impl Object {
         max_properties: usize,
     ) -> Result<()> {
         let property_count = self.property_count();
-        let enumerable_update = if self.contains_named_property(property) {
-            let existing = self.named_property_mut(property)?;
+        let enumerable_update = if self.contains_named_property(shapes, property)? {
+            let existing = self.named_property_mut(shapes, property)?;
             let was_enumerable = existing.is_enumerable();
             existing.set_value(value);
             if let Some(enumerable) = enumerable {
@@ -632,7 +637,7 @@ impl Object {
         let Some(key) = property.key() else {
             return Ok(true);
         };
-        let Some(existing_property) = self.named_property(key) else {
+        let Some(existing_property) = self.named_property(shapes, key)? else {
             return Ok(true);
         };
         if !existing_property.is_configurable() {
@@ -709,7 +714,7 @@ impl Object {
     }
 
     const fn property_count(&self) -> usize {
-        self.properties
+        self.named_properties
             .len()
             .saturating_add(self.array_storage.property_count())
     }

@@ -29,7 +29,7 @@ impl ObjectHeap {
         property: PropertyLookup<'_>,
     ) -> Result<bool> {
         let object = self.object(id)?;
-        if object.has_own(property) {
+        if object.has_own(property, &self.shapes)? {
             return Ok(true);
         }
 
@@ -38,7 +38,7 @@ impl ObjectHeap {
         while let Some(current_id) = current {
             budget.enter_next()?;
             let object = self.object(current_id)?;
-            if object.has_own(property) {
+            if object.has_own(property, &self.shapes)? {
                 return Ok(true);
             }
             current = object.prototype;
@@ -68,7 +68,7 @@ impl ObjectHeap {
         property: PropertyLookup<'_>,
     ) -> Result<Option<Value>> {
         let object = self.object(id)?;
-        if let Some(value) = object.get_own(property) {
+        if let Some(value) = object.get_own(property, &self.shapes)? {
             return Ok(Some(value));
         }
 
@@ -77,7 +77,7 @@ impl ObjectHeap {
         while let Some(current_id) = current {
             budget.enter_next()?;
             let object = self.object(current_id)?;
-            if let Some(value) = object.get_own(property) {
+            if let Some(value) = object.get_own(property, &self.shapes)? {
                 return Ok(Some(value));
             }
             current = object.prototype;
