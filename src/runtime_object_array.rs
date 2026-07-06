@@ -142,6 +142,9 @@ impl ObjectHeap {
         max_properties: usize,
     ) -> Result<Value> {
         let this_length = self.array_length_for_method(id, ARRAY_CONCAT_RECEIVER_ERROR)?;
+        if let Some(values) = self.packed_concat_values(id, this_length, &values)? {
+            return self.create_array(values, prototype, max_objects, max_properties);
+        }
         let result = self.create_array_with_length(0, prototype, max_objects)?;
         let Value::Object(result_id) = result else {
             return Err(Error::runtime("array concat result is not an object"));
@@ -393,23 +396,6 @@ impl ObjectHeap {
         Ok(self.object(id)?.packed_array_properties(length))
     }
 
-    fn packed_array_value_range(
-        &self,
-        id: ObjectId,
-        length: usize,
-        start: usize,
-        count: usize,
-    ) -> Result<Option<Vec<Value>>> {
-        let Some(properties) = self.packed_array_properties(id, length)? else {
-            return Ok(None);
-        };
-        let mut values = Vec::with_capacity(count);
-        for property in properties.iter().skip(start).take(count) {
-            values.push(property.value());
-        }
-        Ok(Some(values))
-    }
-
     pub(super) fn array_length_for_method(&self, id: ObjectId, error: &str) -> Result<ArrayLength> {
         let object = self.object(id)?;
         object.array_length.ok_or_else(|| Error::runtime(error))
@@ -461,7 +447,7 @@ impl ObjectHeap {
         Ok(())
     }
 
-    fn array_length_if_array(&self, id: ObjectId) -> Result<Option<ArrayLength>> {
+    pub(super) fn array_length_if_array(&self, id: ObjectId) -> Result<Option<ArrayLength>> {
         let object = self.object(id)?;
         Ok(object.array_length)
     }
@@ -707,7 +693,7 @@ impl ObjectHeap {
 }
 
 impl Object {
-    fn packed_array_properties(&self, length: usize) -> Option<&[ObjectProperty]> {
+    pub(super) fn packed_array_properties(&self, length: usize) -> Option<&[ObjectProperty]> {
         self.array_length?;
         self.array_storage.packed_properties_for_len(length)
     }

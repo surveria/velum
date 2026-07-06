@@ -173,6 +173,33 @@ impl ArrayStorage {
         true
     }
 
+    pub(super) fn append_packed_default_values(
+        &mut self,
+        values: Vec<Value>,
+        max_properties: usize,
+    ) -> Result<usize> {
+        if self.has_sparse_keys() {
+            return Err(Error::runtime("packed array storage has sparse keys"));
+        }
+        let value_count = values.len();
+        let Some(new_property_count) = self.property_count.checked_add(value_count) else {
+            return Err(Error::limit("object property count overflowed"));
+        };
+        if new_property_count > max_properties {
+            return Err(Error::limit(format!(
+                "object property count exceeded {max_properties}"
+            )));
+        }
+        let ArrayElements::Packed(elements) = &mut self.elements else {
+            return Err(Error::runtime("array storage is not packed"));
+        };
+        for value in values {
+            elements.push_back(ObjectProperty::ordinary(value, PropertyEnumerable::Yes));
+        }
+        self.property_count = new_property_count;
+        Ok(value_count)
+    }
+
     pub(super) fn dense_len(&self) -> usize {
         match &self.elements {
             ArrayElements::Packed(elements) => elements.len(),
