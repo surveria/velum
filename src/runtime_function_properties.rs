@@ -68,10 +68,15 @@ pub(super) struct FunctionProperties {
 pub(super) struct FunctionIntrinsicDefaults {
     length: DataPropertyDescriptor,
     name: DataPropertyDescriptor,
+    prototype: Option<DataPropertyDescriptor>,
 }
 
 impl FunctionIntrinsicDefaults {
-    pub(super) const fn new(length: Value, name: Value) -> Self {
+    pub(super) const fn new(
+        length: Value,
+        name: Value,
+        prototype: Option<DataPropertyDescriptor>,
+    ) -> Self {
         Self {
             length: DataPropertyDescriptor::new(
                 length,
@@ -85,6 +90,7 @@ impl FunctionIntrinsicDefaults {
                 PropertyEnumerable::No,
                 PropertyConfigurable::Yes,
             ),
+            prototype,
         }
     }
 
@@ -92,7 +98,19 @@ impl FunctionIntrinsicDefaults {
         match property {
             FunctionPropertyKind::Length => Some(self.length.clone()),
             FunctionPropertyKind::Name => Some(self.name.clone()),
-            FunctionPropertyKind::Prototype | FunctionPropertyKind::Custom => None,
+            FunctionPropertyKind::Prototype => self.prototype.clone(),
+            FunctionPropertyKind::Custom => None,
+        }
+    }
+
+    fn set_prototype_value(&mut self, value: Value) {
+        if let Some(descriptor) = &self.prototype {
+            self.prototype = Some(DataPropertyDescriptor::new(
+                value,
+                descriptor.writable(),
+                descriptor.enumerable(),
+                descriptor.configurable(),
+            ));
         }
     }
 }
@@ -162,12 +180,18 @@ impl FunctionProperties {
         property: FunctionPropertyKind,
     ) -> Option<DataPropertyDescriptor> {
         let default = self.intrinsic_defaults.descriptor(property)?;
+        if property.is_prototype() {
+            return Some(default);
+        }
         self.intrinsic(property)
             .and_then(|intrinsic| intrinsic.descriptor(default))
     }
 
     pub(super) fn intrinsic_value(&self, property: FunctionPropertyKind) -> Option<Value> {
         let default = self.intrinsic_defaults.descriptor(property)?;
+        if property.is_prototype() {
+            return Some(default.value());
+        }
         self.intrinsic(property)
             .and_then(|intrinsic| intrinsic.value(default))
     }
@@ -196,6 +220,7 @@ impl FunctionProperties {
             return Ok(());
         }
         if property_kind.is_prototype() {
+            self.intrinsic_defaults.set_prototype_value(value.clone());
             self.prototype = value;
             return Ok(());
         }
@@ -287,6 +312,7 @@ impl FunctionProperties {
         }
         if property_kind.is_prototype() {
             if let Some(value) = update.value() {
+                self.intrinsic_defaults.set_prototype_value(value.clone());
                 self.prototype = value;
             }
             return Ok(());

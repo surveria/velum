@@ -2,7 +2,10 @@ use crate::{
     ast::{DeclKind, Expr, StaticBinding},
     error::{Error, Result},
     runtime::Context,
-    runtime_object::{ObjectPropertyInit, PropertyEnumerable},
+    runtime_object::{
+        DataPropertyDescriptor, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
+        PropertyWritable,
+    },
     runtime_scope::BindingCell,
     value::{ErrorName, ErrorObject, NativeFunctionId, Value},
 };
@@ -121,9 +124,16 @@ pub(super) struct NativeFunction {
 
 impl NativeFunction {
     fn new(kind: NativeFunctionKind, prototype: Value) -> Self {
+        let prototype_default = DataPropertyDescriptor::new(
+            prototype.clone(),
+            PropertyWritable::No,
+            PropertyEnumerable::No,
+            PropertyConfigurable::No,
+        );
         let intrinsic_defaults = FunctionIntrinsicDefaults::new(
             Value::Number(kind.length()),
             Value::String(kind.name().to_owned()),
+            Some(prototype_default),
         );
         Self {
             kind,

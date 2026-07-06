@@ -73,8 +73,19 @@ impl Context {
         };
         let function_name = self.function_name(name)?;
         let arity = super::FunctionArity::new(params.len());
-        let intrinsic_defaults =
-            FunctionIntrinsicDefaults::new(arity.value()?, function_name.value(&self.atoms)?);
+        let prototype_default = constructable.then(|| {
+            DataPropertyDescriptor::new(
+                prototype.clone(),
+                PropertyWritable::Yes,
+                PropertyEnumerable::No,
+                PropertyConfigurable::No,
+            )
+        });
+        let intrinsic_defaults = FunctionIntrinsicDefaults::new(
+            arity.value()?,
+            function_name.value(&self.atoms)?,
+            prototype_default,
+        );
         let param_atoms = self.function_param_atoms(params)?;
         let static_name_atom_cache = self.current_static_name_atom_cache();
         let static_binding_cache = self.current_static_binding_cache();
@@ -231,10 +242,10 @@ impl Context {
         property: PropertyLookup<'_>,
     ) -> Result<Option<DataPropertyDescriptor>> {
         let function = self.function(id)?;
-        if let Some(descriptor) = function_intrinsic_descriptor(
-            function,
-            FunctionPropertyKind::from_name(property.name()),
-        ) {
+        if let Some(descriptor) = function
+            .properties
+            .intrinsic_descriptor(FunctionPropertyKind::from_name(property.name()))
+        {
             return Ok(Some(descriptor));
         }
         Ok(function.properties.own_property_descriptor(property))
@@ -375,7 +386,7 @@ impl Context {
         let function = self.native_function(id)?;
         let property_name = property.name();
         let property_kind = FunctionPropertyKind::from_name(property_name);
-        if let Some(descriptor) = native_function_intrinsic_descriptor(function, property_kind) {
+        if let Some(descriptor) = function.properties().intrinsic_descriptor(property_kind) {
             return Ok(Some(descriptor));
         }
         if let Some(value) = function.intrinsic_property(property_name) {
@@ -625,42 +636,4 @@ impl super::FunctionArity {
             .map_err(|_| Error::limit("function parameter count exceeded supported range"))?;
         Ok(Value::Number(f64::from(length)))
     }
-}
-
-fn function_intrinsic_descriptor(
-    function: &super::Function,
-    property: FunctionPropertyKind,
-) -> Option<DataPropertyDescriptor> {
-    if let Some(descriptor) = function.properties.intrinsic_descriptor(property) {
-        return Some(descriptor);
-    }
-    if !(property.is_prototype() && function.constructable) {
-        return None;
-    }
-    let descriptor = DataPropertyDescriptor::new(
-        function.properties.prototype(),
-        PropertyWritable::Yes,
-        PropertyEnumerable::No,
-        PropertyConfigurable::No,
-    );
-    Some(descriptor)
-}
-
-fn native_function_intrinsic_descriptor(
-    function: &super::runtime_native::NativeFunction,
-    property: FunctionPropertyKind,
-) -> Option<DataPropertyDescriptor> {
-    if let Some(descriptor) = function.properties().intrinsic_descriptor(property) {
-        return Some(descriptor);
-    }
-    if !property.is_prototype() {
-        return None;
-    }
-    let descriptor = DataPropertyDescriptor::new(
-        function.properties().prototype(),
-        PropertyWritable::No,
-        PropertyEnumerable::No,
-        PropertyConfigurable::No,
-    );
-    Some(descriptor)
 }
