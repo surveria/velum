@@ -337,7 +337,7 @@ impl Context {
         for property in properties {
             let value = self.eval_expr(&property.value)?;
             let key = self.intern_property_key(&property.key)?;
-            values.push((key, property.key.clone(), value));
+            values.push((key, property.key.as_str().to_owned(), value));
         }
         let constructor_key = self.intern_property_key(OBJECT_CONSTRUCTOR_PROPERTY)?;
         self.objects.create(

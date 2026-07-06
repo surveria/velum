@@ -13,7 +13,7 @@ pub fn is_assert_throws_call(callee: &Expr) -> bool {
     matches!(
         callee,
         Expr::Member { object, property }
-            if is_identifier(object, ASSERT_NAME) && property == ASSERT_THROWS_NAME
+            if is_identifier(object, ASSERT_NAME) && property.as_str() == ASSERT_THROWS_NAME
     )
 }
 
@@ -72,5 +72,5 @@ fn reference_error_message(message: &str) -> Option<&str> {
 }
 
 fn is_identifier(expr: &Expr, expected: &str) -> bool {
-    matches!(expr, Expr::Identifier(name) if name == expected)
+    matches!(expr, Expr::Identifier(name) if name.as_str() == expected)
 }
