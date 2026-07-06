@@ -12,7 +12,7 @@ use crate::{
         DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
         PropertyEnumerable, PropertyWritable,
     },
-    runtime_scope::{BindingCell, BindingScope, BindingSlot},
+    runtime_scope::{BindingCell, BindingScope},
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
 };
 
@@ -20,6 +20,7 @@ use super::runtime_function_properties::{
     FUNCTION_LENGTH_PROPERTY, FUNCTION_NAME_PROPERTY, FUNCTION_PROTOTYPE_PROPERTY,
     FunctionProperties, PROTOTYPE_CONSTRUCTOR_PROPERTY,
 };
+use super::runtime_static_bindings::CompiledBindingFrame;
 
 impl Context {
     pub(crate) fn create_function(
@@ -494,8 +495,9 @@ impl Context {
             let value = args.next().unwrap_or(Value::Undefined);
             self.checked_value(value.clone())?;
             let cell = BindingCell::new(value, true, DeclKind::Var);
-            if let Some(slot) = function_param_slot(binding, layout)? {
-                scope.insert_or_replace_at_slot(atom, cell, slot)?;
+            if let Some(frame) = function_param_frame(binding, layout)? {
+                let inserted = scope.insert_or_replace_at_slot(atom, cell, frame.slot())?;
+                Self::mark_binding_scope_frame_slot(&mut scope, frame, inserted)?;
             } else {
                 scope.insert(atom, cell);
             }
@@ -568,10 +570,10 @@ fn function_param_binding_ids(params: &[StaticBinding]) -> Rc<[StaticBindingId]>
         .into()
 }
 
-fn function_param_slot(
+fn function_param_frame(
     binding: StaticBindingId,
     layout: Option<&BindingLayout>,
-) -> Result<Option<BindingSlot>> {
+) -> Result<Option<CompiledBindingFrame>> {
     let Some(layout) = layout else {
         return Ok(None);
     };
@@ -579,7 +581,10 @@ fn function_param_slot(
         return Ok(None);
     };
     match operand {
-        BindingOperand::Local { slot, .. } => Ok(Some(BindingSlot::from_index(slot.index()?))),
+        BindingOperand::Local { scope, slot } => Ok(Some(CompiledBindingFrame::local(
+            scope,
+            crate::runtime_scope::BindingSlot::from_index(slot.index()?),
+        ))),
         BindingOperand::Global { .. } | BindingOperand::Upvalue { .. } => Err(Error::runtime(
             "function parameter binding layout is not a local slot",
         )),

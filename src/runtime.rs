@@ -47,6 +47,7 @@ mod runtime_static_names;
 #[path = "runtime_well_known.rs"]
 mod runtime_well_known;
 
+pub use runtime_static_bindings::CompiledBindingFrame;
 use runtime_static_bindings::StaticBindingCacheHandle;
 use runtime_static_names::StaticNameAtomCacheHandle;
 use runtime_well_known::WellKnownPropertyKeys;

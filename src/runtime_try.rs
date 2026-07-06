@@ -1,7 +1,7 @@
 use crate::{
     ast::{CatchClause, DeclKind, StaticBinding, Stmt},
     error::Result,
-    runtime::Context,
+    runtime::{CompiledBindingFrame, Context},
     runtime_completion::Completion,
     runtime_scope::BindingCell,
     value::Value,
@@ -53,14 +53,16 @@ impl Context {
         value: Value,
     ) -> Result<Completion> {
         let atom = self.ensure_binding_capacity_static(param)?;
-        let slot = self.compiled_local_binding_slot(param)?;
+        let frame = self.compiled_local_binding_frame(param)?;
         self.checked_value(value.clone())?;
-        self.active_bindings_mut()
+        let inserted = self
+            .active_bindings_mut()
             .insert_or_replace_at_optional_slot(
                 atom,
                 BindingCell::new(value, true, DeclKind::Let),
-                slot,
+                frame.map(CompiledBindingFrame::slot),
             )?;
+        self.mark_active_binding_frame_slot(frame, inserted)?;
         self.remember_active_static_binding(param, atom)?;
         self.eval_scoped_block(&catch.body)
     }

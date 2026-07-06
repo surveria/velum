@@ -4,9 +4,11 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime_completion::Completion,
-    runtime_scope::{BindingCell, BindingScope, BindingSlot},
+    runtime_scope::{BindingCell, BindingScope},
     value::Value,
 };
+
+use super::runtime_static_bindings::CompiledBindingFrame;
 
 impl Context {
     pub(crate) fn hoist_var_declarations(&mut self, statements: &[Stmt]) -> Result<()> {
@@ -91,13 +93,15 @@ impl Context {
         }
 
         self.ensure_binding_capacity_for_atom(atom)?;
-        let slot = self.compiled_active_binding_slot(name)?;
-        self.active_bindings_mut()
+        let frame = self.compiled_active_binding_frame(name)?;
+        let inserted = self
+            .active_bindings_mut()
             .insert_or_replace_at_optional_slot(
                 atom,
                 BindingCell::new(Value::Undefined, true, DeclKind::Var),
-                slot,
+                frame.map(CompiledBindingFrame::slot),
             )?;
+        self.mark_active_binding_frame_slot(frame, inserted)?;
         self.remember_active_static_binding(name, atom)?;
         Ok(())
     }
@@ -149,8 +153,8 @@ impl Context {
         kind: DeclKind,
     ) -> Result<()> {
         let atom = self.intern_static_name_atom(name.name())?;
-        let slot = self.compiled_active_binding_slot(name)?;
-        self.define_atom(atom, name, value, kind, slot)?;
+        let frame = self.compiled_active_binding_frame(name)?;
+        self.define_atom(atom, name, value, kind, frame)?;
         self.remember_active_static_binding(name, atom)
     }
 
@@ -160,7 +164,7 @@ impl Context {
         name: &str,
         value: Value,
         kind: DeclKind,
-        slot: Option<BindingSlot>,
+        frame: Option<CompiledBindingFrame>,
     ) -> Result<()> {
         if self.active_bindings().contains(atom) {
             return Err(Error::runtime(format!(
@@ -171,12 +175,14 @@ impl Context {
 
         self.checked_value(value.clone())?;
         let mutable = kind != DeclKind::Const;
-        self.active_bindings_mut()
+        let inserted = self
+            .active_bindings_mut()
             .insert_or_replace_at_optional_slot(
                 atom,
                 BindingCell::new(value, mutable, kind),
-                slot,
+                frame.map(CompiledBindingFrame::slot),
             )?;
+        self.mark_active_binding_frame_slot(frame, inserted)?;
         Ok(())
     }
 
