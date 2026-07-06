@@ -185,7 +185,7 @@ impl Parser {
             .ok_or_else(|| Error::parse("expected expression", self.offset()))?;
         let expr = match token.kind {
             TokenKind::Number(value) => Expr::Literal(Value::Number(value)),
-            TokenKind::String(value) => Expr::Literal(Value::String(value)),
+            TokenKind::String(value) => Expr::StringLiteral(self.static_string(value)?),
             TokenKind::True => Expr::Literal(Value::Bool(true)),
             TokenKind::False => Expr::Literal(Value::Bool(false)),
             TokenKind::Null => Expr::Literal(Value::Null),
@@ -394,14 +394,13 @@ impl Parser {
     }
 
     fn static_computed_property_key(&mut self, property: &Expr) -> Result<Option<StaticName>> {
-        let name = match property {
-            Expr::Literal(Value::String(value)) => value.clone(),
+        match property {
+            Expr::StringLiteral(value) => self.borrowed_static_name(value.as_str()).map(Some),
             Expr::Literal(
                 value @ (Value::Undefined | Value::Null | Value::Bool(_) | Value::Number(_)),
-            ) => value.to_string(),
-            _ => return Ok(None),
-        };
-        self.static_name(name).map(Some)
+            ) => self.static_name(value.to_string()).map(Some),
+            _ => Ok(None),
+        }
     }
 }
 

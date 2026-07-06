@@ -485,7 +485,7 @@ impl LayoutBuilder {
         function: FunctionScopeId,
     ) -> Result<()> {
         match expr {
-            Expr::Literal(_) | Expr::This => Ok(()),
+            Expr::Literal(_) | Expr::StringLiteral(_) | Expr::This => Ok(()),
             Expr::Identifier(binding) => self.resolve(binding, scope, function),
             Expr::Parenthesized(expr) | Expr::Unary { expr, .. } | Expr::Update { expr, .. } => {
                 self.analyze_expr(expr, scope, function)

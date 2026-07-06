@@ -354,6 +354,32 @@ fn normalizes_context_owned_strings_after_storage_boundaries() -> TestResult {
     ensure_usize(after_parameter.string_bytes, after_retained.string_bytes)
 }
 
+#[test]
+fn compiled_string_literals_use_script_local_constants() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r#"
+        var holder = { camera: "front" };
+        var repeated = "front";
+        holder["camera"];
+        "#,
+    )?;
+
+    ensure_usize(script.usage().static_string_count(), 2)?;
+    let value = vm.eval_compiled(&script)?;
+    ensure_heap_string(&value, "front")?;
+    let after_first = vm.resource_usage();
+    ensure_usize(after_first.string_count, 1)?;
+    ensure_usize(after_first.string_bytes, "front".len())?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_heap_string(&value, "front")?;
+    let after_second = vm.resource_usage();
+    ensure_usize(after_second.string_count, after_first.string_count)?;
+    ensure_usize(after_second.string_bytes, after_first.string_bytes)
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

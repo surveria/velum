@@ -30,6 +30,7 @@ impl CompiledScript {
                 top_level_statement_count: parsed.usage.top_level_statement_count,
                 max_expression_depth: parsed.usage.max_expression_depth,
                 static_name_count: parsed.usage.static_name_count,
+                static_string_count: parsed.usage.static_string_count,
                 static_binding_count: parsed.usage.static_binding_count,
                 static_property_access_count: parsed.usage.static_property_access_count,
                 resolved_static_binding_count: binding_layout.resolved_count(),
@@ -79,6 +80,7 @@ pub struct CompiledScriptUsage {
     top_level_statement_count: usize,
     max_expression_depth: usize,
     static_name_count: usize,
+    static_string_count: usize,
     static_binding_count: usize,
     static_property_access_count: usize,
     resolved_static_binding_count: usize,
@@ -107,6 +109,11 @@ impl CompiledScriptUsage {
     #[must_use]
     pub const fn static_name_count(self) -> usize {
         self.static_name_count
+    }
+
+    #[must_use]
+    pub const fn static_string_count(self) -> usize {
+        self.static_string_count
     }
 
     #[must_use]

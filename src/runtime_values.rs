@@ -1,4 +1,5 @@
 use crate::{
+    ast::StaticString,
     error::{Error, Result},
     runtime::Context,
     value::Value,
@@ -7,6 +8,10 @@ use crate::{
 impl Context {
     pub(crate) fn literal_value(&mut self, value: &Value) -> Result<Value> {
         self.runtime_value(value.clone())
+    }
+
+    pub(crate) fn static_string_value(&mut self, value: &StaticString) -> Result<Value> {
+        self.heap_string_value(value.as_str())
     }
 
     pub(crate) fn runtime_value(&mut self, value: Value) -> Result<Value> {
