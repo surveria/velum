@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260706T220043Z.md`
-- Task: rsqjs-test-report-20260706T220043Z.md
-- Performance: 0.81x (40/63 >1.00x)
+- `rsqjs-test-report-20260706T221054Z.md`
+- Task: `04ce981` Dynamic array-index bytecode quickening tranche: Route computed array-index reads and dense writes through guarded array-storage paths before dynamic property-key fallback.
+- Performance: 0.81x (41/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 11145 passed / 91433 failed (10.86%)
 
@@ -207,4 +207,5 @@ Latest report:
 | `20260706T210623Z` `3c0ba4d` Numeric add and array length quickening tranche: Extend bytecode quickening to the common numeric `+` path and static array `length` reads while preserving generic JavaScript fallback semantics. | 0.81x (41/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
 | `20260706T212153Z` `148c5a3` Native call-site inline-cache tranche: Cache validated static and computed member native call kinds per property access site and expose hit/miss/fallback counters to embedders. | 0.79x (41/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
 | `20260706T214152Z` `bab54f3` Static array-index bytecode quickening tranche: Route static numeric property operands such as `array[0]` through dedicated array-index bytecode reads and writes with generic fallback semantics. | 0.80x (42/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
-| `20260706T220043Z` rsqjs-test-report-20260706T220043Z.md | 0.81x (40/63 >1.00x) | - (0/63 >1.00x) | 11145 passed / 91433 failed (10.86%) |
+| `20260706T220043Z` `e7229f8` Add bytecode-backed function declarations | 0.81x (40/63 >1.00x) | - (0/63 >1.00x) | 11145 passed / 91433 failed (10.86%) |
+| `20260706T221054Z` `04ce981` Dynamic array-index bytecode quickening tranche: Route computed array-index reads and dense writes through guarded array-storage paths before dynamic property-key fallback. | 0.81x (41/63 >1.00x) | - (0/63 >1.00x) | 11145 passed / 91433 failed (10.86%) |
