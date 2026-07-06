@@ -22,7 +22,9 @@ path = "src/bin/rsqjs-test-runner.rs"
 [dependencies]
 anyhow = "1"
 human-yaml = { git = "https://github.com/chertov/human-yaml.git", rev = "1b83913343223316678776f0c5329d4c577df0f5" }
+image = { version = "0.24", default-features = false, features = ["jpeg"] }
 parking_lot = "0.12"
+plotters = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tabled = "0.21.0"

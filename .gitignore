@@ -12,6 +12,8 @@
 !/.github/workflows/ci.yml
 
 !/reports/
+!/reports/*.jpg
+!/reports/*.md
 !/reports/test-runs/
 !/reports/test-runs/*.md
 

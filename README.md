@@ -4,6 +4,10 @@
 
 This repository is intentionally starting small. It is not a drop-in replacement for `QuickJS` or `rquickjs` yet.
 
+## Current Status
+
+![Benchmark and Test262 history](reports/benchmark-summary.jpg)
+
 ## Goals
 
 - Safe Rust core: no `unsafe` blocks in the engine crate.
