@@ -10,26 +10,16 @@ use anyhow::{Context as _, bail};
 use rs_quickjs::{Runtime, Value};
 use tabled::{Table, Tabled};
 
-#[path = "rsqjs_test_runner/bench_engines.rs"]
 mod bench_engines;
-#[path = "rsqjs_test_runner/bench_measure.rs"]
 mod bench_measure;
-#[path = "rsqjs_test_runner/benchmarks.rs"]
 mod benchmarks;
-#[path = "rsqjs_test_runner/cases.rs"]
 mod cases;
-#[path = "rsqjs_test_runner/failure_classification.rs"]
 mod failure_classification;
 #[cfg(test)]
-#[path = "rsqjs_test_runner/report_formatting_tests.rs"]
 mod report_formatting_tests;
-#[path = "rsqjs_test_runner/report_rollup.rs"]
 mod report_rollup;
-#[path = "rsqjs_test_runner/test262_external.rs"]
 mod test262_external;
-#[path = "rsqjs_test_runner/test262_full.rs"]
 mod test262_full;
-#[path = "rsqjs_test_runner/test262_metadata.rs"]
 mod test262_metadata;
 
 use cases::{DifferentialCase, EngineCase, Expectation};

@@ -748,15 +748,24 @@ name = "rs-quickjs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "parking_lot",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "rsqjs-test-runner"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "human-yaml",
  "image",
- "parking_lot",
  "plotters",
  "rquickjs",
+ "rs-quickjs",
  "serde",
  "serde_json",
  "tabled",
- "thiserror",
 ]
 
 [[package]]
