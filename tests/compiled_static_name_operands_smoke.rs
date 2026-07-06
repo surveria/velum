@@ -64,6 +64,15 @@ var counter = makeCounter(10);
 counter(2) + value;
 ";
 
+const REPEATED_LOCAL_FRAME_SOURCE: &str = r"
+var run = function run(seed) {
+    let local = seed;
+    local = local + 1;
+    return local;
+};
+run(1) + run(40);
+";
+
 #[test]
 fn compiled_static_names_preserve_binding_and_property_paths() -> TestResult {
     let engine = Engine::new();
@@ -139,6 +148,21 @@ fn compiled_static_binding_cache_handles_captured_shadowing() -> TestResult {
 
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(13.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atom_count)
+}
+
+#[test]
+fn compiled_static_binding_cache_keeps_local_frames_call_scoped() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(REPEATED_LOCAL_FRAME_SOURCE)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(43.0))?;
+    let atom_count = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(43.0))?;
     ensure_usize(vm.resource_usage().atom_count, atom_count)
 }
 

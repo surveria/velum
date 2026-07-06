@@ -67,6 +67,10 @@ impl BindingScope {
         self.cell(slot).cloned()
     }
 
+    pub(crate) fn cell_at_slot(&self, slot: BindingSlot) -> Option<BindingCell> {
+        self.cell(slot).cloned()
+    }
+
     pub(crate) fn insert(&mut self, atom: AtomId, binding: BindingCell) -> BindingSlot {
         self.insert_or_replace(atom, binding)
     }
