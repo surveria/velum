@@ -6,6 +6,8 @@ mod atom;
 mod binding_layout;
 mod binding_layout_types;
 mod bytecode;
+mod bytecode_analysis;
+mod bytecode_hoist;
 mod compiled_script;
 mod embedding;
 mod error;

@@ -24,6 +24,21 @@ holder.total = values[0] + values[1] + holder.offset;
 holder.total;
 ";
 
+const BYTECODE_HOIST_SOURCE: &str = r"
+if (false) {
+    var hidden = 41;
+}
+hidden;
+";
+
+const BYTECODE_FALLBACK_SOURCE: &str = r"
+try {
+    1;
+} finally {
+    2;
+}
+";
+
 #[test]
 fn compiled_script_exposes_bytecode_instruction_count() -> TestResult {
     let engine = Engine::new();
@@ -75,6 +90,31 @@ fn bytecode_executes_property_array_and_object_paths() -> TestResult {
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(13.0))?;
     ensure_usize(vm.resource_usage().atom_count, atoms)
+}
+
+#[test]
+fn bytecode_hoist_plan_replaces_top_level_ast_hoist() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(BYTECODE_HOIST_SOURCE)?;
+
+    ensure_usize(script.usage().bytecode_hoisted_var_count(), 1)?;
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Undefined)
+}
+
+#[test]
+fn compiled_script_reports_ast_fallback_instruction_count() -> TestResult {
+    let engine = Engine::new();
+    let vm = engine.create_vm();
+    let direct = vm.compile(BYTECODE_PROPERTY_SOURCE)?;
+    let fallback = vm.compile(BYTECODE_FALLBACK_SOURCE)?;
+
+    ensure_usize(direct.usage().bytecode_ast_fallback_count(), 0)?;
+    ensure_positive(
+        fallback.usage().bytecode_ast_fallback_count(),
+        "AST fallback instructions",
+    )
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
