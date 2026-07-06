@@ -49,11 +49,6 @@ pub fn thrown_value_matches(value: &Value, expected_name: &str) -> bool {
     error.name() == expected
 }
 
-pub fn error_property(error: &ErrorObject, property: &str) -> Value {
-    error_property_text(error, property)
-        .map_or(Value::Undefined, |value| Value::String(value.to_owned()))
-}
-
 pub fn error_property_text<'a>(error: &'a ErrorObject, property: &str) -> Option<&'a str> {
     match property {
         ERROR_NAME_PROPERTY => Some(error.name().as_str()),

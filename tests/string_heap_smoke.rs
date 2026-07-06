@@ -267,6 +267,43 @@ fn keeps_string_wrapper_indices_virtual_and_heap_backed() -> TestResult {
 }
 
 #[test]
+fn inherited_string_wrapper_indices_are_heap_backed() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    vm.context().eval("String")?;
+    let after_constructor = vm.resource_usage();
+
+    let first = vm.context().eval(
+        r#"
+        var stringProto = new String("camera");
+        var child = {};
+        child.__proto__ = stringProto;
+        child[0]
+        "#,
+    )?;
+    ensure_heap_string(&first, CAMERA_FIRST_CHAR)?;
+    let after_first = vm.resource_usage();
+    ensure_usize(
+        after_first.string_count,
+        after_constructor.string_count.saturating_add(2),
+    )?;
+    ensure_usize(
+        after_first.string_bytes,
+        after_constructor
+            .string_bytes
+            .saturating_add(CAMERA_LABEL.len())
+            .saturating_add(CAMERA_FIRST_CHAR.len()),
+    )?;
+
+    let repeated = vm.context().eval("child[0]")?;
+    ensure_heap_string(&repeated, CAMERA_FIRST_CHAR)?;
+    let after_repeated = vm.resource_usage();
+    ensure_usize(after_repeated.string_count, after_first.string_count)?;
+    ensure_usize(after_repeated.string_bytes, after_first.string_bytes)
+}
+
+#[test]
 fn interns_string_wrapper_descriptor_values_in_vm_heap() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();

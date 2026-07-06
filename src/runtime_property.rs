@@ -1,7 +1,7 @@
 use crate::atom::AtomTable;
 use crate::error::{Error, Result};
-use crate::runtime_assertions::error_property;
-use crate::runtime_object::{ObjectHeap, PropertyKey, PropertyLookup};
+use crate::runtime_assertions::error_property_text;
+use crate::runtime_object::{ObjectHeap, ObjectPropertyValue, PropertyKey, PropertyLookup};
 use crate::value::Value;
 
 const NULLISH_PROPERTY_DELETE_ERROR: &str = "Cannot convert undefined or null to object";
@@ -48,14 +48,14 @@ impl DynamicPropertyKey {
     }
 }
 
-pub fn get_property(
+pub fn get_property<'a>(
     objects: &ObjectHeap,
-    object: &Value,
+    object: &'a Value,
     property: PropertyLookup<'_>,
-) -> Result<Value> {
+) -> Result<PropertyValue<'a>> {
     match object {
-        Value::Error(error) => Ok(error_property(error, property.name())),
-        Value::Object(id) => objects.get(*id, property),
+        Value::Error(error) => Ok(error_property_value(error, property.name())),
+        Value::Object(id) => objects.get(*id, property).map(PropertyValue::from),
         Value::String(value) => string_property(value, property.name()),
         Value::HeapString(value) => string_property(value.as_str(), property.name()),
         value => Err(Error::runtime(format!(
@@ -63,6 +63,22 @@ pub fn get_property(
             property.name(),
             value.type_name()
         ))),
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum PropertyValue<'a> {
+    Value(Value),
+    Text(&'a str),
+    Character(char),
+}
+
+impl From<ObjectPropertyValue> for PropertyValue<'_> {
+    fn from(value: ObjectPropertyValue) -> Self {
+        match value {
+            ObjectPropertyValue::Value(value) => Self::Value(value),
+            ObjectPropertyValue::StringCharacter(ch) => Self::Character(ch),
+        }
     }
 }
 
@@ -151,11 +167,19 @@ pub fn delete_property(
     }
 }
 
-fn string_property(value: &str, property: &str) -> Result<Value> {
+fn error_property_value<'a>(
+    error: &'a crate::value::ErrorObject,
+    property: &str,
+) -> PropertyValue<'a> {
+    error_property_text(error, property)
+        .map_or(PropertyValue::Value(Value::Undefined), PropertyValue::Text)
+}
+
+fn string_property<'a>(value: &str, property: &str) -> Result<PropertyValue<'a>> {
     match string_property_value(value, property)? {
-        StringPropertyValue::Length(value) => Ok(Value::Number(value)),
-        StringPropertyValue::Character(ch) => Ok(Value::String(ch.to_string())),
-        StringPropertyValue::Missing => Ok(Value::Undefined),
+        StringPropertyValue::Length(value) => Ok(PropertyValue::Value(Value::Number(value))),
+        StringPropertyValue::Character(ch) => Ok(PropertyValue::Character(ch)),
+        StringPropertyValue::Missing => Ok(PropertyValue::Value(Value::Undefined)),
     }
 }
 
