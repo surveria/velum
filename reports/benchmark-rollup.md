@@ -16,73 +16,73 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260706T134253Z.md`
-- Task: Global var slot order tranche: Align compiled global `GlobalSlot` assignment with the runtime `var` hoist phase before broader direct binding operands.
-- Performance: 1.29x (47/63 >1.00x)
-- Memory: 1.09x (58/63 >1.00x)
+- `rsqjs-test-report-20260706T135425Z.md`
+- Task: rsqjs-test-report-20260706T135425Z.md
+- Performance: 0.68x (36/63 >1.00x)
+- Memory: - (0/63 >1.00x)
 - Full Test262: 10872 passed / 91706 failed (10.60%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
 | `20260704T213500Z` `dc0208d` Add testing infrastructure | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260704T220653Z` `b6d2e2d` Add corpus and benchmark reporting | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260704T222641Z` `a9fb326` Add QuickJS reference baseline | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260704T224757Z` `b367b81` Add pinned Test262 manifest baseline | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260704T225730Z` `4ca9db8` Add Boolean built-in baseline | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260704T230556Z` `b2e4c43` Add Test262 negative parse baseline | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260704T232106Z` `7ea20a8` Support basic var hoisting | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260704T233435Z` `e89359c` Support basic try catch | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260704T234711Z` `8c8664a` Support conditional and bitwise and | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260704T235856Z` `5d483d7` Support function expressions | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T001305Z` `b9585c3` Support assert throws reference errors | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T002449Z` `d36a55f` Support error object properties | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T003531Z` `931c686` Support function return statements | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T005826Z` `8e012a6` Support function parameters and local scope | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T010922Z` `5dff6cb` Support escaping closure environments | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T011932Z` `c2a4274` Support object literals and properties | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T013253Z` `9374ffa` Support computed property access | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T014202Z` `c6fefb2` Support array literals | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T014934Z` `0046ccf` Support while statements | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T015903Z` `7696ba2` Support break and continue | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T021151Z` `167078f` Support for statements | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T022136Z` `2f977e4` Support switch statements | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T023157Z` `0cb7c25` Support try finally statements | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T024632Z` `5d29ec2` Support unary operators | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T025832Z` `493eaab` Support block lexical scopes | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T030844Z` `14d1770` Support update expressions | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T032259Z` `8f892f6` Support compound assignments | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T034026Z` `46d12db` Support remaining compound assignments | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T035115Z` `02280b0` Support parenthesized exponentiation | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T040155Z` `4d41d9e` Support in operator | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T041624Z` `2a1442a` Support for-in statements | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T042618Z` `5b4b35c` Split runtime declaration handling | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T043635Z` `7682d5f` Support function metadata properties | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T044838Z` `3ab0d6e` Support custom function properties | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T045801Z` `af14b32` Support method this binding | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T050634Z` `816d6f0` Split parser modules | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T051519Z` `0c752a1` Support object prototype lookup | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T052710Z` `55280f2` Support constructor prototype chains | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T053949Z` `22dcb7b` Add object property enumerability | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T054837Z` `8657f5c` Split runner case tables | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T060246Z` `8a38e64` Add default object prototype root | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T061658Z` `f358555` Add native Object builtin | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T062819Z` `95f9e76` Add native Array builtin | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T063818Z` `831fefc` Add Array prototype push and pop | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T065103Z` `915e0e9` Add Array.prototype.join | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T070456Z` `bcb4d78` Add Array.prototype.shift and unshift | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T071625Z` `335c8f4` Add Array.prototype.slice | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T073120Z` `916d915` Add Array.prototype.indexOf | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T074155Z` `fdd22e1` Add Array.prototype.lastIndexOf | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T075403Z` `575a1bf` Add Array.prototype.includes | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T080435Z` `0f1a6a4` Add Array.prototype.reverse | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T081731Z` `c2d8a71` Split native Array method plumbing | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T084000Z` `c01b7d6` Add Array.prototype.concat | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T085027Z` `ee432bd` Optimize Array concat copy path | - (0/0 >1.00x) | - (0/0 >1.00x) | - |
-| `20260705T090718Z` `9ebd10e` Connect full Test262 corpus reporting | - (0/0 >1.00x) | - (0/0 >1.00x) | 4 passed / 0 failed (0.01%) |
-| `20260705T092247Z` `0bc5a26` Run full Test262 corpus by default | - (0/0 >1.00x) | - (0/0 >1.00x) | 591 passed / 53092 failed (1.10%) |
-| `20260705T094834Z` `aeab9c5` Add Test262 metadata harness | - (0/0 >1.00x) | - (0/0 >1.00x) | 8831 passed / 82643 failed (9.03%) |
-| `20260705T105812Z` `8c94d48` Run full Test262 metadata cases | - (0/0 >1.00x) | - (0/0 >1.00x) | 8965 passed / 93613 failed (8.74%) |
-| `20260705T113101Z` `198e3c5` Classify Test262 full corpus failures | - (0/0 >1.00x) | - (0/0 >1.00x) | 8965 passed / 93613 failed (8.74%) |
+| `20260704T220653Z` `b6d2e2d` Add corpus and benchmark reporting | - (0/2 >1.00x) | - (0/2 >1.00x) | - |
+| `20260704T222641Z` `a9fb326` Add QuickJS reference baseline | - (0/2 >1.00x) | - (0/2 >1.00x) | - |
+| `20260704T224757Z` `b367b81` Add pinned Test262 manifest baseline | - (0/2 >1.00x) | - (0/2 >1.00x) | - |
+| `20260704T225730Z` `4ca9db8` Add Boolean built-in baseline | - (0/3 >1.00x) | - (0/3 >1.00x) | - |
+| `20260704T230556Z` `b2e4c43` Add Test262 negative parse baseline | - (0/3 >1.00x) | - (0/3 >1.00x) | - |
+| `20260704T232106Z` `7ea20a8` Support basic var hoisting | - (0/4 >1.00x) | - (0/4 >1.00x) | - |
+| `20260704T233435Z` `e89359c` Support basic try catch | - (0/5 >1.00x) | - (0/5 >1.00x) | - |
+| `20260704T234711Z` `8c8664a` Support conditional and bitwise and | - (0/6 >1.00x) | - (0/6 >1.00x) | - |
+| `20260704T235856Z` `5d483d7` Support function expressions | - (0/7 >1.00x) | - (0/7 >1.00x) | - |
+| `20260705T001305Z` `b9585c3` Support assert throws reference errors | - (0/8 >1.00x) | - (0/8 >1.00x) | - |
+| `20260705T002449Z` `d36a55f` Support error object properties | - (0/9 >1.00x) | - (0/9 >1.00x) | - |
+| `20260705T003531Z` `931c686` Support function return statements | - (0/10 >1.00x) | - (0/10 >1.00x) | - |
+| `20260705T005826Z` `8e012a6` Support function parameters and local scope | - (0/11 >1.00x) | - (0/11 >1.00x) | - |
+| `20260705T010922Z` `5dff6cb` Support escaping closure environments | - (0/12 >1.00x) | - (0/12 >1.00x) | - |
+| `20260705T011932Z` `c2a4274` Support object literals and properties | - (0/13 >1.00x) | - (0/13 >1.00x) | - |
+| `20260705T013253Z` `9374ffa` Support computed property access | - (0/14 >1.00x) | - (0/14 >1.00x) | - |
+| `20260705T014202Z` `c6fefb2` Support array literals | - (0/15 >1.00x) | - (0/15 >1.00x) | - |
+| `20260705T014934Z` `0046ccf` Support while statements | - (0/16 >1.00x) | - (0/16 >1.00x) | - |
+| `20260705T015903Z` `7696ba2` Support break and continue | - (0/17 >1.00x) | - (0/17 >1.00x) | - |
+| `20260705T021151Z` `167078f` Support for statements | - (0/18 >1.00x) | - (0/18 >1.00x) | - |
+| `20260705T022136Z` `2f977e4` Support switch statements | - (0/19 >1.00x) | - (0/19 >1.00x) | - |
+| `20260705T023157Z` `0cb7c25` Support try finally statements | - (0/20 >1.00x) | - (0/20 >1.00x) | - |
+| `20260705T024632Z` `5d29ec2` Support unary operators | - (0/21 >1.00x) | - (0/21 >1.00x) | - |
+| `20260705T025832Z` `493eaab` Support block lexical scopes | - (0/22 >1.00x) | - (0/22 >1.00x) | - |
+| `20260705T030844Z` `14d1770` Support update expressions | - (0/23 >1.00x) | - (0/23 >1.00x) | - |
+| `20260705T032259Z` `8f892f6` Support compound assignments | - (0/24 >1.00x) | - (0/24 >1.00x) | - |
+| `20260705T034026Z` `46d12db` Support remaining compound assignments | - (0/25 >1.00x) | - (0/25 >1.00x) | - |
+| `20260705T035115Z` `02280b0` Support parenthesized exponentiation | - (0/26 >1.00x) | - (0/26 >1.00x) | - |
+| `20260705T040155Z` `4d41d9e` Support in operator | - (0/27 >1.00x) | - (0/27 >1.00x) | - |
+| `20260705T041624Z` `2a1442a` Support for-in statements | - (0/28 >1.00x) | - (0/28 >1.00x) | - |
+| `20260705T042618Z` `5b4b35c` Split runtime declaration handling | - (0/28 >1.00x) | - (0/28 >1.00x) | - |
+| `20260705T043635Z` `7682d5f` Support function metadata properties | - (0/29 >1.00x) | - (0/29 >1.00x) | - |
+| `20260705T044838Z` `3ab0d6e` Support custom function properties | - (0/30 >1.00x) | - (0/30 >1.00x) | - |
+| `20260705T045801Z` `af14b32` Support method this binding | - (0/31 >1.00x) | - (0/31 >1.00x) | - |
+| `20260705T050634Z` `816d6f0` Split parser modules | - (0/31 >1.00x) | - (0/31 >1.00x) | - |
+| `20260705T051519Z` `0c752a1` Support object prototype lookup | - (0/32 >1.00x) | - (0/32 >1.00x) | - |
+| `20260705T052710Z` `55280f2` Support constructor prototype chains | - (0/33 >1.00x) | - (0/33 >1.00x) | - |
+| `20260705T053949Z` `22dcb7b` Add object property enumerability | - (0/34 >1.00x) | - (0/34 >1.00x) | - |
+| `20260705T054837Z` `8657f5c` Split runner case tables | - (0/34 >1.00x) | - (0/34 >1.00x) | - |
+| `20260705T060246Z` `8a38e64` Add default object prototype root | - (0/35 >1.00x) | - (0/35 >1.00x) | - |
+| `20260705T061658Z` `f358555` Add native Object builtin | - (0/36 >1.00x) | - (0/36 >1.00x) | - |
+| `20260705T062819Z` `95f9e76` Add native Array builtin | - (0/37 >1.00x) | - (0/37 >1.00x) | - |
+| `20260705T063818Z` `831fefc` Add Array prototype push and pop | - (0/38 >1.00x) | - (0/38 >1.00x) | - |
+| `20260705T065103Z` `915e0e9` Add Array.prototype.join | - (0/39 >1.00x) | - (0/39 >1.00x) | - |
+| `20260705T070456Z` `bcb4d78` Add Array.prototype.shift and unshift | - (0/40 >1.00x) | - (0/40 >1.00x) | - |
+| `20260705T071625Z` `335c8f4` Add Array.prototype.slice | - (0/41 >1.00x) | - (0/41 >1.00x) | - |
+| `20260705T073120Z` `916d915` Add Array.prototype.indexOf | - (0/42 >1.00x) | - (0/42 >1.00x) | - |
+| `20260705T074155Z` `fdd22e1` Add Array.prototype.lastIndexOf | - (0/43 >1.00x) | - (0/43 >1.00x) | - |
+| `20260705T075403Z` `575a1bf` Add Array.prototype.includes | - (0/44 >1.00x) | - (0/44 >1.00x) | - |
+| `20260705T080435Z` `0f1a6a4` Add Array.prototype.reverse | - (0/45 >1.00x) | - (0/45 >1.00x) | - |
+| `20260705T081731Z` `c2d8a71` Split native Array method plumbing | - (0/45 >1.00x) | - (0/45 >1.00x) | - |
+| `20260705T084000Z` `c01b7d6` Add Array.prototype.concat | - (0/46 >1.00x) | - (0/46 >1.00x) | - |
+| `20260705T085027Z` `ee432bd` Optimize Array concat copy path | - (0/46 >1.00x) | - (0/46 >1.00x) | - |
+| `20260705T090718Z` `9ebd10e` Connect full Test262 corpus reporting | - (0/46 >1.00x) | - (0/46 >1.00x) | 4 passed / 0 failed (0.01%) |
+| `20260705T092247Z` `0bc5a26` Run full Test262 corpus by default | - (0/46 >1.00x) | - (0/46 >1.00x) | 591 passed / 53092 failed (1.10%) |
+| `20260705T094834Z` `aeab9c5` Add Test262 metadata harness | - (0/46 >1.00x) | - (0/46 >1.00x) | 8831 passed / 82643 failed (9.03%) |
+| `20260705T105812Z` `8c94d48` Run full Test262 metadata cases | - (0/46 >1.00x) | - (0/46 >1.00x) | 8965 passed / 93613 failed (8.74%) |
+| `20260705T113101Z` `198e3c5` Classify Test262 full corpus failures | - (0/46 >1.00x) | - (0/46 >1.00x) | 8965 passed / 93613 failed (8.74%) |
 | `20260705T114452Z` `14749d8` Track benchmark budgets and RSS | 1.08x (27/46 >1.00x) | 1.00x (21/46 >1.00x) | 8965 passed / 93613 failed (8.74%) |
 | `20260705T115143Z` `d35fdc7` Use single lookup for array index values | 1.08x (26/46 >1.00x) | 1.00x (17/46 >1.00x) | 8965 passed / 93613 failed (8.74%) |
 | `20260705T115953Z` `14fdf60` Add in-process benchmark measurements | 1.08x (26/46 >1.00x) | 1.01x (27/46 >1.00x) | 8965 passed / 93613 failed (8.74%) |
@@ -188,4 +188,5 @@ Latest report:
 | `20260706T130038Z` `a792e21` Direct string descriptor heap materialization tranche: Avoid the remaining context-free owned-string fallback when `Object.getOwnPropertyDescriptor` materializes virtual string-wrapper index descriptors. | 1.30x (48/63 >1.00x) | 1.08x (58/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T131317Z` `b67f950` Native function registry tranche: Replace linear native-function kind rediscovery with a VM-local checked registry before broader intrinsic metadata and native-call bytecode operands. | 1.28x (46/63 >1.00x) | 1.07x (58/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T133250Z` `170e763` Exact global binding cache tranche: Split binding cache location metadata and safely introduce atom-free top-level global cache hits where runtime and compiled slots are proven aligned. | 1.29x (46/63 >1.00x) | 1.09x (58/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
-| `20260706T134253Z` `512621a` Global var slot order tranche: Align compiled global `GlobalSlot` assignment with the runtime `var` hoist phase before broader direct binding operands. | 1.29x (47/63 >1.00x) | 1.09x (58/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
+| `20260706T134253Z` `2a2e13a` Global var slot order tranche: Align compiled global `GlobalSlot` assignment with the runtime `var` hoist phase before broader direct binding operands. | 1.29x (47/63 >1.00x) | 1.09x (58/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
+| `20260706T135425Z` rsqjs-test-report-20260706T135425Z.md | 0.68x (36/63 >1.00x) | - (0/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
