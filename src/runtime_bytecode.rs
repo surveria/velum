@@ -1,32 +1,55 @@
-use std::rc::Rc;
+#[path = "runtime_bytecode_control.rs"]
+mod runtime_bytecode_control;
+#[path = "runtime_bytecode_ops.rs"]
+mod runtime_bytecode_ops;
+#[path = "runtime_bytecode_state.rs"]
+mod runtime_bytecode_state;
 
 use crate::{
-    ast::{BinaryOp, DeclKind, StaticName, UnaryOp},
-    bytecode::{BytecodeAddress, BytecodeCompletion, BytecodeInstruction, BytecodeProgram},
+    bytecode::{BytecodeAddress, BytecodeBlock, BytecodeInstruction, BytecodeProgram},
     error::{Error, Result},
     runtime::Context,
+    runtime_assertions::runtime_exception_value,
+    runtime_call_args::RuntimeCallArgs,
     runtime_completion::Completion,
-    runtime_numeric::{
-        bitwise_and, bitwise_or, bitwise_xor, compare_binary, numeric_binary, shift_left,
-        shift_right, shift_right_unsigned,
-    },
-    runtime_object::{OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyEnumerable},
     value::Value,
 };
+
+use runtime_bytecode_state::BytecodeState;
 
 impl Context {
     pub(crate) fn eval_bytecode_program(
         &mut self,
         bytecode: &BytecodeProgram,
     ) -> Result<Completion> {
+        self.eval_bytecode_block(bytecode.block())
+    }
+
+    pub(super) fn eval_bytecode_block(&mut self, block: &BytecodeBlock) -> Result<Completion> {
         let mut state = BytecodeState::new();
-        while let Some(instruction) = bytecode.instruction(state.pc)? {
+        while let Some(instruction) = block.instruction(state.pc)? {
             self.step()?;
-            if let Some(completion) = self.eval_bytecode_instruction(&mut state, instruction)? {
+            let result = self.eval_bytecode_instruction(&mut state, instruction);
+            let completion = match result {
+                Ok(completion) => completion,
+                Err(error) => {
+                    if let Some(value) = runtime_exception_value(&error) {
+                        self.checked_value(value.clone())?;
+                        Some(Completion::Throw(value))
+                    } else {
+                        return Err(error);
+                    }
+                }
+            };
+            if let Some(completion) = completion {
                 return Ok(completion);
             }
         }
         Ok(Completion::Normal(state.last))
+    }
+
+    pub(super) fn eval_bytecode_expression(&mut self, block: &BytecodeBlock) -> Result<Value> {
+        self.eval_bytecode_block(block)?.into_result()
     }
 
     fn eval_bytecode_instruction(
@@ -43,37 +66,55 @@ impl Context {
             | BytecodeInstruction::LoadBinding(_)
             | BytecodeInstruction::StoreBinding(_)
             | BytecodeInstruction::DeclareBinding { .. }
-            | BytecodeInstruction::SetLastUndefined
             | BytecodeInstruction::StoreLast
-            | BytecodeInstruction::Pop => {
-                self.eval_bytecode_stack_instruction(state, instruction, next)?;
-                Ok(None)
+            | BytecodeInstruction::Pop
+            | BytecodeInstruction::Unary(_)
+            | BytecodeInstruction::TypeOfBinding(_)
+            | BytecodeInstruction::TypeOfValue => {
+                self.eval_bytecode_stack_instruction(state, instruction, next)
             }
-            BytecodeInstruction::Unary(_)
+            BytecodeInstruction::DeleteBinding(_)
+            | BytecodeInstruction::DeleteStaticProperty { .. }
+            | BytecodeInstruction::DeleteComputedProperty
+            | BytecodeInstruction::DeleteValue
+            | BytecodeInstruction::UpdateBinding { .. }
+            | BytecodeInstruction::UpdateStaticProperty { .. }
+            | BytecodeInstruction::UpdateComputedProperty { .. }
             | BytecodeInstruction::Binary { .. }
+            | BytecodeInstruction::CompoundStoreBinding { .. }
+            | BytecodeInstruction::CompoundStaticProperty { .. }
+            | BytecodeInstruction::CompoundComputedProperty { .. }
             | BytecodeInstruction::StaticMember { .. }
             | BytecodeInstruction::ComputedMember { .. }
             | BytecodeInstruction::StaticPropertyAssign { .. }
-            | BytecodeInstruction::ComputedPropertyAssign { .. }
+            | BytecodeInstruction::ComputedPropertyAssign { .. } => {
+                self.eval_bytecode_property_instruction(state, instruction, next)
+            }
+            BytecodeInstruction::CallBinding { .. }
+            | BytecodeInstruction::CallValue { .. }
+            | BytecodeInstruction::CallStaticMember { .. }
+            | BytecodeInstruction::CallComputedMember { .. }
+            | BytecodeInstruction::Print { .. }
+            | BytecodeInstruction::AssertThrows { .. }
+            | BytecodeInstruction::Construct { .. }
+            | BytecodeInstruction::CreateFunction { .. }
             | BytecodeInstruction::ArrayLiteral { .. }
             | BytecodeInstruction::ObjectLiteral { .. } => {
-                self.eval_bytecode_value_instruction(state, instruction, next)?;
-                Ok(None)
+                self.eval_bytecode_call_instruction(state, instruction, next)
             }
-            BytecodeInstruction::Jump(target) => {
-                state.pc = *target;
-                Ok(None)
-            }
-            BytecodeInstruction::JumpIfFalse(target) => {
-                let value = state.stack.pop()?;
-                state.pc = if value.is_truthy() { next } else { *target };
-                Ok(None)
-            }
-            BytecodeInstruction::Complete(completion) => state.complete(*completion).map(Some),
-            BytecodeInstruction::EvalAstExpr(_)
-            | BytecodeInstruction::EvalAstStatement(_)
-            | BytecodeInstruction::EvalAstLoopStatement { .. } => {
-                self.eval_bytecode_ast_instruction(state, instruction, next)
+            BytecodeInstruction::If { .. }
+            | BytecodeInstruction::While { .. }
+            | BytecodeInstruction::For { .. }
+            | BytecodeInstruction::ForIn { .. }
+            | BytecodeInstruction::Switch { .. }
+            | BytecodeInstruction::Try { .. }
+            | BytecodeInstruction::ScopedBlock(_)
+            | BytecodeInstruction::Jump(_)
+            | BytecodeInstruction::JumpIfFalse(_)
+            | BytecodeInstruction::JumpIfFalseKeep(_)
+            | BytecodeInstruction::JumpIfTrueKeep(_)
+            | BytecodeInstruction::Complete(_) => {
+                self.eval_bytecode_control_instruction(state, instruction, next)
             }
         }
     }
@@ -83,27 +124,39 @@ impl Context {
         state: &mut BytecodeState,
         instruction: &BytecodeInstruction,
         next: BytecodeAddress,
-    ) -> Result<()> {
+    ) -> Result<Option<Completion>> {
         match instruction {
             BytecodeInstruction::PushLiteral(value) => {
                 state.stack.push(self.runtime_value(value.clone())?);
+                state.pc = next;
+                Ok(None)
             }
             BytecodeInstruction::PushString(value) => {
                 state.stack.push(self.static_string_value(value)?);
+                state.pc = next;
+                Ok(None)
             }
             BytecodeInstruction::PushUndefined => {
                 state.stack.push(Value::Undefined);
+                state.pc = next;
+                Ok(None)
             }
             BytecodeInstruction::LoadThis => {
                 state.stack.push(self.current_this()?);
+                state.pc = next;
+                Ok(None)
             }
             BytecodeInstruction::LoadBinding(binding) => {
-                state.stack.push(self.eval_identifier(binding)?);
+                state.stack.push(self.eval_bytecode_identifier(binding)?);
+                state.pc = next;
+                Ok(None)
             }
             BytecodeInstruction::StoreBinding(binding) => {
                 let value = state.stack.pop()?;
                 self.assign_static_or_builtin(binding, value.clone())?;
                 state.stack.push(value);
+                state.pc = next;
+                Ok(None)
             }
             BytecodeInstruction::DeclareBinding {
                 name,
@@ -117,47 +170,138 @@ impl Context {
                 };
                 self.eval_bytecode_declaration(name, *kind, value)?;
                 state.last = Value::Undefined;
-            }
-            BytecodeInstruction::SetLastUndefined => {
-                state.last = Value::Undefined;
+                state.pc = next;
+                Ok(None)
             }
             BytecodeInstruction::StoreLast => {
                 state.last = state.stack.pop()?;
+                state.pc = next;
+                Ok(None)
             }
             BytecodeInstruction::Pop => {
                 state.stack.pop()?;
+                state.pc = next;
+                Ok(None)
             }
-            BytecodeInstruction::Unary(_)
-            | BytecodeInstruction::Binary { .. }
-            | BytecodeInstruction::StaticMember { .. }
-            | BytecodeInstruction::ComputedMember { .. }
-            | BytecodeInstruction::StaticPropertyAssign { .. }
-            | BytecodeInstruction::ComputedPropertyAssign { .. }
-            | BytecodeInstruction::ArrayLiteral { .. }
-            | BytecodeInstruction::ObjectLiteral { .. }
-            | BytecodeInstruction::Jump(_)
-            | BytecodeInstruction::JumpIfFalse(_)
-            | BytecodeInstruction::Complete(_)
-            | BytecodeInstruction::EvalAstExpr(_)
-            | BytecodeInstruction::EvalAstStatement(_)
-            | BytecodeInstruction::EvalAstLoopStatement { .. } => {
-                return Err(Error::runtime("bytecode stack instruction mismatch"));
+            BytecodeInstruction::Unary(op) => {
+                let value = state.stack.pop()?;
+                state.stack.push(Self::eval_bytecode_unary(*op, &value)?);
+                state.pc = next;
+                Ok(None)
             }
+            BytecodeInstruction::TypeOfBinding(binding) => {
+                state
+                    .stack
+                    .push(self.eval_bytecode_typeof_binding(binding)?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::TypeOfValue => {
+                let value = state.stack.pop()?;
+                state.stack.push(self.heap_string_value(value.type_name())?);
+                state.pc = next;
+                Ok(None)
+            }
+            _ => Err(Error::runtime("bytecode stack instruction mismatch")),
         }
-        state.pc = next;
-        Ok(())
     }
 
-    fn eval_bytecode_value_instruction(
+    fn eval_bytecode_property_instruction(
         &mut self,
         state: &mut BytecodeState,
         instruction: &BytecodeInstruction,
         next: BytecodeAddress,
-    ) -> Result<()> {
+    ) -> Result<Option<Completion>> {
         match instruction {
-            BytecodeInstruction::Unary(op) => {
-                let value = state.stack.pop()?;
-                state.stack.push(Self::eval_bytecode_unary(*op, &value)?);
+            BytecodeInstruction::DeleteBinding(_)
+            | BytecodeInstruction::DeleteStaticProperty { .. }
+            | BytecodeInstruction::DeleteComputedProperty
+            | BytecodeInstruction::DeleteValue
+            | BytecodeInstruction::UpdateBinding { .. }
+            | BytecodeInstruction::UpdateStaticProperty { .. }
+            | BytecodeInstruction::UpdateComputedProperty { .. }
+            | BytecodeInstruction::Binary { .. } => {
+                self.eval_bytecode_mutation_instruction(state, instruction, next)
+            }
+            BytecodeInstruction::CompoundStoreBinding { .. }
+            | BytecodeInstruction::CompoundStaticProperty { .. }
+            | BytecodeInstruction::CompoundComputedProperty { .. }
+            | BytecodeInstruction::StaticMember { .. }
+            | BytecodeInstruction::ComputedMember { .. }
+            | BytecodeInstruction::StaticPropertyAssign { .. }
+            | BytecodeInstruction::ComputedPropertyAssign { .. } => {
+                self.eval_bytecode_member_instruction(state, instruction, next)
+            }
+            _ => Err(Error::runtime("bytecode property instruction mismatch")),
+        }
+    }
+
+    fn eval_bytecode_mutation_instruction(
+        &mut self,
+        state: &mut BytecodeState,
+        instruction: &BytecodeInstruction,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        match instruction {
+            BytecodeInstruction::DeleteBinding(binding) => {
+                let exists = self.binding_exists_or_materialize_static(binding)?;
+                state.stack.push(Value::Bool(!exists));
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::DeleteStaticProperty { property } => {
+                let object = state.stack.pop()?;
+                state
+                    .stack
+                    .push(self.delete_static_property_value(&object, property)?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::DeleteComputedProperty => {
+                let property = state.stack.pop()?;
+                let object = state.stack.pop()?;
+                let property = self.dynamic_property_key(&property)?;
+                state
+                    .stack
+                    .push(self.delete_dynamic_property_value(&object, &property)?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::DeleteValue => {
+                state.stack.pop()?;
+                state.stack.push(Value::Bool(true));
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::UpdateBinding { name, op, prefix } => {
+                state
+                    .stack
+                    .push(self.eval_bytecode_update_binding(name, *op, *prefix)?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::UpdateStaticProperty {
+                property,
+                access,
+                op,
+                prefix,
+            } => {
+                let object = state.stack.pop()?;
+                state.stack.push(self.eval_bytecode_update_static_property(
+                    &object, property, *access, *op, *prefix,
+                )?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::UpdateComputedProperty { access, op, prefix } => {
+                let property = state.stack.pop()?;
+                let object = state.stack.pop()?;
+                let property = self.dynamic_property_key(&property)?;
+                state.stack.push(self.eval_bytecode_update_dynamic_property(
+                    &object, property, *access, *op, *prefix,
+                )?);
+                state.pc = next;
+                Ok(None)
             }
             BytecodeInstruction::Binary {
                 op,
@@ -171,12 +315,71 @@ impl Context {
                     &right,
                     *property_access,
                 )?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::CompoundStoreBinding { name, op } => {
+                let right = state.stack.pop()?;
+                state
+                    .stack
+                    .push(self.eval_bytecode_binding_compound_assignment(*op, name, &right)?);
+                state.pc = next;
+                Ok(None)
+            }
+            _ => Err(Error::runtime("bytecode mutation instruction mismatch")),
+        }
+    }
+
+    fn eval_bytecode_member_instruction(
+        &mut self,
+        state: &mut BytecodeState,
+        instruction: &BytecodeInstruction,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        match instruction {
+            BytecodeInstruction::CompoundStoreBinding { name, op } => {
+                let right = state.stack.pop()?;
+                state
+                    .stack
+                    .push(self.eval_bytecode_binding_compound_assignment(*op, name, &right)?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::CompoundStaticProperty {
+                property,
+                access,
+                op,
+            } => {
+                let right = state.stack.pop()?;
+                let object = state.stack.pop()?;
+                state
+                    .stack
+                    .push(self.eval_bytecode_static_compound_assignment(
+                        *op, &object, property, *access, &right,
+                    )?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::CompoundComputedProperty { access, op } => {
+                let right = state.stack.pop()?;
+                let property = state.stack.pop()?;
+                let object = state.stack.pop()?;
+                let property = self.dynamic_property_key(&property)?;
+                state
+                    .stack
+                    .push(self.eval_bytecode_dynamic_compound_assignment(
+                        *op, &object, property, *access, &right,
+                    )?);
+                state.pc = next;
+                Ok(None)
             }
             BytecodeInstruction::StaticMember { property, access } => {
                 let object = state.stack.pop()?;
                 state
                     .stack
                     .push(self.get_static_property_value(&object, property, *access)?);
+                state.pc = next;
+                Ok(None)
             }
             BytecodeInstruction::ComputedMember { access } => {
                 let property = state.stack.pop()?;
@@ -185,12 +388,16 @@ impl Context {
                 state
                     .stack
                     .push(self.get_cached_dynamic_property_value(&object, &property, *access)?);
+                state.pc = next;
+                Ok(None)
             }
             BytecodeInstruction::StaticPropertyAssign { property, access } => {
                 let value = state.stack.pop()?;
                 let object = state.stack.pop()?;
                 self.set_static_property_value(&object, property, *access, value.clone())?;
                 state.stack.push(value);
+                state.pc = next;
+                Ok(None)
             }
             BytecodeInstruction::ComputedPropertyAssign { access } => {
                 let value = state.stack.pop()?;
@@ -204,302 +411,172 @@ impl Context {
                     value.clone(),
                 )?;
                 state.stack.push(value);
+                state.pc = next;
+                Ok(None)
             }
-            BytecodeInstruction::ArrayLiteral { len } => {
-                let values = state.stack.pop_many(*len)?;
-                state.stack.push(self.create_array_from_elements(values)?);
-            }
-            BytecodeInstruction::ObjectLiteral { properties } => {
-                let values = state.stack.pop_many(properties.len())?;
-                state
-                    .stack
-                    .push(self.create_bytecode_object_literal(properties, values)?);
-            }
-            BytecodeInstruction::PushLiteral(_)
-            | BytecodeInstruction::PushString(_)
-            | BytecodeInstruction::PushUndefined
-            | BytecodeInstruction::LoadThis
-            | BytecodeInstruction::LoadBinding(_)
-            | BytecodeInstruction::StoreBinding(_)
-            | BytecodeInstruction::DeclareBinding { .. }
-            | BytecodeInstruction::SetLastUndefined
-            | BytecodeInstruction::StoreLast
-            | BytecodeInstruction::Pop
-            | BytecodeInstruction::Jump(_)
-            | BytecodeInstruction::JumpIfFalse(_)
-            | BytecodeInstruction::Complete(_)
-            | BytecodeInstruction::EvalAstExpr(_)
-            | BytecodeInstruction::EvalAstStatement(_)
-            | BytecodeInstruction::EvalAstLoopStatement { .. } => {
-                return Err(Error::runtime("bytecode value instruction mismatch"));
-            }
+            _ => Err(Error::runtime("bytecode member instruction mismatch")),
         }
-        state.pc = next;
-        Ok(())
     }
 
-    fn eval_bytecode_ast_instruction(
+    fn eval_bytecode_call_instruction(
         &mut self,
         state: &mut BytecodeState,
         instruction: &BytecodeInstruction,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         match instruction {
-            BytecodeInstruction::EvalAstExpr(expr) => {
-                state.stack.push(self.eval_expr(expr)?);
-                state.pc = next;
-                Ok(None)
+            BytecodeInstruction::CallBinding { .. }
+            | BytecodeInstruction::CallValue { .. }
+            | BytecodeInstruction::CallStaticMember { .. }
+            | BytecodeInstruction::CallComputedMember { .. }
+            | BytecodeInstruction::Print { .. }
+            | BytecodeInstruction::AssertThrows { .. } => {
+                self.eval_bytecode_invocation_instruction(state, instruction, next)
             }
-            BytecodeInstruction::EvalAstStatement(statement) => {
-                match self.eval_statement(statement)? {
-                    Completion::Normal(value) => state.last = value,
-                    completion => return Ok(Some(completion)),
-                }
-                state.pc = next;
-                Ok(None)
-            }
-            BytecodeInstruction::EvalAstLoopStatement {
-                statement,
-                break_target,
-                continue_target,
-            } => {
-                match self.eval_statement(statement)? {
-                    Completion::Normal(value) => {
-                        state.last = value;
-                        state.pc = next;
-                    }
-                    Completion::Break => state.pc = *break_target,
-                    Completion::Continue => state.pc = *continue_target,
-                    completion @ (Completion::Throw(_) | Completion::Return(_)) => {
-                        return Ok(Some(completion));
-                    }
-                }
-                Ok(None)
-            }
-            BytecodeInstruction::PushLiteral(_)
-            | BytecodeInstruction::PushString(_)
-            | BytecodeInstruction::PushUndefined
-            | BytecodeInstruction::LoadThis
-            | BytecodeInstruction::LoadBinding(_)
-            | BytecodeInstruction::StoreBinding(_)
-            | BytecodeInstruction::DeclareBinding { .. }
-            | BytecodeInstruction::SetLastUndefined
-            | BytecodeInstruction::StoreLast
-            | BytecodeInstruction::Pop
-            | BytecodeInstruction::Unary(_)
-            | BytecodeInstruction::Binary { .. }
-            | BytecodeInstruction::StaticMember { .. }
-            | BytecodeInstruction::ComputedMember { .. }
-            | BytecodeInstruction::StaticPropertyAssign { .. }
-            | BytecodeInstruction::ComputedPropertyAssign { .. }
+            BytecodeInstruction::Construct { .. }
+            | BytecodeInstruction::CreateFunction { .. }
             | BytecodeInstruction::ArrayLiteral { .. }
-            | BytecodeInstruction::ObjectLiteral { .. }
-            | BytecodeInstruction::Jump(_)
-            | BytecodeInstruction::JumpIfFalse(_)
-            | BytecodeInstruction::Complete(_) => {
-                Err(Error::runtime("bytecode AST instruction mismatch"))
+            | BytecodeInstruction::ObjectLiteral { .. } => {
+                self.eval_bytecode_creation_instruction(state, instruction, next)
             }
+            _ => Err(Error::runtime("bytecode call instruction mismatch")),
         }
     }
 
-    fn eval_bytecode_declaration(
+    fn eval_bytecode_invocation_instruction(
         &mut self,
-        name: &crate::ast::StaticBinding,
-        kind: DeclKind,
-        value: Option<Value>,
-    ) -> Result<()> {
-        match kind {
-            DeclKind::Var => {
-                if let Some(value) = value {
-                    self.assign_static(name, value)?;
-                }
+        state: &mut BytecodeState,
+        instruction: &BytecodeInstruction,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        match instruction {
+            BytecodeInstruction::CallBinding { callee, arg_count } => {
+                let args = state.stack.pop_many(*arg_count)?;
+                state
+                    .stack
+                    .push(self.eval_identifier_call_value(callee, &args)?);
+                state.pc = next;
+                Ok(None)
             }
-            DeclKind::Let => {
-                self.define_static(name, value.unwrap_or(Value::Undefined), DeclKind::Let)?;
+            BytecodeInstruction::CallValue { arg_count } => {
+                let args = state.stack.pop_many(*arg_count)?;
+                let callee = state.stack.pop()?;
+                state
+                    .stack
+                    .push(self.eval_call_value(callee, &args, Value::Undefined)?);
+                state.pc = next;
+                Ok(None)
             }
-            DeclKind::Const => {
-                let Some(value) = value else {
-                    return Err(Error::runtime("const declaration requires an initializer"));
+            BytecodeInstruction::CallStaticMember {
+                property,
+                access,
+                arg_count,
+            } => {
+                let args = state.stack.pop_many(*arg_count)?;
+                let this_value = state.stack.pop()?;
+                let callee = self.get_static_property_value(&this_value, property, *access)?;
+                state
+                    .stack
+                    .push(self.eval_call_value(callee, &args, this_value)?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::CallComputedMember { access, arg_count } => {
+                let args = state.stack.pop_many(*arg_count)?;
+                let property = state.stack.pop()?;
+                let this_value = state.stack.pop()?;
+                let property = self.dynamic_property_key(&property)?;
+                let callee =
+                    self.get_cached_dynamic_property_value(&this_value, &property, *access)?;
+                state
+                    .stack
+                    .push(self.eval_call_value(callee, &args, this_value)?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::Print { arg_count } => {
+                let args = state.stack.pop_many(*arg_count)?;
+                state
+                    .stack
+                    .push(self.eval_print_call(RuntimeCallArgs::values(&args))?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::AssertThrows {
+                expected,
+                has_message,
+            } => {
+                let message = if *has_message {
+                    Some(state.stack.pop()?)
+                } else {
+                    None
                 };
-                self.define_static(name, value, DeclKind::Const)?;
+                let callback = state.stack.pop()?;
+                state
+                    .stack
+                    .push(self.eval_bytecode_assert_throws(*expected, &callback, message)?);
+                state.pc = next;
+                Ok(None)
             }
-        }
-        Ok(())
-    }
-
-    fn eval_bytecode_unary(op: UnaryOp, value: &Value) -> Result<Value> {
-        match op {
-            UnaryOp::Not => Ok(Value::Bool(!value.is_truthy())),
-            UnaryOp::Negate => value
-                .as_number()
-                .map(|value| Value::Number(-value))
-                .ok_or_else(|| Error::runtime("unary '-' expects a number")),
-            UnaryOp::Plus => value
-                .as_number()
-                .map(Value::Number)
-                .ok_or_else(|| Error::runtime("unary '+' expects a number")),
-            UnaryOp::Void => Ok(Value::Undefined),
-            UnaryOp::Typeof | UnaryOp::Delete => Err(Error::runtime(
-                "non-bytecode unary operator reached bytecode unary path",
-            )),
+            BytecodeInstruction::Construct { .. }
+            | BytecodeInstruction::CreateFunction { .. }
+            | BytecodeInstruction::ArrayLiteral { .. }
+            | BytecodeInstruction::ObjectLiteral { .. } => {
+                self.eval_bytecode_creation_instruction(state, instruction, next)
+            }
+            _ => Err(Error::runtime("bytecode invocation instruction mismatch")),
         }
     }
 
-    fn eval_bytecode_binary(
+    fn eval_bytecode_creation_instruction(
         &mut self,
-        op: BinaryOp,
-        left: &Value,
-        right: &Value,
-        property_access: Option<crate::ast::StaticPropertyAccessId>,
-    ) -> Result<Value> {
-        let value = match op {
-            BinaryOp::Add => self.add(left, right)?,
-            BinaryOp::Sub => numeric_binary(left, right, "-", |left, right| left - right)?,
-            BinaryOp::Mul => numeric_binary(left, right, "*", |left, right| left * right)?,
-            BinaryOp::Div => numeric_binary(left, right, "/", |left, right| left / right)?,
-            BinaryOp::Rem => numeric_binary(left, right, "%", |left, right| left % right)?,
-            BinaryOp::Pow => numeric_binary(left, right, "**", f64::powf)?,
-            BinaryOp::Equal | BinaryOp::StrictEqual => Value::Bool(left == right),
-            BinaryOp::NotEqual | BinaryOp::StrictNotEqual => Value::Bool(left != right),
-            BinaryOp::Less => compare_binary(left, right, "<", |left, right| left < right)?,
-            BinaryOp::LessEqual => compare_binary(left, right, "<=", |left, right| left <= right)?,
-            BinaryOp::Greater => compare_binary(left, right, ">", |left, right| left > right)?,
-            BinaryOp::GreaterEqual => {
-                compare_binary(left, right, ">=", |left, right| left >= right)?
+        state: &mut BytecodeState,
+        instruction: &BytecodeInstruction,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        match instruction {
+            BytecodeInstruction::Construct {
+                constructor,
+                arg_count,
+            } => {
+                let args = state.stack.pop_many(*arg_count)?;
+                state.stack.push(self.eval_new_value(constructor, &args)?);
+                state.pc = next;
+                Ok(None)
             }
-            BinaryOp::In => self.eval_bytecode_in(left, right, property_access)?,
-            BinaryOp::BitAnd => bitwise_and(left, right)?,
-            BinaryOp::BitOr => bitwise_or(left, right)?,
-            BinaryOp::BitXor => bitwise_xor(left, right)?,
-            BinaryOp::ShiftLeft => shift_left(left, right)?,
-            BinaryOp::ShiftRight => shift_right(left, right)?,
-            BinaryOp::ShiftRightUnsigned => shift_right_unsigned(left, right)?,
-            BinaryOp::LogicalAnd | BinaryOp::LogicalOr => {
-                return Err(Error::runtime(
-                    "logical operator reached bytecode eager evaluation",
-                ));
+            BytecodeInstruction::CreateFunction {
+                id,
+                name,
+                params,
+                bytecode,
+                constructable,
+            } => {
+                let function = self.create_bytecode_function(
+                    *id,
+                    name.as_ref(),
+                    params,
+                    bytecode,
+                    *constructable,
+                )?;
+                state.stack.push(function);
+                state.pc = next;
+                Ok(None)
             }
-        };
-        self.checked_value(value)
-    }
-
-    fn eval_bytecode_in(
-        &self,
-        left: &Value,
-        right: &Value,
-        property_access: Option<crate::ast::StaticPropertyAccessId>,
-    ) -> Result<Value> {
-        let property = self.dynamic_property_key(left)?;
-        if let Some(access) = property_access {
-            return self
-                .has_cached_dynamic_property_value(right, &property, access)
-                .map(Value::Bool);
+            BytecodeInstruction::ArrayLiteral { len } => {
+                let values = state.stack.pop_many(*len)?;
+                state.stack.push(self.create_array_from_elements(values)?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::ObjectLiteral { properties } => {
+                let values = state.stack.pop_many(properties.len())?;
+                state
+                    .stack
+                    .push(self.create_bytecode_object_literal(properties, values)?);
+                state.pc = next;
+                Ok(None)
+            }
+            _ => Err(Error::runtime("bytecode creation instruction mismatch")),
         }
-        self.has_dynamic_property_value(right, &property)
-            .map(Value::Bool)
-    }
-
-    fn create_bytecode_object_literal(
-        &mut self,
-        properties: &Rc<[StaticName]>,
-        values: Vec<Value>,
-    ) -> Result<Value> {
-        if properties.len() != values.len() {
-            return Err(Error::runtime(
-                "bytecode object literal stack arity mismatch",
-            ));
-        }
-        let mut inits = Vec::with_capacity(properties.len());
-        for (property, value) in properties.iter().zip(values) {
-            let key = self.intern_static_property_key(property)?;
-            inits.push(ObjectPropertyInit::new(
-                key,
-                property.as_str(),
-                value,
-                PropertyEnumerable::Yes,
-            ));
-        }
-        let constructor_key = self.intern_property_key(OBJECT_CONSTRUCTOR_PROPERTY)?;
-        self.objects.create(
-            inits,
-            constructor_key,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )
-    }
-}
-
-#[derive(Debug)]
-struct BytecodeState {
-    pc: BytecodeAddress,
-    stack: BytecodeStack,
-    last: Value,
-}
-
-impl BytecodeState {
-    const fn new() -> Self {
-        Self {
-            pc: BytecodeAddress::new(0),
-            stack: BytecodeStack::new(),
-            last: Value::Undefined,
-        }
-    }
-
-    fn next_pc(&self) -> Result<BytecodeAddress> {
-        let next = self
-            .pc
-            .index()
-            .checked_add(1)
-            .ok_or_else(|| Error::runtime("bytecode instruction pointer overflowed"))?;
-        Ok(BytecodeAddress::new(next))
-    }
-
-    fn complete(&mut self, completion: BytecodeCompletion) -> Result<Completion> {
-        match completion {
-            BytecodeCompletion::Break => Ok(Completion::Break),
-            BytecodeCompletion::Continue => Ok(Completion::Continue),
-            BytecodeCompletion::Return => Ok(Completion::Return(self.stack.pop_single()?)),
-            BytecodeCompletion::Throw => Ok(Completion::Throw(self.stack.pop_single()?)),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct BytecodeStack {
-    values: Vec<Value>,
-}
-
-impl BytecodeStack {
-    const fn new() -> Self {
-        Self { values: Vec::new() }
-    }
-
-    fn push(&mut self, value: Value) {
-        self.values.push(value);
-    }
-
-    fn pop(&mut self) -> Result<Value> {
-        self.values
-            .pop()
-            .ok_or_else(|| Error::runtime("bytecode stack underflowed"))
-    }
-
-    fn pop_many(&mut self, count: usize) -> Result<Vec<Value>> {
-        let mut values = Vec::with_capacity(count);
-        for _ in 0..count {
-            values.push(self.pop()?);
-        }
-        values.reverse();
-        Ok(values)
-    }
-
-    fn pop_single(&mut self) -> Result<Value> {
-        let value = self.pop()?;
-        if !self.values.is_empty() {
-            return Err(Error::runtime(
-                "bytecode completion left extra stack values",
-            ));
-        }
-        Ok(value)
     }
 }

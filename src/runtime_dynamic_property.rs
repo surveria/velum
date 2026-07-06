@@ -1,5 +1,4 @@
 use crate::{
-    ast::Expr,
     error::Result,
     runtime_assertions::error_property_text,
     runtime_object::PropertyKey,
@@ -15,11 +14,6 @@ use super::Context;
 const MAX_UTF8_CHAR_BYTES: usize = 4;
 
 impl Context {
-    pub(crate) fn eval_property_key(&mut self, property: &Expr) -> Result<DynamicPropertyKey> {
-        let value = self.eval_expr(property)?;
-        self.dynamic_property_key(&value)
-    }
-
     pub(super) fn dynamic_property_key(&self, value: &Value) -> Result<DynamicPropertyKey> {
         let name = property_key(value);
         self.check_string_len(&name)?;

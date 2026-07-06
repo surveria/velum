@@ -1,7 +1,7 @@
 use crate::{
-    ast::Expr,
     error::{Error, Result},
     runtime::Context,
+    runtime_call_args::RuntimeCallArgs,
     runtime_object::{
         DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
         PropertyEnumerable, PropertyKey, PropertyWritable,
@@ -39,8 +39,8 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(super) fn eval_object_constructor(&mut self, args: &[Expr]) -> Result<Value> {
-        let values = self.eval_native_args(args)?;
+    pub(super) fn eval_object_constructor(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+        let values = Self::eval_native_args(args);
         let Some(value) = values.first() else {
             return self.create_object_from_constructor();
         };
@@ -60,8 +60,11 @@ impl Context {
         }
     }
 
-    pub(super) fn eval_object_define_property(&mut self, args: &[Expr]) -> Result<Value> {
-        let values = self.eval_native_args(args)?;
+    pub(super) fn eval_object_define_property(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        let values = Self::eval_native_args(args);
         let target = Self::argument_or_undefined(&values, 0);
         let property = self.object_property_key(&values, 1)?;
         let descriptor_value = Self::argument_or_undefined(&values, 2);
@@ -99,9 +102,9 @@ impl Context {
 
     pub(super) fn eval_object_get_own_property_descriptor(
         &mut self,
-        args: &[Expr],
+        args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let values = self.eval_native_args(args)?;
+        let values = Self::eval_native_args(args);
         let target = Self::argument_or_undefined(&values, 0);
         let property = self.object_property_key(&values, 1)?;
         let descriptor = match target {
@@ -155,16 +158,16 @@ impl Context {
         )))
     }
 
-    pub(super) fn eval_object_has_own(&mut self, args: &[Expr]) -> Result<Value> {
-        let values = self.eval_native_args(args)?;
+    pub(super) fn eval_object_has_own(&self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+        let values = Self::eval_native_args(args);
         let target = Self::argument_or_undefined(&values, 0);
         let property = self.object_property_key(&values, 1)?;
         self.has_own_property_value(&target, &property)
             .map(Value::Bool)
     }
 
-    pub(super) fn eval_object_keys(&mut self, args: &[Expr]) -> Result<Value> {
-        let values = self.eval_native_args(args)?;
+    pub(super) fn eval_object_keys(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+        let values = Self::eval_native_args(args);
         let target = Self::argument_or_undefined(&values, 0);
         let keys = self.own_enumerable_keys(&target)?;
         self.array_constructor_value()?;
@@ -218,8 +221,8 @@ impl Context {
         Ok(())
     }
 
-    fn eval_native_args(&mut self, args: &[Expr]) -> Result<Vec<Value>> {
-        args.iter().map(|arg| self.eval_expr(arg)).collect()
+    fn eval_native_args(args: RuntimeCallArgs<'_>) -> Vec<Value> {
+        args.evaluate()
     }
 
     fn argument_or_undefined(values: &[Value], index: usize) -> Value {

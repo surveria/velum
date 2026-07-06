@@ -1,7 +1,7 @@
 use crate::{
-    ast::Expr,
     error::{Error, Result},
     runtime::Context,
+    runtime_call_args::RuntimeCallArgs,
     runtime_object::{ObjectPropertyInit, PropertyEnumerable},
     value::{ObjectId, Value},
 };
@@ -25,12 +25,12 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(super) fn eval_boolean_constructor(&mut self, args: &[Expr]) -> Result<Value> {
-        self.eval_boolean_argument(args).map(Value::Bool)
+    pub(super) fn eval_boolean_constructor(&self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+        self.checked_value(Value::Bool(Self::eval_boolean_argument(args)))
     }
 
-    pub(super) fn construct_boolean_object(&mut self, args: &[Expr]) -> Result<Value> {
-        self.eval_boolean_argument(args)?;
+    pub(super) fn construct_boolean_object(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+        Self::eval_boolean_argument(args);
         let prototype = self.boolean_constructor_prototype()?;
         let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_with_prototype(
@@ -67,8 +67,8 @@ impl Context {
         }
     }
 
-    fn eval_boolean_argument(&mut self, args: &[Expr]) -> Result<bool> {
-        let value = self.eval_native_unary_argument_value(args)?;
-        Ok(value.as_ref().is_some_and(Value::is_truthy))
+    fn eval_boolean_argument(args: RuntimeCallArgs<'_>) -> bool {
+        let value = Self::eval_native_unary_argument_value(args);
+        value.as_ref().is_some_and(Value::is_truthy)
     }
 }

@@ -31,12 +31,53 @@ if (false) {
 hidden;
 ";
 
-const BYTECODE_FALLBACK_SOURCE: &str = r"
-try {
-    1;
-} finally {
-    2;
+const BYTECODE_STRUCTURED_SOURCE: &str = r"
+var obj = { a: 1, b: 2 };
+var seen = 0;
+for (var key in obj) {
+    seen += obj[key];
 }
+switch (seen) {
+    case 3:
+        seen = seen + 1;
+        break;
+    default:
+        seen = 0;
+}
+try {
+    if (seen === 4) {
+        throw new Test262Error('boom');
+    }
+} catch (error) {
+    seen = seen + 1;
+} finally {
+    seen = seen + 1;
+}
+var plus = function(value) {
+    return value + 1;
+};
+Math.max(seen, plus(5));
+";
+
+const BYTECODE_FUNCTION_HOIST_SOURCE: &str = r"
+var read = function() {
+    if (false) {
+        var hidden = 9;
+    }
+    return hidden;
+};
+read();
+";
+
+const BYTECODE_CLOSURE_SOURCE: &str = r"
+var make = function(base) {
+    var offset = 2;
+    return function(value) {
+        return base + offset + value;
+    };
+};
+var add = make(10);
+add(5);
 ";
 
 #[test]
@@ -104,17 +145,38 @@ fn bytecode_hoist_plan_replaces_top_level_ast_hoist() -> TestResult {
 }
 
 #[test]
-fn compiled_script_reports_ast_fallback_instruction_count() -> TestResult {
+fn bytecode_executes_structured_control_flow_and_function_calls() -> TestResult {
     let engine = Engine::new();
-    let vm = engine.create_vm();
-    let direct = vm.compile(BYTECODE_PROPERTY_SOURCE)?;
-    let fallback = vm.compile(BYTECODE_FALLBACK_SOURCE)?;
+    let mut vm = engine.create_vm();
+    let structured = vm.compile(BYTECODE_STRUCTURED_SOURCE)?;
 
-    ensure_usize(direct.usage().bytecode_ast_fallback_count(), 0)?;
     ensure_positive(
-        fallback.usage().bytecode_ast_fallback_count(),
-        "AST fallback instructions",
-    )
+        structured.usage().bytecode_instruction_count(),
+        "bytecode instructions",
+    )?;
+
+    let value = vm.eval_compiled(&structured)?;
+    ensure_value(&value, &Value::Number(6.0))
+}
+
+#[test]
+fn bytecode_functions_use_function_local_hoist_plan() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(BYTECODE_FUNCTION_HOIST_SOURCE)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Undefined)
+}
+
+#[test]
+fn bytecode_functions_capture_closure_upvalues_without_ast_body() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(BYTECODE_CLOSURE_SOURCE)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(17.0))
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

@@ -1,12 +1,14 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{DeclKind, Expr, StaticBinding, StaticBindingId, StaticFunctionId, StaticName, Stmt},
+    ast::{DeclKind, StaticBinding, StaticBindingId, StaticFunctionId, StaticName},
     atom::AtomId,
     binding_layout::BindingLayout,
     binding_layout_types::BindingOperand,
+    bytecode::BytecodeFunction,
     error::{Error, Result},
     runtime::Context,
+    runtime_call_args::RuntimeCallArgs,
     runtime_completion::Completion,
     runtime_object::{
         DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
@@ -23,34 +25,17 @@ use super::runtime_function_properties::{
 use super::runtime_static_bindings::CompiledBindingFrame;
 
 impl Context {
-    pub(crate) fn create_function(
-        &mut self,
-        id: StaticFunctionId,
-        name: Option<&StaticName>,
-        params: &Rc<[StaticBinding]>,
-        body: &Rc<[Stmt]>,
-    ) -> Result<Value> {
-        self.create_function_with_properties(id, name, params, body, true)
-    }
-
-    pub(crate) fn create_method_function(
-        &mut self,
-        id: StaticFunctionId,
-        name: &StaticName,
-        params: &Rc<[StaticBinding]>,
-        body: &Rc<[Stmt]>,
-    ) -> Result<Value> {
-        self.create_function_with_properties(id, Some(name), params, body, false)
-    }
-
-    fn create_function_with_properties(
+    pub(crate) fn create_bytecode_function(
         &mut self,
         static_function_id: StaticFunctionId,
         name: Option<&StaticName>,
         params: &Rc<[StaticBinding]>,
-        body: &Rc<[Stmt]>,
+        bytecode: &BytecodeFunction,
         constructable: bool,
     ) -> Result<Value> {
+        if !constructable && name.is_none() {
+            return Err(Error::runtime("method function name disappeared"));
+        }
         let id = FunctionId::new(self.functions.len());
         let function = Value::Function(id);
         let prototype = if constructable {
@@ -89,7 +74,7 @@ impl Context {
         let static_binding_layout = self.current_static_binding_layout();
         let upvalues = self.capture_function_upvalues(
             static_function_id,
-            body,
+            bytecode.capture_bindings(),
             static_binding_layout.as_ref(),
         )?;
         let captures = super::FunctionCaptures::from_current_locals(
@@ -101,7 +86,7 @@ impl Context {
         self.functions.push(super::Function {
             param_binding_ids: function_param_binding_ids(params),
             param_atoms,
-            body: Rc::clone(body),
+            bytecode: bytecode.clone(),
             captures,
             upvalues: upvalues.cells,
             static_name_atom_cache,
@@ -113,14 +98,10 @@ impl Context {
         Ok(function)
     }
 
-    pub(crate) fn eval_function(&mut self, id: FunctionId, args: &[Expr]) -> Result<Value> {
-        self.eval_function_with_this(id, args, Value::Undefined)
-    }
-
     pub(crate) fn eval_function_with_this(
         &mut self,
         id: FunctionId,
-        args: &[Expr],
+        args: RuntimeCallArgs<'_>,
         this_value: Value,
     ) -> Result<Value> {
         let value = self
@@ -132,7 +113,7 @@ impl Context {
     pub(crate) fn eval_function_completion(
         &mut self,
         id: FunctionId,
-        args: &[Expr],
+        args: RuntimeCallArgs<'_>,
     ) -> Result<Completion> {
         self.eval_function_completion_with_this(id, args, Value::Undefined)
     }
@@ -140,13 +121,13 @@ impl Context {
     pub(crate) fn eval_function_completion_with_this(
         &mut self,
         id: FunctionId,
-        args: &[Expr],
+        args: RuntimeCallArgs<'_>,
         this_value: Value,
     ) -> Result<Completion> {
         let (
             param_atoms,
             param_binding_ids,
-            body,
+            bytecode,
             captures,
             upvalues,
             static_name_atom_cache,
@@ -157,7 +138,7 @@ impl Context {
             (
                 Rc::clone(&function.param_atoms),
                 Rc::clone(&function.param_binding_ids),
-                Rc::clone(&function.body),
+                function.bytecode.clone(),
                 function.captures.call_locals(),
                 Rc::clone(&function.upvalues),
                 function.static_name_atom_cache.clone(),
@@ -165,7 +146,7 @@ impl Context {
                 function.static_binding_layout.clone(),
             )
         };
-        let args = self.eval_args(args)?;
+        let args = args.evaluate();
         let caller_locals = std::mem::replace(&mut self.locals, captures);
         let scope = match self.function_scope(
             &param_atoms,
@@ -188,7 +169,7 @@ impl Context {
             static_binding_layout,
             &param_binding_ids,
             &param_atoms,
-            &body,
+            &bytecode,
         );
         let removed_this = self.this_values.pop();
         let removed_upvalues = self.upvalue_frames.pop();
@@ -487,14 +468,6 @@ impl Context {
         function.properties().keys(&self.atoms)
     }
 
-    fn eval_args(&mut self, args: &[Expr]) -> Result<Vec<Value>> {
-        let mut values = Vec::with_capacity(args.len());
-        for arg in args {
-            values.push(self.eval_expr(arg)?);
-        }
-        Ok(values)
-    }
-
     fn function_param_atoms(&mut self, params: &[StaticBinding]) -> Result<Rc<[AtomId]>> {
         let mut atoms = Vec::with_capacity(params.len());
         for param in params {
@@ -559,7 +532,7 @@ impl Context {
         static_binding_layout: Option<crate::binding_layout::BindingLayout>,
         param_binding_ids: &[StaticBindingId],
         param_atoms: &[AtomId],
-        body: &[Stmt],
+        bytecode: &BytecodeFunction,
     ) -> Result<Completion> {
         match (
             static_name_atom_cache,
@@ -577,20 +550,20 @@ impl Context {
                 |context| {
                     context.remember_function_params(param_binding_ids, param_atoms)?;
                     context
-                        .hoist_var_declarations(body)
-                        .and_then(|()| context.eval_block(body))
+                        .hoist_bytecode_var_declarations(bytecode.hoist_plan())
+                        .and_then(|()| context.eval_bytecode_block(bytecode.body()))
                 },
             ),
             (Some(static_name_atom_cache), None, _) => {
                 self.with_static_name_atom_cache(static_name_atom_cache, |context| {
                     context
-                        .hoist_var_declarations(body)
-                        .and_then(|()| context.eval_block(body))
+                        .hoist_bytecode_var_declarations(bytecode.hoist_plan())
+                        .and_then(|()| context.eval_bytecode_block(bytecode.body()))
                 })
             }
             (None, _, _) | (Some(_), Some(_), None) => self
-                .hoist_var_declarations(body)
-                .and_then(|()| self.eval_block(body)),
+                .hoist_bytecode_var_declarations(bytecode.hoist_plan())
+                .and_then(|()| self.eval_bytecode_block(bytecode.body())),
         }
     }
 }

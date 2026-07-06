@@ -1,7 +1,8 @@
 use crate::{
-    ast::{DeclKind, Expr, StaticBinding},
+    ast::{DeclKind, StaticBinding},
     error::{Error, Result},
     runtime::Context,
+    runtime_call_args::RuntimeCallArgs,
     runtime_object::{
         DataPropertyDescriptor, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
         PropertyWritable,
@@ -455,7 +456,7 @@ impl Context {
     pub(crate) fn eval_native_function(
         &mut self,
         id: NativeFunctionId,
-        args: &[Expr],
+        args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
         let kind = self.native_function(id)?.kind();
@@ -465,7 +466,7 @@ impl Context {
     pub(super) fn eval_native_function_kind(
         &mut self,
         kind: NativeFunctionKind,
-        args: &[Expr],
+        args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
         match kind {
@@ -535,7 +536,7 @@ impl Context {
     pub(crate) fn construct_native_function(
         &mut self,
         id: NativeFunctionId,
-        args: &[Expr],
+        args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         match self.native_function(id)?.kind() {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
@@ -721,36 +722,16 @@ impl Context {
         self.native_function_registry.get(kind)
     }
 
-    fn eval_native_unary_argument_value(&mut self, args: &[Expr]) -> Result<Option<Value>> {
-        let mut args = args.iter();
-        let value = if let Some(arg) = args.next() {
-            Some(self.eval_expr(arg)?)
-        } else {
-            None
-        };
-        self.eval_native_remaining_args(args)?;
-        Ok(value)
-    }
-
-    fn eval_native_remaining_args<'a>(
-        &mut self,
-        args: impl Iterator<Item = &'a Expr>,
-    ) -> Result<()> {
-        for arg in args {
-            self.eval_expr(arg)?;
-        }
-        Ok(())
+    pub(super) fn eval_native_unary_argument_value(args: RuntimeCallArgs<'_>) -> Option<Value> {
+        args.unary_value()
     }
 
     pub(super) fn eval_error_constructor(
-        &mut self,
+        &self,
         name: ErrorName,
-        args: &[Expr],
+        args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let values = args
-            .iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
+        let values = args.evaluate();
         let message = values
             .first()
             .map_or_else(String::new, Value::display_for_concat);

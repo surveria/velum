@@ -1,9 +1,9 @@
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
 use crate::{
-    ast::Expr,
     error::{Error, Result},
     runtime::Context,
+    runtime_call_args::RuntimeCallArgs,
     runtime_object::{ObjectPropertyInit, PropertyEnumerable},
     value::{ObjectId, Value},
 };
@@ -45,8 +45,8 @@ impl Context {
         Ok(value)
     }
 
-    pub(super) fn eval_json_parse(&mut self, args: &[Expr]) -> Result<Value> {
-        let values = self.eval_json_args(args)?;
+    pub(super) fn eval_json_parse(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+        let values = Self::eval_json_args(args);
         let text = values
             .first()
             .map_or_else(|| Value::Undefined.to_string(), ToString::to_string);
@@ -56,8 +56,8 @@ impl Context {
         self.value_from_json(value)
     }
 
-    pub(super) fn eval_json_stringify(&mut self, args: &[Expr]) -> Result<Value> {
-        let values = self.eval_json_args(args)?;
+    pub(super) fn eval_json_stringify(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+        let values = Self::eval_json_args(args);
         let Some(value) = values.first() else {
             return Ok(Value::Undefined);
         };
@@ -79,12 +79,8 @@ impl Context {
         self.define_non_enumerable_object_property(object, name, function)
     }
 
-    fn eval_json_args(&mut self, args: &[Expr]) -> Result<Vec<Value>> {
-        let mut values = Vec::with_capacity(args.len());
-        for arg in args {
-            values.push(self.eval_expr(arg)?);
-        }
-        Ok(values)
+    fn eval_json_args(args: RuntimeCallArgs<'_>) -> Vec<Value> {
+        args.evaluate()
     }
 
     fn value_from_json(&mut self, value: JsonValue) -> Result<Value> {
