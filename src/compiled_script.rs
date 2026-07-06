@@ -1,5 +1,6 @@
 use crate::{
     ast::Program,
+    binding_layout::BindingLayout,
     error::{Error, Result},
     lexer, parser,
     runtime_limits::RuntimeLimits,
@@ -8,6 +9,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompiledScript {
     program: Program,
+    binding_layout: BindingLayout,
     usage: CompiledScriptUsage,
 }
 
@@ -16,6 +18,8 @@ impl CompiledScript {
         check_source_len(source, limits)?;
         let tokens = lexer::lex(source)?;
         let parsed = parser::parse_with_usage(tokens, limits)?;
+        let binding_layout =
+            BindingLayout::build(&parsed.program, parsed.usage.static_binding_count)?;
         Ok(Self {
             program: parsed.program,
             usage: CompiledScriptUsage {
@@ -24,8 +28,18 @@ impl CompiledScript {
                 max_expression_depth: parsed.usage.max_expression_depth,
                 static_name_count: parsed.usage.static_name_count,
                 static_binding_count: parsed.usage.static_binding_count,
+                resolved_static_binding_count: binding_layout.resolved_count(),
+                unresolved_static_binding_count: binding_layout.unresolved_count(),
+                global_binding_slot_count: binding_layout.global_slot_count(),
+                local_binding_slot_count: binding_layout.local_slot_count(),
+                upvalue_binding_slot_count: binding_layout.upvalue_slot_count(),
             },
+            binding_layout,
         })
+    }
+
+    pub(crate) const fn binding_layout(&self) -> &BindingLayout {
+        &self.binding_layout
     }
 
     #[must_use]
@@ -62,6 +76,11 @@ pub struct CompiledScriptUsage {
     max_expression_depth: usize,
     static_name_count: usize,
     static_binding_count: usize,
+    resolved_static_binding_count: usize,
+    unresolved_static_binding_count: usize,
+    global_binding_slot_count: usize,
+    local_binding_slot_count: usize,
+    upvalue_binding_slot_count: usize,
 }
 
 impl CompiledScriptUsage {
@@ -88,6 +107,31 @@ impl CompiledScriptUsage {
     #[must_use]
     pub const fn static_binding_count(self) -> usize {
         self.static_binding_count
+    }
+
+    #[must_use]
+    pub const fn resolved_static_binding_count(self) -> usize {
+        self.resolved_static_binding_count
+    }
+
+    #[must_use]
+    pub const fn unresolved_static_binding_count(self) -> usize {
+        self.unresolved_static_binding_count
+    }
+
+    #[must_use]
+    pub const fn global_binding_slot_count(self) -> usize {
+        self.global_binding_slot_count
+    }
+
+    #[must_use]
+    pub const fn local_binding_slot_count(self) -> usize {
+        self.local_binding_slot_count
+    }
+
+    #[must_use]
+    pub const fn upvalue_binding_slot_count(self) -> usize {
+        self.upvalue_binding_slot_count
     }
 }
 
