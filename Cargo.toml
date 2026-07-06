@@ -1,9 +1,12 @@
+# Explicit single-crate workspace root: keeps the engine self-contained and
+# excludes the `runner/` submodule, which is its own workspace in the
+# rs-quickjs-testing repository.
 [workspace]
-members = ["runner"]
+exclude = ["runner"]
 
 [package]
 name = "rs-quickjs"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/surveria/rs-quickjs"
@@ -18,22 +21,19 @@ path = "src/lib.rs"
 name = "rsqjs"
 path = "src/bin/rsqjs.rs"
 
-# The engine crate stays intentionally dependency-light. The test/benchmark
-# runner and its heavier dependencies (tabled, plotters, image, rquickjs, ...)
-# live in the separate `runner` crate.
+# The engine is a standalone, dependency-light crate. The test/benchmark runner
+# and its heavier dependencies live in the separate `rs-quickjs-testing`
+# repository, consumed here as the `runner/` git submodule.
 [dependencies]
 anyhow = "1"
 parking_lot = "0.12"
 serde_json = "1"
 thiserror = "2"
 
-[lints]
-workspace = true
-
-[workspace.lints.rust]
+[lints.rust]
 unsafe_code = "deny"
 
-[workspace.lints.clippy]
+[lints.clippy]
 nursery = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
 uninlined_format_args = "deny"
