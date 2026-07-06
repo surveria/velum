@@ -464,8 +464,6 @@ fn compiled_upvalue_frames_skip_legacy_capture_snapshots() -> TestResult {
     ensure_value(&value, &Value::Number(144.0))?;
     let usage = vm.resource_usage();
 
-    ensure_usize(usage.captured_scope_count, 0)?;
-    ensure_usize(usage.captured_binding_count, 0)?;
     ensure_greater_than(usage.upvalue_cell_count, 0, "upvalue cells")
 }
 
@@ -485,8 +483,6 @@ fn compiled_upvalue_frames_lift_transitive_captures() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))?;
     let usage = vm.resource_usage();
 
-    ensure_usize(usage.captured_scope_count, 0)?;
-    ensure_usize(usage.captured_binding_count, 0)?;
     ensure_greater_than(usage.upvalue_cell_count, 1, "upvalue cells")
 }
 

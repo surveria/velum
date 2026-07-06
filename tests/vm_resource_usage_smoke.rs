@@ -30,8 +30,6 @@ fn reports_vm_resource_usage_at_teardown() -> TestResult {
             shape_count: report.resources.shape_count,
             native_function_count: report.resources.native_function_count,
             prototype_lookup_version: report.resources.prototype_lookup_version,
-            captured_scope_count: report.resources.captured_scope_count,
-            captured_binding_count: report.resources.captured_binding_count,
             upvalue_cell_count: report.resources.upvalue_cell_count,
             native_call_cache_hits: report.resources.native_call_cache_hits,
             native_call_cache_misses: report.resources.native_call_cache_misses,

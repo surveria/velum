@@ -77,17 +77,10 @@ impl Context {
             bytecode.capture_bindings(),
             static_binding_layout.as_ref(),
         )?;
-        let captures = super::FunctionCaptures::from_current_locals(
-            &self.locals,
-            static_binding_layout.is_some(),
-            &upvalues.cells,
-            upvalues.needs_legacy_scope_fallback,
-        );
         self.functions.push(super::Function {
             param_binding_ids: function_param_binding_ids(params),
             param_atoms,
             bytecode: bytecode.clone(),
-            captures,
             upvalues: upvalues.cells,
             static_name_atom_cache,
             static_binding_cache,
@@ -154,7 +147,6 @@ impl Context {
             param_atoms,
             param_binding_ids,
             bytecode,
-            captures,
             upvalues,
             static_name_atom_cache,
             static_binding_cache,
@@ -165,7 +157,6 @@ impl Context {
                 Rc::clone(&function.param_atoms),
                 Rc::clone(&function.param_binding_ids),
                 function.bytecode.clone(),
-                function.captures.call_locals(),
                 Rc::clone(&function.upvalues),
                 function.static_name_atom_cache.clone(),
                 function.static_binding_cache.clone(),
@@ -173,7 +164,7 @@ impl Context {
             )
         };
         let args = args.evaluate();
-        let caller_locals = std::mem::replace(&mut self.locals, captures);
+        let caller_locals = std::mem::take(&mut self.locals);
         let scope = match self.function_scope(
             &param_atoms,
             &param_binding_ids,
