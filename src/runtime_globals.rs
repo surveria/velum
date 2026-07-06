@@ -57,6 +57,10 @@ impl Context {
         self.objects.shape_count()
     }
 
+    pub(crate) const fn native_function_count(&self) -> usize {
+        self.native_functions.len()
+    }
+
     pub(crate) const fn prototype_lookup_version(&self) -> u64 {
         self.objects.prototype_lookup_version()
     }

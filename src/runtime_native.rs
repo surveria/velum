@@ -621,13 +621,12 @@ impl Context {
             return Ok(Value::NativeFunction(id));
         }
 
-        let id = NativeFunctionId::new(self.native_functions.len());
+        let id = self.next_native_function_id();
         let constructor = Value::NativeFunction(id);
         let prototype = self.error_prototype_with_constructor(constructor.clone())?;
         let function_kind = NativeFunctionKind::ErrorConstructor(name);
         let function_name = self.native_function_name_value(function_kind)?;
-        self.native_functions
-            .push(NativeFunction::new(function_kind, prototype, function_name));
+        self.push_native_function_with_id(id, function_kind, prototype, function_name)?;
         self.insert_global_builtin(name.as_str(), constructor.clone())?;
         Ok(constructor)
     }
@@ -687,10 +686,31 @@ impl Context {
         prototype: Value,
     ) -> Result<Value> {
         let name = self.native_function_name_value(kind)?;
-        let id = NativeFunctionId::new(self.native_functions.len());
+        let id = self.next_native_function_id();
+        self.push_native_function_with_id(id, kind, prototype, name)?;
+        Ok(Value::NativeFunction(id))
+    }
+
+    const fn next_native_function_id(&self) -> NativeFunctionId {
+        NativeFunctionId::new(self.native_functions.len())
+    }
+
+    fn push_native_function_with_id(
+        &mut self,
+        id: NativeFunctionId,
+        kind: NativeFunctionKind,
+        prototype: Value,
+        name: Value,
+    ) -> Result<()> {
+        if id.index() != self.native_functions.len() {
+            return Err(Error::runtime(
+                "native function id insertion order mismatch",
+            ));
+        }
+        self.native_function_registry.insert(kind, id)?;
         self.native_functions
             .push(NativeFunction::new(kind, prototype, name));
-        Ok(Value::NativeFunction(id))
+        Ok(())
     }
 
     fn native_function_name_value(&mut self, kind: NativeFunctionKind) -> Result<Value> {
@@ -698,15 +718,7 @@ impl Context {
     }
 
     fn native_function_id(&self, kind: NativeFunctionKind) -> Option<NativeFunctionId> {
-        self.native_functions
-            .iter()
-            .enumerate()
-            .find_map(|(index, function)| {
-                if function.kind() == kind {
-                    return Some(NativeFunctionId::new(index));
-                }
-                None
-            })
+        self.native_function_registry.get(kind)
     }
 
     fn eval_native_unary_argument_value(&mut self, args: &[Expr]) -> Result<Option<Value>> {

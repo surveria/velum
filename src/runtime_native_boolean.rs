@@ -3,10 +3,10 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime_object::{ObjectPropertyInit, PropertyEnumerable},
-    value::{NativeFunctionId, ObjectId, Value},
+    value::{ObjectId, Value},
 };
 
-use super::{BOOLEAN_NAME, NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY};
+use super::{BOOLEAN_NAME, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY};
 
 impl Context {
     pub(super) fn boolean_constructor_value(&mut self) -> Result<Value> {
@@ -15,16 +15,12 @@ impl Context {
         }
 
         self.object_constructor_value()?;
-        let id = NativeFunctionId::new(self.native_functions.len());
+        let id = self.next_native_function_id();
         let constructor = Value::NativeFunction(id);
         let prototype_id = self.boolean_prototype_id_with_constructor(constructor.clone())?;
         let prototype = Value::Object(prototype_id);
         let name = self.native_function_name_value(NativeFunctionKind::Boolean)?;
-        self.native_functions.push(NativeFunction::new(
-            NativeFunctionKind::Boolean,
-            prototype,
-            name,
-        ));
+        self.push_native_function_with_id(id, NativeFunctionKind::Boolean, prototype, name)?;
         self.insert_global_builtin(BOOLEAN_NAME, constructor.clone())?;
         Ok(constructor)
     }

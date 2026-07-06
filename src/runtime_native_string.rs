@@ -3,10 +3,10 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime_object::{ObjectPropertyInit, PropertyEnumerable},
-    value::{NativeFunctionId, ObjectId, Value},
+    value::{ObjectId, Value},
 };
 
-use super::{NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, STRING_NAME};
+use super::{NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, STRING_NAME};
 
 const STRING_LENGTH_PROPERTY: &str = "length";
 
@@ -17,16 +17,12 @@ impl Context {
         }
 
         self.object_constructor_value()?;
-        let id = NativeFunctionId::new(self.native_functions.len());
+        let id = self.next_native_function_id();
         let constructor = Value::NativeFunction(id);
         let prototype_id = self.string_prototype_id_with_constructor(constructor.clone())?;
         let prototype = Value::Object(prototype_id);
         let name = self.native_function_name_value(NativeFunctionKind::String)?;
-        self.native_functions.push(NativeFunction::new(
-            NativeFunctionKind::String,
-            prototype,
-            name,
-        ));
+        self.push_native_function_with_id(id, NativeFunctionKind::String, prototype, name)?;
         self.insert_global_builtin(STRING_NAME, constructor.clone())?;
         Ok(constructor)
     }
