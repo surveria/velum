@@ -57,9 +57,13 @@ impl ObjectHeap {
         {
             return Err(Error::runtime(PROTOTYPE_CYCLE_SET_ERROR));
         }
+        let before = self.object(id)?.structure_snapshot();
         let object = self.object_mut(id)?;
+        if object.prototype == prototype {
+            return Ok(());
+        }
         object.prototype = prototype;
-        Ok(())
+        self.bump_if_structure_changed(id, before)
     }
 
     fn prototype_property_value_in_chain(

@@ -212,8 +212,10 @@ impl ObjectHeap {
         update: DataPropertyUpdate,
         max_properties: usize,
     ) -> Result<()> {
+        let before = self.object(id)?.structure_snapshot();
         let (object, shapes) = self.object_mut_with_shapes(id)?;
-        object.define_property(property, property_name, update, shapes, max_properties)
+        object.define_property(property, property_name, update, shapes, max_properties)?;
+        self.bump_if_structure_changed(id, before)
     }
 
     pub fn has_own(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {

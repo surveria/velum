@@ -168,6 +168,7 @@ impl Vm {
             global_bindings: self.context.global_binding_count(),
             atom_count: self.context.atom_count(),
             shape_count: self.context.shape_count(),
+            prototype_lookup_version: self.context.prototype_lookup_version(),
         }
     }
 
@@ -197,6 +198,7 @@ pub struct VmResourceUsage {
     pub global_bindings: usize,
     pub atom_count: usize,
     pub shape_count: usize,
+    pub prototype_lookup_version: u64,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
