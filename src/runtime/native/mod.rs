@@ -1,15 +1,15 @@
 use crate::{
+    api::native_call::NativeCallTarget,
     ast::{DeclKind, StaticPropertyAccessId},
     bytecode::BytecodeBinding,
     error::{Error, Result},
-    native_call::NativeCallTarget,
     runtime::Context,
+    runtime::binding::scope::BindingCell,
     runtime::call_args::RuntimeCallArgs,
     runtime::object::{
         DataPropertyDescriptor, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
         PropertyWritable,
     },
-    runtime::scope::BindingCell,
     value::{ErrorName, ErrorObject, NativeFunctionId, Value},
 };
 

@@ -1,5 +1,6 @@
 use crate::{
     error::Result,
+    runtime::Context,
     runtime::assertions::error_property_text,
     runtime::object::PropertyKey,
     runtime::property::{
@@ -9,12 +10,13 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-use super::Context;
-
 const MAX_UTF8_CHAR_BYTES: usize = 4;
 
 impl Context {
-    pub(super) fn dynamic_property_key(&self, value: &Value) -> Result<DynamicPropertyKey> {
+    pub(in crate::runtime) fn dynamic_property_key(
+        &self,
+        value: &Value,
+    ) -> Result<DynamicPropertyKey> {
         let name = property_key(value);
         self.check_string_len(&name)?;
         let key = self.known_property_key(&name);
@@ -47,7 +49,7 @@ impl Context {
         self.runtime_property_value(value)
     }
 
-    pub(super) fn get_error_property_value(
+    pub(in crate::runtime) fn get_error_property_value(
         &mut self,
         error: &crate::value::ErrorObject,
         property: &str,
@@ -58,7 +60,10 @@ impl Context {
         Ok(Value::Undefined)
     }
 
-    pub(super) fn runtime_property_value(&mut self, value: PropertyValue<'_>) -> Result<Value> {
+    pub(in crate::runtime) fn runtime_property_value(
+        &mut self,
+        value: PropertyValue<'_>,
+    ) -> Result<Value> {
         match value {
             PropertyValue::Value(value) => self.runtime_value(value),
             PropertyValue::Text(value) => self.heap_string_value(value),
@@ -66,7 +71,7 @@ impl Context {
         }
     }
 
-    pub(super) fn get_string_property_value(
+    pub(in crate::runtime) fn get_string_property_value(
         &mut self,
         value: &str,
         property: &str,
@@ -78,12 +83,12 @@ impl Context {
         }
     }
 
-    pub(super) fn heap_string_char_value(&mut self, ch: char) -> Result<Value> {
+    pub(in crate::runtime) fn heap_string_char_value(&mut self, ch: char) -> Result<Value> {
         let mut buffer = [0_u8; MAX_UTF8_CHAR_BYTES];
         self.heap_string_value(ch.encode_utf8(&mut buffer))
     }
 
-    pub(super) fn get_string_object_property_value(
+    pub(in crate::runtime) fn get_string_object_property_value(
         &mut self,
         id: ObjectId,
         property: &str,
@@ -94,7 +99,7 @@ impl Context {
         self.heap_string_char_value(ch).map(Some)
     }
 
-    pub(super) fn has_dynamic_property_value(
+    pub(in crate::runtime) fn has_dynamic_property_value(
         &self,
         object: &Value,
         property: &DynamicPropertyKey,
@@ -108,7 +113,7 @@ impl Context {
         }
     }
 
-    pub(super) fn intern_dynamic_property_key(
+    pub(in crate::runtime) fn intern_dynamic_property_key(
         &mut self,
         property: &mut DynamicPropertyKey,
     ) -> Result<PropertyKey> {

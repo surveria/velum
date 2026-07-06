@@ -1,4 +1,4 @@
-use crate::native_call::NativeCallTarget;
+use crate::api::native_call::NativeCallTarget;
 
 use super::NativeFunctionKind;
 

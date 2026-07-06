@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::string_heap::JsString;
+use crate::storage::string_heap::JsString;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FunctionId(usize);

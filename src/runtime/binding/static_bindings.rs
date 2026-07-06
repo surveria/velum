@@ -3,19 +3,19 @@ use std::rc::Rc;
 
 use crate::{
     ast::{StaticBinding, StaticBindingId},
-    atom::AtomId,
     binding_layout::BindingLayout,
     binding_layout::{BindingOperand, DeclarationRef, FunctionScopeId, ScopeId},
     bytecode::BytecodeBinding,
     error::{Error, Result},
     runtime::Context,
     runtime::assertions::reference_error_undefined,
-    runtime::scope::{BindingCell, BindingScope, BindingSlot},
+    runtime::binding::scope::{BindingCell, BindingScope, BindingSlot},
+    runtime::native::NativeFunctionKind,
+    storage::atom::AtomId,
     value::{NativeFunctionId, Value},
 };
 
-use super::binding_location::{BindingLocation, LocalScopeIndex};
-use super::native::NativeFunctionKind;
+use super::location::{BindingLocation, LocalScopeIndex};
 
 #[derive(Debug, Clone)]
 pub struct StaticBindingCacheHandle {
@@ -24,7 +24,7 @@ pub struct StaticBindingCacheHandle {
 }
 
 impl StaticBindingCacheHandle {
-    pub(super) fn new(slot_count: usize) -> Self {
+    pub(in crate::runtime) fn new(slot_count: usize) -> Self {
         let mut bindings = Vec::with_capacity(slot_count);
         for _ in 0..slot_count {
             bindings.push(Cell::new(None));
@@ -130,7 +130,7 @@ impl Context {
         self.static_binding_caches.last().cloned()
     }
 
-    pub(super) fn cached_static_binding_native_call_kind(
+    pub(in crate::runtime) fn cached_static_binding_native_call_kind(
         &self,
         binding: &StaticBinding,
         function: NativeFunctionId,
@@ -143,7 +143,7 @@ impl Context {
             .and_then(|cached| cached.kind_if_current(function)))
     }
 
-    pub(super) fn remember_static_binding_native_call_kind(
+    pub(in crate::runtime) fn remember_static_binding_native_call_kind(
         &self,
         binding: &StaticBinding,
         function: NativeFunctionId,

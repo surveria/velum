@@ -1,9 +1,9 @@
 use crate::{
-    atom::AtomId,
     error::Result,
     runtime::Context,
     runtime::object::{OBJECT_CONSTRUCTOR_PROPERTY, PropertyKey, PropertyLookup},
-    string_heap::JsString,
+    storage::atom::AtomId,
+    storage::string_heap::JsString,
     value::{ObjectId, Value},
 };
 

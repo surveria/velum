@@ -1,6 +1,6 @@
+use crate::api::host::{HostCall, IntoJsValue};
 use crate::compiled_script::CompiledScript;
 use crate::error::Result;
-use crate::host::{HostCall, IntoJsValue};
 use crate::runtime::Context;
 use crate::runtime::limits::RuntimeLimits;
 use crate::value::Value;

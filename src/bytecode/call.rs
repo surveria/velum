@@ -1,7 +1,7 @@
 use crate::{
+    api::native_call::NativeCallTarget,
     ast::Expr,
     error::{Error, Result},
-    native_call::NativeCallTarget,
     value::{ErrorName, Value},
 };
 

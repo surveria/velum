@@ -1,29 +1,27 @@
 use std::rc::Rc;
 
+use crate::api::host::HostFunction;
+use crate::api::native_call::NativeCallTarget;
 use crate::ast::StaticBindingId;
-use crate::atom::{AtomId, AtomTable};
 use crate::binding_layout::BindingLayout;
 use crate::bytecode::{BytecodeBinding, BytecodeFunction};
 use crate::compiled_script::CompiledScript;
 use crate::error::{Error, Result};
-use crate::host::HostFunction;
-use crate::native_call::NativeCallTarget;
 use crate::runtime::assertions::reference_error_undefined;
+use crate::runtime::binding::scope::{BindingCell, BindingScope};
 use crate::runtime::completion::Completion;
 use crate::runtime::limits::RuntimeLimits;
 use crate::runtime::object::ObjectHeap;
 use crate::runtime::property::enumerable_property_keys;
-use crate::runtime::scope::{BindingCell, BindingScope};
-use crate::string_heap::StringHeap;
+use crate::storage::atom::{AtomId, AtomTable};
+use crate::storage::string_heap::StringHeap;
 use crate::value::{ErrorName, Value};
 
 pub mod assertions;
-pub mod binding_location;
+pub mod binding;
 pub mod bytecode;
 pub mod call_args;
 pub mod completion;
-pub mod declaration;
-pub mod dynamic_property;
 pub mod engine;
 pub mod function;
 pub mod globals;
@@ -32,18 +30,14 @@ pub mod native;
 pub mod numeric;
 pub mod object;
 pub mod property;
-pub mod scope;
-pub mod static_bindings;
-pub mod static_names;
 pub mod values;
-pub mod well_known;
 
+pub use binding::static_bindings::CompiledBindingFrame;
+use binding::static_bindings::StaticBindingCacheHandle;
 use call_args::RuntimeCallArgs;
 use native::NativeFunctionRegistry;
-pub use static_bindings::CompiledBindingFrame;
-use static_bindings::StaticBindingCacheHandle;
-use static_names::StaticNameAtomCacheHandle;
-use well_known::{DescriptorPropertyKeys, WellKnownPropertyKeys};
+use property::static_names::StaticNameAtomCacheHandle;
+use property::well_known::{DescriptorPropertyKeys, WellKnownPropertyKeys};
 
 const INITIAL_RANDOM_STATE: u64 = 0x9e37_79b9_7f4a_7c15;
 const TEST262_ERROR_NAME: &str = "Test262Error";

@@ -2,18 +2,19 @@ use std::rc::Rc;
 
 use crate::{
     ast::{DeclKind, StaticBinding, StaticBindingId, StaticFunctionId, StaticName},
-    atom::AtomId,
     binding_layout::{BindingLayout, BindingOperand},
     bytecode::BytecodeFunction,
     error::{Error, Result},
     runtime::Context,
+    runtime::binding::scope::{BindingCell, BindingScope},
+    runtime::binding::static_bindings::CompiledBindingFrame,
     runtime::call_args::RuntimeCallArgs,
     runtime::completion::Completion,
     runtime::object::{
         DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
         PropertyEnumerable, PropertyKey, PropertyLookup, PropertyWritable,
     },
-    runtime::scope::{BindingCell, BindingScope},
+    storage::atom::AtomId,
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
 };
 
@@ -23,7 +24,6 @@ mod upvalues;
 
 pub(super) use properties::{FunctionIntrinsicDefaults, FunctionProperties};
 
-use super::static_bindings::CompiledBindingFrame;
 use properties::{FunctionPropertyKind, PROTOTYPE_CONSTRUCTOR_PROPERTY};
 
 impl Context {
@@ -613,7 +613,7 @@ fn function_param_frame(
     match operand {
         BindingOperand::Local { scope, slot } => Ok(Some(CompiledBindingFrame::local(
             scope,
-            crate::runtime::scope::BindingSlot::from_index(slot.index()?),
+            crate::runtime::binding::scope::BindingSlot::from_index(slot.index()?),
         ))),
         BindingOperand::Global { .. } | BindingOperand::Upvalue { .. } => Err(Error::runtime(
             "function parameter binding layout is not a local slot",

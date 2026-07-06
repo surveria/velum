@@ -3,10 +3,11 @@ use std::rc::Rc;
 
 use crate::{
     ast::{StaticName, StaticPropertyAccessId},
-    atom::AtomId,
     binding_layout::BindingLayout,
     error::{Error, Result},
     runtime::Context,
+    runtime::binding::static_bindings::StaticBindingCacheHandle,
+    runtime::native::NativeFunctionKind,
     runtime::object::{
         CacheablePropertyDelete, CacheablePropertyLookup, CacheablePropertyPresence,
         CacheablePropertyValue, CacheablePropertyWrite, PropertyKey, PropertyLookup,
@@ -14,11 +15,9 @@ use crate::{
     runtime::property::{
         DynamicPropertyKey, delete_property, get_property, has_property, set_property,
     },
+    storage::atom::AtomId,
     value::{NativeFunctionId, ObjectId, Value},
 };
-
-use super::native::NativeFunctionKind;
-use super::static_bindings::StaticBindingCacheHandle;
 
 #[derive(Debug, Clone)]
 pub struct StaticNameAtomCacheHandle {
@@ -28,7 +27,10 @@ pub struct StaticNameAtomCacheHandle {
 }
 
 impl StaticNameAtomCacheHandle {
-    pub(super) fn new(static_name_count: usize, static_property_access_count: usize) -> Self {
+    pub(in crate::runtime) fn new(
+        static_name_count: usize,
+        static_property_access_count: usize,
+    ) -> Self {
         let mut atoms = Vec::with_capacity(static_name_count);
         for _ in 0..static_name_count {
             atoms.push(Cell::new(None));
@@ -165,7 +167,7 @@ impl Context {
         self.static_name_atom_caches.last().cloned()
     }
 
-    pub(super) fn cached_static_property_native_call_kind(
+    pub(in crate::runtime) fn cached_static_property_native_call_kind(
         &self,
         access: StaticPropertyAccessId,
         function: NativeFunctionId,
@@ -178,7 +180,7 @@ impl Context {
             .and_then(|cached| cached.kind_if_current(function)))
     }
 
-    pub(super) fn remember_static_property_native_call_kind(
+    pub(in crate::runtime) fn remember_static_property_native_call_kind(
         &self,
         access: StaticPropertyAccessId,
         function: NativeFunctionId,

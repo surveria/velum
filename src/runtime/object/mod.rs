@@ -395,7 +395,7 @@ struct Object {
     shape: ShapeId,
     enumerable_property_count: usize,
     array_length: Option<ArrayLength>,
-    string_value: Option<crate::string_heap::JsString>,
+    string_value: Option<crate::storage::string_heap::JsString>,
     prototype: Option<ObjectId>,
 }
 

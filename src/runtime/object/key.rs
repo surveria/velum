@@ -1,4 +1,4 @@
-use crate::{atom::AtomId, value::Value};
+use crate::{storage::atom::AtomId, value::Value};
 
 use super::descriptor::PropertyEnumerable;
 

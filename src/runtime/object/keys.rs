@@ -1,6 +1,6 @@
 use crate::{
-    atom::AtomTable,
     error::{Error, Result},
+    storage::atom::AtomTable,
     value::ObjectId,
 };
 

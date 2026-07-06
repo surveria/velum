@@ -12,7 +12,7 @@ const VALUE_PROPERTY: &str = "value";
 const WRITABLE_PROPERTY: &str = "writable";
 
 #[derive(Debug, Clone, Copy)]
-pub(super) struct DescriptorPropertyKeys {
+pub(in crate::runtime) struct DescriptorPropertyKeys {
     value: PropertyKey,
     writable: PropertyKey,
     enumerable: PropertyKey,
@@ -20,7 +20,7 @@ pub(super) struct DescriptorPropertyKeys {
 }
 
 impl DescriptorPropertyKeys {
-    pub(super) const fn new(
+    pub(in crate::runtime) const fn new(
         value: PropertyKey,
         writable: PropertyKey,
         enumerable: PropertyKey,
@@ -34,25 +34,25 @@ impl DescriptorPropertyKeys {
         }
     }
 
-    pub(super) const fn value(self) -> PropertyKey {
+    pub(in crate::runtime) const fn value(self) -> PropertyKey {
         self.value
     }
 
-    pub(super) const fn writable(self) -> PropertyKey {
+    pub(in crate::runtime) const fn writable(self) -> PropertyKey {
         self.writable
     }
 
-    pub(super) const fn enumerable(self) -> PropertyKey {
+    pub(in crate::runtime) const fn enumerable(self) -> PropertyKey {
         self.enumerable
     }
 
-    pub(super) const fn configurable(self) -> PropertyKey {
+    pub(in crate::runtime) const fn configurable(self) -> PropertyKey {
         self.configurable
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(super) struct WellKnownPropertyKeys {
+pub(in crate::runtime) struct WellKnownPropertyKeys {
     configurable: Option<PropertyKey>,
     constructor: Option<PropertyKey>,
     enumerable: Option<PropertyKey>,
@@ -66,7 +66,7 @@ pub(super) struct WellKnownPropertyKeys {
 }
 
 impl WellKnownPropertyKeys {
-    pub(super) const fn new() -> Self {
+    pub(in crate::runtime) const fn new() -> Self {
         Self {
             configurable: None,
             constructor: None,
@@ -82,7 +82,7 @@ impl WellKnownPropertyKeys {
     }
 
     #[must_use]
-    pub(super) fn lookup(&self, name: &str) -> Option<PropertyKey> {
+    pub(in crate::runtime) fn lookup(&self, name: &str) -> Option<PropertyKey> {
         match name {
             CONFIGURABLE_PROPERTY => self.configurable,
             CONSTRUCTOR_PROPERTY => self.constructor,
@@ -98,7 +98,7 @@ impl WellKnownPropertyKeys {
         }
     }
 
-    pub(super) fn remember(&mut self, name: &str, key: PropertyKey) {
+    pub(in crate::runtime) fn remember(&mut self, name: &str, key: PropertyKey) {
         match name {
             CONFIGURABLE_PROPERTY => self.configurable = Some(key),
             CONSTRUCTOR_PROPERTY => self.constructor = Some(key),

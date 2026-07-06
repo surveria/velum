@@ -1,10 +1,10 @@
 use crate::{
     ast::{DeclKind, StaticBinding},
-    atom::AtomId,
     bytecode::BytecodeHoistPlan,
     error::{Error, Result},
     runtime::Context,
-    runtime::scope::{BindingCell, BindingScope},
+    runtime::binding::scope::{BindingCell, BindingScope},
+    storage::atom::AtomId,
     value::Value,
 };
 

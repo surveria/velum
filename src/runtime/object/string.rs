@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    string_heap::JsString,
+    storage::string_heap::JsString,
     value::{ObjectId, Value},
 };
 
