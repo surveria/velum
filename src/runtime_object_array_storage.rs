@@ -57,6 +57,35 @@ impl ArrayStorage {
         }
     }
 
+    pub(super) fn packed_properties_for_len_mut(
+        &mut self,
+        len: usize,
+    ) -> Option<&mut [ObjectProperty]> {
+        if self.has_sparse_keys() {
+            return None;
+        }
+        match &mut self.elements {
+            ArrayElements::Packed(elements) if elements.len() == len => {
+                Some(elements.as_mut_slice())
+            }
+            ArrayElements::Packed(_) | ArrayElements::Holey(_) => None,
+        }
+    }
+
+    pub(super) fn reverse_packed_for_len_if_default(&mut self, len: usize) -> bool {
+        let Some(properties) = self.packed_properties_for_len_mut(len) else {
+            return false;
+        };
+        if !properties
+            .iter()
+            .all(ObjectProperty::has_default_array_attributes)
+        {
+            return false;
+        }
+        properties.reverse();
+        true
+    }
+
     pub(super) const fn dense_len(&self) -> usize {
         match &self.elements {
             ArrayElements::Packed(elements) => elements.len(),

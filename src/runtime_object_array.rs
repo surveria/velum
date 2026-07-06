@@ -155,6 +155,9 @@ impl ObjectHeap {
         if length <= 1 {
             return Ok(Value::Object(id));
         }
+        if self.object_mut(id)?.reverse_packed_array(length) {
+            return Ok(Value::Object(id));
+        }
 
         let middle = length / 2;
         for lower_index in 0..middle {
@@ -710,6 +713,10 @@ impl Object {
     fn packed_array_properties(&self, length: usize) -> Option<&[ObjectProperty]> {
         self.array_length?;
         self.array_storage.packed_properties_for_len(length)
+    }
+
+    fn reverse_packed_array(&mut self, length: usize) -> bool {
+        self.array_storage.reverse_packed_for_len_if_default(length)
     }
 
     fn get_own_array_index(&self, shapes: &ShapeTable, index: ArrayIndex) -> Result<Option<Value>> {

@@ -102,6 +102,28 @@ fn supports_array_reverse_method() -> TestResult {
 }
 
 #[test]
+fn keeps_descriptor_modified_arrays_on_generic_reverse_path() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let values = [1, 2, 3];
+        Object.defineProperty(values, "0", {
+            value: 1,
+            writable: false,
+            enumerable: true,
+            configurable: true
+        });
+        values.reverse();
+        values[0] === 1 && values[1] === 2 && values[2] === 1 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn rejects_array_reverse_on_non_array_receiver() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

@@ -165,6 +165,12 @@ impl ObjectProperty {
         self.descriptor.configurable().is_yes()
     }
 
+    pub(super) const fn has_default_array_attributes(&self) -> bool {
+        self.descriptor.writable().is_yes()
+            && self.descriptor.enumerable().is_yes()
+            && self.descriptor.configurable().is_yes()
+    }
+
     pub fn descriptor(&self) -> DataPropertyDescriptor {
         self.descriptor.clone()
     }
