@@ -69,7 +69,7 @@ impl BytecodeCompiler<'_> {
                 self.compile_expr(property)?;
                 self.compile_args(args)?;
                 self.emit(BytecodeInstruction::CallComputedMember {
-                    access: *access,
+                    property: Self::compile_dynamic_property(*access),
                     arg_count: args.len(),
                 });
                 Ok(())

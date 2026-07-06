@@ -3,6 +3,7 @@ mod ops;
 mod state;
 
 use crate::{
+    ast::UpdateOp,
     bytecode::{BytecodeAddress, BytecodeBlock, BytecodeInstruction, BytecodeProgram},
     error::{Error, Result},
     runtime::{
@@ -72,7 +73,7 @@ impl Context {
             }
             BytecodeInstruction::DeleteBinding(_)
             | BytecodeInstruction::DeleteStaticProperty { .. }
-            | BytecodeInstruction::DeleteComputedProperty
+            | BytecodeInstruction::DeleteComputedProperty { .. }
             | BytecodeInstruction::DeleteValue
             | BytecodeInstruction::UpdateBinding { .. }
             | BytecodeInstruction::UpdateStaticProperty { .. }
@@ -213,7 +214,7 @@ impl Context {
         match instruction {
             BytecodeInstruction::DeleteBinding(_)
             | BytecodeInstruction::DeleteStaticProperty { .. }
-            | BytecodeInstruction::DeleteComputedProperty
+            | BytecodeInstruction::DeleteComputedProperty { .. }
             | BytecodeInstruction::DeleteValue
             | BytecodeInstruction::UpdateBinding { .. }
             | BytecodeInstruction::UpdateStaticProperty { .. }
@@ -256,7 +257,7 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::DeleteComputedProperty => {
+            BytecodeInstruction::DeleteComputedProperty { .. } => {
                 let property = state.stack.pop()?;
                 let object = state.stack.pop()?;
                 let property = self.dynamic_property_key(&property)?;
@@ -295,16 +296,13 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::UpdateComputedProperty { access, op, prefix } => {
-                let property = state.stack.pop()?;
-                let object = state.stack.pop()?;
-                let property = self.dynamic_property_key(&property)?;
-                state.stack.push(self.eval_bytecode_update_dynamic_property(
-                    &object, property, *access, *op, *prefix,
-                )?);
-                state.pc = next;
-                Ok(None)
-            }
+            BytecodeInstruction::UpdateComputedProperty {
+                property,
+                op,
+                prefix,
+            } => self.eval_bytecode_update_computed_property_instruction(
+                state, *property, *op, *prefix, next,
+            ),
             BytecodeInstruction::Binary {
                 op,
                 property_access,
@@ -341,6 +339,28 @@ impl Context {
         }
     }
 
+    fn eval_bytecode_update_computed_property_instruction(
+        &mut self,
+        state: &mut BytecodeState,
+        property: crate::bytecode::BytecodeDynamicProperty,
+        op: UpdateOp,
+        prefix: bool,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let key = state.stack.pop()?;
+        let object = state.stack.pop()?;
+        let key = self.dynamic_property_key(&key)?;
+        state.stack.push(self.eval_bytecode_update_dynamic_property(
+            &object,
+            key,
+            property.access(),
+            op,
+            prefix,
+        )?);
+        state.pc = next;
+        Ok(None)
+    }
+
     fn eval_bytecode_member_instruction(
         &mut self,
         state: &mut BytecodeState,
@@ -371,15 +391,22 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::CompoundComputedProperty { access, op } => {
+            BytecodeInstruction::CompoundComputedProperty {
+                property: operand,
+                op,
+            } => {
                 let right = state.stack.pop()?;
-                let property = state.stack.pop()?;
+                let key = state.stack.pop()?;
                 let object = state.stack.pop()?;
-                let property = self.dynamic_property_key(&property)?;
+                let key = self.dynamic_property_key(&key)?;
                 state
                     .stack
                     .push(self.eval_bytecode_dynamic_compound_assignment(
-                        *op, &object, property, *access, &right,
+                        *op,
+                        &object,
+                        key,
+                        operand.access(),
+                        &right,
                     )?);
                 state.pc = next;
                 Ok(None)
@@ -394,13 +421,15 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::ComputedMember { access } => {
+            BytecodeInstruction::ComputedMember { property: operand } => {
                 let property = state.stack.pop()?;
                 let object = state.stack.pop()?;
-                let property = self.dynamic_property_key(&property)?;
-                state
-                    .stack
-                    .push(self.get_cached_dynamic_property_value(&object, &property, *access)?);
+                let key = self.dynamic_property_key(&property)?;
+                state.stack.push(self.get_cached_dynamic_property_value(
+                    &object,
+                    &key,
+                    operand.access(),
+                )?);
                 state.pc = next;
                 Ok(None)
             }
@@ -417,15 +446,15 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::ComputedPropertyAssign { access } => {
+            BytecodeInstruction::ComputedPropertyAssign { property: operand } => {
                 let value = state.stack.pop()?;
-                let property = state.stack.pop()?;
+                let key = state.stack.pop()?;
                 let object = state.stack.pop()?;
-                let mut property = self.dynamic_property_key(&property)?;
+                let mut key = self.dynamic_property_key(&key)?;
                 self.set_cached_dynamic_property_value(
                     &object,
-                    &mut property,
-                    *access,
+                    &mut key,
+                    operand.access(),
                     value.clone(),
                 )?;
                 state.stack.push(value);
@@ -510,13 +539,16 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::CallComputedMember { access, arg_count } => {
+            BytecodeInstruction::CallComputedMember {
+                property: operand,
+                arg_count,
+            } => {
                 let args = state.stack.pop_many(*arg_count)?;
                 let property = state.stack.pop()?;
                 let this_value = state.stack.pop()?;
-                let property = self.dynamic_property_key(&property)?;
+                let key = self.dynamic_property_key(&property)?;
                 let callee =
-                    self.get_cached_dynamic_property_value(&this_value, &property, *access)?;
+                    self.get_cached_dynamic_property_value(&this_value, &key, operand.access())?;
                 state
                     .stack
                     .push(self.eval_call_value(callee, &args, this_value)?);

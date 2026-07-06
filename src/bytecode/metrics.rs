@@ -155,11 +155,21 @@ impl BytecodeInstruction {
     fn property_operand_count(&self) -> usize {
         match self {
             Self::DeleteStaticProperty { .. }
+            | Self::DeleteComputedProperty { .. }
             | Self::UpdateStaticProperty { .. }
+            | Self::UpdateComputedProperty { .. }
+            | Self::Binary {
+                property_access: Some(_),
+                ..
+            }
             | Self::CompoundStaticProperty { .. }
+            | Self::CompoundComputedProperty { .. }
             | Self::StaticMember { .. }
+            | Self::ComputedMember { .. }
             | Self::StaticPropertyAssign { .. }
-            | Self::CallStaticMember { .. } => 1,
+            | Self::ComputedPropertyAssign { .. }
+            | Self::CallStaticMember { .. }
+            | Self::CallComputedMember { .. } => 1,
             Self::If {
                 condition,
                 consequent,
@@ -485,7 +495,7 @@ impl BytecodeInstruction {
             self,
             Self::DeleteBinding(_)
                 | Self::DeleteStaticProperty { .. }
-                | Self::DeleteComputedProperty
+                | Self::DeleteComputedProperty { .. }
                 | Self::DeleteValue
                 | Self::UpdateBinding { .. }
                 | Self::UpdateStaticProperty { .. }

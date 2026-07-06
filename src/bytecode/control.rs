@@ -177,7 +177,7 @@ impl BytecodeCompiler<'_> {
             } => Ok(BytecodeAssignmentTarget::ComputedProperty {
                 object: BytecodeBlock::compile_expression(object, self.layout)?,
                 property: BytecodeBlock::compile_expression(property, self.layout)?,
-                access: *access,
+                operand: Self::compile_dynamic_property(*access),
             }),
             Expr::Parenthesized(expr) => self.compile_assignment_target(expr),
             _ => Err(Error::runtime("invalid bytecode assignment target")),
