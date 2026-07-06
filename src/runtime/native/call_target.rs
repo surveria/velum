@@ -64,6 +64,11 @@ impl NativeFunctionKind {
             }
             NativeCallTarget::ObjectHasOwn => Self::ObjectHasOwn,
             NativeCallTarget::ObjectKeys => Self::ObjectKeys,
+            NativeCallTarget::Promise => Self::Promise,
+            NativeCallTarget::PromiseResolve => Self::PromiseResolve,
+            NativeCallTarget::PromiseReject => Self::PromiseReject,
+            NativeCallTarget::PromiseThen => Self::PromiseThen,
+            NativeCallTarget::PromiseCatch => Self::PromiseCatch,
             NativeCallTarget::String => Self::String,
         }
     }

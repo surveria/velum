@@ -44,8 +44,12 @@ impl Parser {
         if self.match_kind(&TokenKind::Return) {
             return self.return_statement();
         }
+        if self.match_kind(&TokenKind::Async) {
+            self.consume(&TokenKind::Function, "expected 'function' after 'async'")?;
+            return self.function_declaration(true);
+        }
         if self.match_kind(&TokenKind::Function) {
-            return self.function_declaration();
+            return self.function_declaration(false);
         }
         if self.match_kind(&TokenKind::Let) {
             return self.var_decl(DeclKind::Let);
@@ -344,7 +348,7 @@ impl Parser {
         Ok(Stmt::Return(value))
     }
 
-    fn function_declaration(&mut self) -> Result<Stmt> {
+    fn function_declaration(&mut self, is_async: bool) -> Result<Stmt> {
         let name = self.consume_binding_identifier("expected function declaration name")?;
         self.consume(&TokenKind::LParen, "expected '(' after function name")?;
         let params = self.function_parameters()?.into();
@@ -357,6 +361,7 @@ impl Parser {
             id,
             params,
             body,
+            is_async,
         })
     }
 

@@ -202,6 +202,10 @@ impl<'a> BytecodeCompiler<'a> {
                 ));
             }
             Expr::Parenthesized(expr) => return self.compile_expr(expr),
+            Expr::Await(expr) => {
+                self.compile_expr(expr)?;
+                self.emit(BytecodeInstruction::Await);
+            }
             Expr::Unary { op, expr } => return self.compile_unary_expr(*op, expr),
             Expr::Binary {
                 op,
@@ -253,13 +257,14 @@ impl<'a> BytecodeCompiler<'a> {
                 name,
                 params,
                 body,
-            } => self.compile_function_expr(*id, name.clone(), params, body, true)?,
+                is_async,
+            } => self.compile_function_expr(*id, name.clone(), params, body, true, *is_async)?,
             Expr::MethodFunction {
                 id,
                 name,
                 params,
                 body,
-            } => self.compile_function_expr(*id, Some(name.clone()), params, body, false)?,
+            } => self.compile_function_expr(*id, Some(name.clone()), params, body, false, false)?,
             Expr::New { constructor, args } => self.compile_new_expr(constructor, args)?,
         }
         Ok(())
@@ -346,6 +351,7 @@ impl<'a> BytecodeCompiler<'a> {
         params: &Rc<[StaticBinding]>,
         body: &[Stmt],
         constructable: bool,
+        is_async: bool,
     ) -> Result<()> {
         self.emit(BytecodeInstruction::CreateFunction {
             id,
@@ -353,6 +359,7 @@ impl<'a> BytecodeCompiler<'a> {
             params: Rc::clone(params),
             bytecode: BytecodeFunction::compile(body, self.layout)?,
             constructable,
+            is_async,
         });
         Ok(())
     }
@@ -652,6 +659,7 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::StoreLast
             | BytecodeInstruction::Pop
             | BytecodeInstruction::Unary(_)
+            | BytecodeInstruction::Await
             | BytecodeInstruction::TypeOfBinding(_)
             | BytecodeInstruction::TypeOfValue
             | BytecodeInstruction::DeleteBinding(_)

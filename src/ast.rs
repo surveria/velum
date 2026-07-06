@@ -248,6 +248,7 @@ pub enum Stmt {
         id: StaticFunctionId,
         params: Rc<[StaticBinding]>,
         body: Rc<[Self]>,
+        is_async: bool,
     },
     VarDecl {
         name: StaticBinding,
@@ -299,6 +300,7 @@ pub enum Expr {
         op: UnaryOp,
         expr: Box<Self>,
     },
+    Await(Box<Self>),
     Update {
         op: UpdateOp,
         prefix: bool,
@@ -355,6 +357,7 @@ pub enum Expr {
         name: Option<StaticName>,
         params: Rc<[StaticBinding]>,
         body: Rc<[Stmt]>,
+        is_async: bool,
     },
     MethodFunction {
         id: StaticFunctionId,

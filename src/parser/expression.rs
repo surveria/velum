@@ -20,6 +20,10 @@ impl Parser {
     }
 
     pub(super) fn unary(&mut self) -> Result<Expr> {
+        if self.match_kind(&TokenKind::Await) {
+            let expr = self.unary()?;
+            return Ok(Expr::Await(Box::new(expr)));
+        }
         if self.match_kind(&TokenKind::New) {
             return self.new_expr();
         }
@@ -192,7 +196,11 @@ impl Parser {
             TokenKind::Undefined => Expr::Literal(Value::Undefined),
             TokenKind::This => Expr::This,
             TokenKind::Identifier(name) => Expr::Identifier(self.static_binding_name(name)?),
-            TokenKind::Function => self.function_expression()?,
+            TokenKind::Function => self.function_expression(false)?,
+            TokenKind::Async => {
+                self.consume(&TokenKind::Function, "expected 'function' after 'async'")?;
+                self.function_expression(true)?
+            }
             TokenKind::LBrace => self.object_literal()?,
             TokenKind::LBracket => self.array_literal()?,
             TokenKind::LParen => {
@@ -320,7 +328,7 @@ impl Parser {
         })
     }
 
-    fn function_expression(&mut self) -> Result<Expr> {
+    fn function_expression(&mut self, is_async: bool) -> Result<Expr> {
         let name = if self.next_is_identifier() {
             Some(self.consume_identifier("expected function name")?)
         } else {
@@ -337,6 +345,7 @@ impl Parser {
             name,
             params,
             body,
+            is_async,
         })
     }
 
@@ -425,6 +434,8 @@ const fn keyword_property_name(kind: &TokenKind) -> Option<&'static str> {
         TokenKind::Throw => Some("throw"),
         TokenKind::Return => Some("return"),
         TokenKind::Function => Some("function"),
+        TokenKind::Async => Some("async"),
+        TokenKind::Await => Some("await"),
         TokenKind::New => Some("new"),
         TokenKind::In => Some("in"),
         TokenKind::Typeof => Some("typeof"),

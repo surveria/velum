@@ -31,7 +31,8 @@ impl Context {
             Some(declaration.function_name()),
             declaration.params(),
             declaration.bytecode(),
-            true,
+            !declaration.is_async(),
+            declaration.is_async(),
         )?;
         self.assign_bytecode(declaration.name(), function)
     }

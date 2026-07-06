@@ -34,6 +34,7 @@ impl Context {
         params: &Rc<[StaticBinding]>,
         bytecode: &BytecodeFunction,
         constructable: bool,
+        is_async: bool,
     ) -> Result<Value> {
         if !constructable && name.is_none() {
             return Err(Error::runtime("method function name disappeared"));
@@ -96,6 +97,7 @@ impl Context {
             static_binding_layout,
             properties: FunctionProperties::new(prototype, intrinsic_defaults),
             constructable,
+            is_async,
         });
         Ok(function)
     }
@@ -106,6 +108,9 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: Value,
     ) -> Result<Value> {
+        if self.function(id)?.is_async {
+            return self.eval_async_function_with_this(id, args, this_value);
+        }
         let value = self
             .eval_function_completion_with_this(id, args, this_value)?
             .into_function_result()?;

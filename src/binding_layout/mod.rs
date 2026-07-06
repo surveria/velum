@@ -345,10 +345,10 @@ impl LayoutBuilder {
             Stmt::Throw(expr) | Stmt::Return(Some(expr)) | Stmt::Expr(expr) => {
                 self.analyze_expr(expr, scope, function)
             }
-            Stmt::Return(None) | Stmt::Break | Stmt::Continue => Ok(()),
             Stmt::FunctionDecl {
                 id, params, body, ..
             } => self.analyze_function(*id, params, body, scope, function),
+            Stmt::Return(None) | Stmt::Break | Stmt::Continue => Ok(()),
             Stmt::VarDecl { init, .. } => {
                 if let Some(init) = init {
                     self.analyze_expr(init, scope, function)?;
@@ -492,9 +492,10 @@ impl LayoutBuilder {
         match expr {
             Expr::Literal(_) | Expr::StringLiteral(_) | Expr::This => Ok(()),
             Expr::Identifier(binding) => self.resolve(binding, scope, function),
-            Expr::Parenthesized(expr) | Expr::Unary { expr, .. } | Expr::Update { expr, .. } => {
-                self.analyze_expr(expr, scope, function)
-            }
+            Expr::Parenthesized(expr)
+            | Expr::Unary { expr, .. }
+            | Expr::Await(expr)
+            | Expr::Update { expr, .. } => self.analyze_expr(expr, scope, function),
             Expr::Binary { left, right, .. } => {
                 self.analyze_expr(left, scope, function)?;
                 self.analyze_expr(right, scope, function)
@@ -752,6 +753,7 @@ fn for_init_needs_layout_scope(init: Option<&Stmt>) -> bool {
                 kind: DeclKind::Var,
                 ..
             }
+            | Stmt::FunctionDecl { .. }
             | Stmt::Block(_)
             | Stmt::If { .. }
             | Stmt::While { .. }
@@ -763,7 +765,6 @@ fn for_init_needs_layout_scope(init: Option<&Stmt>) -> bool {
             | Stmt::Continue
             | Stmt::Throw(_)
             | Stmt::Return(_)
-            | Stmt::FunctionDecl { .. }
             | Stmt::Expr(_),
         )
         | None => false,

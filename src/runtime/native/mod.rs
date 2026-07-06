@@ -20,6 +20,7 @@ mod json;
 mod math;
 mod number;
 mod object;
+mod promise;
 mod registry;
 mod string;
 
@@ -113,6 +114,19 @@ const OBJECT_HAS_OWN_NAME: &str = "hasOwn";
 const OBJECT_KEYS_FUNCTION_LENGTH: f64 = 1.0;
 const OBJECT_KEYS_NAME: &str = "keys";
 const OBJECT_NAME: &str = "Object";
+const PROMISE_CATCH_FUNCTION_LENGTH: f64 = 1.0;
+const PROMISE_CATCH_NAME: &str = "catch";
+const PROMISE_FUNCTION_LENGTH: f64 = 1.0;
+const PROMISE_NAME: &str = "Promise";
+const PROMISE_REJECT_FUNCTION_LENGTH: f64 = 1.0;
+const PROMISE_REJECT_NAME: &str = "reject";
+const PROMISE_RESOLVE_FUNCTION_LENGTH: f64 = 1.0;
+const PROMISE_RESOLVE_NAME: &str = "resolve";
+const PROMISE_RESOLVER_FUNCTION_LENGTH: f64 = 1.0;
+const PROMISE_THEN_FUNCTION_LENGTH: f64 = 2.0;
+const PROMISE_THEN_NAME: &str = "then";
+const REJECT_NAME: &str = "reject";
+const RESOLVE_NAME: &str = "resolve";
 const STRING_FUNCTION_LENGTH: f64 = 1.0;
 const STRING_NAME: &str = "String";
 
@@ -212,6 +226,12 @@ impl NativeFunction {
             | NativeFunctionKind::ObjectGetOwnPropertyDescriptor
             | NativeFunctionKind::ObjectHasOwn
             | NativeFunctionKind::ObjectKeys
+            | NativeFunctionKind::Promise
+            | NativeFunctionKind::PromiseResolve
+            | NativeFunctionKind::PromiseReject
+            | NativeFunctionKind::PromiseThen
+            | NativeFunctionKind::PromiseCatch
+            | NativeFunctionKind::PromiseResolver { .. }
             | NativeFunctionKind::String => None,
         }
     }
@@ -283,6 +303,12 @@ impl NativeFunctionKind {
             }
             Self::ObjectHasOwn => OBJECT_HAS_OWN_FUNCTION_LENGTH,
             Self::ObjectKeys => OBJECT_KEYS_FUNCTION_LENGTH,
+            Self::Promise => PROMISE_FUNCTION_LENGTH,
+            Self::PromiseResolve => PROMISE_RESOLVE_FUNCTION_LENGTH,
+            Self::PromiseReject => PROMISE_REJECT_FUNCTION_LENGTH,
+            Self::PromiseThen => PROMISE_THEN_FUNCTION_LENGTH,
+            Self::PromiseCatch => PROMISE_CATCH_FUNCTION_LENGTH,
+            Self::PromiseResolver { .. } => PROMISE_RESOLVER_FUNCTION_LENGTH,
             Self::String => STRING_FUNCTION_LENGTH,
         }
     }
@@ -346,6 +372,19 @@ impl NativeFunctionKind {
             Self::ObjectGetOwnPropertyDescriptor => OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
             Self::ObjectHasOwn => OBJECT_HAS_OWN_NAME,
             Self::ObjectKeys => OBJECT_KEYS_NAME,
+            Self::Promise => PROMISE_NAME,
+            Self::PromiseResolve => PROMISE_RESOLVE_NAME,
+            Self::PromiseReject => PROMISE_REJECT_NAME,
+            Self::PromiseThen => PROMISE_THEN_NAME,
+            Self::PromiseCatch => PROMISE_CATCH_NAME,
+            Self::PromiseResolver {
+                kind: crate::runtime::promise::PromiseResolverKind::Resolve,
+                ..
+            } => RESOLVE_NAME,
+            Self::PromiseResolver {
+                kind: crate::runtime::promise::PromiseResolverKind::Reject,
+                ..
+            } => REJECT_NAME,
             Self::String => STRING_NAME,
         }
     }
@@ -410,6 +449,15 @@ pub(super) enum NativeFunctionKind {
     ObjectGetOwnPropertyDescriptor,
     ObjectHasOwn,
     ObjectKeys,
+    Promise,
+    PromiseResolve,
+    PromiseReject,
+    PromiseThen,
+    PromiseCatch,
+    PromiseResolver {
+        promise: crate::runtime::promise::PromiseId,
+        kind: crate::runtime::promise::PromiseResolverKind,
+    },
     String,
 }
 
@@ -428,6 +476,7 @@ impl Context {
                 .map(Some),
             NUMBER_NAME => self.number_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
+            PROMISE_NAME => self.promise_constructor_value().map(Some),
             STRING_NAME => self.string_constructor_value().map(Some),
             _ => {
                 let Some(name) =
@@ -577,6 +626,14 @@ impl Context {
             }
             NativeFunctionKind::ObjectHasOwn => self.eval_object_has_own(args),
             NativeFunctionKind::ObjectKeys => self.eval_object_keys(args),
+            NativeFunctionKind::Promise => self.eval_promise_constructor(args),
+            NativeFunctionKind::PromiseResolve => self.eval_promise_resolve(args),
+            NativeFunctionKind::PromiseReject => self.eval_promise_reject(args),
+            NativeFunctionKind::PromiseThen => self.eval_promise_then(args, this_value),
+            NativeFunctionKind::PromiseCatch => self.eval_promise_catch(args, this_value),
+            NativeFunctionKind::PromiseResolver { promise, kind } => {
+                self.eval_promise_resolver(promise, kind, args)
+            }
             NativeFunctionKind::String => self.eval_string_constructor(args),
         }
     }
@@ -639,9 +696,15 @@ impl Context {
             | NativeFunctionKind::ObjectDefineProperty
             | NativeFunctionKind::ObjectGetOwnPropertyDescriptor
             | NativeFunctionKind::ObjectHasOwn
-            | NativeFunctionKind::ObjectKeys => {
+            | NativeFunctionKind::ObjectKeys
+            | NativeFunctionKind::PromiseResolve
+            | NativeFunctionKind::PromiseReject
+            | NativeFunctionKind::PromiseThen
+            | NativeFunctionKind::PromiseCatch
+            | NativeFunctionKind::PromiseResolver { .. } => {
                 Err(Error::runtime("native method is not a constructor"))
             }
+            NativeFunctionKind::Promise => self.eval_promise_constructor(args),
             NativeFunctionKind::Boolean => self.construct_boolean_object(args),
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
             NativeFunctionKind::Number => self.construct_number_object(args),
@@ -740,6 +803,17 @@ impl Context {
         Ok(Value::NativeFunction(id))
     }
 
+    pub(in crate::runtime) fn create_ephemeral_native_function(
+        &mut self,
+        kind: NativeFunctionKind,
+        prototype: Value,
+    ) -> Result<Value> {
+        let name = self.native_function_name_value(kind)?;
+        let id = self.next_native_function_id();
+        self.push_native_function_unregistered_with_id(id, kind, prototype, name)?;
+        Ok(Value::NativeFunction(id))
+    }
+
     const fn next_native_function_id(&self) -> NativeFunctionId {
         NativeFunctionId::new(self.native_functions.len())
     }
@@ -757,6 +831,21 @@ impl Context {
             ));
         }
         self.native_function_registry.insert(kind, id)?;
+        self.push_native_function_unregistered_with_id(id, kind, prototype, name)
+    }
+
+    fn push_native_function_unregistered_with_id(
+        &mut self,
+        id: NativeFunctionId,
+        kind: NativeFunctionKind,
+        prototype: Value,
+        name: Value,
+    ) -> Result<()> {
+        if id.index() != self.native_functions.len() {
+            return Err(Error::runtime(
+                "native function id insertion order mismatch",
+            ));
+        }
         self.native_functions
             .push(NativeFunction::new(kind, prototype, name));
         Ok(())

@@ -70,7 +70,12 @@ const ERROR_SYNTAX_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(61);
 const ERROR_TEST262_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(62);
 const ERROR_TYPE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(63);
 const ERROR_URI_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(64);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 65;
+const PROMISE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(65);
+const PROMISE_RESOLVE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(66);
+const PROMISE_REJECT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(67);
+const PROMISE_THEN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(68);
+const PROMISE_CATCH_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(69);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 70;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -85,7 +90,7 @@ impl NativeFunctionRegistry {
     }
 
     pub(in crate::runtime) fn get(&self, kind: NativeFunctionKind) -> Option<NativeFunctionId> {
-        self.slots.get(slot(kind).index()).copied().flatten()
+        self.slots.get(slot(kind)?.index()).copied().flatten()
     }
 
     pub(in crate::runtime) fn insert(
@@ -93,7 +98,9 @@ impl NativeFunctionRegistry {
         kind: NativeFunctionKind,
         id: NativeFunctionId,
     ) -> Result<()> {
-        let slot = slot(kind);
+        let Some(slot) = slot(kind) else {
+            return Ok(());
+        };
         let entry = self
             .slots
             .get_mut(slot.index())
@@ -122,68 +129,74 @@ impl NativeFunctionSlot {
     }
 }
 
-const fn slot(kind: NativeFunctionKind) -> NativeFunctionSlot {
+const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     match kind {
-        NativeFunctionKind::Array => ARRAY_SLOT,
-        NativeFunctionKind::ArrayConcat => ARRAY_CONCAT_SLOT,
-        NativeFunctionKind::ArrayIncludes => ARRAY_INCLUDES_SLOT,
-        NativeFunctionKind::ArrayIndexOf => ARRAY_INDEX_OF_SLOT,
-        NativeFunctionKind::ArrayJoin => ARRAY_JOIN_SLOT,
-        NativeFunctionKind::ArrayLastIndexOf => ARRAY_LAST_INDEX_OF_SLOT,
-        NativeFunctionKind::ArrayPop => ARRAY_POP_SLOT,
-        NativeFunctionKind::ArrayPush => ARRAY_PUSH_SLOT,
-        NativeFunctionKind::ArrayReverse => ARRAY_REVERSE_SLOT,
-        NativeFunctionKind::ArrayShift => ARRAY_SHIFT_SLOT,
-        NativeFunctionKind::ArraySlice => ARRAY_SLICE_SLOT,
-        NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_SLOT,
-        NativeFunctionKind::Boolean => BOOLEAN_SLOT,
-        NativeFunctionKind::ErrorConstructor(name) => error_constructor_slot(name),
-        NativeFunctionKind::JsonParse => JSON_PARSE_SLOT,
-        NativeFunctionKind::JsonStringify => JSON_STRINGIFY_SLOT,
-        NativeFunctionKind::MathAbs => MATH_ABS_SLOT,
-        NativeFunctionKind::MathAcos => MATH_ACOS_SLOT,
-        NativeFunctionKind::MathAcosh => MATH_ACOSH_SLOT,
-        NativeFunctionKind::MathAsin => MATH_ASIN_SLOT,
-        NativeFunctionKind::MathAsinh => MATH_ASINH_SLOT,
-        NativeFunctionKind::MathAtan => MATH_ATAN_SLOT,
-        NativeFunctionKind::MathAtan2 => MATH_ATAN2_SLOT,
-        NativeFunctionKind::MathAtanh => MATH_ATANH_SLOT,
-        NativeFunctionKind::MathCbrt => MATH_CBRT_SLOT,
-        NativeFunctionKind::MathCeil => MATH_CEIL_SLOT,
-        NativeFunctionKind::MathClz32 => MATH_CLZ32_SLOT,
-        NativeFunctionKind::MathCos => MATH_COS_SLOT,
-        NativeFunctionKind::MathCosh => MATH_COSH_SLOT,
-        NativeFunctionKind::MathExp => MATH_EXP_SLOT,
-        NativeFunctionKind::MathExpm1 => MATH_EXPM1_SLOT,
-        NativeFunctionKind::MathFloor => MATH_FLOOR_SLOT,
-        NativeFunctionKind::MathFround => MATH_FROUND_SLOT,
-        NativeFunctionKind::MathHypot => MATH_HYPOT_SLOT,
-        NativeFunctionKind::MathImul => MATH_IMUL_SLOT,
-        NativeFunctionKind::MathLog => MATH_LOG_SLOT,
-        NativeFunctionKind::MathLog10 => MATH_LOG10_SLOT,
-        NativeFunctionKind::MathLog1p => MATH_LOG1P_SLOT,
-        NativeFunctionKind::MathLog2 => MATH_LOG2_SLOT,
-        NativeFunctionKind::MathMax => MATH_MAX_SLOT,
-        NativeFunctionKind::MathMin => MATH_MIN_SLOT,
-        NativeFunctionKind::MathPow => MATH_POW_SLOT,
-        NativeFunctionKind::MathRandom => MATH_RANDOM_SLOT,
-        NativeFunctionKind::MathRound => MATH_ROUND_SLOT,
-        NativeFunctionKind::MathSign => MATH_SIGN_SLOT,
-        NativeFunctionKind::MathSin => MATH_SIN_SLOT,
-        NativeFunctionKind::MathSinh => MATH_SINH_SLOT,
-        NativeFunctionKind::MathSqrt => MATH_SQRT_SLOT,
-        NativeFunctionKind::MathTan => MATH_TAN_SLOT,
-        NativeFunctionKind::MathTanh => MATH_TANH_SLOT,
-        NativeFunctionKind::MathTrunc => MATH_TRUNC_SLOT,
-        NativeFunctionKind::Number => NUMBER_SLOT,
-        NativeFunctionKind::Object => OBJECT_SLOT,
-        NativeFunctionKind::ObjectDefineProperty => OBJECT_DEFINE_PROPERTY_SLOT,
+        NativeFunctionKind::Array => Some(ARRAY_SLOT),
+        NativeFunctionKind::ArrayConcat => Some(ARRAY_CONCAT_SLOT),
+        NativeFunctionKind::ArrayIncludes => Some(ARRAY_INCLUDES_SLOT),
+        NativeFunctionKind::ArrayIndexOf => Some(ARRAY_INDEX_OF_SLOT),
+        NativeFunctionKind::ArrayJoin => Some(ARRAY_JOIN_SLOT),
+        NativeFunctionKind::ArrayLastIndexOf => Some(ARRAY_LAST_INDEX_OF_SLOT),
+        NativeFunctionKind::ArrayPop => Some(ARRAY_POP_SLOT),
+        NativeFunctionKind::ArrayPush => Some(ARRAY_PUSH_SLOT),
+        NativeFunctionKind::ArrayReverse => Some(ARRAY_REVERSE_SLOT),
+        NativeFunctionKind::ArrayShift => Some(ARRAY_SHIFT_SLOT),
+        NativeFunctionKind::ArraySlice => Some(ARRAY_SLICE_SLOT),
+        NativeFunctionKind::ArrayUnshift => Some(ARRAY_UNSHIFT_SLOT),
+        NativeFunctionKind::Boolean => Some(BOOLEAN_SLOT),
+        NativeFunctionKind::ErrorConstructor(name) => Some(error_constructor_slot(name)),
+        NativeFunctionKind::JsonParse => Some(JSON_PARSE_SLOT),
+        NativeFunctionKind::JsonStringify => Some(JSON_STRINGIFY_SLOT),
+        NativeFunctionKind::MathAbs => Some(MATH_ABS_SLOT),
+        NativeFunctionKind::MathAcos => Some(MATH_ACOS_SLOT),
+        NativeFunctionKind::MathAcosh => Some(MATH_ACOSH_SLOT),
+        NativeFunctionKind::MathAsin => Some(MATH_ASIN_SLOT),
+        NativeFunctionKind::MathAsinh => Some(MATH_ASINH_SLOT),
+        NativeFunctionKind::MathAtan => Some(MATH_ATAN_SLOT),
+        NativeFunctionKind::MathAtan2 => Some(MATH_ATAN2_SLOT),
+        NativeFunctionKind::MathAtanh => Some(MATH_ATANH_SLOT),
+        NativeFunctionKind::MathCbrt => Some(MATH_CBRT_SLOT),
+        NativeFunctionKind::MathCeil => Some(MATH_CEIL_SLOT),
+        NativeFunctionKind::MathClz32 => Some(MATH_CLZ32_SLOT),
+        NativeFunctionKind::MathCos => Some(MATH_COS_SLOT),
+        NativeFunctionKind::MathCosh => Some(MATH_COSH_SLOT),
+        NativeFunctionKind::MathExp => Some(MATH_EXP_SLOT),
+        NativeFunctionKind::MathExpm1 => Some(MATH_EXPM1_SLOT),
+        NativeFunctionKind::MathFloor => Some(MATH_FLOOR_SLOT),
+        NativeFunctionKind::MathFround => Some(MATH_FROUND_SLOT),
+        NativeFunctionKind::MathHypot => Some(MATH_HYPOT_SLOT),
+        NativeFunctionKind::MathImul => Some(MATH_IMUL_SLOT),
+        NativeFunctionKind::MathLog => Some(MATH_LOG_SLOT),
+        NativeFunctionKind::MathLog10 => Some(MATH_LOG10_SLOT),
+        NativeFunctionKind::MathLog1p => Some(MATH_LOG1P_SLOT),
+        NativeFunctionKind::MathLog2 => Some(MATH_LOG2_SLOT),
+        NativeFunctionKind::MathMax => Some(MATH_MAX_SLOT),
+        NativeFunctionKind::MathMin => Some(MATH_MIN_SLOT),
+        NativeFunctionKind::MathPow => Some(MATH_POW_SLOT),
+        NativeFunctionKind::MathRandom => Some(MATH_RANDOM_SLOT),
+        NativeFunctionKind::MathRound => Some(MATH_ROUND_SLOT),
+        NativeFunctionKind::MathSign => Some(MATH_SIGN_SLOT),
+        NativeFunctionKind::MathSin => Some(MATH_SIN_SLOT),
+        NativeFunctionKind::MathSinh => Some(MATH_SINH_SLOT),
+        NativeFunctionKind::MathSqrt => Some(MATH_SQRT_SLOT),
+        NativeFunctionKind::MathTan => Some(MATH_TAN_SLOT),
+        NativeFunctionKind::MathTanh => Some(MATH_TANH_SLOT),
+        NativeFunctionKind::MathTrunc => Some(MATH_TRUNC_SLOT),
+        NativeFunctionKind::Number => Some(NUMBER_SLOT),
+        NativeFunctionKind::Object => Some(OBJECT_SLOT),
+        NativeFunctionKind::ObjectDefineProperty => Some(OBJECT_DEFINE_PROPERTY_SLOT),
         NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
-            OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_SLOT
+            Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_SLOT)
         }
-        NativeFunctionKind::ObjectHasOwn => OBJECT_HAS_OWN_SLOT,
-        NativeFunctionKind::ObjectKeys => OBJECT_KEYS_SLOT,
-        NativeFunctionKind::String => STRING_SLOT,
+        NativeFunctionKind::ObjectHasOwn => Some(OBJECT_HAS_OWN_SLOT),
+        NativeFunctionKind::ObjectKeys => Some(OBJECT_KEYS_SLOT),
+        NativeFunctionKind::Promise => Some(PROMISE_SLOT),
+        NativeFunctionKind::PromiseResolve => Some(PROMISE_RESOLVE_SLOT),
+        NativeFunctionKind::PromiseReject => Some(PROMISE_REJECT_SLOT),
+        NativeFunctionKind::PromiseThen => Some(PROMISE_THEN_SLOT),
+        NativeFunctionKind::PromiseCatch => Some(PROMISE_CATCH_SLOT),
+        NativeFunctionKind::PromiseResolver { .. } => None,
+        NativeFunctionKind::String => Some(STRING_SLOT),
     }
 }
 
