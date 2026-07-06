@@ -116,6 +116,17 @@ struct FunctionCaptures {
     scopes: Vec<BindingScope>,
 }
 
+enum CallReference {
+    Generic {
+        callee: Value,
+        this_value: Value,
+    },
+    Native {
+        kind: runtime_native::NativeFunctionKind,
+        this_value: Value,
+    },
+}
+
 impl FunctionCaptures {
     fn from_current_locals(
         locals: &[BindingScope],
@@ -513,12 +524,17 @@ impl Context {
             return self.eval_print_call(args);
         }
 
-        if let Some((callee, this_value)) = self.eval_call_reference(callee)? {
-            return match callee {
-                Value::Function(id) => self.eval_function_with_this(id, args, this_value),
-                Value::NativeFunction(id) => self.eval_native_function(id, args, &this_value),
-                Value::HostFunction(id) => self.eval_host_function(id, args),
-                value => Err(Error::runtime(format!("'{value}' is not callable"))),
+        if let Some(reference) = self.eval_call_reference(callee)? {
+            return match reference {
+                CallReference::Native { kind, this_value } => {
+                    self.eval_native_function_kind(kind, args, &this_value)
+                }
+                CallReference::Generic { callee, this_value } => match callee {
+                    Value::Function(id) => self.eval_function_with_this(id, args, this_value),
+                    Value::NativeFunction(id) => self.eval_native_function(id, args, &this_value),
+                    Value::HostFunction(id) => self.eval_host_function(id, args),
+                    value => Err(Error::runtime(format!("'{value}' is not callable"))),
+                },
             };
         }
 
@@ -530,7 +546,7 @@ impl Context {
         }
     }
 
-    fn eval_call_reference(&mut self, callee: &Expr) -> Result<Option<(Value, Value)>> {
+    fn eval_call_reference(&mut self, callee: &Expr) -> Result<Option<CallReference>> {
         match callee {
             Expr::Member {
                 object,
@@ -539,13 +555,30 @@ impl Context {
             } => {
                 let this_value = self.eval_expr(object)?;
                 let function = self.get_static_property_value(&this_value, property, *access)?;
-                Ok(Some((function, this_value)))
+                if let Value::NativeFunction(id) = function {
+                    let kind =
+                        if let Some(kind) = self.cached_static_native_call_kind(*access, id)? {
+                            kind
+                        } else {
+                            let kind = self.native_function(id)?.kind();
+                            self.remember_static_native_call_kind(*access, id, kind)?;
+                            kind
+                        };
+                    return Ok(Some(CallReference::Native { kind, this_value }));
+                }
+                Ok(Some(CallReference::Generic {
+                    callee: function,
+                    this_value,
+                }))
             }
             Expr::ComputedMember { object, property } => {
                 let this_value = self.eval_expr(object)?;
                 let property = self.eval_property_key(property)?;
                 let function = self.get_dynamic_property_value(&this_value, &property)?;
-                Ok(Some((function, this_value)))
+                Ok(Some(CallReference::Generic {
+                    callee: function,
+                    this_value,
+                }))
             }
             Expr::Parenthesized(expr) => self.eval_call_reference(expr),
             _ => Ok(None),
