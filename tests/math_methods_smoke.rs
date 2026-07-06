@@ -62,8 +62,24 @@ let nanOk =
     Math.log(-1) !== Math.log(-1) &&
     Math.sign(NaN) !== Math.sign(NaN);
 
+let order = "";
+let mark = function(label, value) {
+    order = order + label;
+    return value;
+};
+let fixedArgAbs = Math.abs(mark("a", -7), mark("b", 1)) === 7;
+let fixedArgAtan2 = near(Math.atan2(mark("c", 1), mark("d", 1), mark("e", 1)), Math.PI / 4);
+let fixedArgPow = Math.pow(mark("f", 2), mark("g", 5), mark("h", 0)) === 32;
+let fixedArgRandom = typeof Math.random(mark("i", 0), mark("j", 0)) === "number";
+let fixedArgEvaluationOk =
+    fixedArgAbs &&
+    fixedArgAtan2 &&
+    fixedArgPow &&
+    fixedArgRandom &&
+    order === "abcdefghij";
+
 print(metadataOk, trigOk, logOk);
-print(rootOk, signOk, hyperOk, hypotOk, nanOk);
+print(rootOk, signOk, hyperOk, hypotOk, nanOk, fixedArgEvaluationOk);
 
 metadataOk &&
     trigOk &&
@@ -72,7 +88,8 @@ metadataOk &&
     signOk &&
     hyperOk &&
     hypotOk &&
-    nanOk ? 42 : 0
+    nanOk &&
+    fixedArgEvaluationOk ? 42 : 0
 "#;
 
 #[test]
@@ -85,7 +102,7 @@ fn exposes_additional_math_methods() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))?;
     ensure_output(
         context.output(),
-        &["true true true", "true true true true true"],
+        &["true true true", "true true true true true true"],
     )
 }
 
