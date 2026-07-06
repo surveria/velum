@@ -1,6 +1,7 @@
 use crate::{
     ast::Program,
     binding_layout::BindingLayout,
+    bytecode::BytecodeProgram,
     error::{Error, Result},
     lexer, parser,
     runtime_limits::RuntimeLimits,
@@ -9,6 +10,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompiledScript {
     program: Program,
+    bytecode: BytecodeProgram,
     binding_layout: BindingLayout,
     usage: CompiledScriptUsage,
 }
@@ -23,8 +25,11 @@ impl CompiledScript {
             parsed.usage.static_binding_count,
             parsed.usage.static_function_count,
         )?;
+        let bytecode = BytecodeProgram::compile(&parsed.program)?;
+        let bytecode_instruction_count = bytecode.instruction_count();
         Ok(Self {
             program: parsed.program,
+            bytecode,
             usage: CompiledScriptUsage {
                 source_len: source.len(),
                 top_level_statement_count: parsed.usage.top_level_statement_count,
@@ -38,6 +43,7 @@ impl CompiledScript {
                 global_binding_slot_count: binding_layout.global_slot_count(),
                 local_binding_slot_count: binding_layout.local_slot_count(),
                 upvalue_binding_slot_count: binding_layout.upvalue_slot_count(),
+                bytecode_instruction_count,
             },
             binding_layout,
         })
@@ -45,6 +51,10 @@ impl CompiledScript {
 
     pub(crate) const fn binding_layout(&self) -> &BindingLayout {
         &self.binding_layout
+    }
+
+    pub(crate) const fn bytecode(&self) -> &BytecodeProgram {
+        &self.bytecode
     }
 
     #[must_use]
@@ -88,6 +98,7 @@ pub struct CompiledScriptUsage {
     global_binding_slot_count: usize,
     local_binding_slot_count: usize,
     upvalue_binding_slot_count: usize,
+    bytecode_instruction_count: usize,
 }
 
 impl CompiledScriptUsage {
@@ -149,6 +160,11 @@ impl CompiledScriptUsage {
     #[must_use]
     pub const fn upvalue_binding_slot_count(self) -> usize {
         self.upvalue_binding_slot_count
+    }
+
+    #[must_use]
+    pub const fn bytecode_instruction_count(self) -> usize {
+        self.bytecode_instruction_count
     }
 }
 

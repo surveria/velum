@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::ast::{
-    BinaryOp, Expr, ObjectProperty, Program, StaticBinding, StaticBindingId, StaticName, Stmt,
+    BinaryOp, Expr, ObjectProperty, StaticBinding, StaticBindingId, StaticName, Stmt,
 };
 use crate::atom::{AtomId, AtomTable};
 use crate::binding_layout::BindingLayout;
@@ -28,6 +28,8 @@ use crate::value::{ErrorName, Value};
 
 #[path = "runtime_binding_location.rs"]
 mod runtime_binding_location;
+#[path = "runtime_bytecode.rs"]
+mod runtime_bytecode;
 #[path = "runtime_declaration.rs"]
 mod runtime_declaration;
 #[path = "runtime_dynamic_property.rs"]
@@ -237,13 +239,13 @@ impl Context {
             static_name_cache,
             binding_cache,
             script.binding_layout().clone(),
-            |context| context.eval_program(script.program()),
+            |context| {
+                context.hoist_var_declarations(&script.program().statements)?;
+                context
+                    .eval_bytecode_program(script.bytecode())
+                    .and_then(Completion::into_result)
+            },
         )
-    }
-
-    fn eval_program(&mut self, program: &Program) -> Result<Value> {
-        self.hoist_var_declarations(&program.statements)?;
-        self.eval_block(&program.statements)?.into_result()
     }
 
     pub(crate) fn eval_statement(&mut self, statement: &Stmt) -> Result<Completion> {
