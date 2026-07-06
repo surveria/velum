@@ -4,8 +4,12 @@ mod state;
 
 use crate::{
     ast::UpdateOp,
-    bytecode::{BytecodeAddress, BytecodeBlock, BytecodeInstruction, BytecodeProgram},
+    bytecode::{
+        BytecodeAddress, BytecodeBlock, BytecodeDynamicProperty, BytecodeInstruction,
+        BytecodeProgram,
+    },
     error::{Error, Result},
+    native_call::NativeCallTarget,
     runtime::{
         Context, assertions::runtime_exception_value, call_args::RuntimeCallArgs,
         completion::Completion,
@@ -548,20 +552,13 @@ impl Context {
             }
             BytecodeInstruction::CallComputedMember {
                 property: operand,
+                native,
                 arg_count,
             } => {
-                let args = state.stack.tail(*arg_count)?;
-                let property = state.stack.value_before_tail(*arg_count, 0)?.clone();
-                let this_value = state.stack.value_before_tail(*arg_count, 1)?.clone();
-                let key = self.dynamic_property_key(&property)?;
-                let callee =
-                    self.get_cached_dynamic_property_value(&this_value, &key, operand.access())?;
-                let value = self.eval_call_value(callee, args, this_value)?;
-                state.stack.drop_tail(*arg_count)?;
-                state.stack.pop()?;
-                state.stack.pop()?;
-                state.stack.push(value);
+                let value =
+                    self.eval_bytecode_computed_member_call(state, *operand, *native, *arg_count)?;
                 state.pc = next;
+                state.stack.push(value);
                 Ok(None)
             }
             BytecodeInstruction::Print { arg_count } => {
@@ -596,6 +593,29 @@ impl Context {
             }
             _ => Err(Error::runtime("bytecode invocation instruction mismatch")),
         }
+    }
+
+    fn eval_bytecode_computed_member_call(
+        &mut self,
+        state: &mut BytecodeState,
+        operand: BytecodeDynamicProperty,
+        native: Option<NativeCallTarget>,
+        arg_count: usize,
+    ) -> Result<Value> {
+        let args = state.stack.tail(arg_count)?;
+        let property = state.stack.value_before_tail(arg_count, 0)?.clone();
+        let this_value = state.stack.value_before_tail(arg_count, 1)?.clone();
+        let key = self.dynamic_property_key(&property)?;
+        let callee = self.get_cached_dynamic_property_value(&this_value, &key, operand.access())?;
+        let value = if let Some(target) = native {
+            self.eval_direct_native_call(target, callee, args, this_value)?
+        } else {
+            self.eval_call_value(callee, args, this_value)?
+        };
+        state.stack.drop_tail(arg_count)?;
+        state.stack.pop()?;
+        state.stack.pop()?;
+        Ok(value)
     }
 
     fn eval_bytecode_creation_instruction(

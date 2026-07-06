@@ -78,6 +78,45 @@ fn static_computed_literal_calls_preserve_this_binding() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))
 }
 
+#[test]
+fn static_computed_literal_calls_carry_direct_native_operands() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r#"
+        var values = [];
+        var firstPush = values["push"](1);
+        var firstMax = Math["max"](3, 8);
+        Math["max"] = function(left, right) {
+            return left - right;
+        };
+        var fallbackMax = Math["max"](10, 4);
+        Array.prototype["push"] = function(value) {
+            this[0] = value + 20;
+            return 77;
+        };
+        var fallbackPush = values["push"](2);
+        firstPush === 1 &&
+            firstMax === 8 &&
+            fallbackMax === 6 &&
+            fallbackPush === 77 &&
+            values[0] === 22 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_positive(
+        script.usage().bytecode_direct_native_call_count(),
+        "direct native calls",
+    )?;
+    ensure_positive(
+        script.usage().bytecode_array_native_call_count(),
+        "array native calls",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
@@ -90,4 +129,11 @@ fn ensure_usize(actual: usize, expected: usize) -> TestResult {
         return Ok(());
     }
     Err(format!("expected {expected}, got {actual}").into())
+}
+
+fn ensure_positive(value: usize, label: &str) -> TestResult {
+    if value > 0 {
+        return Ok(());
+    }
+    Err(format!("expected positive {label}, got {value}").into())
 }

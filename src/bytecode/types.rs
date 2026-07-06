@@ -331,6 +331,7 @@ pub enum BytecodeInstruction {
     },
     CallComputedMember {
         property: BytecodeDynamicProperty,
+        native: Option<NativeCallTarget>,
         arg_count: usize,
     },
     Print {
