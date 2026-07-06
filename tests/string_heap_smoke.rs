@@ -2,6 +2,10 @@ use rs_quickjs::{Engine, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
+const REFERENCE_ERROR_NAME: &str = "ReferenceError";
+const MISSING_REFERENCE_MESSAGE: &str = "'missing' is not defined";
+const ERROR_MESSAGE_PROPERTY: &str = "message";
+
 #[test]
 fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestResult {
     let engine = Engine::new();
@@ -110,6 +114,65 @@ fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestRe
     ensure_usize(
         after_unicode_index.string_bytes,
         after_static_index.string_bytes + "\u{00e9}x".len() + "\u{00e9}".len(),
+    )
+}
+
+#[test]
+fn interns_error_properties_in_vm_heap() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    ensure_usize(vm.resource_usage().string_count, 0)?;
+    ensure_usize(vm.resource_usage().string_bytes, 0)?;
+
+    let name = vm
+        .context()
+        .eval("try { missing; } catch (error) { error.name }")?;
+    ensure_value(&name, &Value::String(REFERENCE_ERROR_NAME.to_owned()))?;
+    let after_name = vm.resource_usage();
+    ensure_usize(after_name.string_count, 1)?;
+    ensure_usize(after_name.string_bytes, REFERENCE_ERROR_NAME.len())?;
+
+    let repeated_name = vm
+        .context()
+        .eval("try { missing; } catch (error) { error.name }")?;
+    ensure_value(
+        &repeated_name,
+        &Value::String(REFERENCE_ERROR_NAME.to_owned()),
+    )?;
+    let after_repeated_name = vm.resource_usage();
+    ensure_usize(after_repeated_name.string_count, after_name.string_count)?;
+    ensure_usize(after_repeated_name.string_bytes, after_name.string_bytes)?;
+
+    let message = vm
+        .context()
+        .eval("try { missing; } catch (error) { error.message }")?;
+    ensure_value(
+        &message,
+        &Value::String(MISSING_REFERENCE_MESSAGE.to_owned()),
+    )?;
+    let after_message = vm.resource_usage();
+    ensure_usize(after_message.string_count, 2)?;
+    ensure_usize(
+        after_message.string_bytes,
+        REFERENCE_ERROR_NAME.len() + MISSING_REFERENCE_MESSAGE.len(),
+    )?;
+
+    let dynamic_message = vm.context().eval(
+        r#"
+        let key = "message";
+        try { missing; } catch (error) { error[key] }
+        "#,
+    )?;
+    ensure_value(
+        &dynamic_message,
+        &Value::String(MISSING_REFERENCE_MESSAGE.to_owned()),
+    )?;
+    let after_dynamic_message = vm.resource_usage();
+    ensure_usize(after_dynamic_message.string_count, 3)?;
+    ensure_usize(
+        after_dynamic_message.string_bytes,
+        after_message.string_bytes + ERROR_MESSAGE_PROPERTY.len(),
     )
 }
 

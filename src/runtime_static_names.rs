@@ -217,6 +217,9 @@ impl Context {
         if let Value::NativeFunction(id) = object {
             return self.get_native_function_property_lookup(*id, lookup);
         }
+        if let Value::Error(error) = object {
+            return self.get_error_property_value(error, property.as_str());
+        }
         if let Value::String(value) = object {
             return self.get_string_property_value(value, property.as_str());
         }
