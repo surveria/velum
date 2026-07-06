@@ -5,6 +5,9 @@ type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 const REFERENCE_ERROR_NAME: &str = "ReferenceError";
 const MISSING_REFERENCE_MESSAGE: &str = "'missing' is not defined";
 const ERROR_MESSAGE_PROPERTY: &str = "message";
+const CAMERA_LABEL: &str = "camera";
+const CAMERA_FIRST_CHAR: &str = "c";
+const CAMERA_KEYS: &str = "0;1;2;3;4;5;";
 
 #[test]
 fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestResult {
@@ -173,6 +176,83 @@ fn interns_error_properties_in_vm_heap() -> TestResult {
     ensure_usize(
         after_dynamic_message.string_bytes,
         after_message.string_bytes + ERROR_MESSAGE_PROPERTY.len(),
+    )
+}
+
+#[test]
+fn keeps_string_wrapper_indices_virtual_and_heap_backed() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    vm.context().eval("String")?;
+    let after_constructor = vm.resource_usage();
+
+    let length = vm
+        .context()
+        .eval(r#"var boxed = new String("camera"); boxed.length"#)?;
+    ensure_value(&length, &Value::Number(6.0))?;
+    let after_construct = vm.resource_usage();
+    ensure_usize(
+        after_construct.string_count,
+        after_constructor.string_count.saturating_add(1),
+    )?;
+    ensure_usize(
+        after_construct.string_bytes,
+        after_constructor
+            .string_bytes
+            .saturating_add(CAMERA_LABEL.len()),
+    )?;
+
+    let first = vm.context().eval("boxed[0]")?;
+    ensure_value(&first, &Value::String(CAMERA_FIRST_CHAR.to_owned()))?;
+    let after_first = vm.resource_usage();
+    ensure_usize(
+        after_first.string_count,
+        after_construct.string_count.saturating_add(1),
+    )?;
+    ensure_usize(
+        after_first.string_bytes,
+        after_construct
+            .string_bytes
+            .saturating_add(CAMERA_FIRST_CHAR.len()),
+    )?;
+
+    let repeated_first = vm.context().eval("boxed[0]")?;
+    ensure_value(
+        &repeated_first,
+        &Value::String(CAMERA_FIRST_CHAR.to_owned()),
+    )?;
+    let after_repeated_first = vm.resource_usage();
+    ensure_usize(after_repeated_first.string_count, after_first.string_count)?;
+    ensure_usize(after_repeated_first.string_bytes, after_first.string_bytes)?;
+
+    let delete_first = vm.context().eval("delete boxed[0]")?;
+    ensure_value(&delete_first, &Value::Bool(false))?;
+    let first_after_delete = vm.context().eval("boxed[0]")?;
+    ensure_value(
+        &first_after_delete,
+        &Value::String(CAMERA_FIRST_CHAR.to_owned()),
+    )?;
+
+    let keys = vm.context().eval(
+        r#"
+        let keys = "";
+        for (let key in boxed) {
+            keys = keys + key + ";";
+        }
+        keys
+        "#,
+    )?;
+    ensure_value(&keys, &Value::String(CAMERA_KEYS.to_owned()))?;
+
+    let after_first_wrapper_shape_count = after_construct.shape_count;
+    let short_length = vm
+        .context()
+        .eval(r#"var shortBoxed = new String("go"); shortBoxed.length"#)?;
+    ensure_value(&short_length, &Value::Number(2.0))?;
+    ensure_usize(
+        vm.resource_usage().shape_count,
+        after_first_wrapper_shape_count,
     )
 }
 

@@ -38,20 +38,13 @@ impl Context {
 
     pub(super) fn construct_string_object(&mut self, args: &[Expr]) -> Result<Value> {
         let value = self.eval_string_argument(args)?;
+        let value = self.intern_heap_string(&value)?;
         let prototype = self.string_constructor_prototype()?;
         let length_key = self.intern_property_key(STRING_LENGTH_PROPERTY)?;
-        let mut character_properties = Vec::with_capacity(value.chars().count());
-        for (index, ch) in value.chars().enumerate() {
-            let name = index.to_string();
-            let key = self.intern_property_key(&name)?;
-            let value = self.heap_string_value(&ch.to_string())?;
-            character_properties.push((key, name, value));
-        }
         self.objects.create_string_object(
-            &value,
+            value,
             prototype,
             length_key,
-            character_properties,
             self.limits.max_objects,
             self.limits.max_object_properties,
         )

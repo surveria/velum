@@ -227,6 +227,11 @@ impl Context {
             return self.get_string_property_value(value.as_str(), property.as_str());
         }
         if let Value::Object(id) = object
+            && let Some(value) = self.get_string_object_property_value(*id, property.as_str())?
+        {
+            return Ok(value);
+        }
+        if let Value::Object(id) = object
             && property.as_str() != PROTOTYPE_PROPERTY
         {
             return self.get_cached_static_object_property_value(*id, access, lookup);

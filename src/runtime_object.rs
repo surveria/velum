@@ -400,6 +400,7 @@ struct Object {
     shape: ShapeId,
     enumerable_property_count: usize,
     array_length: Option<ArrayLength>,
+    string_value: Option<crate::string_heap::JsString>,
     prototype: Option<ObjectId>,
 }
 
@@ -419,6 +420,7 @@ impl Object {
             shape: ShapeId::root(),
             enumerable_property_count: 0,
             array_length: None,
+            string_value: None,
             prototype: None,
         }
     }
@@ -430,6 +432,7 @@ impl Object {
             shape: ShapeId::root(),
             enumerable_property_count: 0,
             array_length: None,
+            string_value: None,
             prototype: None,
         }
     }
@@ -441,6 +444,7 @@ impl Object {
             shape: ShapeId::root(),
             enumerable_property_count: 0,
             array_length: Some(length),
+            string_value: None,
             prototype: None,
         }
     }
@@ -471,6 +475,9 @@ impl Object {
     }
 
     fn get_own(&self, property: PropertyLookup<'_>, shapes: &ShapeTable) -> Result<Option<Value>> {
+        if let Some(value) = self.virtual_string_property_value(property)? {
+            return Ok(Some(value));
+        }
         if let Some(length) = self
             .array_length
             .filter(|_| property.name() == ARRAY_LENGTH_PROPERTY)
@@ -491,6 +498,9 @@ impl Object {
     }
 
     fn has_own(&self, property: PropertyLookup<'_>, shapes: &ShapeTable) -> Result<bool> {
+        if self.has_virtual_string_property(property)? {
+            return Ok(true);
+        }
         if self.array_length.is_some() && property.name() == ARRAY_LENGTH_PROPERTY {
             return Ok(true);
         }
@@ -518,6 +528,9 @@ impl Object {
             return Err(Error::runtime("array length assignment is not supported"));
         }
         let index = ArrayIndex::parse(property_name);
+        if self.has_virtual_string_property_name(property_name)? {
+            return Ok(());
+        }
         self.set_ordinary(property, property_name, value, shapes, max_properties)?;
         if let Some(index) = index {
             self.extend_array_length(index)?;
@@ -685,6 +698,9 @@ impl Object {
     }
 
     fn delete(&mut self, property: PropertyLookup<'_>, shapes: &mut ShapeTable) -> Result<bool> {
+        if self.has_virtual_string_property(property)? {
+            return Ok(false);
+        }
         if self.array_length.is_some() && property.name() == ARRAY_LENGTH_PROPERTY {
             return Ok(false);
         }
@@ -753,8 +769,8 @@ impl Object {
         false
     }
 
-    const fn has_enumerable_own_keys(&self) -> bool {
-        self.enumerable_property_count > 0
+    fn has_enumerable_own_keys(&self) -> bool {
+        self.enumerable_property_count > 0 || self.has_virtual_string_keys()
     }
 
     const fn update_enumerable_property_count(

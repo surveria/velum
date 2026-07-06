@@ -46,8 +46,9 @@ impl ObjectHeap {
 }
 
 impl Object {
-    const fn enumerable_key_count_hint(&self) -> usize {
+    fn enumerable_key_count_hint(&self) -> usize {
         self.enumerable_property_count
+            .saturating_add(self.virtual_string_key_count())
     }
 
     fn extend_enumerable_keys(
@@ -59,6 +60,7 @@ impl Object {
         if !self.has_enumerable_own_keys() {
             return Ok(());
         }
+        self.extend_virtual_string_keys(keys)?;
         if self.array_length.is_none() {
             self.extend_named_keys(atoms, keys, false)?;
             return Ok(());
@@ -126,7 +128,7 @@ impl Object {
     }
 }
 
-fn push_unique_key(keys: &mut Vec<String>, key: String) {
+pub(super) fn push_unique_key(keys: &mut Vec<String>, key: String) {
     if keys.iter().any(|existing| existing == &key) {
         return;
     }
