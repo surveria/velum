@@ -33,6 +33,9 @@ fn reports_vm_resource_usage_at_teardown() -> TestResult {
             captured_scope_count: report.resources.captured_scope_count,
             captured_binding_count: report.resources.captured_binding_count,
             upvalue_cell_count: report.resources.upvalue_cell_count,
+            native_call_cache_hits: report.resources.native_call_cache_hits,
+            native_call_cache_misses: report.resources.native_call_cache_misses,
+            native_call_cache_fallbacks: report.resources.native_call_cache_fallbacks,
         },
     )?;
 

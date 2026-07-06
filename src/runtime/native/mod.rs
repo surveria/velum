@@ -1,5 +1,5 @@
 use crate::{
-    ast::DeclKind,
+    ast::{DeclKind, StaticPropertyAccessId},
     bytecode::BytecodeBinding,
     error::{Error, Result},
     native_call::NativeCallTarget,
@@ -460,30 +460,44 @@ impl Context {
         self.eval_native_function_kind(kind, args, this_value)
     }
 
-    pub(crate) fn eval_direct_native_call(
+    pub(crate) fn eval_direct_native_property_call(
         &mut self,
         target: NativeCallTarget,
+        access: StaticPropertyAccessId,
         callee: Value,
         args: &[Value],
         this_value: Value,
     ) -> Result<Value> {
-        if let Value::NativeFunction(id) = callee
-            && let Some(kind) = self.direct_native_call_kind(id, target)
-        {
-            if target.is_array_target() {
-                return self.eval_array_native_function_kind(
-                    kind,
-                    RuntimeCallArgs::values(args),
-                    &this_value,
-                );
+        if let Value::NativeFunction(id) = callee {
+            if let Some(kind) = self.cached_static_property_native_call_kind(access, id)? {
+                self.record_native_call_cache_hit();
+                return self.eval_direct_native_function_kind(target, kind, args, &this_value);
             }
-            return self.eval_native_function_kind(
+            if let Some(kind) = self.direct_native_call_kind(id, target) {
+                self.record_native_call_cache_miss();
+                self.remember_static_property_native_call_kind(access, id, kind)?;
+                return self.eval_direct_native_function_kind(target, kind, args, &this_value);
+            }
+        }
+        self.record_native_call_cache_fallback();
+        self.eval_call_value(callee, args, this_value)
+    }
+
+    fn eval_direct_native_function_kind(
+        &mut self,
+        target: NativeCallTarget,
+        kind: NativeFunctionKind,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
+        if target.is_array_target() {
+            return self.eval_array_native_function_kind(
                 kind,
                 RuntimeCallArgs::values(args),
-                &this_value,
+                this_value,
             );
         }
-        self.eval_call_value(callee, args, this_value)
+        self.eval_native_function_kind(kind, RuntimeCallArgs::values(args), this_value)
     }
 
     pub(super) fn direct_native_call_kind(

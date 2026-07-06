@@ -32,6 +32,30 @@ impl Context {
         self.runtime_steps
     }
 
+    pub(crate) const fn native_call_cache_hits(&self) -> usize {
+        self.native_call_cache_hits
+    }
+
+    pub(crate) const fn native_call_cache_misses(&self) -> usize {
+        self.native_call_cache_misses
+    }
+
+    pub(crate) const fn native_call_cache_fallbacks(&self) -> usize {
+        self.native_call_cache_fallbacks
+    }
+
+    pub(super) const fn record_native_call_cache_hit(&mut self) {
+        self.native_call_cache_hits = self.native_call_cache_hits.saturating_add(1);
+    }
+
+    pub(super) const fn record_native_call_cache_miss(&mut self) {
+        self.native_call_cache_misses = self.native_call_cache_misses.saturating_add(1);
+    }
+
+    pub(super) const fn record_native_call_cache_fallback(&mut self) {
+        self.native_call_cache_fallbacks = self.native_call_cache_fallbacks.saturating_add(1);
+    }
+
     #[must_use]
     pub const fn atom_count(&self) -> usize {
         self.atoms.len()
