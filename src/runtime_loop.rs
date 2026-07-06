@@ -77,13 +77,18 @@ impl Context {
         let mut last = Value::Undefined;
         self.ensure_extra_binding_capacity(0)?;
         let atom = self.intern_static_name_atom(name.name())?;
+        let slot = self.compiled_local_binding_slot(name)?;
         let mutable = kind != DeclKind::Const;
         let mut scope = BindingScope::new();
         let cleanup_scope = !matches!(body, Stmt::Block(_));
         for key in keys {
             self.step()?;
             let value = self.checked_value(Value::String(key))?;
-            scope.insert_or_replace(atom, BindingCell::new(value, mutable, kind));
+            scope.insert_or_replace_at_optional_slot(
+                atom,
+                BindingCell::new(value, mutable, kind),
+                slot,
+            )?;
             self.push_lexical_scope_with(scope);
             self.remember_active_static_binding(name, atom)?;
             let completion = self.eval_statement(body);

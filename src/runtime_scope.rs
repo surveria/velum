@@ -100,6 +100,21 @@ impl BindingScope {
         }
     }
 
+    pub(crate) fn insert_or_replace_at_optional_slot(
+        &mut self,
+        atom: AtomId,
+        binding: BindingCell,
+        slot: Option<BindingSlot>,
+    ) -> Result<BindingSlot> {
+        if let Some(slot) = slot
+            && let Some(inserted) =
+                self.try_insert_or_replace_at_slot(atom, binding.clone(), slot)?
+        {
+            return Ok(inserted);
+        }
+        Ok(self.insert_or_replace(atom, binding))
+    }
+
     pub(crate) fn retain_only(&mut self, atom: AtomId) {
         let Some(binding) = self.get(atom) else {
             self.slots.clear();
@@ -143,6 +158,47 @@ impl BindingScope {
         self.bindings
             .insert(position, BindingEntry::new(atom, slot));
         Ok(slot)
+    }
+
+    fn try_insert_or_replace_at_slot(
+        &mut self,
+        atom: AtomId,
+        binding: BindingCell,
+        slot: BindingSlot,
+    ) -> Result<Option<BindingSlot>> {
+        match self.binding_position(atom) {
+            Ok(position) => {
+                let Some(entry) = self.bindings.get(position) else {
+                    return Err(Error::runtime("binding frame index disappeared"));
+                };
+                if entry.slot() != slot {
+                    return Ok(None);
+                }
+                let Some(existing) = self.cell_mut(slot) else {
+                    return Err(Error::runtime("binding frame slot is not defined"));
+                };
+                *existing = binding;
+                Ok(Some(slot))
+            }
+            Err(position) => Ok(self.try_insert_new_at_slot(position, atom, binding, slot)),
+        }
+    }
+
+    fn try_insert_new_at_slot(
+        &mut self,
+        position: usize,
+        atom: AtomId,
+        binding: BindingCell,
+        slot: BindingSlot,
+    ) -> Option<BindingSlot> {
+        if slot.index() != self.slots.len() {
+            return None;
+        }
+        self.slots.push(binding);
+        self.slot_atoms.push(atom);
+        self.bindings
+            .insert(position, BindingEntry::new(atom, slot));
+        Some(slot)
     }
 
     fn binding_position(&self, atom: AtomId) -> std::result::Result<usize, usize> {

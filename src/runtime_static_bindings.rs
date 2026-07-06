@@ -116,6 +116,24 @@ impl Context {
         self.static_binding_layouts.last().cloned()
     }
 
+    pub(crate) fn compiled_local_binding_slot(
+        &self,
+        binding: &StaticBinding,
+    ) -> Result<Option<BindingSlot>> {
+        let Some(layout) = self.current_static_binding_layout() else {
+            return Ok(None);
+        };
+        let Some(operand) = layout.operand_for_binding_id(binding.id())? else {
+            return Ok(None);
+        };
+        match operand {
+            BindingOperand::Local { slot, .. } => Ok(Some(BindingSlot::from_index(slot.index()?))),
+            BindingOperand::Global { .. }
+            | BindingOperand::Upvalue { .. }
+            | BindingOperand::Unresolved => Ok(None),
+        }
+    }
+
     pub(crate) fn get_binding_static(
         &self,
         binding: &StaticBinding,
