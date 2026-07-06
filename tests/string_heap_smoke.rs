@@ -267,6 +267,57 @@ fn keeps_string_wrapper_indices_virtual_and_heap_backed() -> TestResult {
 }
 
 #[test]
+fn interns_string_wrapper_descriptor_values_in_vm_heap() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    vm.context().eval(
+        r#"
+        (function() {
+        let boxed = new String("warm");
+        return Object.getOwnPropertyDescriptor(boxed, 0).value;
+        })()
+        "#,
+    )?;
+    let after_warmup = vm.resource_usage();
+
+    let value = vm.context().eval(
+        r#"
+        (function() {
+        let boxed = new String("camera");
+        return Object.getOwnPropertyDescriptor(boxed, 0).value;
+        })()
+        "#,
+    )?;
+    ensure_heap_string(&value, CAMERA_FIRST_CHAR)?;
+    let after_descriptor = vm.resource_usage();
+    ensure_usize(
+        after_descriptor.string_count,
+        after_warmup.string_count.saturating_add(2),
+    )?;
+    ensure_usize(
+        after_descriptor.string_bytes,
+        after_warmup
+            .string_bytes
+            .saturating_add(CAMERA_LABEL.len())
+            .saturating_add(CAMERA_FIRST_CHAR.len()),
+    )?;
+
+    let repeated = vm.context().eval(
+        r#"
+        (function() {
+        let boxed = new String("camera");
+        return Object.getOwnPropertyDescriptor(boxed, 0).value;
+        })()
+        "#,
+    )?;
+    ensure_heap_string(&repeated, CAMERA_FIRST_CHAR)?;
+    let after_repeated = vm.resource_usage();
+    ensure_usize(after_repeated.string_count, after_descriptor.string_count)?;
+    ensure_usize(after_repeated.string_bytes, after_descriptor.string_bytes)
+}
+
+#[test]
 fn normalizes_context_owned_strings_after_storage_boundaries() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();

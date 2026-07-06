@@ -318,11 +318,12 @@ impl Context {
         descriptor: &DataPropertyDescriptor,
     ) -> Result<Value> {
         let keys = self.descriptor_property_keys()?;
+        let descriptor_value = self.runtime_value(descriptor.value())?;
         let properties = vec![
             Self::descriptor_object_property(
                 keys.value(),
                 DESCRIPTOR_VALUE_PROPERTY,
-                descriptor.value(),
+                descriptor_value,
             ),
             Self::descriptor_object_property(
                 keys.writable(),
