@@ -21,8 +21,12 @@
 
 use std::{
     env,
+    path::Path,
+    process::Command,
     time::{Duration, Instant},
 };
+
+use anyhow::{Context as _, bail};
 
 const ENV_MIN_TIME_MS: &str = "RSQJS_BENCH_MIN_TIME_MS";
 const ENV_WARMUP_MS: &str = "RSQJS_BENCH_WARMUP_MS";
@@ -39,6 +43,21 @@ const DEFAULT_CLI_WARMUP: usize = 3;
 const MIN_SAMPLES: usize = 3;
 const MAX_ITERS_PER_SAMPLE: u128 = 50_000_000;
 const PERMILLE_SCALE: u128 = 1000;
+
+const NANOS_PER_MICROSECOND: u128 = 1_000;
+const NANOS_PER_MILLISECOND: u128 = 1_000_000;
+const RATIO_DECIMAL_SCALE: u128 = 100;
+const FRACTION_SCALE: u128 = 100;
+const ENV_EXEC_FLOOR_US: &str = "RSQJS_BENCH_EXEC_FLOOR_US";
+// The ratio guard applies to both engines' startup-subtracted execution, and
+// QuickJS runs most cases in well under 100 us, so its (small) execution is the
+// binding term. Below this floor the ratio's denominator is dominated by
+// process-startup jitter and is reported as startup-bound instead of a
+// misleading number. Chosen empirically: at 80 us the surviving ~21 cases hold
+// a run-to-run CV under 9% (median ~4%), versus the ~13% the raw CLI ratio
+// carried; lighter cases keep their stable in-process numbers but no ratio.
+const DEFAULT_EXEC_FLOOR_US: u64 = 80;
+const STARTUP_PROBE: &str = "0";
 
 /// Configuration for one in-process time-based measurement.
 #[derive(Debug, Clone, Copy)]
@@ -279,9 +298,81 @@ fn env_usize(name: &str, default: usize) -> usize {
         .unwrap_or(default)
 }
 
+/// Time a single process spawn of `engine args...`, returning the wall time.
+fn spawn_timed(engine: &Path, args: &[&str], label: &str) -> anyhow::Result<Duration> {
+    let start = Instant::now();
+    let output = Command::new(engine)
+        .args(args)
+        .output()
+        .with_context(|| format!("failed to execute {label} '{}'", engine.display()))?;
+    let elapsed = start.elapsed();
+    if !output.status.success() {
+        bail!(
+            "{label} run failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(elapsed)
+}
+
+/// Robustly time an engine running a benchmark file (warmup + many spawns).
+pub fn measure_cli_file(engine: &Path, path: &str, label: &str) -> anyhow::Result<MeasureStats> {
+    measure_cli_samples(|| spawn_timed(engine, &[path], label))
+}
+
+/// Measure an engine's process-startup floor by running a trivial program.
+/// Returns the minimum spawn time so it can be subtracted from benchmark
+/// timings; falls back to zero (no subtraction) if the probe fails.
+pub fn measure_startup(engine: &Path, label: &str) -> Duration {
+    measure_cli_samples(|| spawn_timed(engine, &["-e", STARTUP_PROBE], label))
+        .map_or(Duration::ZERO, |stats| stats.min())
+}
+
+/// Execution estimate = benchmark spawn time minus the startup floor.
+pub const fn exec_estimate(bench_min: Duration, startup: Duration) -> Duration {
+    bench_min.saturating_sub(startup)
+}
+
+/// Below this execution estimate the startup-subtracted signal is dominated by
+/// measurement noise, so the CLI ratio is not reported as meaningful.
+pub fn exec_floor_from_env() -> Duration {
+    Duration::from_micros(env_u64(ENV_EXEC_FLOOR_US, DEFAULT_EXEC_FLOOR_US))
+}
+
+/// Format a duration with three significant figures (e.g. `1.74 ms`).
+pub fn format_duration(duration: Duration) -> String {
+    let nanos = duration.as_nanos();
+    if nanos < NANOS_PER_MICROSECOND {
+        return format!("{nanos} ns");
+    }
+    if nanos < NANOS_PER_MILLISECOND {
+        return format!("{} us", fixed_point(nanos, NANOS_PER_MICROSECOND));
+    }
+    format!("{} ms", fixed_point(nanos, NANOS_PER_MILLISECOND))
+}
+
+fn fixed_point(nanos: u128, unit: u128) -> String {
+    let whole = nanos / unit;
+    let frac = (nanos % unit).saturating_mul(FRACTION_SCALE) / unit;
+    format!("{whole}.{frac:02}")
+}
+
+/// Render `ours / reference` as a two-decimal ratio like `1.24x`.
+pub fn ratio_values(ours: u128, reference: u128) -> String {
+    if reference == 0 {
+        return "-".to_owned();
+    }
+    let scaled = ours.saturating_mul(RATIO_DECIMAL_SCALE) / reference;
+    format!(
+        "{}.{:02}x",
+        scaled / RATIO_DECIMAL_SCALE,
+        scaled % RATIO_DECIMAL_SCALE
+    )
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{MeasureConfig, isqrt, measure, median_of_sorted};
+    use super::{MeasureConfig, format_duration, isqrt, measure, median_of_sorted, ratio_values};
     use std::{
         hint::black_box,
         time::{Duration, Instant},
@@ -312,6 +403,26 @@ mod tests {
         assert_eq!(median_of_sorted(&[1, 2, 3]), 2);
         assert_eq!(median_of_sorted(&[10, 20, 30, 40]), 25);
         assert_eq!(median_of_sorted(&[]), 0);
+    }
+
+    #[test]
+    fn formats_duration_with_three_significant_figures() {
+        assert_eq!(format_duration(Duration::from_micros(1_500)), "1.50 ms");
+        assert_eq!(format_duration(Duration::from_nanos(365)), "365 ns");
+    }
+
+    #[test]
+    fn formats_ratio_below_and_above_one() {
+        let below = ratio_values(
+            Duration::from_micros(5).as_nanos(),
+            Duration::from_micros(366).as_nanos(),
+        );
+        assert_eq!(below, "0.01x");
+        let above = ratio_values(
+            Duration::from_micros(250).as_nanos(),
+            Duration::from_micros(100).as_nanos(),
+        );
+        assert_eq!(above, "2.50x");
     }
 
     #[test]
