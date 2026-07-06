@@ -197,6 +197,12 @@ impl Context {
                 "Array.prototype.join requires an array receiver",
             ));
         };
+        if let Some(joined) =
+            self.objects
+                .packed_array_join(*id, &separator, self.limits.max_string_len)?
+        {
+            return Ok(Value::String(joined));
+        }
 
         let length = self.objects.array_len(*id)?;
         let mut joined = String::new();
