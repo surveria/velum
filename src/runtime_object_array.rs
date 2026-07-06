@@ -3,7 +3,10 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ArrayLength, Object, ObjectHeap, ObjectProperty};
+use super::{
+    ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ArrayLength, Object, ObjectHeap, ObjectProperty,
+    ShapeTable,
+};
 
 const ARRAY_CONCAT_RECEIVER_ERROR: &str = "Array.prototype.concat requires an array receiver";
 const ARRAY_INCLUDES_RECEIVER_ERROR: &str = "Array.prototype.includes requires an array receiver";
@@ -47,7 +50,7 @@ impl ObjectHeap {
     }
 
     pub(crate) fn array_pop(&mut self, id: ObjectId) -> Result<Value> {
-        let object = self.object_mut(id)?;
+        let (object, shapes) = self.object_mut_with_shapes(id)?;
         let Some(length) = object.array_length else {
             return Err(Error::runtime(ARRAY_POP_RECEIVER_ERROR));
         };
@@ -58,7 +61,7 @@ impl ObjectHeap {
         let value = object
             .get_own_array_index(index)
             .unwrap_or(Value::Undefined);
-        object.delete_array_index(index);
+        object.delete_array_index(index, shapes)?;
         object.array_length = Some(index.length());
         Ok(value)
     }
@@ -371,8 +374,8 @@ impl ObjectHeap {
     }
 
     fn delete_array_index(&mut self, id: ObjectId, index: ArrayIndex) -> Result<bool> {
-        let object = self.object_mut(id)?;
-        Ok(object.delete_array_index(index))
+        let (object, shapes) = self.object_mut_with_shapes(id)?;
+        object.delete_array_index(index, shapes)
     }
 
     fn array_property_value_by_index(
@@ -723,23 +726,25 @@ impl Object {
         value: Value,
         max_properties: usize,
     ) -> Result<()> {
-        self.set_array_property_value(index, None, value, None, max_properties)?;
+        self.set_array_property_value(index, None, value, None, None, max_properties)?;
         self.extend_array_length(index)
     }
 
-    fn delete_array_index(&mut self, index: ArrayIndex) -> bool {
+    fn delete_array_index(&mut self, index: ArrayIndex, shapes: &mut ShapeTable) -> Result<bool> {
         if self.array_length.is_some() && self.delete_array_element(index) {
-            return true;
+            return Ok(true);
         }
-        let Some(key) = self.array_storage.remove_sparse_key(index) else {
-            return true;
+        let Some(key) = self.array_storage.sparse_key(index) else {
+            return Ok(true);
         };
-        if let Some(property) = self.remove_named_property(key)
+        let removed = self.remove_named_property(shapes, key)?;
+        self.array_storage.remove_sparse_key(index);
+        if let Some(property) = removed
             && property.is_enumerable()
         {
             self.enumerable_property_count = self.enumerable_property_count.saturating_sub(1);
         }
-        true
+        Ok(true)
     }
 }
 

@@ -34,10 +34,18 @@ impl ObjectHeap {
             STRING_LENGTH_PROPERTY,
             Value::Number(length_to_value(length)?),
             PropertyEnumerable::No,
+            &mut self.shapes,
             max_properties,
         )?;
         for (key, name, value) in character_properties {
-            object.define(key, &name, value, PropertyEnumerable::Yes, max_properties)?;
+            object.define(
+                key,
+                &name,
+                value,
+                PropertyEnumerable::Yes,
+                &mut self.shapes,
+                max_properties,
+            )?;
         }
         self.push_object(object, max_objects).map(Value::Object)
     }

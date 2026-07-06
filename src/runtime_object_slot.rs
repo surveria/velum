@@ -1,6 +1,6 @@
 use crate::error::{Error, Result};
 
-use super::{Object, ObjectProperty, PropertyKey};
+use super::{Object, ObjectProperty, PropertyKey, ShapeTable};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(super) struct PropertySlot(usize);
@@ -87,29 +87,44 @@ impl Object {
 
     pub(super) fn push_named_property(
         &mut self,
+        shapes: &mut ShapeTable,
         key: PropertyKey,
         property: ObjectProperty,
     ) -> Result<()> {
         let Err(position) = self.property_position(key) else {
             return Err(Error::runtime("object property slot replaced existing key"));
         };
+        let shape = shapes.transition_after_add(self.shape, key)?;
         let slot = PropertySlot::from_index(self.named_properties.len());
         self.named_properties
             .push(NamedProperty::new(key, property));
         self.properties
             .insert(position, PropertyIndexEntry::new(key, slot));
+        self.shape = shape;
         Ok(())
     }
 
-    pub(super) fn remove_named_property(&mut self, key: PropertyKey) -> Option<ObjectProperty> {
-        let position = self.property_position(key).ok()?;
-        let slot = self.properties.get(position)?.slot();
+    pub(super) fn remove_named_property(
+        &mut self,
+        shapes: &mut ShapeTable,
+        key: PropertyKey,
+    ) -> Result<Option<ObjectProperty>> {
+        let Ok(position) = self.property_position(key) else {
+            return Ok(None);
+        };
+        let Some(slot) = self.properties.get(position).map(|entry| entry.slot()) else {
+            return Ok(None);
+        };
         let index = slot.index();
-        self.named_properties.get(index)?;
+        if self.named_properties.get(index).is_none() {
+            return Ok(None);
+        }
+        let shape = shapes.transition_after_remove(self.shape, key)?;
         let removed = self.named_properties.remove(index);
         self.properties.remove(position);
         self.reindex_named_properties_from(index);
-        Some(removed.property)
+        self.shape = shape;
+        Ok(Some(removed.property))
     }
 
     fn reindex_named_properties_from(&mut self, start: usize) {

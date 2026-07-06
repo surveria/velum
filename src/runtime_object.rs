@@ -19,6 +19,8 @@ mod runtime_object_key;
 mod runtime_object_keys;
 #[path = "runtime_object_prototype.rs"]
 mod runtime_object_prototype;
+#[path = "runtime_object_shape.rs"]
+mod runtime_object_shape;
 #[path = "runtime_object_slot.rs"]
 mod runtime_object_slot;
 #[path = "runtime_object_string.rs"]
@@ -33,6 +35,7 @@ pub use runtime_object_descriptor::{
 };
 use runtime_object_index::{ArrayIndex, ArrayLength};
 pub use runtime_object_key::{ObjectPropertyInit, PropertyKey, PropertyLookup};
+use runtime_object_shape::{ShapeId, ShapeTable};
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
 const ARRAY_INDEX_LIMIT_ERROR: &str = "array index exceeded supported range";
@@ -55,7 +58,7 @@ impl ObjectHeap {
                     literal_prototype = Some(prototype);
                 }
             } else {
-                object.set(key, &name, value, max_properties)?;
+                object.set(key, &name, value, &mut self.shapes, max_properties)?;
             }
         }
         object.prototype = match literal_prototype {
@@ -84,7 +87,7 @@ impl ObjectHeap {
         object.prototype = Some(prototype);
         for (index, value) in elements.into_iter().enumerate() {
             let index = ArrayIndex::from_usize(index)?;
-            object.set_array_property_value(index, None, value, None, max_properties)?;
+            object.set_array_property_value(index, None, value, None, None, max_properties)?;
         }
 
         self.push_object(object, max_objects).map(Value::Object)
@@ -163,6 +166,7 @@ impl ObjectHeap {
             property.name,
             property.value,
             property.enumerable,
+            &mut self.shapes,
             max_properties,
         )?;
 
@@ -204,6 +208,7 @@ impl ObjectHeap {
             OBJECT_CONSTRUCTOR_PROPERTY,
             Value::String("Object".to_owned()),
             PropertyEnumerable::No,
+            &mut self.shapes,
             max_properties,
         )?;
 
@@ -260,12 +265,13 @@ impl ObjectHeap {
         value: Value,
         max_properties: usize,
     ) -> Result<()> {
-        let object = self.object_mut(id)?;
+        let (object, shapes) = self.object_mut_with_shapes(id)?;
         object.define(
             property,
             property_name,
             value,
             PropertyEnumerable::No,
+            shapes,
             max_properties,
         )
     }
@@ -290,20 +296,20 @@ impl ObjectHeap {
         if property_name == PROTOTYPE_PROPERTY && !self.object(id)?.has_own(lookup) {
             return self.set_prototype(id, &value);
         }
-        let object = self.object_mut(id)?;
-        object.set(property, property_name, value, max_properties)
+        let (object, shapes) = self.object_mut_with_shapes(id)?;
+        object.set(property, property_name, value, shapes, max_properties)
     }
 
     pub fn delete(&mut self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {
         if property.name() == PROTOTYPE_PROPERTY {
             if self.object(id)?.has_own(property) {
-                let object = self.object_mut(id)?;
-                return Ok(object.delete(property));
+                let (object, shapes) = self.object_mut_with_shapes(id)?;
+                return object.delete(property, shapes);
             }
             return Ok(true);
         }
-        let object = self.object_mut(id)?;
-        Ok(object.delete(property))
+        let (object, shapes) = self.object_mut_with_shapes(id)?;
+        object.delete(property, shapes)
     }
 
     fn get_in_chain(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<Value> {
@@ -330,6 +336,18 @@ impl ObjectHeap {
             .ok_or_else(|| Error::runtime("object id is not defined"))
     }
 
+    fn object_mut_with_shapes(&mut self, id: ObjectId) -> Result<(&mut Object, &mut ShapeTable)> {
+        let object = self
+            .objects
+            .get_mut(id.index())
+            .ok_or_else(|| Error::runtime("object id is not defined"))?;
+        Ok((object, &mut self.shapes))
+    }
+
+    pub(crate) const fn shape_count(&self) -> usize {
+        self.shapes.len()
+    }
+
     fn push_object(&mut self, object: Object, max_objects: usize) -> Result<ObjectId> {
         if self.objects.len() >= max_objects {
             return Err(Error::limit(format!("object count exceeded {max_objects}")));
@@ -346,6 +364,7 @@ struct Object {
     properties: Vec<runtime_object_slot::PropertyIndexEntry>,
     named_properties: Vec<runtime_object_slot::NamedProperty>,
     array_storage: ArrayStorage,
+    shape: ShapeId,
     enumerable_property_count: usize,
     array_length: Option<ArrayLength>,
     prototype: Option<ObjectId>,
@@ -357,6 +376,7 @@ impl Object {
             properties: Vec::new(),
             named_properties: Vec::new(),
             array_storage: ArrayStorage::new(),
+            shape: ShapeId::root(),
             enumerable_property_count: 0,
             array_length: None,
             prototype: None,
@@ -368,6 +388,7 @@ impl Object {
             properties: Vec::with_capacity(capacity),
             named_properties: Vec::with_capacity(capacity),
             array_storage: ArrayStorage::new(),
+            shape: ShapeId::root(),
             enumerable_property_count: 0,
             array_length: None,
             prototype: None,
@@ -379,6 +400,7 @@ impl Object {
             properties: Vec::new(),
             named_properties: Vec::new(),
             array_storage: ArrayStorage::new(),
+            shape: ShapeId::root(),
             enumerable_property_count: 0,
             array_length: Some(length),
             prototype: None,
@@ -432,13 +454,14 @@ impl Object {
         property: PropertyKey,
         property_name: &str,
         value: Value,
+        shapes: &mut ShapeTable,
         max_properties: usize,
     ) -> Result<()> {
         if self.array_length.is_some() && property_name == ARRAY_LENGTH_PROPERTY {
             return Err(Error::runtime("array length assignment is not supported"));
         }
         let index = ArrayIndex::parse(property_name);
-        self.set_ordinary(property, property_name, value, max_properties)?;
+        self.set_ordinary(property, property_name, value, shapes, max_properties)?;
         if let Some(index) = index {
             self.extend_array_length(index)?;
         }
@@ -450,9 +473,10 @@ impl Object {
         property: PropertyKey,
         property_name: &str,
         value: Value,
+        shapes: &mut ShapeTable,
         max_properties: usize,
     ) -> Result<()> {
-        self.set_property_value(property, property_name, value, None, max_properties)
+        self.set_property_value(property, property_name, value, None, shapes, max_properties)
     }
 
     fn define(
@@ -461,6 +485,7 @@ impl Object {
         property_name: &str,
         value: Value,
         enumerable: PropertyEnumerable,
+        shapes: &mut ShapeTable,
         max_properties: usize,
     ) -> Result<()> {
         self.set_property_value(
@@ -468,6 +493,7 @@ impl Object {
             property_name,
             value,
             Some(enumerable),
+            shapes,
             max_properties,
         )
     }
@@ -478,6 +504,7 @@ impl Object {
         property_name: &str,
         value: Value,
         enumerable: Option<PropertyEnumerable>,
+        shapes: &mut ShapeTable,
         max_properties: usize,
     ) -> Result<()> {
         let index = ArrayIndex::parse(property_name);
@@ -489,12 +516,13 @@ impl Object {
                 Some((property, property_name)),
                 value,
                 enumerable,
+                Some(shapes),
                 max_properties,
             )?;
             return self.extend_array_length(index);
         }
 
-        self.set_named_property_value(property, value, enumerable, max_properties)?;
+        self.set_named_property_value(property, value, enumerable, shapes, max_properties)?;
         if let Some(index) = index {
             self.array_storage.insert_sparse_key(index, property);
         }
@@ -506,6 +534,7 @@ impl Object {
         property: PropertyKey,
         value: Value,
         enumerable: Option<PropertyEnumerable>,
+        shapes: &mut ShapeTable,
         max_properties: usize,
     ) -> Result<()> {
         let property_count = self.property_count();
@@ -526,7 +555,7 @@ impl Object {
             let named_property =
                 ObjectProperty::ordinary(value, enumerable.unwrap_or(PropertyEnumerable::Yes));
             let enumerable_update = named_property.is_enumerable().then_some((false, true));
-            self.push_named_property(property, named_property)?;
+            self.push_named_property(shapes, property, named_property)?;
             enumerable_update
         };
         if let Some((was_enumerable, is_enumerable)) = enumerable_update {
@@ -541,14 +570,24 @@ impl Object {
         property: Option<(PropertyKey, &str)>,
         value: Value,
         enumerable: Option<PropertyEnumerable>,
+        shapes: Option<&mut ShapeTable>,
         max_properties: usize,
     ) -> Result<()> {
         if index.dense_position(max_properties)?.is_none() {
             let Some((property, _)) = property else {
                 return Err(Error::runtime("sparse array property key is not available"));
             };
+            let Some(shapes) = shapes else {
+                return Err(Error::runtime("sparse array shape table is not available"));
+            };
             self.array_storage.insert_sparse_key(index, property);
-            return self.set_named_property_value(property, value, enumerable, max_properties);
+            return self.set_named_property_value(
+                property,
+                value,
+                enumerable,
+                shapes,
+                max_properties,
+            );
         }
 
         if let Some(property) = self.array_storage.dense_property_mut(index)? {
@@ -580,27 +619,27 @@ impl Object {
         Ok(())
     }
 
-    fn delete(&mut self, property: PropertyLookup<'_>) -> bool {
+    fn delete(&mut self, property: PropertyLookup<'_>, shapes: &mut ShapeTable) -> Result<bool> {
         if self.array_length.is_some() && property.name() == ARRAY_LENGTH_PROPERTY {
-            return false;
+            return Ok(false);
         }
         if self.array_length.is_some()
             && let Some(index) = ArrayIndex::parse(property.name())
             && self.delete_array_element(index)
         {
-            return true;
+            return Ok(true);
         }
         let Some(key) = property.key() else {
-            return true;
+            return Ok(true);
         };
         let Some(existing_property) = self.named_property(key) else {
-            return true;
+            return Ok(true);
         };
         if !existing_property.is_configurable() {
-            return false;
+            return Ok(false);
         }
-        let Some(removed_property) = self.remove_named_property(key) else {
-            return true;
+        let Some(removed_property) = self.remove_named_property(shapes, key)? else {
+            return Ok(true);
         };
         if removed_property.is_enumerable() {
             self.enumerable_property_count = self.enumerable_property_count.saturating_sub(1);
@@ -608,7 +647,7 @@ impl Object {
         if let Some(index) = ArrayIndex::parse(property.name()) {
             self.array_storage.remove_sparse_key(index);
         }
-        true
+        Ok(true)
     }
 
     fn extend_array_length(&mut self, index: ArrayIndex) -> Result<()> {
