@@ -6,12 +6,12 @@ use crate::{
     atom::AtomId,
     error::{Error, Result},
     runtime::Context,
-    runtime_assertions::reference_error_undefined,
     runtime_object::{PropertyKey, PropertyLookup},
     runtime_property::{delete_property, get_property, set_property},
-    runtime_scope::BindingCell,
     value::Value,
 };
+
+use super::runtime_static_bindings::StaticBindingCacheHandle;
 
 #[derive(Debug, Clone)]
 pub struct StaticNameAtomCacheHandle(Rc<[Cell<Option<AtomId>>]>);
@@ -54,6 +54,20 @@ impl Context {
         result
     }
 
+    pub(crate) fn with_static_name_caches<T>(
+        &mut self,
+        atom_cache: StaticNameAtomCacheHandle,
+        binding_cache: StaticBindingCacheHandle,
+        evaluate: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        self.static_name_atom_caches.push(atom_cache);
+        self.static_binding_caches.push(binding_cache);
+        let result = evaluate(self);
+        self.pop_static_binding_cache()?;
+        self.pop_static_name_atom_cache()?;
+        result
+    }
+
     pub(crate) fn current_static_name_atom_cache(&self) -> Option<StaticNameAtomCacheHandle> {
         self.static_name_atom_caches.last().cloned()
     }
@@ -79,21 +93,6 @@ impl Context {
         let atom = self.intern_atom(name)?;
         self.remember_static_name_atom(name, atom)?;
         Ok(atom)
-    }
-
-    pub(crate) fn get_binding_static(&self, name: &StaticName) -> Result<Option<BindingCell>> {
-        let Some(atom) = self.lookup_static_name_atom(name)? else {
-            return Ok(None);
-        };
-        Ok(self.get_binding_by_atom(atom))
-    }
-
-    pub(crate) fn assign_static(&self, name: &StaticName, value: Value) -> Result<()> {
-        self.checked_value(value.clone())?;
-        let Some(binding) = self.get_binding_static(name)? else {
-            return Err(reference_error_undefined(name));
-        };
-        binding.assign(name, value)
     }
 
     pub(crate) fn intern_static_property_key(&mut self, name: &StaticName) -> Result<PropertyKey> {
@@ -187,5 +186,12 @@ impl Context {
             return Ok(());
         }
         Err(Error::runtime("static name atom cache disappeared"))
+    }
+
+    fn pop_static_binding_cache(&mut self) -> Result<()> {
+        if self.static_binding_caches.pop().is_some() {
+            return Ok(());
+        }
+        Err(Error::runtime("static binding cache disappeared"))
     }
 }

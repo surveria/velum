@@ -1,0 +1,201 @@
+use std::cell::Cell;
+use std::rc::Rc;
+
+use crate::{
+    ast::StaticName,
+    atom::AtomId,
+    error::{Error, Result},
+    runtime::Context,
+    runtime_assertions::reference_error_undefined,
+    runtime_scope::{BindingCell, BindingSlot},
+    value::Value,
+};
+
+#[derive(Debug, Clone)]
+pub struct StaticBindingCacheHandle(Rc<[Cell<Option<BindingLocation>>]>);
+
+impl StaticBindingCacheHandle {
+    pub(super) fn new(slot_count: usize) -> Self {
+        let mut bindings = Vec::with_capacity(slot_count);
+        for _ in 0..slot_count {
+            bindings.push(Cell::new(None));
+        }
+        Self(Rc::from(bindings.into_boxed_slice()))
+    }
+
+    fn location(&self, name: &StaticName) -> Result<Option<BindingLocation>> {
+        self.0
+            .get(name.id().index()?)
+            .map(Cell::get)
+            .ok_or_else(|| Error::runtime("static binding cache slot is not defined"))
+    }
+
+    fn remember(&self, name: &StaticName, location: BindingLocation) -> Result<()> {
+        let slot = self
+            .0
+            .get(name.id().index()?)
+            .ok_or_else(|| Error::runtime("static binding cache slot is not defined"))?;
+        slot.set(Some(location));
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct BindingLocation {
+    atom: AtomId,
+    scope: BindingScopeLocation,
+    slot: BindingSlot,
+}
+
+impl BindingLocation {
+    const fn global(atom: AtomId, slot: BindingSlot) -> Self {
+        Self {
+            atom,
+            scope: BindingScopeLocation::Global,
+            slot,
+        }
+    }
+
+    const fn local(atom: AtomId, scope: LocalScopeIndex, slot: BindingSlot) -> Self {
+        Self {
+            atom,
+            scope: BindingScopeLocation::Local(scope),
+            slot,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum BindingScopeLocation {
+    Global,
+    Local(LocalScopeIndex),
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LocalScopeIndex(usize);
+
+impl LocalScopeIndex {
+    const fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    const fn index(self) -> usize {
+        self.0
+    }
+}
+
+impl Context {
+    pub(crate) fn current_static_binding_cache(&self) -> Option<StaticBindingCacheHandle> {
+        self.static_binding_caches.last().cloned()
+    }
+
+    pub(crate) fn get_binding_static(&self, name: &StaticName) -> Result<Option<BindingCell>> {
+        let Some(atom) = self.lookup_static_name_atom(name)? else {
+            return Ok(None);
+        };
+        if let Some(binding) = self.cached_static_binding(name)? {
+            return Ok(Some(binding));
+        }
+        let Some(location) = self.resolve_binding_location(atom) else {
+            return Ok(None);
+        };
+        self.remember_static_binding(name, location)?;
+        self.binding_at_location(location)
+    }
+
+    pub(crate) fn assign_static(&self, name: &StaticName, value: Value) -> Result<()> {
+        self.checked_value(value.clone())?;
+        let Some(binding) = self.get_binding_static(name)? else {
+            return Err(reference_error_undefined(name));
+        };
+        binding.assign(name, value)
+    }
+
+    pub(crate) fn remember_active_static_binding(
+        &self,
+        name: &StaticName,
+        atom: AtomId,
+    ) -> Result<()> {
+        let Some(cache) = self.current_static_binding_cache() else {
+            return Ok(());
+        };
+        let Some(location) = self.resolve_binding_location(atom) else {
+            return Ok(());
+        };
+        cache.remember(name, location)
+    }
+
+    fn cached_static_binding(&self, name: &StaticName) -> Result<Option<BindingCell>> {
+        let Some(cache) = self.current_static_binding_cache() else {
+            return Ok(None);
+        };
+        let Some(location) = cache.location(name)? else {
+            return Ok(None);
+        };
+        self.binding_at_location(location)
+    }
+
+    fn remember_static_binding(&self, name: &StaticName, location: BindingLocation) -> Result<()> {
+        let Some(cache) = self.current_static_binding_cache() else {
+            return Ok(());
+        };
+        cache.remember(name, location)
+    }
+
+    fn resolve_binding_location(&self, atom: AtomId) -> Option<BindingLocation> {
+        for (index, scope) in self.locals.iter().enumerate().rev() {
+            if let Some(slot) = scope.slot_of(atom) {
+                return Some(BindingLocation::local(
+                    atom,
+                    LocalScopeIndex::new(index),
+                    slot,
+                ));
+            }
+        }
+        self.globals
+            .slot_of(atom)
+            .map(|slot| BindingLocation::global(atom, slot))
+    }
+
+    fn binding_at_location(&self, location: BindingLocation) -> Result<Option<BindingCell>> {
+        match location.scope {
+            BindingScopeLocation::Global => {
+                if self.scope_above_has_binding(0, location.atom) {
+                    return Ok(None);
+                }
+                Ok(self.globals.cell_for_slot(location.atom, location.slot))
+            }
+            BindingScopeLocation::Local(index) => self.local_binding_at_location(index, location),
+        }
+    }
+
+    fn local_binding_at_location(
+        &self,
+        index: LocalScopeIndex,
+        location: BindingLocation,
+    ) -> Result<Option<BindingCell>> {
+        let Some(scope) = self.locals.get(index.index()) else {
+            return Ok(None);
+        };
+        let Some(binding) = scope.cell_for_slot(location.atom, location.slot) else {
+            return Ok(None);
+        };
+        let start = index
+            .index()
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("local scope index overflowed"))?;
+        if self.scope_above_has_binding(start, location.atom) {
+            return Ok(None);
+        }
+        Ok(Some(binding))
+    }
+
+    fn scope_above_has_binding(&self, start: usize, atom: AtomId) -> bool {
+        for scope in self.locals.iter().skip(start) {
+            if scope.contains(atom) {
+                return true;
+            }
+        }
+        false
+    }
+}

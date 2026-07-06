@@ -82,6 +82,7 @@ impl Context {
         let atom = self.intern_static_name_atom(name)?;
         if let Some(binding) = self.active_bindings().get(atom) {
             if binding.kind() == DeclKind::Var {
+                self.remember_active_static_binding(name, atom)?;
                 return Ok(());
             }
             return Err(Error::runtime(format!(
@@ -94,6 +95,7 @@ impl Context {
             atom,
             BindingCell::new(Value::Undefined, true, DeclKind::Var),
         );
+        self.remember_active_static_binding(name, atom)?;
         Ok(())
     }
 
@@ -144,7 +146,8 @@ impl Context {
         kind: DeclKind,
     ) -> Result<()> {
         let atom = self.intern_static_name_atom(name)?;
-        self.define_atom(atom, name, value, kind)
+        self.define_atom(atom, name, value, kind)?;
+        self.remember_active_static_binding(name, atom)
     }
 
     fn define_atom(

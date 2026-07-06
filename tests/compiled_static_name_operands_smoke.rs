@@ -41,6 +41,29 @@ var firstCounter = counterFactory(10);
 firstCounter(5) + firstCounter(1);
 ";
 
+const SHADOWED_BINDING_SOURCE: &str = r"
+var value = 1;
+value = value + 10;
+{
+    let value = 100;
+    value = value + 1;
+}
+value = value + 1;
+value;
+";
+
+const SHADOWED_CLOSURE_SOURCE: &str = r"
+var value = 1;
+var makeCounter = function makeCounter(value) {
+    return function(step) {
+        value = value + step;
+        return value;
+    };
+};
+var counter = makeCounter(10);
+counter(2) + value;
+";
+
 #[test]
 fn compiled_static_names_preserve_binding_and_property_paths() -> TestResult {
     let engine = Engine::new();
@@ -86,6 +109,36 @@ fn escaped_compiled_function_reuses_static_name_atom_cache() -> TestResult {
 
     let value = vm.eval_compiled(&call)?;
     ensure_value(&value, &Value::Number(31.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atom_count)
+}
+
+#[test]
+fn compiled_static_binding_cache_handles_block_shadowing() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(SHADOWED_BINDING_SOURCE)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(12.0))?;
+    let atom_count = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(12.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atom_count)
+}
+
+#[test]
+fn compiled_static_binding_cache_handles_captured_shadowing() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(SHADOWED_CLOSURE_SOURCE)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(13.0))?;
+    let atom_count = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(13.0))?;
     ensure_usize(vm.resource_usage().atom_count, atom_count)
 }
 
