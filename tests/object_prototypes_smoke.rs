@@ -79,6 +79,31 @@ fn supports_prototype_assignment_shadowing_and_null() -> TestResult {
 }
 
 #[test]
+fn walks_deep_prototype_chains_with_cycle_guard() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let root = { shared: 7 };
+        let current = root;
+        for (let index = 0; index < 12; index++) {
+            current = { __proto__: current };
+        }
+        let inherited = current.shared;
+        let hasInherited = "shared" in current;
+        current.own = 35;
+        print(inherited, hasInherited, current.own);
+
+        inherited === 7 && hasInherited && current.own === 35 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(context.output(), &["7 true 35".to_owned()])
+}
+
+#[test]
 fn rejects_prototype_cycles() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
