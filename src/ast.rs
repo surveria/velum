@@ -1,21 +1,50 @@
 use std::rc::Rc;
 
+use crate::error::{Error, Result};
 use crate::value::Value;
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct StaticName(Rc<str>);
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub struct StaticNameId(u32);
 
-impl StaticName {
-    pub fn new(name: String) -> Self {
-        Self(Rc::from(name.into_boxed_str()))
+impl StaticNameId {
+    pub fn from_index(index: usize) -> Result<Self> {
+        let id = u32::try_from(index)
+            .map_err(|_| Error::limit("static name table exceeded supported range"))?;
+        Ok(Self(id))
     }
 
-    pub fn borrowed(name: &str) -> Self {
-        Self(Rc::from(name))
+    pub fn index(self) -> Result<usize> {
+        usize::try_from(self.0).map_err(|_| Error::limit("static name id exceeded supported range"))
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct StaticName {
+    id: StaticNameId,
+    text: Rc<str>,
+}
+
+impl StaticName {
+    pub fn new(id: StaticNameId, name: String) -> Self {
+        Self {
+            id,
+            text: Rc::from(name.into_boxed_str()),
+        }
+    }
+
+    pub fn borrowed(id: StaticNameId, name: &str) -> Self {
+        Self {
+            id,
+            text: Rc::from(name),
+        }
+    }
+
+    pub const fn id(&self) -> StaticNameId {
+        self.id
     }
 
     pub fn as_str(&self) -> &str {
-        self.0.as_ref()
+        self.text.as_ref()
     }
 }
 
@@ -30,12 +59,6 @@ impl std::ops::Deref for StaticName {
 
     fn deref(&self) -> &Self::Target {
         self.as_str()
-    }
-}
-
-impl From<String> for StaticName {
-    fn from(name: String) -> Self {
-        Self::new(name)
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::ast::{Program, StaticName};
+use crate::ast::{Program, StaticName, StaticNameId};
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
 use crate::runtime_limits::RuntimeLimits;
@@ -164,11 +164,15 @@ impl Parser {
 #[derive(Debug, Clone, Default)]
 struct StaticNameTable {
     names: Vec<StaticName>,
+    index: Vec<StaticNameIndexEntry>,
 }
 
 impl StaticNameTable {
     const fn new() -> Self {
-        Self { names: Vec::new() }
+        Self {
+            names: Vec::new(),
+            index: Vec::new(),
+        }
     }
 
     const fn len(&self) -> usize {
@@ -178,52 +182,80 @@ impl StaticNameTable {
     fn intern_owned(&mut self, name: String, offset: usize) -> Result<StaticName> {
         let position = self.static_name_position(&name);
         let position = match position {
-            Ok(position) => {
-                return self
-                    .names
-                    .get(position)
-                    .cloned()
-                    .ok_or_else(|| Error::parse("static name entry is not available", offset));
-            }
+            Ok(position) => return self.static_name_at_index_position(position, offset),
             Err(position) => position,
         };
-        if position > self.names.len() {
+        if position > self.index.len() {
             return Err(Error::parse(
                 "static name insert position is out of range",
                 offset,
             ));
         }
-        let name = StaticName::new(name);
-        self.names.insert(position, name.clone());
+        let id = StaticNameId::from_index(self.names.len())?;
+        let name = StaticName::new(id, name);
+        self.names.push(name.clone());
+        self.index
+            .insert(position, StaticNameIndexEntry::new(name.clone()));
         Ok(name)
     }
 
     fn intern_borrowed(&mut self, name: &str, offset: usize) -> Result<StaticName> {
         let position = self.static_name_position(name);
         let position = match position {
-            Ok(position) => {
-                return self
-                    .names
-                    .get(position)
-                    .cloned()
-                    .ok_or_else(|| Error::parse("static name entry is not available", offset));
-            }
+            Ok(position) => return self.static_name_at_index_position(position, offset),
             Err(position) => position,
         };
-        if position > self.names.len() {
+        if position > self.index.len() {
             return Err(Error::parse(
                 "static name insert position is out of range",
                 offset,
             ));
         }
-        let name = StaticName::borrowed(name);
-        self.names.insert(position, name.clone());
+        let id = StaticNameId::from_index(self.names.len())?;
+        let name = StaticName::borrowed(id, name);
+        self.names.push(name.clone());
+        self.index
+            .insert(position, StaticNameIndexEntry::new(name.clone()));
         Ok(name)
     }
 
-    fn static_name_position(&self, name: &str) -> std::result::Result<usize, usize> {
+    fn static_name_at_index_position(&self, position: usize, offset: usize) -> Result<StaticName> {
+        let entry = self
+            .index
+            .get(position)
+            .ok_or_else(|| Error::parse("static name index entry is not available", offset))?;
+        self.static_name_by_id(entry.id(), offset)
+    }
+
+    fn static_name_by_id(&self, id: StaticNameId, offset: usize) -> Result<StaticName> {
         self.names
+            .get(id.index()?)
+            .cloned()
+            .ok_or_else(|| Error::parse("static name id is not defined", offset))
+    }
+
+    fn static_name_position(&self, name: &str) -> std::result::Result<usize, usize> {
+        self.index
             .binary_search_by(|entry| entry.as_str().cmp(name))
+    }
+}
+
+#[derive(Debug, Clone)]
+struct StaticNameIndexEntry {
+    name: StaticName,
+}
+
+impl StaticNameIndexEntry {
+    const fn new(name: StaticName) -> Self {
+        Self { name }
+    }
+
+    fn as_str(&self) -> &str {
+        self.name.as_str()
+    }
+
+    const fn id(&self) -> StaticNameId {
+        self.name.id()
     }
 }
 

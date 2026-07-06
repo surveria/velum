@@ -15,6 +15,13 @@ let record = {
 record.value + record.total + record.method();
 ";
 
+const OUT_OF_ORDER_STATIC_NAME_SOURCE: &str = r"
+let zeta = 1;
+let alpha = zeta + 1;
+let middle = alpha + zeta;
+middle + alpha + zeta;
+";
+
 #[test]
 fn compiled_script_deduplicates_static_names() -> TestResult {
     let engine = Engine::new();
@@ -24,6 +31,17 @@ fn compiled_script_deduplicates_static_names() -> TestResult {
     ensure_usize(script.usage().static_name_count(), 4)?;
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(5.0))
+}
+
+#[test]
+fn compiled_script_reuses_out_of_order_static_names() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(OUT_OF_ORDER_STATIC_NAME_SOURCE)?;
+
+    ensure_usize(script.usage().static_name_count(), 3)?;
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(6.0))
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
