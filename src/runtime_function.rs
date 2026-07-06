@@ -73,6 +73,7 @@ impl Context {
         let static_name_atom_cache = self.current_static_name_atom_cache();
         let static_binding_cache = self.current_static_binding_cache();
         let static_binding_layout = self.current_static_binding_layout();
+        let upvalues = self.capture_function_upvalues(body, static_binding_layout.as_ref())?;
         self.functions.push(super::Function {
             name: function_name,
             arity: super::FunctionArity::new(params.len()),
@@ -80,6 +81,7 @@ impl Context {
             param_atoms,
             body: Rc::clone(body),
             captures: self.locals.clone(),
+            upvalues,
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
@@ -124,6 +126,7 @@ impl Context {
             param_binding_ids,
             body,
             captures,
+            upvalues,
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
@@ -134,6 +137,7 @@ impl Context {
                 Rc::clone(&function.param_binding_ids),
                 Rc::clone(&function.body),
                 function.captures.clone(),
+                Rc::clone(&function.upvalues),
                 function.static_name_atom_cache.clone(),
                 function.static_binding_cache.clone(),
                 function.static_binding_layout.clone(),
@@ -154,6 +158,7 @@ impl Context {
             }
         };
         self.locals.push(scope);
+        self.upvalue_frames.push(upvalues);
         self.this_values.push(this_value);
         let result = self.eval_function_body(
             static_name_atom_cache,
@@ -164,10 +169,14 @@ impl Context {
             &body,
         );
         let removed_this = self.this_values.pop();
+        let removed_upvalues = self.upvalue_frames.pop();
         let removed = self.locals.pop();
         self.locals = caller_locals;
         if removed_this.is_none() {
             return Err(Error::runtime("function this binding disappeared"));
+        }
+        if removed_upvalues.is_none() {
+            return Err(Error::runtime("function upvalue frame disappeared"));
         }
         if removed.is_none() {
             return Err(Error::runtime("function scope disappeared"));

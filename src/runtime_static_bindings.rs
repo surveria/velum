@@ -77,6 +77,15 @@ impl BindingLocation {
         }
     }
 
+    const fn upvalue(atom: AtomId, slot: BindingSlot) -> Self {
+        Self {
+            atom,
+            scope: BindingScopeLocation::Upvalue,
+            slot,
+            validation: BindingLocationValidation::Exact,
+        }
+    }
+
     const fn exact(self) -> Self {
         Self {
             validation: BindingLocationValidation::Exact,
@@ -100,6 +109,7 @@ enum BindingScopeLocation {
     Global,
     BuiltinGlobal,
     Local(LocalScopeIndex),
+    Upvalue,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -229,6 +239,10 @@ impl Context {
             self.remember_static_binding(binding, location)?;
             return Ok(Some(cell));
         }
+        if let Some((location, cell)) = self.compiled_upvalue_static_binding(binding, atom)? {
+            self.remember_static_binding(binding, location)?;
+            return Ok(Some(cell));
+        }
         let Some(location) = self.resolve_binding_location(atom) else {
             return Ok(None);
         };
@@ -242,6 +256,19 @@ impl Context {
             return Err(reference_error_undefined(binding));
         };
         cell.assign(binding, value)
+    }
+
+    pub(crate) fn resolve_runtime_static_binding(
+        &self,
+        binding: &StaticBinding,
+    ) -> Result<Option<BindingCell>> {
+        let Some(atom) = self.lookup_static_name_atom(binding.name())? else {
+            return Ok(None);
+        };
+        let Some(location) = self.resolve_binding_location(atom) else {
+            return Ok(None);
+        };
+        self.binding_at_location(location)
     }
 
     pub(crate) fn remember_active_static_binding(
@@ -314,6 +341,22 @@ impl Context {
             return Ok(Some((location, cell)));
         }
         Ok(None)
+    }
+
+    fn compiled_upvalue_static_binding(
+        &self,
+        binding: &StaticBinding,
+        atom: AtomId,
+    ) -> Result<Option<(BindingLocation, BindingCell)>> {
+        let BindingOperand::Upvalue { slot, .. } = self.compiled_binding_operand(binding.id())?
+        else {
+            return Ok(None);
+        };
+        let location = BindingLocation::upvalue(atom, BindingSlot::from_index(slot.index()?));
+        let Some(cell) = self.binding_at_location(location)? else {
+            return Ok(None);
+        };
+        Ok(Some((location, cell)))
     }
 
     fn compiled_active_static_binding(
@@ -428,6 +471,7 @@ impl Context {
                 Ok(self.builtin_global_binding_at_location(location))
             }
             BindingScopeLocation::Local(index) => self.local_binding_at_location(index, location),
+            BindingScopeLocation::Upvalue => Ok(self.upvalue_binding_at_location(location)),
         }
     }
 
@@ -467,6 +511,13 @@ impl Context {
             return Ok(None);
         }
         Ok(Some(binding))
+    }
+
+    fn upvalue_binding_at_location(&self, location: BindingLocation) -> Option<BindingCell> {
+        self.upvalue_frames
+            .last()
+            .and_then(|frame| frame.get(location.slot.index()))
+            .and_then(Clone::clone)
     }
 
     fn scope_above_has_binding(&self, start: usize, atom: AtomId) -> bool {
