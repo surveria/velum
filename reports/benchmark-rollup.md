@@ -17,7 +17,7 @@ Artifacts:
 Latest report:
 
 - `rsqjs-test-report-20260706T130038Z.md`
-- Task: rsqjs-test-report-20260706T130038Z.md
+- Task: Direct string descriptor heap materialization tranche: Avoid the remaining context-free owned-string fallback when `Object.getOwnPropertyDescriptor` materializes virtual string-wrapper index descriptors.
 - Performance: 1.30x (48/63 >1.00x)
 - Memory: 1.08x (58/63 >1.00x)
 - Full Test262: 10872 passed / 91706 failed (10.60%)
@@ -185,4 +185,4 @@ Latest report:
 | `20260706T122435Z` `f83b274` Context string normalization tranche: Normalize owned string values at `Context` storage and return boundaries without making every expression dispatch pay for heap checks. | 1.30x (45/63 >1.00x) | 1.08x (54/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T124144Z` `7aa4e1b` Packed array bulk storage tranche: Continue the Dense Arrays direction by avoiding generic per-index property mutation when a packed array can be built from a complete value vector. | 1.29x (47/63 >1.00x) | 1.10x (60/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T125009Z` `f273777` String descriptor heap fallback tranche: Close a remaining string-wrapper descriptor path where virtual indexed character values could escape as owned `Value::String` instead of VM-owned heap strings. | 1.29x (48/63 >1.00x) | 1.08x (59/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
-| `20260706T130038Z` rsqjs-test-report-20260706T130038Z.md | 1.30x (48/63 >1.00x) | 1.08x (58/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
+| `20260706T130038Z` `884ef39` Direct string descriptor heap materialization tranche: Avoid the remaining context-free owned-string fallback when `Object.getOwnPropertyDescriptor` materializes virtual string-wrapper index descriptors. | 1.30x (48/63 >1.00x) | 1.08x (58/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
