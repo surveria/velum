@@ -17,9 +17,7 @@ const ARRAY_LAST_INDEX_OF_RECEIVER_ERROR: &str =
 const ARRAY_POP_RECEIVER_ERROR: &str = "Array.prototype.pop requires an array receiver";
 const ARRAY_PUSH_RECEIVER_ERROR: &str = "Array.prototype.push requires an array receiver";
 const ARRAY_REVERSE_RECEIVER_ERROR: &str = "Array.prototype.reverse requires an array receiver";
-const ARRAY_SHIFT_RECEIVER_ERROR: &str = "Array.prototype.shift requires an array receiver";
 const ARRAY_SLICE_RECEIVER_ERROR: &str = "Array.prototype.slice requires an array receiver";
-const ARRAY_UNSHIFT_RECEIVER_ERROR: &str = "Array.prototype.unshift requires an array receiver";
 const INDEX_NOT_FOUND: f64 = -1.0;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -59,56 +57,6 @@ impl ObjectHeap {
         self.delete_array_index(id, index)?;
         self.object_mut(id)?.array_length = Some(index.length());
         Ok(value)
-    }
-
-    pub(crate) fn array_shift(&mut self, id: ObjectId, max_properties: usize) -> Result<Value> {
-        let length = self.array_length_for_method(id, ARRAY_SHIFT_RECEIVER_ERROR)?;
-        let Some(first_index) = length.first_index() else {
-            return Ok(Value::Undefined);
-        };
-
-        let first_value = self.get_array_index(id, first_index)?;
-        let length_usize = length.to_usize()?;
-        for index in 1..length_usize {
-            self.move_array_index(id, index, index.saturating_sub(1), max_properties)?;
-        }
-
-        let Some(last_index) = length.previous_index() else {
-            return Ok(first_value);
-        };
-        self.delete_array_index(id, last_index)?;
-        self.object_mut(id)?.array_length = Some(last_index.length());
-        Ok(first_value)
-    }
-
-    pub(crate) fn array_unshift(
-        &mut self,
-        id: ObjectId,
-        values: Vec<Value>,
-        max_properties: usize,
-    ) -> Result<Value> {
-        let length = self.array_length_for_method(id, ARRAY_UNSHIFT_RECEIVER_ERROR)?;
-        let value_count = values.len();
-        let new_length = length.add_usize(value_count)?;
-        if value_count == 0 {
-            return Ok(new_length.value());
-        }
-
-        let length_usize = length.to_usize()?;
-        for offset in 0..length_usize {
-            let from_index = length_usize.saturating_sub(offset).saturating_sub(1);
-            let to_index = from_index
-                .checked_add(value_count)
-                .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
-            self.move_array_index(id, from_index, to_index, max_properties)?;
-        }
-
-        for (index, value) in values.into_iter().enumerate() {
-            let index = ArrayIndex::from_usize(index)?;
-            self.set_array_index(id, index, value, max_properties)?;
-        }
-        self.object_mut(id)?.array_length = Some(new_length);
-        Ok(new_length.value())
     }
 
     pub(crate) fn array_slice(
@@ -155,7 +103,11 @@ impl ObjectHeap {
         if length <= 1 {
             return Ok(Value::Object(id));
         }
-        if self.object_mut(id)?.reverse_packed_array(length) {
+        if self
+            .object_mut(id)?
+            .array_storage
+            .reverse_packed_for_len_if_default(length)
+        {
             return Ok(Value::Object(id));
         }
 
@@ -350,14 +302,14 @@ impl ObjectHeap {
         Ok(Some(joined))
     }
 
-    fn get_array_index(&self, id: ObjectId, index: ArrayIndex) -> Result<Value> {
+    pub(super) fn get_array_index(&self, id: ObjectId, index: ArrayIndex) -> Result<Value> {
         if let Some(value) = self.array_property_value_by_index(id, index)? {
             return Ok(value);
         }
         Ok(Value::Undefined)
     }
 
-    fn set_array_index(
+    pub(super) fn set_array_index(
         &mut self,
         id: ObjectId,
         index: ArrayIndex,
@@ -373,7 +325,7 @@ impl ObjectHeap {
         self.bump_if_structure_changed(id, before)
     }
 
-    fn delete_array_index(&mut self, id: ObjectId, index: ArrayIndex) -> Result<bool> {
+    pub(super) fn delete_array_index(&mut self, id: ObjectId, index: ArrayIndex) -> Result<bool> {
         let before = self.object(id)?.structure_snapshot();
         let (object, shapes) = self.object_mut_with_shapes(id)?;
         let deleted = object.delete_array_index(index, shapes)?;
@@ -427,12 +379,12 @@ impl ObjectHeap {
         Ok(Some(values))
     }
 
-    fn array_length_for_method(&self, id: ObjectId, error: &str) -> Result<ArrayLength> {
+    pub(super) fn array_length_for_method(&self, id: ObjectId, error: &str) -> Result<ArrayLength> {
         let object = self.object(id)?;
         object.array_length.ok_or_else(|| Error::runtime(error))
     }
 
-    fn move_array_index(
+    pub(super) fn move_array_index(
         &mut self,
         id: ObjectId,
         from_index: usize,
@@ -715,10 +667,6 @@ impl Object {
         self.array_storage.packed_properties_for_len(length)
     }
 
-    fn reverse_packed_array(&mut self, length: usize) -> bool {
-        self.array_storage.reverse_packed_for_len_if_default(length)
-    }
-
     fn get_own_array_index(&self, shapes: &ShapeTable, index: ArrayIndex) -> Result<Option<Value>> {
         if self.array_length.is_some()
             && let Some(value) = self.array_element_value(index)
@@ -761,11 +709,11 @@ impl Object {
 }
 
 impl ArrayLength {
-    fn to_usize(self) -> Result<usize> {
+    pub(super) fn to_usize(self) -> Result<usize> {
         usize::try_from(self.0).map_err(|_| Error::limit("array length exceeded supported range"))
     }
 
-    fn add_usize(self, value: usize) -> Result<Self> {
+    pub(super) fn add_usize(self, value: usize) -> Result<Self> {
         let value = u32::try_from(value)
             .map_err(|_| Error::limit("array length exceeded supported range"))?;
         self.0
@@ -778,14 +726,14 @@ impl ArrayLength {
         ArrayIndex::from_u32(self.0)
     }
 
-    const fn first_index(self) -> Option<ArrayIndex> {
+    pub(super) const fn first_index(self) -> Option<ArrayIndex> {
         if self.0 == 0 {
             return None;
         }
         Some(ArrayIndex(0))
     }
 
-    const fn previous_index(self) -> Option<ArrayIndex> {
+    pub(super) const fn previous_index(self) -> Option<ArrayIndex> {
         if self.0 == 0 {
             return None;
         }

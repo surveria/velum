@@ -152,6 +152,45 @@ fn rejects_shift_and_unshift_on_non_array_receivers() -> TestResult {
     ensure_error_contains(&unshift_error, "requires an array receiver")
 }
 
+#[test]
+fn keeps_descriptor_modified_arrays_on_generic_paths() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let shifted = [1, 2, 3];
+        Object.defineProperty(shifted, "0", {
+            value: 1,
+            writable: false,
+            enumerable: true,
+            configurable: true
+        });
+        let first = shifted.shift();
+
+        let unshifted = [3];
+        Object.defineProperty(unshifted, "0", {
+            value: 3,
+            writable: false,
+            enumerable: true,
+            configurable: true
+        });
+        let length = unshifted.unshift(1, 2);
+
+        first === 1 &&
+            shifted.length === 2 &&
+            shifted[0] === 1 &&
+            shifted[1] === 3 &&
+            length === 3 &&
+            unshifted[0] === 3 &&
+            unshifted[1] === 2 &&
+            unshifted[2] === 3 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
