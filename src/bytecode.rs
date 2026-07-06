@@ -2,140 +2,45 @@ use std::rc::Rc;
 
 use crate::{
     ast::{
-        BinaryOp, DeclKind, Expr, ObjectProperty, Program, StaticBinding, StaticName,
-        StaticPropertyAccessId, StaticString, Stmt, UnaryOp,
+        BinaryOp, CatchClause, DeclKind, Expr, ForInTarget, ObjectProperty, Program, StaticBinding,
+        StaticPropertyAccessId, Stmt, SwitchCase, UnaryOp, UpdateOp,
     },
-    bytecode_analysis::{block_can_inline, for_can_compile},
     bytecode_hoist::BytecodeHoistPlan,
     error::{Error, Result},
-    value::Value,
 };
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct BytecodeProgram {
-    instructions: Rc<[BytecodeInstruction]>,
-    hoist_plan: BytecodeHoistPlan,
-}
+#[path = "bytecode_call.rs"]
+mod bytecode_call;
+#[path = "bytecode_function.rs"]
+mod bytecode_function;
+
+pub use crate::bytecode_types::{
+    BytecodeAddress, BytecodeAssignmentTarget, BytecodeBlock, BytecodeCatch, BytecodeCompletion,
+    BytecodeForInTarget, BytecodeFunction, BytecodeInstruction, BytecodeProgram,
+    BytecodeSwitchCase,
+};
 
 impl BytecodeProgram {
     pub fn compile(program: &Program) -> Result<Self> {
+        Ok(Self::new(
+            BytecodeBlock::compile_statements(&program.statements, StatementValue::Store)?,
+            BytecodeHoistPlan::compile(&program.statements),
+        ))
+    }
+}
+
+impl BytecodeBlock {
+    fn compile_statements(statements: &[Stmt], value: StatementValue) -> Result<Self> {
         let mut compiler = BytecodeCompiler::new();
-        compiler.compile_statements(&program.statements, StatementValue::Store)?;
-        Ok(Self {
-            instructions: Rc::from(compiler.instructions.into_boxed_slice()),
-            hoist_plan: BytecodeHoistPlan::compile(&program.statements),
-        })
+        compiler.compile_statements(statements, value)?;
+        Ok(Self::from_instructions(compiler.instructions))
     }
 
-    pub fn instruction(&self, address: BytecodeAddress) -> Result<Option<&BytecodeInstruction>> {
-        let index = address.index();
-        if index == self.instructions.len() {
-            return Ok(None);
-        }
-        if index > self.instructions.len() {
-            return Err(Error::runtime(
-                "bytecode instruction pointer escaped program",
-            ));
-        }
-        Ok(self.instructions.get(index))
-    }
-
-    pub fn instruction_count(&self) -> usize {
-        self.instructions.len()
-    }
-
-    pub fn ast_fallback_instruction_count(&self) -> usize {
-        self.instructions
-            .iter()
-            .filter(|instruction| instruction.is_ast_fallback())
-            .count()
-    }
-
-    pub const fn hoist_plan(&self) -> &BytecodeHoistPlan {
-        &self.hoist_plan
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum BytecodeInstruction {
-    PushLiteral(Value),
-    PushString(StaticString),
-    PushUndefined,
-    LoadThis,
-    LoadBinding(StaticBinding),
-    StoreBinding(StaticBinding),
-    DeclareBinding {
-        name: StaticBinding,
-        kind: DeclKind,
-        has_init: bool,
-    },
-    SetLastUndefined,
-    StoreLast,
-    Pop,
-    Unary(UnaryOp),
-    Binary {
-        op: BinaryOp,
-        property_access: Option<StaticPropertyAccessId>,
-    },
-    StaticMember {
-        property: StaticName,
-        access: StaticPropertyAccessId,
-    },
-    ComputedMember {
-        access: StaticPropertyAccessId,
-    },
-    StaticPropertyAssign {
-        property: StaticName,
-        access: StaticPropertyAccessId,
-    },
-    ComputedPropertyAssign {
-        access: StaticPropertyAccessId,
-    },
-    ArrayLiteral {
-        len: usize,
-    },
-    ObjectLiteral {
-        properties: Rc<[StaticName]>,
-    },
-    Jump(BytecodeAddress),
-    JumpIfFalse(BytecodeAddress),
-    Complete(BytecodeCompletion),
-    EvalAstExpr(Box<Expr>),
-    EvalAstStatement(Box<Stmt>),
-    EvalAstLoopStatement {
-        statement: Box<Stmt>,
-        break_target: BytecodeAddress,
-        continue_target: BytecodeAddress,
-    },
-}
-
-impl BytecodeInstruction {
-    const fn is_ast_fallback(&self) -> bool {
-        matches!(
-            self,
-            Self::EvalAstExpr(_) | Self::EvalAstStatement(_) | Self::EvalAstLoopStatement { .. }
-        )
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum BytecodeCompletion {
-    Break,
-    Continue,
-    Return,
-    Throw,
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct BytecodeAddress(usize);
-
-impl BytecodeAddress {
-    pub const fn new(index: usize) -> Self {
-        Self(index)
-    }
-
-    pub const fn index(self) -> usize {
-        self.0
+    fn compile_expression(expr: &Expr) -> Result<Self> {
+        let mut compiler = BytecodeCompiler::new();
+        compiler.compile_expr(expr)?;
+        compiler.emit(BytecodeInstruction::StoreLast);
+        Ok(Self::from_instructions(compiler.instructions))
     }
 }
 
@@ -148,14 +53,12 @@ enum StatementValue {
 #[derive(Debug)]
 struct BytecodeCompiler {
     instructions: Vec<BytecodeInstruction>,
-    loops: Vec<LoopPatch>,
 }
 
 impl BytecodeCompiler {
     const fn new() -> Self {
         Self {
             instructions: Vec::new(),
-            loops: Vec::new(),
         }
     }
 
@@ -168,8 +71,10 @@ impl BytecodeCompiler {
 
     fn compile_statement(&mut self, statement: &Stmt, value: StatementValue) -> Result<()> {
         match statement {
-            Stmt::Block(statements) if block_can_inline(statements) => {
-                self.compile_statements(statements, value)
+            Stmt::Block(statements) => {
+                let block = BytecodeBlock::compile_statements(statements, value)?;
+                self.emit(BytecodeInstruction::ScopedBlock(block));
+                Ok(())
             }
             Stmt::DeclList(declarations) => self.compile_statements(declarations, value),
             Stmt::If {
@@ -183,11 +88,29 @@ impl BytecodeCompiler {
                 condition,
                 update,
                 body,
-            } if for_can_compile(init.as_deref(), body) => {
-                self.compile_for(init.as_deref(), condition.as_ref(), update.as_ref(), body)
+            } => self.compile_for(init.as_deref(), condition.as_ref(), update.as_ref(), body),
+            Stmt::ForIn {
+                target,
+                object,
+                body,
+            } => self.compile_for_in(target, object, body),
+            Stmt::Switch {
+                discriminant,
+                cases,
+            } => self.compile_switch(discriminant, cases),
+            Stmt::Try {
+                body,
+                catch,
+                finally_body,
+            } => self.compile_try(body, catch.as_ref(), finally_body.as_deref()),
+            Stmt::Break => {
+                self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Break));
+                Ok(())
             }
-            Stmt::Break => self.compile_loop_completion(BytecodeCompletion::Break),
-            Stmt::Continue => self.compile_loop_completion(BytecodeCompletion::Continue),
+            Stmt::Continue => {
+                self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Continue));
+                Ok(())
+            }
             Stmt::Throw(expr) => {
                 self.compile_expr(expr)?;
                 self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Throw));
@@ -213,11 +136,6 @@ impl BytecodeCompiler {
                 });
                 Ok(())
             }
-            Stmt::Block(_)
-            | Stmt::For { .. }
-            | Stmt::ForIn { .. }
-            | Stmt::Switch { .. }
-            | Stmt::Try { .. } => self.compile_ast_statement(statement),
         }
     }
 
@@ -228,33 +146,25 @@ impl BytecodeCompiler {
         alternate: Option<&Stmt>,
         value: StatementValue,
     ) -> Result<()> {
-        self.compile_expr(condition)?;
-        let false_jump = self.emit_jump_if_false();
-        self.compile_statement(consequent, value)?;
-        let end_jump = self.emit_jump();
-        let alternate_address = self.current_address();
-        self.patch_jump(false_jump, alternate_address)?;
-        if let Some(alternate) = alternate {
-            self.compile_statement(alternate, value)?;
-        } else if value == StatementValue::Store {
-            self.emit(BytecodeInstruction::SetLastUndefined);
-        }
-        let end_address = self.current_address();
-        self.patch_jump(end_jump, end_address)
+        let condition = BytecodeBlock::compile_expression(condition)?;
+        let consequent = Self::compile_statement_block(consequent, value)?;
+        let alternate = alternate
+            .map(|alternate| Self::compile_statement_block(alternate, value))
+            .transpose()?;
+        self.emit(BytecodeInstruction::If {
+            condition,
+            consequent,
+            alternate,
+        });
+        Ok(())
     }
 
     fn compile_while(&mut self, condition: &Expr, body: &Stmt) -> Result<()> {
-        self.emit(BytecodeInstruction::SetLastUndefined);
-        let start = self.current_address();
-        self.compile_expr(condition)?;
-        let false_jump = self.emit_jump_if_false();
-        self.push_loop();
-        self.compile_statement(body, StatementValue::Store)?;
-        let loop_patch = self.pop_loop()?;
-        self.emit(BytecodeInstruction::Jump(start));
-        let end = self.current_address();
-        self.patch_jump(false_jump, end)?;
-        self.patch_loop(loop_patch, end, start)
+        self.emit(BytecodeInstruction::While {
+            condition: BytecodeBlock::compile_expression(condition)?,
+            body: Self::compile_statement_block(body, StatementValue::Store)?,
+        });
+        Ok(())
     }
 
     fn compile_for(
@@ -264,32 +174,116 @@ impl BytecodeCompiler {
         update: Option<&Expr>,
         body: &Stmt,
     ) -> Result<()> {
-        if let Some(init) = init {
-            self.compile_statement(init, StatementValue::Discard)?;
+        self.emit(BytecodeInstruction::For {
+            init: init
+                .map(|init| Self::compile_statement_block(init, StatementValue::Discard))
+                .transpose()?,
+            condition: condition
+                .map(BytecodeBlock::compile_expression)
+                .transpose()?,
+            update: update.map(BytecodeBlock::compile_expression).transpose()?,
+            body: Self::compile_statement_block(body, StatementValue::Store)?,
+            scoped: for_init_needs_lexical_scope(init),
+        });
+        Ok(())
+    }
+
+    fn compile_for_in(&mut self, target: &ForInTarget, object: &Expr, body: &Stmt) -> Result<()> {
+        self.emit(BytecodeInstruction::ForIn {
+            target: Self::compile_for_in_target(target)?,
+            object: BytecodeBlock::compile_expression(object)?,
+            body: Self::compile_statement_block(body, StatementValue::Store)?,
+        });
+        Ok(())
+    }
+
+    fn compile_switch(&mut self, discriminant: &Expr, cases: &[SwitchCase]) -> Result<()> {
+        let mut bytecode_cases = Vec::with_capacity(cases.len());
+        for case in cases {
+            bytecode_cases.push(BytecodeSwitchCase {
+                test: case
+                    .test
+                    .as_ref()
+                    .map(BytecodeBlock::compile_expression)
+                    .transpose()?,
+                body: BytecodeBlock::compile_statements(&case.statements, StatementValue::Store)?,
+            });
         }
-        self.emit(BytecodeInstruction::SetLastUndefined);
-        let condition_address = self.current_address();
-        let false_jump = if let Some(condition) = condition {
-            self.compile_expr(condition)?;
-            Some(self.emit_jump_if_false())
-        } else {
-            None
-        };
-        self.push_loop();
-        self.compile_statement(body, StatementValue::Store)?;
-        let loop_patch = self.pop_loop()?;
-        let update_address = self.current_address();
-        self.patch_loop_continues(&loop_patch, update_address)?;
-        if let Some(update) = update {
-            self.compile_expr(update)?;
-            self.emit(BytecodeInstruction::Pop);
+        self.emit(BytecodeInstruction::Switch {
+            discriminant: BytecodeBlock::compile_expression(discriminant)?,
+            cases: Rc::from(bytecode_cases.into_boxed_slice()),
+        });
+        Ok(())
+    }
+
+    fn compile_try(
+        &mut self,
+        body: &[Stmt],
+        catch: Option<&CatchClause>,
+        finally_body: Option<&[Stmt]>,
+    ) -> Result<()> {
+        self.emit(BytecodeInstruction::Try {
+            body: BytecodeBlock::compile_statements(body, StatementValue::Store)?,
+            catch: catch
+                .map(|catch| {
+                    Ok(BytecodeCatch {
+                        param: catch.param.clone(),
+                        body: BytecodeBlock::compile_statements(
+                            &catch.body,
+                            StatementValue::Store,
+                        )?,
+                    })
+                })
+                .transpose()?,
+            finally_body: finally_body
+                .map(|body| BytecodeBlock::compile_statements(body, StatementValue::Store))
+                .transpose()?,
+        });
+        Ok(())
+    }
+
+    fn compile_statement_block(statement: &Stmt, value: StatementValue) -> Result<BytecodeBlock> {
+        let mut compiler = Self::new();
+        compiler.compile_statement(statement, value)?;
+        Ok(BytecodeBlock::from_instructions(compiler.instructions))
+    }
+
+    fn compile_for_in_target(target: &ForInTarget) -> Result<BytecodeForInTarget> {
+        match target {
+            ForInTarget::Binding { name, kind } => Ok(BytecodeForInTarget::Binding {
+                name: name.clone(),
+                kind: *kind,
+            }),
+            ForInTarget::Assignment(expr) => {
+                Self::compile_assignment_target(expr).map(BytecodeForInTarget::Assignment)
+            }
         }
-        self.emit(BytecodeInstruction::Jump(condition_address));
-        let end = self.current_address();
-        if let Some(false_jump) = false_jump {
-            self.patch_jump(false_jump, end)?;
+    }
+
+    fn compile_assignment_target(expr: &Expr) -> Result<BytecodeAssignmentTarget> {
+        match expr {
+            Expr::Identifier(name) => Ok(BytecodeAssignmentTarget::Binding(name.clone())),
+            Expr::Member {
+                object,
+                property,
+                access,
+            } => Ok(BytecodeAssignmentTarget::StaticProperty {
+                object: BytecodeBlock::compile_expression(object)?,
+                property: property.clone(),
+                access: *access,
+            }),
+            Expr::ComputedMember {
+                object,
+                property,
+                access,
+            } => Ok(BytecodeAssignmentTarget::ComputedProperty {
+                object: BytecodeBlock::compile_expression(object)?,
+                property: BytecodeBlock::compile_expression(property)?,
+                access: *access,
+            }),
+            Expr::Parenthesized(expr) => Self::compile_assignment_target(expr),
+            _ => Err(Error::runtime("invalid bytecode assignment target")),
         }
-        self.patch_loop_breaks(loop_patch, end)
     }
 
     fn compile_declaration(
@@ -324,23 +318,13 @@ impl BytecodeCompiler {
                 self.emit(BytecodeInstruction::LoadBinding(name.clone()));
             }
             Expr::Parenthesized(expr) => return self.compile_expr(expr),
-            Expr::Unary { op, expr } if unary_can_compile(*op) => {
-                self.compile_expr(expr)?;
-                self.emit(BytecodeInstruction::Unary(*op));
-            }
+            Expr::Unary { op, expr } => return self.compile_unary_expr(*op, expr),
             Expr::Binary {
                 op,
                 left,
                 right,
                 property_access,
-            } if binary_can_compile(*op) => {
-                self.compile_expr(left)?;
-                self.compile_expr(right)?;
-                self.emit(BytecodeInstruction::Binary {
-                    op: *op,
-                    property_access: *property_access,
-                });
-            }
+            } => return self.compile_binary_expr(*op, left, right, *property_access),
             Expr::Conditional {
                 condition,
                 consequent,
@@ -396,18 +380,247 @@ impl BytecodeCompiler {
             }
             Expr::Object(properties) => return self.compile_object_literal(properties),
             Expr::Array(elements) => return self.compile_array_literal(elements),
-            Expr::Unary { .. }
-            | Expr::Update { .. }
-            | Expr::Binary { .. }
-            | Expr::CompoundAssignment { .. }
-            | Expr::Call { .. }
-            | Expr::Function { .. }
-            | Expr::MethodFunction { .. }
-            | Expr::New { .. } => {
-                self.emit(BytecodeInstruction::EvalAstExpr(Box::new(expr.clone())));
+            Expr::Update { op, prefix, expr } => {
+                return self.compile_update_expr(*op, *prefix, expr);
             }
+            Expr::CompoundAssignment { op, target, expr } => {
+                return self.compile_compound_assignment(*op, target, expr);
+            }
+            Expr::Call { callee, args } => return self.compile_call_expr(callee, args),
+            Expr::Function {
+                id,
+                name,
+                params,
+                body,
+            } => self.compile_function_expr(*id, name.clone(), params, body, true)?,
+            Expr::MethodFunction {
+                id,
+                name,
+                params,
+                body,
+            } => self.compile_function_expr(*id, Some(name.clone()), params, body, false)?,
+            Expr::New { constructor, args } => self.compile_new_expr(constructor, args)?,
         }
         Ok(())
+    }
+
+    fn compile_function_expr(
+        &mut self,
+        id: crate::ast::StaticFunctionId,
+        name: Option<crate::ast::StaticName>,
+        params: &Rc<[StaticBinding]>,
+        body: &[Stmt],
+        constructable: bool,
+    ) -> Result<()> {
+        self.emit(BytecodeInstruction::CreateFunction {
+            id,
+            name,
+            params: Rc::clone(params),
+            bytecode: BytecodeFunction::compile(body)?,
+            constructable,
+        });
+        Ok(())
+    }
+
+    fn compile_new_expr(&mut self, constructor: &StaticBinding, args: &[Expr]) -> Result<()> {
+        self.compile_args(args)?;
+        self.emit(BytecodeInstruction::Construct {
+            constructor: constructor.clone(),
+            arg_count: args.len(),
+        });
+        Ok(())
+    }
+
+    fn compile_unary_expr(&mut self, op: UnaryOp, expr: &Expr) -> Result<()> {
+        match op {
+            UnaryOp::Not | UnaryOp::Negate | UnaryOp::Plus | UnaryOp::Void => {
+                self.compile_expr(expr)?;
+                self.emit(BytecodeInstruction::Unary(op));
+            }
+            UnaryOp::Typeof => self.compile_typeof_expr(expr)?,
+            UnaryOp::Delete => self.compile_delete_expr(expr)?,
+        }
+        Ok(())
+    }
+
+    fn compile_typeof_expr(&mut self, expr: &Expr) -> Result<()> {
+        match expr {
+            Expr::Parenthesized(expr) => self.compile_typeof_expr(expr),
+            Expr::Identifier(name) => {
+                self.emit(BytecodeInstruction::TypeOfBinding(name.clone()));
+                Ok(())
+            }
+            expr => {
+                self.compile_expr(expr)?;
+                self.emit(BytecodeInstruction::TypeOfValue);
+                Ok(())
+            }
+        }
+    }
+
+    fn compile_delete_expr(&mut self, expr: &Expr) -> Result<()> {
+        match expr {
+            Expr::Parenthesized(expr) => self.compile_delete_expr(expr),
+            Expr::Identifier(name) => {
+                self.emit(BytecodeInstruction::DeleteBinding(name.clone()));
+                Ok(())
+            }
+            Expr::Member {
+                object, property, ..
+            } => {
+                self.compile_expr(object)?;
+                self.emit(BytecodeInstruction::DeleteStaticProperty {
+                    property: property.clone(),
+                });
+                Ok(())
+            }
+            Expr::ComputedMember {
+                object, property, ..
+            } => {
+                self.compile_expr(object)?;
+                self.compile_expr(property)?;
+                self.emit(BytecodeInstruction::DeleteComputedProperty);
+                Ok(())
+            }
+            expr => {
+                self.compile_expr(expr)?;
+                self.emit(BytecodeInstruction::DeleteValue);
+                Ok(())
+            }
+        }
+    }
+
+    fn compile_binary_expr(
+        &mut self,
+        op: BinaryOp,
+        left: &Expr,
+        right: &Expr,
+        property_access: Option<StaticPropertyAccessId>,
+    ) -> Result<()> {
+        match op {
+            BinaryOp::LogicalAnd => self.compile_logical_and(left, right),
+            BinaryOp::LogicalOr => self.compile_logical_or(left, right),
+            _ => {
+                self.compile_expr(left)?;
+                self.compile_expr(right)?;
+                self.emit(BytecodeInstruction::Binary {
+                    op,
+                    property_access,
+                });
+                Ok(())
+            }
+        }
+    }
+
+    fn compile_logical_and(&mut self, left: &Expr, right: &Expr) -> Result<()> {
+        self.compile_expr(left)?;
+        let end_jump = self.emit_jump_if_false_keep();
+        self.emit(BytecodeInstruction::Pop);
+        self.compile_expr(right)?;
+        let end = self.current_address();
+        self.patch_jump(end_jump, end)
+    }
+
+    fn compile_logical_or(&mut self, left: &Expr, right: &Expr) -> Result<()> {
+        self.compile_expr(left)?;
+        let end_jump = self.emit_jump_if_true_keep();
+        self.emit(BytecodeInstruction::Pop);
+        self.compile_expr(right)?;
+        let end = self.current_address();
+        self.patch_jump(end_jump, end)
+    }
+
+    fn compile_update_expr(&mut self, op: UpdateOp, prefix: bool, expr: &Expr) -> Result<()> {
+        match expr {
+            Expr::Identifier(name) => {
+                self.emit(BytecodeInstruction::UpdateBinding {
+                    name: name.clone(),
+                    op,
+                    prefix,
+                });
+                Ok(())
+            }
+            Expr::Member {
+                object,
+                property,
+                access,
+            } => {
+                self.compile_expr(object)?;
+                self.emit(BytecodeInstruction::UpdateStaticProperty {
+                    property: property.clone(),
+                    access: *access,
+                    op,
+                    prefix,
+                });
+                Ok(())
+            }
+            Expr::ComputedMember {
+                object,
+                property,
+                access,
+            } => {
+                self.compile_expr(object)?;
+                self.compile_expr(property)?;
+                self.emit(BytecodeInstruction::UpdateComputedProperty {
+                    access: *access,
+                    op,
+                    prefix,
+                });
+                Ok(())
+            }
+            Expr::Parenthesized(expr) => self.compile_update_expr(op, prefix, expr),
+            _ => Err(Error::runtime("invalid bytecode update target")),
+        }
+    }
+
+    fn compile_compound_assignment(
+        &mut self,
+        op: BinaryOp,
+        target: &Expr,
+        expr: &Expr,
+    ) -> Result<()> {
+        match target {
+            Expr::Identifier(name) => {
+                self.compile_expr(expr)?;
+                self.emit(BytecodeInstruction::CompoundStoreBinding {
+                    name: name.clone(),
+                    op,
+                });
+                Ok(())
+            }
+            Expr::Member {
+                object,
+                property,
+                access,
+            } => {
+                self.compile_expr(object)?;
+                self.compile_expr(expr)?;
+                self.emit(BytecodeInstruction::CompoundStaticProperty {
+                    property: property.clone(),
+                    access: *access,
+                    op,
+                });
+                Ok(())
+            }
+            Expr::ComputedMember {
+                object,
+                property,
+                access,
+            } => {
+                self.compile_expr(object)?;
+                self.compile_expr(property)?;
+                self.compile_expr(expr)?;
+                self.emit(BytecodeInstruction::CompoundComputedProperty {
+                    access: *access,
+                    op,
+                });
+                Ok(())
+            }
+            Expr::Parenthesized(target) => self.compile_compound_assignment(op, target, expr),
+            _ => Err(Error::runtime(
+                "invalid bytecode compound assignment target",
+            )),
+        }
     }
 
     fn compile_conditional_expr(
@@ -449,122 +662,6 @@ impl BytecodeCompiler {
         Ok(())
     }
 
-    fn compile_loop_completion(&mut self, completion: BytecodeCompletion) -> Result<()> {
-        if !matches!(
-            completion,
-            BytecodeCompletion::Break | BytecodeCompletion::Continue
-        ) {
-            self.emit(BytecodeInstruction::Complete(completion));
-            return Ok(());
-        }
-
-        if self.loops.last().is_none() {
-            self.emit(BytecodeInstruction::Complete(completion));
-            return Ok(());
-        }
-        let jump = self.emit_jump();
-        let Some(loop_patch) = self.loops.last_mut() else {
-            return Err(Error::runtime("bytecode loop patch disappeared"));
-        };
-        match completion {
-            BytecodeCompletion::Break => loop_patch.break_jumps.push(jump),
-            BytecodeCompletion::Continue => loop_patch.continue_jumps.push(jump),
-            BytecodeCompletion::Return | BytecodeCompletion::Throw => {}
-        }
-        Ok(())
-    }
-
-    fn compile_ast_statement(&mut self, statement: &Stmt) -> Result<()> {
-        if self.loops.last().is_none() {
-            self.emit(BytecodeInstruction::EvalAstStatement(Box::new(
-                statement.clone(),
-            )));
-            return Ok(());
-        }
-        let index = self.emit(BytecodeInstruction::EvalAstLoopStatement {
-            statement: Box::new(statement.clone()),
-            break_target: BytecodeAddress::new(0),
-            continue_target: BytecodeAddress::new(0),
-        });
-        let Some(loop_patch) = self.loops.last_mut() else {
-            return Err(Error::runtime("bytecode loop patch disappeared"));
-        };
-        loop_patch.ast_loop_statements.push(index);
-        Ok(())
-    }
-
-    fn push_loop(&mut self) {
-        self.loops.push(LoopPatch::new());
-    }
-
-    fn pop_loop(&mut self) -> Result<LoopPatch> {
-        self.loops
-            .pop()
-            .ok_or_else(|| Error::runtime("bytecode loop stack underflowed"))
-    }
-
-    fn patch_loop(
-        &mut self,
-        patch: LoopPatch,
-        break_target: BytecodeAddress,
-        continue_target: BytecodeAddress,
-    ) -> Result<()> {
-        self.patch_loop_continues(&patch, continue_target)?;
-        self.patch_loop_breaks(patch, break_target)
-    }
-
-    fn patch_loop_continues(
-        &mut self,
-        patch: &LoopPatch,
-        continue_target: BytecodeAddress,
-    ) -> Result<()> {
-        for jump in &patch.continue_jumps {
-            self.patch_jump(*jump, continue_target)?;
-        }
-        for jump in &patch.ast_loop_statements {
-            self.patch_jump(*jump, continue_target)?;
-        }
-        Ok(())
-    }
-
-    fn patch_loop_breaks(&mut self, patch: LoopPatch, break_target: BytecodeAddress) -> Result<()> {
-        for jump in patch.break_jumps {
-            self.patch_jump(jump, break_target)?;
-        }
-        for index in patch.ast_loop_statements {
-            self.patch_ast_loop(index, break_target)?;
-        }
-        Ok(())
-    }
-
-    fn patch_ast_loop(
-        &mut self,
-        index: InstructionIndex,
-        break_target: BytecodeAddress,
-    ) -> Result<()> {
-        let instruction = self
-            .instructions
-            .get_mut(index.index())
-            .ok_or_else(|| Error::runtime("bytecode AST loop patch target disappeared"))?;
-        let BytecodeInstruction::EvalAstLoopStatement {
-            break_target: patched_break,
-            continue_target,
-            ..
-        } = instruction
-        else {
-            return Err(Error::runtime(
-                "bytecode AST loop patch target is not a loop statement",
-            ));
-        };
-        *patched_break = break_target;
-        if *continue_target == BytecodeAddress::new(0) {
-            return Err(Error::runtime(
-                "bytecode AST loop continue target was not patched",
-            ));
-        }
-        Ok(())
-    }
-
     fn emit_jump(&mut self) -> InstructionIndex {
         self.emit(BytecodeInstruction::Jump(BytecodeAddress::new(0)))
     }
@@ -573,20 +670,27 @@ impl BytecodeCompiler {
         self.emit(BytecodeInstruction::JumpIfFalse(BytecodeAddress::new(0)))
     }
 
+    fn emit_jump_if_false_keep(&mut self) -> InstructionIndex {
+        self.emit(BytecodeInstruction::JumpIfFalseKeep(BytecodeAddress::new(
+            0,
+        )))
+    }
+
+    fn emit_jump_if_true_keep(&mut self) -> InstructionIndex {
+        self.emit(BytecodeInstruction::JumpIfTrueKeep(BytecodeAddress::new(0)))
+    }
+
     fn patch_jump(&mut self, index: InstructionIndex, target: BytecodeAddress) -> Result<()> {
         let instruction = self
             .instructions
             .get_mut(index.index())
             .ok_or_else(|| Error::runtime("bytecode jump patch target disappeared"))?;
         match instruction {
-            BytecodeInstruction::Jump(address) | BytecodeInstruction::JumpIfFalse(address) => {
+            BytecodeInstruction::Jump(address)
+            | BytecodeInstruction::JumpIfFalse(address)
+            | BytecodeInstruction::JumpIfFalseKeep(address)
+            | BytecodeInstruction::JumpIfTrueKeep(address) => {
                 *address = target;
-                Ok(())
-            }
-            BytecodeInstruction::EvalAstLoopStatement {
-                continue_target, ..
-            } => {
-                *continue_target = target;
                 Ok(())
             }
             BytecodeInstruction::PushLiteral(_)
@@ -596,20 +700,44 @@ impl BytecodeCompiler {
             | BytecodeInstruction::LoadBinding(_)
             | BytecodeInstruction::StoreBinding(_)
             | BytecodeInstruction::DeclareBinding { .. }
-            | BytecodeInstruction::SetLastUndefined
             | BytecodeInstruction::StoreLast
             | BytecodeInstruction::Pop
             | BytecodeInstruction::Unary(_)
+            | BytecodeInstruction::TypeOfBinding(_)
+            | BytecodeInstruction::TypeOfValue
+            | BytecodeInstruction::DeleteBinding(_)
+            | BytecodeInstruction::DeleteStaticProperty { .. }
+            | BytecodeInstruction::DeleteComputedProperty
+            | BytecodeInstruction::DeleteValue
+            | BytecodeInstruction::UpdateBinding { .. }
+            | BytecodeInstruction::UpdateStaticProperty { .. }
+            | BytecodeInstruction::UpdateComputedProperty { .. }
             | BytecodeInstruction::Binary { .. }
+            | BytecodeInstruction::CompoundStoreBinding { .. }
+            | BytecodeInstruction::CompoundStaticProperty { .. }
+            | BytecodeInstruction::CompoundComputedProperty { .. }
             | BytecodeInstruction::StaticMember { .. }
             | BytecodeInstruction::ComputedMember { .. }
             | BytecodeInstruction::StaticPropertyAssign { .. }
             | BytecodeInstruction::ComputedPropertyAssign { .. }
+            | BytecodeInstruction::CallBinding { .. }
+            | BytecodeInstruction::CallValue { .. }
+            | BytecodeInstruction::CallStaticMember { .. }
+            | BytecodeInstruction::CallComputedMember { .. }
+            | BytecodeInstruction::Print { .. }
+            | BytecodeInstruction::AssertThrows { .. }
+            | BytecodeInstruction::Construct { .. }
+            | BytecodeInstruction::CreateFunction { .. }
             | BytecodeInstruction::ArrayLiteral { .. }
             | BytecodeInstruction::ObjectLiteral { .. }
-            | BytecodeInstruction::Complete(_)
-            | BytecodeInstruction::EvalAstExpr(_)
-            | BytecodeInstruction::EvalAstStatement(_) => Err(Error::runtime(
+            | BytecodeInstruction::If { .. }
+            | BytecodeInstruction::While { .. }
+            | BytecodeInstruction::For { .. }
+            | BytecodeInstruction::ForIn { .. }
+            | BytecodeInstruction::Switch { .. }
+            | BytecodeInstruction::Try { .. }
+            | BytecodeInstruction::ScopedBlock(_)
+            | BytecodeInstruction::Complete(_) => Err(Error::runtime(
                 "bytecode jump patch target is not a jump instruction",
             )),
         }
@@ -626,23 +754,6 @@ impl BytecodeCompiler {
     }
 }
 
-#[derive(Debug)]
-struct LoopPatch {
-    break_jumps: Vec<InstructionIndex>,
-    continue_jumps: Vec<InstructionIndex>,
-    ast_loop_statements: Vec<InstructionIndex>,
-}
-
-impl LoopPatch {
-    const fn new() -> Self {
-        Self {
-            break_jumps: Vec::new(),
-            continue_jumps: Vec::new(),
-            ast_loop_statements: Vec::new(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 struct InstructionIndex(usize);
 
@@ -656,13 +767,21 @@ impl InstructionIndex {
     }
 }
 
-const fn unary_can_compile(op: UnaryOp) -> bool {
-    matches!(
-        op,
-        UnaryOp::Negate | UnaryOp::Plus | UnaryOp::Not | UnaryOp::Void
-    )
-}
-
-const fn binary_can_compile(op: BinaryOp) -> bool {
-    !matches!(op, BinaryOp::LogicalAnd | BinaryOp::LogicalOr)
+fn for_init_needs_lexical_scope(init: Option<&Stmt>) -> bool {
+    match init {
+        Some(Stmt::VarDecl {
+            kind: DeclKind::Let | DeclKind::Const,
+            ..
+        }) => true,
+        Some(Stmt::DeclList(statements)) => statements.iter().any(|statement| {
+            matches!(
+                statement,
+                Stmt::VarDecl {
+                    kind: DeclKind::Let | DeclKind::Const,
+                    ..
+                }
+            )
+        }),
+        Some(_) | None => false,
+    }
 }

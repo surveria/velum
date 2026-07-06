@@ -1,7 +1,7 @@
 use crate::{
-    ast::Expr,
     error::{Error, Result},
     runtime::Context,
+    runtime_call_args::RuntimeCallArgs,
     value::{ObjectId, Value},
 };
 
@@ -38,11 +38,8 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(super) fn eval_array_constructor(&mut self, args: &[Expr]) -> Result<Value> {
-        let values = args
-            .iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
+    pub(super) fn eval_array_constructor(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+        let values = args.evaluate();
         if let Some(length) = Self::array_constructor_length(&values)? {
             let prototype = self.array_constructor_prototype()?;
             return self.objects.create_array_with_length(
@@ -54,25 +51,27 @@ impl Context {
         self.create_array_from_elements(values)
     }
 
-    pub(super) fn eval_array_push(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
+    pub(super) fn eval_array_push(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.push requires an array receiver",
             ));
         };
-        let values = args
-            .iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
+        let values = args.evaluate();
         self.objects
             .array_push(*id, values, self.limits.max_object_properties)
     }
 
-    pub(super) fn eval_array_concat(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
-        let values = args
-            .iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
+    pub(super) fn eval_array_concat(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let values = args.evaluate();
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.concat requires an array receiver",
@@ -90,10 +89,10 @@ impl Context {
 
     pub(super) fn eval_array_reverse(
         &mut self,
-        args: &[Expr],
+        args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        self.eval_array_discard_args(args)?;
+        Self::eval_array_discard_args(args);
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.reverse requires an array receiver",
@@ -103,8 +102,12 @@ impl Context {
             .array_reverse(*id, self.limits.max_object_properties)
     }
 
-    pub(super) fn eval_array_pop(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
-        self.eval_array_discard_args(args)?;
+    pub(super) fn eval_array_pop(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        Self::eval_array_discard_args(args);
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.pop requires an array receiver",
@@ -114,11 +117,11 @@ impl Context {
     }
 
     pub(super) fn eval_array_includes(
-        &mut self,
-        args: &[Expr],
+        &self,
+        args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let (search, from_index) = self.eval_array_binary_values(args)?;
+        let (search, from_index) = Self::eval_array_binary_values(args);
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.includes requires an array receiver",
@@ -132,11 +135,11 @@ impl Context {
     }
 
     pub(super) fn eval_array_index_of(
-        &mut self,
-        args: &[Expr],
+        &self,
+        args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let (search, from_index) = self.eval_array_binary_values(args)?;
+        let (search, from_index) = Self::eval_array_binary_values(args);
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.indexOf requires an array receiver",
@@ -150,11 +153,11 @@ impl Context {
     }
 
     pub(super) fn eval_array_last_index_of(
-        &mut self,
-        args: &[Expr],
+        &self,
+        args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let (search, from_index) = self.eval_array_binary_values(args)?;
+        let (search, from_index) = Self::eval_array_binary_values(args);
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.lastIndexOf requires an array receiver",
@@ -167,8 +170,12 @@ impl Context {
         self.objects.array_last_index_of(*id, &search, from_index)
     }
 
-    pub(super) fn eval_array_join(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
-        let separator = self.eval_array_unary_value(args)?;
+    pub(super) fn eval_array_join(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let separator = Self::eval_array_unary_value(args);
         let separator = Self::array_join_separator(separator.as_ref());
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
@@ -195,8 +202,12 @@ impl Context {
         self.heap_string_value(&joined)
     }
 
-    pub(super) fn eval_array_shift(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
-        self.eval_array_discard_args(args)?;
+    pub(super) fn eval_array_shift(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        Self::eval_array_discard_args(args);
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.shift requires an array receiver",
@@ -206,8 +217,12 @@ impl Context {
             .array_shift(*id, self.limits.max_object_properties)
     }
 
-    pub(super) fn eval_array_slice(&mut self, args: &[Expr], this_value: &Value) -> Result<Value> {
-        let (start, end) = self.eval_array_binary_values(args)?;
+    pub(super) fn eval_array_slice(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let (start, end) = Self::eval_array_binary_values(args);
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.slice requires an array receiver",
@@ -230,13 +245,10 @@ impl Context {
 
     pub(super) fn eval_array_unshift(
         &mut self,
-        args: &[Expr],
+        args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let values = args
-            .iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
+        let values = args.evaluate();
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.unshift requires an array receiver",
@@ -384,48 +396,16 @@ impl Context {
         }
     }
 
-    fn eval_array_unary_value(&mut self, args: &[Expr]) -> Result<Option<Value>> {
-        let mut args = args.iter();
-        let value = if let Some(arg) = args.next() {
-            Some(self.eval_expr(arg)?)
-        } else {
-            None
-        };
-        self.eval_array_remaining_args(args)?;
-        Ok(value)
+    fn eval_array_unary_value(args: RuntimeCallArgs<'_>) -> Option<Value> {
+        args.unary_value()
     }
 
-    fn eval_array_binary_values(
-        &mut self,
-        args: &[Expr],
-    ) -> Result<(Option<Value>, Option<Value>)> {
-        let mut args = args.iter();
-        let left = if let Some(arg) = args.next() {
-            Some(self.eval_expr(arg)?)
-        } else {
-            None
-        };
-        let right = if let Some(arg) = args.next() {
-            Some(self.eval_expr(arg)?)
-        } else {
-            None
-        };
-        self.eval_array_remaining_args(args)?;
-        Ok((left, right))
+    fn eval_array_binary_values(args: RuntimeCallArgs<'_>) -> (Option<Value>, Option<Value>) {
+        args.binary_values()
     }
 
-    fn eval_array_discard_args(&mut self, args: &[Expr]) -> Result<()> {
-        self.eval_array_remaining_args(args.iter())
-    }
-
-    fn eval_array_remaining_args<'a>(
-        &mut self,
-        args: impl Iterator<Item = &'a Expr>,
-    ) -> Result<()> {
-        for arg in args {
-            self.eval_expr(arg)?;
-        }
-        Ok(())
+    fn eval_array_discard_args(args: RuntimeCallArgs<'_>) {
+        args.discard();
     }
 
     fn array_join_element_text(value: &Value) -> String {

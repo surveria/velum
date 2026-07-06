@@ -26,7 +26,6 @@ impl CompiledScript {
         )?;
         let bytecode = BytecodeProgram::compile(&program)?;
         let bytecode_instruction_count = bytecode.instruction_count();
-        let bytecode_ast_fallback_count = bytecode.ast_fallback_instruction_count();
         let bytecode_hoisted_var_count = bytecode.hoist_plan().var_declaration_count();
         Ok(Self {
             bytecode,
@@ -44,7 +43,6 @@ impl CompiledScript {
                 local_binding_slot_count: binding_layout.local_slot_count(),
                 upvalue_binding_slot_count: binding_layout.upvalue_slot_count(),
                 bytecode_instruction_count,
-                bytecode_ast_fallback_count,
                 bytecode_hoisted_var_count,
             },
             binding_layout,
@@ -97,7 +95,6 @@ pub struct CompiledScriptUsage {
     local_binding_slot_count: usize,
     upvalue_binding_slot_count: usize,
     bytecode_instruction_count: usize,
-    bytecode_ast_fallback_count: usize,
     bytecode_hoisted_var_count: usize,
 }
 
@@ -165,11 +162,6 @@ impl CompiledScriptUsage {
     #[must_use]
     pub const fn bytecode_instruction_count(self) -> usize {
         self.bytecode_instruction_count
-    }
-
-    #[must_use]
-    pub const fn bytecode_ast_fallback_count(self) -> usize {
-        self.bytecode_ast_fallback_count
     }
 
     #[must_use]

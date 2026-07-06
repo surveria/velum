@@ -137,22 +137,6 @@ impl BindingScope {
         Ok(self.insert_or_replace(atom, binding))
     }
 
-    pub(crate) fn retain_only(&mut self, atom: AtomId) {
-        let Some(binding) = self.get(atom) else {
-            self.slots.clear();
-            self.slot_atoms.clear();
-            self.bindings.clear();
-            return;
-        };
-        self.slots.clear();
-        self.slot_atoms.clear();
-        self.bindings.clear();
-        self.slots.push(binding);
-        self.slot_atoms.push(atom);
-        self.bindings
-            .push(BindingEntry::new(atom, BindingSlot::zero()));
-    }
-
     fn cell(&self, slot: BindingSlot) -> Option<&BindingCell> {
         self.slots.get(slot.index())
     }
@@ -255,10 +239,6 @@ pub struct BindingSlot(usize);
 impl BindingSlot {
     pub(crate) const fn from_index(index: usize) -> Self {
         Self(index)
-    }
-
-    const fn zero() -> Self {
-        Self(0)
     }
 
     pub const fn index(self) -> usize {

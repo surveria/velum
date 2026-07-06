@@ -1,10 +1,9 @@
 use crate::{
-    ast::{DeclKind, Expr, ForInTarget, StaticBinding, Stmt},
+    ast::{DeclKind, StaticBinding},
     atom::AtomId,
     bytecode_hoist::BytecodeHoistPlan,
     error::{Error, Result},
     runtime::Context,
-    runtime_completion::Completion,
     runtime_scope::{BindingCell, BindingScope},
     value::Value,
 };
@@ -20,75 +19,6 @@ impl Context {
             self.hoist_var(binding)?;
         }
         Ok(())
-    }
-
-    pub(crate) fn hoist_var_declarations(&mut self, statements: &[Stmt]) -> Result<()> {
-        for statement in statements {
-            self.hoist_statement_vars(statement)?;
-        }
-        Ok(())
-    }
-
-    fn hoist_statement_vars(&mut self, statement: &Stmt) -> Result<()> {
-        match statement {
-            Stmt::Block(statements) | Stmt::DeclList(statements) => {
-                self.hoist_var_declarations(statements)
-            }
-            Stmt::If {
-                consequent,
-                alternate,
-                ..
-            } => {
-                self.hoist_statement_vars(consequent)?;
-                if let Some(alternate) = alternate {
-                    self.hoist_statement_vars(alternate)?;
-                }
-                Ok(())
-            }
-            Stmt::While { body, .. } => self.hoist_statement_vars(body),
-            Stmt::For { init, body, .. } => {
-                if let Some(init) = init {
-                    self.hoist_statement_vars(init)?;
-                }
-                self.hoist_statement_vars(body)
-            }
-            Stmt::ForIn { target, body, .. } => {
-                if let ForInTarget::Binding {
-                    name,
-                    kind: DeclKind::Var,
-                } = target
-                {
-                    self.hoist_var(name)?;
-                }
-                self.hoist_statement_vars(body)
-            }
-            Stmt::Switch { cases, .. } => self.hoist_switch_vars(cases),
-            Stmt::Try {
-                body,
-                catch,
-                finally_body,
-            } => {
-                self.hoist_var_declarations(body)?;
-                if let Some(catch) = catch {
-                    self.hoist_var_declarations(&catch.body)?;
-                }
-                if let Some(finally_body) = finally_body {
-                    self.hoist_var_declarations(finally_body)?;
-                }
-                Ok(())
-            }
-            Stmt::VarDecl {
-                name,
-                kind: DeclKind::Var,
-                ..
-            } => self.hoist_var(name),
-            Stmt::Break
-            | Stmt::Continue
-            | Stmt::Throw(_)
-            | Stmt::Return(_)
-            | Stmt::VarDecl { .. }
-            | Stmt::Expr(_) => Ok(()),
-        }
     }
 
     fn hoist_var(&mut self, name: &StaticBinding) -> Result<()> {
@@ -115,41 +45,6 @@ impl Context {
         self.mark_active_binding_frame_slot(frame, inserted)?;
         self.remember_active_static_binding(name, atom)?;
         Ok(())
-    }
-
-    pub(crate) fn eval_declaration(
-        &mut self,
-        name: &StaticBinding,
-        kind: DeclKind,
-        init: Option<&Expr>,
-    ) -> Result<Completion> {
-        match kind {
-            DeclKind::Var => {
-                if let Some(init) = init {
-                    let value = self.eval_expr(init)?;
-                    self.assign_static(name, value)?;
-                }
-            }
-            DeclKind::Let => {
-                let value = self.eval_optional_init(init)?;
-                self.define_static(name, value, DeclKind::Let)?;
-            }
-            DeclKind::Const => {
-                let Some(init) = init else {
-                    return Err(Error::runtime("const declaration requires an initializer"));
-                };
-                let value = self.eval_expr(init)?;
-                self.define_static(name, value, DeclKind::Const)?;
-            }
-        }
-        Ok(Completion::Normal(Value::Undefined))
-    }
-
-    pub(crate) fn eval_optional_init(&mut self, init: Option<&Expr>) -> Result<Value> {
-        if let Some(init) = init {
-            return self.eval_expr(init);
-        }
-        Ok(Value::Undefined)
     }
 
     pub(crate) fn define(&mut self, name: &str, value: Value, kind: DeclKind) -> Result<()> {

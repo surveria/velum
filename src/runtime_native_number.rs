@@ -1,7 +1,7 @@
 use crate::{
-    ast::Expr,
     error::Result,
     runtime::Context,
+    runtime_call_args::RuntimeCallArgs,
     runtime_object::{ObjectPropertyInit, PropertyEnumerable},
     value::{ObjectId, Value},
 };
@@ -52,13 +52,13 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(super) fn eval_number_constructor(&mut self, args: &[Expr]) -> Result<Value> {
-        let value = self.eval_native_unary_argument_value(args)?;
-        Ok(Value::Number(Self::number_argument_value(value.as_ref())))
+    pub(super) fn eval_number_constructor(&self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+        let value = Self::eval_native_unary_argument_value(args);
+        self.checked_value(Value::Number(Self::number_argument_value(value.as_ref())))
     }
 
-    pub(super) fn construct_number_object(&mut self, args: &[Expr]) -> Result<Value> {
-        let value = self.eval_native_unary_argument_value(args)?;
+    pub(super) fn construct_number_object(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+        let value = Self::eval_native_unary_argument_value(args);
         let _number_value = Self::number_argument_value(value.as_ref());
         let prototype = self.number_constructor_prototype()?;
         let constructor_key = self.object_constructor_property_key()?;

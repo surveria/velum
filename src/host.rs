@@ -1,9 +1,10 @@
 use std::{fmt, rc::Rc};
 
 use crate::{
-    ast::{DeclKind, Expr},
+    ast::DeclKind,
     error::{Error, Result},
     runtime::Context,
+    runtime_call_args::RuntimeCallArgs,
     value::{HostFunctionId, Value},
 };
 
@@ -291,12 +292,9 @@ impl Context {
     pub(crate) fn eval_host_function(
         &mut self,
         id: HostFunctionId,
-        args: &[Expr],
+        args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let values = args
-            .iter()
-            .map(|arg| self.eval_expr(arg))
-            .collect::<Result<Vec<_>>>()?;
+        let values = args.evaluate();
         let function = self.host_function(id)?.clone();
         self.checked_host_return_value(function.call(&values)?)
     }

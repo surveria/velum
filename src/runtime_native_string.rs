@@ -1,7 +1,7 @@
 use crate::{
-    ast::Expr,
     error::{Error, Result},
     runtime::Context,
+    runtime_call_args::RuntimeCallArgs,
     runtime_object::{ObjectPropertyInit, PropertyEnumerable},
     value::{ObjectId, Value},
 };
@@ -27,12 +27,12 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(super) fn eval_string_constructor(&mut self, args: &[Expr]) -> Result<Value> {
+    pub(super) fn eval_string_constructor(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
         let value = self.eval_string_argument(args)?;
         self.heap_string_value(&value)
     }
 
-    pub(super) fn construct_string_object(&mut self, args: &[Expr]) -> Result<Value> {
+    pub(super) fn construct_string_object(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
         let value = self.eval_string_argument(args)?;
         let value = self.intern_heap_string(&value)?;
         let prototype = self.string_constructor_prototype()?;
@@ -72,8 +72,8 @@ impl Context {
         }
     }
 
-    fn eval_string_argument(&mut self, args: &[Expr]) -> Result<String> {
-        let value = self.eval_native_unary_argument_value(args)?;
+    fn eval_string_argument(&self, args: RuntimeCallArgs<'_>) -> Result<String> {
+        let value = Self::eval_native_unary_argument_value(args);
         let value = Self::string_argument_value(value.as_ref());
         self.check_string_len(&value)?;
         Ok(value)
