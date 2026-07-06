@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    value::{ObjectId, Value},
+    value::{NativeFunctionId, ObjectId, Value},
 };
 
 use super::index::ArrayIndex;
@@ -137,6 +137,17 @@ pub enum CacheablePropertyValue {
     Uncacheable,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum CacheableNativePropertyValue {
+    Native {
+        function: NativeFunctionId,
+        version: u64,
+    },
+    Other(Value),
+    Missing,
+    Uncacheable,
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum CacheablePropertyPresence {
     Hit,
@@ -249,6 +260,58 @@ impl ObjectHeap {
         self.read_valid_cacheable_property_value(lookup)
     }
 
+    pub(crate) fn read_cacheable_native_property_value_for(
+        &self,
+        id: ObjectId,
+        lookup: CacheablePropertyLookup,
+    ) -> Result<CacheableNativePropertyValue> {
+        if !lookup.guard.is_valid_for(self, id)? {
+            return Ok(CacheableNativePropertyValue::Uncacheable);
+        }
+        self.read_valid_cacheable_native_property_value(lookup)
+    }
+
+    pub(crate) fn cacheable_native_property_is_current_for(
+        &self,
+        id: ObjectId,
+        lookup: CacheablePropertyLookup,
+        expected_function: NativeFunctionId,
+        expected_version: u64,
+    ) -> Result<bool> {
+        let CacheablePropertyLookupResult::Hit(hit) = lookup.result else {
+            return Ok(false);
+        };
+        if hit.owner == id && hit.depth == PrototypeLookupDepth::root() {
+            let object = self.object(id)?;
+            if lookup.guard.receiver != id
+                || object.shape != lookup.guard.receiver_shape
+                || object.shape != hit.owner_shape
+            {
+                return Ok(false);
+            }
+            return self.cacheable_native_property_matches(
+                hit,
+                expected_function,
+                expected_version,
+            );
+        }
+        if !lookup.guard.is_valid_for(self, id)? {
+            return Ok(false);
+        }
+        self.cacheable_native_property_matches(hit, expected_function, expected_version)
+    }
+
+    fn cacheable_native_property_matches(
+        &self,
+        hit: CacheablePropertyHit,
+        expected_function: NativeFunctionId,
+        expected_version: u64,
+    ) -> Result<bool> {
+        let property = self.cacheable_hit_property(hit)?;
+        Ok(property.version() == expected_version
+            && matches!(property.value(), Value::NativeFunction(function) if function == expected_function))
+    }
+
     pub(crate) fn read_cacheable_property_presence_for(
         &self,
         id: ObjectId,
@@ -355,6 +418,19 @@ impl ObjectHeap {
         }
     }
 
+    fn read_valid_cacheable_native_property_value(
+        &self,
+        lookup: CacheablePropertyLookup,
+    ) -> Result<CacheableNativePropertyValue> {
+        match lookup.result {
+            CacheablePropertyLookupResult::Hit(hit) => self.cacheable_hit_native_property(hit),
+            CacheablePropertyLookupResult::Missing => Ok(CacheableNativePropertyValue::Missing),
+            CacheablePropertyLookupResult::Uncacheable => {
+                Ok(CacheableNativePropertyValue::Uncacheable)
+            }
+        }
+    }
+
     fn read_cacheable_property_presence(
         &self,
         lookup: CacheablePropertyLookup,
@@ -381,10 +457,27 @@ impl ObjectHeap {
     }
 
     fn cacheable_hit_value(&self, hit: CacheablePropertyHit) -> Result<Value> {
-        self.ensure_cacheable_hit(hit)?;
-        self.object(hit.owner)?
-            .named_property_at_slot(hit.slot)
+        self.cacheable_hit_property(hit)
             .map(super::ObjectProperty::value)
+    }
+
+    fn cacheable_hit_native_property(
+        &self,
+        hit: CacheablePropertyHit,
+    ) -> Result<CacheableNativePropertyValue> {
+        let property = self.cacheable_hit_property(hit)?;
+        match property.value() {
+            Value::NativeFunction(function) => Ok(CacheableNativePropertyValue::Native {
+                function,
+                version: property.version(),
+            }),
+            value => Ok(CacheableNativePropertyValue::Other(value)),
+        }
+    }
+
+    fn cacheable_hit_property(&self, hit: CacheablePropertyHit) -> Result<&super::ObjectProperty> {
+        self.ensure_cacheable_hit(hit)?;
+        self.object(hit.owner)?.named_property_at_slot(hit.slot)
     }
 
     fn ensure_cacheable_hit(&self, hit: CacheablePropertyHit) -> Result<()> {

@@ -135,6 +135,7 @@ impl DataPropertyUpdate {
 #[derive(Debug, Clone)]
 pub struct ObjectProperty {
     descriptor: DataPropertyDescriptor,
+    version: u64,
 }
 
 impl ObjectProperty {
@@ -146,15 +147,23 @@ impl ObjectProperty {
                 enumerable,
                 PropertyConfigurable::Yes,
             ),
+            version: 0,
         }
     }
 
     const fn from_descriptor(descriptor: DataPropertyDescriptor) -> Self {
-        Self { descriptor }
+        Self {
+            descriptor,
+            version: 0,
+        }
     }
 
     pub fn value(&self) -> Value {
         self.descriptor.value()
+    }
+
+    pub const fn version(&self) -> u64 {
+        self.version
     }
 
     pub const fn is_enumerable(&self) -> bool {
@@ -186,12 +195,14 @@ impl ObjectProperty {
     pub fn set_value(&mut self, value: Value) {
         if self.descriptor.writable().is_yes() {
             self.descriptor.value = value;
+            self.version = self.version.saturating_add(1);
         }
     }
 
     pub fn define(&mut self, update: DataPropertyUpdate) {
         if let Some(value) = update.value {
             self.descriptor.value = value;
+            self.version = self.version.saturating_add(1);
         }
         if let Some(writable) = update.writable {
             self.descriptor.writable = writable;

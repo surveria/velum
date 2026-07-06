@@ -24,8 +24,8 @@ pub use descriptor::{
 use index::{ArrayIndex, ArrayLength};
 pub use key::{ObjectPropertyInit, PropertyKey, PropertyLookup};
 pub use lookup::{
-    CacheablePropertyDelete, CacheablePropertyLookup, CacheablePropertyPresence,
-    CacheablePropertyValue, CacheablePropertyWrite,
+    CacheableNativePropertyValue, CacheablePropertyDelete, CacheablePropertyLookup,
+    CacheablePropertyPresence, CacheablePropertyValue, CacheablePropertyWrite,
 };
 use shape::{ShapeId, ShapeTable};
 

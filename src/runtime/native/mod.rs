@@ -2,6 +2,7 @@ mod array;
 mod boolean;
 mod call_target;
 mod core;
+mod direct;
 mod function;
 mod json;
 mod kind;
