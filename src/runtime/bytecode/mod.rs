@@ -4,13 +4,13 @@ mod ops;
 mod state;
 
 use crate::{
+    api::native_call::NativeCallTarget,
     ast::UpdateOp,
     bytecode::{
         BytecodeAddress, BytecodeBlock, BytecodeDynamicProperty, BytecodeInstruction,
         BytecodeProgram, BytecodeProperty,
     },
     error::{Error, Result},
-    native_call::NativeCallTarget,
     runtime::{
         Context, assertions::runtime_exception_value, call_args::RuntimeCallArgs,
         completion::Completion,

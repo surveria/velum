@@ -1,6 +1,7 @@
 use std::{fmt, rc::Rc};
 
 use crate::{
+    api::native_call::NativeCallTarget,
     ast::{
         BinaryOp, DeclKind, StaticBinding, StaticFunctionId, StaticName, StaticPropertyAccessId,
         StaticString, UnaryOp, UpdateOp,
@@ -8,7 +9,6 @@ use crate::{
     binding_layout::{BindingLayout, BindingOperand},
     bytecode::BytecodeHoistPlan,
     error::{Error, Result},
-    native_call::NativeCallTarget,
     value::{ErrorName, Value},
 };
 

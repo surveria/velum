@@ -1,8 +1,12 @@
-use crate::atom::AtomTable;
 use crate::error::{Error, Result};
 use crate::runtime::assertions::error_property_text;
 use crate::runtime::object::{ObjectHeap, ObjectPropertyValue, PropertyKey, PropertyLookup};
+use crate::storage::atom::AtomTable;
 use crate::value::Value;
+
+mod dynamic;
+pub mod static_names;
+pub mod well_known;
 
 const NULLISH_PROPERTY_DELETE_ERROR: &str = "Cannot convert undefined or null to object";
 const ERROR_NAME_PROPERTY: &str = "name";

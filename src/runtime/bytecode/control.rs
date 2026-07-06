@@ -8,8 +8,8 @@ use crate::{
     },
     error::{Error, Result},
     runtime::Context,
+    runtime::binding::scope::{BindingCell, BindingScope},
     runtime::completion::Completion,
-    runtime::scope::{BindingCell, BindingScope},
     value::Value,
 };
 

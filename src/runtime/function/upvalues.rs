@@ -6,7 +6,7 @@ use crate::{
     binding_layout::{BindingOperand, FunctionScopeId},
     error::{Error, Result},
     runtime::Context,
-    runtime::scope::BindingCell,
+    runtime::binding::scope::BindingCell,
 };
 
 impl Context {

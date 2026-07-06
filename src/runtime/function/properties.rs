@@ -1,10 +1,10 @@
 use crate::{
-    atom::AtomTable,
     error::{Error, Result},
     runtime::object::{
         DataPropertyDescriptor, DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable,
         PropertyKey, PropertyLookup, PropertyWritable,
     },
+    storage::atom::AtomTable,
     value::Value,
 };
 

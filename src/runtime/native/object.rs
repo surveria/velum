@@ -10,11 +10,11 @@ use crate::{
     value::{NativeFunctionId, ObjectId, Value},
 };
 
-use super::super::well_known::DescriptorPropertyKeys;
 use super::{
     NativeFunctionKind, OBJECT_DEFINE_PROPERTY_NAME, OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
     OBJECT_HAS_OWN_NAME, OBJECT_KEYS_NAME, OBJECT_NAME,
 };
+use crate::runtime::property::well_known::DescriptorPropertyKeys;
 
 const DESCRIPTOR_CONFIGURABLE_PROPERTY: &str = "configurable";
 const DESCRIPTOR_ENUMERABLE_PROPERTY: &str = "enumerable";

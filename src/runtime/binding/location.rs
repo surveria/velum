@@ -1,7 +1,7 @@
 use crate::{
-    atom::AtomId,
     binding_layout::{BindingOperand, ScopeId},
-    runtime::scope::BindingSlot,
+    runtime::binding::scope::BindingSlot,
+    storage::atom::AtomId,
 };
 
 #[derive(Debug, Clone, Copy)]
