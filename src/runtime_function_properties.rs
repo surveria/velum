@@ -2,7 +2,8 @@ use crate::{
     atom::AtomTable,
     error::{Error, Result},
     runtime_object::{
-        DataPropertyDescriptor, DataPropertyUpdate, PropertyEnumerable, PropertyKey, PropertyLookup,
+        DataPropertyDescriptor, DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable,
+        PropertyKey, PropertyLookup, PropertyWritable,
     },
     value::Value,
 };
@@ -56,10 +57,44 @@ impl FunctionPropertyKind {
 #[derive(Debug, Clone)]
 pub(super) struct FunctionProperties {
     prototype: Value,
+    intrinsic_defaults: FunctionIntrinsicDefaults,
     length: FunctionIntrinsicProperty,
     name: FunctionIntrinsicProperty,
     properties: Vec<FunctionPropertyEntry>,
     property_order: Vec<PropertyKey>,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct FunctionIntrinsicDefaults {
+    length: DataPropertyDescriptor,
+    name: DataPropertyDescriptor,
+}
+
+impl FunctionIntrinsicDefaults {
+    pub(super) const fn new(length: Value, name: Value) -> Self {
+        Self {
+            length: DataPropertyDescriptor::new(
+                length,
+                PropertyWritable::No,
+                PropertyEnumerable::No,
+                PropertyConfigurable::Yes,
+            ),
+            name: DataPropertyDescriptor::new(
+                name,
+                PropertyWritable::No,
+                PropertyEnumerable::No,
+                PropertyConfigurable::Yes,
+            ),
+        }
+    }
+
+    fn descriptor(&self, property: FunctionPropertyKind) -> Option<DataPropertyDescriptor> {
+        match property {
+            FunctionPropertyKind::Length => Some(self.length.clone()),
+            FunctionPropertyKind::Name => Some(self.name.clone()),
+            FunctionPropertyKind::Prototype | FunctionPropertyKind::Custom => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -87,9 +122,13 @@ impl FunctionPropertyEntry {
 }
 
 impl FunctionProperties {
-    pub(super) const fn new(prototype: Value) -> Self {
+    pub(super) const fn new(
+        prototype: Value,
+        intrinsic_defaults: FunctionIntrinsicDefaults,
+    ) -> Self {
         Self {
             prototype,
+            intrinsic_defaults,
             length: FunctionIntrinsicProperty::new(),
             name: FunctionIntrinsicProperty::new(),
             properties: Vec::new(),
@@ -121,17 +160,14 @@ impl FunctionProperties {
     pub(super) fn intrinsic_descriptor(
         &self,
         property: FunctionPropertyKind,
-        default: DataPropertyDescriptor,
     ) -> Option<DataPropertyDescriptor> {
+        let default = self.intrinsic_defaults.descriptor(property)?;
         self.intrinsic(property)
             .and_then(|intrinsic| intrinsic.descriptor(default))
     }
 
-    pub(super) fn intrinsic_value(
-        &self,
-        property: FunctionPropertyKind,
-        default: DataPropertyDescriptor,
-    ) -> Option<Value> {
+    pub(super) fn intrinsic_value(&self, property: FunctionPropertyKind) -> Option<Value> {
+        let default = self.intrinsic_defaults.descriptor(property)?;
         self.intrinsic(property)
             .and_then(|intrinsic| intrinsic.value(default))
     }
@@ -153,9 +189,8 @@ impl FunctionProperties {
         property_kind: FunctionPropertyKind,
         value: Value,
         max_properties: usize,
-        default_intrinsic: Option<DataPropertyDescriptor>,
     ) -> Result<()> {
-        if let Some(default) = default_intrinsic
+        if let Some(default) = self.intrinsic_defaults.descriptor(property_kind)
             && self.set_intrinsic_value(property_kind, default, value.clone())
         {
             return Ok(());
@@ -184,9 +219,8 @@ impl FunctionProperties {
         &mut self,
         property: PropertyLookup<'_>,
         property_kind: FunctionPropertyKind,
-        default_intrinsic: Option<DataPropertyDescriptor>,
     ) -> bool {
-        if let Some(default) = default_intrinsic
+        if let Some(default) = self.intrinsic_defaults.descriptor(property_kind)
             && let Some(deleted) = self.delete_intrinsic(property_kind, default)
         {
             return deleted;
@@ -210,15 +244,10 @@ impl FunctionProperties {
         true
     }
 
-    pub(super) fn keys(
-        &self,
-        atoms: &AtomTable,
-        length: Option<DataPropertyDescriptor>,
-        name: Option<DataPropertyDescriptor>,
-    ) -> Result<Vec<String>> {
+    pub(super) fn keys(&self, atoms: &AtomTable) -> Result<Vec<String>> {
         let mut keys = Vec::new();
-        self.push_intrinsic_key(&mut keys, FunctionPropertyKind::Length, length);
-        self.push_intrinsic_key(&mut keys, FunctionPropertyKind::Name, name);
+        self.push_intrinsic_key(&mut keys, FunctionPropertyKind::Length);
+        self.push_intrinsic_key(&mut keys, FunctionPropertyKind::Name);
         for key in &self.property_order {
             if self
                 .function_property(*key)
@@ -250,9 +279,8 @@ impl FunctionProperties {
         property_kind: FunctionPropertyKind,
         update: DataPropertyUpdate,
         max_properties: usize,
-        default_intrinsic: Option<DataPropertyDescriptor>,
     ) -> Result<()> {
-        if let Some(default) = default_intrinsic
+        if let Some(default) = self.intrinsic_defaults.descriptor(property_kind)
             && self.define_intrinsic(property_kind, default, &update)
         {
             return Ok(());
@@ -331,18 +359,11 @@ impl FunctionProperties {
             .and_then(|intrinsic| intrinsic.delete(default))
     }
 
-    fn push_intrinsic_key(
-        &self,
-        keys: &mut Vec<String>,
-        property: FunctionPropertyKind,
-        descriptor: Option<DataPropertyDescriptor>,
-    ) {
+    fn push_intrinsic_key(&self, keys: &mut Vec<String>, property: FunctionPropertyKind) {
         let Some(name) = property.enumerable_name() else {
             return;
         };
-        let Some(descriptor) =
-            descriptor.and_then(|default| self.intrinsic_descriptor(property, default))
-        else {
+        let Some(descriptor) = self.intrinsic_descriptor(property) else {
             return;
         };
         if descriptor.enumerable().is_yes() {

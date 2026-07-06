@@ -7,7 +7,7 @@ use crate::{
     value::{ErrorName, ErrorObject, NativeFunctionId, Value},
 };
 
-use super::runtime_function_properties::FunctionProperties;
+use super::runtime_function_properties::{FunctionIntrinsicDefaults, FunctionProperties};
 
 #[path = "runtime_native_array.rs"]
 mod runtime_native_array;
@@ -120,145 +120,19 @@ pub(super) struct NativeFunction {
 }
 
 impl NativeFunction {
-    const fn new(kind: NativeFunctionKind, prototype: Value) -> Self {
+    fn new(kind: NativeFunctionKind, prototype: Value) -> Self {
+        let intrinsic_defaults = FunctionIntrinsicDefaults::new(
+            Value::Number(kind.length()),
+            Value::String(kind.name().to_owned()),
+        );
         Self {
             kind,
-            properties: FunctionProperties::new(prototype),
+            properties: FunctionProperties::new(prototype, intrinsic_defaults),
         }
     }
 
     pub(super) const fn kind(&self) -> NativeFunctionKind {
         self.kind
-    }
-
-    pub(super) const fn length(&self) -> f64 {
-        match self.kind {
-            NativeFunctionKind::Array => ARRAY_FUNCTION_LENGTH,
-            NativeFunctionKind::ArrayConcat => ARRAY_CONCAT_FUNCTION_LENGTH,
-            NativeFunctionKind::ArrayIncludes => ARRAY_INCLUDES_FUNCTION_LENGTH,
-            NativeFunctionKind::ArrayIndexOf => ARRAY_INDEX_OF_FUNCTION_LENGTH,
-            NativeFunctionKind::ArrayJoin => ARRAY_JOIN_FUNCTION_LENGTH,
-            NativeFunctionKind::ArrayLastIndexOf => ARRAY_LAST_INDEX_OF_FUNCTION_LENGTH,
-            NativeFunctionKind::ArrayPop => ARRAY_POP_FUNCTION_LENGTH,
-            NativeFunctionKind::ArrayPush => ARRAY_PUSH_FUNCTION_LENGTH,
-            NativeFunctionKind::ArrayReverse => ARRAY_REVERSE_FUNCTION_LENGTH,
-            NativeFunctionKind::ArrayShift => ARRAY_SHIFT_FUNCTION_LENGTH,
-            NativeFunctionKind::ArraySlice => ARRAY_SLICE_FUNCTION_LENGTH,
-            NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_FUNCTION_LENGTH,
-            NativeFunctionKind::Boolean => BOOLEAN_FUNCTION_LENGTH,
-            NativeFunctionKind::ErrorConstructor(_) => ERROR_FUNCTION_LENGTH,
-            NativeFunctionKind::JsonParse => JSON_PARSE_FUNCTION_LENGTH,
-            NativeFunctionKind::JsonStringify => JSON_STRINGIFY_FUNCTION_LENGTH,
-            NativeFunctionKind::MathRandom => MATH_FUNCTION_LENGTH_ZERO,
-            NativeFunctionKind::MathAbs
-            | NativeFunctionKind::MathAcos
-            | NativeFunctionKind::MathAcosh
-            | NativeFunctionKind::MathAsin
-            | NativeFunctionKind::MathAsinh
-            | NativeFunctionKind::MathAtan
-            | NativeFunctionKind::MathAtanh
-            | NativeFunctionKind::MathCbrt
-            | NativeFunctionKind::MathCeil
-            | NativeFunctionKind::MathClz32
-            | NativeFunctionKind::MathCos
-            | NativeFunctionKind::MathCosh
-            | NativeFunctionKind::MathExp
-            | NativeFunctionKind::MathExpm1
-            | NativeFunctionKind::MathFloor
-            | NativeFunctionKind::MathFround
-            | NativeFunctionKind::MathLog
-            | NativeFunctionKind::MathLog10
-            | NativeFunctionKind::MathLog1p
-            | NativeFunctionKind::MathLog2
-            | NativeFunctionKind::MathRound
-            | NativeFunctionKind::MathSign
-            | NativeFunctionKind::MathSin
-            | NativeFunctionKind::MathSinh
-            | NativeFunctionKind::MathSqrt
-            | NativeFunctionKind::MathTan
-            | NativeFunctionKind::MathTanh
-            | NativeFunctionKind::MathTrunc => MATH_FUNCTION_LENGTH_ONE,
-            NativeFunctionKind::MathAtan2
-            | NativeFunctionKind::MathHypot
-            | NativeFunctionKind::MathImul
-            | NativeFunctionKind::MathMax
-            | NativeFunctionKind::MathMin
-            | NativeFunctionKind::MathPow => MATH_FUNCTION_LENGTH_TWO,
-            NativeFunctionKind::Number => NUMBER_FUNCTION_LENGTH,
-            NativeFunctionKind::Object => OBJECT_FUNCTION_LENGTH,
-            NativeFunctionKind::ObjectDefineProperty => OBJECT_DEFINE_PROPERTY_FUNCTION_LENGTH,
-            NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
-                OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH
-            }
-            NativeFunctionKind::ObjectHasOwn => OBJECT_HAS_OWN_FUNCTION_LENGTH,
-            NativeFunctionKind::ObjectKeys => OBJECT_KEYS_FUNCTION_LENGTH,
-            NativeFunctionKind::String => STRING_FUNCTION_LENGTH,
-        }
-    }
-
-    pub(super) const fn name(&self) -> &'static str {
-        match self.kind {
-            NativeFunctionKind::Array => ARRAY_NAME,
-            NativeFunctionKind::ArrayConcat => ARRAY_CONCAT_NAME,
-            NativeFunctionKind::ArrayIncludes => ARRAY_INCLUDES_NAME,
-            NativeFunctionKind::ArrayIndexOf => ARRAY_INDEX_OF_NAME,
-            NativeFunctionKind::ArrayJoin => ARRAY_JOIN_NAME,
-            NativeFunctionKind::ArrayLastIndexOf => ARRAY_LAST_INDEX_OF_NAME,
-            NativeFunctionKind::ArrayPop => ARRAY_POP_NAME,
-            NativeFunctionKind::ArrayPush => ARRAY_PUSH_NAME,
-            NativeFunctionKind::ArrayReverse => ARRAY_REVERSE_NAME,
-            NativeFunctionKind::ArrayShift => ARRAY_SHIFT_NAME,
-            NativeFunctionKind::ArraySlice => ARRAY_SLICE_NAME,
-            NativeFunctionKind::ArrayUnshift => ARRAY_UNSHIFT_NAME,
-            NativeFunctionKind::Boolean => BOOLEAN_NAME,
-            NativeFunctionKind::ErrorConstructor(name) => name.as_str(),
-            NativeFunctionKind::JsonParse => JSON_PARSE_NAME,
-            NativeFunctionKind::JsonStringify => JSON_STRINGIFY_NAME,
-            NativeFunctionKind::MathAbs => MATH_ABS_NAME,
-            NativeFunctionKind::MathAcos => MATH_ACOS_NAME,
-            NativeFunctionKind::MathAcosh => MATH_ACOSH_NAME,
-            NativeFunctionKind::MathAsin => MATH_ASIN_NAME,
-            NativeFunctionKind::MathAsinh => MATH_ASINH_NAME,
-            NativeFunctionKind::MathAtan => MATH_ATAN_NAME,
-            NativeFunctionKind::MathAtan2 => MATH_ATAN2_NAME,
-            NativeFunctionKind::MathAtanh => MATH_ATANH_NAME,
-            NativeFunctionKind::MathCbrt => MATH_CBRT_NAME,
-            NativeFunctionKind::MathCeil => MATH_CEIL_NAME,
-            NativeFunctionKind::MathClz32 => MATH_CLZ32_NAME,
-            NativeFunctionKind::MathCos => MATH_COS_NAME,
-            NativeFunctionKind::MathCosh => MATH_COSH_NAME,
-            NativeFunctionKind::MathExp => MATH_EXP_NAME,
-            NativeFunctionKind::MathExpm1 => MATH_EXPM1_NAME,
-            NativeFunctionKind::MathFloor => MATH_FLOOR_NAME,
-            NativeFunctionKind::MathFround => MATH_FROUND_NAME,
-            NativeFunctionKind::MathHypot => MATH_HYPOT_NAME,
-            NativeFunctionKind::MathImul => MATH_IMUL_NAME,
-            NativeFunctionKind::MathLog => MATH_LOG_NAME,
-            NativeFunctionKind::MathLog10 => MATH_LOG10_NAME,
-            NativeFunctionKind::MathLog1p => MATH_LOG1P_NAME,
-            NativeFunctionKind::MathLog2 => MATH_LOG2_NAME,
-            NativeFunctionKind::MathMax => MATH_MAX_NAME,
-            NativeFunctionKind::MathMin => MATH_MIN_NAME,
-            NativeFunctionKind::MathPow => MATH_POW_NAME,
-            NativeFunctionKind::MathRandom => MATH_RANDOM_NAME,
-            NativeFunctionKind::MathRound => MATH_ROUND_NAME,
-            NativeFunctionKind::MathSign => MATH_SIGN_NAME,
-            NativeFunctionKind::MathSin => MATH_SIN_NAME,
-            NativeFunctionKind::MathSinh => MATH_SINH_NAME,
-            NativeFunctionKind::MathSqrt => MATH_SQRT_NAME,
-            NativeFunctionKind::MathTan => MATH_TAN_NAME,
-            NativeFunctionKind::MathTanh => MATH_TANH_NAME,
-            NativeFunctionKind::MathTrunc => MATH_TRUNC_NAME,
-            NativeFunctionKind::Number => NUMBER_NAME,
-            NativeFunctionKind::Object => OBJECT_NAME,
-            NativeFunctionKind::ObjectDefineProperty => OBJECT_DEFINE_PROPERTY_NAME,
-            NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
-                OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME
-            }
-            NativeFunctionKind::ObjectHasOwn => OBJECT_HAS_OWN_NAME,
-            NativeFunctionKind::ObjectKeys => OBJECT_KEYS_NAME,
-            NativeFunctionKind::String => STRING_NAME,
-        }
     }
 
     pub(super) const fn properties(&self) -> &FunctionProperties {
@@ -336,6 +210,136 @@ impl NativeFunction {
 
     pub(super) fn has_intrinsic_property(&self, property: &str) -> bool {
         self.intrinsic_property(property).is_some()
+    }
+}
+
+impl NativeFunctionKind {
+    const fn length(self) -> f64 {
+        match self {
+            Self::Array => ARRAY_FUNCTION_LENGTH,
+            Self::ArrayConcat => ARRAY_CONCAT_FUNCTION_LENGTH,
+            Self::ArrayIncludes => ARRAY_INCLUDES_FUNCTION_LENGTH,
+            Self::ArrayIndexOf => ARRAY_INDEX_OF_FUNCTION_LENGTH,
+            Self::ArrayJoin => ARRAY_JOIN_FUNCTION_LENGTH,
+            Self::ArrayLastIndexOf => ARRAY_LAST_INDEX_OF_FUNCTION_LENGTH,
+            Self::ArrayPop => ARRAY_POP_FUNCTION_LENGTH,
+            Self::ArrayPush => ARRAY_PUSH_FUNCTION_LENGTH,
+            Self::ArrayReverse => ARRAY_REVERSE_FUNCTION_LENGTH,
+            Self::ArrayShift => ARRAY_SHIFT_FUNCTION_LENGTH,
+            Self::ArraySlice => ARRAY_SLICE_FUNCTION_LENGTH,
+            Self::ArrayUnshift => ARRAY_UNSHIFT_FUNCTION_LENGTH,
+            Self::Boolean => BOOLEAN_FUNCTION_LENGTH,
+            Self::ErrorConstructor(_) => ERROR_FUNCTION_LENGTH,
+            Self::JsonParse => JSON_PARSE_FUNCTION_LENGTH,
+            Self::JsonStringify => JSON_STRINGIFY_FUNCTION_LENGTH,
+            Self::MathRandom => MATH_FUNCTION_LENGTH_ZERO,
+            Self::MathAbs
+            | Self::MathAcos
+            | Self::MathAcosh
+            | Self::MathAsin
+            | Self::MathAsinh
+            | Self::MathAtan
+            | Self::MathAtanh
+            | Self::MathCbrt
+            | Self::MathCeil
+            | Self::MathClz32
+            | Self::MathCos
+            | Self::MathCosh
+            | Self::MathExp
+            | Self::MathExpm1
+            | Self::MathFloor
+            | Self::MathFround
+            | Self::MathLog
+            | Self::MathLog10
+            | Self::MathLog1p
+            | Self::MathLog2
+            | Self::MathRound
+            | Self::MathSign
+            | Self::MathSin
+            | Self::MathSinh
+            | Self::MathSqrt
+            | Self::MathTan
+            | Self::MathTanh
+            | Self::MathTrunc => MATH_FUNCTION_LENGTH_ONE,
+            Self::MathAtan2
+            | Self::MathHypot
+            | Self::MathImul
+            | Self::MathMax
+            | Self::MathMin
+            | Self::MathPow => MATH_FUNCTION_LENGTH_TWO,
+            Self::Number => NUMBER_FUNCTION_LENGTH,
+            Self::Object => OBJECT_FUNCTION_LENGTH,
+            Self::ObjectDefineProperty => OBJECT_DEFINE_PROPERTY_FUNCTION_LENGTH,
+            Self::ObjectGetOwnPropertyDescriptor => {
+                OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH
+            }
+            Self::ObjectHasOwn => OBJECT_HAS_OWN_FUNCTION_LENGTH,
+            Self::ObjectKeys => OBJECT_KEYS_FUNCTION_LENGTH,
+            Self::String => STRING_FUNCTION_LENGTH,
+        }
+    }
+
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Array => ARRAY_NAME,
+            Self::ArrayConcat => ARRAY_CONCAT_NAME,
+            Self::ArrayIncludes => ARRAY_INCLUDES_NAME,
+            Self::ArrayIndexOf => ARRAY_INDEX_OF_NAME,
+            Self::ArrayJoin => ARRAY_JOIN_NAME,
+            Self::ArrayLastIndexOf => ARRAY_LAST_INDEX_OF_NAME,
+            Self::ArrayPop => ARRAY_POP_NAME,
+            Self::ArrayPush => ARRAY_PUSH_NAME,
+            Self::ArrayReverse => ARRAY_REVERSE_NAME,
+            Self::ArrayShift => ARRAY_SHIFT_NAME,
+            Self::ArraySlice => ARRAY_SLICE_NAME,
+            Self::ArrayUnshift => ARRAY_UNSHIFT_NAME,
+            Self::Boolean => BOOLEAN_NAME,
+            Self::ErrorConstructor(name) => name.as_str(),
+            Self::JsonParse => JSON_PARSE_NAME,
+            Self::JsonStringify => JSON_STRINGIFY_NAME,
+            Self::MathAbs => MATH_ABS_NAME,
+            Self::MathAcos => MATH_ACOS_NAME,
+            Self::MathAcosh => MATH_ACOSH_NAME,
+            Self::MathAsin => MATH_ASIN_NAME,
+            Self::MathAsinh => MATH_ASINH_NAME,
+            Self::MathAtan => MATH_ATAN_NAME,
+            Self::MathAtan2 => MATH_ATAN2_NAME,
+            Self::MathAtanh => MATH_ATANH_NAME,
+            Self::MathCbrt => MATH_CBRT_NAME,
+            Self::MathCeil => MATH_CEIL_NAME,
+            Self::MathClz32 => MATH_CLZ32_NAME,
+            Self::MathCos => MATH_COS_NAME,
+            Self::MathCosh => MATH_COSH_NAME,
+            Self::MathExp => MATH_EXP_NAME,
+            Self::MathExpm1 => MATH_EXPM1_NAME,
+            Self::MathFloor => MATH_FLOOR_NAME,
+            Self::MathFround => MATH_FROUND_NAME,
+            Self::MathHypot => MATH_HYPOT_NAME,
+            Self::MathImul => MATH_IMUL_NAME,
+            Self::MathLog => MATH_LOG_NAME,
+            Self::MathLog10 => MATH_LOG10_NAME,
+            Self::MathLog1p => MATH_LOG1P_NAME,
+            Self::MathLog2 => MATH_LOG2_NAME,
+            Self::MathMax => MATH_MAX_NAME,
+            Self::MathMin => MATH_MIN_NAME,
+            Self::MathPow => MATH_POW_NAME,
+            Self::MathRandom => MATH_RANDOM_NAME,
+            Self::MathRound => MATH_ROUND_NAME,
+            Self::MathSign => MATH_SIGN_NAME,
+            Self::MathSin => MATH_SIN_NAME,
+            Self::MathSinh => MATH_SINH_NAME,
+            Self::MathSqrt => MATH_SQRT_NAME,
+            Self::MathTan => MATH_TAN_NAME,
+            Self::MathTanh => MATH_TANH_NAME,
+            Self::MathTrunc => MATH_TRUNC_NAME,
+            Self::Number => NUMBER_NAME,
+            Self::Object => OBJECT_NAME,
+            Self::ObjectDefineProperty => OBJECT_DEFINE_PROPERTY_NAME,
+            Self::ObjectGetOwnPropertyDescriptor => OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
+            Self::ObjectHasOwn => OBJECT_HAS_OWN_NAME,
+            Self::ObjectKeys => OBJECT_KEYS_NAME,
+            Self::String => STRING_NAME,
+        }
     }
 }
 
