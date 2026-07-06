@@ -18,7 +18,10 @@ use crate::runtime_numeric::{
     bitwise_and, bitwise_or, bitwise_xor, compare_binary, numeric_binary, shift_left, shift_right,
     shift_right_unsigned,
 };
-use crate::runtime_object::{OBJECT_CONSTRUCTOR_PROPERTY, ObjectHeap, PropertyKey, PropertyLookup};
+use crate::runtime_object::{
+    OBJECT_CONSTRUCTOR_PROPERTY, ObjectHeap, ObjectPropertyInit, PropertyEnumerable, PropertyKey,
+    PropertyLookup,
+};
 use crate::runtime_property::{
     delete_property, enumerable_property_keys, get_property, has_property, property_key,
     set_property,
@@ -363,7 +366,12 @@ impl Context {
         for property in properties {
             let value = self.eval_expr(&property.value)?;
             let key = self.intern_static_property_key(&property.key)?;
-            values.push((key, property.key.as_str().to_owned(), value));
+            values.push(ObjectPropertyInit::new(
+                key,
+                property.key.as_str(),
+                value,
+                PropertyEnumerable::Yes,
+            ));
         }
         let constructor_key = self.intern_property_key(OBJECT_CONSTRUCTOR_PROPERTY)?;
         self.objects.create(

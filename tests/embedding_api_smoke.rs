@@ -229,6 +229,28 @@ fn tracks_atoms_for_object_property_keys_without_interning_missing_properties() 
 }
 
 #[test]
+fn reuses_compiled_object_literal_property_atoms() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.context().eval("var proto = { base: 40 };")?;
+
+    let script = vm.compile(
+        r"
+        var bag = { __proto__: proto, alpha: 1, beta: 1 };
+        bag.base + bag.alpha + bag.beta
+        ",
+    )?;
+
+    let first = vm.eval_compiled(&script)?;
+    ensure_value(&first, &Value::Number(42.0))?;
+    let first_atoms = vm.resource_usage().atom_count;
+
+    let second = vm.eval_compiled(&script)?;
+    ensure_value(&second, &Value::Number(42.0))?;
+    ensure_usize(vm.resource_usage().atom_count, first_atoms)
+}
+
+#[test]
 fn reuses_shape_layouts_for_matching_object_properties() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
