@@ -281,15 +281,13 @@ fn interns_string_wrapper_descriptor_values_in_vm_heap() -> TestResult {
     )?;
     let after_warmup = vm.resource_usage();
 
-    let value = vm.context().eval(
+    vm.context().eval(
         r#"
-        (function() {
-        let boxed = new String("camera");
-        return Object.getOwnPropertyDescriptor(boxed, 0).value;
-        })()
+        var descriptorBoxed = new String("camera");
+        var descriptorValue = Object.getOwnPropertyDescriptor(descriptorBoxed, 0);
+        descriptorValue
         "#,
     )?;
-    ensure_heap_string(&value, CAMERA_FIRST_CHAR)?;
     let after_descriptor = vm.resource_usage();
     ensure_usize(
         after_descriptor.string_count,
@@ -302,6 +300,12 @@ fn interns_string_wrapper_descriptor_values_in_vm_heap() -> TestResult {
             .saturating_add(CAMERA_LABEL.len())
             .saturating_add(CAMERA_FIRST_CHAR.len()),
     )?;
+
+    let value = vm.context().eval("descriptorValue.value")?;
+    ensure_heap_string(&value, CAMERA_FIRST_CHAR)?;
+    let after_value_read = vm.resource_usage();
+    ensure_usize(after_value_read.string_count, after_descriptor.string_count)?;
+    ensure_usize(after_value_read.string_bytes, after_descriptor.string_bytes)?;
 
     let repeated = vm.context().eval(
         r#"

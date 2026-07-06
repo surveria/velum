@@ -100,12 +100,14 @@ impl Context {
     ) -> Result<Value> {
         match string_property_value(value, property)? {
             StringPropertyValue::Length(value) => Ok(Value::Number(value)),
-            StringPropertyValue::Character(ch) => {
-                let mut buffer = [0_u8; MAX_UTF8_CHAR_BYTES];
-                self.heap_string_value(ch.encode_utf8(&mut buffer))
-            }
+            StringPropertyValue::Character(ch) => self.heap_string_char_value(ch),
             StringPropertyValue::Missing => Ok(Value::Undefined),
         }
+    }
+
+    pub(super) fn heap_string_char_value(&mut self, ch: char) -> Result<Value> {
+        let mut buffer = [0_u8; MAX_UTF8_CHAR_BYTES];
+        self.heap_string_value(ch.encode_utf8(&mut buffer))
     }
 
     pub(super) fn get_string_object_property_value(
@@ -116,9 +118,7 @@ impl Context {
         let Some(ch) = self.objects.string_object_character(id, property)? else {
             return Ok(None);
         };
-        let mut buffer = [0_u8; MAX_UTF8_CHAR_BYTES];
-        self.heap_string_value(ch.encode_utf8(&mut buffer))
-            .map(Some)
+        self.heap_string_char_value(ch).map(Some)
     }
 
     pub(crate) fn set_dynamic_property_value(

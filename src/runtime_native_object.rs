@@ -7,7 +7,7 @@ use crate::{
         PropertyEnumerable, PropertyKey, PropertyWritable,
     },
     runtime_property::{has_property, property_key},
-    value::{NativeFunctionId, Value},
+    value::{NativeFunctionId, ObjectId, Value},
 };
 
 use super::super::runtime_well_known::DescriptorPropertyKeys;
@@ -109,9 +109,16 @@ impl Context {
         let target = Self::argument_or_undefined(&values, 0);
         let property = self.object_property_key(&values, 1)?;
         let descriptor = match target {
-            Value::Object(id) => self
-                .objects
-                .own_property_descriptor(id, self.property_lookup(&property))?,
+            Value::Object(id) => {
+                if let Some(descriptor) =
+                    self.string_object_own_property_descriptor(id, &property)?
+                {
+                    Some(descriptor)
+                } else {
+                    self.objects
+                        .own_property_descriptor(id, self.property_lookup(&property))?
+                }
+            }
             Value::Function(id) => self.function_own_property_descriptor(id, &property)?,
             Value::NativeFunction(id) => {
                 self.native_function_own_property_descriptor(id, &property)?
@@ -133,6 +140,23 @@ impl Context {
             return Ok(Value::Undefined);
         };
         self.create_property_descriptor_object(&descriptor)
+    }
+
+    fn string_object_own_property_descriptor(
+        &mut self,
+        id: ObjectId,
+        property: &str,
+    ) -> Result<Option<DataPropertyDescriptor>> {
+        let Some(ch) = self.objects.string_object_character(id, property)? else {
+            return Ok(None);
+        };
+        let value = self.heap_string_char_value(ch)?;
+        Ok(Some(DataPropertyDescriptor::new(
+            value,
+            PropertyWritable::No,
+            PropertyEnumerable::Yes,
+            PropertyConfigurable::No,
+        )))
     }
 
     pub(super) fn eval_object_has_own(&mut self, args: &[Expr]) -> Result<Value> {
