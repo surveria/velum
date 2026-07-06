@@ -1,0 +1,30 @@
+[package]
+name = "rsqjs-test-runner"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/surveria/rs-quickjs"
+description = "Test and benchmark runner for the rs-quickjs engine. Kept in its own crate so the engine stays a minimal, dependency-light library; intended to move to a separate repository later."
+
+[[bin]]
+name = "rsqjs-test-runner"
+path = "src/main.rs"
+
+[dependencies]
+rs-quickjs = { path = ".." }
+anyhow = "1"
+human-yaml = { git = "https://github.com/chertov/human-yaml.git", rev = "1b83913343223316678776f0c5329d4c577df0f5" }
+image = { version = "0.24", default-features = false, features = ["jpeg"] }
+plotters = "0.3"
+rquickjs = { version = "0.9", optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tabled = "0.21.0"
+
+[features]
+# Enables an in-process QuickJS reference (via the `rquickjs` binding) used by
+# the benchmark runner to compare execution against the original engine.
+reference-quickjs = ["dep:rquickjs"]
+
+[lints]
+workspace = true

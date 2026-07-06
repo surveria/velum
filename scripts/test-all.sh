@@ -21,12 +21,15 @@ fi
 export RSQJS_TEST262_RUN_ALL="${RSQJS_TEST262_RUN_ALL:-1}"
 
 cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-targets --all-features
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
-cargo build --release --bin rsqjs --bin rsqjs-test-runner
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-targets --all-features
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features
+# Engine CLI plus the separate runner crate, which drives all benchmarks
+# in-process and compares against an embedded QuickJS reference behind the
+# `reference-quickjs` feature.
+cargo build --release -p rs-quickjs --bin rsqjs
+cargo build --release -p rsqjs-test-runner --features reference-quickjs
 
-export RSQJS_ENGINE="${RSQJS_ENGINE:-${target_dir}/release/rsqjs}"
 "${target_dir}/release/rsqjs-test-runner" --report "${report_path}"
 
 printf 'test report: %s\n' "${report_path}"

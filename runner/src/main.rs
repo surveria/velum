@@ -10,27 +10,22 @@ use anyhow::{Context as _, bail};
 use rs_quickjs::{Runtime, Value};
 use tabled::{Table, Tabled};
 
-#[path = "rsqjs_test_runner/benchmarks.rs"]
+mod bench_engines;
+mod bench_measure;
 mod benchmarks;
-#[path = "rsqjs_test_runner/cases.rs"]
 mod cases;
-#[path = "rsqjs_test_runner/failure_classification.rs"]
 mod failure_classification;
 #[cfg(test)]
-#[path = "rsqjs_test_runner/report_formatting_tests.rs"]
 mod report_formatting_tests;
-#[path = "rsqjs_test_runner/report_rollup.rs"]
 mod report_rollup;
-#[path = "rsqjs_test_runner/test262_external.rs"]
 mod test262_external;
-#[path = "rsqjs_test_runner/test262_full.rs"]
 mod test262_full;
-#[path = "rsqjs_test_runner/test262_metadata.rs"]
 mod test262_metadata;
 
 use cases::{DifferentialCase, EngineCase, Expectation};
 
-const USAGE: &str = "usage: rsqjs-test-runner --report <path> | --aggregate-reports <dir>";
+const USAGE: &str =
+    "usage: rsqjs-test-runner --report <path> | --benchmarks <path> | --aggregate-reports <dir>";
 const STATUS_PASSED: &str = "✅ passed";
 const STATUS_FAILED: &str = "❌ failed";
 const STATUS_SKIPPED: &str = "🟡 skipped";
@@ -45,7 +40,6 @@ const PERCENT_SCALE: usize = 100;
 const COVERAGE_SCALE: usize = 1_000_000;
 const COVERAGE_MINOR_SCALE: usize = 10_000;
 const QUICKJS_ENV: &str = "RSQJS_QUICKJS";
-const ENGINE_ENV: &str = "RSQJS_ENGINE";
 const TEST262_ENV: &str = "RSQJS_TEST262_DIR";
 
 const REASON_MATCHED: &str = "matched expected behavior";
@@ -64,6 +58,9 @@ fn run() -> anyhow::Result<()> {
     let config = Config::from_args(env::args().skip(1))?;
     let report_path = match config {
         Config::Run { report_path } => report_path,
+        Config::Benchmarks { report_path } => {
+            return run_benchmarks_only(&report_path);
+        }
         Config::AggregateReports { report_dir } => {
             let outputs = report_rollup::generate_from_report_dir(&report_dir)?;
             print_rollup_outputs(&outputs);
@@ -72,9 +69,8 @@ fn run() -> anyhow::Result<()> {
     };
 
     let quickjs = env::var_os(QUICKJS_ENV).map(PathBuf::from);
-    let engine = env::var_os(ENGINE_ENV).map(PathBuf::from);
     let test262 = env::var_os(TEST262_ENV).map(PathBuf::from);
-    let report = build_report(quickjs.as_deref(), engine.as_deref(), test262.as_deref());
+    let report = build_report(quickjs.as_deref(), test262.as_deref());
     write_report(&report_path, &report)?;
     let outputs = report_rollup::generate_from_report_path(&report_path)?;
     print_rollup_outputs(&outputs);
@@ -93,6 +89,7 @@ fn run() -> anyhow::Result<()> {
 #[derive(Debug)]
 enum Config {
     Run { report_path: PathBuf },
+    Benchmarks { report_path: PathBuf },
     AggregateReports { report_dir: PathBuf },
 }
 
@@ -110,6 +107,15 @@ impl Config {
             }
             return Ok(Self::AggregateReports {
                 report_dir: PathBuf::from(report_dir),
+            });
+        }
+        if flag == "--benchmarks" {
+            let report_path = args.next().context("missing path after --benchmarks")?;
+            if let Some(extra) = args.next() {
+                bail!("unexpected argument '{extra}'; {USAGE}");
+            }
+            return Ok(Self::Benchmarks {
+                report_path: PathBuf::from(report_path),
             });
         }
         if flag != "--report" {
@@ -363,18 +369,14 @@ impl FeatureAreaStats {
     }
 }
 
-fn build_report(
-    quickjs: Option<&Path>,
-    engine: Option<&Path>,
-    test262: Option<&Path>,
-) -> FullReport {
+fn build_report(quickjs: Option<&Path>, test262: Option<&Path>) -> FullReport {
     let corpora = vec![
         run_engine_corpus(),
         run_test262_corpus(),
         run_test262_full_corpus(test262),
         run_quickjs_corpus(quickjs),
     ];
-    let benchmarks = benchmarks::run(quickjs, engine);
+    let benchmarks = benchmarks::run();
     FullReport {
         corpora,
         benchmarks,
@@ -641,7 +643,7 @@ fn render_report(report: &FullReport) -> String {
     sections.push("## Benchmarks".to_owned());
     sections.push(String::new());
     sections.push(format!(
-        "- CLI measured: {}\n- In-process measured: {}\n- Failed: {}\n- Skipped reference: {}\n- Over latency budget ({}): {}\n- Over memory budget ({}): {}",
+        "- Measured: {}\n- In-process measured: {}\n- Failed: {}\n- Skipped reference: {}\n- Over latency budget ({}): {}\n- Over memory budget ({}): {}",
         report.benchmarks.measured,
         report.benchmarks.in_process_measured,
         report.benchmarks.failed,
@@ -655,6 +657,40 @@ fn render_report(report: &FullReport) -> String {
     sections.push(fenced_table(&Table::new(&report.benchmarks.rows)));
     sections.push(String::new());
     sections.join("\n")
+}
+
+fn run_benchmarks_only(report_path: &Path) -> anyhow::Result<()> {
+    let report = benchmarks::run();
+    let body = render_benchmarks_only(&report);
+    std::fs::write(report_path, body).with_context(|| {
+        format!(
+            "failed to write benchmark report to {}",
+            report_path.display()
+        )
+    })?;
+    println!("benchmark report: {}", report_path.display());
+    if report.failed == 0 {
+        return Ok(());
+    }
+    bail!("benchmark run recorded {} failed case(s)", report.failed)
+}
+
+fn render_benchmarks_only(report: &benchmarks::BenchmarkReport) -> String {
+    let summary = format!(
+        "- Measured: {}\n- In-process measured: {}\n- Failed: {}\n- Skipped reference: {}\n- Over latency budget ({}): {}\n- Over memory budget ({}): {}",
+        report.measured,
+        report.in_process_measured,
+        report.failed,
+        report.skipped,
+        benchmarks::BUDGET_LABEL,
+        report.over_latency_budget,
+        benchmarks::BUDGET_LABEL,
+        report.over_memory_budget,
+    );
+    let table = fenced_table(&Table::new(&report.rows));
+    format!(
+        "{REPORT_TITLE}\n\nBenchmarks only, generated by {RUNNER_NAME}.\n\n## Benchmarks\n\n{summary}\n\n{table}\n"
+    )
 }
 
 fn last_failed_rows(rows: &[CaseRow], limit: usize) -> Vec<CaseRow> {

@@ -25,6 +25,13 @@ These rules are mandatory for humans and agents working in any part of this repo
 - If the task is fully implemented and CI is green, push, PR creation, and merge do not need extra confirmation. Ask only when implementation is incomplete, there is doubt, or CI is red.
 - After merge, update the main repository directory to fresh `main` with `git checkout main && git pull`.
 
+## Workspace, Crates, And Versioning
+
+- The repository is a Cargo workspace with two independent crates:
+  - `rs-quickjs` (repository root): the embeddable engine library plus the `rsqjs` smoke CLI. It must stay dependency-light — only what the engine itself needs. Do not add reporting, benchmarking, or reference-engine dependencies here.
+  - `rsqjs-test-runner` (`runner/`): the test and benchmark runner and all of its heavier dependencies (`tabled`, `plotters`, `image`, `serde`, `rquickjs`, and so on). It depends on the engine only through its public API and is intended to move to a separate repository later, so keep it decoupled from engine internals.
+- Every pull request that changes the engine crate must bump `version` in the root `Cargo.toml`. Every pull request that changes the runner crate must bump `version` in `runner/Cargo.toml`. The two crates version independently; use semantic versioning and state the new version in the PR description.
+
 ## Gitignore Whitelist Model
 
 - The root `.gitignore` must deny everything with `*` and then explicitly allow only required files and directories.
