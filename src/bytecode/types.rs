@@ -2,8 +2,8 @@ use std::{fmt, rc::Rc};
 
 use crate::{
     ast::{
-        BinaryOp, DeclKind, StaticBinding, StaticName, StaticPropertyAccessId, StaticString,
-        UnaryOp, UpdateOp,
+        BinaryOp, DeclKind, StaticBinding, StaticFunctionId, StaticName, StaticPropertyAccessId,
+        StaticString, UnaryOp, UpdateOp,
     },
     binding_layout::{BindingLayout, BindingOperand},
     bytecode::BytecodeHoistPlan,
@@ -62,6 +62,53 @@ impl BytecodeFunction {
 
     pub fn capture_bindings(&self) -> &[StaticBinding] {
         &self.capture_bindings
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BytecodeFunctionDeclaration {
+    name: BytecodeBinding,
+    id: StaticFunctionId,
+    function_name: StaticName,
+    params: Rc<[StaticBinding]>,
+    bytecode: BytecodeFunction,
+}
+
+impl BytecodeFunctionDeclaration {
+    pub(crate) const fn new(
+        name: BytecodeBinding,
+        id: StaticFunctionId,
+        function_name: StaticName,
+        params: Rc<[StaticBinding]>,
+        bytecode: BytecodeFunction,
+    ) -> Self {
+        Self {
+            name,
+            id,
+            function_name,
+            params,
+            bytecode,
+        }
+    }
+
+    pub const fn name(&self) -> &BytecodeBinding {
+        &self.name
+    }
+
+    pub const fn id(&self) -> StaticFunctionId {
+        self.id
+    }
+
+    pub const fn function_name(&self) -> &StaticName {
+        &self.function_name
+    }
+
+    pub const fn params(&self) -> &Rc<[StaticBinding]> {
+        &self.params
+    }
+
+    pub const fn bytecode(&self) -> &BytecodeFunction {
+        &self.bytecode
     }
 }
 

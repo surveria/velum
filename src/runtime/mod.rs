@@ -71,6 +71,7 @@ pub struct Context {
     output: Vec<String>,
     random_state: u64,
     runtime_steps: usize,
+    call_depth: usize,
     native_call_cache_hits: usize,
     native_call_cache_misses: usize,
     native_call_cache_fallbacks: usize,
@@ -194,6 +195,7 @@ impl Context {
             output: Vec::new(),
             random_state: INITIAL_RANDOM_STATE,
             runtime_steps: 0,
+            call_depth: 0,
             native_call_cache_hits: 0,
             native_call_cache_misses: 0,
             native_call_cache_fallbacks: 0,
@@ -227,7 +229,7 @@ impl Context {
             binding_cache,
             script.binding_layout().clone(),
             |context| {
-                context.hoist_bytecode_var_declarations(script.bytecode().hoist_plan())?;
+                context.hoist_bytecode_declarations(script.bytecode().hoist_plan())?;
                 context
                     .eval_bytecode_program(script.bytecode())
                     .and_then(Completion::into_result)

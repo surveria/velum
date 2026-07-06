@@ -11,14 +11,29 @@ use crate::{
 use super::static_bindings::CompiledBindingFrame;
 
 impl Context {
-    pub(crate) fn hoist_bytecode_var_declarations(
-        &mut self,
-        plan: &BytecodeHoistPlan,
-    ) -> Result<()> {
+    pub(crate) fn hoist_bytecode_declarations(&mut self, plan: &BytecodeHoistPlan) -> Result<()> {
         for binding in plan.var_declarations() {
             self.hoist_var(binding)?;
         }
+        for declaration in plan.function_declarations() {
+            self.hoist_function(declaration)?;
+        }
         Ok(())
+    }
+
+    fn hoist_function(
+        &mut self,
+        declaration: &crate::bytecode::BytecodeFunctionDeclaration,
+    ) -> Result<()> {
+        self.hoist_var(declaration.name().name())?;
+        let function = self.create_bytecode_function(
+            declaration.id(),
+            Some(declaration.function_name()),
+            declaration.params(),
+            declaration.bytecode(),
+            true,
+        )?;
+        self.assign_bytecode(declaration.name(), function)
     }
 
     fn hoist_var(&mut self, name: &StaticBinding) -> Result<()> {

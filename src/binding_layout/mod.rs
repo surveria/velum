@@ -182,7 +182,8 @@ impl LayoutBuilder {
                 DeclKind::Var => self.declare(var_scope, name),
                 DeclKind::Let | DeclKind::Const => self.declare(scope, name),
             },
-            Stmt::Block(_)
+            Stmt::FunctionDecl { .. }
+            | Stmt::Block(_)
             | Stmt::If { .. }
             | Stmt::While { .. }
             | Stmt::For { .. }
@@ -265,7 +266,8 @@ impl LayoutBuilder {
                 name,
                 kind: DeclKind::Var,
                 ..
-            } => self.declare(var_scope, name),
+            }
+            | Stmt::FunctionDecl { name, .. } => self.declare(var_scope, name),
             Stmt::VarDecl { .. }
             | Stmt::Break
             | Stmt::Continue
@@ -344,6 +346,9 @@ impl LayoutBuilder {
                 self.analyze_expr(expr, scope, function)
             }
             Stmt::Return(None) | Stmt::Break | Stmt::Continue => Ok(()),
+            Stmt::FunctionDecl {
+                id, params, body, ..
+            } => self.analyze_function(*id, params, body, scope, function),
             Stmt::VarDecl { init, .. } => {
                 if let Some(init) = init {
                     self.analyze_expr(init, scope, function)?;
@@ -758,6 +763,7 @@ fn for_init_needs_layout_scope(init: Option<&Stmt>) -> bool {
             | Stmt::Continue
             | Stmt::Throw(_)
             | Stmt::Return(_)
+            | Stmt::FunctionDecl { .. }
             | Stmt::Expr(_),
         )
         | None => false,

@@ -20,8 +20,8 @@ pub use hoist::BytecodeHoistPlan;
 pub use types::{
     BytecodeAddress, BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock,
     BytecodeCatch, BytecodeCompletion, BytecodeDynamicProperty, BytecodeForInTarget,
-    BytecodeFunction, BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeProgram,
-    BytecodeProperty, BytecodeSwitchCase,
+    BytecodeFunction, BytecodeFunctionDeclaration, BytecodeInstruction, BytecodeNumericBinaryOp,
+    BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
 };
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
@@ -30,7 +30,7 @@ impl BytecodeProgram {
     pub fn compile(program: &Program, layout: &BindingLayout) -> Result<Self> {
         Ok(Self::new(
             BytecodeBlock::compile_statements(&program.statements, StatementValue::Store, layout)?,
-            BytecodeHoistPlan::compile(&program.statements),
+            BytecodeHoistPlan::compile(&program.statements, layout)?,
         ))
     }
 }
@@ -153,6 +153,7 @@ impl<'a> BytecodeCompiler<'a> {
                 self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Return));
                 Ok(())
             }
+            Stmt::FunctionDecl { .. } => Ok(()),
             Stmt::VarDecl { name, kind, init } => {
                 self.compile_declaration(name, *kind, init.as_ref())
             }

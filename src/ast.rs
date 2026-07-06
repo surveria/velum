@@ -243,6 +243,12 @@ pub enum Stmt {
     Continue,
     Throw(Expr),
     Return(Option<Expr>),
+    FunctionDecl {
+        name: StaticBinding,
+        id: StaticFunctionId,
+        params: Rc<[StaticBinding]>,
+        body: Rc<[Self]>,
+    },
     VarDecl {
         name: StaticBinding,
         kind: DeclKind,

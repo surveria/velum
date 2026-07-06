@@ -8,6 +8,10 @@ use super::Parser;
 
 impl Parser {
     pub(super) fn statement(&mut self) -> Result<Stmt> {
+        self.with_statement_depth(Self::statement_inner)
+    }
+
+    fn statement_inner(&mut self) -> Result<Stmt> {
         if self.match_kind(&TokenKind::LBrace) {
             return self.block();
         }
@@ -40,6 +44,9 @@ impl Parser {
         if self.match_kind(&TokenKind::Return) {
             return self.return_statement();
         }
+        if self.match_kind(&TokenKind::Function) {
+            return self.function_declaration();
+        }
         if self.match_kind(&TokenKind::Let) {
             return self.var_decl(DeclKind::Let);
         }
@@ -53,6 +60,26 @@ impl Parser {
         let expr = self.expression()?;
         self.consume_optional_semicolon();
         Ok(Stmt::Expr(expr))
+    }
+
+    fn with_statement_depth(
+        &mut self,
+        parse: impl FnOnce(&mut Self) -> Result<Stmt>,
+    ) -> Result<Stmt> {
+        self.statement_depth = self
+            .statement_depth
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("statement nesting overflowed"))?;
+        if self.statement_depth > self.limits.max_expression_depth {
+            self.statement_depth = self.statement_depth.saturating_sub(1);
+            return Err(Error::limit(format!(
+                "statement nesting exceeded {}",
+                self.limits.max_expression_depth
+            )));
+        }
+        let result = parse(self);
+        self.statement_depth = self.statement_depth.saturating_sub(1);
+        result
     }
 
     pub(super) fn block_statements(&mut self) -> Result<Vec<Stmt>> {
@@ -315,6 +342,22 @@ impl Parser {
             };
         self.consume_optional_semicolon();
         Ok(Stmt::Return(value))
+    }
+
+    fn function_declaration(&mut self) -> Result<Stmt> {
+        let name = self.consume_binding_identifier("expected function declaration name")?;
+        self.consume(&TokenKind::LParen, "expected '(' after function name")?;
+        let params = self.function_parameters()?.into();
+        self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
+        self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
+        let body = self.block_statements()?.into();
+        let id = self.static_function()?;
+        Ok(Stmt::FunctionDecl {
+            name,
+            id,
+            params,
+            body,
+        })
     }
 
     fn var_decl(&mut self, kind: DeclKind) -> Result<Stmt> {
