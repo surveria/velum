@@ -21,24 +21,16 @@
 
 use std::{
     env,
-    path::Path,
-    process::Command,
     time::{Duration, Instant},
 };
-
-use anyhow::{Context as _, bail};
 
 const ENV_MIN_TIME_MS: &str = "RSQJS_BENCH_MIN_TIME_MS";
 const ENV_WARMUP_MS: &str = "RSQJS_BENCH_WARMUP_MS";
 const ENV_SAMPLES: &str = "RSQJS_BENCH_SAMPLES";
-const ENV_CLI_SAMPLES: &str = "RSQJS_BENCH_CLI_SAMPLES";
-const ENV_CLI_WARMUP: &str = "RSQJS_BENCH_CLI_WARMUP";
 
 const DEFAULT_MIN_TIME_MS: u64 = 500;
 const DEFAULT_WARMUP_MS: u64 = 150;
 const DEFAULT_SAMPLES: usize = 10;
-const DEFAULT_CLI_SAMPLES: usize = 20;
-const DEFAULT_CLI_WARMUP: usize = 3;
 
 const MIN_SAMPLES: usize = 3;
 const MAX_ITERS_PER_SAMPLE: u128 = 50_000_000;
@@ -48,16 +40,6 @@ const NANOS_PER_MICROSECOND: u128 = 1_000;
 const NANOS_PER_MILLISECOND: u128 = 1_000_000;
 const RATIO_DECIMAL_SCALE: u128 = 100;
 const FRACTION_SCALE: u128 = 100;
-const ENV_EXEC_FLOOR_US: &str = "RSQJS_BENCH_EXEC_FLOOR_US";
-// The ratio guard applies to both engines' startup-subtracted execution, and
-// QuickJS runs most cases in well under 100 us, so its (small) execution is the
-// binding term. Below this floor the ratio's denominator is dominated by
-// process-startup jitter and is reported as startup-bound instead of a
-// misleading number. Chosen empirically: at 80 us the surviving ~21 cases hold
-// a run-to-run CV under 9% (median ~4%), versus the ~13% the raw CLI ratio
-// carried; lighter cases keep their stable in-process numbers but no ratio.
-const DEFAULT_EXEC_FLOOR_US: u64 = 80;
-const STARTUP_PROBE: &str = "0";
 
 /// Configuration for one in-process time-based measurement.
 #[derive(Debug, Clone, Copy)]
@@ -93,7 +75,6 @@ impl MeasureConfig {
 #[derive(Debug, Clone, Copy)]
 pub struct MeasureStats {
     median: Duration,
-    min: Duration,
     /// Coefficient of variation of the samples, in per-mille (‰).
     cv_permille: u32,
     iters_per_sample: u64,
@@ -103,10 +84,6 @@ pub struct MeasureStats {
 impl MeasureStats {
     pub const fn median(&self) -> Duration {
         self.median
-    }
-
-    pub const fn min(&self) -> Duration {
-        self.min
     }
 
     /// Coefficient of variation as a percentage with one decimal, e.g. `1.4`.
@@ -124,10 +101,6 @@ impl MeasureStats {
     fn sample_count_u64(&self) -> u64 {
         // sample counts are tiny; a saturating conversion never loses data here.
         u64::try_from(self.samples).unwrap_or(u64::MAX)
-    }
-
-    pub const fn samples(&self) -> usize {
-        self.samples
     }
 }
 
@@ -150,27 +123,6 @@ where
         per_op.push(elapsed / iters_per_sample.max(1));
     }
     Ok(summarize(per_op, iters_u64, config.samples))
-}
-
-/// Sample a process-spawning operation (one spawn per sample) robustly.
-///
-/// Each CLI iteration is a separate process, so looping inside a sample would
-/// not reduce startup jitter. Instead we warm up a few spawns and then take
-/// many single-spawn samples, reporting the median and minimum.
-pub fn measure_cli_samples<F>(mut spawn: F) -> anyhow::Result<MeasureStats>
-where
-    F: FnMut() -> anyhow::Result<Duration>,
-{
-    let warmup = env_usize(ENV_CLI_WARMUP, DEFAULT_CLI_WARMUP);
-    let samples = env_usize(ENV_CLI_SAMPLES, DEFAULT_CLI_SAMPLES).max(MIN_SAMPLES);
-    for _ in 0..warmup {
-        spawn()?;
-    }
-    let mut per_op = Vec::with_capacity(samples);
-    for _ in 0..samples {
-        per_op.push(spawn()?.as_nanos());
-    }
-    Ok(summarize(per_op, 1, samples))
 }
 
 fn warmup_and_estimate<F>(warmup: Duration, op: &mut F) -> anyhow::Result<u128>
@@ -199,12 +151,10 @@ fn calibrate_iters(config: MeasureConfig, op_cost: u128) -> u128 {
 
 fn summarize(mut per_op: Vec<u128>, iters_per_sample: u64, samples: usize) -> MeasureStats {
     per_op.sort_unstable();
-    let min = per_op.first().copied().unwrap_or(0);
     let median = median_of_sorted(&per_op);
     let cv_permille = coefficient_of_variation_permille(&per_op);
     MeasureStats {
         median: duration_from_nanos(median),
-        min: duration_from_nanos(min),
         cv_permille,
         iters_per_sample,
         samples,
@@ -296,47 +246,6 @@ fn env_usize(name: &str, default: usize) -> usize {
         .ok()
         .and_then(|raw| raw.trim().parse::<usize>().ok())
         .unwrap_or(default)
-}
-
-/// Time a single process spawn of `engine args...`, returning the wall time.
-fn spawn_timed(engine: &Path, args: &[&str], label: &str) -> anyhow::Result<Duration> {
-    let start = Instant::now();
-    let output = Command::new(engine)
-        .args(args)
-        .output()
-        .with_context(|| format!("failed to execute {label} '{}'", engine.display()))?;
-    let elapsed = start.elapsed();
-    if !output.status.success() {
-        bail!(
-            "{label} run failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-    Ok(elapsed)
-}
-
-/// Robustly time an engine running a benchmark file (warmup + many spawns).
-pub fn measure_cli_file(engine: &Path, path: &str, label: &str) -> anyhow::Result<MeasureStats> {
-    measure_cli_samples(|| spawn_timed(engine, &[path], label))
-}
-
-/// Measure an engine's process-startup floor by running a trivial program.
-/// Returns the minimum spawn time so it can be subtracted from benchmark
-/// timings; falls back to zero (no subtraction) if the probe fails.
-pub fn measure_startup(engine: &Path, label: &str) -> Duration {
-    measure_cli_samples(|| spawn_timed(engine, &["-e", STARTUP_PROBE], label))
-        .map_or(Duration::ZERO, |stats| stats.min())
-}
-
-/// Execution estimate = benchmark spawn time minus the startup floor.
-pub const fn exec_estimate(bench_min: Duration, startup: Duration) -> Duration {
-    bench_min.saturating_sub(startup)
-}
-
-/// Below this execution estimate the startup-subtracted signal is dominated by
-/// measurement noise, so the CLI ratio is not reported as meaningful.
-pub fn exec_floor_from_env() -> Duration {
-    Duration::from_micros(env_u64(ENV_EXEC_FLOOR_US, DEFAULT_EXEC_FLOOR_US))
 }
 
 /// Format a duration with three significant figures (e.g. `1.74 ms`).
@@ -465,8 +374,8 @@ mod tests {
         };
         let stats = measure(fixed_config(), work)?;
         black_box(start.elapsed());
-        // Structural sanity: at least the configured samples were taken.
-        assert_eq!(stats.samples(), 8);
+        // Structural sanity: auto-calibration produced real iterations.
+        assert!(stats.total_iters() > 0);
         Ok(())
     }
 }

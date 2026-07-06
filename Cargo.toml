@@ -25,10 +25,17 @@ human-yaml = { git = "https://github.com/chertov/human-yaml.git", rev = "1b83913
 image = { version = "0.24", default-features = false, features = ["jpeg"] }
 parking_lot = "0.12"
 plotters = "0.3"
+rquickjs = { version = "0.9", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tabled = "0.21.0"
 thiserror = "2"
+
+[features]
+# Enables an in-process QuickJS reference (via the `rquickjs` binding) used by
+# the benchmark runner. Off by default so library embedders never pull in the
+# QuickJS C sources; the test/benchmark pipeline turns it on.
+reference-quickjs = ["dep:rquickjs"]
 
 [lints.rust]
 unsafe_code = "deny"

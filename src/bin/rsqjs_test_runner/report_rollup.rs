@@ -205,7 +205,7 @@ fn parse_benchmark_metrics(text: &str) -> ParsedBenchmarks {
         if !in_benchmarks {
             continue;
         }
-        if let Some(count) = parse_summary_count(line, "CLI measured") {
+        if let Some(count) = parse_summary_count(line, "Measured") {
             parsed.benchmark_count = count;
         }
         if let Some(count) = parse_summary_count(line, &latency_summary_label) {
@@ -624,7 +624,7 @@ mod tests {
 
 ## Benchmarks
 
-- CLI measured: 2
+- Measured: 2
 - Over latency budget (legacy): 0
 - Over memory budget (legacy): 0
 
@@ -648,7 +648,7 @@ mod tests {
 
 ## Benchmarks
 
-- CLI measured: 2
+- Measured: 2
 - Over latency budget (1.00x): 2
 - Over memory budget (1.00x): 1
 

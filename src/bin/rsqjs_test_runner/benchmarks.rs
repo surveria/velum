@@ -1,43 +1,40 @@
-use std::{
-    fs,
-    hint::black_box,
-    io::ErrorKind,
-    path::{Path, PathBuf},
-    process::{self, Command},
-    time::Duration,
-};
+//! In-process benchmark harness.
+//!
+//! Both the engine under test and the optional `QuickJS` reference are timed by
+//! the same sampler (`bench_measure::measure`) through the `BenchEngine`
+//! interface, so the latency ratio reflects execution with no process-startup
+//! component on either side and the runner owns every measurement. The CLI /
+//! startup-subtraction machinery it replaces has been removed.
+//!
+//! Peak-memory comparison used to piggyback on a CLI process; a byte-level
+//! in-process memory parity needs per-VM heap accounting that rs-quickjs does
+//! not expose yet, so the `memory_ratio` column is reserved (`-`) for now.
 
-use anyhow::Context as _;
-use rs_quickjs::Runtime;
+use std::fs;
+
 use tabled::Tabled;
 
-use super::bench_measure::{
-    self, MeasureConfig, MeasureStats, exec_estimate, exec_floor_from_env, format_duration,
-    measure_cli_file, measure_startup, ratio_values,
-};
+use super::bench_engines::{BenchEngine, RsqjsEngine, make_reference};
+use super::bench_measure::{self, MeasureConfig, MeasureStats, format_duration, ratio_values};
 use super::cases::{self, BenchmarkCase};
 
 pub const BUDGET_LABEL: &str = "1.00x";
 
 const BUDGET_NUMERATOR: u128 = 100;
 const BUDGET_DENOMINATOR: u128 = 100;
-const GNU_TIME_PATH: &str = "/usr/bin/time";
-const MEMORY_UNIT: &str = "KiB";
-const REASON_ENGINE_ENV_MISSING: &str = "set RSQJS_ENGINE=/path/to/rsqjs to enable benchmarks";
-const STATUS_FAILED: &str = "❌ failed";
 const STATUS_MEASURED: &str = "✅ measured";
-const STATUS_NOT_AVAILABLE: &str = "🟡 not available";
-const STATUS_NOT_CONFIGURED: &str = "🟡 not configured";
+const STATUS_FAILED: &str = "❌ failed";
 const STATUS_TRACKED_EXCEPTION: &str = "🟡 tracked exception";
 const STATUS_WITHIN_BUDGET: &str = "✅ within budget";
-const BUDGET_NOT_CONFIGURED: &str = "🟡 no reference";
-const BUDGET_NOT_AVAILABLE: &str = "🟡 unavailable";
-const BUDGET_STARTUP_BOUND: &str = "🟡 startup-bound";
-const BUDGET_OVER: &str = "🟡 > 1.00x";
 const BUDGET_WITHIN: &str = "✅ <= 1.00x";
+const BUDGET_OVER: &str = "🟡 > 1.00x";
+const BUDGET_NOT_AVAILABLE: &str = "🟡 unavailable";
+const BUDGET_NOT_CONFIGURED: &str = "🟡 no reference";
+const REFERENCE_NOT_CONFIGURED: &str = "🟡 not configured";
+const REFERENCE_NOT_AVAILABLE: &str = "🟡 not available";
+const NOT_MEASURED: &str = "-";
 const DETAIL_COMPLETED: &str = "sequential benchmark completed";
 const DETAIL_LATENCY_EXCEPTION: &str = "latency budget exception tracked";
-const DETAIL_MEMORY_EXCEPTION: &str = "memory budget exception tracked";
 
 #[derive(Debug)]
 pub struct BenchmarkReport {
@@ -56,24 +53,14 @@ pub struct BenchmarkRow {
     status: String,
     source: String,
     iterations: usize,
-    rsqjs_in_process_avg: String,
-    rsqjs_compile_avg: String,
-    rsqjs_compiled_eval_avg: String,
-    rsqjs_cli_avg: String,
-    quickjs_cli_avg: String,
+    rsqjs_eval: String,
+    quickjs_eval: String,
     latency_ratio: String,
     latency_budget: String,
-    rsqjs_peak_rss: String,
-    quickjs_peak_rss: String,
     memory_ratio: String,
-    memory_budget: String,
+    rsqjs_cv: String,
+    quickjs_cv: String,
     detail: String,
-}
-
-#[derive(Debug)]
-struct BenchmarkOutcome {
-    row: BenchmarkRow,
-    counts: BenchmarkCounts,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -83,21 +70,12 @@ struct BenchmarkCounts {
     failed: usize,
     skipped: usize,
     over_latency_budget: usize,
-    over_memory_budget: usize,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct InProcessMeasurements {
-    cold_eval: MeasureStats,
-    compile: MeasureStats,
-    compiled_eval: MeasureStats,
-}
-
-#[derive(Debug, Clone)]
-enum MemoryMeasurement {
-    Measured(u64),
-    NotConfigured,
-    Unavailable(String),
+#[derive(Debug)]
+struct BenchmarkOutcome {
+    row: BenchmarkRow,
+    counts: BenchmarkCounts,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -106,23 +84,10 @@ struct BudgetCheck {
     over_budget: bool,
 }
 
-/// Per-engine process-startup floor, measured once and subtracted from every
-/// benchmark's CLI time so the ratio reflects execution rather than startup.
-#[derive(Debug, Clone, Copy)]
-struct CliBaseline {
-    ours: Duration,
-    reference: Duration,
-}
-
-/// Resolved latency verdict for one benchmark row.
-struct LatencyOutcome {
-    ratio: String,
-    label: &'static str,
-    over_budget: bool,
-}
-
 #[must_use]
-pub fn run(quickjs: Option<&Path>, engine: Option<&Path>) -> BenchmarkReport {
+pub fn run() -> BenchmarkReport {
+    let config = MeasureConfig::in_process_from_env();
+    let reference = make_reference();
     let mut report = BenchmarkReport {
         rows: Vec::new(),
         measured: 0,
@@ -132,9 +97,8 @@ pub fn run(quickjs: Option<&Path>, engine: Option<&Path>) -> BenchmarkReport {
         over_latency_budget: 0,
         over_memory_budget: 0,
     };
-    let baseline = cli_baseline(engine, quickjs);
     for case in cases::benchmark_cases() {
-        let outcome = run_benchmark_case(&case, quickjs, engine, baseline);
+        let outcome = run_benchmark_case(&case, config, reference.as_deref());
         report.measured = report.measured.saturating_add(outcome.counts.measured);
         report.in_process_measured = report
             .in_process_measured
@@ -144,9 +108,6 @@ pub fn run(quickjs: Option<&Path>, engine: Option<&Path>) -> BenchmarkReport {
         report.over_latency_budget = report
             .over_latency_budget
             .saturating_add(outcome.counts.over_latency_budget);
-        report.over_memory_budget = report
-            .over_memory_budget
-            .saturating_add(outcome.counts.over_memory_budget);
         report.rows.push(outcome.row);
     }
     report
@@ -154,87 +115,74 @@ pub fn run(quickjs: Option<&Path>, engine: Option<&Path>) -> BenchmarkReport {
 
 fn run_benchmark_case(
     case: &BenchmarkCase,
-    quickjs: Option<&Path>,
-    engine: Option<&Path>,
-    baseline: CliBaseline,
+    config: MeasureConfig,
+    reference: Option<&dyn BenchEngine>,
 ) -> BenchmarkOutcome {
-    let config = MeasureConfig::in_process_from_env();
-    let in_process = match measure_in_process(case.path, config) {
-        Ok(measurements) => measurements,
+    let source = match fs::read_to_string(case.path) {
+        Ok(source) => source,
+        Err(error) => {
+            return failed_outcome(case, &format!("failed to read '{}': {error}", case.path));
+        }
+    };
+    let ours = match bench_measure::measure(config, || RsqjsEngine.eval(&source)) {
+        Ok(stats) => stats,
         Err(error) => return failed_outcome(case, &error.to_string()),
     };
-
-    let Some(engine) = engine else {
-        return failed_outcome_with_in_process(case, in_process, REASON_ENGINE_ENV_MISSING);
+    let Some(reference) = reference else {
+        return measured_without_reference(case, ours);
     };
-
-    match measure_cli_file(engine, case.path, "rsqjs") {
-        Ok(ours) => benchmark_with_ours(case, quickjs, engine, ours, in_process, baseline),
-        Err(error) => failed_outcome_with_in_process(case, in_process, &error.to_string()),
+    match bench_measure::measure(config, || reference.eval(&source)) {
+        Ok(reference_stats) => measured_with_reference(case, ours, reference_stats),
+        Err(error) => reference_unavailable(case, ours, &format!("{}: {error}", reference.label())),
     }
 }
 
-fn benchmark_with_ours(
+fn measured_with_reference(
     case: &BenchmarkCase,
-    quickjs: Option<&Path>,
-    engine: &Path,
     ours: MeasureStats,
-    in_process: InProcessMeasurements,
-    baseline: CliBaseline,
+    reference: MeasureStats,
 ) -> BenchmarkOutcome {
-    let ours_memory = measure_peak_rss(engine, case.path, "rsqjs", case.id);
-    let Some(quickjs) = quickjs else {
-        return measured_without_reference(case, ours, in_process, &ours_memory);
-    };
-
-    match measure_cli_file(quickjs, case.path, "QuickJS") {
-        Ok(quickjs_stats) => {
-            let quickjs_memory = measure_peak_rss(quickjs, case.path, "quickjs", case.id);
-            measured_with_reference(
-                case,
-                ours,
-                in_process,
-                quickjs_stats,
-                &ours_memory,
-                &quickjs_memory,
-                baseline,
-            )
-        }
-        Err(error) => {
-            failed_outcome_with_ours(case, ours, in_process, &ours_memory, &error.to_string())
-        }
+    let budget = budget_check(ours.median().as_nanos(), reference.median().as_nanos());
+    let over = budget.over_budget;
+    BenchmarkOutcome {
+        row: BenchmarkRow {
+            benchmark: case.id.to_owned(),
+            status: benchmark_status(over).to_owned(),
+            source: case.path.to_owned(),
+            iterations: report_iterations(ours),
+            rsqjs_eval: format_duration(ours.median()),
+            quickjs_eval: format_duration(reference.median()),
+            latency_ratio: ratio_values(ours.median().as_nanos(), reference.median().as_nanos()),
+            latency_budget: budget.label.to_owned(),
+            memory_ratio: NOT_MEASURED.to_owned(),
+            rsqjs_cv: ours.cv_percent_text(),
+            quickjs_cv: reference.cv_percent_text(),
+            detail: detail_text(over),
+        },
+        counts: BenchmarkCounts {
+            measured: 1,
+            in_process_measured: 1,
+            over_latency_budget: count_if(over),
+            ..BenchmarkCounts::default()
+        },
     }
 }
 
-fn measured_without_reference(
-    case: &BenchmarkCase,
-    ours: MeasureStats,
-    in_process: InProcessMeasurements,
-    ours_memory: &MemoryMeasurement,
-) -> BenchmarkOutcome {
+fn measured_without_reference(case: &BenchmarkCase, ours: MeasureStats) -> BenchmarkOutcome {
     BenchmarkOutcome {
         row: BenchmarkRow {
             benchmark: case.id.to_owned(),
             status: STATUS_MEASURED.to_owned(),
             source: case.path.to_owned(),
-            iterations: report_iterations(&in_process),
-            rsqjs_in_process_avg: format_duration(in_process.cold_eval.median()),
-            rsqjs_compile_avg: format_duration(in_process.compile.median()),
-            rsqjs_compiled_eval_avg: format_duration(in_process.compiled_eval.median()),
-            rsqjs_cli_avg: format_duration(ours.min()),
-            quickjs_cli_avg: STATUS_NOT_CONFIGURED.to_owned(),
-            latency_ratio: "-".to_owned(),
+            iterations: report_iterations(ours),
+            rsqjs_eval: format_duration(ours.median()),
+            quickjs_eval: REFERENCE_NOT_CONFIGURED.to_owned(),
+            latency_ratio: NOT_MEASURED.to_owned(),
             latency_budget: BUDGET_NOT_CONFIGURED.to_owned(),
-            rsqjs_peak_rss: format_memory(ours_memory),
-            quickjs_peak_rss: STATUS_NOT_CONFIGURED.to_owned(),
-            memory_ratio: "-".to_owned(),
-            memory_budget: BUDGET_NOT_CONFIGURED.to_owned(),
-            detail: format_detail(
-                &[],
-                ours_memory,
-                &MemoryMeasurement::NotConfigured,
-                &in_process_spread_note(&in_process),
-            ),
+            memory_ratio: NOT_MEASURED.to_owned(),
+            rsqjs_cv: ours.cv_percent_text(),
+            quickjs_cv: NOT_MEASURED.to_owned(),
+            detail: DETAIL_COMPLETED.to_owned(),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -245,113 +193,42 @@ fn measured_without_reference(
     }
 }
 
-fn measured_with_reference(
-    case: &BenchmarkCase,
-    ours: MeasureStats,
-    in_process: InProcessMeasurements,
-    quickjs: MeasureStats,
-    ours_memory: &MemoryMeasurement,
-    quickjs_memory: &MemoryMeasurement,
-    baseline: CliBaseline,
-) -> BenchmarkOutcome {
-    let exec_ours = exec_estimate(ours.min(), baseline.ours);
-    let exec_ref = exec_estimate(quickjs.min(), baseline.reference);
-    let latency = resolve_latency(exec_ours, exec_ref);
-    let memory_budget = memory_budget_check(ours_memory, quickjs_memory);
-    let over_memory_budget = memory_budget.over_budget;
-    let detail_flags = detail_flags(latency.over_budget, over_memory_budget);
-    let spread = cli_and_eval_note(&in_process, ours, quickjs, exec_ours, exec_ref, baseline);
-
+/// The engine under test was measured, but the reference could not run this
+/// script (e.g. an unsupported construct): report our number without a ratio
+/// and note the reason, rather than failing the benchmark.
+fn reference_unavailable(case: &BenchmarkCase, ours: MeasureStats, note: &str) -> BenchmarkOutcome {
     BenchmarkOutcome {
         row: BenchmarkRow {
             benchmark: case.id.to_owned(),
-            status: benchmark_status(latency.over_budget, over_memory_budget).to_owned(),
+            status: STATUS_MEASURED.to_owned(),
             source: case.path.to_owned(),
-            iterations: report_iterations(&in_process),
-            rsqjs_in_process_avg: format_duration(in_process.cold_eval.median()),
-            rsqjs_compile_avg: format_duration(in_process.compile.median()),
-            rsqjs_compiled_eval_avg: format_duration(in_process.compiled_eval.median()),
-            rsqjs_cli_avg: format_duration(ours.min()),
-            quickjs_cli_avg: format_duration(quickjs.min()),
-            latency_ratio: latency.ratio,
-            latency_budget: latency.label.to_owned(),
-            rsqjs_peak_rss: format_memory(ours_memory),
-            quickjs_peak_rss: format_memory(quickjs_memory),
-            memory_ratio: memory_ratio(ours_memory, quickjs_memory),
-            memory_budget: memory_budget.label.to_owned(),
-            detail: format_detail(&detail_flags, ours_memory, quickjs_memory, &spread),
+            iterations: report_iterations(ours),
+            rsqjs_eval: format_duration(ours.median()),
+            quickjs_eval: REFERENCE_NOT_AVAILABLE.to_owned(),
+            latency_ratio: NOT_MEASURED.to_owned(),
+            latency_budget: BUDGET_NOT_AVAILABLE.to_owned(),
+            memory_ratio: NOT_MEASURED.to_owned(),
+            rsqjs_cv: ours.cv_percent_text(),
+            quickjs_cv: NOT_MEASURED.to_owned(),
+            detail: format!("{DETAIL_COMPLETED}; reference error: {note}"),
         },
         counts: BenchmarkCounts {
             measured: 1,
             in_process_measured: 1,
-            over_latency_budget: count_if(latency.over_budget),
-            over_memory_budget: count_if(over_memory_budget),
+            skipped: 1,
             ..BenchmarkCounts::default()
         },
     }
-}
-
-/// Turn startup-subtracted execution estimates into a latency verdict. When
-/// execution is below the noise floor the ratio is startup-bound and omitted.
-fn resolve_latency(exec_ours: Duration, exec_ref: Duration) -> LatencyOutcome {
-    let floor = exec_floor_from_env();
-    if exec_ref < floor || exec_ours < floor {
-        return LatencyOutcome {
-            ratio: "-".to_owned(),
-            label: BUDGET_STARTUP_BOUND,
-            over_budget: false,
-        };
-    }
-    let budget = budget_check(exec_ours.as_nanos(), exec_ref.as_nanos());
-    LatencyOutcome {
-        ratio: ratio_values(exec_ours.as_nanos(), exec_ref.as_nanos()),
-        label: budget.label,
-        over_budget: budget.over_budget,
-    }
-}
-
-/// Detail note exposing in-process spread plus the startup-subtracted CLI
-/// execution estimates and their sample dispersion.
-fn cli_and_eval_note(
-    in_process: &InProcessMeasurements,
-    ours: MeasureStats,
-    quickjs: MeasureStats,
-    exec_ours: Duration,
-    exec_ref: Duration,
-    baseline: CliBaseline,
-) -> String {
-    format!(
-        "{}; cli exec {} vs {} (startup {}/{}, cv {}/{})",
-        in_process_spread_note(in_process),
-        format_duration(exec_ours),
-        format_duration(exec_ref),
-        format_duration(baseline.ours),
-        format_duration(baseline.reference),
-        ours.cv_percent_text(),
-        quickjs.cv_percent_text(),
-    )
 }
 
 fn failed_outcome(case: &BenchmarkCase, detail: &str) -> BenchmarkOutcome {
     BenchmarkOutcome {
-        row: BenchmarkRow {
-            benchmark: case.id.to_owned(),
-            status: STATUS_FAILED.to_owned(),
-            source: case.path.to_owned(),
-            iterations: 0,
-            rsqjs_in_process_avg: "-".to_owned(),
-            rsqjs_compile_avg: "-".to_owned(),
-            rsqjs_compiled_eval_avg: "-".to_owned(),
-            rsqjs_cli_avg: STATUS_FAILED.to_owned(),
-            quickjs_cli_avg: "-".to_owned(),
-            latency_ratio: "-".to_owned(),
-            latency_budget: "-".to_owned(),
-            rsqjs_peak_rss: "-".to_owned(),
-            quickjs_peak_rss: "-".to_owned(),
-            memory_ratio: "-".to_owned(),
-            memory_budget: "-".to_owned(),
-            detail: detail.to_owned(),
-        },
+        row: failed_row(
+            case,
+            NOT_MEASURED.to_owned(),
+            NOT_MEASURED.to_owned(),
+            detail,
+        ),
         counts: BenchmarkCounts {
             failed: 1,
             ..BenchmarkCounts::default()
@@ -359,263 +236,37 @@ fn failed_outcome(case: &BenchmarkCase, detail: &str) -> BenchmarkOutcome {
     }
 }
 
-fn failed_outcome_with_in_process(
+fn failed_row(
     case: &BenchmarkCase,
-    in_process: InProcessMeasurements,
+    rsqjs_eval: String,
+    rsqjs_cv: String,
     detail: &str,
-) -> BenchmarkOutcome {
-    BenchmarkOutcome {
-        row: BenchmarkRow {
-            benchmark: case.id.to_owned(),
-            status: STATUS_FAILED.to_owned(),
-            source: case.path.to_owned(),
-            iterations: report_iterations(&in_process),
-            rsqjs_in_process_avg: format_duration(in_process.cold_eval.median()),
-            rsqjs_compile_avg: format_duration(in_process.compile.median()),
-            rsqjs_compiled_eval_avg: format_duration(in_process.compiled_eval.median()),
-            rsqjs_cli_avg: STATUS_FAILED.to_owned(),
-            quickjs_cli_avg: "-".to_owned(),
-            latency_ratio: "-".to_owned(),
-            latency_budget: "-".to_owned(),
-            rsqjs_peak_rss: "-".to_owned(),
-            quickjs_peak_rss: "-".to_owned(),
-            memory_ratio: "-".to_owned(),
-            memory_budget: "-".to_owned(),
-            detail: detail.to_owned(),
-        },
-        counts: BenchmarkCounts {
-            in_process_measured: 1,
-            failed: 1,
-            ..BenchmarkCounts::default()
-        },
+) -> BenchmarkRow {
+    BenchmarkRow {
+        benchmark: case.id.to_owned(),
+        status: STATUS_FAILED.to_owned(),
+        source: case.path.to_owned(),
+        iterations: 0,
+        rsqjs_eval,
+        quickjs_eval: NOT_MEASURED.to_owned(),
+        latency_ratio: NOT_MEASURED.to_owned(),
+        latency_budget: NOT_MEASURED.to_owned(),
+        memory_ratio: NOT_MEASURED.to_owned(),
+        rsqjs_cv,
+        quickjs_cv: NOT_MEASURED.to_owned(),
+        detail: detail.to_owned(),
     }
 }
 
-fn failed_outcome_with_ours(
-    case: &BenchmarkCase,
-    ours: MeasureStats,
-    in_process: InProcessMeasurements,
-    ours_memory: &MemoryMeasurement,
-    detail: &str,
-) -> BenchmarkOutcome {
-    BenchmarkOutcome {
-        row: BenchmarkRow {
-            benchmark: case.id.to_owned(),
-            status: STATUS_FAILED.to_owned(),
-            source: case.path.to_owned(),
-            iterations: report_iterations(&in_process),
-            rsqjs_in_process_avg: format_duration(in_process.cold_eval.median()),
-            rsqjs_compile_avg: format_duration(in_process.compile.median()),
-            rsqjs_compiled_eval_avg: format_duration(in_process.compiled_eval.median()),
-            rsqjs_cli_avg: format_duration(ours.min()),
-            quickjs_cli_avg: STATUS_FAILED.to_owned(),
-            latency_ratio: "-".to_owned(),
-            latency_budget: "-".to_owned(),
-            rsqjs_peak_rss: format_memory(ours_memory),
-            quickjs_peak_rss: "-".to_owned(),
-            memory_ratio: "-".to_owned(),
-            memory_budget: "-".to_owned(),
-            detail: detail.to_owned(),
-        },
-        counts: BenchmarkCounts {
-            in_process_measured: 1,
-            failed: 1,
-            ..BenchmarkCounts::default()
-        },
+fn detail_text(over_latency_budget: bool) -> String {
+    if over_latency_budget {
+        return format!("{DETAIL_COMPLETED}; {DETAIL_LATENCY_EXCEPTION}");
     }
+    DETAIL_COMPLETED.to_owned()
 }
 
-fn measure_in_process(path: &str, config: MeasureConfig) -> anyhow::Result<InProcessMeasurements> {
-    let source = fs::read_to_string(path)
-        .with_context(|| format!("failed to read in-process benchmark source '{path}'"))?;
-    measure_in_process_source(&source, config, path)
-}
-
-fn measure_in_process_source(
-    source: &str,
-    config: MeasureConfig,
-    label: &str,
-) -> anyhow::Result<InProcessMeasurements> {
-    Ok(InProcessMeasurements {
-        cold_eval: measure_cold_eval_source(source, config, label)?,
-        compile: measure_compile_source(source, config, label)?,
-        compiled_eval: measure_compiled_eval_source(source, config, label)?,
-    })
-}
-
-fn measure_cold_eval_source(
-    source: &str,
-    config: MeasureConfig,
-    label: &str,
-) -> anyhow::Result<MeasureStats> {
-    bench_measure::measure(config, || {
-        let runtime = Runtime::new();
-        let mut context = runtime.context();
-        let value = context
-            .eval(source)
-            .with_context(|| format!("in-process benchmark '{label}' failed"))?;
-        black_box(value);
-        black_box(context.output().len());
-        Ok(())
-    })
-}
-
-fn measure_compile_source(
-    source: &str,
-    config: MeasureConfig,
-    label: &str,
-) -> anyhow::Result<MeasureStats> {
-    let runtime = Runtime::new();
-    bench_measure::measure(config, || {
-        let script = runtime
-            .compile(source)
-            .with_context(|| format!("compile benchmark '{label}' failed"))?;
-        black_box(script.usage());
-        Ok(())
-    })
-}
-
-fn measure_compiled_eval_source(
-    source: &str,
-    config: MeasureConfig,
-    label: &str,
-) -> anyhow::Result<MeasureStats> {
-    let runtime = Runtime::new();
-    let script = runtime
-        .compile(source)
-        .with_context(|| format!("compile step for compiled-eval benchmark '{label}' failed"))?;
-    bench_measure::measure(config, || {
-        let mut context = runtime.context();
-        let value = context
-            .eval_compiled(&script)
-            .with_context(|| format!("compiled-eval benchmark '{label}' failed"))?;
-        black_box(value);
-        black_box(context.output().len());
-        Ok(())
-    })
-}
-
-fn cli_baseline(engine: Option<&Path>, quickjs: Option<&Path>) -> CliBaseline {
-    CliBaseline {
-        ours: engine.map_or(Duration::ZERO, |engine| measure_startup(engine, "rsqjs")),
-        reference: quickjs.map_or(Duration::ZERO, |quickjs| {
-            measure_startup(quickjs, "QuickJS")
-        }),
-    }
-}
-
-fn measure_peak_rss(engine: &Path, path: &str, label: &str, case_id: &str) -> MemoryMeasurement {
-    let time_path = Path::new(GNU_TIME_PATH);
-    if !time_path.is_file() {
-        return MemoryMeasurement::Unavailable(format!("{GNU_TIME_PATH} is not available"));
-    }
-
-    let report_path = memory_report_path(label, case_id);
-    let output = Command::new(time_path)
-        .arg("-f")
-        .arg("%M")
-        .arg("-o")
-        .arg(&report_path)
-        .arg(engine)
-        .arg(path)
-        .output();
-    let output = match output {
-        Ok(output) => output,
-        Err(error) => {
-            return MemoryMeasurement::Unavailable(format!(
-                "failed to execute GNU time for {label}: {error}"
-            ));
-        }
-    };
-
-    if !output.status.success() {
-        let cleanup_error = cleanup_temp_file(&report_path);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return memory_unavailable_with_cleanup(
-            format!("GNU time failed for {label}: {stderr}"),
-            cleanup_error,
-        );
-    }
-
-    let rss_text = fs::read_to_string(&report_path);
-    let cleanup_error = cleanup_temp_file(&report_path);
-    let rss_text = match rss_text {
-        Ok(text) => text,
-        Err(error) => {
-            return memory_unavailable_with_cleanup(
-                format!(
-                    "failed to read GNU time RSS report '{}': {error}",
-                    report_path.display()
-                ),
-                cleanup_error,
-            );
-        }
-    };
-
-    let trimmed = rss_text.trim();
-    let kib = match trimmed.parse::<u64>() {
-        Ok(kib) => kib,
-        Err(error) => {
-            return memory_unavailable_with_cleanup(
-                format!("failed to parse GNU time RSS '{trimmed}': {error}"),
-                cleanup_error,
-            );
-        }
-    };
-
-    if let Some(error) = cleanup_error {
-        return MemoryMeasurement::Unavailable(error);
-    }
-
-    MemoryMeasurement::Measured(kib)
-}
-
-fn memory_report_path(label: &str, case_id: &str) -> PathBuf {
-    let file_name = format!(
-        "rsqjs-bench-{}-{}-{}.rss",
-        process::id(),
-        sanitize_path_segment(label),
-        sanitize_path_segment(case_id)
-    );
-    std::env::temp_dir().join(file_name)
-}
-
-fn sanitize_path_segment(input: &str) -> String {
-    let segment = input
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() {
-                character
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>();
-    if segment.is_empty() {
-        return "value".to_owned();
-    }
-    segment
-}
-
-fn cleanup_temp_file(path: &Path) -> Option<String> {
-    match fs::remove_file(path) {
-        Ok(()) => None,
-        Err(error) if error.kind() == ErrorKind::NotFound => None,
-        Err(error) => Some(format!(
-            "failed to remove memory report '{}': {error}",
-            path.display()
-        )),
-    }
-}
-
-fn memory_unavailable_with_cleanup(
-    message: String,
-    cleanup_error: Option<String>,
-) -> MemoryMeasurement {
-    let Some(cleanup_error) = cleanup_error else {
-        return MemoryMeasurement::Unavailable(message);
-    };
-    MemoryMeasurement::Unavailable(format!("{message}; {cleanup_error}"))
+fn report_iterations(stats: MeasureStats) -> usize {
+    usize::try_from(stats.total_iters()).unwrap_or(usize::MAX)
 }
 
 const fn budget_check(ours: u128, reference: u128) -> BudgetCheck {
@@ -637,110 +288,22 @@ const fn budget_check(ours: u128, reference: u128) -> BudgetCheck {
     }
 }
 
-fn memory_budget_check(ours: &MemoryMeasurement, quickjs: &MemoryMeasurement) -> BudgetCheck {
-    let (MemoryMeasurement::Measured(ours), MemoryMeasurement::Measured(quickjs)) = (ours, quickjs)
-    else {
-        return BudgetCheck {
-            label: BUDGET_NOT_AVAILABLE,
-            over_budget: false,
-        };
-    };
-    budget_check(u128::from(*ours), u128::from(*quickjs))
-}
-
-const fn benchmark_status(over_latency_budget: bool, over_memory_budget: bool) -> &'static str {
-    if over_latency_budget || over_memory_budget {
+const fn benchmark_status(over_latency_budget: bool) -> &'static str {
+    if over_latency_budget {
         return STATUS_TRACKED_EXCEPTION;
     }
     STATUS_WITHIN_BUDGET
 }
 
 const fn count_if(condition: bool) -> usize {
-    if condition {
-        return 1;
-    }
-    0
-}
-
-fn detail_flags(over_latency_budget: bool, over_memory_budget: bool) -> Vec<&'static str> {
-    let mut flags = Vec::new();
-    if over_latency_budget {
-        flags.push(DETAIL_LATENCY_EXCEPTION);
-    }
-    if over_memory_budget {
-        flags.push(DETAIL_MEMORY_EXCEPTION);
-    }
-    flags
-}
-
-fn format_detail(
-    flags: &[&str],
-    ours_memory: &MemoryMeasurement,
-    quickjs_memory: &MemoryMeasurement,
-    spread: &str,
-) -> String {
-    let mut details = vec![DETAIL_COMPLETED.to_owned()];
-    details.extend(flags.iter().map(|flag| (*flag).to_owned()));
-    if !spread.is_empty() {
-        details.push(spread.to_owned());
-    }
-    if let Some(note) = memory_note("rsqjs", ours_memory) {
-        details.push(note);
-    }
-    if let Some(note) = memory_note("QuickJS", quickjs_memory) {
-        details.push(note);
-    }
-    details.join("; ")
-}
-
-/// Total in-process eval iterations behind the reported median, for the
-/// informational `iterations` column (it now varies per benchmark).
-fn report_iterations(in_process: &InProcessMeasurements) -> usize {
-    usize::try_from(in_process.compiled_eval.total_iters()).unwrap_or(usize::MAX)
-}
-
-/// Compact note exposing the residual measurement noise so a reader can tell a
-/// real change from jitter without leaving the report.
-fn in_process_spread_note(in_process: &InProcessMeasurements) -> String {
-    let eval = in_process.compiled_eval;
-    format!(
-        "rsqjs eval min {} cv {} ({} samples)",
-        format_duration(eval.min()),
-        eval.cv_percent_text(),
-        eval.samples()
-    )
-}
-
-fn memory_note(label: &str, memory: &MemoryMeasurement) -> Option<String> {
-    let MemoryMeasurement::Unavailable(reason) = memory else {
-        return None;
-    };
-    Some(format!("{label} memory unavailable: {reason}"))
-}
-
-fn format_memory(memory: &MemoryMeasurement) -> String {
-    match memory {
-        MemoryMeasurement::Measured(kib) => format!("{kib} {MEMORY_UNIT}"),
-        MemoryMeasurement::NotConfigured => STATUS_NOT_CONFIGURED.to_owned(),
-        MemoryMeasurement::Unavailable(_) => STATUS_NOT_AVAILABLE.to_owned(),
-    }
-}
-
-fn memory_ratio(ours: &MemoryMeasurement, quickjs: &MemoryMeasurement) -> String {
-    let (MemoryMeasurement::Measured(ours), MemoryMeasurement::Measured(quickjs)) = (ours, quickjs)
-    else {
-        return "-".to_owned();
-    };
-    ratio_values(u128::from(*ours), u128::from(*quickjs))
+    if condition { 1 } else { 0 }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::{BUDGET_OVER, BUDGET_WITHIN, RsqjsEngine, bench_measure, budget_check};
+    use crate::bench_engines::BenchEngine;
     use std::time::Duration;
-
-    use super::{
-        BUDGET_OVER, BUDGET_WITHIN, MeasureConfig, budget_check, measure_in_process_source,
-    };
 
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -759,21 +322,18 @@ mod tests {
     }
 
     #[test]
-    fn measures_in_process_source() -> TestResult {
-        let config = MeasureConfig::new(Duration::from_millis(5), Duration::from_millis(15), 3);
-        let measurements =
-            measure_in_process_source("let value = 40 + 2; value", config, "unit-test")?;
+    fn samples_engine_under_test_in_process() -> TestResult {
+        let config =
+            super::MeasureConfig::new(Duration::from_millis(5), Duration::from_millis(15), 3);
+        let stats =
+            bench_measure::measure(config, || RsqjsEngine.eval("let value = 40 + 2; value"))?;
         ensure_bool(
-            measurements.cold_eval.median() <= Duration::from_secs(1),
-            "in-process cold eval should finish quickly",
+            stats.median() <= Duration::from_secs(1),
+            "in-process eval should finish quickly",
         )?;
         ensure_bool(
-            measurements.compile.median() <= Duration::from_secs(1),
-            "in-process compile should finish quickly",
-        )?;
-        ensure_bool(
-            measurements.compiled_eval.median() <= Duration::from_secs(1),
-            "in-process compiled eval should finish quickly",
+            stats.total_iters() > 1,
+            "sampler must auto-scale iterations",
         )
     }
 
