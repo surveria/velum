@@ -1,3 +1,4 @@
+mod array;
 mod control;
 mod ops;
 mod state;
@@ -5,8 +6,8 @@ mod state;
 use crate::{
     ast::UpdateOp,
     bytecode::{
-        BytecodeAddress, BytecodeArrayIndex, BytecodeBlock, BytecodeDynamicProperty,
-        BytecodeInstruction, BytecodeProgram, BytecodeProperty,
+        BytecodeAddress, BytecodeBlock, BytecodeDynamicProperty, BytecodeInstruction,
+        BytecodeProgram, BytecodeProperty,
     },
     error::{Error, Result},
     native_call::NativeCallTarget,
@@ -447,6 +448,11 @@ impl Context {
             BytecodeInstruction::ComputedMember { property: operand } => {
                 let property = state.stack.pop()?;
                 let object = state.stack.pop()?;
+                if let Some(value) = self.eval_dynamic_array_index_member(&object, &property)? {
+                    state.stack.push(value);
+                    state.pc = next;
+                    return Ok(None);
+                }
                 let key = self.dynamic_property_key(&property)?;
                 state.stack.push(self.get_cached_dynamic_property_value(
                     &object,
@@ -493,6 +499,11 @@ impl Context {
                 let value = state.stack.pop()?;
                 let key = state.stack.pop()?;
                 let object = state.stack.pop()?;
+                if self.set_dynamic_array_index_property(&object, &key, value.clone())? {
+                    state.stack.push(value);
+                    state.pc = next;
+                    return Ok(None);
+                }
                 let mut key = self.dynamic_property_key(&key)?;
                 self.set_cached_dynamic_property_value(
                     &object,
@@ -522,54 +533,6 @@ impl Context {
         )?);
         state.pc = next;
         Ok(None)
-    }
-
-    fn eval_bytecode_array_length(
-        &mut self,
-        object: &Value,
-        property: &BytecodeProperty,
-    ) -> Result<Value> {
-        if let Some(value) = self.get_array_length_property_value(object)? {
-            return Ok(value);
-        }
-        self.get_static_property_value(object, property.name(), property.access())
-    }
-
-    fn eval_bytecode_array_index_member(
-        &mut self,
-        object: &Value,
-        property: &BytecodeProperty,
-        index: BytecodeArrayIndex,
-    ) -> Result<Value> {
-        if let Value::Object(id) = object
-            && let Some(value) = self
-                .objects
-                .array_index_value_if_array(*id, index.index()?)?
-        {
-            return self.runtime_value(value);
-        }
-        self.get_static_property_value(object, property.name(), property.access())
-    }
-
-    fn set_bytecode_array_index_property(
-        &mut self,
-        object: &Value,
-        property: &BytecodeProperty,
-        index: BytecodeArrayIndex,
-        value: Value,
-    ) -> Result<()> {
-        let value = self.runtime_value(value)?;
-        if let Value::Object(id) = object
-            && self.objects.set_array_index_if_array(
-                *id,
-                index.index()?,
-                value.clone(),
-                self.limits.max_object_properties,
-            )?
-        {
-            return Ok(());
-        }
-        self.set_static_property_value(object, property.name(), property.access(), value)
     }
 
     fn eval_bytecode_call_instruction(

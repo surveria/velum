@@ -6,6 +6,20 @@ use crate::{
 use super::{ArrayIndex, ObjectHeap};
 
 impl ObjectHeap {
+    pub(crate) fn dynamic_array_index_if_array(
+        &self,
+        id: ObjectId,
+        property: &Value,
+    ) -> Result<Option<usize>> {
+        if self.array_length_if_array(id)?.is_none() {
+            return Ok(None);
+        }
+        let Some(index) = array_index_from_property_value(property) else {
+            return Ok(None);
+        };
+        index.position().map(Some)
+    }
+
     pub(crate) fn array_index_value_if_array(
         &self,
         id: ObjectId,
@@ -34,5 +48,21 @@ impl ObjectHeap {
         }
         self.set_array_index(id, index, value, max_properties)?;
         Ok(true)
+    }
+}
+
+fn array_index_from_property_value(property: &Value) -> Option<ArrayIndex> {
+    match property {
+        Value::String(value) => ArrayIndex::parse(value),
+        Value::HeapString(value) => ArrayIndex::parse(value.as_str()),
+        Value::Number(_) => ArrayIndex::parse(&property.to_string()),
+        Value::Undefined
+        | Value::Null
+        | Value::Bool(_)
+        | Value::Function(_)
+        | Value::NativeFunction(_)
+        | Value::HostFunction(_)
+        | Value::Object(_)
+        | Value::Error(_) => None,
     }
 }
