@@ -16,6 +16,7 @@ use crate::{
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
 };
 
+use super::runtime_function_capture::statements_contain_nested_function;
 use super::runtime_function_properties::{
     FUNCTION_LENGTH_PROPERTY, FUNCTION_NAME_PROPERTY, FUNCTION_PROTOTYPE_PROPERTY,
     FunctionProperties, PROTOTYPE_CONSTRUCTOR_PROPERTY,
@@ -74,13 +75,19 @@ impl Context {
         let static_binding_cache = self.current_static_binding_cache();
         let static_binding_layout = self.current_static_binding_layout();
         let upvalues = self.capture_function_upvalues(body, static_binding_layout.as_ref())?;
+        let captures = super::FunctionCaptures::from_current_locals(
+            &self.locals,
+            static_binding_layout.is_some(),
+            &upvalues,
+            statements_contain_nested_function(body),
+        );
         self.functions.push(super::Function {
             name: function_name,
             arity: super::FunctionArity::new(params.len()),
             param_binding_ids: function_param_binding_ids(params),
             param_atoms,
             body: Rc::clone(body),
-            captures: self.locals.clone(),
+            captures,
             upvalues,
             static_name_atom_cache,
             static_binding_cache,
@@ -136,7 +143,7 @@ impl Context {
                 Rc::clone(&function.param_atoms),
                 Rc::clone(&function.param_binding_ids),
                 Rc::clone(&function.body),
-                function.captures.clone(),
+                function.captures.call_locals(),
                 Rc::clone(&function.upvalues),
                 function.static_name_atom_cache.clone(),
                 function.static_binding_cache.clone(),

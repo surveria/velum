@@ -359,6 +359,21 @@ fn compiled_upvalue_frame_cells_preserve_closure_instances() -> TestResult {
 }
 
 #[test]
+fn compiled_upvalue_frames_skip_legacy_capture_snapshots() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(UPVALUE_FRAME_CELLS_SOURCE)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(144.0))?;
+    let usage = vm.resource_usage();
+
+    ensure_usize(usage.captured_scope_count, 0)?;
+    ensure_usize(usage.captured_binding_count, 0)?;
+    ensure_greater_than(usage.upvalue_cell_count, 0, "upvalue cells")
+}
+
+#[test]
 fn compiled_binding_operations_materialize_builtins_only_after_binding_lookup() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
