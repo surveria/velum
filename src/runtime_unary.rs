@@ -60,8 +60,7 @@ impl Context {
         match expr {
             Expr::Parenthesized(expr) => self.eval_delete(expr),
             Expr::Identifier(name) => {
-                let binding_exists = self.get_binding_static(name)?.is_some()
-                    || self.materialize_builtin_binding(name)?;
+                let binding_exists = self.binding_exists_or_materialize_static(name)?;
                 Ok(Value::Bool(!binding_exists))
             }
             Expr::Member { object, property } => {

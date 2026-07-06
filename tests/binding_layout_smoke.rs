@@ -118,6 +118,26 @@ var right = makeCounter(100);
 left(1) + left(2) + right(3) + left(4);
 ";
 
+const STATIC_BINDING_MATERIALIZATION_GUARD_SOURCE: &str = r"
+var make = function make(seed) {
+    var total = seed;
+    return function apply(delta) {
+        total = total + delta;
+        total += 1;
+        total++;
+        return total;
+    };
+};
+var run = make(1);
+var index = 0;
+var observed = 0;
+while (index < 3) {
+    observed = observed + run(index);
+    index = index + 1;
+}
+observed;
+";
+
 #[test]
 fn compiled_layout_counts_global_local_and_upvalue_slots() -> TestResult {
     let engine = Engine::new();
@@ -335,6 +355,27 @@ fn compiled_upvalue_frame_cells_preserve_closure_instances() -> TestResult {
 
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(144.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atom_count)
+}
+
+#[test]
+fn compiled_binding_operations_materialize_builtins_only_after_binding_lookup() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(STATIC_BINDING_MATERIALIZATION_GUARD_SOURCE)?;
+    let usage = script.usage();
+
+    ensure_usize(usage.global_binding_slot_count(), 4)?;
+    ensure_usize(usage.local_binding_slot_count(), 3)?;
+    ensure_usize(usage.upvalue_binding_slot_count(), 1)?;
+    ensure_usize(usage.unresolved_static_binding_count(), 0)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(19.0))?;
+    let atom_count = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(19.0))?;
     ensure_usize(vm.resource_usage().atom_count, atom_count)
 }
 

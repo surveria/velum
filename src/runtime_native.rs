@@ -428,18 +428,14 @@ impl Context {
         }
     }
 
-    pub(crate) fn materialize_builtin_binding(&mut self, name: &str) -> Result<bool> {
-        self.builtin_value(name).map(|value| value.is_some())
-    }
-
     pub(crate) fn constructor_binding_static(
         &mut self,
         name: &StaticBinding,
     ) -> Result<Option<Value>> {
-        if let Some(binding) = self.get_binding_static(name)? {
+        if let Some(binding) = self.get_or_materialize_binding_static(name)? {
             return Ok(Some(binding.value()));
         }
-        self.builtin_value(name.name())
+        Ok(None)
     }
 
     pub(crate) fn eval_native_function(
