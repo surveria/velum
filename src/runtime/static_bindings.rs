@@ -6,6 +6,7 @@ use crate::{
     atom::AtomId,
     binding_layout::BindingLayout,
     binding_layout::{BindingOperand, DeclarationRef, FunctionScopeId, ScopeId},
+    bytecode::BytecodeBinding,
     error::{Error, Result},
     runtime::Context,
     runtime::assertions::reference_error_undefined,
@@ -251,44 +252,62 @@ impl Context {
         self.binding_at_location(location)
     }
 
-    pub(crate) fn assign_static(&mut self, binding: &StaticBinding, value: Value) -> Result<()> {
-        let value = self.runtime_value(value)?;
-        let Some(cell) = self.get_binding_static(binding)? else {
-            return Err(reference_error_undefined(binding));
-        };
-        cell.assign(binding, value)
+    pub(crate) fn get_binding_bytecode(
+        &self,
+        binding: &BytecodeBinding,
+    ) -> Result<Option<BindingCell>> {
+        if let Some(cell) = self.cached_static_binding(binding.name())? {
+            return Ok(Some(cell));
+        }
+        if let Some((location, cell)) = self.direct_bytecode_static_binding(binding.operand())? {
+            self.remember_static_binding(binding.name(), location)?;
+            return Ok(Some(cell));
+        }
+        self.get_binding_static(binding.name())
     }
 
-    pub(crate) fn assign_static_or_builtin(
+    pub(crate) fn assign_bytecode(
         &mut self,
-        binding: &StaticBinding,
+        binding: &BytecodeBinding,
         value: Value,
     ) -> Result<()> {
         let value = self.runtime_value(value)?;
-        let Some(cell) = self.get_or_materialize_binding_static(binding)? else {
-            return Err(reference_error_undefined(binding));
+        let Some(cell) = self.get_binding_bytecode(binding)? else {
+            return Err(reference_error_undefined(binding.name()));
         };
-        cell.assign(binding, value)
+        cell.assign(binding.name(), value)
     }
 
-    pub(crate) fn get_or_materialize_binding_static(
+    pub(crate) fn assign_bytecode_or_builtin(
         &mut self,
-        binding: &StaticBinding,
+        binding: &BytecodeBinding,
+        value: Value,
+    ) -> Result<()> {
+        let value = self.runtime_value(value)?;
+        let Some(cell) = self.get_or_materialize_binding_bytecode(binding)? else {
+            return Err(reference_error_undefined(binding.name()));
+        };
+        cell.assign(binding.name(), value)
+    }
+
+    pub(crate) fn get_or_materialize_binding_bytecode(
+        &mut self,
+        binding: &BytecodeBinding,
     ) -> Result<Option<BindingCell>> {
-        if let Some(cell) = self.get_binding_static(binding)? {
+        if let Some(cell) = self.get_binding_bytecode(binding)? {
             return Ok(Some(cell));
         }
-        if self.builtin_value(binding.name())?.is_none() {
+        if self.builtin_value(binding.name().name())?.is_none() {
             return Ok(None);
         }
-        self.get_binding_static(binding)
+        self.get_binding_bytecode(binding)
     }
 
-    pub(crate) fn binding_exists_or_materialize_static(
+    pub(crate) fn binding_exists_or_materialize_bytecode(
         &mut self,
-        binding: &StaticBinding,
+        binding: &BytecodeBinding,
     ) -> Result<bool> {
-        self.get_or_materialize_binding_static(binding)
+        self.get_or_materialize_binding_bytecode(binding)
             .map(|binding| binding.is_some())
     }
 
@@ -354,7 +373,14 @@ impl Context {
         &self,
         binding: &StaticBinding,
     ) -> Result<Option<(BindingLocation, BindingCell)>> {
-        match self.compiled_binding_operand(binding.id())? {
+        self.direct_bytecode_static_binding(self.compiled_binding_operand(binding.id())?)
+    }
+
+    fn direct_bytecode_static_binding(
+        &self,
+        operand: BindingOperand,
+    ) -> Result<Option<(BindingLocation, BindingCell)>> {
+        match operand {
             BindingOperand::Local { scope, slot } => {
                 self.direct_compiled_local_static_binding(scope, slot)
             }

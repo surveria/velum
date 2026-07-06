@@ -2,42 +2,48 @@ use std::rc::Rc;
 
 use crate::{
     ast::{
-        BinaryOp, CatchClause, DeclKind, Expr, ForInTarget, ObjectProperty, Program, StaticBinding,
-        StaticPropertyAccessId, Stmt, SwitchCase, UnaryOp, UpdateOp,
+        BinaryOp, DeclKind, Expr, ObjectProperty, Program, StaticBinding, StaticName,
+        StaticPropertyAccessId, Stmt, UnaryOp, UpdateOp,
     },
+    binding_layout::BindingLayout,
     error::{Error, Result},
 };
 
 mod call;
+mod control;
 mod function;
 mod hoist;
 mod types;
 
 pub use hoist::BytecodeHoistPlan;
 pub use types::{
-    BytecodeAddress, BytecodeAssignmentTarget, BytecodeBlock, BytecodeCatch, BytecodeCompletion,
-    BytecodeForInTarget, BytecodeFunction, BytecodeInstruction, BytecodeProgram,
-    BytecodeSwitchCase,
+    BytecodeAddress, BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock, BytecodeCatch,
+    BytecodeCompletion, BytecodeForInTarget, BytecodeFunction, BytecodeInstruction,
+    BytecodeProgram, BytecodeSwitchCase,
 };
 
 impl BytecodeProgram {
-    pub fn compile(program: &Program) -> Result<Self> {
+    pub fn compile(program: &Program, layout: &BindingLayout) -> Result<Self> {
         Ok(Self::new(
-            BytecodeBlock::compile_statements(&program.statements, StatementValue::Store)?,
+            BytecodeBlock::compile_statements(&program.statements, StatementValue::Store, layout)?,
             BytecodeHoistPlan::compile(&program.statements),
         ))
     }
 }
 
 impl BytecodeBlock {
-    fn compile_statements(statements: &[Stmt], value: StatementValue) -> Result<Self> {
-        let mut compiler = BytecodeCompiler::new();
+    fn compile_statements(
+        statements: &[Stmt],
+        value: StatementValue,
+        layout: &BindingLayout,
+    ) -> Result<Self> {
+        let mut compiler = BytecodeCompiler::new(layout);
         compiler.compile_statements(statements, value)?;
         Ok(Self::from_instructions(compiler.instructions))
     }
 
-    fn compile_expression(expr: &Expr) -> Result<Self> {
-        let mut compiler = BytecodeCompiler::new();
+    fn compile_expression(expr: &Expr, layout: &BindingLayout) -> Result<Self> {
+        let mut compiler = BytecodeCompiler::new(layout);
         compiler.compile_expr(expr)?;
         compiler.emit(BytecodeInstruction::StoreLast);
         Ok(Self::from_instructions(compiler.instructions))
@@ -51,15 +57,21 @@ enum StatementValue {
 }
 
 #[derive(Debug)]
-struct BytecodeCompiler {
+struct BytecodeCompiler<'a> {
+    layout: &'a BindingLayout,
     instructions: Vec<BytecodeInstruction>,
 }
 
-impl BytecodeCompiler {
-    const fn new() -> Self {
+impl<'a> BytecodeCompiler<'a> {
+    const fn new(layout: &'a BindingLayout) -> Self {
         Self {
+            layout,
             instructions: Vec::new(),
         }
+    }
+
+    fn compile_binding(&self, binding: &StaticBinding) -> Result<BytecodeBinding> {
+        BytecodeBinding::compile(binding, self.layout)
     }
 
     fn compile_statements(&mut self, statements: &[Stmt], value: StatementValue) -> Result<()> {
@@ -72,7 +84,7 @@ impl BytecodeCompiler {
     fn compile_statement(&mut self, statement: &Stmt, value: StatementValue) -> Result<()> {
         match statement {
             Stmt::Block(statements) => {
-                let block = BytecodeBlock::compile_statements(statements, value)?;
+                let block = BytecodeBlock::compile_statements(statements, value, self.layout)?;
                 self.emit(BytecodeInstruction::ScopedBlock(block));
                 Ok(())
             }
@@ -139,153 +151,6 @@ impl BytecodeCompiler {
         }
     }
 
-    fn compile_if(
-        &mut self,
-        condition: &Expr,
-        consequent: &Stmt,
-        alternate: Option<&Stmt>,
-        value: StatementValue,
-    ) -> Result<()> {
-        let condition = BytecodeBlock::compile_expression(condition)?;
-        let consequent = Self::compile_statement_block(consequent, value)?;
-        let alternate = alternate
-            .map(|alternate| Self::compile_statement_block(alternate, value))
-            .transpose()?;
-        self.emit(BytecodeInstruction::If {
-            condition,
-            consequent,
-            alternate,
-        });
-        Ok(())
-    }
-
-    fn compile_while(&mut self, condition: &Expr, body: &Stmt) -> Result<()> {
-        self.emit(BytecodeInstruction::While {
-            condition: BytecodeBlock::compile_expression(condition)?,
-            body: Self::compile_statement_block(body, StatementValue::Store)?,
-        });
-        Ok(())
-    }
-
-    fn compile_for(
-        &mut self,
-        init: Option<&Stmt>,
-        condition: Option<&Expr>,
-        update: Option<&Expr>,
-        body: &Stmt,
-    ) -> Result<()> {
-        self.emit(BytecodeInstruction::For {
-            init: init
-                .map(|init| Self::compile_statement_block(init, StatementValue::Discard))
-                .transpose()?,
-            condition: condition
-                .map(BytecodeBlock::compile_expression)
-                .transpose()?,
-            update: update.map(BytecodeBlock::compile_expression).transpose()?,
-            body: Self::compile_statement_block(body, StatementValue::Store)?,
-            scoped: for_init_needs_lexical_scope(init),
-        });
-        Ok(())
-    }
-
-    fn compile_for_in(&mut self, target: &ForInTarget, object: &Expr, body: &Stmt) -> Result<()> {
-        self.emit(BytecodeInstruction::ForIn {
-            target: Self::compile_for_in_target(target)?,
-            object: BytecodeBlock::compile_expression(object)?,
-            body: Self::compile_statement_block(body, StatementValue::Store)?,
-        });
-        Ok(())
-    }
-
-    fn compile_switch(&mut self, discriminant: &Expr, cases: &[SwitchCase]) -> Result<()> {
-        let mut bytecode_cases = Vec::with_capacity(cases.len());
-        for case in cases {
-            bytecode_cases.push(BytecodeSwitchCase {
-                test: case
-                    .test
-                    .as_ref()
-                    .map(BytecodeBlock::compile_expression)
-                    .transpose()?,
-                body: BytecodeBlock::compile_statements(&case.statements, StatementValue::Store)?,
-            });
-        }
-        self.emit(BytecodeInstruction::Switch {
-            discriminant: BytecodeBlock::compile_expression(discriminant)?,
-            cases: Rc::from(bytecode_cases.into_boxed_slice()),
-        });
-        Ok(())
-    }
-
-    fn compile_try(
-        &mut self,
-        body: &[Stmt],
-        catch: Option<&CatchClause>,
-        finally_body: Option<&[Stmt]>,
-    ) -> Result<()> {
-        self.emit(BytecodeInstruction::Try {
-            body: BytecodeBlock::compile_statements(body, StatementValue::Store)?,
-            catch: catch
-                .map(|catch| {
-                    Ok(BytecodeCatch {
-                        param: catch.param.clone(),
-                        body: BytecodeBlock::compile_statements(
-                            &catch.body,
-                            StatementValue::Store,
-                        )?,
-                    })
-                })
-                .transpose()?,
-            finally_body: finally_body
-                .map(|body| BytecodeBlock::compile_statements(body, StatementValue::Store))
-                .transpose()?,
-        });
-        Ok(())
-    }
-
-    fn compile_statement_block(statement: &Stmt, value: StatementValue) -> Result<BytecodeBlock> {
-        let mut compiler = Self::new();
-        compiler.compile_statement(statement, value)?;
-        Ok(BytecodeBlock::from_instructions(compiler.instructions))
-    }
-
-    fn compile_for_in_target(target: &ForInTarget) -> Result<BytecodeForInTarget> {
-        match target {
-            ForInTarget::Binding { name, kind } => Ok(BytecodeForInTarget::Binding {
-                name: name.clone(),
-                kind: *kind,
-            }),
-            ForInTarget::Assignment(expr) => {
-                Self::compile_assignment_target(expr).map(BytecodeForInTarget::Assignment)
-            }
-        }
-    }
-
-    fn compile_assignment_target(expr: &Expr) -> Result<BytecodeAssignmentTarget> {
-        match expr {
-            Expr::Identifier(name) => Ok(BytecodeAssignmentTarget::Binding(name.clone())),
-            Expr::Member {
-                object,
-                property,
-                access,
-            } => Ok(BytecodeAssignmentTarget::StaticProperty {
-                object: BytecodeBlock::compile_expression(object)?,
-                property: property.clone(),
-                access: *access,
-            }),
-            Expr::ComputedMember {
-                object,
-                property,
-                access,
-            } => Ok(BytecodeAssignmentTarget::ComputedProperty {
-                object: BytecodeBlock::compile_expression(object)?,
-                property: BytecodeBlock::compile_expression(property)?,
-                access: *access,
-            }),
-            Expr::Parenthesized(expr) => Self::compile_assignment_target(expr),
-            _ => Err(Error::runtime("invalid bytecode assignment target")),
-        }
-    }
-
     fn compile_declaration(
         &mut self,
         name: &StaticBinding,
@@ -296,7 +161,7 @@ impl BytecodeCompiler {
             self.compile_expr(init)?;
         }
         self.emit(BytecodeInstruction::DeclareBinding {
-            name: name.clone(),
+            name: self.compile_binding(name)?,
             kind,
             has_init: init.is_some(),
         });
@@ -315,7 +180,9 @@ impl BytecodeCompiler {
                 self.emit(BytecodeInstruction::LoadThis);
             }
             Expr::Identifier(name) => {
-                self.emit(BytecodeInstruction::LoadBinding(name.clone()));
+                self.emit(BytecodeInstruction::LoadBinding(
+                    self.compile_binding(name)?,
+                ));
             }
             Expr::Parenthesized(expr) => return self.compile_expr(expr),
             Expr::Unary { op, expr } => return self.compile_unary_expr(*op, expr),
@@ -331,53 +198,30 @@ impl BytecodeCompiler {
                 alternate,
             } => return self.compile_conditional_expr(condition, consequent, alternate),
             Expr::Assignment { name, expr } => {
-                self.compile_expr(expr)?;
-                self.emit(BytecodeInstruction::StoreBinding(name.clone()));
+                return self.compile_binding_assignment_expr(name, expr);
             }
             Expr::PropertyAssignment {
                 object,
                 property,
                 access,
                 expr,
-            } => {
-                self.compile_expr(object)?;
-                self.compile_expr(expr)?;
-                self.emit(BytecodeInstruction::StaticPropertyAssign {
-                    property: property.clone(),
-                    access: *access,
-                });
-            }
+            } => return self.compile_static_property_assignment(object, property, *access, expr),
             Expr::ComputedPropertyAssignment {
                 object,
                 property,
                 access,
                 expr,
-            } => {
-                self.compile_expr(object)?;
-                self.compile_expr(property)?;
-                self.compile_expr(expr)?;
-                self.emit(BytecodeInstruction::ComputedPropertyAssign { access: *access });
-            }
+            } => return self.compile_computed_property_assignment(object, property, *access, expr),
             Expr::Member {
                 object,
                 property,
                 access,
-            } => {
-                self.compile_expr(object)?;
-                self.emit(BytecodeInstruction::StaticMember {
-                    property: property.clone(),
-                    access: *access,
-                });
-            }
+            } => return self.compile_static_member_expr(object, property, *access),
             Expr::ComputedMember {
                 object,
                 property,
                 access,
-            } => {
-                self.compile_expr(object)?;
-                self.compile_expr(property)?;
-                self.emit(BytecodeInstruction::ComputedMember { access: *access });
-            }
+            } => return self.compile_computed_member_expr(object, property, *access),
             Expr::Object(properties) => return self.compile_object_literal(properties),
             Expr::Array(elements) => return self.compile_array_literal(elements),
             Expr::Update { op, prefix, expr } => {
@@ -404,6 +248,70 @@ impl BytecodeCompiler {
         Ok(())
     }
 
+    fn compile_binding_assignment_expr(&mut self, name: &StaticBinding, expr: &Expr) -> Result<()> {
+        self.compile_expr(expr)?;
+        self.emit(BytecodeInstruction::StoreBinding(
+            self.compile_binding(name)?,
+        ));
+        Ok(())
+    }
+
+    fn compile_static_property_assignment(
+        &mut self,
+        object: &Expr,
+        property: &StaticName,
+        access: StaticPropertyAccessId,
+        expr: &Expr,
+    ) -> Result<()> {
+        self.compile_expr(object)?;
+        self.compile_expr(expr)?;
+        self.emit(BytecodeInstruction::StaticPropertyAssign {
+            property: property.clone(),
+            access,
+        });
+        Ok(())
+    }
+
+    fn compile_computed_property_assignment(
+        &mut self,
+        object: &Expr,
+        property: &Expr,
+        access: StaticPropertyAccessId,
+        expr: &Expr,
+    ) -> Result<()> {
+        self.compile_expr(object)?;
+        self.compile_expr(property)?;
+        self.compile_expr(expr)?;
+        self.emit(BytecodeInstruction::ComputedPropertyAssign { access });
+        Ok(())
+    }
+
+    fn compile_static_member_expr(
+        &mut self,
+        object: &Expr,
+        property: &StaticName,
+        access: StaticPropertyAccessId,
+    ) -> Result<()> {
+        self.compile_expr(object)?;
+        self.emit(BytecodeInstruction::StaticMember {
+            property: property.clone(),
+            access,
+        });
+        Ok(())
+    }
+
+    fn compile_computed_member_expr(
+        &mut self,
+        object: &Expr,
+        property: &Expr,
+        access: StaticPropertyAccessId,
+    ) -> Result<()> {
+        self.compile_expr(object)?;
+        self.compile_expr(property)?;
+        self.emit(BytecodeInstruction::ComputedMember { access });
+        Ok(())
+    }
+
     fn compile_function_expr(
         &mut self,
         id: crate::ast::StaticFunctionId,
@@ -416,7 +324,7 @@ impl BytecodeCompiler {
             id,
             name,
             params: Rc::clone(params),
-            bytecode: BytecodeFunction::compile(body)?,
+            bytecode: BytecodeFunction::compile(body, self.layout)?,
             constructable,
         });
         Ok(())
@@ -425,7 +333,7 @@ impl BytecodeCompiler {
     fn compile_new_expr(&mut self, constructor: &StaticBinding, args: &[Expr]) -> Result<()> {
         self.compile_args(args)?;
         self.emit(BytecodeInstruction::Construct {
-            constructor: constructor.clone(),
+            constructor: self.compile_binding(constructor)?,
             arg_count: args.len(),
         });
         Ok(())
@@ -447,7 +355,9 @@ impl BytecodeCompiler {
         match expr {
             Expr::Parenthesized(expr) => self.compile_typeof_expr(expr),
             Expr::Identifier(name) => {
-                self.emit(BytecodeInstruction::TypeOfBinding(name.clone()));
+                self.emit(BytecodeInstruction::TypeOfBinding(
+                    self.compile_binding(name)?,
+                ));
                 Ok(())
             }
             expr => {
@@ -462,7 +372,9 @@ impl BytecodeCompiler {
         match expr {
             Expr::Parenthesized(expr) => self.compile_delete_expr(expr),
             Expr::Identifier(name) => {
-                self.emit(BytecodeInstruction::DeleteBinding(name.clone()));
+                self.emit(BytecodeInstruction::DeleteBinding(
+                    self.compile_binding(name)?,
+                ));
                 Ok(())
             }
             Expr::Member {
@@ -534,7 +446,7 @@ impl BytecodeCompiler {
         match expr {
             Expr::Identifier(name) => {
                 self.emit(BytecodeInstruction::UpdateBinding {
-                    name: name.clone(),
+                    name: self.compile_binding(name)?,
                     op,
                     prefix,
                 });
@@ -583,7 +495,7 @@ impl BytecodeCompiler {
             Expr::Identifier(name) => {
                 self.compile_expr(expr)?;
                 self.emit(BytecodeInstruction::CompoundStoreBinding {
-                    name: name.clone(),
+                    name: self.compile_binding(name)?,
                     op,
                 });
                 Ok(())
@@ -764,24 +676,5 @@ impl InstructionIndex {
 
     const fn index(self) -> usize {
         self.0
-    }
-}
-
-fn for_init_needs_lexical_scope(init: Option<&Stmt>) -> bool {
-    match init {
-        Some(Stmt::VarDecl {
-            kind: DeclKind::Let | DeclKind::Const,
-            ..
-        }) => true,
-        Some(Stmt::DeclList(statements)) => statements.iter().any(|statement| {
-            matches!(
-                statement,
-                Stmt::VarDecl {
-                    kind: DeclKind::Let | DeclKind::Const,
-                    ..
-                }
-            )
-        }),
-        Some(_) | None => false,
     }
 }

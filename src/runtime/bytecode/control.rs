@@ -1,10 +1,10 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{DeclKind, StaticBinding},
+    ast::DeclKind,
     bytecode::{
-        BytecodeAddress, BytecodeBlock, BytecodeCatch, BytecodeForInTarget, BytecodeInstruction,
-        BytecodeSwitchCase,
+        BytecodeAddress, BytecodeBinding, BytecodeBlock, BytecodeCatch, BytecodeForInTarget,
+        BytecodeInstruction, BytecodeSwitchCase,
     },
     error::{Error, Result},
     runtime::Context,
@@ -252,7 +252,7 @@ impl Context {
                 kind: DeclKind::Var,
             } => self.eval_bytecode_for_in_assignment_loop(keys, body, |context, key| {
                 let value = context.heap_string_value(&key)?;
-                context.assign_static(name, value)
+                context.assign_bytecode(name, value)
             })?,
             BytecodeForInTarget::Assignment(target) => {
                 self.eval_bytecode_for_in_assignment_loop(keys, body, |context, key| {
@@ -266,15 +266,15 @@ impl Context {
 
     fn eval_bytecode_for_in_lexical_binding(
         &mut self,
-        name: &StaticBinding,
+        name: &BytecodeBinding,
         kind: DeclKind,
         keys: Vec<String>,
         body: &BytecodeBlock,
     ) -> Result<Completion> {
         let mut last = Value::Undefined;
         self.ensure_extra_binding_capacity(0)?;
-        let atom = self.intern_static_name_atom(name.name())?;
-        let frame = self.compiled_local_binding_frame(name)?;
+        let atom = self.intern_static_name_atom(name.name().name())?;
+        let frame = self.compiled_local_binding_frame(name.name())?;
         let mutable = kind != DeclKind::Const;
         let mut scope = BindingScope::new();
         for key in keys {
@@ -289,7 +289,7 @@ impl Context {
                 Self::mark_binding_scope_frame_slot(&mut scope, frame, inserted)?;
             }
             self.push_lexical_scope_with(scope);
-            self.remember_active_static_binding(name, atom)?;
+            self.remember_active_static_binding(name.name(), atom)?;
             let completion = self.eval_bytecode_block(body);
             let Some(removed_scope) = self.pop_lexical_scope() else {
                 return Err(Error::runtime("bytecode for-in lexical scope disappeared"));
@@ -415,12 +415,12 @@ impl Context {
 
     fn eval_bytecode_catch_scope(
         &mut self,
-        param: &StaticBinding,
+        param: &BytecodeBinding,
         value: Value,
         body: &BytecodeBlock,
     ) -> Result<Completion> {
-        let atom = self.ensure_binding_capacity_static(param)?;
-        let frame = self.compiled_local_binding_frame(param)?;
+        let atom = self.ensure_binding_capacity_static(param.name())?;
+        let frame = self.compiled_local_binding_frame(param.name())?;
         let value = self.runtime_value(value)?;
         let inserted = self
             .active_bindings_mut()
@@ -430,7 +430,7 @@ impl Context {
                 frame.map(crate::runtime::CompiledBindingFrame::slot),
             )?;
         self.mark_active_binding_frame_slot(frame, inserted)?;
-        self.remember_active_static_binding(param, atom)?;
+        self.remember_active_static_binding(param.name(), atom)?;
         self.eval_bytecode_scoped_block(body)
     }
 }

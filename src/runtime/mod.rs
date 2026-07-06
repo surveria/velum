@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
-use crate::ast::{StaticBinding, StaticBindingId};
+use crate::ast::StaticBindingId;
 use crate::atom::{AtomId, AtomTable};
 use crate::binding_layout::BindingLayout;
-use crate::bytecode::BytecodeFunction;
+use crate::bytecode::{BytecodeBinding, BytecodeFunction};
 use crate::compiled_script::CompiledScript;
 use crate::error::{Error, Result};
 use crate::host::HostFunction;
@@ -246,12 +246,12 @@ impl Context {
         }
     }
 
-    pub(crate) fn eval_identifier_call_value(
+    pub(crate) fn eval_bytecode_identifier_call_value(
         &mut self,
-        callee: &StaticBinding,
+        callee: &BytecodeBinding,
         args: &[Value],
     ) -> Result<Value> {
-        let reference = self.eval_identifier_call_reference(callee)?;
+        let reference = self.eval_bytecode_identifier_call_reference(callee)?;
         self.eval_call_reference_result(reference, RuntimeCallArgs::values(args))
     }
 
@@ -273,20 +273,24 @@ impl Context {
         }
     }
 
-    fn eval_identifier_call_reference(&mut self, callee: &StaticBinding) -> Result<CallReference> {
-        let Some(binding) = self.get_or_materialize_binding_static(callee)? else {
-            return Err(reference_error_undefined(callee));
+    fn eval_bytecode_identifier_call_reference(
+        &mut self,
+        callee: &BytecodeBinding,
+    ) -> Result<CallReference> {
+        let Some(binding) = self.get_or_materialize_binding_bytecode(callee)? else {
+            return Err(reference_error_undefined(callee.name()));
         };
         let function = binding.value();
         if let Value::NativeFunction(id) = function {
-            let kind =
-                if let Some(kind) = self.cached_static_binding_native_call_kind(callee, id)? {
-                    kind
-                } else {
-                    let kind = self.native_function(id)?.kind();
-                    self.remember_static_binding_native_call_kind(callee, id, kind)?;
-                    kind
-                };
+            let kind = if let Some(kind) =
+                self.cached_static_binding_native_call_kind(callee.name(), id)?
+            {
+                kind
+            } else {
+                let kind = self.native_function(id)?.kind();
+                self.remember_static_binding_native_call_kind(callee.name(), id, kind)?;
+                kind
+            };
             return Ok(CallReference::Native {
                 kind,
                 this_value: Value::Undefined,
@@ -320,31 +324,33 @@ impl Context {
         Ok(Value::Undefined)
     }
 
-    pub(crate) fn eval_new_value(
+    pub(crate) fn eval_bytecode_new_value(
         &mut self,
-        constructor: &StaticBinding,
+        constructor: &BytecodeBinding,
         args: &[Value],
     ) -> Result<Value> {
-        if constructor.as_str() != TEST262_ERROR_NAME {
-            return self.eval_function_constructor(constructor, RuntimeCallArgs::values(args));
+        if constructor.name().as_str() != TEST262_ERROR_NAME {
+            return self
+                .eval_bytecode_function_constructor(constructor, RuntimeCallArgs::values(args));
         }
         self.eval_error_constructor(ErrorName::Test262Error, RuntimeCallArgs::values(args))
     }
 
-    fn eval_function_constructor(
+    fn eval_bytecode_function_constructor(
         &mut self,
-        constructor: &StaticBinding,
+        constructor: &BytecodeBinding,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let value = self
-            .constructor_binding_static(constructor)?
-            .ok_or_else(|| reference_error_undefined(constructor))?;
+            .constructor_binding_bytecode(constructor)?
+            .ok_or_else(|| reference_error_undefined(constructor.name()))?;
         let Value::Function(id) = value else {
             if let Value::NativeFunction(id) = value {
                 return self.construct_native_function(id, args);
             }
             return Err(Error::runtime(format!(
-                "'{constructor}' is not a constructor"
+                "'{}' is not a constructor",
+                constructor.name()
             )));
         };
         let prototype = self.function_constructor_prototype(id)?;

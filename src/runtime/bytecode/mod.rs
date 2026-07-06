@@ -150,7 +150,7 @@ impl Context {
             }
             BytecodeInstruction::StoreBinding(binding) => {
                 let value = state.stack.pop()?;
-                self.assign_static_or_builtin(binding, value.clone())?;
+                self.assign_bytecode_or_builtin(binding, value.clone())?;
                 state.stack.push(value);
                 state.pc = next;
                 Ok(None)
@@ -241,7 +241,7 @@ impl Context {
     ) -> Result<Option<Completion>> {
         match instruction {
             BytecodeInstruction::DeleteBinding(binding) => {
-                let exists = self.binding_exists_or_materialize_static(binding)?;
+                let exists = self.binding_exists_or_materialize_bytecode(binding)?;
                 state.stack.push(Value::Bool(!exists));
                 state.pc = next;
                 Ok(None)
@@ -451,7 +451,7 @@ impl Context {
                 let args = state.stack.pop_many(*arg_count)?;
                 state
                     .stack
-                    .push(self.eval_identifier_call_value(callee, &args)?);
+                    .push(self.eval_bytecode_identifier_call_value(callee, &args)?);
                 state.pc = next;
                 Ok(None)
             }
@@ -537,7 +537,9 @@ impl Context {
                 arg_count,
             } => {
                 let args = state.stack.pop_many(*arg_count)?;
-                state.stack.push(self.eval_new_value(constructor, &args)?);
+                state
+                    .stack
+                    .push(self.eval_bytecode_new_value(constructor, &args)?);
                 state.pc = next;
                 Ok(None)
             }

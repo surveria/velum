@@ -175,6 +175,22 @@ while (index < 3) {
 observed;
 ";
 
+const DIRECT_LOCAL_UPVALUE_SLOT_READ_SOURCE: &str = r"
+var make = function make(seed) {
+    let total = seed;
+    {
+        let total = seed + 1000;
+        total = total + 1;
+    }
+    return function step(delta) {
+        total = total + delta;
+        return total;
+    };
+};
+var step = make(10);
+step(1) + step(2);
+";
+
 #[test]
 fn compiled_layout_counts_global_local_and_upvalue_slots() -> TestResult {
     let engine = Engine::new();
@@ -492,6 +508,30 @@ fn compiled_binding_operations_materialize_builtins_only_after_binding_lookup() 
 
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(19.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atom_count)
+}
+
+#[test]
+fn bytecode_direct_local_and_upvalue_operands_preserve_shadowing() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(DIRECT_LOCAL_UPVALUE_SLOT_READ_SOURCE)?;
+    let usage = script.usage();
+
+    ensure_usize(usage.upvalue_binding_slot_count(), 1)?;
+    ensure_usize(usage.unresolved_static_binding_count(), 0)?;
+    ensure_greater_than(
+        usage.bytecode_binding_operand_count(),
+        0,
+        "bytecode binding operands",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(24.0))?;
+    let atom_count = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(24.0))?;
     ensure_usize(vm.resource_usage().atom_count, atom_count)
 }
 

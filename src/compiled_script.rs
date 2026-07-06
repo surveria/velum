@@ -24,8 +24,9 @@ impl CompiledScript {
             parsed.usage.static_binding_count,
             parsed.usage.static_function_count,
         )?;
-        let bytecode = BytecodeProgram::compile(&program)?;
+        let bytecode = BytecodeProgram::compile(&program, &binding_layout)?;
         let bytecode_instruction_count = bytecode.instruction_count();
+        let bytecode_binding_operand_count = bytecode.binding_operand_count();
         let bytecode_hoisted_var_count = bytecode.hoist_plan().var_declaration_count();
         Ok(Self {
             bytecode,
@@ -43,6 +44,7 @@ impl CompiledScript {
                 local_binding_slot_count: binding_layout.local_slot_count(),
                 upvalue_binding_slot_count: binding_layout.upvalue_slot_count(),
                 bytecode_instruction_count,
+                bytecode_binding_operand_count,
                 bytecode_hoisted_var_count,
             },
             binding_layout,
@@ -95,6 +97,7 @@ pub struct CompiledScriptUsage {
     local_binding_slot_count: usize,
     upvalue_binding_slot_count: usize,
     bytecode_instruction_count: usize,
+    bytecode_binding_operand_count: usize,
     bytecode_hoisted_var_count: usize,
 }
 
@@ -162,6 +165,11 @@ impl CompiledScriptUsage {
     #[must_use]
     pub const fn bytecode_instruction_count(self) -> usize {
         self.bytecode_instruction_count
+    }
+
+    #[must_use]
+    pub const fn bytecode_binding_operand_count(self) -> usize {
+        self.bytecode_binding_operand_count
     }
 
     #[must_use]
