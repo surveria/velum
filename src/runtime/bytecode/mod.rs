@@ -251,19 +251,23 @@ impl Context {
             }
             BytecodeInstruction::DeleteStaticProperty { property } => {
                 let object = state.stack.pop()?;
-                state
-                    .stack
-                    .push(self.delete_static_property_value(&object, property.name())?);
+                state.stack.push(self.delete_static_property_value(
+                    &object,
+                    property.name(),
+                    property.access(),
+                )?);
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::DeleteComputedProperty { .. } => {
+            BytecodeInstruction::DeleteComputedProperty { property: operand } => {
                 let property = state.stack.pop()?;
                 let object = state.stack.pop()?;
                 let property = self.dynamic_property_key(&property)?;
-                state
-                    .stack
-                    .push(self.delete_dynamic_property_value(&object, &property)?);
+                state.stack.push(self.delete_cached_dynamic_property_value(
+                    &object,
+                    &property,
+                    operand.access(),
+                )?);
                 state.pc = next;
                 Ok(None)
             }

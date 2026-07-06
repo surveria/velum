@@ -150,6 +150,14 @@ pub enum CacheablePropertyWrite {
     Uncacheable,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum CacheablePropertyDelete {
+    Deleted,
+    Missing,
+    NotConfigurable,
+    Uncacheable,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(super) struct PrototypeTraversalBudget {
     remaining: usize,
@@ -273,6 +281,55 @@ impl ObjectHeap {
         }
         object.update_named_property_at_slot(hit.slot, value)?;
         Ok(CacheablePropertyWrite::Updated)
+    }
+
+    pub(crate) fn delete_cacheable_own_property_for(
+        &mut self,
+        id: ObjectId,
+        lookup: CacheablePropertyLookup,
+    ) -> Result<CacheablePropertyDelete> {
+        if !lookup.guard.is_valid_for(self, id)? {
+            return Ok(CacheablePropertyDelete::Uncacheable);
+        }
+        match lookup.result {
+            CacheablePropertyLookupResult::Hit(hit) => {
+                self.delete_cacheable_hit_own_property(id, lookup, hit)
+            }
+            CacheablePropertyLookupResult::Missing => Ok(CacheablePropertyDelete::Missing),
+            CacheablePropertyLookupResult::Uncacheable => Ok(CacheablePropertyDelete::Uncacheable),
+        }
+    }
+
+    fn delete_cacheable_hit_own_property(
+        &mut self,
+        id: ObjectId,
+        lookup: CacheablePropertyLookup,
+        hit: CacheablePropertyHit,
+    ) -> Result<CacheablePropertyDelete> {
+        if hit.owner != id {
+            return Ok(CacheablePropertyDelete::Uncacheable);
+        }
+        let Some(key) = lookup.key else {
+            return Ok(CacheablePropertyDelete::Uncacheable);
+        };
+        let object = self.object(hit.owner)?;
+        if object.shape != hit.owner_shape || object.array_length.is_some() {
+            return Ok(CacheablePropertyDelete::Uncacheable);
+        }
+        if !object.named_property_at_slot(hit.slot)?.is_configurable() {
+            return Ok(CacheablePropertyDelete::NotConfigurable);
+        }
+
+        let before = object.structure_snapshot();
+        let (object, shapes) = self.object_mut_with_shapes(hit.owner)?;
+        let Some(removed) = object.remove_named_property(shapes, key)? else {
+            return Ok(CacheablePropertyDelete::Uncacheable);
+        };
+        if removed.is_enumerable() {
+            object.enumerable_property_count = object.enumerable_property_count.saturating_sub(1);
+        }
+        self.bump_if_structure_changed(hit.owner, before)?;
+        Ok(CacheablePropertyDelete::Deleted)
     }
 
     fn read_cacheable_property_value(

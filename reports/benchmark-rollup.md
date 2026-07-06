@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260706T194510Z.md`
-- Task: rsqjs-test-report-20260706T194510Z.md
-- Performance: 0.82x (42/63 >1.00x)
+- `rsqjs-test-report-20260706T200246Z.md`
+- Task: rsqjs-test-report-20260706T200246Z.md
+- Performance: 0.82x (40/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 10890 passed / 91688 failed (10.62%)
 
@@ -199,4 +199,5 @@ Latest report:
 | `20260706T182226Z` `d3d7043` Source module hierarchy cleanup: Replace the flat `src/` module namespace with domain-owned module directories before the bytecode VM, runtime object model, and parser continue to grow. | 0.76x (39/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
 | `20260706T184834Z` `8569493` Bytecode binding direct operand tranche: Move binding-heavy bytecode instructions from runtime layout lookup toward compiler-assigned direct operands while preserving fallback semantics. | 0.82x (41/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
 | `20260706T192856Z` `e60745b` Bytecode property/native/numeric/array operand tranche: Extend the bytecode operand model beyond bindings so property access, native calls, numeric arithmetic, and guarded array-native dispatch have explicit specialized execution points. | 0.82x (43/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
-| `20260706T194510Z` rsqjs-test-report-20260706T194510Z.md | 0.82x (42/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
+| `20260706T194510Z` `30270ec` Computed dynamic bytecode property operand tranche: Replace raw computed property cache-site ids in bytecode with an explicit dynamic property operand so computed paths match the static property operand model. | 0.82x (42/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
+| `20260706T200246Z` rsqjs-test-report-20260706T200246Z.md | 0.82x (40/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
