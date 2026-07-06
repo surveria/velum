@@ -1,0 +1,4 @@
+# When building anything from within this repository (including the runner in
+# the `runner/` submodule), override the runner's git dependency on the engine
+# with this local checkout, so the runner always measures the local engine.
+paths = ["."]
