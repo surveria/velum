@@ -4,7 +4,7 @@ use crate::{
     ast::DeclKind,
     error::{Error, Result},
     runtime::Context,
-    runtime_call_args::RuntimeCallArgs,
+    runtime::call_args::RuntimeCallArgs,
     value::{HostFunctionId, Value},
 };
 

@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260706T175913Z.md`
-- Task: rsqjs-test-report-20260706T175913Z.md
-- Performance: 0.77x (41/63 >1.00x)
+- `rsqjs-test-report-20260706T182226Z.md`
+- Task: rsqjs-test-report-20260706T182226Z.md
+- Performance: 0.76x (39/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 10890 passed / 91688 failed (10.62%)
 
@@ -195,5 +195,5 @@ Latest report:
 | `20260706T150245Z` `78fd866` Typed context-free property string results tranche: Stop context-free property and object fallback code from constructing temporary owned `Value::String` values for diagnostic text and virtual string characters. | 0.68x (34/63 >1.00x) | - (0/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T161206Z` `6b3b49b` Bytecode VM foundation tranche: Put compiled execution on a generic bytecode interpreter behind the stable `CompiledScript` API before specializing hot instructions. | 0.70x (37/63 >1.00x) | - (0/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
 | `20260706T164401Z` `ce14c15` Canonical compiled bytecode tranche: Stop retaining the complete parsed top-level AST in `CompiledScript` and make bytecode own the compiled-script execution metadata it needs. | 0.70x (37/63 >1.00x) | - (0/63 >1.00x) | 10872 passed / 91706 failed (10.60%) |
-| `20260706T175213Z` `1ab5672` Bytecode-first runtime cleanup tranche: Remove the remaining AST runtime fallback paths so execution runs through bytecode-owned top-level and function metadata. | 0.76x (39/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
-| `20260706T175913Z` rsqjs-test-report-20260706T175913Z.md | 0.77x (41/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
+| `20260706T175913Z` `50238fc` Bytecode-first runtime cleanup tranche: Remove the remaining AST runtime fallback paths so execution runs through bytecode-owned top-level and function metadata. | 0.77x (41/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
+| `20260706T182226Z` rsqjs-test-report-20260706T182226Z.md | 0.76x (39/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
