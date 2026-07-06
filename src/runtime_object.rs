@@ -17,6 +17,8 @@ mod runtime_object_index;
 mod runtime_object_key;
 #[path = "runtime_object_keys.rs"]
 mod runtime_object_keys;
+#[path = "runtime_object_lookup.rs"]
+mod runtime_object_lookup;
 #[path = "runtime_object_prototype.rs"]
 mod runtime_object_prototype;
 #[path = "runtime_object_shape.rs"]

@@ -3,9 +3,11 @@ use crate::{
     value::{ObjectId, Value},
 };
 
+use super::runtime_object_lookup::{
+    CacheablePropertyPresence, CacheablePropertyValue, PrototypeTraversalBudget,
+};
 use super::{ObjectHeap, PROTOTYPE_PROPERTY, PropertyLookup};
 
-const PROTOTYPE_CYCLE_DETECTED_ERROR: &str = "prototype cycle detected";
 const PROTOTYPE_CYCLE_SET_ERROR: &str = "prototype cycle is not allowed";
 
 impl ObjectHeap {
@@ -14,6 +16,16 @@ impl ObjectHeap {
         id: ObjectId,
         property: PropertyLookup<'_>,
     ) -> Result<Value> {
+        match self.cacheable_property_value(id, property)? {
+            CacheablePropertyValue::Hit(value) => return Ok(value),
+            CacheablePropertyValue::Missing => {
+                if property.name() == PROTOTYPE_PROPERTY {
+                    return self.prototype_value(id);
+                }
+                return Ok(Value::Undefined);
+            }
+            CacheablePropertyValue::Uncacheable => {}
+        }
         if let Some(value) = self.prototype_property_value_in_chain(id, property)? {
             return Ok(value);
         }
@@ -28,6 +40,11 @@ impl ObjectHeap {
         id: ObjectId,
         property: PropertyLookup<'_>,
     ) -> Result<bool> {
+        match self.cacheable_property_presence(id, property)? {
+            CacheablePropertyPresence::Hit => return Ok(true),
+            CacheablePropertyPresence::Missing => return Ok(false),
+            CacheablePropertyPresence::Uncacheable => {}
+        }
         let object = self.object(id)?;
         if object.has_own(property, &self.shapes)? {
             return Ok(true);
@@ -105,26 +122,5 @@ impl ObjectHeap {
     fn prototype_value(&self, id: ObjectId) -> Result<Value> {
         let object = self.object(id)?;
         Ok(object.prototype.map_or(Value::Null, Value::Object))
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct PrototypeTraversalBudget {
-    remaining: usize,
-}
-
-impl PrototypeTraversalBudget {
-    const fn from_object_count(object_count: usize) -> Self {
-        Self {
-            remaining: object_count,
-        }
-    }
-
-    fn enter_next(&mut self) -> Result<()> {
-        self.remaining = self
-            .remaining
-            .checked_sub(1)
-            .ok_or_else(|| Error::runtime(PROTOTYPE_CYCLE_DETECTED_ERROR))?;
-        Ok(())
     }
 }
