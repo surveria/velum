@@ -1,5 +1,6 @@
 use crate::ast::{
     Program, StaticBinding, StaticBindingId, StaticFunctionId, StaticName, StaticNameId,
+    StaticPropertyAccessId,
 };
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
@@ -29,6 +30,7 @@ pub struct ParseUsage {
     pub static_name_count: usize,
     pub static_binding_count: usize,
     pub static_function_count: usize,
+    pub static_property_access_count: usize,
 }
 
 struct Parser {
@@ -40,6 +42,7 @@ struct Parser {
     static_names: StaticNameTable,
     static_bindings: StaticBindingTable,
     static_functions: StaticFunctionTable,
+    static_property_access_count: usize,
 }
 
 impl Parser {
@@ -53,6 +56,7 @@ impl Parser {
             static_names: StaticNameTable::new(),
             static_bindings: StaticBindingTable::new(),
             static_functions: StaticFunctionTable::new(),
+            static_property_access_count: 0,
         }
     }
 
@@ -76,6 +80,7 @@ impl Parser {
             static_name_count: self.static_names.len(),
             static_binding_count: self.static_bindings.len(),
             static_function_count: self.static_functions.len(),
+            static_property_access_count: self.static_property_access_count,
         };
         Ok(ParsedProgram {
             program: Program { statements },
@@ -113,6 +118,15 @@ impl Parser {
 
     pub(super) fn static_function(&mut self) -> Result<StaticFunctionId> {
         self.static_functions.intern()
+    }
+
+    pub(super) fn static_property_access(&mut self) -> Result<StaticPropertyAccessId> {
+        let access = StaticPropertyAccessId::from_index(self.static_property_access_count)?;
+        self.static_property_access_count = self
+            .static_property_access_count
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("static property access count overflowed"))?;
+        Ok(access)
     }
 
     pub(super) fn borrowed_static_name(&mut self, name: &str) -> Result<StaticName> {

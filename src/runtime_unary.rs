@@ -63,7 +63,9 @@ impl Context {
                 let binding_exists = self.binding_exists_or_materialize_static(name)?;
                 Ok(Value::Bool(!binding_exists))
             }
-            Expr::Member { object, property } => {
+            Expr::Member {
+                object, property, ..
+            } => {
                 let object = self.eval_expr(object)?;
                 self.delete_static_property_value(&object, property)
             }
