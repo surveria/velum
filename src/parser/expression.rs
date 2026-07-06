@@ -14,6 +14,18 @@ struct ObjectPropertyName {
     shorthand_name: Option<StaticName>,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum ArrowParameters {
+    Single,
+    Parenthesized,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ArrowSignature {
+    is_async: bool,
+    parameters: ArrowParameters,
+}
+
 impl Parser {
     pub(super) fn expression(&mut self) -> Result<Expr> {
         self.with_expression_depth(Self::assignment)
@@ -213,6 +225,121 @@ impl Parser {
         Ok(expr)
     }
 
+    pub(super) fn arrow_function(&mut self) -> Result<Option<Expr>> {
+        let Some(signature) = self.arrow_signature() else {
+            return Ok(None);
+        };
+        if signature.is_async {
+            self.consume(
+                &TokenKind::Async,
+                "expected 'async' before async arrow function",
+            )?;
+        }
+        let params = match signature.parameters {
+            ArrowParameters::Single => {
+                vec![self.consume_binding_identifier("expected arrow function parameter")?]
+            }
+            ArrowParameters::Parenthesized => {
+                self.consume(&TokenKind::LParen, "expected '(' before arrow parameters")?;
+                let params = self.function_parameters()?;
+                self.consume(&TokenKind::RParen, "expected ')' after arrow parameters")?;
+                params
+            }
+        };
+        self.consume(&TokenKind::Arrow, "expected '=>' after arrow parameters")?;
+        let body = self.arrow_body()?;
+        let id = self.static_function()?;
+        Ok(Some(Expr::ArrowFunction {
+            id,
+            params: params.into(),
+            body,
+            is_async: signature.is_async,
+        }))
+    }
+
+    fn arrow_body(&mut self) -> Result<std::rc::Rc<[crate::ast::Stmt]>> {
+        if self.match_kind(&TokenKind::LBrace) {
+            return Ok(self.block_statements()?.into());
+        }
+        let value = self.assignment()?;
+        Ok(std::rc::Rc::from(
+            vec![crate::ast::Stmt::Return(Some(value))].into_boxed_slice(),
+        ))
+    }
+
+    fn arrow_signature(&self) -> Option<ArrowSignature> {
+        match self.peek_kind(0)? {
+            TokenKind::Identifier(_) if self.peek_kind_is(1, &TokenKind::Arrow) => {
+                Some(ArrowSignature {
+                    is_async: false,
+                    parameters: ArrowParameters::Single,
+                })
+            }
+            TokenKind::LParen if self.parenthesized_arrow_end(0).is_some() => {
+                Some(ArrowSignature {
+                    is_async: false,
+                    parameters: ArrowParameters::Parenthesized,
+                })
+            }
+            TokenKind::Async => self.async_arrow_signature(),
+            _ => None,
+        }
+    }
+
+    fn async_arrow_signature(&self) -> Option<ArrowSignature> {
+        match self.peek_kind(1)? {
+            TokenKind::Identifier(_) if self.peek_kind_is(2, &TokenKind::Arrow) => {
+                Some(ArrowSignature {
+                    is_async: true,
+                    parameters: ArrowParameters::Single,
+                })
+            }
+            TokenKind::LParen if self.parenthesized_arrow_end(1).is_some() => {
+                Some(ArrowSignature {
+                    is_async: true,
+                    parameters: ArrowParameters::Parenthesized,
+                })
+            }
+            _ => None,
+        }
+    }
+
+    fn parenthesized_arrow_end(&self, lparen_offset: usize) -> Option<usize> {
+        let mut offset = lparen_offset.checked_add(1)?;
+        if self.peek_kind_is(offset, &TokenKind::RParen) {
+            let arrow = offset.checked_add(1)?;
+            return self.peek_kind_is(arrow, &TokenKind::Arrow).then_some(arrow);
+        }
+        loop {
+            if !matches!(self.peek_kind(offset)?, TokenKind::Identifier(_)) {
+                return None;
+            }
+            offset = offset.checked_add(1)?;
+            if self.peek_kind_is(offset, &TokenKind::RParen) {
+                let arrow = offset.checked_add(1)?;
+                return self.peek_kind_is(arrow, &TokenKind::Arrow).then_some(arrow);
+            }
+            if !self.peek_kind_is(offset, &TokenKind::Comma) {
+                return None;
+            }
+            offset = offset.checked_add(1)?;
+            if self.peek_kind_is(offset, &TokenKind::RParen) {
+                let arrow = offset.checked_add(1)?;
+                return self.peek_kind_is(arrow, &TokenKind::Arrow).then_some(arrow);
+            }
+        }
+    }
+
+    fn peek_kind(&self, offset: usize) -> Option<&TokenKind> {
+        let cursor = self.cursor.checked_add(offset)?;
+        self.tokens.get(cursor).map(|token| &token.kind)
+    }
+
+    fn peek_kind_is(&self, offset: usize, expected: &TokenKind) -> bool {
+        self.peek_kind(offset)
+            .is_some_and(|kind| super::token_kind_eq(kind, expected))
+    }
+
     fn object_literal(&mut self) -> Result<Expr> {
         let mut properties = Vec::new();
         if self.match_kind(&TokenKind::RBrace) {
@@ -356,6 +483,9 @@ impl Parser {
         }
 
         loop {
+            if self.check(&TokenKind::RParen) {
+                break;
+            }
             let name = self.consume_binding_identifier("expected function parameter name")?;
             params.push(name);
             if !self.match_kind(&TokenKind::Comma) {

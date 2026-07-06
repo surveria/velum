@@ -68,6 +68,7 @@ pub enum TokenKind {
     Percent,
     PercentEqual,
     Bang,
+    Arrow,
     Equal,
     EqualEqual,
     BangEqual,
@@ -177,7 +178,9 @@ impl<'a> Lexer<'a> {
                 }
                 '=' => {
                     self.advance();
-                    if self.match_char('=') {
+                    if self.match_char('>') {
+                        self.push(TokenKind::Arrow, offset);
+                    } else if self.match_char('=') {
                         if self.match_char('=') {
                             self.push(TokenKind::StrictEqual, offset);
                         } else {

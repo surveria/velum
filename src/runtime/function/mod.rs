@@ -36,9 +36,6 @@ impl Context {
         constructable: bool,
         is_async: bool,
     ) -> Result<Value> {
-        if !constructable && name.is_none() {
-            return Err(Error::runtime("method function name disappeared"));
-        }
         let id = FunctionId::new(self.functions.len());
         let function = Value::Function(id);
         let prototype = if constructable {
