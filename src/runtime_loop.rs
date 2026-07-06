@@ -1,5 +1,5 @@
 use crate::{
-    ast::{DeclKind, Expr, ForInTarget, StaticName, Stmt},
+    ast::{DeclKind, Expr, ForInTarget, StaticBinding, Stmt},
     error::{Error, Result},
     runtime::Context,
     runtime_completion::Completion,
@@ -69,14 +69,14 @@ impl Context {
 
     fn eval_for_in_lexical_binding(
         &mut self,
-        name: &StaticName,
+        name: &StaticBinding,
         kind: DeclKind,
         keys: Vec<String>,
         body: &Stmt,
     ) -> Result<Completion> {
         let mut last = Value::Undefined;
         self.ensure_extra_binding_capacity(0)?;
-        let atom = self.intern_static_name_atom(name)?;
+        let atom = self.intern_static_name_atom(name.name())?;
         let mutable = kind != DeclKind::Const;
         let mut scope = BindingScope::new();
         let cleanup_scope = !matches!(body, Stmt::Block(_));

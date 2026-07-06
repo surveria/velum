@@ -46,7 +46,7 @@ impl Context {
             if let Some(binding) = self.get_binding_static(name)? {
                 return Ok(Value::String(binding.value().type_name().to_owned()));
             }
-            if let Some(value) = self.builtin_value(name)? {
+            if let Some(value) = self.builtin_value(name.name())? {
                 return Ok(Value::String(value.type_name().to_owned()));
             }
             return Ok(Value::String(Value::Undefined.type_name().to_owned()));

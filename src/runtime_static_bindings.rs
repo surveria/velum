@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use crate::{
-    ast::StaticName,
+    ast::StaticBinding,
     atom::AtomId,
     error::{Error, Result},
     runtime::Context,
@@ -23,17 +23,17 @@ impl StaticBindingCacheHandle {
         Self(Rc::from(bindings.into_boxed_slice()))
     }
 
-    fn location(&self, name: &StaticName) -> Result<Option<BindingLocation>> {
+    fn location(&self, binding: &StaticBinding) -> Result<Option<BindingLocation>> {
         self.0
-            .get(name.id().index()?)
+            .get(binding.id().index()?)
             .map(Cell::get)
             .ok_or_else(|| Error::runtime("static binding cache slot is not defined"))
     }
 
-    fn remember(&self, name: &StaticName, location: BindingLocation) -> Result<()> {
+    fn remember(&self, binding: &StaticBinding, location: BindingLocation) -> Result<()> {
         let slot = self
             .0
-            .get(name.id().index()?)
+            .get(binding.id().index()?)
             .ok_or_else(|| Error::runtime("static binding cache slot is not defined"))?;
         slot.set(Some(location));
         Ok(())
@@ -89,31 +89,34 @@ impl Context {
         self.static_binding_caches.last().cloned()
     }
 
-    pub(crate) fn get_binding_static(&self, name: &StaticName) -> Result<Option<BindingCell>> {
-        let Some(atom) = self.lookup_static_name_atom(name)? else {
+    pub(crate) fn get_binding_static(
+        &self,
+        binding: &StaticBinding,
+    ) -> Result<Option<BindingCell>> {
+        let Some(atom) = self.lookup_static_name_atom(binding.name())? else {
             return Ok(None);
         };
-        if let Some(binding) = self.cached_static_binding(name)? {
-            return Ok(Some(binding));
+        if let Some(cell) = self.cached_static_binding(binding)? {
+            return Ok(Some(cell));
         }
         let Some(location) = self.resolve_binding_location(atom) else {
             return Ok(None);
         };
-        self.remember_static_binding(name, location)?;
+        self.remember_static_binding(binding, location)?;
         self.binding_at_location(location)
     }
 
-    pub(crate) fn assign_static(&self, name: &StaticName, value: Value) -> Result<()> {
+    pub(crate) fn assign_static(&self, binding: &StaticBinding, value: Value) -> Result<()> {
         self.checked_value(value.clone())?;
-        let Some(binding) = self.get_binding_static(name)? else {
-            return Err(reference_error_undefined(name));
+        let Some(cell) = self.get_binding_static(binding)? else {
+            return Err(reference_error_undefined(binding));
         };
-        binding.assign(name, value)
+        cell.assign(binding, value)
     }
 
     pub(crate) fn remember_active_static_binding(
         &self,
-        name: &StaticName,
+        binding: &StaticBinding,
         atom: AtomId,
     ) -> Result<()> {
         let Some(cache) = self.current_static_binding_cache() else {
@@ -122,24 +125,28 @@ impl Context {
         let Some(location) = self.resolve_binding_location(atom) else {
             return Ok(());
         };
-        cache.remember(name, location)
+        cache.remember(binding, location)
     }
 
-    fn cached_static_binding(&self, name: &StaticName) -> Result<Option<BindingCell>> {
+    fn cached_static_binding(&self, binding: &StaticBinding) -> Result<Option<BindingCell>> {
         let Some(cache) = self.current_static_binding_cache() else {
             return Ok(None);
         };
-        let Some(location) = cache.location(name)? else {
+        let Some(location) = cache.location(binding)? else {
             return Ok(None);
         };
         self.binding_at_location(location)
     }
 
-    fn remember_static_binding(&self, name: &StaticName, location: BindingLocation) -> Result<()> {
+    fn remember_static_binding(
+        &self,
+        binding: &StaticBinding,
+        location: BindingLocation,
+    ) -> Result<()> {
         let Some(cache) = self.current_static_binding_cache() else {
             return Ok(());
         };
-        cache.remember(name, location)
+        cache.remember(binding, location)
     }
 
     fn resolve_binding_location(&self, atom: AtomId) -> Option<BindingLocation> {

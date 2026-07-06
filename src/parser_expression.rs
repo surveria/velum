@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expr, ObjectProperty, StaticName, UnaryOp, UpdateOp},
+    ast::{Expr, ObjectProperty, StaticBinding, StaticName, UnaryOp, UpdateOp},
     error::{Error, Result},
     lexer::TokenKind,
     value::Value,
@@ -11,7 +11,7 @@ const THIS_PROPERTY_NAME: &str = "this";
 
 struct ObjectPropertyName {
     key: StaticName,
-    shorthand_binding: Option<StaticName>,
+    shorthand_name: Option<StaticName>,
 }
 
 impl Parser {
@@ -133,7 +133,8 @@ impl Parser {
     }
 
     fn new_expr(&mut self) -> Result<Expr> {
-        let constructor = self.consume_identifier("expected constructor name after 'new'")?;
+        let constructor =
+            self.consume_binding_identifier("expected constructor name after 'new'")?;
         self.consume(&TokenKind::LParen, "expected '(' after constructor name")?;
         let args = if self.check(&TokenKind::RParen) {
             Vec::new()
@@ -177,7 +178,7 @@ impl Parser {
             TokenKind::Null => Expr::Literal(Value::Null),
             TokenKind::Undefined => Expr::Literal(Value::Undefined),
             TokenKind::This => Expr::This,
-            TokenKind::Identifier(name) => Expr::Identifier(self.static_name(name)?),
+            TokenKind::Identifier(name) => Expr::Identifier(self.static_binding_name(name)?),
             TokenKind::Function => self.function_expression()?,
             TokenKind::LBrace => self.object_literal()?,
             TokenKind::LBracket => self.array_literal()?,
@@ -235,7 +236,8 @@ impl Parser {
                 value,
             });
         }
-        if let Some(binding) = name.shorthand_binding {
+        if let Some(binding) = name.shorthand_name {
+            let binding = self.static_binding(binding)?;
             return Ok(ObjectProperty {
                 key: name.key,
                 value: Expr::Identifier(binding),
@@ -276,16 +278,16 @@ impl Parser {
                 let name = self.static_name(name)?;
                 Ok(ObjectPropertyName {
                     key: name.clone(),
-                    shorthand_binding: Some(name),
+                    shorthand_name: Some(name),
                 })
             }
             TokenKind::String(name) => Ok(ObjectPropertyName {
                 key: self.static_name(name)?,
-                shorthand_binding: None,
+                shorthand_name: None,
             }),
             TokenKind::Number(value) => Ok(ObjectPropertyName {
                 key: self.static_name(Value::Number(value).to_string())?,
-                shorthand_binding: None,
+                shorthand_name: None,
             }),
             kind => {
                 let Some(name) = keyword_property_name(&kind) else {
@@ -299,7 +301,7 @@ impl Parser {
     fn keyword_property_name(&mut self, name: &str) -> Result<ObjectPropertyName> {
         Ok(ObjectPropertyName {
             key: self.borrowed_static_name(name)?,
-            shorthand_binding: None,
+            shorthand_name: None,
         })
     }
 
@@ -317,14 +319,14 @@ impl Parser {
         Ok(Expr::Function { name, params, body })
     }
 
-    fn function_parameters(&mut self) -> Result<Vec<StaticName>> {
+    fn function_parameters(&mut self) -> Result<Vec<StaticBinding>> {
         let mut params = Vec::new();
         if self.check(&TokenKind::RParen) {
             return Ok(params);
         }
 
         loop {
-            let name = self.consume_identifier("expected function parameter name")?;
+            let name = self.consume_binding_identifier("expected function parameter name")?;
             params.push(name);
             if !self.match_kind(&TokenKind::Comma) {
                 break;

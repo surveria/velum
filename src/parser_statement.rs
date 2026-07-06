@@ -100,6 +100,8 @@ impl Parser {
         self.consume(&TokenKind::LParen, "expected '(' after 'for'")?;
         let cursor = self.cursor;
         let expression_depth = self.expression_depth;
+        let static_names = self.static_names.clone();
+        let static_bindings = self.static_bindings.clone();
         if let Some((target, object)) = self.for_in_header()? {
             self.consume(&TokenKind::RParen, "expected ')' after for-in expression")?;
             let body = Box::new(self.statement()?);
@@ -111,6 +113,8 @@ impl Parser {
         }
         self.cursor = cursor;
         self.expression_depth = expression_depth;
+        self.static_names = static_names;
+        self.static_bindings = static_bindings;
 
         let init = self.for_init()?;
         let condition = if self.check(&TokenKind::Semicolon) {
@@ -163,7 +167,7 @@ impl Parser {
     }
 
     fn for_in_binding_header(&mut self, kind: DeclKind) -> Result<Option<(ForInTarget, Expr)>> {
-        let name = self.consume_identifier("expected for-in binding name")?;
+        let name = self.consume_binding_identifier("expected for-in binding name")?;
         if !self.match_kind(&TokenKind::In) {
             return Ok(None);
         }
@@ -283,7 +287,7 @@ impl Parser {
             return Ok(CatchClause { param: None, body });
         }
         self.consume(&TokenKind::LParen, "expected '(' or '{' after 'catch'")?;
-        let param = self.consume_identifier("expected catch binding name")?;
+        let param = self.consume_binding_identifier("expected catch binding name")?;
         self.consume(&TokenKind::RParen, "expected ')' after catch binding")?;
         self.consume(&TokenKind::LBrace, "expected '{' after catch binding")?;
         let body = self.block_statements()?;
@@ -326,7 +330,7 @@ impl Parser {
     fn var_declarations(&mut self, kind: DeclKind) -> Result<Vec<Stmt>> {
         let mut declarations = Vec::new();
         loop {
-            let name = self.consume_identifier("expected binding name")?;
+            let name = self.consume_binding_identifier("expected binding name")?;
             let init = if self.match_kind(&TokenKind::Equal) {
                 Some(self.expression()?)
             } else if kind == DeclKind::Const {

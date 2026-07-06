@@ -1,5 +1,5 @@
 use crate::{
-    ast::{DeclKind, Expr, ForInTarget, StaticName, Stmt},
+    ast::{DeclKind, Expr, ForInTarget, StaticBinding, Stmt},
     atom::AtomId,
     error::{Error, Result},
     runtime::Context,
@@ -78,8 +78,8 @@ impl Context {
         }
     }
 
-    fn hoist_var(&mut self, name: &StaticName) -> Result<()> {
-        let atom = self.intern_static_name_atom(name)?;
+    fn hoist_var(&mut self, name: &StaticBinding) -> Result<()> {
+        let atom = self.intern_static_name_atom(name.name())?;
         if let Some(binding) = self.active_bindings().get(atom) {
             if binding.kind() == DeclKind::Var {
                 self.remember_active_static_binding(name, atom)?;
@@ -101,7 +101,7 @@ impl Context {
 
     pub(crate) fn eval_declaration(
         &mut self,
-        name: &StaticName,
+        name: &StaticBinding,
         kind: DeclKind,
         init: Option<&Expr>,
     ) -> Result<Completion> {
@@ -141,11 +141,11 @@ impl Context {
 
     pub(crate) fn define_static(
         &mut self,
-        name: &StaticName,
+        name: &StaticBinding,
         value: Value,
         kind: DeclKind,
     ) -> Result<()> {
-        let atom = self.intern_static_name_atom(name)?;
+        let atom = self.intern_static_name_atom(name.name())?;
         self.define_atom(atom, name, value, kind)?;
         self.remember_active_static_binding(name, atom)
     }
@@ -171,8 +171,11 @@ impl Context {
         Ok(())
     }
 
-    pub(crate) fn ensure_binding_capacity_static(&mut self, name: &StaticName) -> Result<AtomId> {
-        let atom = self.intern_static_name_atom(name)?;
+    pub(crate) fn ensure_binding_capacity_static(
+        &mut self,
+        name: &StaticBinding,
+    ) -> Result<AtomId> {
+        let atom = self.intern_static_name_atom(name.name())?;
         self.ensure_binding_capacity_for_atom(atom)?;
         Ok(atom)
     }
