@@ -1,0 +1,70 @@
+use crate::native_call::NativeCallTarget;
+
+use super::NativeFunctionKind;
+
+impl NativeFunctionKind {
+    pub(super) const fn from_call_target(target: NativeCallTarget) -> Self {
+        match target {
+            NativeCallTarget::Array => Self::Array,
+            NativeCallTarget::ArrayConcat => Self::ArrayConcat,
+            NativeCallTarget::ArrayIncludes => Self::ArrayIncludes,
+            NativeCallTarget::ArrayIndexOf => Self::ArrayIndexOf,
+            NativeCallTarget::ArrayJoin => Self::ArrayJoin,
+            NativeCallTarget::ArrayLastIndexOf => Self::ArrayLastIndexOf,
+            NativeCallTarget::ArrayPop => Self::ArrayPop,
+            NativeCallTarget::ArrayPush => Self::ArrayPush,
+            NativeCallTarget::ArrayReverse => Self::ArrayReverse,
+            NativeCallTarget::ArrayShift => Self::ArrayShift,
+            NativeCallTarget::ArraySlice => Self::ArraySlice,
+            NativeCallTarget::ArrayUnshift => Self::ArrayUnshift,
+            NativeCallTarget::Boolean => Self::Boolean,
+            NativeCallTarget::ErrorConstructor(name) => Self::ErrorConstructor(name),
+            NativeCallTarget::JsonParse => Self::JsonParse,
+            NativeCallTarget::JsonStringify => Self::JsonStringify,
+            NativeCallTarget::MathAbs => Self::MathAbs,
+            NativeCallTarget::MathAcos => Self::MathAcos,
+            NativeCallTarget::MathAcosh => Self::MathAcosh,
+            NativeCallTarget::MathAsin => Self::MathAsin,
+            NativeCallTarget::MathAsinh => Self::MathAsinh,
+            NativeCallTarget::MathAtan => Self::MathAtan,
+            NativeCallTarget::MathAtan2 => Self::MathAtan2,
+            NativeCallTarget::MathAtanh => Self::MathAtanh,
+            NativeCallTarget::MathCbrt => Self::MathCbrt,
+            NativeCallTarget::MathCeil => Self::MathCeil,
+            NativeCallTarget::MathClz32 => Self::MathClz32,
+            NativeCallTarget::MathCos => Self::MathCos,
+            NativeCallTarget::MathCosh => Self::MathCosh,
+            NativeCallTarget::MathExp => Self::MathExp,
+            NativeCallTarget::MathExpm1 => Self::MathExpm1,
+            NativeCallTarget::MathFloor => Self::MathFloor,
+            NativeCallTarget::MathFround => Self::MathFround,
+            NativeCallTarget::MathHypot => Self::MathHypot,
+            NativeCallTarget::MathImul => Self::MathImul,
+            NativeCallTarget::MathLog => Self::MathLog,
+            NativeCallTarget::MathLog10 => Self::MathLog10,
+            NativeCallTarget::MathLog1p => Self::MathLog1p,
+            NativeCallTarget::MathLog2 => Self::MathLog2,
+            NativeCallTarget::MathMax => Self::MathMax,
+            NativeCallTarget::MathMin => Self::MathMin,
+            NativeCallTarget::MathPow => Self::MathPow,
+            NativeCallTarget::MathRandom => Self::MathRandom,
+            NativeCallTarget::MathRound => Self::MathRound,
+            NativeCallTarget::MathSign => Self::MathSign,
+            NativeCallTarget::MathSin => Self::MathSin,
+            NativeCallTarget::MathSinh => Self::MathSinh,
+            NativeCallTarget::MathSqrt => Self::MathSqrt,
+            NativeCallTarget::MathTan => Self::MathTan,
+            NativeCallTarget::MathTanh => Self::MathTanh,
+            NativeCallTarget::MathTrunc => Self::MathTrunc,
+            NativeCallTarget::Number => Self::Number,
+            NativeCallTarget::Object => Self::Object,
+            NativeCallTarget::ObjectDefineProperty => Self::ObjectDefineProperty,
+            NativeCallTarget::ObjectGetOwnPropertyDescriptor => {
+                Self::ObjectGetOwnPropertyDescriptor
+            }
+            NativeCallTarget::ObjectHasOwn => Self::ObjectHasOwn,
+            NativeCallTarget::ObjectKeys => Self::ObjectKeys,
+            NativeCallTarget::String => Self::String,
+        }
+    }
+}

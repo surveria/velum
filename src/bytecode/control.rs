@@ -168,8 +168,7 @@ impl BytecodeCompiler<'_> {
                 access,
             } => Ok(BytecodeAssignmentTarget::StaticProperty {
                 object: BytecodeBlock::compile_expression(object, self.layout)?,
-                property: property.clone(),
-                access: *access,
+                property: Self::compile_property(property, *access),
             }),
             Expr::ComputedMember {
                 object,

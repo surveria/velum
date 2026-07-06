@@ -2,6 +2,7 @@ use crate::{
     ast::DeclKind,
     bytecode::BytecodeBinding,
     error::{Error, Result},
+    native_call::NativeCallTarget,
     runtime::Context,
     runtime::call_args::RuntimeCallArgs,
     runtime::object::{
@@ -14,6 +15,7 @@ use crate::{
 
 mod array;
 mod boolean;
+mod call_target;
 mod json;
 mod math;
 mod number;
@@ -456,6 +458,43 @@ impl Context {
     ) -> Result<Value> {
         let kind = self.native_function(id)?.kind();
         self.eval_native_function_kind(kind, args, this_value)
+    }
+
+    pub(crate) fn eval_direct_native_call(
+        &mut self,
+        target: NativeCallTarget,
+        callee: Value,
+        args: &[Value],
+        this_value: Value,
+    ) -> Result<Value> {
+        if let Value::NativeFunction(id) = callee
+            && let Some(kind) = self.direct_native_call_kind(id, target)
+        {
+            if target.is_array_target() {
+                return self.eval_array_native_function_kind(
+                    kind,
+                    RuntimeCallArgs::values(args),
+                    &this_value,
+                );
+            }
+            return self.eval_native_function_kind(
+                kind,
+                RuntimeCallArgs::values(args),
+                &this_value,
+            );
+        }
+        self.eval_call_value(callee, args, this_value)
+    }
+
+    pub(super) fn direct_native_call_kind(
+        &self,
+        id: NativeFunctionId,
+        target: NativeCallTarget,
+    ) -> Option<NativeFunctionKind> {
+        let kind = NativeFunctionKind::from_call_target(target);
+        self.native_function_id(kind)
+            .filter(|expected| *expected == id)
+            .map(|_| kind)
     }
 
     pub(super) fn eval_native_function_kind(

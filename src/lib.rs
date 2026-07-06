@@ -10,6 +10,7 @@ mod embedding;
 mod error;
 mod host;
 mod lexer;
+mod native_call;
 mod parser;
 mod runtime;
 mod string_heap;

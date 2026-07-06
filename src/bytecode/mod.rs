@@ -13,13 +13,14 @@ mod call;
 mod control;
 mod function;
 mod hoist;
+mod metrics;
 mod types;
 
 pub use hoist::BytecodeHoistPlan;
 pub use types::{
     BytecodeAddress, BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock, BytecodeCatch,
     BytecodeCompletion, BytecodeForInTarget, BytecodeFunction, BytecodeInstruction,
-    BytecodeProgram, BytecodeSwitchCase,
+    BytecodeNumericBinaryOp, BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
 };
 
 impl BytecodeProgram {
@@ -72,6 +73,10 @@ impl<'a> BytecodeCompiler<'a> {
 
     fn compile_binding(&self, binding: &StaticBinding) -> Result<BytecodeBinding> {
         BytecodeBinding::compile(binding, self.layout)
+    }
+
+    fn compile_property(property: &StaticName, access: StaticPropertyAccessId) -> BytecodeProperty {
+        BytecodeProperty::new(property.clone(), access)
     }
 
     fn compile_statements(&mut self, statements: &[Stmt], value: StatementValue) -> Result<()> {
@@ -266,8 +271,7 @@ impl<'a> BytecodeCompiler<'a> {
         self.compile_expr(object)?;
         self.compile_expr(expr)?;
         self.emit(BytecodeInstruction::StaticPropertyAssign {
-            property: property.clone(),
-            access,
+            property: Self::compile_property(property, access),
         });
         Ok(())
     }
@@ -294,8 +298,7 @@ impl<'a> BytecodeCompiler<'a> {
     ) -> Result<()> {
         self.compile_expr(object)?;
         self.emit(BytecodeInstruction::StaticMember {
-            property: property.clone(),
-            access,
+            property: Self::compile_property(property, access),
         });
         Ok(())
     }
@@ -378,11 +381,13 @@ impl<'a> BytecodeCompiler<'a> {
                 Ok(())
             }
             Expr::Member {
-                object, property, ..
+                object,
+                property,
+                access,
             } => {
                 self.compile_expr(object)?;
                 self.emit(BytecodeInstruction::DeleteStaticProperty {
-                    property: property.clone(),
+                    property: Self::compile_property(property, *access),
                 });
                 Ok(())
             }
@@ -415,10 +420,16 @@ impl<'a> BytecodeCompiler<'a> {
             _ => {
                 self.compile_expr(left)?;
                 self.compile_expr(right)?;
-                self.emit(BytecodeInstruction::Binary {
-                    op,
-                    property_access,
-                });
+                if property_access.is_none()
+                    && let Some(op) = BytecodeNumericBinaryOp::from_binary(op)
+                {
+                    self.emit(BytecodeInstruction::NumberBinary(op));
+                } else {
+                    self.emit(BytecodeInstruction::Binary {
+                        op,
+                        property_access,
+                    });
+                }
                 Ok(())
             }
         }
@@ -459,8 +470,7 @@ impl<'a> BytecodeCompiler<'a> {
             } => {
                 self.compile_expr(object)?;
                 self.emit(BytecodeInstruction::UpdateStaticProperty {
-                    property: property.clone(),
-                    access: *access,
+                    property: Self::compile_property(property, *access),
                     op,
                     prefix,
                 });
@@ -508,8 +518,7 @@ impl<'a> BytecodeCompiler<'a> {
                 self.compile_expr(object)?;
                 self.compile_expr(expr)?;
                 self.emit(BytecodeInstruction::CompoundStaticProperty {
-                    property: property.clone(),
-                    access: *access,
+                    property: Self::compile_property(property, *access),
                     op,
                 });
                 Ok(())
@@ -625,6 +634,7 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::UpdateStaticProperty { .. }
             | BytecodeInstruction::UpdateComputedProperty { .. }
             | BytecodeInstruction::Binary { .. }
+            | BytecodeInstruction::NumberBinary(_)
             | BytecodeInstruction::CompoundStoreBinding { .. }
             | BytecodeInstruction::CompoundStaticProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. }

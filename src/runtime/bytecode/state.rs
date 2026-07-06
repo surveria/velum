@@ -67,12 +67,12 @@ impl BytecodeStack {
     }
 
     pub(super) fn pop_many(&mut self, count: usize) -> Result<Vec<Value>> {
-        let mut values = Vec::with_capacity(count);
-        for _ in 0..count {
-            values.push(self.pop()?);
-        }
-        values.reverse();
-        Ok(values)
+        let start = self
+            .values
+            .len()
+            .checked_sub(count)
+            .ok_or_else(|| Error::runtime("bytecode stack underflowed"))?;
+        Ok(self.values.split_off(start))
     }
 
     fn pop_single(&mut self) -> Result<Value> {

@@ -258,6 +258,31 @@ impl Context {
             .array_unshift(*id, values, self.limits.max_object_properties)
     }
 
+    pub(super) fn eval_array_native_function_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        match kind {
+            NativeFunctionKind::Array => self.eval_array_constructor(args),
+            NativeFunctionKind::ArrayConcat => self.eval_array_concat(args, this_value),
+            NativeFunctionKind::ArrayIncludes => self.eval_array_includes(args, this_value),
+            NativeFunctionKind::ArrayIndexOf => self.eval_array_index_of(args, this_value),
+            NativeFunctionKind::ArrayJoin => self.eval_array_join(args, this_value),
+            NativeFunctionKind::ArrayLastIndexOf => self.eval_array_last_index_of(args, this_value),
+            NativeFunctionKind::ArrayPop => self.eval_array_pop(args, this_value),
+            NativeFunctionKind::ArrayPush => self.eval_array_push(args, this_value),
+            NativeFunctionKind::ArrayReverse => self.eval_array_reverse(args, this_value),
+            NativeFunctionKind::ArrayShift => self.eval_array_shift(args, this_value),
+            NativeFunctionKind::ArraySlice => self.eval_array_slice(args, this_value),
+            NativeFunctionKind::ArrayUnshift => self.eval_array_unshift(args, this_value),
+            _ => Err(Error::runtime(
+                "native function is not an array fast target",
+            )),
+        }
+    }
+
     pub(crate) fn create_array_from_elements(&mut self, elements: Vec<Value>) -> Result<Value> {
         let prototype = self.array_constructor_prototype()?;
         self.objects.create_array(
@@ -404,7 +429,7 @@ impl Context {
         args.binary_values()
     }
 
-    fn eval_array_discard_args(args: RuntimeCallArgs<'_>) {
+    const fn eval_array_discard_args(args: RuntimeCallArgs<'_>) {
         args.discard();
     }
 

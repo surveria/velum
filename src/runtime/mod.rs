@@ -7,6 +7,7 @@ use crate::bytecode::{BytecodeBinding, BytecodeFunction};
 use crate::compiled_script::CompiledScript;
 use crate::error::{Error, Result};
 use crate::host::HostFunction;
+use crate::native_call::NativeCallTarget;
 use crate::runtime::assertions::reference_error_undefined;
 use crate::runtime::completion::Completion;
 use crate::runtime::limits::RuntimeLimits;
@@ -249,9 +250,10 @@ impl Context {
     pub(crate) fn eval_bytecode_identifier_call_value(
         &mut self,
         callee: &BytecodeBinding,
+        native: Option<NativeCallTarget>,
         args: &[Value],
     ) -> Result<Value> {
-        let reference = self.eval_bytecode_identifier_call_reference(callee)?;
+        let reference = self.eval_bytecode_identifier_call_reference(callee, native)?;
         self.eval_call_reference_result(reference, RuntimeCallArgs::values(args))
     }
 
@@ -276,13 +278,18 @@ impl Context {
     fn eval_bytecode_identifier_call_reference(
         &mut self,
         callee: &BytecodeBinding,
+        native: Option<NativeCallTarget>,
     ) -> Result<CallReference> {
         let Some(binding) = self.get_or_materialize_binding_bytecode(callee)? else {
             return Err(reference_error_undefined(callee.name()));
         };
         let function = binding.value();
         if let Value::NativeFunction(id) = function {
-            let kind = if let Some(kind) =
+            let kind = if let Some(target) = native
+                && let Some(kind) = self.direct_native_call_kind(id, target)
+            {
+                kind
+            } else if let Some(kind) =
                 self.cached_static_binding_native_call_kind(callee.name(), id)?
             {
                 kind

@@ -27,6 +27,10 @@ impl CompiledScript {
         let bytecode = BytecodeProgram::compile(&program, &binding_layout)?;
         let bytecode_instruction_count = bytecode.instruction_count();
         let bytecode_binding_operand_count = bytecode.binding_operand_count();
+        let bytecode_property_operand_count = bytecode.property_operand_count();
+        let bytecode_direct_native_call_count = bytecode.direct_native_call_count();
+        let bytecode_array_native_call_count = bytecode.array_native_call_count();
+        let bytecode_numeric_instruction_count = bytecode.numeric_instruction_count();
         let bytecode_hoisted_var_count = bytecode.hoist_plan().var_declaration_count();
         Ok(Self {
             bytecode,
@@ -45,6 +49,10 @@ impl CompiledScript {
                 upvalue_binding_slot_count: binding_layout.upvalue_slot_count(),
                 bytecode_instruction_count,
                 bytecode_binding_operand_count,
+                bytecode_property_operand_count,
+                bytecode_direct_native_call_count,
+                bytecode_array_native_call_count,
+                bytecode_numeric_instruction_count,
                 bytecode_hoisted_var_count,
             },
             binding_layout,
@@ -98,6 +106,10 @@ pub struct CompiledScriptUsage {
     upvalue_binding_slot_count: usize,
     bytecode_instruction_count: usize,
     bytecode_binding_operand_count: usize,
+    bytecode_property_operand_count: usize,
+    bytecode_direct_native_call_count: usize,
+    bytecode_array_native_call_count: usize,
+    bytecode_numeric_instruction_count: usize,
     bytecode_hoisted_var_count: usize,
 }
 
@@ -170,6 +182,26 @@ impl CompiledScriptUsage {
     #[must_use]
     pub const fn bytecode_binding_operand_count(self) -> usize {
         self.bytecode_binding_operand_count
+    }
+
+    #[must_use]
+    pub const fn bytecode_property_operand_count(self) -> usize {
+        self.bytecode_property_operand_count
+    }
+
+    #[must_use]
+    pub const fn bytecode_direct_native_call_count(self) -> usize {
+        self.bytecode_direct_native_call_count
+    }
+
+    #[must_use]
+    pub const fn bytecode_array_native_call_count(self) -> usize {
+        self.bytecode_array_native_call_count
+    }
+
+    #[must_use]
+    pub const fn bytecode_numeric_instruction_count(self) -> usize {
+        self.bytecode_numeric_instruction_count
     }
 
     #[must_use]
