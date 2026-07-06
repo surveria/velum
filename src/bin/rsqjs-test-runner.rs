@@ -19,6 +19,8 @@ mod failure_classification;
 #[cfg(test)]
 #[path = "rsqjs_test_runner/report_formatting_tests.rs"]
 mod report_formatting_tests;
+#[path = "rsqjs_test_runner/report_rollup.rs"]
+mod report_rollup;
 #[path = "rsqjs_test_runner/test262_external.rs"]
 mod test262_external;
 #[path = "rsqjs_test_runner/test262_full.rs"]
@@ -28,7 +30,7 @@ mod test262_metadata;
 
 use cases::{DifferentialCase, EngineCase, Expectation};
 
-const USAGE: &str = "usage: rsqjs-test-runner --report <path>";
+const USAGE: &str = "usage: rsqjs-test-runner --report <path> | --aggregate-reports <dir>";
 const STATUS_PASSED: &str = "✅ passed";
 const STATUS_FAILED: &str = "❌ failed";
 const STATUS_SKIPPED: &str = "🟡 skipped";
@@ -60,11 +62,22 @@ fn main() {
 
 fn run() -> anyhow::Result<()> {
     let config = Config::from_args(env::args().skip(1))?;
+    let report_path = match config {
+        Config::Run { report_path } => report_path,
+        Config::AggregateReports { report_dir } => {
+            let outputs = report_rollup::generate_from_report_dir(&report_dir)?;
+            print_rollup_outputs(&outputs);
+            return Ok(());
+        }
+    };
+
     let quickjs = env::var_os(QUICKJS_ENV).map(PathBuf::from);
     let engine = env::var_os(ENGINE_ENV).map(PathBuf::from);
     let test262 = env::var_os(TEST262_ENV).map(PathBuf::from);
     let report = build_report(quickjs.as_deref(), engine.as_deref(), test262.as_deref());
-    write_report(&config.report_path, &report)?;
+    write_report(&report_path, &report)?;
+    let outputs = report_rollup::generate_from_report_path(&report_path)?;
+    print_rollup_outputs(&outputs);
 
     if report.failed_count() == 0 {
         return Ok(());
@@ -73,13 +86,14 @@ fn run() -> anyhow::Result<()> {
     bail!(
         "test runner recorded {} failed case(s); report written to {}",
         report.failed_count(),
-        config.report_path.display()
+        report_path.display()
     )
 }
 
 #[derive(Debug)]
-struct Config {
-    report_path: PathBuf,
+enum Config {
+    Run { report_path: PathBuf },
+    AggregateReports { report_dir: PathBuf },
 }
 
 impl Config {
@@ -87,6 +101,17 @@ impl Config {
         let Some(flag) = args.next() else {
             bail!("{USAGE}");
         };
+        if flag == "--aggregate-reports" {
+            let report_dir = args
+                .next()
+                .context("missing directory after --aggregate-reports")?;
+            if let Some(extra) = args.next() {
+                bail!("unexpected argument '{extra}'; {USAGE}");
+            }
+            return Ok(Self::AggregateReports {
+                report_dir: PathBuf::from(report_dir),
+            });
+        }
         if flag != "--report" {
             bail!("unknown argument '{flag}'; {USAGE}");
         }
@@ -96,10 +121,18 @@ impl Config {
             bail!("unexpected argument '{extra}'; {USAGE}");
         }
 
-        Ok(Self {
+        Ok(Self::Run {
             report_path: PathBuf::from(report_path),
         })
     }
+}
+
+fn print_rollup_outputs(outputs: &report_rollup::RollupOutputs) {
+    println!("benchmark rollup: {}", outputs.markdown.display());
+    println!(
+        "benchmark summary chart: {}",
+        outputs.summary_chart.display()
+    );
 }
 
 #[derive(Debug)]
