@@ -148,6 +148,28 @@ impl BytecodeProperty {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct BytecodeArrayIndex {
+    index: u32,
+}
+
+impl BytecodeArrayIndex {
+    const INDEX_LIMIT: u32 = u32::MAX;
+
+    pub(crate) fn parse(property: &BytecodeProperty) -> Option<Self> {
+        let index = property.name().as_str().parse::<u32>().ok()?;
+        if index == Self::INDEX_LIMIT || index.to_string() != property.name().as_str() {
+            return None;
+        }
+        Some(Self { index })
+    }
+
+    pub(crate) fn index(self) -> Result<usize> {
+        usize::try_from(self.index)
+            .map_err(|_| Error::limit("array index exceeded supported range"))
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct BytecodeDynamicProperty {
     access: StaticPropertyAccessId,
 }
@@ -312,11 +334,19 @@ pub enum BytecodeInstruction {
     ArrayLength {
         property: BytecodeProperty,
     },
+    ArrayIndexMember {
+        property: BytecodeProperty,
+        index: BytecodeArrayIndex,
+    },
     ComputedMember {
         property: BytecodeDynamicProperty,
     },
     StaticPropertyAssign {
         property: BytecodeProperty,
+    },
+    ArrayIndexAssign {
+        property: BytecodeProperty,
+        index: BytecodeArrayIndex,
     },
     ComputedPropertyAssign {
         property: BytecodeDynamicProperty,
