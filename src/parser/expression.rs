@@ -195,10 +195,11 @@ impl Parser {
             self.arguments()?
         };
         self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
-        Ok(Expr::New {
+        let expr = Expr::New {
             constructor: Box::new(constructor),
             args,
-        })
+        };
+        self.call_suffix(expr)
     }
 
     fn constructor_starts_with_import(expr: &Expr) -> bool {

@@ -55,6 +55,13 @@ camera.name === "roof" && camera.__proto__ === Used.prototype;
 }
 
 #[test]
+fn supports_call_suffix_after_new_expression() -> TestResult {
+    let value = eval(r#"new Function("return 42")()"#)?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn rejects_import_call_constructor_forms() -> TestResult {
     let Err(error) = eval("new import.defer('./empty_FIXTURE.js');") else {
         return Err("expected import constructor form to fail during parsing".into());
