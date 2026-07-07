@@ -8,7 +8,7 @@ camera.read = function() {
     return this.value;
 };
 
-for (let index = 0; index < 8192; index++) {
+for (let index = 0; index < 65536; index++) {
     total += camera.bump(1);
     total += camera["read"]();
 }

@@ -1,7 +1,7 @@
 let values = [1, 2, 3, 4];
 let total = 0;
 
-for (let index = 0; index < 12288; index = index + 1) {
+for (let index = 0; index < 98304; index = index + 1) {
     switch (index & 3) {
         case 0:
             total = total + values[0];
