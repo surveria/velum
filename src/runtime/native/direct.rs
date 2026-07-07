@@ -20,16 +20,6 @@ const fn runtime_call_args(args: &[Value]) -> RuntimeCallArgs<'_> {
 }
 
 impl Context {
-    pub(crate) fn eval_native_function(
-        &mut self,
-        id: NativeFunctionId,
-        args: RuntimeCallArgs<'_>,
-        this_value: &Value,
-    ) -> Result<Value> {
-        let kind = self.native_function(id)?.kind();
-        self.eval_native_function_kind(kind, args, this_value)
-    }
-
     pub(crate) fn eval_direct_native_property_call(
         &mut self,
         target: NativeCallTarget,
@@ -285,7 +275,7 @@ impl Context {
             .map(|_| kind)
     }
 
-    fn eval_direct_or_generic_native_function_kind(
+    pub(in crate::runtime) fn eval_direct_or_generic_native_function_kind(
         &mut self,
         kind: NativeFunctionKind,
         args: &[Value],
