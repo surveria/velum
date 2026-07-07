@@ -1,7 +1,7 @@
 let total = 0;
 let index = 0;
 
-while (index < 200) {
+while (index < 4096) {
   let value = index + 1;
   total = total + Math.acos(1);
   total = total + Math.asin(0);

@@ -1,7 +1,7 @@
 let total = 0;
 let prototype = Array.prototype;
 
-for (let index = 0; index < 128; index++) {
+for (let index = 0; index < 4096; index++) {
     let literal = [index, index + 1];
     let created = Array();
     let constructed = new Array();

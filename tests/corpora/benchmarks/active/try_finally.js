@@ -1,6 +1,6 @@
 let total = 0;
 
-for (let index = 0; index < 64; index = index + 1) {
+for (let index = 0; index < 65536; index = index + 1) {
     try {
         if ((index & 3) === 0) {
             throw 1;

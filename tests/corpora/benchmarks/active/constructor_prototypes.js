@@ -10,7 +10,7 @@ Camera.prototype.read = function() {
     return this.value;
 };
 
-for (let index = 0; index < 128; index++) {
+for (let index = 0; index < 32768; index++) {
     let camera = new Camera(index);
     total += camera.bump(1);
     total += camera.read();

@@ -1,6 +1,6 @@
 let total = 0;
 
-for (let i = 0; i < 250; i = i + 1) {
+for (let i = 0; i < 1024; i = i + 1) {
     let f = function namedCamera(a, b) {};
     Object.defineProperty(f, "tag", {
         value: i,

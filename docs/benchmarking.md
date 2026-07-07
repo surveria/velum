@@ -31,9 +31,9 @@ Track these against QuickJS on every supported device class:
 
 Set `RSQJS_QUICKJS_AUTO_SETUP=0` to disable automatic download and build. In that mode, differential checks and QuickJS benchmark columns are reported as skipped unless `RSQJS_QUICKJS` or `qjs` is available.
 
-The standard test script builds `target/release/rsqjs` and runs `runner/Cargo.toml` with the `reference-quickjs` feature. Current benchmark rows compare the release `rsqjs` CLI with the QuickJS `qjs` CLI sequentially. Each row reports average in-process cold eval latency for the Rust library, compile-only latency, eval latency for a reused `CompiledScript`, average CLI latency, peak process RSS when GNU `time` is available, latency ratio, memory ratio, and the current QuickJS parity budget status.
+The standard test script runs `runner/Cargo.toml` with the `reference-quickjs` feature. Current benchmark rows compare rs-quickjs and QuickJS through the same in-process `eval` adapter, so they measure engine work instead of process startup, shell argument parsing, or report formatting. Each row reports median per-operation latency, calibrated iteration counts, sample coefficient of variation, QuickJS latency ratio when the reference is available, and the current benchmark quality status.
 
-CLI benchmarks are useful integration smoke tests, but they include process startup and argument handling. The in-process column removes that CLI startup cost for rs-quickjs and should guide local optimization work. Future in-process rows should separate parser, compiler, VM execution, host callback, and teardown costs as those subsystems become explicit.
+The rs-quickjs benchmark adapter uses only the public runtime API. It applies a benchmark-only resource envelope that is larger than the default library limits, so active workload cases can be large enough for stable timing without changing embedder defaults. Future benchmark rows should separate parser, compiler, VM execution, host callback, and teardown costs as those subsystems become explicit.
 
 ## Test262 Reference
 
@@ -55,6 +55,22 @@ The 1.00x budget applies to features that are implemented locally and have compa
 
 Memory reporting should track both peak resident memory and engine-owned heap counters where available. The current report uses process-level maximum resident set size for CLI parity. The long-term target is VM-level accounting exposed through the library API.
 
+## Measurement Quality Gate
+
+Benchmark cases are allowed into the active corpus only when they produce stable, measurable operations. By default the runner marks a row as an invalid benchmark when either engine reports a median operation below `1 ms`, when the sample coefficient of variation is above `10%`, or when calibration reaches the per-sample iteration cap. Invalid benchmark rows count as failed rows and make the benchmark command exit non-zero.
+
+Use regular engine tests for cheap semantic coverage. Active benchmark scripts should scale the workload inside the script until one measured operation is large enough to clear the quality gate. The runner still calibrates outer iterations and samples, but it must not be asked to interpret nanosecond or low-microsecond operations as meaningful performance signals.
+
+The timing and quality thresholds can be adjusted for local diagnosis:
+
+- `RSQJS_BENCH_WARMUP_MS` controls warmup duration before sampling.
+- `RSQJS_BENCH_MIN_TIME_MS` controls the target minimum time for one sample.
+- `RSQJS_BENCH_SAMPLES` controls the number of measured samples.
+- `RSQJS_BENCH_MIN_OP_US` controls the minimum valid median operation time.
+- `RSQJS_BENCH_MAX_CV_PERCENT` controls the maximum valid sample coefficient of variation.
+
+Do not weaken these thresholds in CI to make a benchmark pass. Fix the benchmark workload or move the case back to tests if it is not a meaningful performance measurement.
+
 ## Coverage Expectations
 
 - Every implemented feature should have project-specific engine tests.
@@ -66,10 +82,13 @@ Memory reporting should track both peak resident memory and engine-owned heap co
 ## Measurement Rules
 
 - Keep benchmark scripts checked in.
+- Keep active benchmark scripts large enough to pass the measurement quality gate.
+- Use regular tests, not benchmarks, for tiny semantic smoke checks.
 - Record target CPU, RAM, kernel, compiler, and optimization flags.
-- Report both median and tail latency.
+- Report median latency and sample variation.
 - Separate parser, compiler, VM, and host callback costs where possible.
 - Compare release builds only.
 - Run benchmark cases sequentially.
+- Avoid benchmark stdout. Return or accumulate a final value so the measured work stays observable without polluting reports.
 - Report memory alongside latency once memory measurement is implemented.
 - Keep ordinary PR benchmark reports as CI artifacts. Commit tracked report files only through the post-merge report publisher or through intentional report-refresh tasks.

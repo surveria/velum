@@ -1,7 +1,7 @@
 let total = 0;
 let prototype = Object.prototype;
 
-for (let index = 0; index < 128; index++) {
+for (let index = 0; index < 4096; index++) {
     let plain = {};
     let created = Object();
     let constructed = new Object();

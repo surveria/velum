@@ -15,4 +15,4 @@ while (index < 500) {
     index = index + 1;
 }
 
-print(total > 0);
+total > 0;

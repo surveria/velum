@@ -3,7 +3,7 @@ let object = { alpha: 1, beta: 2, gamma: 3, delta: 4 };
 let values = [1, 2, 3, 4];
 values[6] = 7;
 
-for (let round = 0; round < 96; round++) {
+for (let round = 0; round < 4096; round++) {
     for (let key in object) {
         total += object[key];
     }

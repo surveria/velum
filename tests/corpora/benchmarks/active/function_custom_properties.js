@@ -7,7 +7,7 @@ fn.alpha = 1;
 fn.beta = 2;
 fn.gamma = 3;
 
-for (let index = 0; index < 128; index++) {
+for (let index = 0; index < 4096; index++) {
     fn.alpha += 1;
     total += fn.alpha;
     total += fn.beta;

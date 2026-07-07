@@ -8,7 +8,7 @@ let proto = {
 };
 let child = { __proto__: proto, value: 1 };
 
-for (let index = 0; index < 128; index++) {
+for (let index = 0; index < 4096; index++) {
     total += child.bump(1);
     total += child.shared;
     if ("bump" in child) {

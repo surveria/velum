@@ -8,6 +8,14 @@ use crate::{REPORT_TITLE, RUNNER_NAME, benchmarks, fenced_table};
 pub fn run(report_path: &Path) -> anyhow::Result<()> {
     let report = benchmarks::run();
     let body = render(&report);
+    if let Some(parent) = report_path.parent() {
+        fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "failed to create benchmark report directory {}",
+                parent.display()
+            )
+        })?;
+    }
     fs::write(report_path, body).with_context(|| {
         format!(
             "failed to write benchmark report to {}",
@@ -23,10 +31,11 @@ pub fn run(report_path: &Path) -> anyhow::Result<()> {
 
 fn render(report: &benchmarks::BenchmarkReport) -> String {
     let summary = format!(
-        "- Measured: {}\n- In-process measured: {}\n- Failed: {}\n- Skipped reference: {}\n- Over latency budget ({}): {}\n- Over memory budget ({}): {}",
+        "- Measured: {}\n- In-process measured: {}\n- Failed: {}\n- Invalid: {}\n- Skipped reference: {}\n- Over latency budget ({}): {}\n- Over memory budget ({}): {}",
         report.measured,
         report.in_process_measured,
         report.failed,
+        report.invalid,
         report.skipped,
         benchmarks::BUDGET_LABEL,
         report.over_latency_budget,
