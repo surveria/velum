@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use rs_quickjs::{Engine, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -58,6 +58,38 @@ fn exposes_global_numeric_constants_as_immutable_bindings() -> TestResult {
     ensure_error_contains(&error, "assignment to constant 'Infinity'")
 }
 
+#[test]
+fn compiled_numeric_constants_use_guarded_direct_loads() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r#"
+        NaN !== NaN &&
+          Infinity > 1e300 &&
+          -Infinity < -1e300 &&
+          typeof NaN === "number"
+            ? 42
+            : 0
+        "#,
+    )?;
+    let global_bindings = vm.resource_usage().global_bindings;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_usize(vm.resource_usage().global_bindings, global_bindings)?;
+
+    let value = vm.eval(
+        r"
+        {
+          let NaN = 7;
+          let Infinity = 8;
+          NaN + Infinity;
+        }
+        ",
+    )?;
+    ensure_value(&value, &Value::Number(15.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
@@ -76,6 +108,14 @@ fn ensure_output(actual: &[String], expected: &[&str]) -> TestResult {
     }
 
     Err(format!("expected output {expected:?}, got {actual:?}").into())
+}
+
+fn ensure_usize(actual: usize, expected: usize) -> TestResult {
+    if actual == expected {
+        return Ok(());
+    }
+
+    Err(format!("expected {expected}, got {actual}").into())
 }
 
 fn ensure_error_contains(error: &rs_quickjs::Error, needle: &str) -> TestResult {
