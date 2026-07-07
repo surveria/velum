@@ -6,6 +6,7 @@ mod ast;
 mod binding_layout;
 mod bytecode;
 mod compiled_script;
+mod compiler;
 mod error;
 mod lexer;
 mod parser;
