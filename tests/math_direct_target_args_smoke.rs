@@ -50,6 +50,25 @@ first &&
     order === "abcdefghabcdefgh" ? 42 : 0
 "#;
 
+const DIRECT_MATH_INTEGER_REPEATED_SCRIPT: &str = r#"
+let total = 0;
+let index = 0;
+
+while (index < 64) {
+    total = total + Math.clz32(index);
+    total = total + Math.imul(index, 31);
+    total = total + Math.fround(index + 0.1);
+    index = index + 1;
+}
+
+let fallbackOk =
+    Math.clz32("0x10") === 27 &&
+    Math.imul("0x10", 2) === 32 &&
+    Math.fround("0.5") === 0.5;
+
+total > 0 && fallbackOk ? 42 : 0
+"#;
+
 #[test]
 fn direct_math_targets_preserve_argument_semantics() -> TestResult {
     let engine = Engine::new();
@@ -102,6 +121,21 @@ fn direct_math_integer_targets_preserve_numeric_and_fallback_paths() -> TestResu
         6,
         "direct integer Math native call cache hits",
     )
+}
+
+#[test]
+fn direct_math_integer_targets_preserve_repeated_numeric_loop() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(DIRECT_MATH_INTEGER_REPEATED_SCRIPT)?;
+    ensure_at_least(
+        script.usage().bytecode_direct_native_call_count(),
+        6,
+        "direct repeated integer Math native call operands",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
