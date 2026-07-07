@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T124717Z.md`
-- Task: rsqjs-test-report-20260707T124717Z.md
-- Performance: 0.88x (43/63 >1.00x)
+- `rsqjs-test-report-20260707T170626Z.md`
+- Task: rsqjs-test-report-20260707T170626Z.md
+- Performance: 0.91x (43/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 15827 passed / 86751 failed (15.43%)
+- Full Test262: 15865 passed / 86713 failed (15.47%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -291,4 +291,5 @@ Latest report:
 | `20260707T120837Z` `ff28afa` Support TDZ-aware parameter defaults | 0.90x (42/63 >1.00x) | - (0/63 >1.00x) | 15528 passed / 87050 failed (15.14%) |
 | `20260707T121815Z` `450271b` Add direct native targets for eval and bind | 0.90x (43/63 >1.00x) | - (0/63 >1.00x) | 15528 passed / 87050 failed (15.14%) |
 | `20260707T123138Z` `97a74f4` Support Test262 string type semantics | 0.93x (43/63 >1.00x) | - (0/63 >1.00x) | 15827 passed / 86751 failed (15.43%) |
-| `20260707T124717Z` rsqjs-test-report-20260707T124717Z.md | 0.88x (43/63 >1.00x) | - (0/63 >1.00x) | 15827 passed / 86751 failed (15.43%) |
+| `20260707T124717Z` `567e509` Use contiguous packed array storage | 0.88x (43/63 >1.00x) | - (0/63 >1.00x) | 15827 passed / 86751 failed (15.43%) |
+| `20260707T170626Z` rsqjs-test-report-20260707T170626Z.md | 0.91x (43/63 >1.00x) | - (0/63 >1.00x) | 15865 passed / 86713 failed (15.47%) |
