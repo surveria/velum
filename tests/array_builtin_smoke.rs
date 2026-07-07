@@ -83,6 +83,25 @@ fn exposes_array_constructor_and_prototype() -> TestResult {
 }
 
 #[test]
+fn supports_array_is_array_static_method() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        Array.isArray([]) &&
+            Array.isArray(new Array(2)) &&
+            !Array.isArray({ length: 0 }) &&
+            !Array.isArray("value") &&
+            Array.isArray.length === 1 &&
+            Array.isArray.name === "isArray"
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
 fn array_intrinsic_does_not_overwrite_user_globals() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

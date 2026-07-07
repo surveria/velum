@@ -6,6 +6,8 @@ const ARRAY_INCLUDES_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_INCLUDES_NAME: &str = "includes";
 const ARRAY_INDEX_OF_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_INDEX_OF_NAME: &str = "indexOf";
+const ARRAY_IS_ARRAY_FUNCTION_LENGTH: f64 = 1.0;
+const ARRAY_IS_ARRAY_NAME: &str = "isArray";
 const ARRAY_JOIN_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_JOIN_NAME: &str = "join";
 const ARRAY_LAST_INDEX_OF_FUNCTION_LENGTH: f64 = 1.0;
@@ -102,9 +104,10 @@ const OBJECT_KEYS_FUNCTION_LENGTH: f64 = 1.0;
 pub(super) const OBJECT_KEYS_NAME: &str = "keys";
 pub(super) const OBJECT_NAME: &str = "Object";
 const OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_FUNCTION_LENGTH: f64 = 1.0;
-pub(super) const OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME: &str = "hasOwnProperty";
+pub(in crate::runtime) const OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME: &str = "hasOwnProperty";
 const OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_FUNCTION_LENGTH: f64 = 1.0;
-pub(super) const OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME: &str = "propertyIsEnumerable";
+pub(in crate::runtime) const OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME: &str =
+    "propertyIsEnumerable";
 const PROMISE_CATCH_FUNCTION_LENGTH: f64 = 1.0;
 pub(super) const PROMISE_CATCH_NAME: &str = "catch";
 const PROMISE_FUNCTION_LENGTH: f64 = 1.0;
@@ -129,6 +132,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ArrayConcat,
     ArrayIncludes,
     ArrayIndexOf,
+    ArrayIsArray,
     ArrayJoin,
     ArrayLastIndexOf,
     ArrayPop,
@@ -212,6 +216,7 @@ impl NativeFunctionKind {
             Self::ArrayConcat => ARRAY_CONCAT_FUNCTION_LENGTH,
             Self::ArrayIncludes => ARRAY_INCLUDES_FUNCTION_LENGTH,
             Self::ArrayIndexOf => ARRAY_INDEX_OF_FUNCTION_LENGTH,
+            Self::ArrayIsArray => ARRAY_IS_ARRAY_FUNCTION_LENGTH,
             Self::ArrayJoin => ARRAY_JOIN_FUNCTION_LENGTH,
             Self::ArrayLastIndexOf => ARRAY_LAST_INDEX_OF_FUNCTION_LENGTH,
             Self::ArrayPop => ARRAY_POP_FUNCTION_LENGTH,
@@ -298,6 +303,7 @@ impl NativeFunctionKind {
             Self::ArrayConcat => ARRAY_CONCAT_NAME,
             Self::ArrayIncludes => ARRAY_INCLUDES_NAME,
             Self::ArrayIndexOf => ARRAY_INDEX_OF_NAME,
+            Self::ArrayIsArray => ARRAY_IS_ARRAY_NAME,
             Self::ArrayJoin => ARRAY_JOIN_NAME,
             Self::ArrayLastIndexOf => ARRAY_LAST_INDEX_OF_NAME,
             Self::ArrayPop => ARRAY_POP_NAME,

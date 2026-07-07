@@ -190,6 +190,7 @@ impl Context {
             NativeCallTarget::ArrayConcat => self.eval_direct_array_concat(args, this_value),
             NativeCallTarget::ArrayIncludes => self.eval_direct_array_includes(args, this_value),
             NativeCallTarget::ArrayIndexOf => self.eval_direct_array_index_of(args, this_value),
+            NativeCallTarget::ArrayIsArray => self.eval_direct_array_is_array(args),
             NativeCallTarget::ArrayJoin => self.eval_direct_array_join(args, this_value),
             NativeCallTarget::ArrayLastIndexOf => {
                 self.eval_direct_array_last_index_of(args, this_value)
@@ -298,6 +299,7 @@ impl Context {
             NativeFunctionKind::ArrayConcat => self.eval_array_concat(args, this_value),
             NativeFunctionKind::ArrayIncludes => self.eval_array_includes(args, this_value),
             NativeFunctionKind::ArrayIndexOf => self.eval_array_index_of(args, this_value),
+            NativeFunctionKind::ArrayIsArray => self.eval_array_is_array(args),
             NativeFunctionKind::ArrayJoin => self.eval_array_join(args, this_value),
             NativeFunctionKind::ArrayLastIndexOf => self.eval_array_last_index_of(args, this_value),
             NativeFunctionKind::ArrayPop => self.eval_array_pop(args, this_value),

@@ -76,6 +76,7 @@ impl Context {
             NativeFunctionKind::ArrayConcat
             | NativeFunctionKind::ArrayIncludes
             | NativeFunctionKind::ArrayIndexOf
+            | NativeFunctionKind::ArrayIsArray
             | NativeFunctionKind::ArrayJoin
             | NativeFunctionKind::ArrayLastIndexOf
             | NativeFunctionKind::ArrayPop
@@ -139,7 +140,7 @@ impl Context {
             | NativeFunctionKind::PromiseCatch
             | NativeFunctionKind::PromiseResolver { .. }
             | NativeFunctionKind::Symbol => {
-                Err(Error::runtime("native method is not a constructor"))
+                Err(Error::type_error("native method is not a constructor"))
             }
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),
             NativeFunctionKind::Boolean => self.construct_boolean_object(args),
