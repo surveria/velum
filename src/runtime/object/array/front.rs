@@ -18,14 +18,15 @@ impl ObjectHeap {
         let Some(last_index) = length.previous_index() else {
             return Ok(Value::Undefined);
         };
+        let allow_holey = self.allow_front_holey_fast_path(id, length_usize)?;
         if let Some(first_property) = self
             .object_mut(id)?
             .array_storage
-            .shift_packed_for_len_if_default(length_usize)
+            .shift_dense_for_len_if_default(length_usize, allow_holey)
         {
             self.object_mut(id)?.array_length = Some(last_index.length());
             self.bump_prototype_lookup_version()?;
-            return Ok(first_property.value());
+            return Ok(first_property.into_value());
         }
 
         let first_value = self.get_array_index(id, first_index)?;
@@ -52,10 +53,11 @@ impl ObjectHeap {
         }
 
         let length_usize = length.to_usize()?;
+        let allow_holey = self.allow_front_holey_fast_path(id, length_usize)?;
         if self
             .object_mut(id)?
             .array_storage
-            .unshift_packed_for_len_if_default(length_usize, values, max_properties)
+            .unshift_dense_for_len_if_default(length_usize, values, max_properties, allow_holey)
         {
             self.object_mut(id)?.array_length = Some(new_length);
             self.bump_prototype_lookup_version()?;
@@ -76,5 +78,16 @@ impl ObjectHeap {
         }
         self.object_mut(id)?.array_length = Some(new_length);
         Ok(new_length.value())
+    }
+
+    fn allow_front_holey_fast_path(&self, id: ObjectId, length: usize) -> Result<bool> {
+        if !self
+            .object(id)?
+            .array_storage
+            .is_holey_dense_for_len(length)
+        {
+            return Ok(false);
+        }
+        Ok(!self.prototype_chain_has_array_index_in_range(id, 0, length)?)
     }
 }

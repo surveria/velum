@@ -13,6 +13,20 @@ pub(in crate::runtime::object) struct ArrayStorage {
     property_count: usize,
 }
 
+pub(in crate::runtime::object) enum ShiftedArrayElement {
+    Hole,
+    Property(ObjectProperty),
+}
+
+impl ShiftedArrayElement {
+    pub(in crate::runtime::object) fn into_value(self) -> Value {
+        match self {
+            Self::Hole => Value::Undefined,
+            Self::Property(property) => property.value(),
+        }
+    }
+}
+
 impl ArrayStorage {
     pub(in crate::runtime::object) const fn new() -> Self {
         Self {
@@ -151,33 +165,53 @@ impl ArrayStorage {
         }
     }
 
-    pub(in crate::runtime::object) fn shift_packed_for_len_if_default(
+    pub(in crate::runtime::object) fn shift_dense_for_len_if_default(
         &mut self,
         len: usize,
-    ) -> Option<ObjectProperty> {
+        allow_holey: bool,
+    ) -> Option<ShiftedArrayElement> {
         if self.has_sparse_keys() {
             return None;
         }
-        let ArrayElements::Packed(elements) = &mut self.elements else {
-            return None;
-        };
-        if elements.len() != len
-            || !elements
-                .iter()
-                .all(ObjectProperty::has_default_array_attributes)
-        {
-            return None;
+        match &mut self.elements {
+            ArrayElements::Packed(elements) if elements.len() == len => {
+                if !elements
+                    .iter()
+                    .all(ObjectProperty::has_default_array_attributes)
+                {
+                    return None;
+                }
+                let removed = elements.pop_front()?;
+                self.property_count = self.property_count.saturating_sub(1);
+                Some(ShiftedArrayElement::Property(removed))
+            }
+            ArrayElements::Holey(elements) if allow_holey && elements.len() == len => {
+                if !elements
+                    .iter()
+                    .flatten()
+                    .all(ObjectProperty::has_default_array_attributes)
+                {
+                    return None;
+                }
+                if elements.is_empty() {
+                    return Some(ShiftedArrayElement::Hole);
+                }
+                let removed = elements.drain(0..1).next().flatten();
+                if removed.is_some() {
+                    self.property_count = self.property_count.saturating_sub(1);
+                }
+                Some(removed.map_or(ShiftedArrayElement::Hole, ShiftedArrayElement::Property))
+            }
+            ArrayElements::Packed(_) | ArrayElements::Holey(_) => None,
         }
-        let removed = elements.pop_front()?;
-        self.property_count = self.property_count.saturating_sub(1);
-        Some(removed)
     }
 
-    pub(in crate::runtime::object) fn unshift_packed_for_len_if_default(
+    pub(in crate::runtime::object) fn unshift_dense_for_len_if_default(
         &mut self,
         len: usize,
         values: &[Value],
         max_properties: usize,
+        allow_holey: bool,
     ) -> bool {
         if self.has_sparse_keys() {
             return false;
@@ -191,24 +225,46 @@ impl ArrayStorage {
         if new_property_count > max_properties || new_len > max_properties {
             return false;
         }
-        let ArrayElements::Packed(elements) = &mut self.elements else {
-            return false;
-        };
-        if elements.len() != len
-            || !elements
-                .iter()
-                .all(ObjectProperty::has_default_array_attributes)
-        {
-            return false;
-        }
-        for value in values.iter().rev() {
-            elements.push_front(ObjectProperty::ordinary(
-                value.clone(),
-                PropertyEnumerable::Yes,
-            ));
+        match &mut self.elements {
+            ArrayElements::Packed(elements) if elements.len() == len => {
+                if !elements
+                    .iter()
+                    .all(ObjectProperty::has_default_array_attributes)
+                {
+                    return false;
+                }
+                for value in values.iter().rev() {
+                    elements.push_front(ObjectProperty::ordinary(
+                        value.clone(),
+                        PropertyEnumerable::Yes,
+                    ));
+                }
+            }
+            ArrayElements::Holey(elements) if allow_holey && elements.len() == len => {
+                if !elements
+                    .iter()
+                    .flatten()
+                    .all(ObjectProperty::has_default_array_attributes)
+                {
+                    return false;
+                }
+                let properties = values
+                    .iter()
+                    .cloned()
+                    .map(|value| Some(ObjectProperty::ordinary(value, PropertyEnumerable::Yes)));
+                elements.splice(0..0, properties);
+            }
+            ArrayElements::Packed(_) | ArrayElements::Holey(_) => return false,
         }
         self.property_count = new_property_count;
         true
+    }
+
+    pub(in crate::runtime::object) fn is_holey_dense_for_len(&self, len: usize) -> bool {
+        if self.has_sparse_keys() {
+            return false;
+        }
+        matches!(&self.elements, ArrayElements::Holey(elements) if elements.len() == len)
     }
 
     pub(in crate::runtime::object) fn pop_packed_for_len_if_configurable(
