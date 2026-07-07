@@ -7,6 +7,8 @@ cd "${repo_root}"
 
 # The runner lives in `runner/` as a nested workspace and depends on this local
 # engine crate through `rs-quickjs = { path = ".." }`.
+export RSQJS_BUILD_REPO_ROOT="${RSQJS_BUILD_REPO_ROOT:-${repo_root}}"
+export RSQJS_BUILD_COMMIT_SHA="${RSQJS_BUILD_COMMIT_SHA:-$(git rev-parse HEAD)}"
 
 # --- Fast gates: run the cheap checks first so the pipeline stops before it
 # compiles anything or downloads corpora. On a pull request CI sets
