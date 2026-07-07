@@ -1,5 +1,6 @@
 mod array;
 mod call;
+mod coercion;
 mod control;
 mod ops;
 mod state;

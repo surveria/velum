@@ -40,6 +40,14 @@ impl ObjectHeap {
     ) -> Result<Option<char>> {
         self.object(id)?.virtual_string_character(property)
     }
+
+    pub(crate) fn string_object_value(&self, id: ObjectId) -> Result<Option<&str>> {
+        Ok(self
+            .object(id)?
+            .string_value
+            .as_ref()
+            .map(crate::storage::string_heap::JsString::as_str))
+    }
 }
 
 impl Object {

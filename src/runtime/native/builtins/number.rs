@@ -119,7 +119,7 @@ impl Context {
         Self::value_to_number(value)
     }
 
-    pub(in crate::runtime::native) fn value_to_number(value: &Value) -> f64 {
+    pub(in crate::runtime) fn value_to_number(value: &Value) -> f64 {
         match value {
             Value::Null => 0.0,
             Value::Bool(value) => f64::from(u8::from(*value)),
@@ -136,7 +136,7 @@ impl Context {
         }
     }
 
-    fn string_to_number(value: &str) -> f64 {
+    pub(in crate::runtime) fn string_to_number(value: &str) -> f64 {
         let trimmed = value.trim();
         if trimmed.is_empty() {
             return 0.0;

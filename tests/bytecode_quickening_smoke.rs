@@ -64,10 +64,8 @@ fn bytecode_quickens_numeric_comparisons_with_fallbacks() -> TestResult {
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(42.0))?;
 
-    let Err(error) = vm.eval("\"a\" < \"b\"") else {
-        return Err("expected non-number comparison to use generic fallback error".into());
-    };
-    ensure_error_contains(&error, "operator '<' expects numbers")
+    let value = vm.eval("\"a\" < \"b\"")?;
+    ensure_value(&value, &Value::Bool(true))
 }
 
 #[test]

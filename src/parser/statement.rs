@@ -568,7 +568,9 @@ impl Parser {
 
     fn var_decl(&mut self, kind: DeclKind) -> Result<Stmt> {
         let declarations = self.var_declarations(kind)?;
-        self.consume_optional_semicolon();
+        self.consume_statement_terminator(
+            "expected statement terminator after variable declaration",
+        )?;
         self.declarations_stmt(declarations)
     }
 

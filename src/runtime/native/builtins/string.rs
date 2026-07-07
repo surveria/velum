@@ -11,7 +11,7 @@ use super::{NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, STRING_NAME};
 const STRING_LENGTH_PROPERTY: &str = "length";
 
 impl Context {
-    pub(in crate::runtime::native) fn string_constructor_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime) fn string_constructor_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::String) {
             return Ok(Value::NativeFunction(id));
         }
