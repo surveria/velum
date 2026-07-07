@@ -31,7 +31,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         if !Self::is_callable(this_value) {
-            return Err(Error::runtime(CALL_TARGET_NOT_CALLABLE_ERROR));
+            return Err(Error::type_error(CALL_TARGET_NOT_CALLABLE_ERROR));
         }
         let (call_this, call_args): (Value, &[Value]) =
             if let Some((this_arg, call_args)) = args.as_slice().split_first() {
@@ -48,7 +48,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         if !Self::is_callable(this_value) {
-            return Err(Error::runtime(BIND_TARGET_NOT_CALLABLE_ERROR));
+            return Err(Error::type_error(BIND_TARGET_NOT_CALLABLE_ERROR));
         }
         let (bound_this, bound_args) =
             if let Some((this_arg, bound_args)) = args.as_slice().split_first() {

@@ -1,3 +1,5 @@
+use std::fmt;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ErrorName {
     Base,
@@ -40,6 +42,12 @@ impl ErrorName {
 
     pub(crate) const fn is_standard(self) -> bool {
         !matches!(self, Self::Test262Error)
+    }
+}
+
+impl fmt::Display for ErrorName {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
     }
 }
 

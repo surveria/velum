@@ -98,7 +98,7 @@ fn function_compile_spec(expr: &Expr) -> Result<FunctionCompileSpec<'_>> {
             name: name.clone(),
             params,
             body,
-            constructable: true,
+            constructable: !*is_async,
             is_async: *is_async,
             new_target_mode: BytecodeNewTargetMode::Own,
         }),

@@ -252,7 +252,7 @@ impl Context {
                 self.eval_direct_or_generic_native_function_kind(kind, args, &this_value)
             }
             Value::HostFunction(id) => self.eval_host_function(id, RuntimeCallArgs::values(args)),
-            value => Err(Error::runtime(format!("'{value}' is not callable"))),
+            value => Err(Error::type_error(format!("'{value}' is not callable"))),
         }
     }
 
@@ -342,7 +342,7 @@ impl Context {
                 Value::HostFunction(id) => {
                     self.eval_host_function(id, RuntimeCallArgs::values(args))
                 }
-                value => Err(Error::runtime(format!("'{value}' is not callable"))),
+                value => Err(Error::type_error(format!("'{value}' is not callable"))),
             },
         }
     }
@@ -426,7 +426,7 @@ impl Context {
             Value::NativeFunction(id) => {
                 self.construct_native_function(id, RuntimeCallArgs::values(args))
             }
-            value => Err(Error::runtime(format!("'{value}' is not a constructor"))),
+            value => Err(Error::type_error(format!("'{value}' is not a constructor"))),
         }
     }
 
@@ -452,7 +452,7 @@ impl Context {
                 }
                 return self.construct_native_function(id, RuntimeCallArgs::values(args));
             }
-            return Err(Error::runtime(format!(
+            return Err(Error::type_error(format!(
                 "'{}' is not a constructor",
                 constructor.name()
             )));
