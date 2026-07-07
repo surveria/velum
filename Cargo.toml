@@ -6,7 +6,7 @@ exclude = ["runner"]
 
 [package]
 name = "rs-quickjs"
-version = "0.2.60"
+version = "0.2.61"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/surveria/rs-quickjs"

@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T055950Z.md`
-- Task: rsqjs-test-report-20260707T055950Z.md
-- Performance: 0.81x (39/63 >1.00x)
+- `rsqjs-test-report-20260707T060933Z.md`
+- Task: rsqjs-test-report-20260707T060933Z.md
+- Performance: 0.81x (41/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 13781 passed / 88797 failed (13.43%)
 
@@ -250,5 +250,5 @@ Latest report:
 | `20260707T052745Z` `02fa01f` Support Test262 function prototype harness helpers | 0.81x (38/63 >1.00x) | - (0/63 >1.00x) | 13781 passed / 88797 failed (13.43%) |
 | `20260707T053505Z` `54a8f3b` Borrow array scan values in fast paths | 0.82x (41/63 >1.00x) | - (0/63 >1.00x) | 13781 passed / 88797 failed (13.43%) |
 | `20260707T054855Z` `7007eb6` Optimize packed array materialization | 0.81x (40/63 >1.00x) | - (0/63 >1.00x) | 13781 passed / 88797 failed (13.43%) |
-| `20260707T055120Z` rsqjs-test-report-20260707T055120Z.md | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 13781 passed / 88797 failed (13.43%) |
-| `20260707T055950Z` rsqjs-test-report-20260707T055950Z.md | 0.81x (39/63 >1.00x) | - (0/63 >1.00x) | 13781 passed / 88797 failed (13.43%) |
+| `20260707T055950Z` `4dac689` Decouple bytecode runtime metadata from AST | 0.81x (39/63 >1.00x) | - (0/63 >1.00x) | 13781 passed / 88797 failed (13.43%) |
+| `20260707T060933Z` rsqjs-test-report-20260707T060933Z.md | 0.81x (41/63 >1.00x) | - (0/63 >1.00x) | 13781 passed / 88797 failed (13.43%) |

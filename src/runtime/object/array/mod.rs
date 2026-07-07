@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 use crate::{
     error::{Error, Result},
     value::{ObjectId, Value},
@@ -354,13 +356,13 @@ impl ObjectHeap {
                 max_string_len,
             );
         };
-        let mut joined = String::new();
+        let mut joined =
+            Self::join_string_with_separator_capacity(length, separator.len(), max_string_len)?;
         for (index, property) in properties.iter().enumerate() {
             if index > 0 {
                 Self::push_join_text(&mut joined, separator, max_string_len)?;
             }
-            let text = Self::array_join_element_text(property.value_ref());
-            Self::push_join_text(&mut joined, &text, max_string_len)?;
+            Self::push_join_value_text(&mut joined, property.value_ref(), max_string_len)?;
         }
         Ok(Some(joined))
     }
@@ -651,13 +653,6 @@ impl ObjectHeap {
         matches!(value.classify(), std::num::FpCategory::Zero)
     }
 
-    pub(super) fn array_join_element_text(value: &Value) -> String {
-        match value {
-            Value::Undefined | Value::Null => String::new(),
-            _ => value.display_for_concat(),
-        }
-    }
-
     pub(super) fn push_join_text(
         joined: &mut String,
         text: &str,
@@ -674,6 +669,52 @@ impl ObjectHeap {
         }
         joined.push_str(text);
         Ok(())
+    }
+
+    pub(super) fn push_join_value_text(
+        joined: &mut String,
+        value: &Value,
+        max_string_len: usize,
+    ) -> Result<()> {
+        match value {
+            Value::Undefined | Value::Null => Ok(()),
+            Value::String(value) => Self::push_join_text(joined, value, max_string_len),
+            Value::HeapString(value) => {
+                Self::push_join_text(joined, value.as_str(), max_string_len)
+            }
+            _ => Self::write_join_display(joined, value, max_string_len),
+        }
+    }
+
+    fn write_join_display(joined: &mut String, value: &Value, max_string_len: usize) -> Result<()> {
+        joined.write_fmt(format_args!("{value}")).map_err(|error| {
+            Error::runtime(format!("failed to format array join value: {error}"))
+        })?;
+        if joined.len() > max_string_len {
+            return Err(Error::limit(format!(
+                "string length {} exceeded {}",
+                joined.len(),
+                max_string_len
+            )));
+        }
+        Ok(())
+    }
+
+    pub(super) fn join_string_with_separator_capacity(
+        length: usize,
+        separator_len: usize,
+        max_string_len: usize,
+    ) -> Result<String> {
+        let separator_count = length.saturating_sub(1);
+        let separator_bytes = separator_count
+            .checked_mul(separator_len)
+            .ok_or_else(|| Error::limit("string length exceeded supported range"))?;
+        if separator_bytes > max_string_len {
+            return Err(Error::limit(format!(
+                "string length {separator_bytes} exceeded {max_string_len}"
+            )));
+        }
+        Ok(String::with_capacity(separator_bytes))
     }
 
     fn packed_array_index_of(
