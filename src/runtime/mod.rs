@@ -54,6 +54,9 @@ pub struct Context {
     strings: StringHeap,
     symbols: SymbolTable,
     well_known_properties: WellKnownPropertyKeys,
+    /// VM-local id of the well-known `Symbol.iterator` symbol, cached when the
+    /// `Symbol` builtin installs its well-known symbol properties.
+    iterator_symbol: Option<crate::storage::symbol::SymbolId>,
     descriptor_property_keys: Option<DescriptorPropertyKeys>,
     static_name_atom_caches: Vec<StaticNameAtomCacheHandle>,
     static_binding_caches: Vec<StaticBindingCacheHandle>,
@@ -159,6 +162,14 @@ impl FunctionArity {
 }
 
 impl Context {
+    pub(crate) const fn set_iterator_symbol(&mut self, symbol: crate::storage::symbol::SymbolId) {
+        self.iterator_symbol = Some(symbol);
+    }
+
+    pub(crate) const fn iterator_symbol(&self) -> Option<crate::storage::symbol::SymbolId> {
+        self.iterator_symbol
+    }
+
     #[must_use]
     pub const fn new(limits: RuntimeLimits) -> Self {
         Self {
@@ -167,6 +178,7 @@ impl Context {
             strings: StringHeap::new(),
             symbols: SymbolTable::new(),
             well_known_properties: WellKnownPropertyKeys::new(),
+            iterator_symbol: None,
             descriptor_property_keys: None,
             static_name_atom_caches: Vec::new(),
             static_binding_caches: Vec::new(),

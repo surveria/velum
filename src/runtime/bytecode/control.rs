@@ -95,6 +95,12 @@ impl Context {
                 object,
                 body,
             } => self.eval_bytecode_for_in(state, labels.as_deref(), target, object, body, next),
+            BytecodeInstruction::ForOf {
+                labels,
+                target,
+                object,
+                body,
+            } => self.eval_bytecode_for_of(state, labels.as_deref(), target, object, body, next),
             BytecodeInstruction::Switch {
                 discriminant,
                 cases,
@@ -137,7 +143,7 @@ impl Context {
         }
     }
 
-    fn store_or_return_completion(
+    pub(super) fn store_or_return_completion(
         state: &mut BytecodeState,
         completion: Completion,
         next: BytecodeAddress,

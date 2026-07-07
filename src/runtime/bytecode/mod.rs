@@ -2,6 +2,7 @@ mod array;
 mod call;
 mod coercion;
 mod control;
+mod for_of;
 mod ops;
 mod state;
 
