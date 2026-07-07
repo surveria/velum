@@ -56,8 +56,14 @@ impl Context {
         &self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let value = Self::eval_native_unary_argument_value(args);
-        self.checked_value(Value::Number(Self::number_argument_value(value)))
+        self.eval_direct_number_constructor(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_number_constructor(
+        &self,
+        args: &[Value],
+    ) -> Result<Value> {
+        self.checked_value(Value::Number(Self::number_argument_value(args.first())))
     }
 
     pub(in crate::runtime::native) fn construct_number_object(

@@ -118,6 +118,10 @@ enum CallReference {
         kind: native::NativeFunctionKind,
         this_value: Value,
     },
+    DirectNative {
+        target: NativeCallTarget,
+        this_value: Value,
+    },
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -289,22 +293,31 @@ impl Context {
         args: &[Value],
     ) -> Result<Value> {
         let reference = self.eval_bytecode_identifier_call_reference(callee, native)?;
-        self.eval_call_reference_result(reference, RuntimeCallArgs::values(args))
+        self.eval_call_reference_result(reference, args)
     }
 
     fn eval_call_reference_result(
         &mut self,
         reference: CallReference,
-        args: RuntimeCallArgs<'_>,
+        args: &[Value],
     ) -> Result<Value> {
         match reference {
+            CallReference::DirectNative { target, this_value } => {
+                self.eval_direct_native_call_target(target, args, &this_value)
+            }
             CallReference::Native { kind, this_value } => {
-                self.eval_native_function_kind(kind, args, &this_value)
+                self.eval_native_function_kind(kind, RuntimeCallArgs::values(args), &this_value)
             }
             CallReference::Generic { callee, this_value } => match callee {
-                Value::Function(id) => self.eval_function_with_this(id, args, this_value),
-                Value::NativeFunction(id) => self.eval_native_function(id, args, &this_value),
-                Value::HostFunction(id) => self.eval_host_function(id, args),
+                Value::Function(id) => {
+                    self.eval_function_with_this(id, RuntimeCallArgs::values(args), this_value)
+                }
+                Value::NativeFunction(id) => {
+                    self.eval_native_function(id, RuntimeCallArgs::values(args), &this_value)
+                }
+                Value::HostFunction(id) => {
+                    self.eval_host_function(id, RuntimeCallArgs::values(args))
+                }
                 value => Err(Error::runtime(format!("'{value}' is not callable"))),
             },
         }
@@ -320,19 +333,22 @@ impl Context {
         };
         let function = binding.value();
         if let Value::NativeFunction(id) = function {
-            let kind = if let Some(target) = native
-                && let Some(kind) = self.direct_native_call_kind(id, target)
+            if let Some(target) = native
+                && self.direct_native_call_kind(id, target).is_some()
             {
-                kind
-            } else if let Some(kind) =
-                self.cached_static_binding_native_call_kind(callee.name(), id)?
-            {
-                kind
-            } else {
-                let kind = self.native_function(id)?.kind();
-                self.remember_static_binding_native_call_kind(callee.name(), id, kind)?;
-                kind
-            };
+                return Ok(CallReference::DirectNative {
+                    target,
+                    this_value: Value::Undefined,
+                });
+            }
+            if let Some(kind) = self.cached_static_binding_native_call_kind(callee.name(), id)? {
+                return Ok(CallReference::Native {
+                    kind,
+                    this_value: Value::Undefined,
+                });
+            }
+            let kind = self.native_function(id)?.kind();
+            self.remember_static_binding_native_call_kind(callee.name(), id, kind)?;
             return Ok(CallReference::Native {
                 kind,
                 this_value: Value::Undefined,

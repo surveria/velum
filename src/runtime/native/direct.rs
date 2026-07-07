@@ -189,7 +189,7 @@ impl Context {
         }
     }
 
-    fn eval_direct_native_call_target(
+    pub(in crate::runtime) fn eval_direct_native_call_target(
         &mut self,
         target: NativeCallTarget,
         args: &[Value],
@@ -210,7 +210,7 @@ impl Context {
             NativeCallTarget::ArrayShift => self.eval_direct_array_shift(args, this_value),
             NativeCallTarget::ArraySlice => self.eval_direct_array_slice(args, this_value),
             NativeCallTarget::ArrayUnshift => self.eval_direct_array_unshift(args, this_value),
-            NativeCallTarget::Boolean => self.eval_boolean_constructor(runtime_call_args(args)),
+            NativeCallTarget::Boolean => self.eval_direct_boolean_constructor(args),
             NativeCallTarget::ErrorConstructor(name) => {
                 self.eval_error_constructor(name, runtime_call_args(args))
             }
@@ -252,8 +252,8 @@ impl Context {
             NativeCallTarget::MathTan => Self::eval_direct_math_tan(args),
             NativeCallTarget::MathTanh => Self::eval_direct_math_tanh(args),
             NativeCallTarget::MathTrunc => Self::eval_direct_math_trunc(args),
-            NativeCallTarget::Number => self.eval_number_constructor(runtime_call_args(args)),
-            NativeCallTarget::Object => self.eval_object_constructor(runtime_call_args(args)),
+            NativeCallTarget::Number => self.eval_direct_number_constructor(args),
+            NativeCallTarget::Object => self.eval_direct_object_constructor(args),
             NativeCallTarget::ObjectDefineProperty => {
                 self.eval_object_define_property(runtime_call_args(args))
             }
@@ -274,7 +274,7 @@ impl Context {
             NativeCallTarget::PromiseCatch => {
                 self.eval_promise_catch(runtime_call_args(args), this_value)
             }
-            NativeCallTarget::String => self.eval_string_constructor(runtime_call_args(args)),
+            NativeCallTarget::String => self.eval_direct_string_constructor(args),
         }
     }
 

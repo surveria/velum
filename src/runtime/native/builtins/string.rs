@@ -31,6 +31,14 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
+        let value = self.eval_string_argument(args.as_slice())?;
+        self.heap_string_value(&value)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_string_constructor(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
         let value = self.eval_string_argument(args)?;
         self.heap_string_value(&value)
     }
@@ -39,7 +47,7 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let value = self.eval_string_argument(args)?;
+        let value = self.eval_string_argument(args.as_slice())?;
         let value = self.intern_heap_string(&value)?;
         let prototype = self.string_constructor_prototype()?;
         let length_key = self.intern_property_key(STRING_LENGTH_PROPERTY)?;
@@ -78,9 +86,8 @@ impl Context {
         }
     }
 
-    fn eval_string_argument(&self, args: RuntimeCallArgs<'_>) -> Result<String> {
-        let value = Self::eval_native_unary_argument_value(args);
-        let value = Self::string_argument_value(value);
+    fn eval_string_argument(&self, args: &[Value]) -> Result<String> {
+        let value = Self::string_argument_value(args.first());
         self.check_string_len(&value)?;
         Ok(value)
     }
