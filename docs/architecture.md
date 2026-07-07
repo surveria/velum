@@ -11,13 +11,19 @@ interpreter paths.
 2. `syntax`: owns shared operator, declaration, and script-local static metadata
    used by parser, bytecode, and runtime.
 3. `parser`: builds a small AST for the currently supported language subset.
-4. `bytecode`: compiles parser AST nodes into VM-owned executable metadata.
-5. `runtime`: owns globals, host functions, output, and resource counters.
-6. `value`: defines the current JavaScript value model.
+4. `binding_layout`: analyzes parser AST scopes and assigns checked binding
+   operands.
+5. `compiler`: consumes parser AST plus binding layout and emits bytecode-owned
+   executable metadata.
+6. `bytecode`: owns AST-free VM executable data structures and bytecode metrics.
+7. `runtime`: owns globals, host functions, output, and resource counters.
+8. `value`: defines the current JavaScript value model.
 
 The parser AST is not a runtime fallback. It is consumed by binding analysis and
-bytecode compilation, then `CompiledScript` stores a `BytecodeProgram` and
-bytecode-owned function metadata for execution.
+the compiler, then `CompiledScript` stores a `BytecodeProgram` and
+bytecode-owned function metadata for execution. The `bytecode` module must not
+import parser AST types; AST traversal belongs in `parser`, `binding_layout`,
+and `compiler` only.
 
 ## Embedding Model
 

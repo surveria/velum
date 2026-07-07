@@ -2,8 +2,9 @@ use std::{fs, path::Path};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
-const BYTECODE_ONLY_SOURCE_DIRS: [&str; 5] = [
+const BYTECODE_ONLY_SOURCE_DIRS: [&str; 6] = [
     "src/api",
+    "src/bytecode",
     "src/compiled_script",
     "src/runtime",
     "src/storage",
@@ -48,7 +49,7 @@ fn check_source_file(path: &Path) -> TestResult {
     for line in text.lines() {
         if line_imports_parser_ast(line) {
             return Err(format!(
-                "{} imports parser AST through `{}`; runtime and embedding layers must execute bytecode-owned metadata",
+                "{} imports parser AST through `{}`; runtime, embedding, and bytecode data layers must execute bytecode-owned metadata",
                 path.display(),
                 line.trim()
             )

@@ -5,6 +5,7 @@ pub use usage::CompiledScriptUsage;
 use crate::{
     binding_layout::BindingLayout,
     bytecode::BytecodeProgram,
+    compiler,
     error::{Error, Result},
     lexer, parser,
     runtime::limits::RuntimeLimits,
@@ -28,7 +29,7 @@ impl CompiledScript {
             parsed.usage.static_binding_count,
             parsed.usage.static_function_count,
         )?;
-        let bytecode = BytecodeProgram::compile(&program, &binding_layout)?;
+        let bytecode = compiler::compile_program(&program, &binding_layout)?;
         let bytecode_instruction_count = bytecode.instruction_count();
         let bytecode_binding_operand_count = bytecode.binding_operand_count();
         let bytecode_property_operand_count = bytecode.property_operand_count();
