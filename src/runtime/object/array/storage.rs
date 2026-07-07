@@ -200,6 +200,28 @@ impl ArrayStorage {
         true
     }
 
+    pub(in crate::runtime::object) fn pop_packed_for_len_if_configurable(
+        &mut self,
+        len: usize,
+    ) -> Option<ObjectProperty> {
+        if self.has_sparse_keys() {
+            return None;
+        }
+        let ArrayElements::Packed(elements) = &mut self.elements else {
+            return None;
+        };
+        if elements.len() != len {
+            return None;
+        }
+        let property = elements.back()?;
+        if !property.is_configurable() {
+            return None;
+        }
+        let removed = elements.pop_back()?;
+        self.property_count = self.property_count.saturating_sub(1);
+        Some(removed)
+    }
+
     pub(in crate::runtime::object) fn append_packed_default_value_iter(
         &mut self,
         values: impl IntoIterator<Item = Value>,

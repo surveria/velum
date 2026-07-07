@@ -105,6 +105,33 @@ fn rejects_array_methods_on_non_array_receivers() -> TestResult {
     ensure_error_contains(&error, "requires an array receiver")
 }
 
+#[test]
+fn keeps_non_configurable_pop_on_generic_path() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let values = [1, 2];
+        Object.defineProperty(values, "1", {
+            value: 2,
+            configurable: false,
+            enumerable: true,
+            writable: true
+        });
+        let popped = values.pop();
+        print("descriptor", popped, values.length, values[1], "1" in values);
+        popped === 2 &&
+            values.length === 1 &&
+            values[1] === 2 &&
+            ("1" in values) ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(context.output(), &["descriptor 2 1 2 true".to_owned()])
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

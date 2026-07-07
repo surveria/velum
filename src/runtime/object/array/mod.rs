@@ -46,6 +46,30 @@ impl ObjectHeap {
         max_properties: usize,
     ) -> Result<Value> {
         let mut length = self.array_length_for_method(id, ARRAY_PUSH_RECEIVER_ERROR)?;
+        let new_length = length.add_usize(values.len())?;
+        if values.is_empty() {
+            return Ok(new_length.value());
+        }
+
+        let length_usize = length.to_usize()?;
+        if self
+            .object(id)?
+            .packed_array_properties(length_usize)
+            .is_some()
+        {
+            let before = self.object(id)?.structure_snapshot();
+            {
+                let object = self.object_mut(id)?;
+                object.append_packed_default_value_iter(
+                    values.iter().cloned(),
+                    values.len(),
+                    max_properties,
+                )?;
+                object.array_length = Some(new_length);
+            }
+            self.bump_if_structure_changed(id, before)?;
+            return Ok(new_length.value());
+        }
 
         for value in values {
             let index = length.index()?;
@@ -61,6 +85,23 @@ impl ObjectHeap {
         let Some(index) = length.previous_index() else {
             return Ok(Value::Undefined);
         };
+        let length_usize = length.to_usize()?;
+
+        if self
+            .object(id)?
+            .packed_array_properties(length_usize)
+            .is_some()
+        {
+            let before = self.object(id)?.structure_snapshot();
+            if let Some(property) = self
+                .object_mut(id)?
+                .pop_packed_for_len_if_configurable(length_usize)
+            {
+                self.object_mut(id)?.array_length = Some(index.length());
+                self.bump_if_structure_changed(id, before)?;
+                return Ok(property.value());
+            }
+        }
 
         let value = self
             .object(id)?

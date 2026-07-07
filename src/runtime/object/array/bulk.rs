@@ -178,6 +178,17 @@ impl Object {
         self.add_enumerable_properties(count)
     }
 
+    pub(in crate::runtime::object) fn pop_packed_for_len_if_configurable(
+        &mut self,
+        len: usize,
+    ) -> Option<ObjectProperty> {
+        let property = self.array_storage.pop_packed_for_len_if_configurable(len)?;
+        if property.is_enumerable() {
+            self.enumerable_property_count = self.enumerable_property_count.saturating_sub(1);
+        }
+        Some(property)
+    }
+
     fn add_enumerable_properties(&mut self, count: usize) -> Result<()> {
         self.enumerable_property_count = self
             .enumerable_property_count

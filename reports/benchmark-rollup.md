@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T083206Z.md`
-- Task: rsqjs-test-report-20260707T083206Z.md
-- Performance: 0.85x (41/63 >1.00x)
+- `rsqjs-test-report-20260707T084248Z.md`
+- Task: rsqjs-test-report-20260707T084248Z.md
+- Performance: 0.86x (41/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 14337 passed / 88241 failed (13.98%)
 
@@ -263,4 +263,5 @@ Latest report:
 | `20260707T075422Z` `f326677` Reuse validated array lengths in native methods | 0.82x (39/63 >1.00x) | - (0/63 >1.00x) | 14568 passed / 88010 failed (14.20%) |
 | `20260707T080227Z` `132c2d9` Support computed object literal properties | 0.85x (39/63 >1.00x) | - (0/63 >1.00x) | 14633 passed / 87945 failed (14.27%) |
 | `20260707T082005Z` `259397c` Support computed object literal methods | 0.85x (42/63 >1.00x) | - (0/63 >1.00x) | 14634 passed / 87944 failed (14.27%) |
-| `20260707T083206Z` rsqjs-test-report-20260707T083206Z.md | 0.85x (41/63 >1.00x) | - (0/63 >1.00x) | 14337 passed / 88241 failed (13.98%) |
+| `20260707T083206Z` `1677ea2` Add RegExp literal support for native function matcher | 0.85x (41/63 >1.00x) | - (0/63 >1.00x) | 14337 passed / 88241 failed (13.98%) |
+| `20260707T084248Z` rsqjs-test-report-20260707T084248Z.md | 0.86x (41/63 >1.00x) | - (0/63 >1.00x) | 14337 passed / 88241 failed (13.98%) |
