@@ -214,7 +214,7 @@ impl Context {
             NativeCallTarget::ErrorConstructor(name) => {
                 self.eval_direct_error_constructor(name, args)
             }
-            NativeCallTarget::Function => self.eval_function_constructor(runtime_call_args(args)),
+            NativeCallTarget::Function => self.eval_direct_function_constructor(args),
             NativeCallTarget::JsonParse => self.eval_direct_json_parse(args),
             NativeCallTarget::JsonStringify => self.eval_direct_json_stringify(args),
             NativeCallTarget::MathAbs => Self::eval_direct_math_abs(args),

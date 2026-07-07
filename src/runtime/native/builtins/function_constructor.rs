@@ -47,6 +47,13 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
+        self.eval_generated_function_constructor(args.as_slice(), false)
+    }
+
+    pub(in crate::runtime) fn eval_direct_function_constructor(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
         self.eval_generated_function_constructor(args, false)
     }
 
@@ -54,7 +61,7 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        self.eval_generated_function_constructor(args, true)
+        self.eval_generated_function_constructor(args.as_slice(), true)
     }
 
     pub(in crate::runtime) fn function_constructor_prototype_value(&mut self) -> Result<Value> {
@@ -77,10 +84,10 @@ impl Context {
 
     fn eval_generated_function_constructor(
         &mut self,
-        args: RuntimeCallArgs<'_>,
+        args: &[Value],
         is_async: bool,
     ) -> Result<Value> {
-        let source = Self::function_constructor_source(args.as_slice(), is_async);
+        let source = Self::function_constructor_source(args, is_async);
         self.check_string_len(&source)?;
         let script = self.compile(&source)?;
         let caller_locals = std::mem::take(&mut self.locals);

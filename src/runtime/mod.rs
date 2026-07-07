@@ -37,7 +37,7 @@ pub mod values;
 pub use binding::static_bindings::CompiledBindingFrame;
 use binding::static_bindings::StaticBindingCacheHandle;
 use call_args::RuntimeCallArgs;
-use native::NativeFunctionRegistry;
+use native::{NativeFunctionKind, NativeFunctionRegistry};
 use promise::{Promise, PromiseId, PromiseJob};
 use property::static_names::{CallValueCache, StaticNameAtomCacheHandle};
 use property::well_known::{DescriptorPropertyKeys, WellKnownPropertyKeys};
@@ -407,11 +407,7 @@ impl Context {
         args: &[Value],
     ) -> Result<Value> {
         if constructor.name().as_str() != TEST262_ERROR_NAME {
-            return self.eval_bytecode_function_constructor(
-                constructor,
-                native,
-                RuntimeCallArgs::values(args),
-            );
+            return self.eval_bytecode_function_constructor(constructor, native, args);
         }
         self.eval_error_constructor(ErrorName::Test262Error, RuntimeCallArgs::values(args))
     }
@@ -420,7 +416,7 @@ impl Context {
         &mut self,
         constructor: &BytecodeBinding,
         native: Option<NativeCallTarget>,
-        args: RuntimeCallArgs<'_>,
+        args: &[Value],
     ) -> Result<Value> {
         let value = self
             .constructor_binding_bytecode(constructor)?
@@ -430,9 +426,13 @@ impl Context {
                 if let Some(target) = native
                     && let Some(kind) = self.direct_native_call_kind(id, target)
                 {
-                    return self.construct_native_function_kind(kind, args);
+                    if kind == NativeFunctionKind::Function {
+                        return self.eval_direct_function_constructor(args);
+                    }
+                    return self
+                        .construct_native_function_kind(kind, RuntimeCallArgs::values(args));
                 }
-                return self.construct_native_function(id, args);
+                return self.construct_native_function(id, RuntimeCallArgs::values(args));
             }
             return Err(Error::runtime(format!(
                 "'{}' is not a constructor",
@@ -449,7 +449,7 @@ impl Context {
         )?;
         match self.eval_function_completion_with_this_and_new_target(
             id,
-            args,
+            RuntimeCallArgs::values(args),
             object.clone(),
             Value::Function(id),
         )? {
