@@ -40,8 +40,14 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let values = args.as_slice();
-        let Some(executor) = values.first().cloned() else {
+        self.eval_direct_promise_constructor(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_promise_constructor(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let Some(executor) = args.first().cloned() else {
             return Err(Error::runtime("Promise constructor requires an executor"));
         };
         if !Self::is_callable(&executor) {
@@ -83,8 +89,15 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
+        self.eval_direct_promise_resolve(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_promise_resolve(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
         self.promise_constructor_value()?;
-        let value = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
+        let value = args.first().cloned().unwrap_or(Value::Undefined);
         if self.promise_id_from_value(&value).is_ok() {
             return Ok(value);
         }
@@ -95,8 +108,15 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
+        self.eval_direct_promise_reject(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_promise_reject(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
         self.promise_constructor_value()?;
-        let reason = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
+        let reason = args.first().cloned().unwrap_or(Value::Undefined);
         self.create_rejected_promise(reason)
     }
 
@@ -105,9 +125,17 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
+        self.eval_direct_promise_then(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_promise_then(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
         let promise = self.promise_id_from_value(this_value)?;
-        let on_fulfilled = Self::promise_reaction_handler(args.as_slice().first());
-        let on_rejected = Self::promise_reaction_handler(args.as_slice().get(1));
+        let on_fulfilled = Self::promise_reaction_handler(args.first());
+        let on_rejected = Self::promise_reaction_handler(args.get(1));
         self.promise_then(promise, on_fulfilled, on_rejected)
     }
 
@@ -116,8 +144,16 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
+        self.eval_direct_promise_catch(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_promise_catch(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
         let promise = self.promise_id_from_value(this_value)?;
-        let on_rejected = Self::promise_reaction_handler(args.as_slice().first());
+        let on_rejected = Self::promise_reaction_handler(args.first());
         self.promise_then(promise, None, on_rejected)
     }
 
