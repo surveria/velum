@@ -375,7 +375,7 @@ impl Context {
         let Some(binding) = self.get_or_materialize_binding_bytecode(callee)? else {
             return Err(reference_error_undefined(callee.name()));
         };
-        let function = binding.value();
+        let function = binding.value(callee.name())?;
         self.call_reference_from_value(callee, native, function)
     }
 
@@ -442,6 +442,9 @@ impl Context {
         args: &[Value],
     ) -> Result<Value> {
         if constructor.name().as_str() != TEST262_ERROR_NAME {
+            return self.eval_bytecode_function_constructor(constructor, native, args);
+        }
+        if self.get_binding_bytecode(constructor)?.is_some() {
             return self.eval_bytecode_function_constructor(constructor, native, args);
         }
         self.eval_error_constructor(ErrorName::Test262Error, RuntimeCallArgs::values(args))

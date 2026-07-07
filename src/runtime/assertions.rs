@@ -44,6 +44,12 @@ pub fn reference_error_undefined(name: &str) -> Error {
     Error::runtime(format!("{REFERENCE_ERROR_NAME}: '{name}' is not defined"))
 }
 
+pub fn reference_error_uninitialized(name: &str) -> Error {
+    Error::runtime(format!(
+        "{REFERENCE_ERROR_NAME}: '{name}' is not initialized"
+    ))
+}
+
 fn reference_error_message(message: &str) -> Option<&str> {
     message
         .strip_prefix(REFERENCE_ERROR_PREFIX)?

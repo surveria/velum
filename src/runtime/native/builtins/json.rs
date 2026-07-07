@@ -24,7 +24,7 @@ const JSON_UNSUPPORTED_NUMBER: &str = "JSON number cannot be represented as f64"
 impl Context {
     pub(in crate::runtime::native) fn json_object_value(&mut self) -> Result<Value> {
         if let Some(binding) = self.get_binding(JSON_NAME) {
-            return Ok(binding.value());
+            return binding.value(JSON_NAME);
         }
 
         let constructor_key = self.object_constructor_property_key()?;

@@ -66,6 +66,10 @@ impl BytecodeFunction {
         &self.param_defaults
     }
 
+    pub fn has_parameter_defaults(&self) -> bool {
+        self.param_defaults.iter().any(Option::is_some)
+    }
+
     pub const fn body(&self) -> &BytecodeBlock {
         &self.body
     }

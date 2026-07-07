@@ -2,11 +2,14 @@ use std::rc::Rc;
 
 use parking_lot::Mutex;
 
-use crate::binding_layout::ScopeId;
-use crate::error::{Error, Result};
-use crate::storage::atom::AtomId;
-use crate::syntax::DeclKind;
-use crate::value::Value;
+use crate::{
+    binding_layout::ScopeId,
+    error::{Error, Result},
+    runtime::assertions::reference_error_uninitialized,
+    storage::atom::AtomId,
+    syntax::DeclKind,
+    value::Value,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct BindingScope {
@@ -252,18 +255,41 @@ pub struct BindingCell(Rc<Mutex<Binding>>);
 impl BindingCell {
     pub fn new(value: Value, mutable: bool, kind: DeclKind) -> Self {
         Self(Rc::new(Mutex::new(Binding {
-            value,
+            state: BindingState::Initialized(value),
             mutable,
             kind,
         })))
     }
 
-    pub fn value(&self) -> Value {
-        self.0.lock().value.clone()
+    pub fn uninitialized(mutable: bool, kind: DeclKind) -> Self {
+        Self(Rc::new(Mutex::new(Binding {
+            state: BindingState::Uninitialized,
+            mutable,
+            kind,
+        })))
+    }
+
+    pub fn value(&self, name: &str) -> Result<Value> {
+        match &self.0.lock().state {
+            BindingState::Initialized(value) => Ok(value.clone()),
+            BindingState::Uninitialized => Err(reference_error_uninitialized(name)),
+        }
     }
 
     pub fn kind(&self) -> DeclKind {
         self.0.lock().kind
+    }
+
+    pub fn initialize(&self, value: Value) -> Result<()> {
+        let mut binding = self.0.lock();
+        if matches!(binding.state, BindingState::Initialized(_)) {
+            return Err(Error::runtime(
+                "function parameter binding is already initialized",
+            ));
+        }
+        binding.state = BindingState::Initialized(value);
+        drop(binding);
+        Ok(())
     }
 
     pub fn assign(&self, name: &str, value: Value) -> Result<()> {
@@ -271,15 +297,24 @@ impl BindingCell {
         if !binding.mutable {
             return Err(Error::runtime(format!("assignment to constant '{name}'")));
         }
-        binding.value = value;
+        if matches!(binding.state, BindingState::Uninitialized) {
+            return Err(reference_error_uninitialized(name));
+        }
+        binding.state = BindingState::Initialized(value);
         drop(binding);
         Ok(())
     }
 }
 
 #[derive(Debug, Clone)]
+enum BindingState {
+    Uninitialized,
+    Initialized(Value),
+}
+
+#[derive(Debug, Clone)]
 struct Binding {
-    value: Value,
+    state: BindingState,
     mutable: bool,
     kind: DeclKind,
 }

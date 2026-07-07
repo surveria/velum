@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T115841Z.md`
-- Task: rsqjs-test-report-20260707T115841Z.md
-- Performance: 0.88x (43/63 >1.00x)
+- `rsqjs-test-report-20260707T120837Z.md`
+- Task: rsqjs-test-report-20260707T120837Z.md
+- Performance: 0.90x (42/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 15474 passed / 87104 failed (15.09%)
+- Full Test262: 15528 passed / 87050 failed (15.14%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -286,5 +286,7 @@ Latest report:
 | `20260707T112110Z` `583586d` Add labeled statement static semantics | 0.89x (43/63 >1.00x) | - (0/63 >1.00x) | 15466 passed / 87112 failed (15.08%) |
 | `20260707T113129Z` `60452e1` Reject escaped async keyword spelling | 0.83x (39/63 >1.00x) | - (0/63 >1.00x) | 15474 passed / 87104 failed (15.09%) |
 | `20260707T114056Z` `85c475d` Expand direct native call targets | 0.90x (43/63 >1.00x) | - (0/63 >1.00x) | 15474 passed / 87104 failed (15.09%) |
-| `20260707T114648Z` `f825ce9` Clarify runtime slow-path architecture | 0.88x (43/63 >1.00x) | - (0/63 >1.00x) | 15474 passed / 87104 failed (15.09%) |
-| `20260707T115841Z` rsqjs-test-report-20260707T115841Z.md | 0.88x (43/63 >1.00x) | - (0/63 >1.00x) | 15474 passed / 87104 failed (15.09%) |
+| `20260707T114648Z` `e6e48a9` Clarify runtime slow-path architecture | 0.88x (43/63 >1.00x) | - (0/63 >1.00x) | 15474 passed / 87104 failed (15.09%) |
+| `20260707T115841Z` `e6e48a9` Clarify runtime slow-path architecture | 0.88x (43/63 >1.00x) | - (0/63 >1.00x) | 15474 passed / 87104 failed (15.09%) |
+| `20260707T115942Z` `568de05` Support TDZ-aware parameter defaults | 0.88x (40/63 >1.00x) | - (0/63 >1.00x) | 15528 passed / 87050 failed (15.14%) |
+| `20260707T120837Z` rsqjs-test-report-20260707T120837Z.md | 0.90x (42/63 >1.00x) | - (0/63 >1.00x) | 15528 passed / 87050 failed (15.14%) |

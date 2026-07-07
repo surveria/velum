@@ -2,7 +2,7 @@ use crate::{
     error::Result,
     runtime::Context,
     runtime::assertions::error_property_text,
-    runtime::object::PropertyKey,
+    runtime::object::{OBJECT_CONSTRUCTOR_PROPERTY, PropertyKey},
     runtime::property::{
         DynamicPropertyKey, PropertyValue, StringPropertyValue, get_property, has_property,
         property_key, string_property_value,
@@ -57,6 +57,9 @@ impl Context {
         error: &crate::value::ErrorObject,
         property: &str,
     ) -> Result<Value> {
+        if property == OBJECT_CONSTRUCTOR_PROPERTY {
+            return self.error_constructor_value(error.name());
+        }
         if let Some(value) = error_property_text(error, property) {
             return self.heap_string_value(value);
         }

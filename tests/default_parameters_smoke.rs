@@ -30,6 +30,50 @@ fn default_parameter_can_read_previous_parameter_and_outer_binding() -> TestResu
 }
 
 #[test]
+fn default_parameters_initialize_sequentially() -> TestResult {
+    let value = eval(
+        r"
+        function chain(first = 39, second = first + 2, third = second + 1) {
+            return third;
+        }
+        chain();
+        ",
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn default_parameter_tdz_rejects_self_and_later_reads() -> TestResult {
+    let value = eval(
+        r#"
+        function readSelf(value = value) {
+            return value;
+        }
+        function readLater(first = second, second = 1) {
+            return first + second;
+        }
+
+        let selfError = "";
+        let laterError = "";
+        try {
+            readSelf();
+        } catch (error) {
+            selfError = error.name + ":" + error.message + ":" + (error.constructor === ReferenceError);
+        }
+        try {
+            readLater();
+        } catch (error) {
+            laterError = error.name + ":" + error.message + ":" + (error.constructor === ReferenceError);
+        }
+
+        selfError === "ReferenceError:'value' is not initialized:true" &&
+            laterError === "ReferenceError:'second' is not initialized:true"
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
 fn supports_default_parameter_trailing_comma_and_function_length() -> TestResult {
     let value = eval(
         r"
@@ -98,6 +142,67 @@ fn async_function_uses_default_parameter_before_body() -> TestResult {
     )?;
     let value = context.eval("resolved")?;
     ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn async_default_parameter_tdz_rejects_returned_promise() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.eval(
+        r#"
+        let bodyStarted = false;
+        let rejected = "";
+
+        async function task(value = value) {
+            bodyStarted = true;
+            return value;
+        }
+
+        task().then(function() {
+            rejected = "resolved";
+        }, function(error) {
+            rejected = error.name + ":" + error.message + ":" + (error.constructor === ReferenceError);
+        });
+        "#,
+    )?;
+    let value = context.eval(
+        r#"
+        !bodyStarted && rejected === "ReferenceError:'value' is not initialized:true"
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn async_default_parameter_abrupt_completion_rejects_returned_promise() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.eval(
+        r#"
+        let bodyStarted = false;
+        let rejected = "";
+        function thrower() {
+            throw new Test262Error("boom");
+        }
+
+        async function task(value = thrower()) {
+            bodyStarted = true;
+            return value;
+        }
+
+        task().then(function() {
+            rejected = "resolved";
+        }, function(error) {
+            rejected = error.message + ":" + (error.constructor === Test262Error);
+        });
+        "#,
+    )?;
+    let value = context.eval(
+        r#"
+        !bodyStarted && rejected === "boom:true"
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
 }
 
 fn eval(source: &str) -> rs_quickjs::Result<Value> {

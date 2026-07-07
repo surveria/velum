@@ -66,7 +66,7 @@ impl Context {
             return Ok(value);
         }
         if let Some(binding) = self.get_binding_bytecode(name)? {
-            return self.runtime_value(binding.value());
+            return self.runtime_value(binding.value(name.name())?);
         }
         self.builtin_value(name.name().name())?
             .ok_or_else(|| crate::runtime::assertions::reference_error_undefined(name.name()))
@@ -77,7 +77,7 @@ impl Context {
             return self.heap_string_value(Value::Number(0.0).type_name());
         }
         if let Some(binding) = self.get_binding_bytecode(name)? {
-            return self.heap_string_value(binding.value().type_name());
+            return self.heap_string_value(binding.value(name.name())?.type_name());
         }
         if let Some(value) = self.builtin_value(name.name().name())? {
             return self.heap_string_value(value.type_name());
@@ -361,7 +361,7 @@ impl Context {
         let binding = self
             .get_binding_bytecode(name)?
             .ok_or_else(|| Error::runtime(format!("ReferenceError: '{name}' is not defined")))?;
-        let old_value = binding.value();
+        let old_value = binding.value(name.name())?;
         let new_value = Self::updated_bytecode_number(&old_value, op)?;
         self.checked_value(new_value.clone())?;
         binding.assign(name.name(), new_value.clone())?;
@@ -432,7 +432,7 @@ impl Context {
         let binding = self
             .get_or_materialize_binding_bytecode(name)?
             .ok_or_else(|| Error::runtime(format!("ReferenceError: '{name}' is not defined")))?;
-        let old_value = binding.value();
+        let old_value = binding.value(name.name())?;
         let value = self.eval_bytecode_compound_value(op, &old_value, right)?;
         binding.assign(name.name(), value.clone())?;
         Ok(value)
