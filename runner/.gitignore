@@ -1,6 +1,7 @@
 *
 
 !/.gitignore
+!/build.rs
 !/Cargo.toml
 !/Cargo.lock
 !/README.md

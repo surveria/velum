@@ -4,6 +4,7 @@
 mod api;
 mod ast;
 mod binding_layout;
+mod build_info;
 mod bytecode;
 mod compiled_script;
 mod compiler;
@@ -19,6 +20,7 @@ pub use crate::api::embedding::{
     Engine, EngineConfig, Vm, VmConfig, VmResourceUsage, VmTeardownReport,
 };
 pub use crate::api::host::{FromJsValue, HostCall, IntoJsValue};
+pub use crate::build_info::{BuildInfo, engine_build_info};
 pub use crate::compiled_script::{CompiledScript, CompiledScriptUsage};
 pub use crate::error::{Error, Result};
 pub use crate::runtime::Context;

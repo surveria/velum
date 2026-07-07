@@ -33,7 +33,7 @@ if [[ -n "${RSQJS_TEST_REPORT_PATH:-}" ]]; then
 elif [[ "${RSQJS_TRACKED_REPORT:-0}" == "1" ]]; then
   report_path="reports/test-runs/rsqjs-test-report-${timestamp}.md"
 else
-  report_path="target/reports/test-runs/rsqjs-test-report-${timestamp}.md"
+  report_path="target/rsqjs-reports/test-runs/rsqjs-test-report-${timestamp}.md"
 fi
 
 report_file="$(basename "${report_path}")"
@@ -92,8 +92,12 @@ metadata_path="${reports_root}/rsqjs-report-metadata.env"
   write_metadata_value 'RSQJS_ARTIFACT_TASK' "${RSQJS_REPORT_TASK:-}"
 } > "${metadata_path}"
 
-printf 'test report: %s\n' "${report_path}"
-printf 'report metadata: %s\n' "${metadata_path}"
-if [[ "${report_path}" == target/reports/* ]]; then
-  printf 'test report is untracked by default; set RSQJS_TRACKED_REPORT=1 for a canonical tracked report\n'
+if [[ "${report_path}" == target/rsqjs-reports/* ]]; then
+  printf 'local/CI benchmark report artifact: %s\n' "${report_path}"
+  printf 'local/CI report artifact root: %s\n' "${reports_root}"
+  printf 'report metadata artifact: %s\n' "${metadata_path}"
+  printf 'do not commit this report from a feature PR; CI uploads the artifact and the post-merge publisher commits the canonical reports/test-runs copy\n'
+else
+  printf 'canonical tracked test report: %s\n' "${report_path}"
+  printf 'report metadata: %s\n' "${metadata_path}"
 fi

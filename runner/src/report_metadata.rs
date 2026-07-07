@@ -1,5 +1,8 @@
 use std::env;
 
+use crate::build_info::runner_build_info;
+use rs_quickjs::engine_build_info;
+
 const TIMESTAMP_ENV: &str = "RSQJS_REPORT_TIMESTAMP";
 const COMMIT_ENV: &str = "RSQJS_REPORT_COMMIT_SHA";
 const TREE_ENV: &str = "RSQJS_REPORT_TREE_SHA";
@@ -23,10 +26,16 @@ pub struct RunMetadata {
     workflow: String,
     pull_request: String,
     task: String,
+    engine_version: String,
+    engine_commit: String,
+    runner_version: String,
+    runner_commit: String,
 }
 
 impl RunMetadata {
     pub fn from_env() -> Self {
+        let engine = engine_build_info();
+        let runner = runner_build_info();
         Self {
             timestamp: env::var(TIMESTAMP_ENV).unwrap_or_default(),
             commit: env::var(COMMIT_ENV).unwrap_or_default(),
@@ -38,6 +47,10 @@ impl RunMetadata {
             workflow: env::var(WORKFLOW_ENV).unwrap_or_default(),
             pull_request: env::var(PR_NUMBER_ENV).unwrap_or_default(),
             task: env::var(TASK_ENV).unwrap_or_default(),
+            engine_version: engine.version.to_owned(),
+            engine_commit: engine.commit_sha.to_owned(),
+            runner_version: runner.version.to_owned(),
+            runner_commit: runner.commit_sha.to_owned(),
         }
     }
 
@@ -50,6 +63,10 @@ impl RunMetadata {
             || !self.workflow.is_empty()
             || !self.pull_request.is_empty()
             || !self.task.is_empty()
+            || !self.engine_version.is_empty()
+            || !self.engine_commit.is_empty()
+            || !self.runner_version.is_empty()
+            || !self.runner_commit.is_empty()
     }
 }
 
@@ -65,6 +82,10 @@ pub fn render_section(metadata: &RunMetadata) -> Vec<String> {
     if !metadata.pull_request.is_empty() {
         lines.push(format!("- Pull request: #{}", metadata.pull_request));
     }
+    push_metadata_line(&mut lines, "Engine version", &metadata.engine_version);
+    push_metadata_line(&mut lines, "Engine build commit", &metadata.engine_commit);
+    push_metadata_line(&mut lines, "Runner version", &metadata.runner_version);
+    push_metadata_line(&mut lines, "Runner build commit", &metadata.runner_commit);
     push_metadata_line(&mut lines, "Tested commit", &metadata.commit);
     push_metadata_line(&mut lines, "Tested tree", &metadata.tree);
     if !metadata.repository.is_empty() && !metadata.run_id.is_empty() {
