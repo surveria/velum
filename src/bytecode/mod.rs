@@ -627,7 +627,12 @@ impl<'a> BytecodeCompiler<'a> {
                 }
                 ObjectPropertyKey::Computed(expr) => {
                     self.compile_expr(expr)?;
-                    operands.push(BytecodeObjectProperty::Computed);
+                    let property = if matches!(&property.value, Expr::MethodFunction { .. }) {
+                        BytecodeObjectProperty::ComputedMethod
+                    } else {
+                        BytecodeObjectProperty::Computed
+                    };
+                    operands.push(property);
                 }
             }
             self.compile_expr(&property.value)?;

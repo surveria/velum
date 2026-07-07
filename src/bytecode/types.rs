@@ -106,13 +106,14 @@ impl BytecodeFunctionParam {
 pub enum BytecodeObjectProperty {
     Static(StaticName),
     Computed,
+    ComputedMethod,
 }
 
 impl BytecodeObjectProperty {
     pub const fn stack_value_count(&self) -> usize {
         match self {
             Self::Static(_) => 1,
-            Self::Computed => 2,
+            Self::Computed | Self::ComputedMethod => 2,
         }
     }
 }

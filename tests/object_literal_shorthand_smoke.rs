@@ -79,6 +79,52 @@ fn supports_computed_symbol_object_literal_property_names() -> TestResult {
 }
 
 #[test]
+fn supports_computed_object_literal_methods() -> TestResult {
+    let value = eval(
+        r#"
+        let order = "";
+        function mark(name, value) {
+            order = order + name;
+            return value;
+        }
+        let object = {
+            value: 40,
+            [mark("k", "read")](extra) {
+                order = order + "m";
+                return this.value + extra;
+            },
+            after: mark("a", 1),
+        };
+        order === "ka" &&
+            object.read(2) === 42 &&
+            order === "kam" &&
+            object.read.name === "read" &&
+            !("prototype" in object.read) ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn supports_computed_symbol_object_literal_methods() -> TestResult {
+    let value = eval(
+        r#"
+        let key = Symbol("camera");
+        let object = {
+            value: 40,
+            [key](extra) {
+                return this.value + extra;
+            },
+        };
+        object[key](2)
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn rejects_missing_shorthand_bindings() -> TestResult {
     let Err(error) = eval("let camera = { missing }; camera.missing") else {
         return Err("expected missing shorthand binding to fail".into());
