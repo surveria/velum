@@ -18,6 +18,7 @@ pub enum Expr {
     Literal(Value),
     StringLiteral(StaticString),
     This,
+    NewTarget,
     Identifier(StaticBinding),
     Parenthesized(Box<Self>),
     Unary {

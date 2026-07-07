@@ -360,7 +360,7 @@ impl Parser {
         let params = self.function_parameters()?.into();
         self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
-        let body = self.block_statements()?.into();
+        let body = self.with_new_target_scope(Self::block_statements)?.into();
         let id = self.static_function()?;
         Ok(Stmt::FunctionDecl {
             name,

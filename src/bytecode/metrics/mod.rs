@@ -528,6 +528,7 @@ impl BytecodeInstruction {
                 | Self::PushString(_)
                 | Self::PushUndefined
                 | Self::LoadThis
+                | Self::LoadNewTarget
                 | Self::LoadBinding(_)
                 | Self::StoreBinding(_)
                 | Self::DeclareBinding { .. }

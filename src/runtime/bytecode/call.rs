@@ -2,7 +2,9 @@ use crate::{
     api::native_call::NativeCallTarget,
     bytecode::{BytecodeAddress, BytecodeDynamicProperty, BytecodeInstruction, BytecodeProperty},
     error::{Error, Result},
-    runtime::{Context, call_args::RuntimeCallArgs, completion::Completion},
+    runtime::{
+        Context, call_args::RuntimeCallArgs, completion::Completion, function::BytecodeFunctionInit,
+    },
     value::Value,
 };
 
@@ -223,15 +225,17 @@ impl Context {
                 bytecode,
                 constructable,
                 is_async,
+                new_target_mode,
             } => {
-                let function = self.create_bytecode_function(
-                    *id,
-                    name.as_ref(),
+                let function = self.create_bytecode_function(&BytecodeFunctionInit {
+                    static_function_id: *id,
+                    name: name.as_ref(),
                     params,
                     bytecode,
-                    *constructable,
-                    *is_async,
-                )?;
+                    constructable: *constructable,
+                    is_async: *is_async,
+                    new_target_mode: *new_target_mode,
+                })?;
                 state.stack.push(function);
                 state.pc = next;
                 Ok(None)

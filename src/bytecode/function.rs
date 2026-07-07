@@ -174,7 +174,7 @@ impl CaptureBindingCollector {
 
     fn collect_expr(&mut self, expr: &Expr) {
         match expr {
-            Expr::Literal(_) | Expr::StringLiteral(_) | Expr::This => {}
+            Expr::Literal(_) | Expr::StringLiteral(_) | Expr::This | Expr::NewTarget => {}
             Expr::Function { params, body, .. }
             | Expr::ArrowFunction { params, body, .. }
             | Expr::MethodFunction { params, body, .. } => self.collect_function_body(params, body),

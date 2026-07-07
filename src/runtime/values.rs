@@ -59,6 +59,15 @@ impl Context {
         self.checked_value(self.this_values.last().cloned().unwrap_or(Value::Undefined))
     }
 
+    pub(crate) fn current_new_target(&self) -> Result<Value> {
+        self.checked_value(
+            self.new_target_values
+                .last()
+                .cloned()
+                .unwrap_or(Value::Undefined),
+        )
+    }
+
     pub(crate) fn check_string_len(&self, text: &str) -> Result<()> {
         if text.len() > self.limits.max_string_len {
             return Err(Error::limit(format!(

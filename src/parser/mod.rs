@@ -39,6 +39,7 @@ struct Parser {
     limits: RuntimeLimits,
     expression_depth: usize,
     statement_depth: usize,
+    new_target_scope_depth: usize,
     max_expression_depth: usize,
     static_names: StaticNameTable,
     static_strings: StaticStringTable,
@@ -56,6 +57,7 @@ impl Parser {
             limits,
             expression_depth: 0,
             statement_depth: 0,
+            new_target_scope_depth: 0,
             max_expression_depth: 0,
             static_names: StaticNameTable::new(),
             static_strings: StaticStringTable::new(),
@@ -282,6 +284,23 @@ impl Parser {
             .checked_sub(1)
             .and_then(|cursor| self.tokens.get(cursor))
             .map_or_else(|| self.offset(), |token| token.offset)
+    }
+
+    pub(super) fn with_new_target_scope<T>(
+        &mut self,
+        parse: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        self.new_target_scope_depth = self
+            .new_target_scope_depth
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("new.target scope depth overflowed"))?;
+        let result = parse(self);
+        self.new_target_scope_depth = self.new_target_scope_depth.saturating_sub(1);
+        result
+    }
+
+    pub(super) const fn allows_new_target(&self) -> bool {
+        self.new_target_scope_depth > 0
     }
 }
 
