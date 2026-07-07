@@ -29,6 +29,8 @@ pub(super) const BOOLEAN_NAME: &str = "Boolean";
 const EVAL_FUNCTION_LENGTH: f64 = 1.0;
 pub(super) const EVAL_NAME: &str = "eval";
 const ERROR_FUNCTION_LENGTH: f64 = 1.0;
+const FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
+pub(super) const FUNCTION_NAME: &str = "Function";
 pub(super) const INFINITY_NAME: &str = "Infinity";
 pub(super) const JSON_NAME: &str = "JSON";
 const JSON_PARSE_FUNCTION_LENGTH: f64 = 2.0;
@@ -122,6 +124,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     Boolean,
     Eval,
     ErrorConstructor(ErrorName),
+    Function,
     JsonParse,
     JsonStringify,
     MathAbs,
@@ -196,6 +199,7 @@ impl NativeFunctionKind {
             Self::Boolean => BOOLEAN_FUNCTION_LENGTH,
             Self::Eval => EVAL_FUNCTION_LENGTH,
             Self::ErrorConstructor(_) => ERROR_FUNCTION_LENGTH,
+            Self::Function => FUNCTION_FUNCTION_LENGTH,
             Self::JsonParse => JSON_PARSE_FUNCTION_LENGTH,
             Self::JsonStringify => JSON_STRINGIFY_FUNCTION_LENGTH,
             Self::MathRandom => MATH_FUNCTION_LENGTH_ZERO,
@@ -269,6 +273,7 @@ impl NativeFunctionKind {
             Self::Boolean => BOOLEAN_NAME,
             Self::Eval => EVAL_NAME,
             Self::ErrorConstructor(name) => name.as_str(),
+            Self::Function => FUNCTION_NAME,
             Self::JsonParse => JSON_PARSE_NAME,
             Self::JsonStringify => JSON_STRINGIFY_NAME,
             Self::MathAbs => MATH_ABS_NAME,

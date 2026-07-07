@@ -1,0 +1,93 @@
+use rs_quickjs::{Runtime, Value};
+
+type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+
+#[test]
+fn exposes_function_constructor_metadata() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        typeof Function === "function" &&
+            Function.name === "Function" &&
+            Function.length === 1 &&
+            Function.prototype.constructor === Function ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn function_constructor_creates_callable_functions() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let add = Function("left", "right", "return left + right;");
+        let fromCommaList = Function("left, right", "return left + right;");
+        add(20, 22) + fromCommaList(10, 32)
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(84.0))
+}
+
+#[test]
+fn new_function_returns_created_function() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let created = new Function("value", "return value + 1;");
+        typeof created === "function" &&
+            created.name === "anonymous" &&
+            created.length === 1 &&
+            created(41) === 42 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn function_constructor_does_not_capture_caller_locals() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let make = function() {
+            let hidden = 42;
+            return Function("return typeof hidden;");
+        };
+        make()()
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::String("undefined".to_owned()))
+}
+
+#[test]
+fn function_constructor_rejects_invalid_source() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let result = context.eval(r#"Function(")")"#);
+    if result.is_err() {
+        return Ok(());
+    }
+
+    Err("expected invalid Function body to fail".into())
+}
+
+fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
+    if actual == expected {
+        return Ok(());
+    }
+
+    Err(format!("expected value {expected:?}, got {actual:?}").into())
+}

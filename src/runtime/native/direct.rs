@@ -165,6 +165,7 @@ impl Context {
             NativeCallTarget::ErrorConstructor(name) => {
                 self.eval_error_constructor(name, runtime_call_args(args))
             }
+            NativeCallTarget::Function => self.eval_function_constructor(runtime_call_args(args)),
             NativeCallTarget::JsonParse => self.eval_json_parse(runtime_call_args(args)),
             NativeCallTarget::JsonStringify => self.eval_json_stringify(runtime_call_args(args)),
             NativeCallTarget::MathAbs => Self::eval_direct_math_abs(args),
@@ -258,6 +259,7 @@ impl Context {
             NativeFunctionKind::Boolean => self.eval_boolean_constructor(args),
             NativeFunctionKind::Eval => self.eval_eval_function(args),
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
+            NativeFunctionKind::Function => self.eval_function_constructor(args),
             NativeFunctionKind::JsonParse => self.eval_json_parse(args),
             NativeFunctionKind::JsonStringify => self.eval_json_stringify(args),
             NativeFunctionKind::MathAbs => Self::eval_math_abs(args),

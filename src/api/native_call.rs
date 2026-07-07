@@ -16,6 +16,7 @@ pub enum NativeCallTarget {
     ArrayUnshift,
     Boolean,
     ErrorConstructor(ErrorName),
+    Function,
     JsonParse,
     JsonStringify,
     MathAbs,
@@ -90,6 +91,7 @@ impl NativeCallTarget {
         match name {
             "Array" => Some(Self::Array),
             "Boolean" => Some(Self::Boolean),
+            "Function" => Some(Self::Function),
             "Number" => Some(Self::Number),
             "Object" => Some(Self::Object),
             "Promise" => Some(Self::Promise),
