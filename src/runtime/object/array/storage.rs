@@ -227,6 +227,53 @@ impl ArrayStorage {
         Ok(value_count)
     }
 
+    pub(in crate::runtime::object) fn append_packed_default_property_values(
+        &mut self,
+        properties: &[ObjectProperty],
+        start: usize,
+        count: usize,
+        max_properties: usize,
+    ) -> Result<usize> {
+        let end = start
+            .checked_add(count)
+            .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
+        let property_range = properties
+            .get(start..end)
+            .ok_or_else(|| Error::runtime("packed array property range is unavailable"))?;
+        self.reserve_packed_append(count, max_properties)?;
+        let ArrayElements::Packed(elements) = &mut self.elements else {
+            return Err(Error::runtime("array storage is not packed"));
+        };
+        for property in property_range {
+            elements.push_back(ObjectProperty::ordinary(
+                property.value_ref().clone(),
+                PropertyEnumerable::Yes,
+            ));
+        }
+        self.property_count = self
+            .property_count
+            .checked_add(count)
+            .ok_or_else(|| Error::limit("object property count overflowed"))?;
+        Ok(count)
+    }
+
+    pub(in crate::runtime::object) fn append_packed_default_value(
+        &mut self,
+        value: Value,
+        max_properties: usize,
+    ) -> Result<usize> {
+        self.reserve_packed_append(1, max_properties)?;
+        let ArrayElements::Packed(elements) = &mut self.elements else {
+            return Err(Error::runtime("array storage is not packed"));
+        };
+        elements.push_back(ObjectProperty::ordinary(value, PropertyEnumerable::Yes));
+        self.property_count = self
+            .property_count
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("object property count overflowed"))?;
+        Ok(1)
+    }
+
     pub(in crate::runtime::object) fn dense_len(&self) -> usize {
         match &self.elements {
             ArrayElements::Packed(elements) => elements.len(),
@@ -343,6 +390,24 @@ impl ArrayStorage {
         position
             .checked_add(1)
             .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))
+    }
+
+    fn reserve_packed_append(&self, count: usize, max_properties: usize) -> Result<()> {
+        if self.has_sparse_keys() {
+            return Err(Error::runtime("packed array storage has sparse keys"));
+        }
+        let Some(new_property_count) = self.property_count.checked_add(count) else {
+            return Err(Error::limit("object property count overflowed"));
+        };
+        if new_property_count > max_properties {
+            return Err(Error::limit(format!(
+                "object property count exceeded {max_properties}"
+            )));
+        }
+        if !matches!(self.elements, ArrayElements::Packed(_)) {
+            return Err(Error::runtime("array storage is not packed"));
+        }
+        Ok(())
     }
 }
 
