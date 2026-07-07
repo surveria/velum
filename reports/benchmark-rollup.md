@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T114056Z.md`
-- Task: rsqjs-test-report-20260707T114056Z.md
-- Performance: 0.90x (43/63 >1.00x)
+- `rsqjs-test-report-20260707T115841Z.md`
+- Task: rsqjs-test-report-20260707T115841Z.md
+- Performance: 0.88x (43/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 15474 passed / 87104 failed (15.09%)
 
@@ -205,7 +205,7 @@ Latest report:
 | `20260706T203450Z` `015d3b1` Computed member and native borrowed argument tranche: Close the remaining bytecode computed-member call argument allocation and remove obvious full-argument clones from read-only native helper paths. | 0.80x (42/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
 | `20260706T204912Z` `8925aaf` Computed direct native-call operand tranche: Let statically known computed member calls use the same guarded direct-native operand model as static member and binding calls. | 0.81x (42/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
 | `20260706T210623Z` `3c0ba4d` Numeric add and array length quickening tranche: Extend bytecode quickening to the common numeric `+` path and static array `length` reads while preserving generic JavaScript fallback semantics. | 0.81x (41/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
-| `20260706T212153Z` `148c5a3` Native call-site inline-cache tranche: Cache validated static and computed member native call kinds per property access site and expose hit/miss/fallback counters to embedders. | 0.79x (41/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
+| `20260706T212153Z` `148c5a3` Native call-site inline-cache tranche: Cache validated static and computed member native call kinds per property access site and expose hit/miss/slow-path counters to embedders. | 0.79x (41/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
 | `20260706T214152Z` `bab54f3` Static array-index bytecode quickening tranche: Route static numeric property operands such as `array[0]` through dedicated array-index bytecode reads and writes with generic fallback semantics. | 0.80x (42/63 >1.00x) | - (0/63 >1.00x) | 10890 passed / 91688 failed (10.62%) |
 | `20260706T220043Z` `e7229f8` Add bytecode-backed function declarations | 0.81x (40/63 >1.00x) | - (0/63 >1.00x) | 11145 passed / 91433 failed (10.86%) |
 | `20260706T221054Z` `dfa1787` Dynamic array-index bytecode quickening tranche: Route computed `array[index]` reads and dense writes through a guarded array-index path before dynamic property-key materialization. | 0.81x (41/63 >1.00x) | - (0/63 >1.00x) | 11145 passed / 91433 failed (10.86%) |
@@ -280,10 +280,11 @@ Latest report:
 | `20260707T103559Z` `e0cf553` Throw SyntaxError from Function constructor parse failures | 0.86x (42/63 >1.00x) | - (0/63 >1.00x) | 15309 passed / 87269 failed (14.92%) |
 | `20260707T104316Z` `0220fc4` Reject duplicate default parameters | 0.86x (41/63 >1.00x) | - (0/63 >1.00x) | 15319 passed / 87259 failed (14.93%) |
 | `20260707T105414Z` `ef9a083` Optimize callable builtin binding calls | 0.85x (41/63 >1.00x) | - (0/63 >1.00x) | 15319 passed / 87259 failed (14.93%) |
-| `20260707T105539Z` `a90f274` Bytecode AST boundary hardening: Make the answer to AST fallback cleanup enforceable: execution is bytecode-only, while parser AST remains only a compile-time front-end IR until a deliberate parser-to-compiler IR redesign. | 0.85x (40/63 >1.00x) | - (0/63 >1.00x) | 15319 passed / 87259 failed (14.93%) |
+| `20260707T105539Z` `a90f274` Bytecode AST boundary hardening: Make the answer to AST fallback cleanup enforceable: execution is bytecode-only, while parser AST remains only a compile-time front-end IR until a deliberate parser-to-frontend-IR redesign. | 0.85x (40/63 >1.00x) | - (0/63 >1.00x) | 15319 passed / 87259 failed (14.93%) |
 | `20260707T110539Z` `ef9a083` Optimize callable builtin binding calls | 0.85x (42/63 >1.00x) | - (0/63 >1.00x) | 15319 passed / 87259 failed (14.93%) |
 | `20260707T111304Z` `e073ea0` Handle strict function parameter early errors | 0.84x (41/63 >1.00x) | - (0/63 >1.00x) | 15385 passed / 87193 failed (15.00%) |
 | `20260707T112110Z` `583586d` Add labeled statement static semantics | 0.89x (43/63 >1.00x) | - (0/63 >1.00x) | 15466 passed / 87112 failed (15.08%) |
 | `20260707T113129Z` `60452e1` Reject escaped async keyword spelling | 0.83x (39/63 >1.00x) | - (0/63 >1.00x) | 15474 passed / 87104 failed (15.09%) |
-| `20260707T113450Z` `d7d10db` Expand direct native call targets | 0.85x (41/63 >1.00x) | - (0/63 >1.00x) | 15466 passed / 87112 failed (15.08%) |
-| `20260707T114056Z` rsqjs-test-report-20260707T114056Z.md | 0.90x (43/63 >1.00x) | - (0/63 >1.00x) | 15474 passed / 87104 failed (15.09%) |
+| `20260707T114056Z` `85c475d` Expand direct native call targets | 0.90x (43/63 >1.00x) | - (0/63 >1.00x) | 15474 passed / 87104 failed (15.09%) |
+| `20260707T114648Z` `f825ce9` Clarify runtime slow-path architecture | 0.88x (43/63 >1.00x) | - (0/63 >1.00x) | 15474 passed / 87104 failed (15.09%) |
+| `20260707T115841Z` rsqjs-test-report-20260707T115841Z.md | 0.88x (43/63 >1.00x) | - (0/63 >1.00x) | 15474 passed / 87104 failed (15.09%) |

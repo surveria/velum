@@ -42,7 +42,7 @@ impl Context {
                 return self.eval_direct_native_call_target(target, args, this_value);
             }
         }
-        self.record_native_call_cache_fallback();
+        self.record_native_call_cache_slow_path();
         self.eval_call_value(callee, args, this_value.clone())
     }
 
@@ -105,17 +105,17 @@ impl Context {
                         .eval_direct_native_call_target(target, args, this_value)
                         .map(Some);
                 }
-                self.record_native_call_cache_fallback();
+                self.record_native_call_cache_slow_path();
                 self.eval_call_value(Value::NativeFunction(function), args, this_value.clone())
                     .map(Some)
             }
             CacheableNativePropertyValue::Other(callee) => {
-                self.record_native_call_cache_fallback();
+                self.record_native_call_cache_slow_path();
                 self.eval_call_value(callee, args, this_value.clone())
                     .map(Some)
             }
             CacheableNativePropertyValue::Missing => {
-                self.record_native_call_cache_fallback();
+                self.record_native_call_cache_slow_path();
                 self.eval_call_value(Value::Undefined, args, this_value.clone())
                     .map(Some)
             }
@@ -166,12 +166,12 @@ impl Context {
                     .map(Some)
             }
             CacheableNativePropertyValue::Other(callee) => {
-                self.record_native_call_cache_fallback();
+                self.record_native_call_cache_slow_path();
                 self.eval_call_value(callee, args, this_value.clone())
                     .map(Some)
             }
             CacheableNativePropertyValue::Missing => {
-                self.record_native_call_cache_fallback();
+                self.record_native_call_cache_slow_path();
                 self.eval_call_value(Value::Undefined, args, this_value.clone())
                     .map(Some)
             }

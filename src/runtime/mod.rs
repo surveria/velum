@@ -80,10 +80,10 @@ pub struct Context {
     call_depth: usize,
     native_call_cache_hits: usize,
     native_call_cache_misses: usize,
-    native_call_cache_fallbacks: usize,
+    native_call_cache_slow_paths: usize,
     call_value_cache_hits: usize,
     call_value_cache_misses: usize,
-    call_value_cache_fallbacks: usize,
+    call_value_cache_slow_paths: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -193,10 +193,10 @@ impl Context {
             call_depth: 0,
             native_call_cache_hits: 0,
             native_call_cache_misses: 0,
-            native_call_cache_fallbacks: 0,
+            native_call_cache_slow_paths: 0,
             call_value_cache_hits: 0,
             call_value_cache_misses: 0,
-            call_value_cache_fallbacks: 0,
+            call_value_cache_slow_paths: 0,
         }
     }
 
@@ -294,7 +294,7 @@ impl Context {
                 self.record_call_value_cache_hit();
                 return self.eval_call_completion_cache(cache, args, this_value);
             }
-            self.record_call_value_cache_fallback();
+            self.record_call_value_cache_slow_path();
         } else {
             self.record_call_value_cache_miss();
         }

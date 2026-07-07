@@ -175,10 +175,10 @@ impl Vm {
             upvalue_cell_count: self.context.upvalue_cell_count(),
             native_call_cache_hits: self.context.native_call_cache_hits(),
             native_call_cache_misses: self.context.native_call_cache_misses(),
-            native_call_cache_fallbacks: self.context.native_call_cache_fallbacks(),
+            native_call_cache_slow_paths: self.context.native_call_cache_slow_paths(),
             call_value_cache_hits: self.context.call_value_cache_hits(),
             call_value_cache_misses: self.context.call_value_cache_misses(),
-            call_value_cache_fallbacks: self.context.call_value_cache_fallbacks(),
+            call_value_cache_slow_paths: self.context.call_value_cache_slow_paths(),
         }
     }
 
@@ -215,10 +215,10 @@ pub struct VmResourceUsage {
     pub upvalue_cell_count: usize,
     pub native_call_cache_hits: usize,
     pub native_call_cache_misses: usize,
-    pub native_call_cache_fallbacks: usize,
+    pub native_call_cache_slow_paths: usize,
     pub call_value_cache_hits: usize,
     pub call_value_cache_misses: usize,
-    pub call_value_cache_fallbacks: usize,
+    pub call_value_cache_slow_paths: usize,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
