@@ -50,6 +50,7 @@ struct Parser {
     expression_depth: usize,
     statement_depth: usize,
     new_target_scope_depth: usize,
+    control_context: ControlContext,
     max_expression_depth: usize,
     static_names: StaticNameTable,
     static_strings: StaticStringTable,
@@ -69,6 +70,7 @@ impl Parser {
             expression_depth: 0,
             statement_depth: 0,
             new_target_scope_depth: 0,
+            control_context: ControlContext::new(),
             max_expression_depth: 0,
             static_names: StaticNameTable::new(),
             static_strings: StaticStringTable::new(),
@@ -442,7 +444,9 @@ impl Parser {
             .new_target_scope_depth
             .checked_add(1)
             .ok_or_else(|| Error::limit("new.target scope depth overflowed"))?;
+        let previous_control_context = std::mem::take(&mut self.control_context);
         let result = parse(self);
+        self.control_context = previous_control_context;
         self.new_target_scope_depth = self.new_target_scope_depth.saturating_sub(1);
         result
     }
@@ -450,6 +454,149 @@ impl Parser {
     pub(super) const fn allows_new_target(&self) -> bool {
         self.new_target_scope_depth > 0
     }
+
+    pub(super) fn with_iteration_statement<T>(
+        &mut self,
+        parse: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        self.control_context.enter_iteration()?;
+        let result = parse(self);
+        self.control_context.exit_iteration();
+        result
+    }
+
+    pub(super) fn with_switch_statement<T>(
+        &mut self,
+        parse: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        self.control_context.enter_breakable()?;
+        let result = parse(self);
+        self.control_context.exit_breakable();
+        result
+    }
+
+    pub(super) fn with_labeled_statement<T>(
+        &mut self,
+        labels: &[StaticName],
+        is_iteration_target: bool,
+        parse: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let previous_len = self.control_context.labels.len();
+        self.control_context
+            .push_labels(labels, is_iteration_target)?;
+        let result = parse(self);
+        self.control_context.labels.truncate(previous_len);
+        result
+    }
+
+    pub(super) fn validate_break_statement(&self, label: Option<&StaticName>) -> Result<()> {
+        match label {
+            Some(label) if self.control_context.has_label(label) => Ok(()),
+            Some(_) => Err(Error::parse(
+                "break target label is not defined",
+                self.offset(),
+            )),
+            None if self.control_context.breakable_depth > 0 => Ok(()),
+            None => Err(Error::parse("break statement outside loop", self.offset())),
+        }
+    }
+
+    pub(super) fn validate_continue_statement(&self, label: Option<&StaticName>) -> Result<()> {
+        match label {
+            Some(label) if self.control_context.has_iteration_label(label) => Ok(()),
+            Some(label) if self.control_context.has_label(label) => Err(Error::parse(
+                "continue target is not an iteration statement",
+                self.offset(),
+            )),
+            Some(_) => Err(Error::parse(
+                "continue target label is not defined",
+                self.offset(),
+            )),
+            None if self.control_context.iteration_depth > 0 => Ok(()),
+            None => Err(Error::parse(
+                "continue statement outside loop",
+                self.offset(),
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct ControlContext {
+    iteration_depth: usize,
+    breakable_depth: usize,
+    labels: Vec<LabelContext>,
+}
+
+impl ControlContext {
+    const fn new() -> Self {
+        Self {
+            iteration_depth: 0,
+            breakable_depth: 0,
+            labels: Vec::new(),
+        }
+    }
+
+    fn enter_iteration(&mut self) -> Result<()> {
+        let iteration_depth = self
+            .iteration_depth
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("iteration statement depth overflowed"))?;
+        let breakable_depth = self
+            .breakable_depth
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("breakable statement depth overflowed"))?;
+        self.iteration_depth = iteration_depth;
+        self.breakable_depth = breakable_depth;
+        Ok(())
+    }
+
+    const fn exit_iteration(&mut self) {
+        self.iteration_depth = self.iteration_depth.saturating_sub(1);
+        self.breakable_depth = self.breakable_depth.saturating_sub(1);
+    }
+
+    fn enter_breakable(&mut self) -> Result<()> {
+        self.breakable_depth = self
+            .breakable_depth
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("breakable statement depth overflowed"))?;
+        Ok(())
+    }
+
+    const fn exit_breakable(&mut self) {
+        self.breakable_depth = self.breakable_depth.saturating_sub(1);
+    }
+
+    fn push_labels(&mut self, labels: &[StaticName], is_iteration_target: bool) -> Result<()> {
+        for label in labels {
+            self.labels
+                .try_reserve(1)
+                .map_err(|_| Error::limit("label stack allocation failed"))?;
+            self.labels.push(LabelContext {
+                name: label.clone(),
+                is_iteration_target,
+            });
+        }
+        Ok(())
+    }
+
+    fn has_label(&self, label: &StaticName) -> bool {
+        self.labels.iter().rev().any(|entry| entry.name == *label)
+    }
+
+    fn has_iteration_label(&self, label: &StaticName) -> bool {
+        self.labels
+            .iter()
+            .rev()
+            .any(|entry| entry.name == *label && entry.is_iteration_target)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct LabelContext {
+    name: StaticName,
+    is_iteration_target: bool,
 }
 
 #[derive(Debug, Clone, Default)]

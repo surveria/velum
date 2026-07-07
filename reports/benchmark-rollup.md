@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T111304Z.md`
-- Task: rsqjs-test-report-20260707T111304Z.md
-- Performance: 0.84x (41/63 >1.00x)
+- `rsqjs-test-report-20260707T112110Z.md`
+- Task: rsqjs-test-report-20260707T112110Z.md
+- Performance: 0.89x (43/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 15385 passed / 87193 failed (15.00%)
+- Full Test262: 15466 passed / 87112 failed (15.08%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -282,4 +282,5 @@ Latest report:
 | `20260707T105414Z` `ef9a083` Optimize callable builtin binding calls | 0.85x (41/63 >1.00x) | - (0/63 >1.00x) | 15319 passed / 87259 failed (14.93%) |
 | `20260707T105539Z` `a90f274` Bytecode AST boundary hardening: Make the answer to AST fallback cleanup enforceable: execution is bytecode-only, while parser AST remains only a compile-time front-end IR until a deliberate parser-to-compiler IR redesign. | 0.85x (40/63 >1.00x) | - (0/63 >1.00x) | 15319 passed / 87259 failed (14.93%) |
 | `20260707T110539Z` `ef9a083` Optimize callable builtin binding calls | 0.85x (42/63 >1.00x) | - (0/63 >1.00x) | 15319 passed / 87259 failed (14.93%) |
-| `20260707T111304Z` rsqjs-test-report-20260707T111304Z.md | 0.84x (41/63 >1.00x) | - (0/63 >1.00x) | 15385 passed / 87193 failed (15.00%) |
+| `20260707T111304Z` `e073ea0` Handle strict function parameter early errors | 0.84x (41/63 >1.00x) | - (0/63 >1.00x) | 15385 passed / 87193 failed (15.00%) |
+| `20260707T112110Z` rsqjs-test-report-20260707T112110Z.md | 0.89x (43/63 >1.00x) | - (0/63 >1.00x) | 15466 passed / 87112 failed (15.08%) |

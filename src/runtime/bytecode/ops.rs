@@ -580,7 +580,7 @@ impl Context {
             Completion::Normal(_) | Completion::Return(_) => Err(Error::runtime(format!(
                 "assert.throws expected {expected_name}, but no exception was thrown"
             ))),
-            completion @ (Completion::Break(_) | Completion::Continue(_)) => {
+            completion @ (Completion::Break { .. } | Completion::Continue(_)) => {
                 completion.into_function_result()
             }
         }

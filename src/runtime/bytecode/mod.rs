@@ -217,7 +217,7 @@ impl Context {
                     }
                     Completion::Throw(value) => Ok(Some(Completion::Throw(value))),
                     completion @ (Completion::Return(_)
-                    | Completion::Break(_)
+                    | Completion::Break { .. }
                     | Completion::Continue(_)) => completion.into_result().map(|_| None),
                 }
             }
