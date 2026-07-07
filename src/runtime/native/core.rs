@@ -47,6 +47,29 @@ impl Context {
         }
     }
 
+    pub(crate) fn direct_builtin_callable_value(&mut self, name: &str) -> Result<Option<Value>> {
+        match name {
+            ARRAY_NAME => self.array_constructor_value().map(Some),
+            BOOLEAN_NAME => self.boolean_constructor_value().map(Some),
+            EVAL_NAME => self.eval_function_value().map(Some),
+            FUNCTION_NAME => self.function_constructor_value().map(Some),
+            NUMBER_NAME => self.number_constructor_value().map(Some),
+            OBJECT_NAME => self.object_constructor_value().map(Some),
+            PROMISE_NAME => self.promise_constructor_value().map(Some),
+            REGEXP_NAME => self.regexp_constructor_value().map(Some),
+            STRING_NAME => self.string_constructor_value().map(Some),
+            SYMBOL_NAME => self.symbol_constructor_value().map(Some),
+            _ => {
+                let Some(name) =
+                    ErrorName::from_constructor_name(name).filter(|name| name.is_standard())
+                else {
+                    return Ok(None);
+                };
+                self.error_constructor_value(name).map(Some)
+            }
+        }
+    }
+
     pub(crate) fn constructor_binding_bytecode(
         &mut self,
         name: &BytecodeBinding,

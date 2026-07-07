@@ -369,10 +369,22 @@ impl Context {
         callee: &BytecodeBinding,
         native: Option<NativeCallTarget>,
     ) -> Result<CallReference> {
+        if let Some(function) = self.unresolved_direct_builtin_callable(callee)? {
+            return self.call_reference_from_value(callee, native, function);
+        }
         let Some(binding) = self.get_or_materialize_binding_bytecode(callee)? else {
             return Err(reference_error_undefined(callee.name()));
         };
         let function = binding.value();
+        self.call_reference_from_value(callee, native, function)
+    }
+
+    fn call_reference_from_value(
+        &self,
+        callee: &BytecodeBinding,
+        native: Option<NativeCallTarget>,
+        function: Value,
+    ) -> Result<CallReference> {
         if let Value::NativeFunction(id) = function {
             if let Some(target) = native
                 && self.direct_native_call_kind(id, target).is_some()
