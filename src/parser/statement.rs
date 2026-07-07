@@ -45,6 +45,10 @@ impl Parser {
         if self.match_kind(&TokenKind::Continue) {
             return self.continue_statement();
         }
+        if self.match_kind(&TokenKind::Debugger) {
+            self.consume_optional_semicolon();
+            return Ok(Stmt::Empty);
+        }
         if self.match_kind(&TokenKind::Throw) {
             return self.throw_statement();
         }

@@ -108,6 +108,10 @@ impl Parser {
                 "super is not a valid identifier",
                 token.offset,
             )),
+            TokenKind::Super => Err(Error::parse(
+                "super is not a valid identifier",
+                token.offset,
+            )),
             TokenKind::Identifier(name) => self.static_name_at(name, token.offset),
             TokenKind::Async => self.static_name_borrowed_at(ASYNC_IDENTIFIER_NAME, token.offset),
             _ => Err(Error::parse(message, token.offset)),
@@ -116,7 +120,8 @@ impl Parser {
 
     pub(super) fn consume_binding_identifier(&mut self, message: &str) -> Result<StaticBinding> {
         if self.peek().is_some_and(|token| {
-            matches!(&token.kind, TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME)
+            token.kind == TokenKind::Super
+                || matches!(&token.kind, TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME)
         }) {
             return Err(Error::parse(
                 "super is not a valid binding identifier",
@@ -220,7 +225,10 @@ impl Parser {
     }
 
     const fn is_identifier_name(kind: &TokenKind) -> bool {
-        matches!(kind, TokenKind::Identifier(_) | TokenKind::Async)
+        matches!(
+            kind,
+            TokenKind::Identifier(_) | TokenKind::Async | TokenKind::Super
+        )
     }
 
     pub(super) fn consume(&mut self, expected: &TokenKind, message: &str) -> Result<()> {
