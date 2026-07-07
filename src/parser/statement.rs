@@ -428,9 +428,9 @@ impl Parser {
     }
 
     fn next_is_contextual_of(&self) -> bool {
-        self.peek().is_some_and(|token| {
-            matches!(&token.kind, TokenKind::Identifier(name) if name == FOR_OF_KEYWORD)
-        })
+        self.peek().is_some_and(
+            |token| matches!(&token.kind, TokenKind::Identifier(name) if name == FOR_OF_KEYWORD),
+        )
     }
 
     fn for_in_assignment_target_start(&self) -> bool {
