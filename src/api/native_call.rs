@@ -18,6 +18,7 @@ pub enum NativeCallTarget {
     Boolean,
     ErrorConstructor(ErrorName),
     Function,
+    FunctionPrototypeCall,
     JsonParse,
     JsonStringify,
     MathAbs,
@@ -59,6 +60,7 @@ pub enum NativeCallTarget {
     Object,
     ObjectDefineProperty,
     ObjectGetOwnPropertyDescriptor,
+    ObjectGetOwnPropertyNames,
     ObjectGetPrototypeOf,
     ObjectHasOwn,
     ObjectKeys,
@@ -68,7 +70,9 @@ pub enum NativeCallTarget {
     PromiseThen,
     PromiseCatch,
     RegExp,
+    RegExpPrototypeTest,
     String,
+    Symbol,
 }
 
 impl NativeCallTarget {
@@ -101,6 +105,7 @@ impl NativeCallTarget {
             "Promise" => Some(Self::Promise),
             "RegExp" => Some(Self::RegExp),
             "String" => Some(Self::String),
+            "Symbol" => Some(Self::Symbol),
             _ => ErrorName::from_constructor_name(name)
                 .filter(|name| name.is_standard())
                 .map(Self::ErrorConstructor),
@@ -120,6 +125,7 @@ impl NativeCallTarget {
             "cbrt" => Some(Self::MathCbrt),
             "ceil" => Some(Self::MathCeil),
             "clz32" => Some(Self::MathClz32),
+            "call" => Some(Self::FunctionPrototypeCall),
             "concat" => Some(Self::ArrayConcat),
             "cos" => Some(Self::MathCos),
             "cosh" => Some(Self::MathCosh),
@@ -129,6 +135,7 @@ impl NativeCallTarget {
             "floor" => Some(Self::MathFloor),
             "fround" => Some(Self::MathFround),
             "getOwnPropertyDescriptor" => Some(Self::ObjectGetOwnPropertyDescriptor),
+            "getOwnPropertyNames" => Some(Self::ObjectGetOwnPropertyNames),
             "getPrototypeOf" => Some(Self::ObjectGetPrototypeOf),
             "hasOwn" => Some(Self::ObjectHasOwn),
             "hypot" => Some(Self::MathHypot),
@@ -165,6 +172,7 @@ impl NativeCallTarget {
             "stringify" => Some(Self::JsonStringify),
             "tan" => Some(Self::MathTan),
             "tanh" => Some(Self::MathTanh),
+            "test" => Some(Self::RegExpPrototypeTest),
             "trunc" => Some(Self::MathTrunc),
             "unshift" => Some(Self::ArrayUnshift),
             _ => None,
