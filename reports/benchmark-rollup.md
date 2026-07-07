@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T211353Z.md`
-- Task: PR #295: [codex] Archive tested report commits
-- Performance: 0.93x (43/63 >1.00x)
+- `rsqjs-test-report-20260707T213014Z.md`
+- Task: PR #296: [codex] Enforce signed commits
+- Performance: 0.92x (43/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 15865 passed / 86713 failed (15.47%)
 
@@ -299,3 +299,4 @@ Latest report:
 | `20260707T204515Z` `114e024` PR #293: [codex] Use root git context for build metadata | 0.93x (43/63 >1.00x) | - (0/63 >1.00x) | 15865 passed / 86713 failed (15.47%) |
 | `20260707T205920Z` `bac0abe` PR #294: [codex] Note report commit identity caveat | 0.93x (43/63 >1.00x) | - (0/63 >1.00x) | 15865 passed / 86713 failed (15.47%) |
 | `20260707T211353Z` `401775d` PR #295: [codex] Archive tested report commits | 0.93x (43/63 >1.00x) | - (0/63 >1.00x) | 15865 passed / 86713 failed (15.47%) |
+| `20260707T213014Z` `955e635` PR #296: [codex] Enforce signed commits | 0.92x (43/63 >1.00x) | - (0/63 >1.00x) | 15865 passed / 86713 failed (15.47%) |
