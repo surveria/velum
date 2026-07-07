@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T005533Z.md`
-- Task: Quicken numeric comparison bytecode
-- Performance: 0.81x (39/63 >1.00x)
+- `rsqjs-test-report-20260707T010814Z.md`
+- Task: Quicken numeric unary bytecode
+- Performance: 0.78x (38/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 12111 passed / 90467 failed (11.81%)
 
@@ -224,4 +224,5 @@ Latest report:
 | `20260707T002918Z` `4936194` Specialize direct Math native arguments | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 12026 passed / 90552 failed (11.72%) |
 | `20260707T003757Z` `0e28f7d` Add Symbol primitive support | 0.81x (40/63 >1.00x) | - (0/63 >1.00x) | 12060 passed / 90518 failed (11.76%) |
 | `20260707T004702Z` `2754e98` Add global Function constructor | 0.80x (39/63 >1.00x) | - (0/63 >1.00x) | 12111 passed / 90467 failed (11.81%) |
-| `20260707T005533Z` `0ce6da4` Quicken numeric comparison bytecode | 0.81x (39/63 >1.00x) | - (0/63 >1.00x) | 12111 passed / 90467 failed (11.81%) |
+| `20260707T005533Z` `12deae2` Quicken numeric comparison bytecode | 0.81x (39/63 >1.00x) | - (0/63 >1.00x) | 12111 passed / 90467 failed (11.81%) |
+| `20260707T010814Z` `27a3c3b` Quicken numeric unary bytecode | 0.78x (38/63 >1.00x) | - (0/63 >1.00x) | 12111 passed / 90467 failed (11.81%) |
