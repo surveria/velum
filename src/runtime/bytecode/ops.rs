@@ -261,6 +261,14 @@ impl Context {
         op: UpdateOp,
         prefix: bool,
     ) -> Result<Value> {
+        if let Some((old_value, new_value)) = self.try_cached_static_property_read_modify_write(
+            object,
+            property,
+            access,
+            |_, value| Self::updated_bytecode_number(value, op),
+        )? {
+            return Ok(if prefix { new_value } else { old_value });
+        }
         let old_value = self.get_static_property_value(object, property, access)?;
         let new_value = Self::updated_bytecode_number(&old_value, op)?;
         self.set_static_property_value(object, property, access, new_value.clone())?;
@@ -275,6 +283,14 @@ impl Context {
         op: UpdateOp,
         prefix: bool,
     ) -> Result<Value> {
+        if let Some((old_value, new_value)) = self.try_cached_dynamic_property_read_modify_write(
+            object,
+            &mut property,
+            access,
+            |_, value| Self::updated_bytecode_number(value, op),
+        )? {
+            return Ok(if prefix { new_value } else { old_value });
+        }
         let old_value = self.get_cached_dynamic_property_value(object, &property, access)?;
         let new_value = Self::updated_bytecode_number(&old_value, op)?;
         self.set_cached_dynamic_property_value(object, &mut property, access, new_value.clone())?;
@@ -315,6 +331,14 @@ impl Context {
         access: StaticPropertyAccessId,
         right: &Value,
     ) -> Result<Value> {
+        if let Some((_, value)) = self.try_cached_static_property_read_modify_write(
+            object,
+            property,
+            access,
+            |context, old_value| context.eval_bytecode_compound_value(op, old_value, right),
+        )? {
+            return Ok(value);
+        }
         let old_value = self.get_static_property_value(object, property, access)?;
         let value = self.eval_bytecode_compound_value(op, &old_value, right)?;
         self.set_static_property_value(object, property, access, value.clone())?;
@@ -329,6 +353,14 @@ impl Context {
         access: StaticPropertyAccessId,
         right: &Value,
     ) -> Result<Value> {
+        if let Some((_, value)) = self.try_cached_dynamic_property_read_modify_write(
+            object,
+            &mut property,
+            access,
+            |context, old_value| context.eval_bytecode_compound_value(op, old_value, right),
+        )? {
+            return Ok(value);
+        }
         let old_value = self.get_cached_dynamic_property_value(object, &property, access)?;
         let value = self.eval_bytecode_compound_value(op, &old_value, right)?;
         self.set_cached_dynamic_property_value(object, &mut property, access, value.clone())?;
