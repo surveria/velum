@@ -317,8 +317,15 @@ impl Context {
         name: ErrorName,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
+        self.eval_direct_error_constructor(name, args.as_slice())
+    }
+
+    pub(in crate::runtime) fn eval_direct_error_constructor(
+        &self,
+        name: ErrorName,
+        args: &[Value],
+    ) -> Result<Value> {
         let message = args
-            .as_slice()
             .first()
             .map_or_else(String::new, Value::display_for_concat);
         self.check_string_len(&message)?;
