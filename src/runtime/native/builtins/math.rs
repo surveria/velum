@@ -54,7 +54,7 @@ macro_rules! math_unary_method {
 impl Context {
     pub(in crate::runtime::native) fn math_object_value(&mut self) -> Result<Value> {
         if let Some(binding) = self.get_binding(MATH_NAME) {
-            return Ok(binding.value());
+            return binding.value(MATH_NAME);
         }
 
         let constructor_key = self.object_constructor_property_key()?;

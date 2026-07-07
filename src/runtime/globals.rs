@@ -24,7 +24,7 @@ impl Context {
         self.globals
             .get(atom)
             .or_else(|| self.builtin_globals.get(atom))
-            .map(|binding| binding.value())
+            .and_then(|binding| binding.value(name).ok())
     }
 
     #[must_use]

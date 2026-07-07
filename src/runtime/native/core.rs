@@ -75,7 +75,7 @@ impl Context {
         name: &BytecodeBinding,
     ) -> Result<Option<Value>> {
         if let Some(binding) = self.get_or_materialize_binding_bytecode(name)? {
-            return Ok(Some(binding.value()));
+            return Ok(Some(binding.value(name.name())?));
         }
         Ok(None)
     }
@@ -195,7 +195,7 @@ impl Context {
             .ok_or_else(|| Error::runtime("native function id is not defined"))
     }
 
-    fn error_constructor_value(&mut self, name: ErrorName) -> Result<Value> {
+    pub(in crate::runtime) fn error_constructor_value(&mut self, name: ErrorName) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::ErrorConstructor(name)) {
             return Ok(Value::NativeFunction(id));
         }
