@@ -23,7 +23,7 @@ Track these against QuickJS on every supported device class:
 
 ## QuickJS Reference
 
-`scripts/test-all.sh` prepares a pinned QuickJS reference binary before running the Rust test runner. The setup order is:
+`scripts/test-all.sh` prepares a pinned QuickJS reference binary before running the Rust test runner. By default it writes full reports, benchmark rollups, and summary charts under `target/reports/` so ordinary feature PRs can attach them as CI artifacts without changing tracked report history. Set `RSQJS_TRACKED_REPORT=1` or `RSQJS_TEST_REPORT_PATH=reports/test-runs/<name>.md` only for intentional canonical report refreshes. The setup order is:
 
 1. use `RSQJS_QUICKJS` when it points to an executable file;
 2. use `qjs` from `PATH` when available;
@@ -72,3 +72,4 @@ Memory reporting should track both peak resident memory and engine-owned heap co
 - Compare release builds only.
 - Run benchmark cases sequentially.
 - Report memory alongside latency once memory measurement is implemented.
+- Keep ordinary PR benchmark reports as CI artifacts. Commit tracked report files only for intentional canonical `main` snapshots or report-refresh tasks.

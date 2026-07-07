@@ -33,7 +33,13 @@ RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path runner/Cargo.toml "${engine
 # --- Reference engine and corpora: only needed for the report/benchmark run, so
 # prepare them after the gates and tests have passed. ---
 timestamp="${RSQJS_TEST_TIMESTAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
-report_path="${RSQJS_TEST_REPORT_PATH:-reports/test-runs/rsqjs-test-report-${timestamp}.md}"
+if [[ -n "${RSQJS_TEST_REPORT_PATH:-}" ]]; then
+  report_path="${RSQJS_TEST_REPORT_PATH}"
+elif [[ "${RSQJS_TRACKED_REPORT:-0}" == "1" ]]; then
+  report_path="reports/test-runs/rsqjs-test-report-${timestamp}.md"
+else
+  report_path="target/reports/test-runs/rsqjs-test-report-${timestamp}.md"
+fi
 
 quickjs_path="$("${script_dir}/prepare-quickjs.sh")"
 if [[ -n "${quickjs_path}" ]]; then
@@ -53,3 +59,6 @@ cargo build --release --bin rsqjs
 cargo run --release --manifest-path runner/Cargo.toml "${engine_override[@]}" --features reference-quickjs -- --report "${report_path}"
 
 printf 'test report: %s\n' "${report_path}"
+if [[ "${report_path}" == target/reports/* ]]; then
+  printf 'test report is untracked by default; set RSQJS_TRACKED_REPORT=1 for a canonical tracked report\n'
+fi

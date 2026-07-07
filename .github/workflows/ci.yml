@@ -5,6 +5,12 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "Run the full report and benchmark gate"
+        required: false
+        default: "true"
 
 jobs:
   rust:
@@ -63,6 +69,18 @@ jobs:
             git fetch --no-tags --quiet origin "${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
             export RSQJS_BASE_REF="origin/${GITHUB_BASE_REF}"
           fi
-          # One runner, one checkout, one sequence: version gate -> fmt -> clippy
-          # -> tests -> docs -> build -> benchmarks, all inside test-all.sh.
-          ./scripts/test-all.sh
+          manual_full="${{ github.event.inputs.full }}"
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" && "${RSQJS_FULL_CI_ON_PR:-0}" != "1" ]] || \
+             [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${manual_full:-true}" != "true" ]]; then
+            RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh
+          else
+            ./scripts/test-all.sh
+          fi
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rsqjs-reports
+          path: target/reports
+          if-no-files-found: ignore

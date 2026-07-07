@@ -785,14 +785,18 @@ Every implementation task follows this order:
    for hot paths.
 
 7. Validate.
-   Run formatting, clippy, targeted tests, and `scripts/test-all.sh` unless the
-   task explicitly documents a narrower validation scope.
+   Run formatting, clippy, targeted tests, and `scripts/check-fast.sh` for the
+   ordinary PR gate. Run `scripts/test-all.sh` when the task needs full
+   QuickJS/Test262/benchmark evidence, before a canonical report refresh, or
+   when explicitly requested. Ordinary feature PRs should keep full reports as
+   CI artifacts under `target/reports/` instead of tracked files.
 
 8. Decide on performance and memory exceptions.
    If a comparable implemented benchmark exceeds `1.00x`, either optimize it in
    the same task or record a tracked exception with the benchmark name, measured
-   ratio, suspected cause, and follow-up task. If an optimization was made,
-   record the latency or memory effect in the task notes.
+   ratio, suspected cause, and follow-up task. Use the CI report artifact for
+   ordinary PR evidence. If an optimization was made, record the latency or
+   memory effect in the task notes.
 
 9. Finish the task board row.
    Before the PR is ready, change the row to `Done` or `Deferred`. Add a concise
@@ -801,7 +805,8 @@ Every implementation task follows this order:
 
 10. Open the PR.
     The PR description must explain what changed, why it changed, validation
-    results, benchmark or memory results, known exceptions, and future work.
+    results, benchmark or memory results, known exceptions, future work, and
+    the report artifact path when a full report was generated.
 
 11. Merge and clean up.
     After green CI, squash-merge the PR, update the main checkout, remove the
