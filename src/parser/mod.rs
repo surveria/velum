@@ -12,6 +12,7 @@ mod expression;
 mod statement;
 
 const ASYNC_IDENTIFIER_NAME: &str = "async";
+const SUPER_IDENTIFIER_NAME: &str = "super";
 
 pub fn parse_with_usage(tokens: Vec<Token>, limits: RuntimeLimits) -> Result<ParsedProgram> {
     Parser::new(tokens, limits).parse()
@@ -103,6 +104,10 @@ impl Parser {
             .advance()
             .ok_or_else(|| Error::parse(message, self.offset()))?;
         match token.kind {
+            TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME => Err(Error::parse(
+                "super is not a valid identifier",
+                token.offset,
+            )),
             TokenKind::Identifier(name) => self.static_name_at(name, token.offset),
             TokenKind::Async => self.static_name_borrowed_at(ASYNC_IDENTIFIER_NAME, token.offset),
             _ => Err(Error::parse(message, token.offset)),
@@ -110,6 +115,14 @@ impl Parser {
     }
 
     pub(super) fn consume_binding_identifier(&mut self, message: &str) -> Result<StaticBinding> {
+        if self.peek().is_some_and(|token| {
+            matches!(&token.kind, TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME)
+        }) {
+            return Err(Error::parse(
+                "super is not a valid binding identifier",
+                self.offset(),
+            ));
+        }
         let name = self.consume_identifier(message)?;
         self.static_binding(name)
     }

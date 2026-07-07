@@ -5,7 +5,7 @@ use crate::{
     value::Value,
 };
 
-use super::Parser;
+use super::{Parser, SUPER_IDENTIFIER_NAME};
 
 const THIS_PROPERTY_NAME: &str = "this";
 const NEW_TARGET_PROPERTY_NAME: &str = "target";
@@ -311,6 +311,12 @@ impl Parser {
             TokenKind::Null => Expr::Literal(Value::Null),
             TokenKind::Undefined => Expr::Literal(Value::Undefined),
             TokenKind::This => Expr::This,
+            TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME => {
+                return Err(Error::parse(
+                    "super is only valid inside class methods",
+                    token.offset,
+                ));
+            }
             TokenKind::Identifier(name) => Expr::Identifier(self.static_binding_name(name)?),
             TokenKind::Function => self.function_expression(false)?,
             TokenKind::Async => {
