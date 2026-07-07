@@ -13,26 +13,31 @@ These rules are mandatory for humans and agents working in any part of this repo
 
 - Create a separate git worktree for every task under `.claude/worktrees/<task>`.
 - Create a separate branch for every task from a fresh `origin/main`.
+- Immediately make the task visible on GitHub: create an empty start commit with `[skip ci]`, push the branch, and open a draft PR that describes the planned scope. If the branch already has a real first commit, push that instead of an empty commit.
+- Keep the PR as draft while implementation is in progress. Draft PRs are for visibility and discussion; the full CI gate starts when the PR is marked ready for review or receives new ready-state commits.
 - Do not delete task branches after completion, either locally or on GitHub. Branch history is part of the work record.
-- Remove the task worktree after the task is complete with `git worktree remove <path>`. Git refuses to remove a worktree that has the `runner/` submodule checked out (which happens once `scripts/test-all.sh` has run in it); in that case remove it with `rm -rf <path>` followed by `git worktree prune`.
+- Remove the task worktree after the task is complete with `git worktree remove <path>`. If a legacy worktree still contains a checked-out submodule and Git refuses to remove it, remove it with `rm -rf <path>` followed by `git worktree prune`.
 
 ## Pull Requests And Merge
 
-- All changes reach `main` only through a pull request: push branch, open PR, wait for green CI, then merge.
+- All changes reach `main` only through a pull request: push branch, open a draft PR early, mark it ready when implemented, wait for green CI, then merge.
 - PR descriptions must be detailed and include what changed, why it changed, problems or noteworthy decisions during the work, and what remains for later.
-- PR descriptions should include the validation summary and link or path for any CI report artifact. Do not commit generated full test reports in ordinary feature PRs unless the branch is explicitly a canonical report refresh.
+- PR descriptions should include the validation summary and link or path for the CI report artifact. Do not commit generated full test reports in ordinary feature PRs unless the branch is explicitly a canonical report refresh.
 - Split work into meaningful commits so the branch history shows the solution path.
 - Merge to `main` with one squash commit and a detailed commit message. The detailed history remains in the branch.
+- The repository should use GitHub merge queue for `main`, with the CI `merge_group` check required before merge. Use a queue group size of one when report history must stay one-PR-per-report.
+- The `main` branch ruleset must require the ready-PR/merge-queue CI check before merge and must allow the report publisher token to push report-only commits, or the post-merge canonical report commit will fail.
+- After a PR is merged, GitHub Actions publishes the canonical report: it downloads the report artifact for the tested tree, copies exactly one report into `reports/test-runs/`, regenerates `reports/benchmark-rollup.md` and `reports/benchmark-summary.jpg`, and pushes one report-only commit to `main`.
 - If the task is fully implemented and CI is green, push, PR creation, and merge do not need extra confirmation. Ask only when implementation is incomplete, there is doubt, or CI is red.
 - After merge, update the main repository directory to fresh `main` with `git checkout main && git pull`.
 
 ## Repositories, Crates, And Versioning
 
-- The engine and its test/benchmark runner live in two separate repositories:
-  - `rs-quickjs` (this repository): the embeddable engine library plus the `rsqjs` smoke CLI. It is a standalone, dependency-light crate — only what the engine itself needs. Do not add reporting, benchmarking, or reference-engine dependencies here. It builds and tests on its own, without the runner.
-  - `rs-quickjs-testing`: the `rsqjs-test-runner` crate (the runner binary and its heavier dependencies — `tabled`, `plotters`, `image`, `serde`, `rquickjs`, and so on). It depends on the engine only through its public API.
-- The runner is checked out here as the `runner/` git submodule, so it can be built and run in place while its source stays in `rs-quickjs-testing`. The runner depends on the engine over git; to measure the local checkout instead, its `rs-quickjs` dependency must be overridden with an absolute `paths` entry pointing at the current repository root. `scripts/test-all.sh` handles both: it runs `git submodule update --init --recursive` and passes `--config "paths=['<repo-root>']"` to the runner's cargo commands, so a task worktree only needs to run that script. Do not commit that override into a `.cargo/config.toml`: worktrees live under the main repository, and cargo's upward config search would then also pick up the main checkout's override and measure the wrong engine. To build or run the runner by hand, add `--manifest-path runner/Cargo.toml`, the same `--config "paths=['<repo-root>']"`, and `--features reference-quickjs` (for the in-process QuickJS reference); without the override the runner builds against the published engine over git. Change runner code in the `rs-quickjs-testing` repository; to adopt it here, update the submodule pointer.
-- Every pull request that changes the engine must bump `version` in the root `Cargo.toml`. Every pull request that changes the runner must bump `version` in the runner's `Cargo.toml` (in `rs-quickjs-testing`). The two version independently; use semantic versioning and state the new version in the PR description. CI enforces the engine side on pull requests: `scripts/check-fast.sh` and `scripts/test-all.sh` run `scripts/check-version-bump.sh` whenever `RSQJS_BASE_REF` is set (CI sets it to the base branch on pull requests), so if `src/`, `Cargo.toml`, or `Cargo.lock` changed relative to the base branch, the engine version must be strictly higher than the version on that branch. Pull-request CI uses `scripts/check-fast.sh` by default to avoid full report churn during parallel work; `main`, manual full runs, and explicit full-PR runs use `scripts/test-all.sh`.
+- The engine and its test/benchmark runner live in this repository but remain separate crates:
+  - `rs-quickjs` (the root crate): the embeddable engine library plus the `rsqjs` smoke CLI. It is a standalone, dependency-light crate — only what the engine itself needs. Do not add reporting, benchmarking, or reference-engine dependencies here. It builds and tests on its own, without the runner.
+  - `runner/`: the `rsqjs-test-runner` nested workspace. It owns heavier dependencies such as `tabled`, `plotters`, `image`, `serde`, `rquickjs`, and report aggregation code. It depends on the engine only through `rs-quickjs = { path = ".." }` and the public API.
+- To build or run the runner by hand, use `--manifest-path runner/Cargo.toml` and add `--features reference-quickjs` for the in-process QuickJS reference. No submodule checkout, Cargo `paths` override, or separate runner repository is required.
+- Every pull request that changes the engine must bump `version` in the root `Cargo.toml`. Every pull request that changes the runner must bump `version` in `runner/Cargo.toml`. The two version independently; use semantic versioning and state the new version in the PR description. CI enforces the engine side on pull requests: `scripts/check-fast.sh` and `scripts/test-all.sh` run `scripts/check-version-bump.sh` whenever `RSQJS_BASE_REF` is set (CI sets it to the base branch on pull requests), so if `src/`, `Cargo.toml`, or `Cargo.lock` changed relative to the base branch, the engine version must be strictly higher than the version on that branch. Ready pull-request CI and merge-queue CI use `scripts/test-all.sh` and keep generated reports as artifacts instead of branch commits.
 
 ## Gitignore Whitelist Model
 
@@ -81,15 +86,15 @@ These rules are mandatory for humans and agents working in any part of this repo
 - Every test case must have one finished status: passed, failed, or skipped.
 - Skipped tests must always include a concrete reason, such as the missing engine feature, missing reference runner, or unsupported external corpus step.
 - Failed tests must report enough context to diagnose the problem: suite, case id, source path when applicable, expected behavior, and actual behavior or error.
-- `scripts/check-fast.sh` is the default pull-request and local iteration gate. It runs formatting, clippy, tests, and docs for the engine without materializing external corpora or generating benchmark reports. Set `RSQJS_FAST_RUNNER=1` when the runner should also be formatted, linted, tested, and documented against the local engine checkout.
-- `scripts/test-all.sh` is the full report and benchmark entrypoint for `main`, manual full CI, canonical report refreshes, and tasks whose evidence requires QuickJS/Test262/benchmark output.
+- `scripts/check-fast.sh` is the local iteration gate. It runs formatting, clippy, tests, and docs for the engine without materializing external corpora or generating benchmark reports. Set `RSQJS_FAST_RUNNER=1` when the runner should also be formatted, linted, tested, and documented against the local engine checkout.
+- `scripts/test-all.sh` is the full pull-request, merge-queue, report, and benchmark entrypoint. It runs the full validation sequence and writes reports under `target/reports/` by default.
 - The Rust test runner is responsible for executing engine-level test cases and writing the final test report.
-- Ordinary feature PRs must not commit generated full test reports. Full reports generated by CI live under `target/reports/` by default and should be attached as CI artifacts or summarized in the PR description.
-- Canonical tracked test reports belong under `reports/test-runs/`. Each tracked report must be a separate Markdown file with a sortable UTC timestamp suffix. Generate one intentionally by setting `RSQJS_TRACKED_REPORT=1` or an explicit `RSQJS_TEST_REPORT_PATH`.
+- Ordinary feature PRs must not commit generated full test reports. Full reports generated by CI live under `target/reports/` and are uploaded as artifacts named by the tested tree SHA.
+- Canonical tracked test reports belong under `reports/test-runs/`. Each tracked report must be a separate Markdown file with a sortable UTC timestamp suffix. After merge, CI publishes the canonical report from the already-tested artifact and regenerates the tracked rollup and chart. Generate one manually only by setting `RSQJS_TRACKED_REPORT=1` or an explicit `RSQJS_TEST_REPORT_PATH`.
 - Test reports must include a summary and a per-case table that records all passed, failed, and skipped cases.
 - Official ECMAScript compatibility work should use Test262 as the external corpus and track pass or skip status by feature area.
 - QuickJS should remain the reference implementation for differential behavior checks where the feature is implemented locally.
-- Future benchmark reports should follow the same pattern: one command, Rust-owned execution, CI artifacts for ordinary PRs, intentional tracked canonical reports, and clear comparison against QuickJS where possible.
+- Future benchmark reports should follow the same pattern: one command, Rust-owned execution, CI artifacts for ordinary PRs, post-merge tracked canonical reports, and clear comparison against QuickJS where possible.
 - Benchmark cases must run sequentially, not in parallel, so measurements do not interfere with each other.
 - Benchmark reports must separate local engine measurements from QuickJS measurements and mark unavailable reference runs as skipped with a concrete reason.
 - Embedding-facing benchmark cases must include direct library measurements where possible, not only CLI process measurements.

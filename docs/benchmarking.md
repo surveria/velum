@@ -23,7 +23,7 @@ Track these against QuickJS on every supported device class:
 
 ## QuickJS Reference
 
-`scripts/test-all.sh` prepares a pinned QuickJS reference binary before running the Rust test runner. By default it writes full reports, benchmark rollups, and summary charts under `target/reports/` so ordinary feature PRs can attach them as CI artifacts without changing tracked report history. Set `RSQJS_TRACKED_REPORT=1` or `RSQJS_TEST_REPORT_PATH=reports/test-runs/<name>.md` only for intentional canonical report refreshes. The setup order is:
+`scripts/test-all.sh` prepares a pinned QuickJS reference binary before running the Rust test runner. By default it writes full reports, benchmark rollups, summary charts, and artifact metadata under `target/reports/` so ready pull requests and merge-queue checks can upload the complete validation result without changing tracked report history. After a PR is merged, GitHub Actions downloads the artifact for the tested tree, copies the single markdown report into `reports/test-runs/`, and regenerates `reports/benchmark-rollup.md` plus `reports/benchmark-summary.jpg` in one report-only commit. Set `RSQJS_TRACKED_REPORT=1` or `RSQJS_TEST_REPORT_PATH=reports/test-runs/<name>.md` only for intentional manual canonical report refreshes. The setup order is:
 
 1. use `RSQJS_QUICKJS` when it points to an executable file;
 2. use `qjs` from `PATH` when available;
@@ -31,7 +31,7 @@ Track these against QuickJS on every supported device class:
 
 Set `RSQJS_QUICKJS_AUTO_SETUP=0` to disable automatic download and build. In that mode, differential checks and QuickJS benchmark columns are reported as skipped unless `RSQJS_QUICKJS` or `qjs` is available.
 
-The standard test script builds `target/release/rsqjs` and `target/release/rsqjs-test-runner`, then exposes the CLI engine to the runner through `RSQJS_ENGINE`. Current benchmark rows compare the release `rsqjs` CLI with the QuickJS `qjs` CLI sequentially. Each row reports average in-process cold eval latency for the Rust library, compile-only latency, eval latency for a reused `CompiledScript`, average CLI latency, peak process RSS when GNU `time` is available, latency ratio, memory ratio, and the current QuickJS parity budget status.
+The standard test script builds `target/release/rsqjs` and runs `runner/Cargo.toml` with the `reference-quickjs` feature. Current benchmark rows compare the release `rsqjs` CLI with the QuickJS `qjs` CLI sequentially. Each row reports average in-process cold eval latency for the Rust library, compile-only latency, eval latency for a reused `CompiledScript`, average CLI latency, peak process RSS when GNU `time` is available, latency ratio, memory ratio, and the current QuickJS parity budget status.
 
 CLI benchmarks are useful integration smoke tests, but they include process startup and argument handling. The in-process column removes that CLI startup cost for rs-quickjs and should guide local optimization work. Future in-process rows should separate parser, compiler, VM execution, host callback, and teardown costs as those subsystems become explicit.
 
@@ -72,4 +72,4 @@ Memory reporting should track both peak resident memory and engine-owned heap co
 - Compare release builds only.
 - Run benchmark cases sequentially.
 - Report memory alongside latency once memory measurement is implemented.
-- Keep ordinary PR benchmark reports as CI artifacts. Commit tracked report files only for intentional canonical `main` snapshots or report-refresh tasks.
+- Keep ordinary PR benchmark reports as CI artifacts. Commit tracked report files only through the post-merge report publisher or through intentional report-refresh tasks.

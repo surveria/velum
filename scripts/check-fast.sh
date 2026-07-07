@@ -17,10 +17,8 @@ cargo test --all-targets --all-features
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
 
 if [[ "${RSQJS_FAST_RUNNER:-0}" == "1" ]]; then
-  git submodule update --init --recursive
-  engine_override=(--config "paths=['${repo_root}']")
   cargo fmt --manifest-path runner/Cargo.toml --all -- --check
-  cargo clippy --manifest-path runner/Cargo.toml "${engine_override[@]}" --all-targets --all-features -- -D warnings
-  cargo test --manifest-path runner/Cargo.toml "${engine_override[@]}" --all-targets --all-features
-  RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path runner/Cargo.toml "${engine_override[@]}" --no-deps --all-features
+  cargo clippy --manifest-path runner/Cargo.toml --all-targets --all-features -- -D warnings
+  cargo test --manifest-path runner/Cargo.toml --all-targets --all-features
+  RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path runner/Cargo.toml --no-deps --all-features
 fi

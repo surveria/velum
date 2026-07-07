@@ -27,8 +27,14 @@
 !/src/**/
 !/src/**/*.rs
 
-!/.gitmodules
-!/runner
+!/runner/
+!/runner/.gitignore
+!/runner/Cargo.toml
+!/runner/Cargo.lock
+!/runner/README.md
+!/runner/src/
+!/runner/src/**/
+!/runner/src/**/*.rs
 
 !/tests/
 !/tests/**/

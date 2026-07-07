@@ -1,12 +1,12 @@
 # Explicit single-crate workspace root: keeps the engine self-contained and
-# excludes the `runner/` submodule, which is its own workspace in the
-# rs-quickjs-testing repository.
+# excludes the `runner/` nested workspace, which carries heavier report and
+# benchmark dependencies.
 [workspace]
 exclude = ["runner"]
 
 [package]
 name = "rs-quickjs"
-version = "0.2.95"
+version = "0.2.96"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/surveria/rs-quickjs"
@@ -22,8 +22,8 @@ name = "rsqjs"
 path = "src/bin/rsqjs.rs"
 
 # The engine is a standalone, dependency-light crate. The test/benchmark runner
-# and its heavier dependencies live in the separate `rs-quickjs-testing`
-# repository, consumed here as the `runner/` git submodule.
+# lives in `runner/` as a separate nested workspace so its heavier dependencies
+# do not become engine dependencies.
 [dependencies]
 anyhow = "1"
 parking_lot = "0.12"
