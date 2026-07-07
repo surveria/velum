@@ -84,6 +84,27 @@ holder.class + holder.import + holder.with + holder['export']
     ensure_error_contains(&error, "expected binding name")
 }
 
+#[test]
+fn escaped_async_is_not_contextual_async_keyword() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r"
+var \u0061sync = 40;
+async + 2
+        ",
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+
+    let Err(error) = context.eval(r"\u0061sync function f(){}") else {
+        return Err("expected escaped async function spelling to fail".into());
+    };
+
+    ensure_error_contains(&error, "expected statement terminator")
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

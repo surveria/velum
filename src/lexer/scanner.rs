@@ -563,11 +563,13 @@ impl<'a> Lexer<'a> {
 
     fn identifier(&mut self, offset: usize) -> Result<()> {
         let mut text = String::new();
+        let mut escaped = self.identifier_escape_start();
         let start = self.identifier_char(offset, IdentifierPosition::Start)?;
         text.push(start);
 
         while let Some((current_offset, ch)) = self.peek() {
             if self.identifier_escape_start() {
+                escaped = true;
                 let escaped = self.identifier_char(current_offset, IdentifierPosition::Part)?;
                 text.push(escaped);
             } else if is_identifier_part(ch) {
@@ -578,7 +580,7 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        let kind = identifier_kind(text);
+        let kind = identifier_kind(text, escaped);
         self.push(kind, offset);
         Ok(())
     }
