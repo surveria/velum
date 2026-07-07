@@ -203,6 +203,9 @@ impl Context {
             NativeCallTarget::ObjectGetOwnPropertyDescriptor => {
                 self.eval_object_get_own_property_descriptor(runtime_call_args(args))
             }
+            NativeCallTarget::ObjectGetPrototypeOf => {
+                self.eval_object_get_prototype_of(runtime_call_args(args))
+            }
             NativeCallTarget::ObjectHasOwn => self.eval_object_has_own(runtime_call_args(args)),
             NativeCallTarget::ObjectKeys => self.eval_object_keys(runtime_call_args(args)),
             NativeCallTarget::Promise => self.eval_promise_constructor(runtime_call_args(args)),
@@ -248,6 +251,7 @@ impl Context {
             NativeFunctionKind::ArrayShift => self.eval_array_shift(args, this_value),
             NativeFunctionKind::ArraySlice => self.eval_array_slice(args, this_value),
             NativeFunctionKind::ArrayUnshift => self.eval_array_unshift(args, this_value),
+            NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
             NativeFunctionKind::Boolean => self.eval_boolean_constructor(args),
             NativeFunctionKind::Eval => self.eval_eval_function(args),
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
@@ -295,6 +299,7 @@ impl Context {
             NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
                 self.eval_object_get_own_property_descriptor(args)
             }
+            NativeFunctionKind::ObjectGetPrototypeOf => self.eval_object_get_prototype_of(args),
             NativeFunctionKind::ObjectHasOwn => self.eval_object_has_own(args),
             NativeFunctionKind::ObjectKeys => self.eval_object_keys(args),
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),

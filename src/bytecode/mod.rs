@@ -262,7 +262,9 @@ impl<'a> BytecodeCompiler<'a> {
                 params,
                 body,
                 is_async,
-            } => self.compile_function_expr(*id, name.clone(), params, body, true, *is_async)?,
+            } => {
+                self.compile_function_expr(*id, name.clone(), params, body, !*is_async, *is_async)?;
+            }
             Expr::ArrowFunction {
                 id,
                 params,

@@ -12,7 +12,7 @@ use crate::{
 
 use super::{
     NativeFunctionKind, OBJECT_DEFINE_PROPERTY_NAME, OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
-    OBJECT_HAS_OWN_NAME, OBJECT_KEYS_NAME, OBJECT_NAME,
+    OBJECT_GET_PROTOTYPE_OF_NAME, OBJECT_HAS_OWN_NAME, OBJECT_KEYS_NAME, OBJECT_NAME,
 };
 use crate::runtime::property::well_known::DescriptorPropertyKeys;
 
@@ -151,6 +151,31 @@ impl Context {
         self.create_property_descriptor_object(&descriptor)
     }
 
+    pub(in crate::runtime::native) fn eval_object_get_prototype_of(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        let values = args.as_slice();
+        let target = Self::argument_or_undefined(values.first());
+        match target {
+            Value::Object(id) => self.objects.prototype_value(id),
+            Value::Function(id) => self.function_object_prototype_value(id),
+            Value::NativeFunction(id) => self.native_function_object_prototype_value(id),
+            Value::Undefined | Value::Null => Err(Error::runtime(
+                "Object.getPrototypeOf target cannot be converted to an object",
+            )),
+            Value::Bool(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::HeapString(_)
+            | Value::Symbol(_)
+            | Value::HostFunction(_)
+            | Value::Error(_) => Err(Error::runtime(
+                "Object.getPrototypeOf target must be an object",
+            )),
+        }
+    }
+
     fn string_object_own_property_descriptor(
         &mut self,
         id: ObjectId,
@@ -210,6 +235,11 @@ impl Context {
             constructor,
             OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
             NativeFunctionKind::ObjectGetOwnPropertyDescriptor,
+        )?;
+        self.define_object_static_method(
+            constructor,
+            OBJECT_GET_PROTOTYPE_OF_NAME,
+            NativeFunctionKind::ObjectGetPrototypeOf,
         )?;
         self.define_object_static_method(
             constructor,

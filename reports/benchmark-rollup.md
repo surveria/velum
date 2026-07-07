@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T022133Z.md`
-- Task: rsqjs-test-report-20260707T022133Z.md
-- Performance: 0.80x (39/63 >1.00x)
+- `rsqjs-test-report-20260707T022929Z.md`
+- Task: rsqjs-test-report-20260707T022929Z.md
+- Performance: 0.81x (40/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 12546 passed / 90032 failed (12.23%)
+- Full Test262: 12671 passed / 89907 failed (12.35%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -232,4 +232,5 @@ Latest report:
 | `20260707T015306Z` `1b8564a` Optimize direct Array native target arguments | 0.79x (39/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
 | `20260707T020401Z` `530b0e3` Optimize direct Math integer arguments | 0.78x (39/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
 | `20260707T021114Z` `5791a02` Organize bytecode runtime modules | 0.79x (38/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
-| `20260707T022133Z` rsqjs-test-report-20260707T022133Z.md | 0.80x (39/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
+| `20260707T022133Z` `3ea4c9a` Optimize static native call cache hits | 0.80x (39/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
+| `20260707T022929Z` rsqjs-test-report-20260707T022929Z.md | 0.81x (40/63 >1.00x) | - (0/63 >1.00x) | 12671 passed / 89907 failed (12.35%) |

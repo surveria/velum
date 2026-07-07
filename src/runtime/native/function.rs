@@ -64,6 +64,7 @@ impl NativeFunction {
             | NativeFunctionKind::ArrayShift
             | NativeFunctionKind::ArraySlice
             | NativeFunctionKind::ArrayUnshift
+            | NativeFunctionKind::AsyncFunction
             | NativeFunctionKind::Boolean
             | NativeFunctionKind::Eval
             | NativeFunctionKind::ErrorConstructor(_)
@@ -107,6 +108,7 @@ impl NativeFunction {
             | NativeFunctionKind::MathTrunc
             | NativeFunctionKind::Object
             | NativeFunctionKind::ObjectDefineProperty
+            | NativeFunctionKind::ObjectGetPrototypeOf
             | NativeFunctionKind::ObjectGetOwnPropertyDescriptor
             | NativeFunctionKind::ObjectHasOwn
             | NativeFunctionKind::ObjectKeys

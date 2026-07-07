@@ -158,12 +158,16 @@ impl FunctionProperties {
         self.prototype.clone()
     }
 
-    pub(in crate::runtime) fn get(&self, property: PropertyLookup<'_>) -> Value {
-        let Some(key) = property.key() else {
-            return Value::Undefined;
-        };
-        self.function_property(key)
-            .map_or(Value::Undefined, FunctionProperty::value)
+    pub(in crate::runtime) fn own_value(
+        &self,
+        property: PropertyLookup<'_>,
+        property_kind: FunctionPropertyKind,
+    ) -> Option<Value> {
+        if let Some(value) = self.intrinsic_value(property_kind) {
+            return Some(value);
+        }
+        let key = property.key()?;
+        self.function_property(key).map(FunctionProperty::value)
     }
 
     pub(in crate::runtime) fn own_property_descriptor(
