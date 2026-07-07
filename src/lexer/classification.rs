@@ -20,7 +20,10 @@ pub(super) fn identifier_position_allows(ch: char, position: IdentifierPosition)
     }
 }
 
-pub(super) fn identifier_kind(text: String) -> TokenKind {
+pub(super) fn identifier_kind(text: String, escaped: bool) -> TokenKind {
+    if escaped && text == "async" {
+        return TokenKind::Identifier(text);
+    }
     match text.as_str() {
         "let" => TokenKind::Let,
         "const" => TokenKind::Const,
