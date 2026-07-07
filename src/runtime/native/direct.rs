@@ -1,6 +1,5 @@
 use crate::{
     api::native_call::NativeCallTarget,
-    ast::{StaticName, StaticPropertyAccessId},
     error::Result,
     runtime::{
         Context,
@@ -8,6 +7,7 @@ use crate::{
         object::{CacheableNativePropertyValue, PropertyLookup},
         property::DynamicPropertyKey,
     },
+    syntax::{StaticName, StaticPropertyAccessId},
     value::{NativeFunctionId, Value},
 };
 

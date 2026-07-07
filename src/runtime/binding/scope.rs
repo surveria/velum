@@ -2,10 +2,10 @@ use std::rc::Rc;
 
 use parking_lot::Mutex;
 
-use crate::ast::DeclKind;
 use crate::binding_layout::ScopeId;
 use crate::error::{Error, Result};
 use crate::storage::atom::AtomId;
+use crate::syntax::DeclKind;
 use crate::value::Value;
 
 #[derive(Debug, Clone, Default)]

@@ -137,7 +137,6 @@ impl<'a> HoistCollector<'a> {
                     BytecodeBinding::compile(name, self.layout)?,
                     *id,
                     name.name().clone(),
-                    Rc::clone(params),
                     BytecodeFunction::compile(params, body, self.layout)?,
                     *is_async,
                 );

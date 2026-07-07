@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+use crate::syntax::DeclKind;
+
 use super::{Expr, FunctionParam, StaticBinding, StaticFunctionId};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -57,13 +59,6 @@ pub enum Stmt {
         init: Option<Expr>,
     },
     Expr(Expr),
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum DeclKind {
-    Var,
-    Let,
-    Const,
 }
 
 #[derive(Debug, Clone, PartialEq)]

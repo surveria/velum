@@ -233,7 +233,6 @@ impl Context {
             BytecodeInstruction::CreateFunction {
                 id,
                 name,
-                params,
                 bytecode,
                 constructable,
                 is_async,
@@ -242,7 +241,6 @@ impl Context {
                 let function = self.create_bytecode_function(&BytecodeFunctionInit {
                     static_function_id: *id,
                     name: name.as_ref(),
-                    params,
                     bytecode,
                     constructable: *constructable,
                     is_async: *is_async,

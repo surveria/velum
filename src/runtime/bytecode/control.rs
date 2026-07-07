@@ -1,7 +1,6 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::DeclKind,
     bytecode::{
         BytecodeAddress, BytecodeBinding, BytecodeBlock, BytecodeCatch, BytecodeForInTarget,
         BytecodeInstruction, BytecodeSwitchCase,
@@ -10,6 +9,7 @@ use crate::{
     runtime::Context,
     runtime::binding::scope::{BindingCell, BindingScope},
     runtime::completion::Completion,
+    syntax::DeclKind,
     value::Value,
 };
 

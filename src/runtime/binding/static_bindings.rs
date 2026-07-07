@@ -2,7 +2,6 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use crate::{
-    ast::{StaticBinding, StaticBindingId},
     binding_layout::BindingLayout,
     binding_layout::{BindingOperand, DeclarationRef, FunctionScopeId, ScopeId},
     bytecode::BytecodeBinding,
@@ -12,6 +11,7 @@ use crate::{
     runtime::binding::scope::{BindingCell, BindingScope, BindingSlot},
     runtime::native::NativeFunctionKind,
     storage::atom::AtomId,
+    syntax::{StaticBinding, StaticBindingId},
     value::{NativeFunctionId, Value},
 };
 

@@ -1,9 +1,8 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{DeclKind, FunctionParam, StaticBindingId, StaticFunctionId, StaticName},
     binding_layout::{BindingLayout, BindingOperand},
-    bytecode::{BytecodeBlock, BytecodeFunction, BytecodeNewTargetMode},
+    bytecode::{BytecodeBlock, BytecodeFunction, BytecodeFunctionParam, BytecodeNewTargetMode},
     error::{Error, Result},
     runtime::Context,
     runtime::binding::scope::{BindingCell, BindingScope},
@@ -16,6 +15,7 @@ use crate::{
     },
     runtime::property::get_property,
     storage::atom::AtomId,
+    syntax::{DeclKind, StaticBindingId, StaticFunctionId, StaticName},
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
 };
 
@@ -35,7 +35,6 @@ use properties::{FunctionPropertyKind, PROTOTYPE_CONSTRUCTOR_PROPERTY};
 pub(super) struct BytecodeFunctionInit<'a> {
     pub(super) static_function_id: StaticFunctionId,
     pub(super) name: Option<&'a StaticName>,
-    pub(super) params: &'a Rc<[FunctionParam]>,
     pub(super) bytecode: &'a BytecodeFunction,
     pub(super) constructable: bool,
     pub(super) is_async: bool,
@@ -68,7 +67,8 @@ impl Context {
             Value::Undefined
         };
         let function_name = self.function_name_value(init.name)?;
-        let arity = function_arity(init.params);
+        let params = init.bytecode.params();
+        let arity = function_arity(params);
         let prototype_default = init.constructable.then(|| {
             DataPropertyDescriptor::new(
                 prototype.clone(),
@@ -79,7 +79,7 @@ impl Context {
         });
         let intrinsic_defaults =
             FunctionIntrinsicDefaults::new(arity.value()?, function_name, prototype_default);
-        let param_atoms = self.function_param_atoms(init.params)?;
+        let param_atoms = self.function_param_atoms(params)?;
         let static_name_atom_cache = self.current_static_name_atom_cache();
         let static_binding_cache = self.current_static_binding_cache();
         let static_binding_layout = self.current_static_binding_layout();
@@ -89,7 +89,7 @@ impl Context {
             static_binding_layout.as_ref(),
         )?;
         self.functions.push(super::Function {
-            param_binding_ids: function_param_binding_ids(init.params),
+            param_binding_ids: function_param_binding_ids(params),
             param_atoms,
             bytecode: init.bytecode.clone(),
             upvalues: upvalues.cells,
@@ -565,10 +565,10 @@ impl Context {
         function.properties().keys(&self.atoms)
     }
 
-    fn function_param_atoms(&mut self, params: &[FunctionParam]) -> Result<Rc<[AtomId]>> {
+    fn function_param_atoms(&mut self, params: &[BytecodeFunctionParam]) -> Result<Rc<[AtomId]>> {
         let mut atoms = Vec::with_capacity(params.len());
         for param in params {
-            atoms.push(self.intern_static_name_atom(param.name.name())?);
+            atoms.push(self.intern_static_name_atom(param.binding().name())?);
         }
         Ok(atoms.into())
     }
@@ -735,18 +735,18 @@ impl Context {
     }
 }
 
-fn function_param_binding_ids(params: &[FunctionParam]) -> Rc<[StaticBindingId]> {
+fn function_param_binding_ids(params: &[BytecodeFunctionParam]) -> Rc<[StaticBindingId]> {
     params
         .iter()
-        .map(|param| param.name.id())
+        .map(|param| param.binding().id())
         .collect::<Vec<_>>()
         .into()
 }
 
-fn function_arity(params: &[FunctionParam]) -> super::FunctionArity {
+fn function_arity(params: &[BytecodeFunctionParam]) -> super::FunctionArity {
     let arity = params
         .iter()
-        .take_while(|param| param.default.is_none())
+        .take_while(|param| !param.has_default())
         .count();
     super::FunctionArity::new(arity)
 }

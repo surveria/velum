@@ -5,12 +5,12 @@ mod ops;
 mod state;
 
 use crate::{
-    ast::UpdateOp,
     bytecode::{
         BytecodeAddress, BytecodeBlock, BytecodeInstruction, BytecodeProgram, BytecodeProperty,
     },
     error::{Error, Result},
     runtime::{Context, assertions::runtime_exception_value, completion::Completion},
+    syntax::UpdateOp,
     value::Value,
 };
 

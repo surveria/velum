@@ -2,7 +2,6 @@ use std::{collections::VecDeque, rc::Rc};
 
 use crate::api::host::HostFunction;
 use crate::api::native_call::NativeCallTarget;
-use crate::ast::StaticBindingId;
 use crate::binding_layout::BindingLayout;
 use crate::bytecode::{BytecodeBinding, BytecodeCallSite, BytecodeFunction, BytecodeNewTargetMode};
 use crate::compiled_script::CompiledScript;
@@ -16,6 +15,7 @@ use crate::runtime::property::enumerable_property_keys;
 use crate::storage::atom::{AtomId, AtomTable};
 use crate::storage::string_heap::StringHeap;
 use crate::storage::symbol::SymbolTable;
+use crate::syntax::StaticBindingId;
 use crate::value::{ErrorName, Value};
 
 pub mod assertions;

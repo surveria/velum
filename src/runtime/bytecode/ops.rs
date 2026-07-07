@@ -1,7 +1,6 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{BinaryOp, DeclKind, StaticName, StaticPropertyAccessId, UnaryOp, UpdateOp},
     bytecode::{
         BytecodeAssignmentTarget, BytecodeBinding, BytecodeDynamicProperty,
         BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
@@ -19,6 +18,7 @@ use crate::{
     },
     runtime::object::{OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyEnumerable},
     runtime::property::DynamicPropertyKey,
+    syntax::{BinaryOp, DeclKind, StaticName, StaticPropertyAccessId, UnaryOp, UpdateOp},
     value::{ErrorName, Value},
 };
 
@@ -105,7 +105,7 @@ impl Context {
             };
             return self.checked_value(Value::Number(value));
         }
-        Self::eval_bytecode_unary(op.fallback_unary(), value)
+        Self::eval_bytecode_unary(op.generic_unary(), value)
     }
 
     pub(super) fn eval_bytecode_binary(
@@ -188,7 +188,7 @@ impl Context {
             };
             return self.checked_value(Value::Number(value));
         }
-        self.eval_bytecode_binary(op.fallback_binary(), left, right, None)
+        self.eval_bytecode_binary(op.generic_binary(), left, right, None)
     }
 
     pub(super) fn eval_bytecode_number_compare(
@@ -206,7 +206,7 @@ impl Context {
             };
             return self.checked_value(Value::Bool(value));
         }
-        self.eval_bytecode_binary(op.fallback_binary(), left, right, None)
+        self.eval_bytecode_binary(op.generic_binary(), left, right, None)
     }
 
     pub(super) fn eval_bytecode_number_equality(
@@ -225,7 +225,7 @@ impl Context {
             };
             return self.checked_value(Value::Bool(value));
         }
-        self.eval_bytecode_binary(op.fallback_binary(), left, right, None)
+        self.eval_bytecode_binary(op.generic_binary(), left, right, None)
     }
 
     fn eval_bytecode_in(

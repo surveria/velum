@@ -2,11 +2,11 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use crate::{
-    ast::{StaticCallSiteId, StaticName, StaticPropertyAccessId},
     error::{Error, Result},
     runtime::native::NativeFunctionKind,
     runtime::object::CacheablePropertyLookup,
     storage::atom::AtomId,
+    syntax::{StaticCallSiteId, StaticName, StaticPropertyAccessId},
     value::{FunctionId, HostFunctionId, NativeFunctionId, Value},
 };
 
