@@ -8,7 +8,7 @@ use crate::{
         DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
         PropertyKey, PropertyWritable,
     },
-    value::{ObjectId, Value},
+    value::{ErrorName, ObjectId, Value},
 };
 
 use super::{
@@ -100,7 +100,9 @@ impl Context {
     ) -> Result<Value> {
         let source = Self::function_constructor_source(args, is_async);
         self.check_string_len(&source.compile)?;
-        let script = self.compile(&source.compile)?;
+        let script = self
+            .compile(&source.compile)
+            .map_err(Self::generated_function_syntax_error)?;
         let caller_locals = std::mem::take(&mut self.locals);
         let caller_upvalue_frames = std::mem::take(&mut self.upvalue_frames);
         let caller_this_values = std::mem::take(&mut self.this_values);
@@ -116,6 +118,15 @@ impl Context {
         };
         self.set_function_source(id, Rc::from(source.display.into_boxed_str()))?;
         Ok(value)
+    }
+
+    fn generated_function_syntax_error(error: Error) -> Error {
+        match error {
+            Error::Lex { .. } | Error::Parse { .. } => {
+                Error::exception(ErrorName::SyntaxError, error.to_string())
+            }
+            Error::Runtime { .. } | Error::Exception { .. } | Error::ResourceLimit { .. } => error,
+        }
     }
 
     fn function_constructor_source(args: &[Value], is_async: bool) -> GeneratedFunctionSource {
