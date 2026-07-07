@@ -1,7 +1,7 @@
 var i = 0;
 var total = 0;
 
-while (i < 200) {
+while (i < 6144) {
   var controls = "\b\f\n\r\t\v\0";
   if (controls === "\u0008\u000c\u000a\u000d\u0009\u000b\u0000") {
     total = total + 1;
@@ -21,4 +21,4 @@ door";
   i = i + 1;
 }
 
-undefined;
+total;

@@ -1,6 +1,6 @@
 let total = 0;
 
-for (let index = 0; index < 128; index++) {
+for (let index = 0; index < 4096; index++) {
     let values = [index + 1, index + 2];
     total += values.unshift(index);
     if (values.shift() === index) {

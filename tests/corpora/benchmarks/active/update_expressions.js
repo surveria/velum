@@ -2,7 +2,7 @@ let total = 0;
 let record = { value: 0 };
 let values = [1, 2, 3, 4];
 
-for (let index = 0; index < 128; index++) {
+for (let index = 0; index < 12288; index++) {
     total++;
     record.value++;
     ++values[index & 3];

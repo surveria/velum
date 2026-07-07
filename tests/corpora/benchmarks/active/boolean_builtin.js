@@ -1,6 +1,6 @@
 let total = 0;
 
-for (let index = 0; index < 256; index++) {
+for (let index = 0; index < 4096; index++) {
     if (Boolean(index)) {
         total += 1;
     }

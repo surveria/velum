@@ -7,8 +7,12 @@ let bump = function(delta) {
   value = value + delta;
   return value;
 };
+let total = 0;
 
-add(10, 20);
-add(20, 22);
-bump(41);
-value;
+for (let index = 0; index < 32768; index = index + 1) {
+  total = total + add(index & 15, 20);
+  total = total + add(20, index & 7);
+  total = total + bump(1);
+}
+
+total + value;

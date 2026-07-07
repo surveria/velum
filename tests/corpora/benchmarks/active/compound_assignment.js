@@ -2,7 +2,7 @@ let total = 0;
 let record = { count: 1 };
 let values = [1, 2, 3, 4];
 
-for (let index = 0; index < 128; index++) {
+for (let index = 0; index < 8192; index++) {
     total += index & 3;
     record.count += 2;
     values[index & 3] += record.count & 1;

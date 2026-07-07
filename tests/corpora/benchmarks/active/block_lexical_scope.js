@@ -1,6 +1,6 @@
 let total = 0;
 
-for (let outer = 0; outer < 64; outer = outer + 1) {
+for (let outer = 0; outer < 8192; outer = outer + 1) {
     let record = { value: outer & 3 };
     {
         let inner = record.value + 1;

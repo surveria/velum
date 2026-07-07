@@ -8,7 +8,7 @@ var camera6 = 7;
 var camera7 = 8;
 var total = 0;
 var index = 0;
-while (index < 200) {
+while (index < 32768) {
   total = total + camera0 + camera1 + camera2 + camera3;
   total = total + camera4 + camera5 + camera6 + camera7;
   index = index + 1;

@@ -1,7 +1,7 @@
 let total = 0;
 let index = 0;
 
-while (index < 200) {
+while (index < 4096) {
   total = total + Math.abs(-index);
   total = total + Math.ceil(index + 0.25);
   total = total + Math.floor(index + 0.75);

@@ -3,7 +3,7 @@ var step = function(value) {
   return value + 1;
 };
 var index = 0;
-while (index < 200) {
+while (index < 12288) {
   counter = step(counter);
   index = index + 1;
 }

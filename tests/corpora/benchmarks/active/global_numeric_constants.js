@@ -1,7 +1,7 @@
 let total = 0;
 let index = 0;
 
-while (index < 200) {
+while (index < 8192) {
   if (NaN !== NaN) {
     total = total + 1;
   }

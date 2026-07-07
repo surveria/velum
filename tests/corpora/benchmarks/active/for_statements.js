@@ -1,7 +1,7 @@
 let values = [1, 2, 3, 4];
 let total = 0;
 
-for (let index = 0; index < 128; index = index + 1) {
+for (let index = 0; index < 12288; index = index + 1) {
     if ((index & 3) === 0) {
         continue;
     }

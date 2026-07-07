@@ -2,7 +2,7 @@ let value = 1;
 let record = { mask: 3 };
 let values = [1, 2, 3, 4];
 
-for (let index = 0; index < 128; index++) {
+for (let index = 0; index < 8192; index++) {
     value |= index;
     value ^= index & 7;
     value <<= 1;
