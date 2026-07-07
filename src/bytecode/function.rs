@@ -181,6 +181,11 @@ impl CaptureBindingCollector {
                 self.collect_expr(condition);
                 self.collect_statement(body);
             }
+            Stmt::DoWhile { body, condition } => {
+                self.collect_statement(body);
+                self.collect_expr(condition);
+            }
+            Stmt::Label { body, .. } => self.collect_statement(body),
             Stmt::For {
                 init,
                 condition,
@@ -239,7 +244,7 @@ impl CaptureBindingCollector {
                     self.collect_expr(init);
                 }
             }
-            Stmt::Break | Stmt::Continue => {}
+            Stmt::Break(_) | Stmt::Continue(_) => {}
         }
     }
 

@@ -79,7 +79,9 @@ impl<'a> HoistCollector<'a> {
                 }
                 Ok(())
             }
-            Stmt::While { body, .. } => self.collect_statement(body),
+            Stmt::While { body, .. } | Stmt::DoWhile { body, .. } | Stmt::Label { body, .. } => {
+                self.collect_statement(body)
+            }
             Stmt::For { init, body, .. } => {
                 if let Some(init) = init {
                     self.collect_statement(init)?;
@@ -143,8 +145,8 @@ impl<'a> HoistCollector<'a> {
                 self.function_declarations.push(declaration);
                 Ok(())
             }
-            Stmt::Break
-            | Stmt::Continue
+            Stmt::Break(_)
+            | Stmt::Continue(_)
             | Stmt::Throw(_)
             | Stmt::Return(_)
             | Stmt::VarDecl { .. }

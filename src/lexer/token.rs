@@ -15,6 +15,7 @@ pub enum TokenKind {
     Var,
     If,
     Else,
+    Do,
     While,
     For,
     Switch,

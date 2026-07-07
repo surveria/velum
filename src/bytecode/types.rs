@@ -652,14 +652,13 @@ pub enum BytecodeInstruction {
     ObjectLiteral {
         properties: Rc<[StaticName]>,
     },
-    If {
-        condition: BytecodeBlock,
-        consequent: BytecodeBlock,
-        alternate: Option<BytecodeBlock>,
-    },
     While {
         condition: BytecodeBlock,
         body: BytecodeBlock,
+    },
+    DoWhile {
+        body: BytecodeBlock,
+        condition: BytecodeBlock,
     },
     For {
         init: Option<BytecodeBlock>,
@@ -682,6 +681,10 @@ pub enum BytecodeInstruction {
         catch: Option<BytecodeCatch>,
         finally_body: Option<BytecodeBlock>,
     },
+    Label {
+        label: StaticName,
+        body: BytecodeBlock,
+    },
     ScopedBlock(BytecodeBlock),
     Jump(BytecodeAddress),
     JumpIfFalse(BytecodeAddress),
@@ -690,10 +693,10 @@ pub enum BytecodeInstruction {
     Complete(BytecodeCompletion),
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum BytecodeCompletion {
-    Break,
-    Continue,
+    Break(Option<StaticName>),
+    Continue(Option<StaticName>),
     Return,
     Throw,
 }

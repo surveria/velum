@@ -5,6 +5,7 @@ use crate::{
         BytecodeInstruction, BytecodeSwitchCase,
     },
     error::{Error, Result},
+    syntax::StaticName,
 };
 
 use super::{BytecodeCompiler, StatementValue};
@@ -17,23 +18,48 @@ impl BytecodeCompiler<'_> {
         alternate: Option<&Stmt>,
         value: StatementValue,
     ) -> Result<()> {
-        let condition = BytecodeBlock::compile_expression(condition, self.layout)?;
-        let consequent = self.compile_statement_block(consequent, value)?;
-        let alternate = alternate
-            .map(|alternate| self.compile_statement_block(alternate, value))
-            .transpose()?;
-        self.emit(BytecodeInstruction::If {
-            condition,
-            consequent,
-            alternate,
-        });
-        Ok(())
+        self.compile_expr(condition)?;
+        let alternate_jump = self.emit_jump_if_false();
+        self.compile_statement(consequent, value)?;
+        self.emit_discard_branch_last(value);
+        let end_jump = self.emit_jump();
+        let alternate_address = self.current_address();
+        self.patch_jump(alternate_jump, alternate_address)?;
+        if let Some(alternate) = alternate {
+            self.compile_statement(alternate, value)?;
+            self.emit_discard_branch_last(value);
+        } else {
+            self.emit_undefined_last();
+        }
+        let end_address = self.current_address();
+        self.patch_jump(end_jump, end_address)
     }
 
     pub(super) fn compile_while(&mut self, condition: &Expr, body: &Stmt) -> Result<()> {
         self.emit(BytecodeInstruction::While {
             condition: BytecodeBlock::compile_expression(condition, self.layout)?,
             body: self.compile_statement_block(body, StatementValue::Store)?,
+        });
+        Ok(())
+    }
+
+    pub(super) fn compile_do_while(&mut self, body: &Stmt, condition: &Expr) -> Result<()> {
+        self.emit(BytecodeInstruction::DoWhile {
+            body: self.compile_statement_block(body, StatementValue::Store)?,
+            condition: BytecodeBlock::compile_expression(condition, self.layout)?,
+        });
+        Ok(())
+    }
+
+    pub(super) fn compile_label(
+        &mut self,
+        label: &StaticName,
+        body: &Stmt,
+        value: StatementValue,
+    ) -> Result<()> {
+        self.emit(BytecodeInstruction::Label {
+            label: label.clone(),
+            body: self.compile_statement_block(body, value)?,
         });
         Ok(())
     }
@@ -143,6 +169,17 @@ impl BytecodeCompiler<'_> {
         let mut compiler = Self::new(self.layout);
         compiler.compile_statement(statement, value)?;
         Ok(BytecodeBlock::from_instructions(compiler.instructions))
+    }
+
+    fn emit_discard_branch_last(&mut self, value: StatementValue) {
+        if value == StatementValue::Discard {
+            self.emit_undefined_last();
+        }
+    }
+
+    fn emit_undefined_last(&mut self) {
+        self.emit(BytecodeInstruction::PushUndefined);
+        self.emit(BytecodeInstruction::StoreLast);
     }
 
     fn compile_for_in_target(&self, target: &ForInTarget) -> Result<BytecodeForInTarget> {

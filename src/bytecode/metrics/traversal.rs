@@ -8,15 +8,6 @@ pub(super) fn count_blocks_2(
     count(first).saturating_add(count(second))
 }
 
-pub(super) fn count_blocks_3(
-    first: &BytecodeBlock,
-    second: &BytecodeBlock,
-    third: Option<&BytecodeBlock>,
-    count: fn(&BytecodeBlock) -> usize,
-) -> usize {
-    count_blocks_2(first, second, count).saturating_add(third.map_or(0, count))
-}
-
 pub(super) fn count_for_blocks(
     init: Option<&BytecodeBlock>,
     condition: Option<&BytecodeBlock>,
