@@ -19,8 +19,10 @@ impl NativeFunctionKind {
             NativeCallTarget::ArraySlice => Self::ArraySlice,
             NativeCallTarget::ArrayUnshift => Self::ArrayUnshift,
             NativeCallTarget::Boolean => Self::Boolean,
+            NativeCallTarget::Eval => Self::Eval,
             NativeCallTarget::ErrorConstructor(name) => Self::ErrorConstructor(name),
             NativeCallTarget::Function => Self::Function,
+            NativeCallTarget::FunctionPrototypeBind => Self::FunctionPrototypeBind,
             NativeCallTarget::FunctionPrototypeCall => Self::FunctionPrototypeCall,
             NativeCallTarget::JsonParse => Self::JsonParse,
             NativeCallTarget::JsonStringify => Self::JsonStringify,
@@ -98,14 +100,14 @@ impl NativeFunctionKind {
             Self::ArrayUnshift => Some(NativeCallTarget::ArrayUnshift),
             Self::AsyncFunction
             | Self::BoundFunction(_)
-            | Self::Eval
-            | Self::FunctionPrototypeBind
             | Self::ObjectPrototypeHasOwnProperty
             | Self::ObjectPrototypePropertyIsEnumerable
             | Self::PromiseResolver { .. } => None,
             Self::Boolean => Some(NativeCallTarget::Boolean),
+            Self::Eval => Some(NativeCallTarget::Eval),
             Self::ErrorConstructor(name) => Some(NativeCallTarget::ErrorConstructor(name)),
             Self::Function => Some(NativeCallTarget::Function),
+            Self::FunctionPrototypeBind => Some(NativeCallTarget::FunctionPrototypeBind),
             Self::FunctionPrototypeCall => Some(NativeCallTarget::FunctionPrototypeCall),
             Self::JsonParse => Some(NativeCallTarget::JsonParse),
             Self::JsonStringify => Some(NativeCallTarget::JsonStringify),

@@ -206,10 +206,14 @@ impl Context {
             NativeCallTarget::ArraySlice => self.eval_direct_array_slice(args, this_value),
             NativeCallTarget::ArrayUnshift => self.eval_direct_array_unshift(args, this_value),
             NativeCallTarget::Boolean => self.eval_direct_boolean_constructor(args),
+            NativeCallTarget::Eval => self.eval_eval_function(runtime_call_args(args)),
             NativeCallTarget::ErrorConstructor(name) => {
                 self.eval_direct_error_constructor(name, args)
             }
             NativeCallTarget::Function => self.eval_direct_function_constructor(args),
+            NativeCallTarget::FunctionPrototypeBind => {
+                self.eval_function_prototype_bind(runtime_call_args(args), this_value)
+            }
             NativeCallTarget::FunctionPrototypeCall => {
                 self.eval_function_prototype_call(runtime_call_args(args), this_value)
             }
