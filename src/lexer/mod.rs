@@ -1,3 +1,4 @@
+mod classification;
 mod scanner;
 mod support;
 mod token;

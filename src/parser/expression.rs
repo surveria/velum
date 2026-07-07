@@ -178,7 +178,11 @@ impl Parser {
             let expr = self.new_target_expr(new_offset)?;
             return self.call_suffix(expr);
         }
-        let constructor = self.primary()?;
+        let constructor = if self.match_kind(&TokenKind::Import) {
+            self.import_constructor_seed()?
+        } else {
+            self.primary()?
+        };
         let constructor = self.member_suffix(constructor)?;
         if Self::constructor_starts_with_import(&constructor) {
             return Err(Error::parse(
@@ -203,6 +207,12 @@ impl Parser {
             args,
         };
         self.call_suffix(expr)
+    }
+
+    fn import_constructor_seed(&mut self) -> Result<Expr> {
+        let name = self.borrowed_static_name(IMPORT_BINDING_NAME)?;
+        let binding = self.static_binding(name)?;
+        Ok(Expr::Identifier(binding))
     }
 
     fn constructor_starts_with_import(expr: &Expr) -> bool {
@@ -734,8 +744,11 @@ const fn keyword_property_name(kind: &TokenKind) -> Option<&'static str> {
         TokenKind::Switch => Some("switch"),
         TokenKind::Case => Some("case"),
         TokenKind::Default => Some("default"),
+        TokenKind::Class => Some("class"),
+        TokenKind::Extends => Some("extends"),
         TokenKind::Break => Some("break"),
         TokenKind::Continue => Some("continue"),
+        TokenKind::Debugger => Some("debugger"),
         TokenKind::Try => Some("try"),
         TokenKind::Catch => Some("catch"),
         TokenKind::Finally => Some("finally"),
@@ -744,6 +757,11 @@ const fn keyword_property_name(kind: &TokenKind) -> Option<&'static str> {
         TokenKind::Function => Some("function"),
         TokenKind::Async => Some("async"),
         TokenKind::Await => Some("await"),
+        TokenKind::Super => Some("super"),
+        TokenKind::Import => Some("import"),
+        TokenKind::Export => Some("export"),
+        TokenKind::Enum => Some("enum"),
+        TokenKind::With => Some("with"),
         TokenKind::New => Some("new"),
         TokenKind::In => Some("in"),
         TokenKind::InstanceOf => Some("instanceof"),

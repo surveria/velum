@@ -1,16 +1,19 @@
+use super::{Token, TokenKind};
 use crate::{
     error::{Error, Result},
+    lexer::classification::{
+        EscapeContext, IdentifierPosition, identifier_kind, identifier_position_allows,
+        token_kind_can_precede_regexp,
+    },
     lexer::support::{
         ASCII_BACKSPACE, ASCII_FORM_FEED, ASCII_VERTICAL_TAB, BIGINT_SUFFIX, DECIMAL_POINT,
         HEX_ESCAPE_DIGITS, LINE_SEPARATOR, MAX_BRACED_UNICODE_ESCAPE_DIGITS,
-        MAX_UNICODE_CODE_POINT, NUMERIC_SEPARATOR, PARAGRAPH_SEPARATOR, RADIX_BINARY,
-        RADIX_DECIMAL, RADIX_HEX, RADIX_OCTAL, TEMPLATE_SUBSTITUTION_START, UNICODE_ESCAPE_DIGITS,
-        checked_hex_accumulate, digit_value, digits_to_number, is_exponent_marker,
-        is_identifier_part, is_identifier_start, unicode_char,
+        MAX_UNICODE_CODE_POINT, NUMERIC_SEPARATOR, PARAGRAPH_SEPARATOR, RADIX_DECIMAL,
+        TEMPLATE_SUBSTITUTION_START, UNICODE_ESCAPE_DIGITS, checked_hex_accumulate, digit_value,
+        digits_to_number, is_exponent_marker, is_identifier_part, is_identifier_start,
+        is_line_terminator, numeric_prefix, unicode_char,
     },
 };
-
-use super::{Token, TokenKind};
 
 pub fn lex(source: &str) -> Result<Vec<Token>> {
     Lexer::new(source).lex()
@@ -22,12 +25,6 @@ struct Lexer<'a> {
     cursor: usize,
     tokens: Vec<Token>,
     line_terminator_before: bool,
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-enum EscapeContext {
-    String,
-    Template,
 }
 
 impl<'a> Lexer<'a> {
@@ -50,12 +47,17 @@ impl<'a> Lexer<'a> {
                     }
                     self.advance();
                 }
+                '#' if self.cursor == 0 && self.peek_next_char() == Some('!') => {
+                    self.hashbang_comment();
+                }
                 '/' if self.peek_next_char() == Some('/') => self.line_comment(),
                 '/' if self.peek_next_char() == Some('*') => self.block_comment(offset)?,
                 '0'..='9' => self.number(offset)?,
                 '"' | '\'' => self.string(offset, ch)?,
                 '`' => self.template_literal(offset)?,
-                ch if is_identifier_start(ch) => self.identifier(offset)?,
+                ch if is_identifier_start(ch) || self.identifier_escape_start() => {
+                    self.identifier(offset)?;
+                }
                 '+' => self.plus_or_increment(offset),
                 '-' => self.minus_or_decrement(offset),
                 '*' => self.star_or_power(offset),
@@ -138,7 +140,7 @@ impl<'a> Lexer<'a> {
 
     fn number(&mut self, offset: usize) -> Result<()> {
         if self.peek_char() == Some('0')
-            && let Some((radix, description)) = self.numeric_prefix()
+            && let Some((radix, description)) = numeric_prefix(self.peek_next_char())
         {
             return self.prefixed_number(offset, radix, description);
         }
@@ -220,15 +222,6 @@ impl<'a> Lexer<'a> {
             self.advance();
         }
         Ok(flags)
-    }
-
-    fn numeric_prefix(&self) -> Option<(u32, &'static str)> {
-        match self.peek_next_char()? {
-            'b' | 'B' => Some((RADIX_BINARY, "binary numeric literal")),
-            'o' | 'O' => Some((RADIX_OCTAL, "octal numeric literal")),
-            'x' | 'X' => Some((RADIX_HEX, "hexadecimal numeric literal")),
-            _ => None,
-        }
     }
 
     fn prefixed_number(&mut self, offset: usize, radix: u32, description: &str) -> Result<()> {
@@ -569,52 +562,69 @@ impl<'a> Lexer<'a> {
     }
 
     fn identifier(&mut self, offset: usize) -> Result<()> {
-        let start = self.cursor;
-        self.advance();
-        while self.peek_char().is_some_and(is_identifier_part) {
-            self.advance();
+        let mut text = String::new();
+        let start = self.identifier_char(offset, IdentifierPosition::Start)?;
+        text.push(start);
+
+        while let Some((current_offset, ch)) = self.peek() {
+            if self.identifier_escape_start() {
+                let escaped = self.identifier_char(current_offset, IdentifierPosition::Part)?;
+                text.push(escaped);
+            } else if is_identifier_part(ch) {
+                self.advance();
+                text.push(ch);
+            } else {
+                break;
+            }
         }
 
-        let start_offset = self.char_offset(start, offset, "identifier")?;
-        let end_offset = self.current_offset();
-        let text = self.source_slice(start_offset, end_offset, offset, "identifier")?;
-        let kind = match text {
-            "let" => TokenKind::Let,
-            "const" => TokenKind::Const,
-            "var" => TokenKind::Var,
-            "if" => TokenKind::If,
-            "else" => TokenKind::Else,
-            "do" => TokenKind::Do,
-            "while" => TokenKind::While,
-            "for" => TokenKind::For,
-            "switch" => TokenKind::Switch,
-            "case" => TokenKind::Case,
-            "default" => TokenKind::Default,
-            "break" => TokenKind::Break,
-            "continue" => TokenKind::Continue,
-            "try" => TokenKind::Try,
-            "catch" => TokenKind::Catch,
-            "finally" => TokenKind::Finally,
-            "throw" => TokenKind::Throw,
-            "return" => TokenKind::Return,
-            "function" => TokenKind::Function,
-            "async" => TokenKind::Async,
-            "await" => TokenKind::Await,
-            "new" => TokenKind::New,
-            "this" => TokenKind::This,
-            "in" => TokenKind::In,
-            "instanceof" => TokenKind::InstanceOf,
-            "typeof" => TokenKind::Typeof,
-            "void" => TokenKind::Void,
-            "delete" => TokenKind::Delete,
-            "true" => TokenKind::True,
-            "false" => TokenKind::False,
-            "null" => TokenKind::Null,
-            "undefined" => TokenKind::Undefined,
-            _ => TokenKind::Identifier(text.to_owned()),
-        };
+        let kind = identifier_kind(text);
         self.push(kind, offset);
         Ok(())
+    }
+
+    fn identifier_escape_start(&self) -> bool {
+        self.peek_char() == Some('\\') && self.peek_next_char() == Some('u')
+    }
+
+    fn identifier_char(&mut self, offset: usize, position: IdentifierPosition) -> Result<char> {
+        let Some((current_offset, ch)) = self.peek() else {
+            return Err(Error::lex("unterminated identifier", offset));
+        };
+        let value = if ch == '\\' {
+            self.identifier_escape(current_offset)?
+        } else {
+            self.advance();
+            ch
+        };
+        if identifier_position_allows(value, position) {
+            return Ok(value);
+        }
+        Err(Error::lex(
+            format!("invalid identifier character '{value}'"),
+            current_offset,
+        ))
+    }
+
+    fn identifier_escape(&mut self, slash_offset: usize) -> Result<char> {
+        self.advance();
+        let Some((escape_offset, escaped)) = self.peek() else {
+            return Err(Error::lex("unterminated identifier escape", slash_offset));
+        };
+        if escaped != 'u' {
+            return Err(Error::lex(
+                "identifier escape must use a unicode escape",
+                escape_offset,
+            ));
+        }
+        self.advance();
+        self.unicode_escape(escape_offset)
+    }
+
+    fn hashbang_comment(&mut self) {
+        self.advance();
+        self.advance();
+        self.line_comment();
     }
 
     fn line_comment(&mut self) {
@@ -784,47 +794,4 @@ impl<'a> Lexer<'a> {
             .get(self.cursor)
             .map_or(self.source.len(), |(offset, _)| *offset)
     }
-
-    fn char_offset(&self, cursor: usize, offset: usize, description: &str) -> Result<usize> {
-        self.chars
-            .get(cursor)
-            .map(|(offset, _)| *offset)
-            .ok_or_else(|| Error::lex(format!("invalid {description} start"), offset))
-    }
-
-    fn source_slice(
-        &self,
-        start: usize,
-        end: usize,
-        offset: usize,
-        description: &str,
-    ) -> Result<&str> {
-        self.source
-            .get(start..end)
-            .ok_or_else(|| Error::lex(format!("invalid {description} span"), offset))
-    }
-}
-
-const fn is_line_terminator(ch: char) -> bool {
-    matches!(ch, '\n' | '\r' | LINE_SEPARATOR | PARAGRAPH_SEPARATOR)
-}
-
-const fn token_kind_can_precede_regexp(kind: &TokenKind) -> bool {
-    !matches!(
-        kind,
-        TokenKind::Number(_)
-            | TokenKind::String(_)
-            | TokenKind::RegExp { .. }
-            | TokenKind::Identifier(_)
-            | TokenKind::This
-            | TokenKind::True
-            | TokenKind::False
-            | TokenKind::Null
-            | TokenKind::Undefined
-            | TokenKind::PlusPlus
-            | TokenKind::MinusMinus
-            | TokenKind::RParen
-            | TokenKind::RBracket
-            | TokenKind::RBrace
-    )
 }

@@ -65,3 +65,18 @@ object-has-own-missing	test/built-ins/Object/hasOwn/hasown_nonexistent.js	run	of
 object-has-own-own-property	test/built-ins/Object/hasOwn/hasown_own_property_exists.js	run	official Test262 Object.hasOwn own-property smoke
 object-has-own-defined-data-property	test/built-ins/Object/hasOwn/hasown_own_writable_configurable_enumerable.js	run	official Test262 Object.hasOwn defined data-property smoke
 object-keys-non-object	test/built-ins/Object/keys/15.2.3.14-1-1.js	run	official Test262 Object.keys primitive coercion smoke
+hashbang-not-empty	test/language/comments/hashbang/not-empty.js	run	official Test262 hashbang source-text smoke
+hashbang-no-line-separator	test/language/comments/hashbang/no-line-separator.js	run	official Test262 hashbang without trailing line terminator smoke
+hashbang-direct-eval	test/language/comments/hashbang/eval.js	run	official Test262 hashbang direct eval smoke
+identifier-escaped-start	test/language/identifiers/start-escape-seq.js	run	official Test262 escaped IdentifierStart smoke
+identifier-underscore-braced-escape	test/language/identifiers/val-underscore-via-escape-hex.js	run	official Test262 braced underscore identifier escape smoke
+identifier-lower-alpha-braced-escape	test/language/identifiers/vals-eng-alpha-lower-via-escape-hex.js	run	official Test262 braced alphabetic identifier escapes smoke
+identifier-cjk-unicode	test/language/identifiers/vals-cjk.js	run	official Test262 CJK identifier smoke
+identifier-zwj-zwnj-parts	test/language/identifiers/part-zwj-zwnj-escaped.js	run	official Test262 ZWJ and ZWNJ identifier part smoke
+identifier-other-id-start	test/language/identifiers/other_id_start.js	run	official Test262 Other_ID_Start identifier smoke
+identifier-other-id-continue	test/language/identifiers/other_id_continue.js	run	official Test262 Other_ID_Continue identifier smoke
+identifier-reserved-with	test/language/identifiers/val-with.js	negative-parse	official Test262 reserved-word identifier negative parse smoke
+identifier-reserved-with-escape	test/language/identifiers/val-with-via-escape-hex.js	negative-parse	official Test262 escaped reserved-word identifier negative parse smoke
+identifier-reserved-class-escape	test/language/identifiers/val-class-via-escape-hex.js	negative-parse	official Test262 escaped class reserved-word identifier negative parse smoke
+identifier-reserved-import	test/language/identifiers/val-import.js	negative-parse	official Test262 import reserved-word identifier negative parse smoke
+identifier-reserved-super-escape	test/language/identifiers/val-super-via-escape-hex4.js	negative-parse	official Test262 escaped super reserved-word identifier negative parse smoke

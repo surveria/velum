@@ -17,13 +17,32 @@ pub const DECIMAL_POINT: char = '.';
 pub const NUMERIC_SEPARATOR: char = '_';
 pub const BIGINT_SUFFIX: char = 'n';
 pub const TEMPLATE_SUBSTITUTION_START: char = '{';
+pub const ZERO_WIDTH_NON_JOINER: char = '\u{200c}';
+pub const ZERO_WIDTH_JOINER: char = '\u{200d}';
 
-pub const fn is_identifier_start(ch: char) -> bool {
-    ch == '_' || ch == '$' || ch.is_ascii_alphabetic()
+pub fn is_identifier_start(ch: char) -> bool {
+    ch == '_' || ch == '$' || unicode_ident::is_xid_start(ch) || is_other_identifier_start(ch)
 }
 
-pub const fn is_identifier_part(ch: char) -> bool {
-    is_identifier_start(ch) || ch.is_ascii_digit()
+pub fn is_identifier_part(ch: char) -> bool {
+    is_identifier_start(ch)
+        || unicode_ident::is_xid_continue(ch)
+        || is_other_identifier_continue(ch)
+        || matches!(ch, ZERO_WIDTH_NON_JOINER | ZERO_WIDTH_JOINER)
+}
+
+const fn is_other_identifier_start(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{1885}' | '\u{1886}' | '\u{2118}' | '\u{212e}' | '\u{309b}' | '\u{309c}'
+    )
+}
+
+const fn is_other_identifier_continue(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{00b7}' | '\u{0387}' | '\u{19da}' | '\u{1369}'..='\u{1371}'
+    )
 }
 
 pub fn checked_hex_accumulate(
@@ -59,6 +78,19 @@ pub const fn digit_value(ch: char, radix: u32) -> Option<u32> {
 
 pub const fn is_exponent_marker(ch: char) -> bool {
     matches!(ch, 'e' | 'E')
+}
+
+pub const fn is_line_terminator(ch: char) -> bool {
+    matches!(ch, '\n' | '\r' | LINE_SEPARATOR | PARAGRAPH_SEPARATOR)
+}
+
+pub const fn numeric_prefix(ch: Option<char>) -> Option<(u32, &'static str)> {
+    match ch {
+        Some('b' | 'B') => Some((RADIX_BINARY, "binary numeric literal")),
+        Some('o' | 'O') => Some((RADIX_OCTAL, "octal numeric literal")),
+        Some('x' | 'X') => Some((RADIX_HEX, "hexadecimal numeric literal")),
+        _ => None,
+    }
 }
 
 pub fn unicode_char(value: u32, offset: usize, description: &str) -> Result<char> {

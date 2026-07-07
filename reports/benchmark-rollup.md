@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T100631Z.md`
-- Task: rsqjs-test-report-20260707T100631Z.md
-- Performance: 0.85x (41/63 >1.00x)
+- `rsqjs-test-report-20260707T100427Z.md`
+- Task: rsqjs-test-report-20260707T100427Z.md
+- Performance: 0.85x (42/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 14539 passed / 88039 failed (14.17%)
+- Full Test262: 15275 passed / 87303 failed (14.89%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -272,3 +272,4 @@ Latest report:
 | `20260707T093956Z` `ec72235` Optimize holey array shift and unshift | 0.85x (42/63 >1.00x) | - (0/63 >1.00x) | 14462 passed / 88116 failed (14.10%) |
 | `20260707T094823Z` `7333c22` Handle Promise constructor TypeErrors in async bodies | 0.86x (41/63 >1.00x) | - (0/63 >1.00x) | 14466 passed / 88112 failed (14.10%) |
 | `20260707T100631Z` rsqjs-test-report-20260707T100631Z.md | 0.85x (41/63 >1.00x) | - (0/63 >1.00x) | 14539 passed / 88039 failed (14.17%) |
+| `20260707T100427Z` rsqjs-test-report-20260707T100427Z.md | 0.85x (42/63 >1.00x) | - (0/63 >1.00x) | 15275 passed / 87303 failed (14.89%) |
