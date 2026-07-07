@@ -10,6 +10,7 @@ use crate::{
     runtime::assertions::reference_error_undefined,
     runtime::binding::scope::{BindingCell, BindingScope, BindingSlot},
     runtime::native::NativeFunctionKind,
+    runtime::native::{INFINITY_NAME, NAN_NAME},
     storage::atom::AtomId,
     syntax::{StaticBinding, StaticBindingId},
     value::{NativeFunctionId, Value},
@@ -264,6 +265,25 @@ impl Context {
             return Ok(Some(cell));
         }
         self.get_binding_static(binding.name())
+    }
+
+    pub(crate) fn unresolved_builtin_numeric_constant(
+        &self,
+        binding: &BytecodeBinding,
+    ) -> Option<Value> {
+        if binding.operand() != BindingOperand::Unresolved {
+            return None;
+        }
+        let name = binding.name().as_str();
+        let value = match name {
+            NAN_NAME => Value::Number(f64::NAN),
+            INFINITY_NAME => Value::Number(f64::INFINITY),
+            _ => return None,
+        };
+        if self.unresolved_binding_name_is_shadowed(name) {
+            return None;
+        }
+        Some(value)
     }
 
     pub(crate) fn assign_bytecode(
@@ -636,6 +656,13 @@ impl Context {
                     .slot_of(atom)
                     .map(|slot| BindingLocation::builtin_global(atom, slot))
             })
+    }
+
+    fn unresolved_binding_name_is_shadowed(&self, name: &str) -> bool {
+        let Some(atom) = self.atom(name) else {
+            return false;
+        };
+        self.globals.contains(atom) || self.scope_above_has_binding(0, atom)
     }
 
     fn binding_at_location(&self, location: BindingLocation) -> Result<Option<BindingCell>> {
