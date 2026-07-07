@@ -22,7 +22,7 @@ const JSON_TRUE: &str = "true";
 const JSON_UNSUPPORTED_NUMBER: &str = "JSON number cannot be represented as f64";
 
 impl Context {
-    pub(super) fn json_object_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime::native) fn json_object_value(&mut self) -> Result<Value> {
         if let Some(binding) = self.get_binding(JSON_NAME) {
             return Ok(binding.value());
         }
@@ -45,7 +45,10 @@ impl Context {
         Ok(value)
     }
 
-    pub(super) fn eval_json_parse(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_json_parse(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         let text = args
             .as_slice()
             .first()
@@ -56,7 +59,10 @@ impl Context {
         self.value_from_json(value)
     }
 
-    pub(super) fn eval_json_stringify(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_json_stringify(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         let Some(value) = args.as_slice().first() else {
             return Ok(Value::Undefined);
         };

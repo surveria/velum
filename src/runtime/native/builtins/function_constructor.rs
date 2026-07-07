@@ -11,7 +11,7 @@ use super::{FUNCTION_NAME, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY};
 const GENERATED_FUNCTION_NAME: &str = "anonymous";
 
 impl Context {
-    pub(super) fn function_constructor_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime::native) fn function_constructor_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::Function) {
             return Ok(Value::NativeFunction(id));
         }
@@ -27,7 +27,10 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(super) fn eval_function_constructor(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_function_constructor(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         let source = Self::function_constructor_source(args.as_slice());
         self.check_string_len(&source)?;
         let script = self.compile(&source)?;

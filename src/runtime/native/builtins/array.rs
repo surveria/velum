@@ -21,7 +21,7 @@ const ARRAY_PROTOTYPE_SLICE_PROPERTY: &str = "slice";
 const ARRAY_PROTOTYPE_UNSHIFT_PROPERTY: &str = "unshift";
 
 impl Context {
-    pub(super) fn array_constructor_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime::native) fn array_constructor_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::Array) {
             return Ok(Value::NativeFunction(id));
         }
@@ -38,7 +38,10 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(super) fn eval_array_constructor(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_array_constructor(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         let values = args.evaluate();
         if let Some(length) = Self::array_constructor_length(&values)? {
             let prototype = self.array_constructor_prototype()?;
@@ -51,7 +54,7 @@ impl Context {
         self.create_array_from_elements(values)
     }
 
-    pub(super) fn eval_array_push(
+    pub(in crate::runtime::native) fn eval_array_push(
         &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
@@ -66,7 +69,7 @@ impl Context {
             .array_push(*id, values, self.limits.max_object_properties)
     }
 
-    pub(super) fn eval_array_concat(
+    pub(in crate::runtime::native) fn eval_array_concat(
         &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
@@ -87,7 +90,7 @@ impl Context {
         )
     }
 
-    pub(super) fn eval_array_reverse(
+    pub(in crate::runtime::native) fn eval_array_reverse(
         &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
@@ -102,7 +105,7 @@ impl Context {
             .array_reverse(*id, self.limits.max_object_properties)
     }
 
-    pub(super) fn eval_array_pop(
+    pub(in crate::runtime::native) fn eval_array_pop(
         &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
@@ -116,7 +119,7 @@ impl Context {
         self.objects.array_pop(*id)
     }
 
-    pub(super) fn eval_array_includes(
+    pub(in crate::runtime::native) fn eval_array_includes(
         &self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
@@ -135,7 +138,7 @@ impl Context {
         self.objects.array_includes(*id, search, from_index)
     }
 
-    pub(super) fn eval_array_index_of(
+    pub(in crate::runtime::native) fn eval_array_index_of(
         &self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
@@ -154,7 +157,7 @@ impl Context {
         self.objects.array_index_of(*id, search, from_index)
     }
 
-    pub(super) fn eval_array_last_index_of(
+    pub(in crate::runtime::native) fn eval_array_last_index_of(
         &self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
@@ -173,7 +176,7 @@ impl Context {
         self.objects.array_last_index_of(*id, search, from_index)
     }
 
-    pub(super) fn eval_array_join(
+    pub(in crate::runtime::native) fn eval_array_join(
         &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
@@ -205,7 +208,7 @@ impl Context {
         self.heap_string_value(&joined)
     }
 
-    pub(super) fn eval_array_shift(
+    pub(in crate::runtime::native) fn eval_array_shift(
         &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
@@ -220,7 +223,7 @@ impl Context {
             .array_shift(*id, self.limits.max_object_properties)
     }
 
-    pub(super) fn eval_array_slice(
+    pub(in crate::runtime::native) fn eval_array_slice(
         &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
@@ -246,7 +249,7 @@ impl Context {
         )
     }
 
-    pub(super) fn eval_array_unshift(
+    pub(in crate::runtime::native) fn eval_array_unshift(
         &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,

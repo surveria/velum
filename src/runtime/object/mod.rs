@@ -4,28 +4,21 @@ use crate::value::{ObjectId, Value};
 mod array;
 mod base;
 mod data;
-mod descriptor;
-mod index;
-mod key;
-mod keys;
-mod lookup;
+mod property;
 mod prototype;
 mod shape;
-mod slot;
 mod string;
 
-use array::ArrayStorage;
+use array::{ArrayIndex, ArrayLength, ArrayStorage};
 use base::LiteralPrototype;
 pub use base::ObjectHeap;
-pub use descriptor::{
-    DataPropertyDescriptor, DataPropertyUpdate, ObjectProperty, PropertyConfigurable,
-    PropertyEnumerable, PropertyWritable,
-};
-use index::{ArrayIndex, ArrayLength};
-pub use key::{ObjectPropertyInit, PropertyKey, PropertyLookup};
-pub use lookup::{
+use property::NamedProperty;
+pub use property::ObjectPropertyInit;
+pub use property::{
     CacheableNativePropertyValue, CacheablePropertyDelete, CacheablePropertyLookup,
     CacheablePropertyPresence, CacheablePropertyValue, CacheablePropertyWrite,
+    DataPropertyDescriptor, DataPropertyUpdate, ObjectProperty, PropertyConfigurable,
+    PropertyEnumerable, PropertyKey, PropertyLookup, PropertyWritable,
 };
 use shape::{ShapeId, ShapeTable};
 
@@ -390,7 +383,7 @@ impl ObjectHeap {
 
 #[derive(Debug, Clone, Default)]
 struct Object {
-    named_properties: Vec<slot::NamedProperty>,
+    named_properties: Vec<NamedProperty>,
     array_storage: ArrayStorage,
     shape: ShapeId,
     enumerable_property_count: usize,

@@ -96,7 +96,7 @@ impl Object {
         };
         let len = string_character_count(value.as_str())?;
         for index in 0..len {
-            super::keys::push_unique_key(keys, index.to_string());
+            super::property::push_unique_key(keys, index.to_string());
         }
         Ok(())
     }

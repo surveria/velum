@@ -3,14 +3,15 @@ use crate::{
     value::{NativeFunctionId, ObjectId, Value},
 };
 
-use super::index::ArrayIndex;
-use super::shape::{PropertySlot, ShapeId};
-use super::{ARRAY_LENGTH_PROPERTY, Object, ObjectHeap, PropertyKey, PropertyLookup};
+use super::{
+    ARRAY_LENGTH_PROPERTY, ArrayIndex, NamedProperty, Object, ObjectHeap, ObjectProperty,
+    PropertyKey, PropertyLookup, PropertySlot, ShapeId, ShapeTable,
+};
 
 const PROTOTYPE_CYCLE_DETECTED_ERROR: &str = "prototype cycle detected";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) struct PropertyLookupGuard {
+pub(in crate::runtime::object) struct PropertyLookupGuard {
     receiver: ObjectId,
     receiver_shape: ShapeId,
     prototype_lookup_version: u64,
@@ -170,18 +171,18 @@ pub enum CacheablePropertyDelete {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(super) struct PrototypeTraversalBudget {
+pub(in crate::runtime::object) struct PrototypeTraversalBudget {
     remaining: usize,
 }
 
 impl PrototypeTraversalBudget {
-    pub(super) const fn from_object_count(object_count: usize) -> Self {
+    pub(in crate::runtime::object) const fn from_object_count(object_count: usize) -> Self {
         Self {
             remaining: object_count,
         }
     }
 
-    pub(super) fn enter_next(&mut self) -> Result<()> {
+    pub(in crate::runtime::object) fn enter_next(&mut self) -> Result<()> {
         self.remaining = self
             .remaining
             .checked_sub(1)
@@ -191,7 +192,7 @@ impl PrototypeTraversalBudget {
 }
 
 impl ObjectHeap {
-    pub(super) fn cacheable_property_value(
+    pub(in crate::runtime::object) fn cacheable_property_value(
         &self,
         id: ObjectId,
         property: PropertyLookup<'_>,
@@ -200,7 +201,7 @@ impl ObjectHeap {
         self.read_cacheable_property_value(lookup)
     }
 
-    pub(super) fn cacheable_property_presence(
+    pub(in crate::runtime::object) fn cacheable_property_presence(
         &self,
         id: ObjectId,
         property: PropertyLookup<'_>,
@@ -457,8 +458,7 @@ impl ObjectHeap {
     }
 
     fn cacheable_hit_value(&self, hit: CacheablePropertyHit) -> Result<Value> {
-        self.cacheable_hit_property(hit)
-            .map(super::ObjectProperty::value)
+        self.cacheable_hit_property(hit).map(ObjectProperty::value)
     }
 
     fn cacheable_hit_native_property(
@@ -475,7 +475,7 @@ impl ObjectHeap {
         }
     }
 
-    fn cacheable_hit_property(&self, hit: CacheablePropertyHit) -> Result<&super::ObjectProperty> {
+    fn cacheable_hit_property(&self, hit: CacheablePropertyHit) -> Result<&ObjectProperty> {
         self.ensure_cacheable_hit(hit)?;
         self.object(hit.owner)?.named_property_at_slot(hit.slot)
     }
@@ -495,7 +495,7 @@ impl Object {
         owner: ObjectId,
         key: PropertyKey,
         depth: PrototypeLookupDepth,
-        shapes: &super::ShapeTable,
+        shapes: &ShapeTable,
     ) -> Result<Option<CacheablePropertyHit>> {
         let Some(slot) = shapes.property_slot(self.shape, key)? else {
             return Ok(None);
@@ -506,10 +506,10 @@ impl Object {
         )))
     }
 
-    fn named_property_at_slot(&self, slot: PropertySlot) -> Result<&super::ObjectProperty> {
+    fn named_property_at_slot(&self, slot: PropertySlot) -> Result<&ObjectProperty> {
         self.named_properties
             .get(slot.index())
-            .map(super::slot::NamedProperty::property)
+            .map(NamedProperty::property)
             .ok_or_else(|| Error::runtime("object property slot is not available"))
     }
 
@@ -517,7 +517,7 @@ impl Object {
         let property = self
             .named_properties
             .get_mut(slot.index())
-            .map(super::slot::NamedProperty::property_mut)
+            .map(NamedProperty::property_mut)
             .ok_or_else(|| Error::runtime("object property slot is not available"))?;
         property.set_value(value);
         Ok(())

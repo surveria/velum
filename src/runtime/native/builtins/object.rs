@@ -24,7 +24,7 @@ const DESCRIPTOR_VALUE_PROPERTY: &str = "value";
 const DESCRIPTOR_WRITABLE_PROPERTY: &str = "writable";
 
 impl Context {
-    pub(super) fn object_constructor_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime::native) fn object_constructor_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::Object) {
             return Ok(Value::NativeFunction(id));
         }
@@ -39,7 +39,10 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(super) fn eval_object_constructor(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_object_constructor(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         let values = args.as_slice();
         let Some(value) = values.first() else {
             return self.create_object_from_constructor();
@@ -61,7 +64,7 @@ impl Context {
         }
     }
 
-    pub(super) fn eval_object_define_property(
+    pub(in crate::runtime::native) fn eval_object_define_property(
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
@@ -104,7 +107,7 @@ impl Context {
         Ok(target)
     }
 
-    pub(super) fn eval_object_get_own_property_descriptor(
+    pub(in crate::runtime::native) fn eval_object_get_own_property_descriptor(
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
@@ -165,7 +168,10 @@ impl Context {
         )))
     }
 
-    pub(super) fn eval_object_has_own(&self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_object_has_own(
+        &self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         let values = args.as_slice();
         let target = Self::argument_or_undefined(values.first());
         let property = self.object_property_key(values.get(1))?;
@@ -173,7 +179,10 @@ impl Context {
             .map(Value::Bool)
     }
 
-    pub(super) fn eval_object_keys(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_object_keys(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         let values = args.as_slice();
         let target = Self::argument_or_undefined(values.first());
         let keys = self.own_enumerable_keys(&target)?;

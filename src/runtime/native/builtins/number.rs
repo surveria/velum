@@ -21,7 +21,7 @@ const NUMBER_POSITIVE_INFINITY_PROPERTY: &str = "POSITIVE_INFINITY";
 const STRING_NEGATIVE_INFINITY: &str = "-Infinity";
 const STRING_POSITIVE_INFINITY: &str = "Infinity";
 
-pub(super) fn number_intrinsic_property(property: &str) -> Option<Value> {
+pub(in crate::runtime::native) fn number_intrinsic_property(property: &str) -> Option<Value> {
     match property {
         NUMBER_EPSILON_PROPERTY => Some(Value::Number(f64::EPSILON)),
         NUMBER_MAX_SAFE_INTEGER_PROPERTY => Some(Value::Number(NUMBER_MAX_SAFE_INTEGER)),
@@ -36,7 +36,7 @@ pub(super) fn number_intrinsic_property(property: &str) -> Option<Value> {
 }
 
 impl Context {
-    pub(super) fn number_constructor_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime::native) fn number_constructor_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::Number) {
             return Ok(Value::NativeFunction(id));
         }
@@ -52,12 +52,18 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(super) fn eval_number_constructor(&self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_number_constructor(
+        &self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         let value = Self::eval_native_unary_argument_value(args);
         self.checked_value(Value::Number(Self::number_argument_value(value)))
     }
 
-    pub(super) fn construct_number_object(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn construct_number_object(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         let value = Self::eval_native_unary_argument_value(args);
         let _number_value = Self::number_argument_value(value);
         let prototype = self.number_constructor_prototype()?;
@@ -107,7 +113,7 @@ impl Context {
         Self::value_to_number(value)
     }
 
-    pub(super) fn value_to_number(value: &Value) -> f64 {
+    pub(in crate::runtime::native) fn value_to_number(value: &Value) -> f64 {
         match value {
             Value::Null => 0.0,
             Value::Bool(value) => f64::from(u8::from(*value)),

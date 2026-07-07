@@ -38,18 +38,20 @@ const RANDOM_XOR_SHIFT_C: u32 = 17;
 
 macro_rules! math_unary_method {
     ($runtime_name:ident, $direct_name:ident, $operation:path) => {
-        pub(super) fn $runtime_name(args: RuntimeCallArgs<'_>) -> Result<Value> {
+        pub(in crate::runtime::native) fn $runtime_name(
+            args: RuntimeCallArgs<'_>,
+        ) -> Result<Value> {
             Self::$direct_name(args.as_slice())
         }
 
-        pub(super) fn $direct_name(args: &[Value]) -> Result<Value> {
+        pub(in crate::runtime::native) fn $direct_name(args: &[Value]) -> Result<Value> {
             Self::eval_math_unary_value(args.first(), $operation)
         }
     };
 }
 
 impl Context {
-    pub(super) fn math_object_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime::native) fn math_object_value(&mut self) -> Result<Value> {
         if let Some(binding) = self.get_binding(MATH_NAME) {
             return Ok(binding.value());
         }
@@ -118,11 +120,11 @@ impl Context {
     math_unary_method!(eval_math_asinh, eval_direct_math_asinh, f64::asinh);
     math_unary_method!(eval_math_atan, eval_direct_math_atan, f64::atan);
 
-    pub(super) fn eval_math_atan2(args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_math_atan2(args: RuntimeCallArgs<'_>) -> Result<Value> {
         Self::eval_direct_math_atan2(args.as_slice())
     }
 
-    pub(super) fn eval_direct_math_atan2(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_atan2(args: &[Value]) -> Result<Value> {
         let (y, x) = Self::eval_math_binary_values(args);
         let y = Self::math_arg_or_nan(y);
         let x = x.map_or(f64::NAN, Self::value_to_number);
@@ -133,11 +135,11 @@ impl Context {
     math_unary_method!(eval_math_cbrt, eval_direct_math_cbrt, f64::cbrt);
     math_unary_method!(eval_math_ceil, eval_direct_math_ceil, f64::ceil);
 
-    pub(super) fn eval_math_clz32(args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_math_clz32(args: RuntimeCallArgs<'_>) -> Result<Value> {
         Self::eval_direct_math_clz32(args.as_slice())
     }
 
-    pub(super) fn eval_direct_math_clz32(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_clz32(args: &[Value]) -> Result<Value> {
         let value = args.first();
         let unsigned = number_to_uint32(Self::math_arg_or_nan(value), MATH_CLZ32_NAME)?;
         Self::math_number(f64::from(unsigned.leading_zeros()))
@@ -149,28 +151,28 @@ impl Context {
     math_unary_method!(eval_math_expm1, eval_direct_math_expm1, f64::exp_m1);
     math_unary_method!(eval_math_floor, eval_direct_math_floor, f64::floor);
 
-    pub(super) fn eval_math_fround(args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_math_fround(args: RuntimeCallArgs<'_>) -> Result<Value> {
         Self::eval_direct_math_fround(args.as_slice())
     }
 
-    pub(super) fn eval_direct_math_fround(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_fround(args: &[Value]) -> Result<Value> {
         let value = args.first();
         Self::math_number(Self::fround_to_number(Self::math_arg_or_nan(value)))
     }
 
-    pub(super) fn eval_math_hypot(args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_math_hypot(args: RuntimeCallArgs<'_>) -> Result<Value> {
         Self::eval_direct_math_hypot(args.as_slice())
     }
 
-    pub(super) fn eval_direct_math_hypot(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_hypot(args: &[Value]) -> Result<Value> {
         Self::eval_math_hypot_values(args)
     }
 
-    pub(super) fn eval_math_imul(args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_math_imul(args: RuntimeCallArgs<'_>) -> Result<Value> {
         Self::eval_direct_math_imul(args.as_slice())
     }
 
-    pub(super) fn eval_direct_math_imul(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_imul(args: &[Value]) -> Result<Value> {
         let (left, right) = Self::eval_math_binary_values(args);
         let left = number_to_uint32(Self::math_arg_or_nan(left), MATH_IMUL_NAME)?;
         let right = number_to_uint32(
@@ -186,11 +188,11 @@ impl Context {
     math_unary_method!(eval_math_log1p, eval_direct_math_log1p, f64::ln_1p);
     math_unary_method!(eval_math_log2, eval_direct_math_log2, f64::log2);
 
-    pub(super) fn eval_math_max(args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_math_max(args: RuntimeCallArgs<'_>) -> Result<Value> {
         Self::eval_direct_math_max(args.as_slice())
     }
 
-    pub(super) fn eval_direct_math_max(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_max(args: &[Value]) -> Result<Value> {
         let mut maximum = f64::NEG_INFINITY;
         for value in args {
             let value = Self::value_to_number(value);
@@ -204,11 +206,11 @@ impl Context {
         Self::math_number(maximum)
     }
 
-    pub(super) fn eval_math_min(args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_math_min(args: RuntimeCallArgs<'_>) -> Result<Value> {
         Self::eval_direct_math_min(args.as_slice())
     }
 
-    pub(super) fn eval_direct_math_min(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_min(args: &[Value]) -> Result<Value> {
         let mut minimum = f64::INFINITY;
         for value in args {
             let value = Self::value_to_number(value);
@@ -222,42 +224,48 @@ impl Context {
         Self::math_number(minimum)
     }
 
-    pub(super) fn eval_math_pow(args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_math_pow(args: RuntimeCallArgs<'_>) -> Result<Value> {
         Self::eval_direct_math_pow(args.as_slice())
     }
 
-    pub(super) fn eval_direct_math_pow(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_pow(args: &[Value]) -> Result<Value> {
         let (base, exponent) = Self::eval_math_binary_values(args);
         let base = Self::math_arg_or_nan(base);
         let exponent = exponent.map_or(f64::NAN, Self::value_to_number);
         Self::math_number(base.powf(exponent))
     }
 
-    pub(super) fn eval_math_random(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_math_random(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         self.eval_direct_math_random(args.as_slice())
     }
 
-    pub(super) fn eval_direct_math_random(&mut self, args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_random(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
         Self::eval_math_discard_values(args);
         Ok(Value::Number(self.next_math_random()?))
     }
 
-    pub(super) fn eval_math_round(args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_math_round(args: RuntimeCallArgs<'_>) -> Result<Value> {
         Self::eval_direct_math_round(args.as_slice())
     }
 
-    pub(super) fn eval_direct_math_round(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_round(args: &[Value]) -> Result<Value> {
         let value = args.first();
         Self::math_number(Self::round_to_nearest_toward_positive(
             Self::math_arg_or_nan(value),
         ))
     }
 
-    pub(super) fn eval_math_sign(args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_math_sign(args: RuntimeCallArgs<'_>) -> Result<Value> {
         Self::eval_direct_math_sign(args.as_slice())
     }
 
-    pub(super) fn eval_direct_math_sign(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_sign(args: &[Value]) -> Result<Value> {
         let value = args.first();
         let value = Self::math_arg_or_nan(value);
         if value.is_nan() || value == 0.0 {

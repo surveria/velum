@@ -1,10 +1,9 @@
 use crate::error::{Error, Result};
 
-use super::shape::PropertySlot;
-use super::{Object, ObjectProperty, PropertyKey, ShapeTable};
+use super::{Object, ObjectProperty, PropertyKey, PropertySlot, ShapeTable};
 
 #[derive(Debug, Clone)]
-pub(super) struct NamedProperty {
+pub(in crate::runtime::object) struct NamedProperty {
     key: PropertyKey,
     property: ObjectProperty,
 }
@@ -14,21 +13,21 @@ impl NamedProperty {
         Self { key, property }
     }
 
-    pub(super) const fn key(&self) -> PropertyKey {
+    pub(in crate::runtime::object) const fn key(&self) -> PropertyKey {
         self.key
     }
 
-    pub(super) const fn property(&self) -> &ObjectProperty {
+    pub(in crate::runtime::object) const fn property(&self) -> &ObjectProperty {
         &self.property
     }
 
-    pub(super) const fn property_mut(&mut self) -> &mut ObjectProperty {
+    pub(in crate::runtime::object) const fn property_mut(&mut self) -> &mut ObjectProperty {
         &mut self.property
     }
 }
 
 impl Object {
-    pub(super) fn named_property(
+    pub(in crate::runtime::object) fn named_property(
         &self,
         shapes: &ShapeTable,
         key: PropertyKey,
@@ -43,7 +42,7 @@ impl Object {
             .ok_or_else(|| Error::runtime("object property slot is not available"))
     }
 
-    pub(super) fn named_property_mut(
+    pub(in crate::runtime::object) fn named_property_mut(
         &mut self,
         shapes: &ShapeTable,
         key: PropertyKey,
@@ -57,11 +56,13 @@ impl Object {
             .ok_or_else(|| Error::runtime("object property slot is not available"))
     }
 
-    pub(super) fn named_properties(&self) -> impl Iterator<Item = &NamedProperty> {
+    pub(in crate::runtime::object) fn named_properties(
+        &self,
+    ) -> impl Iterator<Item = &NamedProperty> {
         self.named_properties.iter()
     }
 
-    pub(super) fn contains_named_property(
+    pub(in crate::runtime::object) fn contains_named_property(
         &self,
         shapes: &ShapeTable,
         key: PropertyKey,
@@ -71,7 +72,7 @@ impl Object {
             .map(|slot| slot.is_some())
     }
 
-    pub(super) fn push_named_property(
+    pub(in crate::runtime::object) fn push_named_property(
         &mut self,
         shapes: &mut ShapeTable,
         key: PropertyKey,
@@ -94,7 +95,7 @@ impl Object {
         Ok(())
     }
 
-    pub(super) fn remove_named_property(
+    pub(in crate::runtime::object) fn remove_named_property(
         &mut self,
         shapes: &mut ShapeTable,
         key: PropertyKey,

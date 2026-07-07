@@ -3,7 +3,7 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-use super::super::lookup::PrototypeTraversalBudget;
+use super::super::property::PrototypeTraversalBudget;
 use super::ArrayCopyProgress;
 use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, Object, ObjectHeap, ObjectProperty};
 

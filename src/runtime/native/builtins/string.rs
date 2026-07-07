@@ -11,7 +11,7 @@ use super::{NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, STRING_NAME};
 const STRING_LENGTH_PROPERTY: &str = "length";
 
 impl Context {
-    pub(super) fn string_constructor_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime::native) fn string_constructor_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::String) {
             return Ok(Value::NativeFunction(id));
         }
@@ -27,12 +27,18 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(super) fn eval_string_constructor(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_string_constructor(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         let value = self.eval_string_argument(args)?;
         self.heap_string_value(&value)
     }
 
-    pub(super) fn construct_string_object(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn construct_string_object(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         let value = self.eval_string_argument(args)?;
         let value = self.intern_heap_string(&value)?;
         let prototype = self.string_constructor_prototype()?;
