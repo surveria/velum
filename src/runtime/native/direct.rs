@@ -155,7 +155,7 @@ impl Context {
         {
             self.record_native_call_cache_hit();
             return self
-                .eval_native_function_kind(kind, runtime_call_args(args), this_value)
+                .eval_direct_or_generic_native_function_kind(kind, args, this_value)
                 .map(Some);
         }
 
@@ -172,7 +172,7 @@ impl Context {
                 self.remember_static_object_property_native_call_kind(
                     access, candidate, version, function, kind,
                 )?;
-                self.eval_native_function_kind(kind, runtime_call_args(args), this_value)
+                self.eval_direct_or_generic_native_function_kind(kind, args, this_value)
                     .map(Some)
             }
             CacheableNativePropertyValue::Other(callee) => {
@@ -283,6 +283,18 @@ impl Context {
         self.native_function_id(kind)
             .filter(|expected| *expected == id)
             .map(|_| kind)
+    }
+
+    fn eval_direct_or_generic_native_function_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
+        if let Some(target) = kind.to_call_target() {
+            return self.eval_direct_native_call_target(target, args, this_value);
+        }
+        self.eval_native_function_kind(kind, runtime_call_args(args), this_value)
     }
 
     pub(in crate::runtime) fn eval_native_function_kind(
