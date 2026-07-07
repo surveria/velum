@@ -59,26 +59,28 @@ const NUMBER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(50);
 const OBJECT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(51);
 const OBJECT_DEFINE_PROPERTY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(52);
 const OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(53);
-const OBJECT_HAS_OWN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(54);
-const OBJECT_KEYS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(55);
-const STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(56);
-const ERROR_BASE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(57);
-const ERROR_EVAL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(58);
-const ERROR_RANGE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(59);
-const ERROR_REFERENCE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(60);
-const ERROR_SYNTAX_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(61);
-const ERROR_TEST262_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(62);
-const ERROR_TYPE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(63);
-const ERROR_URI_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(64);
-const PROMISE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(65);
-const PROMISE_RESOLVE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(66);
-const PROMISE_REJECT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(67);
-const PROMISE_THEN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(68);
-const PROMISE_CATCH_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(69);
-const EVAL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(70);
-const SYMBOL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(71);
-const FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(72);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 73;
+const OBJECT_GET_PROTOTYPE_OF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(54);
+const OBJECT_HAS_OWN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(55);
+const OBJECT_KEYS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(56);
+const STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(57);
+const ERROR_BASE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(58);
+const ERROR_EVAL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(59);
+const ERROR_RANGE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(60);
+const ERROR_REFERENCE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(61);
+const ERROR_SYNTAX_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(62);
+const ERROR_TEST262_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(63);
+const ERROR_TYPE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(64);
+const ERROR_URI_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(65);
+const PROMISE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(66);
+const PROMISE_RESOLVE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(67);
+const PROMISE_REJECT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(68);
+const PROMISE_THEN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(69);
+const PROMISE_CATCH_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(70);
+const EVAL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(71);
+const SYMBOL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(72);
+const FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(73);
+const ASYNC_FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(74);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 75;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -146,6 +148,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::ArrayShift => Some(ARRAY_SHIFT_SLOT),
         NativeFunctionKind::ArraySlice => Some(ARRAY_SLICE_SLOT),
         NativeFunctionKind::ArrayUnshift => Some(ARRAY_UNSHIFT_SLOT),
+        NativeFunctionKind::AsyncFunction => Some(ASYNC_FUNCTION_SLOT),
         NativeFunctionKind::Boolean => Some(BOOLEAN_SLOT),
         NativeFunctionKind::Eval => Some(EVAL_SLOT),
         NativeFunctionKind::ErrorConstructor(name) => Some(error_constructor_slot(name)),
@@ -190,6 +193,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::Number => Some(NUMBER_SLOT),
         NativeFunctionKind::Object => Some(OBJECT_SLOT),
         NativeFunctionKind::ObjectDefineProperty => Some(OBJECT_DEFINE_PROPERTY_SLOT),
+        NativeFunctionKind::ObjectGetPrototypeOf => Some(OBJECT_GET_PROTOTYPE_OF_SLOT),
         NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
             Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_SLOT)
         }

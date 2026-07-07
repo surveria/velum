@@ -119,7 +119,7 @@ impl ObjectHeap {
         Ok(false)
     }
 
-    fn prototype_value(&self, id: ObjectId) -> Result<Value> {
+    pub(crate) fn prototype_value(&self, id: ObjectId) -> Result<Value> {
         let object = self.object(id)?;
         Ok(object.prototype.map_or(Value::Null, Value::Object))
     }

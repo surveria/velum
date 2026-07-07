@@ -63,6 +63,7 @@ impl NativeFunctionKind {
             NativeCallTarget::ObjectGetOwnPropertyDescriptor => {
                 Self::ObjectGetOwnPropertyDescriptor
             }
+            NativeCallTarget::ObjectGetPrototypeOf => Self::ObjectGetPrototypeOf,
             NativeCallTarget::ObjectHasOwn => Self::ObjectHasOwn,
             NativeCallTarget::ObjectKeys => Self::ObjectKeys,
             NativeCallTarget::Promise => Self::Promise,

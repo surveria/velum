@@ -71,6 +71,7 @@ impl Context {
     ) -> Result<Value> {
         match kind {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
+            NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
             NativeFunctionKind::Function => self.eval_function_constructor(args),
             NativeFunctionKind::ArrayConcat
             | NativeFunctionKind::ArrayIncludes
@@ -122,6 +123,7 @@ impl Context {
             | NativeFunctionKind::MathTanh
             | NativeFunctionKind::MathTrunc
             | NativeFunctionKind::ObjectDefineProperty
+            | NativeFunctionKind::ObjectGetPrototypeOf
             | NativeFunctionKind::ObjectGetOwnPropertyDescriptor
             | NativeFunctionKind::ObjectHasOwn
             | NativeFunctionKind::ObjectKeys

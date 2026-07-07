@@ -82,6 +82,34 @@ fn async_function_returns_a_resolved_promise() -> TestResult {
 }
 
 #[test]
+fn exposes_async_function_constructor_and_prototype() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let AsyncFunction = async function() {}.constructor;
+        let AsyncFunctionPrototype = AsyncFunction.prototype;
+        let first = AsyncFunction("await 1");
+        let second = new AsyncFunction("left", "right", "return await left + right;");
+        typeof AsyncFunction === "function" &&
+            AsyncFunction.name === "AsyncFunction" &&
+            AsyncFunction.length === 1 &&
+            Object.getPrototypeOf(async function() {}) === AsyncFunctionPrototype &&
+            AsyncFunctionPrototype.constructor === AsyncFunction &&
+            first.constructor === AsyncFunction &&
+            first.length === 0 &&
+            Object.getPrototypeOf(first) === AsyncFunctionPrototype &&
+            second.constructor === AsyncFunction &&
+            second.length === 2 &&
+            Object.getPrototypeOf(second) === AsyncFunctionPrototype ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn await_reads_already_resolved_promise_value() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

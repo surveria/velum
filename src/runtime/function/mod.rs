@@ -14,6 +14,7 @@ use crate::{
         DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
         PropertyEnumerable, PropertyKey, PropertyLookup, PropertyWritable,
     },
+    runtime::property::get_property,
     storage::atom::AtomId,
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
 };
@@ -22,6 +23,7 @@ mod intrinsic;
 mod properties;
 mod upvalues;
 
+use crate::runtime::native::NativeFunctionKind;
 pub(super) use properties::{FunctionIntrinsicDefaults, FunctionProperties};
 
 use properties::{FunctionPropertyKind, PROTOTYPE_CONSTRUCTOR_PROPERTY};
@@ -205,22 +207,43 @@ impl Context {
     }
 
     pub(crate) fn get_function_property_lookup(
-        &self,
+        &mut self,
         id: FunctionId,
         property: PropertyLookup<'_>,
     ) -> Result<Value> {
-        let function = self.function(id)?;
         let property_kind = FunctionPropertyKind::from_name(property.name());
-        if let Some(value) = function.properties.intrinsic_value(property_kind) {
+        let own_value = {
+            let function = self.function(id)?;
+            function.properties.own_value(property, property_kind)
+        };
+        if let Some(value) = own_value {
             return self.checked_value(value);
         }
+        self.get_function_object_prototype_property(id, property)
+    }
 
-        let value = if property_kind.is_prototype() {
-            function.properties.prototype()
-        } else {
-            function.properties.get(property)
+    fn get_function_object_prototype_property(
+        &mut self,
+        id: FunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<Value> {
+        if !self.should_materialize_function_prototype_for(property) {
+            return Ok(Value::Undefined);
+        }
+        let prototype = self.function_object_prototype_value(id)?;
+        let Some(property) = self.known_function_prototype_lookup(property) else {
+            return Ok(Value::Undefined);
         };
-        self.checked_value(value)
+        let value = get_property(&self.objects, &prototype, property)?;
+        self.runtime_property_value(value)
+    }
+
+    pub(crate) fn function_object_prototype_value(&mut self, id: FunctionId) -> Result<Value> {
+        let is_async = self.function(id)?.is_async;
+        if is_async {
+            return self.async_function_constructor_prototype_value();
+        }
+        self.function_constructor_prototype_value()
     }
 
     pub(crate) fn function_own_property_descriptor_lookup(
@@ -334,25 +357,68 @@ impl Context {
     }
 
     pub(crate) fn get_native_function_property_lookup(
-        &self,
+        &mut self,
         id: NativeFunctionId,
         property: PropertyLookup<'_>,
     ) -> Result<Value> {
-        let function = self.native_function(id)?;
         let property_name = property.name();
         let property_kind = FunctionPropertyKind::from_name(property_name);
-        if let Some(value) = function.properties().intrinsic_value(property_kind) {
+        let own_value = {
+            let function = self.native_function(id)?;
+            function
+                .properties()
+                .own_value(property, property_kind)
+                .or_else(|| function.intrinsic_property(property_name))
+        };
+        if let Some(value) = own_value {
             return self.checked_value(value);
         }
+        self.get_native_function_object_prototype_property(id, property)
+    }
 
-        let value = if property_kind.is_prototype() {
-            function.properties().prototype()
-        } else {
-            function
-                .intrinsic_property(property_name)
-                .unwrap_or_else(|| function.properties().get(property))
+    fn get_native_function_object_prototype_property(
+        &mut self,
+        id: NativeFunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<Value> {
+        if !self.should_materialize_function_prototype_for(property) {
+            return Ok(Value::Undefined);
+        }
+        let prototype = self.native_function_object_prototype_value(id)?;
+        let Some(property) = self.known_function_prototype_lookup(property) else {
+            return Ok(Value::Undefined);
         };
-        self.checked_value(value)
+        let value = get_property(&self.objects, &prototype, property)?;
+        self.runtime_property_value(value)
+    }
+
+    fn known_function_prototype_lookup<'a>(
+        &self,
+        property: PropertyLookup<'a>,
+    ) -> Option<PropertyLookup<'a>> {
+        let Some(key) = property.key() else {
+            return self
+                .known_property_key(property.name())
+                .map(|key| PropertyLookup::from_key(property.name(), key));
+        };
+        Some(PropertyLookup::from_key(property.name(), key))
+    }
+
+    fn should_materialize_function_prototype_for(&self, property: PropertyLookup<'_>) -> bool {
+        property.key().is_some()
+            || self.known_property_key(property.name()).is_some()
+            || property.name() == PROTOTYPE_CONSTRUCTOR_PROPERTY
+    }
+
+    pub(crate) fn native_function_object_prototype_value(
+        &mut self,
+        id: NativeFunctionId,
+    ) -> Result<Value> {
+        let kind = self.native_function(id)?.kind();
+        if kind == NativeFunctionKind::AsyncFunction {
+            return self.function_constructor_value();
+        }
+        self.function_constructor_prototype_value()
     }
 
     pub(crate) fn native_function_own_property_descriptor_lookup(

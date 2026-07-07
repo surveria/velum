@@ -22,6 +22,8 @@ const ARRAY_SLICE_FUNCTION_LENGTH: f64 = 2.0;
 const ARRAY_SLICE_NAME: &str = "slice";
 const ARRAY_UNSHIFT_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_UNSHIFT_NAME: &str = "unshift";
+const ASYNC_FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
+pub(super) const ASYNC_FUNCTION_NAME: &str = "AsyncFunction";
 const ARRAY_FUNCTION_LENGTH: f64 = 1.0;
 pub(super) const ARRAY_NAME: &str = "Array";
 const BOOLEAN_FUNCTION_LENGTH: f64 = 1.0;
@@ -82,6 +84,8 @@ pub(super) const NUMBER_NAME: &str = "Number";
 const OBJECT_FUNCTION_LENGTH: f64 = 1.0;
 const OBJECT_DEFINE_PROPERTY_FUNCTION_LENGTH: f64 = 3.0;
 pub(super) const OBJECT_DEFINE_PROPERTY_NAME: &str = "defineProperty";
+const OBJECT_GET_PROTOTYPE_OF_FUNCTION_LENGTH: f64 = 1.0;
+pub(super) const OBJECT_GET_PROTOTYPE_OF_NAME: &str = "getPrototypeOf";
 const OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH: f64 = 2.0;
 pub(super) const OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME: &str = "getOwnPropertyDescriptor";
 const OBJECT_HAS_OWN_FUNCTION_LENGTH: f64 = 2.0;
@@ -121,6 +125,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ArrayShift,
     ArraySlice,
     ArrayUnshift,
+    AsyncFunction,
     Boolean,
     Eval,
     ErrorConstructor(ErrorName),
@@ -165,6 +170,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     Number,
     Object,
     ObjectDefineProperty,
+    ObjectGetPrototypeOf,
     ObjectGetOwnPropertyDescriptor,
     ObjectHasOwn,
     ObjectKeys,
@@ -196,6 +202,7 @@ impl NativeFunctionKind {
             Self::ArrayShift => ARRAY_SHIFT_FUNCTION_LENGTH,
             Self::ArraySlice => ARRAY_SLICE_FUNCTION_LENGTH,
             Self::ArrayUnshift => ARRAY_UNSHIFT_FUNCTION_LENGTH,
+            Self::AsyncFunction => ASYNC_FUNCTION_FUNCTION_LENGTH,
             Self::Boolean => BOOLEAN_FUNCTION_LENGTH,
             Self::Eval => EVAL_FUNCTION_LENGTH,
             Self::ErrorConstructor(_) => ERROR_FUNCTION_LENGTH,
@@ -240,6 +247,7 @@ impl NativeFunctionKind {
             Self::Number => NUMBER_FUNCTION_LENGTH,
             Self::Object => OBJECT_FUNCTION_LENGTH,
             Self::ObjectDefineProperty => OBJECT_DEFINE_PROPERTY_FUNCTION_LENGTH,
+            Self::ObjectGetPrototypeOf => OBJECT_GET_PROTOTYPE_OF_FUNCTION_LENGTH,
             Self::ObjectGetOwnPropertyDescriptor => {
                 OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH
             }
@@ -270,6 +278,7 @@ impl NativeFunctionKind {
             Self::ArrayShift => ARRAY_SHIFT_NAME,
             Self::ArraySlice => ARRAY_SLICE_NAME,
             Self::ArrayUnshift => ARRAY_UNSHIFT_NAME,
+            Self::AsyncFunction => ASYNC_FUNCTION_NAME,
             Self::Boolean => BOOLEAN_NAME,
             Self::Eval => EVAL_NAME,
             Self::ErrorConstructor(name) => name.as_str(),
@@ -314,6 +323,7 @@ impl NativeFunctionKind {
             Self::Number => NUMBER_NAME,
             Self::Object => OBJECT_NAME,
             Self::ObjectDefineProperty => OBJECT_DEFINE_PROPERTY_NAME,
+            Self::ObjectGetPrototypeOf => OBJECT_GET_PROTOTYPE_OF_NAME,
             Self::ObjectGetOwnPropertyDescriptor => OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
             Self::ObjectHasOwn => OBJECT_HAS_OWN_NAME,
             Self::ObjectKeys => OBJECT_KEYS_NAME,
