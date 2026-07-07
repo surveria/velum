@@ -66,9 +66,12 @@ impl NativeFunction {
             | NativeFunctionKind::ArrayUnshift
             | NativeFunctionKind::AsyncFunction
             | NativeFunctionKind::Boolean
+            | NativeFunctionKind::BoundFunction(_)
             | NativeFunctionKind::Eval
             | NativeFunctionKind::ErrorConstructor(_)
             | NativeFunctionKind::Function
+            | NativeFunctionKind::FunctionPrototypeBind
+            | NativeFunctionKind::FunctionPrototypeCall
             | NativeFunctionKind::JsonParse
             | NativeFunctionKind::JsonStringify
             | NativeFunctionKind::MathAbs
@@ -110,8 +113,11 @@ impl NativeFunction {
             | NativeFunctionKind::ObjectDefineProperty
             | NativeFunctionKind::ObjectGetPrototypeOf
             | NativeFunctionKind::ObjectGetOwnPropertyDescriptor
+            | NativeFunctionKind::ObjectGetOwnPropertyNames
             | NativeFunctionKind::ObjectHasOwn
             | NativeFunctionKind::ObjectKeys
+            | NativeFunctionKind::ObjectPrototypeHasOwnProperty
+            | NativeFunctionKind::ObjectPrototypePropertyIsEnumerable
             | NativeFunctionKind::Promise
             | NativeFunctionKind::PromiseResolve
             | NativeFunctionKind::PromiseReject

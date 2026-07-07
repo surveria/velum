@@ -306,6 +306,7 @@ impl BytecodeNumericBinaryOp {
             | BinaryOp::Greater
             | BinaryOp::GreaterEqual
             | BinaryOp::In
+            | BinaryOp::InstanceOf
             | BinaryOp::LogicalAnd
             | BinaryOp::LogicalOr => None,
         }
@@ -378,6 +379,7 @@ impl BytecodeNumericCompareOp {
             | BinaryOp::StrictEqual
             | BinaryOp::StrictNotEqual
             | BinaryOp::In
+            | BinaryOp::InstanceOf
             | BinaryOp::BitAnd
             | BinaryOp::BitOr
             | BinaryOp::BitXor
@@ -425,6 +427,7 @@ impl BytecodeNumericEqualityOp {
             | BinaryOp::Greater
             | BinaryOp::GreaterEqual
             | BinaryOp::In
+            | BinaryOp::InstanceOf
             | BinaryOp::BitAnd
             | BinaryOp::BitOr
             | BinaryOp::BitXor

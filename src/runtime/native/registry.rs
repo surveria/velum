@@ -150,6 +150,13 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::ArrayUnshift => Some(ARRAY_UNSHIFT_SLOT),
         NativeFunctionKind::AsyncFunction => Some(ASYNC_FUNCTION_SLOT),
         NativeFunctionKind::Boolean => Some(BOOLEAN_SLOT),
+        NativeFunctionKind::BoundFunction(_)
+        | NativeFunctionKind::FunctionPrototypeBind
+        | NativeFunctionKind::FunctionPrototypeCall
+        | NativeFunctionKind::ObjectGetOwnPropertyNames
+        | NativeFunctionKind::ObjectPrototypeHasOwnProperty
+        | NativeFunctionKind::ObjectPrototypePropertyIsEnumerable
+        | NativeFunctionKind::PromiseResolver { .. } => None,
         NativeFunctionKind::Eval => Some(EVAL_SLOT),
         NativeFunctionKind::ErrorConstructor(name) => Some(error_constructor_slot(name)),
         NativeFunctionKind::Function => Some(FUNCTION_SLOT),
@@ -204,7 +211,6 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::PromiseReject => Some(PROMISE_REJECT_SLOT),
         NativeFunctionKind::PromiseThen => Some(PROMISE_THEN_SLOT),
         NativeFunctionKind::PromiseCatch => Some(PROMISE_CATCH_SLOT),
-        NativeFunctionKind::PromiseResolver { .. } => None,
         NativeFunctionKind::String => Some(STRING_SLOT),
         NativeFunctionKind::Symbol => Some(SYMBOL_SLOT),
     }

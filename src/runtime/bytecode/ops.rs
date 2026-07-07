@@ -12,6 +12,7 @@ use crate::{
     runtime::assertions::thrown_value_matches,
     runtime::call_args::RuntimeCallArgs,
     runtime::completion::Completion,
+    runtime::native::NativeFunctionKind,
     runtime::numeric::{
         bitwise_and, bitwise_or, bitwise_xor, compare_binary, number_shift_count, number_to_i32,
         number_to_uint32, numeric_binary, shift_left, shift_right, shift_right_unsigned,
@@ -20,6 +21,11 @@ use crate::{
     runtime::property::DynamicPropertyKey,
     value::{ErrorName, Value},
 };
+
+const INSTANCEOF_PROTOTYPE_PROPERTY: &str = "prototype";
+const INSTANCEOF_NOT_CALLABLE_ERROR: &str = "right-hand side of 'instanceof' is not callable";
+const INSTANCEOF_NON_OBJECT_PROTOTYPE_ERROR: &str =
+    "right-hand side of 'instanceof' has non-object prototype";
 
 impl Context {
     pub(super) fn eval_bytecode_declaration(
@@ -125,6 +131,7 @@ impl Context {
                 compare_binary(left, right, ">=", |left, right| left >= right)?
             }
             BinaryOp::In => self.eval_bytecode_in(left, right, property_access)?,
+            BinaryOp::InstanceOf => self.eval_bytecode_instanceof(left, right)?,
             BinaryOp::BitAnd => bitwise_and(left, right)?,
             BinaryOp::BitOr => bitwise_or(left, right)?,
             BinaryOp::BitXor => bitwise_xor(left, right)?,
@@ -235,6 +242,104 @@ impl Context {
         }
         self.has_dynamic_property_value(right, &property)
             .map(Value::Bool)
+    }
+
+    fn eval_bytecode_instanceof(&mut self, left: &Value, right: &Value) -> Result<Value> {
+        let target = self.instanceof_target_prototype(right)?;
+        let matches = if let Value::Error(error) = left {
+            self.error_matches_instanceof(error.name(), right)?
+        } else {
+            self.value_prototype_chain_has_object(left, target)?
+        };
+        Ok(Value::Bool(matches))
+    }
+
+    fn instanceof_target_prototype(&mut self, right: &Value) -> Result<crate::value::ObjectId> {
+        if !Self::is_callable(right) {
+            return Err(Error::runtime(INSTANCEOF_NOT_CALLABLE_ERROR));
+        }
+        let prototype = match right {
+            Value::Function(id) => self.get_function_property_lookup(
+                *id,
+                self.property_lookup(INSTANCEOF_PROTOTYPE_PROPERTY),
+            )?,
+            Value::NativeFunction(id) => self.get_native_function_property_lookup(
+                *id,
+                self.property_lookup(INSTANCEOF_PROTOTYPE_PROPERTY),
+            )?,
+            Value::HostFunction(_) => Value::Undefined,
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::HeapString(_)
+            | Value::Symbol(_)
+            | Value::Object(_)
+            | Value::Error(_) => return Err(Error::runtime(INSTANCEOF_NOT_CALLABLE_ERROR)),
+        };
+        let Value::Object(id) = prototype else {
+            return Err(Error::runtime(INSTANCEOF_NON_OBJECT_PROTOTYPE_ERROR));
+        };
+        Ok(id)
+    }
+
+    fn value_prototype_chain_has_object(
+        &mut self,
+        value: &Value,
+        target: crate::value::ObjectId,
+    ) -> Result<bool> {
+        match value {
+            Value::Object(id) => self.objects.prototype_chain_has_object(*id, target),
+            Value::Function(id) => {
+                let prototype = self.function_object_prototype_value(*id)?;
+                self.prototype_value_chain_has_object(&prototype, target)
+            }
+            Value::NativeFunction(id) => {
+                let prototype = self.native_function_object_prototype_value(*id)?;
+                self.prototype_value_chain_has_object(&prototype, target)
+            }
+            Value::HostFunction(_) => {
+                let prototype = self.function_constructor_prototype_value()?;
+                self.prototype_value_chain_has_object(&prototype, target)
+            }
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::HeapString(_)
+            | Value::Symbol(_)
+            | Value::Error(_) => Ok(false),
+        }
+    }
+
+    fn prototype_value_chain_has_object(
+        &self,
+        prototype: &Value,
+        target: crate::value::ObjectId,
+    ) -> Result<bool> {
+        let Value::Object(id) = prototype else {
+            return Ok(false);
+        };
+        if *id == target {
+            return Ok(true);
+        }
+        self.objects.prototype_chain_has_object(*id, target)
+    }
+
+    fn error_matches_instanceof(&self, name: ErrorName, right: &Value) -> Result<bool> {
+        let Value::NativeFunction(id) = right else {
+            return Ok(false);
+        };
+        let NativeFunctionKind::ErrorConstructor(expected) = self.native_function(*id)?.kind()
+        else {
+            return Ok(false);
+        };
+        if expected == ErrorName::Base {
+            return Ok(name.is_standard());
+        }
+        Ok(name == expected)
     }
 
     pub(super) fn eval_bytecode_update_binding(
@@ -404,6 +509,7 @@ impl Context {
             | BinaryOp::Greater
             | BinaryOp::GreaterEqual
             | BinaryOp::In
+            | BinaryOp::InstanceOf
             | BinaryOp::LogicalAnd
             | BinaryOp::LogicalOr => {
                 return Err(Error::runtime("invalid compound assignment operator"));

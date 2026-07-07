@@ -26,6 +26,9 @@ mod upvalues;
 use crate::runtime::native::NativeFunctionKind;
 pub(super) use properties::{FunctionIntrinsicDefaults, FunctionProperties};
 
+const FUNCTION_PROTOTYPE_BIND_PROPERTY: &str = "bind";
+const FUNCTION_PROTOTYPE_CALL_PROPERTY: &str = "call";
+
 use super::FunctionNewTarget;
 use properties::{FunctionPropertyKind, PROTOTYPE_CONSTRUCTOR_PROPERTY};
 
@@ -444,6 +447,8 @@ impl Context {
         property.key().is_some()
             || self.known_property_key(property.name()).is_some()
             || property.name() == PROTOTYPE_CONSTRUCTOR_PROPERTY
+            || property.name() == FUNCTION_PROTOTYPE_BIND_PROPERTY
+            || property.name() == FUNCTION_PROTOTYPE_CALL_PROPERTY
     }
 
     pub(crate) fn native_function_object_prototype_value(

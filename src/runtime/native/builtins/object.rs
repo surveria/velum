@@ -12,7 +12,9 @@ use crate::{
 
 use super::{
     NativeFunctionKind, OBJECT_DEFINE_PROPERTY_NAME, OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
-    OBJECT_GET_PROTOTYPE_OF_NAME, OBJECT_HAS_OWN_NAME, OBJECT_KEYS_NAME, OBJECT_NAME,
+    OBJECT_GET_OWN_PROPERTY_NAMES_NAME, OBJECT_GET_PROTOTYPE_OF_NAME, OBJECT_HAS_OWN_NAME,
+    OBJECT_KEYS_NAME, OBJECT_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
+    OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
 };
 use crate::runtime::property::well_known::DescriptorPropertyKeys;
 
@@ -22,6 +24,7 @@ const DESCRIPTOR_GET_PROPERTY: &str = "get";
 const DESCRIPTOR_SET_PROPERTY: &str = "set";
 const DESCRIPTOR_VALUE_PROPERTY: &str = "value";
 const DESCRIPTOR_WRITABLE_PROPERTY: &str = "writable";
+const OBJECT_PROTOTYPE_PROPERTY: &str = "prototype";
 
 impl Context {
     pub(in crate::runtime::native) fn object_constructor_value(&mut self) -> Result<Value> {
@@ -35,6 +38,7 @@ impl Context {
         let name = self.native_function_name_value(NativeFunctionKind::Object)?;
         self.push_native_function_with_id(id, NativeFunctionKind::Object, prototype, name)?;
         self.install_object_static_methods(id)?;
+        self.install_object_prototype_methods(&constructor)?;
         self.insert_global_builtin(OBJECT_NAME, constructor.clone())?;
         Ok(constructor)
     }
@@ -231,6 +235,47 @@ impl Context {
         )
     }
 
+    pub(in crate::runtime::native) fn eval_object_get_own_property_names(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        let values = args.as_slice();
+        let target = Self::argument_or_undefined(values.first());
+        let keys = self.own_property_names(&target)?;
+        self.array_constructor_value()?;
+        let prototype = self.objects.existing_array_prototype_id()?;
+        let mut elements = Vec::with_capacity(keys.len());
+        for key in keys {
+            elements.push(self.heap_string_value(&key)?);
+        }
+        self.objects.create_array(
+            elements,
+            prototype,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )
+    }
+
+    pub(in crate::runtime::native) fn eval_object_prototype_has_own_property(
+        &self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let property = self.object_property_key(args.as_slice().first())?;
+        self.has_own_property_value(this_value, &property)
+            .map(Value::Bool)
+    }
+
+    pub(in crate::runtime::native) fn eval_object_prototype_property_is_enumerable(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let property = self.object_property_key(args.as_slice().first())?;
+        self.property_is_enumerable_value(this_value, &property)
+            .map(Value::Bool)
+    }
+
     fn install_object_static_methods(&mut self, constructor: NativeFunctionId) -> Result<()> {
         self.define_object_static_method(
             constructor,
@@ -241,6 +286,11 @@ impl Context {
             constructor,
             OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
             NativeFunctionKind::ObjectGetOwnPropertyDescriptor,
+        )?;
+        self.define_object_static_method(
+            constructor,
+            OBJECT_GET_OWN_PROPERTY_NAMES_NAME,
+            NativeFunctionKind::ObjectGetOwnPropertyNames,
         )?;
         self.define_object_static_method(
             constructor,
@@ -257,6 +307,34 @@ impl Context {
             OBJECT_KEYS_NAME,
             NativeFunctionKind::ObjectKeys,
         )
+    }
+
+    fn install_object_prototype_methods(&mut self, constructor: &Value) -> Result<()> {
+        let Value::Object(prototype) =
+            self.get_property_value(constructor, OBJECT_PROTOTYPE_PROPERTY)?
+        else {
+            return Err(Error::runtime("Object prototype is not an object"));
+        };
+        self.define_object_prototype_method(
+            prototype,
+            OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
+            NativeFunctionKind::ObjectPrototypeHasOwnProperty,
+        )?;
+        self.define_object_prototype_method(
+            prototype,
+            OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
+            NativeFunctionKind::ObjectPrototypePropertyIsEnumerable,
+        )
+    }
+
+    fn define_object_prototype_method(
+        &mut self,
+        prototype: ObjectId,
+        name: &str,
+        kind: NativeFunctionKind,
+    ) -> Result<()> {
+        let function = self.create_ephemeral_native_function(kind, Value::Undefined)?;
+        self.define_non_enumerable_object_property(prototype, name, function)
     }
 
     fn define_object_static_method(
@@ -463,6 +541,56 @@ impl Context {
         }
     }
 
+    fn property_is_enumerable_value(
+        &mut self,
+        target: &Value,
+        property: &DynamicPropertyKey,
+    ) -> Result<bool> {
+        let Some(descriptor) = self.own_property_descriptor_value(target, property)? else {
+            return Ok(false);
+        };
+        Ok(descriptor.enumerable().is_yes())
+    }
+
+    fn own_property_descriptor_value(
+        &mut self,
+        target: &Value,
+        property: &DynamicPropertyKey,
+    ) -> Result<Option<DataPropertyDescriptor>> {
+        match target {
+            Value::Object(id) => {
+                if let Some(descriptor) =
+                    self.string_object_own_property_descriptor(*id, property)?
+                {
+                    return Ok(Some(descriptor));
+                }
+                self.objects.own_property_descriptor(*id, property.lookup())
+            }
+            Value::Function(id) => {
+                self.function_own_property_descriptor_lookup(*id, property.lookup())
+            }
+            Value::NativeFunction(id) => {
+                self.native_function_own_property_descriptor_lookup(*id, property.lookup())
+            }
+            Value::Error(_) | Value::String(_) | Value::HeapString(_) => {
+                if self.has_own_property_value(target, property)? {
+                    Ok(Some(DataPropertyDescriptor::new(
+                        self.get_property_value(target, property.name())?,
+                        PropertyWritable::Yes,
+                        PropertyEnumerable::Yes,
+                        PropertyConfigurable::Yes,
+                    )))
+                } else {
+                    Ok(None)
+                }
+            }
+            Value::Bool(_) | Value::Number(_) | Value::Symbol(_) => Ok(None),
+            Value::Undefined | Value::Null | Value::HostFunction(_) => Err(Error::runtime(
+                "Object.prototype.propertyIsEnumerable target cannot be converted to an object",
+            )),
+        }
+    }
+
     fn own_enumerable_keys(&self, target: &Value) -> Result<Vec<String>> {
         match target {
             Value::Object(id) => self.objects.own_keys(*id, &self.atoms),
@@ -474,6 +602,21 @@ impl Context {
             Value::Bool(_) | Value::Number(_) | Value::Symbol(_) => Ok(Vec::new()),
             Value::Undefined | Value::Null | Value::HostFunction(_) => Err(Error::runtime(
                 "Object.keys target cannot be converted to an object",
+            )),
+        }
+    }
+
+    fn own_property_names(&self, target: &Value) -> Result<Vec<String>> {
+        match target {
+            Value::Object(id) => self.objects.own_property_names(*id, &self.atoms),
+            Value::Function(id) => self.function_enumerable_keys(*id),
+            Value::NativeFunction(id) => self.native_function_enumerable_keys(*id),
+            Value::Error(_) | Value::String(_) | Value::HeapString(_) => {
+                self.enumerable_keys(target)
+            }
+            Value::Bool(_) | Value::Number(_) | Value::Symbol(_) => Ok(Vec::new()),
+            Value::Undefined | Value::Null | Value::HostFunction(_) => Err(Error::runtime(
+                "Object.getOwnPropertyNames target cannot be converted to an object",
             )),
         }
     }

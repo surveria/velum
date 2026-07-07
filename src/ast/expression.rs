@@ -138,6 +138,7 @@ pub enum BinaryOp {
     Greater,
     GreaterEqual,
     In,
+    InstanceOf,
     BitAnd,
     BitOr,
     BitXor,

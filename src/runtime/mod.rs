@@ -20,6 +20,7 @@ use crate::value::{ErrorName, Value};
 
 pub mod assertions;
 pub mod binding;
+mod bound;
 pub mod bytecode;
 pub mod call_args;
 pub mod completion;
@@ -36,6 +37,7 @@ pub mod values;
 
 pub use binding::static_bindings::CompiledBindingFrame;
 use binding::static_bindings::StaticBindingCacheHandle;
+use bound::BoundFunction;
 use call_args::RuntimeCallArgs;
 use native::{NativeFunctionKind, NativeFunctionRegistry};
 use promise::{Promise, PromiseId, PromiseJob};
@@ -63,6 +65,7 @@ pub struct Context {
     functions: Vec<Function>,
     native_functions: Vec<native::NativeFunction>,
     native_function_registry: NativeFunctionRegistry,
+    bound_functions: Vec<BoundFunction>,
     pub(crate) host_functions: Vec<HostFunction>,
     objects: ObjectHeap,
     promises: Vec<Promise>,
@@ -174,6 +177,7 @@ impl Context {
             functions: Vec::new(),
             native_functions: Vec::new(),
             native_function_registry: NativeFunctionRegistry::new(),
+            bound_functions: Vec::new(),
             host_functions: Vec::new(),
             objects: ObjectHeap::new(),
             promises: Vec::new(),

@@ -70,6 +70,7 @@ impl Parser {
                 (&TokenKind::Greater, BinaryOp::Greater),
                 (&TokenKind::GreaterEqual, BinaryOp::GreaterEqual),
                 (&TokenKind::In, BinaryOp::In),
+                (&TokenKind::InstanceOf, BinaryOp::InstanceOf),
             ],
         )
     }

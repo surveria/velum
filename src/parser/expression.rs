@@ -676,6 +676,7 @@ const fn keyword_property_name(kind: &TokenKind) -> Option<&'static str> {
         TokenKind::Await => Some("await"),
         TokenKind::New => Some("new"),
         TokenKind::In => Some("in"),
+        TokenKind::InstanceOf => Some("instanceof"),
         TokenKind::Typeof => Some("typeof"),
         TokenKind::Void => Some("void"),
         TokenKind::Delete => Some("delete"),
