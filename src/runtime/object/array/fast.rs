@@ -106,7 +106,8 @@ impl ObjectHeap {
             return Ok(None);
         };
 
-        let mut joined = String::new();
+        let mut joined =
+            Self::join_string_with_separator_capacity(length, separator.len(), max_string_len)?;
         for (index, property) in properties.iter().enumerate() {
             if index > 0 {
                 Self::push_join_text(&mut joined, separator, max_string_len)?;
@@ -114,8 +115,7 @@ impl ObjectHeap {
             let Some(property) = property else {
                 continue;
             };
-            let text = Self::array_join_element_text(property.value_ref());
-            Self::push_join_text(&mut joined, &text, max_string_len)?;
+            Self::push_join_value_text(&mut joined, property.value_ref(), max_string_len)?;
         }
         Ok(Some(joined))
     }

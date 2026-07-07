@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 use crate::{
     error::{Error, Result},
     runtime::Context,
@@ -273,14 +275,13 @@ impl Context {
         }
 
         let length = self.objects.array_len(*id)?;
-        let mut joined = String::new();
+        let mut joined = self.join_string_with_separator_capacity(length, separator.len())?;
         for index in 0..length {
             if index > 0 {
                 self.push_join_text(&mut joined, &separator)?;
             }
             let value = self.objects.array_get_index(*id, index)?;
-            let text = Self::array_join_element_text(&value);
-            self.push_join_text(&mut joined, &text)?;
+            self.push_join_value_text(&mut joined, &value)?;
         }
         self.heap_string_value(&joined)
     }
@@ -512,10 +513,12 @@ impl Context {
 
     const fn eval_array_discard_args(_args: &[Value]) {}
 
-    fn array_join_element_text(value: &Value) -> String {
+    fn push_join_value_text(&self, joined: &mut String, value: &Value) -> Result<()> {
         match value {
-            Value::Undefined | Value::Null => String::new(),
-            _ => value.display_for_concat(),
+            Value::Undefined | Value::Null => Ok(()),
+            Value::String(value) => self.push_join_text(joined, value),
+            Value::HeapString(value) => self.push_join_text(joined, value.as_str()),
+            _ => self.write_join_display(joined, value),
         }
     }
 
@@ -532,6 +535,38 @@ impl Context {
         }
         joined.push_str(text);
         Ok(())
+    }
+
+    fn write_join_display(&self, joined: &mut String, value: &Value) -> Result<()> {
+        joined.write_fmt(format_args!("{value}")).map_err(|error| {
+            Error::runtime(format!("failed to format array join value: {error}"))
+        })?;
+        if joined.len() > self.limits.max_string_len {
+            return Err(Error::limit(format!(
+                "string length {} exceeded {}",
+                joined.len(),
+                self.limits.max_string_len
+            )));
+        }
+        Ok(())
+    }
+
+    fn join_string_with_separator_capacity(
+        &self,
+        length: usize,
+        separator_len: usize,
+    ) -> Result<String> {
+        let separator_count = length.saturating_sub(1);
+        let separator_bytes = separator_count
+            .checked_mul(separator_len)
+            .ok_or_else(|| Error::limit("string length exceeded supported range"))?;
+        if separator_bytes > self.limits.max_string_len {
+            return Err(Error::limit(format!(
+                "string length {} exceeded {}",
+                separator_bytes, self.limits.max_string_len
+            )));
+        }
+        Ok(String::with_capacity(separator_bytes))
     }
 
     fn array_slice_bound(value: Option<&Value>, length: usize, default: usize) -> Result<usize> {
