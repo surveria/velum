@@ -1,6 +1,6 @@
 let total = 0;
 
-for (let index = 0; index < 128; index++) {
+for (let index = 0; index < 4096; index++) {
     let values = [index, index + 1, index + 2, index + 1];
     total += values.lastIndexOf(index + 1);
     total += values.lastIndexOf(index + 1, 2);

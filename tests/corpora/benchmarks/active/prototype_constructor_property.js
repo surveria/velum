@@ -3,7 +3,7 @@ let Camera = function Camera(value) {
     this.value = value;
 };
 
-for (let index = 0; index < 128; index++) {
+for (let index = 0; index < 4096; index++) {
     let keys = "";
     for (let key in Camera.prototype) {
         keys = keys + key + ";";

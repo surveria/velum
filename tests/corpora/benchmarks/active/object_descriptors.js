@@ -1,6 +1,6 @@
 let total = 0;
 
-for (let i = 0; i < 250; i = i + 1) {
+for (let i = 0; i < 2048; i = i + 1) {
     let object = { base: i };
     Object.defineProperty(object, "visible", {
         value: i + 1,

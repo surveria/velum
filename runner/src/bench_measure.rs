@@ -27,14 +27,19 @@ use std::{
 const ENV_MIN_TIME_MS: &str = "RSQJS_BENCH_MIN_TIME_MS";
 const ENV_WARMUP_MS: &str = "RSQJS_BENCH_WARMUP_MS";
 const ENV_SAMPLES: &str = "RSQJS_BENCH_SAMPLES";
+const ENV_MIN_OP_US: &str = "RSQJS_BENCH_MIN_OP_US";
+const ENV_MAX_CV_PERCENT: &str = "RSQJS_BENCH_MAX_CV_PERCENT";
 
 const DEFAULT_MIN_TIME_MS: u64 = 500;
 const DEFAULT_WARMUP_MS: u64 = 150;
 const DEFAULT_SAMPLES: usize = 10;
+const DEFAULT_MIN_OP_US: u64 = 1_000;
+const DEFAULT_MAX_CV_PERCENT: u64 = 10;
 
 const MIN_SAMPLES: usize = 3;
 const MAX_ITERS_PER_SAMPLE: u128 = 50_000_000;
 const PERMILLE_SCALE: u128 = 1000;
+const PERCENT_TO_PERMILLE: u64 = 10;
 
 const NANOS_PER_MICROSECOND: u128 = 1_000;
 const NANOS_PER_MILLISECOND: u128 = 1_000_000;
@@ -47,6 +52,8 @@ pub struct MeasureConfig {
     warmup: Duration,
     min_total: Duration,
     samples: usize,
+    min_op_time: Duration,
+    max_cv_permille: u32,
 }
 
 impl MeasureConfig {
@@ -58,6 +65,8 @@ impl MeasureConfig {
             warmup,
             min_total,
             samples: samples.max(MIN_SAMPLES),
+            min_op_time: Duration::from_micros(DEFAULT_MIN_OP_US),
+            max_cv_permille: cv_percent_to_permille(DEFAULT_MAX_CV_PERCENT),
         }
     }
 
@@ -68,6 +77,17 @@ impl MeasureConfig {
             Duration::from_millis(env_u64(ENV_MIN_TIME_MS, DEFAULT_MIN_TIME_MS)),
             env_usize(ENV_SAMPLES, DEFAULT_SAMPLES),
         )
+        .with_quality(
+            Duration::from_micros(env_u64(ENV_MIN_OP_US, DEFAULT_MIN_OP_US)),
+            cv_percent_to_permille(env_u64(ENV_MAX_CV_PERCENT, DEFAULT_MAX_CV_PERCENT)),
+        )
+    }
+
+    #[must_use]
+    pub const fn with_quality(mut self, min_op_time: Duration, max_cv_permille: u32) -> Self {
+        self.min_op_time = min_op_time;
+        self.max_cv_permille = max_cv_permille;
+        self
     }
 }
 
@@ -79,6 +99,8 @@ pub struct MeasureStats {
     cv_permille: u32,
     iters_per_sample: u64,
     samples: usize,
+    median_sample: Duration,
+    quality: MeasurementQuality,
 }
 
 impl MeasureStats {
@@ -88,9 +110,7 @@ impl MeasureStats {
 
     /// Coefficient of variation as a percentage with one decimal, e.g. `1.4`.
     pub fn cv_percent_text(&self) -> String {
-        let whole = self.cv_permille / 10;
-        let frac = self.cv_permille % 10;
-        format!("{whole}.{frac}%")
+        cv_permille_text(self.cv_permille)
     }
 
     pub fn total_iters(&self) -> u64 {
@@ -98,9 +118,52 @@ impl MeasureStats {
             .saturating_mul(self.sample_count_u64())
     }
 
+    pub const fn median_sample(&self) -> Duration {
+        self.median_sample
+    }
+
+    pub const fn quality(&self) -> MeasurementQuality {
+        self.quality
+    }
+
     fn sample_count_u64(&self) -> u64 {
         // sample counts are tiny; a saturating conversion never loses data here.
         u64::try_from(self.samples).unwrap_or(u64::MAX)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct MeasurementQuality {
+    min_op_time: Duration,
+    max_cv_permille: u32,
+    low_signal: bool,
+    high_variance: bool,
+    iteration_cap_reached: bool,
+}
+
+impl MeasurementQuality {
+    pub const fn is_valid(self) -> bool {
+        !self.low_signal && !self.high_variance && !self.iteration_cap_reached
+    }
+
+    pub const fn min_op_time(self) -> Duration {
+        self.min_op_time
+    }
+
+    pub fn max_cv_percent_text(self) -> String {
+        cv_permille_text(self.max_cv_permille)
+    }
+
+    pub const fn low_signal(self) -> bool {
+        self.low_signal
+    }
+
+    pub const fn high_variance(self) -> bool {
+        self.high_variance
+    }
+
+    pub const fn iteration_cap_reached(self) -> bool {
+        self.iteration_cap_reached
     }
 }
 
@@ -110,19 +173,27 @@ where
     F: FnMut() -> anyhow::Result<()>,
 {
     let op_cost = warmup_and_estimate(config.warmup, &mut op)?;
-    let iters_per_sample = calibrate_iters(config, op_cost);
-    let iters_u64 = clamp_u128_to_u64(iters_per_sample);
+    let calibration = calibrate_iters(config, op_cost);
+    let iters_u64 = clamp_u128_to_u64(calibration.iters_per_sample);
 
     let mut per_op = Vec::with_capacity(config.samples);
+    let mut sample_times = Vec::with_capacity(config.samples);
     for _ in 0..config.samples {
         let start = Instant::now();
         for _ in 0..iters_u64 {
             op()?;
         }
         let elapsed = start.elapsed().as_nanos();
-        per_op.push(elapsed / iters_per_sample.max(1));
+        sample_times.push(elapsed);
+        per_op.push(elapsed / calibration.iters_per_sample.max(1));
     }
-    Ok(summarize(per_op, iters_u64, config.samples))
+    Ok(summarize(
+        per_op,
+        sample_times,
+        iters_u64,
+        config,
+        calibration.capped,
+    ))
 }
 
 fn warmup_and_estimate<F>(warmup: Duration, op: &mut F) -> anyhow::Result<u128>
@@ -142,22 +213,57 @@ where
     Ok((elapsed / calls.max(1)).max(1))
 }
 
-fn calibrate_iters(config: MeasureConfig, op_cost: u128) -> u128 {
+#[derive(Debug, Clone, Copy)]
+struct Calibration {
+    iters_per_sample: u128,
+    capped: bool,
+}
+
+fn calibrate_iters(config: MeasureConfig, op_cost: u128) -> Calibration {
     let samples = u128::try_from(config.samples.max(1)).unwrap_or(1);
     let target_per_sample = config.min_total.as_nanos() / samples;
     let iters = target_per_sample / op_cost.max(1);
-    iters.clamp(1, MAX_ITERS_PER_SAMPLE)
+    let iters_per_sample = iters.clamp(1, MAX_ITERS_PER_SAMPLE);
+    Calibration {
+        iters_per_sample,
+        capped: iters > MAX_ITERS_PER_SAMPLE,
+    }
 }
 
-fn summarize(mut per_op: Vec<u128>, iters_per_sample: u64, samples: usize) -> MeasureStats {
+fn summarize(
+    mut per_op: Vec<u128>,
+    mut sample_times: Vec<u128>,
+    iters_per_sample: u64,
+    config: MeasureConfig,
+    iteration_cap_reached: bool,
+) -> MeasureStats {
     per_op.sort_unstable();
     let median = median_of_sorted(&per_op);
     let cv_permille = coefficient_of_variation_permille(&per_op);
+    sample_times.sort_unstable();
+    let median_sample = median_of_sorted(&sample_times);
     MeasureStats {
         median: duration_from_nanos(median),
         cv_permille,
         iters_per_sample,
-        samples,
+        samples: config.samples,
+        median_sample: duration_from_nanos(median_sample),
+        quality: measurement_quality(config, median, cv_permille, iteration_cap_reached),
+    }
+}
+
+const fn measurement_quality(
+    config: MeasureConfig,
+    median: u128,
+    cv_permille: u32,
+    iteration_cap_reached: bool,
+) -> MeasurementQuality {
+    MeasurementQuality {
+        min_op_time: config.min_op_time,
+        max_cv_permille: config.max_cv_permille,
+        low_signal: median < config.min_op_time.as_nanos(),
+        high_variance: cv_permille > config.max_cv_permille,
+        iteration_cap_reached,
     }
 }
 
@@ -234,6 +340,17 @@ fn clamp_u128_to_u32(value: u128) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX)
 }
 
+fn cv_percent_to_permille(percent: u64) -> u32 {
+    let permille = percent.saturating_mul(PERCENT_TO_PERMILLE);
+    u32::try_from(permille).unwrap_or(u32::MAX)
+}
+
+fn cv_permille_text(permille: u32) -> String {
+    let whole = permille / 10;
+    let frac = permille % 10;
+    format!("{whole}.{frac}%")
+}
+
 fn env_u64(name: &str, default: u64) -> u64 {
     env::var(name)
         .ok()
@@ -288,11 +405,8 @@ mod tests {
     };
 
     fn fixed_config() -> MeasureConfig {
-        MeasureConfig {
-            warmup: Duration::from_millis(20),
-            min_total: Duration::from_millis(60),
-            samples: 8,
-        }
+        MeasureConfig::new(Duration::from_millis(20), Duration::from_millis(60), 8)
+            .with_quality(Duration::from_nanos(1), 10_000)
     }
 
     #[test]
@@ -376,6 +490,16 @@ mod tests {
         black_box(start.elapsed());
         // Structural sanity: auto-calibration produced real iterations.
         assert!(stats.total_iters() > 0);
+        Ok(())
+    }
+
+    #[test]
+    fn measure_marks_tiny_work_as_low_signal() -> anyhow::Result<()> {
+        let config = MeasureConfig::new(Duration::from_millis(5), Duration::from_millis(15), 3)
+            .with_quality(Duration::from_millis(1), 10_000);
+        let stats = measure(config, || Ok(()))?;
+        assert!(stats.quality().low_signal());
+        assert!(!stats.quality().is_valid());
         Ok(())
     }
 }

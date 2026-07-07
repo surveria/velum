@@ -97,6 +97,8 @@ These rules are mandatory for humans and agents working in any part of this repo
 - QuickJS should remain the reference implementation for differential behavior checks where the feature is implemented locally.
 - Future benchmark reports should follow the same pattern: one command, Rust-owned execution, CI artifacts for ordinary PRs, post-merge tracked canonical reports, and clear comparison against QuickJS where possible.
 - Benchmark cases must run sequentially, not in parallel, so measurements do not interfere with each other.
+- Active benchmark cases must be large enough to pass the runner measurement quality gate. The default gate rejects rows with a median operation below 1 ms, sample variation above 10%, or calibration at the iteration cap.
+- Use ordinary tests for tiny semantic checks. Do not keep microsecond-scale smoke cases in the active benchmark corpus.
 - Benchmark reports must separate local engine measurements from QuickJS measurements and mark unavailable reference runs as skipped with a concrete reason.
 - Embedding-facing benchmark cases must include direct library measurements where possible, not only CLI process measurements.
 

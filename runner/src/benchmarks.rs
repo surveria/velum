@@ -24,17 +24,22 @@ const BUDGET_NUMERATOR: u128 = 100;
 const BUDGET_DENOMINATOR: u128 = 100;
 const STATUS_MEASURED: &str = "✅ measured";
 const STATUS_FAILED: &str = "❌ failed";
+const STATUS_INVALID_BENCHMARK: &str = "❌ invalid benchmark";
 const STATUS_TRACKED_EXCEPTION: &str = "🟡 tracked exception";
 const STATUS_WITHIN_BUDGET: &str = "✅ within budget";
 const BUDGET_WITHIN: &str = "✅ <= 1.00x";
 const BUDGET_OVER: &str = "🟡 > 1.00x";
+const BUDGET_INVALID: &str = "❌ invalid";
 const BUDGET_NOT_AVAILABLE: &str = "🟡 unavailable";
 const BUDGET_NOT_CONFIGURED: &str = "🟡 no reference";
+const QUALITY_VALID: &str = "✅ valid";
+const QUALITY_INVALID: &str = "❌ invalid";
 const REFERENCE_NOT_CONFIGURED: &str = "🟡 not configured";
 const REFERENCE_NOT_AVAILABLE: &str = "🟡 not available";
 const NOT_MEASURED: &str = "-";
 const DETAIL_COMPLETED: &str = "sequential benchmark completed";
 const DETAIL_LATENCY_EXCEPTION: &str = "latency budget exception tracked";
+const DETAIL_QUALITY_GATE: &str = "measurement quality gate failed";
 
 #[derive(Debug)]
 pub struct BenchmarkReport {
@@ -42,6 +47,7 @@ pub struct BenchmarkReport {
     pub measured: usize,
     pub in_process_measured: usize,
     pub failed: usize,
+    pub invalid: usize,
     pub skipped: usize,
     pub over_latency_budget: usize,
     pub over_memory_budget: usize,
@@ -60,6 +66,7 @@ pub struct BenchmarkRow {
     memory_ratio: String,
     rsqjs_cv: String,
     quickjs_cv: String,
+    quality: String,
     detail: String,
 }
 
@@ -68,6 +75,7 @@ struct BenchmarkCounts {
     measured: usize,
     in_process_measured: usize,
     failed: usize,
+    invalid: usize,
     skipped: usize,
     over_latency_budget: usize,
 }
@@ -93,6 +101,7 @@ pub fn run() -> BenchmarkReport {
         measured: 0,
         in_process_measured: 0,
         failed: 0,
+        invalid: 0,
         skipped: 0,
         over_latency_budget: 0,
         over_memory_budget: 0,
@@ -104,6 +113,7 @@ pub fn run() -> BenchmarkReport {
             .in_process_measured
             .saturating_add(outcome.counts.in_process_measured);
         report.failed = report.failed.saturating_add(outcome.counts.failed);
+        report.invalid = report.invalid.saturating_add(outcome.counts.invalid);
         report.skipped = report.skipped.saturating_add(outcome.counts.skipped);
         report.over_latency_budget = report
             .over_latency_budget
@@ -142,6 +152,16 @@ fn measured_with_reference(
     ours: MeasureStats,
     reference: MeasureStats,
 ) -> BenchmarkOutcome {
+    if let Some(detail) = quality_failure_detail(ours, Some(reference)) {
+        return invalid_measurement_outcome(
+            case,
+            ours,
+            format_duration(reference.median()),
+            reference.cv_percent_text(),
+            &detail,
+            false,
+        );
+    }
     let budget = budget_check(ours.median().as_nanos(), reference.median().as_nanos());
     let over = budget.over_budget;
     BenchmarkOutcome {
@@ -157,6 +177,7 @@ fn measured_with_reference(
             memory_ratio: NOT_MEASURED.to_owned(),
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv: reference.cv_percent_text(),
+            quality: QUALITY_VALID.to_owned(),
             detail: detail_text(over),
         },
         counts: BenchmarkCounts {
@@ -169,6 +190,16 @@ fn measured_with_reference(
 }
 
 fn measured_without_reference(case: &BenchmarkCase, ours: MeasureStats) -> BenchmarkOutcome {
+    if let Some(detail) = quality_failure_detail(ours, None) {
+        return invalid_measurement_outcome(
+            case,
+            ours,
+            REFERENCE_NOT_CONFIGURED.to_owned(),
+            NOT_MEASURED.to_owned(),
+            &detail,
+            true,
+        );
+    }
     BenchmarkOutcome {
         row: BenchmarkRow {
             benchmark: case.id.to_owned(),
@@ -182,6 +213,7 @@ fn measured_without_reference(case: &BenchmarkCase, ours: MeasureStats) -> Bench
             memory_ratio: NOT_MEASURED.to_owned(),
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
+            quality: QUALITY_VALID.to_owned(),
             detail: DETAIL_COMPLETED.to_owned(),
         },
         counts: BenchmarkCounts {
@@ -197,6 +229,16 @@ fn measured_without_reference(case: &BenchmarkCase, ours: MeasureStats) -> Bench
 /// script (e.g. an unsupported construct): report our number without a ratio
 /// and note the reason, rather than failing the benchmark.
 fn reference_unavailable(case: &BenchmarkCase, ours: MeasureStats, note: &str) -> BenchmarkOutcome {
+    if let Some(detail) = quality_failure_detail(ours, None) {
+        return invalid_measurement_outcome(
+            case,
+            ours,
+            REFERENCE_NOT_AVAILABLE.to_owned(),
+            NOT_MEASURED.to_owned(),
+            &format!("{detail}; reference error: {note}"),
+            true,
+        );
+    }
     BenchmarkOutcome {
         row: BenchmarkRow {
             benchmark: case.id.to_owned(),
@@ -210,12 +252,48 @@ fn reference_unavailable(case: &BenchmarkCase, ours: MeasureStats, note: &str) -
             memory_ratio: NOT_MEASURED.to_owned(),
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
+            quality: QUALITY_VALID.to_owned(),
             detail: format!("{DETAIL_COMPLETED}; reference error: {note}"),
         },
         counts: BenchmarkCounts {
             measured: 1,
             in_process_measured: 1,
             skipped: 1,
+            ..BenchmarkCounts::default()
+        },
+    }
+}
+
+fn invalid_measurement_outcome(
+    case: &BenchmarkCase,
+    ours: MeasureStats,
+    quickjs_eval: String,
+    quickjs_cv: String,
+    detail: &str,
+    skipped_reference: bool,
+) -> BenchmarkOutcome {
+    BenchmarkOutcome {
+        row: BenchmarkRow {
+            benchmark: case.id.to_owned(),
+            status: STATUS_INVALID_BENCHMARK.to_owned(),
+            source: case.path.to_owned(),
+            iterations: report_iterations(ours),
+            rsqjs_eval: format_duration(ours.median()),
+            quickjs_eval,
+            latency_ratio: NOT_MEASURED.to_owned(),
+            latency_budget: BUDGET_INVALID.to_owned(),
+            memory_ratio: NOT_MEASURED.to_owned(),
+            rsqjs_cv: ours.cv_percent_text(),
+            quickjs_cv,
+            quality: QUALITY_INVALID.to_owned(),
+            detail: detail.to_owned(),
+        },
+        counts: BenchmarkCounts {
+            measured: 1,
+            in_process_measured: 1,
+            failed: 1,
+            invalid: 1,
+            skipped: count_if(skipped_reference),
             ..BenchmarkCounts::default()
         },
     }
@@ -254,7 +332,48 @@ fn failed_row(
         memory_ratio: NOT_MEASURED.to_owned(),
         rsqjs_cv,
         quickjs_cv: NOT_MEASURED.to_owned(),
+        quality: NOT_MEASURED.to_owned(),
         detail: detail.to_owned(),
+    }
+}
+
+fn quality_failure_detail(ours: MeasureStats, reference: Option<MeasureStats>) -> Option<String> {
+    if ours.quality().is_valid() && reference.is_none_or(|reference| reference.quality().is_valid())
+    {
+        return None;
+    }
+    let mut reasons = Vec::new();
+    collect_quality_reasons(&mut reasons, "rsqjs", ours);
+    if let Some(reference) = reference {
+        collect_quality_reasons(&mut reasons, "quickjs", reference);
+    }
+    if reasons.is_empty() {
+        return None;
+    }
+    Some(format!("{DETAIL_QUALITY_GATE}: {}", reasons.join("; ")))
+}
+
+fn collect_quality_reasons(reasons: &mut Vec<String>, label: &str, stats: MeasureStats) {
+    let quality = stats.quality();
+    if quality.low_signal() {
+        reasons.push(format!(
+            "{label} median {} below minimum {}",
+            format_duration(stats.median()),
+            format_duration(quality.min_op_time())
+        ));
+    }
+    if quality.high_variance() {
+        reasons.push(format!(
+            "{label} CV {} exceeds maximum {}",
+            stats.cv_percent_text(),
+            quality.max_cv_percent_text()
+        ));
+    }
+    if quality.iteration_cap_reached() {
+        reasons.push(format!(
+            "{label} calibration reached iteration cap; median sample {}",
+            format_duration(stats.median_sample())
+        ));
     }
 }
 

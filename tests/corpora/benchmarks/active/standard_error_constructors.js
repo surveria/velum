@@ -1,7 +1,7 @@
 var i = 0;
 var total = 0;
 
-while (i < 200) {
+while (i < 2048) {
   var plain = Error("plain");
   if (plain.name === "Error") {
     total = total + 1;
@@ -28,4 +28,4 @@ while (i < 200) {
   i = i + 1;
 }
 
-undefined;
+total;

@@ -7,8 +7,12 @@ let makeCounter = function(start) {
 };
 
 let counter = makeCounter(0);
-counter(1);
-counter(2);
-counter(3);
-counter(4);
-counter(5);
+let total = 0;
+
+for (let index = 0; index < 32768; index = index + 1) {
+  total = total + counter(1);
+  total = total + counter(2);
+  total = total + counter(3);
+}
+
+total;

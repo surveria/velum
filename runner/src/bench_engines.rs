@@ -9,6 +9,19 @@
 
 use std::hint::black_box;
 
+use rs_quickjs::RuntimeLimits;
+
+const BENCH_RUNTIME_LIMITS: RuntimeLimits = RuntimeLimits {
+    max_source_len: 262_144,
+    max_statements: 65_536,
+    max_expression_depth: 512,
+    max_runtime_steps: 10_000_000,
+    max_string_len: 1_048_576,
+    max_bindings: 65_536,
+    max_objects: 262_144,
+    max_object_properties: 262_144,
+};
+
 /// A JavaScript engine that can evaluate a source string in a fresh top-level
 /// scope. Kept deliberately tiny so the runner never depends on engine
 /// internals (compiled scripts, usage counters, and so on).
@@ -17,9 +30,10 @@ pub trait BenchEngine {
     fn eval(&self, source: &str) -> anyhow::Result<()>;
 }
 
-/// The engine under test, driven only through its oldest stable public API
-/// (`Runtime::new` + `eval`) so this harness can also be grafted onto historic
-/// commits.
+/// The engine under test, driven only through the public runtime API. Benchmark
+/// scripts use a larger resource envelope than ordinary smoke tests so active
+/// workload cases can be large enough for stable timing without changing the
+/// library defaults.
 pub struct RsqjsEngine;
 
 impl BenchEngine for RsqjsEngine {
@@ -28,7 +42,7 @@ impl BenchEngine for RsqjsEngine {
     }
 
     fn eval(&self, source: &str) -> anyhow::Result<()> {
-        let runtime = rs_quickjs::Runtime::new();
+        let runtime = rs_quickjs::Runtime::with_limits(BENCH_RUNTIME_LIMITS);
         let mut context = runtime.context();
         let value = context
             .eval(source)

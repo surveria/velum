@@ -2,6 +2,10 @@ var value = 0;
 var update = function() {
   value = value + 1;
 };
-update();
-update();
-undefined;
+
+for (let index = 0; index < 32768; index = index + 1) {
+  update();
+  update();
+}
+
+value;
