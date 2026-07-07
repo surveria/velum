@@ -44,8 +44,8 @@ fn env_commit(name: &str) -> Option<String> {
 
 fn git_stdout(args: &[&str]) -> Option<String> {
     let mut command = Command::new("git");
-    if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
-        command.current_dir(manifest_dir);
+    if let Some(repo_root) = git_work_dir() {
+        command.current_dir(repo_root);
     }
     let output = command.args(args).output().ok()?;
     if !output.status.success() {
@@ -63,6 +63,28 @@ fn git_path(git_path_name: &str) -> Option<String> {
         git_path_name,
     ])
     .or_else(|| git_stdout(&["rev-parse", "--git-path", git_path_name]))
+}
+
+fn git_work_dir() -> Option<PathBuf> {
+    env_path("RSQJS_BUILD_REPO_ROOT")
+        .or_else(|| env_path("GITHUB_WORKSPACE"))
+        .or_else(manifest_repo_root)
+}
+
+fn manifest_repo_root() -> Option<PathBuf> {
+    let manifest_dir = env_path("CARGO_MANIFEST_DIR")?;
+    let file_name = manifest_dir.file_name().and_then(|name| name.to_str());
+    if file_name == Some("runner")
+        && let Some(parent) = manifest_dir.parent()
+    {
+        return Some(parent.to_path_buf());
+    }
+    Some(manifest_dir)
+}
+
+fn env_path(name: &str) -> Option<PathBuf> {
+    let value = env::var(name).ok()?;
+    non_empty(value).map(PathBuf::from)
 }
 
 fn non_empty(value: String) -> Option<String> {
