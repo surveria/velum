@@ -191,6 +191,46 @@ fn keeps_descriptor_modified_arrays_on_generic_paths() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))
 }
 
+#[test]
+fn keeps_descriptor_modified_holey_arrays_on_generic_paths() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let shifted = Array(3);
+        Object.defineProperty(shifted, "0", {
+            value: "zero",
+            writable: true,
+            enumerable: true,
+            configurable: false
+        });
+        shifted[2] = "tail";
+        let first = shifted.shift();
+
+        let unshifted = Array(2);
+        Object.defineProperty(unshifted, "1", {
+            value: "tail",
+            writable: true,
+            enumerable: true,
+            configurable: false
+        });
+        let length = unshifted.unshift("head");
+
+        first === "zero" &&
+            shifted.length === 2 &&
+            shifted[0] === "zero" &&
+            shifted[1] === "tail" &&
+            length === 3 &&
+            unshifted[0] === "head" &&
+            unshifted[1] === "tail" &&
+            unshifted[2] === "tail" ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

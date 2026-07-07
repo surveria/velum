@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T093159Z.md`
-- Task: Bytecode-only architecture finalization guard: Make the no-AST-runtime boundary repository-wide and remove stale roadmap language that still permits AST-backed compiled execution.
-- Performance: 0.87x (42/63 >1.00x)
+- `rsqjs-test-report-20260707T093956Z.md`
+- Task: rsqjs-test-report-20260707T093956Z.md
+- Performance: 0.85x (42/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 14462 passed / 88116 failed (14.10%)
 
@@ -268,4 +268,5 @@ Latest report:
 | `20260707T085719Z` `5d63695` Bytecode/compiler module boundary tranche: Make the code layout match the bytecode-first architecture by moving AST traversal out of the `bytecode` module. | 0.87x (42/63 >1.00x) | - (0/63 >1.00x) | 14337 passed / 88241 failed (13.98%) |
 | `20260707T091032Z` `a5654d5` Optimize holey array reverse | 0.85x (42/63 >1.00x) | - (0/63 >1.00x) | 14337 passed / 88241 failed (13.98%) |
 | `20260707T092236Z` `2622319` Support async object literal methods | 0.84x (41/63 >1.00x) | - (0/63 >1.00x) | 14462 passed / 88116 failed (14.10%) |
-| `20260707T093159Z` Bytecode-only architecture finalization guard: Make the no-AST-runtime boundary repository-wide and remove stale roadmap language that still permits AST-backed compiled execution. | 0.87x (42/63 >1.00x) | - (0/63 >1.00x) | 14462 passed / 88116 failed (14.10%) |
+| `20260707T093159Z` `564d006` Bytecode-only architecture finalization guard: Make the no-AST-runtime boundary repository-wide and remove stale roadmap language that still permits AST-backed compiled execution. | 0.87x (42/63 >1.00x) | - (0/63 >1.00x) | 14462 passed / 88116 failed (14.10%) |
+| `20260707T093956Z` rsqjs-test-report-20260707T093956Z.md | 0.85x (42/63 >1.00x) | - (0/63 >1.00x) | 14462 passed / 88116 failed (14.10%) |
