@@ -16,7 +16,7 @@ impl<'a> RuntimeCallArgs<'a> {
         }
     }
 
-    pub fn evaluate(self) -> Vec<Value> {
+    pub fn to_owned_values(self) -> Vec<Value> {
         self.as_slice().to_vec()
     }
 }

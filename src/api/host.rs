@@ -294,7 +294,7 @@ impl Context {
         id: HostFunctionId,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let values = args.evaluate();
+        let values = args.to_owned_values();
         let function = self.host_function(id)?.clone();
         self.checked_host_return_value(function.call(&values)?)
     }

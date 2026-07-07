@@ -202,7 +202,7 @@ impl Context {
                 function.static_binding_layout.clone(),
             )
         };
-        let args = args.evaluate();
+        let args = args.to_owned_values();
         let caller_locals = std::mem::take(&mut self.locals);
         let scope = match self.function_scope(
             &param_atoms,

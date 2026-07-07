@@ -142,7 +142,8 @@ not define the whole roadmap.
 
 - Add bytecode after enough language coverage exists to benchmark honestly.
 - Keep opcodes compact and cache-friendly.
-- Preserve interpreter fallback tests so bytecode generation has an oracle.
+- Preserve bytecode regression tests as the execution oracle instead of keeping
+  an AST interpreter fallback.
 - Add inline property caches after shapes exist.
 
 ## Phase 12: Heap Management And Collection
