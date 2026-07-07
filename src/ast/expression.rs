@@ -12,8 +12,14 @@ use super::{
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjectProperty {
-    pub key: StaticName,
+    pub key: ObjectPropertyKey,
     pub value: Expr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ObjectPropertyKey {
+    Static(StaticName),
+    Computed(Box<Expr>),
 }
 
 #[derive(Debug, Clone, PartialEq)]

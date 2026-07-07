@@ -50,10 +50,11 @@ impl ObjectHeap {
         let mut object = Object::ordinary_with_property_capacity(properties.len());
         let mut literal_prototype = None;
         for property in properties {
+            let uses_literal_prototype = property.uses_literal_prototype();
             let ObjectPropertyInit {
                 key, name, value, ..
             } = property;
-            if name == PROTOTYPE_PROPERTY {
+            if uses_literal_prototype && name == PROTOTYPE_PROPERTY {
                 if let Some(prototype) = Object::literal_prototype(&value) {
                     literal_prototype = Some(prototype);
                 }

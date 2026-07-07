@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expr, FunctionParam, ObjectProperty, StaticName, UnaryOp, UpdateOp},
+    ast::{Expr, FunctionParam, ObjectProperty, ObjectPropertyKey, StaticName, UnaryOp, UpdateOp},
     error::{Error, Result},
     lexer::TokenKind,
     value::Value,
@@ -11,9 +11,12 @@ const THIS_PROPERTY_NAME: &str = "this";
 const NEW_TARGET_PROPERTY_NAME: &str = "target";
 const IMPORT_BINDING_NAME: &str = "import";
 
-struct ObjectPropertyName {
-    key: StaticName,
-    shorthand_name: Option<StaticName>,
+enum ObjectPropertyName {
+    Static {
+        key: StaticName,
+        shorthand_name: Option<StaticName>,
+    },
+    Computed(Expr),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -469,31 +472,39 @@ impl Parser {
         if self.match_kind(&TokenKind::Colon) {
             let value = self.expression()?;
             return Ok(ObjectProperty {
-                key: name.key,
+                key: name.into_key(),
                 value,
             });
         }
-        if self.match_kind(&TokenKind::LParen) {
+        if matches!(&name, ObjectPropertyName::Static { .. }) && self.match_kind(&TokenKind::LParen)
+        {
             let params = self.function_parameters()?.into();
             self.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
             self.consume(&TokenKind::LBrace, "expected '{' before method body")?;
             let body = self.with_new_target_scope(Self::block_statements)?.into();
             let id = self.static_function()?;
+            let ObjectPropertyName::Static { key, .. } = name else {
+                return Err(Error::runtime("object method key disappeared"));
+            };
             let value = Expr::MethodFunction {
                 id,
-                name: name.key.clone(),
+                name: key.clone(),
                 params,
                 body,
             };
             return Ok(ObjectProperty {
-                key: name.key,
+                key: ObjectPropertyKey::Static(key),
                 value,
             });
         }
-        if let Some(binding) = name.shorthand_name {
+        if let ObjectPropertyName::Static {
+            key,
+            shorthand_name: Some(binding),
+        } = name
+        {
             let binding = self.static_binding(binding)?;
             return Ok(ObjectProperty {
-                key: name.key,
+                key: ObjectPropertyKey::Static(key),
                 value: Expr::Identifier(binding),
             });
         }
@@ -524,22 +535,30 @@ impl Parser {
     }
 
     fn object_property_key(&mut self) -> Result<ObjectPropertyName> {
+        if self.match_kind(&TokenKind::LBracket) {
+            let expr = self.expression()?;
+            self.consume(
+                &TokenKind::RBracket,
+                "expected ']' after computed object property name",
+            )?;
+            return Ok(ObjectPropertyName::Computed(expr));
+        }
         let token = self
             .advance()
             .ok_or_else(|| Error::parse("expected object property name", self.offset()))?;
         match token.kind {
             TokenKind::Identifier(name) => {
                 let name = self.static_name(name)?;
-                Ok(ObjectPropertyName {
+                Ok(ObjectPropertyName::Static {
                     key: name.clone(),
                     shorthand_name: Some(name),
                 })
             }
-            TokenKind::String(name) => Ok(ObjectPropertyName {
+            TokenKind::String(name) => Ok(ObjectPropertyName::Static {
                 key: self.static_name(name)?,
                 shorthand_name: None,
             }),
-            TokenKind::Number(value) => Ok(ObjectPropertyName {
+            TokenKind::Number(value) => Ok(ObjectPropertyName::Static {
                 key: self.static_name(Value::Number(value).to_string())?,
                 shorthand_name: None,
             }),
@@ -553,7 +572,7 @@ impl Parser {
     }
 
     fn keyword_property_name(&mut self, name: &str) -> Result<ObjectPropertyName> {
-        Ok(ObjectPropertyName {
+        Ok(ObjectPropertyName::Static {
             key: self.borrowed_static_name(name)?,
             shorthand_name: None,
         })
@@ -648,6 +667,15 @@ impl Parser {
                 value @ (Value::Undefined | Value::Null | Value::Bool(_) | Value::Number(_)),
             ) => self.static_name(value.to_string()).map(Some),
             _ => Ok(None),
+        }
+    }
+}
+
+impl ObjectPropertyName {
+    fn into_key(self) -> ObjectPropertyKey {
+        match self {
+            Self::Static { key, .. } => ObjectPropertyKey::Static(key),
+            Self::Computed(expr) => ObjectPropertyKey::Computed(Box::new(expr)),
         }
     }
 }

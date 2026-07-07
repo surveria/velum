@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use crate::{
     ast::{
-        CatchClause, DeclKind, Expr, ForInTarget, FunctionParam, Program, StaticBinding,
-        StaticBindingId, StaticFunctionId, StaticNameId, Stmt, SwitchCase,
+        CatchClause, DeclKind, Expr, ForInTarget, FunctionParam, ObjectProperty, ObjectPropertyKey,
+        Program, StaticBinding, StaticBindingId, StaticFunctionId, StaticNameId, Stmt, SwitchCase,
     },
     binding_layout::types::{
         Declaration, FunctionScope, GlobalSlot, Scope, ScopeContext, ScopeKind,
@@ -556,12 +556,7 @@ impl LayoutBuilder {
             | Expr::MethodFunction {
                 id, params, body, ..
             } => self.analyze_function(*id, params, body, scope, function),
-            Expr::Object(properties) => {
-                for property in properties {
-                    self.analyze_expr(&property.value, scope, function)?;
-                }
-                Ok(())
-            }
+            Expr::Object(properties) => self.analyze_object_properties(properties, scope, function),
             Expr::Array(elements) => self.analyze_exprs(elements, scope, function),
             Expr::New { constructor, args } => {
                 self.analyze_expr(constructor, scope, function)?;
@@ -578,6 +573,21 @@ impl LayoutBuilder {
     ) -> Result<()> {
         for expr in exprs {
             self.analyze_expr(expr, scope, function)?;
+        }
+        Ok(())
+    }
+
+    fn analyze_object_properties(
+        &mut self,
+        properties: &[ObjectProperty],
+        scope: ScopeId,
+        function: FunctionScopeId,
+    ) -> Result<()> {
+        for property in properties {
+            if let ObjectPropertyKey::Computed(expr) = &property.key {
+                self.analyze_expr(expr, scope, function)?;
+            }
+            self.analyze_expr(&property.value, scope, function)?;
         }
         Ok(())
     }

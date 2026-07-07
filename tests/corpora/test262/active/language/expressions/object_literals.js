@@ -31,6 +31,36 @@ if (shared === {}) {
     throw new Test262Error("distinct object literals shared identity");
 }
 
+let order = "";
+function mark(name, value) {
+    order = order + name;
+    return value;
+}
+
+let computed = {
+    [mark("k", "front")]: mark("v", 40),
+    [mark("n", "door")]: mark("w", 2),
+};
+
+if (order !== "kvnw") {
+    throw new Test262Error("computed object property evaluation order was not preserved");
+}
+
+if (computed.front + computed.door !== 42) {
+    throw new Test262Error("computed object properties were not readable");
+}
+
+let computedProto = { ["__proto__"]: 42 };
+if (computedProto.__proto__ !== 42) {
+    throw new Test262Error("computed __proto__ object property was not a data property");
+}
+
+let symbolKey = Symbol("object-literal-key");
+let computedSymbol = { [symbolKey]: 42 };
+if (computedSymbol[symbolKey] !== 42) {
+    throw new Test262Error("computed symbol object property was not readable");
+}
+
 let make = function() {
     let state = { value: 40 };
     return function() {

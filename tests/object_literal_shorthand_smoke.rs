@@ -34,6 +34,51 @@ fn supports_object_literal_shorthand_and_methods() -> TestResult {
 }
 
 #[test]
+fn supports_computed_object_literal_property_names() -> TestResult {
+    let value = eval(
+        r#"
+        let order = "";
+        function mark(name, value) {
+            order = order + name;
+            return value;
+        }
+        let object = {
+            [mark("k", "front")]: mark("v", 40),
+            [mark("n", "door")]: mark("w", 2),
+        };
+        order === "kvnw" && object.front + object.door === 42 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn computed_proto_object_literal_property_is_data_property() -> TestResult {
+    let value = eval(
+        r#"
+        let object = { ["__proto__"]: 42, marker: 1 };
+        object.__proto__ === 42 && !("inherited" in object) ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn supports_computed_symbol_object_literal_property_names() -> TestResult {
+    let value = eval(
+        r#"
+        let key = Symbol("camera");
+        let object = { [key]: 42 };
+        object[key]
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn rejects_missing_shorthand_bindings() -> TestResult {
     let Err(error) = eval("let camera = { missing }; camera.missing") else {
         return Err("expected missing shorthand binding to fail".into());
