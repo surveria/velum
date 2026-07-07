@@ -108,6 +108,54 @@ fn function_constructor_rejects_invalid_source() -> TestResult {
     Err("expected invalid Function body to fail".into())
 }
 
+#[test]
+fn function_constructor_throws_catchable_syntax_errors() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let AsyncFunction = async function() {}.constructor;
+        let caughtBody = false;
+        let caughtParam = false;
+        let caughtNew = false;
+        let caughtAsync = false;
+
+        try {
+            Function(")");
+        } catch (error) {
+            caughtBody = error.name === "SyntaxError";
+        }
+
+        try {
+            Function("left right", "return 1;");
+        } catch (error) {
+            caughtParam = error.name === "SyntaxError";
+        }
+
+        try {
+            new Function(")");
+        } catch (error) {
+            caughtNew = error.name === "SyntaxError";
+        }
+
+        try {
+            AsyncFunction(")");
+        } catch (error) {
+            caughtAsync = error.name === "SyntaxError";
+        }
+
+        assert.throws(SyntaxError, function() {
+            Function(")");
+        });
+
+        caughtBody && caughtParam && caughtNew && caughtAsync ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
