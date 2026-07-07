@@ -216,6 +216,13 @@ impl Context {
     /// # Errors
     /// Fails when the compiled script exceeds this context's limits or evaluation fails.
     pub fn eval_compiled(&mut self, script: &CompiledScript) -> Result<Value> {
+        self.eval_compiled_completion(script)?.into_result()
+    }
+
+    pub(crate) fn eval_compiled_completion(
+        &mut self,
+        script: &CompiledScript,
+    ) -> Result<Completion> {
         script.ensure_within_limits(self.limits)?;
         let static_name_cache = StaticNameAtomCacheHandle::new(
             script.usage().static_name_count(),
@@ -229,11 +236,11 @@ impl Context {
             script.binding_layout().clone(),
             |context| {
                 context.hoist_bytecode_declarations(script.bytecode().hoist_plan())?;
-                let value = context
-                    .eval_bytecode_program(script.bytecode())
-                    .and_then(Completion::into_result)?;
-                context.drain_promise_jobs()?;
-                Ok(value)
+                let completion = context.eval_bytecode_program(script.bytecode())?;
+                if matches!(completion, Completion::Normal(_)) {
+                    context.drain_promise_jobs()?;
+                }
+                Ok(completion)
             },
         )
     }

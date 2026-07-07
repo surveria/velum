@@ -11,6 +11,7 @@ use crate::{
 };
 
 const MAX_UTF8_CHAR_BYTES: usize = 4;
+const STRING_CONSTRUCTOR_PROPERTY: &str = "constructor";
 
 impl Context {
     pub(in crate::runtime) fn dynamic_property_key(
@@ -82,6 +83,9 @@ impl Context {
         value: &str,
         property: &str,
     ) -> Result<Value> {
+        if property == STRING_CONSTRUCTOR_PROPERTY {
+            return self.string_constructor_value();
+        }
         match string_property_value(value, property)? {
             StringPropertyValue::Length(value) => Ok(Value::Number(value)),
             StringPropertyValue::Character(ch) => self.heap_string_char_value(ch),
@@ -103,6 +107,13 @@ impl Context {
             return Ok(None);
         };
         self.heap_string_char_value(ch).map(Some)
+    }
+
+    pub(in crate::runtime) fn string_object_primitive_value(
+        &self,
+        id: ObjectId,
+    ) -> Result<Option<&str>> {
+        self.objects.string_object_value(id)
     }
 
     pub(in crate::runtime) fn has_dynamic_property_value(

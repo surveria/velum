@@ -107,6 +107,103 @@ fn exposes_string_constructor_and_wrapper_properties() -> TestResult {
     )
 }
 
+#[test]
+fn supports_legacy_string_primitive_comparison_and_constructor_lookup() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let empty = "";
+        let text = "x\0a";
+        let next = "x\0b";
+        let boxed = new String("ABC");
+        let emptyBoxed = new String("");
+        text < next &&
+            next > text &&
+            text <= "x\0a" &&
+            next >= "x\0b" &&
+            empty == 0 &&
+            empty == false &&
+            empty != undefined &&
+            empty != null &&
+            empty !== 0 &&
+            "rock'n'roll".constructor === String &&
+            "ABC".constructor === boxed.constructor &&
+            "ABC" == boxed &&
+            "" == emptyBoxed &&
+            emptyBoxed == false &&
+            emptyBoxed !== "" ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn supports_legacy_bare_string_constructor_call() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let str = "";
+        let strObj = new String;
+        str.constructor === strObj.constructor &&
+            str == strObj &&
+            str !== strObj &&
+            typeof str !== typeof strObj ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn rejects_adjacent_string_literals_after_var_initializer() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let Err(error) = context.eval("var str = '''';") else {
+        return Err("expected adjacent single-quote string literals to fail parsing".into());
+    };
+
+    let message = error.to_string();
+    if !message.contains("expected statement terminator after variable declaration") {
+        return Err(format!("expected statement terminator parse error, got {message}").into());
+    }
+
+    let Err(error) = context.eval(r#"var str = """";"#) else {
+        return Err("expected adjacent double-quote string literals to fail parsing".into());
+    };
+
+    let message = error.to_string();
+    if message.contains("expected statement terminator after variable declaration") {
+        return Ok(());
+    }
+
+    Err(format!("expected statement terminator parse error, got {message}").into())
+}
+
+#[test]
+fn assert_throws_observes_reference_error_from_eval_line_terminator_source() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        assert.throws(ReferenceError, function() {
+            eval("var x = asdf\u000Aghjk");
+        });
+        assert.throws(ReferenceError, function() {
+            eval("var x = asdf\u2028ghjk");
+        });
+        42
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

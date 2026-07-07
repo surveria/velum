@@ -1,4 +1,8 @@
-use crate::{error::Result, runtime::Context, runtime::call_args::RuntimeCallArgs, value::Value};
+use crate::{
+    error::{Error, Result},
+    runtime::{Context, call_args::RuntimeCallArgs, completion::Completion},
+    value::Value,
+};
 
 use super::{EVAL_NAME, NativeFunctionKind};
 
@@ -24,13 +28,20 @@ impl Context {
         match argument {
             Value::String(source) => {
                 let script = self.compile(source)?;
-                self.eval_compiled(&script)
+                eval_completion_result(self.eval_compiled_completion(&script)?)
             }
             Value::HeapString(source) => {
                 let script = self.compile(source.as_str())?;
-                self.eval_compiled(&script)
+                eval_completion_result(self.eval_compiled_completion(&script)?)
             }
             value => Ok(value.clone()),
         }
     }
+}
+
+fn eval_completion_result(completion: Completion) -> Result<Value> {
+    let Completion::Throw(Value::Error(error)) = &completion else {
+        return completion.into_result();
+    };
+    Err(Error::exception(error.name(), error.message().to_owned()))
 }

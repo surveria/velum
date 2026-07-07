@@ -190,18 +190,17 @@ impl Parser {
                 new_offset,
             ));
         }
-        if !self.match_kind(&TokenKind::LParen) {
-            return Err(Error::parse(
-                "expected '(' after constructor expression",
-                self.offset(),
-            ));
-        }
-        let args = if self.check(&TokenKind::RParen) {
-            Vec::new()
+        let args = if self.match_kind(&TokenKind::LParen) {
+            let args = if self.check(&TokenKind::RParen) {
+                Vec::new()
+            } else {
+                self.arguments()?
+            };
+            self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
+            args
         } else {
-            self.arguments()?
+            Vec::new()
         };
-        self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
         let expr = Expr::New {
             constructor: Box::new(constructor),
             args,

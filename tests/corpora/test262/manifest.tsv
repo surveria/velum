@@ -7,6 +7,30 @@ template-literal-no-substitution	test/language/expressions/template-literal/no-s
 string-constructor-call-undefined	test/built-ins/String/S15.5.1.1_A1_T1.js	run	official Test262 String function undefined conversion smoke
 string-constructor-call-null	test/built-ins/String/S15.5.1.1_A1_T2.js	run	official Test262 String function null conversion smoke
 string-constructor-length	test/built-ins/String/S15.5.3_A1.js	run	official Test262 String.length smoke
+language-types-string-empty	test/language/types/string/S8.4_A1.js	run	official Test262 string type corpus
+language-types-string-unicode-escape	test/language/types/string/S8.4_A10.js	run	official Test262 string type corpus
+language-types-string-escaped-quote	test/language/types/string/S8.4_A11.js	run	official Test262 string type corpus
+language-types-string-single-quote-constructor	test/language/types/string/S8.4_A12.js	run	official Test262 string type corpus
+language-types-string-single-quote-basic	test/language/types/string/S8.4_A13_T1.js	run	official Test262 string type corpus
+language-types-string-single-quote-apostrophe	test/language/types/string/S8.4_A13_T2.js	run	official Test262 string type corpus
+language-types-string-single-quote-adjacent-negative	test/language/types/string/S8.4_A13_T3.js	negative-parse	official Test262 string type negative parse corpus
+language-types-string-double-quote-basic	test/language/types/string/S8.4_A14_T1.js	run	official Test262 string type corpus
+language-types-string-double-quote-escaped	test/language/types/string/S8.4_A14_T2.js	run	official Test262 string type corpus
+language-types-string-double-quote-adjacent-negative	test/language/types/string/S8.4_A14_T3.js	negative-parse	official Test262 string type negative parse corpus
+language-types-string-not-number	test/language/types/string/S8.4_A2.js	run	official Test262 string type corpus
+language-types-string-boolean-comparison	test/language/types/string/S8.4_A3.js	run	official Test262 string type corpus
+language-types-string-null-comparison	test/language/types/string/S8.4_A4.js	run	official Test262 string type corpus
+language-types-string-relational-comparison	test/language/types/string/S8.4_A5.js	run	official Test262 string type corpus
+language-types-string-null-character	test/language/types/string/S8.4_A6.1.js	run	official Test262 string type corpus
+language-types-string-null-character-concat	test/language/types/string/S8.4_A6.2.js	run	official Test262 string type corpus
+language-types-string-lf-eval	test/language/types/string/S8.4_A7.1.js	run	official Test262 string type corpus
+language-types-string-cr-eval	test/language/types/string/S8.4_A7.2.js	run	official Test262 string type corpus
+language-types-string-ps-eval	test/language/types/string/S8.4_A7.3.js	run	official Test262 string type corpus
+language-types-string-ls-eval	test/language/types/string/S8.4_A7.4.js	run	official Test262 string type corpus
+language-types-string-abstract-equality	test/language/types/string/S8.4_A8.js	run	official Test262 string type corpus
+language-types-string-object-equality	test/language/types/string/S8.4_A9_T1.js	run	official Test262 string type corpus
+language-types-string-empty-object-equality	test/language/types/string/S8.4_A9_T2.js	run	official Test262 string type corpus
+language-types-string-bare-constructor	test/language/types/string/S8.4_A9_T3.js	run	official Test262 string type corpus
 boolean-constructor-call	test/built-ins/Boolean/S15.6.1.1_A1_T1.js	run	official Test262 Boolean function conversion smoke
 boolean-constructor-numeric-values	test/built-ins/Boolean/S15.6.1.1_A1_T2.js	run	official Test262 Boolean conversion for Infinity and NaN smoke
 boolean-constructor-new	test/built-ins/Boolean/S15.6.2.1_A1.js	run	official Test262 Boolean constructor smoke

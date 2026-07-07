@@ -27,21 +27,6 @@ pub fn numeric_binary(
     Ok(Value::Number(apply(left, right)))
 }
 
-pub fn compare_binary(
-    left: &Value,
-    right: &Value,
-    op: &str,
-    apply: impl FnOnce(f64, f64) -> bool,
-) -> Result<Value> {
-    let Some(left) = left.as_number() else {
-        return Err(Error::runtime(format!("operator '{op}' expects numbers")));
-    };
-    let Some(right) = right.as_number() else {
-        return Err(Error::runtime(format!("operator '{op}' expects numbers")));
-    };
-    Ok(Value::Bool(apply(left, right)))
-}
-
 pub fn bitwise_and(left: &Value, right: &Value) -> Result<Value> {
     let left = bitwise_i32(left, "&")?;
     let right = bitwise_i32(right, "&")?;

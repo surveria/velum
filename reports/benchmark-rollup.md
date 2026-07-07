@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T121815Z.md`
-- Task: rsqjs-test-report-20260707T121815Z.md
-- Performance: 0.90x (43/63 >1.00x)
+- `rsqjs-test-report-20260707T123138Z.md`
+- Task: rsqjs-test-report-20260707T123138Z.md
+- Performance: 0.93x (43/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 15528 passed / 87050 failed (15.14%)
+- Full Test262: 15827 passed / 86751 failed (15.43%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -289,4 +289,5 @@ Latest report:
 | `20260707T114648Z` `e6e48a9` Clarify runtime slow-path architecture | 0.88x (43/63 >1.00x) | - (0/63 >1.00x) | 15474 passed / 87104 failed (15.09%) |
 | `20260707T115841Z` `e6e48a9` Clarify runtime slow-path architecture | 0.88x (43/63 >1.00x) | - (0/63 >1.00x) | 15474 passed / 87104 failed (15.09%) |
 | `20260707T120837Z` `ff28afa` Support TDZ-aware parameter defaults | 0.90x (42/63 >1.00x) | - (0/63 >1.00x) | 15528 passed / 87050 failed (15.14%) |
-| `20260707T121815Z` rsqjs-test-report-20260707T121815Z.md | 0.90x (43/63 >1.00x) | - (0/63 >1.00x) | 15528 passed / 87050 failed (15.14%) |
+| `20260707T121815Z` `450271b` Add direct native targets for eval and bind | 0.90x (43/63 >1.00x) | - (0/63 >1.00x) | 15528 passed / 87050 failed (15.14%) |
+| `20260707T123138Z` rsqjs-test-report-20260707T123138Z.md | 0.93x (43/63 >1.00x) | - (0/63 >1.00x) | 15827 passed / 86751 failed (15.43%) |

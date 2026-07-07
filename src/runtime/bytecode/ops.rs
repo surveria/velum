@@ -9,12 +9,13 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime::assertions::thrown_value_matches,
+    runtime::bytecode::coercion::{abstract_equality, relational_compare, strict_equality},
     runtime::call_args::RuntimeCallArgs,
     runtime::completion::Completion,
     runtime::native::NativeFunctionKind,
     runtime::numeric::{
-        bitwise_and, bitwise_or, bitwise_xor, compare_binary, number_shift_count, number_to_i32,
-        number_to_uint32, numeric_binary, shift_left, shift_right, shift_right_unsigned,
+        bitwise_and, bitwise_or, bitwise_xor, number_shift_count, number_to_i32, number_to_uint32,
+        numeric_binary, shift_left, shift_right, shift_right_unsigned,
     },
     runtime::object::{
         DataPropertyUpdate, OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyConfigurable,
@@ -132,13 +133,12 @@ impl Context {
             BinaryOp::Div => numeric_binary(left, right, "/", |left, right| left / right)?,
             BinaryOp::Rem => numeric_binary(left, right, "%", |left, right| left % right)?,
             BinaryOp::Pow => numeric_binary(left, right, "**", f64::powf)?,
-            BinaryOp::Equal | BinaryOp::StrictEqual => Value::Bool(left == right),
-            BinaryOp::NotEqual | BinaryOp::StrictNotEqual => Value::Bool(left != right),
-            BinaryOp::Less => compare_binary(left, right, "<", |left, right| left < right)?,
-            BinaryOp::LessEqual => compare_binary(left, right, "<=", |left, right| left <= right)?,
-            BinaryOp::Greater => compare_binary(left, right, ">", |left, right| left > right)?,
-            BinaryOp::GreaterEqual => {
-                compare_binary(left, right, ">=", |left, right| left >= right)?
+            BinaryOp::Equal => Value::Bool(abstract_equality(self, left, right)?),
+            BinaryOp::NotEqual => Value::Bool(!abstract_equality(self, left, right)?),
+            BinaryOp::StrictEqual => Value::Bool(strict_equality(left, right)),
+            BinaryOp::StrictNotEqual => Value::Bool(!strict_equality(left, right)),
+            BinaryOp::Less | BinaryOp::LessEqual | BinaryOp::Greater | BinaryOp::GreaterEqual => {
+                relational_compare(op, left, right)
             }
             BinaryOp::In => self.eval_bytecode_in(left, right, property_access)?,
             BinaryOp::InstanceOf => self.eval_bytecode_instanceof(left, right)?,
