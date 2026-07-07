@@ -212,7 +212,7 @@ impl Context {
             NativeCallTarget::ArrayUnshift => self.eval_direct_array_unshift(args, this_value),
             NativeCallTarget::Boolean => self.eval_direct_boolean_constructor(args),
             NativeCallTarget::ErrorConstructor(name) => {
-                self.eval_error_constructor(name, runtime_call_args(args))
+                self.eval_direct_error_constructor(name, args)
             }
             NativeCallTarget::Function => self.eval_function_constructor(runtime_call_args(args)),
             NativeCallTarget::JsonParse => self.eval_direct_json_parse(args),
