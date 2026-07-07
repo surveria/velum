@@ -1,11 +1,11 @@
 use std::{env, fs, path::PathBuf, process::Command};
 
-const UNKNOWN_COMMIT: &str = "unknown";
+const UNKNOWN_VALUE: &str = "unknown";
 
 fn main() {
     emit_rerun_hints();
 
-    let version = env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| UNKNOWN_COMMIT.to_owned());
+    let version = env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| UNKNOWN_VALUE.to_owned());
     let commit = build_commit_sha();
 
     println!("cargo:rustc-env=RSQJS_ENGINE_VERSION={version}");
@@ -21,8 +21,8 @@ fn emit_rerun_hints() {
     }
 }
 
-fn emit_git_path_hint(git_path: &str) {
-    let Some(path) = git_stdout(&["rev-parse", "--git-path", git_path]) else {
+fn emit_git_path_hint(git_path_name: &str) {
+    let Some(path) = git_path(git_path_name) else {
         return;
     };
     let path = PathBuf::from(path);
@@ -34,7 +34,7 @@ fn build_commit_sha() -> String {
     env_commit("RSQJS_BUILD_COMMIT_SHA")
         .or_else(|| git_stdout(&["rev-parse", "HEAD"]))
         .or_else(|| env_commit("GITHUB_SHA"))
-        .unwrap_or_else(|| UNKNOWN_COMMIT.to_owned())
+        .unwrap_or_else(|| UNKNOWN_VALUE.to_owned())
 }
 
 fn env_commit(name: &str) -> Option<String> {
@@ -43,12 +43,26 @@ fn env_commit(name: &str) -> Option<String> {
 }
 
 fn git_stdout(args: &[&str]) -> Option<String> {
-    let output = Command::new("git").args(args).output().ok()?;
+    let mut command = Command::new("git");
+    if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+        command.current_dir(manifest_dir);
+    }
+    let output = command.args(args).output().ok()?;
     if !output.status.success() {
         return None;
     }
     let stdout = String::from_utf8(output.stdout).ok()?;
     non_empty(stdout.trim().to_owned())
+}
+
+fn git_path(git_path_name: &str) -> Option<String> {
+    git_stdout(&[
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-path",
+        git_path_name,
+    ])
+    .or_else(|| git_stdout(&["rev-parse", "--git-path", git_path_name]))
 }
 
 fn non_empty(value: String) -> Option<String> {
