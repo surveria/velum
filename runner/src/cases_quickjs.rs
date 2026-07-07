@@ -27,6 +27,7 @@ const PATH_QUICKJS_FOR_STATEMENTS: &str =
     "tests/corpora/quickjs_differential/active/for_statements.js";
 const PATH_QUICKJS_FOR_IN_STATEMENTS: &str =
     "tests/corpora/quickjs_differential/active/for_in_statements.js";
+const PATH_QUICKJS_FOR_OF: &str = "tests/corpora/quickjs_differential/active/for_of.js";
 const PATH_QUICKJS_SWITCH_STATEMENTS: &str =
     "tests/corpora/quickjs_differential/active/switch_statements.js";
 const PATH_QUICKJS_BLOCK_LEXICAL_SCOPE: &str =
@@ -194,6 +195,10 @@ fn quickjs_control_flow_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "for_in_statements",
             path: PATH_QUICKJS_FOR_IN_STATEMENTS,
+        },
+        DifferentialCase {
+            id: "for_of",
+            path: PATH_QUICKJS_FOR_OF,
         },
         DifferentialCase {
             id: "switch_statements",
