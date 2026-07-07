@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T091032Z.md`
-- Task: rsqjs-test-report-20260707T091032Z.md
-- Performance: 0.85x (42/63 >1.00x)
+- `rsqjs-test-report-20260707T092236Z.md`
+- Task: rsqjs-test-report-20260707T092236Z.md
+- Performance: 0.84x (41/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 14337 passed / 88241 failed (13.98%)
+- Full Test262: 14462 passed / 88116 failed (14.10%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -266,4 +266,5 @@ Latest report:
 | `20260707T083206Z` `1677ea2` Add RegExp literal support for native function matcher | 0.85x (41/63 >1.00x) | - (0/63 >1.00x) | 14337 passed / 88241 failed (13.98%) |
 | `20260707T084248Z` `0ad8501` Optimize packed array push and pop | 0.86x (41/63 >1.00x) | - (0/63 >1.00x) | 14337 passed / 88241 failed (13.98%) |
 | `20260707T085719Z` `5d63695` Bytecode/compiler module boundary tranche: Make the code layout match the bytecode-first architecture by moving AST traversal out of the `bytecode` module. | 0.87x (42/63 >1.00x) | - (0/63 >1.00x) | 14337 passed / 88241 failed (13.98%) |
-| `20260707T091032Z` rsqjs-test-report-20260707T091032Z.md | 0.85x (42/63 >1.00x) | - (0/63 >1.00x) | 14337 passed / 88241 failed (13.98%) |
+| `20260707T091032Z` `a5654d5` Optimize holey array reverse | 0.85x (42/63 >1.00x) | - (0/63 >1.00x) | 14337 passed / 88241 failed (13.98%) |
+| `20260707T092236Z` rsqjs-test-report-20260707T092236Z.md | 0.84x (41/63 >1.00x) | - (0/63 >1.00x) | 14462 passed / 88116 failed (14.10%) |
