@@ -268,6 +268,12 @@ pub enum BytecodeNumericBinaryOp {
     Div,
     Rem,
     Pow,
+    BitAnd,
+    BitOr,
+    BitXor,
+    ShiftLeft,
+    ShiftRight,
+    ShiftRightUnsigned,
 }
 
 impl BytecodeNumericBinaryOp {
@@ -279,6 +285,12 @@ impl BytecodeNumericBinaryOp {
             BinaryOp::Div => Some(Self::Div),
             BinaryOp::Rem => Some(Self::Rem),
             BinaryOp::Pow => Some(Self::Pow),
+            BinaryOp::BitAnd => Some(Self::BitAnd),
+            BinaryOp::BitOr => Some(Self::BitOr),
+            BinaryOp::BitXor => Some(Self::BitXor),
+            BinaryOp::ShiftLeft => Some(Self::ShiftLeft),
+            BinaryOp::ShiftRight => Some(Self::ShiftRight),
+            BinaryOp::ShiftRightUnsigned => Some(Self::ShiftRightUnsigned),
             BinaryOp::Equal
             | BinaryOp::NotEqual
             | BinaryOp::StrictEqual
@@ -288,12 +300,6 @@ impl BytecodeNumericBinaryOp {
             | BinaryOp::Greater
             | BinaryOp::GreaterEqual
             | BinaryOp::In
-            | BinaryOp::BitAnd
-            | BinaryOp::BitOr
-            | BinaryOp::BitXor
-            | BinaryOp::ShiftLeft
-            | BinaryOp::ShiftRight
-            | BinaryOp::ShiftRightUnsigned
             | BinaryOp::LogicalAnd
             | BinaryOp::LogicalOr => None,
         }
@@ -307,6 +313,12 @@ impl BytecodeNumericBinaryOp {
             Self::Div => BinaryOp::Div,
             Self::Rem => BinaryOp::Rem,
             Self::Pow => BinaryOp::Pow,
+            Self::BitAnd => BinaryOp::BitAnd,
+            Self::BitOr => BinaryOp::BitOr,
+            Self::BitXor => BinaryOp::BitXor,
+            Self::ShiftLeft => BinaryOp::ShiftLeft,
+            Self::ShiftRight => BinaryOp::ShiftRight,
+            Self::ShiftRightUnsigned => BinaryOp::ShiftRightUnsigned,
         }
     }
 }

@@ -12,8 +12,8 @@ use crate::{
     runtime::call_args::RuntimeCallArgs,
     runtime::completion::Completion,
     runtime::numeric::{
-        bitwise_and, bitwise_or, bitwise_xor, compare_binary, numeric_binary, shift_left,
-        shift_right, shift_right_unsigned,
+        bitwise_and, bitwise_or, bitwise_xor, compare_binary, number_shift_count, number_to_i32,
+        number_to_uint32, numeric_binary, shift_left, shift_right, shift_right_unsigned,
     },
     runtime::object::{OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyEnumerable},
     runtime::property::DynamicPropertyKey,
@@ -153,6 +153,30 @@ impl Context {
                 BytecodeNumericBinaryOp::Div => left / right,
                 BytecodeNumericBinaryOp::Rem => left % right,
                 BytecodeNumericBinaryOp::Pow => left.powf(*right),
+                BytecodeNumericBinaryOp::BitAnd => {
+                    f64::from(number_to_i32(*left, "&")? & number_to_i32(*right, "&")?)
+                }
+                BytecodeNumericBinaryOp::BitOr => {
+                    f64::from(number_to_i32(*left, "|")? | number_to_i32(*right, "|")?)
+                }
+                BytecodeNumericBinaryOp::BitXor => {
+                    f64::from(number_to_i32(*left, "^")? ^ number_to_i32(*right, "^")?)
+                }
+                BytecodeNumericBinaryOp::ShiftLeft => {
+                    let left = number_to_i32(*left, "<<")?;
+                    let right = number_shift_count(*right, "<<")?;
+                    f64::from(left.wrapping_shl(right))
+                }
+                BytecodeNumericBinaryOp::ShiftRight => {
+                    let left = number_to_i32(*left, ">>")?;
+                    let right = number_shift_count(*right, ">>")?;
+                    f64::from(left.wrapping_shr(right))
+                }
+                BytecodeNumericBinaryOp::ShiftRightUnsigned => {
+                    let left = number_to_uint32(*left, ">>>")?;
+                    let right = number_shift_count(*right, ">>>")?;
+                    f64::from(left.wrapping_shr(right))
+                }
             };
             return self.checked_value(Value::Number(value));
         }
@@ -297,6 +321,15 @@ impl Context {
         left: &Value,
         right: &Value,
     ) -> Result<Value> {
+        if let (Value::Number(left), Value::Number(right)) = (left, right)
+            && let Some(op) = BytecodeNumericBinaryOp::from_binary(op)
+        {
+            return self.eval_bytecode_number_binary(
+                op,
+                &Value::Number(*left),
+                &Value::Number(*right),
+            );
+        }
         let value = match op {
             BinaryOp::Add => self.add(left, right)?,
             BinaryOp::Sub => numeric_binary(left, right, "-=", |left, right| left - right)?,

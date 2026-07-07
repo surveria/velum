@@ -146,9 +146,13 @@ pub fn number_to_uint32(value: f64, context: &str) -> Result<u32> {
     modulo_to_u32(modulo, context)
 }
 
-fn number_to_i32(value: f64, op: &str) -> Result<i32> {
+pub fn number_to_i32(value: f64, op: &str) -> Result<i32> {
     let unsigned = number_to_uint32(value, op)?;
     uint32_to_int32(unsigned, op)
+}
+
+pub fn number_shift_count(value: f64, op: &str) -> Result<u32> {
+    Ok(number_to_uint32(value, op)? & SHIFT_COUNT_MASK)
 }
 
 fn uint32_to_int32(unsigned: u32, op: &str) -> Result<i32> {
