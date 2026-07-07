@@ -53,7 +53,11 @@ impl Context {
                 arg_count,
             } => {
                 let args = state.stack.tail(*arg_count)?;
-                let value = self.eval_bytecode_identifier_call_value(callee, *native, args)?;
+                let completion =
+                    self.eval_bytecode_identifier_call_completion(callee, *native, args)?;
+                let Completion::Normal(value) = completion else {
+                    return Ok(Some(completion));
+                };
                 state.stack.drop_tail(*arg_count)?;
                 state.stack.push(value);
                 state.pc = next;
@@ -62,7 +66,11 @@ impl Context {
             BytecodeInstruction::CallValue { site, arg_count } => {
                 let args = state.stack.tail(*arg_count)?;
                 let callee = state.stack.value_before_tail(*arg_count, 0)?.clone();
-                let value = self.eval_cached_call_value(*site, callee, args, Value::Undefined)?;
+                let completion =
+                    self.eval_cached_call_completion(*site, callee, args, Value::Undefined)?;
+                let Completion::Normal(value) = completion else {
+                    return Ok(Some(completion));
+                };
                 state.stack.drop_tail(*arg_count)?;
                 state.stack.pop()?;
                 state.stack.push(value);
@@ -74,8 +82,12 @@ impl Context {
                 native,
                 arg_count,
             } => {
-                let value =
-                    self.eval_bytecode_static_member_call(state, property, *native, *arg_count)?;
+                let completion = self.eval_bytecode_static_member_call_completion(
+                    state, property, *native, *arg_count,
+                )?;
+                let Completion::Normal(value) = completion else {
+                    return Ok(Some(completion));
+                };
                 state.stack.drop_tail(*arg_count)?;
                 state.stack.pop()?;
                 state.stack.push(value);
@@ -87,8 +99,12 @@ impl Context {
                 native,
                 arg_count,
             } => {
-                let value =
-                    self.eval_bytecode_computed_member_call(state, *operand, *native, *arg_count)?;
+                let completion = self.eval_bytecode_computed_member_call_completion(
+                    state, *operand, *native, *arg_count,
+                )?;
+                let Completion::Normal(value) = completion else {
+                    return Ok(Some(completion));
+                };
                 state.pc = next;
                 state.stack.push(value);
                 Ok(None)
@@ -128,13 +144,13 @@ impl Context {
         }
     }
 
-    fn eval_bytecode_computed_member_call(
+    fn eval_bytecode_computed_member_call_completion(
         &mut self,
         state: &mut BytecodeState,
         operand: BytecodeDynamicProperty,
         native: Option<NativeCallTarget>,
         arg_count: usize,
-    ) -> Result<Value> {
+    ) -> Result<Completion> {
         let args = state.stack.tail(arg_count)?;
         let property = state.stack.value_before_tail(arg_count, 0)?;
         let this_value = state.stack.value_before_tail(arg_count, 1)?;
@@ -150,33 +166,37 @@ impl Context {
             state.stack.drop_tail(arg_count)?;
             state.stack.pop()?;
             state.stack.pop()?;
-            return Ok(value);
+            return Ok(Completion::Normal(value));
         }
         let callee = self.get_cached_dynamic_property_value(this_value, &key, operand.access())?;
-        let value = if let Some(target) = native {
-            self.eval_direct_native_property_call(
+        let completion = if let Some(target) = native {
+            let value = self.eval_direct_native_property_call(
                 target,
                 operand.access(),
                 callee,
                 args,
                 this_value,
-            )?
+            )?;
+            Completion::Normal(value)
         } else {
-            self.eval_call_value(callee, args, this_value.clone())?
+            self.eval_call_completion(callee, args, this_value.clone())?
+        };
+        let Completion::Normal(value) = completion else {
+            return Ok(completion);
         };
         state.stack.drop_tail(arg_count)?;
         state.stack.pop()?;
         state.stack.pop()?;
-        Ok(value)
+        Ok(Completion::Normal(value))
     }
 
-    fn eval_bytecode_static_member_call(
+    fn eval_bytecode_static_member_call_completion(
         &mut self,
         state: &BytecodeState,
         property: &BytecodeProperty,
         native: Option<NativeCallTarget>,
         arg_count: usize,
-    ) -> Result<Value> {
+    ) -> Result<Completion> {
         let args = state.stack.tail(arg_count)?;
         let this_value = state.stack.value_before_tail(arg_count, 0)?;
         if let Some(target) = native {
@@ -187,21 +207,23 @@ impl Context {
                 args,
                 this_value,
             )? {
-                return Ok(value);
+                return Ok(Completion::Normal(value));
             }
             let callee =
                 self.get_static_property_value(this_value, property.name(), property.access())?;
-            return self.eval_direct_native_property_call(
-                target,
-                property.access(),
-                callee,
-                args,
-                this_value,
-            );
+            return self
+                .eval_direct_native_property_call(
+                    target,
+                    property.access(),
+                    callee,
+                    args,
+                    this_value,
+                )
+                .map(Completion::Normal);
         }
         let callee =
             self.get_static_property_value(this_value, property.name(), property.access())?;
-        self.eval_call_value(callee, args, this_value.clone())
+        self.eval_call_completion(callee, args, this_value.clone())
     }
 
     fn eval_bytecode_creation_instruction(

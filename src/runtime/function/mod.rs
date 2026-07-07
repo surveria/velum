@@ -127,6 +127,21 @@ impl Context {
         self.runtime_value(value)
     }
 
+    pub(crate) fn eval_function_call_completion_with_this(
+        &mut self,
+        id: FunctionId,
+        args: RuntimeCallArgs<'_>,
+        this_value: Value,
+    ) -> Result<Completion> {
+        let new_target = self.function_direct_call_new_target(id)?;
+        if self.function(id)?.is_async {
+            let value = self.eval_async_function_with_this(id, args, this_value, new_target)?;
+            return Ok(Completion::Normal(value));
+        }
+        self.eval_function_completion_with_this_and_new_target(id, args, this_value, new_target)?
+            .into_call_completion()
+    }
+
     pub(crate) fn eval_function_completion(
         &mut self,
         id: FunctionId,
@@ -670,12 +685,14 @@ impl Context {
                     static_binding_layout,
                     |context| {
                         context.remember_function_params(param_binding_ids, param_atoms)?;
-                        context.apply_function_param_defaults(
+                        if let Some(completion) = context.apply_function_param_defaults(
                             param_binding_ids,
                             param_atoms,
                             bytecode.param_defaults(),
                             Some(&default_layout),
-                        )?;
+                        )? {
+                            return Ok(completion);
+                        }
                         context
                             .hoist_bytecode_declarations(bytecode.hoist_plan())
                             .and_then(|()| context.eval_bytecode_block(bytecode.body()))
@@ -684,24 +701,28 @@ impl Context {
             }
             (Some(static_name_atom_cache), None, _) => {
                 self.with_static_name_atom_cache(static_name_atom_cache, |context| {
-                    context.apply_function_param_defaults(
+                    if let Some(completion) = context.apply_function_param_defaults(
                         param_binding_ids,
                         param_atoms,
                         bytecode.param_defaults(),
                         None,
-                    )?;
+                    )? {
+                        return Ok(completion);
+                    }
                     context
                         .hoist_bytecode_declarations(bytecode.hoist_plan())
                         .and_then(|()| context.eval_bytecode_block(bytecode.body()))
                 })
             }
             (None, _, _) | (Some(_), Some(_), None) => {
-                self.apply_function_param_defaults(
+                if let Some(completion) = self.apply_function_param_defaults(
                     param_binding_ids,
                     param_atoms,
                     bytecode.param_defaults(),
                     None,
-                )?;
+                )? {
+                    return Ok(completion);
+                }
                 self.hoist_bytecode_declarations(bytecode.hoist_plan())
                     .and_then(|()| self.eval_bytecode_block(bytecode.body()))
             }
@@ -714,7 +735,7 @@ impl Context {
         atoms: &[AtomId],
         defaults: &[Option<BytecodeBlock>],
         layout: Option<&BindingLayout>,
-    ) -> Result<()> {
+    ) -> Result<Option<Completion>> {
         if binding_ids.len() != atoms.len() || binding_ids.len() != defaults.len() {
             return Err(Error::runtime("function parameter layout length mismatch"));
         }
@@ -731,10 +752,13 @@ impl Context {
             if !matches!(cell.value(), Value::Undefined) {
                 continue;
             }
-            let value = self.eval_bytecode_expression(default)?;
+            let value = match self.eval_bytecode_block(default)? {
+                Completion::Normal(value) => value,
+                completion => return Ok(Some(completion)),
+            };
             cell.assign("function parameter", value)?;
         }
-        Ok(())
+        Ok(None)
     }
 
     fn function_param_cell(

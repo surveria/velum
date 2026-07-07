@@ -257,18 +257,42 @@ impl Context {
         }
     }
 
-    pub(crate) fn eval_cached_call_value(
+    pub(crate) fn eval_call_completion(
+        &mut self,
+        callee: Value,
+        args: &[Value],
+        this_value: Value,
+    ) -> Result<Completion> {
+        match callee {
+            Value::Function(id) => self.eval_function_call_completion_with_this(
+                id,
+                RuntimeCallArgs::values(args),
+                this_value,
+            ),
+            Value::NativeFunction(id) => {
+                let kind = self.native_function(id)?.kind();
+                self.eval_direct_or_generic_native_function_kind(kind, args, &this_value)
+                    .map(Completion::Normal)
+            }
+            Value::HostFunction(id) => self
+                .eval_host_function(id, RuntimeCallArgs::values(args))
+                .map(Completion::Normal),
+            value => Err(Error::type_error(format!("'{value}' is not callable"))),
+        }
+    }
+
+    pub(crate) fn eval_cached_call_completion(
         &mut self,
         site: BytecodeCallSite,
         callee: Value,
         args: &[Value],
         this_value: Value,
-    ) -> Result<Value> {
+    ) -> Result<Completion> {
         let site = site.site();
         if let Some(cache) = self.cached_call_value(site)? {
             if cache.matches_callee(&callee) {
                 self.record_call_value_cache_hit();
-                return self.eval_call_value_cache(cache, args, this_value);
+                return self.eval_call_completion_cache(cache, args, this_value);
             }
             self.record_call_value_cache_fallback();
         } else {
@@ -276,10 +300,10 @@ impl Context {
         }
 
         let Some(cache) = self.cacheable_call_value(&callee)? else {
-            return self.eval_call_value(callee, args, this_value);
+            return self.eval_call_completion(callee, args, this_value);
         };
         self.remember_call_value(site, cache)?;
-        self.eval_call_value_cache(cache, args, this_value)
+        self.eval_call_completion_cache(cache, args, this_value)
     }
 
     fn cacheable_call_value(&self, callee: &Value) -> Result<Option<CallValueCache>> {
@@ -291,60 +315,52 @@ impl Context {
         Ok(CallValueCache::from_callee(callee, native_kind))
     }
 
-    fn eval_call_value_cache(
+    fn eval_call_completion_cache(
         &mut self,
         cache: CallValueCache,
         args: &[Value],
         this_value: Value,
-    ) -> Result<Value> {
+    ) -> Result<Completion> {
         match cache {
-            CallValueCache::Function(id) => {
-                self.eval_function_with_this(id, RuntimeCallArgs::values(args), this_value)
-            }
-            CallValueCache::NativeFunction { kind, .. } => {
-                self.eval_direct_or_generic_native_function_kind(kind, args, &this_value)
-            }
-            CallValueCache::HostFunction(id) => {
-                self.eval_host_function(id, RuntimeCallArgs::values(args))
-            }
+            CallValueCache::Function(id) => self.eval_function_call_completion_with_this(
+                id,
+                RuntimeCallArgs::values(args),
+                this_value,
+            ),
+            CallValueCache::NativeFunction { kind, .. } => self
+                .eval_direct_or_generic_native_function_kind(kind, args, &this_value)
+                .map(Completion::Normal),
+            CallValueCache::HostFunction(id) => self
+                .eval_host_function(id, RuntimeCallArgs::values(args))
+                .map(Completion::Normal),
         }
     }
 
-    pub(crate) fn eval_bytecode_identifier_call_value(
+    pub(crate) fn eval_bytecode_identifier_call_completion(
         &mut self,
         callee: &BytecodeBinding,
         native: Option<NativeCallTarget>,
         args: &[Value],
-    ) -> Result<Value> {
+    ) -> Result<Completion> {
         let reference = self.eval_bytecode_identifier_call_reference(callee, native)?;
-        self.eval_call_reference_result(reference, args)
+        self.eval_call_reference_completion(reference, args)
     }
 
-    fn eval_call_reference_result(
+    fn eval_call_reference_completion(
         &mut self,
         reference: CallReference,
         args: &[Value],
-    ) -> Result<Value> {
+    ) -> Result<Completion> {
         match reference {
-            CallReference::DirectNative { target, this_value } => {
-                self.eval_direct_native_call_target(target, args, &this_value)
+            CallReference::DirectNative { target, this_value } => self
+                .eval_direct_native_call_target(target, args, &this_value)
+                .map(Completion::Normal),
+            CallReference::Native { kind, this_value } => self
+                .eval_direct_or_generic_native_function_kind(kind, args, &this_value)
+                .map(Completion::Normal),
+            CallReference::Generic { callee, this_value } => {
+                self.eval_call_completion(callee, args, this_value)
             }
-            CallReference::Native { kind, this_value } => {
-                self.eval_direct_or_generic_native_function_kind(kind, args, &this_value)
-            }
-            CallReference::Generic { callee, this_value } => match callee {
-                Value::Function(id) => {
-                    self.eval_function_with_this(id, RuntimeCallArgs::values(args), this_value)
-                }
-                Value::NativeFunction(id) => {
-                    let kind = self.native_function(id)?.kind();
-                    self.eval_direct_or_generic_native_function_kind(kind, args, &this_value)
-                }
-                Value::HostFunction(id) => {
-                    self.eval_host_function(id, RuntimeCallArgs::values(args))
-                }
-                value => Err(Error::type_error(format!("'{value}' is not callable"))),
-            },
         }
     }
 

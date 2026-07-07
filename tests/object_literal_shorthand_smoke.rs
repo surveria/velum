@@ -125,6 +125,125 @@ fn supports_computed_symbol_object_literal_methods() -> TestResult {
 }
 
 #[test]
+fn supports_async_object_literal_methods() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    context.eval(
+        r"
+        let value = 0;
+        let object = {
+            base: 40,
+            async answer(extra) {
+                return await Promise.resolve(this.base + extra);
+            },
+        };
+        object.answer(2).then(function(resolved) {
+            value = resolved;
+        });
+        ",
+    )?;
+
+    let value = context.eval(
+        r#"
+        let AsyncFunction = async function() {}.constructor;
+        value === 42 &&
+            object.answer.name === "answer" &&
+            object.answer.constructor === AsyncFunction &&
+            !("prototype" in object.answer) ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn supports_computed_async_object_literal_methods() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    context.eval(
+        r#"
+        let key = "answer";
+        let value = 0;
+        let object = {
+            base: 40,
+            async [key](extra) {
+                return await Promise.resolve(this.base + extra);
+            },
+        };
+        object.answer(2).then(function(resolved) {
+            value = resolved;
+        });
+        "#,
+    )?;
+
+    let value = context.eval(
+        r#"
+        let AsyncFunction = async function() {}.constructor;
+        value === 42 &&
+            object.answer.name === "answer" &&
+            object.answer.constructor === AsyncFunction ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn preserves_async_named_sync_object_literal_method() -> TestResult {
+    let value = eval(
+        r#"
+        let object = {
+            async() {
+                return 42;
+            },
+        };
+        object.async() === 42 &&
+            object.async.name === "async" &&
+            object.async.constructor === Function ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn rejects_async_object_method_default_parameter_errors() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    context.eval(
+        r#"
+        let bodyRun = false;
+        let rejected = "";
+        function fail() {
+            throw new TypeError("bad default");
+        }
+        let object = {
+            async answer(value = fail()) {
+                bodyRun = true;
+                return value;
+            },
+        };
+        object.answer().then(function() {
+            rejected = "resolved";
+        }, function(error) {
+            rejected = error.name + ":" + error.message;
+        });
+        "#,
+    )?;
+
+    let value = context.eval(
+        r#"
+        !bodyRun && rejected === "TypeError:bad default" ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn rejects_missing_shorthand_bindings() -> TestResult {
     let Err(error) = eval("let camera = { missing }; camera.missing") else {
         return Err("expected missing shorthand binding to fail".into());
