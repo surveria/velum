@@ -109,6 +109,7 @@ pub enum Expr {
         name: Option<StaticName>,
         params: Rc<[FunctionParam]>,
         body: Rc<[Stmt]>,
+        is_async: bool,
     },
     Object(Vec<ObjectProperty>),
     Array(Vec<Self>),

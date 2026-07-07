@@ -84,6 +84,36 @@ fn catches_function_prototype_call_and_bind_type_errors() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))
 }
 
+#[test]
+fn catches_throw_from_called_js_function() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        function fail() {
+            throw new TypeError("from callee");
+        }
+        let caught = "";
+
+        try {
+            fail();
+        } catch (error) {
+            caught = error.name + ":" + error.message;
+        }
+
+        assert.throws(TypeError, function() {
+            fail();
+        });
+
+        caught
+        "#,
+    )?;
+
+    ensure_string_starts_with(&value, "TypeError:")?;
+    ensure_string_contains(&value, "from callee")
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

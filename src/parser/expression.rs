@@ -472,6 +472,14 @@ impl Parser {
     }
 
     fn object_literal_property(&mut self) -> Result<ObjectProperty> {
+        if self.async_object_method_start() {
+            self.consume(
+                &TokenKind::Async,
+                "expected 'async' before async object method",
+            )?;
+            let name = self.object_property_key()?;
+            return self.object_method_property(name, true);
+        }
         let name = self.object_property_key()?;
         if self.match_kind(&TokenKind::Colon) {
             let value = self.expression()?;
@@ -481,23 +489,7 @@ impl Parser {
             });
         }
         if self.match_kind(&TokenKind::LParen) {
-            let params = self.function_parameters()?.into();
-            self.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
-            self.consume(&TokenKind::LBrace, "expected '{' before method body")?;
-            let body = self.with_new_target_scope(Self::block_statements)?.into();
-            let id = self.static_function()?;
-            let key = name.into_key();
-            let name = match &key {
-                ObjectPropertyKey::Static(name) => Some(name.clone()),
-                ObjectPropertyKey::Computed(_) => None,
-            };
-            let value = Expr::MethodFunction {
-                id,
-                name,
-                params,
-                body,
-            };
-            return Ok(ObjectProperty { key, value });
+            return self.object_method_property_after_lparen(name, false);
         }
         if let ObjectPropertyName::Static {
             key,
@@ -514,6 +506,46 @@ impl Parser {
             "expected ':' after object property name",
             self.offset(),
         ))
+    }
+
+    fn async_object_method_start(&self) -> bool {
+        self.peek_kind_is(0, &TokenKind::Async)
+            && !self.peek_has_line_terminator_before(1)
+            && self.peek_kind(1).is_some_and(is_object_property_name_start)
+    }
+
+    fn object_method_property(
+        &mut self,
+        name: ObjectPropertyName,
+        is_async: bool,
+    ) -> Result<ObjectProperty> {
+        self.consume(&TokenKind::LParen, "expected '(' after object method name")?;
+        self.object_method_property_after_lparen(name, is_async)
+    }
+
+    fn object_method_property_after_lparen(
+        &mut self,
+        name: ObjectPropertyName,
+        is_async: bool,
+    ) -> Result<ObjectProperty> {
+        let params = self.function_parameters()?.into();
+        self.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
+        self.consume(&TokenKind::LBrace, "expected '{' before method body")?;
+        let body = self.with_new_target_scope(Self::block_statements)?.into();
+        let id = self.static_function()?;
+        let key = name.into_key();
+        let name = match &key {
+            ObjectPropertyKey::Static(name) => Some(name.clone()),
+            ObjectPropertyKey::Computed(_) => None,
+        };
+        let value = Expr::MethodFunction {
+            id,
+            name,
+            params,
+            body,
+            is_async,
+        };
+        Ok(ObjectProperty { key, value })
     }
 
     fn array_literal(&mut self) -> Result<Expr> {
@@ -718,4 +750,14 @@ const fn keyword_property_name(kind: &TokenKind) -> Option<&'static str> {
         TokenKind::Undefined => Some("undefined"),
         _ => None,
     }
+}
+
+const fn is_object_property_name_start(kind: &TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::Identifier(_)
+            | TokenKind::String(_)
+            | TokenKind::Number(_)
+            | TokenKind::LBracket
+    ) || keyword_property_name(kind).is_some()
 }
