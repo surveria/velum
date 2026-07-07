@@ -27,6 +27,7 @@ impl Context {
                 self.eval_bytecode_invocation_instruction(state, instruction, next)
             }
             BytecodeInstruction::Construct { .. }
+            | BytecodeInstruction::ConstructValue { .. }
             | BytecodeInstruction::CreateFunction { .. }
             | BytecodeInstruction::ArrayLiteral { .. }
             | BytecodeInstruction::ObjectLiteral { .. } => {
@@ -114,6 +115,7 @@ impl Context {
                 Ok(None)
             }
             BytecodeInstruction::Construct { .. }
+            | BytecodeInstruction::ConstructValue { .. }
             | BytecodeInstruction::CreateFunction { .. }
             | BytecodeInstruction::ArrayLiteral { .. }
             | BytecodeInstruction::ObjectLiteral { .. } => {
@@ -214,6 +216,16 @@ impl Context {
                 let args = state.stack.tail(*arg_count)?;
                 let value = self.eval_bytecode_new_value(constructor, *native, args)?;
                 state.stack.drop_tail(*arg_count)?;
+                state.stack.push(value);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::ConstructValue { arg_count } => {
+                let args = state.stack.tail(*arg_count)?;
+                let constructor = state.stack.value_before_tail(*arg_count, 0)?.clone();
+                let value = self.eval_new_value(constructor, args)?;
+                state.stack.drop_tail(*arg_count)?;
+                state.stack.pop()?;
                 state.stack.push(value);
                 state.pc = next;
                 Ok(None)

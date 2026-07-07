@@ -178,15 +178,10 @@ impl CaptureBindingCollector {
             Expr::Function { params, body, .. }
             | Expr::ArrowFunction { params, body, .. }
             | Expr::MethodFunction { params, body, .. } => self.collect_function_body(params, body),
-            Expr::Identifier(binding)
-            | Expr::New {
-                constructor: binding,
-                ..
-            } => {
-                self.collect_binding(binding);
-                if let Expr::New { args, .. } = expr {
-                    self.collect_exprs(args);
-                }
+            Expr::Identifier(binding) => self.collect_binding(binding),
+            Expr::New { constructor, args } => {
+                self.collect_expr(constructor);
+                self.collect_exprs(args);
             }
             Expr::Parenthesized(expr)
             | Expr::Unary { expr, .. }

@@ -414,6 +414,18 @@ impl Context {
         self.eval_error_constructor(ErrorName::Test262Error, RuntimeCallArgs::values(args))
     }
 
+    pub(crate) fn eval_new_value(&mut self, constructor: Value, args: &[Value]) -> Result<Value> {
+        match constructor {
+            Value::Function(id) => {
+                self.eval_function_constructor_value(id, RuntimeCallArgs::values(args))
+            }
+            Value::NativeFunction(id) => {
+                self.construct_native_function(id, RuntimeCallArgs::values(args))
+            }
+            value => Err(Error::runtime(format!("'{value}' is not a constructor"))),
+        }
+    }
+
     fn eval_bytecode_function_constructor(
         &mut self,
         constructor: &BytecodeBinding,
@@ -441,6 +453,14 @@ impl Context {
                 constructor.name()
             )));
         };
+        self.eval_function_constructor_value(id, RuntimeCallArgs::values(args))
+    }
+
+    fn eval_function_constructor_value(
+        &mut self,
+        id: crate::value::FunctionId,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         let prototype = self.function_constructor_prototype(id)?;
         let constructor_key = self.object_constructor_property_key()?;
         let object = self.objects.create_with_prototype(
@@ -451,7 +471,7 @@ impl Context {
         )?;
         match self.eval_function_completion_with_this_and_new_target(
             id,
-            RuntimeCallArgs::values(args),
+            args,
             object.clone(),
             Value::Function(id),
         )? {

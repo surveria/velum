@@ -524,6 +524,7 @@ impl BytecodeInstruction {
                 | Self::Print { .. }
                 | Self::AssertThrows { .. }
                 | Self::Construct { .. }
+                | Self::ConstructValue { .. }
                 | Self::PushLiteral(_)
                 | Self::PushString(_)
                 | Self::PushUndefined

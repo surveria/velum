@@ -370,11 +370,19 @@ impl<'a> BytecodeCompiler<'a> {
         Ok(())
     }
 
-    fn compile_new_expr(&mut self, constructor: &StaticBinding, args: &[Expr]) -> Result<()> {
+    fn compile_new_expr(&mut self, constructor: &Expr, args: &[Expr]) -> Result<()> {
+        if let Some(binding) = constructor_binding_expr(constructor) {
+            self.compile_args(args)?;
+            self.emit(BytecodeInstruction::Construct {
+                constructor: self.compile_binding(binding)?,
+                native: NativeCallTarget::from_binding_name(binding.as_str()),
+                arg_count: args.len(),
+            });
+            return Ok(());
+        }
+        self.compile_expr(constructor)?;
         self.compile_args(args)?;
-        self.emit(BytecodeInstruction::Construct {
-            constructor: self.compile_binding(constructor)?,
-            native: NativeCallTarget::from_binding_name(constructor.as_str()),
+        self.emit(BytecodeInstruction::ConstructValue {
             arg_count: args.len(),
         });
         Ok(())
@@ -711,6 +719,7 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::Print { .. }
             | BytecodeInstruction::AssertThrows { .. }
             | BytecodeInstruction::Construct { .. }
+            | BytecodeInstruction::ConstructValue { .. }
             | BytecodeInstruction::CreateFunction { .. }
             | BytecodeInstruction::ArrayLiteral { .. }
             | BytecodeInstruction::ObjectLiteral { .. }
@@ -784,6 +793,14 @@ fn function_compile_spec(expr: &Expr) -> Result<FunctionCompileSpec<'_>> {
             new_target_mode: BytecodeNewTargetMode::Own,
         }),
         _ => Err(Error::runtime("expected function expression")),
+    }
+}
+
+fn constructor_binding_expr(expr: &Expr) -> Option<&StaticBinding> {
+    match expr {
+        Expr::Identifier(binding) => Some(binding),
+        Expr::Parenthesized(expr) => constructor_binding_expr(expr),
+        _ => None,
     }
 }
 
