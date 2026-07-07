@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T103559Z.md`
-- Task: rsqjs-test-report-20260707T103559Z.md
-- Performance: 0.86x (42/63 >1.00x)
+- `rsqjs-test-report-20260707T104316Z.md`
+- Task: rsqjs-test-report-20260707T104316Z.md
+- Performance: 0.86x (41/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 15309 passed / 87269 failed (14.92%)
+- Full Test262: 15319 passed / 87259 failed (14.93%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -276,5 +276,6 @@ Latest report:
 | `20260707T101222Z` `16e45e6` Support hashbang and Unicode identifiers | 0.85x (41/63 >1.00x) | - (0/63 >1.00x) | 15279 passed / 87299 failed (14.90%) |
 | `20260707T101753Z` `16e45e6` Support hashbang and Unicode identifiers | 0.86x (41/63 >1.00x) | - (0/63 >1.00x) | 15279 passed / 87299 failed (14.90%) |
 | `20260707T102300Z` `ba5a763` Optimize builtin numeric constant loads | 0.85x (41/63 >1.00x) | - (0/63 >1.00x) | 15279 passed / 87299 failed (14.90%) |
-| `20260707T102926Z` `7cee847` Throw SyntaxError from Function constructor parse failures | 0.85x (42/63 >1.00x) | - (0/63 >1.00x) | 15309 passed / 87269 failed (14.92%) |
-| `20260707T103559Z` rsqjs-test-report-20260707T103559Z.md | 0.86x (42/63 >1.00x) | - (0/63 >1.00x) | 15309 passed / 87269 failed (14.92%) |
+| `20260707T102926Z` `e0cf553` Throw SyntaxError from Function constructor parse failures | 0.85x (42/63 >1.00x) | - (0/63 >1.00x) | 15309 passed / 87269 failed (14.92%) |
+| `20260707T103559Z` `e0cf553` Throw SyntaxError from Function constructor parse failures | 0.86x (42/63 >1.00x) | - (0/63 >1.00x) | 15309 passed / 87269 failed (14.92%) |
+| `20260707T104316Z` rsqjs-test-report-20260707T104316Z.md | 0.86x (41/63 >1.00x) | - (0/63 >1.00x) | 15319 passed / 87259 failed (14.93%) |
