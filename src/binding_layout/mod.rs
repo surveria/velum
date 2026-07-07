@@ -502,6 +502,9 @@ impl LayoutBuilder {
             | Expr::RegExpLiteral { .. }
             | Expr::This
             | Expr::NewTarget => Ok(()),
+            Expr::TemplateLiteral { expressions, .. } => {
+                self.analyze_exprs(expressions, scope, function)
+            }
             Expr::Identifier(binding) => self.resolve(binding, scope, function),
             Expr::Parenthesized(expr)
             | Expr::Unary { expr, .. }

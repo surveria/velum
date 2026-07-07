@@ -46,6 +46,21 @@ impl Context {
         }
     }
 
+    pub(crate) fn template_concat_text(&self, parts: &[Value]) -> Result<String> {
+        let mut text = String::new();
+        for value in parts {
+            // Template substitutions use ToString semantics, which reject
+            // symbol values instead of stringifying their description.
+            if matches!(value, Value::Symbol(_)) {
+                return Err(Error::type_error(
+                    "cannot convert a Symbol value to a string",
+                ));
+            }
+            text.push_str(&self.display_for_concat(value)?);
+        }
+        Ok(text)
+    }
+
     pub(crate) fn checked_value(&self, value: Value) -> Result<Value> {
         match &value {
             Value::String(text) => self.check_string_len(text)?,

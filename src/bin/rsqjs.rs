@@ -5,7 +5,9 @@ use rs_quickjs::{Runtime, Value};
 
 fn main() {
     if let Err(error) = run() {
-        eprintln!("{error}");
+        // Alternate form prints the full anyhow context chain so CLI smoke
+        // runs expose the underlying lexer/parser/runtime error.
+        eprintln!("{error:#}");
         process::exit(1);
     }
 }

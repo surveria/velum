@@ -276,6 +276,7 @@ impl CaptureBindingCollector {
             | Expr::RegExpLiteral { .. }
             | Expr::This
             | Expr::NewTarget => {}
+            Expr::TemplateLiteral { expressions, .. } => self.collect_exprs(expressions),
             Expr::Function { params, body, .. }
             | Expr::ArrowFunction { params, body, .. }
             | Expr::MethodFunction { params, body, .. } => self.collect_function_body(params, body),

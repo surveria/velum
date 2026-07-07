@@ -25,6 +25,26 @@ struct Lexer<'a> {
     cursor: usize,
     tokens: Vec<Token>,
     line_terminator_before: bool,
+    template_substitutions: Vec<TemplateSubstitutionState>,
+}
+
+/// Tracks one open `${` substitution of a template literal while its
+/// expression tokens are produced by the main scanning loop.
+#[derive(Debug)]
+struct TemplateSubstitutionState {
+    /// Count of `{` tokens opened inside the substitution expression that a
+    /// later `}` must close before the substitution itself can end.
+    open_braces: usize,
+    /// Offset of the `${` marker, used for unterminated-substitution errors.
+    substitution_offset: usize,
+}
+
+/// Distinguishes scanning the leading template part (after the opening
+/// backtick) from scanning a continuation part (after a substitution `}`).
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum TemplatePartPosition {
+    Head,
+    Continuation,
 }
 
 impl<'a> Lexer<'a> {
@@ -35,6 +55,7 @@ impl<'a> Lexer<'a> {
             cursor: 0,
             tokens: Vec::new(),
             line_terminator_before: false,
+            template_substitutions: Vec::new(),
         }
     }
 
@@ -71,63 +92,31 @@ impl<'a> Lexer<'a> {
                 '.' => self.simple(TokenKind::Dot),
                 '(' => self.simple(TokenKind::LParen),
                 ')' => self.simple(TokenKind::RParen),
-                '{' => self.simple(TokenKind::LBrace),
-                '}' => self.simple(TokenKind::RBrace),
+                '{' => {
+                    self.substitution_brace_open(offset)?;
+                    self.simple(TokenKind::LBrace);
+                }
+                '}' => self.right_brace_or_template_continuation(offset)?,
                 '[' => self.simple(TokenKind::LBracket),
                 ']' => self.simple(TokenKind::RBracket),
                 ';' => self.simple(TokenKind::Semicolon),
                 ',' => self.simple(TokenKind::Comma),
-                '!' => {
-                    self.advance();
-                    if self.match_char('=') {
-                        if self.match_char('=') {
-                            self.push(TokenKind::StrictNotEqual, offset);
-                        } else {
-                            self.push(TokenKind::BangEqual, offset);
-                        }
-                    } else {
-                        self.push(TokenKind::Bang, offset);
-                    }
-                }
-                '=' => {
-                    self.advance();
-                    if self.match_char('>') {
-                        self.push(TokenKind::Arrow, offset);
-                    } else if self.match_char('=') {
-                        if self.match_char('=') {
-                            self.push(TokenKind::StrictEqual, offset);
-                        } else {
-                            self.push(TokenKind::EqualEqual, offset);
-                        }
-                    } else {
-                        self.push(TokenKind::Equal, offset);
-                    }
-                }
+                '!' => self.bang_token(offset),
+                '=' => self.equal_token(offset),
                 '<' => self.less_token(offset),
                 '>' => self.greater_token(offset),
-                '&' => {
-                    self.advance();
-                    if self.match_char('&') {
-                        self.push(TokenKind::AndAnd, offset);
-                    } else if self.match_char('=') {
-                        self.push(TokenKind::AmpersandEqual, offset);
-                    } else {
-                        self.push(TokenKind::Ampersand, offset);
-                    }
-                }
-                '|' => {
-                    self.advance();
-                    if self.match_char('|') {
-                        self.push(TokenKind::OrOr, offset);
-                    } else if self.match_char('=') {
-                        self.push(TokenKind::PipeEqual, offset);
-                    } else {
-                        self.push(TokenKind::Pipe, offset);
-                    }
-                }
+                '&' => self.ampersand_token(offset),
+                '|' => self.pipe_token(offset),
                 '^' => self.simple_or_equal(offset, TokenKind::Caret, TokenKind::CaretEqual),
                 _ => return Err(Error::lex(format!("unexpected character '{ch}'"), offset)),
             }
+        }
+
+        if let Some(substitution) = self.template_substitutions.last() {
+            return Err(Error::lex(
+                "unterminated template literal substitution",
+                substitution.substitution_offset,
+            ));
         }
 
         self.tokens.push(Token {
@@ -377,20 +366,24 @@ impl<'a> Lexer<'a> {
 
     fn template_literal(&mut self, offset: usize) -> Result<()> {
         self.advance();
+        self.template_part(offset, TemplatePartPosition::Head)
+    }
+
+    fn template_part(&mut self, offset: usize, position: TemplatePartPosition) -> Result<()> {
         let mut output = String::new();
 
         while let Some((current_offset, ch)) = self.peek() {
             self.advance();
             match ch {
-                '`' => {
-                    self.push(TokenKind::String(output), offset);
-                    return Ok(());
-                }
+                '`' => return self.end_template_part(position, output, offset),
                 '$' if self.peek_char() == Some(TEMPLATE_SUBSTITUTION_START) => {
-                    return Err(Error::lex(
-                        "template literal substitutions are not supported",
+                    self.advance();
+                    return self.begin_template_substitution(
+                        position,
+                        output,
+                        offset,
                         current_offset,
-                    ));
+                    );
                 }
                 '\\' => self.template_escape(current_offset, &mut output)?,
                 '\n' => output.push('\n'),
@@ -406,6 +399,88 @@ impl<'a> Lexer<'a> {
         }
 
         Err(Error::lex("unterminated template literal", offset))
+    }
+
+    fn end_template_part(
+        &mut self,
+        position: TemplatePartPosition,
+        output: String,
+        offset: usize,
+    ) -> Result<()> {
+        match position {
+            TemplatePartPosition::Head => {
+                // A template without substitutions stays a plain string token.
+                self.push(TokenKind::String(output), offset);
+            }
+            TemplatePartPosition::Continuation => {
+                if self.template_substitutions.pop().is_none() {
+                    return Err(Error::lex(
+                        "template substitution state underflowed",
+                        offset,
+                    ));
+                }
+                self.push(TokenKind::TemplateTail(output), offset);
+            }
+        }
+        Ok(())
+    }
+
+    fn begin_template_substitution(
+        &mut self,
+        position: TemplatePartPosition,
+        output: String,
+        offset: usize,
+        substitution_offset: usize,
+    ) -> Result<()> {
+        match position {
+            TemplatePartPosition::Head => {
+                self.push(TokenKind::TemplateHead(output), offset);
+                self.template_substitutions.push(TemplateSubstitutionState {
+                    open_braces: 0,
+                    substitution_offset,
+                });
+            }
+            TemplatePartPosition::Continuation => {
+                let Some(substitution) = self.template_substitutions.last_mut() else {
+                    return Err(Error::lex(
+                        "template substitution state underflowed",
+                        offset,
+                    ));
+                };
+                substitution.open_braces = 0;
+                substitution.substitution_offset = substitution_offset;
+                self.push(TokenKind::TemplateMiddle(output), offset);
+            }
+        }
+        Ok(())
+    }
+
+    fn substitution_brace_open(&mut self, offset: usize) -> Result<()> {
+        if let Some(substitution) = self.template_substitutions.last_mut() {
+            substitution.open_braces =
+                substitution.open_braces.checked_add(1).ok_or_else(|| {
+                    Error::lex("template substitution brace depth overflowed", offset)
+                })?;
+        }
+        Ok(())
+    }
+
+    fn right_brace_or_template_continuation(&mut self, offset: usize) -> Result<()> {
+        match self.template_substitutions.last_mut() {
+            Some(substitution) if substitution.open_braces == 0 => {
+                self.advance();
+                self.template_part(offset, TemplatePartPosition::Continuation)
+            }
+            Some(substitution) => {
+                substitution.open_braces = substitution.open_braces.saturating_sub(1);
+                self.simple(TokenKind::RBrace);
+                Ok(())
+            }
+            None => {
+                self.simple(TokenKind::RBrace);
+                Ok(())
+            }
+        }
     }
 
     fn template_escape(&mut self, slash_offset: usize, output: &mut String) -> Result<()> {
@@ -700,6 +775,56 @@ impl<'a> Lexer<'a> {
             self.push(TokenKind::StarStarEqual, offset);
         } else {
             self.push(TokenKind::StarStar, offset);
+        }
+    }
+
+    fn bang_token(&mut self, offset: usize) {
+        self.advance();
+        if self.match_char('=') {
+            if self.match_char('=') {
+                self.push(TokenKind::StrictNotEqual, offset);
+            } else {
+                self.push(TokenKind::BangEqual, offset);
+            }
+        } else {
+            self.push(TokenKind::Bang, offset);
+        }
+    }
+
+    fn equal_token(&mut self, offset: usize) {
+        self.advance();
+        if self.match_char('>') {
+            self.push(TokenKind::Arrow, offset);
+        } else if self.match_char('=') {
+            if self.match_char('=') {
+                self.push(TokenKind::StrictEqual, offset);
+            } else {
+                self.push(TokenKind::EqualEqual, offset);
+            }
+        } else {
+            self.push(TokenKind::Equal, offset);
+        }
+    }
+
+    fn ampersand_token(&mut self, offset: usize) {
+        self.advance();
+        if self.match_char('&') {
+            self.push(TokenKind::AndAnd, offset);
+        } else if self.match_char('=') {
+            self.push(TokenKind::AmpersandEqual, offset);
+        } else {
+            self.push(TokenKind::Ampersand, offset);
+        }
+    }
+
+    fn pipe_token(&mut self, offset: usize) {
+        self.advance();
+        if self.match_char('|') {
+            self.push(TokenKind::OrOr, offset);
+        } else if self.match_char('=') {
+            self.push(TokenKind::PipeEqual, offset);
+        } else {
+            self.push(TokenKind::Pipe, offset);
         }
     }
 

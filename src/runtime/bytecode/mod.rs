@@ -61,6 +61,7 @@ impl Context {
         match instruction {
             BytecodeInstruction::PushLiteral(_)
             | BytecodeInstruction::PushString(_)
+            | BytecodeInstruction::TemplateConcat { .. }
             | BytecodeInstruction::CreateRegExp { .. }
             | BytecodeInstruction::PushUndefined
             | BytecodeInstruction::LoadThis
@@ -150,6 +151,9 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
+            BytecodeInstruction::TemplateConcat { part_count } => {
+                self.eval_bytecode_template_concat(state, *part_count, next)
+            }
             BytecodeInstruction::CreateRegExp { pattern, flags } => {
                 self.eval_bytecode_create_regexp(state, pattern, flags, next)
             }
@@ -208,20 +212,7 @@ impl Context {
             BytecodeInstruction::Unary(_) | BytecodeInstruction::NumberUnary(_) => {
                 self.eval_bytecode_unary_instruction(state, instruction, next)
             }
-            BytecodeInstruction::Await => {
-                let value = state.stack.pop()?;
-                match self.eval_bytecode_await(value)? {
-                    Completion::Normal(value) => {
-                        state.stack.push(value);
-                        state.pc = next;
-                        Ok(None)
-                    }
-                    Completion::Throw(value) => Ok(Some(Completion::Throw(value))),
-                    completion @ (Completion::Return(_)
-                    | Completion::Break { .. }
-                    | Completion::Continue(_)) => completion.into_result().map(|_| None),
-                }
-            }
+            BytecodeInstruction::Await => self.eval_bytecode_await_instruction(state, next),
             BytecodeInstruction::TypeOfBinding(binding) => {
                 state
                     .stack
@@ -237,6 +228,39 @@ impl Context {
             }
             _ => Err(Error::runtime("bytecode stack instruction mismatch")),
         }
+    }
+
+    fn eval_bytecode_await_instruction(
+        &mut self,
+        state: &mut BytecodeState,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let value = state.stack.pop()?;
+        match self.eval_bytecode_await(value)? {
+            Completion::Normal(value) => {
+                state.stack.push(value);
+                state.pc = next;
+                Ok(None)
+            }
+            Completion::Throw(value) => Ok(Some(Completion::Throw(value))),
+            completion @ (Completion::Return(_)
+            | Completion::Break { .. }
+            | Completion::Continue(_)) => completion.into_result().map(|_| None),
+        }
+    }
+
+    fn eval_bytecode_template_concat(
+        &mut self,
+        state: &mut BytecodeState,
+        part_count: usize,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let text = self.template_concat_text(state.stack.tail(part_count)?)?;
+        let value = self.heap_string_value(&text)?;
+        state.stack.drop_tail(part_count)?;
+        state.stack.push(value);
+        state.pc = next;
+        Ok(None)
     }
 
     fn eval_bytecode_create_regexp(

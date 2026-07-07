@@ -26,6 +26,10 @@ pub enum ObjectPropertyKey {
 pub enum Expr {
     Literal(Value),
     StringLiteral(StaticString),
+    TemplateLiteral {
+        quasis: Vec<StaticString>,
+        expressions: Vec<Self>,
+    },
     RegExpLiteral {
         pattern: StaticString,
         flags: StaticString,

@@ -293,6 +293,34 @@ impl Parser {
         })
     }
 
+    fn template_literal(&mut self, head: String) -> Result<Expr> {
+        let mut quasis = vec![self.static_string(head)?];
+        let mut expressions = Vec::new();
+        loop {
+            expressions.push(self.expression()?);
+            let token = self.advance().ok_or_else(|| {
+                Error::parse("expected template literal continuation", self.offset())
+            })?;
+            match token.kind {
+                TokenKind::TemplateMiddle(cooked) => quasis.push(self.static_string(cooked)?),
+                TokenKind::TemplateTail(cooked) => {
+                    quasis.push(self.static_string(cooked)?);
+                    break;
+                }
+                _ => {
+                    return Err(Error::parse(
+                        "expected '}' to continue template literal",
+                        token.offset,
+                    ));
+                }
+            }
+        }
+        Ok(Expr::TemplateLiteral {
+            quasis,
+            expressions,
+        })
+    }
+
     fn arguments(&mut self) -> Result<Vec<Expr>> {
         let mut args = Vec::new();
         loop {
@@ -311,6 +339,7 @@ impl Parser {
         let expr = match token.kind {
             TokenKind::Number(value) => Expr::Literal(Value::Number(value)),
             TokenKind::String(value) => Expr::StringLiteral(self.static_string(value)?),
+            TokenKind::TemplateHead(head) => self.template_literal(head)?,
             TokenKind::RegExp { pattern, flags } => Expr::RegExpLiteral {
                 pattern: self.static_string(pattern)?,
                 flags: self.static_string(flags)?,
