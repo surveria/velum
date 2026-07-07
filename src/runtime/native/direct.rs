@@ -6,6 +6,7 @@ use crate::{
         Context,
         call_args::RuntimeCallArgs,
         object::{CacheableNativePropertyValue, PropertyLookup},
+        property::DynamicPropertyKey,
     },
     value::{NativeFunctionId, Value},
 };
@@ -116,6 +117,62 @@ impl Context {
                 }
                 self.record_native_call_cache_fallback();
                 self.eval_call_value(Value::NativeFunction(function), args, this_value.clone())
+                    .map(Some)
+            }
+            CacheableNativePropertyValue::Other(callee) => {
+                self.record_native_call_cache_fallback();
+                self.eval_call_value(callee, args, this_value.clone())
+                    .map(Some)
+            }
+            CacheableNativePropertyValue::Missing => {
+                self.record_native_call_cache_fallback();
+                self.eval_call_value(Value::Undefined, args, this_value.clone())
+                    .map(Some)
+            }
+            CacheableNativePropertyValue::Uncacheable => Ok(None),
+        }
+    }
+
+    pub(crate) fn eval_cached_native_dynamic_member_call(
+        &mut self,
+        property: &DynamicPropertyKey,
+        access: StaticPropertyAccessId,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Option<Value>> {
+        let Value::Object(object) = this_value else {
+            return Ok(None);
+        };
+        if property.name() == PROTOTYPE_PROPERTY
+            || self.objects.array_len_if_array(*object)?.is_some()
+        {
+            return Ok(None);
+        }
+
+        let lookup = property.lookup();
+        if let Some(kind) =
+            self.cached_static_object_property_native_call_kind(access, *object, lookup)?
+        {
+            self.record_native_call_cache_hit();
+            return self
+                .eval_native_function_kind(kind, runtime_call_args(args), this_value)
+                .map(Some);
+        }
+
+        let candidate = self
+            .objects
+            .cacheable_property_lookup(*object, property.lookup())?;
+        match self
+            .objects
+            .read_cacheable_native_property_value_for(*object, candidate)?
+        {
+            CacheableNativePropertyValue::Native { function, version } => {
+                let kind = self.native_function(function)?.kind();
+                self.record_native_call_cache_miss();
+                self.remember_static_object_property_native_call_kind(
+                    access, candidate, version, function, kind,
+                )?;
+                self.eval_native_function_kind(kind, runtime_call_args(args), this_value)
                     .map(Some)
             }
             CacheableNativePropertyValue::Other(callee) => {
