@@ -82,10 +82,28 @@ impl ObjectHeap {
         max_objects: usize,
         max_properties: usize,
     ) -> Result<Value> {
-        let length = ArrayLength::from_usize(elements.len())?;
+        let element_count = elements.len();
+        self.create_array_from_iter(
+            elements,
+            element_count,
+            prototype,
+            max_objects,
+            max_properties,
+        )
+    }
+
+    pub(crate) fn create_array_from_iter(
+        &mut self,
+        elements: impl IntoIterator<Item = Value>,
+        element_count: usize,
+        prototype: ObjectId,
+        max_objects: usize,
+        max_properties: usize,
+    ) -> Result<Value> {
+        let length = ArrayLength::from_usize(element_count)?;
         let mut object = Object::array(length);
         object.prototype = Some(prototype);
-        object.append_packed_default_values(elements, max_properties)?;
+        object.append_packed_default_value_iter(elements, element_count, max_properties)?;
 
         self.push_object(object, max_objects).map(Value::Object)
     }

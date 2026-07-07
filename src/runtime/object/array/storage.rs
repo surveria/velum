@@ -200,15 +200,15 @@ impl ArrayStorage {
         true
     }
 
-    pub(in crate::runtime::object) fn append_packed_default_values(
+    pub(in crate::runtime::object) fn append_packed_default_value_iter(
         &mut self,
-        values: Vec<Value>,
+        values: impl IntoIterator<Item = Value>,
+        value_count: usize,
         max_properties: usize,
     ) -> Result<usize> {
         if self.has_sparse_keys() {
             return Err(Error::runtime("packed array storage has sparse keys"));
         }
-        let value_count = values.len();
         let Some(new_property_count) = self.property_count.checked_add(value_count) else {
             return Err(Error::limit("object property count overflowed"));
         };

@@ -137,14 +137,17 @@ impl ObjectHeap {
 }
 
 impl Object {
-    pub(in crate::runtime::object) fn append_packed_default_values(
+    pub(in crate::runtime::object) fn append_packed_default_value_iter(
         &mut self,
-        values: Vec<Value>,
+        values: impl IntoIterator<Item = Value>,
+        value_count: usize,
         max_properties: usize,
     ) -> Result<()> {
-        let count = self
-            .array_storage
-            .append_packed_default_values(values, max_properties)?;
+        let count = self.array_storage.append_packed_default_value_iter(
+            values,
+            value_count,
+            max_properties,
+        )?;
         self.add_enumerable_properties(count)
     }
 
