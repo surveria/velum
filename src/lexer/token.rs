@@ -9,6 +9,9 @@ pub struct Token {
 pub enum TokenKind {
     Number(f64),
     String(String),
+    TemplateHead(String),
+    TemplateMiddle(String),
+    TemplateTail(String),
     RegExp { pattern: String, flags: String },
     Identifier(String),
     Let,
