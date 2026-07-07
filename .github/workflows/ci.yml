@@ -2,9 +2,13 @@ name: CI
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+      - closed
+  merge_group:
   workflow_dispatch:
     inputs:
       full:
@@ -12,8 +16,15 @@ on:
         required: false
         default: "true"
 
+permissions:
+  contents: read
+  actions: read
+
 jobs:
   rust:
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.action != 'closed' && github.event.pull_request.draft == false)
     runs-on:
       - self-hosted
       - Linux
@@ -28,11 +39,14 @@ jobs:
       RSQJS_QUICKJS_SOURCE: git
       RSQJS_QUICKJS_CACHE_DIR: /home/runner/.cache/cargo-target/rs-quickjs/external/quickjs
       RSQJS_TEST262_CACHE_DIR: /home/runner/.cache/cargo-target/rs-quickjs/external/test262
+      RSQJS_REPORT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+      RSQJS_REPORT_TASK: ${{ github.event.pull_request.title || github.event.merge_group.head_ref || github.event_name }}
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          # Full history so the version-bump gate can find the merge base.
+          # Full history so the version-bump gate can find the merge base and
+          # report artifacts can be keyed by the tested tree.
           fetch-depth: 0
 
       - name: Check self-hosted runner
@@ -48,6 +62,24 @@ jobs:
           cargo fmt --version
           cargo clippy --version
 
+      - name: Prepare report metadata
+        id: report_metadata
+        run: |
+          tree_sha="$(git rev-parse 'HEAD^{tree}')"
+          commit_sha="$(git rev-parse HEAD)"
+          artifact_name="rsqjs-reports-${tree_sha}"
+          printf 'tree_sha=%s\n' "${tree_sha}" >> "${GITHUB_OUTPUT}"
+          printf 'artifact_name=%s\n' "${artifact_name}" >> "${GITHUB_OUTPUT}"
+          {
+            printf 'RSQJS_REPORT_TREE_SHA=%s\n' "${tree_sha}"
+            printf 'RSQJS_REPORT_COMMIT_SHA=%s\n' "${commit_sha}"
+            printf 'RSQJS_REPORT_EVENT_NAME=%s\n' "${GITHUB_EVENT_NAME}"
+            printf 'RSQJS_REPORT_RUN_ID=%s\n' "${GITHUB_RUN_ID}"
+            printf 'RSQJS_REPORT_RUN_ATTEMPT=%s\n' "${GITHUB_RUN_ATTEMPT}"
+            printf 'RSQJS_REPORT_REPOSITORY=%s\n' "${GITHUB_REPOSITORY}"
+            printf 'RSQJS_REPORT_WORKFLOW=%s\n' "${GITHUB_WORKFLOW}"
+          } >> "${GITHUB_ENV}"
+
       - name: CI checks
         env:
           RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
@@ -56,13 +88,10 @@ jobs:
             echo "RSQJS_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
             exit 1
           fi
-          # Token rewrites for private git access: chertov (Rust deps such as
-          # human-yaml) and surveria (the rs-quickjs-testing runner submodule).
-          export GIT_CONFIG_COUNT=2
+          # Token rewrite for private Rust dependencies such as human-yaml.
+          export GIT_CONFIG_COUNT=1
           export GIT_CONFIG_KEY_0="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
           export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
-          export GIT_CONFIG_KEY_1="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/surveria/.insteadOf"
-          export GIT_CONFIG_VALUE_1="https://github.com/surveria/"
           # On a pull request GITHUB_BASE_REF names the base branch; fetch it and
           # turn on the engine version-bump gate against it.
           if [[ -n "${GITHUB_BASE_REF:-}" ]]; then
@@ -70,8 +99,7 @@ jobs:
             export RSQJS_BASE_REF="origin/${GITHUB_BASE_REF}"
           fi
           manual_full="${{ github.event.inputs.full }}"
-          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" && "${RSQJS_FULL_CI_ON_PR:-0}" != "1" ]] || \
-             [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${manual_full:-true}" != "true" ]]; then
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${manual_full:-true}" != "true" ]]; then
             RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh
           else
             ./scripts/test-all.sh
@@ -81,6 +109,63 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rsqjs-reports
+          name: ${{ steps.report_metadata.outputs.artifact_name }}
           path: target/reports
           if-no-files-found: ignore
+
+  publish-report:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - surveria
+      - rust
+      - isolated
+      - gha-runner-ctrl-test
+    permissions:
+      contents: write
+      actions: read
+      pull-requests: read
+    concurrency:
+      group: rsqjs-report-publish-main
+      queue: max
+    env:
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/rs-quickjs
+      GH_TOKEN: ${{ github.token }}
+      RSQJS_MERGE_COMMIT_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Configure report publisher
+        env:
+          RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
+        run: |
+          if [[ -z "${RSQJS_DEPENDENCY_TOKEN}" ]]; then
+            echo "RSQJS_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
+          export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
+          mkdir -p "${CARGO_TARGET_DIR}"
+          rustc --version
+          cargo --version
+          gh --version
+
+      - name: Publish canonical report
+        env:
+          RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.RSQJS_DEPENDENCY_TOKEN }}@github.com/chertov/.insteadOf
+          GIT_CONFIG_VALUE_0: https://github.com/chertov/
+        run: ./scripts/publish-report-artifact.sh

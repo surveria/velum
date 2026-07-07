@@ -785,11 +785,12 @@ Every implementation task follows this order:
    for hot paths.
 
 7. Validate.
-   Run formatting, clippy, targeted tests, and `scripts/check-fast.sh` for the
-   ordinary PR gate. Run `scripts/test-all.sh` when the task needs full
-   QuickJS/Test262/benchmark evidence, before a canonical report refresh, or
-   when explicitly requested. Ordinary feature PRs should keep full reports as
-   CI artifacts under `target/reports/` instead of tracked files.
+   Run formatting, clippy, targeted tests, and `scripts/check-fast.sh` during
+   local iteration. Ready pull requests and merge-queue candidates use
+   `scripts/test-all.sh` as the full CI gate; the resulting report, rollup, and
+   chart stay under `target/reports/` as CI artifacts. After merge, the report
+   publisher copies the already-tested report into `reports/test-runs/` and
+   regenerates the tracked rollup and chart in one report-only commit.
 
 8. Decide on performance and memory exceptions.
    If a comparable implemented benchmark exceeds `1.00x`, either optimize it in
