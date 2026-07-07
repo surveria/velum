@@ -99,6 +99,35 @@ fn bytecode_quickens_numeric_unary_with_fallbacks() -> TestResult {
 }
 
 #[test]
+fn bytecode_quickens_numeric_bitwise_and_shifts_with_fallbacks() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r"
+        var direct = (5 & 3) + (5 | 2) + (5 ^ 1) + (1 << 4) + (-8 >> 1) + (-1 >>> 1);
+        var value = 1;
+        value |= 6;
+        value ^= 3;
+        value <<= 2;
+        value >>= 1;
+        value >>>= 1;
+        direct === 2147483671 && value === 4 ? 42 : 0
+        ",
+    )?;
+    ensure_at_least(
+        script.usage().bytecode_numeric_instruction_count(),
+        12,
+        "bytecode numeric instructions",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+
+    let value = vm.eval("\"5\" & 3")?;
+    ensure_value(&value, &Value::Number(1.0))
+}
+
+#[test]
 fn bytecode_quickens_static_array_index_reads_and_writes_with_fallbacks() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
