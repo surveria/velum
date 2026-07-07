@@ -36,6 +36,18 @@ const RANDOM_XOR_SHIFT_A: u32 = 13;
 const RANDOM_XOR_SHIFT_B: u32 = 7;
 const RANDOM_XOR_SHIFT_C: u32 = 17;
 
+macro_rules! math_unary_method {
+    ($runtime_name:ident, $direct_name:ident, $operation:path) => {
+        pub(super) fn $runtime_name(args: RuntimeCallArgs<'_>) -> Result<Value> {
+            Self::$direct_name(args.as_slice())
+        }
+
+        pub(super) fn $direct_name(args: &[Value]) -> Result<Value> {
+            Self::eval_math_unary_value(args.first(), $operation)
+        }
+    };
+}
+
 impl Context {
     pub(super) fn math_object_value(&mut self) -> Result<Value> {
         if let Some(binding) = self.get_binding(MATH_NAME) {
@@ -99,86 +111,198 @@ impl Context {
         Ok(value)
     }
 
-    pub(super) fn eval_math_abs(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::abs)
-    }
-
-    pub(super) fn eval_math_acos(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::acos)
-    }
-
-    pub(super) fn eval_math_acosh(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::acosh)
-    }
-
-    pub(super) fn eval_math_asin(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::asin)
-    }
-
-    pub(super) fn eval_math_asinh(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::asinh)
-    }
-
-    pub(super) fn eval_math_atan(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::atan)
-    }
+    math_unary_method!(eval_math_abs, eval_direct_math_abs, f64::abs);
+    math_unary_method!(eval_math_acos, eval_direct_math_acos, f64::acos);
+    math_unary_method!(eval_math_acosh, eval_direct_math_acosh, f64::acosh);
+    math_unary_method!(eval_math_asin, eval_direct_math_asin, f64::asin);
+    math_unary_method!(eval_math_asinh, eval_direct_math_asinh, f64::asinh);
+    math_unary_method!(eval_math_atan, eval_direct_math_atan, f64::atan);
 
     pub(super) fn eval_math_atan2(args: RuntimeCallArgs<'_>) -> Result<Value> {
+        Self::eval_direct_math_atan2(args.as_slice())
+    }
+
+    pub(super) fn eval_direct_math_atan2(args: &[Value]) -> Result<Value> {
         let (y, x) = Self::eval_math_binary_values(args);
         let y = Self::math_arg_or_nan(y);
         let x = x.map_or(f64::NAN, Self::value_to_number);
         Self::math_number(y.atan2(x))
     }
 
-    pub(super) fn eval_math_atanh(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::atanh)
-    }
-
-    pub(super) fn eval_math_cbrt(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::cbrt)
-    }
-
-    pub(super) fn eval_math_ceil(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::ceil)
-    }
+    math_unary_method!(eval_math_atanh, eval_direct_math_atanh, f64::atanh);
+    math_unary_method!(eval_math_cbrt, eval_direct_math_cbrt, f64::cbrt);
+    math_unary_method!(eval_math_ceil, eval_direct_math_ceil, f64::ceil);
 
     pub(super) fn eval_math_clz32(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let value = Self::eval_math_unary_value(args);
+        Self::eval_direct_math_clz32(args.as_slice())
+    }
+
+    pub(super) fn eval_direct_math_clz32(args: &[Value]) -> Result<Value> {
+        let value = args.first();
         let unsigned = number_to_uint32(Self::math_arg_or_nan(value), MATH_CLZ32_NAME)?;
         Self::math_number(f64::from(unsigned.leading_zeros()))
     }
 
-    pub(super) fn eval_math_cos(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::cos)
-    }
-
-    pub(super) fn eval_math_cosh(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::cosh)
-    }
-
-    pub(super) fn eval_math_exp(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::exp)
-    }
-
-    pub(super) fn eval_math_expm1(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::exp_m1)
-    }
-
-    pub(super) fn eval_math_floor(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::floor)
-    }
+    math_unary_method!(eval_math_cos, eval_direct_math_cos, f64::cos);
+    math_unary_method!(eval_math_cosh, eval_direct_math_cosh, f64::cosh);
+    math_unary_method!(eval_math_exp, eval_direct_math_exp, f64::exp);
+    math_unary_method!(eval_math_expm1, eval_direct_math_expm1, f64::exp_m1);
+    math_unary_method!(eval_math_floor, eval_direct_math_floor, f64::floor);
 
     pub(super) fn eval_math_fround(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let value = Self::eval_math_unary_value(args);
+        Self::eval_direct_math_fround(args.as_slice())
+    }
+
+    pub(super) fn eval_direct_math_fround(args: &[Value]) -> Result<Value> {
+        let value = args.first();
         Self::math_number(Self::fround_to_number(Self::math_arg_or_nan(value)))
     }
 
     pub(super) fn eval_math_hypot(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let values = Self::eval_math_args(args);
+        Self::eval_direct_math_hypot(args.as_slice())
+    }
+
+    pub(super) fn eval_direct_math_hypot(args: &[Value]) -> Result<Value> {
+        Self::eval_math_hypot_values(args)
+    }
+
+    pub(super) fn eval_math_imul(args: RuntimeCallArgs<'_>) -> Result<Value> {
+        Self::eval_direct_math_imul(args.as_slice())
+    }
+
+    pub(super) fn eval_direct_math_imul(args: &[Value]) -> Result<Value> {
+        let (left, right) = Self::eval_math_binary_values(args);
+        let left = number_to_uint32(Self::math_arg_or_nan(left), MATH_IMUL_NAME)?;
+        let right = number_to_uint32(
+            right.map_or(f64::NAN, Self::value_to_number),
+            MATH_IMUL_NAME,
+        )?;
+        let product = left.wrapping_mul(right);
+        Self::math_number(f64::from(i32::from_ne_bytes(product.to_ne_bytes())))
+    }
+
+    math_unary_method!(eval_math_log, eval_direct_math_log, f64::ln);
+    math_unary_method!(eval_math_log10, eval_direct_math_log10, f64::log10);
+    math_unary_method!(eval_math_log1p, eval_direct_math_log1p, f64::ln_1p);
+    math_unary_method!(eval_math_log2, eval_direct_math_log2, f64::log2);
+
+    pub(super) fn eval_math_max(args: RuntimeCallArgs<'_>) -> Result<Value> {
+        Self::eval_direct_math_max(args.as_slice())
+    }
+
+    pub(super) fn eval_direct_math_max(args: &[Value]) -> Result<Value> {
+        let mut maximum = f64::NEG_INFINITY;
+        for value in args {
+            let value = Self::value_to_number(value);
+            if value.is_nan() {
+                return Self::math_number(f64::NAN);
+            }
+            if value > maximum || Self::should_replace_max_zero(maximum, value) {
+                maximum = value;
+            }
+        }
+        Self::math_number(maximum)
+    }
+
+    pub(super) fn eval_math_min(args: RuntimeCallArgs<'_>) -> Result<Value> {
+        Self::eval_direct_math_min(args.as_slice())
+    }
+
+    pub(super) fn eval_direct_math_min(args: &[Value]) -> Result<Value> {
+        let mut minimum = f64::INFINITY;
+        for value in args {
+            let value = Self::value_to_number(value);
+            if value.is_nan() {
+                return Self::math_number(f64::NAN);
+            }
+            if value < minimum || Self::should_replace_min_zero(minimum, value) {
+                minimum = value;
+            }
+        }
+        Self::math_number(minimum)
+    }
+
+    pub(super) fn eval_math_pow(args: RuntimeCallArgs<'_>) -> Result<Value> {
+        Self::eval_direct_math_pow(args.as_slice())
+    }
+
+    pub(super) fn eval_direct_math_pow(args: &[Value]) -> Result<Value> {
+        let (base, exponent) = Self::eval_math_binary_values(args);
+        let base = Self::math_arg_or_nan(base);
+        let exponent = exponent.map_or(f64::NAN, Self::value_to_number);
+        Self::math_number(base.powf(exponent))
+    }
+
+    pub(super) fn eval_math_random(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+        self.eval_direct_math_random(args.as_slice())
+    }
+
+    pub(super) fn eval_direct_math_random(&mut self, args: &[Value]) -> Result<Value> {
+        Self::eval_math_discard_values(args);
+        Ok(Value::Number(self.next_math_random()?))
+    }
+
+    pub(super) fn eval_math_round(args: RuntimeCallArgs<'_>) -> Result<Value> {
+        Self::eval_direct_math_round(args.as_slice())
+    }
+
+    pub(super) fn eval_direct_math_round(args: &[Value]) -> Result<Value> {
+        let value = args.first();
+        Self::math_number(Self::round_to_nearest_toward_positive(
+            Self::math_arg_or_nan(value),
+        ))
+    }
+
+    pub(super) fn eval_math_sign(args: RuntimeCallArgs<'_>) -> Result<Value> {
+        Self::eval_direct_math_sign(args.as_slice())
+    }
+
+    pub(super) fn eval_direct_math_sign(args: &[Value]) -> Result<Value> {
+        let value = args.first();
+        let value = Self::math_arg_or_nan(value);
+        if value.is_nan() || value == 0.0 {
+            return Self::math_number(value);
+        }
+        if value.is_sign_negative() {
+            return Self::math_number(-1.0);
+        }
+        Self::math_number(1.0)
+    }
+
+    math_unary_method!(eval_math_sin, eval_direct_math_sin, f64::sin);
+    math_unary_method!(eval_math_sinh, eval_direct_math_sinh, f64::sinh);
+    math_unary_method!(eval_math_sqrt, eval_direct_math_sqrt, f64::sqrt);
+    math_unary_method!(eval_math_tan, eval_direct_math_tan, f64::tan);
+    math_unary_method!(eval_math_tanh, eval_direct_math_tanh, f64::tanh);
+    math_unary_method!(eval_math_trunc, eval_direct_math_trunc, f64::trunc);
+
+    fn define_math_constant(&mut self, object: ObjectId, name: &str, value: f64) -> Result<()> {
+        self.define_non_enumerable_object_property(object, name, Value::Number(value))
+    }
+
+    fn define_math_method(
+        &mut self,
+        object: ObjectId,
+        name: &str,
+        kind: NativeFunctionKind,
+    ) -> Result<()> {
+        let function = self.create_native_function(kind, Value::Undefined)?;
+        self.define_non_enumerable_object_property(object, name, function)
+    }
+
+    fn eval_math_unary_value(value: Option<&Value>, operation: fn(f64) -> f64) -> Result<Value> {
+        Self::math_number(operation(Self::math_arg_or_nan(value)))
+    }
+
+    fn eval_math_binary_values(args: &[Value]) -> (Option<&Value>, Option<&Value>) {
+        (args.first(), args.get(1))
+    }
+
+    fn eval_math_hypot_values(args: &[Value]) -> Result<Value> {
         let mut has_infinity = false;
         let mut has_nan = false;
         let mut magnitude = 0.0_f64;
-        for value in values {
+        for value in args {
             let value = Self::value_to_number(value);
             if value.is_infinite() {
                 has_infinity = true;
@@ -197,153 +321,7 @@ impl Context {
         Self::math_number(magnitude)
     }
 
-    pub(super) fn eval_math_imul(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let (left, right) = Self::eval_math_binary_values(args);
-        let left = number_to_uint32(Self::math_arg_or_nan(left), MATH_IMUL_NAME)?;
-        let right = number_to_uint32(
-            right.map_or(f64::NAN, Self::value_to_number),
-            MATH_IMUL_NAME,
-        )?;
-        let product = left.wrapping_mul(right);
-        Self::math_number(f64::from(i32::from_ne_bytes(product.to_ne_bytes())))
-    }
-
-    pub(super) fn eval_math_log(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::ln)
-    }
-
-    pub(super) fn eval_math_log10(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::log10)
-    }
-
-    pub(super) fn eval_math_log1p(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::ln_1p)
-    }
-
-    pub(super) fn eval_math_log2(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::log2)
-    }
-
-    pub(super) fn eval_math_max(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let values = Self::eval_math_args(args);
-        let mut maximum = f64::NEG_INFINITY;
-        for value in values {
-            let value = Self::value_to_number(value);
-            if value.is_nan() {
-                return Self::math_number(f64::NAN);
-            }
-            if value > maximum || Self::should_replace_max_zero(maximum, value) {
-                maximum = value;
-            }
-        }
-        Self::math_number(maximum)
-    }
-
-    pub(super) fn eval_math_min(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let values = Self::eval_math_args(args);
-        let mut minimum = f64::INFINITY;
-        for value in values {
-            let value = Self::value_to_number(value);
-            if value.is_nan() {
-                return Self::math_number(f64::NAN);
-            }
-            if value < minimum || Self::should_replace_min_zero(minimum, value) {
-                minimum = value;
-            }
-        }
-        Self::math_number(minimum)
-    }
-
-    pub(super) fn eval_math_pow(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let (base, exponent) = Self::eval_math_binary_values(args);
-        let base = Self::math_arg_or_nan(base);
-        let exponent = exponent.map_or(f64::NAN, Self::value_to_number);
-        Self::math_number(base.powf(exponent))
-    }
-
-    pub(super) fn eval_math_random(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_discard_args(args);
-        Ok(Value::Number(self.next_math_random()?))
-    }
-
-    pub(super) fn eval_math_round(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let value = Self::eval_math_unary_value(args);
-        Self::math_number(Self::round_to_nearest_toward_positive(
-            Self::math_arg_or_nan(value),
-        ))
-    }
-
-    pub(super) fn eval_math_sign(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let value = Self::eval_math_unary_value(args);
-        let value = Self::math_arg_or_nan(value);
-        if value.is_nan() || value == 0.0 {
-            return Self::math_number(value);
-        }
-        if value.is_sign_negative() {
-            return Self::math_number(-1.0);
-        }
-        Self::math_number(1.0)
-    }
-
-    pub(super) fn eval_math_sin(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::sin)
-    }
-
-    pub(super) fn eval_math_sinh(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::sinh)
-    }
-
-    pub(super) fn eval_math_sqrt(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::sqrt)
-    }
-
-    pub(super) fn eval_math_tan(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::tan)
-    }
-
-    pub(super) fn eval_math_tanh(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::tanh)
-    }
-
-    pub(super) fn eval_math_trunc(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_math_unary(args, f64::trunc)
-    }
-
-    fn define_math_constant(&mut self, object: ObjectId, name: &str, value: f64) -> Result<()> {
-        self.define_non_enumerable_object_property(object, name, Value::Number(value))
-    }
-
-    fn define_math_method(
-        &mut self,
-        object: ObjectId,
-        name: &str,
-        kind: NativeFunctionKind,
-    ) -> Result<()> {
-        let function = self.create_native_function(kind, Value::Undefined)?;
-        self.define_non_enumerable_object_property(object, name, function)
-    }
-
-    const fn eval_math_args(args: RuntimeCallArgs<'_>) -> &[Value] {
-        args.as_slice()
-    }
-
-    fn eval_math_unary(args: RuntimeCallArgs<'_>, operation: fn(f64) -> f64) -> Result<Value> {
-        let value = Self::eval_math_unary_value(args);
-        Self::math_number(operation(Self::math_arg_or_nan(value)))
-    }
-
-    const fn eval_math_unary_value(args: RuntimeCallArgs<'_>) -> Option<&Value> {
-        args.as_slice().first()
-    }
-
-    fn eval_math_binary_values(args: RuntimeCallArgs<'_>) -> (Option<&Value>, Option<&Value>) {
-        let args = args.as_slice();
-        (args.first(), args.get(1))
-    }
-
-    const fn eval_math_discard_args(args: RuntimeCallArgs<'_>) {
-        args.discard();
-    }
+    const fn eval_math_discard_values(_args: &[Value]) {}
 
     fn math_arg_or_nan(value: Option<&Value>) -> f64 {
         value.map_or(f64::NAN, Self::value_to_number)
