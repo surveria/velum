@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T015306Z.md`
-- Task: rsqjs-test-report-20260707T015306Z.md
-- Performance: 0.79x (39/63 >1.00x)
+- `rsqjs-test-report-20260707T020401Z.md`
+- Task: rsqjs-test-report-20260707T020401Z.md
+- Performance: 0.78x (39/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 12546 passed / 90032 failed (12.23%)
 
@@ -229,4 +229,5 @@ Latest report:
 | `20260707T012046Z` `d819d63` Reorganize runtime source modules | 0.79x (39/63 >1.00x) | - (0/63 >1.00x) | 12111 passed / 90467 failed (11.81%) |
 | `20260707T012738Z` `598cf12` Support contextual async parsing for Test262 | 0.80x (39/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
 | `20260707T013432Z` `534c4ba` Quicken numeric bitwise bytecode | 0.80x (38/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
-| `20260707T015306Z` rsqjs-test-report-20260707T015306Z.md | 0.79x (39/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
+| `20260707T015306Z` `1b8564a` Optimize direct Array native target arguments | 0.79x (39/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
+| `20260707T020401Z` rsqjs-test-report-20260707T020401Z.md | 0.78x (39/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |

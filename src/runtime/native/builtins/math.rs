@@ -140,8 +140,7 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_direct_math_clz32(args: &[Value]) -> Result<Value> {
-        let value = args.first();
-        let unsigned = number_to_uint32(Self::math_arg_or_nan(value), MATH_CLZ32_NAME)?;
+        let unsigned = Self::math_uint32_arg_or_zero(args.first(), MATH_CLZ32_NAME)?;
         Self::math_number(f64::from(unsigned.leading_zeros()))
     }
 
@@ -156,8 +155,8 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_direct_math_fround(args: &[Value]) -> Result<Value> {
-        let value = args.first();
-        Self::math_number(Self::fround_to_number(Self::math_arg_or_nan(value)))
+        let number = Self::math_arg_or_nan(args.first());
+        Self::math_number(Self::fround_to_number(number))
     }
 
     pub(in crate::runtime::native) fn eval_math_hypot(args: RuntimeCallArgs<'_>) -> Result<Value> {
@@ -174,11 +173,8 @@ impl Context {
 
     pub(in crate::runtime::native) fn eval_direct_math_imul(args: &[Value]) -> Result<Value> {
         let (left, right) = Self::eval_math_binary_values(args);
-        let left = number_to_uint32(Self::math_arg_or_nan(left), MATH_IMUL_NAME)?;
-        let right = number_to_uint32(
-            right.map_or(f64::NAN, Self::value_to_number),
-            MATH_IMUL_NAME,
-        )?;
+        let left = Self::math_uint32_arg_or_zero(left, MATH_IMUL_NAME)?;
+        let right = Self::math_uint32_arg_or_zero(right, MATH_IMUL_NAME)?;
         let product = left.wrapping_mul(right);
         Self::math_number(f64::from(i32::from_ne_bytes(product.to_ne_bytes())))
     }
@@ -332,7 +328,36 @@ impl Context {
     const fn eval_math_discard_values(_args: &[Value]) {}
 
     fn math_arg_or_nan(value: Option<&Value>) -> f64 {
-        value.map_or(f64::NAN, Self::value_to_number)
+        match value {
+            Some(Value::Number(value)) => *value,
+            Some(value) => Self::value_to_number(value),
+            None => f64::NAN,
+        }
+    }
+
+    fn math_uint32_arg_or_zero(value: Option<&Value>, context: &str) -> Result<u32> {
+        let Some(value) = value else {
+            return Ok(0);
+        };
+        match value {
+            Value::Number(value) => Self::math_number_to_uint32(*value, context),
+            value => number_to_uint32(Self::value_to_number(value), context),
+        }
+    }
+
+    fn math_number_to_uint32(value: f64, context: &str) -> Result<u32> {
+        if let Some(unsigned) = Self::nonnegative_number_to_uint32_fast(value) {
+            return Ok(unsigned);
+        }
+        number_to_uint32(value, context)
+    }
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn nonnegative_number_to_uint32_fast(value: f64) -> Option<u32> {
+        if value.is_finite() && (0.0..=f64::from(u32::MAX)).contains(&value) {
+            return Some(value as u32);
+        }
+        None
     }
 
     // Native function dispatch requires Result<Value>; number creation cannot fail.
