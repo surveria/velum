@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use rs_quickjs::{Engine, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -16,6 +16,9 @@ let numberValueOk = Number(mark("e", "7"), mark("f", "unused")) === 7;
 let numberObject = new Number(mark("g", "8"), mark("h", "unused"));
 let booleanFalseOk = Boolean(mark("i", 0), mark("j", 1)) === false;
 let booleanObject = new Boolean(mark("k", ""), mark("l", true));
+let objectValue = Object(mark("m", null), mark("n", "unused"));
+let existing = { flag: 1 };
+let objectSameOk = Object(mark("o", existing), mark("p", "unused")) === existing;
 
 stringValueOk &&
     stringObject.length === 2 &&
@@ -26,8 +29,26 @@ stringValueOk &&
     typeof booleanObject === "object" &&
     booleanObject.__proto__ === Boolean.prototype &&
     Boolean(booleanObject) === true &&
-    order === "abcdefghijkl" ? 42 : 0
+    typeof objectValue === "object" &&
+    objectSameOk &&
+    order === "abcdefghijklmnop" ? 42 : 0
 "#;
+
+#[test]
+fn primitive_constructor_calls_compile_to_direct_native_operands() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(PRIMITIVE_CONSTRUCTOR_ARGUMENT_SCRIPT)?;
+
+    ensure_at_least(
+        script.usage().bytecode_direct_native_call_count(),
+        4,
+        "primitive constructor direct native call operands",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))
+}
 
 #[test]
 fn primitive_constructors_preserve_extra_argument_side_effects() -> TestResult {
@@ -45,4 +66,12 @@ fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     }
 
     Err(format!("expected value {expected:?}, got {actual:?}").into())
+}
+
+fn ensure_at_least(actual: usize, expected: usize, label: &str) -> TestResult {
+    if actual >= expected {
+        return Ok(());
+    }
+
+    Err(format!("expected {label} >= {expected}, got {actual}").into())
 }

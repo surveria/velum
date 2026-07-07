@@ -43,8 +43,14 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let values = args.as_slice();
-        let Some(value) = values.first() else {
+        self.eval_direct_object_constructor(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_object_constructor(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let Some(value) = args.first() else {
             return self.create_object_from_constructor();
         };
 

@@ -29,6 +29,13 @@ impl Context {
         &self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
+        self.eval_direct_boolean_constructor(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_boolean_constructor(
+        &self,
+        args: &[Value],
+    ) -> Result<Value> {
         self.checked_value(Value::Bool(Self::eval_boolean_argument(args)))
     }
 
@@ -36,7 +43,7 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        Self::eval_boolean_argument(args);
+        Self::eval_boolean_argument(args.as_slice());
         let prototype = self.boolean_constructor_prototype()?;
         let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_with_prototype(
@@ -73,8 +80,8 @@ impl Context {
         }
     }
 
-    fn eval_boolean_argument(args: RuntimeCallArgs<'_>) -> bool {
-        let value = Self::eval_native_unary_argument_value(args);
+    fn eval_boolean_argument(args: &[Value]) -> bool {
+        let value = args.first();
         value.is_some_and(Value::is_truthy)
     }
 }
