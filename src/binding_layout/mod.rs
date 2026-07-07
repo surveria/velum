@@ -191,6 +191,7 @@ impl LayoutBuilder {
             | Stmt::Label { .. }
             | Stmt::For { .. }
             | Stmt::ForIn { .. }
+            | Stmt::ForOf { .. }
             | Stmt::Switch { .. }
             | Stmt::Try { .. }
             | Stmt::Break(_)
@@ -229,7 +230,7 @@ impl LayoutBuilder {
                 }
                 self.collect_hoisted_vars(body, var_scope)
             }
-            Stmt::ForIn { target, body, .. } => {
+            Stmt::ForIn { target, body, .. } | Stmt::ForOf { target, body, .. } => {
                 if let ForInTarget::Binding {
                     name,
                     kind: DeclKind::Var,
@@ -331,6 +332,11 @@ impl LayoutBuilder {
                 ScopeContext::new(scope, var_scope, function),
             ),
             Stmt::ForIn {
+                target,
+                object,
+                body,
+            }
+            | Stmt::ForOf {
                 target,
                 object,
                 body,
@@ -794,6 +800,7 @@ fn for_init_needs_layout_scope(init: Option<&Stmt>) -> bool {
             | Stmt::Label { .. }
             | Stmt::For { .. }
             | Stmt::ForIn { .. }
+            | Stmt::ForOf { .. }
             | Stmt::Switch { .. }
             | Stmt::Try { .. }
             | Stmt::Break(_)

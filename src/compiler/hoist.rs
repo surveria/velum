@@ -67,7 +67,7 @@ impl<'a> HoistCollector<'a> {
                 self.collect_statement(body)?;
                 Ok(())
             }
-            Stmt::ForIn { target, body, .. } => {
+            Stmt::ForIn { target, body, .. } | Stmt::ForOf { target, body, .. } => {
                 if let ForInTarget::Binding {
                     name,
                     kind: DeclKind::Var,

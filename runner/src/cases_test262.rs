@@ -112,6 +112,7 @@ const PATH_TEST262_BREAK_CONTINUE: &str =
     "tests/corpora/test262/active/language/statements/break_continue.js";
 const PATH_TEST262_FOR: &str = "tests/corpora/test262/active/language/statements/for.js";
 const PATH_TEST262_FOR_IN: &str = "tests/corpora/test262/active/language/statements/for_in.js";
+const PATH_TEST262_FOR_OF: &str = "tests/corpora/test262/active/language/statements/for_of.js";
 const PATH_TEST262_FOR_IN_NULLISH_ERROR: &str =
     "tests/corpora/test262/active/language/statements/for_in_nullish_error.js";
 const PATH_TEST262_SWITCH: &str = "tests/corpora/test262/active/language/statements/switch.js";
@@ -505,6 +506,11 @@ fn test262_statement_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/statements/for_in",
             path: PATH_TEST262_FOR_IN,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/statements/for_of",
+            path: PATH_TEST262_FOR_OF,
             expectation: Expectation::Value("42"),
         },
         EngineCase {

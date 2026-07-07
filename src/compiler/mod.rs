@@ -121,6 +121,11 @@ impl<'a> BytecodeCompiler<'a> {
                 object,
                 body,
             } => self.compile_for_in(target, object, body),
+            Stmt::ForOf {
+                target,
+                object,
+                body,
+            } => self.compile_for_of(target, object, body),
             Stmt::Switch {
                 discriminant,
                 cases,
@@ -762,6 +767,7 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::DoWhile { .. }
             | BytecodeInstruction::For { .. }
             | BytecodeInstruction::ForIn { .. }
+            | BytecodeInstruction::ForOf { .. }
             | BytecodeInstruction::Switch { .. }
             | BytecodeInstruction::Try { .. }
             | BytecodeInstruction::Label { .. }
