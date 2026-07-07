@@ -1,8 +1,8 @@
 use crate::{
-    ast::{BinaryOp, UpdateOp},
     bytecode::{BytecodeArrayIndex, BytecodeProperty},
     error::Result,
     runtime::Context,
+    syntax::{BinaryOp, StaticPropertyAccessId, UpdateOp},
     value::Value,
 };
 
@@ -122,7 +122,7 @@ impl Context {
         &mut self,
         object: &Value,
         property: &Value,
-        access: crate::ast::StaticPropertyAccessId,
+        access: StaticPropertyAccessId,
         op: UpdateOp,
         prefix: bool,
     ) -> Result<Option<Value>> {
@@ -173,7 +173,7 @@ impl Context {
         op: BinaryOp,
         object: &Value,
         property: &Value,
-        access: crate::ast::StaticPropertyAccessId,
+        access: StaticPropertyAccessId,
         right: &Value,
     ) -> Result<Option<Value>> {
         let Value::Object(id) = object else {
@@ -256,7 +256,7 @@ impl Context {
         &mut self,
         object: &Value,
         property: &Value,
-        access: crate::ast::StaticPropertyAccessId,
+        access: StaticPropertyAccessId,
         mutation: ArrayIndexMutation,
         prefix: bool,
     ) -> Result<Value> {
