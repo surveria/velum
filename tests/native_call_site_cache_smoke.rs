@@ -58,13 +58,18 @@ first === 7 &&
 
 const DYNAMIC_NATIVE_MEMBER_CACHE_SCRIPT: &str = r#"
 var method = "abs";
+var order = "";
+var mark = function(label, value) {
+    order = order + label;
+    return value;
+};
 
 var runUnary = function(value) {
     return Math[method](value);
 };
 
-var first = runUnary(-3);
-var second = runUnary(-4);
+var first = runUnary(mark("a", -3));
+var second = runUnary(mark("b", -4));
 
 Math.abs = function(value) {
     return value + 100;
@@ -73,12 +78,13 @@ Math.abs = function(value) {
 var third = runUnary(5);
 
 method = "max";
-var fourth = Math[method](2, 9);
+var fourth = Math[method](mark("c", 2), mark("d", 9));
 
 first === 3 &&
     second === 4 &&
     third === 105 &&
-    fourth === 9 ? 42 : 0
+    fourth === 9 &&
+    order === "abcd" ? 42 : 0
 "#;
 
 #[test]

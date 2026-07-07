@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T041739Z.md`
-- Task: rsqjs-test-report-20260707T041739Z.md
-- Performance: 0.81x (40/63 >1.00x)
+- `rsqjs-test-report-20260707T042509Z.md`
+- Task: rsqjs-test-report-20260707T042509Z.md
+- Performance: 0.82x (39/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 12687 passed / 89891 failed (12.37%)
 
@@ -240,4 +240,5 @@ Latest report:
 | `20260707T031728Z` `c8860d2` Specialize direct JSON native calls | 0.79x (39/63 >1.00x) | - (0/63 >1.00x) | 12671 passed / 89907 failed (12.35%) |
 | `20260707T032555Z` `d90eda9` Specialize direct Error native calls | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 12671 passed / 89907 failed (12.35%) |
 | `20260707T041016Z` `c441579` Specialize direct Promise native calls | 0.79x (39/63 >1.00x) | - (0/63 >1.00x) | 12671 passed / 89907 failed (12.35%) |
-| `20260707T041739Z` rsqjs-test-report-20260707T041739Z.md | 0.81x (40/63 >1.00x) | - (0/63 >1.00x) | 12687 passed / 89891 failed (12.37%) |
+| `20260707T041739Z` `ab25c84` Support new.target in bytecode runtime | 0.81x (40/63 >1.00x) | - (0/63 >1.00x) | 12687 passed / 89891 failed (12.37%) |
+| `20260707T042509Z` rsqjs-test-report-20260707T042509Z.md | 0.82x (39/63 >1.00x) | - (0/63 >1.00x) | 12687 passed / 89891 failed (12.37%) |
