@@ -41,6 +41,23 @@ fn supports_recursive_function_declarations() -> TestResult {
 }
 
 #[test]
+fn async_function_expressions_inherit_object_prototype_helpers() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let task = async function task() {};
+        task.prototype === undefined &&
+            task.hasOwnProperty("prototype") === false &&
+            task.propertyIsEnumerable("name") === false
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
 fn nested_function_declarations_capture_function_scope() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

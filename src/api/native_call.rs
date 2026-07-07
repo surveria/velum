@@ -6,6 +6,7 @@ pub enum NativeCallTarget {
     ArrayConcat,
     ArrayIncludes,
     ArrayIndexOf,
+    ArrayIsArray,
     ArrayJoin,
     ArrayLastIndexOf,
     ArrayPop,
@@ -77,6 +78,7 @@ impl NativeCallTarget {
                 | Self::ArrayConcat
                 | Self::ArrayIncludes
                 | Self::ArrayIndexOf
+                | Self::ArrayIsArray
                 | Self::ArrayJoin
                 | Self::ArrayLastIndexOf
                 | Self::ArrayPop
@@ -131,6 +133,7 @@ impl NativeCallTarget {
             "imul" => Some(Self::MathImul),
             "includes" => Some(Self::ArrayIncludes),
             "indexOf" => Some(Self::ArrayIndexOf),
+            "isArray" => Some(Self::ArrayIsArray),
             "join" => Some(Self::ArrayJoin),
             "keys" => Some(Self::ObjectKeys),
             "lastIndexOf" => Some(Self::ArrayLastIndexOf),

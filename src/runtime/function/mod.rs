@@ -23,7 +23,10 @@ mod intrinsic;
 mod properties;
 mod upvalues;
 
-use crate::runtime::native::NativeFunctionKind;
+use crate::runtime::native::{
+    NativeFunctionKind, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
+    OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
+};
 pub(super) use properties::{FunctionIntrinsicDefaults, FunctionProperties};
 
 const FUNCTION_PROTOTYPE_BIND_PROPERTY: &str = "bind";
@@ -365,7 +368,7 @@ impl Context {
     ) -> Result<Option<ObjectId>> {
         let function = self.function(id)?;
         if !function.constructable {
-            return Err(Error::runtime("function is not a constructor"));
+            return Err(Error::type_error("function is not a constructor"));
         }
         match function.properties.prototype() {
             Value::Object(id) => Ok(Some(id)),
@@ -449,6 +452,8 @@ impl Context {
             || property.name() == PROTOTYPE_CONSTRUCTOR_PROPERTY
             || property.name() == FUNCTION_PROTOTYPE_BIND_PROPERTY
             || property.name() == FUNCTION_PROTOTYPE_CALL_PROPERTY
+            || property.name() == OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME
+            || property.name() == OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME
     }
 
     pub(crate) fn native_function_object_prototype_value(

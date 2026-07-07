@@ -1,3 +1,5 @@
+use crate::value::ErrorName;
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, Clone, Eq, PartialEq, thiserror::Error)]
@@ -8,6 +10,8 @@ pub enum Error {
     Parse { message: String, offset: usize },
     #[error("runtime error: {message}")]
     Runtime { message: String },
+    #[error("javascript exception: {name}: {message}")]
+    Exception { name: ErrorName, message: String },
     #[error("resource limit exceeded: {message}")]
     ResourceLimit { message: String },
 }
@@ -35,6 +39,19 @@ impl Error {
     }
 
     #[must_use]
+    pub(crate) fn exception(name: ErrorName, message: impl Into<String>) -> Self {
+        Self::Exception {
+            name,
+            message: message.into(),
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn type_error(message: impl Into<String>) -> Self {
+        Self::exception(ErrorName::TypeError, message)
+    }
+
+    #[must_use]
     pub fn limit(message: impl Into<String>) -> Self {
         Self::ResourceLimit {
             message: message.into(),
@@ -54,6 +71,10 @@ impl Error {
                 offset,
             },
             Self::Runtime { message } => Self::Runtime {
+                message: format!("{context}: {message}"),
+            },
+            Self::Exception { name, message } => Self::Exception {
+                name,
                 message: format!("{context}: {message}"),
             },
             Self::ResourceLimit { message } => Self::ResourceLimit {

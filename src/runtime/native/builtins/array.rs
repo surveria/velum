@@ -2,9 +2,8 @@ use std::fmt::Write as _;
 
 use crate::{
     error::{Error, Result},
-    runtime::Context,
-    runtime::call_args::RuntimeCallArgs,
-    value::{ObjectId, Value},
+    runtime::{Context, call_args::RuntimeCallArgs, object::PropertyEnumerable},
+    value::{NativeFunctionId, ObjectId, Value},
 };
 
 use super::{ARRAY_NAME, NativeFunctionKind};
@@ -13,6 +12,7 @@ const ARRAY_JOIN_DEFAULT_SEPARATOR: &str = ",";
 const ARRAY_PROTOTYPE_CONCAT_PROPERTY: &str = "concat";
 const ARRAY_PROTOTYPE_INCLUDES_PROPERTY: &str = "includes";
 const ARRAY_PROTOTYPE_INDEX_OF_PROPERTY: &str = "indexOf";
+const ARRAY_IS_ARRAY_PROPERTY: &str = "isArray";
 const ARRAY_PROTOTYPE_JOIN_PROPERTY: &str = "join";
 const ARRAY_PROTOTYPE_LAST_INDEX_OF_PROPERTY: &str = "lastIndexOf";
 const ARRAY_PROTOTYPE_POP_PROPERTY: &str = "pop";
@@ -35,6 +35,7 @@ impl Context {
         let prototype = Value::Object(prototype_id);
         let name = self.native_function_name_value(NativeFunctionKind::Array)?;
         self.push_native_function_with_id(id, NativeFunctionKind::Array, prototype, name)?;
+        self.install_array_static_methods(id)?;
         self.install_array_prototype_methods(prototype_id)?;
         self.insert_global_builtin(ARRAY_NAME, constructor.clone())?;
         Ok(constructor)
@@ -69,6 +70,37 @@ impl Context {
             );
         }
         self.create_array_from_elements(args.to_vec())
+    }
+
+    pub(in crate::runtime::native) fn eval_array_is_array(
+        &self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_array_is_array(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_array_is_array(
+        &self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let is_array = match args.first() {
+            Some(Value::Object(id)) => self.objects.array_len_if_array(*id)?.is_some(),
+            Some(
+                Value::Undefined
+                | Value::Null
+                | Value::Bool(_)
+                | Value::Number(_)
+                | Value::String(_)
+                | Value::HeapString(_)
+                | Value::Symbol(_)
+                | Value::Function(_)
+                | Value::NativeFunction(_)
+                | Value::HostFunction(_)
+                | Value::Error(_),
+            )
+            | None => false,
+        };
+        Ok(Value::Bool(is_array))
     }
 
     pub(in crate::runtime::native) fn eval_array_push(
@@ -458,6 +490,16 @@ impl Context {
             ARRAY_PROTOTYPE_UNSHIFT_PROPERTY,
             unshift,
         )
+    }
+
+    fn install_array_static_methods(&mut self, constructor: NativeFunctionId) -> Result<()> {
+        let is_array =
+            self.create_native_function(NativeFunctionKind::ArrayIsArray, Value::Undefined)?;
+        let key = self.intern_property_key(ARRAY_IS_ARRAY_PROPERTY)?;
+        self.native_function_mut(constructor)?
+            .properties_mut()
+            .define_builtin(key, is_array, PropertyEnumerable::No);
+        Ok(())
     }
 
     fn array_constructor_prototype(&mut self) -> Result<ObjectId> {

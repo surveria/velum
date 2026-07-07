@@ -56,6 +56,7 @@ impl NativeFunction {
             | NativeFunctionKind::ArrayConcat
             | NativeFunctionKind::ArrayIncludes
             | NativeFunctionKind::ArrayIndexOf
+            | NativeFunctionKind::ArrayIsArray
             | NativeFunctionKind::ArrayJoin
             | NativeFunctionKind::ArrayLastIndexOf
             | NativeFunctionKind::ArrayPop

@@ -31,6 +31,9 @@ pub fn error_property_text<'a>(error: &'a ErrorObject, property: &str) -> Option
 
 pub fn runtime_exception_value(error: &Error) -> Option<Value> {
     match error {
+        Error::Exception { name, message } => {
+            Some(Value::Error(ErrorObject::new(*name, message.clone())))
+        }
         Error::Runtime { message } => reference_error_message(message)
             .map(|message| Value::Error(ErrorObject::new(ErrorName::ReferenceError, message))),
         Error::Lex { .. } | Error::Parse { .. } | Error::ResourceLimit { .. } => None,

@@ -80,7 +80,8 @@ const EVAL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(71);
 const SYMBOL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(72);
 const FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(73);
 const ASYNC_FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(74);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 75;
+const ARRAY_IS_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(75);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 76;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -140,6 +141,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::ArrayConcat => Some(ARRAY_CONCAT_SLOT),
         NativeFunctionKind::ArrayIncludes => Some(ARRAY_INCLUDES_SLOT),
         NativeFunctionKind::ArrayIndexOf => Some(ARRAY_INDEX_OF_SLOT),
+        NativeFunctionKind::ArrayIsArray => Some(ARRAY_IS_ARRAY_SLOT),
         NativeFunctionKind::ArrayJoin => Some(ARRAY_JOIN_SLOT),
         NativeFunctionKind::ArrayLastIndexOf => Some(ARRAY_LAST_INDEX_OF_SLOT),
         NativeFunctionKind::ArrayPop => Some(ARRAY_POP_SLOT),
