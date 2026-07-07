@@ -1,5 +1,7 @@
 use std::fmt::Write as _;
 
+use std::ops::Range;
+
 use crate::{
     error::{Error, Result},
     value::{ObjectId, Value},
@@ -72,22 +74,20 @@ impl ObjectHeap {
     pub(crate) fn array_slice(
         &mut self,
         id: ObjectId,
-        start: usize,
-        end: usize,
+        length: usize,
+        range: Range<usize>,
         prototype: ObjectId,
         max_objects: usize,
         max_properties: usize,
     ) -> Result<Value> {
-        let length = self
-            .array_length_for_method(id, ARRAY_SLICE_RECEIVER_ERROR)?
-            .to_usize()?;
-        let count = end
-            .checked_sub(start)
+        let count = range
+            .end
+            .checked_sub(range.start)
             .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
         if let Some(value) = self.create_packed_array_slice(
             id,
             length,
-            start,
+            range.start,
             count,
             prototype,
             ArrayCopyLimits::new(max_objects, max_properties),
@@ -97,7 +97,7 @@ impl ObjectHeap {
         if let Some(value) = self.holey_array_slice_without_indexed_prototype(
             id,
             length,
-            start,
+            range.start,
             count,
             prototype,
             ArrayCopyLimits::new(max_objects, max_properties),
@@ -111,7 +111,8 @@ impl ObjectHeap {
         };
 
         for offset in 0..count {
-            let source_index = start
+            let source_index = range
+                .start
                 .checked_add(offset)
                 .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
             let source_index = ArrayIndex::from_usize(source_index)?;
@@ -239,12 +240,10 @@ impl ObjectHeap {
     pub(crate) fn array_index_of(
         &self,
         id: ObjectId,
+        length: usize,
         search: &Value,
         start: usize,
     ) -> Result<Value> {
-        let length = self
-            .array_length_for_method(id, ARRAY_INDEX_OF_RECEIVER_ERROR)?
-            .to_usize()?;
         if start >= length {
             return Ok(Value::Number(INDEX_NOT_FOUND));
         }
@@ -274,12 +273,10 @@ impl ObjectHeap {
     pub(crate) fn array_includes(
         &self,
         id: ObjectId,
+        length: usize,
         search: &Value,
         start: usize,
     ) -> Result<Value> {
-        let length = self
-            .array_length_for_method(id, ARRAY_INCLUDES_RECEIVER_ERROR)?
-            .to_usize()?;
         if start >= length {
             return Ok(Value::Bool(false));
         }
@@ -310,12 +307,10 @@ impl ObjectHeap {
     pub(crate) fn array_last_index_of(
         &self,
         id: ObjectId,
+        length: usize,
         search: &Value,
         start: Option<usize>,
     ) -> Result<Value> {
-        let length = self
-            .array_length_for_method(id, ARRAY_LAST_INDEX_OF_RECEIVER_ERROR)?
-            .to_usize()?;
         let Some(start) = start else {
             return Ok(Value::Number(INDEX_NOT_FOUND));
         };
