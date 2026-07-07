@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T051922Z.md`
-- Task: rsqjs-test-report-20260707T051922Z.md
-- Performance: 0.80x (40/63 >1.00x)
+- `rsqjs-test-report-20260707T052745Z.md`
+- Task: rsqjs-test-report-20260707T052745Z.md
+- Performance: 0.81x (38/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 12723 passed / 89855 failed (12.40%)
+- Full Test262: 13781 passed / 88797 failed (13.43%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -246,4 +246,5 @@ Latest report:
 | `20260707T044541Z` `3aa5f63` Use direct dispatch for call value native caches | 0.81x (39/63 >1.00x) | - (0/63 >1.00x) | 12687 passed / 89891 failed (12.37%) |
 | `20260707T045830Z` `049b876` Fuse cached property read-modify-write paths | 0.81x (39/63 >1.00x) | - (0/63 >1.00x) | 12687 passed / 89891 failed (12.37%) |
 | `20260707T051116Z` `dc7989e` Support constructor expression callees | 0.81x (41/63 >1.00x) | - (0/63 >1.00x) | 12723 passed / 89855 failed (12.40%) |
-| `20260707T051922Z` rsqjs-test-report-20260707T051922Z.md | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 12723 passed / 89855 failed (12.40%) |
+| `20260707T051922Z` `10a9049` Quicken array index read-modify-write paths | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 12723 passed / 89855 failed (12.40%) |
+| `20260707T052745Z` rsqjs-test-report-20260707T052745Z.md | 0.81x (38/63 >1.00x) | - (0/63 >1.00x) | 13781 passed / 88797 failed (13.43%) |

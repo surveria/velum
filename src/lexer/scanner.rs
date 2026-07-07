@@ -525,6 +525,7 @@ impl<'a> Lexer<'a> {
             "new" => TokenKind::New,
             "this" => TokenKind::This,
             "in" => TokenKind::In,
+            "instanceof" => TokenKind::InstanceOf,
             "typeof" => TokenKind::Typeof,
             "void" => TokenKind::Void,
             "delete" => TokenKind::Delete,

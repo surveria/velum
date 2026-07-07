@@ -308,9 +308,16 @@ impl Context {
             NativeFunctionKind::ArrayUnshift => self.eval_array_unshift(args, this_value),
             NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
             NativeFunctionKind::Boolean => self.eval_boolean_constructor(args),
+            NativeFunctionKind::BoundFunction(id) => self.eval_bound_function(id, args),
             NativeFunctionKind::Eval => self.eval_eval_function(args),
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
             NativeFunctionKind::Function => self.eval_function_constructor(args),
+            NativeFunctionKind::FunctionPrototypeBind => {
+                self.eval_function_prototype_bind(args, this_value)
+            }
+            NativeFunctionKind::FunctionPrototypeCall => {
+                self.eval_function_prototype_call(args, this_value)
+            }
             NativeFunctionKind::JsonParse => self.eval_json_parse(args),
             NativeFunctionKind::JsonStringify => self.eval_json_stringify(args),
             NativeFunctionKind::MathAbs => Self::eval_math_abs(args),
@@ -354,9 +361,18 @@ impl Context {
             NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
                 self.eval_object_get_own_property_descriptor(args)
             }
+            NativeFunctionKind::ObjectGetOwnPropertyNames => {
+                self.eval_object_get_own_property_names(args)
+            }
             NativeFunctionKind::ObjectGetPrototypeOf => self.eval_object_get_prototype_of(args),
             NativeFunctionKind::ObjectHasOwn => self.eval_object_has_own(args),
             NativeFunctionKind::ObjectKeys => self.eval_object_keys(args),
+            NativeFunctionKind::ObjectPrototypeHasOwnProperty => {
+                self.eval_object_prototype_has_own_property(args, this_value)
+            }
+            NativeFunctionKind::ObjectPrototypePropertyIsEnumerable => {
+                self.eval_object_prototype_property_is_enumerable(args, this_value)
+            }
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),
             NativeFunctionKind::PromiseResolve => self.eval_promise_resolve(args),
             NativeFunctionKind::PromiseReject => self.eval_promise_reject(args),

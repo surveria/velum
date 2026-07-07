@@ -2,13 +2,20 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime::call_args::RuntimeCallArgs,
-    runtime::object::{ObjectPropertyInit, PropertyEnumerable},
+    runtime::object::{
+        DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
+        PropertyKey, PropertyWritable,
+    },
     value::{ObjectId, Value},
 };
 
-use super::{FUNCTION_NAME, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY};
+use super::{
+    FUNCTION_NAME, FUNCTION_PROTOTYPE_BIND_NAME, FUNCTION_PROTOTYPE_CALL_NAME, NativeFunctionKind,
+    OBJECT_CONSTRUCTOR_PROPERTY,
+};
 
 const GENERATED_FUNCTION_NAME: &str = "anonymous";
+const SYMBOL_TO_STRING_TAG_PROPERTY: &str = "toStringTag";
 
 impl Context {
     pub(in crate::runtime) fn function_constructor_value(&mut self) -> Result<Value> {
@@ -24,6 +31,7 @@ impl Context {
         let name = self.native_function_name_value(NativeFunctionKind::Function)?;
         self.push_native_function_with_id(id, NativeFunctionKind::Function, prototype, name)?;
         self.insert_global_builtin(FUNCTION_NAME, constructor.clone())?;
+        self.install_function_prototype_methods(prototype_id)?;
         Ok(constructor)
     }
 
@@ -40,6 +48,7 @@ impl Context {
         let prototype = Value::Object(prototype_id);
         let name = self.native_function_name_value(NativeFunctionKind::AsyncFunction)?;
         self.push_native_function_with_id(id, NativeFunctionKind::AsyncFunction, prototype, name)?;
+        self.install_async_function_prototype_properties(prototype_id)?;
         Ok(constructor)
     }
 
@@ -146,6 +155,21 @@ impl Context {
         )
     }
 
+    fn install_function_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
+        let prototype_value = Value::Object(prototype);
+        let call = self.create_ephemeral_native_function(
+            NativeFunctionKind::FunctionPrototypeCall,
+            prototype_value.clone(),
+        )?;
+        self.define_non_enumerable_object_property(prototype, FUNCTION_PROTOTYPE_CALL_NAME, call)?;
+
+        let bind = self.create_ephemeral_native_function(
+            NativeFunctionKind::FunctionPrototypeBind,
+            prototype_value,
+        )?;
+        self.define_non_enumerable_object_property(prototype, FUNCTION_PROTOTYPE_BIND_NAME, bind)
+    }
+
     fn async_function_prototype_id_with_constructor(
         &mut self,
         constructor: Value,
@@ -164,6 +188,36 @@ impl Context {
             self.limits.max_objects,
             self.limits.max_object_properties,
         )
+    }
+
+    fn install_async_function_prototype_properties(&mut self, prototype: ObjectId) -> Result<()> {
+        let to_string_tag = self.async_function_to_string_tag_value()?;
+        let key = self.well_known_symbol_property_key(SYMBOL_TO_STRING_TAG_PROPERTY)?;
+        self.objects.define_property(
+            prototype,
+            key,
+            SYMBOL_TO_STRING_TAG_PROPERTY,
+            DataPropertyUpdate::new(
+                Some(to_string_tag),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            ),
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn async_function_to_string_tag_value(&mut self) -> Result<Value> {
+        self.heap_string_value(NativeFunctionKind::AsyncFunction.name())
+    }
+
+    fn well_known_symbol_property_key(&mut self, property: &str) -> Result<PropertyKey> {
+        let constructor = self.symbol_constructor_value()?;
+        let value = self.get_property_value(&constructor, property)?;
+        let Value::Symbol(symbol) = value else {
+            return Err(Error::runtime("well-known Symbol property is not a symbol"));
+        };
+        Ok(PropertyKey::symbol(symbol.id()))
     }
 }
 

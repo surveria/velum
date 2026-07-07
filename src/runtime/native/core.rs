@@ -84,7 +84,10 @@ impl Context {
             | NativeFunctionKind::ArrayShift
             | NativeFunctionKind::ArraySlice
             | NativeFunctionKind::ArrayUnshift
+            | NativeFunctionKind::BoundFunction(_)
             | NativeFunctionKind::Eval
+            | NativeFunctionKind::FunctionPrototypeBind
+            | NativeFunctionKind::FunctionPrototypeCall
             | NativeFunctionKind::JsonParse
             | NativeFunctionKind::JsonStringify
             | NativeFunctionKind::MathAbs
@@ -125,8 +128,11 @@ impl Context {
             | NativeFunctionKind::ObjectDefineProperty
             | NativeFunctionKind::ObjectGetPrototypeOf
             | NativeFunctionKind::ObjectGetOwnPropertyDescriptor
+            | NativeFunctionKind::ObjectGetOwnPropertyNames
             | NativeFunctionKind::ObjectHasOwn
             | NativeFunctionKind::ObjectKeys
+            | NativeFunctionKind::ObjectPrototypeHasOwnProperty
+            | NativeFunctionKind::ObjectPrototypePropertyIsEnumerable
             | NativeFunctionKind::PromiseResolve
             | NativeFunctionKind::PromiseReject
             | NativeFunctionKind::PromiseThen

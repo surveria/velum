@@ -33,6 +33,7 @@ pub enum TokenKind {
     New,
     This,
     In,
+    InstanceOf,
     Typeof,
     Void,
     Delete,

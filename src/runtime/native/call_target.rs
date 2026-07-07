@@ -89,7 +89,16 @@ impl NativeFunctionKind {
             Self::ArrayShift => Some(NativeCallTarget::ArrayShift),
             Self::ArraySlice => Some(NativeCallTarget::ArraySlice),
             Self::ArrayUnshift => Some(NativeCallTarget::ArrayUnshift),
-            Self::AsyncFunction | Self::Eval | Self::PromiseResolver { .. } | Self::Symbol => None,
+            Self::AsyncFunction
+            | Self::BoundFunction(_)
+            | Self::Eval
+            | Self::FunctionPrototypeBind
+            | Self::FunctionPrototypeCall
+            | Self::ObjectGetOwnPropertyNames
+            | Self::ObjectPrototypeHasOwnProperty
+            | Self::ObjectPrototypePropertyIsEnumerable
+            | Self::PromiseResolver { .. }
+            | Self::Symbol => None,
             Self::Boolean => Some(NativeCallTarget::Boolean),
             Self::ErrorConstructor(name) => Some(NativeCallTarget::ErrorConstructor(name)),
             Self::Function => Some(NativeCallTarget::Function),

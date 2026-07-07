@@ -83,6 +83,24 @@ impl ObjectHeap {
         self.bump_if_structure_changed(id, before)
     }
 
+    pub(crate) fn prototype_chain_has_object(
+        &self,
+        id: ObjectId,
+        target: ObjectId,
+    ) -> Result<bool> {
+        let object = self.object(id)?;
+        let mut budget = PrototypeTraversalBudget::from_object_count(self.objects.len());
+        let mut current = object.prototype;
+        while let Some(current_id) = current {
+            budget.enter_next()?;
+            if current_id == target {
+                return Ok(true);
+            }
+            current = self.object(current_id)?.prototype;
+        }
+        Ok(false)
+    }
+
     fn prototype_property_value_in_chain(
         &self,
         id: ObjectId,

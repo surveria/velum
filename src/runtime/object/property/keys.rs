@@ -22,6 +22,17 @@ impl ObjectHeap {
         Ok(keys)
     }
 
+    pub(crate) fn own_property_names(
+        &self,
+        id: ObjectId,
+        atoms: &AtomTable,
+    ) -> Result<Vec<String>> {
+        let object = self.object(id)?;
+        let mut keys = Vec::with_capacity(object.property_count());
+        object.extend_own_property_names(atoms, &mut keys)?;
+        Ok(keys)
+    }
+
     fn collect_keys(
         &self,
         id: ObjectId,
@@ -71,6 +82,18 @@ impl Object {
         self.extend_named_keys(atoms, keys, true)
     }
 
+    fn extend_own_property_names(&self, atoms: &AtomTable, keys: &mut Vec<String>) -> Result<()> {
+        self.extend_virtual_string_keys(keys)?;
+        if self.array_length.is_some() {
+            self.extend_array_element_names(keys);
+            self.extend_sparse_array_element_names(atoms, keys)?;
+            self.extend_named_property_names(atoms, keys, true)?;
+        } else {
+            self.extend_named_property_names(atoms, keys, false)?;
+        }
+        Ok(())
+    }
+
     fn extend_named_keys(
         &self,
         atoms: &AtomTable,
@@ -93,12 +116,44 @@ impl Object {
         Ok(())
     }
 
+    fn extend_named_property_names(
+        &self,
+        atoms: &AtomTable,
+        keys: &mut Vec<String>,
+        skip_array_indices: bool,
+    ) -> Result<()> {
+        for named_property in self.named_properties() {
+            let key = named_property.key();
+            let Some(atom) = key.atom() else {
+                continue;
+            };
+            let name = atoms.name(atom)?;
+            if skip_array_indices && ArrayIndex::parse(name).is_some() {
+                continue;
+            }
+            push_unique_key(keys, name.to_owned());
+        }
+        Ok(())
+    }
+
     fn extend_array_element_keys(&self, keys: &mut Vec<String>) {
         for index in 0..self.array_storage.dense_len() {
             if self
                 .array_storage
                 .dense_property_at_position(index)
                 .is_some_and(ObjectProperty::is_enumerable)
+            {
+                push_unique_key(keys, index.to_string());
+            }
+        }
+    }
+
+    fn extend_array_element_names(&self, keys: &mut Vec<String>) {
+        for index in 0..self.array_storage.dense_len() {
+            if self
+                .array_storage
+                .dense_property_at_position(index)
+                .is_some()
             {
                 push_unique_key(keys, index.to_string());
             }
@@ -125,6 +180,20 @@ impl Object {
         }
         entries.sort_by_key(|(index, _)| *index);
         for (_, key) in entries {
+            let Some(atom) = key.atom() else {
+                continue;
+            };
+            push_unique_key(keys, atoms.name(atom)?.to_owned());
+        }
+        Ok(())
+    }
+
+    fn extend_sparse_array_element_names(
+        &self,
+        atoms: &AtomTable,
+        keys: &mut Vec<String>,
+    ) -> Result<()> {
+        for (_, key) in self.array_storage.sparse_keys() {
             let Some(atom) = key.atom() else {
                 continue;
             };

@@ -1,4 +1,4 @@
-use crate::value::ErrorName;
+use crate::value::{BoundFunctionId, ErrorName};
 
 const ARRAY_CONCAT_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_CONCAT_NAME: &str = "concat";
@@ -33,6 +33,12 @@ pub(super) const EVAL_NAME: &str = "eval";
 const ERROR_FUNCTION_LENGTH: f64 = 1.0;
 const FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
 pub(super) const FUNCTION_NAME: &str = "Function";
+const FUNCTION_PROTOTYPE_BIND_LENGTH: f64 = 1.0;
+pub(super) const FUNCTION_PROTOTYPE_BIND_NAME: &str = "bind";
+const FUNCTION_PROTOTYPE_CALL_LENGTH: f64 = 1.0;
+pub(super) const FUNCTION_PROTOTYPE_CALL_NAME: &str = "call";
+const BOUND_FUNCTION_LENGTH: f64 = 0.0;
+const BOUND_FUNCTION_NAME: &str = "bound";
 pub(super) const INFINITY_NAME: &str = "Infinity";
 pub(super) const JSON_NAME: &str = "JSON";
 const JSON_PARSE_FUNCTION_LENGTH: f64 = 2.0;
@@ -88,11 +94,17 @@ const OBJECT_GET_PROTOTYPE_OF_FUNCTION_LENGTH: f64 = 1.0;
 pub(super) const OBJECT_GET_PROTOTYPE_OF_NAME: &str = "getPrototypeOf";
 const OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH: f64 = 2.0;
 pub(super) const OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME: &str = "getOwnPropertyDescriptor";
+const OBJECT_GET_OWN_PROPERTY_NAMES_FUNCTION_LENGTH: f64 = 1.0;
+pub(super) const OBJECT_GET_OWN_PROPERTY_NAMES_NAME: &str = "getOwnPropertyNames";
 const OBJECT_HAS_OWN_FUNCTION_LENGTH: f64 = 2.0;
 pub(super) const OBJECT_HAS_OWN_NAME: &str = "hasOwn";
 const OBJECT_KEYS_FUNCTION_LENGTH: f64 = 1.0;
 pub(super) const OBJECT_KEYS_NAME: &str = "keys";
 pub(super) const OBJECT_NAME: &str = "Object";
+const OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_FUNCTION_LENGTH: f64 = 1.0;
+pub(super) const OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME: &str = "hasOwnProperty";
+const OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_FUNCTION_LENGTH: f64 = 1.0;
+pub(super) const OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME: &str = "propertyIsEnumerable";
 const PROMISE_CATCH_FUNCTION_LENGTH: f64 = 1.0;
 pub(super) const PROMISE_CATCH_NAME: &str = "catch";
 const PROMISE_FUNCTION_LENGTH: f64 = 1.0;
@@ -127,9 +139,12 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ArrayUnshift,
     AsyncFunction,
     Boolean,
+    BoundFunction(BoundFunctionId),
     Eval,
     ErrorConstructor(ErrorName),
     Function,
+    FunctionPrototypeBind,
+    FunctionPrototypeCall,
     JsonParse,
     JsonStringify,
     MathAbs,
@@ -172,8 +187,11 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ObjectDefineProperty,
     ObjectGetPrototypeOf,
     ObjectGetOwnPropertyDescriptor,
+    ObjectGetOwnPropertyNames,
     ObjectHasOwn,
     ObjectKeys,
+    ObjectPrototypeHasOwnProperty,
+    ObjectPrototypePropertyIsEnumerable,
     Promise,
     PromiseResolve,
     PromiseReject,
@@ -204,9 +222,12 @@ impl NativeFunctionKind {
             Self::ArrayUnshift => ARRAY_UNSHIFT_FUNCTION_LENGTH,
             Self::AsyncFunction => ASYNC_FUNCTION_FUNCTION_LENGTH,
             Self::Boolean => BOOLEAN_FUNCTION_LENGTH,
+            Self::BoundFunction(_) => BOUND_FUNCTION_LENGTH,
             Self::Eval => EVAL_FUNCTION_LENGTH,
             Self::ErrorConstructor(_) => ERROR_FUNCTION_LENGTH,
             Self::Function => FUNCTION_FUNCTION_LENGTH,
+            Self::FunctionPrototypeBind => FUNCTION_PROTOTYPE_BIND_LENGTH,
+            Self::FunctionPrototypeCall => FUNCTION_PROTOTYPE_CALL_LENGTH,
             Self::JsonParse => JSON_PARSE_FUNCTION_LENGTH,
             Self::JsonStringify => JSON_STRINGIFY_FUNCTION_LENGTH,
             Self::MathRandom => MATH_FUNCTION_LENGTH_ZERO,
@@ -251,8 +272,15 @@ impl NativeFunctionKind {
             Self::ObjectGetOwnPropertyDescriptor => {
                 OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH
             }
+            Self::ObjectGetOwnPropertyNames => OBJECT_GET_OWN_PROPERTY_NAMES_FUNCTION_LENGTH,
             Self::ObjectHasOwn => OBJECT_HAS_OWN_FUNCTION_LENGTH,
             Self::ObjectKeys => OBJECT_KEYS_FUNCTION_LENGTH,
+            Self::ObjectPrototypeHasOwnProperty => {
+                OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_FUNCTION_LENGTH
+            }
+            Self::ObjectPrototypePropertyIsEnumerable => {
+                OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_FUNCTION_LENGTH
+            }
             Self::Promise => PROMISE_FUNCTION_LENGTH,
             Self::PromiseResolve => PROMISE_RESOLVE_FUNCTION_LENGTH,
             Self::PromiseReject => PROMISE_REJECT_FUNCTION_LENGTH,
@@ -280,9 +308,12 @@ impl NativeFunctionKind {
             Self::ArrayUnshift => ARRAY_UNSHIFT_NAME,
             Self::AsyncFunction => ASYNC_FUNCTION_NAME,
             Self::Boolean => BOOLEAN_NAME,
+            Self::BoundFunction(_) => BOUND_FUNCTION_NAME,
             Self::Eval => EVAL_NAME,
             Self::ErrorConstructor(name) => name.as_str(),
             Self::Function => FUNCTION_NAME,
+            Self::FunctionPrototypeBind => FUNCTION_PROTOTYPE_BIND_NAME,
+            Self::FunctionPrototypeCall => FUNCTION_PROTOTYPE_CALL_NAME,
             Self::JsonParse => JSON_PARSE_NAME,
             Self::JsonStringify => JSON_STRINGIFY_NAME,
             Self::MathAbs => MATH_ABS_NAME,
@@ -325,8 +356,13 @@ impl NativeFunctionKind {
             Self::ObjectDefineProperty => OBJECT_DEFINE_PROPERTY_NAME,
             Self::ObjectGetPrototypeOf => OBJECT_GET_PROTOTYPE_OF_NAME,
             Self::ObjectGetOwnPropertyDescriptor => OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
+            Self::ObjectGetOwnPropertyNames => OBJECT_GET_OWN_PROPERTY_NAMES_NAME,
             Self::ObjectHasOwn => OBJECT_HAS_OWN_NAME,
             Self::ObjectKeys => OBJECT_KEYS_NAME,
+            Self::ObjectPrototypeHasOwnProperty => OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
+            Self::ObjectPrototypePropertyIsEnumerable => {
+                OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME
+            }
             Self::Promise => PROMISE_NAME,
             Self::PromiseResolve => PROMISE_RESOLVE_NAME,
             Self::PromiseReject => PROMISE_REJECT_NAME,
