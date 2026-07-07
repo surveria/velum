@@ -1,3 +1,7 @@
+mod usage;
+
+pub use usage::CompiledScriptUsage;
+
 use crate::{
     binding_layout::BindingLayout,
     bytecode::BytecodeProgram,
@@ -90,138 +94,6 @@ impl CompiledScript {
             )));
         }
         Ok(())
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct CompiledScriptUsage {
-    source_len: usize,
-    top_level_statement_count: usize,
-    max_expression_depth: usize,
-    static_name_count: usize,
-    static_string_count: usize,
-    static_binding_count: usize,
-    static_property_access_count: usize,
-    static_call_site_count: usize,
-    resolved_static_binding_count: usize,
-    unresolved_static_binding_count: usize,
-    global_binding_slot_count: usize,
-    local_binding_slot_count: usize,
-    upvalue_binding_slot_count: usize,
-    bytecode_instruction_count: usize,
-    bytecode_binding_operand_count: usize,
-    bytecode_property_operand_count: usize,
-    bytecode_direct_native_call_count: usize,
-    bytecode_array_native_call_count: usize,
-    bytecode_numeric_instruction_count: usize,
-    bytecode_hoisted_var_count: usize,
-    bytecode_hoisted_function_count: usize,
-}
-
-impl CompiledScriptUsage {
-    #[must_use]
-    pub const fn source_len(self) -> usize {
-        self.source_len
-    }
-
-    #[must_use]
-    pub const fn top_level_statement_count(self) -> usize {
-        self.top_level_statement_count
-    }
-
-    #[must_use]
-    pub const fn max_expression_depth(self) -> usize {
-        self.max_expression_depth
-    }
-
-    #[must_use]
-    pub const fn static_name_count(self) -> usize {
-        self.static_name_count
-    }
-
-    #[must_use]
-    pub const fn static_string_count(self) -> usize {
-        self.static_string_count
-    }
-
-    #[must_use]
-    pub const fn static_binding_count(self) -> usize {
-        self.static_binding_count
-    }
-
-    #[must_use]
-    pub const fn static_property_access_count(self) -> usize {
-        self.static_property_access_count
-    }
-
-    #[must_use]
-    pub const fn static_call_site_count(self) -> usize {
-        self.static_call_site_count
-    }
-
-    #[must_use]
-    pub const fn resolved_static_binding_count(self) -> usize {
-        self.resolved_static_binding_count
-    }
-
-    #[must_use]
-    pub const fn unresolved_static_binding_count(self) -> usize {
-        self.unresolved_static_binding_count
-    }
-
-    #[must_use]
-    pub const fn global_binding_slot_count(self) -> usize {
-        self.global_binding_slot_count
-    }
-
-    #[must_use]
-    pub const fn local_binding_slot_count(self) -> usize {
-        self.local_binding_slot_count
-    }
-
-    #[must_use]
-    pub const fn upvalue_binding_slot_count(self) -> usize {
-        self.upvalue_binding_slot_count
-    }
-
-    #[must_use]
-    pub const fn bytecode_instruction_count(self) -> usize {
-        self.bytecode_instruction_count
-    }
-
-    #[must_use]
-    pub const fn bytecode_binding_operand_count(self) -> usize {
-        self.bytecode_binding_operand_count
-    }
-
-    #[must_use]
-    pub const fn bytecode_property_operand_count(self) -> usize {
-        self.bytecode_property_operand_count
-    }
-
-    #[must_use]
-    pub const fn bytecode_direct_native_call_count(self) -> usize {
-        self.bytecode_direct_native_call_count
-    }
-
-    #[must_use]
-    pub const fn bytecode_array_native_call_count(self) -> usize {
-        self.bytecode_array_native_call_count
-    }
-
-    #[must_use]
-    pub const fn bytecode_numeric_instruction_count(self) -> usize {
-        self.bytecode_numeric_instruction_count
-    }
-
-    #[must_use]
-    pub const fn bytecode_hoisted_var_count(self) -> usize {
-        self.bytecode_hoisted_var_count
-    }
-
-    #[must_use]
-    pub const fn bytecode_hoisted_function_count(self) -> usize {
-        self.bytecode_hoisted_function_count
     }
 }
 
