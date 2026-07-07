@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T021114Z.md`
-- Task: Organize bytecode runtime modules
-- Performance: 0.79x (38/63 >1.00x)
+- `rsqjs-test-report-20260707T022133Z.md`
+- Task: rsqjs-test-report-20260707T022133Z.md
+- Performance: 0.80x (39/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 12546 passed / 90032 failed (12.23%)
 
@@ -231,4 +231,5 @@ Latest report:
 | `20260707T013432Z` `534c4ba` Quicken numeric bitwise bytecode | 0.80x (38/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
 | `20260707T015306Z` `1b8564a` Optimize direct Array native target arguments | 0.79x (39/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
 | `20260707T020401Z` `530b0e3` Optimize direct Math integer arguments | 0.78x (39/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
-| `20260707T021114Z` `fab7fb9` Organize bytecode runtime modules | 0.79x (38/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
+| `20260707T021114Z` `5791a02` Organize bytecode runtime modules | 0.79x (38/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
+| `20260707T022133Z` rsqjs-test-report-20260707T022133Z.md | 0.80x (39/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
