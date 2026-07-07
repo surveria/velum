@@ -286,6 +286,20 @@ impl Context {
         Some(value)
     }
 
+    pub(crate) fn unresolved_direct_builtin_callable(
+        &mut self,
+        binding: &BytecodeBinding,
+    ) -> Result<Option<Value>> {
+        if binding.operand() != BindingOperand::Unresolved {
+            return Ok(None);
+        }
+        let name = binding.name().as_str();
+        if self.unresolved_binding_name_is_shadowed(name) {
+            return Ok(None);
+        }
+        self.direct_builtin_callable_value(name)
+    }
+
     pub(crate) fn assign_bytecode(
         &mut self,
         binding: &BytecodeBinding,
