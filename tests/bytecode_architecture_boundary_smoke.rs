@@ -1,4 +1,7 @@
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Path, StripPrefixError},
+};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -9,11 +12,35 @@ const AST_FRONTEND_SOURCE_DIRS: [&str; 4] = [
     "src/binding_layout",
 ];
 
+const FRONTEND_PIPELINE_SOURCE_DIRS: [&str; 5] = [
+    "src/lexer",
+    "src/parser",
+    "src/compiler",
+    "src/binding_layout",
+    "src/ast",
+];
+
+const FRONTEND_BRIDGE_SOURCE_DIRS: [&str; 1] = ["src/compiled_script"];
+
 const OBSOLETE_AST_EXECUTION_MARKERS: [&str; 4] = [
     "EvalAst",
     "eval_ast",
     "AstInterpreter",
     "RuntimeCallArgs::evaluate",
+];
+
+const AST_EXECUTION_TYPE_MARKERS: [&str; 11] = [
+    "program: Program",
+    ": Program",
+    "Rc<[Stmt]>",
+    "Vec<Stmt>",
+    "Box<Stmt>",
+    "Stmt::",
+    "Expr::",
+    "Box<Expr>",
+    "Vec<Expr>",
+    ": Expr",
+    "FunctionSpec",
 ];
 
 #[test]
@@ -50,10 +77,27 @@ fn check_source_file(repo: &Path, path: &Path) -> TestResult {
     let text = fs::read_to_string(path)
         .map_err(|error| format!("failed to read source file {}: {error}", path.display()))?;
     let parser_ast_allowed = path_allows_parser_ast(repo, path)?;
+    let frontend_pipeline_allowed = path_allows_frontend_pipeline(repo, path)?;
     for line in text.lines() {
         if line_imports_parser_ast(line) && !parser_ast_allowed {
             return Err(format!(
                 "{} imports parser AST through `{}`; only parser, AST, compiler, and binding-layout layers may traverse parser AST",
+                path.display(),
+                line.trim()
+            )
+            .into());
+        }
+        if line_imports_frontend_pipeline(line) && !frontend_pipeline_allowed {
+            return Err(format!(
+                "{} imports frontend pipeline module through `{}`; runtime execution must enter compiled bytecode through CompiledScript",
+                path.display(),
+                line.trim()
+            )
+            .into());
+        }
+        if line_contains_ast_execution_type_marker(line) && !parser_ast_allowed {
+            return Err(format!(
+                "{} contains parser AST execution/storage marker `{}`; non-frontend layers must store bytecode-owned metadata",
                 path.display(),
                 line.trim()
             )
@@ -71,10 +115,18 @@ fn check_source_file(repo: &Path, path: &Path) -> TestResult {
     Ok(())
 }
 
-fn path_allows_parser_ast(repo: &Path, path: &Path) -> Result<bool, std::path::StripPrefixError> {
+fn path_allows_parser_ast(repo: &Path, path: &Path) -> Result<bool, StripPrefixError> {
     let relative = path.strip_prefix(repo)?;
     Ok(AST_FRONTEND_SOURCE_DIRS
         .iter()
+        .any(|allowed| relative.starts_with(allowed)))
+}
+
+fn path_allows_frontend_pipeline(repo: &Path, path: &Path) -> Result<bool, StripPrefixError> {
+    let relative = path.strip_prefix(repo)?;
+    Ok(FRONTEND_PIPELINE_SOURCE_DIRS
+        .iter()
+        .chain(FRONTEND_BRIDGE_SOURCE_DIRS.iter())
         .any(|allowed| relative.starts_with(allowed)))
 }
 
@@ -91,6 +143,24 @@ fn line_imports_parser_ast(line: &str) -> bool {
         || line.contains(" ast::")
         || line.contains("{ast::")
         || line.contains("(ast::")
+}
+
+fn line_imports_frontend_pipeline(line: &str) -> bool {
+    let trimmed = line.trim();
+    line.contains("crate::lexer")
+        || line.contains("crate::parser")
+        || line.contains("crate::compiler")
+        || trimmed == "lexer,"
+        || trimmed == "parser,"
+        || trimmed == "compiler,"
+        || trimmed == "lexer, parser,"
+        || trimmed == "parser, lexer,"
+}
+
+fn line_contains_ast_execution_type_marker(line: &str) -> bool {
+    AST_EXECUTION_TYPE_MARKERS
+        .iter()
+        .any(|marker| line.contains(marker))
 }
 
 fn line_contains_obsolete_ast_execution_marker(line: &str) -> bool {

@@ -65,8 +65,8 @@ not define the whole roadmap.
   mutable JavaScript state.
 - Add direct API tests for VM creation, isolation, resource-limit failures,
   teardown reporting, and output separation.
-- Keep the public API compatible with future `CompiledScript` and bytecode
-  backends.
+- Keep `CompiledScript` bytecode-owned and hidden behind the public API so
+  bytecode operands and quickening can evolve without exposing VM internals.
 
 ## Phase 2: Host Extension API
 
@@ -92,12 +92,14 @@ not define the whole roadmap.
   use cases.
 - Add benchmarks for hot built-in paths as they become implemented.
 
-## Phase 5: Reusable Compilation API
+## Phase 5: Reusable Compilation And Bytecode API
 
-- Introduce `CompiledScript` before bytecode.
-- Reuse lexing and parsing work for repeated evaluation.
+- Keep `CompiledScript` as the reusable, bytecode-owned execution artifact.
+- Reuse lexing, parsing, binding analysis, and compilation work for repeated
+  evaluation.
 - Separate parse, compile, execute, host-callback, and teardown measurements.
-- Keep the API stable enough for a later bytecode backend.
+- Keep the parser AST as compile-time front-end IR only; runtime execution must
+  not retain AST bodies or reparse from execution layers.
 
 ## Phase 6: Diagnostics And Error Model
 
@@ -138,13 +140,16 @@ not define the whole roadmap.
 - Split array storage into packed, holey, and sparse representations.
 - Prefer VM-owned indexed heaps over scattered small allocations.
 
-## Phase 11: Bytecode And Dispatch
+## Phase 11: Bytecode Dispatch And Quickening
 
-- Add bytecode after enough language coverage exists to benchmark honestly.
-- Keep opcodes compact and cache-friendly.
-- Preserve bytecode regression tests as the execution oracle instead of keeping
-  an AST interpreter fallback.
-- Add inline property caches after shapes exist.
+- Extend bytecode coverage as compatibility grows and benchmark evidence
+  identifies hot paths.
+- Keep opcodes and operands compact, cache-friendly, and bytecode-owned.
+- Preserve bytecode regression tests and QuickJS differential checks as the
+  execution oracle. Parser-AST execution fallback is forbidden.
+- Add direct operands, inline caches, dense-array loop instructions, and native
+  call specializations only behind explicit guards with ordinary bytecode
+  semantic fallbacks.
 
 ## Phase 12: Heap Management And Collection
 
