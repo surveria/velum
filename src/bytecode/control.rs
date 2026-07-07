@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{
     ast::{CatchClause, DeclKind, Expr, ForInTarget, Stmt, SwitchCase},
     bytecode::{
@@ -36,7 +38,17 @@ impl BytecodeCompiler<'_> {
     }
 
     pub(super) fn compile_while(&mut self, condition: &Expr, body: &Stmt) -> Result<()> {
+        self.compile_labeled_while(None, condition, body)
+    }
+
+    fn compile_labeled_while(
+        &mut self,
+        labels: Option<Rc<[StaticName]>>,
+        condition: &Expr,
+        body: &Stmt,
+    ) -> Result<()> {
         self.emit(BytecodeInstruction::While {
+            labels,
             condition: BytecodeBlock::compile_expression(condition, self.layout)?,
             body: self.compile_statement_block(body, StatementValue::Store)?,
         });
@@ -44,7 +56,17 @@ impl BytecodeCompiler<'_> {
     }
 
     pub(super) fn compile_do_while(&mut self, body: &Stmt, condition: &Expr) -> Result<()> {
+        self.compile_labeled_do_while(None, body, condition)
+    }
+
+    fn compile_labeled_do_while(
+        &mut self,
+        labels: Option<Rc<[StaticName]>>,
+        body: &Stmt,
+        condition: &Expr,
+    ) -> Result<()> {
         self.emit(BytecodeInstruction::DoWhile {
+            labels,
             body: self.compile_statement_block(body, StatementValue::Store)?,
             condition: BytecodeBlock::compile_expression(condition, self.layout)?,
         });
@@ -57,6 +79,50 @@ impl BytecodeCompiler<'_> {
         body: &Stmt,
         value: StatementValue,
     ) -> Result<()> {
+        let (labels, labeled_body) = collect_label_chain(label, body);
+        let labels = Some(labels);
+        match labeled_body {
+            Stmt::While { condition, body } => {
+                return self.compile_labeled_while(labels, condition, body);
+            }
+            Stmt::DoWhile { body, condition } => {
+                return self.compile_labeled_do_while(labels, body, condition);
+            }
+            Stmt::For {
+                init,
+                condition,
+                update,
+                body,
+            } => {
+                return self.compile_labeled_for(
+                    labels,
+                    init.as_deref(),
+                    condition.as_ref(),
+                    update.as_ref(),
+                    body,
+                );
+            }
+            Stmt::ForIn {
+                target,
+                object,
+                body,
+            } => {
+                return self.compile_labeled_for_in(labels, target, object, body);
+            }
+            Stmt::Block(_)
+            | Stmt::DeclList(_)
+            | Stmt::If { .. }
+            | Stmt::Label { .. }
+            | Stmt::Switch { .. }
+            | Stmt::Try { .. }
+            | Stmt::Break(_)
+            | Stmt::Continue(_)
+            | Stmt::Throw(_)
+            | Stmt::Return(_)
+            | Stmt::FunctionDecl { .. }
+            | Stmt::VarDecl { .. }
+            | Stmt::Expr(_) => {}
+        }
         self.emit(BytecodeInstruction::Label {
             label: label.clone(),
             body: self.compile_statement_block(body, value)?,
@@ -71,7 +137,19 @@ impl BytecodeCompiler<'_> {
         update: Option<&Expr>,
         body: &Stmt,
     ) -> Result<()> {
+        self.compile_labeled_for(None, init, condition, update, body)
+    }
+
+    fn compile_labeled_for(
+        &mut self,
+        labels: Option<Rc<[StaticName]>>,
+        init: Option<&Stmt>,
+        condition: Option<&Expr>,
+        update: Option<&Expr>,
+        body: &Stmt,
+    ) -> Result<()> {
         self.emit(BytecodeInstruction::For {
+            labels,
             init: init
                 .map(|init| self.compile_statement_block(init, StatementValue::Discard))
                 .transpose()?,
@@ -93,7 +171,18 @@ impl BytecodeCompiler<'_> {
         object: &Expr,
         body: &Stmt,
     ) -> Result<()> {
+        self.compile_labeled_for_in(None, target, object, body)
+    }
+
+    fn compile_labeled_for_in(
+        &mut self,
+        labels: Option<Rc<[StaticName]>>,
+        target: &ForInTarget,
+        object: &Expr,
+        body: &Stmt,
+    ) -> Result<()> {
         self.emit(BytecodeInstruction::ForIn {
+            labels,
             target: self.compile_for_in_target(target)?,
             object: BytecodeBlock::compile_expression(object, self.layout)?,
             body: self.compile_statement_block(body, StatementValue::Store)?,
@@ -220,6 +309,23 @@ impl BytecodeCompiler<'_> {
             _ => Err(Error::runtime("invalid bytecode assignment target")),
         }
     }
+}
+
+fn collect_label_chain<'a>(
+    first_label: &StaticName,
+    first_body: &'a Stmt,
+) -> (Rc<[StaticName]>, &'a Stmt) {
+    let mut labels = vec![first_label.clone()];
+    let mut body = first_body;
+    while let Stmt::Label {
+        label,
+        body: nested_body,
+    } = body
+    {
+        labels.push(label.clone());
+        body = nested_body;
+    }
+    (Rc::from(labels.into_boxed_slice()), body)
 }
 
 fn for_init_needs_lexical_scope(init: Option<&Stmt>) -> bool {

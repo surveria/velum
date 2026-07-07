@@ -95,9 +95,9 @@ impl BytecodeInstruction {
             }
             Self::CallBinding { callee, .. } => callee.direct_operand_count(),
             Self::Construct { constructor, .. } => constructor.direct_operand_count(),
-            Self::While { condition, body } => {
-                count_blocks_2(condition, body, BytecodeBlock::binding_operand_count)
-            }
+            Self::While {
+                condition, body, ..
+            } => count_blocks_2(condition, body, BytecodeBlock::binding_operand_count),
             Self::For {
                 init,
                 condition,
@@ -115,6 +115,7 @@ impl BytecodeInstruction {
                 target,
                 object,
                 body,
+                ..
             } => target
                 .binding_operand_count()
                 .saturating_add(object.binding_operand_count())
@@ -170,9 +171,9 @@ impl BytecodeInstruction {
             | Self::ComputedPropertyAssign { .. }
             | Self::CallStaticMember { .. }
             | Self::CallComputedMember { .. } => 1,
-            Self::While { condition, body } => {
-                count_blocks_2(condition, body, BytecodeBlock::property_operand_count)
-            }
+            Self::While {
+                condition, body, ..
+            } => count_blocks_2(condition, body, BytecodeBlock::property_operand_count),
             Self::For {
                 init,
                 condition,
@@ -190,6 +191,7 @@ impl BytecodeInstruction {
                 target,
                 object,
                 body,
+                ..
             } => target
                 .property_operand_count()
                 .saturating_add(object.property_operand_count())
@@ -228,9 +230,9 @@ impl BytecodeInstruction {
             | Self::CallStaticMember { native, .. }
             | Self::CallComputedMember { native, .. }
             | Self::Construct { native, .. } => usize::from(native.is_some()),
-            Self::While { condition, body } => {
-                count_blocks_2(condition, body, BytecodeBlock::direct_native_call_count)
-            }
+            Self::While {
+                condition, body, ..
+            } => count_blocks_2(condition, body, BytecodeBlock::direct_native_call_count),
             Self::For {
                 init,
                 condition,
@@ -248,6 +250,7 @@ impl BytecodeInstruction {
                 target,
                 object,
                 body,
+                ..
             } => target
                 .direct_native_call_count()
                 .saturating_add(object.direct_native_call_count())
@@ -288,9 +291,9 @@ impl BytecodeInstruction {
             | Self::Construct { native, .. } => {
                 native.map_or(0, |target| usize::from(target.is_array_target()))
             }
-            Self::While { condition, body } => {
-                count_blocks_2(condition, body, BytecodeBlock::array_native_call_count)
-            }
+            Self::While {
+                condition, body, ..
+            } => count_blocks_2(condition, body, BytecodeBlock::array_native_call_count),
             Self::For {
                 init,
                 condition,
@@ -308,6 +311,7 @@ impl BytecodeInstruction {
                 target,
                 object,
                 body,
+                ..
             } => target
                 .array_native_call_count()
                 .saturating_add(object.array_native_call_count())
@@ -346,9 +350,9 @@ impl BytecodeInstruction {
             | Self::NumberBinary(_)
             | Self::NumberCompare(_)
             | Self::NumberEquality(_) => 1,
-            Self::While { condition, body } => {
-                count_blocks_2(condition, body, BytecodeBlock::numeric_instruction_count)
-            }
+            Self::While {
+                condition, body, ..
+            } => count_blocks_2(condition, body, BytecodeBlock::numeric_instruction_count),
             Self::For {
                 init,
                 condition,
@@ -366,6 +370,7 @@ impl BytecodeInstruction {
                 target,
                 object,
                 body,
+                ..
             } => target
                 .numeric_instruction_count()
                 .saturating_add(object.numeric_instruction_count())
@@ -400,9 +405,9 @@ impl BytecodeInstruction {
 
     fn nested_instruction_count(&self) -> usize {
         match self {
-            Self::While { condition, body } => {
-                count_blocks_2(condition, body, BytecodeBlock::instruction_count)
-            }
+            Self::While {
+                condition, body, ..
+            } => count_blocks_2(condition, body, BytecodeBlock::instruction_count),
             Self::For {
                 init,
                 condition,
@@ -420,6 +425,7 @@ impl BytecodeInstruction {
                 object,
                 body,
                 target,
+                ..
             } => object
                 .instruction_count()
                 .saturating_add(body.instruction_count())
