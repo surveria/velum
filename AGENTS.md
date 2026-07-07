@@ -27,7 +27,7 @@ These rules are mandatory for humans and agents working in any part of this repo
 - Merge to `main` with one squash commit and a detailed commit message. The detailed history remains in the branch.
 - The repository should use GitHub merge queue for `main`, with the CI `merge_group` check required before merge. Use a queue group size of one when report history must stay one-PR-per-report.
 - The `main` branch ruleset must require the ready-PR/merge-queue CI check before merge and must allow the report publisher token to push report-only commits, or the post-merge canonical report commit will fail.
-- After a PR is merged, GitHub Actions publishes the canonical report: it downloads the report artifact for the tested tree, copies exactly one report into `reports/test-runs/`, regenerates `reports/benchmark-rollup.md` and `reports/benchmark-summary.jpg`, and pushes one report-only commit to `main`.
+- After a PR is merged, GitHub Actions publishes the canonical report: it downloads the report artifact for the tested tree, stores the tested source commit on the single `ci-tested-sources` archive branch so report commit SHAs remain fetchable, copies exactly one report into `reports/test-runs/`, regenerates `reports/benchmark-rollup.md` and `reports/benchmark-summary.jpg`, and pushes one report-only commit to `main`.
 - If the task is fully implemented and CI is green, push, PR creation, and merge do not need extra confirmation. Ask only when implementation is incomplete, there is doubt, or CI is red.
 - After merge, update the main repository directory to fresh `main` with `git checkout main && git pull`.
 

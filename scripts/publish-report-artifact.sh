@@ -90,6 +90,75 @@ checkout_latest_main() {
   fi
 }
 
+fetch_tested_source_commit() {
+  local source_commit="$1"
+  local expected_tree="$2"
+
+  if [[ ! "${source_commit}" =~ ^[0-9a-f]{40}$ ]]; then
+    fail "invalid source commit in artifact metadata: ${source_commit}"
+  fi
+
+  git fetch --no-tags origin "${source_commit}"
+  git cat-file -e "${source_commit}^{commit}" || fail "source commit is not a commit: ${source_commit}"
+
+  local source_tree
+  source_tree="$(git rev-parse "${source_commit}^{tree}")"
+  if [[ "${source_tree}" != "${expected_tree}" ]]; then
+    fail "source commit tree mismatch: ${source_tree} != ${expected_tree}"
+  fi
+}
+
+archive_commit_message() {
+  local source_commit="$1"
+  local expected_tree="$2"
+  local source_run="$3"
+
+  printf 'Archive tested source %.12s [skip ci]\n\n' "${source_commit}"
+  printf 'Source commit: %s\n' "${source_commit}"
+  printf 'Source tree: %s\n' "${expected_tree}"
+  printf 'Source workflow run: %s\n' "${source_run}"
+}
+
+checkout_archive_branch() {
+  local archive_branch="$1"
+
+  if git ls-remote --exit-code --heads origin "${archive_branch}" >/dev/null 2>&1; then
+    git fetch --no-tags origin "${archive_branch}:refs/remotes/origin/${archive_branch}"
+    git checkout -B "${archive_branch}" "refs/remotes/origin/${archive_branch}"
+    return 0
+  fi
+
+  return 1
+}
+
+archive_tested_source_commit() {
+  local archive_branch="$1"
+  local source_commit="$2"
+  local expected_tree="$3"
+  local source_run="$4"
+
+  git check-ref-format --branch "${archive_branch}" >/dev/null ||
+    fail "invalid tested source archive branch: ${archive_branch}"
+  fetch_tested_source_commit "${source_commit}" "${expected_tree}"
+
+  local archive_message
+  archive_message="$(archive_commit_message "${source_commit}" "${expected_tree}" "${source_run}")"
+
+  if checkout_archive_branch "${archive_branch}"; then
+    if git merge-base --is-ancestor "${source_commit}" HEAD; then
+      printf 'tested source commit already archived: %s\n' "${source_commit}"
+      return 0
+    fi
+    git merge --no-ff -s ours -m "${archive_message}" "${source_commit}"
+  else
+    git checkout -B "${archive_branch}" "${source_commit}"
+    git commit --allow-empty -m "${archive_message}"
+  fi
+
+  git push origin "HEAD:refs/heads/${archive_branch}"
+  printf 'tested source archive branch updated: %s -> %s\n' "${archive_branch}" "${source_commit}"
+}
+
 stage_report_outputs() {
   local source_report="$1"
   local report_file="$2"
@@ -165,7 +234,9 @@ report_file="${RSQJS_ARTIFACT_REPORT_FILE}"
 source_report="${artifact_dir}/${RSQJS_ARTIFACT_REPORT_RELATIVE_PATH}"
 source_commit="${RSQJS_ARTIFACT_COMMIT_SHA:-unknown}"
 source_run="${RSQJS_ARTIFACT_RUN_ID:-unknown}"
+archive_branch="${RSQJS_TESTED_SOURCE_ARCHIVE_BRANCH:-ci-tested-sources}"
 
+archive_tested_source_commit "${archive_branch}" "${source_commit}" "${expected_tree}" "${source_run}"
 checkout_latest_main
 stage_report_outputs "${source_report}" "${report_file}"
 commit_and_push "${report_file}" "${expected_tree}" "${source_commit}" "${source_run}"

@@ -142,6 +142,7 @@ jobs:
       CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/rs-quickjs
       GH_TOKEN: ${{ github.token }}
       RSQJS_MERGE_COMMIT_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+      RSQJS_TESTED_SOURCE_ARCHIVE_BRANCH: ci-tested-sources
     steps:
       - uses: actions/checkout@v4
         with:
