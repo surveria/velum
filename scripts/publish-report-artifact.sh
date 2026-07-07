@@ -171,7 +171,92 @@ stage_report_outputs() {
   cp "${source_report}" "${target_report}"
 
   cargo run --manifest-path runner/Cargo.toml -- --aggregate-reports reports/test-runs
-  git add "${target_report}" reports/benchmark-rollup.md reports/benchmark-summary.jpg
+}
+
+create_report_commit_payload() {
+  local payload_path="$1"
+  local repository="$2"
+  local expected_head="$3"
+  local headline="$4"
+  local body="$5"
+  shift 5
+
+  python3 - "${payload_path}" "${repository}" "${expected_head}" "${headline}" "${body}" "$@" <<'PY'
+import base64
+import json
+import pathlib
+import sys
+
+payload_path, repository, expected_head, headline, body, *paths = sys.argv[1:]
+additions = []
+for path in paths:
+    contents = pathlib.Path(path).read_bytes()
+    additions.append({
+        "path": path,
+        "contents": base64.b64encode(contents).decode("ascii"),
+    })
+
+query = """
+mutation($input: CreateCommitOnBranchInput!) {
+  createCommitOnBranch(input: $input) {
+    commit {
+      oid
+      url
+    }
+  }
+}
+"""
+payload = {
+    "query": query,
+    "variables": {
+        "input": {
+            "branch": {
+                "repositoryNameWithOwner": repository,
+                "branchName": "main",
+            },
+            "expectedHeadOid": expected_head,
+            "message": {
+                "headline": headline,
+                "body": body,
+            },
+            "fileChanges": {
+                "additions": additions,
+            },
+        },
+    },
+}
+pathlib.Path(payload_path).write_text(json.dumps(payload), encoding="utf-8")
+PY
+}
+
+create_signed_main_commit() {
+  local repository="$1"
+  local headline="$2"
+  local body="$3"
+  shift 3
+
+  local expected_head payload_path commit_oid
+  expected_head="$(git rev-parse HEAD)"
+  payload_path="$(mktemp)"
+  create_report_commit_payload "${payload_path}" "${repository}" "${expected_head}" "${headline}" "${body}" "$@"
+  if ! commit_oid="$(gh api graphql --input "${payload_path}" --jq '.data.createCommitOnBranch.commit.oid')"; then
+    rm -f "${payload_path}"
+    return 1
+  fi
+  rm -f "${payload_path}"
+  [[ -n "${commit_oid}" ]] || return 1
+  printf 'signed GitHub report commit: %s\n' "${commit_oid}"
+}
+
+reset_report_outputs() {
+  local target_report="$1"
+
+  if git ls-files --error-unmatch "${target_report}" >/dev/null 2>&1; then
+    git restore --worktree -- "${target_report}"
+  else
+    rm -f "${target_report}"
+  fi
+  git restore --worktree -- reports/benchmark-rollup.md reports/benchmark-summary.jpg
 }
 
 commit_and_push() {
@@ -180,36 +265,36 @@ commit_and_push() {
   local source_commit="$3"
   local source_run="$4"
 
-  if git diff --cached --quiet; then
+  local target_report="reports/test-runs/${report_file}"
+  if [[ -z "$(git status --porcelain -- "${target_report}" reports/benchmark-rollup.md reports/benchmark-summary.jpg)" ]]; then
     printf 'canonical report outputs are already up to date\n'
     return 0
   fi
 
   local timestamp="${report_file#rsqjs-test-report-}"
   timestamp="${timestamp%.md}"
-  git commit \
-    -m "Add rsqjs report ${timestamp} [skip ci]" \
-    -m "Source commit: ${source_commit}" \
-    -m "Source tree: ${expected_tree}" \
-    -m "Source workflow run: ${source_run}"
+  local headline="Add rsqjs report ${timestamp} [skip ci]"
+  local body
+  body="$(printf 'Source commit: %s\n\nSource tree: %s\n\nSource workflow run: %s\n' \
+    "${source_commit}" "${expected_tree}" "${source_run}")"
 
-  if git push origin HEAD:main; then
+  if create_signed_main_commit "${repository}" "${headline}" "${body}" \
+    "${target_report}" reports/benchmark-rollup.md reports/benchmark-summary.jpg; then
     return 0
   fi
 
-  printf 'initial report push failed; rebasing once onto latest origin/main\n' >&2
-  git pull --rebase origin main
-  cargo run --manifest-path runner/Cargo.toml -- --aggregate-reports reports/test-runs
-  git add reports/benchmark-rollup.md reports/benchmark-summary.jpg
-  if ! git diff --cached --quiet; then
-    git commit --amend --no-edit
-  fi
-  git push origin HEAD:main
+  printf 'initial signed report commit failed; retrying once on latest origin/main\n' >&2
+  reset_report_outputs "${target_report}"
+  checkout_latest_main
+  stage_report_outputs "${source_report}" "${report_file}"
+  create_signed_main_commit "${repository}" "${headline}" "${body}" \
+    "${target_report}" reports/benchmark-rollup.md reports/benchmark-summary.jpg
 }
 
 need_cmd gh
 need_cmd git
 need_cmd cargo
+need_cmd python3
 
 repository="${GITHUB_REPOSITORY:-}"
 [[ -n "${repository}" ]] || fail "GITHUB_REPOSITORY is required"

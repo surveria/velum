@@ -24,6 +24,7 @@ These rules are mandatory for humans and agents working in any part of this repo
 - PR descriptions must be detailed and include what changed, why it changed, problems or noteworthy decisions during the work, and what remains for later.
 - PR descriptions should include the validation summary and link or path for the CI report artifact. Do not commit generated full test reports in ordinary feature PRs unless the branch is explicitly a canonical report refresh.
 - Split work into meaningful commits so the branch history shows the solution path.
+- Every PR commit must have a GitHub-verified signature before the ready-PR CI gate can pass. Agents must use the repository signing key and a GitHub-verified author and committer email; do not use placeholder identities such as `codex@local`.
 - Merge to `main` with one squash commit and a detailed commit message. The detailed history remains in the branch.
 - The repository should use GitHub merge queue for `main`, with the CI `merge_group` check required before merge. Use a queue group size of one when report history must stay one-PR-per-report.
 - The `main` branch ruleset must require the ready-PR/merge-queue CI check before merge and must allow the report publisher token to push report-only commits, or the post-merge canonical report commit will fail.
