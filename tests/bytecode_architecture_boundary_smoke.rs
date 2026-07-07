@@ -2,25 +2,28 @@ use std::{fs, path::Path};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
-const BYTECODE_ONLY_SOURCE_DIRS: [&str; 6] = [
-    "src/api",
-    "src/bytecode",
-    "src/compiled_script",
-    "src/runtime",
-    "src/storage",
-    "src/value",
+const AST_FRONTEND_SOURCE_DIRS: [&str; 4] = [
+    "src/ast",
+    "src/parser",
+    "src/compiler",
+    "src/binding_layout",
+];
+
+const OBSOLETE_AST_EXECUTION_MARKERS: [&str; 4] = [
+    "EvalAst",
+    "eval_ast",
+    "AstInterpreter",
+    "RuntimeCallArgs::evaluate",
 ];
 
 #[test]
-fn runtime_and_embedding_layers_do_not_import_parser_ast() -> TestResult {
+fn only_frontend_and_compiler_layers_import_parser_ast() -> TestResult {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR"));
-    for relative_dir in BYTECODE_ONLY_SOURCE_DIRS {
-        check_source_dir(&repo.join(relative_dir))?;
-    }
+    check_source_dir(repo, &repo.join("src"))?;
     Ok(())
 }
 
-fn check_source_dir(dir: &Path) -> TestResult {
+fn check_source_dir(repo: &Path, dir: &Path) -> TestResult {
     let entries = fs::read_dir(dir)
         .map_err(|error| format!("failed to read source dir {}: {error}", dir.display()))?;
     for entry in entries {
@@ -35,21 +38,30 @@ fn check_source_dir(dir: &Path) -> TestResult {
             .file_type()
             .map_err(|error| format!("failed to inspect {}: {error}", path.display()))?;
         if file_type.is_dir() {
-            check_source_dir(&path)?;
+            check_source_dir(repo, &path)?;
         } else if is_rust_file(&path) {
-            check_source_file(&path)?;
+            check_source_file(repo, &path)?;
         }
     }
     Ok(())
 }
 
-fn check_source_file(path: &Path) -> TestResult {
+fn check_source_file(repo: &Path, path: &Path) -> TestResult {
     let text = fs::read_to_string(path)
         .map_err(|error| format!("failed to read source file {}: {error}", path.display()))?;
+    let parser_ast_allowed = path_allows_parser_ast(repo, path)?;
     for line in text.lines() {
-        if line_imports_parser_ast(line) {
+        if line_imports_parser_ast(line) && !parser_ast_allowed {
             return Err(format!(
-                "{} imports parser AST through `{}`; runtime, embedding, and bytecode data layers must execute bytecode-owned metadata",
+                "{} imports parser AST through `{}`; only parser, AST, compiler, and binding-layout layers may traverse parser AST",
+                path.display(),
+                line.trim()
+            )
+            .into());
+        }
+        if line_contains_obsolete_ast_execution_marker(line) {
+            return Err(format!(
+                "{} contains obsolete AST execution marker `{}`; runtime execution must stay bytecode-owned",
                 path.display(),
                 line.trim()
             )
@@ -57,6 +69,13 @@ fn check_source_file(path: &Path) -> TestResult {
         }
     }
     Ok(())
+}
+
+fn path_allows_parser_ast(repo: &Path, path: &Path) -> Result<bool, std::path::StripPrefixError> {
+    let relative = path.strip_prefix(repo)?;
+    Ok(AST_FRONTEND_SOURCE_DIRS
+        .iter()
+        .any(|allowed| relative.starts_with(allowed)))
 }
 
 fn is_rust_file(path: &Path) -> bool {
@@ -72,4 +91,10 @@ fn line_imports_parser_ast(line: &str) -> bool {
         || line.contains(" ast::")
         || line.contains("{ast::")
         || line.contains("(ast::")
+}
+
+fn line_contains_obsolete_ast_execution_marker(line: &str) -> bool {
+    OBSOLETE_AST_EXECUTION_MARKERS
+        .iter()
+        .any(|marker| line.contains(marker))
 }
