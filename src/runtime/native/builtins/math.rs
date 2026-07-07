@@ -1,6 +1,7 @@
 use std::f64::consts::{E, FRAC_1_SQRT_2, LN_2, LN_10, LOG2_E, LOG10_E, PI, SQRT_2};
 
 use crate::{
+    api::native_call::NativeCallTarget,
     error::{Error, Result},
     runtime::Context,
     runtime::call_args::RuntimeCallArgs,
@@ -279,6 +280,48 @@ impl Context {
     math_unary_method!(eval_math_tan, eval_direct_math_tan, f64::tan);
     math_unary_method!(eval_math_tanh, eval_direct_math_tanh, f64::tanh);
     math_unary_method!(eval_math_trunc, eval_direct_math_trunc, f64::trunc);
+
+    pub(in crate::runtime::native) fn eval_direct_math_integer_number_target(
+        target: NativeCallTarget,
+        args: &[Value],
+    ) -> Option<Value> {
+        match target {
+            NativeCallTarget::MathClz32 => Self::eval_direct_math_clz32_number(args),
+            NativeCallTarget::MathFround => Self::eval_direct_math_fround_number(args),
+            NativeCallTarget::MathImul => Self::eval_direct_math_imul_number(args),
+            _ => None,
+        }
+    }
+
+    fn eval_direct_math_clz32_number(args: &[Value]) -> Option<Value> {
+        let Some(Value::Number(value)) = args.first() else {
+            return None;
+        };
+        let unsigned = Self::nonnegative_number_to_uint32_fast(*value)?;
+        Some(Value::Number(f64::from(unsigned.leading_zeros())))
+    }
+
+    fn eval_direct_math_fround_number(args: &[Value]) -> Option<Value> {
+        let Some(Value::Number(value)) = args.first() else {
+            return None;
+        };
+        Some(Value::Number(Self::fround_to_number(*value)))
+    }
+
+    fn eval_direct_math_imul_number(args: &[Value]) -> Option<Value> {
+        let Some(Value::Number(left)) = args.first() else {
+            return None;
+        };
+        let Some(Value::Number(right)) = args.get(1) else {
+            return None;
+        };
+        let left = Self::nonnegative_number_to_uint32_fast(*left)?;
+        let right = Self::nonnegative_number_to_uint32_fast(*right)?;
+        let product = left.wrapping_mul(right);
+        Some(Value::Number(f64::from(i32::from_ne_bytes(
+            product.to_ne_bytes(),
+        ))))
+    }
 
     fn define_math_constant(&mut self, object: ObjectId, name: &str, value: f64) -> Result<()> {
         self.define_non_enumerable_object_property(object, name, Value::Number(value))

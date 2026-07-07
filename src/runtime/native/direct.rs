@@ -185,6 +185,10 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
+        if let Some(value) = Self::eval_direct_math_integer_number_target(target, args) {
+            return Ok(value);
+        }
+
         match target {
             NativeCallTarget::Array => self.eval_direct_array_constructor(args),
             NativeCallTarget::ArrayConcat => self.eval_direct_array_concat(args, this_value),

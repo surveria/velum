@@ -16,8 +16,8 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T065259Z.md`
-- Task: rsqjs-test-report-20260707T065259Z.md
+- `rsqjs-test-report-20260707T070659Z.md`
+- Task: rsqjs-test-report-20260707T070659Z.md
 - Performance: 0.84x (42/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 14552 passed / 88026 failed (14.19%)
@@ -256,4 +256,5 @@ Latest report:
 | `20260707T061903Z` `3399549` Handle JS TypeError completions for async function tests | 0.84x (42/63 >1.00x) | - (0/63 >1.00x) | 14526 passed / 88052 failed (14.16%) |
 | `20260707T062725Z` `c018750` Optimize numeric array search paths | 0.88x (42/63 >1.00x) | - (0/63 >1.00x) | 14526 passed / 88052 failed (14.16%) |
 | `20260707T064443Z` `cebc427` Add do-while bytecode and labeled break support | 0.83x (40/63 >1.00x) | - (0/63 >1.00x) | 14552 passed / 88026 failed (14.19%) |
-| `20260707T065259Z` rsqjs-test-report-20260707T065259Z.md | 0.84x (42/63 >1.00x) | - (0/63 >1.00x) | 14552 passed / 88026 failed (14.19%) |
+| `20260707T065259Z` `b6264d1` Avoid temporary Vecs during array materialization | 0.84x (42/63 >1.00x) | - (0/63 >1.00x) | 14552 passed / 88026 failed (14.19%) |
+| `20260707T070659Z` rsqjs-test-report-20260707T070659Z.md | 0.84x (42/63 >1.00x) | - (0/63 >1.00x) | 14552 passed / 88026 failed (14.19%) |
