@@ -25,6 +25,24 @@ bytecode-owned function metadata for execution. The `bytecode` module must not
 import parser AST types; AST traversal belongs in `parser`, `binding_layout`,
 and `compiler` only.
 
+`CompiledScript::compile` is the only bridge from source text into the
+front-end pipeline. Runtime, bytecode, API, value, storage, object, native, and
+function layers must not import lexer, parser, compiler, or parser AST modules
+directly. If execution needs a new construct, the construct must first be
+represented as bytecode-owned metadata and then executed through the VM.
+
+The word fallback has one allowed runtime meaning: a guarded bytecode,
+inline-cache, direct-native, slot, shape, or dense-array fast path may fall back
+to the ordinary bytecode/runtime semantic path when a guard cannot prove that
+the specialization is valid. It must never mean falling back to a parser-AST
+interpreter, retaining AST statement bodies in function objects, or reparsing
+from runtime code.
+
+Removing the parser AST itself is a separate front-end redesign. It requires a
+direct parser-to-compiler IR or parser-to-bytecode pipeline that still preserves
+binding analysis, diagnostics, resource accounting, and Test262 compatibility.
+Until that redesign is scheduled, the AST remains a compile-time IR only.
+
 ## Embedding Model
 
 The library API is the product surface. The CLI exists for smoke tests, differential checks, and benchmark orchestration, but engine architecture must optimize for embedding inside a larger Rust application. A feature is not complete just because it works through the CLI; VM-facing behavior must also make sense through the Rust API.
