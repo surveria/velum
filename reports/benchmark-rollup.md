@@ -16,8 +16,8 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T044541Z.md`
-- Task: rsqjs-test-report-20260707T044541Z.md
+- `rsqjs-test-report-20260707T045830Z.md`
+- Task: rsqjs-test-report-20260707T045830Z.md
 - Performance: 0.81x (39/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 12687 passed / 89891 failed (12.37%)
@@ -243,4 +243,5 @@ Latest report:
 | `20260707T041739Z` `ab25c84` Support new.target in bytecode runtime | 0.81x (40/63 >1.00x) | - (0/63 >1.00x) | 12687 passed / 89891 failed (12.37%) |
 | `20260707T042509Z` `4d9a21e` Use direct dispatch for cached dynamic native calls | 0.82x (39/63 >1.00x) | - (0/63 >1.00x) | 12687 passed / 89891 failed (12.37%) |
 | `20260707T043629Z` `7dced11` Specialize direct Function constructor args | 0.79x (40/63 >1.00x) | - (0/63 >1.00x) | 12687 passed / 89891 failed (12.37%) |
-| `20260707T044541Z` rsqjs-test-report-20260707T044541Z.md | 0.81x (39/63 >1.00x) | - (0/63 >1.00x) | 12687 passed / 89891 failed (12.37%) |
+| `20260707T044541Z` `3aa5f63` Use direct dispatch for call value native caches | 0.81x (39/63 >1.00x) | - (0/63 >1.00x) | 12687 passed / 89891 failed (12.37%) |
+| `20260707T045830Z` rsqjs-test-report-20260707T045830Z.md | 0.81x (39/63 >1.00x) | - (0/63 >1.00x) | 12687 passed / 89891 failed (12.37%) |
