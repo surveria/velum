@@ -26,6 +26,10 @@ pub enum ObjectPropertyKey {
 pub enum Expr {
     Literal(Value),
     StringLiteral(StaticString),
+    RegExpLiteral {
+        pattern: StaticString,
+        flags: StaticString,
+    },
     This,
     NewTarget,
     Identifier(StaticBinding),

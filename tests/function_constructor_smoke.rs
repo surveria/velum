@@ -72,6 +72,30 @@ fn function_constructor_does_not_capture_caller_locals() -> TestResult {
 }
 
 #[test]
+fn function_constructor_handles_parameter_line_comments() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let AsyncFunction = async function() {}.constructor;
+        let sync = Function("a", " /* a */ b, c /* b */ //", "/* c */ ; /* d */ //");
+        let asyncCreated = AsyncFunction("a", " /* a */ b, c /* b */ //", "/* c */ ; /* d */ //");
+        let syncSource =
+            "function anonymous(a, /* a */ b, c /* b */ //\n) {\n/* c */ ; /* d */ //\n}";
+        let asyncSource =
+            "async function anonymous(a, /* a */ b, c /* b */ //\n) {\n/* c */ ; /* d */ //\n}";
+        sync(1, 2, 3) === undefined &&
+            typeof asyncCreated === "function" &&
+            "" + sync === syncSource &&
+            "" + asyncCreated === asyncSource ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn function_constructor_rejects_invalid_source() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

@@ -244,7 +244,7 @@ impl CaptureBindingCollector {
                     self.collect_expr(init);
                 }
             }
-            Stmt::Break(_) | Stmt::Continue(_) => {}
+            Stmt::Empty | Stmt::Break(_) | Stmt::Continue(_) => {}
         }
     }
 
@@ -270,7 +270,11 @@ impl CaptureBindingCollector {
 
     fn collect_expr(&mut self, expr: &Expr) {
         match expr {
-            Expr::Literal(_) | Expr::StringLiteral(_) | Expr::This | Expr::NewTarget => {}
+            Expr::Literal(_)
+            | Expr::StringLiteral(_)
+            | Expr::RegExpLiteral { .. }
+            | Expr::This
+            | Expr::NewTarget => {}
             Expr::Function { params, body, .. }
             | Expr::ArrowFunction { params, body, .. }
             | Expr::MethodFunction { params, body, .. } => self.collect_function_body(params, body),

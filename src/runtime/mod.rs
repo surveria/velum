@@ -91,6 +91,7 @@ struct Function {
     param_binding_ids: Rc<[StaticBindingId]>,
     param_atoms: Rc<[AtomId]>,
     bytecode: BytecodeFunction,
+    source: Option<Rc<str>>,
     upvalues: FunctionUpvalues,
     static_name_atom_cache: Option<StaticNameAtomCacheHandle>,
     static_binding_cache: Option<StaticBindingCacheHandle>,

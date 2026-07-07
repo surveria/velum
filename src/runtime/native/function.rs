@@ -125,6 +125,8 @@ impl NativeFunction {
             | NativeFunctionKind::PromiseThen
             | NativeFunctionKind::PromiseCatch
             | NativeFunctionKind::PromiseResolver { .. }
+            | NativeFunctionKind::RegExp
+            | NativeFunctionKind::RegExpPrototypeTest
             | NativeFunctionKind::String
             | NativeFunctionKind::Symbol => None,
         }

@@ -22,10 +22,27 @@ impl Context {
             (Value::Number(left), Value::Number(right)) => Ok(Value::Number(left + right)),
             (Value::String(_) | Value::HeapString(_), _)
             | (_, Value::String(_) | Value::HeapString(_)) => {
-                let value = left.display_for_concat() + &right.display_for_concat();
+                let value = self.display_for_concat(left)? + &self.display_for_concat(right)?;
                 self.heap_string_value(&value)
             }
             _ => Err(Error::runtime("operator '+' expects numbers or strings")),
+        }
+    }
+
+    fn display_for_concat(&self, value: &Value) -> Result<String> {
+        match value {
+            Value::Function(id) => self.function_source_text(*id),
+            Value::NativeFunction(_)
+            | Value::HostFunction(_)
+            | Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::HeapString(_)
+            | Value::Symbol(_)
+            | Value::Object(_)
+            | Value::Error(_) => Ok(value.display_for_concat()),
         }
     }
 

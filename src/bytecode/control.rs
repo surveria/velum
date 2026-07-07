@@ -111,6 +111,7 @@ impl BytecodeCompiler<'_> {
             }
             Stmt::Block(_)
             | Stmt::DeclList(_)
+            | Stmt::Empty
             | Stmt::If { .. }
             | Stmt::Label { .. }
             | Stmt::Switch { .. }

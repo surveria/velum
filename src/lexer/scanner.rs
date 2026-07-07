@@ -59,7 +59,7 @@ impl<'a> Lexer<'a> {
                 '+' => self.plus_or_increment(offset),
                 '-' => self.minus_or_decrement(offset),
                 '*' => self.star_or_power(offset),
-                '/' => self.simple_or_equal(offset, TokenKind::Slash, TokenKind::SlashEqual),
+                '/' => self.slash_or_regexp(offset)?,
                 '%' => self.simple_or_equal(offset, TokenKind::Percent, TokenKind::PercentEqual),
                 '?' => self.simple(TokenKind::Question),
                 ':' => self.simple(TokenKind::Colon),
@@ -143,6 +143,83 @@ impl<'a> Lexer<'a> {
             return self.prefixed_number(offset, radix, description);
         }
         self.decimal_number(offset)
+    }
+
+    fn slash_or_regexp(&mut self, offset: usize) -> Result<()> {
+        if self.peek_next_char() == Some('=') || !self.can_start_regexp_literal() {
+            self.simple_or_equal(offset, TokenKind::Slash, TokenKind::SlashEqual);
+            return Ok(());
+        }
+        self.regexp_literal(offset)
+    }
+
+    fn can_start_regexp_literal(&self) -> bool {
+        self.tokens
+            .last()
+            .is_none_or(|token| token_kind_can_precede_regexp(&token.kind))
+    }
+
+    fn regexp_literal(&mut self, offset: usize) -> Result<()> {
+        self.advance();
+        let mut pattern = String::new();
+        let mut in_class = false;
+        let mut escaped = false;
+        while let Some((_, ch)) = self.peek() {
+            if is_line_terminator(ch) {
+                return Err(Error::lex(
+                    "unterminated regular expression literal",
+                    offset,
+                ));
+            }
+            self.advance();
+            if escaped {
+                pattern.push(ch);
+                escaped = false;
+                continue;
+            }
+            match ch {
+                '\\' => {
+                    pattern.push(ch);
+                    escaped = true;
+                }
+                '[' => {
+                    pattern.push(ch);
+                    in_class = true;
+                }
+                ']' => {
+                    pattern.push(ch);
+                    in_class = false;
+                }
+                '/' if !in_class => {
+                    let flags = self.regexp_flags(offset)?;
+                    self.push(TokenKind::RegExp { pattern, flags }, offset);
+                    return Ok(());
+                }
+                _ => pattern.push(ch),
+            }
+        }
+        Err(Error::lex(
+            "unterminated regular expression literal",
+            offset,
+        ))
+    }
+
+    fn regexp_flags(&mut self, offset: usize) -> Result<String> {
+        let mut flags = String::new();
+        while let Some((_, ch)) = self.peek() {
+            if !is_identifier_part(ch) {
+                break;
+            }
+            if flags.contains(ch) {
+                return Err(Error::lex(
+                    format!("duplicate regular expression flag '{ch}'"),
+                    offset,
+                ));
+            }
+            flags.push(ch);
+            self.advance();
+        }
+        Ok(flags)
     }
 
     fn numeric_prefix(&self) -> Option<(u32, &'static str)> {
@@ -730,4 +807,24 @@ impl<'a> Lexer<'a> {
 
 const fn is_line_terminator(ch: char) -> bool {
     matches!(ch, '\n' | '\r' | LINE_SEPARATOR | PARAGRAPH_SEPARATOR)
+}
+
+const fn token_kind_can_precede_regexp(kind: &TokenKind) -> bool {
+    !matches!(
+        kind,
+        TokenKind::Number(_)
+            | TokenKind::String(_)
+            | TokenKind::RegExp { .. }
+            | TokenKind::Identifier(_)
+            | TokenKind::This
+            | TokenKind::True
+            | TokenKind::False
+            | TokenKind::Null
+            | TokenKind::Undefined
+            | TokenKind::PlusPlus
+            | TokenKind::MinusMinus
+            | TokenKind::RParen
+            | TokenKind::RBracket
+            | TokenKind::RBrace
+    )
 }

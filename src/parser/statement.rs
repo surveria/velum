@@ -15,6 +15,9 @@ impl Parser {
         if self.match_kind(&TokenKind::LBrace) {
             return self.block();
         }
+        if self.match_kind(&TokenKind::Semicolon) {
+            return Ok(Stmt::Empty);
+        }
         if self.match_kind(&TokenKind::If) {
             return self.if_statement();
         }
@@ -171,6 +174,7 @@ impl Parser {
             Stmt::Label { body, .. } => Self::invalid_do_while_body(body),
             Stmt::Block(_)
             | Stmt::DeclList(_)
+            | Stmt::Empty
             | Stmt::If { .. }
             | Stmt::While { .. }
             | Stmt::DoWhile { .. }

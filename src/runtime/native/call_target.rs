@@ -72,6 +72,7 @@ impl NativeFunctionKind {
             NativeCallTarget::PromiseReject => Self::PromiseReject,
             NativeCallTarget::PromiseThen => Self::PromiseThen,
             NativeCallTarget::PromiseCatch => Self::PromiseCatch,
+            NativeCallTarget::RegExp => Self::RegExp,
             NativeCallTarget::String => Self::String,
         }
     }
@@ -100,6 +101,7 @@ impl NativeFunctionKind {
             | Self::ObjectPrototypeHasOwnProperty
             | Self::ObjectPrototypePropertyIsEnumerable
             | Self::PromiseResolver { .. }
+            | Self::RegExpPrototypeTest
             | Self::Symbol => None,
             Self::Boolean => Some(NativeCallTarget::Boolean),
             Self::ErrorConstructor(name) => Some(NativeCallTarget::ErrorConstructor(name)),
@@ -155,6 +157,7 @@ impl NativeFunctionKind {
             Self::PromiseReject => Some(NativeCallTarget::PromiseReject),
             Self::PromiseThen => Some(NativeCallTarget::PromiseThen),
             Self::PromiseCatch => Some(NativeCallTarget::PromiseCatch),
+            Self::RegExp => Some(NativeCallTarget::RegExp),
             Self::String => Some(NativeCallTarget::String),
         }
     }

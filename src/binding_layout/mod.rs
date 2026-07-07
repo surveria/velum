@@ -183,6 +183,7 @@ impl LayoutBuilder {
                 DeclKind::Let | DeclKind::Const => self.declare(scope, name),
             },
             Stmt::FunctionDecl { .. }
+            | Stmt::Empty
             | Stmt::Block(_)
             | Stmt::If { .. }
             | Stmt::While { .. }
@@ -273,6 +274,7 @@ impl LayoutBuilder {
             }
             | Stmt::FunctionDecl { name, .. } => self.declare(var_scope, name),
             Stmt::VarDecl { .. }
+            | Stmt::Empty
             | Stmt::Break(_)
             | Stmt::Continue(_)
             | Stmt::Throw(_)
@@ -353,7 +355,7 @@ impl LayoutBuilder {
             Stmt::FunctionDecl {
                 id, params, body, ..
             } => self.analyze_function(*id, params, body, scope, function),
-            Stmt::Return(None) | Stmt::Break(_) | Stmt::Continue(_) => Ok(()),
+            Stmt::Empty | Stmt::Return(None) | Stmt::Break(_) | Stmt::Continue(_) => Ok(()),
             Stmt::VarDecl { init, .. } => {
                 if let Some(init) = init {
                     self.analyze_expr(init, scope, function)?;
@@ -495,7 +497,11 @@ impl LayoutBuilder {
         function: FunctionScopeId,
     ) -> Result<()> {
         match expr {
-            Expr::Literal(_) | Expr::StringLiteral(_) | Expr::This | Expr::NewTarget => Ok(()),
+            Expr::Literal(_)
+            | Expr::StringLiteral(_)
+            | Expr::RegExpLiteral { .. }
+            | Expr::This
+            | Expr::NewTarget => Ok(()),
             Expr::Identifier(binding) => self.resolve(binding, scope, function),
             Expr::Parenthesized(expr)
             | Expr::Unary { expr, .. }
@@ -777,6 +783,7 @@ fn for_init_needs_layout_scope(init: Option<&Stmt>) -> bool {
                 ..
             }
             | Stmt::FunctionDecl { .. }
+            | Stmt::Empty
             | Stmt::Block(_)
             | Stmt::If { .. }
             | Stmt::While { .. }

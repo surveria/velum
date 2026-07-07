@@ -67,6 +67,7 @@ pub enum NativeCallTarget {
     PromiseReject,
     PromiseThen,
     PromiseCatch,
+    RegExp,
     String,
 }
 
@@ -98,6 +99,7 @@ impl NativeCallTarget {
             "Number" => Some(Self::Number),
             "Object" => Some(Self::Object),
             "Promise" => Some(Self::Promise),
+            "RegExp" => Some(Self::RegExp),
             "String" => Some(Self::String),
             _ => ErrorName::from_constructor_name(name)
                 .filter(|name| name.is_standard())

@@ -95,6 +95,7 @@ impl Context {
             param_binding_ids: function_param_binding_ids(params),
             param_atoms,
             bytecode: init.bytecode.clone(),
+            source: None,
             upvalues: upvalues.cells,
             static_name_atom_cache,
             static_binding_cache,
@@ -390,6 +391,22 @@ impl Context {
         self.functions
             .get(id.index())
             .ok_or_else(|| Error::runtime("function id is not defined"))
+    }
+
+    pub(in crate::runtime) fn function_source_text(&self, id: FunctionId) -> Result<String> {
+        let Some(source) = &self.function(id)?.source else {
+            return Ok("function()".to_owned());
+        };
+        Ok(source.to_string())
+    }
+
+    pub(in crate::runtime) fn set_function_source(
+        &mut self,
+        id: FunctionId,
+        source: Rc<str>,
+    ) -> Result<()> {
+        self.function_mut(id)?.source = Some(source);
+        Ok(())
     }
 
     fn function_mut(&mut self, id: FunctionId) -> Result<&mut super::Function> {

@@ -265,6 +265,7 @@ impl Context {
             NativeCallTarget::PromiseReject => self.eval_direct_promise_reject(args),
             NativeCallTarget::PromiseThen => self.eval_direct_promise_then(args, this_value),
             NativeCallTarget::PromiseCatch => self.eval_direct_promise_catch(args, this_value),
+            NativeCallTarget::RegExp => self.eval_direct_regexp_constructor(args),
             NativeCallTarget::String => self.eval_direct_string_constructor(args),
         }
     }
@@ -386,6 +387,10 @@ impl Context {
             NativeFunctionKind::PromiseCatch => self.eval_promise_catch(args, this_value),
             NativeFunctionKind::PromiseResolver { promise, kind } => {
                 self.eval_promise_resolver(promise, kind, args)
+            }
+            NativeFunctionKind::RegExp => self.eval_regexp_constructor(args),
+            NativeFunctionKind::RegExpPrototypeTest => {
+                self.eval_regexp_prototype_test(args, this_value)
             }
             NativeFunctionKind::String => self.eval_string_constructor(args),
             NativeFunctionKind::Symbol => self.eval_symbol_constructor(args),

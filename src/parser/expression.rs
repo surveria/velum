@@ -302,6 +302,10 @@ impl Parser {
         let expr = match token.kind {
             TokenKind::Number(value) => Expr::Literal(Value::Number(value)),
             TokenKind::String(value) => Expr::StringLiteral(self.static_string(value)?),
+            TokenKind::RegExp { pattern, flags } => Expr::RegExpLiteral {
+                pattern: self.static_string(pattern)?,
+                flags: self.static_string(flags)?,
+            },
             TokenKind::True => Expr::Literal(Value::Bool(true)),
             TokenKind::False => Expr::Literal(Value::Bool(false)),
             TokenKind::Null => Expr::Literal(Value::Null),
