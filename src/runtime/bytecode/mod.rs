@@ -86,6 +86,7 @@ impl Context {
             | BytecodeInstruction::UpdateComputedProperty { .. }
             | BytecodeInstruction::Binary { .. }
             | BytecodeInstruction::NumberBinary(_)
+            | BytecodeInstruction::NumberCompare(_)
             | BytecodeInstruction::CompoundStoreBinding { .. }
             | BytecodeInstruction::CompoundStaticProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. }
@@ -243,7 +244,8 @@ impl Context {
             | BytecodeInstruction::UpdateStaticProperty { .. }
             | BytecodeInstruction::UpdateComputedProperty { .. }
             | BytecodeInstruction::Binary { .. }
-            | BytecodeInstruction::NumberBinary(_) => {
+            | BytecodeInstruction::NumberBinary(_)
+            | BytecodeInstruction::NumberCompare(_) => {
                 self.eval_bytecode_mutation_instruction(state, instruction, next)
             }
             BytecodeInstruction::CompoundStoreBinding { .. }
@@ -333,6 +335,30 @@ impl Context {
             } => self.eval_bytecode_update_computed_property_instruction(
                 state, *property, *op, *prefix, next,
             ),
+            BytecodeInstruction::Binary { .. }
+            | BytecodeInstruction::NumberBinary(_)
+            | BytecodeInstruction::NumberCompare(_) => {
+                self.eval_bytecode_binary_instruction(state, instruction, next)
+            }
+            BytecodeInstruction::CompoundStoreBinding { name, op } => {
+                let right = state.stack.pop()?;
+                state
+                    .stack
+                    .push(self.eval_bytecode_binding_compound_assignment(*op, name, &right)?);
+                state.pc = next;
+                Ok(None)
+            }
+            _ => Err(Error::runtime("bytecode mutation instruction mismatch")),
+        }
+    }
+
+    fn eval_bytecode_binary_instruction(
+        &mut self,
+        state: &mut BytecodeState,
+        instruction: &BytecodeInstruction,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        match instruction {
             BytecodeInstruction::Binary {
                 op,
                 property_access,
@@ -357,15 +383,16 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::CompoundStoreBinding { name, op } => {
+            BytecodeInstruction::NumberCompare(op) => {
                 let right = state.stack.pop()?;
+                let left = state.stack.pop()?;
                 state
                     .stack
-                    .push(self.eval_bytecode_binding_compound_assignment(*op, name, &right)?);
+                    .push(self.eval_bytecode_number_compare(*op, &left, &right)?);
                 state.pc = next;
                 Ok(None)
             }
-            _ => Err(Error::runtime("bytecode mutation instruction mismatch")),
+            _ => Err(Error::runtime("bytecode binary instruction mismatch")),
         }
     }
 

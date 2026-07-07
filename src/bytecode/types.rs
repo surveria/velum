@@ -311,6 +311,53 @@ impl BytecodeNumericBinaryOp {
     }
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BytecodeNumericCompareOp {
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+}
+
+impl BytecodeNumericCompareOp {
+    pub(crate) const fn from_binary(op: BinaryOp) -> Option<Self> {
+        match op {
+            BinaryOp::Less => Some(Self::Less),
+            BinaryOp::LessEqual => Some(Self::LessEqual),
+            BinaryOp::Greater => Some(Self::Greater),
+            BinaryOp::GreaterEqual => Some(Self::GreaterEqual),
+            BinaryOp::Add
+            | BinaryOp::Sub
+            | BinaryOp::Mul
+            | BinaryOp::Div
+            | BinaryOp::Rem
+            | BinaryOp::Pow
+            | BinaryOp::Equal
+            | BinaryOp::NotEqual
+            | BinaryOp::StrictEqual
+            | BinaryOp::StrictNotEqual
+            | BinaryOp::In
+            | BinaryOp::BitAnd
+            | BinaryOp::BitOr
+            | BinaryOp::BitXor
+            | BinaryOp::ShiftLeft
+            | BinaryOp::ShiftRight
+            | BinaryOp::ShiftRightUnsigned
+            | BinaryOp::LogicalAnd
+            | BinaryOp::LogicalOr => None,
+        }
+    }
+
+    pub(crate) const fn fallback_binary(self) -> BinaryOp {
+        match self {
+            Self::Less => BinaryOp::Less,
+            Self::LessEqual => BinaryOp::LessEqual,
+            Self::Greater => BinaryOp::Greater,
+            Self::GreaterEqual => BinaryOp::GreaterEqual,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum BytecodeForInTarget {
     Binding {
@@ -393,6 +440,7 @@ pub enum BytecodeInstruction {
         property_access: Option<BytecodeDynamicProperty>,
     },
     NumberBinary(BytecodeNumericBinaryOp),
+    NumberCompare(BytecodeNumericCompareOp),
     CompoundStoreBinding {
         name: BytecodeBinding,
         op: BinaryOp,
