@@ -56,6 +56,31 @@ first === 7 &&
     values[0] === 13 ? 42 : 0
 "#;
 
+const DYNAMIC_NATIVE_MEMBER_CACHE_SCRIPT: &str = r#"
+var method = "abs";
+
+var runUnary = function(value) {
+    return Math[method](value);
+};
+
+var first = runUnary(-3);
+var second = runUnary(-4);
+
+Math.abs = function(value) {
+    return value + 100;
+};
+
+var third = runUnary(5);
+
+method = "max";
+var fourth = Math[method](2, 9);
+
+first === 3 &&
+    second === 4 &&
+    third === 105 &&
+    fourth === 9 ? 42 : 0
+"#;
+
 #[test]
 fn cached_native_call_sites_follow_property_mutations() -> TestResult {
     let runtime = Runtime::new();
@@ -91,6 +116,29 @@ fn native_call_site_cache_reports_hits_misses_and_fallbacks() -> TestResult {
     ensure_at_least(
         usage.native_call_cache_fallbacks,
         2,
+        "native call cache fallbacks",
+    )
+}
+
+#[test]
+fn dynamic_native_member_call_sites_cache_object_property_hits() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(DYNAMIC_NATIVE_MEMBER_CACHE_SCRIPT)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+
+    let usage = vm.resource_usage();
+    ensure_at_least(usage.native_call_cache_hits, 1, "native call cache hits")?;
+    ensure_at_least(
+        usage.native_call_cache_misses,
+        2,
+        "native call cache misses",
+    )?;
+    ensure_at_least(
+        usage.native_call_cache_fallbacks,
+        1,
         "native call cache fallbacks",
     )
 }

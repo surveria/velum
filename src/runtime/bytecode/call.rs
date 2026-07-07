@@ -132,6 +132,19 @@ impl Context {
         let property = state.stack.value_before_tail(arg_count, 0)?;
         let this_value = state.stack.value_before_tail(arg_count, 1)?;
         let key = self.dynamic_property_key(property)?;
+        if native.is_none()
+            && let Some(value) = self.eval_cached_native_dynamic_member_call(
+                &key,
+                operand.access(),
+                args,
+                this_value,
+            )?
+        {
+            state.stack.drop_tail(arg_count)?;
+            state.stack.pop()?;
+            state.stack.pop()?;
+            return Ok(value);
+        }
         let callee = self.get_cached_dynamic_property_value(this_value, &key, operand.access())?;
         let value = if let Some(target) = native {
             self.eval_direct_native_property_call(
