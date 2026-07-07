@@ -80,3 +80,23 @@ identifier-reserved-with-escape	test/language/identifiers/val-with-via-escape-he
 identifier-reserved-class-escape	test/language/identifiers/val-class-via-escape-hex.js	negative-parse	official Test262 escaped class reserved-word identifier negative parse smoke
 identifier-reserved-import	test/language/identifiers/val-import.js	negative-parse	official Test262 import reserved-word identifier negative parse smoke
 identifier-reserved-super-escape	test/language/identifiers/val-super-via-escape-hex4.js	negative-parse	official Test262 escaped super reserved-word identifier negative parse smoke
+label-ident-false	test/language/reserved-words/label-ident-false.js	negative-parse	official Test262 reserved-word label identifier negative parse smoke
+label-ident-false-escaped	test/language/reserved-words/label-ident-false-escaped.js	negative-parse	official Test262 escaped reserved-word label identifier negative parse smoke
+label-ident-null	test/language/reserved-words/label-ident-null.js	negative-parse	official Test262 reserved-word label identifier negative parse smoke
+label-ident-null-escaped	test/language/reserved-words/label-ident-null-escaped.js	negative-parse	official Test262 escaped reserved-word label identifier negative parse smoke
+label-ident-true	test/language/reserved-words/label-ident-true.js	negative-parse	official Test262 reserved-word label identifier negative parse smoke
+label-ident-true-escaped	test/language/reserved-words/label-ident-true-escaped.js	negative-parse	official Test262 escaped reserved-word label identifier negative parse smoke
+debugger-expression	test/language/statements/debugger/expression.js	run	official Test262 debugger statement expression smoke
+debugger-statement	test/language/statements/debugger/statement.js	run	official Test262 debugger statement smoke
+empty-statement-basic	test/language/statements/empty/S12.3_A1.js	run	official Test262 empty statement smoke
+empty-statement-completion	test/language/statements/empty/cptn-value.js	run	official Test262 empty statement completion smoke
+expression-statement-basic	test/language/statements/expression/S12.4_A1.js	run	official Test262 expression statement smoke
+expression-statement-function-lookahead	test/language/statements/expression/S12.4_A2_T1.js	negative-parse	official Test262 expression statement function lookahead negative parse smoke
+expression-statement-brace-lookahead	test/language/statements/expression/S12.4_A2_T2.js	negative-parse	official Test262 expression statement brace lookahead negative parse smoke
+labeled-empty-statement	test/language/statements/labeled/S12.12_A1_T1.js	run	official Test262 labeled statement smoke
+labeled-continue-non-iteration	test/language/statements/labeled/continue.js	negative-parse	official Test262 labeled continue static semantics smoke
+labeled-break-completion	test/language/statements/labeled/cptn-break.js	run	official Test262 labeled break completion smoke
+labeled-normal-completion	test/language/statements/labeled/cptn-nrml.js	run	official Test262 labeled normal completion smoke
+labeled-async-function-declaration	test/language/statements/labeled/decl-async-function.js	negative-parse	official Test262 async function declaration label-body negative parse smoke
+labeled-const-declaration	test/language/statements/labeled/decl-const.js	negative-parse	official Test262 const declaration label-body negative parse smoke
+labeled-let-declaration	test/language/statements/labeled/decl-let.js	negative-parse	official Test262 let declaration label-body negative parse smoke

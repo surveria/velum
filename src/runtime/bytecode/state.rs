@@ -33,7 +33,10 @@ impl BytecodeState {
 
     pub(super) fn complete(&mut self, completion: BytecodeCompletion) -> Result<Completion> {
         match completion {
-            BytecodeCompletion::Break(label) => Ok(Completion::Break(label)),
+            BytecodeCompletion::Break(label) => Ok(Completion::Break {
+                label,
+                value: self.last.clone(),
+            }),
             BytecodeCompletion::Continue(label) => Ok(Completion::Continue(label)),
             BytecodeCompletion::Return => Ok(Completion::Return(self.stack.pop_single()?)),
             BytecodeCompletion::Throw => Ok(Completion::Throw(self.stack.pop_single()?)),
@@ -139,15 +142,16 @@ pub(super) fn bytecode_loop_completion(
             None
         }
         Completion::Continue(None) => None,
-        Completion::Break(None) => Some(Completion::Normal(last.clone())),
+        Completion::Break { label: None, value } => Some(Completion::Normal(value)),
         Completion::Continue(Some(target)) if loop_label_matches(labels, &target) => None,
-        Completion::Break(Some(target)) if loop_label_matches(labels, &target) => {
-            Some(Completion::Normal(last.clone()))
-        }
-        completion @ (Completion::Break(Some(_)) | Completion::Continue(Some(_))) => {
-            Some(completion)
-        }
-        completion @ (Completion::Throw(_) | Completion::Return(_)) => Some(completion),
+        Completion::Break {
+            label: Some(target),
+            value,
+        } if loop_label_matches(labels, &target) => Some(Completion::Normal(value)),
+        completion @ (Completion::Break { .. }
+        | Completion::Continue(Some(_))
+        | Completion::Throw(_)
+        | Completion::Return(_)) => Some(completion),
     }
 }
 

@@ -169,7 +169,7 @@ impl Parser {
         self.consume(&TokenKind::LParen, "expected '(' after 'while'")?;
         let condition = self.expression()?;
         self.consume(&TokenKind::RParen, "expected ')' after while condition")?;
-        let body = Box::new(self.statement()?);
+        let body = Box::new(self.with_iteration_statement(Self::statement)?);
         Ok(Stmt::While { condition, body })
     }
 
@@ -185,7 +185,7 @@ impl Parser {
                 self.offset(),
             ));
         }
-        let body = Box::new(self.statement()?);
+        let body = Box::new(self.with_iteration_statement(Self::statement)?);
         if Self::invalid_do_while_body(&body) {
             return Err(Error::parse(
                 "declaration is not allowed as a do-while body",
@@ -235,20 +235,68 @@ impl Parser {
     }
 
     fn label_statement(&mut self) -> Result<Stmt> {
-        let label = self.consume_identifier("expected label name")?;
-        self.consume(&TokenKind::Colon, "expected ':' after label name")?;
-        let body = Box::new(self.statement()?);
-        Ok(Stmt::Label { label, body })
+        let labels = self.consume_label_chain()?;
+        self.reject_invalid_labeled_item()?;
+        let is_iteration_target = self.labeled_item_is_iteration_statement();
+        let body = self.with_labeled_statement(&labels, is_iteration_target, Self::statement)?;
+        Ok(Self::nest_labeled_statements(labels, body))
+    }
+
+    fn consume_label_chain(&mut self) -> Result<Vec<crate::ast::StaticName>> {
+        let mut labels = Vec::new();
+        loop {
+            labels.push(self.consume_identifier("expected label name")?);
+            self.consume(&TokenKind::Colon, "expected ':' after label name")?;
+            if !self.label_statement_start() {
+                break;
+            }
+        }
+        Ok(labels)
+    }
+
+    fn reject_invalid_labeled_item(&self) -> Result<()> {
+        if self.check(&TokenKind::Let) || self.check(&TokenKind::Const) {
+            return Err(Error::parse(
+                "lexical declaration is not allowed as a label body",
+                self.offset(),
+            ));
+        }
+        if self.check(&TokenKind::Async)
+            && self.peek_kind_is_no_line_terminator(1, &TokenKind::Function)
+        {
+            return Err(Error::parse(
+                "async function declaration is not allowed as a label body",
+                self.offset(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn labeled_item_is_iteration_statement(&self) -> bool {
+        self.check(&TokenKind::Do) || self.check(&TokenKind::While) || self.check(&TokenKind::For)
+    }
+
+    fn nest_labeled_statements(labels: Vec<crate::ast::StaticName>, body: Stmt) -> Stmt {
+        let mut statement = body;
+        for label in labels.into_iter().rev() {
+            statement = Stmt::Label {
+                label,
+                body: Box::new(statement),
+            };
+        }
+        statement
     }
 
     fn break_statement(&mut self) -> Result<Stmt> {
         let label = self.optional_jump_label("expected break label")?;
+        self.validate_break_statement(label.as_ref())?;
         self.consume_statement_terminator("expected statement terminator after break")?;
         Ok(Stmt::Break(label))
     }
 
     fn continue_statement(&mut self) -> Result<Stmt> {
         let label = self.optional_jump_label("expected continue label")?;
+        self.validate_continue_statement(label.as_ref())?;
         self.consume_statement_terminator("expected statement terminator after continue")?;
         Ok(Stmt::Continue(label))
     }
@@ -276,7 +324,7 @@ impl Parser {
         let static_functions = self.static_functions.clone();
         if let Some((target, object)) = self.for_in_header()? {
             self.consume(&TokenKind::RParen, "expected ')' after for-in expression")?;
-            let body = Box::new(self.statement()?);
+            let body = Box::new(self.with_iteration_statement(Self::statement)?);
             return Ok(Stmt::ForIn {
                 target,
                 object,
@@ -302,7 +350,7 @@ impl Parser {
             Some(self.expression()?)
         };
         self.consume(&TokenKind::RParen, "expected ')' after for clauses")?;
-        let body = Box::new(self.statement()?);
+        let body = Box::new(self.with_iteration_statement(Self::statement)?);
         Ok(Stmt::For {
             init,
             condition,
@@ -381,6 +429,14 @@ impl Parser {
         self.consume(&TokenKind::RParen, "expected ')' after switch discriminant")?;
         self.consume(&TokenKind::LBrace, "expected '{' before switch body")?;
 
+        let cases = self.with_switch_statement(Self::switch_cases)?;
+        Ok(Stmt::Switch {
+            discriminant,
+            cases,
+        })
+    }
+
+    fn switch_cases(&mut self) -> Result<Vec<SwitchCase>> {
         let mut cases = Vec::new();
         let mut default_seen = false;
         while !self.check(&TokenKind::RBrace) {
@@ -406,10 +462,7 @@ impl Parser {
             ));
         }
         self.consume(&TokenKind::RBrace, "expected '}' after switch body")?;
-        Ok(Stmt::Switch {
-            discriminant,
-            cases,
-        })
+        Ok(cases)
     }
 
     fn switch_case(&mut self, test: Option<Expr>) -> Result<SwitchCase> {

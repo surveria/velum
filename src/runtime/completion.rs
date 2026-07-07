@@ -9,7 +9,10 @@ pub enum Completion {
     Normal(Value),
     Throw(Value),
     Return(Value),
-    Break(Option<StaticName>),
+    Break {
+        label: Option<StaticName>,
+        value: Value,
+    },
     Continue(Option<StaticName>),
 }
 
@@ -21,7 +24,7 @@ impl Completion {
             Self::Return(value) => Err(Error::runtime(format!(
                 "return statement outside function returned {value}"
             ))),
-            Self::Break(_) => Err(Error::runtime("break statement outside loop")),
+            Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),
         }
     }
@@ -31,7 +34,7 @@ impl Completion {
             Self::Normal(_) => Ok(Value::Undefined),
             Self::Throw(value) => Err(Error::runtime(format!("uncaught throw: {value}"))),
             Self::Return(value) => Ok(value),
-            Self::Break(_) => Err(Error::runtime("break statement outside loop")),
+            Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),
         }
     }
@@ -41,7 +44,7 @@ impl Completion {
             Self::Normal(_) => Ok(Self::Normal(Value::Undefined)),
             Self::Throw(value) => Ok(Self::Throw(value)),
             Self::Return(value) => Ok(Self::Normal(value)),
-            Self::Break(_) => Err(Error::runtime("break statement outside loop")),
+            Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),
         }
     }

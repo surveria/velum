@@ -511,7 +511,7 @@ impl Context {
             Completion::Return(value) if Self::constructor_return_is_object(&value) => Ok(value),
             Completion::Normal(_) | Completion::Return(_) => Ok(object),
             Completion::Throw(value) => Err(Error::runtime(format!("uncaught throw: {value}"))),
-            Completion::Break(_) => Err(Error::runtime("break statement outside loop")),
+            Completion::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Completion::Continue(_) => Err(Error::runtime("continue statement outside loop")),
         }
     }

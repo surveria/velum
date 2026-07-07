@@ -182,11 +182,18 @@ impl Context {
                 Completion::Normal(value) => last = value,
                 Completion::Continue(None) => {}
                 Completion::Continue(Some(target)) if loop_label_matches(labels, &target) => {}
-                Completion::Break(None) => break,
-                Completion::Break(Some(target)) if loop_label_matches(labels, &target) => {
+                Completion::Break { label: None, value } => {
+                    last = value;
                     break;
                 }
-                completion @ (Completion::Break(Some(_))
+                Completion::Break {
+                    label: Some(target),
+                    value,
+                } if loop_label_matches(labels, &target) => {
+                    last = value;
+                    break;
+                }
+                completion @ (Completion::Break { .. }
                 | Completion::Continue(Some(_))
                 | Completion::Throw(_)
                 | Completion::Return(_)) => {
@@ -214,9 +221,18 @@ impl Context {
                 Completion::Normal(value) => last = value,
                 Completion::Continue(None) => {}
                 Completion::Continue(Some(target)) if loop_label_matches(labels, &target) => {}
-                Completion::Break(None) => break,
-                Completion::Break(Some(target)) if loop_label_matches(labels, &target) => break,
-                completion @ (Completion::Break(Some(_))
+                Completion::Break { label: None, value } => {
+                    last = value;
+                    break;
+                }
+                Completion::Break {
+                    label: Some(target),
+                    value,
+                } if loop_label_matches(labels, &target) => {
+                    last = value;
+                    break;
+                }
+                completion @ (Completion::Break { .. }
                 | Completion::Continue(Some(_))
                 | Completion::Throw(_)
                 | Completion::Return(_)) => {
@@ -277,11 +293,18 @@ impl Context {
                 Completion::Continue(None) => {}
                 Completion::Continue(Some(target)) if loop_label_matches(parts.labels, &target) => {
                 }
-                Completion::Break(None) => break,
-                Completion::Break(Some(target)) if loop_label_matches(parts.labels, &target) => {
+                Completion::Break { label: None, value } => {
+                    last = value;
                     break;
                 }
-                completion @ (Completion::Break(Some(_))
+                Completion::Break {
+                    label: Some(target),
+                    value,
+                } if loop_label_matches(parts.labels, &target) => {
+                    last = value;
+                    break;
+                }
+                completion @ (Completion::Break { .. }
                 | Completion::Continue(Some(_))
                 | Completion::Throw(_)
                 | Completion::Return(_)) => {
@@ -302,7 +325,7 @@ impl Context {
             Completion::Normal(value) => Ok(BytecodeCondition::Value(value.is_truthy())),
             completion @ (Completion::Throw(_)
             | Completion::Return(_)
-            | Completion::Break(_)
+            | Completion::Break { .. }
             | Completion::Continue(_)) => Ok(BytecodeCondition::Completion(completion)),
         }
     }
@@ -450,10 +473,12 @@ impl Context {
         for case in cases.iter().skip(start) {
             match self.eval_bytecode_block(&case.body)? {
                 Completion::Normal(value) => last = value,
-                Completion::Break(None) => return Ok(Completion::Normal(last)),
+                Completion::Break { label: None, value } => {
+                    return Ok(Completion::Normal(value));
+                }
                 completion @ (Completion::Throw(_)
                 | Completion::Return(_)
-                | Completion::Break(Some(_))
+                | Completion::Break { .. }
                 | Completion::Continue(_)) => return Ok(completion),
             }
         }
@@ -468,8 +493,11 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         match self.eval_bytecode_block(body)? {
-            Completion::Break(Some(target)) if target == *label => {
-                state.last = Value::Undefined;
+            Completion::Break {
+                label: Some(target),
+                value,
+            } if target == *label => {
+                state.last = value;
                 state.pc = next;
                 Ok(None)
             }
