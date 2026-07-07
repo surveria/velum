@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T031728Z.md`
-- Task: rsqjs-test-report-20260707T031728Z.md
-- Performance: 0.79x (39/63 >1.00x)
+- `rsqjs-test-report-20260707T032555Z.md`
+- Task: rsqjs-test-report-20260707T032555Z.md
+- Performance: 0.80x (40/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 12671 passed / 89907 failed (12.35%)
 
@@ -237,4 +237,5 @@ Latest report:
 | `20260707T023832Z` `95d80c6` Cache dynamic native member calls | 0.80x (39/63 >1.00x) | - (0/63 >1.00x) | 12671 passed / 89907 failed (12.35%) |
 | `20260707T025231Z` `ca9e41c` Quicken numeric equality bytecode | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 12671 passed / 89907 failed (12.35%) |
 | `20260707T030808Z` `a542aac` Specialize direct primitive native calls | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 12671 passed / 89907 failed (12.35%) |
-| `20260707T031728Z` rsqjs-test-report-20260707T031728Z.md | 0.79x (39/63 >1.00x) | - (0/63 >1.00x) | 12671 passed / 89907 failed (12.35%) |
+| `20260707T031728Z` `c8860d2` Specialize direct JSON native calls | 0.79x (39/63 >1.00x) | - (0/63 >1.00x) | 12671 passed / 89907 failed (12.35%) |
+| `20260707T032555Z` rsqjs-test-report-20260707T032555Z.md | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 12671 passed / 89907 failed (12.35%) |
