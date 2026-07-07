@@ -102,7 +102,7 @@ pub enum Expr {
     },
     MethodFunction {
         id: StaticFunctionId,
-        name: StaticName,
+        name: Option<StaticName>,
         params: Rc<[FunctionParam]>,
         body: Rc<[Stmt]>,
     },

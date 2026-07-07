@@ -17,7 +17,8 @@ use crate::{
         number_to_uint32, numeric_binary, shift_left, shift_right, shift_right_unsigned,
     },
     runtime::object::{
-        OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyEnumerable, PropertyKey,
+        DataPropertyUpdate, OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyConfigurable,
+        PropertyEnumerable, PropertyKey, PropertyWritable,
     },
     runtime::property::DynamicPropertyKey,
     syntax::{BinaryOp, DeclKind, StaticName, StaticPropertyAccessId, UnaryOp, UpdateOp},
@@ -28,6 +29,7 @@ const INSTANCEOF_PROTOTYPE_PROPERTY: &str = "prototype";
 const INSTANCEOF_NOT_CALLABLE_ERROR: &str = "right-hand side of 'instanceof' is not callable";
 const INSTANCEOF_NON_OBJECT_PROTOTYPE_ERROR: &str =
     "right-hand side of 'instanceof' has non-object prototype";
+const FUNCTION_NAME_PROPERTY: &str = "name";
 
 impl Context {
     pub(super) fn eval_bytecode_declaration(
@@ -602,11 +604,16 @@ impl Context {
                         value,
                     });
                 }
-                BytecodeObjectProperty::Computed => {
+                BytecodeObjectProperty::Computed | BytecodeObjectProperty::ComputedMethod => {
+                    let set_method_name =
+                        matches!(property, BytecodeObjectProperty::ComputedMethod);
                     let key_value = next_object_literal_stack_value(&mut values)?;
                     let value = next_object_literal_stack_value(&mut values)?;
                     let mut property = self.dynamic_property_key(&key_value)?;
                     let key = self.intern_dynamic_property_key(&mut property)?;
+                    if set_method_name {
+                        self.set_computed_method_name(&value, property.name())?;
+                    }
                     let name_index = dynamic_names.len();
                     dynamic_names.push(property.name().to_owned());
                     entries.push(RuntimeObjectLiteralEntry {
@@ -645,6 +652,25 @@ impl Context {
             constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
+        )
+    }
+
+    fn set_computed_method_name(&mut self, value: &Value, name: &str) -> Result<()> {
+        let Value::Function(id) = value else {
+            return Ok(());
+        };
+        let key = self.intern_property_key(FUNCTION_NAME_PROPERTY)?;
+        let value = self.heap_string_value(name)?;
+        self.define_function_property_key(
+            *id,
+            FUNCTION_NAME_PROPERTY,
+            key,
+            DataPropertyUpdate::new(
+                Some(value),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            ),
         )
     }
 }

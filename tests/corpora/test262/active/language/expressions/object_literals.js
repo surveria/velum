@@ -61,6 +61,49 @@ if (computedSymbol[symbolKey] !== 42) {
     throw new Test262Error("computed symbol object property was not readable");
 }
 
+let methodOrder = "";
+function markMethod(name, value) {
+    methodOrder = methodOrder + name;
+    return value;
+}
+
+let computedMethod = {
+    value: 40,
+    [markMethod("k", "read")](extra) {
+        methodOrder = methodOrder + "m";
+        return this.value + extra;
+    },
+    after: markMethod("a", 1),
+};
+
+if (methodOrder !== "ka") {
+    throw new Test262Error("computed object method key evaluation order was not preserved");
+}
+
+if (computedMethod.read(2) !== 42 || methodOrder !== "kam") {
+    throw new Test262Error("computed object method was not callable with the object receiver");
+}
+
+if (computedMethod.read.name !== "read") {
+    throw new Test262Error("computed object method name was not assigned");
+}
+
+if ("prototype" in computedMethod.read) {
+    throw new Test262Error("computed object method should not be constructable");
+}
+
+let computedMethodSymbol = Symbol("object-literal-method");
+let computedSymbolMethod = {
+    value: 40,
+    [computedMethodSymbol](extra) {
+        return this.value + extra;
+    },
+};
+
+if (computedSymbolMethod[computedMethodSymbol](2) !== 42) {
+    throw new Test262Error("computed symbol object method was not callable");
+}
+
 let make = function() {
     let state = { value: 40 };
     return function() {

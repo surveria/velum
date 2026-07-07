@@ -476,26 +476,24 @@ impl Parser {
                 value,
             });
         }
-        if matches!(&name, ObjectPropertyName::Static { .. }) && self.match_kind(&TokenKind::LParen)
-        {
+        if self.match_kind(&TokenKind::LParen) {
             let params = self.function_parameters()?.into();
             self.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
             self.consume(&TokenKind::LBrace, "expected '{' before method body")?;
             let body = self.with_new_target_scope(Self::block_statements)?.into();
             let id = self.static_function()?;
-            let ObjectPropertyName::Static { key, .. } = name else {
-                return Err(Error::runtime("object method key disappeared"));
+            let key = name.into_key();
+            let name = match &key {
+                ObjectPropertyKey::Static(name) => Some(name.clone()),
+                ObjectPropertyKey::Computed(_) => None,
             };
             let value = Expr::MethodFunction {
                 id,
-                name: key.clone(),
+                name,
                 params,
                 body,
             };
-            return Ok(ObjectProperty {
-                key: ObjectPropertyKey::Static(key),
-                value,
-            });
+            return Ok(ObjectProperty { key, value });
         }
         if let ObjectPropertyName::Static {
             key,

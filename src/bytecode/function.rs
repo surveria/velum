@@ -123,7 +123,7 @@ fn function_compile_spec(expr: &Expr) -> Result<FunctionCompileSpec<'_>> {
             body,
         } => Ok(FunctionCompileSpec {
             id: *id,
-            name: Some(name.clone()),
+            name: name.clone(),
             params,
             body,
             constructable: false,
