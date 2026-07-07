@@ -21,6 +21,7 @@ impl NativeFunctionKind {
             NativeCallTarget::Boolean => Self::Boolean,
             NativeCallTarget::ErrorConstructor(name) => Self::ErrorConstructor(name),
             NativeCallTarget::Function => Self::Function,
+            NativeCallTarget::FunctionPrototypeCall => Self::FunctionPrototypeCall,
             NativeCallTarget::JsonParse => Self::JsonParse,
             NativeCallTarget::JsonStringify => Self::JsonStringify,
             NativeCallTarget::MathAbs => Self::MathAbs,
@@ -64,6 +65,7 @@ impl NativeFunctionKind {
             NativeCallTarget::ObjectGetOwnPropertyDescriptor => {
                 Self::ObjectGetOwnPropertyDescriptor
             }
+            NativeCallTarget::ObjectGetOwnPropertyNames => Self::ObjectGetOwnPropertyNames,
             NativeCallTarget::ObjectGetPrototypeOf => Self::ObjectGetPrototypeOf,
             NativeCallTarget::ObjectHasOwn => Self::ObjectHasOwn,
             NativeCallTarget::ObjectKeys => Self::ObjectKeys,
@@ -73,7 +75,9 @@ impl NativeFunctionKind {
             NativeCallTarget::PromiseThen => Self::PromiseThen,
             NativeCallTarget::PromiseCatch => Self::PromiseCatch,
             NativeCallTarget::RegExp => Self::RegExp,
+            NativeCallTarget::RegExpPrototypeTest => Self::RegExpPrototypeTest,
             NativeCallTarget::String => Self::String,
+            NativeCallTarget::Symbol => Self::Symbol,
         }
     }
 
@@ -96,16 +100,13 @@ impl NativeFunctionKind {
             | Self::BoundFunction(_)
             | Self::Eval
             | Self::FunctionPrototypeBind
-            | Self::FunctionPrototypeCall
-            | Self::ObjectGetOwnPropertyNames
             | Self::ObjectPrototypeHasOwnProperty
             | Self::ObjectPrototypePropertyIsEnumerable
-            | Self::PromiseResolver { .. }
-            | Self::RegExpPrototypeTest
-            | Self::Symbol => None,
+            | Self::PromiseResolver { .. } => None,
             Self::Boolean => Some(NativeCallTarget::Boolean),
             Self::ErrorConstructor(name) => Some(NativeCallTarget::ErrorConstructor(name)),
             Self::Function => Some(NativeCallTarget::Function),
+            Self::FunctionPrototypeCall => Some(NativeCallTarget::FunctionPrototypeCall),
             Self::JsonParse => Some(NativeCallTarget::JsonParse),
             Self::JsonStringify => Some(NativeCallTarget::JsonStringify),
             Self::MathAbs => Some(NativeCallTarget::MathAbs),
@@ -150,6 +151,7 @@ impl NativeFunctionKind {
             Self::ObjectGetOwnPropertyDescriptor => {
                 Some(NativeCallTarget::ObjectGetOwnPropertyDescriptor)
             }
+            Self::ObjectGetOwnPropertyNames => Some(NativeCallTarget::ObjectGetOwnPropertyNames),
             Self::ObjectHasOwn => Some(NativeCallTarget::ObjectHasOwn),
             Self::ObjectKeys => Some(NativeCallTarget::ObjectKeys),
             Self::Promise => Some(NativeCallTarget::Promise),
@@ -158,7 +160,9 @@ impl NativeFunctionKind {
             Self::PromiseThen => Some(NativeCallTarget::PromiseThen),
             Self::PromiseCatch => Some(NativeCallTarget::PromiseCatch),
             Self::RegExp => Some(NativeCallTarget::RegExp),
+            Self::RegExpPrototypeTest => Some(NativeCallTarget::RegExpPrototypeTest),
             Self::String => Some(NativeCallTarget::String),
+            Self::Symbol => Some(NativeCallTarget::Symbol),
         }
     }
 }

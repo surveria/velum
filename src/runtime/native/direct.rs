@@ -210,6 +210,9 @@ impl Context {
                 self.eval_direct_error_constructor(name, args)
             }
             NativeCallTarget::Function => self.eval_direct_function_constructor(args),
+            NativeCallTarget::FunctionPrototypeCall => {
+                self.eval_function_prototype_call(runtime_call_args(args), this_value)
+            }
             NativeCallTarget::JsonParse => self.eval_direct_json_parse(args),
             NativeCallTarget::JsonStringify => self.eval_direct_json_stringify(args),
             NativeCallTarget::MathAbs => Self::eval_direct_math_abs(args),
@@ -255,6 +258,9 @@ impl Context {
             NativeCallTarget::ObjectGetOwnPropertyDescriptor => {
                 self.eval_object_get_own_property_descriptor(runtime_call_args(args))
             }
+            NativeCallTarget::ObjectGetOwnPropertyNames => {
+                self.eval_object_get_own_property_names(runtime_call_args(args))
+            }
             NativeCallTarget::ObjectGetPrototypeOf => {
                 self.eval_object_get_prototype_of(runtime_call_args(args))
             }
@@ -266,7 +272,11 @@ impl Context {
             NativeCallTarget::PromiseThen => self.eval_direct_promise_then(args, this_value),
             NativeCallTarget::PromiseCatch => self.eval_direct_promise_catch(args, this_value),
             NativeCallTarget::RegExp => self.eval_direct_regexp_constructor(args),
+            NativeCallTarget::RegExpPrototypeTest => {
+                self.eval_regexp_prototype_test(runtime_call_args(args), this_value)
+            }
             NativeCallTarget::String => self.eval_direct_string_constructor(args),
+            NativeCallTarget::Symbol => self.eval_symbol_constructor(runtime_call_args(args)),
         }
     }
 
