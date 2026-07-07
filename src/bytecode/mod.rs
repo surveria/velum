@@ -22,8 +22,8 @@ pub use types::{
     BytecodeAddress, BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock,
     BytecodeCallSite, BytecodeCatch, BytecodeCompletion, BytecodeDynamicProperty,
     BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeInstruction,
-    BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeProgram, BytecodeProperty,
-    BytecodeSwitchCase,
+    BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericUnaryOp, BytecodeProgram,
+    BytecodeProperty, BytecodeSwitchCase,
 };
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
@@ -388,7 +388,11 @@ impl<'a> BytecodeCompiler<'a> {
         match op {
             UnaryOp::Not | UnaryOp::Negate | UnaryOp::Plus | UnaryOp::Void => {
                 self.compile_expr(expr)?;
-                self.emit(BytecodeInstruction::Unary(op));
+                if let Some(op) = BytecodeNumericUnaryOp::from_unary(op) {
+                    self.emit(BytecodeInstruction::NumberUnary(op));
+                } else {
+                    self.emit(BytecodeInstruction::Unary(op));
+                }
             }
             UnaryOp::Typeof => self.compile_typeof_expr(expr)?,
             UnaryOp::Delete => self.compile_delete_expr(expr)?,
@@ -674,6 +678,7 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::StoreLast
             | BytecodeInstruction::Pop
             | BytecodeInstruction::Unary(_)
+            | BytecodeInstruction::NumberUnary(_)
             | BytecodeInstruction::Await
             | BytecodeInstruction::TypeOfBinding(_)
             | BytecodeInstruction::TypeOfValue

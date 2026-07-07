@@ -312,6 +312,29 @@ impl BytecodeNumericBinaryOp {
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BytecodeNumericUnaryOp {
+    Negate,
+    Plus,
+}
+
+impl BytecodeNumericUnaryOp {
+    pub(crate) const fn from_unary(op: UnaryOp) -> Option<Self> {
+        match op {
+            UnaryOp::Negate => Some(Self::Negate),
+            UnaryOp::Plus => Some(Self::Plus),
+            UnaryOp::Not | UnaryOp::Void | UnaryOp::Typeof | UnaryOp::Delete => None,
+        }
+    }
+
+    pub(crate) const fn fallback_unary(self) -> UnaryOp {
+        match self {
+            Self::Negate => UnaryOp::Negate,
+            Self::Plus => UnaryOp::Plus,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BytecodeNumericCompareOp {
     Less,
     LessEqual,
@@ -409,6 +432,7 @@ pub enum BytecodeInstruction {
     StoreLast,
     Pop,
     Unary(UnaryOp),
+    NumberUnary(BytecodeNumericUnaryOp),
     Await,
     TypeOfBinding(BytecodeBinding),
     TypeOfValue,
