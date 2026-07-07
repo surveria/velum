@@ -48,10 +48,12 @@ impl Context {
         args: &[Value],
     ) -> Result<Value> {
         let Some(executor) = args.first().cloned() else {
-            return Err(Error::runtime("Promise constructor requires an executor"));
+            return Err(Error::type_error(
+                "Promise constructor requires an executor",
+            ));
         };
         if !Self::is_callable(&executor) {
-            return Err(Error::runtime("Promise executor must be callable"));
+            return Err(Error::type_error("Promise executor must be callable"));
         }
 
         let (promise, object) = self.create_pending_promise()?;
