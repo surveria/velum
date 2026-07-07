@@ -21,6 +21,7 @@ struct Lexer<'a> {
     chars: Vec<(usize, char)>,
     cursor: usize,
     tokens: Vec<Token>,
+    line_terminator_before: bool,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -36,6 +37,7 @@ impl<'a> Lexer<'a> {
             chars: source.char_indices().collect(),
             cursor: 0,
             tokens: Vec::new(),
+            line_terminator_before: false,
         }
     }
 
@@ -43,6 +45,9 @@ impl<'a> Lexer<'a> {
         while let Some((offset, ch)) = self.peek() {
             match ch {
                 ch if ch.is_whitespace() => {
+                    if is_line_terminator(ch) {
+                        self.line_terminator_before = true;
+                    }
                     self.advance();
                 }
                 '/' if self.peek_next_char() == Some('/') => self.line_comment(),
@@ -126,6 +131,7 @@ impl<'a> Lexer<'a> {
         self.tokens.push(Token {
             kind: TokenKind::Eof,
             offset: self.source.len(),
+            line_terminator_before: self.line_terminator_before,
         });
         Ok(self.tokens)
     }
@@ -535,7 +541,8 @@ impl<'a> Lexer<'a> {
     fn line_comment(&mut self) {
         while let Some(ch) = self.peek_char() {
             self.advance();
-            if ch == '\n' {
+            if is_line_terminator(ch) {
+                self.line_terminator_before = true;
                 break;
             }
         }
@@ -550,6 +557,9 @@ impl<'a> Lexer<'a> {
                 self.advance();
                 self.advance();
                 return Ok(());
+            }
+            if self.peek_char().is_some_and(is_line_terminator) {
+                self.line_terminator_before = true;
             }
             self.advance();
         }
@@ -652,7 +662,12 @@ impl<'a> Lexer<'a> {
     }
 
     fn push(&mut self, kind: TokenKind, offset: usize) {
-        self.tokens.push(Token { kind, offset });
+        self.tokens.push(Token {
+            kind,
+            offset,
+            line_terminator_before: self.line_terminator_before,
+        });
+        self.line_terminator_before = false;
     }
 
     fn advance(&mut self) -> Option<(usize, char)> {
@@ -709,4 +724,8 @@ impl<'a> Lexer<'a> {
             .get(start..end)
             .ok_or_else(|| Error::lex(format!("invalid {description} span"), offset))
     }
+}
+
+const fn is_line_terminator(ch: char) -> bool {
+    matches!(ch, '\n' | '\r' | LINE_SEPARATOR | PARAGRAPH_SEPARATOR)
 }

@@ -44,7 +44,10 @@ impl Parser {
         if self.match_kind(&TokenKind::Return) {
             return self.return_statement();
         }
-        if self.match_kind(&TokenKind::Async) {
+        if self.check(&TokenKind::Async)
+            && self.peek_kind_is_no_line_terminator(1, &TokenKind::Function)
+        {
+            self.consume(&TokenKind::Async, "expected 'async' before async function")?;
             self.consume(&TokenKind::Function, "expected 'function' after 'async'")?;
             return self.function_declaration(true);
         }
@@ -62,7 +65,7 @@ impl Parser {
         }
 
         let expr = self.expression()?;
-        self.consume_optional_semicolon();
+        self.consume_statement_terminator("expected statement terminator")?;
         Ok(Stmt::Expr(expr))
     }
 
@@ -210,7 +213,10 @@ impl Parser {
 
     fn for_in_assignment_target_start(&self) -> bool {
         self.peek().is_some_and(|token| {
-            matches!(&token.kind, TokenKind::Identifier(_) | TokenKind::LParen)
+            matches!(
+                &token.kind,
+                TokenKind::Identifier(_) | TokenKind::Async | TokenKind::LParen
+            )
         })
     }
 

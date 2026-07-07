@@ -44,6 +44,28 @@ fn supports_async_arrow_parenthesized_params_and_await() -> TestResult {
 }
 
 #[test]
+fn supports_async_arrow_default_parameters() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    context.eval(
+        r"
+        let answer = async (left = 40, right = 2,) => {
+            let base = await Promise.resolve(left);
+            return base + right;
+        };
+        let observed = 0;
+        answer(undefined).then(function(resolved) {
+            observed = resolved;
+        });
+        ",
+    )?;
+
+    let value = context.eval("observed")?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn supports_plain_arrow_callbacks_for_promise_then() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

@@ -212,8 +212,12 @@ impl Parser {
             TokenKind::Identifier(name) => Expr::Identifier(self.static_binding_name(name)?),
             TokenKind::Function => self.function_expression(false)?,
             TokenKind::Async => {
-                self.consume(&TokenKind::Function, "expected 'function' after 'async'")?;
-                self.function_expression(true)?
+                if self.peek_kind_is_no_line_terminator(0, &TokenKind::Function) {
+                    self.consume(&TokenKind::Function, "expected 'function' after 'async'")?;
+                    self.function_expression(true)?
+                } else {
+                    Expr::Identifier(self.contextual_async_binding(token.offset)?)
+                }
             }
             TokenKind::LBrace => self.object_literal()?,
             TokenKind::LBracket => self.array_literal()?,
@@ -272,7 +276,9 @@ impl Parser {
 
     fn arrow_signature(&self) -> Option<ArrowSignature> {
         match self.peek_kind(0)? {
-            TokenKind::Identifier(_) if self.peek_kind_is(1, &TokenKind::Arrow) => {
+            TokenKind::Identifier(_) | TokenKind::Async
+                if self.peek_kind_is_no_line_terminator(1, &TokenKind::Arrow) =>
+            {
                 Some(ArrowSignature {
                     is_async: false,
                     parameters: ArrowParameters::Single,
@@ -291,13 +297,19 @@ impl Parser {
 
     fn async_arrow_signature(&self) -> Option<ArrowSignature> {
         match self.peek_kind(1)? {
-            TokenKind::Identifier(_) if self.peek_kind_is(2, &TokenKind::Arrow) => {
+            _ if !self.peek_has_line_terminator_before(1)
+                && self.peek_is_identifier_name(1)
+                && self.peek_kind_is_no_line_terminator(2, &TokenKind::Arrow) =>
+            {
                 Some(ArrowSignature {
                     is_async: true,
                     parameters: ArrowParameters::Single,
                 })
             }
-            TokenKind::LParen if self.parenthesized_arrow_end(1).is_some() => {
+            TokenKind::LParen
+                if !self.peek_has_line_terminator_before(1)
+                    && self.parenthesized_arrow_end(1).is_some() =>
+            {
                 Some(ArrowSignature {
                     is_async: true,
                     parameters: ArrowParameters::Parenthesized,
@@ -308,41 +320,35 @@ impl Parser {
     }
 
     fn parenthesized_arrow_end(&self, lparen_offset: usize) -> Option<usize> {
-        let mut offset = lparen_offset.checked_add(1)?;
-        if self.peek_kind_is(offset, &TokenKind::RParen) {
-            let arrow = offset.checked_add(1)?;
-            return self.peek_kind_is(arrow, &TokenKind::Arrow).then_some(arrow);
+        if !self.peek_kind_is(lparen_offset, &TokenKind::LParen) {
+            return None;
         }
+        let mut offset = lparen_offset;
+        let mut depth = 0usize;
         loop {
-            if !matches!(self.peek_kind(offset)?, TokenKind::Identifier(_)) {
-                return None;
+            let kind = self.peek_kind(offset)?;
+            match kind {
+                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => {
+                    depth = depth.checked_add(1)?;
+                }
+                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
+                    depth = depth.checked_sub(1)?;
+                    if depth == 0 {
+                        if !self.peek_kind_is(offset, &TokenKind::RParen) {
+                            return None;
+                        }
+                        let arrow = offset.checked_add(1)?;
+                        return self
+                            .peek_kind_is_no_line_terminator(arrow, &TokenKind::Arrow)
+                            .then_some(arrow);
+                    }
+                }
+                TokenKind::Eof => return None,
+                _ => {}
             }
             offset = offset.checked_add(1)?;
-            if self.peek_kind_is(offset, &TokenKind::RParen) {
-                let arrow = offset.checked_add(1)?;
-                return self.peek_kind_is(arrow, &TokenKind::Arrow).then_some(arrow);
-            }
-            if !self.peek_kind_is(offset, &TokenKind::Comma) {
-                return None;
-            }
-            offset = offset.checked_add(1)?;
-            if self.peek_kind_is(offset, &TokenKind::RParen) {
-                let arrow = offset.checked_add(1)?;
-                return self.peek_kind_is(arrow, &TokenKind::Arrow).then_some(arrow);
-            }
         }
     }
-
-    fn peek_kind(&self, offset: usize) -> Option<&TokenKind> {
-        let cursor = self.cursor.checked_add(offset)?;
-        self.tokens.get(cursor).map(|token| &token.kind)
-    }
-
-    fn peek_kind_is(&self, offset: usize, expected: &TokenKind) -> bool {
-        self.peek_kind(offset)
-            .is_some_and(|kind| super::token_kind_eq(kind, expected))
-    }
-
     fn object_literal(&mut self) -> Result<Expr> {
         let mut properties = Vec::new();
         if self.match_kind(&TokenKind::RBrace) {

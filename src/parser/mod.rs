@@ -11,6 +11,8 @@ mod binary;
 mod expression;
 mod statement;
 
+const ASYNC_IDENTIFIER_NAME: &str = "async";
+
 pub fn parse_with_usage(tokens: Vec<Token>, limits: RuntimeLimits) -> Result<ParsedProgram> {
     Parser::new(tokens, limits).parse()
 }
@@ -100,6 +102,7 @@ impl Parser {
             .ok_or_else(|| Error::parse(message, self.offset()))?;
         match token.kind {
             TokenKind::Identifier(name) => self.static_name_at(name, token.offset),
+            TokenKind::Async => self.static_name_borrowed_at(ASYNC_IDENTIFIER_NAME, token.offset),
             _ => Err(Error::parse(message, token.offset)),
         }
     }
@@ -154,13 +157,55 @@ impl Parser {
             .intern_borrowed(name, self.previous_offset())
     }
 
+    pub(super) fn contextual_async_binding(&mut self, offset: usize) -> Result<StaticBinding> {
+        let name = self.static_name_borrowed_at(ASYNC_IDENTIFIER_NAME, offset)?;
+        self.static_binding(name)
+    }
+
     fn static_name_at(&mut self, name: String, offset: usize) -> Result<StaticName> {
         self.static_names.intern_owned(name, offset)
     }
 
+    fn static_name_borrowed_at(&mut self, name: &str, offset: usize) -> Result<StaticName> {
+        self.static_names.intern_borrowed(name, offset)
+    }
+
     pub(super) fn next_is_identifier(&self) -> bool {
         self.peek()
-            .is_some_and(|token| matches!(&token.kind, TokenKind::Identifier(_)))
+            .is_some_and(|token| Self::is_identifier_name(&token.kind))
+    }
+
+    pub(super) fn peek_kind(&self, offset: usize) -> Option<&TokenKind> {
+        let cursor = self.cursor.checked_add(offset)?;
+        self.tokens.get(cursor).map(|token| &token.kind)
+    }
+
+    pub(super) fn peek_kind_is(&self, offset: usize, expected: &TokenKind) -> bool {
+        self.peek_kind(offset)
+            .is_some_and(|kind| token_kind_eq(kind, expected))
+    }
+
+    pub(super) fn peek_kind_is_no_line_terminator(
+        &self,
+        offset: usize,
+        expected: &TokenKind,
+    ) -> bool {
+        self.peek_token(offset).is_some_and(|token| {
+            !token.line_terminator_before && token_kind_eq(&token.kind, expected)
+        })
+    }
+
+    pub(super) fn peek_has_line_terminator_before(&self, offset: usize) -> bool {
+        self.peek_token(offset)
+            .is_some_and(|token| token.line_terminator_before)
+    }
+
+    pub(super) fn peek_is_identifier_name(&self, offset: usize) -> bool {
+        self.peek_kind(offset).is_some_and(Self::is_identifier_name)
+    }
+
+    const fn is_identifier_name(kind: &TokenKind) -> bool {
+        matches!(kind, TokenKind::Identifier(_) | TokenKind::Async)
     }
 
     pub(super) fn consume(&mut self, expected: &TokenKind, message: &str) -> Result<()> {
@@ -177,6 +222,18 @@ impl Parser {
 
     pub(super) fn consume_optional_semicolon(&mut self) {
         self.match_kind(&TokenKind::Semicolon);
+    }
+
+    pub(super) fn consume_statement_terminator(&mut self, message: &str) -> Result<()> {
+        if self.match_kind(&TokenKind::Semicolon)
+            || self.at_end()
+            || self.check(&TokenKind::RBrace)
+            || self.peek_has_line_terminator_before(0)
+        {
+            return Ok(());
+        }
+
+        Err(Error::parse(message, self.offset()))
     }
 
     pub(super) fn match_kind(&mut self, expected: &TokenKind) -> bool {
@@ -207,6 +264,11 @@ impl Parser {
 
     pub(super) fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.cursor)
+    }
+
+    fn peek_token(&self, offset: usize) -> Option<&Token> {
+        let cursor = self.cursor.checked_add(offset)?;
+        self.tokens.get(cursor)
     }
 
     pub(super) fn offset(&self) -> usize {

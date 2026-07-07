@@ -2,6 +2,7 @@
 pub struct Token {
     pub kind: TokenKind,
     pub offset: usize,
+    pub line_terminator_before: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

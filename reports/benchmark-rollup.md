@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T012046Z.md`
-- Task: Reorganize runtime source module layout
-- Performance: 0.79x (39/63 >1.00x)
+- `rsqjs-test-report-20260707T012738Z.md`
+- Task: rsqjs-test-report-20260707T012738Z.md
+- Performance: 0.80x (39/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 12111 passed / 90467 failed (11.81%)
+- Full Test262: 12546 passed / 90032 failed (12.23%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -226,4 +226,5 @@ Latest report:
 | `20260707T004702Z` `2754e98` Add global Function constructor | 0.80x (39/63 >1.00x) | - (0/63 >1.00x) | 12111 passed / 90467 failed (11.81%) |
 | `20260707T005533Z` `12deae2` Quicken numeric comparison bytecode | 0.81x (39/63 >1.00x) | - (0/63 >1.00x) | 12111 passed / 90467 failed (11.81%) |
 | `20260707T010814Z` `3b678b6` Quicken numeric unary bytecode | 0.78x (38/63 >1.00x) | - (0/63 >1.00x) | 12111 passed / 90467 failed (11.81%) |
-| `20260707T012046Z` Reorganize runtime source module layout | 0.79x (39/63 >1.00x) | - (0/63 >1.00x) | 12111 passed / 90467 failed (11.81%) |
+| `20260707T012046Z` `d819d63` Reorganize runtime source modules | 0.79x (39/63 >1.00x) | - (0/63 >1.00x) | 12111 passed / 90467 failed (11.81%) |
+| `20260707T012738Z` rsqjs-test-report-20260707T012738Z.md | 0.80x (39/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
