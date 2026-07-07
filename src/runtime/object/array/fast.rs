@@ -27,6 +27,17 @@ impl ObjectHeap {
             return Ok(None);
         };
 
+        if let Value::Number(search) = search {
+            return Ok(Some(Self::holey_array_includes_number(
+                properties, *search, start,
+            )));
+        }
+        if matches!(search, Value::Undefined) {
+            return Ok(Some(Self::holey_array_includes_undefined(
+                properties, start,
+            )));
+        }
+
         for property in properties.iter().skip(start) {
             if property.as_ref().map_or_else(
                 || Self::same_value_zero(&Value::Undefined, search),
@@ -57,6 +68,10 @@ impl ObjectHeap {
             return Ok(None);
         };
 
+        if let Value::Number(search) = search {
+            return Self::holey_array_index_of_number(properties, *search, start).map(Some);
+        }
+
         for (position, property) in properties.iter().enumerate().skip(start) {
             if let Some(property) = property
                 && property.value_ref() == search
@@ -83,6 +98,10 @@ impl ObjectHeap {
             return Ok(None);
         };
 
+        if let Value::Number(search) = search {
+            return Self::holey_array_last_index_of_number(properties, *search, count).map(Some);
+        }
+
         for (position, property) in properties.iter().enumerate().take(count).rev() {
             if let Some(property) = property
                 && property.value_ref() == search
@@ -91,6 +110,69 @@ impl ObjectHeap {
             }
         }
         Ok(Some(Value::Number(INDEX_NOT_FOUND)))
+    }
+
+    fn holey_array_includes_number(
+        properties: &[Option<ObjectProperty>],
+        search: f64,
+        start: usize,
+    ) -> Value {
+        for property in properties.iter().skip(start).flatten() {
+            if let Value::Number(value) = property.value_ref()
+                && Self::number_same_value_zero(*value, search)
+            {
+                return Value::Bool(true);
+            }
+        }
+        Value::Bool(false)
+    }
+
+    fn holey_array_includes_undefined(
+        properties: &[Option<ObjectProperty>],
+        start: usize,
+    ) -> Value {
+        for property in properties.iter().skip(start) {
+            match property {
+                None => return Value::Bool(true),
+                Some(property) if matches!(property.value_ref(), Value::Undefined) => {
+                    return Value::Bool(true);
+                }
+                Some(_) => {}
+            }
+        }
+        Value::Bool(false)
+    }
+
+    fn holey_array_index_of_number(
+        properties: &[Option<ObjectProperty>],
+        search: f64,
+        start: usize,
+    ) -> Result<Value> {
+        for (position, property) in properties.iter().enumerate().skip(start) {
+            if let Some(property) = property
+                && let Value::Number(value) = property.value_ref()
+                && Self::number_strict_equal(*value, search)
+            {
+                return Self::array_index_value(position);
+            }
+        }
+        Ok(Value::Number(INDEX_NOT_FOUND))
+    }
+
+    fn holey_array_last_index_of_number(
+        properties: &[Option<ObjectProperty>],
+        search: f64,
+        count: usize,
+    ) -> Result<Value> {
+        for (position, property) in properties.iter().enumerate().take(count).rev() {
+            if let Some(property) = property
+                && let Value::Number(value) = property.value_ref()
+                && Self::number_strict_equal(*value, search)
+            {
+                return Self::array_index_value(position);
+            }
+        }
+        Ok(Value::Number(INDEX_NOT_FOUND))
     }
 
     pub(in crate::runtime::object) fn holey_array_join_without_indexed_prototype(
