@@ -3,7 +3,9 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-use super::lookup::{CacheablePropertyPresence, CacheablePropertyValue, PrototypeTraversalBudget};
+use super::property::{
+    CacheablePropertyPresence, CacheablePropertyValue, PrototypeTraversalBudget,
+};
 use super::{ObjectHeap, ObjectPropertyValue, PROTOTYPE_PROPERTY, PropertyLookup};
 
 const PROTOTYPE_CYCLE_SET_ERROR: &str = "prototype cycle is not allowed";

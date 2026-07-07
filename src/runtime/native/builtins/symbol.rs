@@ -49,7 +49,7 @@ const WELL_KNOWN_SYMBOL_PROPERTIES: &[&str] = &[
 ];
 
 impl Context {
-    pub(super) fn symbol_constructor_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime::native) fn symbol_constructor_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::Symbol) {
             return Ok(Value::NativeFunction(id));
         }
@@ -66,7 +66,10 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(super) fn eval_symbol_constructor(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_symbol_constructor(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         let description = self.symbol_description(args)?;
         self.create_symbol_value(description.as_deref())
     }

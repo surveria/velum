@@ -1,8 +1,8 @@
 use crate::value::Value;
 
-use super::shape::ShapePropertyAttributes;
 use super::{
-    ARRAY_LENGTH_PROPERTY, ArrayIndex, Object, ObjectHeap, PropertyKey, PropertyLookup, ShapeTable,
+    ARRAY_LENGTH_PROPERTY, ArrayIndex, Object, ObjectHeap, PropertyKey, PropertyLookup,
+    ShapePropertyAttributes, ShapeTable,
 };
 use crate::error::Result;
 use crate::value::ObjectId;
@@ -174,7 +174,7 @@ impl ObjectProperty {
         self.descriptor.configurable().is_yes()
     }
 
-    pub(super) const fn has_default_array_attributes(&self) -> bool {
+    pub(in crate::runtime::object) const fn has_default_array_attributes(&self) -> bool {
         self.descriptor.writable().is_yes()
             && self.descriptor.enumerable().is_yes()
             && self.descriptor.configurable().is_yes()
@@ -184,7 +184,7 @@ impl ObjectProperty {
         self.descriptor.clone()
     }
 
-    pub(super) const fn shape_attributes(&self) -> ShapePropertyAttributes {
+    pub(in crate::runtime::object) const fn shape_attributes(&self) -> ShapePropertyAttributes {
         ShapePropertyAttributes::new(
             self.descriptor.writable().is_yes(),
             self.descriptor.enumerable().is_yes(),

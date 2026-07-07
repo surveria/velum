@@ -16,7 +16,7 @@ use super::{
 };
 
 impl Context {
-    pub(super) fn promise_constructor_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime::native) fn promise_constructor_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::Promise) {
             return Ok(Value::NativeFunction(id));
         }
@@ -36,7 +36,10 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(super) fn eval_promise_constructor(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_promise_constructor(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         let values = args.as_slice();
         let Some(executor) = values.first().cloned() else {
             return Err(Error::runtime("Promise constructor requires an executor"));
@@ -76,7 +79,10 @@ impl Context {
         Ok(object)
     }
 
-    pub(super) fn eval_promise_resolve(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_promise_resolve(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         self.promise_constructor_value()?;
         let value = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
         if self.promise_id_from_value(&value).is_ok() {
@@ -85,13 +91,16 @@ impl Context {
         self.create_fulfilled_promise(value)
     }
 
-    pub(super) fn eval_promise_reject(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_promise_reject(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         self.promise_constructor_value()?;
         let reason = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
         self.create_rejected_promise(reason)
     }
 
-    pub(super) fn eval_promise_then(
+    pub(in crate::runtime::native) fn eval_promise_then(
         &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
@@ -102,7 +111,7 @@ impl Context {
         self.promise_then(promise, on_fulfilled, on_rejected)
     }
 
-    pub(super) fn eval_promise_catch(
+    pub(in crate::runtime::native) fn eval_promise_catch(
         &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
@@ -194,7 +203,7 @@ impl Context {
     }
 }
 
-pub(super) fn promise_executor_error_value(error: &Error) -> Value {
+pub(in crate::runtime::native) fn promise_executor_error_value(error: &Error) -> Value {
     runtime_exception_value(error).unwrap_or_else(|| {
         Value::Error(crate::value::ErrorObject::new(
             crate::value::ErrorName::Base,

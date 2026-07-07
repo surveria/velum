@@ -3,7 +3,7 @@ use crate::{
     value::Value,
 };
 
-use super::descriptor::PropertyEnumerable;
+use super::PropertyEnumerable;
 
 #[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 pub enum PropertyKey {
@@ -57,10 +57,10 @@ impl<'a> PropertyLookup<'a> {
 
 #[derive(Debug, Clone)]
 pub struct ObjectPropertyInit<'a> {
-    pub(super) key: PropertyKey,
-    pub(super) name: &'a str,
-    pub(super) value: Value,
-    pub(super) enumerable: PropertyEnumerable,
+    pub(in crate::runtime::object) key: PropertyKey,
+    pub(in crate::runtime::object) name: &'a str,
+    pub(in crate::runtime::object) value: Value,
+    pub(in crate::runtime::object) enumerable: PropertyEnumerable,
 }
 
 impl<'a> ObjectPropertyInit<'a> {

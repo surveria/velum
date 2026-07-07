@@ -1,21 +1,12 @@
-mod array;
-mod boolean;
+mod builtins;
 mod call_target;
 mod core;
 mod direct;
-mod eval;
 mod function;
-mod function_constructor;
-mod json;
 mod kind;
-mod math;
-mod number;
-mod object;
-mod promise;
 mod registry;
-mod string;
-mod symbol;
 
+pub(in crate::runtime::native) use builtins::number_intrinsic_property;
 pub(in crate::runtime) use function::NativeFunction;
 pub(in crate::runtime) use kind::NativeFunctionKind;
 pub(in crate::runtime::native) use kind::{

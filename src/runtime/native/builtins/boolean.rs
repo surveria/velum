@@ -9,7 +9,7 @@ use crate::{
 use super::{BOOLEAN_NAME, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY};
 
 impl Context {
-    pub(super) fn boolean_constructor_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime::native) fn boolean_constructor_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::Boolean) {
             return Ok(Value::NativeFunction(id));
         }
@@ -25,11 +25,17 @@ impl Context {
         Ok(constructor)
     }
 
-    pub(super) fn eval_boolean_constructor(&self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_boolean_constructor(
+        &self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         self.checked_value(Value::Bool(Self::eval_boolean_argument(args)))
     }
 
-    pub(super) fn construct_boolean_object(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime::native) fn construct_boolean_object(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
         Self::eval_boolean_argument(args);
         let prototype = self.boolean_constructor_prototype()?;
         let constructor_key = self.object_constructor_property_key()?;

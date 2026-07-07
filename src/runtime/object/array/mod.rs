@@ -7,14 +7,13 @@ mod bulk;
 mod bytecode;
 mod fast;
 mod front;
+mod index;
 mod storage;
 
+pub(super) use index::{ArrayIndex, ArrayLength};
 pub(super) use storage::ArrayStorage;
 
-use super::{
-    ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ArrayLength, Object, ObjectHeap, ObjectProperty,
-    ShapeTable,
-};
+use super::{ARRAY_INDEX_LIMIT_ERROR, Object, ObjectHeap, ObjectProperty, ShapeTable};
 use fast::ArrayCopyLimits;
 
 const ARRAY_CONCAT_RECEIVER_ERROR: &str = "Array.prototype.concat requires an array receiver";

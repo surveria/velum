@@ -4,7 +4,7 @@ use crate::{
     value::ObjectId,
 };
 
-use super::{ArrayIndex, Object, ObjectHeap, PropertyKey};
+use super::{ArrayIndex, Object, ObjectHeap, ObjectProperty, PropertyKey, ShapeTable};
 
 impl ObjectHeap {
     pub fn keys(&self, id: ObjectId, atoms: &AtomTable) -> Result<Vec<String>> {
@@ -54,7 +54,7 @@ impl Object {
     fn extend_enumerable_keys(
         &self,
         atoms: &AtomTable,
-        shapes: &super::ShapeTable,
+        shapes: &ShapeTable,
         keys: &mut Vec<String>,
     ) -> Result<()> {
         if !self.has_enumerable_own_keys() {
@@ -98,7 +98,7 @@ impl Object {
             if self
                 .array_storage
                 .dense_property_at_position(index)
-                .is_some_and(super::ObjectProperty::is_enumerable)
+                .is_some_and(ObjectProperty::is_enumerable)
             {
                 push_unique_key(keys, index.to_string());
             }
@@ -108,7 +108,7 @@ impl Object {
     fn extend_sparse_array_element_keys(
         &self,
         atoms: &AtomTable,
-        shapes: &super::ShapeTable,
+        shapes: &ShapeTable,
         keys: &mut Vec<String>,
     ) -> Result<()> {
         if !self.array_storage.has_sparse_keys() {
@@ -118,7 +118,7 @@ impl Object {
         for (index, key) in self.array_storage.sparse_keys() {
             if self
                 .named_property(shapes, *key)?
-                .is_some_and(super::ObjectProperty::is_enumerable)
+                .is_some_and(ObjectProperty::is_enumerable)
             {
                 entries.push((*index, *key));
             }
@@ -134,7 +134,7 @@ impl Object {
     }
 }
 
-pub(super) fn push_unique_key(keys: &mut Vec<String>, key: String) {
+pub(in crate::runtime::object) fn push_unique_key(keys: &mut Vec<String>, key: String) {
     if keys.iter().any(|existing| existing == &key) {
         return;
     }

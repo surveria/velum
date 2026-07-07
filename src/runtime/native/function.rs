@@ -6,7 +6,7 @@ use crate::{
     value::Value,
 };
 
-use super::{NativeFunctionKind, number};
+use super::{NativeFunctionKind, number_intrinsic_property};
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunction {
@@ -51,7 +51,7 @@ impl NativeFunction {
 
     pub(in crate::runtime) fn intrinsic_property(&self, property: &str) -> Option<Value> {
         match self.kind {
-            NativeFunctionKind::Number => number::number_intrinsic_property(property),
+            NativeFunctionKind::Number => number_intrinsic_property(property),
             NativeFunctionKind::Array
             | NativeFunctionKind::ArrayConcat
             | NativeFunctionKind::ArrayIncludes
