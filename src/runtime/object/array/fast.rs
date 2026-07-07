@@ -241,8 +241,8 @@ impl ObjectHeap {
 
 #[derive(Debug, Clone, Copy)]
 pub(in crate::runtime::object) struct ArrayCopyLimits {
-    max_objects: usize,
-    max_properties: usize,
+    pub(in crate::runtime::object) max_objects: usize,
+    pub(in crate::runtime::object) max_properties: usize,
 }
 
 impl ArrayCopyLimits {

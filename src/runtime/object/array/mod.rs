@@ -82,8 +82,15 @@ impl ObjectHeap {
         let count = end
             .checked_sub(start)
             .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
-        if let Some(values) = self.packed_array_value_range(id, length, start, count)? {
-            return self.create_array(values, prototype, max_objects, max_properties);
+        if let Some(value) = self.create_packed_array_slice(
+            id,
+            length,
+            start,
+            count,
+            prototype,
+            ArrayCopyLimits::new(max_objects, max_properties),
+        )? {
+            return Ok(value);
         }
         if let Some(value) = self.holey_array_slice_without_indexed_prototype(
             id,
@@ -149,8 +156,15 @@ impl ObjectHeap {
         max_properties: usize,
     ) -> Result<Value> {
         let this_length = self.array_length_for_method(id, ARRAY_CONCAT_RECEIVER_ERROR)?;
-        if let Some(values) = self.packed_concat_values(id, this_length, values)? {
-            return self.create_array(values, prototype, max_objects, max_properties);
+        if let Some(value) = self.create_packed_array_concat(
+            id,
+            this_length,
+            values,
+            prototype,
+            max_objects,
+            max_properties,
+        )? {
+            return Ok(value);
         }
         let result = self.create_array_with_length(0, prototype, max_objects)?;
         let Value::Object(result_id) = result else {
