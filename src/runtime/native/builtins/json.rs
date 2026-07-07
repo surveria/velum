@@ -49,8 +49,14 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
+        self.eval_direct_json_parse(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_json_parse(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
         let text = args
-            .as_slice()
             .first()
             .map_or_else(|| Value::Undefined.to_string(), ToString::to_string);
         self.check_string_len(&text)?;
@@ -63,7 +69,14 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let Some(value) = args.as_slice().first() else {
+        self.eval_direct_json_stringify(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_json_stringify(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let Some(value) = args.first() else {
             return Ok(Value::Undefined);
         };
 
