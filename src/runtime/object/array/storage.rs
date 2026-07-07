@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 
 use crate::error::{Error, Result};
 use crate::value::Value;
@@ -30,7 +30,7 @@ impl ShiftedArrayElement {
 impl ArrayStorage {
     pub(in crate::runtime::object) const fn new() -> Self {
         Self {
-            elements: ArrayElements::Packed(VecDeque::new()),
+            elements: ArrayElements::Packed(Vec::new()),
             sparse_keys: BTreeMap::new(),
             property_count: 0,
         }
@@ -77,10 +77,7 @@ impl ArrayStorage {
             return None;
         }
         match &self.elements {
-            ArrayElements::Packed(elements) if elements.len() == len => {
-                let (front, back) = elements.as_slices();
-                back.is_empty().then_some(front)
-            }
+            ArrayElements::Packed(elements) if elements.len() == len => Some(elements.as_slice()),
             ArrayElements::Packed(_) | ArrayElements::Holey(_) => None,
         }
     }
@@ -147,7 +144,7 @@ impl ArrayStorage {
                 {
                     return false;
                 }
-                elements.make_contiguous().reverse();
+                elements.reverse();
                 true
             }
             ArrayElements::Holey(elements) if elements.len() == len => {
@@ -181,7 +178,10 @@ impl ArrayStorage {
                 {
                     return None;
                 }
-                let removed = elements.pop_front()?;
+                if elements.is_empty() {
+                    return None;
+                }
+                let removed = elements.remove(0);
                 self.property_count = self.property_count.saturating_sub(1);
                 Some(ShiftedArrayElement::Property(removed))
             }
@@ -233,12 +233,11 @@ impl ArrayStorage {
                 {
                     return false;
                 }
-                for value in values.iter().rev() {
-                    elements.push_front(ObjectProperty::ordinary(
-                        value.clone(),
-                        PropertyEnumerable::Yes,
-                    ));
-                }
+                let properties = values
+                    .iter()
+                    .cloned()
+                    .map(|value| ObjectProperty::ordinary(value, PropertyEnumerable::Yes));
+                elements.splice(0..0, properties);
             }
             ArrayElements::Holey(elements) if allow_holey && elements.len() == len => {
                 if !elements
@@ -280,11 +279,11 @@ impl ArrayStorage {
         if elements.len() != len {
             return None;
         }
-        let property = elements.back()?;
+        let property = elements.last()?;
         if !property.is_configurable() {
             return None;
         }
-        let removed = elements.pop_back()?;
+        let removed = elements.pop()?;
         self.property_count = self.property_count.saturating_sub(1);
         Some(removed)
     }
@@ -310,7 +309,7 @@ impl ArrayStorage {
             return Err(Error::runtime("array storage is not packed"));
         };
         for value in values {
-            elements.push_back(ObjectProperty::ordinary(value, PropertyEnumerable::Yes));
+            elements.push(ObjectProperty::ordinary(value, PropertyEnumerable::Yes));
         }
         self.property_count = new_property_count;
         Ok(value_count)
@@ -334,7 +333,7 @@ impl ArrayStorage {
             return Err(Error::runtime("array storage is not packed"));
         };
         for property in property_range {
-            elements.push_back(ObjectProperty::ordinary(
+            elements.push(ObjectProperty::ordinary(
                 property.value_ref().clone(),
                 PropertyEnumerable::Yes,
             ));
@@ -355,7 +354,7 @@ impl ArrayStorage {
         let ArrayElements::Packed(elements) = &mut self.elements else {
             return Err(Error::runtime("array storage is not packed"));
         };
-        elements.push_back(ObjectProperty::ordinary(value, PropertyEnumerable::Yes));
+        elements.push(ObjectProperty::ordinary(value, PropertyEnumerable::Yes));
         self.property_count = self
             .property_count
             .checked_add(1)
@@ -363,7 +362,7 @@ impl ArrayStorage {
         Ok(1)
     }
 
-    pub(in crate::runtime::object) fn dense_len(&self) -> usize {
+    pub(in crate::runtime::object) const fn dense_len(&self) -> usize {
         match &self.elements {
             ArrayElements::Packed(elements) => elements.len(),
             ArrayElements::Holey(elements) => elements.len(),
@@ -382,7 +381,7 @@ impl ArrayStorage {
                     return Ok(Some(std::mem::replace(existing, property)));
                 }
                 if position == elements.len() {
-                    elements.push_back(property);
+                    elements.push(property);
                     self.property_count = self.property_count.saturating_add(1);
                     return Ok(None);
                 }
@@ -424,7 +423,7 @@ impl ArrayStorage {
                     return Ok(None);
                 }
                 if position.checked_add(1) == Some(elements.len()) {
-                    elements.pop_back()
+                    elements.pop()
                 } else {
                     let mut holey = Vec::with_capacity(elements.len());
                     holey.extend(elements.drain(..).map(Some));
@@ -510,6 +509,6 @@ impl Default for ArrayStorage {
 enum ArrayElements {
     // Packed means the materialized dense prefix has no holes; callers must still
     // compare storage length with the JavaScript array length before full fast paths.
-    Packed(VecDeque<ObjectProperty>),
+    Packed(Vec<ObjectProperty>),
     Holey(Vec<Option<ObjectProperty>>),
 }
