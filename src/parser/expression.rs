@@ -657,6 +657,7 @@ impl Parser {
 
     pub(super) fn function_parameters(&mut self) -> Result<Vec<FunctionParam>> {
         let mut params = Vec::new();
+        let mut has_default = false;
         if self.check(&TokenKind::RParen) {
             return Ok(params);
         }
@@ -667,6 +668,7 @@ impl Parser {
             }
             let name = self.consume_binding_identifier("expected function parameter name")?;
             let default = if self.match_kind(&TokenKind::Equal) {
+                has_default = true;
                 Some(self.assignment()?)
             } else {
                 None
@@ -677,7 +679,26 @@ impl Parser {
             }
         }
 
+        if has_default {
+            self.reject_duplicate_non_simple_parameters(&params)?;
+        }
+
         Ok(params)
+    }
+
+    fn reject_duplicate_non_simple_parameters(&self, params: &[FunctionParam]) -> Result<()> {
+        let mut seen = Vec::new();
+        for param in params {
+            let name = param.name.as_str();
+            if seen.contains(&name) {
+                return Err(Error::parse(
+                    "duplicate parameter name in non-simple parameter list",
+                    self.offset(),
+                ));
+            }
+            seen.push(name);
+        }
+        Ok(())
     }
 
     fn with_expression_depth(

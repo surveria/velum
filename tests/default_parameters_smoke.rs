@@ -43,6 +43,24 @@ fn supports_default_parameter_trailing_comma_and_function_length() -> TestResult
 }
 
 #[test]
+fn rejects_duplicate_non_simple_parameters() -> TestResult {
+    let sources = [
+        "function duplicate(value, value = 1) {}",
+        "function duplicate(value = 1, value) {}",
+        "(function(value, value = 1) {})",
+        "async function duplicate(value, value = 1) {}",
+        "(async function(value, value = 1) {})",
+        "async (value, value = 1) => value",
+    ];
+
+    for source in sources {
+        ensure_parse_error_contains(source, "duplicate parameter name")?;
+    }
+
+    Ok(())
+}
+
+#[test]
 fn async_function_uses_default_parameter_before_body() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
@@ -65,6 +83,21 @@ fn eval(source: &str) -> rs_quickjs::Result<Value> {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     context.eval(source)
+}
+
+fn ensure_parse_error_contains(source: &str, expected: &str) -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let Err(error) = context.eval(source) else {
+        return Err(format!("expected '{source}' to fail").into());
+    };
+    let rs_quickjs::Error::Parse { message, .. } = error else {
+        return Err(format!("expected parse error for '{source}', got {error:?}").into());
+    };
+    if message.contains(expected) {
+        return Ok(());
+    }
+    Err(format!("expected parse error containing '{expected}', got '{message}'").into())
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
