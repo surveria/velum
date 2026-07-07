@@ -1,6 +1,9 @@
 use crate::{
     api::native_call::NativeCallTarget,
-    bytecode::{BytecodeAddress, BytecodeDynamicProperty, BytecodeInstruction, BytecodeProperty},
+    bytecode::{
+        BytecodeAddress, BytecodeDynamicProperty, BytecodeInstruction, BytecodeObjectProperty,
+        BytecodeProperty,
+    },
     error::{Error, Result},
     runtime::{
         Context, call_args::RuntimeCallArgs, completion::Completion, function::BytecodeFunctionInit,
@@ -260,7 +263,8 @@ impl Context {
                 Ok(None)
             }
             BytecodeInstruction::ObjectLiteral { properties } => {
-                let values = state.stack.pop_many(properties.len())?;
+                let value_count = object_literal_stack_value_count(properties)?;
+                let values = state.stack.pop_many(value_count)?;
                 state
                     .stack
                     .push(self.create_bytecode_object_literal(properties, values)?);
@@ -270,4 +274,14 @@ impl Context {
             _ => Err(Error::runtime("bytecode creation instruction mismatch")),
         }
     }
+}
+
+fn object_literal_stack_value_count(properties: &[BytecodeObjectProperty]) -> Result<usize> {
+    let mut count = 0_usize;
+    for property in properties {
+        count = count
+            .checked_add(property.stack_value_count())
+            .ok_or_else(|| Error::limit("object literal stack value count overflowed"))?;
+    }
+    Ok(count)
 }

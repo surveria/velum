@@ -3,8 +3,8 @@ use std::rc::Rc;
 use crate::{
     api::native_call::NativeCallTarget,
     ast::{
-        BinaryOp, DeclKind, Expr, ObjectProperty, Program, StaticBinding, StaticPropertyAccessId,
-        Stmt, UnaryOp, UpdateOp,
+        BinaryOp, DeclKind, Expr, ObjectProperty, ObjectPropertyKey, Program, StaticBinding,
+        StaticPropertyAccessId, Stmt, UnaryOp, UpdateOp,
     },
     binding_layout::BindingLayout,
     error::{Error, Result},
@@ -24,8 +24,8 @@ pub use types::{
     BytecodeCallSite, BytecodeCatch, BytecodeCompletion, BytecodeDynamicProperty,
     BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeFunctionParam,
     BytecodeInstruction, BytecodeNewTargetMode, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
-    BytecodeNumericEqualityOp, BytecodeNumericUnaryOp, BytecodeProgram, BytecodeProperty,
-    BytecodeSwitchCase,
+    BytecodeNumericEqualityOp, BytecodeNumericUnaryOp, BytecodeObjectProperty, BytecodeProgram,
+    BytecodeProperty, BytecodeSwitchCase,
 };
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
@@ -619,13 +619,21 @@ impl<'a> BytecodeCompiler<'a> {
     }
 
     fn compile_object_literal(&mut self, properties: &[ObjectProperty]) -> Result<()> {
-        let mut names = Vec::with_capacity(properties.len());
+        let mut operands = Vec::with_capacity(properties.len());
         for property in properties {
-            names.push(property.key.clone());
+            match &property.key {
+                ObjectPropertyKey::Static(key) => {
+                    operands.push(BytecodeObjectProperty::Static(key.clone()));
+                }
+                ObjectPropertyKey::Computed(expr) => {
+                    self.compile_expr(expr)?;
+                    operands.push(BytecodeObjectProperty::Computed);
+                }
+            }
             self.compile_expr(&property.value)?;
         }
         self.emit(BytecodeInstruction::ObjectLiteral {
-            properties: Rc::from(names.into_boxed_slice()),
+            properties: Rc::from(operands.into_boxed_slice()),
         });
         Ok(())
     }

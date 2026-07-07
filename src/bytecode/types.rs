@@ -102,6 +102,21 @@ impl BytecodeFunctionParam {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum BytecodeObjectProperty {
+    Static(StaticName),
+    Computed,
+}
+
+impl BytecodeObjectProperty {
+    pub const fn stack_value_count(&self) -> usize {
+        match self {
+            Self::Static(_) => 1,
+            Self::Computed => 2,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BytecodeNewTargetMode {
     Own,
@@ -650,7 +665,7 @@ pub enum BytecodeInstruction {
         len: usize,
     },
     ObjectLiteral {
-        properties: Rc<[StaticName]>,
+        properties: Rc<[BytecodeObjectProperty]>,
     },
     While {
         labels: Option<Rc<[StaticName]>>,

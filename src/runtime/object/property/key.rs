@@ -61,6 +61,7 @@ pub struct ObjectPropertyInit<'a> {
     pub(in crate::runtime::object) name: &'a str,
     pub(in crate::runtime::object) value: Value,
     pub(in crate::runtime::object) enumerable: PropertyEnumerable,
+    kind: ObjectPropertyInitKind,
 }
 
 impl<'a> ObjectPropertyInit<'a> {
@@ -75,6 +76,32 @@ impl<'a> ObjectPropertyInit<'a> {
             name,
             value,
             enumerable,
+            kind: ObjectPropertyInitKind::Literal,
         }
     }
+
+    pub const fn new_data(
+        key: PropertyKey,
+        name: &'a str,
+        value: Value,
+        enumerable: PropertyEnumerable,
+    ) -> Self {
+        Self {
+            key,
+            name,
+            value,
+            enumerable,
+            kind: ObjectPropertyInitKind::Data,
+        }
+    }
+
+    pub(in crate::runtime::object) const fn uses_literal_prototype(&self) -> bool {
+        matches!(self.kind, ObjectPropertyInitKind::Literal)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum ObjectPropertyInitKind {
+    Literal,
+    Data,
 }

@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use crate::{
     ast::{
-        CatchClause, Expr, ForInTarget, FunctionParam, ObjectProperty, StaticBinding, Stmt,
-        SwitchCase,
+        CatchClause, Expr, ForInTarget, FunctionParam, ObjectProperty, ObjectPropertyKey,
+        StaticBinding, Stmt, SwitchCase,
     },
     binding_layout::BindingLayout,
     error::{Error, Result},
@@ -338,6 +338,9 @@ impl CaptureBindingCollector {
 
     fn collect_object_properties(&mut self, properties: &[ObjectProperty]) {
         for property in properties {
+            if let ObjectPropertyKey::Computed(expr) = &property.key {
+                self.collect_expr(expr);
+            }
             self.collect_expr(&property.value);
         }
     }

@@ -4,7 +4,7 @@ use crate::{
     bytecode::{
         BytecodeAssignmentTarget, BytecodeBinding, BytecodeDynamicProperty,
         BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
-        BytecodeNumericUnaryOp,
+        BytecodeNumericUnaryOp, BytecodeObjectProperty,
     },
     error::{Error, Result},
     runtime::Context,
@@ -16,7 +16,9 @@ use crate::{
         bitwise_and, bitwise_or, bitwise_xor, compare_binary, number_shift_count, number_to_i32,
         number_to_uint32, numeric_binary, shift_left, shift_right, shift_right_unsigned,
     },
-    runtime::object::{OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyEnumerable},
+    runtime::object::{
+        OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyEnumerable, PropertyKey,
+    },
     runtime::property::DynamicPropertyKey,
     syntax::{BinaryOp, DeclKind, StaticName, StaticPropertyAccessId, UnaryOp, UpdateOp},
     value::{ErrorName, Value},
@@ -578,23 +580,64 @@ impl Context {
 
     pub(super) fn create_bytecode_object_literal(
         &mut self,
-        properties: &Rc<[StaticName]>,
+        properties: &Rc<[BytecodeObjectProperty]>,
         values: Vec<Value>,
     ) -> Result<Value> {
-        if properties.len() != values.len() {
+        if object_literal_stack_value_count(properties)? != values.len() {
             return Err(Error::runtime(
                 "bytecode object literal stack arity mismatch",
             ));
         }
-        let mut inits = Vec::with_capacity(properties.len());
-        for (property, value) in properties.iter().zip(values) {
-            let key = self.intern_static_property_key(property)?;
-            inits.push(ObjectPropertyInit::new(
-                key,
-                property.as_str(),
-                value,
-                PropertyEnumerable::Yes,
+        let mut values = values.into_iter();
+        let mut dynamic_names = Vec::new();
+        let mut entries = Vec::with_capacity(properties.len());
+        for property in properties.iter() {
+            match property {
+                BytecodeObjectProperty::Static(name) => {
+                    let value = next_object_literal_stack_value(&mut values)?;
+                    let key = self.intern_static_property_key(name)?;
+                    entries.push(RuntimeObjectLiteralEntry {
+                        key,
+                        name: RuntimeObjectLiteralName::Static(name.as_str()),
+                        value,
+                    });
+                }
+                BytecodeObjectProperty::Computed => {
+                    let key_value = next_object_literal_stack_value(&mut values)?;
+                    let value = next_object_literal_stack_value(&mut values)?;
+                    let mut property = self.dynamic_property_key(&key_value)?;
+                    let key = self.intern_dynamic_property_key(&mut property)?;
+                    let name_index = dynamic_names.len();
+                    dynamic_names.push(property.name().to_owned());
+                    entries.push(RuntimeObjectLiteralEntry {
+                        key,
+                        name: RuntimeObjectLiteralName::Dynamic(name_index),
+                        value,
+                    });
+                }
+            }
+        }
+        if values.next().is_some() {
+            return Err(Error::runtime(
+                "bytecode object literal stack arity mismatch",
             ));
+        }
+        let mut inits = Vec::with_capacity(entries.len());
+        for entry in entries {
+            let is_dynamic = entry.name.is_dynamic();
+            let name = match entry.name {
+                RuntimeObjectLiteralName::Static(name) => name,
+                RuntimeObjectLiteralName::Dynamic(index) => dynamic_names
+                    .get(index)
+                    .map(String::as_str)
+                    .ok_or_else(|| Error::runtime("computed object property name disappeared"))?,
+            };
+            let init = if is_dynamic {
+                ObjectPropertyInit::new_data(entry.key, name, entry.value, PropertyEnumerable::Yes)
+            } else {
+                ObjectPropertyInit::new(entry.key, name, entry.value, PropertyEnumerable::Yes)
+            };
+            inits.push(init);
         }
         let constructor_key = self.intern_property_key(OBJECT_CONSTRUCTOR_PROPERTY)?;
         self.objects.create(
@@ -604,6 +647,41 @@ impl Context {
             self.limits.max_object_properties,
         )
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum RuntimeObjectLiteralName<'a> {
+    Static(&'a str),
+    Dynamic(usize),
+}
+
+impl RuntimeObjectLiteralName<'_> {
+    const fn is_dynamic(self) -> bool {
+        matches!(self, Self::Dynamic(_))
+    }
+}
+
+#[derive(Debug)]
+struct RuntimeObjectLiteralEntry<'a> {
+    key: PropertyKey,
+    name: RuntimeObjectLiteralName<'a>,
+    value: Value,
+}
+
+fn object_literal_stack_value_count(properties: &[BytecodeObjectProperty]) -> Result<usize> {
+    let mut count = 0_usize;
+    for property in properties {
+        count = count
+            .checked_add(property.stack_value_count())
+            .ok_or_else(|| Error::limit("object literal stack value count overflowed"))?;
+    }
+    Ok(count)
+}
+
+fn next_object_literal_stack_value(values: &mut impl Iterator<Item = Value>) -> Result<Value> {
+    values
+        .next()
+        .ok_or_else(|| Error::runtime("bytecode object literal stack arity mismatch"))
 }
 
 const fn bytecode_numbers_equal(left: f64, right: f64) -> bool {
