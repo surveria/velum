@@ -9,11 +9,13 @@ use crate::{
     runtime::Context,
     runtime::binding::scope::{BindingCell, BindingScope},
     runtime::completion::Completion,
-    syntax::DeclKind,
+    syntax::{DeclKind, StaticName},
     value::Value,
 };
 
-use super::state::{BytecodeState, bytecode_loop_completion, init_completion_to_result};
+use super::state::{
+    BytecodeState, bytecode_loop_completion, init_completion_to_result, loop_label_matches,
+};
 
 #[derive(Debug, Clone, Copy)]
 struct BytecodeForParts<'a> {
@@ -21,6 +23,7 @@ struct BytecodeForParts<'a> {
     condition: Option<&'a BytecodeBlock>,
     update: Option<&'a BytecodeBlock>,
     body: &'a BytecodeBlock,
+    labels: Option<&'a [StaticName]>,
     scoped: bool,
 }
 
@@ -36,6 +39,7 @@ impl<'a> BytecodeForParts<'a> {
         condition: Option<&'a BytecodeBlock>,
         update: Option<&'a BytecodeBlock>,
         body: &'a BytecodeBlock,
+        labels: Option<&'a [StaticName]>,
         scoped: bool,
     ) -> Self {
         Self {
@@ -43,6 +47,7 @@ impl<'a> BytecodeForParts<'a> {
             condition,
             update,
             body,
+            labels,
             scoped,
         }
     }
@@ -56,13 +61,18 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         match instruction {
-            BytecodeInstruction::While { condition, body } => {
-                self.eval_bytecode_while(state, condition, body, next)
-            }
-            BytecodeInstruction::DoWhile { body, condition } => {
-                self.eval_bytecode_do_while(state, body, condition, next)
-            }
+            BytecodeInstruction::While {
+                labels,
+                condition,
+                body,
+            } => self.eval_bytecode_while(state, labels.as_deref(), condition, body, next),
+            BytecodeInstruction::DoWhile {
+                labels,
+                body,
+                condition,
+            } => self.eval_bytecode_do_while(state, labels.as_deref(), body, condition, next),
             BytecodeInstruction::For {
+                labels,
                 init,
                 condition,
                 update,
@@ -74,15 +84,17 @@ impl Context {
                     condition.as_ref(),
                     update.as_ref(),
                     body,
+                    labels.as_deref(),
                     *scoped,
                 );
                 self.eval_bytecode_for(state, parts, next)
             }
             BytecodeInstruction::ForIn {
+                labels,
                 target,
                 object,
                 body,
-            } => self.eval_bytecode_for_in(state, target, object, body, next),
+            } => self.eval_bytecode_for_in(state, labels.as_deref(), target, object, body, next),
             BytecodeInstruction::Switch {
                 discriminant,
                 cases,
@@ -153,6 +165,7 @@ impl Context {
     fn eval_bytecode_while(
         &mut self,
         state: &mut BytecodeState,
+        labels: Option<&[StaticName]>,
         condition: &BytecodeBlock,
         body: &BytecodeBlock,
         next: BytecodeAddress,
@@ -168,10 +181,10 @@ impl Context {
             match self.eval_bytecode_block(body)? {
                 Completion::Normal(value) => last = value,
                 Completion::Continue(None) => {}
-                Completion::Break(None) => {
-                    state.last = last;
-                    state.pc = next;
-                    return Ok(None);
+                Completion::Continue(Some(target)) if loop_label_matches(labels, &target) => {}
+                Completion::Break(None) => break,
+                Completion::Break(Some(target)) if loop_label_matches(labels, &target) => {
+                    break;
                 }
                 completion @ (Completion::Break(Some(_))
                 | Completion::Continue(Some(_))
@@ -189,6 +202,7 @@ impl Context {
     fn eval_bytecode_do_while(
         &mut self,
         state: &mut BytecodeState,
+        labels: Option<&[StaticName]>,
         body: &BytecodeBlock,
         condition: &BytecodeBlock,
         next: BytecodeAddress,
@@ -199,7 +213,9 @@ impl Context {
             match self.eval_bytecode_block(body)? {
                 Completion::Normal(value) => last = value,
                 Completion::Continue(None) => {}
+                Completion::Continue(Some(target)) if loop_label_matches(labels, &target) => {}
                 Completion::Break(None) => break,
+                Completion::Break(Some(target)) if loop_label_matches(labels, &target) => break,
                 completion @ (Completion::Break(Some(_))
                 | Completion::Continue(Some(_))
                 | Completion::Throw(_)
@@ -259,7 +275,12 @@ impl Context {
             match self.eval_bytecode_block(parts.body)? {
                 Completion::Normal(value) => last = value,
                 Completion::Continue(None) => {}
+                Completion::Continue(Some(target)) if loop_label_matches(parts.labels, &target) => {
+                }
                 Completion::Break(None) => break,
+                Completion::Break(Some(target)) if loop_label_matches(parts.labels, &target) => {
+                    break;
+                }
                 completion @ (Completion::Break(Some(_))
                 | Completion::Continue(Some(_))
                 | Completion::Throw(_)
@@ -289,6 +310,7 @@ impl Context {
     fn eval_bytecode_for_in(
         &mut self,
         state: &mut BytecodeState,
+        labels: Option<&[StaticName]>,
         target: &BytecodeForInTarget,
         object: &BytecodeBlock,
         body: &BytecodeBlock,
@@ -300,16 +322,18 @@ impl Context {
             BytecodeForInTarget::Binding {
                 name,
                 kind: kind @ (DeclKind::Let | DeclKind::Const),
-            } => self.eval_bytecode_for_in_lexical_binding(name, *kind, keys, body)?,
+            } => self.eval_bytecode_for_in_lexical_binding(name, *kind, keys, body, labels)?,
             BytecodeForInTarget::Binding {
                 name,
                 kind: DeclKind::Var,
-            } => self.eval_bytecode_for_in_assignment_loop(keys, body, |context, key| {
-                let value = context.heap_string_value(&key)?;
-                context.assign_bytecode(name, value)
-            })?,
+            } => {
+                self.eval_bytecode_for_in_assignment_loop(keys, body, labels, |context, key| {
+                    let value = context.heap_string_value(&key)?;
+                    context.assign_bytecode(name, value)
+                })?
+            }
             BytecodeForInTarget::Assignment(target) => {
-                self.eval_bytecode_for_in_assignment_loop(keys, body, |context, key| {
+                self.eval_bytecode_for_in_assignment_loop(keys, body, labels, |context, key| {
                     let value = context.heap_string_value(&key)?;
                     context.assign_bytecode_target(target, value)
                 })?
@@ -324,6 +348,7 @@ impl Context {
         kind: DeclKind,
         keys: Vec<String>,
         body: &BytecodeBlock,
+        labels: Option<&[StaticName]>,
     ) -> Result<Completion> {
         let mut last = Value::Undefined;
         self.ensure_extra_binding_capacity(0)?;
@@ -349,7 +374,7 @@ impl Context {
                 return Err(Error::runtime("bytecode for-in lexical scope disappeared"));
             };
             scope = removed_scope;
-            if let Some(completion) = bytecode_loop_completion(&mut last, completion?) {
+            if let Some(completion) = bytecode_loop_completion(&mut last, completion?, labels) {
                 return Ok(completion);
             }
         }
@@ -360,6 +385,7 @@ impl Context {
         &mut self,
         keys: Vec<String>,
         body: &BytecodeBlock,
+        labels: Option<&[StaticName]>,
         mut assign: impl FnMut(&mut Self, String) -> Result<()>,
     ) -> Result<Completion> {
         let mut last = Value::Undefined;
@@ -367,7 +393,7 @@ impl Context {
             self.step()?;
             assign(self, key)?;
             if let Some(completion) =
-                bytecode_loop_completion(&mut last, self.eval_bytecode_block(body)?)
+                bytecode_loop_completion(&mut last, self.eval_bytecode_block(body)?, labels)
             {
                 return Ok(completion);
             }

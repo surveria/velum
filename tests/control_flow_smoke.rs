@@ -197,6 +197,72 @@ fn supports_labeled_break_statements() -> TestResult {
 }
 
 #[test]
+fn supports_labeled_continue_statements() -> TestResult {
+    expect_value(
+        r"
+        let index = 0;
+        let total = 0;
+        outer: while (index < 5) {
+            index = index + 1;
+            if (index === 3) {
+                continue outer;
+            }
+            total = total + index;
+        }
+        total
+        ",
+        &Value::Number(12.0),
+    )?;
+
+    expect_value(
+        r"
+        let index = 0;
+        let total = 0;
+        outer: do {
+            index = index + 1;
+            if (index === 2) {
+                continue outer;
+            }
+            total = total + index;
+        } while (index < 4);
+        total
+        ",
+        &Value::Number(8.0),
+    )?;
+
+    expect_value(
+        r"
+        let total = 0;
+        outer: for (let row = 0; row < 3; row = row + 1) {
+            for (let column = 0; column < 3; column = column + 1) {
+                if (column === 1) {
+                    continue outer;
+                }
+                total = total + row + column;
+            }
+            total = 100;
+        }
+        total
+        ",
+        &Value::Number(3.0),
+    )?;
+
+    expect_value(
+        r#"
+        let seen = "";
+        outer: inner: for (let key in { a: 1, b: 2, c: 3 }) {
+            if (key === "b") {
+                continue outer;
+            }
+            seen = seen + key;
+        }
+        seen
+        "#,
+        &Value::String("ac".to_owned()),
+    )
+}
+
+#[test]
 fn propagates_while_completion() -> TestResult {
     expect_value(
         r"

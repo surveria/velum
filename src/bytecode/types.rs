@@ -653,14 +653,17 @@ pub enum BytecodeInstruction {
         properties: Rc<[StaticName]>,
     },
     While {
+        labels: Option<Rc<[StaticName]>>,
         condition: BytecodeBlock,
         body: BytecodeBlock,
     },
     DoWhile {
+        labels: Option<Rc<[StaticName]>>,
         body: BytecodeBlock,
         condition: BytecodeBlock,
     },
     For {
+        labels: Option<Rc<[StaticName]>>,
         init: Option<BytecodeBlock>,
         condition: Option<BytecodeBlock>,
         update: Option<BytecodeBlock>,
@@ -668,6 +671,7 @@ pub enum BytecodeInstruction {
         scoped: bool,
     },
     ForIn {
+        labels: Option<Rc<[StaticName]>>,
         target: BytecodeForInTarget,
         object: BytecodeBlock,
         body: BytecodeBlock,

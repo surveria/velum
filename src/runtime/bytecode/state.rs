@@ -2,6 +2,7 @@ use crate::{
     bytecode::{BytecodeAddress, BytecodeCompletion},
     error::{Error, Result},
     runtime::completion::Completion,
+    syntax::StaticName,
     value::Value,
 };
 
@@ -130,6 +131,7 @@ pub(super) fn init_completion_to_result(completion: Completion) -> Result<()> {
 pub(super) fn bytecode_loop_completion(
     last: &mut Value,
     completion: Completion,
+    labels: Option<&[StaticName]>,
 ) -> Option<Completion> {
     match completion {
         Completion::Normal(value) => {
@@ -138,9 +140,17 @@ pub(super) fn bytecode_loop_completion(
         }
         Completion::Continue(None) => None,
         Completion::Break(None) => Some(Completion::Normal(last.clone())),
+        Completion::Continue(Some(target)) if loop_label_matches(labels, &target) => None,
+        Completion::Break(Some(target)) if loop_label_matches(labels, &target) => {
+            Some(Completion::Normal(last.clone()))
+        }
         completion @ (Completion::Break(Some(_)) | Completion::Continue(Some(_))) => {
             Some(completion)
         }
         completion @ (Completion::Throw(_) | Completion::Return(_)) => Some(completion),
     }
+}
+
+pub(super) fn loop_label_matches(labels: Option<&[StaticName]>, target: &StaticName) -> bool {
+    labels.is_some_and(|labels| labels.iter().any(|label| label == target))
 }
