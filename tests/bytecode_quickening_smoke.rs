@@ -250,6 +250,65 @@ fn bytecode_quickens_dynamic_array_index_reads_and_writes_with_fallbacks() -> Te
     ensure_usize(vm.resource_usage().atom_count, atoms)
 }
 
+#[test]
+fn bytecode_quickens_array_index_read_modify_write_with_fallbacks() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r"
+        Array.prototype[4] = 20;
+
+        var values = [1, 2, 3];
+        var staticPost = values[0]++;
+        var staticPre = ++values[1];
+        values[2] += 10;
+
+        var dynamicIndex = 1;
+        values[dynamicIndex] += 5;
+        var dynamicPost = values[dynamicIndex]++;
+
+        var far = 100000;
+        values[far] = 7;
+        values[far] += 2;
+
+        var inherited = [0];
+        inherited[4] += 2;
+
+        var plain = {};
+        plain[0] = 1;
+        plain[0]++;
+        plain[0] += 2;
+
+        var ok = staticPost === 1 &&
+            staticPre === 3 &&
+            dynamicPost === 8 &&
+            values[0] === 2 &&
+            values[1] === 9 &&
+            values[2] === 13 &&
+            values[far] === 9 &&
+            inherited[4] === 22 &&
+            inherited.length === 5 &&
+            plain[0] === 4;
+
+        delete Array.prototype[4];
+        ok ? 42 : 0
+        ",
+    )?;
+    ensure_at_least(
+        script.usage().bytecode_property_operand_count(),
+        12,
+        "bytecode property operands",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    let atoms = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atoms)
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

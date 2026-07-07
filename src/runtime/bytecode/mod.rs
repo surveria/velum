@@ -81,6 +81,7 @@ impl Context {
             | BytecodeInstruction::DeleteValue
             | BytecodeInstruction::UpdateBinding { .. }
             | BytecodeInstruction::UpdateStaticProperty { .. }
+            | BytecodeInstruction::UpdateArrayIndexProperty { .. }
             | BytecodeInstruction::UpdateComputedProperty { .. }
             | BytecodeInstruction::Binary { .. }
             | BytecodeInstruction::NumberBinary(_)
@@ -88,6 +89,7 @@ impl Context {
             | BytecodeInstruction::NumberEquality(_)
             | BytecodeInstruction::CompoundStoreBinding { .. }
             | BytecodeInstruction::CompoundStaticProperty { .. }
+            | BytecodeInstruction::CompoundArrayIndexProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. }
             | BytecodeInstruction::StaticMember { .. }
             | BytecodeInstruction::ArrayLength { .. }
@@ -269,6 +271,7 @@ impl Context {
             | BytecodeInstruction::DeleteValue
             | BytecodeInstruction::UpdateBinding { .. }
             | BytecodeInstruction::UpdateStaticProperty { .. }
+            | BytecodeInstruction::UpdateArrayIndexProperty { .. }
             | BytecodeInstruction::UpdateComputedProperty { .. }
             | BytecodeInstruction::Binary { .. }
             | BytecodeInstruction::NumberBinary(_)
@@ -278,6 +281,7 @@ impl Context {
             }
             BytecodeInstruction::CompoundStoreBinding { .. }
             | BytecodeInstruction::CompoundStaticProperty { .. }
+            | BytecodeInstruction::CompoundArrayIndexProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. }
             | BytecodeInstruction::StaticMember { .. }
             | BytecodeInstruction::ArrayLength { .. }
@@ -353,6 +357,19 @@ impl Context {
                     *op,
                     *prefix,
                 )?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::UpdateArrayIndexProperty {
+                property,
+                index,
+                op,
+                prefix,
+            } => {
+                let object = state.stack.pop()?;
+                state.stack.push(
+                    self.eval_bytecode_array_index_update(&object, property, *index, *op, *prefix)?,
+                );
                 state.pc = next;
                 Ok(None)
             }
@@ -444,6 +461,13 @@ impl Context {
     ) -> Result<Option<Completion>> {
         let key = state.stack.pop()?;
         let object = state.stack.pop()?;
+        if let Some(value) =
+            self.eval_dynamic_array_index_update(&object, &key, property.access(), op, prefix)?
+        {
+            state.stack.push(value);
+            state.pc = next;
+            return Ok(None);
+        }
         let key = self.dynamic_property_key(&key)?;
         state.stack.push(self.eval_bytecode_update_dynamic_property(
             &object,
@@ -463,48 +487,11 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         match instruction {
-            BytecodeInstruction::CompoundStoreBinding { name, op } => {
-                let right = state.stack.pop()?;
-                state
-                    .stack
-                    .push(self.eval_bytecode_binding_compound_assignment(*op, name, &right)?);
-                state.pc = next;
-                Ok(None)
-            }
-            BytecodeInstruction::CompoundStaticProperty { property, op } => {
-                let right = state.stack.pop()?;
-                let object = state.stack.pop()?;
-                state
-                    .stack
-                    .push(self.eval_bytecode_static_compound_assignment(
-                        *op,
-                        &object,
-                        property.name(),
-                        property.access(),
-                        &right,
-                    )?);
-                state.pc = next;
-                Ok(None)
-            }
-            BytecodeInstruction::CompoundComputedProperty {
-                property: operand,
-                op,
-            } => {
-                let right = state.stack.pop()?;
-                let key = state.stack.pop()?;
-                let object = state.stack.pop()?;
-                let key = self.dynamic_property_key(&key)?;
-                state
-                    .stack
-                    .push(self.eval_bytecode_dynamic_compound_assignment(
-                        *op,
-                        &object,
-                        key,
-                        operand.access(),
-                        &right,
-                    )?);
-                state.pc = next;
-                Ok(None)
+            BytecodeInstruction::CompoundStoreBinding { .. }
+            | BytecodeInstruction::CompoundStaticProperty { .. }
+            | BytecodeInstruction::CompoundArrayIndexProperty { .. }
+            | BytecodeInstruction::CompoundComputedProperty { .. } => {
+                self.eval_bytecode_compound_member_instruction(state, instruction, next)
             }
             BytecodeInstruction::StaticMember { property } => {
                 self.eval_bytecode_static_member_instruction(state, property, next)
@@ -549,6 +536,80 @@ impl Context {
             }
             _ => Err(Error::runtime("bytecode member instruction mismatch")),
         }
+    }
+
+    fn eval_bytecode_compound_member_instruction(
+        &mut self,
+        state: &mut BytecodeState,
+        instruction: &BytecodeInstruction,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        match instruction {
+            BytecodeInstruction::CompoundStoreBinding { name, op } => {
+                let right = state.stack.pop()?;
+                state
+                    .stack
+                    .push(self.eval_bytecode_binding_compound_assignment(*op, name, &right)?);
+            }
+            BytecodeInstruction::CompoundStaticProperty { property, op } => {
+                let right = state.stack.pop()?;
+                let object = state.stack.pop()?;
+                state
+                    .stack
+                    .push(self.eval_bytecode_static_compound_assignment(
+                        *op,
+                        &object,
+                        property.name(),
+                        property.access(),
+                        &right,
+                    )?);
+            }
+            BytecodeInstruction::CompoundArrayIndexProperty {
+                property,
+                index,
+                op,
+            } => {
+                let right = state.stack.pop()?;
+                let object = state.stack.pop()?;
+                state
+                    .stack
+                    .push(self.eval_bytecode_array_index_compound_assignment(
+                        *op, &object, property, *index, &right,
+                    )?);
+            }
+            BytecodeInstruction::CompoundComputedProperty {
+                property: operand,
+                op,
+            } => {
+                let right = state.stack.pop()?;
+                let key = state.stack.pop()?;
+                let object = state.stack.pop()?;
+                if let Some(value) = self.eval_dynamic_array_index_compound_assignment(
+                    *op,
+                    &object,
+                    &key,
+                    operand.access(),
+                    &right,
+                )? {
+                    state.stack.push(value);
+                    state.pc = next;
+                    return Ok(None);
+                }
+                let key = self.dynamic_property_key(&key)?;
+                state
+                    .stack
+                    .push(self.eval_bytecode_dynamic_compound_assignment(
+                        *op,
+                        &object,
+                        key,
+                        operand.access(),
+                        &right,
+                    )?);
+            }
+            _ => return Err(Error::runtime("bytecode compound member mismatch")),
+        }
+        state.pc = next;
+        Ok(None)
     }
 
     fn eval_bytecode_property_assign_instruction(

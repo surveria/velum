@@ -520,6 +520,12 @@ pub enum BytecodeInstruction {
         op: UpdateOp,
         prefix: bool,
     },
+    UpdateArrayIndexProperty {
+        property: BytecodeProperty,
+        index: BytecodeArrayIndex,
+        op: UpdateOp,
+        prefix: bool,
+    },
     UpdateComputedProperty {
         property: BytecodeDynamicProperty,
         op: UpdateOp,
@@ -538,6 +544,11 @@ pub enum BytecodeInstruction {
     },
     CompoundStaticProperty {
         property: BytecodeProperty,
+        op: BinaryOp,
+    },
+    CompoundArrayIndexProperty {
+        property: BytecodeProperty,
+        index: BytecodeArrayIndex,
         op: BinaryOp,
     },
     CompoundComputedProperty {

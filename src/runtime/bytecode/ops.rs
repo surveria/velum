@@ -297,7 +297,7 @@ impl Context {
         Ok(if prefix { new_value } else { old_value })
     }
 
-    fn updated_bytecode_number(value: &Value, op: UpdateOp) -> Result<Value> {
+    pub(super) fn updated_bytecode_number(value: &Value, op: UpdateOp) -> Result<Value> {
         let Some(number) = value.as_number() else {
             return Err(Error::runtime("update operator expects a number"));
         };
@@ -367,7 +367,7 @@ impl Context {
         Ok(value)
     }
 
-    fn eval_bytecode_compound_value(
+    pub(super) fn eval_bytecode_compound_value(
         &mut self,
         op: BinaryOp,
         left: &Value,

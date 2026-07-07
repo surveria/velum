@@ -161,12 +161,14 @@ impl BytecodeInstruction {
             Self::DeleteStaticProperty { .. }
             | Self::DeleteComputedProperty { .. }
             | Self::UpdateStaticProperty { .. }
+            | Self::UpdateArrayIndexProperty { .. }
             | Self::UpdateComputedProperty { .. }
             | Self::Binary {
                 property_access: Some(_),
                 ..
             }
             | Self::CompoundStaticProperty { .. }
+            | Self::CompoundArrayIndexProperty { .. }
             | Self::CompoundComputedProperty { .. }
             | Self::StaticMember { .. }
             | Self::ArrayLength { .. }
@@ -513,9 +515,11 @@ impl BytecodeInstruction {
                 | Self::DeleteValue
                 | Self::UpdateBinding { .. }
                 | Self::UpdateStaticProperty { .. }
+                | Self::UpdateArrayIndexProperty { .. }
                 | Self::UpdateComputedProperty { .. }
                 | Self::CompoundStoreBinding { .. }
                 | Self::CompoundStaticProperty { .. }
+                | Self::CompoundArrayIndexProperty { .. }
                 | Self::CompoundComputedProperty { .. }
                 | Self::CallBinding { .. }
                 | Self::CallValue { .. }
