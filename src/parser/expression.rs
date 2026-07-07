@@ -359,6 +359,7 @@ impl Parser {
         let Some(signature) = self.arrow_signature() else {
             return Ok(None);
         };
+        let inherited_strict = self.is_strict_mode();
         if signature.is_async {
             self.consume(
                 &TokenKind::Async,
@@ -378,24 +379,26 @@ impl Parser {
             }
         };
         self.consume(&TokenKind::Arrow, "expected '=>' after arrow parameters")?;
-        let body = self.arrow_body()?;
+        let body = self.arrow_body(inherited_strict)?;
+        self.validate_function_parameters(&params, inherited_strict, body.contains_use_strict)?;
         let id = self.static_function()?;
         Ok(Some(Expr::ArrowFunction {
             id,
             params: params.into(),
-            body,
+            body: body.statements.into(),
             is_async: signature.is_async,
         }))
     }
 
-    fn arrow_body(&mut self) -> Result<std::rc::Rc<[crate::ast::Stmt]>> {
+    fn arrow_body(&mut self, inherited_strict: bool) -> Result<super::ParsedFunctionBody> {
         if self.match_kind(&TokenKind::LBrace) {
-            return Ok(self.block_statements()?.into());
+            return self.function_body(inherited_strict);
         }
         let value = self.assignment()?;
-        Ok(std::rc::Rc::from(
-            vec![crate::ast::Stmt::Return(Some(value))].into_boxed_slice(),
-        ))
+        Ok(super::ParsedFunctionBody {
+            statements: vec![crate::ast::Stmt::Return(Some(value))],
+            contains_use_strict: false,
+        })
     }
 
     fn arrow_signature(&self) -> Option<ArrowSignature> {
@@ -550,10 +553,12 @@ impl Parser {
         name: ObjectPropertyName,
         is_async: bool,
     ) -> Result<ObjectProperty> {
-        let params = self.function_parameters()?.into();
+        let inherited_strict = self.is_strict_mode();
+        let params = self.function_parameters()?;
         self.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before method body")?;
-        let body = self.with_new_target_scope(Self::block_statements)?.into();
+        let body = self.with_new_target_scope(|parser| parser.function_body(inherited_strict))?;
+        self.validate_function_parameters(&params, inherited_strict, body.contains_use_strict)?;
         let id = self.static_function()?;
         let key = name.into_key();
         let name = match &key {
@@ -563,8 +568,8 @@ impl Parser {
         let value = Expr::MethodFunction {
             id,
             name,
-            params,
-            body,
+            params: params.into(),
+            body: body.statements.into(),
             is_async,
         };
         Ok(ObjectProperty { key, value })
@@ -635,70 +640,30 @@ impl Parser {
     }
 
     fn function_expression(&mut self, is_async: bool) -> Result<Expr> {
+        let inherited_strict = self.is_strict_mode();
         let name = if self.next_is_identifier() {
-            Some(self.consume_identifier("expected function name")?)
+            let name = self.consume_identifier("expected function name")?;
+            if inherited_strict {
+                self.validate_function_name_in_strict_code(&name)?;
+            }
+            Some(name)
         } else {
             None
         };
         self.consume(&TokenKind::LParen, "expected '(' after 'function'")?;
-        let params = self.function_parameters()?.into();
+        let params = self.function_parameters()?;
         self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
-        let body = self.with_new_target_scope(Self::block_statements)?.into();
+        let body = self.with_new_target_scope(|parser| parser.function_body(inherited_strict))?;
+        self.validate_function_parameters(&params, inherited_strict, body.contains_use_strict)?;
         let id = self.static_function()?;
         Ok(Expr::Function {
             id,
             name,
-            params,
-            body,
+            params: params.into(),
+            body: body.statements.into(),
             is_async,
         })
-    }
-
-    pub(super) fn function_parameters(&mut self) -> Result<Vec<FunctionParam>> {
-        let mut params = Vec::new();
-        let mut has_default = false;
-        if self.check(&TokenKind::RParen) {
-            return Ok(params);
-        }
-
-        loop {
-            if self.check(&TokenKind::RParen) {
-                break;
-            }
-            let name = self.consume_binding_identifier("expected function parameter name")?;
-            let default = if self.match_kind(&TokenKind::Equal) {
-                has_default = true;
-                Some(self.assignment()?)
-            } else {
-                None
-            };
-            params.push(FunctionParam::new(name, default));
-            if !self.match_kind(&TokenKind::Comma) {
-                break;
-            }
-        }
-
-        if has_default {
-            self.reject_duplicate_non_simple_parameters(&params)?;
-        }
-
-        Ok(params)
-    }
-
-    fn reject_duplicate_non_simple_parameters(&self, params: &[FunctionParam]) -> Result<()> {
-        let mut seen = Vec::new();
-        for param in params {
-            let name = param.name.as_str();
-            if seen.contains(&name) {
-                return Err(Error::parse(
-                    "duplicate parameter name in non-simple parameter list",
-                    self.offset(),
-                ));
-            }
-            seen.push(name);
-        }
-        Ok(())
     }
 
     fn with_expression_depth(
