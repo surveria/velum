@@ -115,6 +115,8 @@ impl<'a> BytecodeCompiler<'a> {
                 alternate,
             } => self.compile_if(condition, consequent, alternate.as_deref(), value),
             Stmt::While { condition, body } => self.compile_while(condition, body),
+            Stmt::DoWhile { body, condition } => self.compile_do_while(body, condition),
+            Stmt::Label { label, body } => self.compile_label(label, body, value),
             Stmt::For {
                 init,
                 condition,
@@ -135,12 +137,16 @@ impl<'a> BytecodeCompiler<'a> {
                 catch,
                 finally_body,
             } => self.compile_try(body, catch.as_ref(), finally_body.as_deref()),
-            Stmt::Break => {
-                self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Break));
+            Stmt::Break(label) => {
+                self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Break(
+                    label.clone(),
+                )));
                 Ok(())
             }
-            Stmt::Continue => {
-                self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Continue));
+            Stmt::Continue(label) => {
+                self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Continue(
+                    label.clone(),
+                )));
                 Ok(())
             }
             Stmt::Throw(expr) => {
@@ -714,12 +720,13 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::CreateFunction { .. }
             | BytecodeInstruction::ArrayLiteral { .. }
             | BytecodeInstruction::ObjectLiteral { .. }
-            | BytecodeInstruction::If { .. }
             | BytecodeInstruction::While { .. }
+            | BytecodeInstruction::DoWhile { .. }
             | BytecodeInstruction::For { .. }
             | BytecodeInstruction::ForIn { .. }
             | BytecodeInstruction::Switch { .. }
             | BytecodeInstruction::Try { .. }
+            | BytecodeInstruction::Label { .. }
             | BytecodeInstruction::ScopedBlock(_)
             | BytecodeInstruction::Complete(_) => Err(Error::runtime(
                 "bytecode jump patch target is not a jump instruction",

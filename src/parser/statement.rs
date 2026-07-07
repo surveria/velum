@@ -18,6 +18,12 @@ impl Parser {
         if self.match_kind(&TokenKind::If) {
             return self.if_statement();
         }
+        if self.match_kind(&TokenKind::Do) {
+            return self.do_while_statement();
+        }
+        if self.label_statement_start() {
+            return self.label_statement();
+        }
         if self.match_kind(&TokenKind::While) {
             return self.while_statement();
         }
@@ -31,12 +37,10 @@ impl Parser {
             return self.try_statement();
         }
         if self.match_kind(&TokenKind::Break) {
-            self.consume_optional_semicolon();
-            return Ok(Stmt::Break);
+            return self.break_statement();
         }
         if self.match_kind(&TokenKind::Continue) {
-            self.consume_optional_semicolon();
-            return Ok(Stmt::Continue);
+            return self.continue_statement();
         }
         if self.match_kind(&TokenKind::Throw) {
             return self.throw_statement();
@@ -128,6 +132,99 @@ impl Parser {
         self.consume(&TokenKind::RParen, "expected ')' after while condition")?;
         let body = Box::new(self.statement()?);
         Ok(Stmt::While { condition, body })
+    }
+
+    fn do_while_statement(&mut self) -> Result<Stmt> {
+        if self.check(&TokenKind::Let)
+            || self.check(&TokenKind::Const)
+            || self.check(&TokenKind::Function)
+            || (self.check(&TokenKind::Async)
+                && self.peek_kind_is_no_line_terminator(1, &TokenKind::Function))
+        {
+            return Err(Error::parse(
+                "declaration is not allowed as a do-while body",
+                self.offset(),
+            ));
+        }
+        let body = Box::new(self.statement()?);
+        if Self::invalid_do_while_body(&body) {
+            return Err(Error::parse(
+                "declaration is not allowed as a do-while body",
+                self.offset(),
+            ));
+        }
+        self.consume(&TokenKind::While, "expected 'while' after do body")?;
+        self.consume(&TokenKind::LParen, "expected '(' after 'while'")?;
+        let condition = self.expression()?;
+        self.consume(&TokenKind::RParen, "expected ')' after do-while condition")?;
+        self.consume_optional_semicolon();
+        Ok(Stmt::DoWhile { body, condition })
+    }
+
+    fn invalid_do_while_body(statement: &Stmt) -> bool {
+        match statement {
+            Stmt::VarDecl {
+                kind: DeclKind::Let | DeclKind::Const,
+                ..
+            }
+            | Stmt::FunctionDecl { .. } => true,
+            Stmt::Label { body, .. } => Self::invalid_do_while_body(body),
+            Stmt::Block(_)
+            | Stmt::DeclList(_)
+            | Stmt::If { .. }
+            | Stmt::While { .. }
+            | Stmt::DoWhile { .. }
+            | Stmt::For { .. }
+            | Stmt::ForIn { .. }
+            | Stmt::Switch { .. }
+            | Stmt::Try { .. }
+            | Stmt::Break(_)
+            | Stmt::Continue(_)
+            | Stmt::Throw(_)
+            | Stmt::Return(_)
+            | Stmt::VarDecl {
+                kind: DeclKind::Var,
+                ..
+            }
+            | Stmt::Expr(_) => false,
+        }
+    }
+
+    fn label_statement_start(&self) -> bool {
+        self.peek_is_identifier_name(0) && self.peek_kind_is(1, &TokenKind::Colon)
+    }
+
+    fn label_statement(&mut self) -> Result<Stmt> {
+        let label = self.consume_identifier("expected label name")?;
+        self.consume(&TokenKind::Colon, "expected ':' after label name")?;
+        let body = Box::new(self.statement()?);
+        Ok(Stmt::Label { label, body })
+    }
+
+    fn break_statement(&mut self) -> Result<Stmt> {
+        let label = self.optional_jump_label("expected break label")?;
+        self.consume_statement_terminator("expected statement terminator after break")?;
+        Ok(Stmt::Break(label))
+    }
+
+    fn continue_statement(&mut self) -> Result<Stmt> {
+        let label = self.optional_jump_label("expected continue label")?;
+        self.consume_statement_terminator("expected statement terminator after continue")?;
+        Ok(Stmt::Continue(label))
+    }
+
+    fn optional_jump_label(&mut self, message: &str) -> Result<Option<crate::ast::StaticName>> {
+        if self.check(&TokenKind::Semicolon)
+            || self.check(&TokenKind::RBrace)
+            || self.at_end()
+            || self.peek_has_line_terminator_before(0)
+        {
+            return Ok(None);
+        }
+        if self.next_is_identifier() {
+            return self.consume_identifier(message).map(Some);
+        }
+        Ok(None)
     }
 
     fn for_statement(&mut self) -> Result<Stmt> {

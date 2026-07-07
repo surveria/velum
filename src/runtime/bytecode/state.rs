@@ -32,8 +32,8 @@ impl BytecodeState {
 
     pub(super) fn complete(&mut self, completion: BytecodeCompletion) -> Result<Completion> {
         match completion {
-            BytecodeCompletion::Break => Ok(Completion::Break),
-            BytecodeCompletion::Continue => Ok(Completion::Continue),
+            BytecodeCompletion::Break(label) => Ok(Completion::Break(label)),
+            BytecodeCompletion::Continue(label) => Ok(Completion::Continue(label)),
             BytecodeCompletion::Return => Ok(Completion::Return(self.stack.pop_single()?)),
             BytecodeCompletion::Throw => Ok(Completion::Throw(self.stack.pop_single()?)),
         }
@@ -131,8 +131,11 @@ pub(super) fn bytecode_loop_completion(
             *last = value;
             None
         }
-        Completion::Continue => None,
-        Completion::Break => Some(Completion::Normal(last.clone())),
+        Completion::Continue(None) => None,
+        Completion::Break(None) => Some(Completion::Normal(last.clone())),
+        completion @ (Completion::Break(Some(_)) | Completion::Continue(Some(_))) => {
+            Some(completion)
+        }
         completion @ (Completion::Throw(_) | Completion::Return(_)) => Some(completion),
     }
 }

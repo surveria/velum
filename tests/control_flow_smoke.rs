@@ -46,6 +46,157 @@ fn supports_while_statements() -> TestResult {
 }
 
 #[test]
+fn preserves_if_statement_completion_values() -> TestResult {
+    expect_value(
+        r"
+        42;
+        if (false) {
+            1;
+        }
+        ",
+        &Value::Undefined,
+    )?;
+
+    expect_value(
+        r"
+        if (true) {
+            42;
+        } else {
+            1;
+        }
+        ",
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
+fn supports_do_while_statements() -> TestResult {
+    expect_value(
+        r"
+        let index = 0;
+        let total = 0;
+        do {
+            index = index + 1;
+            total = total + index;
+        } while (index < 6);
+        total
+        ",
+        &Value::Number(21.0),
+    )?;
+
+    expect_value(
+        r"
+        let ran = 0;
+        do {
+            ran = ran + 1;
+        } while (false);
+        ran
+        ",
+        &Value::Number(1.0),
+    )?;
+
+    expect_value(
+        r"
+        do {
+            var hoisted = 42;
+        } while (false);
+        hoisted
+        ",
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
+fn propagates_do_while_control_flow() -> TestResult {
+    expect_value(
+        r"
+        let index = 0;
+        let total = 0;
+        do {
+            index = index + 1;
+            if (index === 2) {
+                continue;
+            }
+            if (index === 5) {
+                break;
+            }
+            total = total + index;
+        } while (index < 8);
+        total
+        ",
+        &Value::Number(8.0),
+    )?;
+
+    expect_value(
+        r"
+        let pick = function() {
+            let index = 0;
+            do {
+                index = index + 1;
+                if (index === 2) {
+                    return 42;
+                }
+            } while (index < 4);
+            return 0;
+        };
+        pick()
+        ",
+        &Value::Number(42.0),
+    )?;
+
+    expect_value(
+        r#"
+        let caught = "none";
+        try {
+            do {
+                throw "boom";
+            } while (false);
+        } catch (error) {
+            caught = error;
+        }
+        caught
+        "#,
+        &Value::String("boom".to_owned()),
+    )
+}
+
+#[test]
+fn supports_labeled_break_statements() -> TestResult {
+    expect_value(
+        r"
+        let value = 0;
+        outer: do {
+            inner: do {
+                value = 42;
+                break outer;
+                value = 1;
+            } while (false);
+            value = 2;
+        } while (false);
+        value
+        ",
+        &Value::Number(42.0),
+    )?;
+
+    expect_value(
+        r"
+        let index = 0;
+        done: {
+            do {
+                index = index + 1;
+                if (index === 3) {
+                    break done;
+                }
+            } while (true);
+            index = 100;
+        }
+        index
+        ",
+        &Value::Number(3.0),
+    )
+}
+
+#[test]
 fn propagates_while_completion() -> TestResult {
     expect_value(
         r"

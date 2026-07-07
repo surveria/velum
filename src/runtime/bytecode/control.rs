@@ -24,6 +24,12 @@ struct BytecodeForParts<'a> {
     scoped: bool,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+enum BytecodeCondition {
+    Value(bool),
+    Completion(Completion),
+}
+
 impl<'a> BytecodeForParts<'a> {
     const fn new(
         init: Option<&'a BytecodeBlock>,
@@ -50,23 +56,11 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         match instruction {
-            BytecodeInstruction::If {
-                condition,
-                consequent,
-                alternate,
-            } => {
-                let condition = self.eval_bytecode_expression(condition)?;
-                let completion = if condition.is_truthy() {
-                    self.eval_bytecode_block(consequent)?
-                } else if let Some(alternate) = alternate {
-                    self.eval_bytecode_block(alternate)?
-                } else {
-                    Completion::Normal(Value::Undefined)
-                };
-                Ok(Self::store_or_return_completion(state, completion, next))
-            }
             BytecodeInstruction::While { condition, body } => {
                 self.eval_bytecode_while(state, condition, body, next)
+            }
+            BytecodeInstruction::DoWhile { body, condition } => {
+                self.eval_bytecode_do_while(state, body, condition, next)
             }
             BytecodeInstruction::For {
                 init,
@@ -98,6 +92,9 @@ impl Context {
                 catch,
                 finally_body,
             } => self.eval_bytecode_try(state, body, catch.as_ref(), finally_body.as_ref(), next),
+            BytecodeInstruction::Label { label, body } => {
+                self.eval_bytecode_label(state, label, body, next)
+            }
             BytecodeInstruction::ScopedBlock(block) => {
                 let completion = self.eval_bytecode_scoped_block(block)?;
                 Ok(Self::store_or_return_completion(state, completion, next))
@@ -121,7 +118,9 @@ impl Context {
                 state.pc = if value.is_truthy() { *target } else { next };
                 Ok(None)
             }
-            BytecodeInstruction::Complete(completion) => state.complete(*completion).map(Some),
+            BytecodeInstruction::Complete(completion) => {
+                state.complete(completion.clone()).map(Some)
+            }
             _ => Err(Error::runtime("bytecode control instruction mismatch")),
         }
     }
@@ -159,19 +158,59 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let mut last = Value::Undefined;
-        while self.eval_bytecode_expression(condition)?.is_truthy() {
+        loop {
+            match self.eval_bytecode_condition(condition)? {
+                BytecodeCondition::Value(true) => {}
+                BytecodeCondition::Value(false) => break,
+                BytecodeCondition::Completion(completion) => return Ok(Some(completion)),
+            }
             self.step()?;
             match self.eval_bytecode_block(body)? {
                 Completion::Normal(value) => last = value,
-                Completion::Continue => {}
-                Completion::Break => {
+                Completion::Continue(None) => {}
+                Completion::Break(None) => {
                     state.last = last;
                     state.pc = next;
                     return Ok(None);
                 }
-                completion @ (Completion::Throw(_) | Completion::Return(_)) => {
+                completion @ (Completion::Break(Some(_))
+                | Completion::Continue(Some(_))
+                | Completion::Throw(_)
+                | Completion::Return(_)) => {
                     return Ok(Some(completion));
                 }
+            }
+        }
+        state.last = last;
+        state.pc = next;
+        Ok(None)
+    }
+
+    fn eval_bytecode_do_while(
+        &mut self,
+        state: &mut BytecodeState,
+        body: &BytecodeBlock,
+        condition: &BytecodeBlock,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let mut last = Value::Undefined;
+        loop {
+            self.step()?;
+            match self.eval_bytecode_block(body)? {
+                Completion::Normal(value) => last = value,
+                Completion::Continue(None) => {}
+                Completion::Break(None) => break,
+                completion @ (Completion::Break(Some(_))
+                | Completion::Continue(Some(_))
+                | Completion::Throw(_)
+                | Completion::Return(_)) => {
+                    return Ok(Some(completion));
+                }
+            }
+            match self.eval_bytecode_condition(condition)? {
+                BytecodeCondition::Value(true) => {}
+                BytecodeCondition::Value(false) => break,
+                BytecodeCondition::Completion(completion) => return Ok(Some(completion)),
             }
         }
         state.last = last;
@@ -209,17 +248,22 @@ impl Context {
         }
         let mut last = Value::Undefined;
         loop {
-            if let Some(condition) = parts.condition
-                && !self.eval_bytecode_expression(condition)?.is_truthy()
-            {
-                break;
+            if let Some(condition) = parts.condition {
+                match self.eval_bytecode_condition(condition)? {
+                    BytecodeCondition::Value(true) => {}
+                    BytecodeCondition::Value(false) => break,
+                    BytecodeCondition::Completion(completion) => return Ok(Some(completion)),
+                }
             }
             self.step()?;
             match self.eval_bytecode_block(parts.body)? {
                 Completion::Normal(value) => last = value,
-                Completion::Continue => {}
-                Completion::Break => break,
-                completion @ (Completion::Throw(_) | Completion::Return(_)) => {
+                Completion::Continue(None) => {}
+                Completion::Break(None) => break,
+                completion @ (Completion::Break(Some(_))
+                | Completion::Continue(Some(_))
+                | Completion::Throw(_)
+                | Completion::Return(_)) => {
                     return Ok(Some(completion));
                 }
             }
@@ -230,6 +274,16 @@ impl Context {
         state.last = last;
         state.pc = next;
         Ok(None)
+    }
+
+    fn eval_bytecode_condition(&mut self, condition: &BytecodeBlock) -> Result<BytecodeCondition> {
+        match self.eval_bytecode_block(condition)? {
+            Completion::Normal(value) => Ok(BytecodeCondition::Value(value.is_truthy())),
+            completion @ (Completion::Throw(_)
+            | Completion::Return(_)
+            | Completion::Break(_)
+            | Completion::Continue(_)) => Ok(BytecodeCondition::Completion(completion)),
+        }
     }
 
     fn eval_bytecode_for_in(
@@ -370,13 +424,31 @@ impl Context {
         for case in cases.iter().skip(start) {
             match self.eval_bytecode_block(&case.body)? {
                 Completion::Normal(value) => last = value,
-                Completion::Break => return Ok(Completion::Normal(last)),
+                Completion::Break(None) => return Ok(Completion::Normal(last)),
                 completion @ (Completion::Throw(_)
                 | Completion::Return(_)
-                | Completion::Continue) => return Ok(completion),
+                | Completion::Break(Some(_))
+                | Completion::Continue(_)) => return Ok(completion),
             }
         }
         Ok(Completion::Normal(last))
+    }
+
+    fn eval_bytecode_label(
+        &mut self,
+        state: &mut BytecodeState,
+        label: &crate::syntax::StaticName,
+        body: &BytecodeBlock,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        match self.eval_bytecode_block(body)? {
+            Completion::Break(Some(target)) if target == *label => {
+                state.last = Value::Undefined;
+                state.pc = next;
+                Ok(None)
+            }
+            completion => Ok(Self::store_or_return_completion(state, completion, next)),
+        }
     }
 
     fn eval_bytecode_try(

@@ -507,6 +507,7 @@ impl<'a> Lexer<'a> {
             "var" => TokenKind::Var,
             "if" => TokenKind::If,
             "else" => TokenKind::Else,
+            "do" => TokenKind::Do,
             "while" => TokenKind::While,
             "for" => TokenKind::For,
             "switch" => TokenKind::Switch,

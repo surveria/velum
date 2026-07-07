@@ -113,12 +113,13 @@ impl Context {
             | BytecodeInstruction::ObjectLiteral { .. } => {
                 self.eval_bytecode_call_instruction(state, instruction, next)
             }
-            BytecodeInstruction::If { .. }
-            | BytecodeInstruction::While { .. }
+            BytecodeInstruction::While { .. }
+            | BytecodeInstruction::DoWhile { .. }
             | BytecodeInstruction::For { .. }
             | BytecodeInstruction::ForIn { .. }
             | BytecodeInstruction::Switch { .. }
             | BytecodeInstruction::Try { .. }
+            | BytecodeInstruction::Label { .. }
             | BytecodeInstruction::ScopedBlock(_)
             | BytecodeInstruction::Jump(_)
             | BytecodeInstruction::JumpIfFalse(_)
@@ -212,8 +213,8 @@ impl Context {
                     }
                     Completion::Throw(value) => Ok(Some(Completion::Throw(value))),
                     completion @ (Completion::Return(_)
-                    | Completion::Break
-                    | Completion::Continue) => completion.into_result().map(|_| None),
+                    | Completion::Break(_)
+                    | Completion::Continue(_)) => completion.into_result().map(|_| None),
                 }
             }
             BytecodeInstruction::TypeOfBinding(binding) => {

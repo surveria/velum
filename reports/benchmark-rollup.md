@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T062725Z.md`
-- Task: rsqjs-test-report-20260707T062725Z.md
-- Performance: 0.88x (42/63 >1.00x)
+- `rsqjs-test-report-20260707T064443Z.md`
+- Task: rsqjs-test-report-20260707T064443Z.md
+- Performance: 0.83x (40/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 14526 passed / 88052 failed (14.16%)
+- Full Test262: 14552 passed / 88026 failed (14.19%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -254,4 +254,5 @@ Latest report:
 | `20260707T060933Z` `c12cc35` Optimize array join text emission | 0.81x (41/63 >1.00x) | - (0/63 >1.00x) | 13781 passed / 88797 failed (13.43%) |
 | `20260707T061252Z` `3399549` Handle JS TypeError completions for async function tests | 0.86x (42/63 >1.00x) | - (0/63 >1.00x) | 14526 passed / 88052 failed (14.16%) |
 | `20260707T061903Z` `3399549` Handle JS TypeError completions for async function tests | 0.84x (42/63 >1.00x) | - (0/63 >1.00x) | 14526 passed / 88052 failed (14.16%) |
-| `20260707T062725Z` rsqjs-test-report-20260707T062725Z.md | 0.88x (42/63 >1.00x) | - (0/63 >1.00x) | 14526 passed / 88052 failed (14.16%) |
+| `20260707T062725Z` `c018750` Optimize numeric array search paths | 0.88x (42/63 >1.00x) | - (0/63 >1.00x) | 14526 passed / 88052 failed (14.16%) |
+| `20260707T064443Z` rsqjs-test-report-20260707T064443Z.md | 0.83x (40/63 >1.00x) | - (0/63 >1.00x) | 14552 passed / 88026 failed (14.19%) |

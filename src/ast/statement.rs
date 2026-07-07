@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::syntax::DeclKind;
 
-use super::{Expr, FunctionParam, StaticBinding, StaticFunctionId};
+use super::{Expr, FunctionParam, StaticBinding, StaticFunctionId, StaticName};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
@@ -20,6 +20,14 @@ pub enum Stmt {
     },
     While {
         condition: Expr,
+        body: Box<Self>,
+    },
+    DoWhile {
+        body: Box<Self>,
+        condition: Expr,
+    },
+    Label {
+        label: StaticName,
         body: Box<Self>,
     },
     For {
@@ -42,8 +50,8 @@ pub enum Stmt {
         catch: Option<CatchClause>,
         finally_body: Option<Vec<Self>>,
     },
-    Break,
-    Continue,
+    Break(Option<StaticName>),
+    Continue(Option<StaticName>),
     Throw(Expr),
     Return(Option<Expr>),
     FunctionDecl {

@@ -8,7 +8,7 @@ use crate::{
 
 mod traversal;
 
-use traversal::{count_blocks_2, count_blocks_3, count_for_blocks, count_switch, count_try};
+use traversal::{count_blocks_2, count_for_blocks, count_switch, count_try};
 
 impl BytecodeProgram {
     pub fn instruction_count(&self) -> usize {
@@ -95,16 +95,6 @@ impl BytecodeInstruction {
             }
             Self::CallBinding { callee, .. } => callee.direct_operand_count(),
             Self::Construct { constructor, .. } => constructor.direct_operand_count(),
-            Self::If {
-                condition,
-                consequent,
-                alternate,
-            } => count_blocks_3(
-                condition,
-                consequent,
-                alternate.as_ref(),
-                BytecodeBlock::binding_operand_count,
-            ),
             Self::While { condition, body } => {
                 count_blocks_2(condition, body, BytecodeBlock::binding_operand_count)
             }
@@ -149,6 +139,7 @@ impl BytecodeInstruction {
                 BytecodeBlock::binding_operand_count,
                 BytecodeCatch::binding_operand_count,
             ),
+            Self::Label { body, .. } => body.binding_operand_count(),
             Self::ScopedBlock(block) => block.binding_operand_count(),
             Self::CreateFunction { bytecode, .. } => bytecode.body().binding_operand_count(),
             instruction if instruction.is_leaf_instruction() => 0,
@@ -179,16 +170,6 @@ impl BytecodeInstruction {
             | Self::ComputedPropertyAssign { .. }
             | Self::CallStaticMember { .. }
             | Self::CallComputedMember { .. } => 1,
-            Self::If {
-                condition,
-                consequent,
-                alternate,
-            } => count_blocks_3(
-                condition,
-                consequent,
-                alternate.as_ref(),
-                BytecodeBlock::property_operand_count,
-            ),
             Self::While { condition, body } => {
                 count_blocks_2(condition, body, BytecodeBlock::property_operand_count)
             }
@@ -233,6 +214,7 @@ impl BytecodeInstruction {
                 BytecodeBlock::property_operand_count,
                 BytecodeCatch::property_operand_count,
             ),
+            Self::Label { body, .. } => body.property_operand_count(),
             Self::ScopedBlock(block) => block.property_operand_count(),
             Self::CreateFunction { bytecode, .. } => bytecode.body().property_operand_count(),
             instruction if instruction.is_leaf_instruction() => 0,
@@ -246,16 +228,6 @@ impl BytecodeInstruction {
             | Self::CallStaticMember { native, .. }
             | Self::CallComputedMember { native, .. }
             | Self::Construct { native, .. } => usize::from(native.is_some()),
-            Self::If {
-                condition,
-                consequent,
-                alternate,
-            } => count_blocks_3(
-                condition,
-                consequent,
-                alternate.as_ref(),
-                BytecodeBlock::direct_native_call_count,
-            ),
             Self::While { condition, body } => {
                 count_blocks_2(condition, body, BytecodeBlock::direct_native_call_count)
             }
@@ -300,6 +272,7 @@ impl BytecodeInstruction {
                 BytecodeBlock::direct_native_call_count,
                 BytecodeCatch::direct_native_call_count,
             ),
+            Self::Label { body, .. } => body.direct_native_call_count(),
             Self::ScopedBlock(block) => block.direct_native_call_count(),
             Self::CreateFunction { bytecode, .. } => bytecode.body().direct_native_call_count(),
             instruction if instruction.is_leaf_instruction() => 0,
@@ -315,16 +288,6 @@ impl BytecodeInstruction {
             | Self::Construct { native, .. } => {
                 native.map_or(0, |target| usize::from(target.is_array_target()))
             }
-            Self::If {
-                condition,
-                consequent,
-                alternate,
-            } => count_blocks_3(
-                condition,
-                consequent,
-                alternate.as_ref(),
-                BytecodeBlock::array_native_call_count,
-            ),
             Self::While { condition, body } => {
                 count_blocks_2(condition, body, BytecodeBlock::array_native_call_count)
             }
@@ -369,6 +332,7 @@ impl BytecodeInstruction {
                 BytecodeBlock::array_native_call_count,
                 BytecodeCatch::array_native_call_count,
             ),
+            Self::Label { body, .. } => body.array_native_call_count(),
             Self::ScopedBlock(block) => block.array_native_call_count(),
             Self::CreateFunction { bytecode, .. } => bytecode.body().array_native_call_count(),
             instruction if instruction.is_leaf_instruction() => 0,
@@ -382,16 +346,6 @@ impl BytecodeInstruction {
             | Self::NumberBinary(_)
             | Self::NumberCompare(_)
             | Self::NumberEquality(_) => 1,
-            Self::If {
-                condition,
-                consequent,
-                alternate,
-            } => count_blocks_3(
-                condition,
-                consequent,
-                alternate.as_ref(),
-                BytecodeBlock::numeric_instruction_count,
-            ),
             Self::While { condition, body } => {
                 count_blocks_2(condition, body, BytecodeBlock::numeric_instruction_count)
             }
@@ -436,6 +390,7 @@ impl BytecodeInstruction {
                 BytecodeBlock::numeric_instruction_count,
                 BytecodeCatch::numeric_instruction_count,
             ),
+            Self::Label { body, .. } => body.numeric_instruction_count(),
             Self::ScopedBlock(block) => block.numeric_instruction_count(),
             Self::CreateFunction { bytecode, .. } => bytecode.body().numeric_instruction_count(),
             instruction if instruction.is_leaf_instruction() => 0,
@@ -445,16 +400,6 @@ impl BytecodeInstruction {
 
     fn nested_instruction_count(&self) -> usize {
         match self {
-            Self::If {
-                condition,
-                consequent,
-                alternate,
-            } => count_blocks_3(
-                condition,
-                consequent,
-                alternate.as_ref(),
-                BytecodeBlock::instruction_count,
-            ),
             Self::While { condition, body } => {
                 count_blocks_2(condition, body, BytecodeBlock::instruction_count)
             }
@@ -499,6 +444,7 @@ impl BytecodeInstruction {
                 BytecodeBlock::instruction_count,
                 BytecodeCatch::instruction_count,
             ),
+            Self::Label { body, .. } => body.instruction_count(),
             Self::ScopedBlock(block) => block.instruction_count(),
             Self::CreateFunction { bytecode, .. } => bytecode.body().instruction_count(),
             instruction if instruction.is_leaf_instruction() => 0,

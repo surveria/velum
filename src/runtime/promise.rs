@@ -221,7 +221,7 @@ impl Context {
             Completion::Normal(_) => self.resolve_promise(promise, Value::Undefined)?,
             Completion::Return(value) => self.resolve_promise(promise, value)?,
             Completion::Throw(value) => self.reject_promise(promise, value)?,
-            Completion::Break | Completion::Continue => {
+            Completion::Break(_) | Completion::Continue(_) => {
                 self.reject_promise(
                     promise,
                     Value::Error(crate::value::ErrorObject::new(

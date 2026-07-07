@@ -660,6 +660,7 @@ const fn keyword_property_name(kind: &TokenKind) -> Option<&'static str> {
         TokenKind::Var => Some("var"),
         TokenKind::If => Some("if"),
         TokenKind::Else => Some("else"),
+        TokenKind::Do => Some("do"),
         TokenKind::While => Some("while"),
         TokenKind::For => Some("for"),
         TokenKind::Switch => Some("switch"),

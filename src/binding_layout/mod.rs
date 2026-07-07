@@ -186,12 +186,14 @@ impl LayoutBuilder {
             | Stmt::Block(_)
             | Stmt::If { .. }
             | Stmt::While { .. }
+            | Stmt::DoWhile { .. }
+            | Stmt::Label { .. }
             | Stmt::For { .. }
             | Stmt::ForIn { .. }
             | Stmt::Switch { .. }
             | Stmt::Try { .. }
-            | Stmt::Break
-            | Stmt::Continue
+            | Stmt::Break(_)
+            | Stmt::Continue(_)
             | Stmt::Throw(_)
             | Stmt::Return(_)
             | Stmt::Expr(_) => Ok(()),
@@ -217,7 +219,9 @@ impl LayoutBuilder {
                 }
                 Ok(())
             }
-            Stmt::While { body, .. } => self.collect_hoisted_vars(body, var_scope),
+            Stmt::While { body, .. } | Stmt::DoWhile { body, .. } | Stmt::Label { body, .. } => {
+                self.collect_hoisted_vars(body, var_scope)
+            }
             Stmt::For { init, body, .. } => {
                 if let Some(init) = init {
                     self.collect_hoisted_vars(init, var_scope)?;
@@ -269,8 +273,8 @@ impl LayoutBuilder {
             }
             | Stmt::FunctionDecl { name, .. } => self.declare(var_scope, name),
             Stmt::VarDecl { .. }
-            | Stmt::Break
-            | Stmt::Continue
+            | Stmt::Break(_)
+            | Stmt::Continue(_)
             | Stmt::Throw(_)
             | Stmt::Return(_)
             | Stmt::Expr(_) => Ok(()),
@@ -307,10 +311,11 @@ impl LayoutBuilder {
                 }
                 Ok(())
             }
-            Stmt::While { condition, body } => {
+            Stmt::While { condition, body } | Stmt::DoWhile { condition, body } => {
                 self.analyze_expr(condition, scope, function)?;
                 self.analyze_statement(body, scope, var_scope, function)
             }
+            Stmt::Label { body, .. } => self.analyze_statement(body, scope, var_scope, function),
             Stmt::For {
                 init,
                 condition,
@@ -348,7 +353,7 @@ impl LayoutBuilder {
             Stmt::FunctionDecl {
                 id, params, body, ..
             } => self.analyze_function(*id, params, body, scope, function),
-            Stmt::Return(None) | Stmt::Break | Stmt::Continue => Ok(()),
+            Stmt::Return(None) | Stmt::Break(_) | Stmt::Continue(_) => Ok(()),
             Stmt::VarDecl { init, .. } => {
                 if let Some(init) = init {
                     self.analyze_expr(init, scope, function)?;
@@ -765,12 +770,14 @@ fn for_init_needs_layout_scope(init: Option<&Stmt>) -> bool {
             | Stmt::Block(_)
             | Stmt::If { .. }
             | Stmt::While { .. }
+            | Stmt::DoWhile { .. }
+            | Stmt::Label { .. }
             | Stmt::For { .. }
             | Stmt::ForIn { .. }
             | Stmt::Switch { .. }
             | Stmt::Try { .. }
-            | Stmt::Break
-            | Stmt::Continue
+            | Stmt::Break(_)
+            | Stmt::Continue(_)
             | Stmt::Throw(_)
             | Stmt::Return(_)
             | Stmt::Expr(_),
