@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T002042Z.md`
-- Task: rsqjs-test-report-20260707T002042Z.md
-- Performance: 0.74x (39/63 >1.00x)
+- `rsqjs-test-report-20260707T002918Z.md`
+- Task: rsqjs-test-report-20260707T002918Z.md
+- Performance: 0.80x (40/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 12026 passed / 90552 failed (11.72%)
 
@@ -220,4 +220,5 @@ Latest report:
 | `20260706T235328Z` `6230dcc` Add global eval native builtin | 0.77x (39/63 >1.00x) | - (0/63 >1.00x) | 12000 passed / 90578 failed (11.70%) |
 | `20260706T235949Z` `c9abc87` Support async parameter defaults | 0.81x (39/63 >1.00x) | - (0/63 >1.00x) | 12026 passed / 90552 failed (11.72%) |
 | `20260707T000853Z` `3facabb` Dispatch direct native call targets | 0.79x (39/63 >1.00x) | - (0/63 >1.00x) | 12026 passed / 90552 failed (11.72%) |
-| `20260707T002042Z` rsqjs-test-report-20260707T002042Z.md | 0.74x (39/63 >1.00x) | - (0/63 >1.00x) | 12026 passed / 90552 failed (11.72%) |
+| `20260707T002042Z` `6fbfdac` Reorganize source module layout | 0.74x (39/63 >1.00x) | - (0/63 >1.00x) | 12026 passed / 90552 failed (11.72%) |
+| `20260707T002918Z` `6b9020e` Specialize direct Math native arguments | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 12026 passed / 90552 failed (11.72%) |
