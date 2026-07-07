@@ -6,6 +6,16 @@ use crate::{
 
 use super::{ParsedFunctionBody, Parser};
 
+const FOR_OF_KEYWORD: &str = "of";
+
+/// Distinguishes `for (target in object)` from `for (target of iterable)`
+/// after the shared head target has been parsed.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum ForHeadKind {
+    In,
+    Of,
+}
+
 impl Parser {
     pub(super) fn statement(&mut self) -> Result<Stmt> {
         self.with_statement_depth(Self::statement_inner)
@@ -216,6 +226,7 @@ impl Parser {
             | Stmt::DoWhile { .. }
             | Stmt::For { .. }
             | Stmt::ForIn { .. }
+            | Stmt::ForOf { .. }
             | Stmt::Switch { .. }
             | Stmt::Try { .. }
             | Stmt::Break(_)
@@ -322,13 +333,20 @@ impl Parser {
         let static_names = self.static_names.clone();
         let static_bindings = self.static_bindings.clone();
         let static_functions = self.static_functions.clone();
-        if let Some((target, object)) = self.for_in_header()? {
+        if let Some((target, object, head)) = self.for_in_header()? {
             self.consume(&TokenKind::RParen, "expected ')' after for-in expression")?;
             let body = Box::new(self.with_iteration_statement(Self::statement)?);
-            return Ok(Stmt::ForIn {
-                target,
-                object,
-                body,
+            return Ok(match head {
+                ForHeadKind::In => Stmt::ForIn {
+                    target,
+                    object,
+                    body,
+                },
+                ForHeadKind::Of => Stmt::ForOf {
+                    target,
+                    object,
+                    body,
+                },
             });
         }
         self.cursor = cursor;
@@ -359,7 +377,7 @@ impl Parser {
         })
     }
 
-    fn for_in_header(&mut self) -> Result<Option<(ForInTarget, Expr)>> {
+    fn for_in_header(&mut self) -> Result<Option<(ForInTarget, Expr, ForHeadKind)>> {
         if self.match_kind(&TokenKind::Let) {
             return self.for_in_binding_header(DeclKind::Let);
         }
@@ -374,9 +392,9 @@ impl Parser {
             return Ok(None);
         }
         let target = self.call()?;
-        if !self.match_kind(&TokenKind::In) {
+        let Some(head) = self.match_for_head_kind() else {
             return Ok(None);
-        }
+        };
         let Some(target) = Self::assignment_target(target) else {
             return Err(Error::parse(
                 "invalid for-in assignment target",
@@ -384,16 +402,35 @@ impl Parser {
             ));
         };
         let object = self.expression()?;
-        Ok(Some((ForInTarget::Assignment(target), object)))
+        Ok(Some((ForInTarget::Assignment(target), object, head)))
     }
 
-    fn for_in_binding_header(&mut self, kind: DeclKind) -> Result<Option<(ForInTarget, Expr)>> {
+    fn for_in_binding_header(
+        &mut self,
+        kind: DeclKind,
+    ) -> Result<Option<(ForInTarget, Expr, ForHeadKind)>> {
         let name = self.consume_binding_identifier("expected for-in binding name")?;
-        if !self.match_kind(&TokenKind::In) {
+        let Some(head) = self.match_for_head_kind() else {
             return Ok(None);
-        }
+        };
         let object = self.expression()?;
-        Ok(Some((ForInTarget::Binding { name, kind }, object)))
+        Ok(Some((ForInTarget::Binding { name, kind }, object, head)))
+    }
+
+    fn match_for_head_kind(&mut self) -> Option<ForHeadKind> {
+        if self.match_kind(&TokenKind::In) {
+            return Some(ForHeadKind::In);
+        }
+        if self.next_is_contextual_of() && self.advance().is_some() {
+            return Some(ForHeadKind::Of);
+        }
+        None
+    }
+
+    fn next_is_contextual_of(&self) -> bool {
+        self.peek().is_some_and(
+            |token| matches!(&token.kind, TokenKind::Identifier(name) if name == FOR_OF_KEYWORD),
+        )
     }
 
     fn for_in_assignment_target_start(&self) -> bool {

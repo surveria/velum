@@ -109,6 +109,13 @@ impl BytecodeCompiler<'_> {
             } => {
                 return self.compile_labeled_for_in(labels, target, object, body);
             }
+            Stmt::ForOf {
+                target,
+                object,
+                body,
+            } => {
+                return self.compile_labeled_for_of(labels, target, object, body);
+            }
             Stmt::Block(_)
             | Stmt::DeclList(_)
             | Stmt::Empty
@@ -183,6 +190,31 @@ impl BytecodeCompiler<'_> {
         body: &Stmt,
     ) -> Result<()> {
         self.emit(BytecodeInstruction::ForIn {
+            labels,
+            target: self.compile_for_in_target(target)?,
+            object: BytecodeBlock::compile_expression(object, self.layout)?,
+            body: self.compile_statement_block(body, StatementValue::Store)?,
+        });
+        Ok(())
+    }
+
+    pub(super) fn compile_for_of(
+        &mut self,
+        target: &ForInTarget,
+        object: &Expr,
+        body: &Stmt,
+    ) -> Result<()> {
+        self.compile_labeled_for_of(None, target, object, body)
+    }
+
+    fn compile_labeled_for_of(
+        &mut self,
+        labels: Option<Rc<[StaticName]>>,
+        target: &ForInTarget,
+        object: &Expr,
+        body: &Stmt,
+    ) -> Result<()> {
+        self.emit(BytecodeInstruction::ForOf {
             labels,
             target: self.compile_for_in_target(target)?,
             object: BytecodeBlock::compile_expression(object, self.layout)?,

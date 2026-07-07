@@ -42,6 +42,11 @@ pub enum Stmt {
         object: Expr,
         body: Box<Self>,
     },
+    ForOf {
+        target: ForInTarget,
+        object: Expr,
+        body: Box<Self>,
+    },
     Switch {
         discriminant: Expr,
         cases: Vec<SwitchCase>,

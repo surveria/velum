@@ -94,6 +94,11 @@ impl Context {
         for name in WELL_KNOWN_SYMBOL_PROPERTIES {
             let description = well_known_symbol_description(name)?;
             let value = self.create_symbol_value(Some(&description))?;
+            if *name == SYMBOL_ITERATOR_PROPERTY
+                && let Value::Symbol(symbol) = &value
+            {
+                self.set_iterator_symbol(symbol.id());
+            }
             let key = self.intern_property_key(name)?;
             self.define_native_function_property_key(
                 constructor,

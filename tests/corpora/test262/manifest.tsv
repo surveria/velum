@@ -143,3 +143,32 @@ template-literal-invalid-unicode-escape-7	test/language/expressions/template-lit
 template-literal-invalid-unicode-escape-8	test/language/expressions/template-literal/invalid-unicode-escape-sequence-8.js	negative-parse	official Test262 template invalid unicode escape negative parse
 template-literal-unicode-escape-nls	test/language/expressions/template-literal/unicode-escape-nls-err.js	negative-parse	official Test262 template unicode escape line separator negative parse
 template-literal-unicode-escape-no-hex	test/language/expressions/template-literal/unicode-escape-no-hex-err.js	negative-parse	official Test262 template unicode escape missing hex negative parse
+for-of-head-expr-obj-iterator-method	test/language/statements/for-of/head-expr-obj-iterator-method.js	run	official Test262 for-of object iterator method smoke
+for-of-head-expr-primitive-iterator-method	test/language/statements/for-of/head-expr-primitive-iterator-method.js	run	official Test262 for-of primitive iterator method smoke
+for-of-head-expr-to-obj	test/language/statements/for-of/head-expr-to-obj.js	run	official Test262 for-of ToObject coercion smoke
+for-of-let-identifier-with-newline	test/language/statements/for-of/let-identifier-with-newline.js	run	official Test262 for-of let identifier newline smoke
+for-of-decl-async-gen	test/language/statements/for-of/decl-async-gen.js	negative-parse	official Test262 for-of negative parse
+for-of-decl-cls	test/language/statements/for-of/decl-cls.js	negative-parse	official Test262 for-of negative parse
+for-of-decl-gen	test/language/statements/for-of/decl-gen.js	negative-parse	official Test262 for-of negative parse
+for-of-head-await-using-bound-names-in-stmt	test/language/statements/for-of/head-await-using-bound-names-in-stmt.js	negative-parse	official Test262 for-of negative parse
+for-of-head-await-using-bound-names-let	test/language/statements/for-of/head-await-using-bound-names-let.js	negative-parse	official Test262 for-of negative parse
+for-of-head-await-using-init	test/language/statements/for-of/head-await-using-init.js	negative-parse	official Test262 for-of negative parse
+for-of-head-const-bound-names-dup	test/language/statements/for-of/head-const-bound-names-dup.js	negative-parse	official Test262 for-of negative parse
+for-of-head-const-bound-names-let	test/language/statements/for-of/head-const-bound-names-let.js	negative-parse	official Test262 for-of negative parse
+for-of-head-const-init	test/language/statements/for-of/head-const-init.js	negative-parse	official Test262 for-of negative parse
+for-of-head-decl-no-expr	test/language/statements/for-of/head-decl-no-expr.js	negative-parse	official Test262 for-of negative parse
+for-of-head-expr-no-expr	test/language/statements/for-of/head-expr-no-expr.js	negative-parse	official Test262 for-of negative parse
+for-of-head-let-bound-names-dup	test/language/statements/for-of/head-let-bound-names-dup.js	negative-parse	official Test262 for-of negative parse
+for-of-head-let-bound-names-let	test/language/statements/for-of/head-let-bound-names-let.js	negative-parse	official Test262 for-of negative parse
+for-of-head-let-init	test/language/statements/for-of/head-let-init.js	negative-parse	official Test262 for-of negative parse
+for-of-head-lhs-cover-non-asnmt-trgt	test/language/statements/for-of/head-lhs-cover-non-asnmt-trgt.js	negative-parse	official Test262 for-of negative parse
+for-of-head-lhs-invalid-asnmt-ptrn-ary	test/language/statements/for-of/head-lhs-invalid-asnmt-ptrn-ary.js	negative-parse	official Test262 for-of negative parse
+for-of-head-lhs-invalid-asnmt-ptrn-obj	test/language/statements/for-of/head-lhs-invalid-asnmt-ptrn-obj.js	negative-parse	official Test262 for-of negative parse
+for-of-head-lhs-let	test/language/statements/for-of/head-lhs-let.js	negative-parse	official Test262 for-of negative parse
+for-of-head-lhs-non-asnmt-trgt	test/language/statements/for-of/head-lhs-non-asnmt-trgt.js	negative-parse	official Test262 for-of negative parse
+for-of-head-using-bound-names-in-stmt	test/language/statements/for-of/head-using-bound-names-in-stmt.js	negative-parse	official Test262 for-of negative parse
+for-of-head-using-bound-names-let	test/language/statements/for-of/head-using-bound-names-let.js	negative-parse	official Test262 for-of negative parse
+for-of-head-using-init	test/language/statements/for-of/head-using-init.js	negative-parse	official Test262 for-of negative parse
+for-of-head-var-init	test/language/statements/for-of/head-var-init.js	negative-parse	official Test262 for-of negative parse
+for-of-head-var-no-expr	test/language/statements/for-of/head-var-no-expr.js	negative-parse	official Test262 for-of negative parse
+for-of-let-array-with-newline	test/language/statements/for-of/let-array-with-newline.js	negative-parse	official Test262 for-of negative parse

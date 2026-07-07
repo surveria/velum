@@ -116,6 +116,12 @@ impl BytecodeInstruction {
                 object,
                 body,
                 ..
+            }
+            | Self::ForOf {
+                target,
+                object,
+                body,
+                ..
             } => target
                 .binding_operand_count()
                 .saturating_add(object.binding_operand_count())
@@ -192,6 +198,12 @@ impl BytecodeInstruction {
                 object,
                 body,
                 ..
+            }
+            | Self::ForOf {
+                target,
+                object,
+                body,
+                ..
             } => target
                 .property_operand_count()
                 .saturating_add(object.property_operand_count())
@@ -247,6 +259,12 @@ impl BytecodeInstruction {
                 BytecodeBlock::direct_native_call_count,
             ),
             Self::ForIn {
+                target,
+                object,
+                body,
+                ..
+            }
+            | Self::ForOf {
                 target,
                 object,
                 body,
@@ -312,6 +330,12 @@ impl BytecodeInstruction {
                 object,
                 body,
                 ..
+            }
+            | Self::ForOf {
+                target,
+                object,
+                body,
+                ..
             } => target
                 .array_native_call_count()
                 .saturating_add(object.array_native_call_count())
@@ -371,6 +395,12 @@ impl BytecodeInstruction {
                 object,
                 body,
                 ..
+            }
+            | Self::ForOf {
+                target,
+                object,
+                body,
+                ..
             } => target
                 .numeric_instruction_count()
                 .saturating_add(object.numeric_instruction_count())
@@ -422,6 +452,12 @@ impl BytecodeInstruction {
                 BytecodeBlock::instruction_count,
             ),
             Self::ForIn {
+                object,
+                body,
+                target,
+                ..
+            }
+            | Self::ForOf {
                 object,
                 body,
                 target,
