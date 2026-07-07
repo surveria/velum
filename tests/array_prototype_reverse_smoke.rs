@@ -124,6 +124,31 @@ fn keeps_descriptor_modified_arrays_on_generic_reverse_path() -> TestResult {
 }
 
 #[test]
+fn keeps_descriptor_modified_holey_arrays_on_generic_reverse_path() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let values = Array(3);
+        Object.defineProperty(values, "0", {
+            value: "zero",
+            writable: true,
+            enumerable: true,
+            configurable: false
+        });
+        values.reverse();
+        values[0] === "zero" &&
+            values[2] === "zero" &&
+            ("0" in values) &&
+            ("2" in values) ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn rejects_array_reverse_on_non_array_receiver() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

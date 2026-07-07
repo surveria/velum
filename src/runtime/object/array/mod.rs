@@ -175,7 +175,7 @@ impl ObjectHeap {
         if self
             .object_mut(id)?
             .array_storage
-            .reverse_packed_for_len_if_default(length)
+            .reverse_dense_for_len_if_default(length)
         {
             return Ok(Value::Object(id));
         }

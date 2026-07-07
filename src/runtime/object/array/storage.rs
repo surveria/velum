@@ -118,7 +118,7 @@ impl ArrayStorage {
         Ok(false)
     }
 
-    pub(in crate::runtime::object) fn reverse_packed_for_len_if_default(
+    pub(in crate::runtime::object) fn reverse_dense_for_len_if_default(
         &mut self,
         len: usize,
     ) -> bool {
@@ -134,6 +134,17 @@ impl ArrayStorage {
                     return false;
                 }
                 elements.make_contiguous().reverse();
+                true
+            }
+            ArrayElements::Holey(elements) if elements.len() == len => {
+                if !elements
+                    .iter()
+                    .flatten()
+                    .all(ObjectProperty::has_default_array_attributes)
+                {
+                    return false;
+                }
+                elements.reverse();
                 true
             }
             ArrayElements::Packed(_) | ArrayElements::Holey(_) => false,
