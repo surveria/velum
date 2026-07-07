@@ -102,6 +102,8 @@ const REJECT_NAME: &str = "reject";
 const RESOLVE_NAME: &str = "resolve";
 const STRING_FUNCTION_LENGTH: f64 = 1.0;
 pub(super) const STRING_NAME: &str = "String";
+const SYMBOL_FUNCTION_LENGTH: f64 = 0.0;
+pub(super) const SYMBOL_NAME: &str = "Symbol";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(in crate::runtime) enum NativeFunctionKind {
@@ -173,6 +175,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
         kind: crate::runtime::promise::PromiseResolverKind,
     },
     String,
+    Symbol,
 }
 
 impl NativeFunctionKind {
@@ -245,6 +248,7 @@ impl NativeFunctionKind {
             Self::PromiseCatch => PROMISE_CATCH_FUNCTION_LENGTH,
             Self::PromiseResolver { .. } => PROMISE_RESOLVER_FUNCTION_LENGTH,
             Self::String => STRING_FUNCTION_LENGTH,
+            Self::Symbol => SYMBOL_FUNCTION_LENGTH,
         }
     }
 
@@ -322,6 +326,7 @@ impl NativeFunctionKind {
                 ..
             } => REJECT_NAME,
             Self::String => STRING_NAME,
+            Self::Symbol => SYMBOL_NAME,
         }
     }
 }

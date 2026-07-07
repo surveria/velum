@@ -79,7 +79,10 @@ impl Object {
     ) -> Result<()> {
         for named_property in self.named_properties() {
             let key = named_property.key();
-            let name = atoms.name(key.atom())?;
+            let Some(atom) = key.atom() else {
+                continue;
+            };
+            let name = atoms.name(atom)?;
             if skip_array_indices && ArrayIndex::parse(name).is_some() {
                 continue;
             }
@@ -122,7 +125,10 @@ impl Object {
         }
         entries.sort_by_key(|(index, _)| *index);
         for (_, key) in entries {
-            push_unique_key(keys, atoms.name(key.atom())?.to_owned());
+            let Some(atom) = key.atom() else {
+                continue;
+            };
+            push_unique_key(keys, atoms.name(atom)?.to_owned());
         }
         Ok(())
     }

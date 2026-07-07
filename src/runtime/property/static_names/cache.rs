@@ -178,6 +178,7 @@ impl CallValueCache {
             | Value::Number(_)
             | Value::String(_)
             | Value::HeapString(_)
+            | Value::Symbol(_)
             | Value::Object(_)
             | Value::Error(_) => None,
         }

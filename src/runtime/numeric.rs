@@ -90,6 +90,7 @@ fn bitwise_i32(value: &Value, op: &str) -> Result<i32> {
         | Value::NativeFunction(_)
         | Value::HostFunction(_)
         | Value::Object(_)
+        | Value::Symbol(_)
         | Value::Error(_) => Ok(0),
         Value::Bool(value) => Ok(i32::from(*value)),
         Value::Number(value) => number_to_i32(*value, op),
@@ -106,6 +107,7 @@ fn bitwise_u32(value: &Value, op: &str) -> Result<u32> {
         | Value::NativeFunction(_)
         | Value::HostFunction(_)
         | Value::Object(_)
+        | Value::Symbol(_)
         | Value::Error(_) => Ok(0),
         Value::Bool(value) => Ok(u32::from(*value)),
         Value::Number(value) => number_to_uint32(*value, op),

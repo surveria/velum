@@ -12,7 +12,7 @@ use crate::{
 use super::{
     ARRAY_NAME, BOOLEAN_NAME, EVAL_NAME, INFINITY_NAME, JSON_NAME, MATH_NAME, NAN_NAME,
     NUMBER_NAME, NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME,
-    PROMISE_NAME, STRING_NAME,
+    PROMISE_NAME, STRING_NAME, SYMBOL_NAME,
 };
 
 impl Context {
@@ -33,6 +33,7 @@ impl Context {
             OBJECT_NAME => self.object_constructor_value().map(Some),
             PROMISE_NAME => self.promise_constructor_value().map(Some),
             STRING_NAME => self.string_constructor_value().map(Some),
+            SYMBOL_NAME => self.symbol_constructor_value().map(Some),
             _ => {
                 let Some(name) =
                     ErrorName::from_constructor_name(name).filter(|name| name.is_standard())
@@ -126,7 +127,8 @@ impl Context {
             | NativeFunctionKind::PromiseReject
             | NativeFunctionKind::PromiseThen
             | NativeFunctionKind::PromiseCatch
-            | NativeFunctionKind::PromiseResolver { .. } => {
+            | NativeFunctionKind::PromiseResolver { .. }
+            | NativeFunctionKind::Symbol => {
                 Err(Error::runtime("native method is not a constructor"))
             }
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),

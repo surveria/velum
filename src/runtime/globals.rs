@@ -91,6 +91,11 @@ impl Context {
     }
 
     #[must_use]
+    pub const fn symbol_count(&self) -> usize {
+        self.symbols.len()
+    }
+
+    #[must_use]
     pub const fn string_bytes(&self) -> usize {
         self.strings.bytes()
     }
@@ -131,6 +136,15 @@ impl Context {
 
     pub(crate) fn heap_string_value(&mut self, text: &str) -> Result<Value> {
         self.intern_heap_string(text).map(Value::HeapString)
+    }
+
+    pub(crate) fn create_symbol_value(&mut self, description: Option<&str>) -> Result<Value> {
+        let description = if let Some(description) = description {
+            Some(self.intern_heap_string(description)?)
+        } else {
+            None
+        };
+        self.symbols.create(description).map(Value::Symbol)
     }
 
     pub(crate) fn atom(&self, name: &str) -> Option<AtomId> {

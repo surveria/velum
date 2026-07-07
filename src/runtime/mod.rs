@@ -15,6 +15,7 @@ use crate::runtime::object::ObjectHeap;
 use crate::runtime::property::enumerable_property_keys;
 use crate::storage::atom::{AtomId, AtomTable};
 use crate::storage::string_heap::StringHeap;
+use crate::storage::symbol::SymbolTable;
 use crate::value::{ErrorName, Value};
 
 pub mod assertions;
@@ -49,6 +50,7 @@ pub struct Context {
     limits: RuntimeLimits,
     atoms: AtomTable,
     strings: StringHeap,
+    symbols: SymbolTable,
     well_known_properties: WellKnownPropertyKeys,
     descriptor_property_keys: Option<DescriptorPropertyKeys>,
     static_name_atom_caches: Vec<StaticNameAtomCacheHandle>,
@@ -138,6 +140,7 @@ impl Context {
             limits,
             atoms: AtomTable::new(),
             strings: StringHeap::new(),
+            symbols: SymbolTable::new(),
             well_known_properties: WellKnownPropertyKeys::new(),
             descriptor_property_keys: None,
             static_name_atom_caches: Vec::new(),

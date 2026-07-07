@@ -134,7 +134,8 @@ impl Context {
             Value::Undefined
             | Value::Function(_)
             | Value::NativeFunction(_)
-            | Value::HostFunction(_) => Ok(None),
+            | Value::HostFunction(_)
+            | Value::Symbol(_) => Ok(None),
             Value::Null => Ok(Some(JSON_NULL.to_owned())),
             Value::Bool(value) => Ok(Some(Self::stringify_json_bool(*value))),
             Value::Number(value) => Ok(Some(Self::stringify_json_number(*value))),
