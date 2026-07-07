@@ -131,6 +131,42 @@ fn await_reads_already_resolved_promise_value() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))
 }
 
+#[test]
+fn async_function_rejects_promise_constructor_type_errors() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    context.eval(
+        r#"
+        let started = false;
+        let afterAwait = false;
+        let rejected = "";
+
+        async function task() {
+            started = true;
+            await new Promise();
+            afterAwait = true;
+        }
+
+        task().then(function() {
+            rejected = "resolved";
+        }, function(error) {
+            rejected = error.name + ":" + error.message;
+        });
+        "#,
+    )?;
+
+    let value = context.eval(
+        r#"
+        started &&
+            !afterAwait &&
+            rejected === "TypeError:Promise constructor requires an executor" ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 fn eval(source: &str) -> rs_quickjs::Result<Value> {
     let runtime = Runtime::new();
     let mut context = runtime.context();

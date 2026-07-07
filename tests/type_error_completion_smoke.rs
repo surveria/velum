@@ -114,6 +114,33 @@ fn catches_throw_from_called_js_function() -> TestResult {
     ensure_string_contains(&value, "from callee")
 }
 
+#[test]
+fn catches_promise_constructor_type_errors() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let caught = "";
+
+        try {
+            new Promise();
+        } catch (error) {
+            caught = error.name + ":" + error.message;
+        }
+
+        assert.throws(TypeError, function() {
+            new Promise({});
+        });
+
+        caught
+        "#,
+    )?;
+
+    ensure_string_starts_with(&value, "TypeError:")?;
+    ensure_string_contains(&value, "requires an executor")
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
