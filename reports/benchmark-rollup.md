@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T101222Z.md`
-- Task: rsqjs-test-report-20260707T101222Z.md
-- Performance: 0.85x (41/63 >1.00x)
+- `rsqjs-test-report-20260707T101753Z.md`
+- Task: rsqjs-test-report-20260707T101753Z.md
+- Performance: 0.86x (41/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 15279 passed / 87299 failed (14.90%)
 
@@ -271,6 +271,7 @@ Latest report:
 | `20260707T093159Z` `564d006` Bytecode-only architecture finalization guard: Make the no-AST-runtime boundary repository-wide and remove stale roadmap language that still permits AST-backed compiled execution. | 0.87x (42/63 >1.00x) | - (0/63 >1.00x) | 14462 passed / 88116 failed (14.10%) |
 | `20260707T093956Z` `ec72235` Optimize holey array shift and unshift | 0.85x (42/63 >1.00x) | - (0/63 >1.00x) | 14462 passed / 88116 failed (14.10%) |
 | `20260707T094823Z` `7333c22` Handle Promise constructor TypeErrors in async bodies | 0.86x (41/63 >1.00x) | - (0/63 >1.00x) | 14466 passed / 88112 failed (14.10%) |
-| `20260707T100631Z` rsqjs-test-report-20260707T100631Z.md | 0.85x (41/63 >1.00x) | - (0/63 >1.00x) | 14539 passed / 88039 failed (14.17%) |
-| `20260707T100427Z` `846d08a` Support hashbang and Unicode identifiers | 0.85x (42/63 >1.00x) | - (0/63 >1.00x) | 15275 passed / 87303 failed (14.89%) |
-| `20260707T101222Z` rsqjs-test-report-20260707T101222Z.md | 0.85x (41/63 >1.00x) | - (0/63 >1.00x) | 15279 passed / 87299 failed (14.90%) |
+| `20260707T100427Z` `4e7b97d` Support hashbang and Unicode identifiers | 0.85x (42/63 >1.00x) | - (0/63 >1.00x) | 15275 passed / 87303 failed (14.89%) |
+| `20260707T100631Z` `5126715` Reject invalid super references in async early errors | 0.85x (41/63 >1.00x) | - (0/63 >1.00x) | 14539 passed / 88039 failed (14.17%) |
+| `20260707T101222Z` `2c8062d` Record Unicode lexer validation report | 0.85x (41/63 >1.00x) | - (0/63 >1.00x) | 15279 passed / 87299 failed (14.90%) |
+| `20260707T101753Z` rsqjs-test-report-20260707T101753Z.md | 0.86x (41/63 >1.00x) | - (0/63 >1.00x) | 15279 passed / 87299 failed (14.90%) |
