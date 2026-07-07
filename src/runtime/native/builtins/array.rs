@@ -54,7 +54,7 @@ impl Context {
                 self.limits.max_objects,
             );
         }
-        self.create_array_from_elements(args.to_vec())
+        self.create_array_from_element_iter(args.iter().cloned(), args.len())
     }
 
     pub(in crate::runtime::native) fn eval_direct_array_constructor(
@@ -69,7 +69,7 @@ impl Context {
                 self.limits.max_objects,
             );
         }
-        self.create_array_from_elements(args.to_vec())
+        self.create_array_from_element_iter(args.iter().cloned(), args.len())
     }
 
     pub(in crate::runtime::native) fn eval_array_is_array(
@@ -398,9 +398,19 @@ impl Context {
     }
 
     pub(crate) fn create_array_from_elements(&mut self, elements: Vec<Value>) -> Result<Value> {
+        let element_count = elements.len();
+        self.create_array_from_element_iter(elements, element_count)
+    }
+
+    pub(crate) fn create_array_from_element_iter(
+        &mut self,
+        elements: impl IntoIterator<Item = Value>,
+        element_count: usize,
+    ) -> Result<Value> {
         let prototype = self.array_constructor_prototype()?;
-        self.objects.create_array(
+        self.objects.create_array_from_iter(
             elements,
+            element_count,
             prototype,
             self.limits.max_objects,
             self.limits.max_object_properties,

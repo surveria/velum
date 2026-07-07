@@ -97,6 +97,11 @@ impl BytecodeStack {
         Ok(self.values.split_off(start))
     }
 
+    pub(super) fn drain_tail(&mut self, count: usize) -> Result<std::vec::Drain<'_, Value>> {
+        let start = self.tail_start(count)?;
+        Ok(self.values.drain(start..))
+    }
+
     fn tail_start(&self, count: usize) -> Result<usize> {
         self.values
             .len()

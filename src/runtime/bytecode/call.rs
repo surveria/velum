@@ -251,8 +251,11 @@ impl Context {
                 Ok(None)
             }
             BytecodeInstruction::ArrayLiteral { len } => {
-                let values = state.stack.pop_many(*len)?;
-                state.stack.push(self.create_array_from_elements(values)?);
+                let value = {
+                    let values = state.stack.drain_tail(*len)?;
+                    self.create_array_from_element_iter(values, *len)?
+                };
+                state.stack.push(value);
                 state.pc = next;
                 Ok(None)
             }
