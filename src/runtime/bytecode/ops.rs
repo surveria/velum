@@ -4,7 +4,8 @@ use crate::{
     ast::{BinaryOp, DeclKind, StaticName, StaticPropertyAccessId, UnaryOp, UpdateOp},
     bytecode::{
         BytecodeAssignmentTarget, BytecodeBinding, BytecodeDynamicProperty,
-        BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericUnaryOp,
+        BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
+        BytecodeNumericUnaryOp,
     },
     error::{Error, Result},
     runtime::Context,
@@ -195,6 +196,25 @@ impl Context {
                 BytecodeNumericCompareOp::LessEqual => left <= right,
                 BytecodeNumericCompareOp::Greater => left > right,
                 BytecodeNumericCompareOp::GreaterEqual => left >= right,
+            };
+            return self.checked_value(Value::Bool(value));
+        }
+        self.eval_bytecode_binary(op.fallback_binary(), left, right, None)
+    }
+
+    pub(super) fn eval_bytecode_number_equality(
+        &mut self,
+        op: BytecodeNumericEqualityOp,
+        left: &Value,
+        right: &Value,
+    ) -> Result<Value> {
+        if let (Value::Number(left), Value::Number(right)) = (left, right) {
+            let equal = bytecode_numbers_equal(*left, *right);
+            let value = match op {
+                BytecodeNumericEqualityOp::Equal | BytecodeNumericEqualityOp::StrictEqual => equal,
+                BytecodeNumericEqualityOp::NotEqual | BytecodeNumericEqualityOp::StrictNotEqual => {
+                    !equal
+                }
             };
             return self.checked_value(Value::Bool(value));
         }
@@ -446,4 +466,18 @@ impl Context {
             self.limits.max_object_properties,
         )
     }
+}
+
+const fn bytecode_numbers_equal(left: f64, right: f64) -> bool {
+    if left.is_nan() || right.is_nan() {
+        return false;
+    }
+    if bytecode_number_is_zero(left) && bytecode_number_is_zero(right) {
+        return true;
+    }
+    left.to_bits() == right.to_bits()
+}
+
+const fn bytecode_number_is_zero(value: f64) -> bool {
+    value.to_bits() << 1 == 0
 }

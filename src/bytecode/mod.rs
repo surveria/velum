@@ -22,8 +22,8 @@ pub use types::{
     BytecodeAddress, BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock,
     BytecodeCallSite, BytecodeCatch, BytecodeCompletion, BytecodeDynamicProperty,
     BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeInstruction,
-    BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericUnaryOp, BytecodeProgram,
-    BytecodeProperty, BytecodeSwitchCase,
+    BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
+    BytecodeNumericUnaryOp, BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
 };
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
@@ -480,6 +480,10 @@ impl<'a> BytecodeCompiler<'a> {
                     && let Some(op) = BytecodeNumericCompareOp::from_binary(op)
                 {
                     self.emit(BytecodeInstruction::NumberCompare(op));
+                } else if property_access.is_none()
+                    && let Some(op) = BytecodeNumericEqualityOp::from_binary(op)
+                {
+                    self.emit(BytecodeInstruction::NumberEquality(op));
                 } else {
                     self.emit(BytecodeInstruction::Binary {
                         op,
@@ -694,6 +698,7 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::Binary { .. }
             | BytecodeInstruction::NumberBinary(_)
             | BytecodeInstruction::NumberCompare(_)
+            | BytecodeInstruction::NumberEquality(_)
             | BytecodeInstruction::CompoundStoreBinding { .. }
             | BytecodeInstruction::CompoundStaticProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. }

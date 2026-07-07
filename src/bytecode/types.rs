@@ -393,6 +393,53 @@ impl BytecodeNumericCompareOp {
     }
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BytecodeNumericEqualityOp {
+    Equal,
+    NotEqual,
+    StrictEqual,
+    StrictNotEqual,
+}
+
+impl BytecodeNumericEqualityOp {
+    pub(crate) const fn from_binary(op: BinaryOp) -> Option<Self> {
+        match op {
+            BinaryOp::Equal => Some(Self::Equal),
+            BinaryOp::NotEqual => Some(Self::NotEqual),
+            BinaryOp::StrictEqual => Some(Self::StrictEqual),
+            BinaryOp::StrictNotEqual => Some(Self::StrictNotEqual),
+            BinaryOp::Add
+            | BinaryOp::Sub
+            | BinaryOp::Mul
+            | BinaryOp::Div
+            | BinaryOp::Rem
+            | BinaryOp::Pow
+            | BinaryOp::Less
+            | BinaryOp::LessEqual
+            | BinaryOp::Greater
+            | BinaryOp::GreaterEqual
+            | BinaryOp::In
+            | BinaryOp::BitAnd
+            | BinaryOp::BitOr
+            | BinaryOp::BitXor
+            | BinaryOp::ShiftLeft
+            | BinaryOp::ShiftRight
+            | BinaryOp::ShiftRightUnsigned
+            | BinaryOp::LogicalAnd
+            | BinaryOp::LogicalOr => None,
+        }
+    }
+
+    pub(crate) const fn fallback_binary(self) -> BinaryOp {
+        match self {
+            Self::Equal => BinaryOp::Equal,
+            Self::NotEqual => BinaryOp::NotEqual,
+            Self::StrictEqual => BinaryOp::StrictEqual,
+            Self::StrictNotEqual => BinaryOp::StrictNotEqual,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum BytecodeForInTarget {
     Binding {
@@ -477,6 +524,7 @@ pub enum BytecodeInstruction {
     },
     NumberBinary(BytecodeNumericBinaryOp),
     NumberCompare(BytecodeNumericCompareOp),
+    NumberEquality(BytecodeNumericEqualityOp),
     CompoundStoreBinding {
         name: BytecodeBinding,
         op: BinaryOp,
