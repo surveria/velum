@@ -244,7 +244,8 @@ impl Context {
                 self.eval_function_with_this(id, RuntimeCallArgs::values(args), this_value)
             }
             Value::NativeFunction(id) => {
-                self.eval_native_function(id, RuntimeCallArgs::values(args), &this_value)
+                let kind = self.native_function(id)?.kind();
+                self.eval_direct_or_generic_native_function_kind(kind, args, &this_value)
             }
             Value::HostFunction(id) => self.eval_host_function(id, RuntimeCallArgs::values(args)),
             value => Err(Error::runtime(format!("'{value}' is not callable"))),
@@ -296,7 +297,7 @@ impl Context {
                 self.eval_function_with_this(id, RuntimeCallArgs::values(args), this_value)
             }
             CallValueCache::NativeFunction { kind, .. } => {
-                self.eval_native_function_kind(kind, RuntimeCallArgs::values(args), &this_value)
+                self.eval_direct_or_generic_native_function_kind(kind, args, &this_value)
             }
             CallValueCache::HostFunction(id) => {
                 self.eval_host_function(id, RuntimeCallArgs::values(args))
@@ -324,14 +325,15 @@ impl Context {
                 self.eval_direct_native_call_target(target, args, &this_value)
             }
             CallReference::Native { kind, this_value } => {
-                self.eval_native_function_kind(kind, RuntimeCallArgs::values(args), &this_value)
+                self.eval_direct_or_generic_native_function_kind(kind, args, &this_value)
             }
             CallReference::Generic { callee, this_value } => match callee {
                 Value::Function(id) => {
                     self.eval_function_with_this(id, RuntimeCallArgs::values(args), this_value)
                 }
                 Value::NativeFunction(id) => {
-                    self.eval_native_function(id, RuntimeCallArgs::values(args), &this_value)
+                    let kind = self.native_function(id)?.kind();
+                    self.eval_direct_or_generic_native_function_kind(kind, args, &this_value)
                 }
                 Value::HostFunction(id) => {
                     self.eval_host_function(id, RuntimeCallArgs::values(args))

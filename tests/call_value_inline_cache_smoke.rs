@@ -2,7 +2,7 @@ use rs_quickjs::{Engine, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
-const CALL_VALUE_INLINE_CACHE_SCRIPT: &str = r"
+const CALL_VALUE_INLINE_CACHE_SCRIPT: &str = r#"
 var plusOne = function(value) {
     return value + 1;
 };
@@ -24,8 +24,16 @@ var jsTotal = invoke(plusOne, 1) +
 var pickNative = function(useAbs) {
     return useAbs ? Math.abs : Math.max;
 };
+var nativeOrder = "";
+var markNative = function(label, value) {
+    nativeOrder = nativeOrder + label;
+    return value;
+};
 var runNative = function(useAbs, left, right) {
-    return pickNative(useAbs)(left, right);
+    return pickNative(useAbs)(
+        markNative(useAbs ? (left < -5 ? "a" : "c") : "e", left),
+        markNative(useAbs ? (left < -5 ? "b" : "d") : "f", right)
+    );
 };
 var nativeTotal = runNative(true, -7, 0) +
     runNative(true, -3, 0) +
@@ -39,8 +47,8 @@ var runHost = function(value) {
 };
 var hostTotal = runHost(20) + runHost(21);
 
-jsTotal + nativeTotal + hostTotal
-";
+nativeOrder === "abcdef" ? jsTotal + nativeTotal + hostTotal : 0
+"#;
 
 #[test]
 fn call_value_sites_cache_js_native_and_host_dispatch() -> TestResult {
