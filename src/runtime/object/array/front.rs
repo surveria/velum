@@ -41,7 +41,7 @@ impl ObjectHeap {
     pub(crate) fn array_unshift(
         &mut self,
         id: ObjectId,
-        values: Vec<Value>,
+        values: &[Value],
         max_properties: usize,
     ) -> Result<Value> {
         let length = self.array_length_for_method(id, ARRAY_UNSHIFT_RECEIVER_ERROR)?;
@@ -55,7 +55,7 @@ impl ObjectHeap {
         if self
             .object_mut(id)?
             .array_storage
-            .unshift_packed_for_len_if_default(length_usize, &values, max_properties)
+            .unshift_packed_for_len_if_default(length_usize, values, max_properties)
         {
             self.object_mut(id)?.array_length = Some(new_length);
             self.bump_prototype_lookup_version()?;
@@ -70,9 +70,9 @@ impl ObjectHeap {
             self.move_array_index(id, from_index, to_index, max_properties)?;
         }
 
-        for (index, value) in values.into_iter().enumerate() {
+        for (index, value) in values.iter().enumerate() {
             let index = ArrayIndex::from_usize(index)?;
-            self.set_array_index(id, index, value, max_properties)?;
+            self.set_array_index(id, index, value.clone(), max_properties)?;
         }
         self.object_mut(id)?.array_length = Some(new_length);
         Ok(new_length.value())

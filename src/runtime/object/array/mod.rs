@@ -38,14 +38,14 @@ impl ObjectHeap {
     pub(crate) fn array_push(
         &mut self,
         id: ObjectId,
-        values: Vec<Value>,
+        values: &[Value],
         max_properties: usize,
     ) -> Result<Value> {
         let mut length = self.array_length_for_method(id, ARRAY_PUSH_RECEIVER_ERROR)?;
 
         for value in values {
             let index = length.index()?;
-            self.set_array_index(id, index, value, max_properties)?;
+            self.set_array_index(id, index, value.clone(), max_properties)?;
             length = index.next_length()?;
         }
         self.object_mut(id)?.array_length = Some(length);
@@ -143,13 +143,13 @@ impl ObjectHeap {
     pub(crate) fn array_concat(
         &mut self,
         id: ObjectId,
-        values: Vec<Value>,
+        values: &[Value],
         prototype: ObjectId,
         max_objects: usize,
         max_properties: usize,
     ) -> Result<Value> {
         let this_length = self.array_length_for_method(id, ARRAY_CONCAT_RECEIVER_ERROR)?;
-        if let Some(values) = self.packed_concat_values(id, this_length, &values)? {
+        if let Some(values) = self.packed_concat_values(id, this_length, values)? {
             return self.create_array(values, prototype, max_objects, max_properties);
         }
         let result = self.create_array_with_length(0, prototype, max_objects)?;
@@ -161,7 +161,7 @@ impl ObjectHeap {
         self.concat_array_source(result_id, &mut next_index, id, this_length, max_properties)?;
 
         for value in values {
-            if let Value::Object(source_id) = &value
+            if let Value::Object(source_id) = value
                 && let Some(length) = self.array_length_if_array(*source_id)?
             {
                 self.concat_array_source(
@@ -172,7 +172,12 @@ impl ObjectHeap {
                     max_properties,
                 )?;
             } else {
-                self.concat_single_value(result_id, &mut next_index, value, max_properties)?;
+                self.concat_single_value(
+                    result_id,
+                    &mut next_index,
+                    value.clone(),
+                    max_properties,
+                )?;
             }
         }
         self.object_mut(result_id)?.array_length = Some(ArrayLength::from_usize(next_index)?);

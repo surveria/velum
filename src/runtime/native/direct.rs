@@ -129,38 +129,20 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         match target {
-            NativeCallTarget::Array => self.eval_array_constructor(runtime_call_args(args)),
-            NativeCallTarget::ArrayConcat => {
-                self.eval_array_concat(runtime_call_args(args), this_value)
-            }
-            NativeCallTarget::ArrayIncludes => {
-                self.eval_array_includes(runtime_call_args(args), this_value)
-            }
-            NativeCallTarget::ArrayIndexOf => {
-                self.eval_array_index_of(runtime_call_args(args), this_value)
-            }
-            NativeCallTarget::ArrayJoin => {
-                self.eval_array_join(runtime_call_args(args), this_value)
-            }
+            NativeCallTarget::Array => self.eval_direct_array_constructor(args),
+            NativeCallTarget::ArrayConcat => self.eval_direct_array_concat(args, this_value),
+            NativeCallTarget::ArrayIncludes => self.eval_direct_array_includes(args, this_value),
+            NativeCallTarget::ArrayIndexOf => self.eval_direct_array_index_of(args, this_value),
+            NativeCallTarget::ArrayJoin => self.eval_direct_array_join(args, this_value),
             NativeCallTarget::ArrayLastIndexOf => {
-                self.eval_array_last_index_of(runtime_call_args(args), this_value)
+                self.eval_direct_array_last_index_of(args, this_value)
             }
-            NativeCallTarget::ArrayPop => self.eval_array_pop(runtime_call_args(args), this_value),
-            NativeCallTarget::ArrayPush => {
-                self.eval_array_push(runtime_call_args(args), this_value)
-            }
-            NativeCallTarget::ArrayReverse => {
-                self.eval_array_reverse(runtime_call_args(args), this_value)
-            }
-            NativeCallTarget::ArrayShift => {
-                self.eval_array_shift(runtime_call_args(args), this_value)
-            }
-            NativeCallTarget::ArraySlice => {
-                self.eval_array_slice(runtime_call_args(args), this_value)
-            }
-            NativeCallTarget::ArrayUnshift => {
-                self.eval_array_unshift(runtime_call_args(args), this_value)
-            }
+            NativeCallTarget::ArrayPop => self.eval_direct_array_pop(args, this_value),
+            NativeCallTarget::ArrayPush => self.eval_direct_array_push(args, this_value),
+            NativeCallTarget::ArrayReverse => self.eval_direct_array_reverse(args, this_value),
+            NativeCallTarget::ArrayShift => self.eval_direct_array_shift(args, this_value),
+            NativeCallTarget::ArraySlice => self.eval_direct_array_slice(args, this_value),
+            NativeCallTarget::ArrayUnshift => self.eval_direct_array_unshift(args, this_value),
             NativeCallTarget::Boolean => self.eval_boolean_constructor(runtime_call_args(args)),
             NativeCallTarget::ErrorConstructor(name) => {
                 self.eval_error_constructor(name, runtime_call_args(args))

@@ -19,10 +19,4 @@ impl<'a> RuntimeCallArgs<'a> {
     pub fn evaluate(self) -> Vec<Value> {
         self.as_slice().to_vec()
     }
-
-    pub const fn discard(self) {
-        match self {
-            Self::Values(_) => {}
-        }
-    }
 }
