@@ -42,8 +42,8 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let values = args.evaluate();
-        if let Some(length) = Self::array_constructor_length(&values)? {
+        let args = args.as_slice();
+        if let Some(length) = Self::array_constructor_length(args)? {
             let prototype = self.array_constructor_prototype()?;
             return self.objects.create_array_with_length(
                 length,
@@ -51,7 +51,22 @@ impl Context {
                 self.limits.max_objects,
             );
         }
-        self.create_array_from_elements(values)
+        self.create_array_from_elements(args.to_vec())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_array_constructor(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        if let Some(length) = Self::array_constructor_length(args)? {
+            let prototype = self.array_constructor_prototype()?;
+            return self.objects.create_array_with_length(
+                length,
+                prototype,
+                self.limits.max_objects,
+            );
+        }
+        self.create_array_from_elements(args.to_vec())
     }
 
     pub(in crate::runtime::native) fn eval_array_push(
@@ -59,14 +74,21 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
+        self.eval_direct_array_push(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_array_push(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.push requires an array receiver",
             ));
         };
-        let values = args.evaluate();
         self.objects
-            .array_push(*id, values, self.limits.max_object_properties)
+            .array_push(*id, args, self.limits.max_object_properties)
     }
 
     pub(in crate::runtime::native) fn eval_array_concat(
@@ -74,7 +96,14 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let values = args.evaluate();
+        self.eval_direct_array_concat(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_array_concat(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.concat requires an array receiver",
@@ -83,7 +112,7 @@ impl Context {
         let prototype = self.existing_array_constructor_prototype()?;
         self.objects.array_concat(
             *id,
-            values,
+            args,
             prototype,
             self.limits.max_objects,
             self.limits.max_object_properties,
@@ -93,6 +122,14 @@ impl Context {
     pub(in crate::runtime::native) fn eval_array_reverse(
         &mut self,
         args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_direct_array_reverse(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_array_reverse(
+        &mut self,
+        args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
         Self::eval_array_discard_args(args);
@@ -110,6 +147,14 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
+        self.eval_direct_array_pop(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_array_pop(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
         Self::eval_array_discard_args(args);
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
@@ -122,6 +167,14 @@ impl Context {
     pub(in crate::runtime::native) fn eval_array_includes(
         &self,
         args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_direct_array_includes(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_array_includes(
+        &self,
+        args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
         let (search, from_index) = Self::eval_array_binary_values(args);
@@ -143,6 +196,14 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
+        self.eval_direct_array_index_of(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_array_index_of(
+        &self,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
         let (search, from_index) = Self::eval_array_binary_values(args);
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
@@ -162,6 +223,14 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
+        self.eval_direct_array_last_index_of(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_array_last_index_of(
+        &self,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
         let (search, from_index) = Self::eval_array_binary_values(args);
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
@@ -179,6 +248,14 @@ impl Context {
     pub(in crate::runtime::native) fn eval_array_join(
         &mut self,
         args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_direct_array_join(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_array_join(
+        &mut self,
+        args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
         let separator = Self::eval_array_unary_value(args);
@@ -213,6 +290,14 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
+        self.eval_direct_array_shift(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_array_shift(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
         Self::eval_array_discard_args(args);
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
@@ -226,6 +311,14 @@ impl Context {
     pub(in crate::runtime::native) fn eval_array_slice(
         &mut self,
         args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_direct_array_slice(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_array_slice(
+        &mut self,
+        args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
         let (start, end) = Self::eval_array_binary_values(args);
@@ -254,14 +347,21 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let values = args.evaluate();
+        self.eval_direct_array_unshift(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_array_unshift(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
         let Value::Object(id) = this_value else {
             return Err(Error::runtime(
                 "Array.prototype.unshift requires an array receiver",
             ));
         };
         self.objects
-            .array_unshift(*id, values, self.limits.max_object_properties)
+            .array_unshift(*id, args, self.limits.max_object_properties)
     }
 
     pub(crate) fn create_array_from_elements(&mut self, elements: Vec<Value>) -> Result<Value> {
@@ -402,18 +502,15 @@ impl Context {
         }
     }
 
-    const fn eval_array_unary_value(args: RuntimeCallArgs<'_>) -> Option<&Value> {
-        args.as_slice().first()
+    const fn eval_array_unary_value(args: &[Value]) -> Option<&Value> {
+        args.first()
     }
 
-    fn eval_array_binary_values(args: RuntimeCallArgs<'_>) -> (Option<&Value>, Option<&Value>) {
-        let args = args.as_slice();
+    fn eval_array_binary_values(args: &[Value]) -> (Option<&Value>, Option<&Value>) {
         (args.first(), args.get(1))
     }
 
-    const fn eval_array_discard_args(args: RuntimeCallArgs<'_>) {
-        args.discard();
-    }
+    const fn eval_array_discard_args(_args: &[Value]) {}
 
     fn array_join_element_text(value: &Value) -> String {
         match value {
