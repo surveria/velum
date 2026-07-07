@@ -72,6 +72,7 @@ impl Context {
             | BytecodeInstruction::StoreLast
             | BytecodeInstruction::Pop
             | BytecodeInstruction::Unary(_)
+            | BytecodeInstruction::NumberUnary(_)
             | BytecodeInstruction::Await
             | BytecodeInstruction::TypeOfBinding(_)
             | BytecodeInstruction::TypeOfValue => {
@@ -192,11 +193,8 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::Unary(op) => {
-                let value = state.stack.pop()?;
-                state.stack.push(Self::eval_bytecode_unary(*op, &value)?);
-                state.pc = next;
-                Ok(None)
+            BytecodeInstruction::Unary(_) | BytecodeInstruction::NumberUnary(_) => {
+                self.eval_bytecode_unary_instruction(state, instruction, next)
             }
             BytecodeInstruction::Await => {
                 let value = state.stack.pop()?;
@@ -226,6 +224,31 @@ impl Context {
                 Ok(None)
             }
             _ => Err(Error::runtime("bytecode stack instruction mismatch")),
+        }
+    }
+
+    fn eval_bytecode_unary_instruction(
+        &self,
+        state: &mut BytecodeState,
+        instruction: &BytecodeInstruction,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        match instruction {
+            BytecodeInstruction::Unary(op) => {
+                let value = state.stack.pop()?;
+                state.stack.push(Self::eval_bytecode_unary(*op, &value)?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::NumberUnary(op) => {
+                let value = state.stack.pop()?;
+                state
+                    .stack
+                    .push(self.eval_bytecode_number_unary(*op, &value)?);
+                state.pc = next;
+                Ok(None)
+            }
+            _ => Err(Error::runtime("bytecode unary instruction mismatch")),
         }
     }
 

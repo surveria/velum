@@ -372,7 +372,7 @@ impl BytecodeInstruction {
 
     fn numeric_instruction_count(&self) -> usize {
         match self {
-            Self::NumberBinary(_) | Self::NumberCompare(_) => 1,
+            Self::NumberUnary(_) | Self::NumberBinary(_) | Self::NumberCompare(_) => 1,
             Self::If {
                 condition,
                 consequent,
@@ -527,6 +527,7 @@ impl BytecodeInstruction {
                 | Self::StoreLast
                 | Self::Pop
                 | Self::Unary(_)
+                | Self::NumberUnary(_)
                 | Self::TypeOfBinding(_)
                 | Self::TypeOfValue
                 | Self::Binary { .. }

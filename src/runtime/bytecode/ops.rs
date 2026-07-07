@@ -4,7 +4,7 @@ use crate::{
     ast::{BinaryOp, DeclKind, StaticName, StaticPropertyAccessId, UnaryOp, UpdateOp},
     bytecode::{
         BytecodeAssignmentTarget, BytecodeBinding, BytecodeDynamicProperty,
-        BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
+        BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericUnaryOp,
     },
     error::{Error, Result},
     runtime::Context,
@@ -84,6 +84,21 @@ impl Context {
                 "non-bytecode unary operator reached bytecode unary path",
             )),
         }
+    }
+
+    pub(super) fn eval_bytecode_number_unary(
+        &self,
+        op: BytecodeNumericUnaryOp,
+        value: &Value,
+    ) -> Result<Value> {
+        if let Value::Number(value) = value {
+            let value = match op {
+                BytecodeNumericUnaryOp::Negate => -*value,
+                BytecodeNumericUnaryOp::Plus => *value,
+            };
+            return self.checked_value(Value::Number(value));
+        }
+        Self::eval_bytecode_unary(op.fallback_unary(), value)
     }
 
     pub(super) fn eval_bytecode_binary(
