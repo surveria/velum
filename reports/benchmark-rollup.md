@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T023832Z.md`
-- Task: rsqjs-test-report-20260707T023832Z.md
-- Performance: 0.80x (39/63 >1.00x)
+- `rsqjs-test-report-20260707T025231Z.md`
+- Task: rsqjs-test-report-20260707T025231Z.md
+- Performance: 0.80x (40/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 12671 passed / 89907 failed (12.35%)
 
@@ -234,4 +234,5 @@ Latest report:
 | `20260707T021114Z` `5791a02` Organize bytecode runtime modules | 0.79x (38/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
 | `20260707T022133Z` `3ea4c9a` Optimize static native call cache hits | 0.80x (39/63 >1.00x) | - (0/63 >1.00x) | 12546 passed / 90032 failed (12.23%) |
 | `20260707T022929Z` `e19beba` Add AsyncFunction constructor prototype support | 0.81x (40/63 >1.00x) | - (0/63 >1.00x) | 12671 passed / 89907 failed (12.35%) |
-| `20260707T023832Z` rsqjs-test-report-20260707T023832Z.md | 0.80x (39/63 >1.00x) | - (0/63 >1.00x) | 12671 passed / 89907 failed (12.35%) |
+| `20260707T023832Z` `95d80c6` Cache dynamic native member calls | 0.80x (39/63 >1.00x) | - (0/63 >1.00x) | 12671 passed / 89907 failed (12.35%) |
+| `20260707T025231Z` rsqjs-test-report-20260707T025231Z.md | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 12671 passed / 89907 failed (12.35%) |

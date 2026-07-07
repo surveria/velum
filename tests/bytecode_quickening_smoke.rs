@@ -71,6 +71,42 @@ fn bytecode_quickens_numeric_comparisons_with_fallbacks() -> TestResult {
 }
 
 #[test]
+fn bytecode_quickens_numeric_equalities_with_fallbacks() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r#"
+        var total = 0;
+        for (var i = 0; i < 8; i = i + 1) {
+            if (i == 2) {
+                total = total + 3;
+            }
+            if (i === 4) {
+                total = total + 5;
+            }
+            if (i != 5) {
+                total = total + 1;
+            }
+            if (i !== 7) {
+                total = total + 1;
+            }
+        }
+        var textFallback = "same" === "same" && "same" !== "other";
+        var nanFallback = NaN !== NaN;
+        total === 22 && textFallback && nanFallback ? 42 : 0
+        "#,
+    )?;
+    ensure_at_least(
+        script.usage().bytecode_numeric_instruction_count(),
+        12,
+        "bytecode numeric instructions",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn bytecode_quickens_numeric_unary_with_fallbacks() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();

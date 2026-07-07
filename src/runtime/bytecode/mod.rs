@@ -84,6 +84,7 @@ impl Context {
             | BytecodeInstruction::Binary { .. }
             | BytecodeInstruction::NumberBinary(_)
             | BytecodeInstruction::NumberCompare(_)
+            | BytecodeInstruction::NumberEquality(_)
             | BytecodeInstruction::CompoundStoreBinding { .. }
             | BytecodeInstruction::CompoundStaticProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. }
@@ -264,7 +265,8 @@ impl Context {
             | BytecodeInstruction::UpdateComputedProperty { .. }
             | BytecodeInstruction::Binary { .. }
             | BytecodeInstruction::NumberBinary(_)
-            | BytecodeInstruction::NumberCompare(_) => {
+            | BytecodeInstruction::NumberCompare(_)
+            | BytecodeInstruction::NumberEquality(_) => {
                 self.eval_bytecode_mutation_instruction(state, instruction, next)
             }
             BytecodeInstruction::CompoundStoreBinding { .. }
@@ -356,7 +358,8 @@ impl Context {
             ),
             BytecodeInstruction::Binary { .. }
             | BytecodeInstruction::NumberBinary(_)
-            | BytecodeInstruction::NumberCompare(_) => {
+            | BytecodeInstruction::NumberCompare(_)
+            | BytecodeInstruction::NumberEquality(_) => {
                 self.eval_bytecode_binary_instruction(state, instruction, next)
             }
             BytecodeInstruction::CompoundStoreBinding { name, op } => {
@@ -408,6 +411,15 @@ impl Context {
                 state
                     .stack
                     .push(self.eval_bytecode_number_compare(*op, &left, &right)?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::NumberEquality(op) => {
+                let right = state.stack.pop()?;
+                let left = state.stack.pop()?;
+                state
+                    .stack
+                    .push(self.eval_bytecode_number_equality(*op, &left, &right)?);
                 state.pc = next;
                 Ok(None)
             }
