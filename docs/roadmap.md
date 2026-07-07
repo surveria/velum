@@ -149,7 +149,7 @@ not define the whole roadmap.
   execution oracle. Parser-AST execution fallback is forbidden.
 - Add direct operands, inline caches, dense-array loop instructions, and native
   call specializations only behind explicit guards with ordinary bytecode
-  semantic fallbacks.
+  semantic slow paths.
 
 ## Phase 12: Heap Management And Collection
 

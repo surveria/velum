@@ -115,10 +115,10 @@ fn keeps_many_vms_isolated_after_one_vm_fails() -> TestResult {
                 upvalue_cell_count: report.resources.upvalue_cell_count,
                 native_call_cache_hits: report.resources.native_call_cache_hits,
                 native_call_cache_misses: report.resources.native_call_cache_misses,
-                native_call_cache_fallbacks: report.resources.native_call_cache_fallbacks,
+                native_call_cache_slow_paths: report.resources.native_call_cache_slow_paths,
                 call_value_cache_hits: report.resources.call_value_cache_hits,
                 call_value_cache_misses: report.resources.call_value_cache_misses,
-                call_value_cache_fallbacks: report.resources.call_value_cache_fallbacks,
+                call_value_cache_slow_paths: report.resources.call_value_cache_slow_paths,
             },
         )?;
     }

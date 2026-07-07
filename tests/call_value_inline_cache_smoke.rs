@@ -73,9 +73,9 @@ fn call_value_sites_cache_js_native_and_host_dispatch() -> TestResult {
     ensure_at_least(usage.call_value_cache_misses, 3, "call value cache misses")?;
     ensure_at_least(usage.call_value_cache_hits, 3, "call value cache hits")?;
     ensure_at_least(
-        usage.call_value_cache_fallbacks,
+        usage.call_value_cache_slow_paths,
         3,
-        "call value cache fallbacks",
+        "call value cache slow paths",
     )
 }
 

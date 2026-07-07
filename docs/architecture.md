@@ -31,17 +31,18 @@ function layers must not import lexer, parser, compiler, or parser AST modules
 directly. If execution needs a new construct, the construct must first be
 represented as bytecode-owned metadata and then executed through the VM.
 
-The word fallback has one allowed runtime meaning: a guarded bytecode,
-inline-cache, direct-native, slot, shape, or dense-array fast path may fall back
-to the ordinary bytecode/runtime semantic path when a guard cannot prove that
-the specialization is valid. It must never mean falling back to a parser-AST
-interpreter, retaining AST statement bodies in function objects, or reparsing
-from runtime code.
+Runtime and public API terminology should call guard misses `slow paths` or
+`generic semantic paths`. A guarded bytecode, inline-cache, direct-native, slot,
+shape, or dense-array specialization may take that slow path when its guard
+cannot prove the optimization is valid. Runtime code must not call that an AST
+fallback, and it must never fall back to a parser-AST interpreter, retain AST
+statement bodies in function objects, or reparse from runtime code.
 
-Removing the parser AST itself is a separate front-end redesign. It requires a
-direct parser-to-compiler IR or parser-to-bytecode pipeline that still preserves
-binding analysis, diagnostics, resource accounting, and Test262 compatibility.
-Until that redesign is scheduled, the AST remains a compile-time IR only.
+Removing the parser AST itself is a separate front-end redesign, not fallback
+cleanup. It requires a direct parser-to-frontend-IR or parser-to-bytecode
+pipeline that still preserves binding analysis, diagnostics, resource
+accounting, and Test262 compatibility. Until that redesign is scheduled, the
+AST remains a compile-time IR only.
 
 ## Embedding Model
 

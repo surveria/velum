@@ -99,7 +99,7 @@ fn cached_native_call_sites_follow_property_mutations() -> TestResult {
 }
 
 #[test]
-fn native_call_site_cache_reports_hits_misses_and_fallbacks() -> TestResult {
+fn native_call_site_cache_reports_hits_misses_and_slow_paths() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
     let script = vm.compile(NATIVE_CALL_SITE_COUNTER_SCRIPT)?;
@@ -120,9 +120,9 @@ fn native_call_site_cache_reports_hits_misses_and_fallbacks() -> TestResult {
     )?;
     ensure_at_least(usage.native_call_cache_hits, 3, "native call cache hits")?;
     ensure_at_least(
-        usage.native_call_cache_fallbacks,
+        usage.native_call_cache_slow_paths,
         2,
-        "native call cache fallbacks",
+        "native call cache slow paths",
     )
 }
 
@@ -143,9 +143,9 @@ fn dynamic_native_member_call_sites_cache_object_property_hits() -> TestResult {
         "native call cache misses",
     )?;
     ensure_at_least(
-        usage.native_call_cache_fallbacks,
+        usage.native_call_cache_slow_paths,
         1,
-        "native call cache fallbacks",
+        "native call cache slow paths",
     )
 }
 

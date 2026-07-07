@@ -22,6 +22,16 @@ const FRONTEND_PIPELINE_SOURCE_DIRS: [&str; 5] = [
 
 const FRONTEND_BRIDGE_SOURCE_DIRS: [&str; 1] = ["src/compiled_script"];
 
+const SLOW_PATH_TERMINOLOGY_SOURCE_DIRS: [&str; 7] = [
+    "src/api",
+    "src/bytecode",
+    "src/compiled_script",
+    "src/runtime",
+    "src/storage",
+    "src/syntax",
+    "src/value",
+];
+
 const OBSOLETE_AST_EXECUTION_MARKERS: [&str; 4] = [
     "EvalAst",
     "eval_ast",
@@ -78,6 +88,7 @@ fn check_source_file(repo: &Path, path: &Path) -> TestResult {
         .map_err(|error| format!("failed to read source file {}: {error}", path.display()))?;
     let parser_ast_allowed = path_allows_parser_ast(repo, path)?;
     let frontend_pipeline_allowed = path_allows_frontend_pipeline(repo, path)?;
+    let slow_path_terminology_required = path_requires_slow_path_terminology(repo, path)?;
     for line in text.lines() {
         if line_imports_parser_ast(line) && !parser_ast_allowed {
             return Err(format!(
@@ -111,6 +122,14 @@ fn check_source_file(repo: &Path, path: &Path) -> TestResult {
             )
             .into());
         }
+        if line_contains_fallback_terminology(line) && slow_path_terminology_required {
+            return Err(format!(
+                "{} uses fallback terminology through `{}`; runtime and public execution layers must call guarded misses slow paths, not AST fallbacks",
+                path.display(),
+                line.trim()
+            )
+            .into());
+        }
     }
     Ok(())
 }
@@ -128,6 +147,13 @@ fn path_allows_frontend_pipeline(repo: &Path, path: &Path) -> Result<bool, Strip
         .iter()
         .chain(FRONTEND_BRIDGE_SOURCE_DIRS.iter())
         .any(|allowed| relative.starts_with(allowed)))
+}
+
+fn path_requires_slow_path_terminology(repo: &Path, path: &Path) -> Result<bool, StripPrefixError> {
+    let relative = path.strip_prefix(repo)?;
+    Ok(SLOW_PATH_TERMINOLOGY_SOURCE_DIRS
+        .iter()
+        .any(|required| relative.starts_with(required)))
 }
 
 fn is_rust_file(path: &Path) -> bool {
@@ -167,4 +193,8 @@ fn line_contains_obsolete_ast_execution_marker(line: &str) -> bool {
     OBSOLETE_AST_EXECUTION_MARKERS
         .iter()
         .any(|marker| line.contains(marker))
+}
+
+fn line_contains_fallback_terminology(line: &str) -> bool {
+    line.contains("fallback") || line.contains("Fallback")
 }
