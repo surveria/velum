@@ -222,7 +222,7 @@ impl Context {
         let from_index = Self::array_slice_bound(from_index, length, 0)?;
         let default_search = Value::Undefined;
         let search = search.unwrap_or(&default_search);
-        self.objects.array_includes(*id, search, from_index)
+        self.objects.array_includes(*id, length, search, from_index)
     }
 
     pub(in crate::runtime::native) fn eval_array_index_of(
@@ -249,7 +249,7 @@ impl Context {
         let from_index = Self::array_slice_bound(from_index, length, 0)?;
         let default_search = Value::Undefined;
         let search = search.unwrap_or(&default_search);
-        self.objects.array_index_of(*id, search, from_index)
+        self.objects.array_index_of(*id, length, search, from_index)
     }
 
     pub(in crate::runtime::native) fn eval_array_last_index_of(
@@ -276,7 +276,8 @@ impl Context {
         let from_index = Self::array_last_index_of_start(from_index, length)?;
         let default_search = Value::Undefined;
         let search = search.unwrap_or(&default_search);
-        self.objects.array_last_index_of(*id, search, from_index)
+        self.objects
+            .array_last_index_of(*id, length, search, from_index)
     }
 
     pub(in crate::runtime::native) fn eval_array_join(
@@ -367,8 +368,8 @@ impl Context {
         let prototype = self.existing_array_constructor_prototype()?;
         self.objects.array_slice(
             *id,
-            start,
-            end,
+            length,
+            start..end,
             prototype,
             self.limits.max_objects,
             self.limits.max_object_properties,

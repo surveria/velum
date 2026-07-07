@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T073034Z.md`
-- Task: rsqjs-test-report-20260707T073034Z.md
-- Performance: 0.80x (40/63 >1.00x)
+- `rsqjs-test-report-20260707T075422Z.md`
+- Task: rsqjs-test-report-20260707T075422Z.md
+- Performance: 0.82x (39/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 14568 passed / 88010 failed (14.20%)
 
@@ -259,4 +259,5 @@ Latest report:
 | `20260707T065259Z` `b6264d1` Avoid temporary Vecs during array materialization | 0.84x (42/63 >1.00x) | - (0/63 >1.00x) | 14552 passed / 88026 failed (14.19%) |
 | `20260707T070659Z` `05c4e32` Optimize direct Math integer native calls | 0.84x (42/63 >1.00x) | - (0/63 >1.00x) | 14552 passed / 88026 failed (14.19%) |
 | `20260707T071704Z` `52fc747` Support labeled continue in bytecode loops | 0.83x (41/63 >1.00x) | - (0/63 >1.00x) | 14568 passed / 88010 failed (14.20%) |
-| `20260707T073034Z` rsqjs-test-report-20260707T073034Z.md | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 14568 passed / 88010 failed (14.20%) |
+| `20260707T073034Z` `e669cfe` Bytecode architecture boundary hardening tranche: Make AST runtime fallback removal enforceable so future work cannot quietly reintroduce parser-AST execution surfaces. | 0.80x (40/63 >1.00x) | - (0/63 >1.00x) | 14568 passed / 88010 failed (14.20%) |
+| `20260707T075422Z` rsqjs-test-report-20260707T075422Z.md | 0.82x (39/63 >1.00x) | - (0/63 >1.00x) | 14568 passed / 88010 failed (14.20%) |
