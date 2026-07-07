@@ -105,6 +105,7 @@ impl Context {
             | BytecodeInstruction::Print { .. }
             | BytecodeInstruction::AssertThrows { .. }
             | BytecodeInstruction::Construct { .. }
+            | BytecodeInstruction::ConstructValue { .. }
             | BytecodeInstruction::CreateFunction { .. }
             | BytecodeInstruction::ArrayLiteral { .. }
             | BytecodeInstruction::ObjectLiteral { .. } => {

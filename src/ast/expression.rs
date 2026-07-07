@@ -100,7 +100,7 @@ pub enum Expr {
     Object(Vec<ObjectProperty>),
     Array(Vec<Self>),
     New {
-        constructor: StaticBinding,
+        constructor: Box<Self>,
         args: Vec<Self>,
     },
 }

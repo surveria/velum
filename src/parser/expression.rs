@@ -9,6 +9,7 @@ use super::Parser;
 
 const THIS_PROPERTY_NAME: &str = "this";
 const NEW_TARGET_PROPERTY_NAME: &str = "target";
+const IMPORT_BINDING_NAME: &str = "import";
 
 struct ObjectPropertyName {
     key: StaticName,
@@ -174,16 +175,80 @@ impl Parser {
             let expr = self.new_target_expr(new_offset)?;
             return self.call_suffix(expr);
         }
-        let constructor =
-            self.consume_binding_identifier("expected constructor name after 'new'")?;
-        self.consume(&TokenKind::LParen, "expected '(' after constructor name")?;
+        let constructor = self.primary()?;
+        let constructor = self.member_suffix(constructor)?;
+        if Self::constructor_starts_with_import(&constructor) {
+            return Err(Error::parse(
+                "import call cannot be used as a constructor",
+                new_offset,
+            ));
+        }
+        if !self.match_kind(&TokenKind::LParen) {
+            return Err(Error::parse(
+                "expected '(' after constructor expression",
+                self.offset(),
+            ));
+        }
         let args = if self.check(&TokenKind::RParen) {
             Vec::new()
         } else {
             self.arguments()?
         };
         self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
-        Ok(Expr::New { constructor, args })
+        Ok(Expr::New {
+            constructor: Box::new(constructor),
+            args,
+        })
+    }
+
+    fn constructor_starts_with_import(expr: &Expr) -> bool {
+        match expr {
+            Expr::Identifier(name) => name.as_str() == IMPORT_BINDING_NAME,
+            Expr::Member { object, .. } | Expr::ComputedMember { object, .. } => {
+                Self::constructor_starts_with_import(object)
+            }
+            Expr::Parenthesized(expr) => Self::constructor_starts_with_import(expr),
+            _ => false,
+        }
+    }
+
+    fn member_suffix(&mut self, mut expr: Expr) -> Result<Expr> {
+        loop {
+            if self.match_kind(&TokenKind::Dot) {
+                let property = self.consume_property_name("expected property name after '.'")?;
+                let access = self.static_property_access()?;
+                expr = Expr::Member {
+                    object: Box::new(expr),
+                    property,
+                    access,
+                };
+                continue;
+            }
+            if !self.match_kind(&TokenKind::LBracket) {
+                break;
+            }
+            let property = self.expression()?;
+            self.consume(
+                &TokenKind::RBracket,
+                "expected ']' after property expression",
+            )?;
+            if let Some(property) = self.static_computed_property_key(&property)? {
+                let access = self.static_property_access()?;
+                expr = Expr::Member {
+                    object: Box::new(expr),
+                    property,
+                    access,
+                };
+                continue;
+            }
+            let access = self.static_property_access()?;
+            expr = Expr::ComputedMember {
+                object: Box::new(expr),
+                property: Box::new(property),
+                access,
+            };
+        }
+        Ok(expr)
     }
 
     fn new_target_expr(&mut self, new_offset: usize) -> Result<Expr> {

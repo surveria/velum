@@ -598,6 +598,9 @@ pub enum BytecodeInstruction {
         native: Option<NativeCallTarget>,
         arg_count: usize,
     },
+    ConstructValue {
+        arg_count: usize,
+    },
     CreateFunction {
         id: crate::ast::StaticFunctionId,
         name: Option<StaticName>,

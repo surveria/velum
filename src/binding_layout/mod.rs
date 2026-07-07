@@ -559,7 +559,7 @@ impl LayoutBuilder {
             }
             Expr::Array(elements) => self.analyze_exprs(elements, scope, function),
             Expr::New { constructor, args } => {
-                self.resolve(constructor, scope, function)?;
+                self.analyze_expr(constructor, scope, function)?;
                 self.analyze_exprs(args, scope, function)
             }
         }
