@@ -531,6 +531,9 @@ pub struct BytecodeCatch {
 pub enum BytecodeInstruction {
     PushLiteral(Value),
     PushString(StaticString),
+    TemplateConcat {
+        part_count: usize,
+    },
     CreateRegExp {
         pattern: StaticString,
         flags: StaticString,

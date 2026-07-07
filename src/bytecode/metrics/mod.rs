@@ -483,6 +483,7 @@ impl BytecodeInstruction {
                 | Self::ConstructValue { .. }
                 | Self::PushLiteral(_)
                 | Self::PushString(_)
+                | Self::TemplateConcat { .. }
                 | Self::CreateRegExp { .. }
                 | Self::PushUndefined
                 | Self::LoadThis

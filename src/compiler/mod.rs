@@ -15,7 +15,7 @@ use crate::{
         BytecodeObjectProperty, BytecodeProgram, BytecodeProperty,
     },
     error::{Error, Result},
-    syntax::StaticName,
+    syntax::{StaticName, StaticString},
 };
 
 mod call;
@@ -196,6 +196,10 @@ impl<'a> BytecodeCompiler<'a> {
             Expr::StringLiteral(value) => {
                 self.emit(BytecodeInstruction::PushString(value.clone()));
             }
+            Expr::TemplateLiteral {
+                quasis,
+                expressions,
+            } => return self.compile_template_literal(quasis, expressions),
             Expr::RegExpLiteral { pattern, flags } => {
                 self.emit(BytecodeInstruction::CreateRegExp {
                     pattern: pattern.clone(),
@@ -271,6 +275,26 @@ impl<'a> BytecodeCompiler<'a> {
             }
             Expr::New { constructor, args } => self.compile_new_expr(constructor, args)?,
         }
+        Ok(())
+    }
+
+    fn compile_template_literal(
+        &mut self,
+        quasis: &[StaticString],
+        expressions: &[Expr],
+    ) -> Result<()> {
+        let mut part_count = 0usize;
+        for (index, quasi) in quasis.iter().enumerate() {
+            if !quasi.as_str().is_empty() {
+                self.emit(BytecodeInstruction::PushString(quasi.clone()));
+                part_count = checked_template_part_count(part_count)?;
+            }
+            if let Some(expression) = expressions.get(index) {
+                self.compile_expr(expression)?;
+                part_count = checked_template_part_count(part_count)?;
+            }
+        }
+        self.emit(BytecodeInstruction::TemplateConcat { part_count });
         Ok(())
     }
 
@@ -685,6 +709,7 @@ impl<'a> BytecodeCompiler<'a> {
             }
             BytecodeInstruction::PushLiteral(_)
             | BytecodeInstruction::PushString(_)
+            | BytecodeInstruction::TemplateConcat { .. }
             | BytecodeInstruction::CreateRegExp { .. }
             | BytecodeInstruction::PushUndefined
             | BytecodeInstruction::LoadThis
@@ -756,6 +781,12 @@ impl<'a> BytecodeCompiler<'a> {
     const fn current_address(&self) -> BytecodeAddress {
         BytecodeAddress::new(self.instructions.len())
     }
+}
+
+fn checked_template_part_count(part_count: usize) -> Result<usize> {
+    part_count
+        .checked_add(1)
+        .ok_or_else(|| Error::runtime("template literal part count overflowed"))
 }
 
 fn constructor_binding_expr(expr: &Expr) -> Option<&StaticBinding> {
