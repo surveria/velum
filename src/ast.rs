@@ -262,7 +262,7 @@ pub enum Stmt {
     FunctionDecl {
         name: StaticBinding,
         id: StaticFunctionId,
-        params: Rc<[StaticBinding]>,
+        params: Rc<[FunctionParam]>,
         body: Rc<[Self]>,
         is_async: bool,
     },
@@ -279,6 +279,18 @@ pub enum DeclKind {
     Var,
     Let,
     Const,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionParam {
+    pub name: StaticBinding,
+    pub default: Option<Expr>,
+}
+
+impl FunctionParam {
+    pub const fn new(name: StaticBinding, default: Option<Expr>) -> Self {
+        Self { name, default }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -372,20 +384,20 @@ pub enum Expr {
     Function {
         id: StaticFunctionId,
         name: Option<StaticName>,
-        params: Rc<[StaticBinding]>,
+        params: Rc<[FunctionParam]>,
         body: Rc<[Stmt]>,
         is_async: bool,
     },
     ArrowFunction {
         id: StaticFunctionId,
-        params: Rc<[StaticBinding]>,
+        params: Rc<[FunctionParam]>,
         body: Rc<[Stmt]>,
         is_async: bool,
     },
     MethodFunction {
         id: StaticFunctionId,
         name: StaticName,
-        params: Rc<[StaticBinding]>,
+        params: Rc<[FunctionParam]>,
         body: Rc<[Stmt]>,
     },
     Object(Vec<ObjectProperty>),

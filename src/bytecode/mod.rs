@@ -3,8 +3,8 @@ use std::rc::Rc;
 use crate::{
     api::native_call::NativeCallTarget,
     ast::{
-        BinaryOp, DeclKind, Expr, ObjectProperty, Program, StaticBinding, StaticName,
-        StaticPropertyAccessId, Stmt, UnaryOp, UpdateOp,
+        BinaryOp, DeclKind, Expr, FunctionParam, ObjectProperty, Program, StaticBinding,
+        StaticName, StaticPropertyAccessId, Stmt, UnaryOp, UpdateOp,
     },
     binding_layout::BindingLayout,
     error::{Error, Result},
@@ -357,7 +357,7 @@ impl<'a> BytecodeCompiler<'a> {
         &mut self,
         id: crate::ast::StaticFunctionId,
         name: Option<crate::ast::StaticName>,
-        params: &Rc<[StaticBinding]>,
+        params: &Rc<[FunctionParam]>,
         body: &[Stmt],
         constructable: bool,
         is_async: bool,
@@ -366,7 +366,7 @@ impl<'a> BytecodeCompiler<'a> {
             id,
             name,
             params: Rc::clone(params),
-            bytecode: BytecodeFunction::compile(body, self.layout)?,
+            bytecode: BytecodeFunction::compile(params, body, self.layout)?,
             constructable,
             is_async,
         });

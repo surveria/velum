@@ -138,7 +138,7 @@ impl<'a> HoistCollector<'a> {
                     *id,
                     name.name().clone(),
                     Rc::clone(params),
-                    BytecodeFunction::compile(body, self.layout)?,
+                    BytecodeFunction::compile(params, body, self.layout)?,
                     *is_async,
                 );
                 self.function_declarations.push(declaration);

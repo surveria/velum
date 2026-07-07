@@ -3,8 +3,8 @@ use std::{fmt, rc::Rc};
 use crate::{
     api::native_call::NativeCallTarget,
     ast::{
-        BinaryOp, DeclKind, StaticBinding, StaticCallSiteId, StaticFunctionId, StaticName,
-        StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
+        BinaryOp, DeclKind, FunctionParam, StaticBinding, StaticCallSiteId, StaticFunctionId,
+        StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
     },
     binding_layout::{BindingLayout, BindingOperand},
     bytecode::BytecodeHoistPlan,
@@ -34,6 +34,7 @@ impl BytecodeProgram {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeFunction {
+    param_defaults: Rc<[Option<BytecodeBlock>]>,
     body: BytecodeBlock,
     hoist_plan: BytecodeHoistPlan,
     capture_bindings: Rc<[StaticBinding]>,
@@ -41,15 +42,21 @@ pub struct BytecodeFunction {
 
 impl BytecodeFunction {
     pub(crate) const fn new(
+        param_defaults: Rc<[Option<BytecodeBlock>]>,
         body: BytecodeBlock,
         hoist_plan: BytecodeHoistPlan,
         capture_bindings: Rc<[StaticBinding]>,
     ) -> Self {
         Self {
+            param_defaults,
             body,
             hoist_plan,
             capture_bindings,
         }
+    }
+
+    pub fn param_defaults(&self) -> &[Option<BytecodeBlock>] {
+        &self.param_defaults
     }
 
     pub const fn body(&self) -> &BytecodeBlock {
@@ -70,7 +77,7 @@ pub struct BytecodeFunctionDeclaration {
     name: BytecodeBinding,
     id: StaticFunctionId,
     function_name: StaticName,
-    params: Rc<[StaticBinding]>,
+    params: Rc<[FunctionParam]>,
     bytecode: BytecodeFunction,
     is_async: bool,
 }
@@ -80,7 +87,7 @@ impl BytecodeFunctionDeclaration {
         name: BytecodeBinding,
         id: StaticFunctionId,
         function_name: StaticName,
-        params: Rc<[StaticBinding]>,
+        params: Rc<[FunctionParam]>,
         bytecode: BytecodeFunction,
         is_async: bool,
     ) -> Self {
@@ -106,7 +113,7 @@ impl BytecodeFunctionDeclaration {
         &self.function_name
     }
 
-    pub const fn params(&self) -> &Rc<[StaticBinding]> {
+    pub const fn params(&self) -> &Rc<[FunctionParam]> {
         &self.params
     }
 
@@ -455,7 +462,7 @@ pub enum BytecodeInstruction {
     CreateFunction {
         id: crate::ast::StaticFunctionId,
         name: Option<StaticName>,
-        params: Rc<[StaticBinding]>,
+        params: Rc<[FunctionParam]>,
         bytecode: BytecodeFunction,
         constructable: bool,
         is_async: bool,

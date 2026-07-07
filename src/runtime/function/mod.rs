@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{DeclKind, StaticBinding, StaticBindingId, StaticFunctionId, StaticName},
+    ast::{DeclKind, FunctionParam, StaticBindingId, StaticFunctionId, StaticName},
     binding_layout::{BindingLayout, BindingOperand},
-    bytecode::BytecodeFunction,
+    bytecode::{BytecodeBlock, BytecodeFunction},
     error::{Error, Result},
     runtime::Context,
     runtime::binding::scope::{BindingCell, BindingScope},
@@ -31,7 +31,7 @@ impl Context {
         &mut self,
         static_function_id: StaticFunctionId,
         name: Option<&StaticName>,
-        params: &Rc<[StaticBinding]>,
+        params: &Rc<[FunctionParam]>,
         bytecode: &BytecodeFunction,
         constructable: bool,
         is_async: bool,
@@ -57,7 +57,7 @@ impl Context {
             Value::Undefined
         };
         let function_name = self.function_name_value(name)?;
-        let arity = super::FunctionArity::new(params.len());
+        let arity = function_arity(params);
         let prototype_default = constructable.then(|| {
             DataPropertyDescriptor::new(
                 prototype.clone(),
@@ -485,10 +485,10 @@ impl Context {
         function.properties().keys(&self.atoms)
     }
 
-    fn function_param_atoms(&mut self, params: &[StaticBinding]) -> Result<Rc<[AtomId]>> {
+    fn function_param_atoms(&mut self, params: &[FunctionParam]) -> Result<Rc<[AtomId]>> {
         let mut atoms = Vec::with_capacity(params.len());
         for param in params {
-            atoms.push(self.intern_static_name_atom(param.name())?);
+            atoms.push(self.intern_static_name_atom(param.name.name())?);
         }
         Ok(atoms.into())
     }
@@ -560,37 +560,115 @@ impl Context {
                 Some(static_name_atom_cache),
                 Some(static_binding_cache),
                 Some(static_binding_layout),
-            ) => self.with_static_name_caches(
-                static_name_atom_cache,
-                static_binding_cache,
-                static_binding_layout,
-                |context| {
-                    context.remember_function_params(param_binding_ids, param_atoms)?;
-                    context
-                        .hoist_bytecode_declarations(bytecode.hoist_plan())
-                        .and_then(|()| context.eval_bytecode_block(bytecode.body()))
-                },
-            ),
+            ) => {
+                let default_layout = static_binding_layout.clone();
+                self.with_static_name_caches(
+                    static_name_atom_cache,
+                    static_binding_cache,
+                    static_binding_layout,
+                    |context| {
+                        context.remember_function_params(param_binding_ids, param_atoms)?;
+                        context.apply_function_param_defaults(
+                            param_binding_ids,
+                            param_atoms,
+                            bytecode.param_defaults(),
+                            Some(&default_layout),
+                        )?;
+                        context
+                            .hoist_bytecode_declarations(bytecode.hoist_plan())
+                            .and_then(|()| context.eval_bytecode_block(bytecode.body()))
+                    },
+                )
+            }
             (Some(static_name_atom_cache), None, _) => {
                 self.with_static_name_atom_cache(static_name_atom_cache, |context| {
+                    context.apply_function_param_defaults(
+                        param_binding_ids,
+                        param_atoms,
+                        bytecode.param_defaults(),
+                        None,
+                    )?;
                     context
                         .hoist_bytecode_declarations(bytecode.hoist_plan())
                         .and_then(|()| context.eval_bytecode_block(bytecode.body()))
                 })
             }
-            (None, _, _) | (Some(_), Some(_), None) => self
-                .hoist_bytecode_declarations(bytecode.hoist_plan())
-                .and_then(|()| self.eval_bytecode_block(bytecode.body())),
+            (None, _, _) | (Some(_), Some(_), None) => {
+                self.apply_function_param_defaults(
+                    param_binding_ids,
+                    param_atoms,
+                    bytecode.param_defaults(),
+                    None,
+                )?;
+                self.hoist_bytecode_declarations(bytecode.hoist_plan())
+                    .and_then(|()| self.eval_bytecode_block(bytecode.body()))
+            }
         }
+    }
+
+    fn apply_function_param_defaults(
+        &mut self,
+        binding_ids: &[StaticBindingId],
+        atoms: &[AtomId],
+        defaults: &[Option<BytecodeBlock>],
+        layout: Option<&BindingLayout>,
+    ) -> Result<()> {
+        if binding_ids.len() != atoms.len() || binding_ids.len() != defaults.len() {
+            return Err(Error::runtime("function parameter layout length mismatch"));
+        }
+        for ((binding, atom), default) in binding_ids
+            .iter()
+            .copied()
+            .zip(atoms.iter().copied())
+            .zip(defaults.iter())
+        {
+            let Some(default) = default else {
+                continue;
+            };
+            let cell = self.function_param_cell(binding, atom, layout)?;
+            if !matches!(cell.value(), Value::Undefined) {
+                continue;
+            }
+            let value = self.eval_bytecode_expression(default)?;
+            cell.assign("function parameter", value)?;
+        }
+        Ok(())
+    }
+
+    fn function_param_cell(
+        &self,
+        binding: StaticBindingId,
+        atom: AtomId,
+        layout: Option<&BindingLayout>,
+    ) -> Result<BindingCell> {
+        let Some(scope) = self.locals.last() else {
+            return Err(Error::runtime("function parameter scope is not active"));
+        };
+        if let Some(frame) = function_param_frame(binding, layout)? {
+            return scope
+                .cell_for_slot(atom, frame.slot())
+                .ok_or_else(|| Error::runtime("function parameter binding is not defined"));
+        }
+        scope
+            .get(atom)
+            .ok_or_else(|| Error::runtime("function parameter binding is not defined"))
     }
 }
 
-fn function_param_binding_ids(params: &[StaticBinding]) -> Rc<[StaticBindingId]> {
+fn function_param_binding_ids(params: &[FunctionParam]) -> Rc<[StaticBindingId]> {
     params
         .iter()
-        .map(StaticBinding::id)
+        .map(|param| param.name.id())
         .collect::<Vec<_>>()
         .into()
+}
+
+fn function_arity(params: &[FunctionParam]) -> super::FunctionArity {
+    let arity = params
+        .iter()
+        .take_while(|param| param.default.is_none())
+        .count();
+    super::FunctionArity::new(arity)
 }
 
 fn function_param_frame(
