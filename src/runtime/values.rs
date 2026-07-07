@@ -36,6 +36,12 @@ impl Context {
                 self.check_string_len(text.as_str())?;
                 self.strings.get(text.id())?;
             }
+            Value::Symbol(symbol) => {
+                if let Some(description) = symbol.description() {
+                    self.check_string_len(description)?;
+                }
+                self.symbols.get(symbol.id())?;
+            }
             Value::Error(error) => self.check_string_len(error.message())?,
             Value::Undefined
             | Value::Null

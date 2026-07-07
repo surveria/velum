@@ -19,7 +19,10 @@ impl Context {
     ) -> Result<DynamicPropertyKey> {
         let name = property_key(value);
         self.check_string_len(&name)?;
-        let key = self.known_property_key(&name);
+        let key = match value {
+            Value::Symbol(symbol) => Some(PropertyKey::symbol(symbol.id())),
+            _ => self.known_property_key(&name),
+        };
         Ok(DynamicPropertyKey::new(name, key))
     }
 

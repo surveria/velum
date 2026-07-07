@@ -454,6 +454,7 @@ impl Context {
             | Value::HostFunction(_)
             | Value::Object(_)
             | Value::Error(_)
+            | Value::Symbol(_)
             | Value::Null => 0.0,
             Value::Bool(value) => {
                 if *value {

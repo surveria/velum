@@ -23,4 +23,5 @@ pub use crate::runtime::Context;
 pub use crate::runtime::engine::Runtime;
 pub use crate::runtime::limits::RuntimeLimits;
 pub use crate::storage::string_heap::{JsString, StringId};
+pub use crate::storage::symbol::{JsSymbol, SymbolId};
 pub use crate::value::Value;

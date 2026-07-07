@@ -17,6 +17,7 @@ pub fn property_key(value: &Value) -> String {
     match value {
         Value::String(value) => value.clone(),
         Value::HeapString(value) => value.as_str().to_owned(),
+        Value::Symbol(value) => value.display_name(),
         _ => value.to_string(),
     }
 }
@@ -129,6 +130,7 @@ pub fn enumerable_property_keys(
         Value::HeapString(value) => string_enumerable_keys(value.as_str()),
         Value::Bool(_)
         | Value::Number(_)
+        | Value::Symbol(_)
         | Value::Function(_)
         | Value::NativeFunction(_)
         | Value::HostFunction(_) => Ok(Vec::new()),
@@ -165,6 +167,7 @@ pub fn delete_property(
         | Value::Number(_)
         | Value::String(_)
         | Value::HeapString(_)
+        | Value::Symbol(_)
         | Value::Function(_)
         | Value::NativeFunction(_)
         | Value::HostFunction(_) => Ok(true),

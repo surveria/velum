@@ -1,17 +1,30 @@
-use crate::{storage::atom::AtomId, value::Value};
+use crate::{
+    storage::{atom::AtomId, symbol::SymbolId},
+    value::Value,
+};
 
 use super::descriptor::PropertyEnumerable;
 
 #[derive(Debug, Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
-pub struct PropertyKey(AtomId);
+pub enum PropertyKey {
+    Atom(AtomId),
+    Symbol(SymbolId),
+}
 
 impl PropertyKey {
     pub const fn new(atom: AtomId) -> Self {
-        Self(atom)
+        Self::Atom(atom)
     }
 
-    pub const fn atom(self) -> AtomId {
-        self.0
+    pub const fn symbol(symbol: SymbolId) -> Self {
+        Self::Symbol(symbol)
+    }
+
+    pub const fn atom(self) -> Option<AtomId> {
+        match self {
+            Self::Atom(atom) => Some(atom),
+            Self::Symbol(_) => None,
+        }
     }
 }
 

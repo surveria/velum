@@ -115,7 +115,8 @@ impl NativeFunction {
             | NativeFunctionKind::PromiseThen
             | NativeFunctionKind::PromiseCatch
             | NativeFunctionKind::PromiseResolver { .. }
-            | NativeFunctionKind::String => None,
+            | NativeFunctionKind::String
+            | NativeFunctionKind::Symbol => None,
         }
     }
 

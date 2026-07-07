@@ -223,14 +223,6 @@ impl Context {
         self.checked_value(value)
     }
 
-    pub(crate) fn function_own_property_descriptor(
-        &self,
-        id: FunctionId,
-        property: &str,
-    ) -> Result<Option<DataPropertyDescriptor>> {
-        self.function_own_property_descriptor_lookup(id, self.property_lookup(property))
-    }
-
     pub(crate) fn function_own_property_descriptor_lookup(
         &self,
         id: FunctionId,
@@ -244,10 +236,6 @@ impl Context {
             return Ok(Some(descriptor));
         }
         Ok(function.properties.own_property_descriptor(property))
-    }
-
-    pub(crate) fn has_function_property(&self, id: FunctionId, property: &str) -> Result<bool> {
-        self.has_function_property_lookup(id, self.property_lookup(property))
     }
 
     pub(crate) fn has_function_property_lookup(
@@ -279,15 +267,15 @@ impl Context {
             .set(key, property_kind, value, max_properties)
     }
 
-    pub(crate) fn define_function_property(
+    pub(crate) fn define_function_property_key(
         &mut self,
         id: FunctionId,
         property: &str,
+        key: PropertyKey,
         update: DataPropertyUpdate,
     ) -> Result<()> {
         let max_properties = self.limits.max_object_properties;
         let property_kind = FunctionPropertyKind::from_name(property);
-        let key = self.intern_property_key(property)?;
         let function = self.function_mut(id)?;
         function
             .properties
@@ -325,6 +313,7 @@ impl Context {
             | Value::Number(_)
             | Value::String(_)
             | Value::HeapString(_)
+            | Value::Symbol(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
             | Value::HostFunction(_)
@@ -366,14 +355,6 @@ impl Context {
         self.checked_value(value)
     }
 
-    pub(crate) fn native_function_own_property_descriptor(
-        &self,
-        id: NativeFunctionId,
-        property: &str,
-    ) -> Result<Option<DataPropertyDescriptor>> {
-        self.native_function_own_property_descriptor_lookup(id, self.property_lookup(property))
-    }
-
     pub(crate) fn native_function_own_property_descriptor_lookup(
         &self,
         id: NativeFunctionId,
@@ -394,14 +375,6 @@ impl Context {
             )));
         }
         Ok(function.properties().own_property_descriptor(property))
-    }
-
-    pub(crate) fn has_native_function_property(
-        &self,
-        id: NativeFunctionId,
-        property: &str,
-    ) -> Result<bool> {
-        self.has_native_function_property_lookup(id, self.property_lookup(property))
     }
 
     pub(crate) fn has_native_function_property_lookup(
@@ -442,10 +415,11 @@ impl Context {
             .set(key, property_kind, value, max_properties)
     }
 
-    pub(crate) fn define_native_function_property(
+    pub(crate) fn define_native_function_property_key(
         &mut self,
         id: NativeFunctionId,
         property: &str,
+        key: PropertyKey,
         update: DataPropertyUpdate,
     ) -> Result<()> {
         let property_kind = FunctionPropertyKind::from_name(property);
@@ -453,7 +427,6 @@ impl Context {
             return Ok(());
         }
         let max_properties = self.limits.max_object_properties;
-        let key = self.intern_property_key(property)?;
         let function = self.native_function_mut(id)?;
         function
             .properties_mut()

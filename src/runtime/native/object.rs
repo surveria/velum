@@ -6,7 +6,7 @@ use crate::{
         DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
         PropertyEnumerable, PropertyKey, PropertyWritable,
     },
-    runtime::property::{has_property, property_key},
+    runtime::property::{DynamicPropertyKey, has_property},
     value::{NativeFunctionId, ObjectId, Value},
 };
 
@@ -56,7 +56,8 @@ impl Context {
             | Value::Bool(_)
             | Value::Number(_)
             | Value::String(_)
-            | Value::HeapString(_) => self.create_object_from_constructor(),
+            | Value::HeapString(_)
+            | Value::Symbol(_) => self.create_object_from_constructor(),
         }
     }
 
@@ -66,23 +67,25 @@ impl Context {
     ) -> Result<Value> {
         let values = args.as_slice();
         let target = Self::argument_or_undefined(values.first());
-        let property = self.object_property_key(values.get(1))?;
+        let mut property = self.object_property_key(values.get(1))?;
+        let key = self.intern_dynamic_property_key(&mut property)?;
         let descriptor_value = Self::argument_or_undefined(values.get(2));
         let descriptor = self.data_property_update_from_value(&descriptor_value)?;
         match &target {
             Value::Object(id) => {
-                let key = self.intern_property_key(&property)?;
                 self.objects.define_property(
                     *id,
                     key,
-                    &property,
+                    property.name(),
                     descriptor,
                     self.limits.max_object_properties,
                 )?;
             }
-            Value::Function(id) => self.define_function_property(*id, &property, descriptor)?,
+            Value::Function(id) => {
+                self.define_function_property_key(*id, property.name(), key, descriptor)?;
+            }
             Value::NativeFunction(id) => {
-                self.define_native_function_property(*id, &property, descriptor)?;
+                self.define_native_function_property_key(*id, property.name(), key, descriptor)?;
             }
             Value::Undefined
             | Value::Null
@@ -90,6 +93,7 @@ impl Context {
             | Value::Number(_)
             | Value::String(_)
             | Value::HeapString(_)
+            | Value::Symbol(_)
             | Value::HostFunction(_)
             | Value::Error(_) => {
                 return Err(Error::runtime(
@@ -115,12 +119,14 @@ impl Context {
                     Some(descriptor)
                 } else {
                     self.objects
-                        .own_property_descriptor(*id, self.property_lookup(&property))?
+                        .own_property_descriptor(*id, property.lookup())?
                 }
             }
-            Value::Function(id) => self.function_own_property_descriptor(*id, &property)?,
+            Value::Function(id) => {
+                self.function_own_property_descriptor_lookup(*id, property.lookup())?
+            }
             Value::NativeFunction(id) => {
-                self.native_function_own_property_descriptor(*id, &property)?
+                self.native_function_own_property_descriptor_lookup(*id, property.lookup())?
             }
             Value::Undefined
             | Value::Null
@@ -128,6 +134,7 @@ impl Context {
             | Value::Number(_)
             | Value::String(_)
             | Value::HeapString(_)
+            | Value::Symbol(_)
             | Value::HostFunction(_)
             | Value::Error(_) => {
                 return Err(Error::runtime(
@@ -144,9 +151,9 @@ impl Context {
     fn string_object_own_property_descriptor(
         &mut self,
         id: ObjectId,
-        property: &str,
+        property: &DynamicPropertyKey,
     ) -> Result<Option<DataPropertyDescriptor>> {
-        let Some(ch) = self.objects.string_object_character(id, property)? else {
+        let Some(ch) = self.objects.string_object_character(id, property.name())? else {
             return Ok(None);
         };
         let value = self.heap_string_char_value(ch)?;
@@ -225,10 +232,9 @@ impl Context {
         value.cloned().unwrap_or(Value::Undefined)
     }
 
-    fn object_property_key(&self, value: Option<&Value>) -> Result<String> {
-        let key = value.map_or_else(|| property_key(&Value::Undefined), property_key);
-        self.check_string_len(&key)?;
-        Ok(key)
+    fn object_property_key(&self, value: Option<&Value>) -> Result<DynamicPropertyKey> {
+        let value = value.cloned().unwrap_or(Value::Undefined);
+        self.dynamic_property_key(&value)
     }
 
     fn data_property_update_from_value(&mut self, value: &Value) -> Result<DataPropertyUpdate> {
@@ -391,15 +397,21 @@ impl Context {
         Ok(keys)
     }
 
-    fn has_own_property_value(&self, target: &Value, property: &str) -> Result<bool> {
+    fn has_own_property_value(
+        &self,
+        target: &Value,
+        property: &DynamicPropertyKey,
+    ) -> Result<bool> {
         match target {
-            Value::Object(id) => self.objects.has_own(*id, self.property_lookup(property)),
-            Value::Function(id) => self.has_function_property(*id, property),
-            Value::NativeFunction(id) => self.has_native_function_property(*id, property),
-            Value::Error(_) | Value::String(_) | Value::HeapString(_) => {
-                has_property(&self.objects, target, self.property_lookup(property))
+            Value::Object(id) => self.objects.has_own(*id, property.lookup()),
+            Value::Function(id) => self.has_function_property_lookup(*id, property.lookup()),
+            Value::NativeFunction(id) => {
+                self.has_native_function_property_lookup(*id, property.lookup())
             }
-            Value::Bool(_) | Value::Number(_) => Ok(false),
+            Value::Error(_) | Value::String(_) | Value::HeapString(_) => {
+                has_property(&self.objects, target, property.lookup())
+            }
+            Value::Bool(_) | Value::Number(_) | Value::Symbol(_) => Ok(false),
             Value::Undefined | Value::Null | Value::HostFunction(_) => Err(Error::runtime(
                 "Object.hasOwn target cannot be converted to an object",
             )),
@@ -414,7 +426,7 @@ impl Context {
             Value::Error(_) | Value::String(_) | Value::HeapString(_) => {
                 self.enumerable_keys(target)
             }
-            Value::Bool(_) | Value::Number(_) => Ok(Vec::new()),
+            Value::Bool(_) | Value::Number(_) | Value::Symbol(_) => Ok(Vec::new()),
             Value::Undefined | Value::Null | Value::HostFunction(_) => Err(Error::runtime(
                 "Object.keys target cannot be converted to an object",
             )),

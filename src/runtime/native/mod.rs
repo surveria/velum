@@ -13,6 +13,7 @@ mod object;
 mod promise;
 mod registry;
 mod string;
+mod symbol;
 
 pub(in crate::runtime) use function::NativeFunction;
 pub(in crate::runtime) use kind::NativeFunctionKind;
@@ -27,7 +28,7 @@ pub(in crate::runtime::native) use kind::{
     MATH_SINH_NAME, MATH_SQRT_NAME, MATH_TAN_NAME, MATH_TANH_NAME, MATH_TRUNC_NAME, NAN_NAME,
     NUMBER_NAME, OBJECT_DEFINE_PROPERTY_NAME, OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
     OBJECT_HAS_OWN_NAME, OBJECT_KEYS_NAME, OBJECT_NAME, PROMISE_CATCH_NAME, PROMISE_NAME,
-    PROMISE_REJECT_NAME, PROMISE_RESOLVE_NAME, PROMISE_THEN_NAME, STRING_NAME,
+    PROMISE_REJECT_NAME, PROMISE_RESOLVE_NAME, PROMISE_THEN_NAME, STRING_NAME, SYMBOL_NAME,
 };
 pub(in crate::runtime) use registry::NativeFunctionRegistry;
 

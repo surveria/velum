@@ -119,6 +119,7 @@ impl Context {
             | Value::NativeFunction(_)
             | Value::HostFunction(_)
             | Value::Object(_)
+            | Value::Symbol(_)
             | Value::Error(_) => f64::NAN,
         }
     }

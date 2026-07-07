@@ -281,7 +281,10 @@ impl FunctionProperties {
                 .function_property(*key)
                 .is_some_and(FunctionProperty::is_enumerable)
             {
-                keys.push(atoms.name(key.atom())?.to_owned());
+                let Some(atom) = key.atom() else {
+                    continue;
+                };
+                keys.push(atoms.name(atom)?.to_owned());
             }
         }
         Ok(keys)

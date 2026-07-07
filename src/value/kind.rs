@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::storage::string_heap::JsString;
+use crate::storage::{string_heap::JsString, symbol::JsSymbol};
 
 use super::{ErrorObject, FunctionId, HostFunctionId, NativeFunctionId, ObjectId};
 
@@ -12,6 +12,7 @@ pub enum Value {
     Number(f64),
     String(String),
     HeapString(JsString),
+    Symbol(JsSymbol),
     Function(FunctionId),
     NativeFunction(NativeFunctionId),
     HostFunction(HostFunctionId),
@@ -28,7 +29,8 @@ impl Value {
             Self::Number(value) => *value != 0.0 && !value.is_nan(),
             Self::String(value) => !value.is_empty(),
             Self::HeapString(value) => !value.as_str().is_empty(),
-            Self::Function(_)
+            Self::Symbol(_)
+            | Self::Function(_)
             | Self::NativeFunction(_)
             | Self::HostFunction(_)
             | Self::Object(_)
@@ -44,6 +46,7 @@ impl Value {
             Self::Bool(_) => "boolean",
             Self::Number(_) => "number",
             Self::String(_) | Self::HeapString(_) => "string",
+            Self::Symbol(_) => "symbol",
             Self::Function(_) | Self::NativeFunction(_) | Self::HostFunction(_) => "function",
         }
     }
@@ -59,6 +62,7 @@ impl Value {
         match self {
             Self::String(value) => value.clone(),
             Self::HeapString(value) => value.as_str().to_owned(),
+            Self::Symbol(value) => value.display_name(),
             _ => self.to_string(),
         }
     }
@@ -74,6 +78,7 @@ impl PartialEq for Value {
             (Self::HeapString(left), Self::HeapString(right)) => left == right,
             (Self::String(left), Self::HeapString(right)) => left == right.as_str(),
             (Self::HeapString(left), Self::String(right)) => left.as_str() == right,
+            (Self::Symbol(left), Self::Symbol(right)) => left == right,
             (Self::Function(left), Self::Function(right)) => left == right,
             (Self::NativeFunction(left), Self::NativeFunction(right)) => left == right,
             (Self::HostFunction(left), Self::HostFunction(right)) => left == right,
@@ -86,6 +91,7 @@ impl PartialEq for Value {
                 | Self::Number(_)
                 | Self::String(_)
                 | Self::HeapString(_)
+                | Self::Symbol(_)
                 | Self::Function(_)
                 | Self::NativeFunction(_)
                 | Self::HostFunction(_)
@@ -118,6 +124,7 @@ impl fmt::Display for Value {
             }
             Self::String(value) => f.write_str(value),
             Self::HeapString(value) => f.write_str(value.as_str()),
+            Self::Symbol(value) => f.write_str(&value.display_name()),
             Self::Function(_) | Self::NativeFunction(_) | Self::HostFunction(_) => {
                 f.write_str("function()")
             }

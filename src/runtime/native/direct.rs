@@ -312,6 +312,7 @@ impl Context {
                 self.eval_promise_resolver(promise, kind, args)
             }
             NativeFunctionKind::String => self.eval_string_constructor(args),
+            NativeFunctionKind::Symbol => self.eval_symbol_constructor(args),
         }
     }
 }
