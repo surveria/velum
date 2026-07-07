@@ -1,15 +1,23 @@
 # Architecture
 
-The engine starts as a small safe-Rust interpreter and should evolve toward a compact bytecode VM only when the language surface and benchmark suite justify it.
+The engine is a small safe-Rust bytecode VM with a parser AST used as a
+front-end intermediate representation. Runtime execution must stay behind
+bytecode-owned structures so language growth does not reintroduce AST
+interpreter paths.
 
 ## Layers
 
 1. `lexer`: converts source text into tokens.
-2. `parser`: builds a small AST for the currently supported language subset.
-3. `runtime`: owns globals, host functions, output, and resource counters.
-4. `value`: defines the current JavaScript value model.
+2. `syntax`: owns shared operator, declaration, and script-local static metadata
+   used by parser, bytecode, and runtime.
+3. `parser`: builds a small AST for the currently supported language subset.
+4. `bytecode`: compiles parser AST nodes into VM-owned executable metadata.
+5. `runtime`: owns globals, host functions, output, and resource counters.
+6. `value`: defines the current JavaScript value model.
 
-The current AST evaluator is deliberately simple. It lets us validate resource accounting, embedding API shape, and language tests before adding a bytecode compiler.
+The parser AST is not a runtime fallback. It is consumed by binding analysis and
+bytecode compilation, then `CompiledScript` stores a `BytecodeProgram` and
+bytecode-owned function metadata for execution.
 
 ## Embedding Model
 
@@ -20,7 +28,8 @@ The public model should evolve around these roles:
 - `Engine`: shared immutable configuration, feature flags, parser caches, atom tables, and other data that can be reused safely across isolated virtual machines.
 - `Vm`: one isolated JavaScript virtual machine with its own heap, globals, job queue, resource counters, and teardown report.
 - `Context`: an execution view into a `Vm`, used to evaluate scripts, inspect values, and register host bindings.
-- `CompiledScript`: a reusable compiled representation. It can start as an AST wrapper and later become bytecode without changing the embedding API.
+- `CompiledScript`: a reusable bytecode-owned representation hidden behind the
+  embedding API.
 - `HostFunctionRegistry`: synchronous and asynchronous Rust callbacks exposed to JavaScript as functions.
 
 The current public skeleton exposes `Engine`, `EngineConfig`, `Vm`, `VmConfig`,
@@ -29,12 +38,12 @@ The current public skeleton exposes `Engine`, `EngineConfig`, `Vm`, `VmConfig`,
 smoke tests and runner code, while new embedding-facing work should prefer the
 `Engine -> Vm -> Context` path.
 
-The first `CompiledScript` implementation is an immutable AST wrapper. It
-records compile-time usage for source length, top-level statement count, and
-maximum expression depth. A target `Context` checks those metrics before
-execution, so a script compiled with wider limits cannot bypass a stricter VM's
-compile-time resource limits. The representation is intentionally hidden behind
-the public API so bytecode can replace the AST later.
+`CompiledScript` records compile-time usage for source length, top-level
+statement count, maximum expression depth, and bytecode instruction counts. A
+target `Context` checks those metrics before execution, so a script compiled
+with wider limits cannot bypass a stricter VM's compile-time resource limits.
+The representation is intentionally hidden behind the public API so bytecode
+operands and quickening can evolve without exposing internal VM details.
 
 Multiple `Vm` instances must be able to run in the same Rust process without sharing mutable JavaScript state. A failure, resource-limit hit, pending job, or global mutation in one VM must not affect another VM. Shared data is allowed only when it is immutable or protected by explicit synchronization and resource accounting.
 
@@ -44,7 +53,8 @@ Embedding API invariants:
 - Public handles must not permit values, objects, promises, or callbacks to cross VM boundaries accidentally.
 - APIs should make resource ownership explicit. Engine-wide caches, VM heaps, queued jobs, host callbacks, and output buffers must have clear owners.
 - The engine must not assume a process-wide async runtime. Async integration belongs at the embedding boundary.
-- The API should be stable enough that the current AST evaluator can later be replaced by bytecode without changing ordinary embedder code.
+- The API should keep bytecode internals hidden unless exposing a VM control is
+  clearly useful for embedders.
 
 Host extensions are a first-class design concern:
 
@@ -79,7 +89,9 @@ The default answer should remain safe Rust.
 
 ## Resource Model
 
-`RuntimeLimits` is part of the public API and is checked by the parser and evaluator. The goal is to make resource use explicit at the embedding boundary instead of relying on global process limits.
+`RuntimeLimits` is part of the public API and is checked by the parser,
+compiler, and bytecode runtime. The goal is to make resource use explicit at
+the embedding boundary instead of relying on global process limits.
 
 Current limits cover:
 
