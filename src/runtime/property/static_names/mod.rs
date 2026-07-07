@@ -98,6 +98,31 @@ impl Context {
         Ok(None)
     }
 
+    pub(in crate::runtime) fn cached_static_object_property_native_call_kind_for_access(
+        &self,
+        access: StaticPropertyAccessId,
+        object: ObjectId,
+    ) -> Result<Option<NativeFunctionKind>> {
+        let Some(cache) = self.current_static_name_atom_cache() else {
+            return Ok(None);
+        };
+        let Some(cached) = cache.native_call(access)? else {
+            return Ok(None);
+        };
+        let Some(object_property) = cached.object_property else {
+            return Ok(None);
+        };
+        if self.objects.cacheable_native_property_is_current_for(
+            object,
+            object_property.lookup,
+            cached.function,
+            object_property.version,
+        )? {
+            return Ok(Some(cached.kind));
+        }
+        Ok(None)
+    }
+
     pub(in crate::runtime) fn remember_static_property_native_call_kind(
         &self,
         access: StaticPropertyAccessId,

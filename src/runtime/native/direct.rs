@@ -70,6 +70,16 @@ impl Context {
             return Ok(None);
         }
 
+        if self
+            .cached_static_object_property_native_call_kind_for_access(access, *object)?
+            .is_some()
+        {
+            self.record_native_call_cache_hit();
+            return self
+                .eval_direct_native_call_target(target, args, this_value)
+                .map(Some);
+        }
+
         let lookup = self.static_property_lookup(property)?;
         if self
             .cached_static_object_property_native_call_kind(access, *object, lookup)?
