@@ -28,10 +28,10 @@ impl ObjectHeap {
         };
 
         for property in properties.iter().skip(start) {
-            let value = property
-                .as_ref()
-                .map_or(Value::Undefined, ObjectProperty::value);
-            if Self::same_value_zero(&value, search) {
+            if property.as_ref().map_or_else(
+                || Self::same_value_zero(&Value::Undefined, search),
+                |property| Self::same_value_zero(property.value_ref(), search),
+            ) {
                 return Ok(Some(Value::Bool(true)));
             }
         }
@@ -59,7 +59,7 @@ impl ObjectHeap {
 
         for (position, property) in properties.iter().enumerate().skip(start) {
             if let Some(property) = property
-                && &property.value() == search
+                && property.value_ref() == search
             {
                 return Self::array_index_value(position).map(Some);
             }
@@ -85,7 +85,7 @@ impl ObjectHeap {
 
         for (position, property) in properties.iter().enumerate().take(count).rev() {
             if let Some(property) = property
-                && &property.value() == search
+                && property.value_ref() == search
             {
                 return Self::array_index_value(position).map(Some);
             }
@@ -114,8 +114,7 @@ impl ObjectHeap {
             let Some(property) = property else {
                 continue;
             };
-            let value = property.value();
-            let text = Self::array_join_element_text(&value);
+            let text = Self::array_join_element_text(property.value_ref());
             Self::push_join_text(&mut joined, &text, max_string_len)?;
         }
         Ok(Some(joined))

@@ -345,8 +345,7 @@ impl ObjectHeap {
             if index > 0 {
                 Self::push_join_text(&mut joined, separator, max_string_len)?;
             }
-            let value = property.value();
-            let text = Self::array_join_element_text(&value);
+            let text = Self::array_join_element_text(property.value_ref());
             Self::push_join_text(&mut joined, &text, max_string_len)?;
         }
         Ok(Some(joined))
@@ -669,8 +668,7 @@ impl ObjectHeap {
         start: usize,
     ) -> Result<Value> {
         for (position, property) in properties.iter().enumerate().skip(start) {
-            let value = property.value();
-            if &value == search {
+            if property.value_ref() == search {
                 return Self::array_index_value(position);
             }
         }
@@ -679,7 +677,7 @@ impl ObjectHeap {
 
     fn packed_array_includes(properties: &[ObjectProperty], search: &Value, start: usize) -> Value {
         for property in properties.iter().skip(start) {
-            if Self::same_value_zero(&property.value(), search) {
+            if Self::same_value_zero(property.value_ref(), search) {
                 return Value::Bool(true);
             }
         }
@@ -699,8 +697,7 @@ impl ObjectHeap {
             .checked_add(1)
             .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
         for (position, property) in properties.iter().enumerate().take(count).rev() {
-            let value = property.value();
-            if &value == search {
+            if property.value_ref() == search {
                 return Self::array_index_value(position);
             }
         }
