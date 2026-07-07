@@ -1,4 +1,4 @@
-use super::{FeatureAreaStats, coverage_percent, feature_area_rows_with_limit};
+use super::{FeatureAreaStats, coverage_percent, feature_area_rows_with_limit, report_metadata};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -60,11 +60,29 @@ fn compacts_feature_area_rows_after_limit() -> TestResult {
     ensure_text(&other_row.failed, "1 ❌ failed")
 }
 
+#[test]
+fn report_metadata_includes_build_versions() -> TestResult {
+    let metadata = report_metadata::RunMetadata::from_env();
+    let rendered = report_metadata::render_section(&metadata).join("\n");
+
+    ensure_contains(&rendered, "Engine version")?;
+    ensure_contains(&rendered, "Engine build commit")?;
+    ensure_contains(&rendered, "Runner version")?;
+    ensure_contains(&rendered, "Runner build commit")
+}
+
 fn ensure_text(actual: &str, expected: &str) -> TestResult {
     if actual == expected {
         return Ok(());
     }
     Err(format!("expected '{expected}', got '{actual}'").into())
+}
+
+fn ensure_contains(actual: &str, expected: &str) -> TestResult {
+    if actual.contains(expected) {
+        return Ok(());
+    }
+    Err(format!("expected text to contain '{expected}'").into())
 }
 
 fn ensure_usize(actual: usize, expected: usize) -> TestResult {

@@ -14,6 +14,7 @@ mod bench_engines;
 mod bench_measure;
 mod benchmark_mode;
 mod benchmarks;
+mod build_info;
 mod cases;
 mod failure_classification;
 #[cfg(test)]

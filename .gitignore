@@ -1,6 +1,7 @@
 *
 
 !/.gitignore
+!/build.rs
 !/Cargo.toml
 !/Cargo.lock
 !/README.md
@@ -29,6 +30,7 @@
 
 !/runner/
 !/runner/.gitignore
+!/runner/build.rs
 !/runner/Cargo.toml
 !/runner/Cargo.lock
 !/runner/README.md
