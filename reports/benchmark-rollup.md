@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T213014Z.md`
-- Task: PR #296: [codex] Enforce signed commits
+- `rsqjs-test-report-20260707T222627Z.md`
+- Task: PR #298: Support for-of statements with iterator protocol
 - Performance: 0.92x (43/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 15865 passed / 86713 failed (15.47%)
+- Full Test262: 15928 passed / 86650 failed (15.53%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -300,3 +300,4 @@ Latest report:
 | `20260707T205920Z` `bac0abe` PR #294: [codex] Note report commit identity caveat | 0.93x (43/63 >1.00x) | - (0/63 >1.00x) | 15865 passed / 86713 failed (15.47%) |
 | `20260707T211353Z` `401775d` PR #295: [codex] Archive tested report commits | 0.93x (43/63 >1.00x) | - (0/63 >1.00x) | 15865 passed / 86713 failed (15.47%) |
 | `20260707T213014Z` `955e635` PR #296: [codex] Enforce signed commits | 0.92x (43/63 >1.00x) | - (0/63 >1.00x) | 15865 passed / 86713 failed (15.47%) |
+| `20260707T222627Z` `b186a12` PR #298: Support for-of statements with iterator protocol | 0.92x (43/63 >1.00x) | - (0/63 >1.00x) | 15928 passed / 86650 failed (15.53%) |
