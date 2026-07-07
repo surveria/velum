@@ -61,6 +61,27 @@ fn rejects_duplicate_non_simple_parameters() -> TestResult {
 }
 
 #[test]
+fn rejects_strict_function_parameter_early_errors() -> TestResult {
+    let sources = [
+        "\"use strict\"; async function duplicate(value, value) {}",
+        "async function duplicate(value, value) { \"use strict\"; }",
+        "async function invalid(value = 1) { \"use strict\"; }",
+        "\"use strict\"; async function eval() {}",
+        "\"use strict\"; async function arguments() {}",
+        "\"use strict\"; async function invalid(eval) {}",
+        "\"use strict\"; async function invalid(arguments) {}",
+        "\"use strict\"; (async function eval() {})",
+        "\"use strict\"; async (eval) => eval",
+    ];
+
+    for source in sources {
+        ensure_parse_error(source)?;
+    }
+
+    Ok(())
+}
+
+#[test]
 fn async_function_uses_default_parameter_before_body() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
@@ -98,6 +119,18 @@ fn ensure_parse_error_contains(source: &str, expected: &str) -> TestResult {
         return Ok(());
     }
     Err(format!("expected parse error containing '{expected}', got '{message}'").into())
+}
+
+fn ensure_parse_error(source: &str) -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let Err(error) = context.eval(source) else {
+        return Err(format!("expected '{source}' to fail").into());
+    };
+    if matches!(error, rs_quickjs::Error::Parse { .. }) {
+        return Ok(());
+    }
+    Err(format!("expected parse error for '{source}', got {error:?}").into())
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

@@ -4,7 +4,7 @@ use crate::{
     lexer::TokenKind,
 };
 
-use super::Parser;
+use super::{ParsedFunctionBody, Parser};
 
 impl Parser {
     pub(super) fn statement(&mut self) -> Result<Stmt> {
@@ -114,6 +114,38 @@ impl Parser {
 
     fn block(&mut self) -> Result<Stmt> {
         Ok(Stmt::Block(self.block_statements()?))
+    }
+
+    pub(super) fn function_body(&mut self, inherited_strict: bool) -> Result<ParsedFunctionBody> {
+        let previous_strict = self.is_strict_mode();
+        self.set_strict_mode(inherited_strict);
+        let result = self.function_body_inner();
+        self.set_strict_mode(previous_strict);
+        result
+    }
+
+    fn function_body_inner(&mut self) -> Result<ParsedFunctionBody> {
+        let mut statements = Vec::new();
+        let mut directive_prologue = true;
+        let mut contains_use_strict = false;
+
+        while !self.check(&TokenKind::RBrace) {
+            if self.at_end() {
+                return Err(Error::parse("expected '}' after block", self.offset()));
+            }
+            let statement = self.statement()?;
+            if directive_prologue && Self::is_use_strict_directive(&statement) {
+                contains_use_strict = true;
+            }
+            self.update_directive_prologue(&mut directive_prologue, &statement);
+            statements.push(statement);
+        }
+
+        self.consume(&TokenKind::RBrace, "expected '}' after block")?;
+        Ok(ParsedFunctionBody {
+            statements,
+            contains_use_strict,
+        })
     }
 
     fn if_statement(&mut self) -> Result<Stmt> {
@@ -461,17 +493,22 @@ impl Parser {
 
     fn function_declaration(&mut self, is_async: bool) -> Result<Stmt> {
         let name = self.consume_binding_identifier("expected function declaration name")?;
+        let inherited_strict = self.is_strict_mode();
+        if inherited_strict {
+            self.validate_function_binding_in_strict_code(&name)?;
+        }
         self.consume(&TokenKind::LParen, "expected '(' after function name")?;
-        let params = self.function_parameters()?.into();
+        let params = self.function_parameters()?;
         self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
-        let body = self.with_new_target_scope(Self::block_statements)?.into();
+        let body = self.with_new_target_scope(|parser| parser.function_body(inherited_strict))?;
+        self.validate_function_parameters(&params, inherited_strict, body.contains_use_strict)?;
         let id = self.static_function()?;
         Ok(Stmt::FunctionDecl {
             name,
             id,
-            params,
-            body,
+            params: params.into(),
+            body: body.statements.into(),
             is_async,
         })
     }
