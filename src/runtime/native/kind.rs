@@ -119,6 +119,10 @@ pub(super) const PROMISE_RESOLVE_NAME: &str = "resolve";
 const PROMISE_RESOLVER_FUNCTION_LENGTH: f64 = 1.0;
 const PROMISE_THEN_FUNCTION_LENGTH: f64 = 2.0;
 pub(super) const PROMISE_THEN_NAME: &str = "then";
+const REGEXP_FUNCTION_LENGTH: f64 = 2.0;
+pub(super) const REGEXP_NAME: &str = "RegExp";
+const REGEXP_PROTOTYPE_TEST_LENGTH: f64 = 1.0;
+pub(super) const REGEXP_PROTOTYPE_TEST_NAME: &str = "test";
 const REJECT_NAME: &str = "reject";
 const RESOLVE_NAME: &str = "resolve";
 const STRING_FUNCTION_LENGTH: f64 = 1.0;
@@ -205,6 +209,8 @@ pub(in crate::runtime) enum NativeFunctionKind {
         promise: crate::runtime::promise::PromiseId,
         kind: crate::runtime::promise::PromiseResolverKind,
     },
+    RegExp,
+    RegExpPrototypeTest,
     String,
     Symbol,
 }
@@ -292,6 +298,8 @@ impl NativeFunctionKind {
             Self::PromiseThen => PROMISE_THEN_FUNCTION_LENGTH,
             Self::PromiseCatch => PROMISE_CATCH_FUNCTION_LENGTH,
             Self::PromiseResolver { .. } => PROMISE_RESOLVER_FUNCTION_LENGTH,
+            Self::RegExp => REGEXP_FUNCTION_LENGTH,
+            Self::RegExpPrototypeTest => REGEXP_PROTOTYPE_TEST_LENGTH,
             Self::String => STRING_FUNCTION_LENGTH,
             Self::Symbol => SYMBOL_FUNCTION_LENGTH,
         }
@@ -382,6 +390,8 @@ impl NativeFunctionKind {
                 kind: crate::runtime::promise::PromiseResolverKind::Reject,
                 ..
             } => REJECT_NAME,
+            Self::RegExp => REGEXP_NAME,
+            Self::RegExpPrototypeTest => REGEXP_PROTOTYPE_TEST_NAME,
             Self::String => STRING_NAME,
             Self::Symbol => SYMBOL_NAME,
         }

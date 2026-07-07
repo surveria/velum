@@ -527,6 +527,10 @@ pub struct BytecodeCatch {
 pub enum BytecodeInstruction {
     PushLiteral(Value),
     PushString(StaticString),
+    CreateRegExp {
+        pattern: StaticString,
+        flags: StaticString,
+    },
     PushUndefined,
     LoadThis,
     LoadNewTarget,

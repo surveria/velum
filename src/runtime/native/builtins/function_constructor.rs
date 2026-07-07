@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{
     error::{Error, Result},
     runtime::Context,
@@ -97,8 +99,8 @@ impl Context {
         is_async: bool,
     ) -> Result<Value> {
         let source = Self::function_constructor_source(args, is_async);
-        self.check_string_len(&source)?;
-        let script = self.compile(&source)?;
+        self.check_string_len(&source.compile)?;
+        let script = self.compile(&source.compile)?;
         let caller_locals = std::mem::take(&mut self.locals);
         let caller_upvalue_frames = std::mem::take(&mut self.upvalue_frames);
         let caller_this_values = std::mem::take(&mut self.this_values);
@@ -107,28 +109,29 @@ impl Context {
         self.upvalue_frames = caller_upvalue_frames;
         self.this_values = caller_this_values;
         let value = result?;
-        let Value::Function(_) = value else {
+        let Value::Function(id) = value.clone() else {
             return Err(Error::runtime(
                 "Function constructor did not produce a function",
             ));
         };
+        self.set_function_source(id, Rc::from(source.display.into_boxed_str()))?;
         Ok(value)
     }
 
-    fn function_constructor_source(args: &[Value], is_async: bool) -> String {
+    fn function_constructor_source(args: &[Value], is_async: bool) -> GeneratedFunctionSource {
         let Some((body, params)) = args.split_last() else {
-            return function_expression_source("", "", is_async);
+            return generated_function_source("", "", is_async);
         };
         let body = function_constructor_argument_text(body);
         if params.is_empty() {
-            return function_expression_source("", &body, is_async);
+            return generated_function_source("", &body, is_async);
         }
         let params = params
             .iter()
             .map(function_constructor_argument_text)
             .collect::<Vec<_>>()
             .join(",");
-        function_expression_source(&params, &body, is_async)
+        generated_function_source(&params, &body, is_async)
     }
 
     fn function_constructor_prototype_id(&mut self) -> Result<ObjectId> {
@@ -221,9 +224,23 @@ impl Context {
     }
 }
 
-fn function_expression_source(params: &str, body: &str, is_async: bool) -> String {
+struct GeneratedFunctionSource {
+    compile: String,
+    display: String,
+}
+
+fn generated_function_source(params: &str, body: &str, is_async: bool) -> GeneratedFunctionSource {
+    let display = function_display_source(params, body, is_async);
+    let compile = format!("({display})");
+    GeneratedFunctionSource { compile, display }
+}
+
+fn function_display_source(params: &str, body: &str, is_async: bool) -> String {
     let async_prefix = if is_async { "async " } else { "" };
-    format!("({async_prefix}function {GENERATED_FUNCTION_NAME}({params}) {{\n{body}\n}})")
+    let parameter_line_terminator = if params.contains("//") { "\n" } else { "" };
+    format!(
+        "{async_prefix}function {GENERATED_FUNCTION_NAME}({params}{parameter_line_terminator}) {{\n{body}\n}}"
+    )
 }
 
 fn function_constructor_argument_text(value: &Value) -> String {

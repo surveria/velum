@@ -81,7 +81,8 @@ const SYMBOL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(72);
 const FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(73);
 const ASYNC_FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(74);
 const ARRAY_IS_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(75);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 76;
+const REGEXP_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(76);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 77;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -158,7 +159,8 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         | NativeFunctionKind::ObjectGetOwnPropertyNames
         | NativeFunctionKind::ObjectPrototypeHasOwnProperty
         | NativeFunctionKind::ObjectPrototypePropertyIsEnumerable
-        | NativeFunctionKind::PromiseResolver { .. } => None,
+        | NativeFunctionKind::PromiseResolver { .. }
+        | NativeFunctionKind::RegExpPrototypeTest => None,
         NativeFunctionKind::Eval => Some(EVAL_SLOT),
         NativeFunctionKind::ErrorConstructor(name) => Some(error_constructor_slot(name)),
         NativeFunctionKind::Function => Some(FUNCTION_SLOT),
@@ -213,6 +215,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::PromiseReject => Some(PROMISE_REJECT_SLOT),
         NativeFunctionKind::PromiseThen => Some(PROMISE_THEN_SLOT),
         NativeFunctionKind::PromiseCatch => Some(PROMISE_CATCH_SLOT),
+        NativeFunctionKind::RegExp => Some(REGEXP_SLOT),
         NativeFunctionKind::String => Some(STRING_SLOT),
         NativeFunctionKind::Symbol => Some(SYMBOL_SLOT),
     }

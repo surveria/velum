@@ -483,6 +483,7 @@ impl BytecodeInstruction {
                 | Self::ConstructValue { .. }
                 | Self::PushLiteral(_)
                 | Self::PushString(_)
+                | Self::CreateRegExp { .. }
                 | Self::PushUndefined
                 | Self::LoadThis
                 | Self::LoadNewTarget

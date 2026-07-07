@@ -163,7 +163,7 @@ impl<'a> BytecodeCompiler<'a> {
                 self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Return));
                 Ok(())
             }
-            Stmt::FunctionDecl { .. } => Ok(()),
+            Stmt::Empty | Stmt::FunctionDecl { .. } => Ok(()),
             Stmt::VarDecl { name, kind, init } => {
                 self.compile_declaration(name, *kind, init.as_ref())
             }
@@ -202,6 +202,12 @@ impl<'a> BytecodeCompiler<'a> {
             }
             Expr::StringLiteral(value) => {
                 self.emit(BytecodeInstruction::PushString(value.clone()));
+            }
+            Expr::RegExpLiteral { pattern, flags } => {
+                self.emit(BytecodeInstruction::CreateRegExp {
+                    pattern: pattern.clone(),
+                    flags: flags.clone(),
+                });
             }
             Expr::This => {
                 self.emit(BytecodeInstruction::LoadThis);
@@ -686,6 +692,7 @@ impl<'a> BytecodeCompiler<'a> {
             }
             BytecodeInstruction::PushLiteral(_)
             | BytecodeInstruction::PushString(_)
+            | BytecodeInstruction::CreateRegExp { .. }
             | BytecodeInstruction::PushUndefined
             | BytecodeInstruction::LoadThis
             | BytecodeInstruction::LoadNewTarget

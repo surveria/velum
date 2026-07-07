@@ -145,7 +145,8 @@ impl<'a> HoistCollector<'a> {
                 self.function_declarations.push(declaration);
                 Ok(())
             }
-            Stmt::Break(_)
+            Stmt::Empty
+            | Stmt::Break(_)
             | Stmt::Continue(_)
             | Stmt::Throw(_)
             | Stmt::Return(_)

@@ -10,7 +10,7 @@ use crate::{
     },
     error::{Error, Result},
     runtime::{Context, assertions::runtime_exception_value, completion::Completion},
-    syntax::UpdateOp,
+    syntax::{StaticString, UpdateOp},
     value::Value,
 };
 
@@ -60,6 +60,7 @@ impl Context {
         match instruction {
             BytecodeInstruction::PushLiteral(_)
             | BytecodeInstruction::PushString(_)
+            | BytecodeInstruction::CreateRegExp { .. }
             | BytecodeInstruction::PushUndefined
             | BytecodeInstruction::LoadThis
             | BytecodeInstruction::LoadNewTarget
@@ -148,6 +149,9 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
+            BytecodeInstruction::CreateRegExp { pattern, flags } => {
+                self.eval_bytecode_create_regexp(state, pattern, flags, next)
+            }
             BytecodeInstruction::PushUndefined => {
                 state.stack.push(Value::Undefined);
                 state.pc = next;
@@ -232,6 +236,20 @@ impl Context {
             }
             _ => Err(Error::runtime("bytecode stack instruction mismatch")),
         }
+    }
+
+    fn eval_bytecode_create_regexp(
+        &mut self,
+        state: &mut BytecodeState,
+        pattern: &StaticString,
+        flags: &StaticString,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        state
+            .stack
+            .push(self.create_regexp_literal(pattern.as_str(), flags.as_str())?);
+        state.pc = next;
+        Ok(None)
     }
 
     fn eval_bytecode_unary_instruction(

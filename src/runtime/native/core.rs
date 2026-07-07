@@ -12,7 +12,7 @@ use crate::{
 use super::{
     ARRAY_NAME, BOOLEAN_NAME, EVAL_NAME, FUNCTION_NAME, INFINITY_NAME, JSON_NAME, MATH_NAME,
     NAN_NAME, NUMBER_NAME, NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY,
-    OBJECT_NAME, PROMISE_NAME, STRING_NAME, SYMBOL_NAME,
+    OBJECT_NAME, PROMISE_NAME, REGEXP_NAME, STRING_NAME, SYMBOL_NAME,
 };
 
 impl Context {
@@ -33,6 +33,7 @@ impl Context {
             NUMBER_NAME => self.number_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
             PROMISE_NAME => self.promise_constructor_value().map(Some),
+            REGEXP_NAME => self.regexp_constructor_value().map(Some),
             STRING_NAME => self.string_constructor_value().map(Some),
             SYMBOL_NAME => self.symbol_constructor_value().map(Some),
             _ => {
@@ -73,6 +74,7 @@ impl Context {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
             NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
             NativeFunctionKind::Function => self.eval_function_constructor(args),
+            NativeFunctionKind::RegExp => self.construct_regexp_object(args),
             NativeFunctionKind::ArrayConcat
             | NativeFunctionKind::ArrayIncludes
             | NativeFunctionKind::ArrayIndexOf
@@ -139,6 +141,7 @@ impl Context {
             | NativeFunctionKind::PromiseThen
             | NativeFunctionKind::PromiseCatch
             | NativeFunctionKind::PromiseResolver { .. }
+            | NativeFunctionKind::RegExpPrototypeTest
             | NativeFunctionKind::Symbol => {
                 Err(Error::type_error("native method is not a constructor"))
             }
