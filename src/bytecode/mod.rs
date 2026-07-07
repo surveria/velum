@@ -531,11 +531,21 @@ impl<'a> BytecodeCompiler<'a> {
                 access,
             } => {
                 self.compile_expr(object)?;
-                self.emit(BytecodeInstruction::UpdateStaticProperty {
-                    property: Self::compile_property(property, *access),
-                    op,
-                    prefix,
-                });
+                let property = Self::compile_property(property, *access);
+                if let Some(index) = Self::compile_array_index(&property) {
+                    self.emit(BytecodeInstruction::UpdateArrayIndexProperty {
+                        property,
+                        index,
+                        op,
+                        prefix,
+                    });
+                } else {
+                    self.emit(BytecodeInstruction::UpdateStaticProperty {
+                        property,
+                        op,
+                        prefix,
+                    });
+                }
                 Ok(())
             }
             Expr::ComputedMember {
@@ -579,10 +589,16 @@ impl<'a> BytecodeCompiler<'a> {
             } => {
                 self.compile_expr(object)?;
                 self.compile_expr(expr)?;
-                self.emit(BytecodeInstruction::CompoundStaticProperty {
-                    property: Self::compile_property(property, *access),
-                    op,
-                });
+                let property = Self::compile_property(property, *access);
+                if let Some(index) = Self::compile_array_index(&property) {
+                    self.emit(BytecodeInstruction::CompoundArrayIndexProperty {
+                        property,
+                        index,
+                        op,
+                    });
+                } else {
+                    self.emit(BytecodeInstruction::CompoundStaticProperty { property, op });
+                }
                 Ok(())
             }
             Expr::ComputedMember {
@@ -697,6 +713,7 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::DeleteValue
             | BytecodeInstruction::UpdateBinding { .. }
             | BytecodeInstruction::UpdateStaticProperty { .. }
+            | BytecodeInstruction::UpdateArrayIndexProperty { .. }
             | BytecodeInstruction::UpdateComputedProperty { .. }
             | BytecodeInstruction::Binary { .. }
             | BytecodeInstruction::NumberBinary(_)
@@ -704,6 +721,7 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::NumberEquality(_)
             | BytecodeInstruction::CompoundStoreBinding { .. }
             | BytecodeInstruction::CompoundStaticProperty { .. }
+            | BytecodeInstruction::CompoundArrayIndexProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. }
             | BytecodeInstruction::StaticMember { .. }
             | BytecodeInstruction::ArrayLength { .. }
