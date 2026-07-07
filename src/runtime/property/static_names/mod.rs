@@ -23,6 +23,11 @@ pub(in crate::runtime) use cache::{CallValueCache, StaticNameAtomCacheHandle};
 
 const PROTOTYPE_PROPERTY: &str = "__proto__";
 
+enum CachedPropertyMutation {
+    Updated { old_value: Value, new_value: Value },
+    NeedsGenericSet { old_value: Value, new_value: Value },
+}
+
 impl Context {
     pub(crate) fn with_static_name_atom_cache<T>(
         &mut self,
@@ -430,6 +435,42 @@ impl Context {
         )
     }
 
+    pub(in crate::runtime) fn try_cached_static_property_read_modify_write(
+        &mut self,
+        object: &Value,
+        property: &StaticName,
+        access: StaticPropertyAccessId,
+        update: impl FnOnce(&mut Self, &Value) -> Result<Value>,
+    ) -> Result<Option<(Value, Value)>> {
+        let Value::Object(object_id) = object else {
+            return Ok(None);
+        };
+        if property.as_str() == PROTOTYPE_PROPERTY {
+            return Ok(None);
+        }
+
+        let key = self.intern_static_property_key(property)?;
+        let lookup = PropertyLookup::from_key(property.as_str(), key);
+        let Some(mutation) =
+            self.try_cached_object_property_read_modify_write(*object_id, access, lookup, update)?
+        else {
+            return Ok(None);
+        };
+        match mutation {
+            CachedPropertyMutation::Updated {
+                old_value,
+                new_value,
+            } => Ok(Some((old_value, new_value))),
+            CachedPropertyMutation::NeedsGenericSet {
+                old_value,
+                new_value,
+            } => {
+                self.set_static_property_value(object, property, access, new_value.clone())?;
+                Ok(Some((old_value, new_value)))
+            }
+        }
+    }
+
     pub(crate) fn set_cached_dynamic_property_value(
         &mut self,
         object: &Value,
@@ -469,6 +510,49 @@ impl Context {
         )
     }
 
+    pub(in crate::runtime) fn try_cached_dynamic_property_read_modify_write(
+        &mut self,
+        object: &Value,
+        property: &mut DynamicPropertyKey,
+        access: StaticPropertyAccessId,
+        update: impl FnOnce(&mut Self, &Value) -> Result<Value>,
+    ) -> Result<Option<(Value, Value)>> {
+        let Value::Object(object_id) = object else {
+            return Ok(None);
+        };
+        if property.name() == PROTOTYPE_PROPERTY
+            || self.objects.array_len_if_array(*object_id)?.is_some()
+        {
+            return Ok(None);
+        }
+
+        let key = self.intern_dynamic_property_key(property)?;
+        let lookup = PropertyLookup::from_key(property.name(), key);
+        let Some(mutation) =
+            self.try_cached_object_property_read_modify_write(*object_id, access, lookup, update)?
+        else {
+            return Ok(None);
+        };
+        match mutation {
+            CachedPropertyMutation::Updated {
+                old_value,
+                new_value,
+            } => Ok(Some((old_value, new_value))),
+            CachedPropertyMutation::NeedsGenericSet {
+                old_value,
+                new_value,
+            } => {
+                self.set_cached_dynamic_property_value(
+                    object,
+                    property,
+                    access,
+                    new_value.clone(),
+                )?;
+                Ok(Some((old_value, new_value)))
+            }
+        }
+    }
+
     fn set_cached_object_property_value(
         &mut self,
         object: ObjectId,
@@ -500,6 +584,79 @@ impl Context {
             return Ok(true);
         }
         Ok(false)
+    }
+
+    fn try_cached_object_property_read_modify_write(
+        &mut self,
+        object: ObjectId,
+        access: StaticPropertyAccessId,
+        lookup: PropertyLookup<'_>,
+        update: impl FnOnce(&mut Self, &Value) -> Result<Value>,
+    ) -> Result<Option<CachedPropertyMutation>> {
+        let Some(cache) = self.current_static_name_atom_cache() else {
+            return Ok(None);
+        };
+        if let Some(cached_lookup) = cache.property_lookup(access)?
+            && cached_lookup.matches_property(lookup)
+        {
+            match self
+                .objects
+                .read_cacheable_property_value_for(object, cached_lookup)?
+            {
+                CacheablePropertyValue::Hit(value) => {
+                    return self.mutate_cached_object_property(
+                        object,
+                        cached_lookup,
+                        value,
+                        update,
+                    );
+                }
+                CacheablePropertyValue::Missing => return Ok(None),
+                CacheablePropertyValue::Uncacheable => {}
+            }
+        }
+
+        let candidate = self.objects.cacheable_property_lookup(object, lookup)?;
+        match self
+            .objects
+            .read_cacheable_property_value_for(object, candidate)?
+        {
+            CacheablePropertyValue::Hit(value) => {
+                cache.remember_property_lookup(access, candidate)?;
+                self.mutate_cached_object_property(object, candidate, value, update)
+            }
+            CacheablePropertyValue::Missing => {
+                cache.remember_property_lookup(access, candidate)?;
+                Ok(None)
+            }
+            CacheablePropertyValue::Uncacheable => Ok(None),
+        }
+    }
+
+    fn mutate_cached_object_property(
+        &mut self,
+        object: ObjectId,
+        lookup: CacheablePropertyLookup,
+        old_value: Value,
+        update: impl FnOnce(&mut Self, &Value) -> Result<Value>,
+    ) -> Result<Option<CachedPropertyMutation>> {
+        let old_value = self.runtime_value(old_value)?;
+        let new_value = update(self, &old_value)?;
+        let new_value = self.runtime_value(new_value)?;
+        if self
+            .objects
+            .write_cacheable_own_property_value_for(object, lookup, new_value.clone())?
+            == CacheablePropertyWrite::Updated
+        {
+            return Ok(Some(CachedPropertyMutation::Updated {
+                old_value,
+                new_value,
+            }));
+        }
+        Ok(Some(CachedPropertyMutation::NeedsGenericSet {
+            old_value,
+            new_value,
+        }))
     }
 
     pub(crate) fn delete_static_property_value(
