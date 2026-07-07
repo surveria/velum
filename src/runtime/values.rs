@@ -1,7 +1,7 @@
 use crate::{
-    ast::StaticString,
     error::{Error, Result},
     runtime::Context,
+    syntax::StaticString,
     value::Value,
 };
 

@@ -1,10 +1,10 @@
 use std::{fmt, rc::Rc};
 
 use crate::{
-    ast::DeclKind,
     error::{Error, Result},
     runtime::Context,
     runtime::call_args::RuntimeCallArgs,
+    syntax::DeclKind,
     value::{HostFunctionId, Value},
 };
 

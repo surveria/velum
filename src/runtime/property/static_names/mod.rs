@@ -1,5 +1,4 @@
 use crate::{
-    ast::{StaticCallSiteId, StaticName, StaticPropertyAccessId},
     binding_layout::BindingLayout,
     error::{Error, Result},
     runtime::Context,
@@ -13,6 +12,7 @@ use crate::{
         DynamicPropertyKey, delete_property, get_property, has_property, set_property,
     },
     storage::atom::AtomId,
+    syntax::{StaticCallSiteId, StaticName, StaticPropertyAccessId},
     value::{NativeFunctionId, ObjectId, Value},
 };
 

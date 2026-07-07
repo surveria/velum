@@ -2,13 +2,13 @@ use std::{fmt, rc::Rc};
 
 use crate::{
     api::native_call::NativeCallTarget,
-    ast::{
-        BinaryOp, DeclKind, FunctionParam, StaticBinding, StaticCallSiteId, StaticFunctionId,
-        StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
-    },
     binding_layout::{BindingLayout, BindingOperand},
     bytecode::BytecodeHoistPlan,
     error::{Error, Result},
+    syntax::{
+        BinaryOp, DeclKind, StaticBinding, StaticCallSiteId, StaticFunctionId, StaticName,
+        StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
+    },
     value::{ErrorName, Value},
 };
 
@@ -34,6 +34,7 @@ impl BytecodeProgram {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeFunction {
+    params: Rc<[BytecodeFunctionParam]>,
     param_defaults: Rc<[Option<BytecodeBlock>]>,
     body: BytecodeBlock,
     hoist_plan: BytecodeHoistPlan,
@@ -42,17 +43,23 @@ pub struct BytecodeFunction {
 
 impl BytecodeFunction {
     pub(crate) const fn new(
+        params: Rc<[BytecodeFunctionParam]>,
         param_defaults: Rc<[Option<BytecodeBlock>]>,
         body: BytecodeBlock,
         hoist_plan: BytecodeHoistPlan,
         capture_bindings: Rc<[StaticBinding]>,
     ) -> Self {
         Self {
+            params,
             param_defaults,
             body,
             hoist_plan,
             capture_bindings,
         }
+    }
+
+    pub fn params(&self) -> &[BytecodeFunctionParam] {
+        &self.params
     }
 
     pub fn param_defaults(&self) -> &[Option<BytecodeBlock>] {
@@ -72,6 +79,29 @@ impl BytecodeFunction {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BytecodeFunctionParam {
+    binding: StaticBinding,
+    has_default: bool,
+}
+
+impl BytecodeFunctionParam {
+    pub(crate) const fn new(binding: StaticBinding, has_default: bool) -> Self {
+        Self {
+            binding,
+            has_default,
+        }
+    }
+
+    pub const fn binding(&self) -> &StaticBinding {
+        &self.binding
+    }
+
+    pub const fn has_default(&self) -> bool {
+        self.has_default
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BytecodeNewTargetMode {
     Own,
@@ -83,7 +113,6 @@ pub struct BytecodeFunctionDeclaration {
     name: BytecodeBinding,
     id: StaticFunctionId,
     function_name: StaticName,
-    params: Rc<[FunctionParam]>,
     bytecode: BytecodeFunction,
     is_async: bool,
 }
@@ -93,7 +122,6 @@ impl BytecodeFunctionDeclaration {
         name: BytecodeBinding,
         id: StaticFunctionId,
         function_name: StaticName,
-        params: Rc<[FunctionParam]>,
         bytecode: BytecodeFunction,
         is_async: bool,
     ) -> Self {
@@ -101,7 +129,6 @@ impl BytecodeFunctionDeclaration {
             name,
             id,
             function_name,
-            params,
             bytecode,
             is_async,
         }
@@ -117,10 +144,6 @@ impl BytecodeFunctionDeclaration {
 
     pub const fn function_name(&self) -> &StaticName {
         &self.function_name
-    }
-
-    pub const fn params(&self) -> &Rc<[FunctionParam]> {
-        &self.params
     }
 
     pub const fn bytecode(&self) -> &BytecodeFunction {
@@ -312,7 +335,7 @@ impl BytecodeNumericBinaryOp {
         }
     }
 
-    pub(crate) const fn fallback_binary(self) -> BinaryOp {
+    pub(crate) const fn generic_binary(self) -> BinaryOp {
         match self {
             Self::Add => BinaryOp::Add,
             Self::Sub => BinaryOp::Sub,
@@ -345,7 +368,7 @@ impl BytecodeNumericUnaryOp {
         }
     }
 
-    pub(crate) const fn fallback_unary(self) -> UnaryOp {
+    pub(crate) const fn generic_unary(self) -> UnaryOp {
         match self {
             Self::Negate => UnaryOp::Negate,
             Self::Plus => UnaryOp::Plus,
@@ -391,7 +414,7 @@ impl BytecodeNumericCompareOp {
         }
     }
 
-    pub(crate) const fn fallback_binary(self) -> BinaryOp {
+    pub(crate) const fn generic_binary(self) -> BinaryOp {
         match self {
             Self::Less => BinaryOp::Less,
             Self::LessEqual => BinaryOp::LessEqual,
@@ -439,7 +462,7 @@ impl BytecodeNumericEqualityOp {
         }
     }
 
-    pub(crate) const fn fallback_binary(self) -> BinaryOp {
+    pub(crate) const fn generic_binary(self) -> BinaryOp {
         match self {
             Self::Equal => BinaryOp::Equal,
             Self::NotEqual => BinaryOp::NotEqual,
@@ -616,9 +639,8 @@ pub enum BytecodeInstruction {
         arg_count: usize,
     },
     CreateFunction {
-        id: crate::ast::StaticFunctionId,
+        id: StaticFunctionId,
         name: Option<StaticName>,
-        params: Rc<[FunctionParam]>,
         bytecode: BytecodeFunction,
         constructable: bool,
         is_async: bool,

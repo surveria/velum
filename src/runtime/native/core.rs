@@ -1,11 +1,11 @@
 use crate::{
-    ast::DeclKind,
     bytecode::BytecodeBinding,
     error::{Error, Result},
     runtime::Context,
     runtime::binding::scope::BindingCell,
     runtime::call_args::RuntimeCallArgs,
     runtime::object::{ObjectPropertyInit, PropertyEnumerable},
+    syntax::DeclKind,
     value::{ErrorName, ErrorObject, NativeFunctionId, Value},
 };
 

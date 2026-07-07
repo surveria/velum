@@ -80,6 +80,16 @@ var add = make(10);
 add(5);
 ";
 
+const BYTECODE_FUNCTION_SIGNATURE_SOURCE: &str = r"
+var make = function(seed) {
+    return function(left, right = seed + left) {
+        return right;
+    };
+};
+var fn = make(4);
+fn(6) + fn(1, 9) + fn.length;
+";
+
 const BYTECODE_DIRECT_BINDING_OPERANDS_SOURCE: &str = r"
 var Box = function Box(value) {
     this.value = value;
@@ -228,6 +238,19 @@ fn bytecode_functions_capture_closure_upvalues_without_ast_body() -> TestResult 
 
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(17.0))
+}
+
+#[test]
+fn bytecode_functions_own_signature_and_default_blocks() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(BYTECODE_FUNCTION_SIGNATURE_SOURCE)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(20.0))?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(20.0))
 }
 
 #[test]

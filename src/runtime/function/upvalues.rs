@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{StaticBinding, StaticFunctionId},
     binding_layout::BindingLayout,
     binding_layout::{BindingOperand, FunctionScopeId},
     error::{Error, Result},
     runtime::Context,
     runtime::binding::scope::BindingCell,
+    syntax::{StaticBinding, StaticFunctionId},
 };
 
 impl Context {

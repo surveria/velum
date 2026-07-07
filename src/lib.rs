@@ -11,6 +11,7 @@ mod lexer;
 mod parser;
 mod runtime;
 mod storage;
+mod syntax;
 mod value;
 
 pub use crate::api::embedding::{

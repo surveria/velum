@@ -1,6 +1,9 @@
 use std::rc::Rc;
 
-use crate::value::Value;
+use crate::{
+    syntax::{BinaryOp, UnaryOp, UpdateOp},
+    value::Value,
+};
 
 use super::{
     FunctionParam, StaticBinding, StaticCallSiteId, StaticFunctionId, StaticName,
@@ -103,48 +106,4 @@ pub enum Expr {
         constructor: Box<Self>,
         args: Vec<Self>,
     },
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum UnaryOp {
-    Negate,
-    Plus,
-    Not,
-    Typeof,
-    Void,
-    Delete,
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum UpdateOp {
-    Increment,
-    Decrement,
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum BinaryOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Rem,
-    Pow,
-    Equal,
-    NotEqual,
-    StrictEqual,
-    StrictNotEqual,
-    Less,
-    LessEqual,
-    Greater,
-    GreaterEqual,
-    In,
-    InstanceOf,
-    BitAnd,
-    BitOr,
-    BitXor,
-    ShiftLeft,
-    ShiftRight,
-    ShiftRightUnsigned,
-    LogicalAnd,
-    LogicalOr,
 }

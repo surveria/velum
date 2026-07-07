@@ -6,10 +6,43 @@ use crate::{
         SwitchCase,
     },
     binding_layout::BindingLayout,
-    error::Result,
+    error::{Error, Result},
+    syntax::{StaticFunctionId, StaticName},
 };
 
-use super::{BytecodeBlock, BytecodeFunction, BytecodeHoistPlan, StatementValue};
+use super::{
+    BytecodeBlock, BytecodeCompiler, BytecodeFunction, BytecodeFunctionParam, BytecodeHoistPlan,
+    BytecodeInstruction, BytecodeNewTargetMode, StatementValue,
+};
+
+struct FunctionCompileSpec<'a> {
+    id: StaticFunctionId,
+    name: Option<StaticName>,
+    params: &'a Rc<[FunctionParam]>,
+    body: &'a [Stmt],
+    constructable: bool,
+    is_async: bool,
+    new_target_mode: BytecodeNewTargetMode,
+}
+
+impl BytecodeCompiler<'_> {
+    pub(super) fn compile_function_literal(&mut self, expr: &Expr) -> Result<()> {
+        let spec = function_compile_spec(expr)?;
+        self.compile_function_expr(spec)
+    }
+
+    fn compile_function_expr(&mut self, spec: FunctionCompileSpec<'_>) -> Result<()> {
+        self.emit(BytecodeInstruction::CreateFunction {
+            id: spec.id,
+            name: spec.name,
+            bytecode: BytecodeFunction::compile(spec.params, spec.body, self.layout)?,
+            constructable: spec.constructable,
+            is_async: spec.is_async,
+            new_target_mode: spec.new_target_mode,
+        });
+        Ok(())
+    }
+}
 
 impl BytecodeFunction {
     pub fn compile(
@@ -18,12 +51,21 @@ impl BytecodeFunction {
         layout: &BindingLayout,
     ) -> Result<Self> {
         Ok(Self::new(
+            compile_params(params),
             compile_param_defaults(params, layout)?,
             BytecodeBlock::compile_statements(statements, StatementValue::Store, layout)?,
             BytecodeHoistPlan::compile(statements, layout)?,
             CaptureBindingCollector::collect_function(params, statements),
         ))
     }
+}
+
+fn compile_params(params: &[FunctionParam]) -> Rc<[BytecodeFunctionParam]> {
+    params
+        .iter()
+        .map(|param| BytecodeFunctionParam::new(param.name.clone(), param.default.is_some()))
+        .collect::<Vec<_>>()
+        .into()
 }
 
 fn compile_param_defaults(
@@ -41,6 +83,55 @@ fn compile_param_defaults(
         })
         .collect::<Result<Vec<_>>>()
         .map(Into::into)
+}
+
+fn function_compile_spec(expr: &Expr) -> Result<FunctionCompileSpec<'_>> {
+    match expr {
+        Expr::Function {
+            id,
+            name,
+            params,
+            body,
+            is_async,
+        } => Ok(FunctionCompileSpec {
+            id: *id,
+            name: name.clone(),
+            params,
+            body,
+            constructable: true,
+            is_async: *is_async,
+            new_target_mode: BytecodeNewTargetMode::Own,
+        }),
+        Expr::ArrowFunction {
+            id,
+            params,
+            body,
+            is_async,
+        } => Ok(FunctionCompileSpec {
+            id: *id,
+            name: None,
+            params,
+            body,
+            constructable: false,
+            is_async: *is_async,
+            new_target_mode: BytecodeNewTargetMode::Lexical,
+        }),
+        Expr::MethodFunction {
+            id,
+            name,
+            params,
+            body,
+        } => Ok(FunctionCompileSpec {
+            id: *id,
+            name: Some(name.clone()),
+            params,
+            body,
+            constructable: false,
+            is_async: false,
+            new_target_mode: BytecodeNewTargetMode::Own,
+        }),
+        _ => Err(Error::runtime("expected function expression")),
+    }
 }
 
 #[derive(Debug, Default)]
