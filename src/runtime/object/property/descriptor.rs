@@ -70,6 +70,10 @@ impl DataPropertyDescriptor {
         self.value.clone()
     }
 
+    pub const fn value_ref(&self) -> &Value {
+        &self.value
+    }
+
     pub const fn writable(&self) -> PropertyWritable {
         self.writable
     }
@@ -160,6 +164,10 @@ impl ObjectProperty {
 
     pub fn value(&self) -> Value {
         self.descriptor.value()
+    }
+
+    pub const fn value_ref(&self) -> &Value {
+        self.descriptor.value_ref()
     }
 
     pub const fn version(&self) -> u64 {
