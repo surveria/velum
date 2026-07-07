@@ -41,6 +41,36 @@ fn bytecode_quickens_numeric_add_and_array_length_with_fallbacks() -> TestResult
 }
 
 #[test]
+fn bytecode_quickens_numeric_comparisons_with_fallbacks() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r"
+        var total = 0;
+        for (var i = 0; i < 8; i = i + 1) {
+            if (i >= 2 && i <= 5 && i > 3) {
+                total = total + i;
+            }
+        }
+        total === 9 ? 42 : 0
+        ",
+    )?;
+    ensure_at_least(
+        script.usage().bytecode_numeric_instruction_count(),
+        6,
+        "bytecode numeric instructions",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+
+    let Err(error) = vm.eval("\"a\" < \"b\"") else {
+        return Err("expected non-number comparison to use generic fallback error".into());
+    };
+    ensure_error_contains(&error, "operator '<' expects numbers")
+}
+
+#[test]
 fn bytecode_quickens_static_array_index_reads_and_writes_with_fallbacks() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
@@ -139,6 +169,14 @@ fn ensure_at_least(value: usize, minimum: usize, label: &str) -> TestResult {
         return Ok(());
     }
     Err(format!("expected {label} >= {minimum}, got {value}").into())
+}
+
+fn ensure_error_contains(error: &rs_quickjs::Error, text: &str) -> TestResult {
+    let message = error.to_string();
+    if message.contains(text) {
+        return Ok(());
+    }
+    Err(format!("expected error containing '{text}', got '{message}'").into())
 }
 
 fn ensure_usize(actual: usize, expected: usize) -> TestResult {

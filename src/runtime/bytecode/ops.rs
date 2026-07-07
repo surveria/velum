@@ -3,7 +3,8 @@ use std::rc::Rc;
 use crate::{
     ast::{BinaryOp, DeclKind, StaticName, StaticPropertyAccessId, UnaryOp, UpdateOp},
     bytecode::{
-        BytecodeAssignmentTarget, BytecodeBinding, BytecodeDynamicProperty, BytecodeNumericBinaryOp,
+        BytecodeAssignmentTarget, BytecodeBinding, BytecodeDynamicProperty,
+        BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
     },
     error::{Error, Result},
     runtime::Context,
@@ -139,6 +140,24 @@ impl Context {
                 BytecodeNumericBinaryOp::Pow => left.powf(*right),
             };
             return self.checked_value(Value::Number(value));
+        }
+        self.eval_bytecode_binary(op.fallback_binary(), left, right, None)
+    }
+
+    pub(super) fn eval_bytecode_number_compare(
+        &mut self,
+        op: BytecodeNumericCompareOp,
+        left: &Value,
+        right: &Value,
+    ) -> Result<Value> {
+        if let (Value::Number(left), Value::Number(right)) = (left, right) {
+            let value = match op {
+                BytecodeNumericCompareOp::Less => left < right,
+                BytecodeNumericCompareOp::LessEqual => left <= right,
+                BytecodeNumericCompareOp::Greater => left > right,
+                BytecodeNumericCompareOp::GreaterEqual => left >= right,
+            };
+            return self.checked_value(Value::Bool(value));
         }
         self.eval_bytecode_binary(op.fallback_binary(), left, right, None)
     }
