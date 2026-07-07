@@ -67,6 +67,7 @@ impl NativeFunction {
             | NativeFunctionKind::Boolean
             | NativeFunctionKind::Eval
             | NativeFunctionKind::ErrorConstructor(_)
+            | NativeFunctionKind::Function
             | NativeFunctionKind::JsonParse
             | NativeFunctionKind::JsonStringify
             | NativeFunctionKind::MathAbs

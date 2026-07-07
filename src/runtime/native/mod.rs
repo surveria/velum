@@ -5,6 +5,7 @@ mod core;
 mod direct;
 mod eval;
 mod function;
+mod function_constructor;
 mod json;
 mod kind;
 mod math;
@@ -18,7 +19,7 @@ mod symbol;
 pub(in crate::runtime) use function::NativeFunction;
 pub(in crate::runtime) use kind::NativeFunctionKind;
 pub(in crate::runtime::native) use kind::{
-    ARRAY_NAME, BOOLEAN_NAME, EVAL_NAME, INFINITY_NAME, JSON_NAME, JSON_PARSE_NAME,
+    ARRAY_NAME, BOOLEAN_NAME, EVAL_NAME, FUNCTION_NAME, INFINITY_NAME, JSON_NAME, JSON_PARSE_NAME,
     JSON_STRINGIFY_NAME, MATH_ABS_NAME, MATH_ACOS_NAME, MATH_ACOSH_NAME, MATH_ASIN_NAME,
     MATH_ASINH_NAME, MATH_ATAN_NAME, MATH_ATAN2_NAME, MATH_ATANH_NAME, MATH_CBRT_NAME,
     MATH_CEIL_NAME, MATH_CLZ32_NAME, MATH_COS_NAME, MATH_COSH_NAME, MATH_EXP_NAME, MATH_EXPM1_NAME,

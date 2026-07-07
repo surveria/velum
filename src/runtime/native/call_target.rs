@@ -19,6 +19,7 @@ impl NativeFunctionKind {
             NativeCallTarget::ArrayUnshift => Self::ArrayUnshift,
             NativeCallTarget::Boolean => Self::Boolean,
             NativeCallTarget::ErrorConstructor(name) => Self::ErrorConstructor(name),
+            NativeCallTarget::Function => Self::Function,
             NativeCallTarget::JsonParse => Self::JsonParse,
             NativeCallTarget::JsonStringify => Self::JsonStringify,
             NativeCallTarget::MathAbs => Self::MathAbs,
