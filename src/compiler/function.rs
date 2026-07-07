@@ -208,6 +208,11 @@ impl CaptureBindingCollector {
                 target,
                 object,
                 body,
+            }
+            | Stmt::ForOf {
+                target,
+                object,
+                body,
             } => {
                 self.collect_for_in_target(target);
                 self.collect_expr(object);

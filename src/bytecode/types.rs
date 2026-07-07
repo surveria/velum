@@ -703,6 +703,12 @@ pub enum BytecodeInstruction {
         object: BytecodeBlock,
         body: BytecodeBlock,
     },
+    ForOf {
+        labels: Option<Rc<[StaticName]>>,
+        target: BytecodeForInTarget,
+        object: BytecodeBlock,
+        body: BytecodeBlock,
+    },
     Switch {
         discriminant: BytecodeBlock,
         cases: Rc<[BytecodeSwitchCase]>,
