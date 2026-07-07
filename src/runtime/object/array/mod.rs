@@ -249,6 +249,9 @@ impl ObjectHeap {
             return Ok(Value::Number(INDEX_NOT_FOUND));
         }
         if let Some(properties) = self.packed_array_properties(id, length)? {
+            if let Value::Number(search) = search {
+                return Self::packed_array_index_of_number(properties, *search, start);
+            }
             return Self::packed_array_index_of(properties, search, start);
         }
         if let Some(value) =
@@ -281,6 +284,11 @@ impl ObjectHeap {
             return Ok(Value::Bool(false));
         }
         if let Some(properties) = self.packed_array_properties(id, length)? {
+            if let Value::Number(search) = search {
+                return Ok(Self::packed_array_includes_number(
+                    properties, *search, start,
+                ));
+            }
             return Ok(Self::packed_array_includes(properties, search, start));
         }
         if let Some(value) =
@@ -312,6 +320,9 @@ impl ObjectHeap {
             return Ok(Value::Number(INDEX_NOT_FOUND));
         };
         if let Some(properties) = self.packed_array_properties(id, length)? {
+            if let Value::Number(search) = search {
+                return Self::packed_array_last_index_of_number(properties, *search, start);
+            }
             return Self::packed_array_last_index_of(properties, search, start);
         }
         if let Some(value) =
@@ -641,12 +652,26 @@ impl ObjectHeap {
     pub(super) fn same_value_zero(left: &Value, right: &Value) -> bool {
         match (left, right) {
             (Value::Number(left), Value::Number(right)) => {
-                (left.to_bits() == right.to_bits())
-                    || (left.is_nan() && right.is_nan())
-                    || (Self::number_is_zero(*left) && Self::number_is_zero(*right))
+                Self::number_same_value_zero(*left, *right)
             }
             _ => left == right,
         }
+    }
+
+    pub(super) const fn number_same_value_zero(left: f64, right: f64) -> bool {
+        (left.to_bits() == right.to_bits())
+            || (left.is_nan() && right.is_nan())
+            || (Self::number_is_zero(left) && Self::number_is_zero(right))
+    }
+
+    pub(super) const fn number_strict_equal(left: f64, right: f64) -> bool {
+        if left.is_nan() || right.is_nan() {
+            return false;
+        }
+        if Self::number_is_zero(left) && Self::number_is_zero(right) {
+            return true;
+        }
+        left.to_bits() == right.to_bits()
     }
 
     const fn number_is_zero(value: f64) -> bool {
@@ -730,9 +755,39 @@ impl ObjectHeap {
         Ok(Value::Number(INDEX_NOT_FOUND))
     }
 
+    fn packed_array_index_of_number(
+        properties: &[ObjectProperty],
+        search: f64,
+        start: usize,
+    ) -> Result<Value> {
+        for (position, property) in properties.iter().enumerate().skip(start) {
+            if let Value::Number(value) = property.value_ref()
+                && Self::number_strict_equal(*value, search)
+            {
+                return Self::array_index_value(position);
+            }
+        }
+        Ok(Value::Number(INDEX_NOT_FOUND))
+    }
+
     fn packed_array_includes(properties: &[ObjectProperty], search: &Value, start: usize) -> Value {
         for property in properties.iter().skip(start) {
             if Self::same_value_zero(property.value_ref(), search) {
+                return Value::Bool(true);
+            }
+        }
+        Value::Bool(false)
+    }
+
+    fn packed_array_includes_number(
+        properties: &[ObjectProperty],
+        search: f64,
+        start: usize,
+    ) -> Value {
+        for property in properties.iter().skip(start) {
+            if let Value::Number(value) = property.value_ref()
+                && Self::number_same_value_zero(*value, search)
+            {
                 return Value::Bool(true);
             }
         }
@@ -753,6 +808,28 @@ impl ObjectHeap {
             .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
         for (position, property) in properties.iter().enumerate().take(count).rev() {
             if property.value_ref() == search {
+                return Self::array_index_value(position);
+            }
+        }
+        Ok(Value::Number(INDEX_NOT_FOUND))
+    }
+
+    fn packed_array_last_index_of_number(
+        properties: &[ObjectProperty],
+        search: f64,
+        start: usize,
+    ) -> Result<Value> {
+        if properties.is_empty() {
+            return Ok(Value::Number(INDEX_NOT_FOUND));
+        }
+        let upper = start.min(properties.len().saturating_sub(1));
+        let count = upper
+            .checked_add(1)
+            .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
+        for (position, property) in properties.iter().enumerate().take(count).rev() {
+            if let Value::Number(value) = property.value_ref()
+                && Self::number_strict_equal(*value, search)
+            {
                 return Self::array_index_value(position);
             }
         }
