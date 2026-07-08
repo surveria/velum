@@ -40,6 +40,7 @@ const NOT_MEASURED: &str = "-";
 const DETAIL_COMPLETED: &str = "sequential benchmark completed";
 const DETAIL_LATENCY_EXCEPTION: &str = "latency budget exception tracked";
 const DETAIL_QUALITY_GATE: &str = "measurement quality gate failed";
+const DETAIL_REFERENCE_COMPLETED: &str = "QuickJS reference completed";
 
 #[derive(Debug)]
 pub struct BenchmarkReport {
@@ -84,6 +85,13 @@ struct BenchmarkCounts {
 struct BenchmarkOutcome {
     row: BenchmarkRow,
     counts: BenchmarkCounts,
+}
+
+#[derive(Debug)]
+enum ReferenceMeasurement {
+    NotConfigured,
+    Measured(MeasureStats),
+    Failed(String),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -134,17 +142,115 @@ fn run_benchmark_case(
             return failed_outcome(case, &format!("failed to read '{}': {error}", case.path));
         }
     };
-    let ours = match bench_measure::measure(config, || RsqjsEngine.eval(&source)) {
-        Ok(stats) => stats,
-        Err(error) => return failed_outcome(case, &error.to_string()),
-    };
-    let Some(reference) = reference else {
-        return measured_without_reference(case, ours);
-    };
-    match bench_measure::measure(config, || reference.eval(&source)) {
-        Ok(reference_stats) => measured_with_reference(case, ours, reference_stats),
-        Err(error) => reference_unavailable(case, ours, &format!("{}: {error}", reference.label())),
+    let ours = bench_measure::measure(config, || RsqjsEngine.eval(&source));
+    let reference = measure_reference(config, reference, &source);
+    match ours {
+        Ok(stats) => measured_with_reference_result(case, stats, reference),
+        Err(error) => failed_with_reference(case, &error.to_string(), reference),
     }
+}
+
+fn measure_reference(
+    config: MeasureConfig,
+    reference: Option<&dyn BenchEngine>,
+    source: &str,
+) -> ReferenceMeasurement {
+    let Some(reference) = reference else {
+        return ReferenceMeasurement::NotConfigured;
+    };
+    match bench_measure::measure(config, || reference.eval(source)) {
+        Ok(stats) => ReferenceMeasurement::Measured(stats),
+        Err(error) => ReferenceMeasurement::Failed(format!("{}: {error}", reference.label())),
+    }
+}
+
+fn measured_with_reference_result(
+    case: &BenchmarkCase,
+    ours: MeasureStats,
+    reference: ReferenceMeasurement,
+) -> BenchmarkOutcome {
+    match reference {
+        ReferenceMeasurement::Measured(reference) => measured_with_reference(case, ours, reference),
+        ReferenceMeasurement::Failed(note) => reference_unavailable(case, ours, &note),
+        ReferenceMeasurement::NotConfigured => measured_without_reference(case, ours),
+    }
+}
+
+fn failed_with_reference(
+    case: &BenchmarkCase,
+    detail: &str,
+    reference: ReferenceMeasurement,
+) -> BenchmarkOutcome {
+    match reference {
+        ReferenceMeasurement::Measured(reference) => failed_with_reference_measurement(
+            case,
+            format_duration(reference.median()),
+            reference.cv_percent_text(),
+            reference_quality(reference),
+            &detail_with_reference_quality(detail, reference),
+        ),
+        ReferenceMeasurement::Failed(note) => failed_with_reference_measurement(
+            case,
+            REFERENCE_NOT_AVAILABLE.to_owned(),
+            NOT_MEASURED.to_owned(),
+            NOT_MEASURED.to_owned(),
+            &format!("{detail}; reference error: {note}"),
+        ),
+        ReferenceMeasurement::NotConfigured => failed_with_reference_measurement(
+            case,
+            REFERENCE_NOT_CONFIGURED.to_owned(),
+            NOT_MEASURED.to_owned(),
+            NOT_MEASURED.to_owned(),
+            detail,
+        ),
+    }
+}
+
+fn failed_with_reference_measurement(
+    case: &BenchmarkCase,
+    quickjs_eval: String,
+    quickjs_cv: String,
+    quality: String,
+    row_detail: &str,
+) -> BenchmarkOutcome {
+    BenchmarkOutcome {
+        row: failed_row(
+            case,
+            NOT_MEASURED.to_owned(),
+            quickjs_eval,
+            NOT_MEASURED.to_owned(),
+            quickjs_cv,
+            quality,
+            row_detail,
+        ),
+        counts: BenchmarkCounts {
+            failed: 1,
+            ..BenchmarkCounts::default()
+        },
+    }
+}
+
+fn reference_quality(reference: MeasureStats) -> String {
+    if reference.quality().is_valid() {
+        return QUALITY_VALID.to_owned();
+    }
+    QUALITY_INVALID.to_owned()
+}
+
+fn detail_with_reference_quality(detail: &str, reference: MeasureStats) -> String {
+    let Some(quality) = reference_quality_failure_detail(reference) else {
+        return format!("{detail}; {DETAIL_REFERENCE_COMPLETED}");
+    };
+    format!("{detail}; {quality}")
+}
+
+fn reference_quality_failure_detail(reference: MeasureStats) -> Option<String> {
+    let mut reasons = Vec::new();
+    collect_quality_reasons(&mut reasons, "quickjs", reference);
+    if reasons.is_empty() {
+        return None;
+    }
+    Some(format!("{DETAIL_QUALITY_GATE}: {}", reasons.join("; ")))
 }
 
 fn measured_with_reference(
@@ -305,6 +411,9 @@ fn failed_outcome(case: &BenchmarkCase, detail: &str) -> BenchmarkOutcome {
             case,
             NOT_MEASURED.to_owned(),
             NOT_MEASURED.to_owned(),
+            NOT_MEASURED.to_owned(),
+            NOT_MEASURED.to_owned(),
+            NOT_MEASURED.to_owned(),
             detail,
         ),
         counts: BenchmarkCounts {
@@ -317,7 +426,10 @@ fn failed_outcome(case: &BenchmarkCase, detail: &str) -> BenchmarkOutcome {
 fn failed_row(
     case: &BenchmarkCase,
     rsqjs_eval: String,
+    quickjs_eval: String,
     rsqjs_cv: String,
+    quickjs_cv: String,
+    quality: String,
     detail: &str,
 ) -> BenchmarkRow {
     BenchmarkRow {
@@ -326,13 +438,13 @@ fn failed_row(
         source: case.path.to_owned(),
         iterations: 0,
         rsqjs_eval,
-        quickjs_eval: NOT_MEASURED.to_owned(),
+        quickjs_eval,
         latency_ratio: NOT_MEASURED.to_owned(),
         latency_budget: NOT_MEASURED.to_owned(),
         memory_ratio: NOT_MEASURED.to_owned(),
         rsqjs_cv,
-        quickjs_cv: NOT_MEASURED.to_owned(),
-        quality: NOT_MEASURED.to_owned(),
+        quickjs_cv,
+        quality,
         detail: detail.to_owned(),
     }
 }
@@ -456,6 +568,41 @@ mod tests {
         )
     }
 
+    #[test]
+    fn failed_benchmark_preserves_quickjs_measurement() -> TestResult {
+        let case = crate::cases::BenchmarkCase {
+            id: "failed-case",
+            path: "tests/corpora/benchmarks/active/arithmetic_chain.js",
+        };
+        let reference = sample_stats()?;
+        let outcome = super::failed_with_reference(
+            &case,
+            "rsqjs eval failed: sample",
+            super::ReferenceMeasurement::Measured(reference),
+        );
+        ensure_text(&outcome.row.status, super::STATUS_FAILED)?;
+        ensure_text(&outcome.row.rsqjs_eval, super::NOT_MEASURED)?;
+        ensure_bool(
+            outcome.row.quickjs_eval != super::NOT_MEASURED,
+            "failed row must retain QuickJS timing",
+        )?;
+        ensure_bool(
+            outcome.row.quickjs_cv != super::NOT_MEASURED,
+            "failed row must retain QuickJS variation",
+        )?;
+        ensure_usize(outcome.counts.failed, 1)
+    }
+
+    fn sample_stats() -> Result<crate::bench_measure::MeasureStats, anyhow::Error> {
+        let config =
+            super::MeasureConfig::new(Duration::from_millis(0), Duration::from_millis(1), 3)
+                .with_quality(Duration::ZERO, u32::MAX);
+        bench_measure::measure(config, || {
+            std::hint::black_box(42_u64);
+            Ok::<(), anyhow::Error>(())
+        })
+    }
+
     fn ensure_text(actual: &str, expected: &str) -> TestResult {
         if actual == expected {
             return Ok(());
@@ -468,5 +615,12 @@ mod tests {
             return Ok(());
         }
         Err(message.to_owned().into())
+    }
+
+    fn ensure_usize(actual: usize, expected: usize) -> TestResult {
+        if actual == expected {
+            return Ok(());
+        }
+        Err(format!("expected {expected}, got {actual}").into())
     }
 }
