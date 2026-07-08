@@ -164,6 +164,7 @@ impl Vm {
     pub fn resource_usage(&self) -> VmResourceUsage {
         VmResourceUsage {
             runtime_steps: self.context.runtime_steps(),
+            bytecode_linear_segment_runs: self.context.bytecode_linear_segment_runs(),
             output_entries: self.context.output().len(),
             global_bindings: self.context.global_binding_count(),
             atom_count: self.context.atom_count(),
@@ -204,6 +205,7 @@ impl Default for Vm {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct VmResourceUsage {
     pub runtime_steps: usize,
+    pub bytecode_linear_segment_runs: usize,
     pub output_entries: usize,
     pub global_bindings: usize,
     pub atom_count: usize,
