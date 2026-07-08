@@ -189,6 +189,7 @@ impl NativeFunctionKind {
             NativeCallTarget::PromiseThen => Some(Self::PromiseThen),
             NativeCallTarget::PromiseCatch => Some(Self::PromiseCatch),
             NativeCallTarget::RegExp => Some(Self::RegExp),
+            NativeCallTarget::RegExpPrototypeExec => Some(Self::RegExpPrototypeExec),
             NativeCallTarget::RegExpPrototypeTest => Some(Self::RegExpPrototypeTest),
             NativeCallTarget::Symbol => Some(Self::Symbol),
             NativeCallTarget::SymbolPrototypeDescriptionGetter => {
@@ -348,6 +349,7 @@ impl NativeFunctionKind {
             Self::PromiseThen => Some(NativeCallTarget::PromiseThen),
             Self::PromiseCatch => Some(NativeCallTarget::PromiseCatch),
             Self::RegExp => Some(NativeCallTarget::RegExp),
+            Self::RegExpPrototypeExec => Some(NativeCallTarget::RegExpPrototypeExec),
             Self::RegExpPrototypeTest => Some(NativeCallTarget::RegExpPrototypeTest),
             Self::Symbol => Some(NativeCallTarget::Symbol),
             Self::SymbolPrototypeDescriptionGetter => {

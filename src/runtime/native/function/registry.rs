@@ -188,7 +188,8 @@ const OBJECT_PREVENT_EXTENSIONS_SLOT: NativeFunctionSlot = NativeFunctionSlot::n
 const OBJECT_SEAL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(180);
 const MATH_F16ROUND_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(181);
 const MATH_SUM_PRECISE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(182);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 183;
+const REGEXP_EXEC_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(183);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 184;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -336,6 +337,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::PromiseThen => Some(PROMISE_THEN_SLOT),
         NativeFunctionKind::PromiseCatch => Some(PROMISE_CATCH_SLOT),
         NativeFunctionKind::RegExp => Some(REGEXP_SLOT),
+        NativeFunctionKind::RegExpPrototypeExec => Some(REGEXP_EXEC_SLOT),
         NativeFunctionKind::String => Some(STRING_SLOT),
         NativeFunctionKind::Symbol => Some(SYMBOL_SLOT),
         _ => collection_slot(kind),

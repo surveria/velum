@@ -183,6 +183,8 @@ const PATH_TEST262_STANDARD_ERROR_CONSTRUCTORS: &str =
     "tests/corpora/test262/active/language/statements/standard_error_constructors.js";
 const PATH_TEST262_ERROR_PROTOTYPE_TO_STRING: &str =
     "tests/corpora/test262/active/built-ins/Error/prototype_to_string.js";
+const PATH_TEST262_REGEXP_BASELINE: &str =
+    "tests/corpora/test262/active/built-ins/RegExp/baseline.js";
 
 pub fn test262_cases() -> Vec<EngineCase> {
     let mut cases = test262_expression_cases();
@@ -547,6 +549,11 @@ fn test262_global_builtin_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "built-ins/Promise/basic",
             path: PATH_TEST262_PROMISE_BUILTIN,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/RegExp/baseline",
+            path: PATH_TEST262_REGEXP_BASELINE,
             expectation: Expectation::Value("42"),
         },
     ]

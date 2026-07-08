@@ -13,6 +13,8 @@ use crate::{
 
 use super::NativeFunctionKind;
 
+mod regexp;
+
 const PROTOTYPE_PROPERTY: &str = "__proto__";
 
 const fn runtime_call_args(args: &[Value]) -> RuntimeCallArgs<'_> {
@@ -225,6 +227,9 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
+        if let Some(value) = self.eval_direct_regexp_call_target(target, args, this_value) {
+            return value;
+        }
         match target {
             NativeCallTarget::Boolean => self.eval_direct_boolean_constructor(args),
             NativeCallTarget::Eval => self.eval_eval_function(runtime_call_args(args)),
@@ -250,10 +255,6 @@ impl Context {
             NativeCallTarget::PromiseReject => self.eval_direct_promise_reject(args),
             NativeCallTarget::PromiseThen => self.eval_direct_promise_then(args, this_value),
             NativeCallTarget::PromiseCatch => self.eval_direct_promise_catch(args, this_value),
-            NativeCallTarget::RegExp => self.eval_direct_regexp_constructor(args),
-            NativeCallTarget::RegExpPrototypeTest => {
-                self.eval_regexp_prototype_test(runtime_call_args(args), this_value)
-            }
             NativeCallTarget::Symbol => self.eval_symbol_constructor(runtime_call_args(args)),
             target => self
                 .eval_direct_string_native_call_target(target, args, this_value)
@@ -536,6 +537,9 @@ impl Context {
         if let Some(result) = self.eval_array_native_function_kind(kind, args, this_value) {
             return result;
         }
+        if let Some(result) = self.eval_regexp_native_function_kind(kind, args, this_value) {
+            return result;
+        }
         match kind {
             NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
             NativeFunctionKind::Boolean => self.eval_boolean_constructor(args),
@@ -565,10 +569,6 @@ impl Context {
             NativeFunctionKind::PromiseCatch => self.eval_promise_catch(args, this_value),
             NativeFunctionKind::PromiseResolver { promise, kind } => {
                 self.eval_promise_resolver(promise, kind, args)
-            }
-            NativeFunctionKind::RegExp => self.eval_regexp_constructor(args),
-            NativeFunctionKind::RegExpPrototypeTest => {
-                self.eval_regexp_prototype_test(args, this_value)
             }
             NativeFunctionKind::Symbol => self.eval_symbol_constructor(args),
             kind => self
