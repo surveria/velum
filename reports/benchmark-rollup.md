@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T135034Z.md`
-- Task: PR #333: Optimize loop body bytecode paths
-- Performance: 6.10x (63/64 >1.00x)
-- Memory: - (0/64 >1.00x)
-- Full Test262: 28632 passed / 73946 failed (27.91%)
+- `rsqjs-test-report-20260708T140646Z.md`
+- Task: PR #336: Add Array static and iterator methods
+- Performance: 6.18x (64/65 >1.00x)
+- Memory: - (0/65 >1.00x)
+- Full Test262: 28763 passed / 73815 failed (28.04%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -329,3 +329,4 @@ Latest report:
 | `20260708T132001Z` `36ae7c6` PR #332: Add Array.prototype callback methods | 6.03x (63/64 >1.00x) | - (0/64 >1.00x) | 28268 passed / 74310 failed (27.56%) |
 | `20260708T133802Z` `b92c129` PR #334: Add baseline WeakMap and WeakSet built-ins | 6.18x (63/64 >1.00x) | - (0/64 >1.00x) | 28632 passed / 73946 failed (27.91%) |
 | `20260708T135034Z` `634423e` PR #333: Optimize loop body bytecode paths | 6.10x (63/64 >1.00x) | - (0/64 >1.00x) | 28632 passed / 73946 failed (27.91%) |
+| `20260708T140646Z` `bfad4f9` PR #336: Add Array static and iterator methods | 6.18x (64/65 >1.00x) | - (0/65 >1.00x) | 28763 passed / 73815 failed (28.04%) |
