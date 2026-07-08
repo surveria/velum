@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T120915Z.md`
-- Task: PR #302: Add baseline Map and Set builtins
-- Performance: 6.27x (62/63 >1.00x)
+- `rsqjs-test-report-20260708T121554Z.md`
+- Task: workflow_dispatch
+- Performance: 5.98x (62/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 25389 passed / 77189 failed (24.75%)
+- Full Test262: 25392 passed / 77186 failed (24.75%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -321,3 +321,4 @@ Latest report:
 | `20260708T114511Z` `f99c5e2` PR #326: Add standard Error prototype support | 6.35x (62/63 >1.00x) | - (0/63 >1.00x) | 24499 passed / 78079 failed (23.88%) |
 | `20260708T115116Z` `4b5d75b` PR #325: Expand String static and Unicode built-ins | 6.35x (62/63 >1.00x) | - (0/63 >1.00x) | 24755 passed / 77823 failed (24.13%) |
 | `20260708T120915Z` `91eb3a3` PR #302: Add baseline Map and Set builtins | 6.27x (62/63 >1.00x) | - (0/63 >1.00x) | 25389 passed / 77189 failed (24.75%) |
+| `20260708T121554Z` `292b532` workflow_dispatch | 5.98x (62/63 >1.00x) | - (0/63 >1.00x) | 25392 passed / 77186 failed (24.75%) |
