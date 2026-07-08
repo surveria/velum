@@ -186,7 +186,9 @@ const OBJECT_IS_FROZEN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(177);
 const OBJECT_IS_SEALED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(178);
 const OBJECT_PREVENT_EXTENSIONS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(179);
 const OBJECT_SEAL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(180);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 181;
+const MATH_F16ROUND_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(181);
+const MATH_SUM_PRECISE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(182);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 183;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -281,6 +283,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::MathCosh => Some(MATH_COSH_SLOT),
         NativeFunctionKind::MathExp => Some(MATH_EXP_SLOT),
         NativeFunctionKind::MathExpm1 => Some(MATH_EXPM1_SLOT),
+        NativeFunctionKind::MathF16round => Some(MATH_F16ROUND_SLOT),
         NativeFunctionKind::MathFloor => Some(MATH_FLOOR_SLOT),
         NativeFunctionKind::MathFround => Some(MATH_FROUND_SLOT),
         NativeFunctionKind::MathHypot => Some(MATH_HYPOT_SLOT),
@@ -298,6 +301,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::MathSin => Some(MATH_SIN_SLOT),
         NativeFunctionKind::MathSinh => Some(MATH_SINH_SLOT),
         NativeFunctionKind::MathSqrt => Some(MATH_SQRT_SLOT),
+        NativeFunctionKind::MathSumPrecise => Some(MATH_SUM_PRECISE_SLOT),
         NativeFunctionKind::MathTan => Some(MATH_TAN_SLOT),
         NativeFunctionKind::MathTanh => Some(MATH_TANH_SLOT),
         NativeFunctionKind::MathTrunc => Some(MATH_TRUNC_SLOT),
