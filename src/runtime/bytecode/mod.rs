@@ -8,7 +8,7 @@ pub(in crate::runtime) mod for_of;
 mod linear;
 mod ops;
 mod spread;
-mod state;
+pub(in crate::runtime) mod state;
 mod super_ops;
 
 use crate::{
