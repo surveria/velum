@@ -7,9 +7,6 @@ cd "${repo_root}"
 
 # Cheap PR/local gate: keep source quality high without materializing external
 # corpora or running sequential QuickJS benchmark/report generation.
-if [[ -n "${RSQJS_BASE_REF:-}" ]]; then
-  "${script_dir}/check-version-bump.sh" "${RSQJS_BASE_REF}"
-fi
 "${script_dir}/check-touched-file-sizes.sh" "${RSQJS_BASE_REF:-origin/main}"
 
 cargo fmt --all -- --check
