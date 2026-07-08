@@ -411,6 +411,33 @@ fn bytecode_runs_linear_segments_inside_mixed_loop_blocks() -> TestResult {
 }
 
 #[test]
+fn bytecode_runs_direct_linear_loop_condition_and_update() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r"
+        var total = 0;
+
+        for (var index = 0; index < 32; index = index + 1) {
+            total = total + index;
+        }
+
+        total === 496 ? 42 : 0
+        ",
+    )?;
+    let initial_direct_runs = vm.resource_usage().bytecode_linear_direct_runs;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    let direct_run_delta = vm
+        .resource_usage()
+        .bytecode_linear_direct_runs
+        .checked_sub(initial_direct_runs)
+        .ok_or("bytecode linear direct counter moved backwards")?;
+    ensure_at_least(direct_run_delta, 60, "bytecode linear direct runs")
+}
+
+#[test]
 fn bytecode_quickens_numeric_compound_binding_paths() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();

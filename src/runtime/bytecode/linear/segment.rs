@@ -82,6 +82,9 @@ impl Context {
         plan: Option<&BytecodeLinearPlan<'_>>,
         state: &mut BytecodeState,
     ) -> Result<Value> {
+        if let Some(value) = self.eval_bytecode_linear_direct_expression(block, plan)? {
+            return Ok(value);
+        }
         self.eval_bytecode_block_with_linear_plan(block, plan, state)?
             .into_result()
     }
@@ -169,6 +172,21 @@ impl<'a> BytecodeLinearPlan<'a> {
     fn segment_at(&self, pc: usize) -> Option<&BytecodeLinearSegment<'a>> {
         let segment_index = self.entry_by_pc.get(pc).copied().flatten()?;
         self.segments.get(segment_index)
+    }
+
+    pub(super) fn single_full_block_op(
+        &self,
+        block: &BytecodeBlock,
+    ) -> Option<&BytecodeLinearOp<'a>> {
+        let segment = self.segments.first()?;
+        if self.segments.len() == 1
+            && segment.start == 0
+            && segment.end == block.instructions().len()
+            && segment.ops.len() == 1
+        {
+            return segment.ops.first();
+        }
+        None
     }
 }
 

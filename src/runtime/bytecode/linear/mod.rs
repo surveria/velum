@@ -1,3 +1,4 @@
+mod direct;
 mod numeric_chain;
 mod segment;
 
