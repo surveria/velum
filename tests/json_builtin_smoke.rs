@@ -93,13 +93,80 @@ let run = function() {
         mark("d", null),
         mark("e", 2)
     );
-    return parsed.value === 7 && text === '{"value":7}';
+    return parsed.value === 7 && text === '{\n  "value": 7\n}';
 };
 
 let first = run();
 let second = run();
 
 first && second && order === "abcdeabcde" ? 42 : 0
+"#;
+
+const JSON_CALLBACKS_SCRIPT: &str = r#"
+let order = "";
+let parsed = JSON.parse(
+    '{"a":1,"nested":{"b":2},"arr":[3,4],"drop":5}',
+    function(key, value) {
+        order = order + key + ";";
+        if (key === "drop" || key === "1") {
+            return undefined;
+        }
+        if (key === "b") {
+            return value + 40;
+        }
+        return value;
+    }
+);
+
+let replacerThisOk = false;
+let replacerText = JSON.stringify(
+    { a: 1, b: 2, c: 3 },
+    function(key, value) {
+        if (key === "a" && this.a === 1) {
+            replacerThisOk = true;
+        }
+        if (key === "b") {
+            return undefined;
+        }
+        return value;
+    }
+);
+
+let listText = JSON.stringify({ a: 1, b: 2, c: 3 }, ["c", "a", "c"]);
+let prettyText = JSON.stringify({ a: 1, nested: { b: 2 } }, null, 2);
+let arrayText = JSON.stringify([1, 2, 3], function(key, value) {
+    if (key === "1") {
+        return undefined;
+    }
+    return value;
+});
+
+let toJsonKey = "";
+let toJsonText = JSON.stringify({
+    keep: {
+        toJSON: function(key) {
+            toJsonKey = key;
+            return { answer: 42, skip: undefined };
+        }
+    }
+});
+
+parsed.a === 1 &&
+    parsed.nested.b === 42 &&
+    parsed.arr.length === 2 &&
+    parsed.arr[0] === 3 &&
+    parsed.arr[1] === undefined &&
+    parsed.drop === undefined &&
+    order === "a;b;nested;0;1;arr;drop;;" &&
+    replacerThisOk &&
+    replacerText === '{"a":1,"c":3}' &&
+    listText === '{"c":3,"a":1}' &&
+    prettyText === '{\n  "a": 1,\n  "nested": {\n    "b": 2\n  }\n}' &&
+    arrayText === '[1,null,3]' &&
+    toJsonKey === "keep" &&
+    toJsonText === '{"keep":{"answer":42}}'
+    ? 42
+    : 0
 "#;
 
 #[test]
@@ -149,6 +216,16 @@ fn direct_json_targets_preserve_argument_semantics() -> TestResult {
         2,
         "direct JSON native call cache hits",
     )
+}
+
+#[test]
+fn supports_json_reviver_replacer_space_and_to_json() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(JSON_CALLBACKS_SCRIPT)?;
+
+    ensure_value(&value, &Value::Number(42.0))
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
