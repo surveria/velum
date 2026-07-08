@@ -23,6 +23,10 @@ impl Context {
             NativeCallTarget::ArrayFindIndex => {
                 Some(self.eval_direct_array_find_index(args, this_value))
             }
+            NativeCallTarget::ArrayFlat => Some(self.eval_direct_array_flat(args, this_value)),
+            NativeCallTarget::ArrayFlatMap => {
+                Some(self.eval_direct_array_flat_map(args, this_value))
+            }
             NativeCallTarget::ArrayForEach => {
                 Some(self.eval_direct_array_for_each(args, this_value))
             }
@@ -72,6 +76,8 @@ impl Context {
             NativeFunctionKind::ArrayFindIndex => {
                 Some(self.eval_array_find_index(args, this_value))
             }
+            NativeFunctionKind::ArrayFlat => Some(self.eval_array_flat(args, this_value)),
+            NativeFunctionKind::ArrayFlatMap => Some(self.eval_array_flat_map(args, this_value)),
             NativeFunctionKind::ArrayForEach => Some(self.eval_array_for_each(args, this_value)),
             NativeFunctionKind::ArrayIncludes => Some(self.eval_array_includes(args, this_value)),
             NativeFunctionKind::ArrayIndexOf => Some(self.eval_array_index_of(args, this_value)),
