@@ -20,6 +20,7 @@ use crate::value::{ErrorName, Value};
 pub mod binding;
 pub mod bytecode;
 pub mod call;
+pub mod collections;
 pub mod control;
 pub mod engine;
 pub mod function;
@@ -68,6 +69,9 @@ pub struct Context {
     pub(crate) host_functions: Vec<HostFunction>,
     objects: ObjectHeap,
     global_object: Option<crate::value::ObjectId>,
+    collections: Vec<collections::CollectionData>,
+    collection_object_slots: Vec<Option<(collections::CollectionKind, collections::CollectionId)>>,
+    collection_iterators: Vec<collections::CollectionIteratorState>,
     promises: Vec<Promise>,
     promise_object_slots: Vec<Option<PromiseId>>,
     promise_jobs: VecDeque<PromiseJob>,
@@ -198,6 +202,9 @@ impl Context {
             host_functions: Vec::new(),
             objects: ObjectHeap::new(),
             global_object: None,
+            collections: Vec::new(),
+            collection_object_slots: Vec::new(),
+            collection_iterators: Vec::new(),
             promises: Vec::new(),
             promise_object_slots: Vec::new(),
             promise_jobs: VecDeque::new(),

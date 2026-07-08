@@ -22,7 +22,7 @@ const ITERATOR_RESULT_VALUE_PROPERTY: &str = "value";
 /// use direct engine iteration because the engine does not install
 /// `%Array.prototype%[Symbol.iterator]` yet; other objects go through the
 /// user-visible iterator protocol.
-pub(super) enum ForOfSource {
+pub(in crate::runtime) enum ForOfSource {
     /// Live array index iteration: the length is re-read every step so
     /// mutation during iteration behaves like the spec array iterator.
     ArrayIndex { array: Value, index: usize },
@@ -37,7 +37,7 @@ pub(super) enum ForOfSource {
 }
 
 /// Outcome of advancing a `for...of` source by one element.
-pub(super) enum ForOfStep {
+pub(in crate::runtime) enum ForOfStep {
     Value(Value),
     Done,
     /// An abrupt completion thrown by user iterator code.
@@ -81,7 +81,7 @@ impl Context {
         Ok(Self::store_or_return_completion(state, completion, next))
     }
 
-    pub(super) fn for_of_source(&mut self, iterable: Value) -> Result<ForOfSource> {
+    pub(in crate::runtime) fn for_of_source(&mut self, iterable: Value) -> Result<ForOfSource> {
         match &iterable {
             Value::String(text) => Ok(chars_source(text)),
             Value::HeapString(text) => Ok(chars_source(text.as_str())),
@@ -153,7 +153,10 @@ impl Context {
         }))
     }
 
-    pub(super) fn for_of_step(&mut self, source: &mut ForOfSource) -> Result<ForOfStep> {
+    pub(in crate::runtime) fn for_of_step(
+        &mut self,
+        source: &mut ForOfSource,
+    ) -> Result<ForOfStep> {
         match source {
             ForOfSource::ArrayIndex { array, index } => {
                 let Value::Object(id) = array else {
@@ -226,7 +229,7 @@ impl Context {
     /// Calls the iterator's `return` method when the loop ends abruptly
     /// before exhaustion, mirroring `IteratorClose`. Errors raised by the
     /// close call are intentionally dropped so the original completion wins.
-    pub(super) fn close_for_of_source(&mut self, source: &ForOfSource) {
+    pub(in crate::runtime) fn close_for_of_source(&mut self, source: &ForOfSource) {
         let ForOfSource::Protocol {
             iterator,
             done: false,

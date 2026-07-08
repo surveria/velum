@@ -4,6 +4,7 @@ mod eval;
 mod function_constructor;
 mod global;
 mod json;
+mod map_set;
 mod math;
 mod number;
 mod object;
@@ -14,6 +15,7 @@ mod string;
 mod string_extra;
 mod symbol;
 
+pub(in crate::runtime::native) use map_set::{CollectionIterationTarget, MAP_NAME, SET_NAME};
 pub(in crate::runtime::native) use number::number_intrinsic_property;
 
 use super::{

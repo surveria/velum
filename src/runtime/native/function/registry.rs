@@ -129,7 +129,27 @@ const STRING_PROTOTYPE_TO_LOCALE_LOWER_CASE_SLOT: NativeFunctionSlot = NativeFun
 const STRING_PROTOTYPE_TO_LOCALE_UPPER_CASE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(121);
 const STRING_PROTOTYPE_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(122);
 const STRING_PROTOTYPE_VALUE_OF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(123);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 124;
+const MAP_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(124);
+const MAP_GET_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(125);
+const MAP_SET_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(126);
+const MAP_HAS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(127);
+const MAP_DELETE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(128);
+const MAP_CLEAR_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(129);
+const MAP_FOR_EACH_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(130);
+const MAP_SIZE_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(131);
+const MAP_ENTRIES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(132);
+const MAP_KEYS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(133);
+const MAP_VALUES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(134);
+const SET_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(135);
+const SET_ADD_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(136);
+const SET_HAS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(137);
+const SET_DELETE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(138);
+const SET_CLEAR_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(139);
+const SET_FOR_EACH_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(140);
+const SET_SIZE_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(141);
+const SET_ENTRIES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(142);
+const SET_VALUES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(143);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 144;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -268,6 +288,32 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::RegExp => Some(REGEXP_SLOT),
         NativeFunctionKind::String => Some(STRING_SLOT),
         NativeFunctionKind::Symbol => Some(SYMBOL_SLOT),
+        _ => collection_slot(kind),
+    }
+}
+
+const fn collection_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
+    match kind {
+        NativeFunctionKind::Map => Some(MAP_SLOT),
+        NativeFunctionKind::MapGet => Some(MAP_GET_SLOT),
+        NativeFunctionKind::MapSet => Some(MAP_SET_SLOT),
+        NativeFunctionKind::MapHas => Some(MAP_HAS_SLOT),
+        NativeFunctionKind::MapDelete => Some(MAP_DELETE_SLOT),
+        NativeFunctionKind::MapClear => Some(MAP_CLEAR_SLOT),
+        NativeFunctionKind::MapForEach => Some(MAP_FOR_EACH_SLOT),
+        NativeFunctionKind::MapSizeGetter => Some(MAP_SIZE_GETTER_SLOT),
+        NativeFunctionKind::MapEntries => Some(MAP_ENTRIES_SLOT),
+        NativeFunctionKind::MapKeys => Some(MAP_KEYS_SLOT),
+        NativeFunctionKind::MapValues => Some(MAP_VALUES_SLOT),
+        NativeFunctionKind::Set => Some(SET_SLOT),
+        NativeFunctionKind::SetAdd => Some(SET_ADD_SLOT),
+        NativeFunctionKind::SetHas => Some(SET_HAS_SLOT),
+        NativeFunctionKind::SetDelete => Some(SET_DELETE_SLOT),
+        NativeFunctionKind::SetClear => Some(SET_CLEAR_SLOT),
+        NativeFunctionKind::SetForEach => Some(SET_FOR_EACH_SLOT),
+        NativeFunctionKind::SetSizeGetter => Some(SET_SIZE_GETTER_SLOT),
+        NativeFunctionKind::SetEntries => Some(SET_ENTRIES_SLOT),
+        NativeFunctionKind::SetValues => Some(SET_VALUES_SLOT),
         _ => None,
     }
 }
