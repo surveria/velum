@@ -33,6 +33,7 @@ impl Context {
             bytecode: declaration.bytecode(),
             constructable: !declaration.is_async(),
             is_async: declaration.is_async(),
+            class_constructor: false,
             new_target_mode: BytecodeNewTargetMode::Own,
         })?;
         self.assign_bytecode(declaration.name(), function)

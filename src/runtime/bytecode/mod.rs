@@ -1,5 +1,6 @@
 mod array;
 mod call;
+mod class;
 mod coercion;
 mod control;
 mod destructure;
@@ -117,6 +118,7 @@ impl Context {
             | BytecodeInstruction::CallComputedMemberSpread { .. }
             | BytecodeInstruction::ConstructValueSpread
             | BytecodeInstruction::ArrayLiteralSpread { .. }
+            | BytecodeInstruction::CreateClass { .. }
             | BytecodeInstruction::Print { .. }
             | BytecodeInstruction::AssertThrows { .. }
             | BytecodeInstruction::Construct { .. }
