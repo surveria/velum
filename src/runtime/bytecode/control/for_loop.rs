@@ -123,15 +123,14 @@ impl Context {
         let mut last = Value::Undefined;
         let array_values = self.fast_loop_numeric_array_values(&fast_path.body)?;
         loop {
-            self.record_bytecode_linear_direct_run()?;
             self.step()?;
+            self.record_bytecode_linear_direct_run()?;
             if !Self::fast_loop_condition(fast_path)? {
                 break;
             }
-            match self.eval_bytecode_for_body_fast_path_with_array(
-                &fast_path.body,
-                array_values.as_deref(),
-            )? {
+            match self
+                .eval_bytecode_for_loop_body_fast_path(&fast_path.body, array_values.as_deref())?
+            {
                 Completion::Normal(value) => last = value,
                 Completion::Continue(None) => {}
                 completion @ (Completion::Break { .. }
@@ -140,7 +139,6 @@ impl Context {
                 | Completion::Return(_)) => return Ok(Some(completion)),
             }
             self.record_bytecode_linear_direct_run()?;
-            self.step()?;
             self.fast_loop_update(fast_path)?;
         }
         state.last = last;
@@ -236,6 +234,23 @@ impl Context {
     ) -> Result<Completion> {
         self.record_bytecode_linear_direct_run()?;
         self.step()?;
+        self.eval_bytecode_for_body_fast_path_catching(fast_path, array_values)
+    }
+
+    fn eval_bytecode_for_loop_body_fast_path(
+        &mut self,
+        fast_path: &BytecodeForBodyFastPath<'_>,
+        array_values: Option<&[f64]>,
+    ) -> Result<Completion> {
+        self.record_bytecode_linear_direct_run()?;
+        self.eval_bytecode_for_body_fast_path_catching(fast_path, array_values)
+    }
+
+    fn eval_bytecode_for_body_fast_path_catching(
+        &mut self,
+        fast_path: &BytecodeForBodyFastPath<'_>,
+        array_values: Option<&[f64]>,
+    ) -> Result<Completion> {
         match self.eval_bytecode_for_body_fast_path_inner(fast_path, array_values) {
             Ok(completion) => Ok(completion),
             Err(error) => {
