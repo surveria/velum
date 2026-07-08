@@ -25,12 +25,9 @@ pub enum NativeCallTarget {
     ArraySome,
     ArrayUnshift,
     Boolean,
-<<<<<<< HEAD
     BooleanPrototypeToString,
     BooleanPrototypeValueOf,
-=======
     Date,
->>>>>>> 79971c0 (Implement baseline Date built-in)
     ErrorConstructor(ErrorName),
     ErrorPrototypeToString,
     Eval,

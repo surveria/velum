@@ -149,7 +149,6 @@ const SET_FOR_EACH_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(140);
 const SET_SIZE_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(141);
 const SET_ENTRIES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(142);
 const SET_VALUES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(143);
-<<<<<<< HEAD
 const NUMBER_IS_INTEGER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(144);
 const NUMBER_IS_SAFE_INTEGER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(145);
 const BOOLEAN_PROTOTYPE_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(146);
@@ -178,11 +177,8 @@ const WEAK_SET_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(168);
 const WEAK_SET_ADD_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(169);
 const WEAK_SET_HAS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(170);
 const WEAK_SET_DELETE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(171);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 172;
-=======
-const DATE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(144);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 145;
->>>>>>> 79971c0 (Implement baseline Date built-in)
+const DATE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(172);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 173;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {

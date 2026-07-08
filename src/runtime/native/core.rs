@@ -10,21 +10,13 @@ use crate::{
 };
 
 use super::{
-<<<<<<< HEAD
-    ARRAY_NAME, BOOLEAN_NAME, EVAL_NAME, FUNCTION_NAME, GLOBAL_DECODE_URI_COMPONENT_NAME,
-    GLOBAL_DECODE_URI_NAME, GLOBAL_ENCODE_URI_COMPONENT_NAME, GLOBAL_ENCODE_URI_NAME,
-    GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME,
-    GLOBAL_THIS_NAME, INFINITY_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME,
-    NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PROMISE_NAME,
-    REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
-=======
     ARRAY_NAME, BOOLEAN_NAME, DATE_NAME, DateFunctionKind, EVAL_NAME, FUNCTION_NAME,
     GLOBAL_DECODE_URI_COMPONENT_NAME, GLOBAL_DECODE_URI_NAME, GLOBAL_ENCODE_URI_COMPONENT_NAME,
     GLOBAL_ENCODE_URI_NAME, GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME,
     GLOBAL_PARSE_INT_NAME, GLOBAL_THIS_NAME, INFINITY_NAME, JSON_NAME, MAP_NAME, MATH_NAME,
     NAN_NAME, NUMBER_NAME, NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY,
-    OBJECT_NAME, PROMISE_NAME, REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME,
->>>>>>> 79971c0 (Implement baseline Date built-in)
+    OBJECT_NAME, PROMISE_NAME, REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME, WEAK_MAP_NAME,
+    WEAK_SET_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -47,12 +39,9 @@ const fn native_kind_is_constructable(kind: NativeFunctionKind) -> bool {
             | NativeFunctionKind::String
             | NativeFunctionKind::Map
             | NativeFunctionKind::Set
-<<<<<<< HEAD
             | NativeFunctionKind::WeakMap
             | NativeFunctionKind::WeakSet
-=======
             | NativeFunctionKind::Date(DateFunctionKind::Constructor)
->>>>>>> 79971c0 (Implement baseline Date built-in)
     )
 }
 

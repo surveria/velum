@@ -181,8 +181,6 @@ pub(in crate::runtime::native) const STRING_PROTOTYPE_TRIM_RIGHT_NAME: &str = "t
 pub(in crate::runtime::native) const STRING_PROTOTYPE_TRIM_START_NAME: &str = "trimStart";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_VALUE_OF_NAME: &str = "valueOf";
 const SYMBOL_FUNCTION_LENGTH: f64 = 0.0;
-<<<<<<< HEAD
-=======
 const DATE_FUNCTION_LENGTH: f64 = 7.0;
 pub(in crate::runtime) const DATE_NAME: &str = "Date";
 const DATE_NOW_FUNCTION_LENGTH: f64 = 0.0;
@@ -231,7 +229,6 @@ const COLLECTION_METHOD_VALUES_NAME: &str = "values";
 const COLLECTION_SIZE_GETTER_NAME: &str = "size";
 const COLLECTION_ITERATOR_NEXT_NAME: &str = "next";
 const COLLECTION_ITERATOR_SELF_NAME: &str = "[Symbol.iterator]";
->>>>>>> 79971c0 (Implement baseline Date built-in)
 pub(in crate::runtime::native) const SYMBOL_NAME: &str = "Symbol";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

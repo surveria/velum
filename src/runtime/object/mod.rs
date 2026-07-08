@@ -74,11 +74,8 @@ struct Object {
     enumerable_property_count: usize,
     array_length: Option<ArrayLength>,
     string_value: Option<crate::storage::string_heap::JsString>,
-<<<<<<< HEAD
     primitive_value: Option<ObjectPrimitiveValue>,
-=======
     date_value: Option<DateValue>,
->>>>>>> 79971c0 (Implement baseline Date built-in)
     prototype: Option<ObjectId>,
 }
 
@@ -99,11 +96,8 @@ impl Object {
             enumerable_property_count: 0,
             array_length: None,
             string_value: None,
-<<<<<<< HEAD
             primitive_value: None,
-=======
             date_value: None,
->>>>>>> 79971c0 (Implement baseline Date built-in)
             prototype: None,
         }
     }
@@ -116,11 +110,8 @@ impl Object {
             enumerable_property_count: 0,
             array_length: None,
             string_value: None,
-<<<<<<< HEAD
             primitive_value: None,
-=======
             date_value: None,
->>>>>>> 79971c0 (Implement baseline Date built-in)
             prototype: None,
         }
     }
@@ -133,8 +124,8 @@ impl Object {
             enumerable_property_count: 0,
             array_length: Some(length),
             string_value: None,
-<<<<<<< HEAD
             primitive_value: None,
+            date_value: None,
             prototype: None,
         }
     }
@@ -148,9 +139,7 @@ impl Object {
             array_length: None,
             string_value: None,
             primitive_value: Some(value),
-=======
             date_value: None,
->>>>>>> 79971c0 (Implement baseline Date built-in)
             prototype: None,
         }
     }
