@@ -42,7 +42,8 @@ impl BytecodeNumericBinaryOp {
             | BinaryOp::In
             | BinaryOp::InstanceOf
             | BinaryOp::LogicalAnd
-            | BinaryOp::LogicalOr => None,
+            | BinaryOp::LogicalOr
+            | BinaryOp::NullishCoalescing => None,
         }
     }
 
@@ -121,7 +122,8 @@ impl BytecodeNumericCompareOp {
             | BinaryOp::ShiftRight
             | BinaryOp::ShiftRightUnsigned
             | BinaryOp::LogicalAnd
-            | BinaryOp::LogicalOr => None,
+            | BinaryOp::LogicalOr
+            | BinaryOp::NullishCoalescing => None,
         }
     }
 
@@ -169,7 +171,8 @@ impl BytecodeNumericEqualityOp {
             | BinaryOp::ShiftRight
             | BinaryOp::ShiftRightUnsigned
             | BinaryOp::LogicalAnd
-            | BinaryOp::LogicalOr => None,
+            | BinaryOp::LogicalOr
+            | BinaryOp::NullishCoalescing => None,
         }
     }
 

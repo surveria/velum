@@ -112,7 +112,8 @@ fn string_relational_compare(op: BinaryOp, left: &str, right: &str) -> bool {
         | BinaryOp::ShiftRight
         | BinaryOp::ShiftRightUnsigned
         | BinaryOp::LogicalAnd
-        | BinaryOp::LogicalOr => false,
+        | BinaryOp::LogicalOr
+        | BinaryOp::NullishCoalescing => false,
     }
 }
 
@@ -141,7 +142,8 @@ fn number_relational_compare(op: BinaryOp, left: f64, right: f64) -> bool {
         | BinaryOp::ShiftRight
         | BinaryOp::ShiftRightUnsigned
         | BinaryOp::LogicalAnd
-        | BinaryOp::LogicalOr => false,
+        | BinaryOp::LogicalOr
+        | BinaryOp::NullishCoalescing => false,
     }
 }
 

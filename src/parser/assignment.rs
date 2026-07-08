@@ -46,6 +46,12 @@ impl Parser {
             Some(BinaryOp::ShiftRight)
         } else if self.match_kind(&TokenKind::GreaterGreaterGreaterEqual) {
             Some(BinaryOp::ShiftRightUnsigned)
+        } else if self.match_kind(&TokenKind::AndAndEqual) {
+            Some(BinaryOp::LogicalAnd)
+        } else if self.match_kind(&TokenKind::OrOrEqual) {
+            Some(BinaryOp::LogicalOr)
+        } else if self.match_kind(&TokenKind::QuestionQuestionEqual) {
+            Some(BinaryOp::NullishCoalescing)
         } else {
             return None;
         };

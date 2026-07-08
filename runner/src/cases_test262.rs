@@ -90,6 +90,8 @@ const PATH_TEST262_COMPOUND_ASSIGNMENT: &str =
     "tests/corpora/test262/active/language/expressions/compound_assignment.js";
 const PATH_TEST262_COMPOUND_ASSIGNMENT_EXTENDED: &str =
     "tests/corpora/test262/active/language/expressions/compound_assignment_extended.js";
+const PATH_TEST262_NULLISH_LOGICAL_ASSIGNMENT: &str =
+    "tests/corpora/test262/active/language/expressions/nullish_logical_assignment.js";
 const PATH_TEST262_EXPONENTIATION_PARENTHESES: &str =
     "tests/corpora/test262/active/language/expressions/exponentiation_parentheses.js";
 const PATH_TEST262_EXPONENTIATION_UNARY_LEFT_ERROR: &str =
@@ -375,6 +377,11 @@ fn test262_operator_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/compound_assignment_extended",
             path: PATH_TEST262_COMPOUND_ASSIGNMENT_EXTENDED,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/nullish_logical_assignment",
+            path: PATH_TEST262_NULLISH_LOGICAL_ASSIGNMENT,
             expectation: Expectation::Value("42"),
         },
         EngineCase {

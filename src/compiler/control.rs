@@ -323,7 +323,10 @@ impl BytecodeCompiler<'_> {
         }
     }
 
-    fn compile_assignment_target(&self, expr: &Expr) -> Result<BytecodeAssignmentTarget> {
+    pub(super) fn compile_assignment_target(
+        &self,
+        expr: &Expr,
+    ) -> Result<BytecodeAssignmentTarget> {
         match expr {
             Expr::Identifier(name) => Ok(BytecodeAssignmentTarget::Binding(
                 self.compile_binding(name)?,
@@ -332,10 +335,20 @@ impl BytecodeCompiler<'_> {
                 object,
                 property,
                 access,
-            } => Ok(BytecodeAssignmentTarget::StaticProperty {
-                object: BytecodeBlock::compile_expression(object, self.layout)?,
-                property: Self::compile_property(property, *access),
-            }),
+            } => {
+                let property = Self::compile_property(property, *access);
+                if let Some(index) = Self::compile_array_index(&property) {
+                    return Ok(BytecodeAssignmentTarget::ArrayIndexProperty {
+                        object: BytecodeBlock::compile_expression(object, self.layout)?,
+                        property,
+                        index,
+                    });
+                }
+                Ok(BytecodeAssignmentTarget::StaticProperty {
+                    object: BytecodeBlock::compile_expression(object, self.layout)?,
+                    property,
+                })
+            }
             Expr::ComputedMember {
                 object,
                 property,

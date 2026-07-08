@@ -98,6 +98,10 @@ impl BytecodeInstruction {
                 callee.direct_operand_count()
             }
             Self::Construct { constructor, .. } => constructor.direct_operand_count(),
+            Self::NullishCoalescing { right } => right.binding_operand_count(),
+            Self::LogicalAssignment { target, value, .. } => target
+                .binding_operand_count()
+                .saturating_add(value.binding_operand_count()),
             Self::While {
                 condition, body, ..
             } => count_blocks_2(condition, body, BytecodeBlock::binding_operand_count),
@@ -182,6 +186,10 @@ impl BytecodeInstruction {
             | Self::CallComputedMember { .. }
             | Self::CallStaticMemberSpread { .. }
             | Self::CallComputedMemberSpread { .. } => 1,
+            Self::NullishCoalescing { right } => right.property_operand_count(),
+            Self::LogicalAssignment { target, value, .. } => target
+                .property_operand_count()
+                .saturating_add(value.property_operand_count()),
             Self::While {
                 condition, body, ..
             } => count_blocks_2(condition, body, BytecodeBlock::property_operand_count),
@@ -247,6 +255,10 @@ impl BytecodeInstruction {
             | Self::CallStaticMember { native, .. }
             | Self::CallComputedMember { native, .. }
             | Self::Construct { native, .. } => usize::from(native.is_some()),
+            Self::NullishCoalescing { right } => right.direct_native_call_count(),
+            Self::LogicalAssignment { target, value, .. } => target
+                .direct_native_call_count()
+                .saturating_add(value.direct_native_call_count()),
             Self::While {
                 condition, body, ..
             } => count_blocks_2(condition, body, BytecodeBlock::direct_native_call_count),
@@ -314,6 +326,10 @@ impl BytecodeInstruction {
             | Self::Construct { native, .. } => {
                 native.map_or(0, |target| usize::from(target.is_array_target()))
             }
+            Self::NullishCoalescing { right } => right.array_native_call_count(),
+            Self::LogicalAssignment { target, value, .. } => target
+                .array_native_call_count()
+                .saturating_add(value.array_native_call_count()),
             Self::While {
                 condition, body, ..
             } => count_blocks_2(condition, body, BytecodeBlock::array_native_call_count),
@@ -379,6 +395,10 @@ impl BytecodeInstruction {
             | Self::NumberBinary(_)
             | Self::NumberCompare(_)
             | Self::NumberEquality(_) => 1,
+            Self::NullishCoalescing { right } => right.numeric_instruction_count(),
+            Self::LogicalAssignment { target, value, .. } => target
+                .numeric_instruction_count()
+                .saturating_add(value.numeric_instruction_count()),
             Self::While {
                 condition, body, ..
             } => count_blocks_2(condition, body, BytecodeBlock::numeric_instruction_count),
@@ -440,6 +460,10 @@ impl BytecodeInstruction {
 
     fn nested_instruction_count(&self) -> usize {
         match self {
+            Self::NullishCoalescing { right } => right.instruction_count(),
+            Self::LogicalAssignment { target, value, .. } => target
+                .nested_instruction_count()
+                .saturating_add(value.instruction_count()),
             Self::While {
                 condition, body, ..
             } => count_blocks_2(condition, body, BytecodeBlock::instruction_count),
@@ -687,7 +711,7 @@ impl BytecodeAssignmentTarget {
     fn property_operand_count(&self) -> usize {
         match self {
             Self::Binding(_) => 0,
-            Self::StaticProperty { object, .. } => {
+            Self::StaticProperty { object, .. } | Self::ArrayIndexProperty { object, .. } => {
                 object.property_operand_count().saturating_add(1)
             }
             Self::ComputedProperty {
@@ -701,7 +725,9 @@ impl BytecodeAssignmentTarget {
     fn direct_native_call_count(&self) -> usize {
         match self {
             Self::Binding(_) => 0,
-            Self::StaticProperty { object, .. } => object.direct_native_call_count(),
+            Self::StaticProperty { object, .. } | Self::ArrayIndexProperty { object, .. } => {
+                object.direct_native_call_count()
+            }
             Self::ComputedProperty {
                 object, property, ..
             } => object
@@ -713,7 +739,9 @@ impl BytecodeAssignmentTarget {
     fn array_native_call_count(&self) -> usize {
         match self {
             Self::Binding(_) => 0,
-            Self::StaticProperty { object, .. } => object.array_native_call_count(),
+            Self::StaticProperty { object, .. } | Self::ArrayIndexProperty { object, .. } => {
+                object.array_native_call_count()
+            }
             Self::ComputedProperty {
                 object, property, ..
             } => object
@@ -725,7 +753,9 @@ impl BytecodeAssignmentTarget {
     fn numeric_instruction_count(&self) -> usize {
         match self {
             Self::Binding(_) => 0,
-            Self::StaticProperty { object, .. } => object.numeric_instruction_count(),
+            Self::StaticProperty { object, .. } | Self::ArrayIndexProperty { object, .. } => {
+                object.numeric_instruction_count()
+            }
             Self::ComputedProperty {
                 object, property, ..
             } => object
@@ -737,7 +767,9 @@ impl BytecodeAssignmentTarget {
     fn binding_operand_count(&self) -> usize {
         match self {
             Self::Binding(binding) => binding.direct_operand_count(),
-            Self::StaticProperty { object, .. } => object.binding_operand_count(),
+            Self::StaticProperty { object, .. } | Self::ArrayIndexProperty { object, .. } => {
+                object.binding_operand_count()
+            }
             Self::ComputedProperty {
                 object, property, ..
             } => object
@@ -749,7 +781,9 @@ impl BytecodeAssignmentTarget {
     fn nested_instruction_count(&self) -> usize {
         match self {
             Self::Binding(_) => 0,
-            Self::StaticProperty { object, .. } => object.instruction_count(),
+            Self::StaticProperty { object, .. } | Self::ArrayIndexProperty { object, .. } => {
+                object.instruction_count()
+            }
             Self::ComputedProperty {
                 object, property, ..
             } => object
