@@ -38,6 +38,7 @@ const PATH_QUICKJS_CLASS_INHERITANCE: &str =
 const PATH_QUICKJS_ARGUMENTS_OBJECT: &str =
     "tests/corpora/quickjs_differential/active/arguments_object.js";
 const PATH_QUICKJS_CLASS_FIELDS: &str = "tests/corpora/quickjs_differential/active/class_fields.js";
+const PATH_QUICKJS_MAP_SET: &str = "tests/corpora/quickjs_differential/active/map_set_baseline.js";
 const PATH_QUICKJS_SWITCH_STATEMENTS: &str =
     "tests/corpora/quickjs_differential/active/switch_statements.js";
 const PATH_QUICKJS_BLOCK_LEXICAL_SCOPE: &str =
@@ -147,6 +148,7 @@ const PATH_QUICKJS_OBJECT_STATIC_METHODS: &str =
 pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
     let mut cases = quickjs_language_cases();
     cases.extend(quickjs_control_flow_cases());
+    cases.extend(quickjs_class_and_collection_cases());
     cases.extend(quickjs_object_cases());
     cases.extend(quickjs_operator_expression_cases());
     cases.extend(quickjs_runtime_cases());
@@ -202,6 +204,31 @@ fn quickjs_language_cases() -> Vec<DifferentialCase> {
     ]
 }
 
+fn quickjs_class_and_collection_cases() -> Vec<DifferentialCase> {
+    vec![
+        DifferentialCase {
+            id: "class_baseline",
+            path: PATH_QUICKJS_CLASS_BASELINE,
+        },
+        DifferentialCase {
+            id: "class_inheritance",
+            path: PATH_QUICKJS_CLASS_INHERITANCE,
+        },
+        DifferentialCase {
+            id: "arguments_object",
+            path: PATH_QUICKJS_ARGUMENTS_OBJECT,
+        },
+        DifferentialCase {
+            id: "class_fields",
+            path: PATH_QUICKJS_CLASS_FIELDS,
+        },
+        DifferentialCase {
+            id: "map_set_baseline",
+            path: PATH_QUICKJS_MAP_SET,
+        },
+    ]
+}
+
 fn quickjs_control_flow_cases() -> Vec<DifferentialCase> {
     vec![
         DifferentialCase {
@@ -231,22 +258,6 @@ fn quickjs_control_flow_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "spread_rest",
             path: PATH_QUICKJS_SPREAD_REST,
-        },
-        DifferentialCase {
-            id: "class_baseline",
-            path: PATH_QUICKJS_CLASS_BASELINE,
-        },
-        DifferentialCase {
-            id: "class_inheritance",
-            path: PATH_QUICKJS_CLASS_INHERITANCE,
-        },
-        DifferentialCase {
-            id: "arguments_object",
-            path: PATH_QUICKJS_ARGUMENTS_OBJECT,
-        },
-        DifferentialCase {
-            id: "class_fields",
-            path: PATH_QUICKJS_CLASS_FIELDS,
         },
         DifferentialCase {
             id: "switch_statements",

@@ -515,45 +515,15 @@ impl Context {
         self.eval_non_object_native_function_kind(kind, args, this_value)
     }
 
-    fn eval_non_object_native_function_kind(
+    fn eval_collection_native_function_kind(
         &mut self,
         kind: NativeFunctionKind,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
-    ) -> Result<Value> {
-        match kind {
-            NativeFunctionKind::Array => self.eval_array_constructor(args),
-            NativeFunctionKind::ArrayConcat => self.eval_array_concat(args, this_value),
-            NativeFunctionKind::ArrayIncludes => self.eval_array_includes(args, this_value),
-            NativeFunctionKind::ArrayIndexOf => self.eval_array_index_of(args, this_value),
-            NativeFunctionKind::ArrayIsArray => self.eval_array_is_array(args),
-            NativeFunctionKind::ArrayJoin => self.eval_array_join(args, this_value),
-            NativeFunctionKind::ArrayLastIndexOf => self.eval_array_last_index_of(args, this_value),
-            NativeFunctionKind::ArrayPop => self.eval_array_pop(args, this_value),
-            NativeFunctionKind::ArrayPush => self.eval_array_push(args, this_value),
-            NativeFunctionKind::ArrayReverse => self.eval_array_reverse(args, this_value),
-            NativeFunctionKind::ArrayShift => self.eval_array_shift(args, this_value),
-            NativeFunctionKind::ArraySlice => self.eval_array_slice(args, this_value),
-            NativeFunctionKind::ArrayUnshift => self.eval_array_unshift(args, this_value),
-            NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
-            NativeFunctionKind::Boolean => self.eval_boolean_constructor(args),
-            NativeFunctionKind::BoundFunction(id) => self.eval_bound_function(id, args),
-            NativeFunctionKind::Eval => self.eval_eval_function(args),
-            NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
-            NativeFunctionKind::ErrorPrototypeToString => {
-                self.eval_error_prototype_to_string(args, this_value)
-            }
-            NativeFunctionKind::Function => self.eval_function_constructor(args),
-            NativeFunctionKind::FunctionPrototypeBind => {
-                self.eval_function_prototype_bind(args, this_value)
-            }
-            NativeFunctionKind::FunctionPrototypeCall => {
-                self.eval_function_prototype_call(args, this_value)
-            }
-            NativeFunctionKind::JsonParse => self.eval_json_parse(args),
-            NativeFunctionKind::JsonStringify => self.eval_json_stringify(args),
+    ) -> Option<Result<Value>> {
+        let result = match kind {
             NativeFunctionKind::Map | NativeFunctionKind::Set => {
-                self.eval_collection_constructor_call()
+                Self::eval_collection_constructor_call()
             }
             NativeFunctionKind::MapGet => self.eval_map_get(args, this_value),
             NativeFunctionKind::MapSet => self.eval_map_set(args, this_value),
@@ -617,6 +587,48 @@ impl Context {
                 self.eval_collection_iterator_next(iterator)
             }
             NativeFunctionKind::IteratorSelf => Ok(this_value.clone()),
+            _ => return None,
+        };
+        Some(result)
+    }
+
+    fn eval_non_object_native_function_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        if let Some(result) = self.eval_collection_native_function_kind(kind, args, this_value) {
+            return result;
+        }
+        match kind {
+            NativeFunctionKind::Array => self.eval_array_constructor(args),
+            NativeFunctionKind::ArrayConcat => self.eval_array_concat(args, this_value),
+            NativeFunctionKind::ArrayIncludes => self.eval_array_includes(args, this_value),
+            NativeFunctionKind::ArrayIndexOf => self.eval_array_index_of(args, this_value),
+            NativeFunctionKind::ArrayIsArray => self.eval_array_is_array(args),
+            NativeFunctionKind::ArrayJoin => self.eval_array_join(args, this_value),
+            NativeFunctionKind::ArrayLastIndexOf => self.eval_array_last_index_of(args, this_value),
+            NativeFunctionKind::ArrayPop => self.eval_array_pop(args, this_value),
+            NativeFunctionKind::ArrayPush => self.eval_array_push(args, this_value),
+            NativeFunctionKind::ArrayReverse => self.eval_array_reverse(args, this_value),
+            NativeFunctionKind::ArrayShift => self.eval_array_shift(args, this_value),
+            NativeFunctionKind::ArraySlice => self.eval_array_slice(args, this_value),
+            NativeFunctionKind::ArrayUnshift => self.eval_array_unshift(args, this_value),
+            NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
+            NativeFunctionKind::Boolean => self.eval_boolean_constructor(args),
+            NativeFunctionKind::BoundFunction(id) => self.eval_bound_function(id, args),
+            NativeFunctionKind::Eval => self.eval_eval_function(args),
+            NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
+            NativeFunctionKind::Function => self.eval_function_constructor(args),
+            NativeFunctionKind::FunctionPrototypeBind => {
+                self.eval_function_prototype_bind(args, this_value)
+            }
+            NativeFunctionKind::FunctionPrototypeCall => {
+                self.eval_function_prototype_call(args, this_value)
+            }
+            NativeFunctionKind::JsonParse => self.eval_json_parse(args),
+            NativeFunctionKind::JsonStringify => self.eval_json_stringify(args),
             NativeFunctionKind::Number => self.eval_number_constructor(args),
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),
             NativeFunctionKind::PromiseResolve => self.eval_promise_resolve(args),

@@ -82,7 +82,6 @@ impl Context {
             NAN_NAME => self
                 .global_constant_value(NAN_NAME, Value::Number(f64::NAN))
                 .map(Some),
-            MAP_NAME => self.map_constructor_value().map(Some),
             NUMBER_NAME => self.number_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
             PROMISE_NAME => self.promise_constructor_value().map(Some),

@@ -288,6 +288,12 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::RegExp => Some(REGEXP_SLOT),
         NativeFunctionKind::String => Some(STRING_SLOT),
         NativeFunctionKind::Symbol => Some(SYMBOL_SLOT),
+        _ => collection_slot(kind),
+    }
+}
+
+const fn collection_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
+    match kind {
         NativeFunctionKind::Map => Some(MAP_SLOT),
         NativeFunctionKind::MapGet => Some(MAP_GET_SLOT),
         NativeFunctionKind::MapSet => Some(MAP_SET_SLOT),

@@ -259,12 +259,12 @@ impl Context {
         }
     }
 
-    pub(in crate::runtime::native) fn eval_collection_constructor_call(&mut self) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_collection_constructor_call() -> Result<Value> {
         Err(Error::type_error(CONSTRUCTOR_REQUIRES_NEW_ERROR))
     }
 
     pub(in crate::runtime::native) fn eval_map_get(
-        &mut self,
+        &self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
@@ -299,7 +299,7 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_collection_has(
-        &mut self,
+        &self,
         kind: CollectionKind,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
@@ -331,7 +331,7 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_collection_size(
-        &mut self,
+        &self,
         kind: CollectionKind,
         this_value: &Value,
     ) -> Result<Value> {

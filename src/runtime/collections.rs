@@ -8,7 +8,7 @@ const COLLECTION_TARGET_ERROR: &str = "method requires a Map or Set receiver";
 
 /// VM-local index of one Map or Set backing store.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(crate) struct CollectionId(usize);
+pub(in crate::runtime) struct CollectionId(usize);
 
 impl CollectionId {
     const fn index(self) -> usize {
@@ -18,20 +18,20 @@ impl CollectionId {
 
 /// Which collection flavor an object slot belongs to.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(crate) enum CollectionKind {
+pub(in crate::runtime) enum CollectionKind {
     Map,
     Set,
 }
 
 /// Insertion-ordered entry storage shared by Map (key/value pairs) and Set
-/// (the key doubles as the value). Keys compare with SameValueZero.
+/// (the key doubles as the value). Keys compare with `SameValueZero`.
 #[derive(Debug, Default, Clone)]
-pub(crate) struct CollectionData {
+pub(in crate::runtime) struct CollectionData {
     entries: Vec<(Value, Value)>,
 }
 
 impl Context {
-    pub(crate) fn create_collection(&mut self) -> Result<CollectionId> {
+    pub(in crate::runtime) fn create_collection(&mut self) -> Result<CollectionId> {
         if self.collections.len() >= self.limits.max_objects {
             return Err(Error::limit(format!(
                 "collection count exceeded {}",
@@ -43,7 +43,7 @@ impl Context {
         Ok(id)
     }
 
-    pub(crate) fn bind_collection_object(
+    pub(in crate::runtime) fn bind_collection_object(
         &mut self,
         object: ObjectId,
         kind: CollectionKind,
@@ -65,7 +65,7 @@ impl Context {
 
     /// Resolves a method receiver to its backing collection, checking the
     /// collection flavor so Map methods reject Set receivers and vice versa.
-    pub(crate) fn collection_from_this(
+    pub(in crate::runtime) fn collection_from_this(
         &self,
         this_value: &Value,
         kind: CollectionKind,
@@ -96,11 +96,15 @@ impl Context {
             .ok_or_else(|| Error::runtime("collection storage disappeared"))
     }
 
-    pub(crate) fn collection_len(&self, id: CollectionId) -> Result<usize> {
+    pub(in crate::runtime) fn collection_len(&self, id: CollectionId) -> Result<usize> {
         Ok(self.collection(id)?.entries.len())
     }
 
-    pub(crate) fn collection_get(&self, id: CollectionId, key: &Value) -> Result<Option<Value>> {
+    pub(in crate::runtime) fn collection_get(
+        &self,
+        id: CollectionId,
+        key: &Value,
+    ) -> Result<Option<Value>> {
         Ok(self
             .collection(id)?
             .entries
@@ -109,7 +113,7 @@ impl Context {
             .map(|(_, value)| value.clone()))
     }
 
-    pub(crate) fn collection_has(&self, id: CollectionId, key: &Value) -> Result<bool> {
+    pub(in crate::runtime) fn collection_has(&self, id: CollectionId, key: &Value) -> Result<bool> {
         Ok(self
             .collection(id)?
             .entries
@@ -118,7 +122,7 @@ impl Context {
     }
 
     /// Inserts or updates an entry, normalizing -0 keys to +0 per spec.
-    pub(crate) fn collection_set(
+    pub(in crate::runtime) fn collection_set(
         &mut self,
         id: CollectionId,
         key: Value,
@@ -144,7 +148,11 @@ impl Context {
         Ok(())
     }
 
-    pub(crate) fn collection_delete(&mut self, id: CollectionId, key: &Value) -> Result<bool> {
+    pub(in crate::runtime) fn collection_delete(
+        &mut self,
+        id: CollectionId,
+        key: &Value,
+    ) -> Result<bool> {
         let data = self.collection_mut(id)?;
         let before = data.entries.len();
         data.entries
@@ -152,20 +160,23 @@ impl Context {
         Ok(data.entries.len() != before)
     }
 
-    pub(crate) fn collection_clear(&mut self, id: CollectionId) -> Result<()> {
+    pub(in crate::runtime) fn collection_clear(&mut self, id: CollectionId) -> Result<()> {
         self.collection_mut(id)?.entries.clear();
         Ok(())
     }
 
     /// Snapshots the current entries for iteration-style consumers.
-    pub(crate) fn collection_entries(&self, id: CollectionId) -> Result<Vec<(Value, Value)>> {
+    pub(in crate::runtime) fn collection_entries(
+        &self,
+        id: CollectionId,
+    ) -> Result<Vec<(Value, Value)>> {
         Ok(self.collection(id)?.entries.clone())
     }
 }
 
 /// VM-local index of one live collection iterator snapshot.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(crate) struct CollectionIteratorId(usize);
+pub(in crate::runtime) struct CollectionIteratorId(usize);
 
 impl CollectionIteratorId {
     const fn index(self) -> usize {
@@ -175,13 +186,13 @@ impl CollectionIteratorId {
 
 /// Snapshot cursor backing one materialized collection iterator object.
 #[derive(Debug, Default, Clone)]
-pub(crate) struct CollectionIteratorState {
+pub(in crate::runtime) struct CollectionIteratorState {
     items: Vec<Value>,
     cursor: usize,
 }
 
 impl Context {
-    pub(crate) fn create_collection_iterator(
+    pub(in crate::runtime) fn create_collection_iterator(
         &mut self,
         items: Vec<Value>,
     ) -> Result<CollectionIteratorId> {
@@ -198,7 +209,7 @@ impl Context {
     }
 
     /// Advances the iterator, returning the next item or None when finished.
-    pub(crate) fn collection_iterator_step(
+    pub(in crate::runtime) fn collection_iterator_step(
         &mut self,
         id: CollectionIteratorId,
     ) -> Result<Option<Value>> {
@@ -217,23 +228,21 @@ impl Context {
     }
 }
 
-/// SameValueZero: strict equality except NaN equals NaN and +0 equals -0.
+/// `SameValueZero`: strict equality except NaN equals NaN and +0 equals -0.
 fn same_value_zero(left: &Value, right: &Value) -> bool {
     if let (Value::Number(left), Value::Number(right)) = (left, right) {
         if left.is_nan() && right.is_nan() {
             return true;
         }
-        return left == right;
+        return left.to_bits() == right.to_bits() || (*left == 0.0 && *right == 0.0);
     }
     left == right
 }
 
 /// Map and Set normalize a -0 key to +0 on insertion.
 fn normalize_zero_key(key: Value) -> Value {
-    if let Value::Number(number) = &key {
-        if *number == 0.0 {
-            return Value::Number(0.0);
-        }
+    if matches!(&key, Value::Number(number) if *number == 0.0) {
+        return Value::Number(0.0);
     }
     key
 }

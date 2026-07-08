@@ -20,7 +20,7 @@ use crate::value::{ErrorName, Value};
 pub mod binding;
 pub mod bytecode;
 pub mod call;
-pub(crate) mod collections;
+pub mod collections;
 pub mod control;
 pub mod engine;
 pub mod function;
