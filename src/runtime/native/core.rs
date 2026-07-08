@@ -15,7 +15,7 @@ use super::{
     GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME,
     GLOBAL_THIS_NAME, INFINITY_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME,
     NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PROMISE_NAME,
-    REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME,
+    REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -38,6 +38,8 @@ const fn native_kind_is_constructable(kind: NativeFunctionKind) -> bool {
             | NativeFunctionKind::String
             | NativeFunctionKind::Map
             | NativeFunctionKind::Set
+            | NativeFunctionKind::WeakMap
+            | NativeFunctionKind::WeakSet
     )
 }
 
@@ -89,6 +91,8 @@ impl Context {
             SET_NAME => self.set_constructor_value().map(Some),
             STRING_NAME => self.string_constructor_value().map(Some),
             SYMBOL_NAME => self.symbol_constructor_value().map(Some),
+            WEAK_MAP_NAME => self.weak_map_constructor_value().map(Some),
+            WEAK_SET_NAME => self.weak_set_constructor_value().map(Some),
             _ => {
                 let Some(name) =
                     ErrorName::from_constructor_name(name).filter(|name| name.is_standard())
@@ -138,6 +142,8 @@ impl Context {
             SET_NAME => self.set_constructor_value().map(Some),
             STRING_NAME => self.string_constructor_value().map(Some),
             SYMBOL_NAME => self.symbol_constructor_value().map(Some),
+            WEAK_MAP_NAME => self.weak_map_constructor_value().map(Some),
+            WEAK_SET_NAME => self.weak_set_constructor_value().map(Some),
             _ => {
                 let Some(name) =
                     ErrorName::from_constructor_name(name).filter(|name| name.is_standard())
@@ -192,6 +198,14 @@ impl Context {
             ),
             NativeFunctionKind::Set => self.construct_collection_object(
                 crate::runtime::collections::CollectionKind::Set,
+                args,
+            ),
+            NativeFunctionKind::WeakMap => self.construct_weak_collection_object(
+                crate::runtime::collections::CollectionKind::WeakMap,
+                args,
+            ),
+            NativeFunctionKind::WeakSet => self.construct_weak_collection_object(
+                crate::runtime::collections::CollectionKind::WeakSet,
                 args,
             ),
             _ => Err(Error::type_error(NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR)),

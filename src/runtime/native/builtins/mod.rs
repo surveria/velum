@@ -14,9 +14,11 @@ mod regexp;
 mod string;
 mod string_extra;
 mod symbol;
+mod weak_collections;
 
 pub(in crate::runtime::native) use map_set::{CollectionIterationTarget, MAP_NAME, SET_NAME};
 pub(in crate::runtime::native) use number::number_intrinsic_property;
+pub(in crate::runtime::native) use weak_collections::{WEAK_MAP_NAME, WEAK_SET_NAME};
 
 use super::{
     ARRAY_NAME, BOOLEAN_NAME, BOOLEAN_PROTOTYPE_TO_STRING_NAME, BOOLEAN_PROTOTYPE_VALUE_OF_NAME,

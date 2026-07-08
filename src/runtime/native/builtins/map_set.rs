@@ -57,6 +57,11 @@ impl Context {
         let constructor_kind = match kind {
             CollectionKind::Map => NativeFunctionKind::Map,
             CollectionKind::Set => NativeFunctionKind::Set,
+            CollectionKind::WeakMap | CollectionKind::WeakSet => {
+                return Err(Error::runtime(
+                    "weak collection routed to Map or Set constructor",
+                ));
+            }
         };
         if let Some(id) = self.native_function_id(constructor_kind) {
             return Ok(Value::NativeFunction(id));
@@ -83,6 +88,11 @@ impl Context {
         let global_name = match kind {
             CollectionKind::Map => MAP_NAME,
             CollectionKind::Set => SET_NAME,
+            CollectionKind::WeakMap | CollectionKind::WeakSet => {
+                return Err(Error::runtime(
+                    "weak collection routed to Map or Set global",
+                ));
+            }
         };
         self.insert_global_builtin(global_name, constructor.clone())?;
         Ok(constructor)
@@ -124,6 +134,11 @@ impl Context {
                 (COLLECTION_KEYS_NAME, NativeFunctionKind::SetValues),
                 (COLLECTION_VALUES_NAME, NativeFunctionKind::SetValues),
             ],
+            CollectionKind::WeakMap | CollectionKind::WeakSet => {
+                return Err(Error::runtime(
+                    "weak collection routed to Map or Set prototype",
+                ));
+            }
         };
         for (name, method_kind) in methods {
             let method = self.collection_method_value(*method_kind)?;
@@ -132,6 +147,9 @@ impl Context {
         let size_kind = match kind {
             CollectionKind::Map => NativeFunctionKind::MapSizeGetter,
             CollectionKind::Set => NativeFunctionKind::SetSizeGetter,
+            CollectionKind::WeakMap | CollectionKind::WeakSet => {
+                return Err(Error::runtime("weak collection routed to Map or Set size"));
+            }
         };
         let getter = self.collection_method_value(size_kind)?;
         let size_key = self.intern_property_key(COLLECTION_SIZE_NAME)?;
@@ -164,6 +182,11 @@ impl Context {
         let iterator_kind = match kind {
             CollectionKind::Map => NativeFunctionKind::MapEntries,
             CollectionKind::Set => NativeFunctionKind::SetValues,
+            CollectionKind::WeakMap | CollectionKind::WeakSet => {
+                return Err(Error::runtime(
+                    "weak collection routed to Map or Set iterator",
+                ));
+            }
         };
         let method = self.collection_method_value(iterator_kind)?;
         self.objects.define_property(
@@ -256,6 +279,9 @@ impl Context {
                 self.collection_set(collection, key, value)
             }
             CollectionKind::Set => self.collection_set(collection, item.clone(), item),
+            CollectionKind::WeakMap | CollectionKind::WeakSet => Err(Error::runtime(
+                "weak collection routed to Map or Set seeding",
+            )),
         }
     }
 

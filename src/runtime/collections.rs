@@ -4,7 +4,7 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-const COLLECTION_TARGET_ERROR: &str = "method requires a Map or Set receiver";
+const COLLECTION_TARGET_ERROR: &str = "method requires a compatible collection receiver";
 
 /// VM-local index of one Map or Set backing store.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -21,6 +21,8 @@ impl CollectionId {
 pub(in crate::runtime) enum CollectionKind {
     Map,
     Set,
+    WeakMap,
+    WeakSet,
 }
 
 /// Insertion-ordered entry storage shared by Map (key/value pairs) and Set
@@ -171,6 +173,10 @@ impl Context {
         id: CollectionId,
     ) -> Result<Vec<(Value, Value)>> {
         Ok(self.collection(id)?.entries.clone())
+    }
+
+    pub(in crate::runtime) const fn can_be_held_weakly(value: &Value) -> bool {
+        matches!(value, Value::Object(_) | Value::Symbol(_))
     }
 }
 

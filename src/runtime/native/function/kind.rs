@@ -353,6 +353,15 @@ pub(in crate::runtime) enum NativeFunctionKind {
     SymbolPrototypeDescriptionGetter,
     SymbolPrototypeToString,
     SymbolPrototypeValueOf,
+    WeakMap,
+    WeakMapDelete,
+    WeakMapGet,
+    WeakMapHas,
+    WeakMapSet,
+    WeakSet,
+    WeakSetAdd,
+    WeakSetDelete,
+    WeakSetHas,
 }
 
 impl NativeFunctionKind {
