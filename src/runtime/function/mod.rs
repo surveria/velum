@@ -15,6 +15,7 @@ use crate::{
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
 };
 
+mod arguments;
 mod intrinsic;
 mod parameters;
 mod properties;
@@ -237,6 +238,7 @@ impl Context {
             )
         };
         let args = args.to_owned_values();
+        let original_args = args.clone();
         let args = self.pack_rest_arguments(bytecode.params(), args)?;
         let has_parameter_defaults = bytecode.has_parameter_defaults();
         let caller_locals = std::mem::take(&mut self.locals);
@@ -253,6 +255,19 @@ impl Context {
                 return Err(error);
             }
         };
+        let binds_arguments = bytecode.uses_arguments()
+            && self.function(id).is_ok_and(|function| {
+                !matches!(function.new_target, FunctionNewTarget::Lexical(_))
+            });
+        if binds_arguments {
+            match self.arguments_wrapper_scope(&original_args) {
+                Ok(wrapper) => self.locals.push(wrapper),
+                Err(error) => {
+                    self.locals = caller_locals;
+                    return Err(error);
+                }
+            }
+        }
         self.locals.push(scope);
         self.upvalue_frames.push(upvalues);
         self.this_values.push(this_value);
@@ -271,6 +286,11 @@ impl Context {
         let removed_this = self.this_values.pop();
         let removed_upvalues = self.upvalue_frames.pop();
         let removed = self.locals.pop();
+        let removed_arguments_scope = if binds_arguments {
+            self.locals.pop().is_some()
+        } else {
+            true
+        };
         self.locals = caller_locals;
         if removed_this.is_none() {
             return Err(Error::runtime("function this binding disappeared"));
@@ -286,6 +306,9 @@ impl Context {
         }
         if removed.is_none() {
             return Err(Error::runtime("function scope disappeared"));
+        }
+        if !removed_arguments_scope {
+            return Err(Error::runtime("function arguments scope disappeared"));
         }
         result
     }
