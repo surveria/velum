@@ -16,7 +16,10 @@ These rules are mandatory for humans and agents working in any part of this repo
 - Immediately make the task visible on GitHub: create an empty start commit with `[skip ci]`, push the branch, and open a draft PR that describes the planned scope. If the branch already has a real first commit, push that instead of an empty commit.
 - Keep the PR as draft while implementation is in progress. Draft PRs are for visibility and discussion; the full CI gate starts when the PR is marked ready for review or receives new ready-state commits.
 - Treat the draft PR branch as the live work log for the task. Split implementation into small, reviewable progress commits with descriptive messages, and push each completed work stage to the PR branch promptly.
-- Do not let a draft PR sit stale while meaningful local-only progress exists. Before pausing, handing off, or switching tasks, push the latest coherent checkpoint or add a PR update that explains the current blocker.
+- Progress checkpoint commits must describe the concrete task progress they preserve, not just that work is in progress. Another agent must be able to reconstruct the task state from GitHub if the current agent session is interrupted.
+- Intermediate progress checkpoint commits do not require tests or the full validation gate before they are committed. Commit and push the coherent checkpoint first; keep validation for the final ready/merge gate or for an explicit validation step.
+- Do not mark a draft PR ready or otherwise trigger ready-state CI just to publish a progress checkpoint. Keep checkpoint commits on the draft PR branch so task progress is visible without loading CI unnecessarily.
+- Do not let a draft PR sit stale while meaningful local-only progress exists. Before pausing, handing off, or switching tasks, push the latest coherent checkpoint to the draft PR branch or add a PR update that explains the current blocker.
 - Do not delete task branches after completion, either locally or on GitHub. Branch history is part of the work record.
 - Remove the task worktree after the task is complete with `git worktree remove <path>`. If a legacy worktree still contains a checked-out submodule and Git refuses to remove it, remove it with `rm -rf <path>` followed by `git worktree prune`.
 
