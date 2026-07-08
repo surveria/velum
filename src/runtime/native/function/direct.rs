@@ -251,6 +251,9 @@ impl Context {
             NativeCallTarget::PromiseThen => self.eval_direct_promise_then(args, this_value),
             NativeCallTarget::PromiseCatch => self.eval_direct_promise_catch(args, this_value),
             NativeCallTarget::RegExp => self.eval_direct_regexp_constructor(args),
+            NativeCallTarget::RegExpPrototypeExec => {
+                self.eval_regexp_prototype_exec(runtime_call_args(args), this_value)
+            }
             NativeCallTarget::RegExpPrototypeTest => {
                 self.eval_regexp_prototype_test(runtime_call_args(args), this_value)
             }
@@ -567,6 +570,9 @@ impl Context {
                 self.eval_promise_resolver(promise, kind, args)
             }
             NativeFunctionKind::RegExp => self.eval_regexp_constructor(args),
+            NativeFunctionKind::RegExpPrototypeExec => {
+                self.eval_regexp_prototype_exec(args, this_value)
+            }
             NativeFunctionKind::RegExpPrototypeTest => {
                 self.eval_regexp_prototype_test(args, this_value)
             }

@@ -155,6 +155,7 @@ const PROMISE_THEN_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const PROMISE_THEN_NAME: &str = "then";
 const REGEXP_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const REGEXP_NAME: &str = "RegExp";
+pub(in crate::runtime::native) const REGEXP_PROTOTYPE_EXEC_NAME: &str = "exec";
 const REGEXP_PROTOTYPE_TEST_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const REGEXP_PROTOTYPE_TEST_NAME: &str = "test";
 const REJECT_NAME: &str = "reject";
@@ -337,6 +338,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
         kind: crate::runtime::promise::PromiseResolverKind,
     },
     RegExp,
+    RegExpPrototypeExec,
     RegExpPrototypeTest,
     String,
     StringFromCharCode,
@@ -544,7 +546,9 @@ impl NativeFunctionKind {
             Self::PromiseCatch => Some(PROMISE_CATCH_FUNCTION_LENGTH),
             Self::PromiseResolver { .. } => Some(PROMISE_RESOLVER_FUNCTION_LENGTH),
             Self::RegExp => Some(REGEXP_FUNCTION_LENGTH),
-            Self::RegExpPrototypeTest => Some(REGEXP_PROTOTYPE_TEST_LENGTH),
+            Self::RegExpPrototypeExec | Self::RegExpPrototypeTest => {
+                Some(REGEXP_PROTOTYPE_TEST_LENGTH)
+            }
             Self::String => Some(STRING_FUNCTION_LENGTH),
             Self::Symbol => Some(SYMBOL_FUNCTION_LENGTH),
             _ => None,
@@ -727,6 +731,7 @@ impl NativeFunctionKind {
                 ..
             } => Some(REJECT_NAME),
             Self::RegExp => Some(REGEXP_NAME),
+            Self::RegExpPrototypeExec => Some(REGEXP_PROTOTYPE_EXEC_NAME),
             Self::RegExpPrototypeTest => Some(REGEXP_PROTOTYPE_TEST_NAME),
             Self::String => Some(STRING_NAME),
             Self::Symbol => Some(SYMBOL_NAME),

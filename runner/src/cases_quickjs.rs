@@ -157,6 +157,8 @@ const PATH_QUICKJS_OBJECT_STATIC_METHODS: &str =
     "tests/corpora/quickjs_differential/active/object_static_methods.js";
 const PATH_QUICKJS_OBJECT_INTEGRITY_METHODS: &str =
     "tests/corpora/quickjs_differential/active/object_integrity_methods.js";
+const PATH_QUICKJS_REGEXP_BASELINE: &str =
+    "tests/corpora/quickjs_differential/active/regexp_baseline.js";
 
 pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
     let mut cases = quickjs_language_cases();
@@ -486,6 +488,10 @@ fn quickjs_runtime_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "json_builtin",
             path: PATH_QUICKJS_JSON_BUILTIN,
+        },
+        DifferentialCase {
+            id: "regexp_baseline",
+            path: PATH_QUICKJS_REGEXP_BASELINE,
         },
         DifferentialCase {
             id: "math_builtin",
