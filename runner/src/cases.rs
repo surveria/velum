@@ -33,6 +33,8 @@ mod cases_engine_runtime;
 mod cases_reporting;
 #[path = "cases_test262.rs"]
 mod cases_test262;
+#[path = "cases_test262_collections.rs"]
+mod cases_test262_collections;
 
 pub use cases_reporting::{benchmark_cases, quickjs_differential_cases};
 pub use cases_test262::test262_cases;
