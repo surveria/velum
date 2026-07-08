@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T095703Z.md`
-- Task: PR #315: Optimize numeric bytecode fast paths
-- Performance: 5.86x (62/63 >1.00x)
+- `rsqjs-test-report-20260708T100850Z.md`
+- Task: PR #314: Expand Object static built-ins
+- Performance: 5.90x (62/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 19622 passed / 82956 failed (19.13%)
+- Full Test262: 20550 passed / 82028 failed (20.03%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -312,3 +312,4 @@ Latest report:
 | `20260708T092725Z` `145672b` PR #308: Optimize control-flow bytecode hot paths | 5.97x (62/63 >1.00x) | - (0/63 >1.00x) | 19442 passed / 83136 failed (18.95%) |
 | `20260708T094421Z` `cdc2689` PR #313: Follow up source module hierarchy cleanup | 6.15x (62/63 >1.00x) | - (0/63 >1.00x) | 19622 passed / 82956 failed (19.13%) |
 | `20260708T095703Z` `0c101bc` PR #315: Optimize numeric bytecode fast paths | 5.86x (62/63 >1.00x) | - (0/63 >1.00x) | 19622 passed / 82956 failed (19.13%) |
+| `20260708T100850Z` `730992d` PR #314: Expand Object static built-ins | 5.90x (62/63 >1.00x) | - (0/63 >1.00x) | 20550 passed / 82028 failed (20.03%) |
