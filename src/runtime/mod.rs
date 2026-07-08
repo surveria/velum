@@ -73,6 +73,7 @@ pub struct Context {
     promise_prototype: Option<crate::value::ObjectId>,
     this_values: Vec<Value>,
     new_target_values: Vec<Value>,
+    super_frames: Vec<Option<Rc<function::FunctionSuperBinding>>>,
     output: Vec<String>,
     random_state: u64,
     runtime_steps: usize,
@@ -99,6 +100,8 @@ struct Function {
     constructable: bool,
     is_async: bool,
     class_constructor: bool,
+    super_binding: Option<Rc<function::FunctionSuperBinding>>,
+    static_parent: Option<Value>,
     new_target: FunctionNewTarget,
 }
 
@@ -196,6 +199,7 @@ impl Context {
             promise_prototype: None,
             this_values: Vec::new(),
             new_target_values: Vec::new(),
+            super_frames: Vec::new(),
             output: Vec::new(),
             random_state: INITIAL_RANDOM_STATE,
             runtime_steps: 0,

@@ -440,3 +440,4 @@ class-expr-method-param-dflt-yield	test/language/expressions/class/method-param-
 class-expr-static-gen-method-param-dflt-yield	test/language/expressions/class/static-gen-method-param-dflt-yield.js	negative-parse	official Test262 class negative parse
 class-expr-static-init-await-binding	test/language/expressions/class/static-init-await-binding.js	negative-parse	official Test262 class negative parse
 class-expr-static-method-param-dflt-yield	test/language/expressions/class/static-method-param-dflt-yield.js	negative-parse	official Test262 class negative parse
+class-subclass-class-definition-null-proto-missing-return-override	test/language/statements/class/subclass/class-definition-null-proto-missing-return-override.js	run	official Test262 class inheritance smoke

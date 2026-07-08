@@ -342,6 +342,8 @@ pub enum BytecodeForInTarget {
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeClass {
     pub name: Option<StaticName>,
+    /// When true the heritage value sits on the stack below computed keys.
+    pub heritage: bool,
     pub constructor_id: StaticFunctionId,
     pub constructor: BytecodeFunction,
     pub members: Rc<[BytecodeClassMember]>,
@@ -649,6 +651,20 @@ pub enum BytecodeInstruction {
     },
     CreateClass {
         class: Rc<BytecodeClass>,
+    },
+    CallSuper {
+        arg_count: usize,
+    },
+    CallSuperSpread,
+    SuperMember {
+        property: BytecodeProperty,
+    },
+    CallSuperMember {
+        property: BytecodeProperty,
+        arg_count: usize,
+    },
+    CallSuperMemberSpread {
+        property: BytecodeProperty,
     },
     Switch {
         discriminant: BytecodeBlock,

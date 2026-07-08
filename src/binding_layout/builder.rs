@@ -410,6 +410,9 @@ impl LayoutBuilder {
         scope: ScopeId,
         function: FunctionScopeId,
     ) -> Result<()> {
+        if let Some(heritage) = &class.heritage {
+            self.analyze_expr(heritage, scope, function)?;
+        }
         self.analyze_function(
             class.constructor.id,
             &class.constructor.params,
@@ -499,12 +502,14 @@ impl LayoutBuilder {
             | Expr::StringLiteral(_)
             | Expr::RegExpLiteral { .. }
             | Expr::This
+            | Expr::SuperMember { .. }
             | Expr::NewTarget => Ok(()),
             Expr::TemplateLiteral { expressions, .. } => {
                 self.analyze_exprs(expressions, scope, function)
             }
             Expr::Identifier(binding) => self.resolve(binding, scope, function),
             Expr::Class(class) => self.analyze_class(class, scope, function),
+            Expr::SuperCall { args } => self.analyze_exprs(args, scope, function),
             Expr::Parenthesized(expr)
             | Expr::Spread(expr)
             | Expr::Unary { expr, .. }

@@ -304,6 +304,11 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::ForOf { .. }
             | BytecodeInstruction::DestructurePattern { .. }
             | BytecodeInstruction::CreateClass { .. }
+            | BytecodeInstruction::CallSuper { .. }
+            | BytecodeInstruction::CallSuperSpread
+            | BytecodeInstruction::SuperMember { .. }
+            | BytecodeInstruction::CallSuperMember { .. }
+            | BytecodeInstruction::CallSuperMemberSpread { .. }
             | BytecodeInstruction::Switch { .. }
             | BytecodeInstruction::Try { .. }
             | BytecodeInstruction::Label { .. }
@@ -329,6 +334,9 @@ impl<'a> BytecodeCompiler<'a> {
     }
 
     pub(super) fn compile_class_literal(&mut self, class: &crate::ast::ClassLiteral) -> Result<()> {
+        if let Some(heritage) = &class.heritage {
+            self.compile_expr(heritage)?;
+        }
         let mut members = Vec::with_capacity(class.members.len());
         for member in &class.members {
             let key = match &member.key {
@@ -355,6 +363,7 @@ impl<'a> BytecodeCompiler<'a> {
         self.emit(BytecodeInstruction::CreateClass {
             class: Rc::new(BytecodeClass {
                 name: class.name.clone(),
+                heritage: class.heritage.is_some(),
                 constructor_id: class.constructor.id,
                 constructor: BytecodeFunction::compile(
                     &class.constructor.params,

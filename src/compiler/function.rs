@@ -270,6 +270,9 @@ impl CaptureBindingCollector {
     }
 
     fn collect_class(&mut self, class: &crate::ast::ClassLiteral) {
+        if let Some(heritage) = &class.heritage {
+            self.collect_expr(heritage);
+        }
         self.collect_function_body(&class.constructor.params, &class.constructor.body);
         for member in &class.members {
             if let crate::ast::ObjectPropertyKey::Computed(key) = &member.key {
@@ -308,12 +311,14 @@ impl CaptureBindingCollector {
             | Expr::StringLiteral(_)
             | Expr::RegExpLiteral { .. }
             | Expr::This
+            | Expr::SuperMember { .. }
             | Expr::NewTarget => {}
             Expr::TemplateLiteral { expressions, .. } => self.collect_exprs(expressions),
             Expr::Function { params, body, .. }
             | Expr::ArrowFunction { params, body, .. }
             | Expr::MethodFunction { params, body, .. } => self.collect_function_body(params, body),
             Expr::Class(class) => self.collect_class(class),
+            Expr::SuperCall { args } => self.collect_exprs(args),
             Expr::Identifier(binding) => self.collect_binding(binding),
             Expr::New { constructor, args } => {
                 self.collect_expr(constructor);

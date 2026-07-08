@@ -9,6 +9,7 @@ mod linear;
 mod ops;
 mod spread;
 mod state;
+mod super_ops;
 
 use crate::{
     bytecode::{
@@ -131,6 +132,11 @@ impl Context {
             | BytecodeInstruction::ConstructValueSpread
             | BytecodeInstruction::ArrayLiteralSpread { .. }
             | BytecodeInstruction::CreateClass { .. }
+            | BytecodeInstruction::CallSuper { .. }
+            | BytecodeInstruction::CallSuperSpread
+            | BytecodeInstruction::SuperMember { .. }
+            | BytecodeInstruction::CallSuperMember { .. }
+            | BytecodeInstruction::CallSuperMemberSpread { .. }
             | BytecodeInstruction::Print { .. }
             | BytecodeInstruction::AssertThrows { .. }
             | BytecodeInstruction::Construct { .. }

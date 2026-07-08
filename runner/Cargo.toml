@@ -2,7 +2,7 @@
 
 [package]
 name = "rsqjs-test-runner"
-version = "0.2.14"
+version = "0.2.15"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/surveria/rs-quickjs"

@@ -121,6 +121,8 @@ const PATH_TEST262_SPREAD_REST: &str =
     "tests/corpora/test262/active/language/expressions/spread_rest.js";
 const PATH_TEST262_CLASS_BASELINE: &str =
     "tests/corpora/test262/active/language/statements/class_baseline.js";
+const PATH_TEST262_CLASS_INHERITANCE: &str =
+    "tests/corpora/test262/active/language/statements/class_inheritance.js";
 const PATH_TEST262_FOR_IN_NULLISH_ERROR: &str =
     "tests/corpora/test262/active/language/statements/for_in_nullish_error.js";
 const PATH_TEST262_SWITCH: &str = "tests/corpora/test262/active/language/statements/switch.js";
@@ -539,6 +541,11 @@ fn test262_statement_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/statements/class_baseline",
             path: PATH_TEST262_CLASS_BASELINE,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/statements/class_inheritance",
+            path: PATH_TEST262_CLASS_INHERITANCE,
             expectation: Expectation::Value("42"),
         },
         EngineCase {

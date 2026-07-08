@@ -59,6 +59,8 @@ struct Parser {
     static_bindings: StaticBindingTable,
     static_functions: StaticFunctionTable,
     static_property_access_count: usize,
+    allow_super_property: bool,
+    allow_super_call: bool,
     static_call_site_count: usize,
     strict_mode: bool,
 }
@@ -79,6 +81,8 @@ impl Parser {
             static_bindings: StaticBindingTable::new(),
             static_functions: StaticFunctionTable::new(),
             static_property_access_count: 0,
+            allow_super_property: false,
+            allow_super_call: false,
             static_call_site_count: 0,
             strict_mode: false,
         }
@@ -283,6 +287,25 @@ impl Parser {
 
     pub(super) fn static_function(&mut self) -> Result<StaticFunctionId> {
         self.static_functions.intern()
+    }
+
+    /// Runs a parse step with the given super-usage permissions, restoring
+    /// the previous permissions afterwards. Ordinary functions clear both;
+    /// class members enable property access and derived constructors enable
+    /// super calls; arrow functions inherit by not switching contexts.
+    pub(super) fn with_super_context<T>(
+        &mut self,
+        allow_property: bool,
+        allow_call: bool,
+        parse: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let previous = (self.allow_super_property, self.allow_super_call);
+        self.allow_super_property = allow_property;
+        self.allow_super_call = allow_call;
+        let result = parse(self);
+        self.allow_super_property = previous.0;
+        self.allow_super_call = previous.1;
+        result
     }
 
     pub(super) fn static_property_access(&mut self) -> Result<StaticPropertyAccessId> {

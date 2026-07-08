@@ -75,7 +75,7 @@ impl Context {
 
     /// Reads the packed argument array produced by `CollectSpreadArgs` back
     /// into an owned argument vector.
-    fn spread_call_arguments(&mut self, packed: &Value) -> Result<Vec<Value>> {
+    pub(super) fn spread_call_arguments(&mut self, packed: &Value) -> Result<Vec<Value>> {
         let Value::Object(id) = packed else {
             return Err(Error::runtime("spread argument pack is not an array"));
         };
