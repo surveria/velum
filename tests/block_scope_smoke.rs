@@ -126,6 +126,80 @@ fn scopes_try_catch_and_finally_blocks() -> TestResult {
     )
 }
 
+#[test]
+fn preserves_var_only_try_catch_finally_without_catch_parameter_leak() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        var status = 0;
+        try {
+            var fromTry = 20;
+            throw 1;
+        } catch (error) {
+            var fromCatch = fromTry + error;
+            status = fromCatch;
+        } finally {
+            var fromFinally = 21;
+            status = status + fromFinally;
+        }
+        status === 42 &&
+            fromTry === 20 &&
+            fromCatch === 21 &&
+            fromFinally === 21 &&
+            typeof error === "undefined"
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn preserves_direct_throw_unreachable_tail() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        var value = 0;
+        try {
+            throw "caught";
+            value = 100;
+        } catch (error) {
+            if (error === "caught") {
+                value = value + 1;
+            }
+        }
+        value === 1
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn preserves_direct_catch_fast_path_false_branch() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        var value = 0;
+        try {
+            throw "miss";
+        } catch (error) {
+            if (error === "caught") {
+                value = value + 1;
+            }
+        }
+        value === 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Bool(true))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
