@@ -101,6 +101,9 @@ impl Context {
                 object,
                 body,
             } => self.eval_bytecode_for_of(state, labels.as_deref(), target, object, body, next),
+            BytecodeInstruction::DestructurePattern { pattern, kind } => {
+                self.eval_bytecode_destructure_instruction(state, pattern, *kind, next)
+            }
             BytecodeInstruction::Switch {
                 discriminant,
                 cases,
@@ -360,6 +363,9 @@ impl Context {
                     let value = context.heap_string_value(&key)?;
                     context.assign_bytecode(name, value)
                 })?
+            }
+            BytecodeForInTarget::PatternBinding { pattern, kind } => {
+                self.eval_for_in_pattern_loop(keys, pattern, *kind, body, labels)?
             }
             BytecodeForInTarget::Assignment(target) => {
                 self.eval_bytecode_for_in_assignment_loop(keys, body, labels, |context, key| {

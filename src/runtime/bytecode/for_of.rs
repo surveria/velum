@@ -22,7 +22,7 @@ const ITERATOR_RESULT_VALUE_PROPERTY: &str = "value";
 /// use direct engine iteration because the engine does not install
 /// `%Array.prototype%[Symbol.iterator]` yet; other objects go through the
 /// user-visible iterator protocol.
-enum ForOfSource {
+pub(super) enum ForOfSource {
     /// Live array index iteration: the length is re-read every step so
     /// mutation during iteration behaves like the spec array iterator.
     ArrayIndex { array: Value, index: usize },
@@ -37,7 +37,7 @@ enum ForOfSource {
 }
 
 /// Outcome of advancing a `for...of` source by one element.
-enum ForOfStep {
+pub(super) enum ForOfStep {
     Value(Value),
     Done,
     /// An abrupt completion thrown by user iterator code.
@@ -69,6 +69,9 @@ impl Context {
                     context.assign_bytecode(name, value)
                 })?
             }
+            BytecodeForInTarget::PatternBinding { pattern, kind } => {
+                self.eval_for_of_pattern_loop(&mut source, pattern, *kind, body, labels)?
+            }
             BytecodeForInTarget::Assignment(target) => {
                 self.eval_for_of_assignment_loop(&mut source, body, labels, |context, value| {
                     context.assign_bytecode_target(target, value)
@@ -78,7 +81,7 @@ impl Context {
         Ok(Self::store_or_return_completion(state, completion, next))
     }
 
-    fn for_of_source(&mut self, iterable: Value) -> Result<ForOfSource> {
+    pub(super) fn for_of_source(&mut self, iterable: Value) -> Result<ForOfSource> {
         match &iterable {
             Value::String(text) => Ok(chars_source(text)),
             Value::HeapString(text) => Ok(chars_source(text.as_str())),
@@ -150,7 +153,7 @@ impl Context {
         }))
     }
 
-    fn for_of_step(&mut self, source: &mut ForOfSource) -> Result<ForOfStep> {
+    pub(super) fn for_of_step(&mut self, source: &mut ForOfSource) -> Result<ForOfStep> {
         match source {
             ForOfSource::ArrayIndex { array, index } => {
                 let Value::Object(id) = array else {
@@ -223,7 +226,7 @@ impl Context {
     /// Calls the iterator's `return` method when the loop ends abruptly
     /// before exhaustion, mirroring `IteratorClose`. Errors raised by the
     /// close call are intentionally dropped so the original completion wins.
-    fn close_for_of_source(&mut self, source: &ForOfSource) {
+    pub(super) fn close_for_of_source(&mut self, source: &ForOfSource) {
         let ForOfSource::Protocol {
             iterator,
             done: false,

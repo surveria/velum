@@ -2,6 +2,7 @@ mod array;
 mod call;
 mod coercion;
 mod control;
+mod destructure;
 mod for_of;
 mod ops;
 mod state;
@@ -122,6 +123,7 @@ impl Context {
             | BytecodeInstruction::For { .. }
             | BytecodeInstruction::ForIn { .. }
             | BytecodeInstruction::ForOf { .. }
+            | BytecodeInstruction::DestructurePattern { .. }
             | BytecodeInstruction::Switch { .. }
             | BytecodeInstruction::Try { .. }
             | BytecodeInstruction::Label { .. }

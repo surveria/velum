@@ -659,7 +659,7 @@ impl Context {
         }
     }
 
-    fn own_enumerable_keys(&self, target: &Value) -> Result<Vec<String>> {
+    pub(in crate::runtime) fn own_enumerable_keys(&self, target: &Value) -> Result<Vec<String>> {
         match target {
             Value::Object(id) => self.objects.own_keys(*id, &self.atoms),
             Value::Function(id) => self.function_enumerable_keys(*id),
