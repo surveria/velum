@@ -1,3 +1,4 @@
+mod condition;
 mod direct;
 mod numeric_chain;
 mod property_chain;
@@ -65,6 +66,19 @@ enum BytecodeLinearOp<'a> {
         op: BytecodeNumericCompareOp,
         right: f64,
     },
+    PushCompareBindingNumber {
+        binding: &'a BytecodeBinding,
+        cell: BindingCell,
+        op: BytecodeNumericCompareOp,
+        right: f64,
+    },
+    PushBindingBitAndNumberEquality {
+        binding: &'a BytecodeBinding,
+        cell: BindingCell,
+        mask: f64,
+        op: BytecodeNumericEqualityOp,
+        right: f64,
+    },
     DeclareVarFromBindingNumberBinary {
         source: &'a BytecodeBinding,
         source_cell: BindingCell,
@@ -110,6 +124,12 @@ impl Context {
     ) -> Result<Option<(BytecodeLinearOp<'a>, usize)>> {
         if let Some(op) = self.compile_compare_binding_number(instructions, index)? {
             return Ok(Some((op, 4)));
+        }
+        if let Some(op) = self.compile_push_compare_binding_number(instructions, index)? {
+            return Ok(Some((op, 3)));
+        }
+        if let Some(op) = self.compile_push_binding_bitand_number_equality(instructions, index)? {
+            return Ok(Some((op, 5)));
         }
         if let Some(op) =
             self.compile_declare_var_from_binding_number_binary(instructions, index)?
@@ -464,6 +484,8 @@ impl Context {
             | BytecodeLinearOp::NumberCompare(_)
             | BytecodeLinearOp::NumberEquality(_) => self.eval_linear_numeric_op(state, op),
             BytecodeLinearOp::CompareBindingNumber { .. }
+            | BytecodeLinearOp::PushCompareBindingNumber { .. }
+            | BytecodeLinearOp::PushBindingBitAndNumberEquality { .. }
             | BytecodeLinearOp::DeclareVarFromBindingNumberBinary { .. }
             | BytecodeLinearOp::StoreBindingFromBindingNumberBinary { .. }
             | BytecodeLinearOp::AddArrayElementToBinding { .. }
@@ -580,6 +602,10 @@ impl Context {
                 let left = self.runtime_value(cell.value(binding.name())?)?;
                 state.last =
                     self.eval_bytecode_number_compare(*op, &left, &Value::Number(*right))?;
+            }
+            BytecodeLinearOp::PushCompareBindingNumber { .. }
+            | BytecodeLinearOp::PushBindingBitAndNumberEquality { .. } => {
+                self.eval_condition_peephole_op(state, op)?;
             }
             BytecodeLinearOp::DeclareVarFromBindingNumberBinary {
                 source,

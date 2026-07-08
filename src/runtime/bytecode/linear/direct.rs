@@ -116,6 +116,8 @@ impl Context {
             | BytecodeLinearOp::NumberCompare(_)
             | BytecodeLinearOp::NumberEquality(_)
             | BytecodeLinearOp::CompoundStoreBinding { .. }
+            | BytecodeLinearOp::PushCompareBindingNumber { .. }
+            | BytecodeLinearOp::PushBindingBitAndNumberEquality { .. }
             | BytecodeLinearOp::DeclareVarFromBindingNumberBinary { .. }
             | BytecodeLinearOp::AddArrayElementToBinding { .. }
             | BytecodeLinearOp::NumericBindingChain(_)
