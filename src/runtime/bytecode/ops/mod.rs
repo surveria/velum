@@ -61,7 +61,7 @@ impl Context {
             return Ok(value);
         }
         if let Some(binding) = self.get_binding_bytecode(name)? {
-            return self.runtime_value(binding.value(name.name())?);
+            return self.checked_value(binding.value(name.name())?);
         }
         self.builtin_value(name.name().name())?
             .ok_or_else(|| crate::runtime::control::reference_error_undefined(name.name()))

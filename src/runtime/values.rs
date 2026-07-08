@@ -7,6 +7,8 @@ use crate::{
     value::Value,
 };
 
+const STRING_CONCAT_INTERMEDIATE_EXTRA_CAPACITY: usize = 24;
+
 impl Context {
     pub(crate) fn static_string_value(&mut self, value: &StaticString) -> Result<Value> {
         self.heap_string_value(value.as_str())
@@ -31,11 +33,82 @@ impl Context {
         }
     }
 
+    pub(crate) fn string_concat_step(
+        &mut self,
+        left: Value,
+        right: &Value,
+        final_result: bool,
+    ) -> Result<Value> {
+        if !matches!(left, Value::String(_) | Value::HeapString(_))
+            && !matches!(right, Value::String(_) | Value::HeapString(_))
+        {
+            return self.add(&left, right);
+        }
+
+        let mut text = match left {
+            Value::String(mut text) => {
+                self.push_display_for_concat(&mut text, right)?;
+                text
+            }
+            left => self.concat_values(&left, right)?,
+        };
+
+        if !final_result {
+            self.reserve_string_concat_tail(&mut text)?;
+        }
+        self.checked_value(Value::String(text))
+    }
+
+    pub(crate) fn string_concat_static_step(
+        &self,
+        left: Value,
+        right: &str,
+        final_result: bool,
+    ) -> Result<Value> {
+        let mut text = match left {
+            Value::String(mut text) => {
+                self.push_concat_text(&mut text, right)?;
+                text
+            }
+            left => self.concat_value_with_static(&left, right)?,
+        };
+
+        if !final_result {
+            self.reserve_string_concat_tail(&mut text)?;
+        }
+        self.checked_value(Value::String(text))
+    }
+
+    fn reserve_string_concat_tail(&self, text: &mut String) -> Result<()> {
+        let target = text
+            .len()
+            .checked_add(STRING_CONCAT_INTERMEDIATE_EXTRA_CAPACITY)
+            .ok_or_else(|| Error::limit("string length exceeded supported range"))?
+            .min(self.limits.max_string_len);
+        let additional = target.saturating_sub(text.capacity());
+        if additional > 0 {
+            text.try_reserve(additional)
+                .map_err(|_| Error::limit("string length exceeded supported range"))?;
+        }
+        Ok(())
+    }
+
     fn concat_values(&self, left: &Value, right: &Value) -> Result<String> {
         let capacity = self.concat_capacity(left, right)?;
         let mut text = String::with_capacity(capacity);
         self.push_display_for_concat(&mut text, left)?;
         self.push_display_for_concat(&mut text, right)?;
+        Ok(text)
+    }
+
+    fn concat_value_with_static(&self, left: &Value, right: &str) -> Result<String> {
+        let capacity = Self::concat_capacity_hint(left)
+            .checked_add(right.len())
+            .ok_or_else(|| Error::limit("string length exceeded supported range"))?
+            .min(self.limits.max_string_len);
+        let mut text = String::with_capacity(capacity);
+        self.push_display_for_concat(&mut text, left)?;
+        self.push_concat_text(&mut text, right)?;
         Ok(text)
     }
 
