@@ -1,3 +1,5 @@
+mod numeric_chain;
+
 use crate::{
     bytecode::{
         BytecodeArrayIndex, BytecodeBinding, BytecodeBlock, BytecodeDynamicProperty,
@@ -15,6 +17,7 @@ use crate::{
 };
 
 use super::state::BytecodeState;
+use numeric_chain::{NumericBindingChain, NumericCompoundBinding};
 
 #[derive(Debug)]
 pub(super) struct BytecodeLinearPlan<'a> {
@@ -86,6 +89,8 @@ enum BytecodeLinearOp<'a> {
         index_mask: Option<f64>,
         property: BytecodeDynamicProperty,
     },
+    NumericBindingChain(NumericBindingChain<'a>),
+    NumericCompoundBinding(NumericCompoundBinding<'a>),
     ArrayLength(&'a BytecodeProperty),
     ArrayIndexMember {
         property: &'a BytecodeProperty,
@@ -143,6 +148,18 @@ impl Context {
             self.compile_store_binding_from_binding_number_binary(instructions, index)?
         {
             return Ok(Some((op, 5)));
+        }
+        if let Some(chain) = self.compile_numeric_binding_chain(instructions, index)? {
+            return Ok(Some((
+                BytecodeLinearOp::NumericBindingChain(chain.op),
+                chain.consumed,
+            )));
+        }
+        if let Some(compound) = self.compile_numeric_compound_binding(instructions, index)? {
+            return Ok(Some((
+                BytecodeLinearOp::NumericCompoundBinding(compound.op),
+                compound.consumed,
+            )));
         }
         if let Some(op) =
             self.compile_add_array_element_to_binding_with_mask(instructions, index)?
@@ -484,7 +501,9 @@ impl Context {
             BytecodeLinearOp::CompareBindingNumber { .. }
             | BytecodeLinearOp::DeclareVarFromBindingNumberBinary { .. }
             | BytecodeLinearOp::StoreBindingFromBindingNumberBinary { .. }
-            | BytecodeLinearOp::AddArrayElementToBinding { .. } => {
+            | BytecodeLinearOp::AddArrayElementToBinding { .. }
+            | BytecodeLinearOp::NumericBindingChain(_)
+            | BytecodeLinearOp::NumericCompoundBinding(_) => {
                 self.eval_linear_peephole_op(state, op)
             }
             BytecodeLinearOp::ArrayLength(_)
@@ -625,6 +644,12 @@ impl Context {
             }
             BytecodeLinearOp::AddArrayElementToBinding { .. } => {
                 self.eval_add_array_element_to_binding(state, op)?;
+            }
+            BytecodeLinearOp::NumericBindingChain(chain) => {
+                self.eval_numeric_binding_chain(state, chain)?;
+            }
+            BytecodeLinearOp::NumericCompoundBinding(compound) => {
+                self.eval_numeric_compound_binding(state, compound)?;
             }
             _ => return Err(Error::runtime("bytecode linear peephole op mismatch")),
         }
