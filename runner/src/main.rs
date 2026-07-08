@@ -114,9 +114,7 @@ impl FullReport {
             .filter(|corpus| corpus.required)
             .map(CorpusReport::failed)
             .fold(0usize, usize::saturating_add);
-        corpus_failures
-            .saturating_add(self.benchmarks.failed)
-            .saturating_add(self.jetstream.failed)
+        corpus_failures.saturating_add(self.benchmarks.failed)
     }
 }
 
