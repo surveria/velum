@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T133802Z.md`
-- Task: PR #334: Add baseline WeakMap and WeakSet built-ins
-- Performance: 6.18x (63/64 >1.00x)
+- `rsqjs-test-report-20260708T141852Z.md`
+- Task: PR #339: Add baseline Date built-in support
+- Performance: 6.12x (63/64 >1.00x)
 - Memory: - (0/64 >1.00x)
-- Full Test262: 28632 passed / 73946 failed (27.91%)
+- Full Test262: 29396 passed / 73182 failed (28.66%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -328,3 +328,4 @@ Latest report:
 | `20260708T130521Z` `245f33b` workflow_dispatch | 5.89x (62/63 >1.00x) | - (0/63 >1.00x) | 26029 passed / 76549 failed (25.37%) |
 | `20260708T132001Z` `36ae7c6` PR #332: Add Array.prototype callback methods | 6.03x (63/64 >1.00x) | - (0/64 >1.00x) | 28268 passed / 74310 failed (27.56%) |
 | `20260708T133802Z` `b92c129` PR #334: Add baseline WeakMap and WeakSet built-ins | 6.18x (63/64 >1.00x) | - (0/64 >1.00x) | 28632 passed / 73946 failed (27.91%) |
+| `20260708T141852Z` `f8eedfe` PR #339: Add baseline Date built-in support | 6.12x (63/64 >1.00x) | - (0/64 >1.00x) | 29396 passed / 73182 failed (28.66%) |
