@@ -80,13 +80,13 @@ fn parameters_and_vars_named_arguments_shadow_the_object() -> TestResult {
 #[test]
 fn arrow_functions_do_not_bind_their_own_arguments() -> TestResult {
     ensure_string(
-        r#"
+        r"
         var probe = () => typeof arguments;
         function host() {
             return probe();
         }
         host(1, 2)
-        "#,
+        ",
         "undefined",
     )
 }
