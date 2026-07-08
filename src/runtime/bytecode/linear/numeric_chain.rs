@@ -23,6 +23,12 @@ pub(super) struct CompiledNumericCompoundBinding<'a> {
 }
 
 #[derive(Debug)]
+pub(super) struct CompiledNumericCompoundChain<'a> {
+    pub(super) op: NumericCompoundChain<'a>,
+    pub(super) consumed: usize,
+}
+
+#[derive(Debug)]
 pub(super) struct NumericBindingChain<'a> {
     source: &'a BytecodeBinding,
     source_cell: BindingCell,
@@ -49,6 +55,19 @@ enum NumericBindingChainTerm<'a> {
 pub(super) struct NumericCompoundBinding<'a> {
     target: &'a BytecodeBinding,
     target_cell: BindingCell,
+    rhs: NumericCompoundRhs<'a>,
+    op: BinaryOp,
+}
+
+#[derive(Debug)]
+pub(super) struct NumericCompoundChain<'a> {
+    target: &'a BytecodeBinding,
+    target_cell: BindingCell,
+    terms: Vec<NumericCompoundTerm<'a>>,
+}
+
+#[derive(Debug)]
+struct NumericCompoundTerm<'a> {
     rhs: NumericCompoundRhs<'a>,
     op: BinaryOp,
 }
@@ -193,6 +212,53 @@ impl Context {
             return Ok(Some(compound));
         }
         self.compile_numeric_compound_binding_bitand_literal(instructions, index)
+    }
+
+    pub(super) fn compile_numeric_compound_chain<'a>(
+        &mut self,
+        instructions: &'a [BytecodeInstruction],
+        index: usize,
+    ) -> Result<Option<CompiledNumericCompoundChain<'a>>> {
+        let Some(first) = self.compile_numeric_compound_binding(instructions, index)? else {
+            return Ok(None);
+        };
+        let mut cursor = index
+            .checked_add(first.consumed)
+            .ok_or_else(|| Error::runtime("numeric compound chain index overflowed"))?;
+        let target = first.op.target;
+        let target_cell = first.op.target_cell;
+        let mut terms = vec![NumericCompoundTerm {
+            rhs: first.op.rhs,
+            op: first.op.op,
+        }];
+
+        while let Some(next) = self.compile_numeric_compound_binding(instructions, cursor)? {
+            if !same_bytecode_binding(target, next.op.target) {
+                break;
+            }
+            cursor = cursor
+                .checked_add(next.consumed)
+                .ok_or_else(|| Error::runtime("numeric compound chain index overflowed"))?;
+            terms.push(NumericCompoundTerm {
+                rhs: next.op.rhs,
+                op: next.op.op,
+            });
+        }
+
+        if terms.len() < 2 {
+            return Ok(None);
+        }
+        let consumed = cursor
+            .checked_sub(index)
+            .ok_or_else(|| Error::runtime("numeric compound chain length overflowed"))?;
+        Ok(Some(CompiledNumericCompoundChain {
+            op: NumericCompoundChain {
+                target,
+                target_cell,
+                terms,
+            },
+            consumed,
+        }))
     }
 
     fn compile_numeric_compound_literal<'a>(
@@ -433,6 +499,35 @@ impl Context {
         Ok(())
     }
 
+    pub(super) fn eval_numeric_compound_chain(
+        &mut self,
+        state: &mut super::BytecodeState,
+        chain: &NumericCompoundChain<'_>,
+    ) -> Result<()> {
+        let mut value = self.runtime_value(chain.target_cell.value(chain.target.name())?)?;
+        for term in &chain.terms {
+            let right = self.eval_numeric_compound_rhs(&term.rhs)?;
+            value = self.eval_numeric_compound_term(term.op, &value, &right)?;
+        }
+        self.assign_bytecode_cell(chain.target, &chain.target_cell, value.clone())?;
+        state.last = value;
+        Ok(())
+    }
+
+    fn eval_numeric_compound_term(
+        &mut self,
+        op: BinaryOp,
+        left: &Value,
+        right: &Value,
+    ) -> Result<Value> {
+        if let (Value::Number(left), Value::Number(right)) = (left, right)
+            && let Some(op) = BytecodeNumericBinaryOp::from_binary(op)
+        {
+            return apply_number_binary(op, *left, *right).map(Value::Number);
+        }
+        self.eval_bytecode_compound_value(op, left, right)
+    }
+
     fn eval_numeric_compound_rhs(&mut self, rhs: &NumericCompoundRhs<'_>) -> Result<Value> {
         match rhs {
             NumericCompoundRhs::Literal(value) => Ok(Value::Number(*value)),
@@ -463,7 +558,11 @@ impl Context {
     }
 }
 
-fn apply_number_binary(op: BytecodeNumericBinaryOp, left: f64, right: f64) -> Result<f64> {
+pub(in crate::runtime::bytecode::linear) fn apply_number_binary(
+    op: BytecodeNumericBinaryOp,
+    left: f64,
+    right: f64,
+) -> Result<f64> {
     let value = match op {
         BytecodeNumericBinaryOp::Add => left + right,
         BytecodeNumericBinaryOp::Sub => left - right,
@@ -500,4 +599,8 @@ fn instruction_window(
 ) -> Option<&[BytecodeInstruction]> {
     let end = start.checked_add(len)?;
     instructions.get(start..end)
+}
+
+fn same_bytecode_binding(left: &BytecodeBinding, right: &BytecodeBinding) -> bool {
+    left.operand() == right.operand() && left.name().as_str() == right.name().as_str()
 }

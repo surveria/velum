@@ -140,6 +140,7 @@ impl Context {
             | BytecodeLinearOp::InArrayIndexMaskBinding { .. }
             | BytecodeLinearOp::NumericBindingChain(_)
             | BytecodeLinearOp::NumericCompoundBinding(_)
+            | BytecodeLinearOp::NumericCompoundChain(_)
             | BytecodeLinearOp::PropertyMutation(_)
             | BytecodeLinearOp::ArrayLength(_)
             | BytecodeLinearOp::ArrayIndexMember { .. }
