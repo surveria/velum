@@ -1,7 +1,7 @@
 use crate::{
     bytecode::{BytecodeAddress, BytecodeCompletion},
     error::{Error, Result},
-    runtime::completion::Completion,
+    runtime::control::Completion,
     syntax::StaticName,
     value::Value,
 };

@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call_args::RuntimeCallArgs, completion::Completion},
+    runtime::{Context, call::RuntimeCallArgs, control::Completion},
     value::Value,
 };
 

@@ -3,7 +3,7 @@ use serde_json::{Map as JsonMap, Value as JsonValue};
 use crate::{
     error::{Error, Result},
     runtime::Context,
-    runtime::call_args::RuntimeCallArgs,
+    runtime::call::RuntimeCallArgs,
     runtime::object::{ObjectPropertyInit, PropertyEnumerable},
     value::{ObjectId, Value},
 };

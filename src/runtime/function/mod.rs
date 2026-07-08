@@ -4,8 +4,8 @@ use crate::{
     bytecode::{BytecodeFunction, BytecodeNewTargetMode},
     error::{Error, Result},
     runtime::Context,
-    runtime::call_args::RuntimeCallArgs,
-    runtime::completion::Completion,
+    runtime::call::RuntimeCallArgs,
+    runtime::control::Completion,
     runtime::object::{
         DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
         PropertyEnumerable, PropertyKey, PropertyLookup, PropertyWritable,

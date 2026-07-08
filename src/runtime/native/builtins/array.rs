@@ -2,7 +2,7 @@ use std::fmt::Write as _;
 
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call_args::RuntimeCallArgs, object::PropertyEnumerable},
+    runtime::{Context, call::RuntimeCallArgs, object::PropertyEnumerable},
     value::{NativeFunctionId, ObjectId, Value},
 };
 

@@ -8,10 +8,10 @@ use crate::{
     },
     error::{Error, Result},
     runtime::Context,
-    runtime::assertions::thrown_value_matches,
     runtime::bytecode::coercion::{abstract_equality, relational_compare, strict_equality},
-    runtime::call_args::RuntimeCallArgs,
-    runtime::completion::Completion,
+    runtime::call::RuntimeCallArgs,
+    runtime::control::Completion,
+    runtime::control::thrown_value_matches,
     runtime::native::NativeFunctionKind,
     runtime::numeric::{
         bitwise_and, bitwise_or, bitwise_xor, number_shift_count, number_to_i32, number_to_uint32,
@@ -72,7 +72,7 @@ impl Context {
             return self.runtime_value(binding.value(name.name())?);
         }
         self.builtin_value(name.name().name())?
-            .ok_or_else(|| crate::runtime::assertions::reference_error_undefined(name.name()))
+            .ok_or_else(|| crate::runtime::control::reference_error_undefined(name.name()))
     }
 
     pub(super) fn eval_bytecode_typeof_binding(&mut self, name: &BytecodeBinding) -> Result<Value> {

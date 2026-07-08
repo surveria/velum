@@ -13,7 +13,7 @@ use crate::{
         BytecodeAddress, BytecodeBlock, BytecodeInstruction, BytecodeProgram, BytecodeProperty,
     },
     error::{Error, Result},
-    runtime::{Context, assertions::runtime_exception_value, completion::Completion},
+    runtime::{Context, control::Completion, control::runtime_exception_value},
     syntax::{StaticString, UpdateOp},
     value::Value,
 };

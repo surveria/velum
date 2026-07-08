@@ -1,14 +1,18 @@
 mod hoist;
 mod metrics;
+mod numeric;
 mod types;
 
 pub use hoist::BytecodeHoistPlan;
+pub use numeric::{
+    BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
+    BytecodeNumericUnaryOp,
+};
 pub use types::{
     BytecodeAddress, BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock,
     BytecodeCallSite, BytecodeCatch, BytecodeCompletion, BytecodeDynamicProperty,
     BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeFunctionParam,
-    BytecodeInstruction, BytecodeNewTargetMode, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
-    BytecodeNumericEqualityOp, BytecodeNumericUnaryOp, BytecodeObjectProperty, BytecodePattern,
+    BytecodeInstruction, BytecodeNewTargetMode, BytecodeObjectProperty, BytecodePattern,
     BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget, BytecodeProgram,
     BytecodeProperty, BytecodeSwitchCase,
 };
