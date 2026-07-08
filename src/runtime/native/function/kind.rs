@@ -225,6 +225,17 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ArraySlice,
     ArraySome,
     ArrayUnshift,
+    ArraySort,
+    ArraySplice,
+    ArrayFill,
+    ArrayCopyWithin,
+    ArrayAt,
+    ArrayFindLast,
+    ArrayFindLastIndex,
+    ArrayToSorted,
+    ArrayToReversed,
+    ArrayToSpliced,
+    ArrayWith,
     AsyncFunction,
     Boolean,
     BooleanPrototypeToString,
@@ -751,49 +762,6 @@ impl NativeFunctionKind {
             Self::NumberIsSafeInteger => Some(NUMBER_IS_SAFE_INTEGER_NAME),
             Self::GlobalParseFloat => Some(GLOBAL_PARSE_FLOAT_NAME),
             Self::GlobalParseInt => Some(GLOBAL_PARSE_INT_NAME),
-            _ => None,
-        }
-    }
-
-    const fn string_static_name(self) -> Option<&'static str> {
-        match self {
-            Self::StringFromCharCode => Some(STRING_FROM_CHAR_CODE_NAME),
-            Self::StringFromCodePoint => Some(STRING_FROM_CODE_POINT_NAME),
-            Self::StringRaw => Some(STRING_RAW_NAME),
-            _ => None,
-        }
-    }
-
-    const fn string_prototype_name(self) -> Option<&'static str> {
-        match self {
-            Self::StringPrototypeAt => Some(STRING_PROTOTYPE_AT_NAME),
-            Self::StringPrototypeCharAt => Some(STRING_PROTOTYPE_CHAR_AT_NAME),
-            Self::StringPrototypeCharCodeAt => Some(STRING_PROTOTYPE_CHAR_CODE_AT_NAME),
-            Self::StringPrototypeCodePointAt => Some(STRING_PROTOTYPE_CODE_POINT_AT_NAME),
-            Self::StringPrototypeConcat => Some(STRING_PROTOTYPE_CONCAT_NAME),
-            Self::StringPrototypeEndsWith => Some(STRING_PROTOTYPE_ENDS_WITH_NAME),
-            Self::StringPrototypeIncludes => Some(STRING_PROTOTYPE_INCLUDES_NAME),
-            Self::StringPrototypeIndexOf => Some(STRING_PROTOTYPE_INDEX_OF_NAME),
-            Self::StringPrototypeLastIndexOf => Some(STRING_PROTOTYPE_LAST_INDEX_OF_NAME),
-            Self::StringPrototypePadEnd => Some(STRING_PROTOTYPE_PAD_END_NAME),
-            Self::StringPrototypePadStart => Some(STRING_PROTOTYPE_PAD_START_NAME),
-            Self::StringPrototypeRepeat => Some(STRING_PROTOTYPE_REPEAT_NAME),
-            Self::StringPrototypeSlice => Some(STRING_PROTOTYPE_SLICE_NAME),
-            Self::StringPrototypeStartsWith => Some(STRING_PROTOTYPE_STARTS_WITH_NAME),
-            Self::StringPrototypeSubstring => Some(STRING_PROTOTYPE_SUBSTRING_NAME),
-            Self::StringPrototypeToLocaleLowerCase => {
-                Some(STRING_PROTOTYPE_TO_LOCALE_LOWER_CASE_NAME)
-            }
-            Self::StringPrototypeToLocaleUpperCase => {
-                Some(STRING_PROTOTYPE_TO_LOCALE_UPPER_CASE_NAME)
-            }
-            Self::StringPrototypeToLowerCase => Some(STRING_PROTOTYPE_TO_LOWER_CASE_NAME),
-            Self::StringPrototypeToString => Some(STRING_PROTOTYPE_TO_STRING_NAME),
-            Self::StringPrototypeToUpperCase => Some(STRING_PROTOTYPE_TO_UPPER_CASE_NAME),
-            Self::StringPrototypeTrim => Some(STRING_PROTOTYPE_TRIM_NAME),
-            Self::StringPrototypeTrimEnd => Some(STRING_PROTOTYPE_TRIM_END_NAME),
-            Self::StringPrototypeTrimStart => Some(STRING_PROTOTYPE_TRIM_START_NAME),
-            Self::StringPrototypeValueOf => Some(STRING_PROTOTYPE_VALUE_OF_NAME),
             _ => None,
         }
     }

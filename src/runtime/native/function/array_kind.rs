@@ -46,6 +46,28 @@ const ARRAY_SOME_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_SOME_NAME: &str = "some";
 const ARRAY_UNSHIFT_FUNCTION_LENGTH: f64 = 1.0;
 const ARRAY_UNSHIFT_NAME: &str = "unshift";
+const ARRAY_SORT_FUNCTION_LENGTH: f64 = 1.0;
+const ARRAY_SORT_NAME: &str = "sort";
+const ARRAY_SPLICE_FUNCTION_LENGTH: f64 = 2.0;
+const ARRAY_SPLICE_NAME: &str = "splice";
+const ARRAY_FILL_FUNCTION_LENGTH: f64 = 1.0;
+const ARRAY_FILL_NAME: &str = "fill";
+const ARRAY_COPY_WITHIN_FUNCTION_LENGTH: f64 = 2.0;
+const ARRAY_COPY_WITHIN_NAME: &str = "copyWithin";
+const ARRAY_AT_FUNCTION_LENGTH: f64 = 1.0;
+const ARRAY_AT_NAME: &str = "at";
+const ARRAY_FIND_LAST_FUNCTION_LENGTH: f64 = 1.0;
+const ARRAY_FIND_LAST_NAME: &str = "findLast";
+const ARRAY_FIND_LAST_INDEX_FUNCTION_LENGTH: f64 = 1.0;
+const ARRAY_FIND_LAST_INDEX_NAME: &str = "findLastIndex";
+const ARRAY_TO_SORTED_FUNCTION_LENGTH: f64 = 1.0;
+const ARRAY_TO_SORTED_NAME: &str = "toSorted";
+const ARRAY_TO_REVERSED_FUNCTION_LENGTH: f64 = 0.0;
+const ARRAY_TO_REVERSED_NAME: &str = "toReversed";
+const ARRAY_TO_SPLICED_FUNCTION_LENGTH: f64 = 2.0;
+const ARRAY_TO_SPLICED_NAME: &str = "toSpliced";
+const ARRAY_WITH_FUNCTION_LENGTH: f64 = 2.0;
+const ARRAY_WITH_NAME: &str = "with";
 const ARRAY_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const ARRAY_NAME: &str = "Array";
 
@@ -76,6 +98,17 @@ impl NativeFunctionKind {
             Self::ArraySlice => Some(ARRAY_SLICE_FUNCTION_LENGTH),
             Self::ArraySome => Some(ARRAY_SOME_FUNCTION_LENGTH),
             Self::ArrayUnshift => Some(ARRAY_UNSHIFT_FUNCTION_LENGTH),
+            Self::ArraySort => Some(ARRAY_SORT_FUNCTION_LENGTH),
+            Self::ArraySplice => Some(ARRAY_SPLICE_FUNCTION_LENGTH),
+            Self::ArrayFill => Some(ARRAY_FILL_FUNCTION_LENGTH),
+            Self::ArrayCopyWithin => Some(ARRAY_COPY_WITHIN_FUNCTION_LENGTH),
+            Self::ArrayAt => Some(ARRAY_AT_FUNCTION_LENGTH),
+            Self::ArrayFindLast => Some(ARRAY_FIND_LAST_FUNCTION_LENGTH),
+            Self::ArrayFindLastIndex => Some(ARRAY_FIND_LAST_INDEX_FUNCTION_LENGTH),
+            Self::ArrayToSorted => Some(ARRAY_TO_SORTED_FUNCTION_LENGTH),
+            Self::ArrayToReversed => Some(ARRAY_TO_REVERSED_FUNCTION_LENGTH),
+            Self::ArrayToSpliced => Some(ARRAY_TO_SPLICED_FUNCTION_LENGTH),
+            Self::ArrayWith => Some(ARRAY_WITH_FUNCTION_LENGTH),
             _ => None,
         }
     }
@@ -106,6 +139,17 @@ impl NativeFunctionKind {
             Self::ArraySlice => Some(ARRAY_SLICE_NAME),
             Self::ArraySome => Some(ARRAY_SOME_NAME),
             Self::ArrayUnshift => Some(ARRAY_UNSHIFT_NAME),
+            Self::ArraySort => Some(ARRAY_SORT_NAME),
+            Self::ArraySplice => Some(ARRAY_SPLICE_NAME),
+            Self::ArrayFill => Some(ARRAY_FILL_NAME),
+            Self::ArrayCopyWithin => Some(ARRAY_COPY_WITHIN_NAME),
+            Self::ArrayAt => Some(ARRAY_AT_NAME),
+            Self::ArrayFindLast => Some(ARRAY_FIND_LAST_NAME),
+            Self::ArrayFindLastIndex => Some(ARRAY_FIND_LAST_INDEX_NAME),
+            Self::ArrayToSorted => Some(ARRAY_TO_SORTED_NAME),
+            Self::ArrayToReversed => Some(ARRAY_TO_REVERSED_NAME),
+            Self::ArrayToSpliced => Some(ARRAY_TO_SPLICED_NAME),
+            Self::ArrayWith => Some(ARRAY_WITH_NAME),
             _ => None,
         }
     }
