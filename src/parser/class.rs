@@ -70,6 +70,7 @@ impl Parser {
         let derived = heritage.is_some();
         let mut constructor = None;
         let mut members = Vec::new();
+        let mut fields = Vec::new();
         while !self.check(&TokenKind::RBrace) {
             if self.at_end() {
                 return Err(Error::parse("expected '}' after class body", self.offset()));
@@ -77,7 +78,7 @@ impl Parser {
             if self.match_kind(&TokenKind::Semicolon) {
                 continue;
             }
-            self.class_member(&mut constructor, &mut members, derived)?;
+            self.class_member(&mut constructor, &mut members, &mut fields, derived)?;
         }
         self.consume(&TokenKind::RBrace, "expected '}' after class body")?;
         let constructor = match constructor {
@@ -90,6 +91,7 @@ impl Parser {
             heritage,
             constructor,
             members,
+            fields,
         })
     }
 
@@ -119,6 +121,7 @@ impl Parser {
         &mut self,
         constructor: &mut Option<ClassConstructor>,
         members: &mut Vec<ClassMember>,
+        fields: &mut Vec<crate::ast::ClassField>,
         derived: bool,
     ) -> Result<()> {
         let member_offset = self.offset();
@@ -132,10 +135,13 @@ impl Parser {
         let key_name = Self::class_member_key_name(&key);
 
         if !self.check(&TokenKind::LParen) {
-            return Err(Error::parse(
-                "class fields are not supported yet",
-                self.offset(),
-            ));
+            if accessor.is_some() {
+                return Err(Error::parse(
+                    "expected '(' after class accessor name",
+                    self.offset(),
+                ));
+            }
+            return self.class_field(key, key_name, is_static, member_offset, fields);
         }
 
         if let Some(name) = &key_name {
@@ -175,6 +181,50 @@ impl Parser {
             name: key_name,
             params: function.params,
             body: function.body,
+        });
+        Ok(())
+    }
+
+    /// Parses a public field after its key: an optional initializer followed
+    /// by an optional semicolon.
+    fn class_field(
+        &mut self,
+        key: ObjectPropertyName,
+        key_name: Option<StaticName>,
+        is_static: bool,
+        member_offset: usize,
+        fields: &mut Vec<crate::ast::ClassField>,
+    ) -> Result<()> {
+        if let Some(name) = &key_name {
+            if name.as_str() == CLASS_CONSTRUCTOR_NAME {
+                return Err(Error::parse(
+                    "class field cannot be named 'constructor'",
+                    member_offset,
+                ));
+            }
+            if is_static && name.as_str() == CLASS_PROTOTYPE_NAME {
+                return Err(Error::parse(
+                    "class static member cannot be named 'prototype'",
+                    member_offset,
+                ));
+            }
+        }
+        let initializer = if self.match_kind(&TokenKind::Equal) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+        if self.check(&TokenKind::Semicolon) && self.advance().is_none() {
+            return Err(Error::parse(
+                "expected ';' after class field",
+                self.offset(),
+            ));
+        }
+        fields.push(crate::ast::ClassField {
+            key: Self::class_property_key(key),
+            is_static,
+            name: key_name,
+            initializer,
         });
         Ok(())
     }
@@ -265,7 +315,9 @@ impl Parser {
         let is_prefix = self.peek().is_some_and(|token| {
             matches!(&token.kind, TokenKind::Identifier(name) if name == CLASS_STATIC_KEYWORD)
         }) && !self.peek_kind_is(1, &TokenKind::LParen)
-            && !self.peek_kind_is(1, &TokenKind::Equal);
+            && !self.peek_kind_is(1, &TokenKind::Equal)
+            && !self.peek_kind_is(1, &TokenKind::Semicolon)
+            && !self.peek_kind_is(1, &TokenKind::RBrace);
         is_prefix && self.advance().is_some()
     }
 
@@ -280,7 +332,11 @@ impl Parser {
             }
             _ => None,
         })?;
-        if self.peek_kind_is(1, &TokenKind::LParen) {
+        if self.peek_kind_is(1, &TokenKind::LParen)
+            || self.peek_kind_is(1, &TokenKind::Equal)
+            || self.peek_kind_is(1, &TokenKind::Semicolon)
+            || self.peek_kind_is(1, &TokenKind::RBrace)
+        {
             return None;
         }
         if self.advance().is_some() {

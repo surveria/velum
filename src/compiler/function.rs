@@ -298,6 +298,14 @@ impl CaptureBindingCollector {
             }
             self.collect_function_body(&member.params, &member.body);
         }
+        for field in &class.fields {
+            if let crate::ast::ObjectPropertyKey::Computed(key) = &field.key {
+                self.collect_expr(key);
+            }
+            if let Some(initializer) = &field.initializer {
+                self.collect_expr(initializer);
+            }
+        }
     }
 
     fn collect_pattern(&mut self, pattern: &BindingPattern) {

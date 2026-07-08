@@ -673,6 +673,11 @@ impl BytecodeClass {
         for member in self.members.iter() {
             total = total.saturating_add(count(member.bytecode.body()));
         }
+        for field in self.fields.iter() {
+            if let Some(initializer) = &field.initializer {
+                total = total.saturating_add(count(initializer));
+            }
+        }
         total
     }
 

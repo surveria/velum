@@ -55,12 +55,9 @@ impl Context {
         let this_value = self.current_this()?;
         let new_target = self.current_new_target()?;
         let completion = match constructor {
-            Value::Function(id) => self.eval_class_super_constructor_completion(
-                id,
-                args,
-                this_value.clone(),
-                new_target,
-            )?,
+            Value::Function(id) => {
+                self.eval_class_super_constructor_completion(id, args, &this_value, new_target)?
+            }
             // Native superclasses cannot initialize an existing instance;
             // run them for effect compatibility and keep the current this.
             Value::NativeFunction(_) => Completion::Normal(Value::Undefined),
@@ -69,6 +66,10 @@ impl Context {
         let Completion::Normal(_) = completion else {
             return Ok(Some(completion));
         };
+        // Derived-class instance fields initialize after super() completes.
+        if let Some(own) = frame.own_constructor {
+            self.initialize_class_fields(own, &this_value)?;
+        }
         state.stack.push(this_value);
         state.pc = next;
         Ok(None)

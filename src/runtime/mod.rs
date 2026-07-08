@@ -104,6 +104,7 @@ struct Function {
     class_constructor: bool,
     super_binding: Option<Rc<function::FunctionSuperBinding>>,
     static_parent: Option<Value>,
+    class_fields: Option<Rc<[function::ResolvedClassField]>>,
     new_target: FunctionNewTarget,
 }
 
@@ -529,6 +530,9 @@ impl Context {
             self.limits.max_objects,
             self.limits.max_object_properties,
         )?;
+        if !self.is_derived_class_constructor(id) {
+            self.initialize_class_fields(id, &object)?;
+        }
         match self.eval_function_completion_with_this_and_new_target(
             id,
             args,
