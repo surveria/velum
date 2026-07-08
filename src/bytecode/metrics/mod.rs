@@ -1,7 +1,7 @@
 use crate::{
     binding_layout::BindingOperand,
     bytecode::{
-        BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock, BytecodeCatch,
+        BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock, BytecodeCatch, BytecodeClass,
         BytecodeForInTarget, BytecodeInstruction, BytecodePattern, BytecodePatternKey,
         BytecodeProgram, BytecodeSwitchCase,
     },
@@ -152,6 +152,7 @@ impl BytecodeInstruction {
             Self::Label { body, .. } => body.binding_operand_count(),
             Self::ScopedBlock(block) => block.binding_operand_count(),
             Self::CreateFunction { bytecode, .. } => bytecode.body().binding_operand_count(),
+            Self::CreateClass { class } => class.binding_operand_count(),
             instruction if instruction.is_leaf_instruction() => 0,
             _ => 0,
         }
@@ -236,6 +237,7 @@ impl BytecodeInstruction {
             Self::Label { body, .. } => body.property_operand_count(),
             Self::ScopedBlock(block) => block.property_operand_count(),
             Self::CreateFunction { bytecode, .. } => bytecode.body().property_operand_count(),
+            Self::CreateClass { class } => class.property_operand_count(),
             instruction if instruction.is_leaf_instruction() => 0,
             _ => 0,
         }
@@ -301,6 +303,7 @@ impl BytecodeInstruction {
             Self::Label { body, .. } => body.direct_native_call_count(),
             Self::ScopedBlock(block) => block.direct_native_call_count(),
             Self::CreateFunction { bytecode, .. } => bytecode.body().direct_native_call_count(),
+            Self::CreateClass { class } => class.direct_native_call_count(),
             instruction if instruction.is_leaf_instruction() => 0,
             _ => 0,
         }
@@ -368,6 +371,7 @@ impl BytecodeInstruction {
             Self::Label { body, .. } => body.array_native_call_count(),
             Self::ScopedBlock(block) => block.array_native_call_count(),
             Self::CreateFunction { bytecode, .. } => bytecode.body().array_native_call_count(),
+            Self::CreateClass { class } => class.array_native_call_count(),
             instruction if instruction.is_leaf_instruction() => 0,
             _ => 0,
         }
@@ -433,6 +437,7 @@ impl BytecodeInstruction {
             Self::Label { body, .. } => body.numeric_instruction_count(),
             Self::ScopedBlock(block) => block.numeric_instruction_count(),
             Self::CreateFunction { bytecode, .. } => bytecode.body().numeric_instruction_count(),
+            Self::CreateClass { class } => class.numeric_instruction_count(),
             instruction if instruction.is_leaf_instruction() => 0,
             _ => 0,
         }
@@ -494,6 +499,7 @@ impl BytecodeInstruction {
             Self::Label { body, .. } => body.instruction_count(),
             Self::ScopedBlock(block) => block.instruction_count(),
             Self::CreateFunction { bytecode, .. } => bytecode.body().instruction_count(),
+            Self::CreateClass { class } => class.instruction_count(),
             instruction if instruction.is_leaf_instruction() => 0,
             _ => 0,
         }
@@ -620,6 +626,40 @@ impl BytecodeForInTarget {
             Self::PatternBinding { pattern, .. } => pattern.nested_instruction_count(),
             Self::Assignment(target) => target.nested_instruction_count(),
         }
+    }
+}
+
+impl BytecodeClass {
+    fn sum_bodies(&self, count: fn(&BytecodeBlock) -> usize) -> usize {
+        let mut total = count(self.constructor.body());
+        for member in self.members.iter() {
+            total = total.saturating_add(count(member.bytecode.body()));
+        }
+        total
+    }
+
+    fn binding_operand_count(&self) -> usize {
+        self.sum_bodies(BytecodeBlock::binding_operand_count)
+    }
+
+    fn property_operand_count(&self) -> usize {
+        self.sum_bodies(BytecodeBlock::property_operand_count)
+    }
+
+    fn direct_native_call_count(&self) -> usize {
+        self.sum_bodies(BytecodeBlock::direct_native_call_count)
+    }
+
+    fn array_native_call_count(&self) -> usize {
+        self.sum_bodies(BytecodeBlock::array_native_call_count)
+    }
+
+    fn numeric_instruction_count(&self) -> usize {
+        self.sum_bodies(BytecodeBlock::numeric_instruction_count)
+    }
+
+    fn instruction_count(&self) -> usize {
+        self.sum_bodies(BytecodeBlock::instruction_count)
     }
 }
 

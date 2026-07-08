@@ -130,6 +130,7 @@ impl BytecodeCompiler<'_> {
             | Stmt::FunctionDecl { .. }
             | Stmt::VarDecl { .. }
             | Stmt::PatternDecl { .. }
+            | Stmt::ClassDecl { .. }
             | Stmt::Expr(_) => {}
         }
         self.emit(BytecodeInstruction::Label {

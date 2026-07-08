@@ -22,6 +22,7 @@ pub(super) fn for_init_needs_layout_scope(init: Option<&Stmt>) -> bool {
                 kind: DeclKind::Var,
                 ..
             }
+            | Stmt::ClassDecl { .. }
             | Stmt::FunctionDecl { .. }
             | Stmt::Empty
             | Stmt::Block(_)

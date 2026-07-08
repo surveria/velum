@@ -336,6 +336,40 @@ pub enum BytecodeForInTarget {
     Assignment(BytecodeAssignmentTarget),
 }
 
+/// Compiled class literal: the constructor function plus prototype and
+/// static members. Computed member keys are evaluated onto the stack in
+/// member order before `CreateClass` runs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BytecodeClass {
+    pub name: Option<StaticName>,
+    pub constructor_id: StaticFunctionId,
+    pub constructor: BytecodeFunction,
+    pub members: Rc<[BytecodeClassMember]>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BytecodeClassMember {
+    pub key: BytecodeClassMemberKey,
+    pub kind: BytecodeClassMemberKind,
+    pub is_static: bool,
+    pub id: StaticFunctionId,
+    pub name: Option<StaticName>,
+    pub bytecode: BytecodeFunction,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BytecodeClassMemberKey {
+    Static(StaticName),
+    Computed,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BytecodeClassMemberKind {
+    Method,
+    Getter,
+    Setter,
+}
+
 /// Compiled destructuring binding pattern. Default initializers and computed
 /// keys stay as lazily evaluated blocks so they only run when the runtime
 /// walker needs them.
@@ -599,6 +633,9 @@ pub enum BytecodeInstruction {
     DestructurePattern {
         pattern: Rc<BytecodePattern>,
         kind: DeclKind,
+    },
+    CreateClass {
+        class: Rc<BytecodeClass>,
     },
     Switch {
         discriminant: BytecodeBlock,

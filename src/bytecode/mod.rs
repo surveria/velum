@@ -10,9 +10,10 @@ pub use numeric::{
 };
 pub use types::{
     BytecodeAddress, BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock,
-    BytecodeCallSite, BytecodeCatch, BytecodeCompletion, BytecodeDynamicProperty,
-    BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeFunctionParam,
-    BytecodeInstruction, BytecodeNewTargetMode, BytecodeObjectProperty, BytecodePattern,
+    BytecodeCallSite, BytecodeCatch, BytecodeClass, BytecodeClassMember, BytecodeClassMemberKey,
+    BytecodeClassMemberKind, BytecodeCompletion, BytecodeDynamicProperty, BytecodeForInTarget,
+    BytecodeFunction, BytecodeFunctionDeclaration, BytecodeFunctionParam, BytecodeInstruction,
+    BytecodeNewTargetMode, BytecodeObjectProperty, BytecodePattern,
     BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget, BytecodeProgram,
     BytecodeProperty, BytecodeSwitchCase,
 };

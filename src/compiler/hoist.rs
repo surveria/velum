@@ -163,6 +163,7 @@ impl<'a> HoistCollector<'a> {
             | Stmt::Throw(_)
             | Stmt::Return(_)
             | Stmt::PatternDecl { .. }
+            | Stmt::ClassDecl { .. }
             | Stmt::VarDecl { .. }
             | Stmt::Expr(_) => Ok(()),
         }
