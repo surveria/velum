@@ -10,6 +10,20 @@ use super::{
 };
 
 impl BytecodeCompiler<'_> {
+    fn compile_super_call(&mut self, args: &[Expr]) -> Result<()> {
+        if has_spread_arg(args) {
+            let spread_flags = self.compile_spread_parts(args)?;
+            self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
+            self.emit(BytecodeInstruction::CallSuperSpread);
+        } else {
+            self.compile_args(args)?;
+            self.emit(BytecodeInstruction::CallSuper {
+                arg_count: args.len(),
+            });
+        }
+        Ok(())
+    }
+
     pub(super) fn compile_expr(&mut self, expr: &Expr) -> Result<()> {
         match expr {
             Expr::Literal(value) => {
@@ -40,6 +54,12 @@ impl BytecodeCompiler<'_> {
                 ));
             }
             Expr::Class(class) => return self.compile_class_literal(class),
+            Expr::SuperCall { args } => return self.compile_super_call(args),
+            Expr::SuperMember { property, access } => {
+                self.emit(BytecodeInstruction::SuperMember {
+                    property: Self::compile_property(property, *access),
+                });
+            }
             Expr::Spread(_) => {
                 return Err(Error::runtime(
                     "spread is only valid in call arguments and literals",
