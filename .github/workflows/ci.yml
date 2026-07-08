@@ -9,6 +9,8 @@ on:
       - ready_for_review
       - closed
   merge_group:
+    types:
+      - checks_requested
   workflow_dispatch:
     inputs:
       full:
@@ -26,6 +28,20 @@ jobs:
     if: >-
       github.event_name != 'pull_request' ||
       (github.event.action != 'closed' && github.event.pull_request.draft == false)
+    concurrency:
+      group: >-
+        ${{
+          github.event_name == 'pull_request' &&
+          github.event.action != 'closed' &&
+          format('rsqjs-ci-pr-{0}', github.event.pull_request.number) ||
+          format('rsqjs-ci-run-{0}', github.run_id)
+        }}
+      cancel-in-progress: >-
+        ${{
+          github.event_name == 'pull_request' &&
+          github.event.action != 'closed' &&
+          github.event.pull_request.draft == false
+        }}
     runs-on:
       - self-hosted
       - Linux
@@ -42,6 +58,7 @@ jobs:
       RSQJS_TEST262_CACHE_DIR: /home/runner/.cache/cargo-target/rs-quickjs/external/test262
       RSQJS_REPORT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
       RSQJS_REPORT_TASK: ${{ github.event.pull_request.title || github.event.merge_group.head_ref || github.event_name }}
+      RSQJS_CI_BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || '' }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
@@ -102,11 +119,13 @@ jobs:
           export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
           export GIT_CONFIG_KEY_1="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/surveria/.insteadOf"
           export GIT_CONFIG_VALUE_1="https://github.com/surveria/"
-          # On a pull request GITHUB_BASE_REF names the base branch; fetch it and
-          # turn on the engine version-bump gate against it.
-          if [[ -n "${GITHUB_BASE_REF:-}" ]]; then
-            git fetch --no-tags --quiet origin "${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
-            export RSQJS_BASE_REF="origin/${GITHUB_BASE_REF}"
+          # On pull_request and merge_group events, fetch the target base branch
+          # and turn on base-relative policy gates.
+          ci_base_ref="${RSQJS_CI_BASE_REF:-}"
+          ci_base_ref="${ci_base_ref#refs/heads/}"
+          if [[ -n "${ci_base_ref}" ]]; then
+            git fetch --no-tags --quiet origin "${ci_base_ref}:refs/remotes/origin/${ci_base_ref}"
+            export RSQJS_BASE_REF="origin/${ci_base_ref}"
           fi
           manual_full="${{ github.event.inputs.full }}"
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${manual_full:-true}" != "true" ]]; then
