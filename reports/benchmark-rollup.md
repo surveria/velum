@@ -17,11 +17,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T160617Z.md`
-- Task: workflow_dispatch
-- Performance: 6.19x (64/65 >1.00x)
+- `rsqjs-test-report-20260708T164028Z.md`
+- Task: PR #350: ci: hide tested source archive ref
+- Performance: 6.24x (64/65 >1.00x)
 - Memory: - (0/65 >1.00x)
-- JetStream: 0.03x (1/1 <1.00x)
+- JetStream: 0.04x (1/1 <1.00x)
 - Full Test262: 30045 passed / 72533 failed (29.29%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
@@ -339,3 +339,4 @@ Latest report:
 | `20260708T154750Z` `6375a3f` PR #343: Optimize string concat bytecode paths | 6.29x (64/65 >1.00x) | - (0/65 >1.00x) | - (0/0 <1.00x) | 29410 passed / 73168 failed (28.67%) |
 | `20260708T155504Z` `9a81810` workflow_dispatch | 6.28x (64/65 >1.00x) | - (0/65 >1.00x) | - (0/0 <1.00x) | 30045 passed / 72533 failed (29.29%) |
 | `20260708T160617Z` `290bf5d` workflow_dispatch | 6.19x (64/65 >1.00x) | - (0/65 >1.00x) | 0.03x (1/1 <1.00x) | 30045 passed / 72533 failed (29.29%) |
+| `20260708T164028Z` `4b6e81c` PR #350: ci: hide tested source archive ref | 6.24x (64/65 >1.00x) | - (0/65 >1.00x) | 0.04x (1/1 <1.00x) | 30045 passed / 72533 failed (29.29%) |
