@@ -10,6 +10,7 @@ cd "${repo_root}"
 if [[ -n "${RSQJS_BASE_REF:-}" ]]; then
   "${script_dir}/check-version-bump.sh" "${RSQJS_BASE_REF}"
 fi
+"${script_dir}/check-touched-file-sizes.sh" "${RSQJS_BASE_REF:-origin/main}"
 
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings

@@ -16,6 +16,7 @@ export RSQJS_BUILD_COMMIT_SHA="${RSQJS_BUILD_COMMIT_SHA:-$(git rev-parse HEAD)}"
 if [[ -n "${RSQJS_BASE_REF:-}" ]]; then
   "${script_dir}/check-version-bump.sh" "${RSQJS_BASE_REF}"
 fi
+"${script_dir}/check-touched-file-sizes.sh" "${RSQJS_BASE_REF:-origin/main}"
 cargo fmt --all -- --check
 cargo fmt --manifest-path runner/Cargo.toml --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
