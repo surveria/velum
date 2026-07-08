@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T092725Z.md`
-- Task: PR #308: Optimize control-flow bytecode hot paths
-- Performance: 5.97x (62/63 >1.00x)
+- `rsqjs-test-report-20260708T094421Z.md`
+- Task: PR #313: Follow up source module hierarchy cleanup
+- Performance: 6.15x (62/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 19442 passed / 83136 failed (18.95%)
+- Full Test262: 19622 passed / 82956 failed (19.13%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -310,3 +310,4 @@ Latest report:
 | `20260708T084924Z` `c4eb59f` PR #306: Support nullish coalescing and logical assignment | 6.41x (62/63 >1.00x) | - (0/63 >1.00x) | 18225 passed / 84353 failed (17.77%) |
 | `20260708T091738Z` `6e5bb23` PR #312: Harden bytecode-only runtime boundary | 6.42x (62/63 >1.00x) | - (0/63 >1.00x) | 19449 passed / 83129 failed (18.96%) |
 | `20260708T092725Z` `145672b` PR #308: Optimize control-flow bytecode hot paths | 5.97x (62/63 >1.00x) | - (0/63 >1.00x) | 19442 passed / 83136 failed (18.95%) |
+| `20260708T094421Z` `cdc2689` PR #313: Follow up source module hierarchy cleanup | 6.15x (62/63 >1.00x) | - (0/63 >1.00x) | 19622 passed / 82956 failed (19.13%) |
