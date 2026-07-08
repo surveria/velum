@@ -620,6 +620,9 @@ impl Context {
             NativeFunctionKind::BoundFunction(id) => self.eval_bound_function(id, args),
             NativeFunctionKind::Eval => self.eval_eval_function(args),
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
+            NativeFunctionKind::ErrorPrototypeToString => {
+                self.eval_error_prototype_to_string(args, this_value)
+            }
             NativeFunctionKind::Function => self.eval_function_constructor(args),
             NativeFunctionKind::FunctionPrototypeBind => {
                 self.eval_function_prototype_bind(args, this_value)
