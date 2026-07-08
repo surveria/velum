@@ -1,3 +1,4 @@
+mod for_loop;
 mod try_catch;
 
 use std::rc::Rc;
@@ -360,13 +361,24 @@ impl Context {
             let mut init_state = BytecodeState::new();
             init_completion_to_result(self.eval_bytecode_block_with_state(init, &mut init_state)?)?;
         }
+        if let Some(fast_path) =
+            self.compile_bytecode_for_loop_fast_path(parts.condition, parts.update, parts.body)?
+            && Self::bytecode_for_loop_fast_path_ready(&fast_path)?
+        {
+            return self.eval_bytecode_for_loop_fast_path(state, next, &fast_path);
+        }
         let mut last = Value::Undefined;
         let condition_plan = if let Some(condition) = parts.condition {
             self.compile_bytecode_linear_plan(condition)?
         } else {
             None
         };
-        let body_plan = self.compile_bytecode_linear_plan(parts.body)?;
+        let body_fast_path = self.compile_bytecode_for_body_fast_path(parts.body)?;
+        let body_plan = if body_fast_path.is_none() {
+            self.compile_bytecode_linear_plan(parts.body)?
+        } else {
+            None
+        };
         let update_plan = if let Some(update) = parts.update {
             self.compile_bytecode_linear_plan(update)?
         } else {
@@ -388,11 +400,16 @@ impl Context {
                 }
             }
             self.step()?;
-            match self.eval_bytecode_block_with_linear_plan(
-                parts.body,
-                body_plan.as_ref(),
-                &mut body_state,
-            )? {
+            let body_completion = if let Some(fast_path) = body_fast_path.as_ref() {
+                self.eval_bytecode_for_body_fast_path(fast_path)?
+            } else {
+                self.eval_bytecode_block_with_linear_plan(
+                    parts.body,
+                    body_plan.as_ref(),
+                    &mut body_state,
+                )?
+            };
+            match body_completion {
                 Completion::Normal(value) => last = value,
                 Completion::Continue(None) => {}
                 Completion::Continue(Some(target)) if loop_label_matches(parts.labels, &target) => {
