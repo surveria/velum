@@ -59,7 +59,11 @@ impl Object {
             enumerable_property_count: 0,
             array_length: None,
             string_value: Some(value),
+<<<<<<< HEAD
             primitive_value: None,
+=======
+            date_value: None,
+>>>>>>> 79971c0 (Implement baseline Date built-in)
             prototype: None,
         }
     }

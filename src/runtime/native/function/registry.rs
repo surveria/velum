@@ -3,7 +3,7 @@ use crate::{
     value::{ErrorName, NativeFunctionId},
 };
 
-use super::NativeFunctionKind;
+use super::{DateFunctionKind, NativeFunctionKind};
 
 const ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(0);
 const ARRAY_CONCAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(1);
@@ -149,6 +149,7 @@ const SET_FOR_EACH_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(140);
 const SET_SIZE_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(141);
 const SET_ENTRIES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(142);
 const SET_VALUES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(143);
+<<<<<<< HEAD
 const NUMBER_IS_INTEGER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(144);
 const NUMBER_IS_SAFE_INTEGER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(145);
 const BOOLEAN_PROTOTYPE_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(146);
@@ -178,6 +179,10 @@ const WEAK_SET_ADD_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(169);
 const WEAK_SET_HAS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(170);
 const WEAK_SET_DELETE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(171);
 const NATIVE_FUNCTION_SLOT_COUNT: usize = 172;
+=======
+const DATE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(144);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 145;
+>>>>>>> 79971c0 (Implement baseline Date built-in)
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -325,6 +330,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
 
 const fn collection_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     match kind {
+        NativeFunctionKind::Date(DateFunctionKind::Constructor) => Some(DATE_SLOT),
         NativeFunctionKind::Map => Some(MAP_SLOT),
         NativeFunctionKind::MapGet => Some(MAP_GET_SLOT),
         NativeFunctionKind::MapSet => Some(MAP_SET_SLOT),

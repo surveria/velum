@@ -55,6 +55,9 @@ pub(in crate::runtime::native) use kind::{
     STRING_PROTOTYPE_VALUE_OF_NAME, STRING_RAW_NAME, SYMBOL_NAME,
 };
 pub(in crate::runtime) use kind::{
+    DATE_NAME, DATE_NOW_NAME, DATE_PARSE_NAME, DATE_UTC_NAME, DateFunctionKind,
+};
+pub(in crate::runtime) use kind::{
     GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
     OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
 };

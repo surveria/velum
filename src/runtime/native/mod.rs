@@ -44,9 +44,12 @@ pub(in crate::runtime::native) use function::{
     SYMBOL_PROTOTYPE_VALUE_OF_NAME,
 };
 pub(in crate::runtime) use function::{
+    DATE_NAME, DATE_NOW_NAME, DATE_PARSE_NAME, DATE_UTC_NAME, DateFunctionKind, NativeFunction,
+    NativeFunctionKind, NativeFunctionRegistry,
+};
+pub(in crate::runtime) use function::{
     GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
     OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
 };
-pub(in crate::runtime) use function::{NativeFunction, NativeFunctionKind, NativeFunctionRegistry};
 
 pub(super) const OBJECT_CONSTRUCTOR_PROPERTY: &str = "constructor";

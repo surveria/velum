@@ -25,8 +25,12 @@ pub enum NativeCallTarget {
     ArraySome,
     ArrayUnshift,
     Boolean,
+<<<<<<< HEAD
     BooleanPrototypeToString,
     BooleanPrototypeValueOf,
+=======
+    Date,
+>>>>>>> 79971c0 (Implement baseline Date built-in)
     ErrorConstructor(ErrorName),
     ErrorPrototypeToString,
     Eval,
@@ -175,6 +179,7 @@ impl NativeCallTarget {
         match name {
             "Array" => Some(Self::Array),
             "Boolean" => Some(Self::Boolean),
+            "Date" => Some(Self::Date),
             "eval" => Some(Self::Eval),
             "Function" => Some(Self::Function),
             "decodeURI" => Some(Self::GlobalDecodeUri),
