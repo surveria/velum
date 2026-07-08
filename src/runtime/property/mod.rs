@@ -4,6 +4,7 @@ use crate::runtime::object::{ObjectHeap, ObjectPropertyValue, PropertyKey, Prope
 use crate::storage::atom::AtomTable;
 use crate::value::Value;
 
+mod accessor;
 mod dynamic;
 pub mod static_names;
 pub mod well_known;
@@ -60,7 +61,9 @@ pub fn get_property<'a>(
 ) -> Result<PropertyValue<'a>> {
     match object {
         Value::Error(error) => Ok(error_property_value(error, property.name())),
-        Value::Object(id) => objects.get(*id, property).map(PropertyValue::from),
+        Value::Object(id) => objects
+            .get(*id, property)
+            .map(|value| PropertyValue::from_object_value(value, object)),
         Value::String(value) => string_property(value, property.name()),
         Value::HeapString(value) => string_property(value.as_str(), property.name()),
         value => Err(Error::runtime(format!(
@@ -76,13 +79,23 @@ pub enum PropertyValue<'a> {
     Value(Value),
     Text(&'a str),
     Character(char),
+    /// The property is an accessor; the caller must invoke `getter` with
+    /// `receiver` as `this` to obtain the value.
+    Getter {
+        getter: Value,
+        receiver: Value,
+    },
 }
 
-impl From<ObjectPropertyValue> for PropertyValue<'_> {
-    fn from(value: ObjectPropertyValue) -> Self {
+impl PropertyValue<'_> {
+    fn from_object_value(value: ObjectPropertyValue, receiver: &Value) -> Self {
         match value {
             ObjectPropertyValue::Value(value) => Self::Value(value),
             ObjectPropertyValue::StringCharacter(ch) => Self::Character(ch),
+            ObjectPropertyValue::Getter(getter) => Self::Getter {
+                getter,
+                receiver: receiver.clone(),
+            },
         }
     }
 }

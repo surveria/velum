@@ -6,7 +6,9 @@ use crate::{
 use super::property::{
     CacheablePropertyPresence, CacheablePropertyValue, PrototypeTraversalBudget,
 };
-use super::{ObjectHeap, ObjectPropertyValue, PROTOTYPE_PROPERTY, PropertyLookup};
+use super::{
+    AccessorWriteDisposition, ObjectHeap, ObjectPropertyValue, PROTOTYPE_PROPERTY, PropertyLookup,
+};
 
 const PROTOTYPE_CYCLE_SET_ERROR: &str = "prototype cycle is not allowed";
 
@@ -99,6 +101,37 @@ impl ObjectHeap {
             current = self.object(current_id)?.prototype;
         }
         Ok(false)
+    }
+
+    /// Resolves how an assignment to `property` on `id` interacts with
+    /// accessor properties: the first object on the chain that owns the
+    /// property decides. A data property (or no property at all) keeps
+    /// ordinary write semantics.
+    pub(crate) fn accessor_write_target(
+        &self,
+        id: ObjectId,
+        property: PropertyLookup<'_>,
+    ) -> Result<AccessorWriteDisposition> {
+        let mut budget = PrototypeTraversalBudget::from_object_count(self.objects.len());
+        let mut current = Some(id);
+        while let Some(current_id) = current {
+            budget.enter_next()?;
+            let object = self.object(current_id)?;
+            if object.has_own(property, &self.shapes)? {
+                if let Some(key) = property.key()
+                    && let Some(named) = object.named_property(&self.shapes, key)?
+                    && let Some(accessor) = named.accessor()
+                {
+                    if accessor.has_setter() {
+                        return Ok(AccessorWriteDisposition::Setter(accessor.set()));
+                    }
+                    return Ok(AccessorWriteDisposition::NoSetter);
+                }
+                return Ok(AccessorWriteDisposition::None);
+            }
+            current = object.prototype;
+        }
+        Ok(AccessorWriteDisposition::None)
     }
 
     fn prototype_property_value_in_chain(

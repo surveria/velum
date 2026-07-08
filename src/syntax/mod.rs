@@ -57,3 +57,10 @@ pub enum DeclKind {
     Let,
     Const,
 }
+
+/// Which half of an accessor property a function value installs.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum AccessorKind {
+    Getter,
+    Setter,
+}

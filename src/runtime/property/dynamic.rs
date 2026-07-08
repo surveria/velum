@@ -75,6 +75,10 @@ impl Context {
             PropertyValue::Value(value) => self.runtime_value(value),
             PropertyValue::Text(value) => self.heap_string_value(value),
             PropertyValue::Character(ch) => self.heap_string_char_value(ch),
+            PropertyValue::Getter { getter, receiver } => {
+                let value = self.call_accessor_getter(getter, receiver)?;
+                self.runtime_value(value)
+            }
         }
     }
 

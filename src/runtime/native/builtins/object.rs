@@ -3,8 +3,9 @@ use crate::{
     runtime::Context,
     runtime::call_args::RuntimeCallArgs,
     runtime::object::{
-        DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
-        PropertyEnumerable, PropertyKey, PropertyWritable,
+        AccessorPropertyUpdate, DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit,
+        OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyKey,
+        PropertyUpdate, PropertyWritable,
     },
     runtime::property::{DynamicPropertyKey, has_property},
     value::{NativeFunctionId, ObjectId, Value},
@@ -83,7 +84,7 @@ impl Context {
         let mut property = self.object_property_key(values.get(1))?;
         let key = self.intern_dynamic_property_key(&mut property)?;
         let descriptor_value = Self::argument_or_undefined(values.get(2));
-        let descriptor = self.data_property_update_from_value(&descriptor_value)?;
+        let descriptor = self.property_update_from_value(&descriptor_value)?;
         match &target {
             Value::Object(id) => {
                 self.objects.define_property(
@@ -95,9 +96,19 @@ impl Context {
                 )?;
             }
             Value::Function(id) => {
+                let PropertyUpdate::Data(descriptor) = descriptor else {
+                    return Err(Error::runtime(
+                        "accessor properties are not supported on function objects",
+                    ));
+                };
                 self.define_function_property_key(*id, property.name(), key, descriptor)?;
             }
             Value::NativeFunction(id) => {
+                let PropertyUpdate::Data(descriptor) = descriptor else {
+                    return Err(Error::runtime(
+                        "accessor properties are not supported on function objects",
+                    ));
+                };
                 self.define_native_function_property_key(*id, property.name(), key, descriptor)?;
             }
             Value::Undefined
@@ -129,18 +140,18 @@ impl Context {
                 if let Some(descriptor) =
                     self.string_object_own_property_descriptor(*id, &property)?
                 {
-                    Some(descriptor)
+                    Some(OwnPropertyDescriptor::Data(descriptor))
                 } else {
                     self.objects
                         .own_property_descriptor(*id, property.lookup())?
                 }
             }
-            Value::Function(id) => {
-                self.function_own_property_descriptor_lookup(*id, property.lookup())?
-            }
-            Value::NativeFunction(id) => {
-                self.native_function_own_property_descriptor_lookup(*id, property.lookup())?
-            }
+            Value::Function(id) => self
+                .function_own_property_descriptor_lookup(*id, property.lookup())?
+                .map(OwnPropertyDescriptor::Data),
+            Value::NativeFunction(id) => self
+                .native_function_own_property_descriptor_lookup(*id, property.lookup())?
+                .map(OwnPropertyDescriptor::Data),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -360,33 +371,56 @@ impl Context {
         self.dynamic_property_key(&value)
     }
 
-    fn data_property_update_from_value(&mut self, value: &Value) -> Result<DataPropertyUpdate> {
+    fn property_update_from_value(&mut self, value: &Value) -> Result<PropertyUpdate> {
         if !matches!(value, Value::Object(_)) {
             return Err(Error::runtime("property descriptor must be an object"));
         }
-        self.reject_accessor_descriptor(value)?;
-        Ok(DataPropertyUpdate::new(
-            self.optional_descriptor_value(value, DESCRIPTOR_VALUE_PROPERTY)?,
-            self.optional_descriptor_writable(value)?,
-            self.optional_descriptor_enumerable(value)?,
-            self.optional_descriptor_configurable(value)?,
-        ))
+        let get = self.optional_descriptor_accessor(value, DESCRIPTOR_GET_PROPERTY)?;
+        let set = self.optional_descriptor_accessor(value, DESCRIPTOR_SET_PROPERTY)?;
+        let data_value = self.optional_descriptor_value(value, DESCRIPTOR_VALUE_PROPERTY)?;
+        let writable = self.optional_descriptor_writable(value)?;
+        let enumerable = self.optional_descriptor_enumerable(value)?;
+        let configurable = self.optional_descriptor_configurable(value)?;
+        if get.is_some() || set.is_some() {
+            if data_value.is_some() || writable.is_some() {
+                return Err(Error::type_error(
+                    "property descriptor cannot mix accessor and data attributes",
+                ));
+            }
+            return Ok(PropertyUpdate::Accessor(AccessorPropertyUpdate::new(
+                get,
+                set,
+                enumerable,
+                configurable,
+            )));
+        }
+        Ok(PropertyUpdate::Data(DataPropertyUpdate::new(
+            data_value,
+            writable,
+            enumerable,
+            configurable,
+        )))
     }
 
-    fn reject_accessor_descriptor(&mut self, descriptor: &Value) -> Result<()> {
+    /// Reads a `get`/`set` descriptor field. Present fields must be callable
+    /// or `undefined`; a missing field returns `None`.
+    fn optional_descriptor_accessor(
+        &mut self,
+        descriptor: &Value,
+        property: &str,
+    ) -> Result<Option<Value>> {
+        let Some(function) = self.optional_descriptor_value(descriptor, property)? else {
+            return Ok(None);
+        };
         if !matches!(
-            self.get_property_value(descriptor, DESCRIPTOR_GET_PROPERTY)?,
-            Value::Undefined
+            function,
+            Value::Undefined | Value::Function(_) | Value::NativeFunction(_)
         ) {
-            return Err(Error::runtime("accessor descriptors are not supported yet"));
+            return Err(Error::type_error(format!(
+                "property descriptor field '{property}' must be callable or undefined"
+            )));
         }
-        if !matches!(
-            self.get_property_value(descriptor, DESCRIPTOR_SET_PROPERTY)?,
-            Value::Undefined
-        ) {
-            return Err(Error::runtime("accessor descriptors are not supported yet"));
-        }
-        Ok(())
+        Ok(Some(function))
     }
 
     fn optional_descriptor_value(
@@ -463,32 +497,58 @@ impl Context {
 
     fn create_property_descriptor_object(
         &mut self,
-        descriptor: &DataPropertyDescriptor,
+        descriptor: &OwnPropertyDescriptor,
     ) -> Result<Value> {
         let keys = self.descriptor_property_keys()?;
-        let descriptor_value = self.runtime_value(descriptor.value())?;
-        let properties = vec![
-            Self::descriptor_object_property(
-                keys.value(),
-                DESCRIPTOR_VALUE_PROPERTY,
-                descriptor_value,
-            ),
-            Self::descriptor_object_property(
-                keys.writable(),
-                DESCRIPTOR_WRITABLE_PROPERTY,
-                Value::Bool(descriptor.writable().is_yes()),
-            ),
-            Self::descriptor_object_property(
-                keys.enumerable(),
-                DESCRIPTOR_ENUMERABLE_PROPERTY,
-                Value::Bool(descriptor.enumerable().is_yes()),
-            ),
-            Self::descriptor_object_property(
-                keys.configurable(),
-                DESCRIPTOR_CONFIGURABLE_PROPERTY,
-                Value::Bool(descriptor.configurable().is_yes()),
-            ),
-        ];
+        let properties = match descriptor {
+            OwnPropertyDescriptor::Data(descriptor) => {
+                let descriptor_value = self.runtime_value(descriptor.value())?;
+                vec![
+                    Self::descriptor_object_property(
+                        keys.value(),
+                        DESCRIPTOR_VALUE_PROPERTY,
+                        descriptor_value,
+                    ),
+                    Self::descriptor_object_property(
+                        keys.writable(),
+                        DESCRIPTOR_WRITABLE_PROPERTY,
+                        Value::Bool(descriptor.writable().is_yes()),
+                    ),
+                    Self::descriptor_object_property(
+                        keys.enumerable(),
+                        DESCRIPTOR_ENUMERABLE_PROPERTY,
+                        Value::Bool(descriptor.enumerable().is_yes()),
+                    ),
+                    Self::descriptor_object_property(
+                        keys.configurable(),
+                        DESCRIPTOR_CONFIGURABLE_PROPERTY,
+                        Value::Bool(descriptor.configurable().is_yes()),
+                    ),
+                ]
+            }
+            OwnPropertyDescriptor::Accessor(descriptor) => vec![
+                Self::descriptor_object_property(
+                    keys.get(),
+                    DESCRIPTOR_GET_PROPERTY,
+                    descriptor.get(),
+                ),
+                Self::descriptor_object_property(
+                    keys.set(),
+                    DESCRIPTOR_SET_PROPERTY,
+                    descriptor.set(),
+                ),
+                Self::descriptor_object_property(
+                    keys.enumerable(),
+                    DESCRIPTOR_ENUMERABLE_PROPERTY,
+                    Value::Bool(descriptor.enumerable().is_yes()),
+                ),
+                Self::descriptor_object_property(
+                    keys.configurable(),
+                    DESCRIPTOR_CONFIGURABLE_PROPERTY,
+                    Value::Bool(descriptor.configurable().is_yes()),
+                ),
+            ],
+        };
         let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_data_object(
             properties,
@@ -515,6 +575,8 @@ impl Context {
             self.intern_property_key(DESCRIPTOR_WRITABLE_PROPERTY)?,
             self.intern_property_key(DESCRIPTOR_ENUMERABLE_PROPERTY)?,
             self.intern_property_key(DESCRIPTOR_CONFIGURABLE_PROPERTY)?,
+            self.intern_property_key(DESCRIPTOR_GET_PROPERTY)?,
+            self.intern_property_key(DESCRIPTOR_SET_PROPERTY)?,
         );
         self.descriptor_property_keys = Some(keys);
         Ok(keys)
@@ -549,36 +611,42 @@ impl Context {
         let Some(descriptor) = self.own_property_descriptor_value(target, property)? else {
             return Ok(false);
         };
-        Ok(descriptor.enumerable().is_yes())
+        let enumerable = match descriptor {
+            OwnPropertyDescriptor::Data(descriptor) => descriptor.enumerable(),
+            OwnPropertyDescriptor::Accessor(descriptor) => descriptor.enumerable(),
+        };
+        Ok(enumerable.is_yes())
     }
 
     fn own_property_descriptor_value(
         &mut self,
         target: &Value,
         property: &DynamicPropertyKey,
-    ) -> Result<Option<DataPropertyDescriptor>> {
+    ) -> Result<Option<OwnPropertyDescriptor>> {
         match target {
             Value::Object(id) => {
                 if let Some(descriptor) =
                     self.string_object_own_property_descriptor(*id, property)?
                 {
-                    return Ok(Some(descriptor));
+                    return Ok(Some(OwnPropertyDescriptor::Data(descriptor)));
                 }
                 self.objects.own_property_descriptor(*id, property.lookup())
             }
-            Value::Function(id) => {
-                self.function_own_property_descriptor_lookup(*id, property.lookup())
-            }
-            Value::NativeFunction(id) => {
-                self.native_function_own_property_descriptor_lookup(*id, property.lookup())
-            }
+            Value::Function(id) => Ok(self
+                .function_own_property_descriptor_lookup(*id, property.lookup())?
+                .map(OwnPropertyDescriptor::Data)),
+            Value::NativeFunction(id) => Ok(self
+                .native_function_own_property_descriptor_lookup(*id, property.lookup())?
+                .map(OwnPropertyDescriptor::Data)),
             Value::Error(_) | Value::String(_) | Value::HeapString(_) => {
                 if self.has_own_property_value(target, property)? {
-                    Ok(Some(DataPropertyDescriptor::new(
-                        self.get_property_value(target, property.name())?,
-                        PropertyWritable::Yes,
-                        PropertyEnumerable::Yes,
-                        PropertyConfigurable::Yes,
+                    Ok(Some(OwnPropertyDescriptor::Data(
+                        DataPropertyDescriptor::new(
+                            self.get_property_value(target, property.name())?,
+                            PropertyWritable::Yes,
+                            PropertyEnumerable::Yes,
+                            PropertyConfigurable::Yes,
+                        ),
                     )))
                 } else {
                     Ok(None)

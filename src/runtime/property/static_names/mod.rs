@@ -8,9 +8,7 @@ use crate::{
         CacheablePropertyDelete, CacheablePropertyLookup, CacheablePropertyPresence,
         CacheablePropertyValue, CacheablePropertyWrite, PropertyKey, PropertyLookup,
     },
-    runtime::property::{
-        DynamicPropertyKey, delete_property, get_property, has_property, set_property,
-    },
+    runtime::property::{DynamicPropertyKey, delete_property, get_property, has_property},
     storage::atom::AtomId,
     syntax::{StaticCallSiteId, StaticName, StaticPropertyAccessId},
     value::{NativeFunctionId, ObjectId, Value},
@@ -425,14 +423,7 @@ impl Context {
         {
             return Ok(());
         }
-        set_property(
-            &mut self.objects,
-            object,
-            key,
-            property,
-            value,
-            self.limits.max_object_properties,
-        )
+        self.set_property_value_with_accessors(object, key, property, value)
     }
 
     pub(in crate::runtime) fn try_cached_static_property_read_modify_write(
@@ -500,14 +491,7 @@ impl Context {
         {
             return Ok(());
         }
-        set_property(
-            &mut self.objects,
-            object,
-            key,
-            property.name(),
-            value,
-            self.limits.max_object_properties,
-        )
+        self.set_property_value_with_accessors(object, key, property.name(), value)
     }
 
     pub(in crate::runtime) fn try_cached_dynamic_property_read_modify_write(
