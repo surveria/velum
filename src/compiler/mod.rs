@@ -306,7 +306,6 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::ForOf { .. }
             | BytecodeInstruction::DestructurePattern { .. }
             | BytecodeInstruction::CreateClass { .. }
-            | BytecodeInstruction::CreateClass { .. }
             | BytecodeInstruction::Switch { .. }
             | BytecodeInstruction::Try { .. }
             | BytecodeInstruction::Label { .. }

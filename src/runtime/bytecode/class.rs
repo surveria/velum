@@ -5,7 +5,7 @@ use crate::{
     },
     error::{Error, Result},
     runtime::Context,
-    runtime::completion::Completion,
+    runtime::control::Completion,
     runtime::function::BytecodeFunctionInit,
     runtime::object::{
         AccessorPropertyUpdate, DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable,

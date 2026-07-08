@@ -13,7 +13,7 @@ pub use types::{
     BytecodeCallSite, BytecodeCatch, BytecodeClass, BytecodeClassMember, BytecodeClassMemberKey,
     BytecodeClassMemberKind, BytecodeCompletion, BytecodeDynamicProperty, BytecodeForInTarget,
     BytecodeFunction, BytecodeFunctionDeclaration, BytecodeFunctionParam, BytecodeInstruction,
-    BytecodeNewTargetMode, BytecodeObjectProperty, BytecodePattern,
-    BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget, BytecodeProgram,
-    BytecodeProperty, BytecodeSwitchCase,
+    BytecodeNewTargetMode, BytecodeObjectProperty, BytecodePattern, BytecodePatternKey,
+    BytecodePatternProperty, BytecodePatternTarget, BytecodeProgram, BytecodeProperty,
+    BytecodeSwitchCase,
 };
