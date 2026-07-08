@@ -474,6 +474,16 @@ impl ObjectHeap {
         Ok(self.object(id)?.packed_array_properties(length))
     }
 
+    pub(crate) fn packed_array_values_if_array(&self, id: ObjectId) -> Result<Option<Vec<Value>>> {
+        let Some(length) = self.array_len_if_array(id)? else {
+            return Ok(None);
+        };
+        let Some(properties) = self.object(id)?.packed_array_properties(length) else {
+            return Ok(None);
+        };
+        Ok(Some(properties.iter().map(ObjectProperty::value).collect()))
+    }
+
     pub(super) fn array_length_for_method(&self, id: ObjectId, error: &str) -> Result<ArrayLength> {
         let object = self.object(id)?;
         object.array_length.ok_or_else(|| Error::runtime(error))

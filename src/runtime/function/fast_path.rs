@@ -2,7 +2,8 @@ use crate::{
     binding_metadata::BindingOperand,
     bytecode::{
         BytecodeBinding, BytecodeFunction, BytecodeFunctionParam, BytecodeInstruction,
-        BytecodeNewTargetMode, BytecodeNumericBinaryOp,
+        BytecodeNewTargetMode, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
+        BytecodeNumericEqualityOp,
     },
     error::{Error, Result},
     runtime::{
@@ -16,8 +17,8 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct FunctionFastPath {
-    kind: FunctionFastPathKind,
-    step_count: usize,
+    pub(super) kind: FunctionFastPathKind,
+    pub(super) step_count: usize,
 }
 
 impl FunctionFastPath {
@@ -46,13 +47,23 @@ impl FunctionFastPath {
 }
 
 #[derive(Debug, Clone)]
-enum FunctionFastPathKind {
+pub(super) enum FunctionFastPathKind {
     ReturnLiteral(Value),
     ReturnString(StaticString),
     ReturnUndefined,
     ReturnSource(FastValueSource),
     ReturnNumberBinary {
         op: BytecodeNumericBinaryOp,
+        left: FastValueSource,
+        right: FastValueSource,
+    },
+    ReturnNumberCompare {
+        op: BytecodeNumericCompareOp,
+        left: FastValueSource,
+        right: FastValueSource,
+    },
+    ReturnNumberEquality {
+        op: BytecodeNumericEqualityOp,
         left: FastValueSource,
         right: FastValueSource,
     },
@@ -65,13 +76,19 @@ enum FunctionFastPathKind {
 }
 
 #[derive(Debug, Clone)]
-enum FastValueSource {
+pub(super) enum FastValueSource {
     Param(usize),
     Binding(BytecodeBinding),
+    Literal(Value),
+    NumberBinary {
+        op: BytecodeNumericBinaryOp,
+        left: Box<Self>,
+        right: Box<Self>,
+    },
 }
 
 #[derive(Debug, Clone)]
-enum FastStoreTarget {
+pub(super) enum FastStoreTarget {
     Param,
     Binding(BytecodeBinding),
 }
@@ -81,7 +98,9 @@ impl FunctionFastPathKind {
         match self {
             Self::ReturnLiteral(_) | Self::ReturnString(_) | Self::ReturnUndefined => false,
             Self::ReturnSource(source) => source.needs_upvalues(),
-            Self::ReturnNumberBinary { left, right, .. } => {
+            Self::ReturnNumberBinary { left, right, .. }
+            | Self::ReturnNumberCompare { left, right, .. }
+            | Self::ReturnNumberEquality { left, right, .. } => {
                 left.needs_upvalues() || right.needs_upvalues()
             }
             Self::StoreNumberBinaryReturn {
@@ -97,8 +116,11 @@ impl FunctionFastPathKind {
 impl FastValueSource {
     const fn needs_upvalues(&self) -> bool {
         match self {
-            Self::Param(_) => false,
+            Self::Param(_) | Self::Literal(_) => false,
             Self::Binding(binding) => matches!(binding.operand(), BindingOperand::Upvalue { .. }),
+            Self::NumberBinary { left, right, .. } => {
+                left.needs_upvalues() || right.needs_upvalues()
+            }
         }
     }
 }
@@ -133,13 +155,33 @@ impl Context {
                 Ok(Some(Completion::Return(Value::Undefined)))
             }
             FunctionFastPathKind::ReturnSource(source) => {
-                let value = self.load_fast_value_source(source, args, upvalues)?;
+                let Some(value) = self.load_fast_value_source(source, args, upvalues)? else {
+                    return Ok(None);
+                };
                 self.charge_runtime_steps(fast_path.step_count)?;
                 Ok(Some(Completion::Return(self.runtime_value(value)?)))
             }
             FunctionFastPathKind::ReturnNumberBinary { op, left, right } => {
                 let Some(value) =
                     self.eval_fast_number_binary_sources(*op, left, right, args, upvalues)?
+                else {
+                    return Ok(None);
+                };
+                self.charge_runtime_steps(fast_path.step_count)?;
+                Ok(Some(Completion::Return(value)))
+            }
+            FunctionFastPathKind::ReturnNumberCompare { op, left, right } => {
+                let Some(value) =
+                    self.eval_fast_number_compare_sources(*op, left, right, args, upvalues)?
+                else {
+                    return Ok(None);
+                };
+                self.charge_runtime_steps(fast_path.step_count)?;
+                Ok(Some(Completion::Return(value)))
+            }
+            FunctionFastPathKind::ReturnNumberEquality { op, left, right } => {
+                let Some(value) =
+                    self.eval_fast_number_equality_sources(*op, left, right, args, upvalues)?
                 else {
                     return Ok(None);
                 };
@@ -162,6 +204,40 @@ impl Context {
                 Ok(Some(Completion::Return(value)))
             }
         }
+    }
+
+    fn eval_fast_number_compare_sources(
+        &mut self,
+        op: BytecodeNumericCompareOp,
+        left: &FastValueSource,
+        right: &FastValueSource,
+        args: &[Value],
+        upvalues: &[BindingCell],
+    ) -> Result<Option<Value>> {
+        let Some(left) = self.load_fast_value_source(left, args, upvalues)? else {
+            return Ok(None);
+        };
+        let Some(right) = self.load_fast_value_source(right, args, upvalues)? else {
+            return Ok(None);
+        };
+        self.fast_number_compare(op, &left, &right)
+    }
+
+    fn eval_fast_number_equality_sources(
+        &mut self,
+        op: BytecodeNumericEqualityOp,
+        left: &FastValueSource,
+        right: &FastValueSource,
+        args: &[Value],
+        upvalues: &[BindingCell],
+    ) -> Result<Option<Value>> {
+        let Some(left) = self.load_fast_value_source(left, args, upvalues)? else {
+            return Ok(None);
+        };
+        let Some(right) = self.load_fast_value_source(right, args, upvalues)? else {
+            return Ok(None);
+        };
+        self.fast_number_equality(op, &left, &right)
     }
 
     pub(super) fn eval_bytecode_function_fast_path(
@@ -244,8 +320,12 @@ impl Context {
         args: &[Value],
         upvalues: &[BindingCell],
     ) -> Result<Option<Value>> {
-        let left = self.load_fast_value_source(left, args, upvalues)?;
-        let right = self.load_fast_value_source(right, args, upvalues)?;
+        let Some(left) = self.load_fast_value_source(left, args, upvalues)? else {
+            return Ok(None);
+        };
+        let Some(right) = self.load_fast_value_source(right, args, upvalues)? else {
+            return Ok(None);
+        };
         self.fast_number_binary(op, &left, &right)
     }
 
@@ -254,13 +334,23 @@ impl Context {
         source: &FastValueSource,
         args: &[Value],
         upvalues: &[BindingCell],
-    ) -> Result<Value> {
+    ) -> Result<Option<Value>> {
         match source {
             FastValueSource::Param(index) => {
-                Ok(args.get(*index).cloned().unwrap_or(Value::Undefined))
+                Ok(Some(args.get(*index).cloned().unwrap_or(Value::Undefined)))
             }
-            FastValueSource::Binding(binding) => {
-                self.fast_pre_setup_load_binding(binding, upvalues)
+            FastValueSource::Binding(binding) => self
+                .fast_pre_setup_load_binding(binding, upvalues)
+                .map(Some),
+            FastValueSource::Literal(value) => self.runtime_value(value.clone()).map(Some),
+            FastValueSource::NumberBinary { op, left, right } => {
+                let Some(left) = self.load_fast_value_source(left, args, upvalues)? else {
+                    return Ok(None);
+                };
+                let Some(right) = self.load_fast_value_source(right, args, upvalues)? else {
+                    return Ok(None);
+                };
+                self.fast_number_binary(*op, &left, &right)
             }
         }
     }
@@ -453,6 +543,39 @@ fn compile_function_fast_path_kind(
         }
         [
             BytecodeInstruction::LoadBinding(left),
+            BytecodeInstruction::PushLiteral(Value::Number(right)),
+            BytecodeInstruction::NumberCompare(op),
+            BytecodeInstruction::Complete(completion),
+        ] if completion.is_return() && has_empty_hoist(bytecode) => {
+            compile_return_compare_number_kind(param_frames, *op, left, *right)
+        }
+        [
+            BytecodeInstruction::LoadBinding(left),
+            BytecodeInstruction::PushLiteral(Value::Number(right)),
+            BytecodeInstruction::NumberEquality(op),
+            BytecodeInstruction::Complete(completion),
+        ] if completion.is_return() && has_empty_hoist(bytecode) => {
+            compile_return_equality_number_kind(param_frames, *op, left, *right)
+        }
+        [
+            BytecodeInstruction::LoadBinding(left),
+            BytecodeInstruction::PushLiteral(Value::Number(binary_right)),
+            BytecodeInstruction::NumberBinary(binary_op),
+            BytecodeInstruction::PushLiteral(Value::Number(expected)),
+            BytecodeInstruction::NumberEquality(equality_op),
+            BytecodeInstruction::Complete(completion),
+        ] if completion.is_return() && has_empty_hoist(bytecode) => {
+            compile_return_binary_number_equality_kind(
+                param_frames,
+                *binary_op,
+                left,
+                *binary_right,
+                *equality_op,
+                *expected,
+            )
+        }
+        [
+            BytecodeInstruction::LoadBinding(left),
             BytecodeInstruction::LoadBinding(right),
             BytecodeInstruction::NumberBinary(op),
             BytecodeInstruction::DeclareBinding {
@@ -484,6 +607,60 @@ fn compile_function_fast_path_kind(
         }
         _ => Ok(None),
     }
+}
+
+fn compile_return_compare_number_kind(
+    param_frames: &[Option<CompiledBindingFrame>],
+    op: BytecodeNumericCompareOp,
+    left: &BytecodeBinding,
+    right: f64,
+) -> Result<Option<FunctionFastPathKind>> {
+    let Some(left) = source_for_binding(param_frames, left)? else {
+        return Ok(None);
+    };
+    Ok(Some(FunctionFastPathKind::ReturnNumberCompare {
+        op,
+        left,
+        right: FastValueSource::Literal(Value::Number(right)),
+    }))
+}
+
+fn compile_return_equality_number_kind(
+    param_frames: &[Option<CompiledBindingFrame>],
+    op: BytecodeNumericEqualityOp,
+    left: &BytecodeBinding,
+    right: f64,
+) -> Result<Option<FunctionFastPathKind>> {
+    let Some(left) = source_for_binding(param_frames, left)? else {
+        return Ok(None);
+    };
+    Ok(Some(FunctionFastPathKind::ReturnNumberEquality {
+        op,
+        left,
+        right: FastValueSource::Literal(Value::Number(right)),
+    }))
+}
+
+fn compile_return_binary_number_equality_kind(
+    param_frames: &[Option<CompiledBindingFrame>],
+    binary_op: BytecodeNumericBinaryOp,
+    left: &BytecodeBinding,
+    binary_right: f64,
+    equality_op: BytecodeNumericEqualityOp,
+    expected: f64,
+) -> Result<Option<FunctionFastPathKind>> {
+    let Some(left) = source_for_binding(param_frames, left)? else {
+        return Ok(None);
+    };
+    Ok(Some(FunctionFastPathKind::ReturnNumberEquality {
+        op: equality_op,
+        left: FastValueSource::NumberBinary {
+            op: binary_op,
+            left: Box::new(left),
+            right: Box::new(FastValueSource::Literal(Value::Number(binary_right))),
+        },
+        right: FastValueSource::Literal(Value::Number(expected)),
+    }))
 }
 
 fn compile_return_binary_kind(

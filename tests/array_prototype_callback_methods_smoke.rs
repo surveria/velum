@@ -95,6 +95,36 @@ fn preserves_sparse_array_callback_semantics() -> TestResult {
 }
 
 #[test]
+fn packed_array_callbacks_observe_mutations_on_generic_path() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let values = [1, 2, 3];
+        let mapped = values.map(function(value, index, array) {
+            if (index === 0) {
+                array[1] = 20;
+            }
+            return value;
+        });
+        let reduced = values.reduce(function(acc, value, index, array) {
+            if (index === 0) {
+                array[1] = 30;
+            }
+            return acc + value;
+        }, 0);
+
+        mapped.join("|") === "1|20|3" &&
+            values[1] === 30 &&
+            reduced === 34 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn supports_callback_methods_on_array_like_objects() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
