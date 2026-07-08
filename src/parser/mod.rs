@@ -10,6 +10,7 @@ mod assignment;
 mod binary;
 mod expression;
 mod function;
+mod pattern;
 mod statement;
 
 const ASYNC_IDENTIFIER_NAME: &str = "async";

@@ -233,6 +233,7 @@ impl Parser {
             | Stmt::Continue(_)
             | Stmt::Throw(_)
             | Stmt::Return(_)
+            | Stmt::PatternDecl { .. }
             | Stmt::VarDecl {
                 kind: DeclKind::Var,
                 ..
@@ -409,6 +410,18 @@ impl Parser {
         &mut self,
         kind: DeclKind,
     ) -> Result<Option<(ForInTarget, Expr, ForHeadKind)>> {
+        if self.next_is_binding_pattern() {
+            let pattern = self.binding_pattern()?;
+            let Some(head) = self.match_for_head_kind() else {
+                return Ok(None);
+            };
+            let object = self.expression()?;
+            let target = ForInTarget::PatternBinding {
+                pattern: Box::new(pattern),
+                kind,
+            };
+            return Ok(Some((target, object, head)));
+        }
         let name = self.consume_binding_identifier("expected for-in binding name")?;
         let Some(head) = self.match_for_head_kind() else {
             return Ok(None);
@@ -588,17 +601,22 @@ impl Parser {
             self.validate_function_binding_in_strict_code(&name)?;
         }
         self.consume(&TokenKind::LParen, "expected '(' after function name")?;
-        let params = self.function_parameters()?;
+        let parameters = self.function_parameters()?;
         self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
         let body = self.with_new_target_scope(|parser| parser.function_body(inherited_strict))?;
-        self.validate_function_parameters(&params, inherited_strict, body.contains_use_strict)?;
+        self.validate_function_parameters(
+            &parameters.params,
+            inherited_strict,
+            body.contains_use_strict,
+        )?;
         let id = self.static_function()?;
+        let (params, statements) = parameters.apply_prologue(body.statements);
         Ok(Stmt::FunctionDecl {
             name,
             id,
             params: params.into(),
-            body: body.statements.into(),
+            body: statements.into(),
             is_async,
         })
     }
@@ -620,23 +638,40 @@ impl Parser {
     fn var_declarations(&mut self, kind: DeclKind) -> Result<Vec<Stmt>> {
         let mut declarations = Vec::new();
         loop {
-            let name = self.consume_binding_identifier("expected binding name")?;
-            let init = if self.match_kind(&TokenKind::Equal) {
-                Some(self.expression()?)
-            } else if kind == DeclKind::Const {
-                return Err(Error::parse(
-                    "const declaration requires an initializer",
-                    self.offset(),
-                ));
-            } else {
-                None
-            };
-            declarations.push(Stmt::VarDecl { name, kind, init });
+            declarations.push(self.var_declaration(kind)?);
             if !self.match_kind(&TokenKind::Comma) {
                 break;
             }
         }
         Ok(declarations)
+    }
+
+    fn var_declaration(&mut self, kind: DeclKind) -> Result<Stmt> {
+        if self.next_is_binding_pattern() {
+            let pattern = self.binding_pattern()?;
+            self.consume(
+                &TokenKind::Equal,
+                "destructuring declaration requires an initializer",
+            )?;
+            let init = self.expression()?;
+            return Ok(Stmt::PatternDecl {
+                pattern,
+                kind,
+                init,
+            });
+        }
+        let name = self.consume_binding_identifier("expected binding name")?;
+        let init = if self.match_kind(&TokenKind::Equal) {
+            Some(self.expression()?)
+        } else if kind == DeclKind::Const {
+            return Err(Error::parse(
+                "const declaration requires an initializer",
+                self.offset(),
+            ));
+        } else {
+            None
+        };
+        Ok(Stmt::VarDecl { name, kind, init })
     }
 
     fn declarations_stmt(&self, declarations: Vec<Stmt>) -> Result<Stmt> {
