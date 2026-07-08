@@ -41,7 +41,11 @@ impl ObjectHeap {
         for property in properties.iter().skip(start) {
             if property.as_ref().map_or_else(
                 || Self::same_value_zero(&Value::Undefined, search),
-                |property| Self::same_value_zero(property.value_ref(), search),
+                |property| {
+                    property
+                        .data_value_ref()
+                        .is_some_and(|value| Self::same_value_zero(value, search))
+                },
             ) {
                 return Ok(Some(Value::Bool(true)));
             }
@@ -74,7 +78,7 @@ impl ObjectHeap {
 
         for (position, property) in properties.iter().enumerate().skip(start) {
             if let Some(property) = property
-                && property.value_ref() == search
+                && property.data_value_ref() == Some(search)
             {
                 return Self::array_index_value(position).map(Some);
             }
@@ -104,7 +108,7 @@ impl ObjectHeap {
 
         for (position, property) in properties.iter().enumerate().take(count).rev() {
             if let Some(property) = property
-                && property.value_ref() == search
+                && property.data_value_ref() == Some(search)
             {
                 return Self::array_index_value(position).map(Some);
             }
@@ -118,7 +122,7 @@ impl ObjectHeap {
         start: usize,
     ) -> Value {
         for property in properties.iter().skip(start).flatten() {
-            if let Value::Number(value) = property.value_ref()
+            if let Some(Value::Number(value)) = property.data_value_ref()
                 && Self::number_same_value_zero(*value, search)
             {
                 return Value::Bool(true);
@@ -134,7 +138,7 @@ impl ObjectHeap {
         for property in properties.iter().skip(start) {
             match property {
                 None => return Value::Bool(true),
-                Some(property) if matches!(property.value_ref(), Value::Undefined) => {
+                Some(property) if matches!(property.data_value_ref(), Some(Value::Undefined)) => {
                     return Value::Bool(true);
                 }
                 Some(_) => {}
@@ -150,7 +154,7 @@ impl ObjectHeap {
     ) -> Result<Value> {
         for (position, property) in properties.iter().enumerate().skip(start) {
             if let Some(property) = property
-                && let Value::Number(value) = property.value_ref()
+                && let Some(Value::Number(value)) = property.data_value_ref()
                 && Self::number_strict_equal(*value, search)
             {
                 return Self::array_index_value(position);
@@ -166,7 +170,7 @@ impl ObjectHeap {
     ) -> Result<Value> {
         for (position, property) in properties.iter().enumerate().take(count).rev() {
             if let Some(property) = property
-                && let Value::Number(value) = property.value_ref()
+                && let Some(Value::Number(value)) = property.data_value_ref()
                 && Self::number_strict_equal(*value, search)
             {
                 return Self::array_index_value(position);
@@ -197,7 +201,8 @@ impl ObjectHeap {
             let Some(property) = property else {
                 continue;
             };
-            Self::push_join_value_text(&mut joined, property.value_ref(), max_string_len)?;
+            let value = property.data_value_ref().unwrap_or(&Value::Undefined);
+            Self::push_join_value_text(&mut joined, value, max_string_len)?;
         }
         Ok(Some(joined))
     }

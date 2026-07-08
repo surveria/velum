@@ -1,4 +1,5 @@
 use crate::error::{Error, Result};
+use crate::syntax::AccessorKind;
 use crate::value::{ObjectId, Value};
 
 mod array;
@@ -15,10 +16,11 @@ pub use base::ObjectHeap;
 use property::NamedProperty;
 pub use property::ObjectPropertyInit;
 pub use property::{
-    CacheableNativePropertyValue, CacheablePropertyDelete, CacheablePropertyLookup,
-    CacheablePropertyPresence, CacheablePropertyValue, CacheablePropertyWrite,
-    DataPropertyDescriptor, DataPropertyUpdate, ObjectProperty, PropertyConfigurable,
-    PropertyEnumerable, PropertyKey, PropertyLookup, PropertyWritable,
+    AccessorPropertyUpdate, CacheableNativePropertyValue, CacheablePropertyDelete,
+    CacheablePropertyLookup, CacheablePropertyPresence, CacheablePropertyValue,
+    CacheablePropertyWrite, DataPropertyDescriptor, DataPropertyUpdate, ObjectProperty,
+    OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup,
+    PropertyUpdate, PropertyWritable,
 };
 use shape::{ShapeId, ShapeTable};
 
@@ -31,12 +33,27 @@ const PROTOTYPE_PROPERTY: &str = "__proto__";
 pub enum ObjectPropertyValue {
     Value(Value),
     StringCharacter(char),
+    /// An accessor property was found; the payload is its getter function,
+    /// which the caller must invoke with the original receiver as `this`.
+    Getter(Value),
 }
 
 impl ObjectPropertyValue {
     const fn value(value: Value) -> Self {
         Self::Value(value)
     }
+}
+
+/// How an assignment should proceed after resolving accessor properties on
+/// the receiver and its prototype chain.
+#[derive(Debug, Clone)]
+pub enum AccessorWriteDisposition {
+    /// No accessor property found; ordinary data-write semantics apply.
+    None,
+    /// An accessor with a setter intercepts the write.
+    Setter(Value),
+    /// A getter-only accessor swallows the write (sloppy-mode no-op).
+    NoSetter,
 }
 
 impl ObjectHeap {
@@ -51,6 +68,7 @@ impl ObjectHeap {
         let mut literal_prototype = None;
         for property in properties {
             let uses_literal_prototype = property.uses_literal_prototype();
+            let accessor = property.accessor_kind();
             let ObjectPropertyInit {
                 key, name, value, ..
             } = property;
@@ -58,6 +76,18 @@ impl ObjectHeap {
                 if let Some(prototype) = Object::literal_prototype(&value) {
                     literal_prototype = Some(prototype);
                 }
+            } else if let Some(kind) = accessor {
+                let (get, set) = match kind {
+                    AccessorKind::Getter => (Some(value), None),
+                    AccessorKind::Setter => (None, Some(value)),
+                };
+                let update = PropertyUpdate::Accessor(AccessorPropertyUpdate::new(
+                    get,
+                    set,
+                    Some(PropertyEnumerable::Yes),
+                    Some(PropertyConfigurable::Yes),
+                ));
+                object.define_property(key, name, update, &mut self.shapes, max_properties)?;
             } else {
                 object.set(key, name, value, &mut self.shapes, max_properties)?;
             }
@@ -505,8 +535,16 @@ impl Object {
         let Some(key) = property.key() else {
             return Ok(None);
         };
-        self.named_property(shapes, key)
-            .map(|property| property.map(|property| ObjectPropertyValue::value(property.value())))
+        let Some(named) = self.named_property(shapes, key)? else {
+            return Ok(None);
+        };
+        if let Some(accessor) = named.accessor() {
+            if accessor.has_getter() {
+                return Ok(Some(ObjectPropertyValue::Getter(accessor.get())));
+            }
+            return Ok(Some(ObjectPropertyValue::value(Value::Undefined)));
+        }
+        Ok(Some(ObjectPropertyValue::value(named.value())))
     }
 
     fn has_own(&self, property: PropertyLookup<'_>, shapes: &ShapeTable) -> Result<bool> {

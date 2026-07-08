@@ -1,5 +1,6 @@
 use crate::{
     storage::{atom::AtomId, symbol::SymbolId},
+    syntax::AccessorKind,
     value::Value,
 };
 
@@ -95,8 +96,32 @@ impl<'a> ObjectPropertyInit<'a> {
         }
     }
 
+    /// A getter or setter half of an accessor property; `value` carries the
+    /// accessor function.
+    pub const fn new_accessor(
+        key: PropertyKey,
+        name: &'a str,
+        function: Value,
+        accessor: AccessorKind,
+    ) -> Self {
+        Self {
+            key,
+            name,
+            value: function,
+            enumerable: PropertyEnumerable::Yes,
+            kind: ObjectPropertyInitKind::Accessor(accessor),
+        }
+    }
+
     pub(in crate::runtime::object) const fn uses_literal_prototype(&self) -> bool {
         matches!(self.kind, ObjectPropertyInitKind::Literal)
+    }
+
+    pub(in crate::runtime::object) const fn accessor_kind(&self) -> Option<AccessorKind> {
+        match self.kind {
+            ObjectPropertyInitKind::Accessor(kind) => Some(kind),
+            ObjectPropertyInitKind::Literal | ObjectPropertyInitKind::Data => None,
+        }
     }
 }
 
@@ -104,4 +129,5 @@ impl<'a> ObjectPropertyInit<'a> {
 enum ObjectPropertyInitKind {
     Literal,
     Data,
+    Accessor(AccessorKind),
 }
