@@ -269,3 +269,36 @@ fn symbol_to_primitive_uses_date_ordering() -> TestResult {
         "[Symbol.toPrimitive]|1|true|true|0|ordinary|s|7|v",
     )
 }
+
+#[test]
+fn annex_b_and_locale_date_methods_are_available() -> TestResult {
+    ensure_string(
+        r#"
+        const d = new Date(0);
+        const setYearReturn = d.setYear(99);
+        const invalid = new Date(NaN);
+        const invalidSetYear = invalid.setYear();
+        [
+            new Date(0).getYear(),
+            setYearReturn,
+            d.toISOString(),
+            invalidSetYear !== invalidSetYear,
+            invalid.getTime() !== invalid.getTime(),
+            Date.prototype.toGMTString === Date.prototype.toUTCString,
+            Date.prototype.toGMTString.name,
+            Date.prototype.toGMTString.length,
+            d.toLocaleString(),
+            d.toLocaleDateString(),
+            d.toLocaleTimeString(),
+            Date.prototype.toLocaleString.name,
+            Date.prototype.toLocaleDateString.name,
+            Date.prototype.toLocaleTimeString.name
+        ].join("|")
+        "#,
+        concat!(
+            "70|915148800000|1999-01-01T00:00:00.000Z|true|true|true|toUTCString|0|",
+            "Fri Jan 01 1999 00:00:00 GMT+0000 (UTC)|Fri Jan 01 1999|",
+            "00:00:00 GMT+0000 (UTC)|toLocaleString|toLocaleDateString|toLocaleTimeString"
+        ),
+    )
+}

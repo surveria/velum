@@ -126,7 +126,7 @@ fn finite_number_to_integer(value: f64) -> Result<i64> {
         .map_err(|error| Error::runtime(format!("failed to convert Date number: {error}")))
 }
 
-fn integer_to_number(value: i64) -> Result<f64> {
+pub(super) fn integer_to_number(value: i64) -> Result<f64> {
     value
         .to_string()
         .parse::<f64>()

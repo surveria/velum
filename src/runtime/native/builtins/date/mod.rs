@@ -1,19 +1,14 @@
 use crate::{
     error::{Error, Result},
-    runtime::{
-        Context,
-        call::RuntimeCallArgs,
-        object::{DateValue, PropertyEnumerable, PropertyKey},
-    },
-    value::{ErrorName, NativeFunctionId, ObjectId, Value},
+    runtime::{Context, call::RuntimeCallArgs, object::DateValue},
+    value::{ErrorName, ObjectId, Value},
 };
 
+mod install;
 mod setters;
 mod support;
 
-use crate::runtime::native::{
-    DATE_NAME, DATE_NOW_NAME, DATE_PARSE_NAME, DATE_UTC_NAME, DateFunctionKind, NativeFunctionKind,
-};
+use crate::runtime::native::{DATE_NAME, DateFunctionKind, NativeFunctionKind};
 
 use super::OBJECT_CONSTRUCTOR_PROPERTY;
 use support::{
@@ -29,7 +24,7 @@ const DATE_TO_PRIMITIVE_HINT_NUMBER: &str = "number";
 const DATE_TO_PRIMITIVE_HINT_STRING: &str = "string";
 const DATE_TO_PRIMITIVE_INVALID_HINT_ERROR: &str =
     "Date @@toPrimitive hint must be 'default', 'string', or 'number'";
-const SYMBOL_TO_PRIMITIVE_PROPERTY: &str = "toPrimitive";
+const DATE_YEAR_OFFSET: i64 = 1_900;
 
 impl Context {
     pub(in crate::runtime::native) fn date_constructor_value(&mut self) -> Result<Value> {
@@ -127,6 +122,9 @@ impl Context {
             DateFunctionKind::PrototypeGetFullYear => {
                 Some(self.eval_date_prototype_get_full_year(this_value))
             }
+            DateFunctionKind::PrototypeGetYear => {
+                Some(self.eval_date_prototype_get_year(this_value))
+            }
             DateFunctionKind::PrototypeGetHours => {
                 Some(self.eval_date_prototype_get_hours(this_value))
             }
@@ -192,6 +190,9 @@ impl Context {
             DateFunctionKind::PrototypeSetFullYear | DateFunctionKind::PrototypeSetUtcFullYear => {
                 Some(self.eval_date_prototype_set_full_year(args, this_value))
             }
+            DateFunctionKind::PrototypeSetYear => {
+                Some(self.eval_date_prototype_set_year(args, this_value))
+            }
             DateFunctionKind::PrototypeSetHours | DateFunctionKind::PrototypeSetUtcHours => {
                 Some(self.eval_date_prototype_set_hours(args, this_value))
             }
@@ -232,6 +233,15 @@ impl Context {
                 Some(self.eval_date_prototype_to_iso_string(this_value))
             }
             DateFunctionKind::PrototypeToJson => Some(self.eval_date_prototype_to_json(this_value)),
+            DateFunctionKind::PrototypeToLocaleDateString => {
+                Some(self.eval_date_prototype_to_locale_date_string(this_value))
+            }
+            DateFunctionKind::PrototypeToLocaleString => {
+                Some(self.eval_date_prototype_to_locale_string(this_value))
+            }
+            DateFunctionKind::PrototypeToLocaleTimeString => {
+                Some(self.eval_date_prototype_to_locale_time_string(this_value))
+            }
             DateFunctionKind::PrototypeToString => {
                 Some(self.eval_date_prototype_to_string(this_value))
             }
@@ -338,6 +348,22 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         self.eval_date_prototype_get_utc_full_year(this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_date_prototype_get_year(
+        &self,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let value = self.date_this_value(this_value)?;
+        let Some(ms) = value.millis() else {
+            return Ok(Value::Number(f64::NAN));
+        };
+        let parts = DateParts::from_millis(ms)?;
+        let year = parts
+            .year
+            .checked_sub(DATE_YEAR_OFFSET)
+            .ok_or_else(|| Error::runtime("Date getYear result overflowed"))?;
+        support::integer_to_number(year).map(Value::Number)
     }
 
     pub(in crate::runtime::native) fn eval_date_prototype_get_month(
@@ -461,6 +487,27 @@ impl Context {
         self.eval_date_prototype_to_iso_string(this_value)
     }
 
+    pub(in crate::runtime::native) fn eval_date_prototype_to_locale_string(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_date_prototype_to_string(this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_date_prototype_to_locale_date_string(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_date_prototype_to_date_string(this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_date_prototype_to_locale_time_string(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_date_prototype_to_time_string(this_value)
+    }
+
     pub(in crate::runtime::native) fn eval_date_prototype_to_string(
         &mut self,
         this_value: &Value,
@@ -528,77 +575,6 @@ impl Context {
             Value::Object(id) => Ok(id),
             _ => Err(Error::runtime("Date prototype is not an object")),
         }
-    }
-
-    fn install_date_static_methods(&mut self, constructor: NativeFunctionId) -> Result<()> {
-        self.define_date_static_method(
-            constructor,
-            DATE_NOW_NAME,
-            NativeFunctionKind::Date(DateFunctionKind::Now),
-        )?;
-        self.define_date_static_method(
-            constructor,
-            DATE_PARSE_NAME,
-            NativeFunctionKind::Date(DateFunctionKind::Parse),
-        )?;
-        self.define_date_static_method(
-            constructor,
-            DATE_UTC_NAME,
-            NativeFunctionKind::Date(DateFunctionKind::Utc),
-        )
-    }
-
-    fn define_date_static_method(
-        &mut self,
-        constructor: NativeFunctionId,
-        name: &str,
-        kind: NativeFunctionKind,
-    ) -> Result<()> {
-        let function = self.create_native_function(kind, Value::Undefined)?;
-        let key = self.intern_property_key(name)?;
-        self.native_function_mut(constructor)?
-            .properties_mut()
-            .define_builtin(key, function, PropertyEnumerable::No);
-        Ok(())
-    }
-
-    fn install_date_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
-        for kind in DATE_PROTOTYPE_METHODS {
-            self.define_date_prototype_method(prototype, NativeFunctionKind::Date(*kind))?;
-        }
-        self.define_date_prototype_symbol_to_primitive(prototype)?;
-        Ok(())
-    }
-
-    fn define_date_prototype_method(
-        &mut self,
-        prototype: ObjectId,
-        kind: NativeFunctionKind,
-    ) -> Result<()> {
-        let function = self.create_ephemeral_native_function(kind, Value::Undefined)?;
-        self.define_non_enumerable_object_property(prototype, kind.name(), function)
-    }
-
-    fn define_date_prototype_symbol_to_primitive(&mut self, prototype: ObjectId) -> Result<()> {
-        let key = self.date_well_known_symbol_property_key(SYMBOL_TO_PRIMITIVE_PROPERTY)?;
-        let kind = NativeFunctionKind::Date(DateFunctionKind::PrototypeSymbolToPrimitive);
-        let function = self.create_ephemeral_native_function(kind, Value::Undefined)?;
-        self.objects.define_non_enumerable(
-            prototype,
-            key,
-            kind.name(),
-            function,
-            self.limits.max_object_properties,
-        )
-    }
-
-    fn date_well_known_symbol_property_key(&mut self, property: &str) -> Result<PropertyKey> {
-        let constructor = self.symbol_constructor_value()?;
-        let value = self.get_property_value(&constructor, property)?;
-        let Value::Symbol(symbol) = value else {
-            return Err(Error::runtime("well-known Symbol property is not a symbol"));
-        };
-        Ok(PropertyKey::symbol(symbol.id()))
     }
 
     fn ordinary_to_primitive(&mut self, value: &Value, method_names: &[&str]) -> Result<Value> {
@@ -740,46 +716,3 @@ impl Context {
         format_date_time_string(value)
     }
 }
-
-const DATE_PROTOTYPE_METHODS: &[DateFunctionKind] = &[
-    DateFunctionKind::PrototypeGetTime,
-    DateFunctionKind::PrototypeValueOf,
-    DateFunctionKind::PrototypeGetUtcFullYear,
-    DateFunctionKind::PrototypeGetUtcMonth,
-    DateFunctionKind::PrototypeGetUtcDate,
-    DateFunctionKind::PrototypeGetUtcDay,
-    DateFunctionKind::PrototypeGetUtcHours,
-    DateFunctionKind::PrototypeGetUtcMinutes,
-    DateFunctionKind::PrototypeGetUtcSeconds,
-    DateFunctionKind::PrototypeGetUtcMilliseconds,
-    DateFunctionKind::PrototypeGetFullYear,
-    DateFunctionKind::PrototypeGetMonth,
-    DateFunctionKind::PrototypeGetDate,
-    DateFunctionKind::PrototypeGetDay,
-    DateFunctionKind::PrototypeGetHours,
-    DateFunctionKind::PrototypeGetMinutes,
-    DateFunctionKind::PrototypeGetSeconds,
-    DateFunctionKind::PrototypeGetMilliseconds,
-    DateFunctionKind::PrototypeGetTimezoneOffset,
-    DateFunctionKind::PrototypeSetFullYear,
-    DateFunctionKind::PrototypeSetUtcFullYear,
-    DateFunctionKind::PrototypeSetMonth,
-    DateFunctionKind::PrototypeSetUtcMonth,
-    DateFunctionKind::PrototypeSetDate,
-    DateFunctionKind::PrototypeSetUtcDate,
-    DateFunctionKind::PrototypeSetHours,
-    DateFunctionKind::PrototypeSetUtcHours,
-    DateFunctionKind::PrototypeSetMinutes,
-    DateFunctionKind::PrototypeSetUtcMinutes,
-    DateFunctionKind::PrototypeSetSeconds,
-    DateFunctionKind::PrototypeSetUtcSeconds,
-    DateFunctionKind::PrototypeSetMilliseconds,
-    DateFunctionKind::PrototypeSetUtcMilliseconds,
-    DateFunctionKind::PrototypeSetTime,
-    DateFunctionKind::PrototypeToIsoString,
-    DateFunctionKind::PrototypeToJson,
-    DateFunctionKind::PrototypeToString,
-    DateFunctionKind::PrototypeToUtcString,
-    DateFunctionKind::PrototypeToDateString,
-    DateFunctionKind::PrototypeToTimeString,
-];

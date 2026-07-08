@@ -55,3 +55,15 @@ print(
   ordinaryNumber,
   order
 );
+
+let annex = new Date(0);
+let setYearReturn = annex.setYear(99);
+print(
+  new Date(0).getYear(),
+  setYearReturn,
+  annex.toISOString(),
+  Date.prototype.toGMTString === Date.prototype.toUTCString,
+  Date.prototype.toGMTString.name,
+  Date.prototype.toGMTString.length,
+  annex.toGMTString()
+);

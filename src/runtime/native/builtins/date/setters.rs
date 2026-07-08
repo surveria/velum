@@ -6,7 +6,7 @@ use crate::{
 
 use super::support::{
     DateParts, date_value_to_number, integer_component, integer_component_with_default,
-    make_date_value,
+    make_date_value, normalize_component_year,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -27,6 +27,30 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         self.eval_date_prototype_set_component(args, this_value, DateSetterKind::FullYear)
+    }
+
+    pub(in crate::runtime::native) fn eval_date_prototype_set_year(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let (id, current) = self.date_this_object_value(this_value)?;
+        let Some(year) = integer_component(args.as_slice().first())? else {
+            self.objects.set_date_value(id, DateValue::Invalid)?;
+            return Ok(Value::Number(f64::NAN));
+        };
+        let parts = Self::date_parts_or_epoch(current)?;
+        let date = make_date_value(
+            normalize_component_year(year),
+            parts.month,
+            parts.date,
+            parts.hour,
+            parts.minute,
+            parts.second,
+            parts.millisecond,
+        );
+        self.objects.set_date_value(id, date)?;
+        date_value_to_number(date).map(Value::Number)
     }
 
     pub(in crate::runtime::native) fn eval_date_prototype_set_month(

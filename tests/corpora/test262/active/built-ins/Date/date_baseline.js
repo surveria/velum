@@ -131,4 +131,32 @@ if (invalidHintError !== "TypeError") {
   throw new Test262Error("Date @@toPrimitive invalid hint must throw TypeError");
 }
 
+if (new Date(0).getYear() !== 70) {
+  throw new Test262Error("Date.prototype.getYear mismatch");
+}
+var setYearDate = new Date(0);
+if (setYearDate.setYear(99) !== Date.UTC(1999, 0, 1) || setYearDate.toISOString() !== "1999-01-01T00:00:00.000Z") {
+  throw new Test262Error("Date.prototype.setYear mismatch");
+}
+var setYearInvalid = new Date(NaN);
+var setYearInvalidResult = setYearInvalid.setYear();
+if (setYearInvalidResult === setYearInvalidResult || setYearInvalid.getTime() === setYearInvalid.getTime()) {
+  throw new Test262Error("Date.prototype.setYear invalid argument mismatch");
+}
+if (Date.prototype.toGMTString !== Date.prototype.toUTCString) {
+  throw new Test262Error("Date.prototype.toGMTString alias mismatch");
+}
+if (setYearDate.toLocaleString() !== setYearDate.toString()) {
+  throw new Test262Error("Date.prototype.toLocaleString UTC-local mismatch");
+}
+if (setYearDate.toLocaleDateString() !== setYearDate.toDateString()) {
+  throw new Test262Error("Date.prototype.toLocaleDateString UTC-local mismatch");
+}
+if (setYearDate.toLocaleTimeString() !== setYearDate.toTimeString()) {
+  throw new Test262Error("Date.prototype.toLocaleTimeString UTC-local mismatch");
+}
+if (Date.prototype.toLocaleString.length !== 0 || Date.prototype.toLocaleDateString.length !== 0 || Date.prototype.toLocaleTimeString.length !== 0) {
+  throw new Test262Error("Date.prototype.toLocale* length mismatch");
+}
+
 42;
