@@ -111,6 +111,24 @@ impl ObjectHeap {
         Ok(value)
     }
 
+    /// Set the length of a dense array, deleting any elements at or beyond the
+    /// new length when shrinking and creating trailing holes when growing.
+    pub(crate) fn set_array_length(&mut self, id: ObjectId, new_length: usize) -> Result<()> {
+        let Some(current) = self.array_len_if_array(id)? else {
+            return Err(Error::runtime(
+                "set_array_length requires an array receiver",
+            ));
+        };
+        if new_length < current {
+            for index in (new_length..current).rev() {
+                let array_index = ArrayIndex::from_usize(index)?;
+                self.delete_array_index(id, array_index)?;
+            }
+        }
+        self.object_mut(id)?.array_length = Some(ArrayLength::from_usize(new_length)?);
+        Ok(())
+    }
+
     pub(crate) fn array_slice(
         &mut self,
         id: ObjectId,
