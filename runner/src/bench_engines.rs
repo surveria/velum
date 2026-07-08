@@ -15,11 +15,11 @@ const BENCH_RUNTIME_LIMITS: RuntimeLimits = RuntimeLimits {
     max_source_len: 262_144,
     max_statements: 65_536,
     max_expression_depth: 512,
-    max_runtime_steps: 10_000_000,
+    max_runtime_steps: 100_000_000,
     max_string_len: 1_048_576,
     max_bindings: 65_536,
-    max_objects: 262_144,
-    max_object_properties: 262_144,
+    max_objects: 1_000_000,
+    max_object_properties: 1_000_000,
 };
 
 /// A JavaScript engine that can evaluate a source string in a fresh top-level

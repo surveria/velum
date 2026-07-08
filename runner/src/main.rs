@@ -17,17 +17,18 @@ mod benchmarks;
 mod build_info;
 mod cases;
 mod failure_classification;
+mod jetstream;
 #[cfg(test)]
 mod report_formatting_tests;
 mod report_metadata;
 mod report_rollup;
+mod runner_cli;
 mod test262_external;
 mod test262_full;
 mod test262_metadata;
 use cases::{DifferentialCase, EngineCase, Expectation};
+use runner_cli::{Config, print_rollup_outputs};
 
-const USAGE: &str =
-    "usage: rsqjs-test-runner --report <path> | --benchmarks <path> | --aggregate-reports <dir>";
 const STATUS_PASSED: &str = "✅ passed";
 const STATUS_FAILED: &str = "❌ failed";
 const STATUS_SKIPPED: &str = "🟡 skipped";
@@ -43,6 +44,7 @@ const COVERAGE_SCALE: usize = 1_000_000;
 const COVERAGE_MINOR_SCALE: usize = 10_000;
 const QUICKJS_ENV: &str = "RSQJS_QUICKJS";
 const TEST262_ENV: &str = "RSQJS_TEST262_DIR";
+const JETSTREAM_REPORT_ENV: &str = "RSQJS_JETSTREAM_REPORT_PATH";
 
 const REASON_MATCHED: &str = "matched expected behavior";
 const REASON_QUICKJS_ENV_MISSING: &str = "set RSQJS_QUICKJS=/path/to/qjs to enable";
@@ -74,6 +76,7 @@ fn run() -> anyhow::Result<()> {
     let test262 = env::var_os(TEST262_ENV).map(PathBuf::from);
     let report = build_report(quickjs.as_deref(), test262.as_deref());
     write_report(&report_path, &report)?;
+    write_jetstream_report_from_env(&report)?;
     let outputs = report_rollup::generate_from_report_path(&report_path)?;
     print_rollup_outputs(&outputs);
 
@@ -88,59 +91,11 @@ fn run() -> anyhow::Result<()> {
     )
 }
 
-#[derive(Debug)]
-enum Config {
-    Run { report_path: PathBuf },
-    Benchmarks { report_path: PathBuf },
-    AggregateReports { report_dir: PathBuf },
-}
-
-impl Config {
-    fn from_args(mut args: impl Iterator<Item = String>) -> anyhow::Result<Self> {
-        let Some(flag) = args.next() else {
-            bail!("{USAGE}");
-        };
-        if flag == "--aggregate-reports" {
-            let report_dir = args
-                .next()
-                .context("missing directory after --aggregate-reports")?;
-            if let Some(extra) = args.next() {
-                bail!("unexpected argument '{extra}'; {USAGE}");
-            }
-            return Ok(Self::AggregateReports {
-                report_dir: PathBuf::from(report_dir),
-            });
-        }
-        if flag == "--benchmarks" {
-            let report_path = args.next().context("missing path after --benchmarks")?;
-            if let Some(extra) = args.next() {
-                bail!("unexpected argument '{extra}'; {USAGE}");
-            }
-            return Ok(Self::Benchmarks {
-                report_path: PathBuf::from(report_path),
-            });
-        }
-        if flag != "--report" {
-            bail!("unknown argument '{flag}'; {USAGE}");
-        }
-
-        let report_path = args.next().context("missing path after --report")?;
-        if let Some(extra) = args.next() {
-            bail!("unexpected argument '{extra}'; {USAGE}");
-        }
-
-        Ok(Self::Run {
-            report_path: PathBuf::from(report_path),
-        })
-    }
-}
-
-fn print_rollup_outputs(outputs: &report_rollup::RollupOutputs) {
-    println!("benchmark rollup: {}", outputs.markdown.display());
-    println!(
-        "benchmark summary chart: {}",
-        outputs.summary_chart.display()
-    );
+fn write_jetstream_report_from_env(report: &FullReport) -> anyhow::Result<()> {
+    let Some(path) = env::var_os(JETSTREAM_REPORT_ENV) else {
+        return Ok(());
+    };
+    jetstream::write_report(Path::new(&path), &report.metadata, &report.jetstream)
 }
 
 #[derive(Debug)]
@@ -148,6 +103,7 @@ struct FullReport {
     metadata: report_metadata::RunMetadata,
     corpora: Vec<CorpusReport>,
     benchmarks: benchmarks::BenchmarkReport,
+    jetstream: jetstream::JetStreamReport,
 }
 
 impl FullReport {
@@ -158,7 +114,9 @@ impl FullReport {
             .filter(|corpus| corpus.required)
             .map(CorpusReport::failed)
             .fold(0usize, usize::saturating_add);
-        corpus_failures.saturating_add(self.benchmarks.failed)
+        corpus_failures
+            .saturating_add(self.benchmarks.failed)
+            .saturating_add(self.jetstream.failed)
     }
 }
 
@@ -377,10 +335,12 @@ fn build_report(quickjs: Option<&Path>, test262: Option<&Path>) -> FullReport {
     corpora.extend(test262_full::run_reports(test262));
     corpora.push(run_quickjs_corpus(quickjs));
     let benchmarks = benchmarks::run();
+    let jetstream = jetstream::run();
     FullReport {
         metadata: report_metadata::RunMetadata::from_env(),
         corpora,
         benchmarks,
+        jetstream,
     }
 }
 
@@ -658,6 +618,7 @@ fn render_report(report: &FullReport) -> String {
     sections.push(String::new());
     sections.push(fenced_table(&Table::new(&report.benchmarks.rows)));
     sections.push(String::new());
+    sections.extend(jetstream::render_section(&report.jetstream));
     sections.join("\n")
 }
 

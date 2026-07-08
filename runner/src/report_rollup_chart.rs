@@ -14,7 +14,7 @@ use super::ReportRecord;
 
 const BUDGET_RATIO: f64 = 1.00;
 const CHART_WIDTH: u32 = 1400;
-const CHART_HEIGHT: u32 = 900;
+const CHART_HEIGHT: u32 = 1200;
 const RGB_CHANNELS: usize = 3;
 
 pub(super) fn write_chart(records: &[ReportRecord], path: &Path) -> anyhow::Result<()> {
@@ -30,10 +30,12 @@ pub(super) fn write_chart(records: &[ReportRecord], path: &Path) -> anyhow::Resu
             .into_drawing_area();
         root.fill(&WHITE)
             .map_err(|error| anyhow!("failed to fill chart background: {error:?}"))?;
-        let mut areas = root.split_evenly((2, 1)).into_iter();
+        let mut areas = root.split_evenly((3, 1)).into_iter();
         let ratio_area = areas.next().context("missing ratio chart area")?;
+        let jetstream_area = areas.next().context("missing JetStream chart area")?;
         let test_area = areas.next().context("missing test coverage chart area")?;
         draw_ratio_panel(&ratio_area, records)?;
+        draw_jetstream_panel(&jetstream_area, records)?;
         draw_test_panel(&test_area, records)?;
         root.present()
             .map_err(|error| anyhow!("failed to render chart: {error:?}"))?;
@@ -43,6 +45,54 @@ pub(super) fn write_chart(records: &[ReportRecord], path: &Path) -> anyhow::Resu
     image
         .save_with_format(path, ImageFormat::Jpeg)
         .with_context(|| format!("failed to write chart '{}'", path.display()))
+}
+
+fn draw_jetstream_panel(
+    area: &DrawingArea<BitMapBackend<'_>, Shift>,
+    records: &[ReportRecord],
+) -> anyhow::Result<()> {
+    let points = jetstream_points(records)?;
+    if points.is_empty() {
+        return draw_empty_panel(
+            area,
+            "JetStream shell score geomean versus QuickJS",
+            "No JetStream score data available",
+        );
+    }
+    let values = points.iter().map(|point| point.score);
+    let bounds = chart_bounds(values, BUDGET_RATIO)?;
+    let x_end = x_axis_end(points.len())?;
+    let mut chart = ChartBuilder::on(area)
+        .caption(
+            "JetStream shell score geomean versus QuickJS",
+            ("sans-serif", 30).into_font(),
+        )
+        .margin(18)
+        .x_label_area_size(34)
+        .y_label_area_size(60)
+        .build_cartesian_2d(0..x_end, bounds)
+        .map_err(|error| anyhow!("failed to build JetStream chart: {error:?}"))?;
+    chart
+        .configure_mesh()
+        .x_desc("measured report order")
+        .y_desc("score ratio")
+        .draw()
+        .map_err(|error| anyhow!("failed to draw JetStream chart mesh: {error:?}"))?;
+    draw_budget_line(&mut chart, x_end)?;
+    chart
+        .draw_series(LineSeries::new(
+            points.iter().map(|point| (point.x, point.score)),
+            CYAN.stroke_width(3),
+        ))
+        .map_err(|error| anyhow!("failed to draw JetStream chart series: {error:?}"))?
+        .label("JetStream score geomean")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 24, y)], CYAN.stroke_width(3)));
+    chart
+        .configure_series_labels()
+        .background_style(WHITE.mix(0.85))
+        .border_style(BLACK)
+        .draw()
+        .map_err(|error| anyhow!("failed to draw JetStream chart legend: {error:?}"))
 }
 
 fn draw_ratio_panel(
@@ -209,6 +259,12 @@ struct RatioPoint {
 }
 
 #[derive(Debug, Clone, Copy)]
+struct JetStreamPoint {
+    x: i32,
+    score: f64,
+}
+
+#[derive(Debug, Clone, Copy)]
 struct TestPoint {
     x: i32,
     passed: f64,
@@ -225,6 +281,20 @@ fn ratio_points(records: &[ReportRecord]) -> anyhow::Result<Vec<RatioPoint>> {
             x: i32::try_from(points.len()).context("too many reports to plot")?,
             performance: record.latency_geomean,
             memory: record.memory_geomean,
+        });
+    }
+    Ok(points)
+}
+
+fn jetstream_points(records: &[ReportRecord]) -> anyhow::Result<Vec<JetStreamPoint>> {
+    let mut points = Vec::new();
+    for record in records {
+        let Some(score) = record.jetstream_score_geomean else {
+            continue;
+        };
+        points.push(JetStreamPoint {
+            x: i32::try_from(points.len()).context("too many reports to plot")?,
+            score,
         });
     }
     Ok(points)
