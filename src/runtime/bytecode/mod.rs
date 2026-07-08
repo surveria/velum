@@ -77,6 +77,7 @@ impl Context {
             | BytecodeInstruction::Unary(_)
             | BytecodeInstruction::NumberUnary(_)
             | BytecodeInstruction::Await
+            | BytecodeInstruction::NullishCoalescing { .. }
             | BytecodeInstruction::TypeOfBinding(_)
             | BytecodeInstruction::TypeOfValue => {
                 self.eval_bytecode_stack_instruction(state, instruction, next)
@@ -97,6 +98,7 @@ impl Context {
             | BytecodeInstruction::CompoundStaticProperty { .. }
             | BytecodeInstruction::CompoundArrayIndexProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. }
+            | BytecodeInstruction::LogicalAssignment { .. }
             | BytecodeInstruction::StaticMember { .. }
             | BytecodeInstruction::ArrayLength { .. }
             | BytecodeInstruction::ArrayIndexMember { .. }
@@ -225,6 +227,15 @@ impl Context {
                 self.eval_bytecode_unary_instruction(state, instruction, next)
             }
             BytecodeInstruction::Await => self.eval_bytecode_await_instruction(state, next),
+            BytecodeInstruction::NullishCoalescing { right } => {
+                let left = state.stack.peek()?.clone();
+                if matches!(left, Value::Undefined | Value::Null) {
+                    state.stack.pop()?;
+                    state.stack.push(self.eval_bytecode_expression(right)?);
+                }
+                state.pc = next;
+                Ok(None)
+            }
             BytecodeInstruction::TypeOfBinding(binding) => {
                 state
                     .stack
@@ -339,6 +350,7 @@ impl Context {
             | BytecodeInstruction::CompoundStaticProperty { .. }
             | BytecodeInstruction::CompoundArrayIndexProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. }
+            | BytecodeInstruction::LogicalAssignment { .. }
             | BytecodeInstruction::StaticMember { .. }
             | BytecodeInstruction::ArrayLength { .. }
             | BytecodeInstruction::ArrayIndexMember { .. }
@@ -548,6 +560,13 @@ impl Context {
             | BytecodeInstruction::CompoundArrayIndexProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. } => {
                 self.eval_bytecode_compound_member_instruction(state, instruction, next)
+            }
+            BytecodeInstruction::LogicalAssignment { op, target, value } => {
+                state
+                    .stack
+                    .push(self.eval_bytecode_logical_assignment(*op, target, value)?);
+                state.pc = next;
+                Ok(None)
             }
             BytecodeInstruction::StaticMember { property } => {
                 self.eval_bytecode_static_member_instruction(state, property, next)

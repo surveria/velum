@@ -261,6 +261,7 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::Unary(_)
             | BytecodeInstruction::NumberUnary(_)
             | BytecodeInstruction::Await
+            | BytecodeInstruction::NullishCoalescing { .. }
             | BytecodeInstruction::TypeOfBinding(_)
             | BytecodeInstruction::TypeOfValue
             | BytecodeInstruction::DeleteBinding(_)
@@ -279,6 +280,7 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::CompoundStaticProperty { .. }
             | BytecodeInstruction::CompoundArrayIndexProperty { .. }
             | BytecodeInstruction::CompoundComputedProperty { .. }
+            | BytecodeInstruction::LogicalAssignment { .. }
             | BytecodeInstruction::StaticMember { .. }
             | BytecodeInstruction::ArrayLength { .. }
             | BytecodeInstruction::ArrayIndexMember { .. }

@@ -49,6 +49,7 @@ pub enum BinaryOp {
     ShiftRightUnsigned,
     LogicalAnd,
     LogicalOr,
+    NullishCoalescing,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

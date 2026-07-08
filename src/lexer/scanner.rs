@@ -84,7 +84,7 @@ impl<'a> Lexer<'a> {
                 '*' => self.star_or_power(offset),
                 '/' => self.slash_or_regexp(offset)?,
                 '%' => self.simple_or_equal(offset, TokenKind::Percent, TokenKind::PercentEqual),
-                '?' => self.simple(TokenKind::Question),
+                '?' => self.question_token(offset),
                 ':' => self.simple(TokenKind::Colon),
                 '.' if matches!(self.peek_next_char(), Some('0'..='9')) => {
                     self.leading_decimal_number(offset)?;
@@ -822,7 +822,11 @@ impl<'a> Lexer<'a> {
     fn ampersand_token(&mut self, offset: usize) {
         self.advance();
         if self.match_char('&') {
-            self.push(TokenKind::AndAnd, offset);
+            if self.match_char('=') {
+                self.push(TokenKind::AndAndEqual, offset);
+            } else {
+                self.push(TokenKind::AndAnd, offset);
+            }
         } else if self.match_char('=') {
             self.push(TokenKind::AmpersandEqual, offset);
         } else {
@@ -833,11 +837,28 @@ impl<'a> Lexer<'a> {
     fn pipe_token(&mut self, offset: usize) {
         self.advance();
         if self.match_char('|') {
-            self.push(TokenKind::OrOr, offset);
+            if self.match_char('=') {
+                self.push(TokenKind::OrOrEqual, offset);
+            } else {
+                self.push(TokenKind::OrOr, offset);
+            }
         } else if self.match_char('=') {
             self.push(TokenKind::PipeEqual, offset);
         } else {
             self.push(TokenKind::Pipe, offset);
+        }
+    }
+
+    fn question_token(&mut self, offset: usize) {
+        self.advance();
+        if self.match_char('?') {
+            if self.match_char('=') {
+                self.push(TokenKind::QuestionQuestionEqual, offset);
+            } else {
+                self.push(TokenKind::QuestionQuestion, offset);
+            }
+        } else {
+            self.push(TokenKind::Question, offset);
         }
     }
 

@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use super::{
-    ARRAY_LENGTH_PROPERTY, AccessorKind, BinaryOp, BytecodeCompiler, BytecodeInstruction,
-    BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
-    BytecodeNumericUnaryOp, BytecodeObjectProperty, Error, Expr, NativeCallTarget, ObjectProperty,
-    ObjectPropertyKey, ObjectPropertyKind, Result, StaticBinding, StaticName,
-    StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp, checked_template_part_count,
-    constructor_binding_expr, has_spread_arg,
+    ARRAY_LENGTH_PROPERTY, AccessorKind, BinaryOp, BytecodeBlock, BytecodeCompiler,
+    BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
+    BytecodeNumericEqualityOp, BytecodeNumericUnaryOp, BytecodeObjectProperty, Error, Expr,
+    NativeCallTarget, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, Result, StaticBinding,
+    StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
+    checked_template_part_count, constructor_binding_expr, has_spread_arg,
 };
 
 impl BytecodeCompiler<'_> {
@@ -307,6 +307,7 @@ impl BytecodeCompiler<'_> {
         match op {
             BinaryOp::LogicalAnd => self.compile_logical_and(left, right),
             BinaryOp::LogicalOr => self.compile_logical_or(left, right),
+            BinaryOp::NullishCoalescing => self.compile_nullish_coalescing(left, right),
             _ => {
                 self.compile_expr(left)?;
                 self.compile_expr(right)?;
@@ -340,6 +341,14 @@ impl BytecodeCompiler<'_> {
         self.compile_expr(right)?;
         let end = self.current_address();
         self.patch_jump(end_jump, end)
+    }
+
+    fn compile_nullish_coalescing(&mut self, left: &Expr, right: &Expr) -> Result<()> {
+        self.compile_expr(left)?;
+        self.emit(BytecodeInstruction::NullishCoalescing {
+            right: BytecodeBlock::compile_expression(right, self.layout)?,
+        });
+        Ok(())
     }
 
     fn compile_logical_or(&mut self, left: &Expr, right: &Expr) -> Result<()> {
@@ -409,6 +418,18 @@ impl BytecodeCompiler<'_> {
         target: &Expr,
         expr: &Expr,
     ) -> Result<()> {
+        if matches!(
+            op,
+            BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing
+        ) {
+            let target = self.compile_assignment_target(target)?;
+            self.emit(BytecodeInstruction::LogicalAssignment {
+                op,
+                target,
+                value: BytecodeBlock::compile_expression(expr, self.layout)?,
+            });
+            return Ok(());
+        }
         match target {
             Expr::Identifier(name) => {
                 self.compile_expr(expr)?;

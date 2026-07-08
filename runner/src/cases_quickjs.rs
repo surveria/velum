@@ -102,6 +102,8 @@ const PATH_QUICKJS_COMPOUND_ASSIGNMENT: &str =
     "tests/corpora/quickjs_differential/active/compound_assignment.js";
 const PATH_QUICKJS_COMPOUND_ASSIGNMENT_EXTENDED: &str =
     "tests/corpora/quickjs_differential/active/compound_assignment_extended.js";
+const PATH_QUICKJS_NULLISH_LOGICAL_ASSIGNMENT: &str =
+    "tests/corpora/quickjs_differential/active/nullish_logical_assignment.js";
 const PATH_QUICKJS_EXPONENTIATION_PARENTHESES: &str =
     "tests/corpora/quickjs_differential/active/exponentiation_parentheses.js";
 const PATH_QUICKJS_IN_OPERATOR: &str = "tests/corpora/quickjs_differential/active/in_operator.js";
@@ -128,6 +130,7 @@ pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
     let mut cases = quickjs_language_cases();
     cases.extend(quickjs_control_flow_cases());
     cases.extend(quickjs_object_cases());
+    cases.extend(quickjs_operator_expression_cases());
     cases.extend(quickjs_runtime_cases());
     cases
 }
@@ -340,6 +343,11 @@ fn quickjs_object_cases() -> Vec<DifferentialCase> {
             id: "array_prototype_slice",
             path: PATH_QUICKJS_ARRAY_PROTOTYPE_SLICE,
         },
+    ]
+}
+
+fn quickjs_operator_expression_cases() -> Vec<DifferentialCase> {
+    vec![
         DifferentialCase {
             id: "unary_operators",
             path: PATH_QUICKJS_UNARY_OPERATORS,
@@ -355,6 +363,10 @@ fn quickjs_object_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "compound_assignment_extended",
             path: PATH_QUICKJS_COMPOUND_ASSIGNMENT_EXTENDED,
+        },
+        DifferentialCase {
+            id: "nullish_logical_assignment",
+            path: PATH_QUICKJS_NULLISH_LOGICAL_ASSIGNMENT,
         },
         DifferentialCase {
             id: "exponentiation_parentheses",
