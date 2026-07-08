@@ -114,20 +114,22 @@ fn supports_array_last_index_of_method() -> TestResult {
 }
 
 #[test]
-fn rejects_array_last_index_of_on_non_array_receiver() -> TestResult {
+fn supports_array_last_index_of_on_array_like_objects() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
 
-    let Err(error) = context.eval(
-        r"
-        let object = {};
-        object.lastIndexOf = Array.prototype.lastIndexOf;
-        object.lastIndexOf(1);
-        ",
-    ) else {
-        return Err("expected Array.prototype.lastIndexOf on non-array receiver to fail".into());
-    };
-    ensure_error_contains(&error, "requires an array receiver")
+    let value = context.eval(
+        r#"
+        let object = { length: 5, 0: "a", 2: "a", 4: "a" };
+        let last = Array.prototype.lastIndexOf.call(object, "a");
+        let fromMiddle = Array.prototype.lastIndexOf.call(object, "a", 3);
+        let fromNegative = Array.prototype.lastIndexOf.call(object, "a", -4);
+        let missing = Array.prototype.lastIndexOf.call(object, undefined);
+        last === 4 && fromMiddle === 2 && fromNegative === 0 && missing === -1 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
@@ -149,13 +151,4 @@ fn ensure_output(actual: &[String], expected: &[&str]) -> TestResult {
         }
     }
     Ok(())
-}
-
-fn ensure_error_contains(error: &rs_quickjs::Error, text: &str) -> TestResult {
-    let message = error.to_string();
-    if message.contains(text) {
-        return Ok(());
-    }
-
-    Err(format!("expected error containing '{text}', got '{message}'").into())
 }

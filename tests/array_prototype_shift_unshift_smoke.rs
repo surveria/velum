@@ -123,33 +123,30 @@ fn supports_array_shift_and_unshift_methods() -> TestResult {
 }
 
 #[test]
-fn rejects_shift_and_unshift_on_non_array_receivers() -> TestResult {
+fn supports_shift_and_unshift_on_array_like_objects() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
 
-    let Err(shift_error) = context.eval(
-        r"
-        let object = {};
-        object.shift = Array.prototype.shift;
-        object.shift();
-        ",
-    ) else {
-        return Err("expected Array.prototype.shift on non-array receiver to fail".into());
-    };
-    ensure_error_contains(&shift_error, "requires an array receiver")?;
+    let value = context.eval(
+        r#"
+        let shifted = { length: 3, 0: "a", 2: "c" };
+        let first = Array.prototype.shift.call(shifted);
+        let unshifted = { length: 2, 1: "tail" };
+        let newLength = Array.prototype.unshift.call(unshifted, "head");
+        first === "a" &&
+            shifted.length === 2 &&
+            !("0" in shifted) &&
+            shifted[1] === "c" &&
+            !("2" in shifted) &&
+            newLength === 3 &&
+            unshifted.length === 3 &&
+            unshifted[0] === "head" &&
+            !("1" in unshifted) &&
+            unshifted[2] === "tail" ? 42 : 0
+        "#,
+    )?;
 
-    let runtime = Runtime::new();
-    let mut context = runtime.context();
-    let Err(unshift_error) = context.eval(
-        r"
-        let object = {};
-        object.unshift = Array.prototype.unshift;
-        object.unshift(1);
-        ",
-    ) else {
-        return Err("expected Array.prototype.unshift on non-array receiver to fail".into());
-    };
-    ensure_error_contains(&unshift_error, "requires an array receiver")
+    ensure_value(&value, &Value::Number(42.0))
 }
 
 #[test]
@@ -250,13 +247,4 @@ fn ensure_output(actual: &[String], expected: &[&str]) -> TestResult {
         }
     }
     Ok(())
-}
-
-fn ensure_error_contains(error: &rs_quickjs::Error, text: &str) -> TestResult {
-    let message = error.to_string();
-    if message.contains(text) {
-        return Ok(());
-    }
-
-    Err(format!("expected error containing '{text}', got '{message}'").into())
 }

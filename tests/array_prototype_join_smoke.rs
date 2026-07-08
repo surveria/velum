@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use rs_quickjs::{Runtime, RuntimeLimits, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -71,20 +71,37 @@ fn supports_array_join_method() -> TestResult {
 }
 
 #[test]
-fn rejects_array_join_on_non_array_receiver() -> TestResult {
+fn supports_array_join_on_array_like_objects() -> TestResult {
     let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let object = { length: 4, 0: "a", 2: null, 3: "d" };
+        Array.prototype.join.call(object, "|") === "a|||d" ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn limits_generic_array_join_on_large_array_like_lengths() -> TestResult {
+    let runtime = Runtime::with_limits(RuntimeLimits {
+        max_runtime_steps: 128,
+        ..RuntimeLimits::default()
+    });
     let mut context = runtime.context();
 
     let Err(error) = context.eval(
         r"
-        let object = {};
-        object.join = Array.prototype.join;
-        object.join('|');
+        Array.prototype.join.call({ length: 1000 }, ',');
         ",
     ) else {
-        return Err("expected Array.prototype.join on non-array receiver to fail".into());
+        return Err("expected generic Array.prototype.join to hit runtime step limit".into());
     };
-    ensure_error_contains(&error, "requires an array receiver")
+
+    ensure_error_contains(&error, "runtime steps")
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

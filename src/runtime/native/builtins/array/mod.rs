@@ -8,6 +8,8 @@ use crate::{
 
 use super::{ARRAY_NAME, NativeFunctionKind};
 
+mod generic;
+
 const ARRAY_JOIN_DEFAULT_SEPARATOR: &str = ",";
 const ARRAY_PROTOTYPE_CONCAT_PROPERTY: &str = "concat";
 const ARRAY_PROTOTYPE_INCLUDES_PROPERTY: &str = "includes";
@@ -116,13 +118,14 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let Value::Object(id) = this_value else {
-            return Err(Error::runtime(
-                "Array.prototype.push requires an array receiver",
-            ));
-        };
-        self.objects
-            .array_push(*id, args, self.limits.max_object_properties)
+        if let Value::Object(id) = this_value
+            && self.objects.array_len_if_array(*id)?.is_some()
+        {
+            return self
+                .objects
+                .array_push(*id, args, self.limits.max_object_properties);
+        }
+        self.generic_array_push(args, this_value)
     }
 
     pub(in crate::runtime::native) fn eval_array_concat(
@@ -167,13 +170,14 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         Self::eval_array_discard_args(args);
-        let Value::Object(id) = this_value else {
-            return Err(Error::runtime(
-                "Array.prototype.reverse requires an array receiver",
-            ));
-        };
-        self.objects
-            .array_reverse(*id, self.limits.max_object_properties)
+        if let Value::Object(id) = this_value
+            && self.objects.array_len_if_array(*id)?.is_some()
+        {
+            return self
+                .objects
+                .array_reverse(*id, self.limits.max_object_properties);
+        }
+        self.generic_array_reverse(this_value)
     }
 
     pub(in crate::runtime::native) fn eval_array_pop(
@@ -190,16 +194,16 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         Self::eval_array_discard_args(args);
-        let Value::Object(id) = this_value else {
-            return Err(Error::runtime(
-                "Array.prototype.pop requires an array receiver",
-            ));
-        };
-        self.objects.array_pop(*id)
+        if let Value::Object(id) = this_value
+            && self.objects.array_len_if_array(*id)?.is_some()
+        {
+            return self.objects.array_pop(*id);
+        }
+        self.generic_array_pop(this_value)
     }
 
     pub(in crate::runtime::native) fn eval_array_includes(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
@@ -207,26 +211,25 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_direct_array_includes(
-        &self,
+        &mut self,
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
         let (search, from_index) = Self::eval_array_binary_values(args);
-        let Value::Object(id) = this_value else {
-            return Err(Error::runtime(
-                "Array.prototype.includes requires an array receiver",
-            ));
-        };
-
-        let length = self.objects.array_len_for_includes(*id)?;
-        let from_index = Self::array_slice_bound(from_index, length, 0)?;
         let default_search = Value::Undefined;
         let search = search.unwrap_or(&default_search);
-        self.objects.array_includes(*id, length, search, from_index)
+        if let Value::Object(id) = this_value
+            && self.objects.array_len_if_array(*id)?.is_some()
+        {
+            let length = self.objects.array_len_for_includes(*id)?;
+            let from_index = Self::array_slice_bound(from_index, length, 0)?;
+            return self.objects.array_includes(*id, length, search, from_index);
+        }
+        self.generic_array_includes(search, from_index, this_value)
     }
 
     pub(in crate::runtime::native) fn eval_array_index_of(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
@@ -234,26 +237,25 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_direct_array_index_of(
-        &self,
+        &mut self,
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
         let (search, from_index) = Self::eval_array_binary_values(args);
-        let Value::Object(id) = this_value else {
-            return Err(Error::runtime(
-                "Array.prototype.indexOf requires an array receiver",
-            ));
-        };
-
-        let length = self.objects.array_len_for_index_of(*id)?;
-        let from_index = Self::array_slice_bound(from_index, length, 0)?;
         let default_search = Value::Undefined;
         let search = search.unwrap_or(&default_search);
-        self.objects.array_index_of(*id, length, search, from_index)
+        if let Value::Object(id) = this_value
+            && self.objects.array_len_if_array(*id)?.is_some()
+        {
+            let length = self.objects.array_len_for_index_of(*id)?;
+            let from_index = Self::array_slice_bound(from_index, length, 0)?;
+            return self.objects.array_index_of(*id, length, search, from_index);
+        }
+        self.generic_array_index_of(search, from_index, this_value)
     }
 
     pub(in crate::runtime::native) fn eval_array_last_index_of(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
@@ -261,23 +263,23 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_direct_array_last_index_of(
-        &self,
+        &mut self,
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
         let (search, from_index) = Self::eval_array_binary_values(args);
-        let Value::Object(id) = this_value else {
-            return Err(Error::runtime(
-                "Array.prototype.lastIndexOf requires an array receiver",
-            ));
-        };
-
-        let length = self.objects.array_len_for_last_index_of(*id)?;
-        let from_index = Self::array_last_index_of_start(from_index, length)?;
         let default_search = Value::Undefined;
         let search = search.unwrap_or(&default_search);
-        self.objects
-            .array_last_index_of(*id, length, search, from_index)
+        if let Value::Object(id) = this_value
+            && self.objects.array_len_if_array(*id)?.is_some()
+        {
+            let length = self.objects.array_len_for_last_index_of(*id)?;
+            let from_index = Self::array_last_index_of_start(from_index, length)?;
+            return self
+                .objects
+                .array_last_index_of(*id, length, search, from_index);
+        }
+        self.generic_array_last_index_of(search, from_index, this_value)
     }
 
     pub(in crate::runtime::native) fn eval_array_join(
@@ -295,28 +297,28 @@ impl Context {
     ) -> Result<Value> {
         let separator = Self::eval_array_unary_value(args);
         let separator = Self::array_join_separator(separator);
-        let Value::Object(id) = this_value else {
-            return Err(Error::runtime(
-                "Array.prototype.join requires an array receiver",
-            ));
-        };
-        if let Some(joined) =
-            self.objects
-                .packed_array_join(*id, &separator, self.limits.max_string_len)?
+        if let Value::Object(id) = this_value
+            && self.objects.array_len_if_array(*id)?.is_some()
         {
+            if let Some(joined) =
+                self.objects
+                    .packed_array_join(*id, &separator, self.limits.max_string_len)?
+            {
+                return self.heap_string_value(&joined);
+            }
+
+            let length = self.objects.array_len(*id)?;
+            let mut joined = self.join_string_with_separator_capacity(length, separator.len())?;
+            for index in 0..length {
+                if index > 0 {
+                    self.push_join_text(&mut joined, &separator)?;
+                }
+                let value = self.objects.array_get_index(*id, index)?;
+                self.push_join_value_text(&mut joined, &value)?;
+            }
             return self.heap_string_value(&joined);
         }
-
-        let length = self.objects.array_len(*id)?;
-        let mut joined = self.join_string_with_separator_capacity(length, separator.len())?;
-        for index in 0..length {
-            if index > 0 {
-                self.push_join_text(&mut joined, &separator)?;
-            }
-            let value = self.objects.array_get_index(*id, index)?;
-            self.push_join_value_text(&mut joined, &value)?;
-        }
-        self.heap_string_value(&joined)
+        self.generic_array_join(&separator, this_value)
     }
 
     pub(in crate::runtime::native) fn eval_array_shift(
@@ -333,13 +335,14 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         Self::eval_array_discard_args(args);
-        let Value::Object(id) = this_value else {
-            return Err(Error::runtime(
-                "Array.prototype.shift requires an array receiver",
-            ));
-        };
-        self.objects
-            .array_shift(*id, self.limits.max_object_properties)
+        if let Value::Object(id) = this_value
+            && self.objects.array_len_if_array(*id)?.is_some()
+        {
+            return self
+                .objects
+                .array_shift(*id, self.limits.max_object_properties);
+        }
+        self.generic_array_shift(this_value)
     }
 
     pub(in crate::runtime::native) fn eval_array_slice(
@@ -356,24 +359,23 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let (start, end) = Self::eval_array_binary_values(args);
-        let Value::Object(id) = this_value else {
-            return Err(Error::runtime(
-                "Array.prototype.slice requires an array receiver",
-            ));
-        };
-
-        let length = self.objects.array_len_for_slice(*id)?;
-        let start = Self::array_slice_bound(start, length, 0)?;
-        let end = Self::array_slice_bound(end, length, length)?.max(start);
-        let prototype = self.existing_array_constructor_prototype()?;
-        self.objects.array_slice(
-            *id,
-            length,
-            start..end,
-            prototype,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )
+        if let Value::Object(id) = this_value
+            && self.objects.array_len_if_array(*id)?.is_some()
+        {
+            let length = self.objects.array_len_for_slice(*id)?;
+            let start = Self::array_slice_bound(start, length, 0)?;
+            let end = Self::array_slice_bound(end, length, length)?.max(start);
+            let prototype = self.existing_array_constructor_prototype()?;
+            return self.objects.array_slice(
+                *id,
+                length,
+                start..end,
+                prototype,
+                self.limits.max_objects,
+                self.limits.max_object_properties,
+            );
+        }
+        self.generic_array_slice(start, end, this_value)
     }
 
     pub(in crate::runtime::native) fn eval_array_unshift(
@@ -389,13 +391,14 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let Value::Object(id) = this_value else {
-            return Err(Error::runtime(
-                "Array.prototype.unshift requires an array receiver",
-            ));
-        };
-        self.objects
-            .array_unshift(*id, args, self.limits.max_object_properties)
+        if let Value::Object(id) = this_value
+            && self.objects.array_len_if_array(*id)?.is_some()
+        {
+            return self
+                .objects
+                .array_unshift(*id, args, self.limits.max_object_properties);
+        }
+        self.generic_array_unshift(args, this_value)
     }
 
     pub(crate) fn create_array_from_elements(&mut self, elements: Vec<Value>) -> Result<Value> {

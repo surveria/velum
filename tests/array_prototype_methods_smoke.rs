@@ -89,20 +89,25 @@ fn supports_array_push_and_pop_methods() -> TestResult {
 }
 
 #[test]
-fn rejects_array_methods_on_non_array_receivers() -> TestResult {
+fn supports_push_and_pop_on_array_like_objects() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
 
-    let Err(error) = context.eval(
-        r"
-        let object = {};
-        object.push = Array.prototype.push;
-        object.push(1);
-        ",
-    ) else {
-        return Err("expected Array.prototype.push on non-array receiver to fail".into());
-    };
-    ensure_error_contains(&error, "requires an array receiver")
+    let value = context.eval(
+        r#"
+        let object = { length: 1, 0: "head" };
+        let pushed = Array.prototype.push.call(object, "tail", undefined);
+        let popped = Array.prototype.pop.call(object);
+        pushed === 3 &&
+            popped === undefined &&
+            object.length === 2 &&
+            object[0] === "head" &&
+            object[1] === "tail" &&
+            !("2" in object) ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
 }
 
 #[test]
@@ -146,13 +151,4 @@ fn ensure_output(actual: &[String], expected: &[String]) -> TestResult {
     }
 
     Err(format!("expected output {expected:?}, got {actual:?}").into())
-}
-
-fn ensure_error_contains(error: &rs_quickjs::Error, text: &str) -> TestResult {
-    let message = error.to_string();
-    if message.contains(text) {
-        return Ok(());
-    }
-
-    Err(format!("expected error containing '{text}', got '{message}'").into())
 }
