@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T070702Z.md`
-- Task: PR #300: Support destructuring binding patterns
-- Performance: 6.48x (62/63 >1.00x)
+- `rsqjs-test-report-20260708T075201Z.md`
+- Task: PR #301: Support spread syntax and rest parameters
+- Performance: 6.61x (62/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 18069 passed / 84509 failed (17.61%)
+- Full Test262: 18160 passed / 84418 failed (17.70%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -304,3 +304,4 @@ Latest report:
 | `20260707T224915Z` `1ccbe3a` PR #297: [codex] Add benchmark quality gate | 6.55x (62/63 >1.00x) | - (0/63 >1.00x) | 15928 passed / 86650 failed (15.53%) |
 | `20260708T060745Z` `29a88b2` PR #299: Support accessor properties (getters/setters) | 6.60x (62/63 >1.00x) | - (0/63 >1.00x) | 16626 passed / 85952 failed (16.21%) |
 | `20260708T070702Z` `6312df7` PR #300: Support destructuring binding patterns | 6.48x (62/63 >1.00x) | - (0/63 >1.00x) | 18069 passed / 84509 failed (17.61%) |
+| `20260708T075201Z` `f044de5` PR #301: Support spread syntax and rest parameters | 6.61x (62/63 >1.00x) | - (0/63 >1.00x) | 18160 passed / 84418 failed (17.70%) |
