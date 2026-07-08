@@ -53,6 +53,22 @@ impl Context {
             BytecodeInstruction::CreateClass { class } => {
                 self.eval_bytecode_create_class(state, class, next)
             }
+            BytecodeInstruction::CallSuper { arg_count } => {
+                self.eval_bytecode_call_super(state, *arg_count, next)
+            }
+            BytecodeInstruction::CallSuperSpread => {
+                self.eval_bytecode_call_super_spread(state, next)
+            }
+            BytecodeInstruction::SuperMember { property } => {
+                self.eval_bytecode_super_member(state, property, next)
+            }
+            BytecodeInstruction::CallSuperMember {
+                property,
+                arg_count,
+            } => self.eval_bytecode_call_super_member(state, property, *arg_count, next),
+            BytecodeInstruction::CallSuperMemberSpread { property } => {
+                self.eval_bytecode_call_super_member_spread(state, property, next)
+            }
             BytecodeInstruction::Construct { .. }
             | BytecodeInstruction::ConstructValue { .. }
             | BytecodeInstruction::CreateFunction { .. }
@@ -294,6 +310,7 @@ impl Context {
                     constructable: *constructable,
                     is_async: *is_async,
                     class_constructor: false,
+                    prototype_parent: None,
                     new_target_mode: *new_target_mode,
                 })?;
                 state.stack.push(function);

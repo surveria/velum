@@ -33,6 +33,15 @@ const FUNCTION_PROTOTYPE_CALL_PROPERTY: &str = "call";
 use super::FunctionNewTarget;
 use properties::{FunctionPropertyKind, PROTOTYPE_CONSTRUCTOR_PROPERTY};
 
+/// Super references available to a class constructor or method body: the
+/// callable parent constructor (derived constructors only) and the home
+/// prototype used by `super.property` lookups.
+#[derive(Debug)]
+pub(in crate::runtime) struct FunctionSuperBinding {
+    pub(in crate::runtime) constructor: Option<Value>,
+    pub(in crate::runtime) home_prototype: Value,
+}
+
 pub(super) struct BytecodeFunctionInit<'a> {
     pub(super) static_function_id: StaticFunctionId,
     pub(super) name: Option<&'a StaticName>,
@@ -40,6 +49,7 @@ pub(super) struct BytecodeFunctionInit<'a> {
     pub(super) constructable: bool,
     pub(super) is_async: bool,
     pub(super) class_constructor: bool,
+    pub(super) prototype_parent: Option<crate::value::ObjectId>,
     pub(super) new_target_mode: BytecodeNewTargetMode,
 }
 
@@ -53,7 +63,7 @@ impl Context {
         let prototype = if init.constructable {
             let constructor_key = self.intern_property_key(PROTOTYPE_CONSTRUCTOR_PROPERTY)?;
             let prototype_id = self.objects.create_with_prototype_property(
-                None,
+                init.prototype_parent,
                 ObjectPropertyInit::new(
                     constructor_key,
                     PROTOTYPE_CONSTRUCTOR_PROPERTY,
@@ -103,6 +113,12 @@ impl Context {
             constructable: init.constructable,
             is_async: init.is_async,
             class_constructor: init.class_constructor,
+            super_binding: if init.new_target_mode == BytecodeNewTargetMode::Lexical {
+                self.super_frames.last().cloned().flatten()
+            } else {
+                None
+            },
+            static_parent: None,
             new_target: FunctionNewTarget::from_mode(
                 init.new_target_mode,
                 self.current_new_target()?,
@@ -241,6 +257,8 @@ impl Context {
         self.upvalue_frames.push(upvalues);
         self.this_values.push(this_value);
         self.new_target_values.push(new_target);
+        self.super_frames
+            .push(self.function(id).ok().and_then(|f| f.super_binding.clone()));
         let result = self.eval_function_body(
             static_name_atom_cache,
             static_binding_cache,
@@ -248,6 +266,7 @@ impl Context {
             FunctionParameterState::new(&param_binding_ids, &param_atoms, &args),
             &bytecode,
         );
+        let removed_super = self.super_frames.pop();
         let removed_new_target = self.new_target_values.pop();
         let removed_this = self.this_values.pop();
         let removed_upvalues = self.upvalue_frames.pop();
@@ -255,6 +274,9 @@ impl Context {
         self.locals = caller_locals;
         if removed_this.is_none() {
             return Err(Error::runtime("function this binding disappeared"));
+        }
+        if removed_super.is_none() {
+            return Err(Error::runtime("function super frame disappeared"));
         }
         if removed_new_target.is_none() {
             return Err(Error::runtime("function new.target binding disappeared"));
@@ -280,6 +302,13 @@ impl Context {
         };
         if let Some(value) = own_value {
             return self.checked_value(value);
+        }
+        let static_parent = self.function(id)?.static_parent.clone();
+        if let Some(parent) = static_parent {
+            let value = self.get_property_value(&parent, property.name())?;
+            if !matches!(value, Value::Undefined) {
+                return Ok(value);
+            }
         }
         self.get_function_object_prototype_property(id, property)
     }
@@ -380,6 +409,53 @@ impl Context {
     pub(crate) fn function_enumerable_keys(&self, id: FunctionId) -> Result<Vec<String>> {
         let function = self.function(id)?;
         function.properties.keys(&self.atoms)
+    }
+
+    /// Runs a parent class constructor for `super(...)`: the current `this`
+    /// is initialized in place, the parent's return-object override is
+    /// ignored, and throws propagate as completions.
+    pub(in crate::runtime) fn eval_class_super_constructor_completion(
+        &mut self,
+        id: FunctionId,
+        args: &[Value],
+        this_value: Value,
+        new_target: Value,
+    ) -> Result<Completion> {
+        match self.eval_function_completion_with_this_and_new_target(
+            id,
+            RuntimeCallArgs::values(args),
+            this_value,
+            new_target,
+        )? {
+            Completion::Normal(_) | Completion::Return(_) => {
+                Ok(Completion::Normal(Value::Undefined))
+            }
+            completion @ Completion::Throw(_) => Ok(completion),
+            Completion::Break { .. } => Err(Error::runtime("break statement outside loop")),
+            Completion::Continue(_) => Err(Error::runtime("continue statement outside loop")),
+        }
+    }
+
+    pub(in crate::runtime) fn set_function_super_binding(
+        &mut self,
+        id: FunctionId,
+        binding: Rc<FunctionSuperBinding>,
+    ) -> Result<()> {
+        self.function_mut(id)?.super_binding = Some(binding);
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn set_function_static_parent(
+        &mut self,
+        id: FunctionId,
+        parent: Value,
+    ) -> Result<()> {
+        self.function_mut(id)?.static_parent = Some(parent);
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn current_super_frame(&self) -> Option<Rc<FunctionSuperBinding>> {
+        self.super_frames.last().cloned().flatten()
     }
 
     /// Class constructors are constructor-only callables.
