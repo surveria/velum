@@ -6,7 +6,8 @@ use crate::{
     runtime::native::NativeFunctionKind,
     runtime::object::{
         CacheablePropertyDelete, CacheablePropertyLookup, CacheablePropertyPresence,
-        CacheablePropertyValue, CacheablePropertyWrite, PropertyKey, PropertyLookup,
+        CacheablePropertyValue, CacheablePropertyWrite, OBJECT_CONSTRUCTOR_PROPERTY, PropertyKey,
+        PropertyLookup,
     },
     runtime::property::{DynamicPropertyKey, delete_property, get_property, has_property},
     storage::atom::AtomId,
@@ -358,6 +359,15 @@ impl Context {
             Value::Function(id) => self.has_function_property_lookup(*id, property.lookup()),
             Value::NativeFunction(id) => {
                 self.has_native_function_property_lookup(*id, property.lookup())
+            }
+            Value::Error(error) => {
+                if matches!(
+                    property.name(),
+                    "name" | "message" | OBJECT_CONSTRUCTOR_PROPERTY
+                ) {
+                    return Ok(true);
+                }
+                self.error_prototype_has_property(error.name(), property.lookup())
             }
             Value::Object(id) => {
                 if let Some(has_property) =

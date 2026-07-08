@@ -184,6 +184,9 @@ impl Context {
             Value::Object(id) => self.objects.prototype_value(id),
             Value::Function(id) => self.function_object_prototype_value(id),
             Value::NativeFunction(id) => self.native_function_object_prototype_value(id),
+            Value::Error(error) => self
+                .error_constructor_prototype(error.name())
+                .map(Value::Object),
             Value::Undefined | Value::Null => Err(Error::runtime(
                 "Object.getPrototypeOf target cannot be converted to an object",
             )),
@@ -192,8 +195,7 @@ impl Context {
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => Err(Error::runtime(
+            | Value::HostFunction(_) => Err(Error::runtime(
                 "Object.getPrototypeOf target must be an object",
             )),
         }

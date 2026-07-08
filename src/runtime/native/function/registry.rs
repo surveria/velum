@@ -116,7 +116,9 @@ const STRING_PROTOTYPE_TO_UPPER_CASE_SLOT: NativeFunctionSlot = NativeFunctionSl
 const STRING_PROTOTYPE_TRIM_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(108);
 const STRING_PROTOTYPE_TRIM_END_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(109);
 const STRING_PROTOTYPE_TRIM_START_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(110);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 111;
+const ERROR_PROTOTYPE_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(111);
+const ERROR_AGGREGATE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(112);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 113;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -186,6 +188,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::Boolean => Some(BOOLEAN_SLOT),
         NativeFunctionKind::Eval => Some(EVAL_SLOT),
         NativeFunctionKind::ErrorConstructor(name) => Some(error_constructor_slot(name)),
+        NativeFunctionKind::ErrorPrototypeToString => Some(ERROR_PROTOTYPE_TO_STRING_SLOT),
         NativeFunctionKind::Function => Some(FUNCTION_SLOT),
         NativeFunctionKind::JsonParse => Some(JSON_PARSE_SLOT),
         NativeFunctionKind::JsonStringify => Some(JSON_STRINGIFY_SLOT),
@@ -314,6 +317,7 @@ const fn string_prototype_slot(kind: NativeFunctionKind) -> Option<NativeFunctio
 
 const fn error_constructor_slot(name: ErrorName) -> NativeFunctionSlot {
     match name {
+        ErrorName::AggregateError => ERROR_AGGREGATE_SLOT,
         ErrorName::Base => ERROR_BASE_SLOT,
         ErrorName::EvalError => ERROR_EVAL_SLOT,
         ErrorName::RangeError => ERROR_RANGE_SLOT,
