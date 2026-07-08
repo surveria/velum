@@ -33,6 +33,8 @@ const PATH_QUICKJS_DESTRUCTURING: &str =
 const PATH_QUICKJS_SPREAD_REST: &str = "tests/corpora/quickjs_differential/active/spread_rest.js";
 const PATH_QUICKJS_CLASS_BASELINE: &str =
     "tests/corpora/quickjs_differential/active/class_baseline.js";
+const PATH_QUICKJS_CLASS_INHERITANCE: &str =
+    "tests/corpora/quickjs_differential/active/class_inheritance.js";
 const PATH_QUICKJS_SWITCH_STATEMENTS: &str =
     "tests/corpora/quickjs_differential/active/switch_statements.js";
 const PATH_QUICKJS_BLOCK_LEXICAL_SCOPE: &str =
@@ -219,6 +221,10 @@ fn quickjs_control_flow_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "class_baseline",
             path: PATH_QUICKJS_CLASS_BASELINE,
+        },
+        DifferentialCase {
+            id: "class_inheritance",
+            path: PATH_QUICKJS_CLASS_INHERITANCE,
         },
         DifferentialCase {
             id: "switch_statements",

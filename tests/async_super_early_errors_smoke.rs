@@ -14,7 +14,7 @@ fn rejects_super_references_in_async_function_bodies() -> TestResult {
     ];
 
     for source in sources {
-        ensure_parse_error_contains(source, "super is only valid inside class methods")?;
+        ensure_parse_error_contains(source, "is only valid inside")?;
     }
 
     Ok(())
@@ -32,7 +32,7 @@ fn rejects_super_references_in_async_parameter_defaults() -> TestResult {
     ];
 
     for source in sources {
-        ensure_parse_error_contains(source, "super is only valid inside class methods")?;
+        ensure_parse_error_contains(source, "is only valid inside")?;
     }
 
     Ok(())

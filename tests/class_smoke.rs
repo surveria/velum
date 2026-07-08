@@ -240,10 +240,6 @@ fn rejects_class_early_errors() -> TestResult {
 
 #[test]
 fn reports_unsupported_class_features_explicitly() -> TestResult {
-    ensure_error_contains(
-        "class E extends Object {}",
-        "class inheritance is not supported yet",
-    )?;
     ensure_error_contains("class F { x = 1 }", "class fields are not supported yet")?;
     ensure_error_contains(
         "class G { *gen() {} }",
