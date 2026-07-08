@@ -16,7 +16,7 @@ const IMPORT_BINDING_NAME: &str = "import";
 const GETTER_KEYWORD_NAME: &str = "get";
 const SETTER_KEYWORD_NAME: &str = "set";
 
-enum ObjectPropertyName {
+pub(super) enum ObjectPropertyName {
     Static {
         key: StaticName,
         shorthand_name: Option<StaticName>,
@@ -399,26 +399,34 @@ impl Parser {
                 "expected 'async' before async arrow function",
             )?;
         }
-        let params = match signature.parameters {
-            ArrowParameters::Single => vec![FunctionParam::new(
-                self.consume_binding_identifier("expected arrow function parameter")?,
-                None,
-            )],
+        let parameters = match signature.parameters {
+            ArrowParameters::Single => super::function::ParsedParameters {
+                params: vec![FunctionParam::new(
+                    self.consume_binding_identifier("expected arrow function parameter")?,
+                    None,
+                )],
+                pattern_prologue: Vec::new(),
+            },
             ArrowParameters::Parenthesized => {
                 self.consume(&TokenKind::LParen, "expected '(' before arrow parameters")?;
-                let params = self.function_parameters()?;
+                let parameters = self.function_parameters()?;
                 self.consume(&TokenKind::RParen, "expected ')' after arrow parameters")?;
-                params
+                parameters
             }
         };
         self.consume(&TokenKind::Arrow, "expected '=>' after arrow parameters")?;
         let body = self.arrow_body(inherited_strict)?;
-        self.validate_function_parameters(&params, inherited_strict, body.contains_use_strict)?;
+        self.validate_function_parameters(
+            &parameters.params,
+            inherited_strict,
+            body.contains_use_strict,
+        )?;
         let id = self.static_function()?;
+        let (params, statements) = parameters.apply_prologue(body.statements);
         Ok(Some(Expr::ArrowFunction {
             id,
             params: params.into(),
-            body: body.statements.into(),
+            body: statements.into(),
             is_async: signature.is_async,
         }))
     }
@@ -601,16 +609,16 @@ impl Parser {
     ) -> Result<ObjectProperty> {
         self.consume(&TokenKind::LParen, "expected '(' after accessor name")?;
         let inherited_strict = self.is_strict_mode();
-        let params = self.function_parameters()?;
+        let parameters = self.function_parameters()?;
         self.consume(&TokenKind::RParen, "expected ')' after accessor parameters")?;
         match kind {
-            ObjectPropertyKind::Get if !params.is_empty() => {
+            ObjectPropertyKind::Get if !parameters.params.is_empty() => {
                 return Err(Error::parse(
                     "getter must not declare parameters",
                     keyword_offset,
                 ));
             }
-            ObjectPropertyKind::Set if params.len() != 1 => {
+            ObjectPropertyKind::Set if parameters.params.len() != 1 => {
                 return Err(Error::parse(
                     "setter must declare exactly one parameter",
                     keyword_offset,
@@ -620,8 +628,13 @@ impl Parser {
         }
         self.consume(&TokenKind::LBrace, "expected '{' before accessor body")?;
         let body = self.with_new_target_scope(|parser| parser.function_body(inherited_strict))?;
-        self.validate_function_parameters(&params, inherited_strict, body.contains_use_strict)?;
+        self.validate_function_parameters(
+            &parameters.params,
+            inherited_strict,
+            body.contains_use_strict,
+        )?;
         let id = self.static_function()?;
+        let (params, statements) = parameters.apply_prologue(body.statements);
         let key = name.into_key();
         let name = match &key {
             ObjectPropertyKey::Static(name) => Some(name.clone()),
@@ -631,7 +644,7 @@ impl Parser {
             id,
             name,
             params: params.into(),
-            body: body.statements.into(),
+            body: statements.into(),
             is_async: false,
         };
         Ok(ObjectProperty { key, kind, value })
@@ -658,12 +671,17 @@ impl Parser {
         is_async: bool,
     ) -> Result<ObjectProperty> {
         let inherited_strict = self.is_strict_mode();
-        let params = self.function_parameters()?;
+        let parameters = self.function_parameters()?;
         self.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before method body")?;
         let body = self.with_new_target_scope(|parser| parser.function_body(inherited_strict))?;
-        self.validate_function_parameters(&params, inherited_strict, body.contains_use_strict)?;
+        self.validate_function_parameters(
+            &parameters.params,
+            inherited_strict,
+            body.contains_use_strict,
+        )?;
         let id = self.static_function()?;
+        let (params, statements) = parameters.apply_prologue(body.statements);
         let key = name.into_key();
         let name = match &key {
             ObjectPropertyKey::Static(name) => Some(name.clone()),
@@ -673,7 +691,7 @@ impl Parser {
             id,
             name,
             params: params.into(),
-            body: body.statements.into(),
+            body: statements.into(),
             is_async,
         };
         Ok(ObjectProperty {
@@ -703,7 +721,7 @@ impl Parser {
         Ok(Expr::Array(elements))
     }
 
-    fn object_property_key(&mut self) -> Result<ObjectPropertyName> {
+    pub(super) fn object_property_key(&mut self) -> Result<ObjectPropertyName> {
         if self.match_kind(&TokenKind::LBracket) {
             let expr = self.expression()?;
             self.consume(
@@ -759,17 +777,22 @@ impl Parser {
             None
         };
         self.consume(&TokenKind::LParen, "expected '(' after 'function'")?;
-        let params = self.function_parameters()?;
+        let parameters = self.function_parameters()?;
         self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
         let body = self.with_new_target_scope(|parser| parser.function_body(inherited_strict))?;
-        self.validate_function_parameters(&params, inherited_strict, body.contains_use_strict)?;
+        self.validate_function_parameters(
+            &parameters.params,
+            inherited_strict,
+            body.contains_use_strict,
+        )?;
         let id = self.static_function()?;
+        let (params, statements) = parameters.apply_prologue(body.statements);
         Ok(Expr::Function {
             id,
             name,
             params: params.into(),
-            body: body.statements.into(),
+            body: statements.into(),
             is_async,
         })
     }

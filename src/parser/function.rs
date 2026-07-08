@@ -1,31 +1,99 @@
-use crate::{ast::FunctionParam, error::Result, lexer::TokenKind};
+use crate::{
+    ast::{Expr, FunctionParam, Stmt},
+    error::Result,
+    lexer::TokenKind,
+    syntax::DeclKind,
+};
 
 use super::Parser;
 
+/// Prefix for synthesized parameter names that hold a destructured argument
+/// before the body-prologue pattern declaration unpacks it. The `%` characters
+/// keep the name outside the user identifier space.
+const PATTERN_PARAM_NAME_PREFIX: &str = "%pattern";
+const PATTERN_PARAM_NAME_SUFFIX: &str = "%";
+
+/// Parsed parameter list plus the pattern-unpacking statements that must run
+/// before the function body.
+pub(super) struct ParsedParameters {
+    pub(super) params: Vec<FunctionParam>,
+    pub(super) pattern_prologue: Vec<Stmt>,
+}
+
+impl ParsedParameters {
+    /// Prepends the pattern-unpacking prologue to the parsed body statements.
+    pub(super) fn apply_prologue(self, mut body: Vec<Stmt>) -> (Vec<FunctionParam>, Vec<Stmt>) {
+        if self.pattern_prologue.is_empty() {
+            return (self.params, body);
+        }
+        let mut statements = self.pattern_prologue;
+        statements.append(&mut body);
+        (self.params, statements)
+    }
+}
+
 impl Parser {
-    pub(super) fn function_parameters(&mut self) -> Result<Vec<FunctionParam>> {
+    pub(super) fn function_parameters(&mut self) -> Result<ParsedParameters> {
         let mut params = Vec::new();
+        let mut pattern_prologue = Vec::new();
         if self.check(&TokenKind::RParen) {
-            return Ok(params);
+            return Ok(ParsedParameters {
+                params,
+                pattern_prologue,
+            });
         }
 
         loop {
             if self.check(&TokenKind::RParen) {
                 break;
             }
-            let name = self.consume_binding_identifier("expected function parameter name")?;
-            let default = if self.match_kind(&TokenKind::Equal) {
-                Some(self.assignment()?)
+            if self.next_is_binding_pattern() {
+                self.pattern_parameter(&mut params, &mut pattern_prologue)?;
             } else {
-                None
-            };
-            params.push(FunctionParam::new(name, default));
+                let name = self.consume_binding_identifier("expected function parameter name")?;
+                let default = if self.match_kind(&TokenKind::Equal) {
+                    Some(self.assignment()?)
+                } else {
+                    None
+                };
+                params.push(FunctionParam::new(name, default));
+            }
             if !self.match_kind(&TokenKind::Comma) {
                 break;
             }
         }
 
         self.reject_duplicate_non_simple_parameters(&params)?;
-        Ok(params)
+        Ok(ParsedParameters {
+            params,
+            pattern_prologue,
+        })
+    }
+
+    /// Parses one destructuring parameter as a synthesized plain parameter
+    /// plus a body-prologue `var` pattern declaration that unpacks it.
+    fn pattern_parameter(
+        &mut self,
+        params: &mut Vec<FunctionParam>,
+        pattern_prologue: &mut Vec<Stmt>,
+    ) -> Result<()> {
+        let pattern = self.binding_pattern()?;
+        let default = if self.match_kind(&TokenKind::Equal) {
+            Some(self.assignment()?)
+        } else {
+            None
+        };
+        let synthetic_name = format!(
+            "{PATTERN_PARAM_NAME_PREFIX}{}{PATTERN_PARAM_NAME_SUFFIX}",
+            params.len()
+        );
+        let synthetic = self.static_binding_name(synthetic_name)?;
+        params.push(FunctionParam::new(synthetic.clone(), default));
+        pattern_prologue.push(Stmt::PatternDecl {
+            pattern,
+            kind: DeclKind::Var,
+            init: Expr::Identifier(synthetic),
+        });
+        Ok(())
     }
 }

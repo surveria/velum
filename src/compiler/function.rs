@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use crate::{
     ast::{
-        CatchClause, Expr, ForInTarget, FunctionParam, ObjectProperty, ObjectPropertyKey,
-        StaticBinding, Stmt, SwitchCase,
+        BindingPattern, CatchClause, Expr, ForInTarget, FunctionParam, ObjectProperty,
+        ObjectPropertyKey, StaticBinding, Stmt, SwitchCase,
     },
     binding_layout::BindingLayout,
     error::{Error, Result},
@@ -250,6 +250,10 @@ impl CaptureBindingCollector {
                     self.collect_expr(init);
                 }
             }
+            Stmt::PatternDecl { pattern, init, .. } => {
+                self.collect_expr(init);
+                self.collect_pattern(pattern);
+            }
             Stmt::Empty | Stmt::Break(_) | Stmt::Continue(_) => {}
         }
     }
@@ -257,7 +261,18 @@ impl CaptureBindingCollector {
     fn collect_for_in_target(&mut self, target: &ForInTarget) {
         match target {
             ForInTarget::Binding { .. } => {}
+            ForInTarget::PatternBinding { pattern, .. } => self.collect_pattern(pattern),
             ForInTarget::Assignment(expr) => self.collect_expr(expr),
+        }
+    }
+
+    fn collect_pattern(&mut self, pattern: &BindingPattern) {
+        let mut visit = |expr: &Expr| -> std::result::Result<(), std::convert::Infallible> {
+            self.collect_expr(expr);
+            Ok(())
+        };
+        match pattern.for_each_expr(&mut visit) {
+            Ok(()) => {}
         }
     }
 

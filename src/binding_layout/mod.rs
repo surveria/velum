@@ -2,8 +2,9 @@ use std::rc::Rc;
 
 use crate::{
     ast::{
-        CatchClause, DeclKind, Expr, ForInTarget, FunctionParam, ObjectProperty, ObjectPropertyKey,
-        Program, StaticBinding, StaticBindingId, StaticFunctionId, StaticNameId, Stmt, SwitchCase,
+        BindingPattern, CatchClause, DeclKind, Expr, ForInTarget, FunctionParam, ObjectProperty,
+        ObjectPropertyKey, Program, StaticBinding, StaticBindingId, StaticFunctionId, StaticNameId,
+        Stmt, SwitchCase,
     },
     binding_layout::types::{
         Declaration, FunctionScope, GlobalSlot, Scope, ScopeContext, ScopeKind,
@@ -182,6 +183,10 @@ impl LayoutBuilder {
                 DeclKind::Var => self.declare(var_scope, name),
                 DeclKind::Let | DeclKind::Const => self.declare(scope, name),
             },
+            Stmt::PatternDecl { pattern, kind, .. } => match kind {
+                DeclKind::Var => self.declare_pattern(pattern, var_scope),
+                DeclKind::Let | DeclKind::Const => self.declare_pattern(pattern, scope),
+            },
             Stmt::FunctionDecl { .. }
             | Stmt::Empty
             | Stmt::Block(_)
@@ -231,12 +236,18 @@ impl LayoutBuilder {
                 self.collect_hoisted_vars(body, var_scope)
             }
             Stmt::ForIn { target, body, .. } | Stmt::ForOf { target, body, .. } => {
-                if let ForInTarget::Binding {
-                    name,
-                    kind: DeclKind::Var,
-                } = target
-                {
-                    self.declare(var_scope, name)?;
+                match target {
+                    ForInTarget::Binding {
+                        name,
+                        kind: DeclKind::Var,
+                    } => self.declare(var_scope, name)?,
+                    ForInTarget::PatternBinding {
+                        pattern,
+                        kind: DeclKind::Var,
+                    } => self.declare_pattern(pattern, var_scope)?,
+                    ForInTarget::Binding { .. }
+                    | ForInTarget::PatternBinding { .. }
+                    | ForInTarget::Assignment(_) => {}
                 }
                 self.collect_hoisted_vars(body, var_scope)
             }
@@ -274,7 +285,13 @@ impl LayoutBuilder {
                 ..
             }
             | Stmt::FunctionDecl { name, .. } => self.declare(var_scope, name),
+            Stmt::PatternDecl {
+                pattern,
+                kind: DeclKind::Var,
+                ..
+            } => self.declare_pattern(pattern, var_scope),
             Stmt::VarDecl { .. }
+            | Stmt::PatternDecl { .. }
             | Stmt::Empty
             | Stmt::Break(_)
             | Stmt::Continue(_)
@@ -368,6 +385,10 @@ impl LayoutBuilder {
                 }
                 Ok(())
             }
+            Stmt::PatternDecl { pattern, init, .. } => {
+                self.analyze_expr(init, scope, function)?;
+                self.analyze_pattern_exprs(pattern, scope, function)
+            }
         }
     }
 
@@ -427,11 +448,41 @@ impl LayoutBuilder {
                 self.declare(var_scope, name)?;
                 self.analyze_statement(body, scope, var_scope, function)
             }
+            ForInTarget::PatternBinding {
+                pattern,
+                kind: DeclKind::Let | DeclKind::Const,
+            } => {
+                let loop_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
+                self.declare_pattern(pattern, loop_scope)?;
+                self.analyze_pattern_exprs(pattern, loop_scope, function)?;
+                self.analyze_statement(body, loop_scope, var_scope, function)
+            }
+            ForInTarget::PatternBinding {
+                pattern,
+                kind: DeclKind::Var,
+            } => {
+                self.declare_pattern(pattern, var_scope)?;
+                self.analyze_pattern_exprs(pattern, scope, function)?;
+                self.analyze_statement(body, scope, var_scope, function)
+            }
             ForInTarget::Assignment(target) => {
                 self.analyze_expr(target, scope, function)?;
                 self.analyze_statement(body, scope, var_scope, function)
             }
         }
+    }
+
+    fn declare_pattern(&mut self, pattern: &BindingPattern, scope: ScopeId) -> Result<()> {
+        pattern.for_each_binding(&mut |binding| self.declare(scope, binding))
+    }
+
+    fn analyze_pattern_exprs(
+        &mut self,
+        pattern: &BindingPattern,
+        scope: ScopeId,
+        function: FunctionScopeId,
+    ) -> Result<()> {
+        pattern.for_each_expr(&mut |expr| self.analyze_expr(expr, scope, function))
     }
 
     fn analyze_switch(
@@ -781,13 +832,23 @@ impl LayoutBuilder {
 
 fn for_init_needs_layout_scope(init: Option<&Stmt>) -> bool {
     match init {
-        Some(Stmt::VarDecl {
-            kind: DeclKind::Let | DeclKind::Const,
-            ..
-        }) => true,
+        Some(
+            Stmt::VarDecl {
+                kind: DeclKind::Let | DeclKind::Const,
+                ..
+            }
+            | Stmt::PatternDecl {
+                kind: DeclKind::Let | DeclKind::Const,
+                ..
+            },
+        ) => true,
         Some(Stmt::DeclList(statements)) => statements.iter().any(is_lexical_declaration),
         Some(
             Stmt::VarDecl {
+                kind: DeclKind::Var,
+                ..
+            }
+            | Stmt::PatternDecl {
                 kind: DeclKind::Var,
                 ..
             }
@@ -817,6 +878,9 @@ const fn is_lexical_declaration(statement: &Stmt) -> bool {
     matches!(
         statement,
         Stmt::VarDecl {
+            kind: DeclKind::Let | DeclKind::Const,
+            ..
+        } | Stmt::PatternDecl {
             kind: DeclKind::Let | DeclKind::Const,
             ..
         }
