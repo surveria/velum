@@ -17,6 +17,7 @@ mod kind;
 mod primitive;
 mod primitive_kind;
 mod registry;
+mod string_kind;
 
 use super::number_intrinsic_property;
 

@@ -54,7 +54,7 @@ fn sort_orders_undefined_after_values_and_holes_last() -> TestResult {
 #[test]
 fn sort_is_stable_and_rejects_non_callable_comparators() -> TestResult {
     eval_is_42(
-        r#"
+        r"
         let input = [
             { key: 1, order: 0 },
             { key: 0, order: 1 },
@@ -76,7 +76,7 @@ fn sort_is_stable_and_rejects_non_callable_comparators() -> TestResult {
         }
 
         stable && typeError ? 42 : 0
-        "#,
+        ",
     )
 }
 
@@ -126,7 +126,7 @@ fn fills_and_copies_within_with_relative_bounds() -> TestResult {
 #[test]
 fn at_resolves_relative_indices() -> TestResult {
     eval_is_42(
-        r#"
+        r"
         let values = [10, 20, 30];
         values.at(0) === 10 &&
             values.at(2) === 30 &&
@@ -136,14 +136,14 @@ fn at_resolves_relative_indices() -> TestResult {
             values.at(-4) === undefined
             ? 42
             : 0
-        "#,
+        ",
     )
 }
 
 #[test]
 fn find_last_scans_in_reverse() -> TestResult {
     eval_is_42(
-        r#"
+        r"
         let values = [1, 2, 3, 4, 5];
         values.findLast((value) => value % 2 === 0) === 4 &&
             values.findLastIndex((value) => value % 2 === 0) === 3 &&
@@ -151,7 +151,7 @@ fn find_last_scans_in_reverse() -> TestResult {
             [1, 3, 5].findLastIndex((value) => value % 2 === 0) === -1
             ? 42
             : 0
-        "#,
+        ",
     )
 }
 
@@ -188,7 +188,7 @@ fn change_by_copy_methods_do_not_mutate_source() -> TestResult {
 #[test]
 fn with_throws_range_error_on_out_of_bounds() -> TestResult {
     eval_is_42(
-        r#"
+        r"
         let threw = 0;
         try {
             [1, 2, 3].with(3, 0);
@@ -205,7 +205,7 @@ fn with_throws_range_error_on_out_of_bounds() -> TestResult {
             }
         }
         threw === 2 ? 42 : 0
-        "#,
+        ",
     )
 }
 
