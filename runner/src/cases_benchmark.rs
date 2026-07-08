@@ -57,6 +57,8 @@ const PATH_BENCH_ARRAY_PROTOTYPE_INDEX_OF: &str =
     "tests/corpora/benchmarks/active/array_prototype_index_of.js";
 const PATH_BENCH_ARRAY_PROTOTYPE_LAST_INDEX_OF: &str =
     "tests/corpora/benchmarks/active/array_prototype_last_index_of.js";
+const PATH_BENCH_ARRAY_PROTOTYPE_SORT: &str =
+    "tests/corpora/benchmarks/active/array_prototype_sort.js";
 const PATH_BENCH_ARRAY_PROTOTYPE_REVERSE: &str =
     "tests/corpora/benchmarks/active/array_prototype_reverse.js";
 const PATH_BENCH_ARRAY_PROTOTYPE_SHIFT_UNSHIFT: &str =
@@ -274,6 +276,10 @@ fn benchmark_array_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "array_prototype_reverse",
             path: PATH_BENCH_ARRAY_PROTOTYPE_REVERSE,
+        },
+        BenchmarkCase {
+            id: "array_prototype_sort",
+            path: PATH_BENCH_ARRAY_PROTOTYPE_SORT,
         },
         BenchmarkCase {
             id: "array_prototype_shift_unshift",
