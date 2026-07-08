@@ -9,7 +9,7 @@ use crate::{
     value::Value,
 };
 
-use super::BytecodeState;
+use super::{BytecodeState, numeric_chain::apply_number_binary};
 
 #[derive(Debug)]
 pub(super) struct CompiledPropertyMutation<'a> {
@@ -581,7 +581,7 @@ impl Context {
                 property,
             } => {
                 let object = self.runtime_value(object_cell.value(object.name())?)?;
-                self.eval_bytecode_static_compound_assignment(
+                self.eval_static_numeric_property_compound(
                     op,
                     &object,
                     property.name(),
@@ -598,6 +598,13 @@ impl Context {
                 property,
             } => {
                 let object = self.runtime_value(array_cell.value(array.name())?)?;
+                if let Some(index) =
+                    self.eval_property_index_usize(index, index_cell, *index_mask)?
+                    && let Some(value) =
+                        self.eval_dynamic_array_numeric_compound(op, &object, index, rhs)?
+                {
+                    return Ok(value);
+                }
                 let index = self.eval_property_index_value(index, index_cell, *index_mask)?;
                 if let Some(value) = self.eval_dynamic_array_index_compound_assignment(
                     op,
@@ -632,6 +639,10 @@ impl Context {
                 mask,
             } => {
                 let value = self.runtime_value(cell.value(binding.name())?)?;
+                if let Value::Number(value) = value {
+                    return apply_number_binary(BytecodeNumericBinaryOp::BitAnd, value, *mask)
+                        .map(Value::Number);
+                }
                 self.eval_bytecode_number_binary(
                     BytecodeNumericBinaryOp::BitAnd,
                     &value,
@@ -647,6 +658,10 @@ impl Context {
                 let object = self.runtime_value(object_cell.value(object.name())?)?;
                 let value =
                     self.get_static_property_value(&object, property.name(), property.access())?;
+                if let Value::Number(value) = value {
+                    return apply_number_binary(BytecodeNumericBinaryOp::BitAnd, value, *mask)
+                        .map(Value::Number);
+                }
                 self.eval_bytecode_number_binary(
                     BytecodeNumericBinaryOp::BitAnd,
                     &value,
@@ -662,6 +677,13 @@ impl Context {
                 property,
             } => {
                 let object = self.runtime_value(array_cell.value(array.name())?)?;
+                if let Some(index) =
+                    self.eval_property_index_usize(index, index_cell, *index_mask)?
+                    && let Value::Object(id) = object
+                    && let Some(value) = self.objects.array_index_value_if_array(id, index)?
+                {
+                    return self.runtime_value(value);
+                }
                 let index = self.eval_property_index_value(index, index_cell, *index_mask)?;
                 if let Some(value) = self.eval_dynamic_array_index_member(&object, &index)? {
                     return Ok(value);
