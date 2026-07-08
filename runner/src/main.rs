@@ -373,12 +373,9 @@ impl FeatureAreaStats {
 }
 
 fn build_report(quickjs: Option<&Path>, test262: Option<&Path>) -> FullReport {
-    let corpora = vec![
-        run_engine_corpus(),
-        run_test262_corpus(),
-        run_test262_full_corpus(test262),
-        run_quickjs_corpus(quickjs),
-    ];
+    let mut corpora = vec![run_engine_corpus(), run_test262_corpus()];
+    corpora.extend(test262_full::run_reports(test262));
+    corpora.push(run_quickjs_corpus(quickjs));
     let benchmarks = benchmarks::run();
     FullReport {
         metadata: report_metadata::RunMetadata::from_env(),
@@ -397,10 +394,6 @@ fn run_test262_corpus() -> CorpusReport {
     let cases = cases::test262_cases();
     let rows = cases.iter().map(run_engine_case).collect();
     CorpusReport::from_rows("Test262 active subset", rows)
-}
-
-fn run_test262_full_corpus(test262: Option<&Path>) -> CorpusReport {
-    test262_full::run(test262)
 }
 
 fn run_quickjs_corpus(quickjs: Option<&Path>) -> CorpusReport {
@@ -589,7 +582,8 @@ fn render_report(report: &FullReport) -> String {
     sections.extend([
         "Corpus detail sections list failed cases only. Passed and skipped cases are summarized to keep the report compact.".to_owned(),
         "The full Test262 corpus is progress-only; the active subset remains the CI gate.".to_owned(),
-        "The full Test262 corpus expands upstream files into metadata-driven default, strict, or raw variants.".to_owned(),
+        "Test262 file conformance collapses required variants by source file for dashboard comparison.".to_owned(),
+        "Test262 full corpus keeps default, strict, module, and raw variants as diagnostic rows.".to_owned(),
         String::new(),
         "## Corpus Summary".to_owned(),
         String::new(),
