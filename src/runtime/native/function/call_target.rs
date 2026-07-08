@@ -1,6 +1,6 @@
 use crate::api::native_call::NativeCallTarget;
 
-use super::NativeFunctionKind;
+use super::{DateFunctionKind, NativeFunctionKind};
 
 impl NativeFunctionKind {
     pub(super) const fn from_call_target(target: NativeCallTarget) -> Self {
@@ -26,21 +26,17 @@ impl NativeFunctionKind {
         match target {
             NativeCallTarget::Array => Some(Self::Array),
             NativeCallTarget::ArrayConcat => Some(Self::ArrayConcat),
-            NativeCallTarget::ArrayEntries => Some(Self::ArrayEntries),
             NativeCallTarget::ArrayEvery => Some(Self::ArrayEvery),
             NativeCallTarget::ArrayFilter => Some(Self::ArrayFilter),
             NativeCallTarget::ArrayFind => Some(Self::ArrayFind),
             NativeCallTarget::ArrayFindIndex => Some(Self::ArrayFindIndex),
             NativeCallTarget::ArrayForEach => Some(Self::ArrayForEach),
-            NativeCallTarget::ArrayFrom => Some(Self::ArrayFrom),
             NativeCallTarget::ArrayIncludes => Some(Self::ArrayIncludes),
             NativeCallTarget::ArrayIndexOf => Some(Self::ArrayIndexOf),
             NativeCallTarget::ArrayIsArray => Some(Self::ArrayIsArray),
             NativeCallTarget::ArrayJoin => Some(Self::ArrayJoin),
-            NativeCallTarget::ArrayKeys => Some(Self::ArrayKeys),
             NativeCallTarget::ArrayLastIndexOf => Some(Self::ArrayLastIndexOf),
             NativeCallTarget::ArrayMap => Some(Self::ArrayMap),
-            NativeCallTarget::ArrayOf => Some(Self::ArrayOf),
             NativeCallTarget::ArrayPop => Some(Self::ArrayPop),
             NativeCallTarget::ArrayPush => Some(Self::ArrayPush),
             NativeCallTarget::ArrayReduce => Some(Self::ArrayReduce),
@@ -50,7 +46,6 @@ impl NativeFunctionKind {
             NativeCallTarget::ArraySlice => Some(Self::ArraySlice),
             NativeCallTarget::ArraySome => Some(Self::ArraySome),
             NativeCallTarget::ArrayUnshift => Some(Self::ArrayUnshift),
-            NativeCallTarget::ArrayValues => Some(Self::ArrayValues),
             _ => None,
         }
     }
@@ -169,6 +164,7 @@ impl NativeFunctionKind {
             NativeCallTarget::Function => Some(Self::Function),
             NativeCallTarget::FunctionPrototypeBind => Some(Self::FunctionPrototypeBind),
             NativeCallTarget::FunctionPrototypeCall => Some(Self::FunctionPrototypeCall),
+            NativeCallTarget::Date => Some(Self::Date(DateFunctionKind::Constructor)),
             NativeCallTarget::JsonParse => Some(Self::JsonParse),
             NativeCallTarget::JsonStringify => Some(Self::JsonStringify),
             NativeCallTarget::Number => Some(Self::Number),
@@ -198,21 +194,17 @@ impl NativeFunctionKind {
         match self {
             Self::Array => Some(NativeCallTarget::Array),
             Self::ArrayConcat => Some(NativeCallTarget::ArrayConcat),
-            Self::ArrayEntries => Some(NativeCallTarget::ArrayEntries),
             Self::ArrayEvery => Some(NativeCallTarget::ArrayEvery),
             Self::ArrayFilter => Some(NativeCallTarget::ArrayFilter),
             Self::ArrayFind => Some(NativeCallTarget::ArrayFind),
             Self::ArrayFindIndex => Some(NativeCallTarget::ArrayFindIndex),
             Self::ArrayForEach => Some(NativeCallTarget::ArrayForEach),
-            Self::ArrayFrom => Some(NativeCallTarget::ArrayFrom),
             Self::ArrayIncludes => Some(NativeCallTarget::ArrayIncludes),
             Self::ArrayIndexOf => Some(NativeCallTarget::ArrayIndexOf),
             Self::ArrayIsArray => Some(NativeCallTarget::ArrayIsArray),
             Self::ArrayJoin => Some(NativeCallTarget::ArrayJoin),
-            Self::ArrayKeys => Some(NativeCallTarget::ArrayKeys),
             Self::ArrayLastIndexOf => Some(NativeCallTarget::ArrayLastIndexOf),
             Self::ArrayMap => Some(NativeCallTarget::ArrayMap),
-            Self::ArrayOf => Some(NativeCallTarget::ArrayOf),
             Self::ArrayPop => Some(NativeCallTarget::ArrayPop),
             Self::ArrayPush => Some(NativeCallTarget::ArrayPush),
             Self::ArrayReduce => Some(NativeCallTarget::ArrayReduce),
@@ -222,7 +214,6 @@ impl NativeFunctionKind {
             Self::ArraySlice => Some(NativeCallTarget::ArraySlice),
             Self::ArraySome => Some(NativeCallTarget::ArraySome),
             Self::ArrayUnshift => Some(NativeCallTarget::ArrayUnshift),
-            Self::ArrayValues => Some(NativeCallTarget::ArrayValues),
             _ => None,
         }
     }
@@ -322,6 +313,7 @@ impl NativeFunctionKind {
             Self::Function => Some(NativeCallTarget::Function),
             Self::FunctionPrototypeBind => Some(NativeCallTarget::FunctionPrototypeBind),
             Self::FunctionPrototypeCall => Some(NativeCallTarget::FunctionPrototypeCall),
+            Self::Date(DateFunctionKind::Constructor) => Some(NativeCallTarget::Date),
             Self::JsonParse => Some(NativeCallTarget::JsonParse),
             Self::JsonStringify => Some(NativeCallTarget::JsonStringify),
             Self::Number => Some(NativeCallTarget::Number),

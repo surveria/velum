@@ -5,6 +5,7 @@ use crate::value::{ObjectId, Value};
 mod array;
 mod base;
 mod data;
+mod date;
 mod heap;
 mod property;
 mod prototype;
@@ -14,6 +15,7 @@ mod string;
 use array::{ArrayIndex, ArrayLength, ArrayStorage};
 use base::LiteralPrototype;
 pub use base::ObjectHeap;
+pub use date::DateValue;
 use property::NamedProperty;
 pub use property::ObjectPropertyInit;
 pub use property::{
@@ -73,6 +75,7 @@ struct Object {
     array_length: Option<ArrayLength>,
     string_value: Option<crate::storage::string_heap::JsString>,
     primitive_value: Option<ObjectPrimitiveValue>,
+    date_value: Option<DateValue>,
     prototype: Option<ObjectId>,
 }
 
@@ -94,6 +97,7 @@ impl Object {
             array_length: None,
             string_value: None,
             primitive_value: None,
+            date_value: None,
             prototype: None,
         }
     }
@@ -107,6 +111,7 @@ impl Object {
             array_length: None,
             string_value: None,
             primitive_value: None,
+            date_value: None,
             prototype: None,
         }
     }
@@ -120,6 +125,7 @@ impl Object {
             array_length: Some(length),
             string_value: None,
             primitive_value: None,
+            date_value: None,
             prototype: None,
         }
     }
@@ -133,6 +139,7 @@ impl Object {
             array_length: None,
             string_value: None,
             primitive_value: Some(value),
+            date_value: None,
             prototype: None,
         }
     }

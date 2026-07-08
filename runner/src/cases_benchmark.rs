@@ -46,8 +46,6 @@ const PATH_BENCH_ARRAY_PROTOTYPE_METHODS: &str =
     "tests/corpora/benchmarks/active/array_prototype_methods.js";
 const PATH_BENCH_ARRAY_PROTOTYPE_CALLBACKS: &str =
     "tests/corpora/benchmarks/active/array_prototype_callbacks.js";
-const PATH_BENCH_ARRAY_STATIC_ITERATORS: &str =
-    "tests/corpora/benchmarks/active/array_static_iterators.js";
 const PATH_BENCH_ARRAY_PROTOTYPE_CONCAT: &str =
     "tests/corpora/benchmarks/active/array_prototype_concat.js";
 const PATH_BENCH_ARRAY_PROTOTYPE_INCLUDES: &str =
@@ -246,10 +244,6 @@ fn benchmark_array_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "array_prototype_callbacks",
             path: PATH_BENCH_ARRAY_PROTOTYPE_CALLBACKS,
-        },
-        BenchmarkCase {
-            id: "array_static_iterators",
-            path: PATH_BENCH_ARRAY_STATIC_ITERATORS,
         },
         BenchmarkCase {
             id: "array_prototype_join",

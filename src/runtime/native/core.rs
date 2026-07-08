@@ -10,12 +10,13 @@ use crate::{
 };
 
 use super::{
-    ARRAY_NAME, BOOLEAN_NAME, EVAL_NAME, FUNCTION_NAME, GLOBAL_DECODE_URI_COMPONENT_NAME,
-    GLOBAL_DECODE_URI_NAME, GLOBAL_ENCODE_URI_COMPONENT_NAME, GLOBAL_ENCODE_URI_NAME,
-    GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME,
-    GLOBAL_THIS_NAME, INFINITY_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME,
-    NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PROMISE_NAME,
-    REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
+    ARRAY_NAME, BOOLEAN_NAME, DATE_NAME, DateFunctionKind, EVAL_NAME, FUNCTION_NAME,
+    GLOBAL_DECODE_URI_COMPONENT_NAME, GLOBAL_DECODE_URI_NAME, GLOBAL_ENCODE_URI_COMPONENT_NAME,
+    GLOBAL_ENCODE_URI_NAME, GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME,
+    GLOBAL_PARSE_INT_NAME, GLOBAL_THIS_NAME, INFINITY_NAME, JSON_NAME, MAP_NAME, MATH_NAME,
+    NAN_NAME, NUMBER_NAME, NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY,
+    OBJECT_NAME, PROMISE_NAME, REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME, WEAK_MAP_NAME,
+    WEAK_SET_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -40,6 +41,7 @@ const fn native_kind_is_constructable(kind: NativeFunctionKind) -> bool {
             | NativeFunctionKind::Set
             | NativeFunctionKind::WeakMap
             | NativeFunctionKind::WeakSet
+            | NativeFunctionKind::Date(DateFunctionKind::Constructor)
     )
 }
 
@@ -79,6 +81,7 @@ impl Context {
                 .global_constant_value(INFINITY_NAME, Value::Number(f64::INFINITY))
                 .map(Some),
             JSON_NAME => self.json_object_value().map(Some),
+            DATE_NAME => self.date_constructor_value().map(Some),
             MAP_NAME => self.map_constructor_value().map(Some),
             MATH_NAME => self.math_object_value().map(Some),
             NAN_NAME => self
@@ -134,6 +137,7 @@ impl Context {
             GLOBAL_PARSE_INT_NAME => self
                 .global_function_value(NativeFunctionKind::GlobalParseInt)
                 .map(Some),
+            DATE_NAME => self.date_constructor_value().map(Some),
             MAP_NAME => self.map_constructor_value().map(Some),
             NUMBER_NAME => self.number_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
@@ -192,6 +196,9 @@ impl Context {
             NativeFunctionKind::Number => self.construct_number_object(args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
             NativeFunctionKind::String => self.construct_string_object(args),
+            NativeFunctionKind::Date(DateFunctionKind::Constructor) => {
+                self.construct_date_object(args)
+            }
             NativeFunctionKind::Map => self.construct_collection_object(
                 crate::runtime::collections::CollectionKind::Map,
                 args,
