@@ -67,6 +67,29 @@ let toJsonText = JSON.stringify({
         }
     }
 });
+let boxedNumber = new Number(10);
+boxedNumber.toString = function() {
+    return "toString";
+};
+boxedNumber.valueOf = function() {
+    throw new Error("JSON replacer list should not call Number object valueOf");
+};
+let boxedListText = JSON.stringify({ 10: 1, toString: 2, valueOf: 3 }, [boxedNumber]);
+let boxedSpace = new Number(3.9);
+boxedSpace.toString = function() {
+    throw new Error("JSON space should not call Number object toString");
+};
+boxedSpace.valueOf = function() {
+    return 3;
+};
+let boxedPrettyText = JSON.stringify({ a: { b: 1 } }, null, boxedSpace);
+let boxedString = new String("wrapped");
+boxedString.toString = function() {
+    return "stringified";
+};
+boxedString.valueOf = function() {
+    throw new Error("JSON String object conversion should prefer toString");
+};
 let callbackOk =
     revived.a === 1 &&
     revived.nested.b === 42 &&
@@ -109,3 +132,11 @@ print(arrayText);
 print(generated);
 print("keys:" + jsonKeys);
 print("callbacks:" + callbackOk);
+print(
+    JSON.stringify(new Boolean(true)),
+    JSON.stringify({ key: new Boolean(false) }),
+    JSON.stringify(new Number(8.5)),
+    JSON.stringify(boxedString),
+    boxedListText
+);
+print(boxedPrettyText);

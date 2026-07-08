@@ -5,7 +5,7 @@ use crate::{
     runtime::Context,
     runtime::call::RuntimeCallArgs,
     runtime::control::Completion,
-    runtime::object::{ObjectPropertyInit, PropertyEnumerable},
+    runtime::object::{ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable},
     runtime::property::delete_property,
     value::{ObjectId, Value},
 };
@@ -272,7 +272,7 @@ impl Context {
         self.set_property_value_with_accessors(holder, property, key, value)
     }
 
-    fn json_replacer(&self, value: Option<&Value>) -> Result<JsonReplacer> {
+    fn json_replacer(&mut self, value: Option<&Value>) -> Result<JsonReplacer> {
         let Some(value) = value else {
             return Ok(JsonReplacer::None);
         };
@@ -289,7 +289,7 @@ impl Context {
             .map(JsonReplacer::PropertyList)
     }
 
-    fn json_replacer_property_list(&self, id: ObjectId) -> Result<Vec<String>> {
+    fn json_replacer_property_list(&mut self, id: ObjectId) -> Result<Vec<String>> {
         let length = self.objects.array_len(id)?;
         let mut keys = Vec::new();
         for index in 0..length {
@@ -304,15 +304,24 @@ impl Context {
         Ok(keys)
     }
 
-    fn json_replacer_property_name(&self, value: &Value) -> Result<Option<String>> {
+    fn json_replacer_property_name(&mut self, value: &Value) -> Result<Option<String>> {
         match value {
             Value::String(value) => Ok(Some(value.clone())),
             Value::HeapString(value) => Ok(Some(value.as_str().to_owned())),
-            Value::Number(value) => Ok(Some(Value::Number(*value).to_string())),
-            Value::Object(id) => self
-                .string_object_primitive_value(*id)
-                .map(|value| value.map(ToOwned::to_owned)),
-            Value::Undefined
+            Value::Number(value) => Ok(Some(Self::json_number_property_name(*value))),
+            Value::Object(id) if self.objects.string_object_value(*id)?.is_some() => {
+                self.json_object_to_string(value).map(Some)
+            }
+            Value::Object(id)
+                if matches!(
+                    self.objects.primitive_value(*id)?,
+                    Some(ObjectPrimitiveValue::Number(_))
+                ) =>
+            {
+                self.json_object_to_string(value).map(Some)
+            }
+            Value::Object(_)
+            | Value::Undefined
             | Value::Null
             | Value::Bool(_)
             | Value::Symbol(_)
@@ -323,7 +332,7 @@ impl Context {
         }
     }
 
-    fn json_gap(&self, value: Option<&Value>) -> Result<String> {
+    fn json_gap(&mut self, value: Option<&Value>) -> Result<String> {
         let Some(value) = value else {
             return Ok(String::new());
         };
@@ -331,10 +340,21 @@ impl Context {
             Value::Number(value) => JSON_SPACE.repeat(Self::json_gap_space_count(*value)),
             Value::String(value) => Self::json_gap_string(value),
             Value::HeapString(value) => Self::json_gap_string(value.as_str()),
-            Value::Object(id) => self
-                .string_object_primitive_value(*id)?
-                .map_or_else(String::new, Self::json_gap_string),
-            Value::Undefined
+            Value::Object(id) if self.objects.string_object_value(*id)?.is_some() => {
+                Self::json_gap_string(&self.json_object_to_string(value)?)
+            }
+            Value::Object(id)
+                if matches!(
+                    self.objects.primitive_value(*id)?,
+                    Some(ObjectPrimitiveValue::Number(_))
+                ) =>
+            {
+                JSON_SPACE.repeat(Self::json_gap_space_count(
+                    self.json_object_to_number(value)?,
+                ))
+            }
+            Value::Object(_)
+            | Value::Undefined
             | Value::Null
             | Value::Bool(_)
             | Value::Symbol(_)
@@ -408,7 +428,8 @@ impl Context {
         value: &Value,
         state: &mut JsonStringifyState,
     ) -> Result<Option<String>> {
-        match value {
+        let value = self.json_boxed_stringify_value(value)?;
+        match &value {
             Value::Undefined
             | Value::Function(_)
             | Value::NativeFunction(_)
@@ -663,6 +684,73 @@ impl Context {
             return "0".to_owned();
         }
         Value::Number(value).to_string()
+    }
+
+    fn json_number_property_name(value: f64) -> String {
+        if value == 0.0 {
+            return "0".to_owned();
+        }
+        Value::Number(value).to_string()
+    }
+
+    fn json_boxed_stringify_value(&mut self, value: &Value) -> Result<Value> {
+        let Value::Object(id) = value else {
+            return Ok(value.clone());
+        };
+        if let Some(ObjectPrimitiveValue::Bool(value)) = self.objects.primitive_value(*id)? {
+            return Ok(Value::Bool(*value));
+        }
+        if matches!(
+            self.objects.primitive_value(*id)?,
+            Some(ObjectPrimitiveValue::Number(_))
+        ) {
+            return self.json_object_to_number(value).map(Value::Number);
+        }
+        if self.objects.string_object_value(*id)?.is_some() {
+            return self
+                .json_object_to_string(value)
+                .and_then(|text| self.heap_string_value(&text));
+        }
+        Ok(value.clone())
+    }
+
+    fn json_object_to_number(&mut self, value: &Value) -> Result<f64> {
+        let primitive = self.json_ordinary_to_primitive(value, &["valueOf", "toString"])?;
+        Ok(Self::value_to_number(&primitive))
+    }
+
+    fn json_object_to_string(&mut self, value: &Value) -> Result<String> {
+        let primitive = self.json_ordinary_to_primitive(value, &["toString", "valueOf"])?;
+        self.string_argument_text(&primitive)
+    }
+
+    fn json_ordinary_to_primitive(&mut self, value: &Value, names: &[&str]) -> Result<Value> {
+        for name in names {
+            let method = self.get_property_value(value, name)?;
+            if !Self::is_json_callable(&method) {
+                continue;
+            }
+            let result = self.call_json_callback(method, value.clone(), &[])?;
+            if Self::is_json_primitive(&result) {
+                return Ok(result);
+            }
+        }
+        Err(Error::type_error(
+            "JSON object could not convert to primitive",
+        ))
+    }
+
+    const fn is_json_primitive(value: &Value) -> bool {
+        matches!(
+            value,
+            Value::Undefined
+                | Value::Null
+                | Value::Bool(_)
+                | Value::Number(_)
+                | Value::String(_)
+                | Value::HeapString(_)
+                | Value::Symbol(_)
+        )
     }
 
     fn call_json_callback(

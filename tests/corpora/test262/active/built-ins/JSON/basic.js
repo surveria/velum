@@ -67,6 +67,36 @@ let toJsonText = JSON.stringify({
     }
   }
 });
+let boxedNumber = new Number(10);
+boxedNumber.toString = function() {
+  return "toString";
+};
+boxedNumber.valueOf = function() {
+  throw new Test262Error("JSON replacer list should not call Number object valueOf");
+};
+let boxedListText = JSON.stringify({ 10: 1, toString: 2, valueOf: 3 }, [boxedNumber]);
+let boxedSpace = new Number(3.9);
+boxedSpace.toString = function() {
+  throw new Test262Error("JSON space should not call Number object toString");
+};
+boxedSpace.valueOf = function() {
+  return 3;
+};
+let boxedPrettyText = JSON.stringify({ a: { b: 1 } }, null, boxedSpace);
+let boxedString = new String("wrapped");
+boxedString.toString = function() {
+  return "stringified";
+};
+boxedString.valueOf = function() {
+  throw new Test262Error("JSON String object conversion should prefer toString");
+};
+let boxedValuesOk =
+  JSON.stringify(new Boolean(true)) === "true" &&
+  JSON.stringify({ key: new Boolean(false) }) === '{"key":false}' &&
+  JSON.stringify(new Number(8.5)) === "8.5" &&
+  JSON.stringify(boxedString) === '"stringified"' &&
+  boxedListText === '{"toString":2}' &&
+  boxedPrettyText === '{\n   "a": {\n      "b": 1\n   }\n}';
 
 if (
   !primitiveOk ||
@@ -104,7 +134,8 @@ if (
   prettyText !== '{\n  "a": 1,\n  "nested": {\n    "b": 2\n  }\n}' ||
   arrayReplacerText !== '[1,null,3]' ||
   toJsonKey !== "keep" ||
-  toJsonText !== '{"keep":{"answer":42}}'
+  toJsonText !== '{"keep":{"answer":42}}' ||
+  !boxedValuesOk
 ) {
   throw new Test262Error("JSON basic behavior was unexpected");
 }
