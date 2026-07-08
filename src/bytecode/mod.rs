@@ -8,6 +8,7 @@ pub use types::{
     BytecodeCallSite, BytecodeCatch, BytecodeCompletion, BytecodeDynamicProperty,
     BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeFunctionParam,
     BytecodeInstruction, BytecodeNewTargetMode, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
-    BytecodeNumericEqualityOp, BytecodeNumericUnaryOp, BytecodeObjectProperty, BytecodeProgram,
+    BytecodeNumericEqualityOp, BytecodeNumericUnaryOp, BytecodeObjectProperty, BytecodePattern,
+    BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget, BytecodeProgram,
     BytecodeProperty, BytecodeSwitchCase,
 };

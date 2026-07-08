@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{DeclKind, ForInTarget, StaticBinding, Stmt},
+    ast::{BindingPattern, DeclKind, ForInTarget, StaticBinding, Stmt},
     binding_layout::BindingLayout,
     bytecode::{BytecodeBinding, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeHoistPlan},
     error::Result,
@@ -41,6 +41,37 @@ impl<'a> HoistCollector<'a> {
         Ok(())
     }
 
+    fn collect_function_declaration(
+        &mut self,
+        name: &StaticBinding,
+        id: crate::syntax::StaticFunctionId,
+        params: &std::rc::Rc<[crate::ast::FunctionParam]>,
+        body: &std::rc::Rc<[Stmt]>,
+        is_async: bool,
+    ) -> Result<()> {
+        self.var_declarations.push(name.clone());
+        let declaration = BytecodeFunctionDeclaration::new(
+            BytecodeBinding::compile(name, self.layout)?,
+            id,
+            name.name().clone(),
+            BytecodeFunction::compile(params, body, self.layout)?,
+            is_async,
+        );
+        self.function_declarations.push(declaration);
+        Ok(())
+    }
+
+    fn collect_pattern_var_declarations(&mut self, pattern: &BindingPattern) {
+        let mut visit =
+            |binding: &StaticBinding| -> std::result::Result<(), std::convert::Infallible> {
+                self.var_declarations.push(binding.clone());
+                Ok(())
+            };
+        match pattern.for_each_binding(&mut visit) {
+            Ok(()) => {}
+        }
+    }
+
     fn collect_statement(&mut self, statement: &Stmt) -> Result<()> {
         match statement {
             Stmt::Block(statements) | Stmt::DeclList(statements) => {
@@ -68,12 +99,18 @@ impl<'a> HoistCollector<'a> {
                 Ok(())
             }
             Stmt::ForIn { target, body, .. } | Stmt::ForOf { target, body, .. } => {
-                if let ForInTarget::Binding {
-                    name,
-                    kind: DeclKind::Var,
-                } = target
-                {
-                    self.var_declarations.push(name.clone());
+                match target {
+                    ForInTarget::Binding {
+                        name,
+                        kind: DeclKind::Var,
+                    } => self.var_declarations.push(name.clone()),
+                    ForInTarget::PatternBinding {
+                        pattern,
+                        kind: DeclKind::Var,
+                    } => self.collect_pattern_var_declarations(pattern),
+                    ForInTarget::Binding { .. }
+                    | ForInTarget::PatternBinding { .. }
+                    | ForInTarget::Assignment(_) => {}
                 }
                 self.collect_statement(body)
             }
@@ -105,29 +142,27 @@ impl<'a> HoistCollector<'a> {
                 self.var_declarations.push(name.clone());
                 Ok(())
             }
+            Stmt::PatternDecl {
+                pattern,
+                kind: DeclKind::Var,
+                ..
+            } => {
+                self.collect_pattern_var_declarations(pattern);
+                Ok(())
+            }
             Stmt::FunctionDecl {
                 name,
                 id,
                 params,
                 body,
                 is_async,
-            } => {
-                self.var_declarations.push(name.clone());
-                let declaration = BytecodeFunctionDeclaration::new(
-                    BytecodeBinding::compile(name, self.layout)?,
-                    *id,
-                    name.name().clone(),
-                    BytecodeFunction::compile(params, body, self.layout)?,
-                    *is_async,
-                );
-                self.function_declarations.push(declaration);
-                Ok(())
-            }
+            } => self.collect_function_declaration(name, *id, params, body, *is_async),
             Stmt::Empty
             | Stmt::Break(_)
             | Stmt::Continue(_)
             | Stmt::Throw(_)
             | Stmt::Return(_)
+            | Stmt::PatternDecl { .. }
             | Stmt::VarDecl { .. }
             | Stmt::Expr(_) => Ok(()),
         }

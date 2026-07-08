@@ -89,7 +89,7 @@ impl<'a> Lexer<'a> {
                 '.' if matches!(self.peek_next_char(), Some('0'..='9')) => {
                     self.leading_decimal_number(offset)?;
                 }
-                '.' => self.simple(TokenKind::Dot),
+                '.' => self.dot_token(offset)?,
                 '(' => self.simple(TokenKind::LParen),
                 ')' => self.simple(TokenKind::RParen),
                 '{' => {
@@ -776,6 +776,19 @@ impl<'a> Lexer<'a> {
         } else {
             self.push(TokenKind::StarStar, offset);
         }
+    }
+
+    fn dot_token(&mut self, offset: usize) -> Result<()> {
+        self.advance();
+        if !self.match_char('.') {
+            self.push(TokenKind::Dot, offset);
+            return Ok(());
+        }
+        if !self.match_char('.') {
+            return Err(Error::lex("unexpected '..'", offset));
+        }
+        self.push(TokenKind::DotDotDot, offset);
+        Ok(())
     }
 
     fn bang_token(&mut self, offset: usize) {

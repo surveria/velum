@@ -22,6 +22,7 @@ mod call;
 mod control;
 mod function;
 mod hoist;
+mod pattern;
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
 
@@ -126,6 +127,19 @@ impl<'a> BytecodeCompiler<'a> {
                 object,
                 body,
             } => self.compile_for_of(target, object, body),
+            Stmt::PatternDecl {
+                pattern,
+                kind,
+                init,
+            } => {
+                self.compile_expr(init)?;
+                let pattern = self.compile_pattern(pattern)?;
+                self.emit(BytecodeInstruction::DestructurePattern {
+                    pattern: Rc::new(pattern),
+                    kind: *kind,
+                });
+                Ok(())
+            }
             Stmt::Switch {
                 discriminant,
                 cases,
@@ -781,6 +795,7 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::For { .. }
             | BytecodeInstruction::ForIn { .. }
             | BytecodeInstruction::ForOf { .. }
+            | BytecodeInstruction::DestructurePattern { .. }
             | BytecodeInstruction::Switch { .. }
             | BytecodeInstruction::Try { .. }
             | BytecodeInstruction::Label { .. }

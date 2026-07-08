@@ -500,7 +500,46 @@ pub enum BytecodeForInTarget {
         name: BytecodeBinding,
         kind: DeclKind,
     },
+    PatternBinding {
+        pattern: Rc<BytecodePattern>,
+        kind: DeclKind,
+    },
     Assignment(BytecodeAssignmentTarget),
+}
+
+/// Compiled destructuring binding pattern. Default initializers and computed
+/// keys stay as lazily evaluated blocks so they only run when the runtime
+/// walker needs them.
+#[derive(Debug, Clone, PartialEq)]
+pub enum BytecodePattern {
+    Binding(BytecodeBinding),
+    Object {
+        properties: Rc<[BytecodePatternProperty]>,
+        rest: Option<BytecodeBinding>,
+    },
+    Array {
+        /// `None` entries are elisions that consume one iterator step.
+        elements: Rc<[Option<BytecodePatternTarget>]>,
+        rest: Option<Rc<Self>>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BytecodePatternProperty {
+    pub key: BytecodePatternKey,
+    pub target: BytecodePatternTarget,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BytecodePatternKey {
+    Static(StaticName),
+    Computed(BytecodeBlock),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BytecodePatternTarget {
+    pub pattern: BytecodePattern,
+    pub default: Option<BytecodeBlock>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -710,6 +749,10 @@ pub enum BytecodeInstruction {
         target: BytecodeForInTarget,
         object: BytecodeBlock,
         body: BytecodeBlock,
+    },
+    DestructurePattern {
+        pattern: Rc<BytecodePattern>,
+        kind: DeclKind,
     },
     Switch {
         discriminant: BytecodeBlock,

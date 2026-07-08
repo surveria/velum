@@ -96,6 +96,7 @@ pub enum TokenKind {
     Question,
     Colon,
     Dot,
+    DotDotDot,
     LParen,
     RParen,
     LBrace,
