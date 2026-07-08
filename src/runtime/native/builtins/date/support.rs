@@ -37,14 +37,14 @@ pub(super) enum DateComponent {
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct DateParts {
-    year: i64,
-    month: i64,
-    date: i64,
-    day: i64,
-    hour: i64,
-    minute: i64,
-    second: i64,
-    millisecond: i64,
+    pub(super) year: i64,
+    pub(super) month: i64,
+    pub(super) date: i64,
+    pub(super) day: i64,
+    pub(super) hour: i64,
+    pub(super) minute: i64,
+    pub(super) second: i64,
+    pub(super) millisecond: i64,
 }
 
 impl DateParts {

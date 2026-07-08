@@ -3,11 +3,12 @@ use crate::{
     runtime::{
         Context,
         call::RuntimeCallArgs,
-        object::{DateValue, PropertyEnumerable},
+        object::{DateValue, PropertyEnumerable, PropertyKey},
     },
     value::{ErrorName, NativeFunctionId, ObjectId, Value},
 };
 
+mod setters;
 mod support;
 
 use crate::runtime::native::{
@@ -23,6 +24,12 @@ use support::{
 };
 
 const DATE_RECEIVER_ERROR: &str = "Date method requires a Date receiver";
+const DATE_TO_PRIMITIVE_HINT_DEFAULT: &str = "default";
+const DATE_TO_PRIMITIVE_HINT_NUMBER: &str = "number";
+const DATE_TO_PRIMITIVE_HINT_STRING: &str = "string";
+const DATE_TO_PRIMITIVE_INVALID_HINT_ERROR: &str =
+    "Date @@toPrimitive hint must be 'default', 'string', or 'number'";
+const SYMBOL_TO_PRIMITIVE_PROPERTY: &str = "toPrimitive";
 
 impl Context {
     pub(in crate::runtime::native) fn date_constructor_value(&mut self) -> Result<Value> {
@@ -78,70 +85,163 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
+        if let Some(result) = self.eval_date_constructor_or_static_kind(kind, args) {
+            return result;
+        }
+        if let Some(result) = self.eval_date_getter_kind(kind, this_value) {
+            return result;
+        }
+        if let Some(result) = self.eval_date_setter_kind(kind, args, this_value) {
+            return result;
+        }
+        if let Some(result) = self.eval_date_string_kind(kind, args, this_value) {
+            return result;
+        }
+        Err(Error::runtime("Date native function kind was not handled"))
+    }
+
+    fn eval_date_constructor_or_static_kind(
+        &mut self,
+        kind: DateFunctionKind,
+        args: RuntimeCallArgs<'_>,
+    ) -> Option<Result<Value>> {
         match kind {
-            DateFunctionKind::Constructor => self.eval_date_constructor(args),
-            DateFunctionKind::Now => Self::eval_date_now(args),
-            DateFunctionKind::Parse => Self::eval_date_parse(args),
-            DateFunctionKind::Utc => Self::eval_date_utc(args),
-            DateFunctionKind::PrototypeGetDate => self.eval_date_prototype_get_date(this_value),
-            DateFunctionKind::PrototypeGetDay => self.eval_date_prototype_get_day(this_value),
-            DateFunctionKind::PrototypeGetFullYear => {
-                self.eval_date_prototype_get_full_year(this_value)
+            DateFunctionKind::Constructor => Some(self.eval_date_constructor(args)),
+            DateFunctionKind::Now => Some(Self::eval_date_now(args)),
+            DateFunctionKind::Parse => Some(Self::eval_date_parse(args)),
+            DateFunctionKind::Utc => Some(Self::eval_date_utc(args)),
+            _ => None,
+        }
+    }
+
+    fn eval_date_getter_kind(
+        &self,
+        kind: DateFunctionKind,
+        this_value: &Value,
+    ) -> Option<Result<Value>> {
+        match kind {
+            DateFunctionKind::PrototypeGetDate => {
+                Some(self.eval_date_prototype_get_date(this_value))
             }
-            DateFunctionKind::PrototypeGetHours => self.eval_date_prototype_get_hours(this_value),
+            DateFunctionKind::PrototypeGetDay => Some(self.eval_date_prototype_get_day(this_value)),
+            DateFunctionKind::PrototypeGetFullYear => {
+                Some(self.eval_date_prototype_get_full_year(this_value))
+            }
+            DateFunctionKind::PrototypeGetHours => {
+                Some(self.eval_date_prototype_get_hours(this_value))
+            }
             DateFunctionKind::PrototypeGetMilliseconds => {
-                self.eval_date_prototype_get_milliseconds(this_value)
+                Some(self.eval_date_prototype_get_milliseconds(this_value))
             }
             DateFunctionKind::PrototypeGetMinutes => {
-                self.eval_date_prototype_get_minutes(this_value)
+                Some(self.eval_date_prototype_get_minutes(this_value))
             }
-            DateFunctionKind::PrototypeGetMonth => self.eval_date_prototype_get_month(this_value),
+            DateFunctionKind::PrototypeGetMonth => {
+                Some(self.eval_date_prototype_get_month(this_value))
+            }
             DateFunctionKind::PrototypeGetSeconds => {
-                self.eval_date_prototype_get_seconds(this_value)
+                Some(self.eval_date_prototype_get_seconds(this_value))
             }
-            DateFunctionKind::PrototypeGetTime => self.eval_date_prototype_get_time(this_value),
+            DateFunctionKind::PrototypeGetTime => {
+                Some(self.eval_date_prototype_get_time(this_value))
+            }
+            DateFunctionKind::PrototypeGetTimezoneOffset => {
+                Some(self.eval_date_prototype_get_timezone_offset(this_value))
+            }
             DateFunctionKind::PrototypeGetUtcDate => {
-                self.eval_date_prototype_get_utc_date(this_value)
+                Some(self.eval_date_prototype_get_utc_date(this_value))
             }
             DateFunctionKind::PrototypeGetUtcDay => {
-                self.eval_date_prototype_get_utc_day(this_value)
+                Some(self.eval_date_prototype_get_utc_day(this_value))
             }
             DateFunctionKind::PrototypeGetUtcFullYear => {
-                self.eval_date_prototype_get_utc_full_year(this_value)
+                Some(self.eval_date_prototype_get_utc_full_year(this_value))
             }
             DateFunctionKind::PrototypeGetUtcHours => {
-                self.eval_date_prototype_get_utc_hours(this_value)
+                Some(self.eval_date_prototype_get_utc_hours(this_value))
             }
             DateFunctionKind::PrototypeGetUtcMilliseconds => {
-                self.eval_date_prototype_get_utc_milliseconds(this_value)
+                Some(self.eval_date_prototype_get_utc_milliseconds(this_value))
             }
             DateFunctionKind::PrototypeGetUtcMinutes => {
-                self.eval_date_prototype_get_utc_minutes(this_value)
+                Some(self.eval_date_prototype_get_utc_minutes(this_value))
             }
             DateFunctionKind::PrototypeGetUtcMonth => {
-                self.eval_date_prototype_get_utc_month(this_value)
+                Some(self.eval_date_prototype_get_utc_month(this_value))
             }
             DateFunctionKind::PrototypeGetUtcSeconds => {
-                self.eval_date_prototype_get_utc_seconds(this_value)
+                Some(self.eval_date_prototype_get_utc_seconds(this_value))
+            }
+            DateFunctionKind::PrototypeValueOf => {
+                Some(self.eval_date_prototype_value_of(this_value))
+            }
+            _ => None,
+        }
+    }
+
+    fn eval_date_setter_kind(
+        &mut self,
+        kind: DateFunctionKind,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Option<Result<Value>> {
+        match kind {
+            DateFunctionKind::PrototypeSetDate | DateFunctionKind::PrototypeSetUtcDate => {
+                Some(self.eval_date_prototype_set_date(args, this_value))
+            }
+            DateFunctionKind::PrototypeSetFullYear | DateFunctionKind::PrototypeSetUtcFullYear => {
+                Some(self.eval_date_prototype_set_full_year(args, this_value))
+            }
+            DateFunctionKind::PrototypeSetHours | DateFunctionKind::PrototypeSetUtcHours => {
+                Some(self.eval_date_prototype_set_hours(args, this_value))
+            }
+            DateFunctionKind::PrototypeSetMilliseconds
+            | DateFunctionKind::PrototypeSetUtcMilliseconds => {
+                Some(self.eval_date_prototype_set_milliseconds(args, this_value))
+            }
+            DateFunctionKind::PrototypeSetMinutes | DateFunctionKind::PrototypeSetUtcMinutes => {
+                Some(self.eval_date_prototype_set_minutes(args, this_value))
+            }
+            DateFunctionKind::PrototypeSetMonth | DateFunctionKind::PrototypeSetUtcMonth => {
+                Some(self.eval_date_prototype_set_month(args, this_value))
+            }
+            DateFunctionKind::PrototypeSetSeconds | DateFunctionKind::PrototypeSetUtcSeconds => {
+                Some(self.eval_date_prototype_set_seconds(args, this_value))
             }
             DateFunctionKind::PrototypeSetTime => {
-                self.eval_date_prototype_set_time(args, this_value)
+                Some(self.eval_date_prototype_set_time(args, this_value))
+            }
+            _ => None,
+        }
+    }
+
+    fn eval_date_string_kind(
+        &mut self,
+        kind: DateFunctionKind,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Option<Result<Value>> {
+        match kind {
+            DateFunctionKind::PrototypeSymbolToPrimitive => {
+                Some(self.eval_date_prototype_symbol_to_primitive(args, this_value))
             }
             DateFunctionKind::PrototypeToDateString => {
-                self.eval_date_prototype_to_date_string(this_value)
+                Some(self.eval_date_prototype_to_date_string(this_value))
             }
             DateFunctionKind::PrototypeToIsoString => {
-                self.eval_date_prototype_to_iso_string(this_value)
+                Some(self.eval_date_prototype_to_iso_string(this_value))
             }
-            DateFunctionKind::PrototypeToJson => self.eval_date_prototype_to_json(this_value),
-            DateFunctionKind::PrototypeToString => self.eval_date_prototype_to_string(this_value),
+            DateFunctionKind::PrototypeToJson => Some(self.eval_date_prototype_to_json(this_value)),
+            DateFunctionKind::PrototypeToString => {
+                Some(self.eval_date_prototype_to_string(this_value))
+            }
             DateFunctionKind::PrototypeToTimeString => {
-                self.eval_date_prototype_to_time_string(this_value)
+                Some(self.eval_date_prototype_to_time_string(this_value))
             }
             DateFunctionKind::PrototypeToUtcString => {
-                self.eval_date_prototype_to_utc_string(this_value)
+                Some(self.eval_date_prototype_to_utc_string(this_value))
             }
-            DateFunctionKind::PrototypeValueOf => self.eval_date_prototype_value_of(this_value),
+            _ => None,
         }
     }
 
@@ -289,24 +389,50 @@ impl Context {
         self.eval_date_prototype_get_utc_milliseconds(this_value)
     }
 
+    pub(in crate::runtime::native) fn eval_date_prototype_get_timezone_offset(
+        &self,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let value = self.date_this_value(this_value)?;
+        if value.millis().is_none() {
+            return Ok(Value::Number(f64::NAN));
+        }
+        Ok(Value::Number(0.0))
+    }
+
     pub(in crate::runtime::native) fn eval_date_prototype_set_time(
         &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let Value::Object(id) = this_value else {
-            return Err(Error::type_error(DATE_RECEIVER_ERROR));
-        };
-        if self.objects.date_value(*id)?.is_none() {
-            return Err(Error::type_error(DATE_RECEIVER_ERROR));
-        }
+        let (id, _) = self.date_this_object_value(this_value)?;
         let value = args
             .as_slice()
             .first()
             .map_or(f64::NAN, Self::value_to_number);
         let date = time_clip(value)?;
-        self.objects.set_date_value(*id, date)?;
+        self.objects.set_date_value(id, date)?;
         date_value_to_number(date).map(Value::Number)
+    }
+
+    pub(in crate::runtime::native) fn eval_date_prototype_symbol_to_primitive(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let Some(hint) = args.as_slice().first() else {
+            return Err(Error::type_error(DATE_TO_PRIMITIVE_INVALID_HINT_ERROR));
+        };
+        let hint = Self::date_to_primitive_hint(hint)?;
+        match hint {
+            DATE_TO_PRIMITIVE_HINT_DEFAULT | DATE_TO_PRIMITIVE_HINT_STRING => {
+                self.ordinary_to_primitive(this_value, &["toString", "valueOf"])
+            }
+            DATE_TO_PRIMITIVE_HINT_NUMBER => {
+                self.ordinary_to_primitive(this_value, &["valueOf", "toString"])
+            }
+            _ => Err(Error::type_error(DATE_TO_PRIMITIVE_INVALID_HINT_ERROR)),
+        }
     }
 
     pub(in crate::runtime::native) fn eval_date_prototype_to_iso_string(
@@ -440,6 +566,7 @@ impl Context {
         for kind in DATE_PROTOTYPE_METHODS {
             self.define_date_prototype_method(prototype, NativeFunctionKind::Date(*kind))?;
         }
+        self.define_date_prototype_symbol_to_primitive(prototype)?;
         Ok(())
     }
 
@@ -450,6 +577,76 @@ impl Context {
     ) -> Result<()> {
         let function = self.create_ephemeral_native_function(kind, Value::Undefined)?;
         self.define_non_enumerable_object_property(prototype, kind.name(), function)
+    }
+
+    fn define_date_prototype_symbol_to_primitive(&mut self, prototype: ObjectId) -> Result<()> {
+        let key = self.date_well_known_symbol_property_key(SYMBOL_TO_PRIMITIVE_PROPERTY)?;
+        let kind = NativeFunctionKind::Date(DateFunctionKind::PrototypeSymbolToPrimitive);
+        let function = self.create_ephemeral_native_function(kind, Value::Undefined)?;
+        self.objects.define_non_enumerable(
+            prototype,
+            key,
+            kind.name(),
+            function,
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn date_well_known_symbol_property_key(&mut self, property: &str) -> Result<PropertyKey> {
+        let constructor = self.symbol_constructor_value()?;
+        let value = self.get_property_value(&constructor, property)?;
+        let Value::Symbol(symbol) = value else {
+            return Err(Error::runtime("well-known Symbol property is not a symbol"));
+        };
+        Ok(PropertyKey::symbol(symbol.id()))
+    }
+
+    fn ordinary_to_primitive(&mut self, value: &Value, method_names: &[&str]) -> Result<Value> {
+        if Self::is_primitive_to_primitive_result(value) {
+            return Err(Error::type_error(
+                "Date @@toPrimitive requires an object receiver",
+            ));
+        }
+        for method_name in method_names {
+            let method = self.get_property_value(value, method_name)?;
+            if !Self::is_callable(&method) {
+                continue;
+            }
+            let result = self.eval_call_value(method, &[], value.clone())?;
+            if Self::is_primitive_to_primitive_result(&result) {
+                return Ok(result);
+            }
+        }
+        Err(Error::type_error(
+            "Cannot convert object to primitive value",
+        ))
+    }
+
+    fn date_to_primitive_hint(value: &Value) -> Result<&str> {
+        let hint = match value {
+            Value::String(value) => value.as_str(),
+            Value::HeapString(value) => value.as_str(),
+            _ => return Err(Error::type_error(DATE_TO_PRIMITIVE_INVALID_HINT_ERROR)),
+        };
+        match hint {
+            DATE_TO_PRIMITIVE_HINT_DEFAULT
+            | DATE_TO_PRIMITIVE_HINT_NUMBER
+            | DATE_TO_PRIMITIVE_HINT_STRING => Ok(hint),
+            _ => Err(Error::type_error(DATE_TO_PRIMITIVE_INVALID_HINT_ERROR)),
+        }
+    }
+
+    const fn is_primitive_to_primitive_result(value: &Value) -> bool {
+        matches!(
+            value,
+            Value::Undefined
+                | Value::Null
+                | Value::Bool(_)
+                | Value::Number(_)
+                | Value::String(_)
+                | Value::HeapString(_)
+                | Value::Symbol(_)
+        )
     }
 
     fn date_value_from_constructor_args(&self, args: &[Value]) -> Result<DateValue> {
@@ -511,12 +708,19 @@ impl Context {
     }
 
     fn date_this_value(&self, this_value: &Value) -> Result<DateValue> {
+        self.date_this_object_value(this_value)
+            .map(|(_, value)| value)
+    }
+
+    fn date_this_object_value(&self, this_value: &Value) -> Result<(ObjectId, DateValue)> {
         let Value::Object(id) = this_value else {
             return Err(Error::type_error(DATE_RECEIVER_ERROR));
         };
-        self.objects
+        let value = self
+            .objects
             .date_value(*id)?
-            .ok_or_else(|| Error::type_error(DATE_RECEIVER_ERROR))
+            .ok_or_else(|| Error::type_error(DATE_RECEIVER_ERROR))?;
+        Ok((*id, value))
     }
 
     fn date_this_number(&self, this_value: &Value) -> Result<f64> {
@@ -556,6 +760,21 @@ const DATE_PROTOTYPE_METHODS: &[DateFunctionKind] = &[
     DateFunctionKind::PrototypeGetMinutes,
     DateFunctionKind::PrototypeGetSeconds,
     DateFunctionKind::PrototypeGetMilliseconds,
+    DateFunctionKind::PrototypeGetTimezoneOffset,
+    DateFunctionKind::PrototypeSetFullYear,
+    DateFunctionKind::PrototypeSetUtcFullYear,
+    DateFunctionKind::PrototypeSetMonth,
+    DateFunctionKind::PrototypeSetUtcMonth,
+    DateFunctionKind::PrototypeSetDate,
+    DateFunctionKind::PrototypeSetUtcDate,
+    DateFunctionKind::PrototypeSetHours,
+    DateFunctionKind::PrototypeSetUtcHours,
+    DateFunctionKind::PrototypeSetMinutes,
+    DateFunctionKind::PrototypeSetUtcMinutes,
+    DateFunctionKind::PrototypeSetSeconds,
+    DateFunctionKind::PrototypeSetUtcSeconds,
+    DateFunctionKind::PrototypeSetMilliseconds,
+    DateFunctionKind::PrototypeSetUtcMilliseconds,
     DateFunctionKind::PrototypeSetTime,
     DateFunctionKind::PrototypeToIsoString,
     DateFunctionKind::PrototypeToJson,
