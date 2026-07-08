@@ -39,6 +39,8 @@ const PATH_QUICKJS_ARGUMENTS_OBJECT: &str =
     "tests/corpora/quickjs_differential/active/arguments_object.js";
 const PATH_QUICKJS_CLASS_FIELDS: &str = "tests/corpora/quickjs_differential/active/class_fields.js";
 const PATH_QUICKJS_MAP_SET: &str = "tests/corpora/quickjs_differential/active/map_set_baseline.js";
+const PATH_QUICKJS_SET_OPERATIONS: &str =
+    "tests/corpora/quickjs_differential/active/set_operations.js";
 const PATH_QUICKJS_WEAK_COLLECTIONS: &str =
     "tests/corpora/quickjs_differential/active/weak_collections.js";
 const PATH_QUICKJS_DATE: &str = "tests/corpora/quickjs_differential/active/date_builtin.js";
@@ -244,6 +246,10 @@ fn quickjs_class_and_collection_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "map_set_baseline",
             path: PATH_QUICKJS_MAP_SET,
+        },
+        DifferentialCase {
+            id: "set_operations",
+            path: PATH_QUICKJS_SET_OPERATIONS,
         },
         DifferentialCase {
             id: "weak_collections",

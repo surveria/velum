@@ -13,6 +13,7 @@ mod object;
 mod object_static;
 mod promise;
 mod regexp;
+mod set_operations;
 mod string;
 mod string_extra;
 mod string_methods;

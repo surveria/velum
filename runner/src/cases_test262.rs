@@ -150,11 +150,6 @@ const PATH_TEST262_ARGUMENTS_OBJECT: &str =
     "tests/corpora/test262/active/language/arguments_object.js";
 const PATH_TEST262_CLASS_FIELDS: &str =
     "tests/corpora/test262/active/language/statements/class_fields.js";
-const PATH_TEST262_MAP_SET: &str = "tests/corpora/test262/active/built-ins/Map/map_set_baseline.js";
-const PATH_TEST262_WEAK_MAP: &str =
-    "tests/corpora/test262/active/built-ins/WeakMap/weak_collections_baseline.js";
-const PATH_TEST262_WEAK_SET: &str =
-    "tests/corpora/test262/active/built-ins/WeakSet/weak_set_baseline.js";
 const PATH_TEST262_DATE: &str = "tests/corpora/test262/active/built-ins/Date/date_baseline.js";
 const PATH_TEST262_FOR_IN_NULLISH_ERROR: &str =
     "tests/corpora/test262/active/language/statements/for_in_nullish_error.js";
@@ -491,7 +486,7 @@ fn test262_builtin_cases() -> Vec<EngineCase> {
     cases.extend(test262_math_builtin_cases());
     cases.extend(test262_object_builtin_cases());
     cases.extend(test262_string_builtin_cases());
-    cases.extend(test262_collection_builtin_cases());
+    cases.extend(super::cases_test262_collections::test262_collection_builtin_cases());
     cases
 }
 
@@ -615,26 +610,6 @@ fn test262_object_builtin_cases() -> Vec<EngineCase> {
     ]
 }
 
-fn test262_collection_builtin_cases() -> Vec<EngineCase> {
-    vec![
-        EngineCase {
-            id: "built-ins/Map/map-set-baseline",
-            path: PATH_TEST262_MAP_SET,
-            expectation: Expectation::Value("42"),
-        },
-        EngineCase {
-            id: "built-ins/WeakMap/weak-map-baseline",
-            path: PATH_TEST262_WEAK_MAP,
-            expectation: Expectation::Value("42"),
-        },
-        EngineCase {
-            id: "built-ins/WeakSet/weak-set-baseline",
-            path: PATH_TEST262_WEAK_SET,
-            expectation: Expectation::Value("42"),
-        },
-    ]
-}
-
 fn test262_binding_cases() -> Vec<EngineCase> {
     vec![
         EngineCase {
@@ -674,7 +649,7 @@ fn test262_class_cases() -> Vec<EngineCase> {
         },
         EngineCase {
             id: "built-ins/Map/map_set_baseline",
-            path: PATH_TEST262_MAP_SET,
+            path: super::cases_test262_collections::PATH_TEST262_MAP_SET,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
