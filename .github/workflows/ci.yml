@@ -64,7 +64,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          # Full history so the version-bump gate can find the merge base and
+          # Full history so base-relative gates can find the merge base and
           # report artifacts can be keyed by the tested tree.
           fetch-depth: 0
 
