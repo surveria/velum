@@ -50,6 +50,13 @@ fn draw_ratio_panel(
     records: &[ReportRecord],
 ) -> anyhow::Result<()> {
     let points = ratio_points(records)?;
+    if points.is_empty() {
+        return draw_empty_panel(
+            area,
+            "Performance and memory geomean versus QuickJS",
+            "No QuickJS ratio data available",
+        );
+    }
     let values = points
         .iter()
         .flat_map(|point| [point.performance, point.memory])
@@ -121,6 +128,13 @@ fn draw_test_panel(
     records: &[ReportRecord],
 ) -> anyhow::Result<()> {
     let points = test_points(records)?;
+    if points.is_empty() {
+        return draw_empty_panel(
+            area,
+            "Full Test262 outcomes",
+            "No Test262 outcome data available",
+        );
+    }
     let values = points
         .iter()
         .flat_map(|point| [Some(point.passed), Some(point.failed)])
@@ -165,6 +179,28 @@ fn draw_test_panel(
         .map_err(|error| anyhow!("failed to draw Test262 chart legend: {error:?}"))
 }
 
+fn draw_empty_panel(
+    area: &DrawingArea<BitMapBackend<'_>, Shift>,
+    title: &str,
+    message: &str,
+) -> anyhow::Result<()> {
+    let (width, height) = area.dim_in_pixel();
+    let x = i32::try_from(width / 2).context("empty chart x coordinate does not fit i32")?;
+    let y = i32::try_from(height / 2).context("empty chart y coordinate does not fit i32")?;
+    area.draw(&Text::new(
+        title.to_owned(),
+        (18, 36),
+        ("sans-serif", 30).into_font(),
+    ))
+    .map_err(|error| anyhow!("failed to draw empty chart title: {error:?}"))?;
+    area.draw(&Text::new(
+        message.to_owned(),
+        (x.saturating_sub(190), y),
+        ("sans-serif", 24).into_font(),
+    ))
+    .map_err(|error| anyhow!("failed to draw empty chart message: {error:?}"))
+}
+
 #[derive(Debug, Clone, Copy)]
 struct RatioPoint {
     x: i32,
@@ -191,9 +227,6 @@ fn ratio_points(records: &[ReportRecord]) -> anyhow::Result<Vec<RatioPoint>> {
             memory: record.memory_geomean,
         });
     }
-    if points.is_empty() {
-        bail!("no ratio values are available to plot");
-    }
     Ok(points)
 }
 
@@ -208,9 +241,6 @@ fn test_points(records: &[ReportRecord]) -> anyhow::Result<Vec<TestPoint>> {
             passed: f64::from(value.passed),
             failed: f64::from(value.failed),
         });
-    }
-    if points.is_empty() {
-        bail!("no Test262 outcome counts are available to plot");
     }
     Ok(points)
 }

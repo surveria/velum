@@ -82,7 +82,15 @@ const FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(73);
 const ASYNC_FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(74);
 const ARRAY_IS_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(75);
 const REGEXP_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(76);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 77;
+const OBJECT_ASSIGN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(77);
+const OBJECT_CREATE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(78);
+const OBJECT_DEFINE_PROPERTIES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(79);
+const OBJECT_ENTRIES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(80);
+const OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(81);
+const OBJECT_IS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(82);
+const OBJECT_SET_PROTOTYPE_OF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(83);
+const OBJECT_VALUES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(84);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 85;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -203,13 +211,23 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::MathTrunc => Some(MATH_TRUNC_SLOT),
         NativeFunctionKind::Number => Some(NUMBER_SLOT),
         NativeFunctionKind::Object => Some(OBJECT_SLOT),
+        NativeFunctionKind::ObjectAssign => Some(OBJECT_ASSIGN_SLOT),
+        NativeFunctionKind::ObjectCreate => Some(OBJECT_CREATE_SLOT),
+        NativeFunctionKind::ObjectDefineProperties => Some(OBJECT_DEFINE_PROPERTIES_SLOT),
         NativeFunctionKind::ObjectDefineProperty => Some(OBJECT_DEFINE_PROPERTY_SLOT),
+        NativeFunctionKind::ObjectEntries => Some(OBJECT_ENTRIES_SLOT),
         NativeFunctionKind::ObjectGetPrototypeOf => Some(OBJECT_GET_PROTOTYPE_OF_SLOT),
         NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
             Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_SLOT)
         }
+        NativeFunctionKind::ObjectGetOwnPropertyDescriptors => {
+            Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_SLOT)
+        }
         NativeFunctionKind::ObjectHasOwn => Some(OBJECT_HAS_OWN_SLOT),
+        NativeFunctionKind::ObjectIs => Some(OBJECT_IS_SLOT),
         NativeFunctionKind::ObjectKeys => Some(OBJECT_KEYS_SLOT),
+        NativeFunctionKind::ObjectSetPrototypeOf => Some(OBJECT_SET_PROTOTYPE_OF_SLOT),
+        NativeFunctionKind::ObjectValues => Some(OBJECT_VALUES_SLOT),
         NativeFunctionKind::Promise => Some(PROMISE_SLOT),
         NativeFunctionKind::PromiseResolve => Some(PROMISE_RESOLVE_SLOT),
         NativeFunctionKind::PromiseReject => Some(PROMISE_REJECT_SLOT),

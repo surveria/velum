@@ -1,6 +1,6 @@
 use crate::{
     api::native_call::NativeCallTarget,
-    error::Result,
+    error::{Error, Result},
     runtime::{
         Context,
         call::RuntimeCallArgs,
@@ -255,21 +255,23 @@ impl Context {
             NativeCallTarget::MathTanh => Self::eval_direct_math_tanh(args),
             NativeCallTarget::MathTrunc => Self::eval_direct_math_trunc(args),
             NativeCallTarget::Number => self.eval_direct_number_constructor(args),
-            NativeCallTarget::Object => self.eval_direct_object_constructor(args),
-            NativeCallTarget::ObjectDefineProperty => {
-                self.eval_object_define_property(runtime_call_args(args))
-            }
-            NativeCallTarget::ObjectGetOwnPropertyDescriptor => {
-                self.eval_object_get_own_property_descriptor(runtime_call_args(args))
-            }
-            NativeCallTarget::ObjectGetOwnPropertyNames => {
-                self.eval_object_get_own_property_names(runtime_call_args(args))
-            }
-            NativeCallTarget::ObjectGetPrototypeOf => {
-                self.eval_object_get_prototype_of(runtime_call_args(args))
-            }
-            NativeCallTarget::ObjectHasOwn => self.eval_object_has_own(runtime_call_args(args)),
-            NativeCallTarget::ObjectKeys => self.eval_object_keys(runtime_call_args(args)),
+            NativeCallTarget::Object
+            | NativeCallTarget::ObjectAssign
+            | NativeCallTarget::ObjectCreate
+            | NativeCallTarget::ObjectDefineProperties
+            | NativeCallTarget::ObjectDefineProperty
+            | NativeCallTarget::ObjectEntries
+            | NativeCallTarget::ObjectGetOwnPropertyDescriptor
+            | NativeCallTarget::ObjectGetOwnPropertyDescriptors
+            | NativeCallTarget::ObjectGetOwnPropertyNames
+            | NativeCallTarget::ObjectGetPrototypeOf
+            | NativeCallTarget::ObjectHasOwn
+            | NativeCallTarget::ObjectIs
+            | NativeCallTarget::ObjectKeys
+            | NativeCallTarget::ObjectSetPrototypeOf
+            | NativeCallTarget::ObjectValues => self
+                .eval_direct_object_native_call_target(target, args)
+                .ok_or_else(|| Error::runtime("Object native call target was not handled"))?,
             NativeCallTarget::Promise => self.eval_direct_promise_constructor(args),
             NativeCallTarget::PromiseResolve => self.eval_direct_promise_resolve(args),
             NativeCallTarget::PromiseReject => self.eval_direct_promise_reject(args),
@@ -281,6 +283,51 @@ impl Context {
             }
             NativeCallTarget::String => self.eval_direct_string_constructor(args),
             NativeCallTarget::Symbol => self.eval_symbol_constructor(runtime_call_args(args)),
+        }
+    }
+
+    fn eval_direct_object_native_call_target(
+        &mut self,
+        target: NativeCallTarget,
+        args: &[Value],
+    ) -> Option<Result<Value>> {
+        match target {
+            NativeCallTarget::Object => Some(self.eval_direct_object_constructor(args)),
+            NativeCallTarget::ObjectAssign => Some(self.eval_direct_object_assign(args)),
+            NativeCallTarget::ObjectCreate => Some(self.eval_direct_object_create(args)),
+            NativeCallTarget::ObjectDefineProperties => {
+                Some(self.eval_object_define_properties(runtime_call_args(args)))
+            }
+            NativeCallTarget::ObjectDefineProperty => {
+                Some(self.eval_object_define_property(runtime_call_args(args)))
+            }
+            NativeCallTarget::ObjectEntries => {
+                Some(self.eval_object_entries(runtime_call_args(args)))
+            }
+            NativeCallTarget::ObjectGetOwnPropertyDescriptor => {
+                Some(self.eval_object_get_own_property_descriptor(runtime_call_args(args)))
+            }
+            NativeCallTarget::ObjectGetOwnPropertyDescriptors => {
+                Some(self.eval_object_get_own_property_descriptors(runtime_call_args(args)))
+            }
+            NativeCallTarget::ObjectGetOwnPropertyNames => {
+                Some(self.eval_object_get_own_property_names(runtime_call_args(args)))
+            }
+            NativeCallTarget::ObjectGetPrototypeOf => {
+                Some(self.eval_object_get_prototype_of(runtime_call_args(args)))
+            }
+            NativeCallTarget::ObjectHasOwn => {
+                Some(self.eval_object_has_own(runtime_call_args(args)))
+            }
+            NativeCallTarget::ObjectIs => Some(Ok(Self::eval_direct_object_is(args))),
+            NativeCallTarget::ObjectKeys => Some(self.eval_object_keys(runtime_call_args(args))),
+            NativeCallTarget::ObjectSetPrototypeOf => {
+                Some(self.eval_direct_object_set_prototype_of(args))
+            }
+            NativeCallTarget::ObjectValues => {
+                Some(self.eval_object_values(runtime_call_args(args)))
+            }
+            _ => None,
         }
     }
 
@@ -377,23 +424,25 @@ impl Context {
             NativeFunctionKind::MathTanh => Self::eval_math_tanh(args),
             NativeFunctionKind::MathTrunc => Self::eval_math_trunc(args),
             NativeFunctionKind::Number => self.eval_number_constructor(args),
-            NativeFunctionKind::Object => self.eval_object_constructor(args),
-            NativeFunctionKind::ObjectDefineProperty => self.eval_object_define_property(args),
-            NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
-                self.eval_object_get_own_property_descriptor(args)
-            }
-            NativeFunctionKind::ObjectGetOwnPropertyNames => {
-                self.eval_object_get_own_property_names(args)
-            }
-            NativeFunctionKind::ObjectGetPrototypeOf => self.eval_object_get_prototype_of(args),
-            NativeFunctionKind::ObjectHasOwn => self.eval_object_has_own(args),
-            NativeFunctionKind::ObjectKeys => self.eval_object_keys(args),
-            NativeFunctionKind::ObjectPrototypeHasOwnProperty => {
-                self.eval_object_prototype_has_own_property(args, this_value)
-            }
-            NativeFunctionKind::ObjectPrototypePropertyIsEnumerable => {
-                self.eval_object_prototype_property_is_enumerable(args, this_value)
-            }
+            NativeFunctionKind::Object
+            | NativeFunctionKind::ObjectAssign
+            | NativeFunctionKind::ObjectCreate
+            | NativeFunctionKind::ObjectDefineProperties
+            | NativeFunctionKind::ObjectDefineProperty
+            | NativeFunctionKind::ObjectEntries
+            | NativeFunctionKind::ObjectGetOwnPropertyDescriptor
+            | NativeFunctionKind::ObjectGetOwnPropertyDescriptors
+            | NativeFunctionKind::ObjectGetOwnPropertyNames
+            | NativeFunctionKind::ObjectGetPrototypeOf
+            | NativeFunctionKind::ObjectHasOwn
+            | NativeFunctionKind::ObjectIs
+            | NativeFunctionKind::ObjectKeys
+            | NativeFunctionKind::ObjectPrototypeHasOwnProperty
+            | NativeFunctionKind::ObjectPrototypePropertyIsEnumerable
+            | NativeFunctionKind::ObjectSetPrototypeOf
+            | NativeFunctionKind::ObjectValues => self
+                .eval_object_native_function_kind(kind, args, this_value)
+                .ok_or_else(|| Error::runtime("Object native function kind was not handled"))?,
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),
             NativeFunctionKind::PromiseResolve => self.eval_promise_resolve(args),
             NativeFunctionKind::PromiseReject => self.eval_promise_reject(args),
@@ -408,6 +457,52 @@ impl Context {
             }
             NativeFunctionKind::String => self.eval_string_constructor(args),
             NativeFunctionKind::Symbol => self.eval_symbol_constructor(args),
+        }
+    }
+
+    fn eval_object_native_function_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Option<Result<Value>> {
+        match kind {
+            NativeFunctionKind::Object => Some(self.eval_object_constructor(args)),
+            NativeFunctionKind::ObjectAssign => Some(self.eval_object_assign(args)),
+            NativeFunctionKind::ObjectCreate => Some(self.eval_object_create(args)),
+            NativeFunctionKind::ObjectDefineProperties => {
+                Some(self.eval_object_define_properties(args))
+            }
+            NativeFunctionKind::ObjectDefineProperty => {
+                Some(self.eval_object_define_property(args))
+            }
+            NativeFunctionKind::ObjectEntries => Some(self.eval_object_entries(args)),
+            NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
+                Some(self.eval_object_get_own_property_descriptor(args))
+            }
+            NativeFunctionKind::ObjectGetOwnPropertyDescriptors => {
+                Some(self.eval_object_get_own_property_descriptors(args))
+            }
+            NativeFunctionKind::ObjectGetOwnPropertyNames => {
+                Some(self.eval_object_get_own_property_names(args))
+            }
+            NativeFunctionKind::ObjectGetPrototypeOf => {
+                Some(self.eval_object_get_prototype_of(args))
+            }
+            NativeFunctionKind::ObjectHasOwn => Some(self.eval_object_has_own(args)),
+            NativeFunctionKind::ObjectIs => Some(Ok(Self::eval_direct_object_is(args.as_slice()))),
+            NativeFunctionKind::ObjectKeys => Some(self.eval_object_keys(args)),
+            NativeFunctionKind::ObjectPrototypeHasOwnProperty => {
+                Some(self.eval_object_prototype_has_own_property(args, this_value))
+            }
+            NativeFunctionKind::ObjectPrototypePropertyIsEnumerable => {
+                Some(self.eval_object_prototype_property_is_enumerable(args, this_value))
+            }
+            NativeFunctionKind::ObjectSetPrototypeOf => {
+                Some(self.eval_object_set_prototype_of(args))
+            }
+            NativeFunctionKind::ObjectValues => Some(self.eval_object_values(args)),
+            _ => None,
         }
     }
 }

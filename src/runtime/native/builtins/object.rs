@@ -12,10 +12,12 @@ use crate::{
 };
 
 use super::{
-    NativeFunctionKind, OBJECT_DEFINE_PROPERTY_NAME, OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
-    OBJECT_GET_OWN_PROPERTY_NAMES_NAME, OBJECT_GET_PROTOTYPE_OF_NAME, OBJECT_HAS_OWN_NAME,
-    OBJECT_KEYS_NAME, OBJECT_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
-    OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
+    NativeFunctionKind, OBJECT_ASSIGN_NAME, OBJECT_CREATE_NAME, OBJECT_DEFINE_PROPERTIES_NAME,
+    OBJECT_DEFINE_PROPERTY_NAME, OBJECT_ENTRIES_NAME, OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
+    OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME, OBJECT_GET_OWN_PROPERTY_NAMES_NAME,
+    OBJECT_GET_PROTOTYPE_OF_NAME, OBJECT_HAS_OWN_NAME, OBJECT_IS_NAME, OBJECT_KEYS_NAME,
+    OBJECT_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
+    OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME, OBJECT_SET_PROTOTYPE_OF_NAME, OBJECT_VALUES_NAME,
 };
 use crate::runtime::property::well_known::DescriptorPropertyKeys;
 
@@ -290,13 +292,38 @@ impl Context {
     fn install_object_static_methods(&mut self, constructor: NativeFunctionId) -> Result<()> {
         self.define_object_static_method(
             constructor,
+            OBJECT_ASSIGN_NAME,
+            NativeFunctionKind::ObjectAssign,
+        )?;
+        self.define_object_static_method(
+            constructor,
+            OBJECT_CREATE_NAME,
+            NativeFunctionKind::ObjectCreate,
+        )?;
+        self.define_object_static_method(
+            constructor,
+            OBJECT_DEFINE_PROPERTIES_NAME,
+            NativeFunctionKind::ObjectDefineProperties,
+        )?;
+        self.define_object_static_method(
+            constructor,
             OBJECT_DEFINE_PROPERTY_NAME,
             NativeFunctionKind::ObjectDefineProperty,
         )?;
         self.define_object_static_method(
             constructor,
+            OBJECT_ENTRIES_NAME,
+            NativeFunctionKind::ObjectEntries,
+        )?;
+        self.define_object_static_method(
+            constructor,
             OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
             NativeFunctionKind::ObjectGetOwnPropertyDescriptor,
+        )?;
+        self.define_object_static_method(
+            constructor,
+            OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME,
+            NativeFunctionKind::ObjectGetOwnPropertyDescriptors,
         )?;
         self.define_object_static_method(
             constructor,
@@ -315,8 +342,23 @@ impl Context {
         )?;
         self.define_object_static_method(
             constructor,
+            OBJECT_IS_NAME,
+            NativeFunctionKind::ObjectIs,
+        )?;
+        self.define_object_static_method(
+            constructor,
             OBJECT_KEYS_NAME,
             NativeFunctionKind::ObjectKeys,
+        )?;
+        self.define_object_static_method(
+            constructor,
+            OBJECT_SET_PROTOTYPE_OF_NAME,
+            NativeFunctionKind::ObjectSetPrototypeOf,
+        )?;
+        self.define_object_static_method(
+            constructor,
+            OBJECT_VALUES_NAME,
+            NativeFunctionKind::ObjectValues,
         )
     }
 
@@ -362,16 +404,22 @@ impl Context {
         Ok(())
     }
 
-    fn argument_or_undefined(value: Option<&Value>) -> Value {
+    pub(in crate::runtime::native) fn argument_or_undefined(value: Option<&Value>) -> Value {
         value.cloned().unwrap_or(Value::Undefined)
     }
 
-    fn object_property_key(&self, value: Option<&Value>) -> Result<DynamicPropertyKey> {
+    pub(in crate::runtime::native) fn object_property_key(
+        &self,
+        value: Option<&Value>,
+    ) -> Result<DynamicPropertyKey> {
         let value = value.cloned().unwrap_or(Value::Undefined);
         self.dynamic_property_key(&value)
     }
 
-    fn property_update_from_value(&mut self, value: &Value) -> Result<PropertyUpdate> {
+    pub(in crate::runtime::native) fn property_update_from_value(
+        &mut self,
+        value: &Value,
+    ) -> Result<PropertyUpdate> {
         if !matches!(value, Value::Object(_)) {
             return Err(Error::runtime("property descriptor must be an object"));
         }
@@ -495,7 +543,7 @@ impl Context {
         }
     }
 
-    fn create_property_descriptor_object(
+    pub(in crate::runtime::native) fn create_property_descriptor_object(
         &mut self,
         descriptor: &OwnPropertyDescriptor,
     ) -> Result<Value> {
@@ -618,7 +666,7 @@ impl Context {
         Ok(enumerable.is_yes())
     }
 
-    fn own_property_descriptor_value(
+    pub(in crate::runtime::native) fn own_property_descriptor_value(
         &mut self,
         target: &Value,
         property: &DynamicPropertyKey,
@@ -674,7 +722,10 @@ impl Context {
         }
     }
 
-    fn own_property_names(&self, target: &Value) -> Result<Vec<String>> {
+    pub(in crate::runtime::native) fn own_property_names(
+        &self,
+        target: &Value,
+    ) -> Result<Vec<String>> {
         match target {
             Value::Object(id) => self.objects.own_property_names(*id, &self.atoms),
             Value::Function(id) => self.function_enumerable_keys(*id),
@@ -689,7 +740,7 @@ impl Context {
         }
     }
 
-    fn create_object_from_constructor(&mut self) -> Result<Value> {
+    pub(in crate::runtime::native) fn create_object_from_constructor(&mut self) -> Result<Value> {
         let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_with_prototype(
             None,
