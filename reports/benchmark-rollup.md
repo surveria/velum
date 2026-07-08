@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T102017Z.md`
-- Task: PR #318: Add bytecode linear segment planning
-- Performance: 6.00x (62/63 >1.00x)
+- `rsqjs-test-report-20260708T104338Z.md`
+- Task: PR #316: Implement global utility built-ins
+- Performance: 5.81x (62/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 20550 passed / 82028 failed (20.03%)
+- Full Test262: 23055 passed / 79523 failed (22.48%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -314,3 +314,4 @@ Latest report:
 | `20260708T095703Z` `0c101bc` PR #315: Optimize numeric bytecode fast paths | 5.86x (62/63 >1.00x) | - (0/63 >1.00x) | 19622 passed / 82956 failed (19.13%) |
 | `20260708T100850Z` `730992d` PR #314: Expand Object static built-ins | 5.90x (62/63 >1.00x) | - (0/63 >1.00x) | 20550 passed / 82028 failed (20.03%) |
 | `20260708T102017Z` `bbd5375` PR #318: Add bytecode linear segment planning | 6.00x (62/63 >1.00x) | - (0/63 >1.00x) | 20550 passed / 82028 failed (20.03%) |
+| `20260708T104338Z` `232acc6` PR #316: Implement global utility built-ins | 5.81x (62/63 >1.00x) | - (0/63 >1.00x) | 23055 passed / 79523 failed (22.48%) |
