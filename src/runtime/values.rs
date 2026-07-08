@@ -195,4 +195,12 @@ impl Context {
         }
         Ok(())
     }
+
+    pub(crate) fn record_bytecode_linear_segment_run(&mut self) -> Result<()> {
+        self.bytecode_linear_segment_runs = self
+            .bytecode_linear_segment_runs
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("bytecode linear segment runs overflowed"))?;
+        Ok(())
+    }
 }

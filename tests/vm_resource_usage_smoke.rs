@@ -22,6 +22,7 @@ fn reports_vm_resource_usage_at_teardown() -> TestResult {
         &report.resources,
         &VmResourceUsage {
             runtime_steps: report.resources.runtime_steps,
+            bytecode_linear_segment_runs: report.resources.bytecode_linear_segment_runs,
             output_entries: 1,
             global_bindings: 1,
             atom_count: report.resources.atom_count,

@@ -1,28 +1,21 @@
 mod numeric_chain;
+mod segment;
 
 use crate::{
     bytecode::{
-        BytecodeArrayIndex, BytecodeBinding, BytecodeBlock, BytecodeDynamicProperty,
-        BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
-        BytecodeNumericEqualityOp, BytecodeProperty,
+        BytecodeArrayIndex, BytecodeBinding, BytecodeDynamicProperty, BytecodeInstruction,
+        BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
+        BytecodeProperty,
     },
     error::{Error, Result},
-    runtime::{
-        Context,
-        binding::scope::BindingCell,
-        control::{Completion, runtime_exception_value},
-    },
+    runtime::{Context, binding::scope::BindingCell},
     syntax::{BinaryOp, DeclKind, UpdateOp},
     value::Value,
 };
 
 use super::state::BytecodeState;
 use numeric_chain::{NumericBindingChain, NumericCompoundBinding};
-
-#[derive(Debug)]
-pub(super) struct BytecodeLinearPlan<'a> {
-    ops: Vec<BytecodeLinearOp<'a>>,
-}
+pub(super) use segment::BytecodeLinearPlan;
 
 #[derive(Debug)]
 enum BytecodeLinearOp<'a> {
@@ -100,37 +93,6 @@ enum BytecodeLinearOp<'a> {
 }
 
 impl Context {
-    pub(super) fn compile_bytecode_linear_plan<'a>(
-        &mut self,
-        block: &'a BytecodeBlock,
-    ) -> Result<Option<BytecodeLinearPlan<'a>>> {
-        let instructions = block.instructions();
-        let mut ops = Vec::with_capacity(instructions.len());
-        let mut index = 0;
-        while index < instructions.len() {
-            if let Some((op, consumed)) =
-                self.compile_bytecode_linear_peephole(instructions, index)?
-            {
-                ops.push(op);
-                index = index
-                    .checked_add(consumed)
-                    .ok_or_else(|| Error::runtime("bytecode peephole index overflowed"))?;
-                continue;
-            }
-            let Some(instruction) = instructions.get(index) else {
-                return Err(Error::runtime("bytecode instruction index is not defined"));
-            };
-            let Some(op) = self.compile_bytecode_linear_op(instruction)? else {
-                return Ok(None);
-            };
-            ops.push(op);
-            index = index
-                .checked_add(1)
-                .ok_or_else(|| Error::runtime("bytecode instruction index overflowed"))?;
-        }
-        Ok(Some(BytecodeLinearPlan { ops }))
-    }
-
     fn compile_bytecode_linear_peephole<'a>(
         &mut self,
         instructions: &'a [BytecodeInstruction],
@@ -435,47 +397,6 @@ impl Context {
             _ => return Ok(None),
         };
         Ok(Some(op))
-    }
-
-    pub(super) fn eval_bytecode_block_with_linear_plan(
-        &mut self,
-        block: &BytecodeBlock,
-        plan: Option<&BytecodeLinearPlan<'_>>,
-        state: &mut BytecodeState,
-    ) -> Result<Completion> {
-        let Some(plan) = plan else {
-            return self.eval_bytecode_block_with_state(block, state);
-        };
-        self.eval_bytecode_linear_plan(plan, state)
-    }
-
-    pub(super) fn eval_bytecode_expression_with_plan(
-        &mut self,
-        block: &BytecodeBlock,
-        plan: Option<&BytecodeLinearPlan<'_>>,
-        state: &mut BytecodeState,
-    ) -> Result<Value> {
-        self.eval_bytecode_block_with_linear_plan(block, plan, state)?
-            .into_result()
-    }
-
-    fn eval_bytecode_linear_plan(
-        &mut self,
-        plan: &BytecodeLinearPlan<'_>,
-        state: &mut BytecodeState,
-    ) -> Result<Completion> {
-        state.reset();
-        for op in &plan.ops {
-            self.step()?;
-            if let Err(error) = self.eval_bytecode_linear_op(state, op) {
-                if let Some(value) = runtime_exception_value(&error) {
-                    self.checked_value(value.clone())?;
-                    return Ok(Completion::Throw(value));
-                }
-                return Err(error);
-            }
-        }
-        Ok(Completion::Normal(state.last.clone()))
     }
 
     fn eval_bytecode_linear_op(

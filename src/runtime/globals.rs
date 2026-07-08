@@ -32,6 +32,10 @@ impl Context {
         self.runtime_steps
     }
 
+    pub(crate) const fn bytecode_linear_segment_runs(&self) -> usize {
+        self.bytecode_linear_segment_runs
+    }
+
     pub(crate) const fn native_call_cache_hits(&self) -> usize {
         self.native_call_cache_hits
     }

@@ -374,6 +374,43 @@ fn bytecode_quickens_numeric_binding_chains() -> TestResult {
 }
 
 #[test]
+fn bytecode_runs_linear_segments_inside_mixed_loop_blocks() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r"
+        var total = 0;
+
+        for (var index = 0; index < 16; index = index + 1) {
+            if ((index & 1) === 0) {
+                total = total + 1 + 2 + 3;
+            } else {
+                total = total + 4 + 5;
+            }
+            total += index & 3;
+        }
+
+        total === 144 ? 42 : 0
+        ",
+    )?;
+
+    let initial_segments = vm.resource_usage().bytecode_linear_segment_runs;
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    let segment_delta = vm
+        .resource_usage()
+        .bytecode_linear_segment_runs
+        .checked_sub(initial_segments)
+        .ok_or("bytecode linear segment counter moved backwards")?;
+    ensure_at_least(segment_delta, 16, "bytecode linear segment runs")?;
+    let atoms = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atoms)
+}
+
+#[test]
 fn bytecode_quickens_numeric_compound_binding_paths() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
