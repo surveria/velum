@@ -15,6 +15,8 @@ These rules are mandatory for humans and agents working in any part of this repo
 - Create a separate branch for every task from a fresh `origin/main`.
 - Immediately make the task visible on GitHub: create an empty start commit with `[skip ci]`, push the branch, and open a draft PR that describes the planned scope. If the branch already has a real first commit, push that instead of an empty commit.
 - Keep the PR as draft while implementation is in progress. Draft PRs are for visibility and discussion; the full CI gate starts when the PR is marked ready for review or receives new ready-state commits.
+- Treat the draft PR branch as the live work log for the task. Split implementation into small, reviewable progress commits with descriptive messages, and push each completed work stage to the PR branch promptly.
+- Do not let a draft PR sit stale while meaningful local-only progress exists. Before pausing, handing off, or switching tasks, push the latest coherent checkpoint or add a PR update that explains the current blocker.
 - Do not delete task branches after completion, either locally or on GitHub. Branch history is part of the work record.
 - Remove the task worktree after the task is complete with `git worktree remove <path>`. If a legacy worktree still contains a checked-out submodule and Git refuses to remove it, remove it with `rm -rf <path>` followed by `git worktree prune`.
 
@@ -23,7 +25,7 @@ These rules are mandatory for humans and agents working in any part of this repo
 - All changes reach `main` only through a pull request: push branch, open a draft PR early, mark it ready when implemented, wait for green CI, then merge.
 - PR descriptions must be detailed and include what changed, why it changed, problems or noteworthy decisions during the work, and what remains for later.
 - PR descriptions should include the validation summary and link or path for the CI report artifact. Do not commit generated full test reports in ordinary feature PRs unless the branch is explicitly a canonical report refresh.
-- Split work into meaningful commits so the branch history shows the solution path.
+- Split work into meaningful commits so the branch history shows the solution path. Avoid large opaque commits that hide intermediate decisions or make the draft PR appear inactive.
 - Every PR commit must have a GitHub-verified signature before the ready-PR CI gate can pass. Agents must use the repository signing key and a GitHub-verified author and committer email; do not use placeholder identities such as `codex@local`.
 - Merge to `main` with one squash commit and a detailed commit message. The detailed history remains in the branch.
 - The repository should use GitHub merge queue for `main`, with the CI `merge_group` check required before merge. Use a queue group size of one when report history must stay one-PR-per-report.
