@@ -12,24 +12,29 @@ interpreter paths.
    used by parser, bytecode, and runtime.
 3. `parser`: builds a small AST for the currently supported language subset.
 4. `binding_layout`: analyzes parser AST scopes and assigns checked binding
-   operands.
-5. `compiler`: consumes parser AST plus binding layout and emits bytecode-owned
+   metadata.
+5. `binding_metadata`: owns the AST-free scope, slot, and binding operand data
+   consumed by bytecode and runtime layers.
+6. `compiler`: consumes parser AST plus binding metadata and emits bytecode-owned
    executable metadata.
-6. `bytecode`: owns AST-free VM executable data structures and bytecode metrics.
-7. `runtime`: owns globals, host functions, output, and resource counters.
-8. `value`: defines the current JavaScript value model.
+7. `bytecode`: owns AST-free VM executable data structures and bytecode metrics.
+8. `runtime`: owns globals, host functions, output, and resource counters.
+9. `value`: defines the current JavaScript value model.
 
 The parser AST is not a runtime fallback. It is consumed by binding analysis and
 the compiler, then `CompiledScript` stores a `BytecodeProgram` and
 bytecode-owned function metadata for execution. The `bytecode` module must not
 import parser AST types; AST traversal belongs in `parser`, `binding_layout`,
-and `compiler` only.
+and `compiler` only. Runtime and bytecode layers may consume
+`binding_metadata`, but must not import `binding_layout`; that module remains a
+front-end analyzer over parser AST.
 
 `CompiledScript::compile` is the only bridge from source text into the
 front-end pipeline. Runtime, bytecode, API, value, storage, object, native, and
-function layers must not import lexer, parser, compiler, or parser AST modules
-directly. If execution needs a new construct, the construct must first be
-represented as bytecode-owned metadata and then executed through the VM.
+function layers must not import lexer, parser, compiler, `binding_layout`, or
+parser AST modules directly. If execution needs a new construct, the construct
+must first be represented as bytecode-owned metadata and then executed through
+the VM.
 
 Runtime and public API terminology should call guard misses `slow paths` or
 `generic semantic paths`. A guarded bytecode, inline-cache, direct-native, slot,

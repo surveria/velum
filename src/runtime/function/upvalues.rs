@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use crate::{
-    binding_layout::BindingLayout,
-    binding_layout::{BindingOperand, FunctionScopeId},
+    binding_metadata::BindingLayout,
+    binding_metadata::{BindingOperand, FunctionScopeId},
     error::{Error, Result},
     runtime::Context,
     runtime::binding::scope::BindingCell,

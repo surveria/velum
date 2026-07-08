@@ -3,7 +3,7 @@ mod usage;
 pub use usage::CompiledScriptUsage;
 
 use crate::{
-    binding_layout::BindingLayout,
+    binding_metadata::BindingLayout,
     bytecode::BytecodeProgram,
     compiler,
     error::{Error, Result},

@@ -5,7 +5,7 @@ use crate::{
         BindingPattern, CatchClause, Expr, ForInTarget, FunctionParam, ObjectProperty,
         ObjectPropertyKey, StaticBinding, Stmt, SwitchCase,
     },
-    binding_layout::BindingLayout,
+    binding_metadata::BindingLayout,
     error::{Error, Result},
     syntax::{StaticFunctionId, StaticName},
 };

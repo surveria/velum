@@ -1,5 +1,5 @@
 use crate::{
-    binding_layout::BindingOperand,
+    binding_metadata::BindingOperand,
     bytecode::{
         BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock, BytecodeCatch, BytecodeClass,
         BytecodeForInTarget, BytecodeInstruction, BytecodePattern, BytecodePatternKey,

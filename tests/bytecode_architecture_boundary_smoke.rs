@@ -22,6 +22,9 @@ const FRONTEND_PIPELINE_SOURCE_DIRS: [&str; 5] = [
 
 const FRONTEND_BRIDGE_SOURCE_DIRS: [&str; 1] = ["src/compiled_script"];
 
+const PARSER_AST_MODULE: &str = "ast";
+const FRONTEND_PIPELINE_MODULES: [&str; 4] = ["lexer", "parser", "compiler", "binding_layout"];
+
 const SLOW_PATH_TERMINOLOGY_SOURCE_DIRS: [&str; 7] = [
     "src/api",
     "src/bytecode",
@@ -163,24 +166,36 @@ fn is_rust_file(path: &Path) -> bool {
 }
 
 fn line_imports_parser_ast(line: &str) -> bool {
-    let trimmed = line.trim_start();
-    line.contains("crate::ast")
-        || trimmed.starts_with("ast::")
-        || line.contains(" ast::")
-        || line.contains("{ast::")
-        || line.contains("(ast::")
+    line_imports_module(line, PARSER_AST_MODULE)
 }
 
 fn line_imports_frontend_pipeline(line: &str) -> bool {
+    FRONTEND_PIPELINE_MODULES
+        .iter()
+        .any(|module| line_imports_module(line, module))
+}
+
+fn line_imports_module(line: &str, module: &str) -> bool {
     let trimmed = line.trim();
-    line.contains("crate::lexer")
-        || line.contains("crate::parser")
-        || line.contains("crate::compiler")
-        || trimmed == "lexer,"
-        || trimmed == "parser,"
-        || trimmed == "compiler,"
-        || trimmed == "lexer, parser,"
-        || trimmed == "parser, lexer,"
+    let direct_path = format!("crate::{module}");
+    let nested_path = format!("{module}::");
+    let grouped_nested_path = format!("{{{module}::");
+    let grouped_spaced_nested_path = format!("{{ {module}::");
+    let parenthesized_nested_path = format!("({module}::");
+    let bare_grouped_module = format!("{{{module}");
+    let bare_spaced_grouped_module = format!("{{ {module}");
+    let bare_comma_module = format!("{module},");
+    let bare_trailing_module = format!("{module}}}");
+    line.contains(&direct_path)
+        || trimmed.starts_with(&nested_path)
+        || line.contains(&format!(" {nested_path}"))
+        || line.contains(&grouped_nested_path)
+        || line.contains(&grouped_spaced_nested_path)
+        || line.contains(&parenthesized_nested_path)
+        || line.contains(&bare_grouped_module)
+        || line.contains(&bare_spaced_grouped_module)
+        || trimmed == bare_comma_module
+        || trimmed.ends_with(&bare_trailing_module)
 }
 
 fn line_contains_ast_execution_type_marker(line: &str) -> bool {

@@ -6,7 +6,7 @@ use crate::{
         BinaryOp, DeclKind, Expr, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, Program,
         StaticBinding, StaticPropertyAccessId, Stmt, UnaryOp, UpdateOp,
     },
-    binding_layout::BindingLayout,
+    binding_metadata::BindingLayout,
     bytecode::{
         BytecodeAddress, BytecodeArrayIndex, BytecodeBinding, BytecodeBlock, BytecodeCallSite,
         BytecodeClass, BytecodeClassMember, BytecodeClassMemberKey, BytecodeClassMemberKind,

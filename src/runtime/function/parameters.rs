@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    binding_layout::{BindingLayout, BindingOperand},
+    binding_metadata::{BindingLayout, BindingOperand},
     bytecode::{BytecodeBlock, BytecodeFunction, BytecodeFunctionParam},
     error::{Error, Result},
     runtime::{
