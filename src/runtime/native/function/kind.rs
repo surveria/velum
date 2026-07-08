@@ -1,6 +1,8 @@
 use super::date_kind::DateFunctionKind;
 use crate::value::{BoundFunctionId, ErrorName};
 
+mod string;
+
 const ASYNC_FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const ASYNC_FUNCTION_NAME: &str = "AsyncFunction";
 const BOOLEAN_FUNCTION_LENGTH: f64 = 1.0;
@@ -175,11 +177,15 @@ pub(in crate::runtime::native) const STRING_PROTOTYPE_ENDS_WITH_NAME: &str = "en
 pub(in crate::runtime::native) const STRING_PROTOTYPE_INCLUDES_NAME: &str = "includes";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_INDEX_OF_NAME: &str = "indexOf";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_LAST_INDEX_OF_NAME: &str = "lastIndexOf";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_MATCH_NAME: &str = "match";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_REPEAT_NAME: &str = "repeat";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_REPLACE_NAME: &str = "replace";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_SEARCH_NAME: &str = "search";
 const STRING_PROTOTYPE_FUNCTION_LENGTH_TWO: f64 = 2.0;
 pub(in crate::runtime::native) const STRING_PROTOTYPE_PAD_END_NAME: &str = "padEnd";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_PAD_START_NAME: &str = "padStart";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_SLICE_NAME: &str = "slice";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_SPLIT_NAME: &str = "split";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_STARTS_WITH_NAME: &str = "startsWith";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_SUBSTRING_NAME: &str = "substring";
 const STRING_PROTOTYPE_FUNCTION_LENGTH_ZERO: f64 = 0.0;
@@ -363,10 +369,14 @@ pub(in crate::runtime) enum NativeFunctionKind {
     StringPrototypeIncludes,
     StringPrototypeIndexOf,
     StringPrototypeLastIndexOf,
+    StringPrototypeMatch,
     StringPrototypePadEnd,
     StringPrototypePadStart,
     StringPrototypeRepeat,
+    StringPrototypeReplace,
+    StringPrototypeSearch,
     StringPrototypeSlice,
+    StringPrototypeSplit,
     StringPrototypeStartsWith,
     StringPrototypeSubstring,
     StringPrototypeToLocaleLowerCase,
@@ -562,46 +572,6 @@ impl NativeFunctionKind {
             }
             Self::String => Some(STRING_FUNCTION_LENGTH),
             Self::Symbol => Some(SYMBOL_FUNCTION_LENGTH),
-            _ => None,
-        }
-    }
-
-    const fn string_static_length(self) -> Option<f64> {
-        match self {
-            Self::StringFromCharCode | Self::StringFromCodePoint | Self::StringRaw => {
-                Some(STRING_PROTOTYPE_FUNCTION_LENGTH_ONE)
-            }
-            _ => None,
-        }
-    }
-
-    const fn string_prototype_length(self) -> Option<f64> {
-        match self {
-            Self::StringPrototypeToLocaleLowerCase
-            | Self::StringPrototypeToLocaleUpperCase
-            | Self::StringPrototypeToLowerCase
-            | Self::StringPrototypeToUpperCase
-            | Self::StringPrototypeToString
-            | Self::StringPrototypeTrim
-            | Self::StringPrototypeTrimEnd
-            | Self::StringPrototypeTrimStart
-            | Self::StringPrototypeValueOf => Some(STRING_PROTOTYPE_FUNCTION_LENGTH_ZERO),
-            Self::StringPrototypeSlice | Self::StringPrototypeSubstring => {
-                Some(STRING_PROTOTYPE_FUNCTION_LENGTH_TWO)
-            }
-            Self::StringPrototypeAt
-            | Self::StringPrototypeCharAt
-            | Self::StringPrototypeCharCodeAt
-            | Self::StringPrototypeCodePointAt
-            | Self::StringPrototypeConcat
-            | Self::StringPrototypeEndsWith
-            | Self::StringPrototypeIncludes
-            | Self::StringPrototypeIndexOf
-            | Self::StringPrototypeLastIndexOf
-            | Self::StringPrototypePadEnd
-            | Self::StringPrototypePadStart
-            | Self::StringPrototypeRepeat
-            | Self::StringPrototypeStartsWith => Some(STRING_PROTOTYPE_FUNCTION_LENGTH_ONE),
             _ => None,
         }
     }
