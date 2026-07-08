@@ -564,3 +564,15 @@ built-ins-Map-iterator-items-are-not-object	test/built-ins/Map/iterator-items-ar
 built-ins-Map-iterator-value-failure	test/built-ins/Map/iterator-value-failure.js	run	official Test262 Map Set smoke
 built-ins-Map-undefined-newtarget	test/built-ins/Map/undefined-newtarget.js	run	official Test262 Map Set smoke
 built-ins-Set-set-undefined-newtarget	test/built-ins/Set/set-undefined-newtarget.js	run	official Test262 Map Set smoke
+built-ins-JSON-15.12-0-2	test/built-ins/JSON/15.12-0-2.js	run	official Test262 JSON smoke
+built-ins-JSON-15.12-0-3	test/built-ins/JSON/15.12-0-3.js	run	official Test262 JSON smoke
+built-ins-JSON-parse-reviver-call-err	test/built-ins/JSON/parse/reviver-call-err.js	run	official Test262 JSON smoke
+built-ins-JSON-stringify-replacer-function-abrupt	test/built-ins/JSON/stringify/replacer-function-abrupt.js	run	official Test262 JSON smoke
+built-ins-JSON-stringify-replacer-function-array-circular	test/built-ins/JSON/stringify/replacer-function-array-circular.js	run	official Test262 JSON smoke
+built-ins-JSON-stringify-replacer-function-object-circular	test/built-ins/JSON/stringify/replacer-function-object-circular.js	run	official Test262 JSON smoke
+built-ins-JSON-stringify-value-array-circular	test/built-ins/JSON/stringify/value-array-circular.js	run	official Test262 JSON smoke
+built-ins-JSON-stringify-value-object-abrupt	test/built-ins/JSON/stringify/value-object-abrupt.js	run	official Test262 JSON smoke
+built-ins-JSON-stringify-value-object-circular	test/built-ins/JSON/stringify/value-object-circular.js	run	official Test262 JSON smoke
+built-ins-JSON-stringify-value-tojson-abrupt	test/built-ins/JSON/stringify/value-tojson-abrupt.js	run	official Test262 JSON smoke
+built-ins-JSON-stringify-value-tojson-array-circular	test/built-ins/JSON/stringify/value-tojson-array-circular.js	run	official Test262 JSON smoke
+built-ins-JSON-stringify-value-tojson-object-circular	test/built-ins/JSON/stringify/value-tojson-object-circular.js	run	official Test262 JSON smoke

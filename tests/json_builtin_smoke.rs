@@ -228,6 +228,13 @@ fn supports_json_reviver_replacer_space_and_to_json() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))
 }
 
+fn ensure_string(source: &str, expected: &str) -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(source)?;
+    ensure_value(&value, &Value::String(expected.to_owned()))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
@@ -254,4 +261,73 @@ fn ensure_at_least(actual: usize, expected: usize, label: &str) -> TestResult {
     }
 
     Err(format!("expected {label} >= {expected}, got {actual}").into())
+}
+
+#[test]
+fn parse_reviver_transforms_and_deletes() -> TestResult {
+    ensure_string(
+        r#"
+        const scaled = JSON.parse('{"a":1,"b":{"c":2}}', function (key, value) {
+            if (typeof value === "number") {
+                return value * 10;
+            }
+            if (key === "b") {
+                return value;
+            }
+            return value;
+        });
+        const dropped = JSON.parse('{"keep":1,"drop":2}', function (key, value) {
+            if (key === "drop") {
+                return undefined;
+            }
+            return value;
+        });
+        "" + scaled.a + ":" + scaled.b.c + ":" + dropped.keep
+            + ":" + ("drop" in dropped)
+        "#,
+        "10:20:1:false",
+    )
+}
+
+#[test]
+fn stringify_replacer_array_filters_keys() -> TestResult {
+    ensure_string(
+        r#"
+        JSON.stringify({a: 1, b: 2, c: {a: 3, d: 4}}, ["a", "c"])
+        "#,
+        r#"{"a":1,"c":{"a":3}}"#,
+    )
+}
+
+#[test]
+fn stringify_space_forms_indent_output() -> TestResult {
+    ensure_string(
+        r#"
+        const numeric = JSON.stringify({a: [1]}, null, 2);
+        const stringy = JSON.stringify({a: 1}, null, "--");
+        const clamped = JSON.stringify({a: 1}, null, 100);
+        const compact = JSON.stringify({a: 1}, null, 0);
+        numeric + "|" + stringy + "|" + (clamped === JSON.stringify({a: 1}, null, 10))
+            + "|" + compact
+        "#,
+        "{\n  \"a\": [\n    1\n  ]\n}|{\n--\"a\": 1\n}|true|{\"a\":1}",
+    )
+}
+
+#[test]
+fn stringify_cycles_throw_type_error() -> TestResult {
+    ensure_string(
+        r#"
+        const o = {};
+        o.self = o;
+        let kind = "none";
+        try {
+            JSON.stringify(o);
+        } catch (error) {
+            kind = error instanceof TypeError ? "TypeError" : "other";
+        }
+        kind
+        "#,
+        "TypeError",
+    )
 }
