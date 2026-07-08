@@ -166,6 +166,25 @@ const REJECT_NAME: &str = "reject";
 const RESOLVE_NAME: &str = "resolve";
 const STRING_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const STRING_NAME: &str = "String";
+const STRING_PROTOTYPE_FUNCTION_LENGTH_ONE: f64 = 1.0;
+pub(in crate::runtime::native) const STRING_PROTOTYPE_CHAR_AT_NAME: &str = "charAt";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_CHAR_CODE_AT_NAME: &str = "charCodeAt";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_CONCAT_NAME: &str = "concat";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_ENDS_WITH_NAME: &str = "endsWith";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_INCLUDES_NAME: &str = "includes";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_INDEX_OF_NAME: &str = "indexOf";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_LAST_INDEX_OF_NAME: &str = "lastIndexOf";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_REPEAT_NAME: &str = "repeat";
+const STRING_PROTOTYPE_FUNCTION_LENGTH_TWO: f64 = 2.0;
+pub(in crate::runtime::native) const STRING_PROTOTYPE_SLICE_NAME: &str = "slice";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_STARTS_WITH_NAME: &str = "startsWith";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_SUBSTRING_NAME: &str = "substring";
+const STRING_PROTOTYPE_FUNCTION_LENGTH_ZERO: f64 = 0.0;
+pub(in crate::runtime::native) const STRING_PROTOTYPE_TO_LOWER_CASE_NAME: &str = "toLowerCase";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_TO_UPPER_CASE_NAME: &str = "toUpperCase";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_TRIM_NAME: &str = "trim";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_TRIM_END_NAME: &str = "trimEnd";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_TRIM_START_NAME: &str = "trimStart";
 const SYMBOL_FUNCTION_LENGTH: f64 = 0.0;
 pub(in crate::runtime::native) const SYMBOL_NAME: &str = "Symbol";
 
@@ -269,6 +288,22 @@ pub(in crate::runtime) enum NativeFunctionKind {
     RegExp,
     RegExpPrototypeTest,
     String,
+    StringPrototypeCharAt,
+    StringPrototypeCharCodeAt,
+    StringPrototypeConcat,
+    StringPrototypeEndsWith,
+    StringPrototypeIncludes,
+    StringPrototypeIndexOf,
+    StringPrototypeLastIndexOf,
+    StringPrototypeRepeat,
+    StringPrototypeSlice,
+    StringPrototypeStartsWith,
+    StringPrototypeSubstring,
+    StringPrototypeToLowerCase,
+    StringPrototypeToUpperCase,
+    StringPrototypeTrim,
+    StringPrototypeTrimEnd,
+    StringPrototypeTrimStart,
     Symbol,
 }
 
@@ -287,6 +322,9 @@ impl NativeFunctionKind {
             return length;
         }
         if let Some(length) = self.core_length() {
+            return length;
+        }
+        if let Some(length) = self.string_prototype_length() {
             return length;
         }
         FUNCTION_FUNCTION_LENGTH
@@ -426,6 +464,29 @@ impl NativeFunctionKind {
         }
     }
 
+    const fn string_prototype_length(self) -> Option<f64> {
+        match self {
+            Self::StringPrototypeToLowerCase
+            | Self::StringPrototypeToUpperCase
+            | Self::StringPrototypeTrim
+            | Self::StringPrototypeTrimEnd
+            | Self::StringPrototypeTrimStart => Some(STRING_PROTOTYPE_FUNCTION_LENGTH_ZERO),
+            Self::StringPrototypeSlice | Self::StringPrototypeSubstring => {
+                Some(STRING_PROTOTYPE_FUNCTION_LENGTH_TWO)
+            }
+            Self::StringPrototypeCharAt
+            | Self::StringPrototypeCharCodeAt
+            | Self::StringPrototypeConcat
+            | Self::StringPrototypeEndsWith
+            | Self::StringPrototypeIncludes
+            | Self::StringPrototypeIndexOf
+            | Self::StringPrototypeLastIndexOf
+            | Self::StringPrototypeRepeat
+            | Self::StringPrototypeStartsWith => Some(STRING_PROTOTYPE_FUNCTION_LENGTH_ONE),
+            _ => None,
+        }
+    }
+
     pub(in crate::runtime::native) const fn name(self) -> &'static str {
         if let Some(name) = self.array_name() {
             return name;
@@ -440,6 +501,9 @@ impl NativeFunctionKind {
             return name;
         }
         if let Some(name) = self.core_name() {
+            return name;
+        }
+        if let Some(name) = self.string_prototype_name() {
             return name;
         }
         FUNCTION_NAME
@@ -574,6 +638,28 @@ impl NativeFunctionKind {
             Self::GlobalIsNan | Self::NumberIsNan => Some(GLOBAL_IS_NAN_NAME),
             Self::GlobalParseFloat => Some(GLOBAL_PARSE_FLOAT_NAME),
             Self::GlobalParseInt => Some(GLOBAL_PARSE_INT_NAME),
+            _ => None,
+        }
+    }
+
+    const fn string_prototype_name(self) -> Option<&'static str> {
+        match self {
+            Self::StringPrototypeCharAt => Some(STRING_PROTOTYPE_CHAR_AT_NAME),
+            Self::StringPrototypeCharCodeAt => Some(STRING_PROTOTYPE_CHAR_CODE_AT_NAME),
+            Self::StringPrototypeConcat => Some(STRING_PROTOTYPE_CONCAT_NAME),
+            Self::StringPrototypeEndsWith => Some(STRING_PROTOTYPE_ENDS_WITH_NAME),
+            Self::StringPrototypeIncludes => Some(STRING_PROTOTYPE_INCLUDES_NAME),
+            Self::StringPrototypeIndexOf => Some(STRING_PROTOTYPE_INDEX_OF_NAME),
+            Self::StringPrototypeLastIndexOf => Some(STRING_PROTOTYPE_LAST_INDEX_OF_NAME),
+            Self::StringPrototypeRepeat => Some(STRING_PROTOTYPE_REPEAT_NAME),
+            Self::StringPrototypeSlice => Some(STRING_PROTOTYPE_SLICE_NAME),
+            Self::StringPrototypeStartsWith => Some(STRING_PROTOTYPE_STARTS_WITH_NAME),
+            Self::StringPrototypeSubstring => Some(STRING_PROTOTYPE_SUBSTRING_NAME),
+            Self::StringPrototypeToLowerCase => Some(STRING_PROTOTYPE_TO_LOWER_CASE_NAME),
+            Self::StringPrototypeToUpperCase => Some(STRING_PROTOTYPE_TO_UPPER_CASE_NAME),
+            Self::StringPrototypeTrim => Some(STRING_PROTOTYPE_TRIM_NAME),
+            Self::StringPrototypeTrimEnd => Some(STRING_PROTOTYPE_TRIM_END_NAME),
+            Self::StringPrototypeTrimStart => Some(STRING_PROTOTYPE_TRIM_START_NAME),
             _ => None,
         }
     }

@@ -62,6 +62,8 @@ const PATH_TEST262_BOOLEAN_BUILTIN: &str =
     "tests/corpora/test262/active/built-ins/Boolean/constructor.js";
 const PATH_TEST262_STRING_BUILTIN: &str =
     "tests/corpora/test262/active/built-ins/String/constructor.js";
+const PATH_TEST262_STRING_PROTOTYPE_METHODS: &str =
+    "tests/corpora/test262/active/built-ins/String/prototype_methods.js";
 const PATH_TEST262_COMPUTED_PROPERTIES: &str =
     "tests/corpora/test262/active/language/expressions/computed_properties.js";
 const PATH_TEST262_ARRAY_LITERALS: &str =
@@ -489,6 +491,11 @@ fn test262_builtin_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "built-ins/String/constructor",
             path: PATH_TEST262_STRING_BUILTIN,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/String/prototype-methods",
+            path: PATH_TEST262_STRING_PROTOTYPE_METHODS,
             expectation: Expectation::Value("42"),
         },
     ]

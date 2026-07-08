@@ -93,7 +93,7 @@ impl Context {
         match string_property_value(value, property)? {
             StringPropertyValue::Length(value) => Ok(Value::Number(value)),
             StringPropertyValue::Character(ch) => self.heap_string_char_value(ch),
-            StringPropertyValue::Missing => Ok(Value::Undefined),
+            StringPropertyValue::Missing => self.string_prototype_property_value(property),
         }
     }
 

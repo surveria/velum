@@ -29,17 +29,20 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         if let Value::NativeFunction(id) = callee {
-            if self
-                .cached_static_property_native_call_kind(access, id)?
-                .is_some()
-            {
+            if let Some(kind) = self.cached_static_property_native_call_kind(access, id)? {
                 self.record_native_call_cache_hit();
-                return self.eval_direct_native_call_target(target, args, this_value);
+                return self.eval_direct_or_generic_native_function_kind(kind, args, this_value);
             }
             if let Some(kind) = self.direct_native_call_kind(id, target) {
                 self.record_native_call_cache_miss();
                 self.remember_static_property_native_call_kind(access, id, kind)?;
                 return self.eval_direct_native_call_target(target, args, this_value);
+            }
+            let kind = self.native_function(id)?.kind();
+            if kind.to_call_target().is_some() {
+                self.record_native_call_cache_miss();
+                self.remember_static_property_native_call_kind(access, id, kind)?;
+                return self.eval_direct_or_generic_native_function_kind(kind, args, this_value);
             }
         }
         self.record_native_call_cache_slow_path();
@@ -61,24 +64,22 @@ impl Context {
             return Ok(None);
         }
 
-        if self
-            .cached_static_object_property_native_call_kind_for_access(access, *object)?
-            .is_some()
+        if let Some(kind) =
+            self.cached_static_object_property_native_call_kind_for_access(access, *object)?
         {
             self.record_native_call_cache_hit();
             return self
-                .eval_direct_native_call_target(target, args, this_value)
+                .eval_direct_or_generic_native_function_kind(kind, args, this_value)
                 .map(Some);
         }
 
         let lookup = self.static_property_lookup(property)?;
-        if self
-            .cached_static_object_property_native_call_kind(access, *object, lookup)?
-            .is_some()
+        if let Some(kind) =
+            self.cached_static_object_property_native_call_kind(access, *object, lookup)?
         {
             self.record_native_call_cache_hit();
             return self
-                .eval_direct_native_call_target(target, args, this_value)
+                .eval_direct_or_generic_native_function_kind(kind, args, this_value)
                 .map(Some);
         }
 
@@ -103,6 +104,16 @@ impl Context {
                     )?;
                     return self
                         .eval_direct_native_call_target(target, args, this_value)
+                        .map(Some);
+                }
+                let kind = self.native_function(function)?.kind();
+                if kind.to_call_target().is_some() {
+                    self.record_native_call_cache_miss();
+                    self.remember_static_object_property_native_call_kind(
+                        access, candidate, version, function, kind,
+                    )?;
+                    return self
+                        .eval_direct_or_generic_native_function_kind(kind, args, this_value)
                         .map(Some);
                 }
                 self.record_native_call_cache_slow_path();
@@ -247,9 +258,70 @@ impl Context {
             NativeCallTarget::RegExpPrototypeTest => {
                 self.eval_regexp_prototype_test(runtime_call_args(args), this_value)
             }
-            NativeCallTarget::String => self.eval_direct_string_constructor(args),
             NativeCallTarget::Symbol => self.eval_symbol_constructor(runtime_call_args(args)),
-            _ => Err(Error::runtime("native target reached non-object dispatch")),
+            target => self
+                .eval_direct_string_native_call_target(target, args, this_value)
+                .ok_or_else(|| Error::runtime("String native call target was not handled"))?,
+        }
+    }
+
+    fn eval_direct_string_native_call_target(
+        &mut self,
+        target: NativeCallTarget,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Option<Result<Value>> {
+        match target {
+            NativeCallTarget::String => Some(self.eval_direct_string_constructor(args)),
+            NativeCallTarget::StringPrototypeCharAt => {
+                Some(self.eval_direct_string_prototype_char_at(args, this_value))
+            }
+            NativeCallTarget::StringPrototypeCharCodeAt => {
+                Some(self.eval_direct_string_prototype_char_code_at(args, this_value))
+            }
+            NativeCallTarget::StringPrototypeConcat => {
+                Some(self.eval_direct_string_prototype_concat(args, this_value))
+            }
+            NativeCallTarget::StringPrototypeEndsWith => {
+                Some(self.eval_direct_string_prototype_ends_with(args, this_value))
+            }
+            NativeCallTarget::StringPrototypeIncludes => {
+                Some(self.eval_direct_string_prototype_includes(args, this_value))
+            }
+            NativeCallTarget::StringPrototypeIndexOf => {
+                Some(self.eval_direct_string_prototype_index_of(args, this_value))
+            }
+            NativeCallTarget::StringPrototypeLastIndexOf => {
+                Some(self.eval_direct_string_prototype_last_index_of(args, this_value))
+            }
+            NativeCallTarget::StringPrototypeRepeat => {
+                Some(self.eval_direct_string_prototype_repeat(args, this_value))
+            }
+            NativeCallTarget::StringPrototypeSlice => {
+                Some(self.eval_direct_string_prototype_slice(args, this_value))
+            }
+            NativeCallTarget::StringPrototypeStartsWith => {
+                Some(self.eval_direct_string_prototype_starts_with(args, this_value))
+            }
+            NativeCallTarget::StringPrototypeSubstring => {
+                Some(self.eval_direct_string_prototype_substring(args, this_value))
+            }
+            NativeCallTarget::StringPrototypeToLowerCase => {
+                Some(self.eval_string_prototype_to_lower_case(runtime_call_args(args), this_value))
+            }
+            NativeCallTarget::StringPrototypeToUpperCase => {
+                Some(self.eval_string_prototype_to_upper_case(runtime_call_args(args), this_value))
+            }
+            NativeCallTarget::StringPrototypeTrim => {
+                Some(self.eval_string_prototype_trim(runtime_call_args(args), this_value))
+            }
+            NativeCallTarget::StringPrototypeTrimEnd => {
+                Some(self.eval_string_prototype_trim_end(runtime_call_args(args), this_value))
+            }
+            NativeCallTarget::StringPrototypeTrimStart => {
+                Some(self.eval_string_prototype_trim_start(runtime_call_args(args), this_value))
+            }
+            _ => None,
         }
     }
 
@@ -458,9 +530,70 @@ impl Context {
             NativeFunctionKind::RegExpPrototypeTest => {
                 self.eval_regexp_prototype_test(args, this_value)
             }
-            NativeFunctionKind::String => self.eval_string_constructor(args),
             NativeFunctionKind::Symbol => self.eval_symbol_constructor(args),
-            _ => Err(Error::runtime("native kind reached non-object dispatch")),
+            kind => self
+                .eval_string_native_function_kind(kind, args, this_value)
+                .ok_or_else(|| Error::runtime("String native function kind was not handled"))?,
+        }
+    }
+
+    fn eval_string_native_function_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Option<Result<Value>> {
+        match kind {
+            NativeFunctionKind::String => Some(self.eval_string_constructor(args)),
+            NativeFunctionKind::StringPrototypeCharAt => {
+                Some(self.eval_string_prototype_char_at(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeCharCodeAt => {
+                Some(self.eval_string_prototype_char_code_at(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeConcat => {
+                Some(self.eval_string_prototype_concat(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeEndsWith => {
+                Some(self.eval_string_prototype_ends_with(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeIncludes => {
+                Some(self.eval_string_prototype_includes(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeIndexOf => {
+                Some(self.eval_string_prototype_index_of(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeLastIndexOf => {
+                Some(self.eval_string_prototype_last_index_of(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeRepeat => {
+                Some(self.eval_string_prototype_repeat(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeSlice => {
+                Some(self.eval_string_prototype_slice(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeStartsWith => {
+                Some(self.eval_string_prototype_starts_with(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeSubstring => {
+                Some(self.eval_string_prototype_substring(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeToLowerCase => {
+                Some(self.eval_string_prototype_to_lower_case(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeToUpperCase => {
+                Some(self.eval_string_prototype_to_upper_case(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeTrim => {
+                Some(self.eval_string_prototype_trim(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeTrimEnd => {
+                Some(self.eval_string_prototype_trim_end(args, this_value))
+            }
+            NativeFunctionKind::StringPrototypeTrimStart => {
+                Some(self.eval_string_prototype_trim_start(args, this_value))
+            }
+            _ => None,
         }
     }
 

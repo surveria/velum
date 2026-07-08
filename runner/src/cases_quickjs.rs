@@ -76,6 +76,8 @@ const PATH_QUICKJS_NUMBER_BUILTIN: &str =
     "tests/corpora/quickjs_differential/active/number_builtin.js";
 const PATH_QUICKJS_STRING_BUILTIN: &str =
     "tests/corpora/quickjs_differential/active/string_builtin.js";
+const PATH_QUICKJS_STRING_PROTOTYPE_METHODS: &str =
+    "tests/corpora/quickjs_differential/active/string_prototype_methods.js";
 const PATH_QUICKJS_COMPUTED_PROPERTIES: &str =
     "tests/corpora/quickjs_differential/active/computed_properties.js";
 const PATH_QUICKJS_ARRAY_LITERALS: &str =
@@ -458,6 +460,10 @@ fn quickjs_runtime_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "string_builtin",
             path: PATH_QUICKJS_STRING_BUILTIN,
+        },
+        DifferentialCase {
+            id: "string_prototype_methods",
+            path: PATH_QUICKJS_STRING_PROTOTYPE_METHODS,
         },
     ]
 }
