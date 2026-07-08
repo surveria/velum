@@ -29,6 +29,27 @@ impl Context {
             | BytecodeInstruction::AssertThrows { .. } => {
                 self.eval_bytecode_invocation_instruction(state, instruction, next)
             }
+            BytecodeInstruction::CollectSpreadArgs { spread_flags } => {
+                self.eval_bytecode_collect_spread_args(state, spread_flags, next)
+            }
+            BytecodeInstruction::ArrayLiteralSpread { spread_flags } => {
+                self.eval_bytecode_array_literal_spread(state, spread_flags, next)
+            }
+            BytecodeInstruction::CallBindingSpread { callee } => {
+                self.eval_bytecode_call_binding_spread(state, callee, next)
+            }
+            BytecodeInstruction::CallValueSpread => {
+                self.eval_bytecode_call_value_spread(state, next)
+            }
+            BytecodeInstruction::CallStaticMemberSpread { property } => {
+                self.eval_bytecode_call_static_member_spread(state, property, next)
+            }
+            BytecodeInstruction::CallComputedMemberSpread { property } => {
+                self.eval_bytecode_call_computed_member_spread(state, *property, next)
+            }
+            BytecodeInstruction::ConstructValueSpread => {
+                self.eval_bytecode_construct_value_spread(state, next)
+            }
             BytecodeInstruction::Construct { .. }
             | BytecodeInstruction::ConstructValue { .. }
             | BytecodeInstruction::CreateFunction { .. }
