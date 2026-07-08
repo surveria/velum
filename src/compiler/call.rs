@@ -5,7 +5,7 @@ use crate::{
     value::{ErrorName, Value},
 };
 
-use super::{BytecodeCallSite, BytecodeCompiler, BytecodeInstruction};
+use super::{BytecodeCallSite, BytecodeCompiler, BytecodeInstruction, has_spread_arg};
 
 impl BytecodeCompiler<'_> {
     pub(super) fn compile_call_expr(
@@ -14,6 +14,9 @@ impl BytecodeCompiler<'_> {
         site: StaticCallSiteId,
         args: &[Expr],
     ) -> Result<()> {
+        if has_spread_arg(args) {
+            return self.compile_spread_call_expr(callee, args);
+        }
         if let Some(expected) = assert_throws_expected_error(callee, args)? {
             let callback = args
                 .get(1)
@@ -88,6 +91,54 @@ impl BytecodeCompiler<'_> {
                     site: BytecodeCallSite::new(site),
                     arg_count: args.len(),
                 });
+                Ok(())
+            }
+        }
+    }
+
+    fn compile_spread_call_expr(&mut self, callee: &Expr, args: &[Expr]) -> Result<()> {
+        match callee {
+            Expr::Identifier(name) => {
+                let spread_flags = self.compile_spread_parts(args)?;
+                self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
+                self.emit(BytecodeInstruction::CallBindingSpread {
+                    callee: self.compile_binding(name)?,
+                });
+                Ok(())
+            }
+            Expr::Member {
+                object,
+                property,
+                access,
+            } => {
+                self.compile_expr(object)?;
+                let spread_flags = self.compile_spread_parts(args)?;
+                self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
+                self.emit(BytecodeInstruction::CallStaticMemberSpread {
+                    property: Self::compile_property(property, *access),
+                });
+                Ok(())
+            }
+            Expr::ComputedMember {
+                object,
+                property,
+                access,
+            } => {
+                self.compile_expr(object)?;
+                self.compile_expr(property)?;
+                let spread_flags = self.compile_spread_parts(args)?;
+                self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
+                self.emit(BytecodeInstruction::CallComputedMemberSpread {
+                    property: Self::compile_dynamic_property(*access),
+                });
+                Ok(())
+            }
+            Expr::Parenthesized(callee) => self.compile_spread_call_expr(callee, args),
+            callee => {
+                self.compile_expr(callee)?;
+                let spread_flags = self.compile_spread_parts(args)?;
+                self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
+                self.emit(BytecodeInstruction::CallValueSpread);
                 Ok(())
             }
         }

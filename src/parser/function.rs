@@ -1,6 +1,6 @@
 use crate::{
     ast::{Expr, FunctionParam, Stmt},
-    error::Result,
+    error::{Error, Result},
     lexer::TokenKind,
     syntax::DeclKind,
 };
@@ -12,6 +12,10 @@ use super::Parser;
 /// keep the name outside the user identifier space.
 const PATTERN_PARAM_NAME_PREFIX: &str = "%pattern";
 const PATTERN_PARAM_NAME_SUFFIX: &str = "%";
+
+/// Prefix for the synthesized rest parameter that holds the packed argument
+/// array before a body-prologue pattern declaration unpacks it.
+const REST_PATTERN_PARAM_NAME: &str = "%rest%";
 
 /// Parsed parameter list plus the pattern-unpacking statements that must run
 /// before the function body.
@@ -47,6 +51,10 @@ impl Parser {
             if self.check(&TokenKind::RParen) {
                 break;
             }
+            if self.match_kind(&TokenKind::DotDotDot) {
+                self.rest_parameter(&mut params, &mut pattern_prologue)?;
+                break;
+            }
             if self.next_is_binding_pattern() {
                 self.pattern_parameter(&mut params, &mut pattern_prologue)?;
             } else {
@@ -68,6 +76,42 @@ impl Parser {
             params,
             pattern_prologue,
         })
+    }
+
+    /// Parses one rest parameter after its consumed `...` marker: identifier
+    /// rests bind directly, pattern rests bind through a synthesized parameter
+    /// plus a body-prologue pattern declaration.
+    fn rest_parameter(
+        &mut self,
+        params: &mut Vec<FunctionParam>,
+        pattern_prologue: &mut Vec<Stmt>,
+    ) -> Result<()> {
+        if self.next_is_binding_pattern() {
+            let pattern = self.binding_pattern()?;
+            let synthetic = self.static_binding_name(REST_PATTERN_PARAM_NAME.to_owned())?;
+            params.push(FunctionParam::rest(synthetic.clone()));
+            pattern_prologue.push(Stmt::PatternDecl {
+                pattern,
+                kind: DeclKind::Var,
+                init: Expr::Identifier(synthetic),
+            });
+        } else {
+            let name = self.consume_binding_identifier("expected rest parameter name")?;
+            params.push(FunctionParam::rest(name));
+        }
+        if self.check(&TokenKind::Equal) {
+            return Err(Error::parse(
+                "rest parameter cannot have a default value",
+                self.offset(),
+            ));
+        }
+        if self.check(&TokenKind::Comma) {
+            return Err(Error::parse(
+                "rest parameter must be the last parameter",
+                self.offset(),
+            ));
+        }
+        Ok(())
     }
 
     /// Parses one destructuring parameter as a synthesized plain parameter

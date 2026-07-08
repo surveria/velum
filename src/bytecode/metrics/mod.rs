@@ -94,7 +94,9 @@ impl BytecodeInstruction {
             Self::UpdateBinding { name, .. } | Self::CompoundStoreBinding { name, .. } => {
                 name.direct_operand_count()
             }
-            Self::CallBinding { callee, .. } => callee.direct_operand_count(),
+            Self::CallBinding { callee, .. } | Self::CallBindingSpread { callee } => {
+                callee.direct_operand_count()
+            }
             Self::Construct { constructor, .. } => constructor.direct_operand_count(),
             Self::While {
                 condition, body, ..
@@ -177,7 +179,9 @@ impl BytecodeInstruction {
             | Self::ArrayIndexAssign { .. }
             | Self::ComputedPropertyAssign { .. }
             | Self::CallStaticMember { .. }
-            | Self::CallComputedMember { .. } => 1,
+            | Self::CallComputedMember { .. }
+            | Self::CallStaticMemberSpread { .. }
+            | Self::CallComputedMemberSpread { .. } => 1,
             Self::While {
                 condition, body, ..
             } => count_blocks_2(condition, body, BytecodeBlock::property_operand_count),
@@ -521,6 +525,13 @@ impl BytecodeInstruction {
                 | Self::PushLiteral(_)
                 | Self::PushString(_)
                 | Self::TemplateConcat { .. }
+                | Self::CollectSpreadArgs { .. }
+                | Self::CallBindingSpread { .. }
+                | Self::CallValueSpread
+                | Self::CallStaticMemberSpread { .. }
+                | Self::CallComputedMemberSpread { .. }
+                | Self::ConstructValueSpread
+                | Self::ArrayLiteralSpread { .. }
                 | Self::CreateRegExp { .. }
                 | Self::PushUndefined
                 | Self::LoadThis

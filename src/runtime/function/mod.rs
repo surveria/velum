@@ -217,6 +217,7 @@ impl Context {
             )
         };
         let args = args.to_owned_values();
+        let args = self.pack_rest_arguments(bytecode.params(), args)?;
         let has_parameter_defaults = bytecode.has_parameter_defaults();
         let caller_locals = std::mem::take(&mut self.locals);
         let scope = match self.function_scope(

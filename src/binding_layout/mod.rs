@@ -564,6 +564,7 @@ impl LayoutBuilder {
             }
             Expr::Identifier(binding) => self.resolve(binding, scope, function),
             Expr::Parenthesized(expr)
+            | Expr::Spread(expr)
             | Expr::Unary { expr, .. }
             | Expr::Await(expr)
             | Expr::Update { expr, .. } => self.analyze_expr(expr, scope, function),

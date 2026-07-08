@@ -5,6 +5,7 @@ mod control;
 mod destructure;
 mod for_of;
 mod ops;
+mod spread;
 mod state;
 
 use crate::{
@@ -109,6 +110,13 @@ impl Context {
             | BytecodeInstruction::CallValue { .. }
             | BytecodeInstruction::CallStaticMember { .. }
             | BytecodeInstruction::CallComputedMember { .. }
+            | BytecodeInstruction::CollectSpreadArgs { .. }
+            | BytecodeInstruction::CallBindingSpread { .. }
+            | BytecodeInstruction::CallValueSpread
+            | BytecodeInstruction::CallStaticMemberSpread { .. }
+            | BytecodeInstruction::CallComputedMemberSpread { .. }
+            | BytecodeInstruction::ConstructValueSpread
+            | BytecodeInstruction::ArrayLiteralSpread { .. }
             | BytecodeInstruction::Print { .. }
             | BytecodeInstruction::AssertThrows { .. }
             | BytecodeInstruction::Construct { .. }

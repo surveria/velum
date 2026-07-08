@@ -24,6 +24,8 @@ pub enum ObjectPropertyKind {
     Init,
     Get,
     Set,
+    /// A `...expr` entry copying own enumerable properties of the value.
+    Spread,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -36,6 +38,7 @@ pub enum ObjectPropertyKey {
 pub enum Expr {
     Literal(Value),
     StringLiteral(StaticString),
+    Spread(Box<Self>),
     TemplateLiteral {
         quasis: Vec<StaticString>,
         expressions: Vec<Self>,
