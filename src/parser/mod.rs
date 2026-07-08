@@ -8,6 +8,7 @@ use crate::runtime::limits::RuntimeLimits;
 
 mod assignment;
 mod binary;
+mod class;
 mod expression;
 mod function;
 mod pattern;
