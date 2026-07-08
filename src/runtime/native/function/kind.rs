@@ -1,3 +1,4 @@
+use super::date_kind::DateFunctionKind;
 use crate::value::{BoundFunctionId, ErrorName};
 
 const ASYNC_FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
@@ -187,22 +188,17 @@ pub(in crate::runtime::native) const SYMBOL_NAME: &str = "Symbol";
 pub(in crate::runtime) enum NativeFunctionKind {
     Array,
     ArrayConcat,
-    ArrayEntries,
     ArrayEvery,
     ArrayFilter,
     ArrayFind,
     ArrayFindIndex,
     ArrayForEach,
-    ArrayFrom,
     ArrayIncludes,
     ArrayIndexOf,
     ArrayIsArray,
-    ArrayIteratorNext(crate::runtime::array_iterators::ArrayIteratorId),
     ArrayJoin,
-    ArrayKeys,
     ArrayLastIndexOf,
     ArrayMap,
-    ArrayOf,
     ArrayPop,
     ArrayPush,
     ArrayReduce,
@@ -212,12 +208,12 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ArraySlice,
     ArraySome,
     ArrayUnshift,
-    ArrayValues,
     AsyncFunction,
     Boolean,
     BooleanPrototypeToString,
     BooleanPrototypeValueOf,
     BoundFunction(BoundFunctionId),
+    Date(DateFunctionKind),
     CollectionIteratorNext(crate::runtime::collections::CollectionIteratorId),
     IteratorSelf,
     Eval,
@@ -372,6 +368,9 @@ pub(in crate::runtime) enum NativeFunctionKind {
 
 impl NativeFunctionKind {
     pub(in crate::runtime::native) const fn length(self) -> f64 {
+        if let Self::Date(kind) = self {
+            return kind.length();
+        }
         if let Some(length) = self.collection_length() {
             return length;
         }
@@ -561,6 +560,9 @@ impl NativeFunctionKind {
     }
 
     pub(in crate::runtime::native) const fn name(self) -> &'static str {
+        if let Self::Date(kind) = self {
+            return kind.name();
+        }
         if let Some(name) = self.collection_name() {
             return name;
         }

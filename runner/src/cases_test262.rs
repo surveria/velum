@@ -84,8 +84,6 @@ const PATH_TEST262_ARRAY_PROTOTYPE_GENERIC_METHODS: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_generic_methods.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_CALLBACK_METHODS: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_callback_methods.js";
-const PATH_TEST262_ARRAY_STATIC_ITERATOR_METHODS: &str =
-    "tests/corpora/test262/active/built-ins/Array/static_iterator_methods.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_CONCAT: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_concat.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_INCLUDES: &str =
@@ -152,6 +150,7 @@ const PATH_TEST262_WEAK_MAP: &str =
     "tests/corpora/test262/active/built-ins/WeakMap/weak_collections_baseline.js";
 const PATH_TEST262_WEAK_SET: &str =
     "tests/corpora/test262/active/built-ins/WeakSet/weak_set_baseline.js";
+const PATH_TEST262_DATE: &str = "tests/corpora/test262/active/built-ins/Date/date_baseline.js";
 const PATH_TEST262_FOR_IN_NULLISH_ERROR: &str =
     "tests/corpora/test262/active/language/statements/for_in_nullish_error.js";
 const PATH_TEST262_SWITCH: &str = "tests/corpora/test262/active/language/statements/switch.js";
@@ -459,21 +458,12 @@ fn test262_operator_expression_cases() -> Vec<EngineCase> {
 
 fn test262_builtin_cases() -> Vec<EngineCase> {
     let mut cases = test262_primitive_builtin_cases();
-    cases.extend(test262_array_builtin_cases());
     cases.extend(test262_global_builtin_cases());
     cases.extend(test262_math_builtin_cases());
     cases.extend(test262_object_builtin_cases());
     cases.extend(test262_string_builtin_cases());
     cases.extend(test262_collection_builtin_cases());
     cases
-}
-
-fn test262_array_builtin_cases() -> Vec<EngineCase> {
-    vec![EngineCase {
-        id: "built-ins/Array/static-iterator-methods",
-        path: PATH_TEST262_ARRAY_STATIC_ITERATOR_METHODS,
-        expectation: Expectation::Value("42"),
-    }]
 }
 
 fn test262_primitive_builtin_cases() -> Vec<EngineCase> {
@@ -656,6 +646,16 @@ fn test262_class_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/statements/class_fields",
             path: PATH_TEST262_CLASS_FIELDS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Map/map_set_baseline",
+            path: PATH_TEST262_MAP_SET,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Date/date_baseline",
+            path: PATH_TEST262_DATE,
             expectation: Expectation::Value("42"),
         },
     ]

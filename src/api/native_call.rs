@@ -4,21 +4,17 @@ use crate::value::ErrorName;
 pub enum NativeCallTarget {
     Array,
     ArrayConcat,
-    ArrayEntries,
     ArrayEvery,
     ArrayFilter,
     ArrayFind,
     ArrayFindIndex,
     ArrayForEach,
-    ArrayFrom,
     ArrayIncludes,
     ArrayIndexOf,
     ArrayIsArray,
     ArrayJoin,
-    ArrayKeys,
     ArrayLastIndexOf,
     ArrayMap,
-    ArrayOf,
     ArrayPop,
     ArrayPush,
     ArrayReduce,
@@ -28,10 +24,10 @@ pub enum NativeCallTarget {
     ArraySlice,
     ArraySome,
     ArrayUnshift,
-    ArrayValues,
     Boolean,
     BooleanPrototypeToString,
     BooleanPrototypeValueOf,
+    Date,
     ErrorConstructor(ErrorName),
     ErrorPrototypeToString,
     Eval,
@@ -153,21 +149,17 @@ impl NativeCallTarget {
             self,
             Self::Array
                 | Self::ArrayConcat
-                | Self::ArrayEntries
                 | Self::ArrayEvery
                 | Self::ArrayFilter
                 | Self::ArrayFind
                 | Self::ArrayFindIndex
                 | Self::ArrayForEach
-                | Self::ArrayFrom
                 | Self::ArrayIncludes
                 | Self::ArrayIndexOf
                 | Self::ArrayIsArray
                 | Self::ArrayJoin
-                | Self::ArrayKeys
                 | Self::ArrayLastIndexOf
                 | Self::ArrayMap
-                | Self::ArrayOf
                 | Self::ArrayPop
                 | Self::ArrayPush
                 | Self::ArrayReduce
@@ -177,7 +169,6 @@ impl NativeCallTarget {
                 | Self::ArraySlice
                 | Self::ArraySome
                 | Self::ArrayUnshift
-                | Self::ArrayValues
         )
     }
 
@@ -185,6 +176,7 @@ impl NativeCallTarget {
         match name {
             "Array" => Some(Self::Array),
             "Boolean" => Some(Self::Boolean),
+            "Date" => Some(Self::Date),
             "eval" => Some(Self::Eval),
             "Function" => Some(Self::Function),
             "decodeURI" => Some(Self::GlobalDecodeUri),
@@ -218,21 +210,17 @@ impl NativeCallTarget {
     fn from_array_property_name(name: &str) -> Option<Self> {
         match name {
             "concat" => Some(Self::ArrayConcat),
-            "entries" => Some(Self::ArrayEntries),
             "every" => Some(Self::ArrayEvery),
             "filter" => Some(Self::ArrayFilter),
             "find" => Some(Self::ArrayFind),
             "findIndex" => Some(Self::ArrayFindIndex),
             "forEach" => Some(Self::ArrayForEach),
-            "from" => Some(Self::ArrayFrom),
             "includes" => Some(Self::ArrayIncludes),
             "indexOf" => Some(Self::ArrayIndexOf),
             "isArray" => Some(Self::ArrayIsArray),
             "join" => Some(Self::ArrayJoin),
-            "keys" => Some(Self::ArrayKeys),
             "lastIndexOf" => Some(Self::ArrayLastIndexOf),
             "map" => Some(Self::ArrayMap),
-            "of" => Some(Self::ArrayOf),
             "pop" => Some(Self::ArrayPop),
             "push" => Some(Self::ArrayPush),
             "reduce" => Some(Self::ArrayReduce),
@@ -242,7 +230,6 @@ impl NativeCallTarget {
             "slice" => Some(Self::ArraySlice),
             "some" => Some(Self::ArraySome),
             "unshift" => Some(Self::ArrayUnshift),
-            "values" => Some(Self::ArrayValues),
             _ => None,
         }
     }
