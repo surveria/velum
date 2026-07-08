@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T083309Z.md`
-- Task: PR #304: Optimize string concat bytecode path
-- Performance: 6.48x (62/63 >1.00x)
+- `rsqjs-test-report-20260708T084924Z.md`
+- Task: PR #306: Support nullish coalescing and logical assignment
+- Performance: 6.41x (62/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 18160 passed / 84418 failed (17.70%)
+- Full Test262: 18225 passed / 84353 failed (17.77%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -307,3 +307,4 @@ Latest report:
 | `20260708T075201Z` `f044de5` PR #301: Support spread syntax and rest parameters | 6.61x (62/63 >1.00x) | - (0/63 >1.00x) | 18160 passed / 84418 failed (17.70%) |
 | `20260708T081738Z` `60437cc` PR #305: Clean up source module hierarchy | 6.79x (62/63 >1.00x) | - (0/63 >1.00x) | 18160 passed / 84418 failed (17.70%) |
 | `20260708T083309Z` `8cbb87a` PR #304: Optimize string concat bytecode path | 6.48x (62/63 >1.00x) | - (0/63 >1.00x) | 18160 passed / 84418 failed (17.70%) |
+| `20260708T084924Z` `c4eb59f` PR #306: Support nullish coalescing and logical assignment | 6.41x (62/63 >1.00x) | - (0/63 >1.00x) | 18225 passed / 84353 failed (17.77%) |
