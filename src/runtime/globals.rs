@@ -324,7 +324,7 @@ impl Context {
         self.builtin_globals.get(atom)
     }
 
-    fn define_global_object_data_property(
+    pub(crate) fn define_global_object_data_property(
         &mut self,
         id: ObjectId,
         name: &str,

@@ -55,6 +55,7 @@ pub(in crate::runtime::native) const MATH_COS_NAME: &str = "cos";
 pub(in crate::runtime::native) const MATH_COSH_NAME: &str = "cosh";
 pub(in crate::runtime::native) const MATH_EXP_NAME: &str = "exp";
 pub(in crate::runtime::native) const MATH_EXPM1_NAME: &str = "expm1";
+pub(in crate::runtime::native) const MATH_F16ROUND_NAME: &str = "f16round";
 pub(in crate::runtime::native) const MATH_FLOOR_NAME: &str = "floor";
 pub(in crate::runtime::native) const MATH_FROUND_NAME: &str = "fround";
 const MATH_FUNCTION_LENGTH_ONE: f64 = 1.0;
@@ -75,6 +76,7 @@ pub(in crate::runtime::native) const MATH_SIGN_NAME: &str = "sign";
 pub(in crate::runtime::native) const MATH_SIN_NAME: &str = "sin";
 pub(in crate::runtime::native) const MATH_SINH_NAME: &str = "sinh";
 pub(in crate::runtime::native) const MATH_SQRT_NAME: &str = "sqrt";
+pub(in crate::runtime::native) const MATH_SUM_PRECISE_NAME: &str = "sumPrecise";
 pub(in crate::runtime::native) const MATH_TAN_NAME: &str = "tan";
 pub(in crate::runtime::native) const MATH_TANH_NAME: &str = "tanh";
 pub(in crate::runtime::native) const MATH_TRUNC_NAME: &str = "trunc";
@@ -261,6 +263,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     MathCosh,
     MathExp,
     MathExpm1,
+    MathF16round,
     MathFloor,
     MathFround,
     MathHypot,
@@ -278,6 +281,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     MathSin,
     MathSinh,
     MathSqrt,
+    MathSumPrecise,
     MathTan,
     MathTanh,
     MathTrunc,
@@ -456,6 +460,7 @@ impl NativeFunctionKind {
             | Self::MathCosh
             | Self::MathExp
             | Self::MathExpm1
+            | Self::MathF16round
             | Self::MathFloor
             | Self::MathFround
             | Self::MathLog
@@ -467,6 +472,7 @@ impl NativeFunctionKind {
             | Self::MathSin
             | Self::MathSinh
             | Self::MathSqrt
+            | Self::MathSumPrecise
             | Self::MathTan
             | Self::MathTanh
             | Self::MathTrunc => Some(MATH_FUNCTION_LENGTH_ONE),
@@ -636,6 +642,7 @@ impl NativeFunctionKind {
             Self::MathCosh => Some(MATH_COSH_NAME),
             Self::MathExp => Some(MATH_EXP_NAME),
             Self::MathExpm1 => Some(MATH_EXPM1_NAME),
+            Self::MathF16round => Some(MATH_F16ROUND_NAME),
             Self::MathFloor => Some(MATH_FLOOR_NAME),
             Self::MathFround => Some(MATH_FROUND_NAME),
             Self::MathHypot => Some(MATH_HYPOT_NAME),
@@ -653,6 +660,7 @@ impl NativeFunctionKind {
             Self::MathSin => Some(MATH_SIN_NAME),
             Self::MathSinh => Some(MATH_SINH_NAME),
             Self::MathSqrt => Some(MATH_SQRT_NAME),
+            Self::MathSumPrecise => Some(MATH_SUM_PRECISE_NAME),
             Self::MathTan => Some(MATH_TAN_NAME),
             Self::MathTanh => Some(MATH_TANH_NAME),
             Self::MathTrunc => Some(MATH_TRUNC_NAME),

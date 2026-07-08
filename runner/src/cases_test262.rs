@@ -178,6 +178,7 @@ const PATH_TEST262_MATH_INTEGER_METHODS: &str =
     "tests/corpora/test262/active/built-ins/Math/integer_methods.js";
 const PATH_TEST262_MATH_METHODS: &str = "tests/corpora/test262/active/built-ins/Math/methods.js";
 const PATH_TEST262_MATH_RANDOM: &str = "tests/corpora/test262/active/built-ins/Math/random.js";
+const PATH_TEST262_MATH_RESIDUAL: &str = "tests/corpora/test262/active/built-ins/Math/residual.js";
 const PATH_TEST262_STANDARD_ERROR_CONSTRUCTORS: &str =
     "tests/corpora/test262/active/language/statements/standard_error_constructors.js";
 const PATH_TEST262_ERROR_PROTOTYPE_TO_STRING: &str =
@@ -571,6 +572,11 @@ fn test262_math_builtin_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "built-ins/Math/random",
             path: PATH_TEST262_MATH_RANDOM,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Math/residual",
+            path: PATH_TEST262_MATH_RESIDUAL,
             expectation: Expectation::Value("42"),
         },
     ]

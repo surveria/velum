@@ -4,8 +4,13 @@ use crate::{
     api::native_call::NativeCallTarget,
     error::{Error, Result},
     runtime::Context,
+    runtime::bytecode::for_of::ForOfStep,
     runtime::call::RuntimeCallArgs,
     runtime::numeric::number_to_uint32,
+    runtime::object::{
+        DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyUpdate,
+        PropertyWritable,
+    },
     value::{ObjectId, Value},
 };
 
@@ -13,11 +18,11 @@ use super::{
     MATH_ABS_NAME, MATH_ACOS_NAME, MATH_ACOSH_NAME, MATH_ASIN_NAME, MATH_ASINH_NAME,
     MATH_ATAN_NAME, MATH_ATAN2_NAME, MATH_ATANH_NAME, MATH_CBRT_NAME, MATH_CEIL_NAME,
     MATH_CLZ32_NAME, MATH_COS_NAME, MATH_COSH_NAME, MATH_EXP_NAME, MATH_EXPM1_NAME,
-    MATH_FLOOR_NAME, MATH_FROUND_NAME, MATH_HYPOT_NAME, MATH_IMUL_NAME, MATH_LOG_NAME,
-    MATH_LOG1P_NAME, MATH_LOG2_NAME, MATH_LOG10_NAME, MATH_MAX_NAME, MATH_MIN_NAME, MATH_NAME,
-    MATH_POW_NAME, MATH_RANDOM_NAME, MATH_ROUND_NAME, MATH_SIGN_NAME, MATH_SIN_NAME,
-    MATH_SINH_NAME, MATH_SQRT_NAME, MATH_TAN_NAME, MATH_TANH_NAME, MATH_TRUNC_NAME,
-    NativeFunctionKind,
+    MATH_F16ROUND_NAME, MATH_FLOOR_NAME, MATH_FROUND_NAME, MATH_HYPOT_NAME, MATH_IMUL_NAME,
+    MATH_LOG_NAME, MATH_LOG1P_NAME, MATH_LOG2_NAME, MATH_LOG10_NAME, MATH_MAX_NAME, MATH_MIN_NAME,
+    MATH_NAME, MATH_POW_NAME, MATH_RANDOM_NAME, MATH_ROUND_NAME, MATH_SIGN_NAME, MATH_SIN_NAME,
+    MATH_SINH_NAME, MATH_SQRT_NAME, MATH_SUM_PRECISE_NAME, MATH_TAN_NAME, MATH_TANH_NAME,
+    MATH_TRUNC_NAME, NativeFunctionKind,
 };
 
 const MATH_E_NAME: &str = "E";
@@ -36,6 +41,16 @@ const RANDOM_LOW_MASK: u64 = (1_u64 << RANDOM_LOW_BITS) - 1;
 const RANDOM_XOR_SHIFT_A: u32 = 13;
 const RANDOM_XOR_SHIFT_B: u32 = 7;
 const RANDOM_XOR_SHIFT_C: u32 = 17;
+const SYMBOL_TO_STRING_TAG_PROPERTY: &str = "toStringTag";
+const F16_MIN_NORMAL: f64 = 0.000_061_035_156_25;
+const F16_MIN_SUBNORMAL: f64 = 0.000_000_059_604_644_775_390_63;
+const F16_HALF_MIN_SUBNORMAL: f64 = 0.000_000_029_802_322_387_695_313;
+const F16_MAX_FINITE: f64 = 65_504.0;
+const F16_OVERFLOW_CUTOFF: f64 = 65_520.0;
+const F16_SIGNIFICAND_BITS: i32 = 10;
+const ROUND_INTEGER_CUTOFF: f64 = 4_503_599_627_370_496.0;
+
+use super::math_sum_precise::PreciseFiniteSum;
 
 macro_rules! math_unary_method {
     ($runtime_name:ident, $direct_name:ident, $operation:path) => {
@@ -54,7 +69,9 @@ macro_rules! math_unary_method {
 impl Context {
     pub(in crate::runtime::native) fn math_object_value(&mut self) -> Result<Value> {
         if let Some(binding) = self.get_binding(MATH_NAME) {
-            return binding.value(MATH_NAME);
+            let value = binding.value(MATH_NAME)?;
+            self.define_math_global_property(value.clone())?;
+            return Ok(value);
         }
 
         let constructor_key = self.object_constructor_property_key()?;
@@ -72,6 +89,7 @@ impl Context {
         self.define_math_constant(object, MATH_PI_NAME, PI)?;
         self.define_math_constant(object, MATH_SQRT1_2_NAME, FRAC_1_SQRT_2)?;
         self.define_math_constant(object, MATH_SQRT2_NAME, SQRT_2)?;
+        self.define_math_to_string_tag(object)?;
 
         self.define_math_method(object, MATH_ABS_NAME, NativeFunctionKind::MathAbs)?;
         self.define_math_method(object, MATH_ACOS_NAME, NativeFunctionKind::MathAcos)?;
@@ -88,6 +106,7 @@ impl Context {
         self.define_math_method(object, MATH_COSH_NAME, NativeFunctionKind::MathCosh)?;
         self.define_math_method(object, MATH_EXP_NAME, NativeFunctionKind::MathExp)?;
         self.define_math_method(object, MATH_EXPM1_NAME, NativeFunctionKind::MathExpm1)?;
+        self.define_math_method(object, MATH_F16ROUND_NAME, NativeFunctionKind::MathF16round)?;
         self.define_math_method(object, MATH_FLOOR_NAME, NativeFunctionKind::MathFloor)?;
         self.define_math_method(object, MATH_FROUND_NAME, NativeFunctionKind::MathFround)?;
         self.define_math_method(object, MATH_HYPOT_NAME, NativeFunctionKind::MathHypot)?;
@@ -105,12 +124,18 @@ impl Context {
         self.define_math_method(object, MATH_SIN_NAME, NativeFunctionKind::MathSin)?;
         self.define_math_method(object, MATH_SINH_NAME, NativeFunctionKind::MathSinh)?;
         self.define_math_method(object, MATH_SQRT_NAME, NativeFunctionKind::MathSqrt)?;
+        self.define_math_method(
+            object,
+            MATH_SUM_PRECISE_NAME,
+            NativeFunctionKind::MathSumPrecise,
+        )?;
         self.define_math_method(object, MATH_TAN_NAME, NativeFunctionKind::MathTan)?;
         self.define_math_method(object, MATH_TANH_NAME, NativeFunctionKind::MathTanh)?;
         self.define_math_method(object, MATH_TRUNC_NAME, NativeFunctionKind::MathTrunc)?;
 
         let value = Value::Object(object);
         self.insert_global_builtin(MATH_NAME, value.clone())?;
+        self.define_math_global_property(value.clone())?;
         Ok(value)
     }
 
@@ -149,6 +174,18 @@ impl Context {
     math_unary_method!(eval_math_cosh, eval_direct_math_cosh, f64::cosh);
     math_unary_method!(eval_math_exp, eval_direct_math_exp, f64::exp);
     math_unary_method!(eval_math_expm1, eval_direct_math_expm1, f64::exp_m1);
+
+    pub(in crate::runtime::native) fn eval_math_f16round(
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        Self::eval_direct_math_f16round(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_math_f16round(args: &[Value]) -> Result<Value> {
+        let number = Self::math_arg_or_nan(args.first());
+        Self::math_number(Self::f16round_to_number(number))
+    }
+
     math_unary_method!(eval_math_floor, eval_direct_math_floor, f64::floor);
 
     pub(in crate::runtime::native) fn eval_math_fround(args: RuntimeCallArgs<'_>) -> Result<Value> {
@@ -277,6 +314,38 @@ impl Context {
     math_unary_method!(eval_math_sin, eval_direct_math_sin, f64::sin);
     math_unary_method!(eval_math_sinh, eval_direct_math_sinh, f64::sinh);
     math_unary_method!(eval_math_sqrt, eval_direct_math_sqrt, f64::sqrt);
+
+    pub(in crate::runtime::native) fn eval_math_sum_precise(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_math_sum_precise(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_math_sum_precise(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let Some(iterable) = args.first() else {
+            return Err(Error::type_error("Math.sumPrecise requires an iterable"));
+        };
+        let mut source = self.for_of_source(iterable.clone())?;
+        let mut sum = PreciseFiniteSum::new();
+        loop {
+            self.step()?;
+            match self.for_of_step(&mut source)? {
+                ForOfStep::Value(value) => {
+                    if let Err(error) = sum.add_value(&value) {
+                        self.close_for_of_source(&source);
+                        return Err(error);
+                    }
+                }
+                ForOfStep::Done => return Self::math_number(sum.finish()?),
+                ForOfStep::Abrupt(completion) => return completion.into_result(),
+            }
+        }
+    }
+
     math_unary_method!(eval_math_tan, eval_direct_math_tan, f64::tan);
     math_unary_method!(eval_math_tanh, eval_direct_math_tanh, f64::tanh);
     math_unary_method!(eval_math_trunc, eval_direct_math_trunc, f64::trunc);
@@ -287,6 +356,7 @@ impl Context {
     ) -> Option<Value> {
         match target {
             NativeCallTarget::MathClz32 => Self::eval_direct_math_clz32_number(args),
+            NativeCallTarget::MathF16round => Self::eval_direct_math_f16round_number(args),
             NativeCallTarget::MathFround => Self::eval_direct_math_fround_number(args),
             NativeCallTarget::MathImul => Self::eval_direct_math_imul_number(args),
             _ => None,
@@ -308,6 +378,13 @@ impl Context {
         Some(Value::Number(Self::fround_to_number(*value)))
     }
 
+    fn eval_direct_math_f16round_number(args: &[Value]) -> Option<Value> {
+        let Some(Value::Number(value)) = args.first() else {
+            return None;
+        };
+        Some(Value::Number(Self::f16round_to_number(*value)))
+    }
+
     fn eval_direct_math_imul_number(args: &[Value]) -> Option<Value> {
         let Some(Value::Number(left)) = args.first() else {
             return None;
@@ -324,7 +401,57 @@ impl Context {
     }
 
     fn define_math_constant(&mut self, object: ObjectId, name: &str, value: f64) -> Result<()> {
-        self.define_non_enumerable_object_property(object, name, Value::Number(value))
+        let key = self.intern_property_key(name)?;
+        self.objects.define_property(
+            object,
+            key,
+            name,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(Value::Number(value)),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::No),
+            )),
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn define_math_to_string_tag(&mut self, object: ObjectId) -> Result<()> {
+        let value = self.heap_string_value(MATH_NAME)?;
+        let key = self.math_well_known_symbol_property_key(SYMBOL_TO_STRING_TAG_PROPERTY)?;
+        self.objects.define_property(
+            object,
+            key,
+            SYMBOL_TO_STRING_TAG_PROPERTY,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(value),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn define_math_global_property(&mut self, value: Value) -> Result<()> {
+        let global = self.global_object_id()?;
+        self.define_global_object_data_property(
+            global,
+            MATH_NAME,
+            value,
+            PropertyWritable::Yes,
+            PropertyEnumerable::No,
+            PropertyConfigurable::Yes,
+        )
+    }
+
+    fn math_well_known_symbol_property_key(&mut self, property: &str) -> Result<PropertyKey> {
+        let constructor = self.symbol_constructor_value()?;
+        let value = self.get_property_value(&constructor, property)?;
+        let Value::Symbol(symbol) = value else {
+            return Err(Error::runtime("well-known Symbol property is not a symbol"));
+        };
+        Ok(PropertyKey::symbol(symbol.id()))
     }
 
     fn define_math_method(
@@ -413,6 +540,29 @@ impl Context {
         f64::from(Self::round_to_binary32(value))
     }
 
+    fn f16round_to_number(value: f64) -> f64 {
+        if value.is_nan() || value.is_infinite() || value == 0.0 {
+            return value;
+        }
+
+        let sign = value.is_sign_negative();
+        let abs = value.abs();
+        let rounded = if abs >= F16_OVERFLOW_CUTOFF {
+            f64::INFINITY
+        } else if abs > F16_MAX_FINITE {
+            F16_MAX_FINITE
+        } else if abs <= F16_HALF_MIN_SUBNORMAL {
+            0.0
+        } else if abs < F16_MIN_NORMAL {
+            let units = Self::round_ties_to_even(abs / F16_MIN_SUBNORMAL);
+            units * F16_MIN_SUBNORMAL
+        } else {
+            Self::round_normal_binary16(abs)
+        };
+
+        if sign { -rounded } else { rounded }
+    }
+
     fn next_math_random(&mut self) -> Result<f64> {
         let mut state = self.random_state;
         state ^= state << RANDOM_XOR_SHIFT_A;
@@ -438,11 +588,48 @@ impl Context {
         if value.is_nan() || value.is_infinite() || value == 0.0 {
             return value;
         }
+        if value.abs() >= ROUND_INTEGER_CUTOFF {
+            return value;
+        }
+        if value > 0.0 && value < 0.5 {
+            return 0.0;
+        }
+        if (-0.5..=0.0).contains(&value) {
+            return -0.0;
+        }
         let rounded = (value + 0.5).floor();
         if rounded == 0.0 && value.is_sign_negative() {
             return -0.0;
         }
         rounded
+    }
+
+    fn round_normal_binary16(value: f64) -> f64 {
+        let exponent = value.log2().floor();
+        let quantum = (exponent - f64::from(F16_SIGNIFICAND_BITS)).exp2();
+        let rounded_units = Self::round_ties_to_even(value / quantum);
+        let rounded = rounded_units * quantum;
+        if rounded >= F16_OVERFLOW_CUTOFF {
+            f64::INFINITY
+        } else {
+            rounded
+        }
+    }
+
+    fn round_ties_to_even(value: f64) -> f64 {
+        let lower = value.floor();
+        let fraction = value - lower;
+        if fraction < 0.5 {
+            return lower;
+        }
+        if fraction > 0.5 || !Self::is_even_integer(lower) {
+            return lower + 1.0;
+        }
+        lower
+    }
+
+    fn is_even_integer(value: f64) -> bool {
+        (value / 2.0).fract() == 0.0
     }
 
     fn should_replace_max_zero(current: f64, candidate: f64) -> bool {
