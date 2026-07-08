@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T225706Z.md`
-- Task: PR #356: Optimize for-statement bytecode fast paths
-- Performance: 5.90x (66/67 >1.00x)
-- Memory: - (0/67 >1.00x)
-- JetStream: 25.00x (4/4 >1.00x)
-- Full Test262: 30880 passed / 71698 failed (30.10%)
+- `rsqjs-test-report-20260708T230810Z.md`
+- Task: PR #357: Implement String RegExp interop Test262 support
+- Performance: 5.86x (67/68 >1.00x)
+- Memory: - (0/68 >1.00x)
+- JetStream: 24.84x (4/4 >1.00x)
+- Full Test262: 31119 passed / 71459 failed (30.34%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -346,3 +346,4 @@ Latest report:
 | `20260708T221701Z` `ee58d2a` PR #352: Implement RegExp baseline Test262 support | 6.20x (65/66 >1.00x) | - (0/66 >1.00x) | 25.29x (4/4 >1.00x) | 30699 passed / 71879 failed (29.93%) |
 | `20260708T223249Z` `c95b4c2` PR #354: Array.prototype sort/splice/fill/copyWithin & change-by-copy tranche | 6.00x (66/67 >1.00x) | - (0/67 >1.00x) | 25.16x (4/4 >1.00x) | 30880 passed / 71698 failed (30.10%) |
 | `20260708T225706Z` `0009089` PR #356: Optimize for-statement bytecode fast paths | 5.90x (66/67 >1.00x) | - (0/67 >1.00x) | 25.00x (4/4 >1.00x) | 30880 passed / 71698 failed (30.10%) |
+| `20260708T230810Z` `2d01b65` PR #357: Implement String RegExp interop Test262 support | 5.86x (67/68 >1.00x) | - (0/68 >1.00x) | 24.84x (4/4 >1.00x) | 31119 passed / 71459 failed (30.34%) |
