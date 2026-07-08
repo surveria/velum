@@ -1,15 +1,9 @@
 mod builtins;
-mod call_target;
 mod core;
-mod direct;
 mod function;
-mod kind;
-mod registry;
 
 pub(in crate::runtime::native) use builtins::number_intrinsic_property;
-pub(in crate::runtime) use function::NativeFunction;
-pub(in crate::runtime) use kind::NativeFunctionKind;
-pub(in crate::runtime::native) use kind::{
+pub(in crate::runtime::native) use function::{
     ARRAY_NAME, BOOLEAN_NAME, EVAL_NAME, FUNCTION_NAME, FUNCTION_PROTOTYPE_BIND_NAME,
     FUNCTION_PROTOTYPE_CALL_NAME, JSON_NAME, JSON_PARSE_NAME, JSON_STRINGIFY_NAME, MATH_ABS_NAME,
     MATH_ACOS_NAME, MATH_ACOSH_NAME, MATH_ASIN_NAME, MATH_ASINH_NAME, MATH_ATAN_NAME,
@@ -25,10 +19,10 @@ pub(in crate::runtime::native) use kind::{
     PROMISE_RESOLVE_NAME, PROMISE_THEN_NAME, REGEXP_NAME, REGEXP_PROTOTYPE_TEST_NAME, STRING_NAME,
     SYMBOL_NAME,
 };
-pub(in crate::runtime) use kind::{
+pub(in crate::runtime) use function::{
     INFINITY_NAME, NAN_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
     OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
 };
-pub(in crate::runtime) use registry::NativeFunctionRegistry;
+pub(in crate::runtime) use function::{NativeFunction, NativeFunctionKind, NativeFunctionRegistry};
 
 pub(super) const OBJECT_CONSTRUCTOR_PROPERTY: &str = "constructor";
