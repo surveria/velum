@@ -168,7 +168,16 @@ const ARRAY_REDUCE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(159);
 const ARRAY_REDUCE_RIGHT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(160);
 const ARRAY_SOME_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(161);
 const ARRAY_MAP_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(162);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 163;
+const WEAK_MAP_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(163);
+const WEAK_MAP_GET_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(164);
+const WEAK_MAP_SET_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(165);
+const WEAK_MAP_HAS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(166);
+const WEAK_MAP_DELETE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(167);
+const WEAK_SET_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(168);
+const WEAK_SET_ADD_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(169);
+const WEAK_SET_HAS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(170);
+const WEAK_SET_DELETE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(171);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 172;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -336,6 +345,15 @@ const fn collection_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot>
         NativeFunctionKind::SetSizeGetter => Some(SET_SIZE_GETTER_SLOT),
         NativeFunctionKind::SetEntries => Some(SET_ENTRIES_SLOT),
         NativeFunctionKind::SetValues => Some(SET_VALUES_SLOT),
+        NativeFunctionKind::WeakMap => Some(WEAK_MAP_SLOT),
+        NativeFunctionKind::WeakMapGet => Some(WEAK_MAP_GET_SLOT),
+        NativeFunctionKind::WeakMapSet => Some(WEAK_MAP_SET_SLOT),
+        NativeFunctionKind::WeakMapHas => Some(WEAK_MAP_HAS_SLOT),
+        NativeFunctionKind::WeakMapDelete => Some(WEAK_MAP_DELETE_SLOT),
+        NativeFunctionKind::WeakSet => Some(WEAK_SET_SLOT),
+        NativeFunctionKind::WeakSetAdd => Some(WEAK_SET_ADD_SLOT),
+        NativeFunctionKind::WeakSetHas => Some(WEAK_SET_HAS_SLOT),
+        NativeFunctionKind::WeakSetDelete => Some(WEAK_SET_DELETE_SLOT),
         _ => None,
     }
 }
