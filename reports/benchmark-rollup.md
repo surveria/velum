@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T112237Z.md`
-- Task: PR #322: Add globalThis object support
-- Performance: 6.06x (62/63 >1.00x)
+- `rsqjs-test-report-20260708T114511Z.md`
+- Task: PR #326: Add standard Error prototype support
+- Performance: 6.35x (62/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 24369 passed / 78209 failed (23.76%)
+- Full Test262: 24499 passed / 78079 failed (23.88%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -318,3 +318,4 @@ Latest report:
 | `20260708T105201Z` `5e80684` PR #320: Optimize loop condition bytecode paths | 5.74x (62/63 >1.00x) | - (0/63 >1.00x) | 23055 passed / 79523 failed (22.48%) |
 | `20260708T110722Z` `9fc0527` PR #319: Expand String prototype built-ins | 5.85x (62/63 >1.00x) | - (0/63 >1.00x) | 23783 passed / 78795 failed (23.19%) |
 | `20260708T112237Z` `f5e950c` PR #322: Add globalThis object support | 6.06x (62/63 >1.00x) | - (0/63 >1.00x) | 24369 passed / 78209 failed (23.76%) |
+| `20260708T114511Z` `f99c5e2` PR #326: Add standard Error prototype support | 6.35x (62/63 >1.00x) | - (0/63 >1.00x) | 24499 passed / 78079 failed (23.88%) |
