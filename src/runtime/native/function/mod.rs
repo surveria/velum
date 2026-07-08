@@ -42,7 +42,7 @@ pub(in crate::runtime::native) use kind::{
     STRING_PROTOTYPE_TRIM_NAME, STRING_PROTOTYPE_TRIM_START_NAME, SYMBOL_NAME,
 };
 pub(in crate::runtime) use kind::{
-    INFINITY_NAME, NAN_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
+    GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
     OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
 };
 pub(in crate::runtime) use registry::NativeFunctionRegistry;

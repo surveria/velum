@@ -51,6 +51,7 @@ const GLOBAL_PARSE_FLOAT_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const GLOBAL_PARSE_FLOAT_NAME: &str = "parseFloat";
 const GLOBAL_PARSE_INT_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const GLOBAL_PARSE_INT_NAME: &str = "parseInt";
+pub(in crate::runtime) const GLOBAL_THIS_NAME: &str = "globalThis";
 const FUNCTION_PROTOTYPE_BIND_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const FUNCTION_PROTOTYPE_BIND_NAME: &str = "bind";
 const FUNCTION_PROTOTYPE_CALL_LENGTH: f64 = 1.0;

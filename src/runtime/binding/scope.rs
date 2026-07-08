@@ -304,6 +304,10 @@ impl BindingCell {
         drop(binding);
         Ok(())
     }
+
+    pub(crate) fn same_cell(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
 }
 
 #[derive(Debug, Clone)]

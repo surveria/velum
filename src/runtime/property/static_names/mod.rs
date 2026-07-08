@@ -242,6 +242,11 @@ impl Context {
             return Ok(value);
         }
         if let Value::Object(id) = object
+            && let Some(value) = self.global_object_property_value(*id, lookup)?
+        {
+            return Ok(value);
+        }
+        if let Value::Object(id) = object
             && property.as_str() != PROTOTYPE_PROPERTY
         {
             return self.get_cached_object_property_value(*id, access, lookup);
@@ -329,6 +334,11 @@ impl Context {
             return Ok(value);
         }
         if let Value::Object(id) = object
+            && let Some(value) = self.global_object_property_value(*id, property.lookup())?
+        {
+            return Ok(value);
+        }
+        if let Value::Object(id) = object
             && property.name() != PROTOTYPE_PROPERTY
             && self.objects.array_len_if_array(*id)?.is_none()
         {
@@ -339,7 +349,7 @@ impl Context {
     }
 
     pub(crate) fn has_cached_dynamic_property_value(
-        &self,
+        &mut self,
         object: &Value,
         property: &DynamicPropertyKey,
         access: StaticPropertyAccessId,
@@ -349,7 +359,14 @@ impl Context {
             Value::NativeFunction(id) => {
                 self.has_native_function_property_lookup(*id, property.lookup())
             }
-            Value::Object(id) => self.has_cached_object_property_value(*id, property, access),
+            Value::Object(id) => {
+                if let Some(has_property) =
+                    self.global_object_has_property(*id, property.lookup())?
+                {
+                    return Ok(has_property);
+                }
+                self.has_cached_object_property_value(*id, property, access)
+            }
             _ => has_property(&self.objects, object, property.lookup()),
         }
     }
@@ -421,9 +438,18 @@ impl Context {
                 value.clone(),
             )?
         {
+            if self.is_global_object_id(*id) {
+                self.sync_global_object_property_binding(property.as_str(), value)?;
+            }
             return Ok(());
         }
-        self.set_property_value_with_accessors(object, key, property, value)
+        self.set_property_value_with_accessors(object, key, property, value.clone())?;
+        if let Value::Object(id) = object
+            && self.is_global_object_id(*id)
+        {
+            self.sync_global_object_property_binding(property.as_str(), value)?;
+        }
+        Ok(())
     }
 
     pub(in crate::runtime) fn try_cached_static_property_read_modify_write(
@@ -489,9 +515,18 @@ impl Context {
                 value.clone(),
             )?
         {
+            if self.is_global_object_id(*id) {
+                self.sync_global_object_property_binding(property.name(), value)?;
+            }
             return Ok(());
         }
-        self.set_property_value_with_accessors(object, key, property.name(), value)
+        self.set_property_value_with_accessors(object, key, property.name(), value.clone())?;
+        if let Value::Object(id) = object
+            && self.is_global_object_id(*id)
+        {
+            self.sync_global_object_property_binding(property.name(), value)?;
+        }
+        Ok(())
     }
 
     pub(in crate::runtime) fn try_cached_dynamic_property_read_modify_write(

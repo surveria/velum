@@ -146,6 +146,8 @@ const PATH_TEST262_GLOBAL_NUMERIC_CONSTANTS: &str =
     "tests/corpora/test262/active/built-ins/global/numeric_constants.js";
 const PATH_TEST262_GLOBAL_UTILITY_FUNCTIONS: &str =
     "tests/corpora/test262/active/built-ins/global/utility_functions.js";
+const PATH_TEST262_GLOBAL_THIS: &str =
+    "tests/corpora/test262/active/built-ins/global/global_this.js";
 const PATH_TEST262_JSON_BUILTIN: &str = "tests/corpora/test262/active/built-ins/JSON/basic.js";
 const PATH_TEST262_PROMISE_BUILTIN: &str =
     "tests/corpora/test262/active/built-ins/Promise/basic.js";
@@ -439,6 +441,11 @@ fn test262_builtin_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "built-ins/global/utility-functions",
             path: PATH_TEST262_GLOBAL_UTILITY_FUNCTIONS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/global/globalThis",
+            path: PATH_TEST262_GLOBAL_THIS,
             expectation: Expectation::Value("42"),
         },
         EngineCase {

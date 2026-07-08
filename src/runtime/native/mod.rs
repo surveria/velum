@@ -31,7 +31,7 @@ pub(in crate::runtime::native) use function::{
     STRING_PROTOTYPE_TRIM_NAME, STRING_PROTOTYPE_TRIM_START_NAME, SYMBOL_NAME,
 };
 pub(in crate::runtime) use function::{
-    INFINITY_NAME, NAN_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
+    GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
     OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
 };
 pub(in crate::runtime) use function::{NativeFunction, NativeFunctionKind, NativeFunctionRegistry};

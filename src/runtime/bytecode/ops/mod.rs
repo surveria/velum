@@ -233,7 +233,7 @@ impl Context {
     }
 
     fn eval_bytecode_in(
-        &self,
+        &mut self,
         left: &Value,
         right: &Value,
         property_access: Option<BytecodeDynamicProperty>,
