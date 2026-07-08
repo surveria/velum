@@ -113,6 +113,7 @@ struct Function {
     super_binding: Option<Rc<function::FunctionSuperBinding>>,
     static_parent: Option<Value>,
     class_fields: Option<Rc<[function::ResolvedClassField]>>,
+    params_remembered: std::cell::Cell<bool>,
     new_target: FunctionNewTarget,
 }
 

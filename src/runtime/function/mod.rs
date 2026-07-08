@@ -158,6 +158,7 @@ impl Context {
             },
             static_parent: None,
             class_fields: None,
+            params_remembered: std::cell::Cell::new(false),
             new_target: FunctionNewTarget::from_mode(
                 init.new_target_mode,
                 self.current_new_target()?,
@@ -270,6 +271,7 @@ impl Context {
             static_binding_layout,
             binds_arguments,
             super_binding,
+            remember_params,
         ) = {
             let function = self.function(id)?;
             (
@@ -284,6 +286,7 @@ impl Context {
                 function.bytecode.uses_arguments()
                     && !matches!(function.new_target, FunctionNewTarget::Lexical(_)),
                 function.super_binding.clone(),
+                !function.params_remembered.replace(true),
             )
         };
         let packed_args = if bytecode.has_rest_parameter() {
@@ -331,6 +334,7 @@ impl Context {
             static_binding_layout,
             FunctionParameterState::new(&param_binding_ids, &param_atoms, args),
             &bytecode,
+            remember_params,
         );
         let removed_super = self.super_frames.pop();
         let removed_new_target = self.new_target_values.pop();

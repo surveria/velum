@@ -107,6 +107,7 @@ impl Context {
         static_binding_layout: Option<BindingLayout>,
         parameters: FunctionParameterState<'_>,
         bytecode: &BytecodeFunction,
+        remember_params: bool,
     ) -> Result<Completion> {
         match (
             static_name_atom_cache,
@@ -124,8 +125,15 @@ impl Context {
                     static_binding_cache,
                     static_binding_layout,
                     |context| {
-                        context
-                            .remember_function_params(parameters.binding_ids, parameters.atoms)?;
+                        // Parameter slots never move between calls; the
+                        // per-function binding cache stays warm after the
+                        // first call.
+                        if remember_params {
+                            context.remember_function_params(
+                                parameters.binding_ids,
+                                parameters.atoms,
+                            )?;
+                        }
                         if let Some(completion) = context.apply_function_param_defaults(
                             parameters.binding_ids,
                             parameters.atoms,

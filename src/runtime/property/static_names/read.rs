@@ -13,6 +13,33 @@ use crate::{
 use super::PROTOTYPE_PROPERTY;
 
 impl Context {
+    /// Validated per-site cache hit for a plain-object read. The cache is
+    /// only ever filled from the plain-object tail of the lookup chain and
+    /// its guard pins the receiver, so a validated hit can skip the exotic
+    /// receiver probes entirely.
+    fn cached_static_property_fast_read(
+        &mut self,
+        object: &Value,
+        access: StaticPropertyAccessId,
+        lookup: PropertyLookup<'_>,
+    ) -> Result<Option<Value>> {
+        let Value::Object(id) = object else {
+            return Ok(None);
+        };
+        let Some(cache) = self.current_static_name_atom_cache() else {
+            return Ok(None);
+        };
+        if let Some(cached_lookup) = cache.property_lookup(access)?
+            && cached_lookup.matches_property(lookup)
+            && let CacheablePropertyValue::Hit(value) = self
+                .objects
+                .read_cacheable_property_value_for(*id, cached_lookup)?
+        {
+            return self.runtime_value(value).map(Some);
+        }
+        Ok(None)
+    }
+
     pub(crate) fn get_static_property_value(
         &mut self,
         object: &Value,
@@ -20,6 +47,9 @@ impl Context {
         access: StaticPropertyAccessId,
     ) -> Result<Value> {
         let lookup = self.static_property_lookup(property)?;
+        if let Some(value) = self.cached_static_property_fast_read(object, access, lookup)? {
+            return Ok(value);
+        }
         if let Value::Function(id) = object {
             return self.get_function_property_lookup(*id, lookup);
         }
@@ -70,6 +100,11 @@ impl Context {
         property: &DynamicPropertyKey,
         access: StaticPropertyAccessId,
     ) -> Result<Value> {
+        if let Some(value) =
+            self.cached_static_property_fast_read(object, access, property.lookup())?
+        {
+            return Ok(value);
+        }
         if let Value::Function(id) = object {
             return self.get_function_property_lookup(*id, property.lookup());
         }
