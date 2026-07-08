@@ -1,7 +1,7 @@
 var i = 0;
 var total = 0;
 
-while (i < 2048) {
+while (i < 3072) {
   var name = "front-door";
   var count = 40;
   var camera = {
