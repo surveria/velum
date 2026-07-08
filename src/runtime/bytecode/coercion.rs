@@ -30,7 +30,7 @@ pub(super) fn abstract_equality(context: &Context, left: &Value, right: &Value) 
     }
 }
 
-pub(super) fn strict_equality(left: &Value, right: &Value) -> bool {
+pub(in crate::runtime::bytecode) fn strict_equality(left: &Value, right: &Value) -> bool {
     left == right
 }
 

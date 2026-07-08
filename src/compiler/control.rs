@@ -3,8 +3,8 @@ use std::rc::Rc;
 use crate::{
     ast::{CatchClause, DeclKind, Expr, ForInTarget, Stmt, SwitchCase},
     bytecode::{
-        BytecodeAssignmentTarget, BytecodeBlock, BytecodeCatch, BytecodeForInTarget,
-        BytecodeInstruction, BytecodeSwitchCase,
+        BytecodeAssignmentTarget, BytecodeBlock, BytecodeCatch, BytecodeCatchFastPath,
+        BytecodeDirectThrow, BytecodeForInTarget, BytecodeInstruction, BytecodeSwitchCase,
     },
     error::{Error, Result},
     syntax::StaticName,
@@ -259,21 +259,41 @@ impl BytecodeCompiler<'_> {
         catch: Option<&CatchClause>,
         finally_body: Option<&[Stmt]>,
     ) -> Result<()> {
+        let body_block =
+            BytecodeBlock::compile_statements(body, StatementValue::Store, self.layout)?;
+        let body_scoped = statements_need_lexical_scope(body);
+        let body_direct_throw = if body_scoped {
+            None
+        } else {
+            BytecodeDirectThrow::from_unscoped_block_start(&body_block)
+        };
         self.emit(BytecodeInstruction::Try {
-            body: BytecodeBlock::compile_statements(body, StatementValue::Store, self.layout)?,
+            body: body_block,
+            body_scoped,
+            body_direct_throw,
             catch: catch
                 .map(|catch| {
+                    let param = catch
+                        .param
+                        .as_ref()
+                        .map(|param| self.compile_binding(param))
+                        .transpose()?;
+                    let body = BytecodeBlock::compile_statements(
+                        &catch.body,
+                        StatementValue::Store,
+                        self.layout,
+                    )?;
+                    let body_scoped = statements_need_lexical_scope(&catch.body);
+                    let body_fast_path = BytecodeCatchFastPath::from_unscoped_body(
+                        param.as_ref(),
+                        &body,
+                        body_scoped,
+                    );
                     Ok(BytecodeCatch {
-                        param: catch
-                            .param
-                            .as_ref()
-                            .map(|param| self.compile_binding(param))
-                            .transpose()?,
-                        body: BytecodeBlock::compile_statements(
-                            &catch.body,
-                            StatementValue::Store,
-                            self.layout,
-                        )?,
+                        param,
+                        body,
+                        body_scoped,
+                        body_fast_path,
                     })
                 })
                 .transpose()?,
@@ -282,6 +302,7 @@ impl BytecodeCompiler<'_> {
                     BytecodeBlock::compile_statements(body, StatementValue::Store, self.layout)
                 })
                 .transpose()?,
+            finally_scoped: finally_body.is_some_and(statements_need_lexical_scope),
         });
         Ok(())
     }

@@ -1,9 +1,11 @@
+mod try_catch;
+
 use std::rc::Rc;
 
 use crate::{
     bytecode::{
-        BytecodeAddress, BytecodeBinding, BytecodeBlock, BytecodeCatch, BytecodeForInTarget,
-        BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeSwitchCase,
+        BytecodeAddress, BytecodeBinding, BytecodeBlock, BytecodeForInTarget, BytecodeInstruction,
+        BytecodeNumericBinaryOp, BytecodeSwitchCase,
     },
     error::{Error, Result},
     runtime::Context,
@@ -19,6 +21,7 @@ use super::{
         BytecodeState, bytecode_loop_completion, init_completion_to_result, loop_label_matches,
     },
 };
+use try_catch::BytecodeTryParts;
 
 #[derive(Debug, Clone, Copy)]
 struct BytecodeForParts<'a> {
@@ -131,9 +134,22 @@ impl Context {
             } => self.eval_bytecode_switch(state, discriminant, cases, *scoped, next),
             BytecodeInstruction::Try {
                 body,
+                body_scoped,
+                body_direct_throw,
                 catch,
                 finally_body,
-            } => self.eval_bytecode_try(state, body, catch.as_ref(), finally_body.as_ref(), next),
+                finally_scoped,
+            } => {
+                let parts = BytecodeTryParts::new(
+                    body,
+                    *body_scoped,
+                    body_direct_throw.as_ref(),
+                    catch.as_ref(),
+                    finally_body.as_ref(),
+                    *finally_scoped,
+                );
+                self.eval_bytecode_try(state, parts, next)
+            }
             BytecodeInstruction::Label { label, body } => {
                 self.eval_bytecode_label(state, label, body, next)
             }
@@ -190,6 +206,17 @@ impl Context {
             return Err(Error::runtime("bytecode lexical scope disappeared"));
         }
         result
+    }
+
+    pub(super) fn eval_bytecode_maybe_scoped_block(
+        &mut self,
+        block: &BytecodeBlock,
+        scoped: bool,
+    ) -> Result<Completion> {
+        if scoped {
+            return self.eval_bytecode_scoped_block(block);
+        }
+        self.eval_bytecode_block(block)
     }
 
     fn eval_bytecode_while(
@@ -682,61 +709,6 @@ impl Context {
             }
             completion => Ok(Self::store_or_return_completion(state, completion, next)),
         }
-    }
-
-    fn eval_bytecode_try(
-        &mut self,
-        state: &mut BytecodeState,
-        body: &BytecodeBlock,
-        catch: Option<&BytecodeCatch>,
-        finally_body: Option<&BytecodeBlock>,
-        next: BytecodeAddress,
-    ) -> Result<Option<Completion>> {
-        let mut completion = self.eval_bytecode_scoped_block(body)?;
-        if let (Completion::Throw(value), Some(catch)) = (&completion, catch) {
-            completion = self.eval_bytecode_catch(catch, value.clone())?;
-        }
-        if let Some(finally_body) = finally_body {
-            let finally_completion = self.eval_bytecode_scoped_block(finally_body)?;
-            if !matches!(finally_completion, Completion::Normal(_)) {
-                completion = finally_completion;
-            }
-        }
-        Ok(Self::store_or_return_completion(state, completion, next))
-    }
-
-    fn eval_bytecode_catch(&mut self, catch: &BytecodeCatch, value: Value) -> Result<Completion> {
-        let Some(param) = catch.param.as_ref() else {
-            return self.eval_bytecode_scoped_block(&catch.body);
-        };
-        self.push_lexical_scope();
-        let result = self.eval_bytecode_catch_scope(param, value, &catch.body);
-        let removed = self.pop_lexical_scope();
-        if removed.is_none() {
-            return Err(Error::runtime("bytecode catch lexical scope disappeared"));
-        }
-        result
-    }
-
-    fn eval_bytecode_catch_scope(
-        &mut self,
-        param: &BytecodeBinding,
-        value: Value,
-        body: &BytecodeBlock,
-    ) -> Result<Completion> {
-        let atom = self.ensure_binding_capacity_static(param.name())?;
-        let frame = self.compiled_local_binding_frame(param.name())?;
-        let value = self.runtime_value(value)?;
-        let inserted = self
-            .active_bindings_mut()
-            .insert_or_replace_at_optional_slot(
-                atom,
-                BindingCell::new(value, true, DeclKind::Let),
-                frame.map(crate::runtime::CompiledBindingFrame::slot),
-            )?;
-        self.mark_active_binding_frame_slot(frame, inserted)?;
-        self.remember_active_static_binding(param.name(), atom)?;
-        self.eval_bytecode_scoped_block(body)
     }
 }
 

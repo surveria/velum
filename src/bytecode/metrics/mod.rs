@@ -1,12 +1,13 @@
 use crate::{
     binding_metadata::BindingOperand,
     bytecode::{
-        BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock, BytecodeCatch, BytecodeClass,
-        BytecodeForInTarget, BytecodeInstruction, BytecodePattern, BytecodePatternKey,
-        BytecodeProgram, BytecodeSwitchCase,
+        BytecodeBinding, BytecodeBlock, BytecodeCatch, BytecodeClass, BytecodeForInTarget,
+        BytecodeInstruction, BytecodePattern, BytecodePatternKey, BytecodeProgram,
+        BytecodeSwitchCase,
     },
 };
 
+mod targets;
 mod traversal;
 
 use traversal::{count_blocks_2, count_for_blocks, count_switch, count_try};
@@ -147,6 +148,7 @@ impl BytecodeInstruction {
                 body,
                 catch,
                 finally_body,
+                ..
             } => count_try(
                 body,
                 catch.as_ref(),
@@ -240,6 +242,7 @@ impl BytecodeInstruction {
                 body,
                 catch,
                 finally_body,
+                ..
             } => count_try(
                 body,
                 catch.as_ref(),
@@ -311,6 +314,7 @@ impl BytecodeInstruction {
                 body,
                 catch,
                 finally_body,
+                ..
             } => count_try(
                 body,
                 catch.as_ref(),
@@ -384,6 +388,7 @@ impl BytecodeInstruction {
                 body,
                 catch,
                 finally_body,
+                ..
             } => count_try(
                 body,
                 catch.as_ref(),
@@ -455,6 +460,7 @@ impl BytecodeInstruction {
                 body,
                 catch,
                 finally_body,
+                ..
             } => count_try(
                 body,
                 catch.as_ref(),
@@ -522,6 +528,7 @@ impl BytecodeInstruction {
                 body,
                 catch,
                 finally_body,
+                ..
             } => count_try(
                 body,
                 catch.as_ref(),
@@ -763,164 +770,5 @@ impl BytecodePattern {
 
     fn nested_instruction_count(&self) -> usize {
         self.sum_blocks(BytecodeBlock::instruction_count)
-    }
-}
-
-impl BytecodeAssignmentTarget {
-    fn property_operand_count(&self) -> usize {
-        match self {
-            Self::Binding(_) => 0,
-            Self::StaticProperty { object, .. } | Self::ArrayIndexProperty { object, .. } => {
-                object.property_operand_count().saturating_add(1)
-            }
-            Self::ComputedProperty {
-                object, property, ..
-            } => object
-                .property_operand_count()
-                .saturating_add(property.property_operand_count()),
-        }
-    }
-
-    fn direct_native_call_count(&self) -> usize {
-        match self {
-            Self::Binding(_) => 0,
-            Self::StaticProperty { object, .. } | Self::ArrayIndexProperty { object, .. } => {
-                object.direct_native_call_count()
-            }
-            Self::ComputedProperty {
-                object, property, ..
-            } => object
-                .direct_native_call_count()
-                .saturating_add(property.direct_native_call_count()),
-        }
-    }
-
-    fn array_native_call_count(&self) -> usize {
-        match self {
-            Self::Binding(_) => 0,
-            Self::StaticProperty { object, .. } | Self::ArrayIndexProperty { object, .. } => {
-                object.array_native_call_count()
-            }
-            Self::ComputedProperty {
-                object, property, ..
-            } => object
-                .array_native_call_count()
-                .saturating_add(property.array_native_call_count()),
-        }
-    }
-
-    fn numeric_instruction_count(&self) -> usize {
-        match self {
-            Self::Binding(_) => 0,
-            Self::StaticProperty { object, .. } | Self::ArrayIndexProperty { object, .. } => {
-                object.numeric_instruction_count()
-            }
-            Self::ComputedProperty {
-                object, property, ..
-            } => object
-                .numeric_instruction_count()
-                .saturating_add(property.numeric_instruction_count()),
-        }
-    }
-
-    fn binding_operand_count(&self) -> usize {
-        match self {
-            Self::Binding(binding) => binding.direct_operand_count(),
-            Self::StaticProperty { object, .. } | Self::ArrayIndexProperty { object, .. } => {
-                object.binding_operand_count()
-            }
-            Self::ComputedProperty {
-                object, property, ..
-            } => object
-                .binding_operand_count()
-                .saturating_add(property.binding_operand_count()),
-        }
-    }
-
-    fn nested_instruction_count(&self) -> usize {
-        match self {
-            Self::Binding(_) => 0,
-            Self::StaticProperty { object, .. } | Self::ArrayIndexProperty { object, .. } => {
-                object.instruction_count()
-            }
-            Self::ComputedProperty {
-                object, property, ..
-            } => object
-                .instruction_count()
-                .saturating_add(property.instruction_count()),
-        }
-    }
-}
-
-impl BytecodeSwitchCase {
-    fn property_operand_count(&self) -> usize {
-        self.test
-            .as_ref()
-            .map_or(0, BytecodeBlock::property_operand_count)
-            .saturating_add(self.body.property_operand_count())
-    }
-
-    fn direct_native_call_count(&self) -> usize {
-        self.test
-            .as_ref()
-            .map_or(0, BytecodeBlock::direct_native_call_count)
-            .saturating_add(self.body.direct_native_call_count())
-    }
-
-    fn array_native_call_count(&self) -> usize {
-        self.test
-            .as_ref()
-            .map_or(0, BytecodeBlock::array_native_call_count)
-            .saturating_add(self.body.array_native_call_count())
-    }
-
-    fn numeric_instruction_count(&self) -> usize {
-        self.test
-            .as_ref()
-            .map_or(0, BytecodeBlock::numeric_instruction_count)
-            .saturating_add(self.body.numeric_instruction_count())
-    }
-
-    fn binding_operand_count(&self) -> usize {
-        self.test
-            .as_ref()
-            .map_or(0, BytecodeBlock::binding_operand_count)
-            .saturating_add(self.body.binding_operand_count())
-    }
-
-    fn instruction_count(&self) -> usize {
-        self.test
-            .as_ref()
-            .map_or(0, BytecodeBlock::instruction_count)
-            .saturating_add(self.body.instruction_count())
-    }
-}
-
-impl BytecodeCatch {
-    fn property_operand_count(&self) -> usize {
-        self.body.property_operand_count()
-    }
-
-    fn direct_native_call_count(&self) -> usize {
-        self.body.direct_native_call_count()
-    }
-
-    fn array_native_call_count(&self) -> usize {
-        self.body.array_native_call_count()
-    }
-
-    fn numeric_instruction_count(&self) -> usize {
-        self.body.numeric_instruction_count()
-    }
-
-    fn binding_operand_count(&self) -> usize {
-        self.param
-            .as_ref()
-            .map_or(0, BytecodeBinding::direct_operand_count)
-            .saturating_add(self.body.binding_operand_count())
-    }
-
-    fn instruction_count(&self) -> usize {
-        self.body.instruction_count()
     }
 }
