@@ -10,21 +10,34 @@ benchmark workloads used by `rsqjs-test-runner`.
 
 The full upstream tree is intentionally not vendored here. The official
 JetStream snapshot is large because it includes WebAssembly payloads, browser
-workloads, compressed assets, and tooling bundles. This repository tracks only
-the shell-compatible JavaScript workload files that are useful for the current
-engine surface.
+workloads, compressed assets, compressed data files, and tooling bundles. This
+repository tracks the JavaScript workload files that can be audited and run or
+reported from the current shell harness without repeated network downloads.
 
-## Active Cases
+## Included Workload Families
 
-- `simple/hash-map.js`: synchronous JavaScript workload with no browser or
-  WebAssembly dependency.
+- `ARES-6/`
+- `Octane/`
+- `RexBench/`
+- `SeaMonster/`
+- `SunSpider/`
+- `bigint/`
+- `cdjs/`
+- `class-fields/`
+- `code-load/`
+- `generators/`
+- `proxy/`
+- `simple/`
+- `validatorjs/`
 
-## Tracked But Skipped Cases
+## Report Semantics
 
-- `simple/doxbee-promise.js`: requires promise-completion support in the runner
-  shell bridge.
-- `simple/doxbee-async.js`: requires async function completion support in the
-  runner shell bridge.
+The runner reports every configured JetStream case explicitly. Cases that run
+under both rs-quickjs and QuickJS get a `latency_ratio` equal to
+`rsqjs_median / quickjs_median`, matching the main benchmark report semantics.
+Cases that need unsupported syntax, async completion, browser APIs, preload
+resources, or WebAssembly remain visible as failed or skipped JetStream rows.
 
-Skipped cases are kept in the snapshot so the report can show explicit coverage
-gaps instead of silently omitting known JetStream shell workloads.
+JetStream candidate failures are non-blocking coverage rows. They are kept in
+the report so unsupported official workloads are visible instead of silently
+omitted while the engine is still growing toward broader compatibility.
