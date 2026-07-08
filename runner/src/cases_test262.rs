@@ -151,6 +151,8 @@ const PATH_TEST262_ARGUMENTS_OBJECT: &str =
 const PATH_TEST262_CLASS_FIELDS: &str =
     "tests/corpora/test262/active/language/statements/class_fields.js";
 const PATH_TEST262_MAP_SET: &str = "tests/corpora/test262/active/built-ins/Map/map_set_baseline.js";
+const PATH_TEST262_SET_OPERATIONS: &str =
+    "tests/corpora/test262/active/built-ins/Set/set_operations.js";
 const PATH_TEST262_WEAK_MAP: &str =
     "tests/corpora/test262/active/built-ins/WeakMap/weak_collections_baseline.js";
 const PATH_TEST262_WEAK_SET: &str =
@@ -620,6 +622,11 @@ fn test262_collection_builtin_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "built-ins/Map/map-set-baseline",
             path: PATH_TEST262_MAP_SET,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Set/set-operations",
+            path: PATH_TEST262_SET_OPERATIONS,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
