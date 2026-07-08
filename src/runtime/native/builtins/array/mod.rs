@@ -10,6 +10,7 @@ use super::{ARRAY_NAME, NativeFunctionKind};
 
 mod callbacks;
 mod copy;
+mod find_last;
 mod flatten;
 mod generic;
 mod mutate;
