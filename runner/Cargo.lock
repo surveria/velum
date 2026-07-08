@@ -745,7 +745,7 @@ dependencies = [
 
 [[package]]
 name = "rs-quickjs"
-version = "0.2.122"
+version = "0.2.123"
 dependencies = [
  "anyhow",
  "parking_lot",
@@ -756,7 +756,7 @@ dependencies = [
 
 [[package]]
 name = "rsqjs-test-runner"
-version = "0.2.25"
+version = "0.2.26"
 dependencies = [
  "anyhow",
  "human-yaml",

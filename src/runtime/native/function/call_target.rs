@@ -22,6 +22,34 @@ impl NativeFunctionKind {
         Self::from_string_call_target(target)
     }
 
+    const fn from_array_call_target(target: NativeCallTarget) -> Option<Self> {
+        match target {
+            NativeCallTarget::Array => Some(Self::Array),
+            NativeCallTarget::ArrayConcat => Some(Self::ArrayConcat),
+            NativeCallTarget::ArrayEvery => Some(Self::ArrayEvery),
+            NativeCallTarget::ArrayFilter => Some(Self::ArrayFilter),
+            NativeCallTarget::ArrayFind => Some(Self::ArrayFind),
+            NativeCallTarget::ArrayFindIndex => Some(Self::ArrayFindIndex),
+            NativeCallTarget::ArrayForEach => Some(Self::ArrayForEach),
+            NativeCallTarget::ArrayIncludes => Some(Self::ArrayIncludes),
+            NativeCallTarget::ArrayIndexOf => Some(Self::ArrayIndexOf),
+            NativeCallTarget::ArrayIsArray => Some(Self::ArrayIsArray),
+            NativeCallTarget::ArrayJoin => Some(Self::ArrayJoin),
+            NativeCallTarget::ArrayLastIndexOf => Some(Self::ArrayLastIndexOf),
+            NativeCallTarget::ArrayMap => Some(Self::ArrayMap),
+            NativeCallTarget::ArrayPop => Some(Self::ArrayPop),
+            NativeCallTarget::ArrayPush => Some(Self::ArrayPush),
+            NativeCallTarget::ArrayReduce => Some(Self::ArrayReduce),
+            NativeCallTarget::ArrayReduceRight => Some(Self::ArrayReduceRight),
+            NativeCallTarget::ArrayReverse => Some(Self::ArrayReverse),
+            NativeCallTarget::ArrayShift => Some(Self::ArrayShift),
+            NativeCallTarget::ArraySlice => Some(Self::ArraySlice),
+            NativeCallTarget::ArraySome => Some(Self::ArraySome),
+            NativeCallTarget::ArrayUnshift => Some(Self::ArrayUnshift),
+            _ => None,
+        }
+    }
+
     pub(super) const fn to_call_target(self) -> Option<NativeCallTarget> {
         if let Some(target) = self.to_array_call_target() {
             return Some(target);
@@ -39,25 +67,6 @@ impl NativeFunctionKind {
             return Some(target);
         }
         self.to_string_call_target()
-    }
-
-    const fn from_array_call_target(target: NativeCallTarget) -> Option<Self> {
-        match target {
-            NativeCallTarget::Array => Some(Self::Array),
-            NativeCallTarget::ArrayConcat => Some(Self::ArrayConcat),
-            NativeCallTarget::ArrayIncludes => Some(Self::ArrayIncludes),
-            NativeCallTarget::ArrayIndexOf => Some(Self::ArrayIndexOf),
-            NativeCallTarget::ArrayIsArray => Some(Self::ArrayIsArray),
-            NativeCallTarget::ArrayJoin => Some(Self::ArrayJoin),
-            NativeCallTarget::ArrayLastIndexOf => Some(Self::ArrayLastIndexOf),
-            NativeCallTarget::ArrayPop => Some(Self::ArrayPop),
-            NativeCallTarget::ArrayPush => Some(Self::ArrayPush),
-            NativeCallTarget::ArrayReverse => Some(Self::ArrayReverse),
-            NativeCallTarget::ArrayShift => Some(Self::ArrayShift),
-            NativeCallTarget::ArraySlice => Some(Self::ArraySlice),
-            NativeCallTarget::ArrayUnshift => Some(Self::ArrayUnshift),
-            _ => None,
-        }
     }
 
     const fn from_global_utility_call_target(target: NativeCallTarget) -> Option<Self> {
@@ -184,16 +193,25 @@ impl NativeFunctionKind {
         match self {
             Self::Array => Some(NativeCallTarget::Array),
             Self::ArrayConcat => Some(NativeCallTarget::ArrayConcat),
+            Self::ArrayEvery => Some(NativeCallTarget::ArrayEvery),
+            Self::ArrayFilter => Some(NativeCallTarget::ArrayFilter),
+            Self::ArrayFind => Some(NativeCallTarget::ArrayFind),
+            Self::ArrayFindIndex => Some(NativeCallTarget::ArrayFindIndex),
+            Self::ArrayForEach => Some(NativeCallTarget::ArrayForEach),
             Self::ArrayIncludes => Some(NativeCallTarget::ArrayIncludes),
             Self::ArrayIndexOf => Some(NativeCallTarget::ArrayIndexOf),
             Self::ArrayIsArray => Some(NativeCallTarget::ArrayIsArray),
             Self::ArrayJoin => Some(NativeCallTarget::ArrayJoin),
             Self::ArrayLastIndexOf => Some(NativeCallTarget::ArrayLastIndexOf),
+            Self::ArrayMap => Some(NativeCallTarget::ArrayMap),
             Self::ArrayPop => Some(NativeCallTarget::ArrayPop),
             Self::ArrayPush => Some(NativeCallTarget::ArrayPush),
+            Self::ArrayReduce => Some(NativeCallTarget::ArrayReduce),
+            Self::ArrayReduceRight => Some(NativeCallTarget::ArrayReduceRight),
             Self::ArrayReverse => Some(NativeCallTarget::ArrayReverse),
             Self::ArrayShift => Some(NativeCallTarget::ArrayShift),
             Self::ArraySlice => Some(NativeCallTarget::ArraySlice),
+            Self::ArraySome => Some(NativeCallTarget::ArraySome),
             Self::ArrayUnshift => Some(NativeCallTarget::ArrayUnshift),
             _ => None,
         }
