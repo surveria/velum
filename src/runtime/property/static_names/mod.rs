@@ -208,7 +208,24 @@ impl Context {
         &self,
         name: &'a StaticName,
     ) -> Result<PropertyLookup<'a>> {
+        // Per-site atom cache first: an indexed Cell read replaces the
+        // well-known string match on hot paths.
+        if let Some(cache) = self.current_static_name_atom_cache()
+            && let Some(atom) = cache.atom(name)?
+        {
+            return Ok(PropertyLookup::from_key(
+                name.as_str(),
+                PropertyKey::new(atom),
+            ));
+        }
         if let Some(key) = self.well_known_properties.lookup(name) {
+            // Remember atom-backed well-known keys in the per-site cache so
+            // later accesses skip the string match entirely.
+            if let PropertyKey::Atom(atom) = key
+                && let Some(cache) = self.current_static_name_atom_cache()
+            {
+                cache.remember(name, atom)?;
+            }
             return Ok(PropertyLookup::from_key(name.as_str(), key));
         }
         let key = self.lookup_static_name_atom(name)?.map(PropertyKey::new);

@@ -16,6 +16,7 @@ use crate::{
 };
 
 mod arguments;
+mod class_support;
 mod fast_path;
 mod intrinsic;
 mod parameters;
@@ -26,8 +27,29 @@ use crate::runtime::native::{
     NativeFunctionKind, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
     OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
 };
+pub(in crate::runtime) use class_support::ResolvedClassField;
+
+/// Per-call snapshot of the callee's shared metadata, extracted in one
+/// borrow of the function table before the call frame is assembled.
+struct FunctionCallSetup {
+    param_atoms: Rc<[crate::storage::atom::AtomId]>,
+    param_binding_ids: Rc<[crate::syntax::StaticBindingId]>,
+    param_frames: Rc<[Option<crate::runtime::binding::static_bindings::CompiledBindingFrame>]>,
+    bytecode: crate::bytecode::BytecodeFunction,
+    upvalues: super::FunctionUpvalues,
+    static_name_atom_cache:
+        Option<crate::runtime::property::static_names::StaticNameAtomCacheHandle>,
+    static_binding_cache:
+        Option<crate::runtime::binding::static_bindings::StaticBindingCacheHandle>,
+    static_binding_layout: Option<crate::binding_metadata::BindingLayout>,
+    binds_arguments: bool,
+    super_binding: Option<Rc<FunctionSuperBinding>>,
+    remember_params: bool,
+    scope_template: Option<Rc<FunctionScopeTemplate>>,
+}
 pub(super) use fast_path::FunctionFastPath;
 use parameters::FunctionParameterState;
+pub(in crate::runtime) use parameters::FunctionScopeTemplate;
 pub(super) use properties::{FunctionIntrinsicDefaults, FunctionProperties};
 
 const FUNCTION_PROTOTYPE_BIND_PROPERTY: &str = "bind";
@@ -58,15 +80,6 @@ pub(in crate::runtime) struct FunctionSuperBinding {
     /// The derived constructor owning this binding; its instance fields
     /// initialize after `super()` completes.
     pub(in crate::runtime) own_constructor: Option<FunctionId>,
-}
-
-/// A resolved public instance field: the property key computed at class
-/// definition time plus the lazily evaluated initializer block.
-#[derive(Debug)]
-pub(in crate::runtime) struct ResolvedClassField {
-    pub(in crate::runtime) key: crate::runtime::object::PropertyKey,
-    pub(in crate::runtime) name: String,
-    pub(in crate::runtime) initializer: Option<crate::bytecode::BytecodeBlock>,
 }
 
 pub(super) struct BytecodeFunctionInit<'a> {
@@ -136,6 +149,11 @@ impl Context {
             init.bytecode.capture_bindings(),
             static_binding_layout.as_ref(),
         )?;
+        let scope_template = parameters::function_scope_template(
+            &param_atoms,
+            &param_frames,
+            init.bytecode.has_parameter_defaults(),
+        )?;
         self.functions.push(super::Function {
             param_binding_ids: parameters::function_param_binding_ids(params),
             param_atoms,
@@ -159,6 +177,7 @@ impl Context {
             static_parent: None,
             class_fields: None,
             params_remembered: std::cell::Cell::new(false),
+            scope_template,
             new_target: FunctionNewTarget::from_mode(
                 init.new_target_mode,
                 self.current_new_target()?,
@@ -249,6 +268,25 @@ impl Context {
         }
     }
 
+    fn function_call_setup(&self, id: FunctionId) -> Result<FunctionCallSetup> {
+        let function = self.function(id)?;
+        Ok(FunctionCallSetup {
+            param_atoms: Rc::clone(&function.param_atoms),
+            param_binding_ids: Rc::clone(&function.param_binding_ids),
+            param_frames: Rc::clone(&function.param_frames),
+            bytecode: function.bytecode.clone(),
+            upvalues: Rc::clone(&function.upvalues),
+            static_name_atom_cache: function.static_name_atom_cache.clone(),
+            static_binding_cache: function.static_binding_cache.clone(),
+            static_binding_layout: function.static_binding_layout.clone(),
+            binds_arguments: function.bytecode.uses_arguments()
+                && !matches!(function.new_target, FunctionNewTarget::Lexical(_)),
+            super_binding: function.super_binding.clone(),
+            remember_params: !function.params_remembered.replace(true),
+            scope_template: function.scope_template.clone(),
+        })
+    }
+
     fn eval_function_completion_with_this_inner(
         &mut self,
         id: FunctionId,
@@ -260,7 +298,7 @@ impl Context {
         if let Some(completion) = self.try_eval_pre_setup_function_fast_path(id, raw_args)? {
             return Ok(completion);
         }
-        let (
+        let FunctionCallSetup {
             param_atoms,
             param_binding_ids,
             param_frames,
@@ -272,23 +310,8 @@ impl Context {
             binds_arguments,
             super_binding,
             remember_params,
-        ) = {
-            let function = self.function(id)?;
-            (
-                Rc::clone(&function.param_atoms),
-                Rc::clone(&function.param_binding_ids),
-                Rc::clone(&function.param_frames),
-                function.bytecode.clone(),
-                Rc::clone(&function.upvalues),
-                function.static_name_atom_cache.clone(),
-                function.static_binding_cache.clone(),
-                function.static_binding_layout.clone(),
-                function.bytecode.uses_arguments()
-                    && !matches!(function.new_target, FunctionNewTarget::Lexical(_)),
-                function.super_binding.clone(),
-                !function.params_remembered.replace(true),
-            )
-        };
+            scope_template,
+        } = self.function_call_setup(id)?;
         let packed_args = if bytecode.has_rest_parameter() {
             Some(self.pack_rest_arguments(bytecode.params(), raw_args.to_vec())?)
         } else {
@@ -302,14 +325,18 @@ impl Context {
         };
         let has_parameter_defaults = bytecode.has_parameter_defaults();
         let local_base = self.enter_function_local_frame();
-        let scope =
-            match self.function_scope(&param_atoms, &param_frames, args, has_parameter_defaults) {
-                Ok(scope) => scope,
-                Err(error) => {
-                    self.leave_function_local_frame(local_base)?;
-                    return Err(error);
-                }
-            };
+        let scope_result = if let Some(template) = scope_template.as_deref() {
+            self.function_scope_from_template(template, args)
+        } else {
+            self.function_scope(&param_atoms, &param_frames, args, has_parameter_defaults)
+        };
+        let scope = match scope_result {
+            Ok(scope) => scope,
+            Err(error) => {
+                self.leave_function_local_frame(local_base)?;
+                return Err(error);
+            }
+        };
         if binds_arguments {
             let Some(original_args) = original_args.as_deref() else {
                 self.leave_function_local_frame(local_base)?;
@@ -502,105 +529,6 @@ impl Context {
     pub(crate) fn function_enumerable_keys(&self, id: FunctionId) -> Result<Vec<String>> {
         let function = self.function(id)?;
         function.properties.keys(&self.atoms)
-    }
-
-    /// Runs a parent class constructor for `super(...)`: the current `this`
-    /// is initialized in place, the parent's return-object override is
-    /// ignored, and throws propagate as completions.
-    pub(in crate::runtime) fn eval_class_super_constructor_completion(
-        &mut self,
-        id: FunctionId,
-        args: &[Value],
-        this_value: &Value,
-        new_target: Value,
-    ) -> Result<Completion> {
-        self.initialize_class_fields(id, this_value)?;
-        match self.eval_function_completion_with_this_and_new_target(
-            id,
-            RuntimeCallArgs::values(args),
-            this_value.clone(),
-            new_target,
-        )? {
-            Completion::Normal(_) | Completion::Return(_) => {
-                Ok(Completion::Normal(Value::Undefined))
-            }
-            completion @ Completion::Throw(_) => Ok(completion),
-            Completion::Break { .. } => Err(Error::runtime("break statement outside loop")),
-            Completion::Continue(_) => Err(Error::runtime("continue statement outside loop")),
-        }
-    }
-
-    pub(in crate::runtime) fn set_function_super_binding(
-        &mut self,
-        id: FunctionId,
-        binding: Rc<FunctionSuperBinding>,
-    ) -> Result<()> {
-        self.function_mut(id)?.super_binding = Some(binding);
-        Ok(())
-    }
-
-    pub(in crate::runtime) fn set_function_class_fields(
-        &mut self,
-        id: FunctionId,
-        fields: Rc<[ResolvedClassField]>,
-    ) -> Result<()> {
-        self.function_mut(id)?.class_fields = Some(fields);
-        Ok(())
-    }
-
-    /// True when the function is a derived class constructor whose fields
-    /// initialize after `super()` instead of at construction entry.
-    pub(in crate::runtime) fn is_derived_class_constructor(&self, id: FunctionId) -> bool {
-        self.function(id).is_ok_and(|function| {
-            function
-                .super_binding
-                .as_ref()
-                .is_some_and(|binding| binding.constructor.is_some())
-        })
-    }
-
-    /// Defines the class instance fields on a freshly created object with
-    /// `this` bound to it while initializers run, in declaration order.
-    pub(in crate::runtime) fn initialize_class_fields(
-        &mut self,
-        id: FunctionId,
-        instance: &Value,
-    ) -> Result<()> {
-        let Some(fields) = self.function(id)?.class_fields.clone() else {
-            return Ok(());
-        };
-        let Value::Object(object_id) = instance else {
-            return Ok(());
-        };
-        for field in fields.iter() {
-            self.this_values.push(instance.clone());
-            let value = field
-                .initializer
-                .as_ref()
-                .map_or(Ok(Completion::Normal(Value::Undefined)), |initializer| {
-                    self.eval_bytecode_block(initializer)
-                });
-            if self.this_values.pop().is_none() {
-                return Err(Error::runtime("class field this binding disappeared"));
-            }
-            let value = value?.into_result()?;
-            let update = crate::runtime::object::PropertyUpdate::Data(
-                crate::runtime::object::DataPropertyUpdate::new(
-                    Some(value),
-                    Some(crate::runtime::object::PropertyWritable::Yes),
-                    Some(crate::runtime::object::PropertyEnumerable::Yes),
-                    Some(crate::runtime::object::PropertyConfigurable::Yes),
-                ),
-            );
-            self.objects.define_property(
-                *object_id,
-                field.key,
-                &field.name,
-                update,
-                self.limits.max_object_properties,
-            )?;
-        }
-        Ok(())
     }
 
     pub(in crate::runtime) fn set_function_static_parent(

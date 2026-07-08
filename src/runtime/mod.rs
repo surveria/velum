@@ -114,6 +114,7 @@ struct Function {
     static_parent: Option<Value>,
     class_fields: Option<Rc<[function::ResolvedClassField]>>,
     params_remembered: std::cell::Cell<bool>,
+    scope_template: Option<Rc<function::FunctionScopeTemplate>>,
     new_target: FunctionNewTarget,
 }
 

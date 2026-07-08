@@ -6,8 +6,7 @@ use crate::{
     value::Value,
 };
 
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub(in crate::runtime) struct BytecodeState {
     pub(super) pc: BytecodeAddress,
     pub(super) stack: BytecodeStack,

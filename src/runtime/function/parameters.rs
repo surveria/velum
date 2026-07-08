@@ -49,6 +49,30 @@ impl Context {
         Ok(atoms.into())
     }
 
+    /// Builds the call scope from the shared per-function template: one
+    /// exactly sized value-slot allocation, no per-call hashing or sorting.
+    pub(super) fn function_scope_from_template(
+        &mut self,
+        template: &FunctionScopeTemplate,
+        args: &[Value],
+    ) -> Result<BindingScope> {
+        self.ensure_extra_binding_capacity(template.param_count)?;
+        let mut slots = Vec::with_capacity(template.param_count);
+        for index in 0..template.param_count {
+            let value = args.get(index).cloned().unwrap_or(Value::Undefined);
+            slots.push(BindingCell::new(
+                self.runtime_value(value)?,
+                true,
+                DeclKind::Var,
+            ));
+        }
+        Ok(BindingScope::from_shared_template(
+            template.scope,
+            std::rc::Rc::clone(&template.index),
+            slots,
+        ))
+    }
+
     pub(super) fn function_scope(
         &mut self,
         params: &[AtomId],
@@ -342,6 +366,37 @@ fn function_param_frame(
         )),
         BindingOperand::Unresolved => Ok(None),
     }
+}
+
+/// Precomputed per-function call-scope layout: the shared atom index plus
+/// the compiled scope id, so each call allocates only the value slots.
+#[derive(Debug)]
+pub(in crate::runtime) struct FunctionScopeTemplate {
+    pub(super) scope: ScopeId,
+    pub(super) index: std::rc::Rc<crate::runtime::binding::scope::ScopeIndexData>,
+    pub(super) param_count: usize,
+}
+
+/// Builds the shared per-function scope template when the parameter layout
+/// is contiguous and unique; general layouts fall back to per-call
+/// construction.
+pub(super) fn function_scope_template(
+    params: &[AtomId],
+    frames: &[Option<CompiledBindingFrame>],
+    has_parameter_defaults: bool,
+) -> Result<Option<std::rc::Rc<super::FunctionScopeTemplate>>> {
+    if has_parameter_defaults || params.len() != frames.len() || !params_have_unique_atoms(params) {
+        return Ok(None);
+    }
+    let Some(scope) = contiguous_parameter_scope(frames) else {
+        return Ok(None);
+    };
+    let index = crate::runtime::binding::scope::ScopeIndexData::from_slot_atoms(params)?;
+    Ok(Some(std::rc::Rc::new(FunctionScopeTemplate {
+        scope,
+        index: std::rc::Rc::new(index),
+        param_count: params.len(),
+    })))
 }
 
 fn contiguous_parameter_scope(frames: &[Option<CompiledBindingFrame>]) -> Option<ScopeId> {
