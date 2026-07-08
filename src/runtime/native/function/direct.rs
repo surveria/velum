@@ -212,6 +212,9 @@ impl Context {
         {
             return value;
         }
+        if let Some(value) = self.eval_direct_array_native_call_target(target, args, this_value) {
+            return value;
+        }
 
         self.eval_direct_non_object_native_call_target(target, args, this_value)
     }
@@ -223,21 +226,6 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         match target {
-            NativeCallTarget::Array => self.eval_direct_array_constructor(args),
-            NativeCallTarget::ArrayConcat => self.eval_direct_array_concat(args, this_value),
-            NativeCallTarget::ArrayIncludes => self.eval_direct_array_includes(args, this_value),
-            NativeCallTarget::ArrayIndexOf => self.eval_direct_array_index_of(args, this_value),
-            NativeCallTarget::ArrayIsArray => self.eval_direct_array_is_array(args),
-            NativeCallTarget::ArrayJoin => self.eval_direct_array_join(args, this_value),
-            NativeCallTarget::ArrayLastIndexOf => {
-                self.eval_direct_array_last_index_of(args, this_value)
-            }
-            NativeCallTarget::ArrayPop => self.eval_direct_array_pop(args, this_value),
-            NativeCallTarget::ArrayPush => self.eval_direct_array_push(args, this_value),
-            NativeCallTarget::ArrayReverse => self.eval_direct_array_reverse(args, this_value),
-            NativeCallTarget::ArrayShift => self.eval_direct_array_shift(args, this_value),
-            NativeCallTarget::ArraySlice => self.eval_direct_array_slice(args, this_value),
-            NativeCallTarget::ArrayUnshift => self.eval_direct_array_unshift(args, this_value),
             NativeCallTarget::Boolean => self.eval_direct_boolean_constructor(args),
             NativeCallTarget::Eval => self.eval_eval_function(runtime_call_args(args)),
             NativeCallTarget::ErrorConstructor(name) => {
@@ -532,20 +520,10 @@ impl Context {
         if let Some(result) = self.eval_collection_native_function_kind(kind, args, this_value) {
             return result;
         }
+        if let Some(result) = self.eval_array_native_function_kind(kind, args, this_value) {
+            return result;
+        }
         match kind {
-            NativeFunctionKind::Array => self.eval_array_constructor(args),
-            NativeFunctionKind::ArrayConcat => self.eval_array_concat(args, this_value),
-            NativeFunctionKind::ArrayIncludes => self.eval_array_includes(args, this_value),
-            NativeFunctionKind::ArrayIndexOf => self.eval_array_index_of(args, this_value),
-            NativeFunctionKind::ArrayIsArray => self.eval_array_is_array(args),
-            NativeFunctionKind::ArrayJoin => self.eval_array_join(args, this_value),
-            NativeFunctionKind::ArrayLastIndexOf => self.eval_array_last_index_of(args, this_value),
-            NativeFunctionKind::ArrayPop => self.eval_array_pop(args, this_value),
-            NativeFunctionKind::ArrayPush => self.eval_array_push(args, this_value),
-            NativeFunctionKind::ArrayReverse => self.eval_array_reverse(args, this_value),
-            NativeFunctionKind::ArrayShift => self.eval_array_shift(args, this_value),
-            NativeFunctionKind::ArraySlice => self.eval_array_slice(args, this_value),
-            NativeFunctionKind::ArrayUnshift => self.eval_array_unshift(args, this_value),
             NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
             NativeFunctionKind::Boolean => self.eval_boolean_constructor(args),
             NativeFunctionKind::BoundFunction(id) => self.eval_bound_function(id, args),

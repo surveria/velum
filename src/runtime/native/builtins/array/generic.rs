@@ -285,27 +285,32 @@ impl Context {
         Ok(())
     }
 
-    fn array_like_length(&mut self, object: &Value) -> Result<usize> {
+    pub(super) fn array_like_length(&mut self, object: &Value) -> Result<usize> {
         let length = self.get_property_value(object, ARRAY_LENGTH_PROPERTY)?;
         Self::length_value_to_usize(&length)
     }
 
-    fn set_array_like_length(&mut self, object: &Value, length: usize) -> Result<()> {
+    pub(super) fn set_array_like_length(&mut self, object: &Value, length: usize) -> Result<()> {
         let value = Self::array_like_length_value(length)?;
         self.set_array_like_property(object, ARRAY_LENGTH_PROPERTY, value)
     }
 
-    fn get_array_like_index(&mut self, object: &Value, index: usize) -> Result<Value> {
+    pub(super) fn get_array_like_index(&mut self, object: &Value, index: usize) -> Result<Value> {
         let property = Self::array_like_index_name(index)?;
         self.get_property_value(object, &property)
     }
 
-    fn has_array_like_index(&self, object: &Value, index: usize) -> Result<bool> {
+    pub(super) fn has_array_like_index(&self, object: &Value, index: usize) -> Result<bool> {
         let property = Self::array_like_index_name(index)?;
         has_property(&self.objects, object, self.property_lookup(&property))
     }
 
-    fn set_array_like_index(&mut self, object: &Value, index: usize, value: Value) -> Result<()> {
+    pub(super) fn set_array_like_index(
+        &mut self,
+        object: &Value,
+        index: usize,
+        value: Value,
+    ) -> Result<()> {
         let property = Self::array_like_index_name(index)?;
         self.set_array_like_property(object, &property, value)
     }
@@ -326,7 +331,7 @@ impl Context {
         delete_property(&mut self.objects, object, lookup).map(|_| ())
     }
 
-    fn ensure_array_like_object(object: &Value) -> Result<()> {
+    pub(super) fn ensure_array_like_object(object: &Value) -> Result<()> {
         if matches!(object, Value::Object(_)) {
             return Ok(());
         }
@@ -380,13 +385,13 @@ impl Context {
         }
     }
 
-    fn array_like_length_value(length: usize) -> Result<Value> {
+    pub(super) fn array_like_length_value(length: usize) -> Result<Value> {
         let value =
             u32::try_from(length).map_err(|_| Error::limit(ARRAY_LIKE_LENGTH_LIMIT_ERROR))?;
         Ok(Value::Number(f64::from(value)))
     }
 
-    fn array_like_index_value(index: usize) -> Result<Value> {
+    pub(super) fn array_like_index_value(index: usize) -> Result<Value> {
         let value = u32::try_from(index).map_err(|_| Error::limit(ARRAY_LIKE_INDEX_LIMIT_ERROR))?;
         Ok(Value::Number(f64::from(value)))
     }

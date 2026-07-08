@@ -8,20 +8,30 @@ use crate::{
 
 use super::{ARRAY_NAME, NativeFunctionKind};
 
+mod callbacks;
 mod generic;
 
 const ARRAY_JOIN_DEFAULT_SEPARATOR: &str = ",";
 const ARRAY_PROTOTYPE_CONCAT_PROPERTY: &str = "concat";
+const ARRAY_PROTOTYPE_EVERY_PROPERTY: &str = "every";
+const ARRAY_PROTOTYPE_FILTER_PROPERTY: &str = "filter";
+const ARRAY_PROTOTYPE_FIND_PROPERTY: &str = "find";
+const ARRAY_PROTOTYPE_FIND_INDEX_PROPERTY: &str = "findIndex";
+const ARRAY_PROTOTYPE_FOR_EACH_PROPERTY: &str = "forEach";
 const ARRAY_PROTOTYPE_INCLUDES_PROPERTY: &str = "includes";
 const ARRAY_PROTOTYPE_INDEX_OF_PROPERTY: &str = "indexOf";
 const ARRAY_IS_ARRAY_PROPERTY: &str = "isArray";
 const ARRAY_PROTOTYPE_JOIN_PROPERTY: &str = "join";
 const ARRAY_PROTOTYPE_LAST_INDEX_OF_PROPERTY: &str = "lastIndexOf";
+const ARRAY_PROTOTYPE_MAP_PROPERTY: &str = "map";
 const ARRAY_PROTOTYPE_POP_PROPERTY: &str = "pop";
 const ARRAY_PROTOTYPE_PUSH_PROPERTY: &str = "push";
+const ARRAY_PROTOTYPE_REDUCE_PROPERTY: &str = "reduce";
+const ARRAY_PROTOTYPE_REDUCE_RIGHT_PROPERTY: &str = "reduceRight";
 const ARRAY_PROTOTYPE_REVERSE_PROPERTY: &str = "reverse";
 const ARRAY_PROTOTYPE_SHIFT_PROPERTY: &str = "shift";
 const ARRAY_PROTOTYPE_SLICE_PROPERTY: &str = "slice";
+const ARRAY_PROTOTYPE_SOME_PROPERTY: &str = "some";
 const ARRAY_PROTOTYPE_UNSHIFT_PROPERTY: &str = "unshift";
 
 impl Context {
@@ -432,78 +442,75 @@ impl Context {
     }
 
     fn install_array_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
-        let concat =
-            self.create_native_function(NativeFunctionKind::ArrayConcat, Value::Undefined)?;
-        self.define_non_enumerable_object_property(
-            prototype,
-            ARRAY_PROTOTYPE_CONCAT_PROPERTY,
-            concat,
-        )?;
-
-        let includes =
-            self.create_native_function(NativeFunctionKind::ArrayIncludes, Value::Undefined)?;
-        self.define_non_enumerable_object_property(
-            prototype,
-            ARRAY_PROTOTYPE_INCLUDES_PROPERTY,
-            includes,
-        )?;
-
-        let index_of =
-            self.create_native_function(NativeFunctionKind::ArrayIndexOf, Value::Undefined)?;
-        self.define_non_enumerable_object_property(
-            prototype,
-            ARRAY_PROTOTYPE_INDEX_OF_PROPERTY,
-            index_of,
-        )?;
-
-        let last_index_of =
-            self.create_native_function(NativeFunctionKind::ArrayLastIndexOf, Value::Undefined)?;
-        self.define_non_enumerable_object_property(
-            prototype,
-            ARRAY_PROTOTYPE_LAST_INDEX_OF_PROPERTY,
-            last_index_of,
-        )?;
-
-        let join = self.create_native_function(NativeFunctionKind::ArrayJoin, Value::Undefined)?;
-        self.define_non_enumerable_object_property(prototype, ARRAY_PROTOTYPE_JOIN_PROPERTY, join)?;
-
-        let push = self.create_native_function(NativeFunctionKind::ArrayPush, Value::Undefined)?;
-        self.define_non_enumerable_object_property(prototype, ARRAY_PROTOTYPE_PUSH_PROPERTY, push)?;
-
-        let reverse =
-            self.create_native_function(NativeFunctionKind::ArrayReverse, Value::Undefined)?;
-        self.define_non_enumerable_object_property(
-            prototype,
-            ARRAY_PROTOTYPE_REVERSE_PROPERTY,
-            reverse,
-        )?;
-
-        let pop = self.create_native_function(NativeFunctionKind::ArrayPop, Value::Undefined)?;
-        self.define_non_enumerable_object_property(prototype, ARRAY_PROTOTYPE_POP_PROPERTY, pop)?;
-
-        let shift =
-            self.create_native_function(NativeFunctionKind::ArrayShift, Value::Undefined)?;
-        self.define_non_enumerable_object_property(
-            prototype,
-            ARRAY_PROTOTYPE_SHIFT_PROPERTY,
-            shift,
-        )?;
-
-        let slice =
-            self.create_native_function(NativeFunctionKind::ArraySlice, Value::Undefined)?;
-        self.define_non_enumerable_object_property(
-            prototype,
-            ARRAY_PROTOTYPE_SLICE_PROPERTY,
-            slice,
-        )?;
-
-        let unshift =
-            self.create_native_function(NativeFunctionKind::ArrayUnshift, Value::Undefined)?;
-        self.define_non_enumerable_object_property(
-            prototype,
-            ARRAY_PROTOTYPE_UNSHIFT_PROPERTY,
-            unshift,
-        )
+        let methods = [
+            (
+                ARRAY_PROTOTYPE_CONCAT_PROPERTY,
+                NativeFunctionKind::ArrayConcat,
+            ),
+            (
+                ARRAY_PROTOTYPE_EVERY_PROPERTY,
+                NativeFunctionKind::ArrayEvery,
+            ),
+            (
+                ARRAY_PROTOTYPE_FILTER_PROPERTY,
+                NativeFunctionKind::ArrayFilter,
+            ),
+            (ARRAY_PROTOTYPE_FIND_PROPERTY, NativeFunctionKind::ArrayFind),
+            (
+                ARRAY_PROTOTYPE_FIND_INDEX_PROPERTY,
+                NativeFunctionKind::ArrayFindIndex,
+            ),
+            (
+                ARRAY_PROTOTYPE_FOR_EACH_PROPERTY,
+                NativeFunctionKind::ArrayForEach,
+            ),
+            (
+                ARRAY_PROTOTYPE_INCLUDES_PROPERTY,
+                NativeFunctionKind::ArrayIncludes,
+            ),
+            (
+                ARRAY_PROTOTYPE_INDEX_OF_PROPERTY,
+                NativeFunctionKind::ArrayIndexOf,
+            ),
+            (ARRAY_PROTOTYPE_JOIN_PROPERTY, NativeFunctionKind::ArrayJoin),
+            (
+                ARRAY_PROTOTYPE_LAST_INDEX_OF_PROPERTY,
+                NativeFunctionKind::ArrayLastIndexOf,
+            ),
+            (ARRAY_PROTOTYPE_MAP_PROPERTY, NativeFunctionKind::ArrayMap),
+            (ARRAY_PROTOTYPE_POP_PROPERTY, NativeFunctionKind::ArrayPop),
+            (ARRAY_PROTOTYPE_PUSH_PROPERTY, NativeFunctionKind::ArrayPush),
+            (
+                ARRAY_PROTOTYPE_REDUCE_PROPERTY,
+                NativeFunctionKind::ArrayReduce,
+            ),
+            (
+                ARRAY_PROTOTYPE_REDUCE_RIGHT_PROPERTY,
+                NativeFunctionKind::ArrayReduceRight,
+            ),
+            (
+                ARRAY_PROTOTYPE_REVERSE_PROPERTY,
+                NativeFunctionKind::ArrayReverse,
+            ),
+            (
+                ARRAY_PROTOTYPE_SHIFT_PROPERTY,
+                NativeFunctionKind::ArrayShift,
+            ),
+            (
+                ARRAY_PROTOTYPE_SLICE_PROPERTY,
+                NativeFunctionKind::ArraySlice,
+            ),
+            (ARRAY_PROTOTYPE_SOME_PROPERTY, NativeFunctionKind::ArraySome),
+            (
+                ARRAY_PROTOTYPE_UNSHIFT_PROPERTY,
+                NativeFunctionKind::ArrayUnshift,
+            ),
+        ];
+        for (property, kind) in methods {
+            let method = self.create_native_function(kind, Value::Undefined)?;
+            self.define_non_enumerable_object_property(prototype, property, method)?;
+        }
+        Ok(())
     }
 
     fn install_array_static_methods(&mut self, constructor: NativeFunctionId) -> Result<()> {
@@ -526,7 +533,7 @@ impl Context {
         }
     }
 
-    fn existing_array_constructor_prototype(&self) -> Result<ObjectId> {
+    pub(super) fn existing_array_constructor_prototype(&self) -> Result<ObjectId> {
         self.objects.existing_array_prototype_id()
     }
 
