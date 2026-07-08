@@ -32,6 +32,21 @@ impl ObjectHeap {
         self.get_array_index(id, index).map(Some)
     }
 
+    pub(crate) fn has_own_array_index_if_array(
+        &self,
+        id: ObjectId,
+        index: usize,
+    ) -> Result<Option<bool>> {
+        if self.array_length_if_array(id)?.is_none() {
+            return Ok(None);
+        }
+        let index = ArrayIndex::from_usize(index)?;
+        self.object(id)?
+            .get_own_array_index(&self.shapes, index)
+            .map(|value| value.is_some())
+            .map(Some)
+    }
+
     pub(crate) fn set_array_index_if_array(
         &mut self,
         id: ObjectId,

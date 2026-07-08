@@ -5,6 +5,7 @@ mod coercion;
 mod control;
 mod destructure;
 pub(in crate::runtime) mod for_of;
+mod in_operator;
 mod linear;
 mod ops;
 mod spread;
@@ -115,6 +116,7 @@ impl Context {
             | BytecodeInstruction::UpdateArrayIndexProperty { .. }
             | BytecodeInstruction::UpdateComputedProperty { .. }
             | BytecodeInstruction::Binary { .. }
+            | BytecodeInstruction::InStaticProperty { .. }
             | BytecodeInstruction::NumberBinary(_)
             | BytecodeInstruction::NumberCompare(_)
             | BytecodeInstruction::NumberEquality(_)
@@ -371,6 +373,7 @@ impl Context {
             | BytecodeInstruction::UpdateArrayIndexProperty { .. }
             | BytecodeInstruction::UpdateComputedProperty { .. }
             | BytecodeInstruction::Binary { .. }
+            | BytecodeInstruction::InStaticProperty { .. }
             | BytecodeInstruction::NumberBinary(_)
             | BytecodeInstruction::NumberCompare(_)
             | BytecodeInstruction::NumberEquality(_) => {
@@ -479,6 +482,7 @@ impl Context {
                 state, *property, *op, *prefix, next,
             ),
             BytecodeInstruction::Binary { .. }
+            | BytecodeInstruction::InStaticProperty { .. }
             | BytecodeInstruction::NumberBinary(_)
             | BytecodeInstruction::NumberCompare(_)
             | BytecodeInstruction::NumberEquality(_) => {
@@ -515,6 +519,14 @@ impl Context {
                     &right,
                     *property_access,
                 )?);
+                state.pc = next;
+                Ok(None)
+            }
+            BytecodeInstruction::InStaticProperty { property, access } => {
+                let object = state.stack.pop()?;
+                state
+                    .stack
+                    .push(self.eval_bytecode_in_static_property(&object, property, *access)?);
                 state.pc = next;
                 Ok(None)
             }

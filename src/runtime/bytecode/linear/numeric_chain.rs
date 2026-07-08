@@ -1,5 +1,5 @@
 use crate::{
-    bytecode::{BytecodeBinding, BytecodeInstruction, BytecodeNumericBinaryOp},
+    bytecode::{BytecodeBinding, BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeProperty},
     error::{Error, Result},
     runtime::{
         Context,
@@ -64,6 +64,11 @@ enum NumericCompoundRhs<'a> {
         binding: &'a BytecodeBinding,
         cell: BindingCell,
         mask: f64,
+    },
+    StaticProperty {
+        object: &'a BytecodeBinding,
+        object_cell: BindingCell,
+        property: &'a BytecodeProperty,
     },
 }
 
@@ -182,6 +187,11 @@ impl Context {
         if let Some(compound) = self.compile_numeric_compound_binding_rhs(instructions, index)? {
             return Ok(Some(compound));
         }
+        if let Some(compound) =
+            self.compile_numeric_compound_static_property_rhs(instructions, index)?
+        {
+            return Ok(Some(compound));
+        }
         self.compile_numeric_compound_binding_bitand_literal(instructions, index)
     }
 
@@ -226,6 +236,37 @@ impl Context {
             *op,
             NumericCompoundRhs::Binding { binding, cell },
             3,
+        )
+    }
+
+    fn compile_numeric_compound_static_property_rhs<'a>(
+        &mut self,
+        instructions: &'a [BytecodeInstruction],
+        index: usize,
+    ) -> Result<Option<CompiledNumericCompoundBinding<'a>>> {
+        let Some(
+            [
+                BytecodeInstruction::LoadBinding(object),
+                BytecodeInstruction::StaticMember { property },
+                BytecodeInstruction::CompoundStoreBinding { name, op },
+                BytecodeInstruction::StoreLast,
+            ],
+        ) = instruction_window(instructions, index, 4)
+        else {
+            return Ok(None);
+        };
+        let Some(object_cell) = self.get_binding_bytecode(object)? else {
+            return Ok(None);
+        };
+        self.compile_numeric_compound_op(
+            name,
+            *op,
+            NumericCompoundRhs::StaticProperty {
+                object,
+                object_cell,
+                property,
+            },
+            4,
         )
     }
 
@@ -409,6 +450,14 @@ impl Context {
                     &value,
                     &Value::Number(*mask),
                 )
+            }
+            NumericCompoundRhs::StaticProperty {
+                object,
+                object_cell,
+                property,
+            } => {
+                let object = self.runtime_value(object_cell.value(object.name())?)?;
+                self.get_static_property_value(&object, property.name(), property.access())
             }
         }
     }

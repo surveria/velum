@@ -232,22 +232,6 @@ impl Context {
         self.eval_bytecode_binary(op.generic_binary(), left, right, None)
     }
 
-    fn eval_bytecode_in(
-        &mut self,
-        left: &Value,
-        right: &Value,
-        property_access: Option<BytecodeDynamicProperty>,
-    ) -> Result<Value> {
-        let property = self.dynamic_property_key(left)?;
-        if let Some(access) = property_access {
-            return self
-                .has_cached_dynamic_property_value(right, &property, access.access())
-                .map(Value::Bool);
-        }
-        self.has_dynamic_property_value(right, &property)
-            .map(Value::Bool)
-    }
-
     fn eval_bytecode_instanceof(&mut self, left: &Value, right: &Value) -> Result<Value> {
         let target = self.instanceof_target_prototype(right)?;
         let matches = if let Value::Error(error) = left {

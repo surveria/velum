@@ -12,6 +12,9 @@ use crate::{
 
 use super::PROTOTYPE_PROPERTY;
 
+const ARRAY_INDEX_PROPERTY_LIMIT: u32 = u32::MAX;
+const ARRAY_LENGTH_PROPERTY: &str = "length";
+
 impl Context {
     /// Validated per-site cache hit for a plain-object read. The cache is
     /// only ever filled from the plain-object tail of the lookup chain and
@@ -149,29 +152,48 @@ impl Context {
         property: &DynamicPropertyKey,
         access: StaticPropertyAccessId,
     ) -> Result<bool> {
+        self.has_cached_property_lookup_value(object, property.name(), property.lookup(), access)
+    }
+
+    pub(crate) fn has_cached_property_name_value(
+        &mut self,
+        object: &Value,
+        property: &str,
+        access: StaticPropertyAccessId,
+    ) -> Result<bool> {
+        let lookup = self.property_lookup(property);
+        if lookup.key().is_none()
+            && matches!(object, Value::Object(_))
+            && !property_name_needs_virtual_lookup(property)
+        {
+            return Ok(false);
+        }
+        self.has_cached_property_lookup_value(object, property, lookup, access)
+    }
+
+    fn has_cached_property_lookup_value(
+        &mut self,
+        object: &Value,
+        property: &str,
+        lookup: PropertyLookup<'_>,
+        access: StaticPropertyAccessId,
+    ) -> Result<bool> {
         match object {
-            Value::Function(id) => self.has_function_property_lookup(*id, property.lookup()),
-            Value::NativeFunction(id) => {
-                self.has_native_function_property_lookup(*id, property.lookup())
-            }
+            Value::Function(id) => self.has_function_property_lookup(*id, lookup),
+            Value::NativeFunction(id) => self.has_native_function_property_lookup(*id, lookup),
             Value::Error(error) => {
-                if matches!(
-                    property.name(),
-                    "name" | "message" | OBJECT_CONSTRUCTOR_PROPERTY
-                ) {
+                if matches!(property, "name" | "message" | OBJECT_CONSTRUCTOR_PROPERTY) {
                     return Ok(true);
                 }
-                self.error_prototype_has_property(error.name(), property.lookup())
+                self.error_prototype_has_property(error.name(), lookup)
             }
             Value::Object(id) => {
-                if let Some(has_property) =
-                    self.global_object_has_property(*id, property.lookup())?
-                {
+                if let Some(has_property) = self.global_object_has_property(*id, lookup)? {
                     return Ok(has_property);
                 }
-                self.has_cached_object_property_value(*id, property, access)
+                self.has_cached_object_property_lookup(*id, lookup, access)
             }
-            _ => has_property(&self.objects, object, property.lookup()),
+            _ => has_property(&self.objects, object, lookup),
         }
     }
 
@@ -220,17 +242,17 @@ impl Context {
         }
     }
 
-    fn has_cached_object_property_value(
+    fn has_cached_object_property_lookup(
         &self,
         object: ObjectId,
-        property: &DynamicPropertyKey,
+        lookup: PropertyLookup<'_>,
         access: StaticPropertyAccessId,
     ) -> Result<bool> {
         let Some(cache) = self.current_static_name_atom_cache() else {
-            return has_property(&self.objects, &Value::Object(object), property.lookup());
+            return has_property(&self.objects, &Value::Object(object), lookup);
         };
         if let Some(cached_lookup) = cache.property_lookup(access)?
-            && cached_lookup.matches_property(property.lookup())
+            && cached_lookup.matches_property(lookup)
         {
             match self
                 .objects
@@ -242,9 +264,7 @@ impl Context {
             }
         }
 
-        let candidate = self
-            .objects
-            .cacheable_property_lookup(object, property.lookup())?;
+        let candidate = self.objects.cacheable_property_lookup(object, lookup)?;
         match self
             .objects
             .read_cacheable_property_presence_for(object, candidate)?
@@ -258,8 +278,19 @@ impl Context {
                 Ok(false)
             }
             CacheablePropertyPresence::Uncacheable => {
-                has_property(&self.objects, &Value::Object(object), property.lookup())
+                has_property(&self.objects, &Value::Object(object), lookup)
             }
         }
     }
+}
+
+fn property_name_needs_virtual_lookup(property: &str) -> bool {
+    property == ARRAY_LENGTH_PROPERTY || is_array_index_property_name(property)
+}
+
+fn is_array_index_property_name(property: &str) -> bool {
+    let Ok(index) = property.parse::<u32>() else {
+        return false;
+    };
+    index != ARRAY_INDEX_PROPERTY_LIMIT && index.to_string() == property
 }

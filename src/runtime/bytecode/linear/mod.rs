@@ -1,4 +1,5 @@
 mod direct;
+mod in_operator;
 mod numeric_chain;
 mod property_chain;
 mod segment;
@@ -11,7 +12,7 @@ use crate::{
     },
     error::{Error, Result},
     runtime::{Context, binding::scope::BindingCell},
-    syntax::{BinaryOp, DeclKind, UpdateOp},
+    syntax::{BinaryOp, DeclKind, StaticString, UpdateOp},
     value::Value,
 };
 
@@ -91,6 +92,21 @@ enum BytecodeLinearOp<'a> {
         index_mask: Option<f64>,
         property: BytecodeDynamicProperty,
     },
+    InStaticPropertyBinding {
+        binding: &'a BytecodeBinding,
+        cell: BindingCell,
+        property: &'a StaticString,
+        access: BytecodeDynamicProperty,
+        store_last: bool,
+    },
+    InArrayIndexMaskBinding {
+        index: &'a BytecodeBinding,
+        index_cell: BindingCell,
+        mask: f64,
+        array: &'a BytecodeBinding,
+        array_cell: BindingCell,
+        access: BytecodeDynamicProperty,
+    },
     NumericBindingChain(NumericBindingChain<'a>),
     NumericCompoundBinding(NumericCompoundBinding<'a>),
     PropertyMutation(PropertyMutation<'a>),
@@ -146,6 +162,12 @@ impl Context {
             self.compile_add_array_element_to_binding_with_mask(instructions, index)?
         {
             return Ok(Some((op, 9)));
+        }
+        if let Some(op) = self.compile_in_static_property_binding(instructions, index)? {
+            return Ok(Some(op));
+        }
+        if let Some(op) = self.compile_in_array_index_mask_binding(instructions, index)? {
+            return Ok(Some((op, 5)));
         }
         if let Some(op) = self.compile_add_array_element_to_binding(instructions, index)? {
             return Ok(Some((op, 7)));
@@ -467,6 +489,8 @@ impl Context {
             | BytecodeLinearOp::DeclareVarFromBindingNumberBinary { .. }
             | BytecodeLinearOp::StoreBindingFromBindingNumberBinary { .. }
             | BytecodeLinearOp::AddArrayElementToBinding { .. }
+            | BytecodeLinearOp::InStaticPropertyBinding { .. }
+            | BytecodeLinearOp::InArrayIndexMaskBinding { .. }
             | BytecodeLinearOp::NumericBindingChain(_)
             | BytecodeLinearOp::NumericCompoundBinding(_)
             | BytecodeLinearOp::UpdateBindingStoreLast { .. }
@@ -609,6 +633,12 @@ impl Context {
             }
             BytecodeLinearOp::AddArrayElementToBinding { .. } => {
                 self.eval_add_array_element_to_binding(state, op)?;
+            }
+            BytecodeLinearOp::InStaticPropertyBinding { .. } => {
+                self.eval_in_static_property_binding(state, op)?;
+            }
+            BytecodeLinearOp::InArrayIndexMaskBinding { .. } => {
+                self.eval_in_array_index_mask_binding(state, op)?;
             }
             BytecodeLinearOp::NumericBindingChain(chain) => {
                 self.eval_numeric_binding_chain(state, chain)?;

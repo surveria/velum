@@ -330,6 +330,17 @@ impl BytecodeCompiler<'_> {
             BinaryOp::LogicalOr => self.compile_logical_or(left, right),
             BinaryOp::NullishCoalescing => self.compile_nullish_coalescing(left, right),
             _ => {
+                if op == BinaryOp::In
+                    && let Some(access) = property_access
+                    && let Some(property) = Self::expr_static_string(left)
+                {
+                    self.compile_expr(right)?;
+                    self.emit(BytecodeInstruction::InStaticProperty {
+                        property: property.clone(),
+                        access: Self::compile_dynamic_property(access),
+                    });
+                    return Ok(());
+                }
                 if op == BinaryOp::Add
                     && property_access.is_none()
                     && self.compile_string_concat_chain(left, right)?
