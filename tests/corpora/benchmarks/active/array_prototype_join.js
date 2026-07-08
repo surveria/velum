@@ -1,6 +1,6 @@
 let total = 0;
 
-for (let index = 0; index < 4096; index++) {
+for (let index = 0; index < 16384; index++) {
     let values = [index, "x", null, undefined, index + 1];
     if (values.join("|") === index + "|x|||" + (index + 1)) {
         total += 1;

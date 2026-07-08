@@ -203,4 +203,12 @@ impl Context {
             .ok_or_else(|| Error::limit("bytecode linear segment runs overflowed"))?;
         Ok(())
     }
+
+    pub(crate) fn record_bytecode_linear_direct_run(&mut self) -> Result<()> {
+        self.bytecode_linear_direct_runs = self
+            .bytecode_linear_direct_runs
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("bytecode linear direct runs overflowed"))?;
+        Ok(())
+    }
 }

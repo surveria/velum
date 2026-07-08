@@ -37,6 +37,7 @@ const DEFAULT_SAMPLES: usize = 10;
 const DEFAULT_MIN_OP_US: u64 = 1_000;
 const DEFAULT_MAX_CV_PERCENT: u64 = 10;
 const DEFAULT_ATTEMPTS: usize = 3;
+const HIGH_VARIANCE_MIN_TOTAL_MULTIPLIER: u32 = 2;
 
 const MIN_SAMPLES: usize = 3;
 const MIN_ATTEMPTS: usize = 1;
@@ -103,6 +104,13 @@ impl MeasureConfig {
         } else {
             attempts
         };
+        self
+    }
+
+    const fn with_min_total_multiplier(mut self, multiplier: u32) -> Self {
+        if let Some(min_total) = self.min_total.checked_mul(multiplier) {
+            self.min_total = min_total;
+        }
         self
     }
 }
@@ -192,12 +200,30 @@ pub fn measure<F>(config: MeasureConfig, mut op: F) -> anyhow::Result<MeasureSta
 where
     F: FnMut() -> anyhow::Result<()>,
 {
-    let mut best = measure_once(config, &mut op)?;
+    let mut best = measure_with_attempts(config, &mut op)?;
+    if best.quality().is_valid() {
+        return Ok(best);
+    }
+    if should_retry_with_larger_sample(best.quality()) {
+        let extended = config.with_min_total_multiplier(HIGH_VARIANCE_MIN_TOTAL_MULTIPLIER);
+        let candidate = measure_with_attempts(extended, &mut op)?;
+        if better_measurement(candidate, best) {
+            best = candidate;
+        }
+    }
+    Ok(best)
+}
+
+fn measure_with_attempts<F>(config: MeasureConfig, op: &mut F) -> anyhow::Result<MeasureStats>
+where
+    F: FnMut() -> anyhow::Result<()>,
+{
+    let mut best = measure_once(config, op)?;
     if best.quality().is_valid() {
         return Ok(best);
     }
     for _ in MIN_ATTEMPTS..config.attempts {
-        let candidate = measure_once(config, &mut op)?;
+        let candidate = measure_once(config, op)?;
         if better_measurement(candidate, best) {
             best = candidate;
         }
@@ -206,6 +232,10 @@ where
         }
     }
     Ok(best)
+}
+
+const fn should_retry_with_larger_sample(quality: MeasurementQuality) -> bool {
+    quality.high_variance() && !quality.low_signal() && !quality.iteration_cap_reached()
 }
 
 fn measure_once<F>(config: MeasureConfig, op: &mut F) -> anyhow::Result<MeasureStats>
