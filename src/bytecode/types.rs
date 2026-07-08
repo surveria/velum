@@ -87,13 +87,15 @@ impl BytecodeFunction {
 pub struct BytecodeFunctionParam {
     binding: StaticBinding,
     has_default: bool,
+    rest: bool,
 }
 
 impl BytecodeFunctionParam {
-    pub(crate) const fn new(binding: StaticBinding, has_default: bool) -> Self {
+    pub(crate) const fn new(binding: StaticBinding, has_default: bool, rest: bool) -> Self {
         Self {
             binding,
             has_default,
+            rest,
         }
     }
 
@@ -104,6 +106,10 @@ impl BytecodeFunctionParam {
     pub const fn has_default(&self) -> bool {
         self.has_default
     }
+
+    pub const fn rest(&self) -> bool {
+        self.rest
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -113,12 +119,13 @@ pub enum BytecodeObjectProperty {
     Computed,
     ComputedMethod,
     ComputedAccessor { kind: AccessorKind },
+    Spread,
 }
 
 impl BytecodeObjectProperty {
     pub const fn stack_value_count(&self) -> usize {
         match self {
-            Self::Static(_) | Self::StaticAccessor { .. } => 1,
+            Self::Static(_) | Self::StaticAccessor { .. } | Self::Spread => 1,
             Self::Computed | Self::ComputedMethod | Self::ComputedAccessor { .. } => 2,
         }
     }
@@ -574,6 +581,23 @@ pub enum BytecodeInstruction {
     PushString(StaticString),
     TemplateConcat {
         part_count: usize,
+    },
+    CollectSpreadArgs {
+        spread_flags: Rc<[bool]>,
+    },
+    CallBindingSpread {
+        callee: BytecodeBinding,
+    },
+    CallValueSpread,
+    CallStaticMemberSpread {
+        property: BytecodeProperty,
+    },
+    CallComputedMemberSpread {
+        property: BytecodeDynamicProperty,
+    },
+    ConstructValueSpread,
+    ArrayLiteralSpread {
+        spread_flags: Rc<[bool]>,
     },
     CreateRegExp {
         pattern: StaticString,
