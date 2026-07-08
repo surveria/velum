@@ -188,7 +188,25 @@ impl Context {
         if let Some(value) = Self::eval_direct_math_integer_number_target(target, args) {
             return Ok(value);
         }
+        if let Some(value) = self.eval_direct_math_call_target(target, args) {
+            return value;
+        }
+        if let Some(value) = self.eval_direct_global_utility_call_target(target, args) {
+            return value;
+        }
+        if let Some(value) = self.eval_direct_object_native_call_target(target, args) {
+            return value;
+        }
 
+        self.eval_direct_non_object_native_call_target(target, args, this_value)
+    }
+
+    fn eval_direct_non_object_native_call_target(
+        &mut self,
+        target: NativeCallTarget,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
         match target {
             NativeCallTarget::Array => self.eval_direct_array_constructor(args),
             NativeCallTarget::ArrayConcat => self.eval_direct_array_concat(args, this_value),
@@ -219,59 +237,7 @@ impl Context {
             }
             NativeCallTarget::JsonParse => self.eval_direct_json_parse(args),
             NativeCallTarget::JsonStringify => self.eval_direct_json_stringify(args),
-            NativeCallTarget::MathAbs => Self::eval_direct_math_abs(args),
-            NativeCallTarget::MathAcos => Self::eval_direct_math_acos(args),
-            NativeCallTarget::MathAcosh => Self::eval_direct_math_acosh(args),
-            NativeCallTarget::MathAsin => Self::eval_direct_math_asin(args),
-            NativeCallTarget::MathAsinh => Self::eval_direct_math_asinh(args),
-            NativeCallTarget::MathAtan => Self::eval_direct_math_atan(args),
-            NativeCallTarget::MathAtan2 => Self::eval_direct_math_atan2(args),
-            NativeCallTarget::MathAtanh => Self::eval_direct_math_atanh(args),
-            NativeCallTarget::MathCbrt => Self::eval_direct_math_cbrt(args),
-            NativeCallTarget::MathCeil => Self::eval_direct_math_ceil(args),
-            NativeCallTarget::MathClz32 => Self::eval_direct_math_clz32(args),
-            NativeCallTarget::MathCos => Self::eval_direct_math_cos(args),
-            NativeCallTarget::MathCosh => Self::eval_direct_math_cosh(args),
-            NativeCallTarget::MathExp => Self::eval_direct_math_exp(args),
-            NativeCallTarget::MathExpm1 => Self::eval_direct_math_expm1(args),
-            NativeCallTarget::MathFloor => Self::eval_direct_math_floor(args),
-            NativeCallTarget::MathFround => Self::eval_direct_math_fround(args),
-            NativeCallTarget::MathHypot => Self::eval_direct_math_hypot(args),
-            NativeCallTarget::MathImul => Self::eval_direct_math_imul(args),
-            NativeCallTarget::MathLog => Self::eval_direct_math_log(args),
-            NativeCallTarget::MathLog10 => Self::eval_direct_math_log10(args),
-            NativeCallTarget::MathLog1p => Self::eval_direct_math_log1p(args),
-            NativeCallTarget::MathLog2 => Self::eval_direct_math_log2(args),
-            NativeCallTarget::MathMax => Self::eval_direct_math_max(args),
-            NativeCallTarget::MathMin => Self::eval_direct_math_min(args),
-            NativeCallTarget::MathPow => Self::eval_direct_math_pow(args),
-            NativeCallTarget::MathRandom => self.eval_direct_math_random(args),
-            NativeCallTarget::MathRound => Self::eval_direct_math_round(args),
-            NativeCallTarget::MathSign => Self::eval_direct_math_sign(args),
-            NativeCallTarget::MathSin => Self::eval_direct_math_sin(args),
-            NativeCallTarget::MathSinh => Self::eval_direct_math_sinh(args),
-            NativeCallTarget::MathSqrt => Self::eval_direct_math_sqrt(args),
-            NativeCallTarget::MathTan => Self::eval_direct_math_tan(args),
-            NativeCallTarget::MathTanh => Self::eval_direct_math_tanh(args),
-            NativeCallTarget::MathTrunc => Self::eval_direct_math_trunc(args),
             NativeCallTarget::Number => self.eval_direct_number_constructor(args),
-            NativeCallTarget::Object
-            | NativeCallTarget::ObjectAssign
-            | NativeCallTarget::ObjectCreate
-            | NativeCallTarget::ObjectDefineProperties
-            | NativeCallTarget::ObjectDefineProperty
-            | NativeCallTarget::ObjectEntries
-            | NativeCallTarget::ObjectGetOwnPropertyDescriptor
-            | NativeCallTarget::ObjectGetOwnPropertyDescriptors
-            | NativeCallTarget::ObjectGetOwnPropertyNames
-            | NativeCallTarget::ObjectGetPrototypeOf
-            | NativeCallTarget::ObjectHasOwn
-            | NativeCallTarget::ObjectIs
-            | NativeCallTarget::ObjectKeys
-            | NativeCallTarget::ObjectSetPrototypeOf
-            | NativeCallTarget::ObjectValues => self
-                .eval_direct_object_native_call_target(target, args)
-                .ok_or_else(|| Error::runtime("Object native call target was not handled"))?,
             NativeCallTarget::Promise => self.eval_direct_promise_constructor(args),
             NativeCallTarget::PromiseResolve => self.eval_direct_promise_resolve(args),
             NativeCallTarget::PromiseReject => self.eval_direct_promise_reject(args),
@@ -283,6 +249,52 @@ impl Context {
             }
             NativeCallTarget::String => self.eval_direct_string_constructor(args),
             NativeCallTarget::Symbol => self.eval_symbol_constructor(runtime_call_args(args)),
+            _ => Err(Error::runtime("native target reached non-object dispatch")),
+        }
+    }
+
+    fn eval_direct_math_call_target(
+        &mut self,
+        target: NativeCallTarget,
+        args: &[Value],
+    ) -> Option<Result<Value>> {
+        match target {
+            NativeCallTarget::MathAbs => Some(Self::eval_direct_math_abs(args)),
+            NativeCallTarget::MathAcos => Some(Self::eval_direct_math_acos(args)),
+            NativeCallTarget::MathAcosh => Some(Self::eval_direct_math_acosh(args)),
+            NativeCallTarget::MathAsin => Some(Self::eval_direct_math_asin(args)),
+            NativeCallTarget::MathAsinh => Some(Self::eval_direct_math_asinh(args)),
+            NativeCallTarget::MathAtan => Some(Self::eval_direct_math_atan(args)),
+            NativeCallTarget::MathAtan2 => Some(Self::eval_direct_math_atan2(args)),
+            NativeCallTarget::MathAtanh => Some(Self::eval_direct_math_atanh(args)),
+            NativeCallTarget::MathCbrt => Some(Self::eval_direct_math_cbrt(args)),
+            NativeCallTarget::MathCeil => Some(Self::eval_direct_math_ceil(args)),
+            NativeCallTarget::MathClz32 => Some(Self::eval_direct_math_clz32(args)),
+            NativeCallTarget::MathCos => Some(Self::eval_direct_math_cos(args)),
+            NativeCallTarget::MathCosh => Some(Self::eval_direct_math_cosh(args)),
+            NativeCallTarget::MathExp => Some(Self::eval_direct_math_exp(args)),
+            NativeCallTarget::MathExpm1 => Some(Self::eval_direct_math_expm1(args)),
+            NativeCallTarget::MathFloor => Some(Self::eval_direct_math_floor(args)),
+            NativeCallTarget::MathFround => Some(Self::eval_direct_math_fround(args)),
+            NativeCallTarget::MathHypot => Some(Self::eval_direct_math_hypot(args)),
+            NativeCallTarget::MathImul => Some(Self::eval_direct_math_imul(args)),
+            NativeCallTarget::MathLog => Some(Self::eval_direct_math_log(args)),
+            NativeCallTarget::MathLog10 => Some(Self::eval_direct_math_log10(args)),
+            NativeCallTarget::MathLog1p => Some(Self::eval_direct_math_log1p(args)),
+            NativeCallTarget::MathLog2 => Some(Self::eval_direct_math_log2(args)),
+            NativeCallTarget::MathMax => Some(Self::eval_direct_math_max(args)),
+            NativeCallTarget::MathMin => Some(Self::eval_direct_math_min(args)),
+            NativeCallTarget::MathPow => Some(Self::eval_direct_math_pow(args)),
+            NativeCallTarget::MathRandom => Some(self.eval_direct_math_random(args)),
+            NativeCallTarget::MathRound => Some(Self::eval_direct_math_round(args)),
+            NativeCallTarget::MathSign => Some(Self::eval_direct_math_sign(args)),
+            NativeCallTarget::MathSin => Some(Self::eval_direct_math_sin(args)),
+            NativeCallTarget::MathSinh => Some(Self::eval_direct_math_sinh(args)),
+            NativeCallTarget::MathSqrt => Some(Self::eval_direct_math_sqrt(args)),
+            NativeCallTarget::MathTan => Some(Self::eval_direct_math_tan(args)),
+            NativeCallTarget::MathTanh => Some(Self::eval_direct_math_tanh(args)),
+            NativeCallTarget::MathTrunc => Some(Self::eval_direct_math_trunc(args)),
+            _ => None,
         }
     }
 
@@ -331,6 +343,32 @@ impl Context {
         }
     }
 
+    fn eval_direct_global_utility_call_target(
+        &mut self,
+        target: NativeCallTarget,
+        args: &[Value],
+    ) -> Option<Result<Value>> {
+        match target {
+            NativeCallTarget::GlobalDecodeUri => Some(self.eval_direct_global_decode_uri(args)),
+            NativeCallTarget::GlobalDecodeUriComponent => {
+                Some(self.eval_direct_global_decode_uri_component(args))
+            }
+            NativeCallTarget::GlobalEncodeUri => Some(self.eval_direct_global_encode_uri(args)),
+            NativeCallTarget::GlobalEncodeUriComponent => {
+                Some(self.eval_direct_global_encode_uri_component(args))
+            }
+            NativeCallTarget::GlobalIsFinite => Some(Ok(Self::eval_direct_global_is_finite(args))),
+            NativeCallTarget::GlobalIsNan => Some(Ok(Self::eval_direct_global_is_nan(args))),
+            NativeCallTarget::GlobalParseFloat => {
+                Some(Ok(Self::eval_direct_global_parse_float(args)))
+            }
+            NativeCallTarget::GlobalParseInt => Some(Self::eval_direct_global_parse_int(args)),
+            NativeCallTarget::NumberIsFinite => Some(Ok(Self::eval_direct_number_is_finite(args))),
+            NativeCallTarget::NumberIsNan => Some(Ok(Self::eval_direct_number_is_nan(args))),
+            _ => None,
+        }
+    }
+
     pub(in crate::runtime) fn direct_native_call_kind(
         &self,
         id: NativeFunctionId,
@@ -355,6 +393,25 @@ impl Context {
     }
 
     pub(in crate::runtime) fn eval_native_function_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        if let Some(value) = self.eval_global_utility_function_kind(kind, args) {
+            return value;
+        }
+        if let Some(value) = self.eval_math_function_kind(kind, args) {
+            return value;
+        }
+        if let Some(value) = self.eval_object_native_function_kind(kind, args, this_value) {
+            return value;
+        }
+
+        self.eval_non_object_native_function_kind(kind, args, this_value)
+    }
+
+    fn eval_non_object_native_function_kind(
         &mut self,
         kind: NativeFunctionKind,
         args: RuntimeCallArgs<'_>,
@@ -388,61 +445,7 @@ impl Context {
             }
             NativeFunctionKind::JsonParse => self.eval_json_parse(args),
             NativeFunctionKind::JsonStringify => self.eval_json_stringify(args),
-            NativeFunctionKind::MathAbs => Self::eval_math_abs(args),
-            NativeFunctionKind::MathAcos => Self::eval_math_acos(args),
-            NativeFunctionKind::MathAcosh => Self::eval_math_acosh(args),
-            NativeFunctionKind::MathAsin => Self::eval_math_asin(args),
-            NativeFunctionKind::MathAsinh => Self::eval_math_asinh(args),
-            NativeFunctionKind::MathAtan => Self::eval_math_atan(args),
-            NativeFunctionKind::MathAtan2 => Self::eval_math_atan2(args),
-            NativeFunctionKind::MathAtanh => Self::eval_math_atanh(args),
-            NativeFunctionKind::MathCbrt => Self::eval_math_cbrt(args),
-            NativeFunctionKind::MathCeil => Self::eval_math_ceil(args),
-            NativeFunctionKind::MathClz32 => Self::eval_math_clz32(args),
-            NativeFunctionKind::MathCos => Self::eval_math_cos(args),
-            NativeFunctionKind::MathCosh => Self::eval_math_cosh(args),
-            NativeFunctionKind::MathExp => Self::eval_math_exp(args),
-            NativeFunctionKind::MathExpm1 => Self::eval_math_expm1(args),
-            NativeFunctionKind::MathFloor => Self::eval_math_floor(args),
-            NativeFunctionKind::MathFround => Self::eval_math_fround(args),
-            NativeFunctionKind::MathHypot => Self::eval_math_hypot(args),
-            NativeFunctionKind::MathImul => Self::eval_math_imul(args),
-            NativeFunctionKind::MathLog => Self::eval_math_log(args),
-            NativeFunctionKind::MathLog10 => Self::eval_math_log10(args),
-            NativeFunctionKind::MathLog1p => Self::eval_math_log1p(args),
-            NativeFunctionKind::MathLog2 => Self::eval_math_log2(args),
-            NativeFunctionKind::MathMax => Self::eval_math_max(args),
-            NativeFunctionKind::MathMin => Self::eval_math_min(args),
-            NativeFunctionKind::MathPow => Self::eval_math_pow(args),
-            NativeFunctionKind::MathRandom => self.eval_math_random(args),
-            NativeFunctionKind::MathRound => Self::eval_math_round(args),
-            NativeFunctionKind::MathSign => Self::eval_math_sign(args),
-            NativeFunctionKind::MathSin => Self::eval_math_sin(args),
-            NativeFunctionKind::MathSinh => Self::eval_math_sinh(args),
-            NativeFunctionKind::MathSqrt => Self::eval_math_sqrt(args),
-            NativeFunctionKind::MathTan => Self::eval_math_tan(args),
-            NativeFunctionKind::MathTanh => Self::eval_math_tanh(args),
-            NativeFunctionKind::MathTrunc => Self::eval_math_trunc(args),
             NativeFunctionKind::Number => self.eval_number_constructor(args),
-            NativeFunctionKind::Object
-            | NativeFunctionKind::ObjectAssign
-            | NativeFunctionKind::ObjectCreate
-            | NativeFunctionKind::ObjectDefineProperties
-            | NativeFunctionKind::ObjectDefineProperty
-            | NativeFunctionKind::ObjectEntries
-            | NativeFunctionKind::ObjectGetOwnPropertyDescriptor
-            | NativeFunctionKind::ObjectGetOwnPropertyDescriptors
-            | NativeFunctionKind::ObjectGetOwnPropertyNames
-            | NativeFunctionKind::ObjectGetPrototypeOf
-            | NativeFunctionKind::ObjectHasOwn
-            | NativeFunctionKind::ObjectIs
-            | NativeFunctionKind::ObjectKeys
-            | NativeFunctionKind::ObjectPrototypeHasOwnProperty
-            | NativeFunctionKind::ObjectPrototypePropertyIsEnumerable
-            | NativeFunctionKind::ObjectSetPrototypeOf
-            | NativeFunctionKind::ObjectValues => self
-                .eval_object_native_function_kind(kind, args, this_value)
-                .ok_or_else(|| Error::runtime("Object native function kind was not handled"))?,
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),
             NativeFunctionKind::PromiseResolve => self.eval_promise_resolve(args),
             NativeFunctionKind::PromiseReject => self.eval_promise_reject(args),
@@ -457,6 +460,7 @@ impl Context {
             }
             NativeFunctionKind::String => self.eval_string_constructor(args),
             NativeFunctionKind::Symbol => self.eval_symbol_constructor(args),
+            _ => Err(Error::runtime("native kind reached non-object dispatch")),
         }
     }
 
@@ -502,6 +506,75 @@ impl Context {
                 Some(self.eval_object_set_prototype_of(args))
             }
             NativeFunctionKind::ObjectValues => Some(self.eval_object_values(args)),
+            _ => None,
+        }
+    }
+
+    fn eval_global_utility_function_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: RuntimeCallArgs<'_>,
+    ) -> Option<Result<Value>> {
+        match kind {
+            NativeFunctionKind::GlobalDecodeUri => Some(self.eval_global_decode_uri(args)),
+            NativeFunctionKind::GlobalDecodeUriComponent => {
+                Some(self.eval_global_decode_uri_component(args))
+            }
+            NativeFunctionKind::GlobalEncodeUri => Some(self.eval_global_encode_uri(args)),
+            NativeFunctionKind::GlobalEncodeUriComponent => {
+                Some(self.eval_global_encode_uri_component(args))
+            }
+            NativeFunctionKind::GlobalIsFinite => Some(Ok(Self::eval_global_is_finite(args))),
+            NativeFunctionKind::GlobalIsNan => Some(Ok(Self::eval_global_is_nan(args))),
+            NativeFunctionKind::GlobalParseFloat => Some(Ok(Self::eval_global_parse_float(args))),
+            NativeFunctionKind::GlobalParseInt => Some(Self::eval_global_parse_int(args)),
+            NativeFunctionKind::NumberIsFinite => Some(Ok(Self::eval_number_is_finite(args))),
+            NativeFunctionKind::NumberIsNan => Some(Ok(Self::eval_number_is_nan(args))),
+            _ => None,
+        }
+    }
+
+    fn eval_math_function_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: RuntimeCallArgs<'_>,
+    ) -> Option<Result<Value>> {
+        match kind {
+            NativeFunctionKind::MathAbs => Some(Self::eval_math_abs(args)),
+            NativeFunctionKind::MathAcos => Some(Self::eval_math_acos(args)),
+            NativeFunctionKind::MathAcosh => Some(Self::eval_math_acosh(args)),
+            NativeFunctionKind::MathAsin => Some(Self::eval_math_asin(args)),
+            NativeFunctionKind::MathAsinh => Some(Self::eval_math_asinh(args)),
+            NativeFunctionKind::MathAtan => Some(Self::eval_math_atan(args)),
+            NativeFunctionKind::MathAtan2 => Some(Self::eval_math_atan2(args)),
+            NativeFunctionKind::MathAtanh => Some(Self::eval_math_atanh(args)),
+            NativeFunctionKind::MathCbrt => Some(Self::eval_math_cbrt(args)),
+            NativeFunctionKind::MathCeil => Some(Self::eval_math_ceil(args)),
+            NativeFunctionKind::MathClz32 => Some(Self::eval_math_clz32(args)),
+            NativeFunctionKind::MathCos => Some(Self::eval_math_cos(args)),
+            NativeFunctionKind::MathCosh => Some(Self::eval_math_cosh(args)),
+            NativeFunctionKind::MathExp => Some(Self::eval_math_exp(args)),
+            NativeFunctionKind::MathExpm1 => Some(Self::eval_math_expm1(args)),
+            NativeFunctionKind::MathFloor => Some(Self::eval_math_floor(args)),
+            NativeFunctionKind::MathFround => Some(Self::eval_math_fround(args)),
+            NativeFunctionKind::MathHypot => Some(Self::eval_math_hypot(args)),
+            NativeFunctionKind::MathImul => Some(Self::eval_math_imul(args)),
+            NativeFunctionKind::MathLog => Some(Self::eval_math_log(args)),
+            NativeFunctionKind::MathLog10 => Some(Self::eval_math_log10(args)),
+            NativeFunctionKind::MathLog1p => Some(Self::eval_math_log1p(args)),
+            NativeFunctionKind::MathLog2 => Some(Self::eval_math_log2(args)),
+            NativeFunctionKind::MathMax => Some(Self::eval_math_max(args)),
+            NativeFunctionKind::MathMin => Some(Self::eval_math_min(args)),
+            NativeFunctionKind::MathPow => Some(Self::eval_math_pow(args)),
+            NativeFunctionKind::MathRandom => Some(self.eval_math_random(args)),
+            NativeFunctionKind::MathRound => Some(Self::eval_math_round(args)),
+            NativeFunctionKind::MathSign => Some(Self::eval_math_sign(args)),
+            NativeFunctionKind::MathSin => Some(Self::eval_math_sin(args)),
+            NativeFunctionKind::MathSinh => Some(Self::eval_math_sinh(args)),
+            NativeFunctionKind::MathSqrt => Some(Self::eval_math_sqrt(args)),
+            NativeFunctionKind::MathTan => Some(Self::eval_math_tan(args)),
+            NativeFunctionKind::MathTanh => Some(Self::eval_math_tanh(args)),
+            NativeFunctionKind::MathTrunc => Some(Self::eval_math_trunc(args)),
             _ => None,
         }
     }

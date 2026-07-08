@@ -56,6 +56,8 @@ const PATH_TEST262_OBJECT_STATIC_METHODS: &str =
     "tests/corpora/test262/active/built-ins/Object/static_methods.js";
 const PATH_TEST262_NUMBER_BUILTIN: &str =
     "tests/corpora/test262/active/built-ins/Number/constructor.js";
+const PATH_TEST262_NUMBER_STATIC_METHODS: &str =
+    "tests/corpora/test262/active/built-ins/Number/static_methods.js";
 const PATH_TEST262_BOOLEAN_BUILTIN: &str =
     "tests/corpora/test262/active/built-ins/Boolean/constructor.js";
 const PATH_TEST262_STRING_BUILTIN: &str =
@@ -136,6 +138,8 @@ const PATH_TEST262_ERROR_OBJECT_PROPERTIES: &str =
     "tests/corpora/test262/active/language/statements/error_object_properties.js";
 const PATH_TEST262_GLOBAL_NUMERIC_CONSTANTS: &str =
     "tests/corpora/test262/active/built-ins/global/numeric_constants.js";
+const PATH_TEST262_GLOBAL_UTILITY_FUNCTIONS: &str =
+    "tests/corpora/test262/active/built-ins/global/utility_functions.js";
 const PATH_TEST262_JSON_BUILTIN: &str = "tests/corpora/test262/active/built-ins/JSON/basic.js";
 const PATH_TEST262_PROMISE_BUILTIN: &str =
     "tests/corpora/test262/active/built-ins/Promise/basic.js";
@@ -426,6 +430,11 @@ fn test262_builtin_cases() -> Vec<EngineCase> {
             expectation: Expectation::Value("42"),
         },
         EngineCase {
+            id: "built-ins/global/utility-functions",
+            path: PATH_TEST262_GLOBAL_UTILITY_FUNCTIONS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
             id: "built-ins/JSON/basic",
             path: PATH_TEST262_JSON_BUILTIN,
             expectation: Expectation::Value("42"),
@@ -458,6 +467,11 @@ fn test262_builtin_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "built-ins/Number/constructor",
             path: PATH_TEST262_NUMBER_BUILTIN,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Number/static-methods",
+            path: PATH_TEST262_NUMBER_STATIC_METHODS,
             expectation: Expectation::Value("42"),
         },
         EngineCase {

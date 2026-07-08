@@ -3,10 +3,13 @@ use crate::{
     runtime::Context,
     runtime::call::RuntimeCallArgs,
     runtime::object::{ObjectPropertyInit, PropertyEnumerable},
-    value::{ObjectId, Value},
+    value::{NativeFunctionId, ObjectId, Value},
 };
 
-use super::{NUMBER_NAME, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY};
+use super::{
+    GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME, NUMBER_IS_FINITE_NAME, NUMBER_IS_NAN_NAME,
+    NUMBER_NAME, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY,
+};
 
 const NUMBER_EPSILON_PROPERTY: &str = "EPSILON";
 const NUMBER_MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
@@ -48,6 +51,7 @@ impl Context {
         let prototype = Value::Object(prototype_id);
         let name = self.native_function_name_value(NativeFunctionKind::Number)?;
         self.push_native_function_with_id(id, NativeFunctionKind::Number, prototype, name)?;
+        self.install_number_static_methods(id)?;
         self.insert_global_builtin(NUMBER_NAME, constructor.clone())?;
         Ok(constructor)
     }
@@ -110,6 +114,46 @@ impl Context {
                 "Number prototype is not an object",
             )),
         }
+    }
+
+    fn install_number_static_methods(&mut self, constructor: NativeFunctionId) -> Result<()> {
+        self.define_number_static_method(
+            constructor,
+            NUMBER_IS_FINITE_NAME,
+            NativeFunctionKind::NumberIsFinite,
+        )?;
+        self.define_number_static_method(
+            constructor,
+            NUMBER_IS_NAN_NAME,
+            NativeFunctionKind::NumberIsNan,
+        )?;
+        let parse_float = self.global_function_value(NativeFunctionKind::GlobalParseFloat)?;
+        self.define_number_static_function(constructor, GLOBAL_PARSE_FLOAT_NAME, parse_float)?;
+        let parse_int = self.global_function_value(NativeFunctionKind::GlobalParseInt)?;
+        self.define_number_static_function(constructor, GLOBAL_PARSE_INT_NAME, parse_int)
+    }
+
+    fn define_number_static_method(
+        &mut self,
+        constructor: NativeFunctionId,
+        name: &str,
+        kind: NativeFunctionKind,
+    ) -> Result<()> {
+        let function = self.create_native_function(kind, Value::Undefined)?;
+        self.define_number_static_function(constructor, name, function)
+    }
+
+    fn define_number_static_function(
+        &mut self,
+        constructor: NativeFunctionId,
+        name: &str,
+        function: Value,
+    ) -> Result<()> {
+        let key = self.intern_property_key(name)?;
+        self.native_function_mut(constructor)?
+            .properties_mut()
+            .define_builtin(key, function, PropertyEnumerable::No);
+        Ok(())
     }
 
     fn number_argument_value(value: Option<&Value>) -> f64 {
