@@ -1,5 +1,6 @@
 mod direct;
 mod numeric_chain;
+mod property_chain;
 mod segment;
 
 use crate::{
@@ -16,6 +17,7 @@ use crate::{
 
 use super::state::BytecodeState;
 use numeric_chain::{NumericBindingChain, NumericCompoundBinding};
+use property_chain::PropertyMutation;
 pub(super) use segment::BytecodeLinearPlan;
 
 #[derive(Debug)]
@@ -38,6 +40,12 @@ enum BytecodeLinearOp<'a> {
     StoreLast,
     Pop,
     UpdateBinding {
+        binding: &'a BytecodeBinding,
+        cell: BindingCell,
+        op: UpdateOp,
+        prefix: bool,
+    },
+    UpdateBindingStoreLast {
         binding: &'a BytecodeBinding,
         cell: BindingCell,
         op: UpdateOp,
@@ -85,6 +93,7 @@ enum BytecodeLinearOp<'a> {
     },
     NumericBindingChain(NumericBindingChain<'a>),
     NumericCompoundBinding(NumericCompoundBinding<'a>),
+    PropertyMutation(PropertyMutation<'a>),
     ArrayLength(&'a BytecodeProperty),
     ArrayIndexMember {
         property: &'a BytecodeProperty,
@@ -123,6 +132,15 @@ impl Context {
                 BytecodeLinearOp::NumericCompoundBinding(compound.op),
                 compound.consumed,
             )));
+        }
+        if let Some(mutation) = self.compile_property_mutation(instructions, index)? {
+            return Ok(Some((
+                BytecodeLinearOp::PropertyMutation(mutation.op),
+                mutation.consumed,
+            )));
+        }
+        if let Some(op) = self.compile_update_binding_store_last(instructions, index)? {
+            return Ok(Some((op, 2)));
         }
         if let Some(op) =
             self.compile_add_array_element_to_binding_with_mask(instructions, index)?
@@ -231,6 +249,31 @@ impl Context {
                 right: *right,
             },
         ))
+    }
+
+    fn compile_update_binding_store_last<'a>(
+        &self,
+        instructions: &'a [BytecodeInstruction],
+        index: usize,
+    ) -> Result<Option<BytecodeLinearOp<'a>>> {
+        let Some(
+            [
+                BytecodeInstruction::UpdateBinding { name, op, prefix },
+                BytecodeInstruction::StoreLast,
+            ],
+        ) = instruction_window(instructions, index, 2)
+        else {
+            return Ok(None);
+        };
+        let Some(cell) = self.get_binding_bytecode(name)? else {
+            return Ok(None);
+        };
+        Ok(Some(BytecodeLinearOp::UpdateBindingStoreLast {
+            binding: name,
+            cell,
+            op: *op,
+            prefix: *prefix,
+        }))
     }
 
     fn compile_add_array_element_to_binding_with_mask<'a>(
@@ -425,9 +468,9 @@ impl Context {
             | BytecodeLinearOp::StoreBindingFromBindingNumberBinary { .. }
             | BytecodeLinearOp::AddArrayElementToBinding { .. }
             | BytecodeLinearOp::NumericBindingChain(_)
-            | BytecodeLinearOp::NumericCompoundBinding(_) => {
-                self.eval_linear_peephole_op(state, op)
-            }
+            | BytecodeLinearOp::NumericCompoundBinding(_)
+            | BytecodeLinearOp::UpdateBindingStoreLast { .. }
+            | BytecodeLinearOp::PropertyMutation(_) => self.eval_linear_peephole_op(state, op),
             BytecodeLinearOp::ArrayLength(_)
             | BytecodeLinearOp::ArrayIndexMember { .. }
             | BytecodeLinearOp::ComputedMember(_) => self.eval_linear_member_op(state, op),
@@ -572,6 +615,21 @@ impl Context {
             }
             BytecodeLinearOp::NumericCompoundBinding(compound) => {
                 self.eval_numeric_compound_binding(state, compound)?;
+            }
+            BytecodeLinearOp::UpdateBindingStoreLast {
+                binding,
+                cell,
+                op,
+                prefix,
+            } => {
+                let old_value = cell.value(binding.name())?;
+                let new_value = Self::updated_bytecode_number(&old_value, *op)?;
+                self.checked_value(new_value.clone())?;
+                self.assign_bytecode_cell(binding, cell, new_value.clone())?;
+                state.last = if *prefix { new_value } else { old_value };
+            }
+            BytecodeLinearOp::PropertyMutation(mutation) => {
+                self.eval_property_mutation(state, mutation)?;
             }
             _ => return Err(Error::runtime("bytecode linear peephole op mismatch")),
         }

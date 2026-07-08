@@ -36,6 +36,7 @@ impl Context {
         if !matches!(
             op,
             BytecodeLinearOp::StoreBindingFromBindingNumberBinary { .. }
+                | BytecodeLinearOp::UpdateBindingStoreLast { .. }
         ) {
             return Ok(None);
         }
@@ -91,6 +92,18 @@ impl Context {
                 self.assign_bytecode_cell(target, target_cell, value.clone())?;
                 Ok(Some(value))
             }
+            BytecodeLinearOp::UpdateBindingStoreLast {
+                binding,
+                cell,
+                op,
+                prefix,
+            } => {
+                let old_value = cell.value(binding.name())?;
+                let new_value = Self::updated_bytecode_number(&old_value, *op)?;
+                self.checked_value(new_value.clone())?;
+                self.assign_bytecode_cell(binding, cell, new_value.clone())?;
+                Ok(Some(if *prefix { new_value } else { old_value }))
+            }
             BytecodeLinearOp::PushLiteral(_)
             | BytecodeLinearOp::PushUndefined
             | BytecodeLinearOp::LoadBinding { .. }
@@ -107,6 +120,7 @@ impl Context {
             | BytecodeLinearOp::AddArrayElementToBinding { .. }
             | BytecodeLinearOp::NumericBindingChain(_)
             | BytecodeLinearOp::NumericCompoundBinding(_)
+            | BytecodeLinearOp::PropertyMutation(_)
             | BytecodeLinearOp::ArrayLength(_)
             | BytecodeLinearOp::ArrayIndexMember { .. }
             | BytecodeLinearOp::ComputedMember(_) => Ok(None),
