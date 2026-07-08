@@ -2,6 +2,7 @@ mod direct;
 mod in_operator;
 mod numeric_chain;
 mod property_chain;
+mod property_numeric;
 mod segment;
 
 use crate::{

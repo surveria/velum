@@ -463,7 +463,11 @@ impl Context {
     }
 }
 
-fn apply_number_binary(op: BytecodeNumericBinaryOp, left: f64, right: f64) -> Result<f64> {
+pub(in crate::runtime::bytecode::linear) fn apply_number_binary(
+    op: BytecodeNumericBinaryOp,
+    left: f64,
+    right: f64,
+) -> Result<f64> {
     let value = match op {
         BytecodeNumericBinaryOp::Add => left + right,
         BytecodeNumericBinaryOp::Sub => left - right,
