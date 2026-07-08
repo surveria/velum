@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T123531Z.md`
-- Task: workflow_dispatch
-- Performance: 5.92x (62/63 >1.00x)
+- `rsqjs-test-report-20260708T125723Z.md`
+- Task: PR #331: Optimize control-flow update bytecode paths
+- Performance: 5.97x (62/63 >1.00x)
 - Memory: - (0/63 >1.00x)
 - Full Test262: 25758 passed / 76820 failed (25.11%)
 
@@ -324,3 +324,4 @@ Latest report:
 | `20260708T121554Z` `292b532` workflow_dispatch | 5.98x (62/63 >1.00x) | - (0/63 >1.00x) | 25392 passed / 77186 failed (24.75%) |
 | `20260708T122945Z` `dad13c4` PR #330: Add workflow gate guardrails | 6.07x (62/63 >1.00x) | - (0/63 >1.00x) | 25428 passed / 77150 failed (24.79%) |
 | `20260708T123531Z` `5a994d3` workflow_dispatch | 5.92x (62/63 >1.00x) | - (0/63 >1.00x) | 25758 passed / 76820 failed (25.11%) |
+| `20260708T125723Z` `00671fe` PR #331: Optimize control-flow update bytecode paths | 5.97x (62/63 >1.00x) | - (0/63 >1.00x) | 25758 passed / 76820 failed (25.11%) |
