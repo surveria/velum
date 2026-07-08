@@ -526,6 +526,53 @@ fn bytecode_quickens_numeric_compound_binding_paths() -> TestResult {
     ensure_usize(vm.resource_usage().atom_count, atoms)
 }
 
+#[test]
+fn bytecode_quickens_property_update_and_compound_paths() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r"
+        var total = 0;
+        var record = { count: 1, mask: 3 };
+        var values = [1, 2, 3, 4];
+
+        for (var index = 0; index < 16; index++) {
+            total++;
+            record.count += 2;
+            record.mask ^= index;
+            record.mask |= values[index & 3];
+            ++values[index & 3];
+            values[index & 3] <<= 1;
+            values[index & 3] >>= 1;
+            values[index & 3] += record.count & 1;
+        }
+
+        total + record.count + record.mask + values[0] + values[1] + values[2] + values[3]
+        ",
+    )?;
+    ensure_at_least(
+        script.usage().bytecode_numeric_instruction_count(),
+        8,
+        "bytecode numeric instructions",
+    )?;
+
+    let initial_segments = vm.resource_usage().bytecode_linear_segment_runs;
+    let initial_direct_runs = vm.resource_usage().bytecode_linear_direct_runs;
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(101.0))?;
+    let usage = vm.resource_usage();
+    let segment_delta = usage
+        .bytecode_linear_segment_runs
+        .checked_sub(initial_segments)
+        .ok_or("bytecode linear segment counter moved backwards")?;
+    let direct_delta = usage
+        .bytecode_linear_direct_runs
+        .checked_sub(initial_direct_runs)
+        .ok_or("bytecode linear direct counter moved backwards")?;
+    ensure_at_least(segment_delta, 16, "bytecode linear segment runs")?;
+    ensure_at_least(direct_delta, 32, "bytecode linear direct runs")
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
