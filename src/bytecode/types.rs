@@ -378,6 +378,11 @@ pub enum BytecodeAssignmentTarget {
         object: BytecodeBlock,
         property: BytecodeProperty,
     },
+    ArrayIndexProperty {
+        object: BytecodeBlock,
+        property: BytecodeProperty,
+        index: BytecodeArrayIndex,
+    },
     ComputedProperty {
         object: BytecodeBlock,
         property: BytecodeBlock,
@@ -440,6 +445,9 @@ pub enum BytecodeInstruction {
     Unary(UnaryOp),
     NumberUnary(BytecodeNumericUnaryOp),
     Await,
+    NullishCoalescing {
+        right: BytecodeBlock,
+    },
     TypeOfBinding(BytecodeBinding),
     TypeOfValue,
     DeleteBinding(BytecodeBinding),
@@ -494,6 +502,11 @@ pub enum BytecodeInstruction {
     CompoundComputedProperty {
         property: BytecodeDynamicProperty,
         op: BinaryOp,
+    },
+    LogicalAssignment {
+        op: BinaryOp,
+        target: BytecodeAssignmentTarget,
+        value: BytecodeBlock,
     },
     StaticMember {
         property: BytecodeProperty,

@@ -8,7 +8,7 @@ use super::Parser;
 
 impl Parser {
     pub(super) fn conditional(&mut self) -> Result<Expr> {
-        let condition = self.logical_or()?;
+        let condition = self.coalesce()?;
         if !self.match_kind(&TokenKind::Question) {
             return Ok(condition);
         }
@@ -21,6 +21,26 @@ impl Parser {
             consequent: Box::new(consequent),
             alternate: Box::new(alternate),
         })
+    }
+
+    fn coalesce(&mut self) -> Result<Expr> {
+        let mut expr = self.logical_or()?;
+        while self.match_kind(&TokenKind::QuestionQuestion) {
+            if Self::contains_unparenthesized_logical(&expr) {
+                return Err(Error::parse(
+                    "'??' cannot be mixed with '&&' or '||' without parentheses",
+                    self.previous_offset(),
+                ));
+            }
+            let right = self.bitwise_or()?;
+            expr = Expr::Binary {
+                op: BinaryOp::NullishCoalescing,
+                left: Box::new(expr),
+                right: Box::new(right),
+                property_access: None,
+            };
+        }
+        Ok(expr)
     }
 
     fn logical_or(&mut self) -> Result<Expr> {
@@ -155,5 +175,28 @@ impl Parser {
             };
         }
         Ok(expr)
+    }
+
+    fn contains_unparenthesized_logical(expr: &Expr) -> bool {
+        match expr {
+            Expr::Binary {
+                op: BinaryOp::LogicalAnd | BinaryOp::LogicalOr,
+                ..
+            } => true,
+            Expr::Binary { left, right, .. } => {
+                Self::contains_unparenthesized_logical(left)
+                    || Self::contains_unparenthesized_logical(right)
+            }
+            Expr::Conditional {
+                condition,
+                consequent,
+                alternate,
+            } => {
+                Self::contains_unparenthesized_logical(condition)
+                    || Self::contains_unparenthesized_logical(consequent)
+                    || Self::contains_unparenthesized_logical(alternate)
+            }
+            _ => false,
+        }
     }
 }

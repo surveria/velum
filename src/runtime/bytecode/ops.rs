@@ -2,12 +2,14 @@ use std::rc::Rc;
 
 use crate::{
     bytecode::{
-        BytecodeAssignmentTarget, BytecodeBinding, BytecodeDynamicProperty,
-        BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
-        BytecodeNumericUnaryOp, BytecodeObjectProperty,
+        BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock,
+        BytecodeDynamicProperty, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
+        BytecodeNumericEqualityOp, BytecodeNumericUnaryOp, BytecodeObjectProperty,
+        BytecodeProperty,
     },
     error::{Error, Result},
     runtime::Context,
+    runtime::binding::scope::BindingCell,
     runtime::bytecode::coercion::{abstract_equality, relational_compare, strict_equality},
     runtime::call::RuntimeCallArgs,
     runtime::control::Completion,
@@ -33,6 +35,122 @@ const INSTANCEOF_NOT_CALLABLE_ERROR: &str = "right-hand side of 'instanceof' is 
 const INSTANCEOF_NON_OBJECT_PROTOTYPE_ERROR: &str =
     "right-hand side of 'instanceof' has non-object prototype";
 const FUNCTION_NAME_PROPERTY: &str = "name";
+
+enum BytecodeAssignmentReference {
+    Binding {
+        name: BytecodeBinding,
+        cell: BindingCell,
+    },
+    StaticProperty {
+        object: Value,
+        property: BytecodeProperty,
+    },
+    ArrayIndexProperty {
+        object: Value,
+        property: BytecodeProperty,
+        index: BytecodeArrayIndex,
+    },
+    ComputedProperty {
+        object: Value,
+        property_value: Value,
+        property: DynamicPropertyKey,
+        access: StaticPropertyAccessId,
+    },
+}
+
+impl BytecodeAssignmentReference {
+    fn get(&self, context: &mut Context) -> Result<Value> {
+        match self {
+            Self::Binding { name, cell } => cell.value(name.name()),
+            Self::StaticProperty { object, property } => {
+                context.get_static_property_value(object, property.name(), property.access())
+            }
+            Self::ArrayIndexProperty {
+                object,
+                property,
+                index,
+            } => context.eval_bytecode_array_index_member(object, property, *index),
+            Self::ComputedProperty {
+                object,
+                property_value,
+                property,
+                access,
+            } => {
+                if let Some(value) =
+                    context.eval_dynamic_array_index_member(object, property_value)?
+                {
+                    return Ok(value);
+                }
+                context.get_cached_dynamic_property_value(object, property, *access)
+            }
+        }
+    }
+
+    fn set(&self, context: &mut Context, value: Value) -> Result<()> {
+        match self {
+            Self::Binding { name, cell } => {
+                let value = context.runtime_value(value)?;
+                cell.assign(name.name(), value)
+            }
+            Self::StaticProperty { object, property } => {
+                context.set_static_property_value(object, property.name(), property.access(), value)
+            }
+            Self::ArrayIndexProperty {
+                object,
+                property,
+                index,
+            } => context.set_bytecode_array_index_property(object, property, *index, value),
+            Self::ComputedProperty {
+                object,
+                property_value,
+                property,
+                access,
+            } => {
+                if context.set_dynamic_array_index_property(
+                    object,
+                    property_value,
+                    value.clone(),
+                )? {
+                    return Ok(());
+                }
+                let mut property = property.clone();
+                context.set_cached_dynamic_property_value(object, &mut property, *access, value)
+            }
+        }
+    }
+}
+
+fn logical_assignment_should_store(op: BinaryOp, value: &Value) -> Result<bool> {
+    match op {
+        BinaryOp::LogicalAnd => Ok(value.is_truthy()),
+        BinaryOp::LogicalOr => Ok(!value.is_truthy()),
+        BinaryOp::NullishCoalescing => Ok(matches!(value, Value::Undefined | Value::Null)),
+        BinaryOp::Add
+        | BinaryOp::Sub
+        | BinaryOp::Mul
+        | BinaryOp::Div
+        | BinaryOp::Rem
+        | BinaryOp::Pow
+        | BinaryOp::Equal
+        | BinaryOp::NotEqual
+        | BinaryOp::StrictEqual
+        | BinaryOp::StrictNotEqual
+        | BinaryOp::Less
+        | BinaryOp::LessEqual
+        | BinaryOp::Greater
+        | BinaryOp::GreaterEqual
+        | BinaryOp::In
+        | BinaryOp::InstanceOf
+        | BinaryOp::BitAnd
+        | BinaryOp::BitOr
+        | BinaryOp::BitXor
+        | BinaryOp::ShiftLeft
+        | BinaryOp::ShiftRight
+        | BinaryOp::ShiftRightUnsigned => {
+            Err(Error::runtime("invalid logical assignment operator"))
+        }
+    }
+}
 
 impl Context {
     pub(super) fn eval_bytecode_declaration(
@@ -150,7 +268,7 @@ impl Context {
             BinaryOp::ShiftLeft => shift_left(left, right)?,
             BinaryOp::ShiftRight => shift_right(left, right)?,
             BinaryOp::ShiftRightUnsigned => shift_right_unsigned(left, right)?,
-            BinaryOp::LogicalAnd | BinaryOp::LogicalOr => {
+            BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing => {
                 return Err(Error::runtime(
                     "logical operator reached bytecode eager evaluation",
                 ));
@@ -523,11 +641,77 @@ impl Context {
             | BinaryOp::In
             | BinaryOp::InstanceOf
             | BinaryOp::LogicalAnd
-            | BinaryOp::LogicalOr => {
+            | BinaryOp::LogicalOr
+            | BinaryOp::NullishCoalescing => {
                 return Err(Error::runtime("invalid compound assignment operator"));
             }
         };
         self.runtime_value(value)
+    }
+
+    pub(super) fn eval_bytecode_logical_assignment(
+        &mut self,
+        op: BinaryOp,
+        target: &BytecodeAssignmentTarget,
+        value: &BytecodeBlock,
+    ) -> Result<Value> {
+        let reference = self.eval_bytecode_assignment_reference(target)?;
+        let current = reference.get(self)?;
+        if !logical_assignment_should_store(op, &current)? {
+            return self.runtime_value(current);
+        }
+        let value = self.eval_bytecode_expression(value)?;
+        reference.set(self, value.clone())?;
+        self.runtime_value(value)
+    }
+
+    fn eval_bytecode_assignment_reference(
+        &mut self,
+        target: &BytecodeAssignmentTarget,
+    ) -> Result<BytecodeAssignmentReference> {
+        match target {
+            BytecodeAssignmentTarget::Binding(name) => {
+                let cell = self
+                    .get_or_materialize_binding_bytecode(name)?
+                    .ok_or_else(|| {
+                        Error::runtime(format!("ReferenceError: '{name}' is not defined"))
+                    })?;
+                Ok(BytecodeAssignmentReference::Binding {
+                    name: name.clone(),
+                    cell,
+                })
+            }
+            BytecodeAssignmentTarget::StaticProperty { object, property } => {
+                Ok(BytecodeAssignmentReference::StaticProperty {
+                    object: self.eval_bytecode_expression(object)?,
+                    property: property.clone(),
+                })
+            }
+            BytecodeAssignmentTarget::ArrayIndexProperty {
+                object,
+                property,
+                index,
+            } => Ok(BytecodeAssignmentReference::ArrayIndexProperty {
+                object: self.eval_bytecode_expression(object)?,
+                property: property.clone(),
+                index: *index,
+            }),
+            BytecodeAssignmentTarget::ComputedProperty {
+                object,
+                property,
+                operand,
+            } => {
+                let object = self.eval_bytecode_expression(object)?;
+                let property_value = self.eval_bytecode_expression(property)?;
+                let property = self.dynamic_property_key(&property_value)?;
+                Ok(BytecodeAssignmentReference::ComputedProperty {
+                    object,
+                    property_value,
+                    property,
+                    access: operand.access(),
+                })
+            }
+        }
     }
 
     pub(super) fn assign_bytecode_target(
@@ -540,6 +724,14 @@ impl Context {
             BytecodeAssignmentTarget::StaticProperty { object, property } => {
                 let object = self.eval_bytecode_expression(object)?;
                 self.set_static_property_value(&object, property.name(), property.access(), value)
+            }
+            BytecodeAssignmentTarget::ArrayIndexProperty {
+                object,
+                property,
+                index,
+            } => {
+                let object = self.eval_bytecode_expression(object)?;
+                self.set_bytecode_array_index_property(&object, property, *index, value)
             }
             BytecodeAssignmentTarget::ComputedProperty {
                 object,
