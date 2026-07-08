@@ -177,7 +177,12 @@ const WEAK_SET_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(168);
 const WEAK_SET_ADD_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(169);
 const WEAK_SET_HAS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(170);
 const WEAK_SET_DELETE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(171);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 172;
+const ARRAY_ENTRIES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(172);
+const ARRAY_FROM_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(173);
+const ARRAY_KEYS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(174);
+const ARRAY_OF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(175);
+const ARRAY_VALUES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(176);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 177;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -362,17 +367,21 @@ const fn array_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     match kind {
         NativeFunctionKind::Array => Some(ARRAY_SLOT),
         NativeFunctionKind::ArrayConcat => Some(ARRAY_CONCAT_SLOT),
+        NativeFunctionKind::ArrayEntries => Some(ARRAY_ENTRIES_SLOT),
         NativeFunctionKind::ArrayEvery => Some(ARRAY_EVERY_SLOT),
         NativeFunctionKind::ArrayFilter => Some(ARRAY_FILTER_SLOT),
         NativeFunctionKind::ArrayFind => Some(ARRAY_FIND_SLOT),
         NativeFunctionKind::ArrayFindIndex => Some(ARRAY_FIND_INDEX_SLOT),
         NativeFunctionKind::ArrayForEach => Some(ARRAY_FOR_EACH_SLOT),
+        NativeFunctionKind::ArrayFrom => Some(ARRAY_FROM_SLOT),
         NativeFunctionKind::ArrayIncludes => Some(ARRAY_INCLUDES_SLOT),
         NativeFunctionKind::ArrayIndexOf => Some(ARRAY_INDEX_OF_SLOT),
         NativeFunctionKind::ArrayIsArray => Some(ARRAY_IS_ARRAY_SLOT),
         NativeFunctionKind::ArrayJoin => Some(ARRAY_JOIN_SLOT),
+        NativeFunctionKind::ArrayKeys => Some(ARRAY_KEYS_SLOT),
         NativeFunctionKind::ArrayLastIndexOf => Some(ARRAY_LAST_INDEX_OF_SLOT),
         NativeFunctionKind::ArrayMap => Some(ARRAY_MAP_SLOT),
+        NativeFunctionKind::ArrayOf => Some(ARRAY_OF_SLOT),
         NativeFunctionKind::ArrayPop => Some(ARRAY_POP_SLOT),
         NativeFunctionKind::ArrayPush => Some(ARRAY_PUSH_SLOT),
         NativeFunctionKind::ArrayReduce => Some(ARRAY_REDUCE_SLOT),
@@ -382,6 +391,7 @@ const fn array_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::ArraySlice => Some(ARRAY_SLICE_SLOT),
         NativeFunctionKind::ArraySome => Some(ARRAY_SOME_SLOT),
         NativeFunctionKind::ArrayUnshift => Some(ARRAY_UNSHIFT_SLOT),
+        NativeFunctionKind::ArrayValues => Some(ARRAY_VALUES_SLOT),
         _ => None,
     }
 }
