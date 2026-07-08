@@ -39,6 +39,7 @@ impl Context {
         let prototype = Value::Object(prototype_id);
         let name = self.native_function_name_value(NativeFunctionKind::String)?;
         self.push_native_function_with_id(id, NativeFunctionKind::String, prototype, name)?;
+        self.install_string_static_methods(id)?;
         self.install_string_prototype_methods(prototype_id)?;
         self.insert_global_builtin(STRING_NAME, constructor.clone())?;
         Ok(constructor)
@@ -426,10 +427,13 @@ impl Context {
             let function = self.create_native_function(*kind, Value::Undefined)?;
             self.define_non_enumerable_object_property(prototype, name, function)?;
         }
-        Ok(())
+        self.install_string_extra_prototype_methods(prototype)
     }
 
-    fn string_receiver_value(&self, value: &Value) -> Result<String> {
+    pub(in crate::runtime::native) fn string_receiver_value(
+        &self,
+        value: &Value,
+    ) -> Result<String> {
         let text = match value {
             Value::Undefined | Value::Null => {
                 return Err(Error::type_error(STRING_METHOD_NULLISH_RECEIVER_ERROR));
@@ -454,7 +458,7 @@ impl Context {
         Ok(text)
     }
 
-    fn string_argument_text(&self, value: &Value) -> Result<String> {
+    pub(in crate::runtime::native) fn string_argument_text(&self, value: &Value) -> Result<String> {
         if matches!(value, Value::Symbol(_)) {
             return Err(Error::type_error(
                 "String.prototype argument cannot be converted from symbol",
