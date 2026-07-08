@@ -60,6 +60,7 @@ impl Object {
             array_length: None,
             string_value: Some(value),
             primitive_value: None,
+            date_value: None,
             prototype: None,
         }
     }

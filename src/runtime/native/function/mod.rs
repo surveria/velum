@@ -11,6 +11,7 @@ mod array_kind;
 mod call_target;
 mod collection;
 mod collection_kind;
+mod date_kind;
 mod direct;
 mod kind;
 mod primitive;
@@ -20,6 +21,9 @@ mod registry;
 use super::number_intrinsic_property;
 
 pub(in crate::runtime::native) use array_kind::ARRAY_NAME;
+pub(in crate::runtime) use date_kind::{
+    DATE_NAME, DATE_NOW_NAME, DATE_PARSE_NAME, DATE_UTC_NAME, DateFunctionKind,
+};
 pub(in crate::runtime) use kind::NativeFunctionKind;
 pub(in crate::runtime::native) use kind::{
     BOOLEAN_NAME, EVAL_NAME, FUNCTION_NAME, FUNCTION_PROTOTYPE_BIND_NAME,

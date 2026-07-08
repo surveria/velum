@@ -73,9 +73,6 @@ impl Context {
         let Some(plan) = plan else {
             return self.eval_bytecode_block_with_state(block, state);
         };
-        if let Some(segment) = plan.single_full_block_segment(block) {
-            return self.eval_bytecode_linear_full_block(segment, state);
-        }
         self.eval_bytecode_segmented_plan(block, plan, state)
     }
 
@@ -122,18 +119,6 @@ impl Context {
             if let Some(completion) = completion {
                 return Ok(completion);
             }
-        }
-        Ok(Completion::Normal(state.last.clone()))
-    }
-
-    fn eval_bytecode_linear_full_block(
-        &mut self,
-        segment: &BytecodeLinearSegment<'_>,
-        state: &mut BytecodeState,
-    ) -> Result<Completion> {
-        state.reset();
-        if let Some(completion) = self.eval_bytecode_linear_segment(segment, state)? {
-            return Ok(completion);
         }
         Ok(Completion::Normal(state.last.clone()))
     }
@@ -193,23 +178,13 @@ impl<'a> BytecodeLinearPlan<'a> {
         &self,
         block: &BytecodeBlock,
     ) -> Option<&BytecodeLinearOp<'a>> {
-        let segment = self.single_full_block_segment(block)?;
-        if segment.ops.len() == 1 {
-            return segment.ops.first();
-        }
-        None
-    }
-
-    fn single_full_block_segment(
-        &self,
-        block: &BytecodeBlock,
-    ) -> Option<&BytecodeLinearSegment<'a>> {
         let segment = self.segments.first()?;
         if self.segments.len() == 1
             && segment.start == 0
             && segment.end == block.instructions().len()
+            && segment.ops.len() == 1
         {
-            return Some(segment);
+            return segment.ops.first();
         }
         None
     }
