@@ -16,9 +16,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T153746Z.md`
-- Task: workflow_dispatch
-- Performance: 6.30x (64/65 >1.00x)
+- `rsqjs-test-report-20260708T154750Z.md`
+- Task: PR #343: Optimize string concat bytecode paths
+- Performance: 6.29x (64/65 >1.00x)
 - Memory: - (0/65 >1.00x)
 - Full Test262: 29410 passed / 73168 failed (28.67%)
 
@@ -334,3 +334,4 @@ Latest report:
 | `20260708T151129Z` `b30a951` PR #342: tests: align Test262 runner accounting with official semantics | 6.20x (63/64 >1.00x) | - (0/64 >1.00x) | 29396 passed / 73182 failed (28.66%) |
 | `20260708T152956Z` `c60d27f` PR #340: Add Array flat and flatMap methods | 6.22x (64/65 >1.00x) | - (0/65 >1.00x) | 29410 passed / 73168 failed (28.67%) |
 | `20260708T153746Z` `93cc9e1` workflow_dispatch | 6.30x (64/65 >1.00x) | - (0/65 >1.00x) | 29410 passed / 73168 failed (28.67%) |
+| `20260708T154750Z` `6375a3f` PR #343: Optimize string concat bytecode paths | 6.29x (64/65 >1.00x) | - (0/65 >1.00x) | 29410 passed / 73168 failed (28.67%) |
