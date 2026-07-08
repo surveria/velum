@@ -16,6 +16,7 @@ use crate::{
 };
 
 mod arguments;
+mod callback_fast_path;
 mod class_support;
 mod fast_path;
 mod intrinsic;

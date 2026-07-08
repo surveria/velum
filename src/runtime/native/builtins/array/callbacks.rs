@@ -56,6 +56,9 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let (callback, callback_this) = Self::array_callback_and_this_arg(args)?;
+        if let Some(value) = self.eval_packed_numeric_array_map(callback, this_value)? {
+            return Ok(value);
+        }
         let length = self.array_like_length_for_callback(this_value)?;
         let result = self.create_array_callback_result(length)?;
         self.visit_array_like_present(this_value, |context, index, value| {
@@ -86,6 +89,9 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let (callback, callback_this) = Self::array_callback_and_this_arg(args)?;
+        if let Some(value) = self.eval_packed_numeric_array_filter(callback, this_value)? {
+            return Ok(value);
+        }
         let result = self.create_array_callback_result(0)?;
         self.visit_array_like_present(this_value, |context, index, value| {
             let keep = context.call_array_callback(
@@ -117,6 +123,9 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let (callback, callback_this) = Self::array_callback_and_this_arg(args)?;
+        if let Some(value) = self.eval_packed_numeric_array_some(callback, this_value)? {
+            return Ok(value);
+        }
         let mut matched = false;
         self.visit_array_like_present(this_value, |context, index, value| {
             let result = context.call_array_callback(
@@ -149,6 +158,9 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let (callback, callback_this) = Self::array_callback_and_this_arg(args)?;
+        if let Some(value) = self.eval_packed_numeric_array_every(callback, this_value)? {
+            return Ok(value);
+        }
         let mut matched = true;
         self.visit_array_like_present(this_value, |context, index, value| {
             let result = context.call_array_callback(
@@ -181,6 +193,9 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let (callback, callback_this) = Self::array_callback_and_this_arg(args)?;
+        if let Some(value) = self.eval_packed_numeric_array_find(callback, this_value)? {
+            return Ok(value);
+        }
         let mut found = Value::Undefined;
         self.visit_array_like_indices(
             this_value,
@@ -217,6 +232,9 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let (callback, callback_this) = Self::array_callback_and_this_arg(args)?;
+        if let Some(value) = self.eval_packed_numeric_array_find_index(callback, this_value)? {
+            return Ok(value);
+        }
         let mut found = Value::Number(INDEX_NOT_FOUND);
         self.visit_array_like_indices(
             this_value,
@@ -271,6 +289,200 @@ impl Context {
         self.eval_direct_array_reduce_with_direction(args, this_value, ReduceDirection::Reverse)
     }
 
+    fn eval_packed_numeric_array_map(
+        &mut self,
+        callback: &Value,
+        this_value: &Value,
+    ) -> Result<Option<Value>> {
+        let Some(values) = self.packed_numeric_array_values(this_value)? else {
+            return Ok(None);
+        };
+        let mut mapped = Vec::with_capacity(values.len());
+        for (index, value) in values.iter().enumerate() {
+            self.step()?;
+            let args = Self::array_callback_args(value, index, this_value)?;
+            let Some(value) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
+                return Ok(None);
+            };
+            mapped.push(value);
+        }
+        self.create_array_callback_result_from_values(mapped)
+            .map(Some)
+    }
+
+    fn eval_packed_numeric_array_filter(
+        &mut self,
+        callback: &Value,
+        this_value: &Value,
+    ) -> Result<Option<Value>> {
+        let Some(values) = self.packed_numeric_array_values(this_value)? else {
+            return Ok(None);
+        };
+        let mut filtered = Vec::new();
+        for (index, value) in values.iter().enumerate() {
+            self.step()?;
+            let args = Self::array_callback_args(value, index, this_value)?;
+            let Some(keep) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
+                return Ok(None);
+            };
+            if keep.is_truthy() {
+                filtered.push(value.clone());
+            }
+        }
+        self.create_array_callback_result_from_values(filtered)
+            .map(Some)
+    }
+
+    fn eval_packed_numeric_array_some(
+        &mut self,
+        callback: &Value,
+        this_value: &Value,
+    ) -> Result<Option<Value>> {
+        let Some(values) = self.packed_numeric_array_values(this_value)? else {
+            return Ok(None);
+        };
+        for (index, value) in values.iter().enumerate() {
+            self.step()?;
+            let args = Self::array_callback_args(value, index, this_value)?;
+            let Some(result) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
+                return Ok(None);
+            };
+            if result.is_truthy() {
+                return Ok(Some(Value::Bool(true)));
+            }
+        }
+        Ok(Some(Value::Bool(false)))
+    }
+
+    fn eval_packed_numeric_array_every(
+        &mut self,
+        callback: &Value,
+        this_value: &Value,
+    ) -> Result<Option<Value>> {
+        let Some(values) = self.packed_numeric_array_values(this_value)? else {
+            return Ok(None);
+        };
+        for (index, value) in values.iter().enumerate() {
+            self.step()?;
+            let args = Self::array_callback_args(value, index, this_value)?;
+            let Some(result) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
+                return Ok(None);
+            };
+            if !result.is_truthy() {
+                return Ok(Some(Value::Bool(false)));
+            }
+        }
+        Ok(Some(Value::Bool(true)))
+    }
+
+    fn eval_packed_numeric_array_find(
+        &mut self,
+        callback: &Value,
+        this_value: &Value,
+    ) -> Result<Option<Value>> {
+        let Some(values) = self.packed_numeric_array_values(this_value)? else {
+            return Ok(None);
+        };
+        for (index, value) in values.iter().enumerate() {
+            self.step()?;
+            let args = Self::array_callback_args(value, index, this_value)?;
+            let Some(result) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
+                return Ok(None);
+            };
+            if result.is_truthy() {
+                return Ok(Some(value.clone()));
+            }
+        }
+        Ok(Some(Value::Undefined))
+    }
+
+    fn eval_packed_numeric_array_find_index(
+        &mut self,
+        callback: &Value,
+        this_value: &Value,
+    ) -> Result<Option<Value>> {
+        let Some(values) = self.packed_numeric_array_values(this_value)? else {
+            return Ok(None);
+        };
+        for (index, value) in values.iter().enumerate() {
+            self.step()?;
+            let args = Self::array_callback_args(value, index, this_value)?;
+            let Some(result) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
+                return Ok(None);
+            };
+            if result.is_truthy() {
+                return Self::array_like_index_value(index).map(Some);
+            }
+        }
+        Ok(Some(Value::Number(INDEX_NOT_FOUND)))
+    }
+
+    fn eval_packed_numeric_array_reduce(
+        &mut self,
+        callback: &Value,
+        this_value: &Value,
+        direction: ReduceDirection,
+        initial: Option<Value>,
+    ) -> Result<Option<Value>> {
+        let Some(values) = self.packed_numeric_array_values(this_value)? else {
+            return Ok(None);
+        };
+        let Some(mut accumulator) = initial else {
+            return Ok(None);
+        };
+        if !matches!(accumulator, Value::Number(_)) {
+            return Ok(None);
+        }
+        let iter: Box<dyn Iterator<Item = (usize, &Value)> + '_> = match direction {
+            ReduceDirection::Forward => Box::new(values.iter().enumerate()),
+            ReduceDirection::Reverse => Box::new(values.iter().enumerate().rev()),
+        };
+        for (index, value) in iter {
+            self.step()?;
+            let args = Self::reduce_callback_args(&accumulator, value, index, this_value)?;
+            let Some(value) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
+                return Ok(None);
+            };
+            accumulator = value;
+        }
+        Ok(Some(accumulator))
+    }
+
+    fn packed_numeric_array_values(&self, object: &Value) -> Result<Option<Vec<Value>>> {
+        let Value::Object(id) = object else {
+            return Ok(None);
+        };
+        let Some(values) = self.objects.packed_array_values_if_array(*id)? else {
+            return Ok(None);
+        };
+        if values.iter().all(|value| matches!(value, Value::Number(_))) {
+            return Ok(Some(values));
+        }
+        Ok(None)
+    }
+
+    fn array_callback_args(value: &Value, index: usize, object: &Value) -> Result<[Value; 3]> {
+        Ok([
+            value.clone(),
+            Self::array_like_index_value(index)?,
+            object.clone(),
+        ])
+    }
+
+    fn reduce_callback_args(
+        accumulator: &Value,
+        value: &Value,
+        index: usize,
+        object: &Value,
+    ) -> Result<[Value; 4]> {
+        Ok([
+            accumulator.clone(),
+            value.clone(),
+            Self::array_like_index_value(index)?,
+            object.clone(),
+        ])
+    }
+
     fn visit_array_like_present<F>(&mut self, object: &Value, visitor: F) -> Result<()>
     where
         F: FnMut(&mut Self, usize, &Value) -> Result<ArrayCallbackAction>,
@@ -315,6 +527,11 @@ impl Context {
         let callback = Self::array_callback_arg(args)?;
         let has_initial = args.get(1).is_some();
         let initial = args.get(1).cloned();
+        if let Some(value) =
+            self.eval_packed_numeric_array_reduce(callback, this_value, direction, initial.clone())?
+        {
+            return Ok(value);
+        }
         let length = self.array_like_length_for_callback(this_value)?;
         let Some(mut state) = self.initial_reduce_state(this_value, length, direction, initial)?
         else {
@@ -451,6 +668,18 @@ impl Context {
         let prototype = self.existing_array_constructor_prototype()?;
         self.objects
             .create_array_with_length(length, prototype, self.limits.max_objects)
+    }
+
+    fn create_array_callback_result_from_values(&mut self, values: Vec<Value>) -> Result<Value> {
+        let prototype = self.existing_array_constructor_prototype()?;
+        let value_count = values.len();
+        self.objects.create_array_from_iter(
+            values,
+            value_count,
+            prototype,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )
     }
 
     fn push_array_callback_result(&mut self, result: &Value, value: Value) -> Result<()> {
