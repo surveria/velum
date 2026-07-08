@@ -112,6 +112,57 @@ impl ArrayStorage {
         }
     }
 
+    pub(in crate::runtime::object) fn seal_dense_properties(&mut self) {
+        match &mut self.elements {
+            ArrayElements::Packed(elements) => {
+                for property in elements {
+                    property.seal();
+                }
+            }
+            ArrayElements::Holey(elements) => {
+                for property in elements.iter_mut().flatten() {
+                    property.seal();
+                }
+            }
+        }
+    }
+
+    pub(in crate::runtime::object) fn freeze_dense_properties(&mut self) {
+        match &mut self.elements {
+            ArrayElements::Packed(elements) => {
+                for property in elements {
+                    property.freeze();
+                }
+            }
+            ArrayElements::Holey(elements) => {
+                for property in elements.iter_mut().flatten() {
+                    property.freeze();
+                }
+            }
+        }
+    }
+
+    pub(in crate::runtime::object) fn dense_properties_are_sealed(&self) -> bool {
+        match &self.elements {
+            ArrayElements::Packed(elements) => {
+                elements.iter().all(|property| !property.is_configurable())
+            }
+            ArrayElements::Holey(elements) => elements
+                .iter()
+                .flatten()
+                .all(|property| !property.is_configurable()),
+        }
+    }
+
+    pub(in crate::runtime::object) fn dense_properties_are_frozen(&self) -> bool {
+        match &self.elements {
+            ArrayElements::Packed(elements) => elements.iter().all(ObjectProperty::is_frozen),
+            ArrayElements::Holey(elements) => {
+                elements.iter().flatten().all(ObjectProperty::is_frozen)
+            }
+        }
+    }
+
     pub(in crate::runtime::object) fn has_sparse_key_in_range(
         &self,
         start: usize,

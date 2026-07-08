@@ -54,10 +54,12 @@ impl Object {
             shape: super::ShapeId::root(),
             enumerable_property_count: 0,
             array_length: None,
+            array_length_writable: super::PropertyWritable::Yes,
             string_value: None,
             primitive_value: None,
             date_value: Some(value),
             prototype: None,
+            extensibility: super::ObjectExtensibility::Extensible,
         }
     }
 }

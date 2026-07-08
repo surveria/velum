@@ -155,6 +155,8 @@ const PATH_QUICKJS_OBJECT_DESCRIPTORS: &str =
     "tests/corpora/quickjs_differential/active/object_descriptors.js";
 const PATH_QUICKJS_OBJECT_STATIC_METHODS: &str =
     "tests/corpora/quickjs_differential/active/object_static_methods.js";
+const PATH_QUICKJS_OBJECT_INTEGRITY_METHODS: &str =
+    "tests/corpora/quickjs_differential/active/object_integrity_methods.js";
 
 pub fn quickjs_differential_cases() -> Vec<DifferentialCase> {
     let mut cases = quickjs_language_cases();
@@ -508,6 +510,10 @@ fn quickjs_runtime_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "object_static_methods",
             path: PATH_QUICKJS_OBJECT_STATIC_METHODS,
+        },
+        DifferentialCase {
+            id: "object_integrity_methods",
+            path: PATH_QUICKJS_OBJECT_INTEGRITY_METHODS,
         },
         DifferentialCase {
             id: "standard_error_constructors",

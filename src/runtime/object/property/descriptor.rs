@@ -331,6 +331,17 @@ impl ObjectProperty {
         }
     }
 
+    pub const fn is_writable(&self) -> bool {
+        match &self.payload {
+            ObjectPropertyPayload::Data(descriptor) => descriptor.writable().is_yes(),
+            ObjectPropertyPayload::Accessor(_) => false,
+        }
+    }
+
+    pub const fn is_frozen(&self) -> bool {
+        !self.is_configurable() && !self.is_writable()
+    }
+
     pub(in crate::runtime::object) const fn has_default_array_attributes(&self) -> bool {
         match &self.payload {
             ObjectPropertyPayload::Data(descriptor) => {
@@ -384,6 +395,31 @@ impl ObjectProperty {
             PropertyUpdate::Data(update) => self.define_data(update),
             PropertyUpdate::Accessor(update) => self.define_accessor(update),
         }
+    }
+
+    pub(in crate::runtime::object) const fn seal(&mut self) {
+        match &mut self.payload {
+            ObjectPropertyPayload::Data(descriptor) => {
+                descriptor.configurable = PropertyConfigurable::No;
+            }
+            ObjectPropertyPayload::Accessor(descriptor) => {
+                descriptor.configurable = PropertyConfigurable::No;
+            }
+        }
+        self.version = self.version.saturating_add(1);
+    }
+
+    pub(in crate::runtime::object) const fn freeze(&mut self) {
+        match &mut self.payload {
+            ObjectPropertyPayload::Data(descriptor) => {
+                descriptor.writable = PropertyWritable::No;
+                descriptor.configurable = PropertyConfigurable::No;
+            }
+            ObjectPropertyPayload::Accessor(descriptor) => {
+                descriptor.configurable = PropertyConfigurable::No;
+            }
+        }
+        self.version = self.version.saturating_add(1);
     }
 
     fn define_data(&mut self, update: DataPropertyUpdate) {
@@ -499,7 +535,7 @@ impl Object {
             return Ok(Some(OwnPropertyDescriptor::Data(
                 DataPropertyDescriptor::new(
                     length.value(),
-                    PropertyWritable::Yes,
+                    self.array_length_writable,
                     PropertyEnumerable::No,
                     PropertyConfigurable::No,
                 ),
@@ -564,6 +600,11 @@ impl Object {
             self.shape = shapes.transition_after_update(self.shape, property, attributes)?;
             Some((was_enumerable, is_enumerable))
         } else {
+            if !self.extensibility.is_extensible() {
+                return Err(crate::error::Error::type_error(
+                    "cannot define property on non-extensible object",
+                ));
+            }
             if property_count >= max_properties {
                 return Err(crate::error::Error::limit(format!(
                     "object property count exceeded {max_properties}"
@@ -589,6 +630,11 @@ impl Object {
         max_properties: usize,
     ) -> Result<()> {
         if index.dense_position(max_properties)?.is_none() {
+            if !self.extensibility.is_extensible() {
+                return Err(crate::error::Error::type_error(
+                    "cannot define property on non-extensible object",
+                ));
+            }
             self.array_storage.insert_sparse_key(index, property);
             return self.define_named_property(property, update, shapes, max_properties);
         }
@@ -601,6 +647,11 @@ impl Object {
         };
 
         let has_existing = self.array_storage.dense_property(index).is_some();
+        if !has_existing && !self.extensibility.is_extensible() {
+            return Err(crate::error::Error::type_error(
+                "cannot define property on non-extensible object",
+            ));
+        }
         if !has_existing && self.property_count() >= max_properties {
             return Err(crate::error::Error::limit(format!(
                 "object property count exceeded {max_properties}"

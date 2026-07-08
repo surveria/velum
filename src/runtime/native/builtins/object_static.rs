@@ -88,6 +88,24 @@ impl Context {
         self.create_array_with_prototype(entries, prototype)
     }
 
+    pub(in crate::runtime::native) fn eval_object_freeze(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_object_freeze(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_object_freeze(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let target = Self::argument_or_undefined(args.first());
+        if let Value::Object(id) = target {
+            self.objects.freeze(id)?;
+        }
+        Ok(target)
+    }
+
     pub(in crate::runtime::native) fn eval_object_get_own_property_descriptors(
         &mut self,
         args: RuntimeCallArgs<'_>,
@@ -122,6 +140,124 @@ impl Context {
         let left = Self::argument_or_undefined(args.first());
         let right = Self::argument_or_undefined(args.get(1));
         Value::Bool(Self::same_value(&left, &right))
+    }
+
+    pub(in crate::runtime::native) fn eval_object_is_extensible(
+        &self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_object_is_extensible(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_object_is_extensible(
+        &self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let target = Self::argument_or_undefined(args.first());
+        let result = match target {
+            Value::Object(id) => self.objects.is_extensible(id)?,
+            Value::Function(_) | Value::NativeFunction(_) => true,
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::HeapString(_)
+            | Value::Symbol(_)
+            | Value::HostFunction(_)
+            | Value::Error(_) => false,
+        };
+        Ok(Value::Bool(result))
+    }
+
+    pub(in crate::runtime::native) fn eval_object_is_frozen(
+        &self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_object_is_frozen(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_object_is_frozen(
+        &self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let target = Self::argument_or_undefined(args.first());
+        let result = match target {
+            Value::Object(id) => self.objects.is_frozen(id)?,
+            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => false,
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::HeapString(_)
+            | Value::Symbol(_)
+            | Value::Error(_) => true,
+        };
+        Ok(Value::Bool(result))
+    }
+
+    pub(in crate::runtime::native) fn eval_object_is_sealed(
+        &self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_object_is_sealed(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_object_is_sealed(
+        &self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let target = Self::argument_or_undefined(args.first());
+        let result = match target {
+            Value::Object(id) => self.objects.is_sealed(id)?,
+            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => false,
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::HeapString(_)
+            | Value::Symbol(_)
+            | Value::Error(_) => true,
+        };
+        Ok(Value::Bool(result))
+    }
+
+    pub(in crate::runtime::native) fn eval_object_prevent_extensions(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_object_prevent_extensions(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_object_prevent_extensions(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let target = Self::argument_or_undefined(args.first());
+        if let Value::Object(id) = target {
+            self.objects.prevent_extensions(id)?;
+        }
+        Ok(target)
+    }
+
+    pub(in crate::runtime::native) fn eval_object_seal(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_object_seal(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_object_seal(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let target = Self::argument_or_undefined(args.first());
+        if let Value::Object(id) = target {
+            self.objects.seal(id)?;
+        }
+        Ok(target)
     }
 
     pub(in crate::runtime::native) fn eval_object_set_prototype_of(

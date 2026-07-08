@@ -101,6 +101,8 @@ const OBJECT_DEFINE_PROPERTY_FUNCTION_LENGTH: f64 = 3.0;
 pub(in crate::runtime::native) const OBJECT_DEFINE_PROPERTY_NAME: &str = "defineProperty";
 const OBJECT_ENTRIES_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_ENTRIES_NAME: &str = "entries";
+const OBJECT_FREEZE_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const OBJECT_FREEZE_NAME: &str = "freeze";
 const OBJECT_GET_PROTOTYPE_OF_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_GET_PROTOTYPE_OF_NAME: &str = "getPrototypeOf";
 const OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH: f64 = 2.0;
@@ -116,9 +118,17 @@ const OBJECT_HAS_OWN_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const OBJECT_HAS_OWN_NAME: &str = "hasOwn";
 const OBJECT_IS_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const OBJECT_IS_NAME: &str = "is";
+const OBJECT_IS_EXTENSIBLE_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const OBJECT_IS_EXTENSIBLE_NAME: &str = "isExtensible";
+const OBJECT_IS_FROZEN_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const OBJECT_IS_FROZEN_NAME: &str = "isFrozen";
+const OBJECT_IS_SEALED_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const OBJECT_IS_SEALED_NAME: &str = "isSealed";
 const OBJECT_KEYS_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_KEYS_NAME: &str = "keys";
 pub(in crate::runtime::native) const OBJECT_NAME: &str = "Object";
+const OBJECT_PREVENT_EXTENSIONS_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const OBJECT_PREVENT_EXTENSIONS_NAME: &str = "preventExtensions";
 const OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime) const OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME: &str = "hasOwnProperty";
 const OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_FUNCTION_LENGTH: f64 = 1.0;
@@ -126,6 +136,8 @@ pub(in crate::runtime) const OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME: &str 
     "propertyIsEnumerable";
 const OBJECT_SET_PROTOTYPE_OF_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const OBJECT_SET_PROTOTYPE_OF_NAME: &str = "setPrototypeOf";
+const OBJECT_SEAL_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const OBJECT_SEAL_NAME: &str = "seal";
 const OBJECT_VALUES_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_VALUES_NAME: &str = "values";
 const PROMISE_CATCH_FUNCTION_LENGTH: f64 = 1.0;
@@ -294,16 +306,22 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ObjectDefineProperties,
     ObjectDefineProperty,
     ObjectEntries,
+    ObjectFreeze,
     ObjectGetPrototypeOf,
     ObjectGetOwnPropertyDescriptor,
     ObjectGetOwnPropertyDescriptors,
     ObjectGetOwnPropertyNames,
     ObjectHasOwn,
     ObjectIs,
+    ObjectIsExtensible,
+    ObjectIsFrozen,
+    ObjectIsSealed,
     ObjectKeys,
+    ObjectPreventExtensions,
     ObjectPrototypeHasOwnProperty,
     ObjectPrototypePropertyIsEnumerable,
     ObjectSetPrototypeOf,
+    ObjectSeal,
     ObjectValues,
     Promise,
     PromiseResolve,
@@ -470,6 +488,7 @@ impl NativeFunctionKind {
             Self::ObjectDefineProperties => Some(OBJECT_DEFINE_PROPERTIES_FUNCTION_LENGTH),
             Self::ObjectDefineProperty => Some(OBJECT_DEFINE_PROPERTY_FUNCTION_LENGTH),
             Self::ObjectEntries => Some(OBJECT_ENTRIES_FUNCTION_LENGTH),
+            Self::ObjectFreeze => Some(OBJECT_FREEZE_FUNCTION_LENGTH),
             Self::ObjectGetPrototypeOf => Some(OBJECT_GET_PROTOTYPE_OF_FUNCTION_LENGTH),
             Self::ObjectGetOwnPropertyDescriptor => {
                 Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH)
@@ -480,7 +499,11 @@ impl NativeFunctionKind {
             Self::ObjectGetOwnPropertyNames => Some(OBJECT_GET_OWN_PROPERTY_NAMES_FUNCTION_LENGTH),
             Self::ObjectHasOwn => Some(OBJECT_HAS_OWN_FUNCTION_LENGTH),
             Self::ObjectIs => Some(OBJECT_IS_FUNCTION_LENGTH),
+            Self::ObjectIsExtensible => Some(OBJECT_IS_EXTENSIBLE_FUNCTION_LENGTH),
+            Self::ObjectIsFrozen => Some(OBJECT_IS_FROZEN_FUNCTION_LENGTH),
+            Self::ObjectIsSealed => Some(OBJECT_IS_SEALED_FUNCTION_LENGTH),
             Self::ObjectKeys => Some(OBJECT_KEYS_FUNCTION_LENGTH),
+            Self::ObjectPreventExtensions => Some(OBJECT_PREVENT_EXTENSIONS_FUNCTION_LENGTH),
             Self::ObjectPrototypeHasOwnProperty => {
                 Some(OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_FUNCTION_LENGTH)
             }
@@ -488,6 +511,7 @@ impl NativeFunctionKind {
                 Some(OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_FUNCTION_LENGTH)
             }
             Self::ObjectSetPrototypeOf => Some(OBJECT_SET_PROTOTYPE_OF_FUNCTION_LENGTH),
+            Self::ObjectSeal => Some(OBJECT_SEAL_FUNCTION_LENGTH),
             Self::ObjectValues => Some(OBJECT_VALUES_FUNCTION_LENGTH),
             _ => None,
         }
@@ -644,18 +668,24 @@ impl NativeFunctionKind {
             Self::ObjectDefineProperties => Some(OBJECT_DEFINE_PROPERTIES_NAME),
             Self::ObjectDefineProperty => Some(OBJECT_DEFINE_PROPERTY_NAME),
             Self::ObjectEntries => Some(OBJECT_ENTRIES_NAME),
+            Self::ObjectFreeze => Some(OBJECT_FREEZE_NAME),
             Self::ObjectGetPrototypeOf => Some(OBJECT_GET_PROTOTYPE_OF_NAME),
             Self::ObjectGetOwnPropertyDescriptor => Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME),
             Self::ObjectGetOwnPropertyDescriptors => Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME),
             Self::ObjectGetOwnPropertyNames => Some(OBJECT_GET_OWN_PROPERTY_NAMES_NAME),
             Self::ObjectHasOwn => Some(OBJECT_HAS_OWN_NAME),
             Self::ObjectIs => Some(OBJECT_IS_NAME),
+            Self::ObjectIsExtensible => Some(OBJECT_IS_EXTENSIBLE_NAME),
+            Self::ObjectIsFrozen => Some(OBJECT_IS_FROZEN_NAME),
+            Self::ObjectIsSealed => Some(OBJECT_IS_SEALED_NAME),
             Self::ObjectKeys => Some(OBJECT_KEYS_NAME),
+            Self::ObjectPreventExtensions => Some(OBJECT_PREVENT_EXTENSIONS_NAME),
             Self::ObjectPrototypeHasOwnProperty => Some(OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME),
             Self::ObjectPrototypePropertyIsEnumerable => {
                 Some(OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME)
             }
             Self::ObjectSetPrototypeOf => Some(OBJECT_SET_PROTOTYPE_OF_NAME),
+            Self::ObjectSeal => Some(OBJECT_SEAL_NAME),
             Self::ObjectValues => Some(OBJECT_VALUES_NAME),
             _ => None,
         }
