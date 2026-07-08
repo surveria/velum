@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260707T224915Z.md`
-- Task: PR #297: [codex] Add benchmark quality gate
-- Performance: 6.55x (62/63 >1.00x)
+- `rsqjs-test-report-20260708T060745Z.md`
+- Task: PR #299: Support accessor properties (getters/setters)
+- Performance: 6.60x (62/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 15928 passed / 86650 failed (15.53%)
+- Full Test262: 16626 passed / 85952 failed (16.21%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -302,3 +302,4 @@ Latest report:
 | `20260707T213014Z` `955e635` PR #296: [codex] Enforce signed commits | 0.92x (43/63 >1.00x) | - (0/63 >1.00x) | 15865 passed / 86713 failed (15.47%) |
 | `20260707T222627Z` `b186a12` PR #298: Support for-of statements with iterator protocol | 0.92x (43/63 >1.00x) | - (0/63 >1.00x) | 15928 passed / 86650 failed (15.53%) |
 | `20260707T224915Z` `1ccbe3a` PR #297: [codex] Add benchmark quality gate | 6.55x (62/63 >1.00x) | - (0/63 >1.00x) | 15928 passed / 86650 failed (15.53%) |
+| `20260708T060745Z` `29a88b2` PR #299: Support accessor properties (getters/setters) | 6.60x (62/63 >1.00x) | - (0/63 >1.00x) | 16626 passed / 85952 failed (16.21%) |
