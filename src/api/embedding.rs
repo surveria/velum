@@ -44,7 +44,7 @@ impl Engine {
     }
 
     #[must_use]
-    pub const fn create_vm(&self) -> Vm {
+    pub fn create_vm(&self) -> Vm {
         Vm::with_config(self.config.default_vm_config())
     }
 }
@@ -85,7 +85,7 @@ impl Vm {
     }
 
     #[must_use]
-    pub const fn with_config(config: VmConfig) -> Self {
+    pub fn with_config(config: VmConfig) -> Self {
         Self {
             config,
             context: Context::new(config.limits()),

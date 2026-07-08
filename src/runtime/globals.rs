@@ -134,8 +134,17 @@ impl Context {
         self.strings.intern(text)
     }
 
+    pub(crate) fn intern_owned_heap_string(&mut self, text: String) -> Result<JsString> {
+        self.check_string_len(&text)?;
+        self.strings.intern_owned(text)
+    }
+
     pub(crate) fn heap_string_value(&mut self, text: &str) -> Result<Value> {
         self.intern_heap_string(text).map(Value::HeapString)
+    }
+
+    pub(crate) fn heap_string_owned_value(&mut self, text: String) -> Result<Value> {
+        self.intern_owned_heap_string(text).map(Value::HeapString)
     }
 
     pub(crate) fn create_symbol_value(&mut self, description: Option<&str>) -> Result<Value> {

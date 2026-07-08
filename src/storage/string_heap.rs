@@ -1,4 +1,4 @@
-use std::{fmt, rc::Rc};
+use std::{collections::HashMap, fmt, rc::Rc};
 
 use crate::error::{Error, Result};
 
@@ -58,15 +58,15 @@ impl fmt::Display for JsString {
 
 #[derive(Debug, Clone, Default)]
 pub struct StringHeap {
-    entries: Vec<StringEntry>,
+    entries: HashMap<Rc<str>, StringId>,
     strings: Vec<Rc<str>>,
     bytes: usize,
 }
 
 impl StringHeap {
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            entries: Vec::new(),
+            entries: HashMap::new(),
             strings: Vec::new(),
             bytes: 0,
         }
@@ -81,33 +81,17 @@ impl StringHeap {
     }
 
     pub fn intern(&mut self, text: &str) -> Result<JsString> {
-        let position = self.string_position(text);
-        let position = match position {
-            Ok(position) => {
-                let id = self
-                    .entries
-                    .get(position)
-                    .map(StringEntry::id)
-                    .ok_or_else(|| Error::runtime("string heap index entry is not available"))?;
-                return self.js_string(id);
-            }
-            Err(position) => position,
-        };
-
-        let id = StringId::from_index(self.strings.len())?;
-        if position > self.entries.len() {
-            return Err(Error::runtime(
-                "string heap insert position is out of range",
-            ));
+        if let Some(id) = self.entries.get(text).copied() {
+            return self.js_string(id);
         }
-        let text: Rc<str> = Rc::from(text);
-        self.bytes = self
-            .bytes
-            .checked_add(text.len())
-            .ok_or_else(|| Error::limit("string heap byte count overflowed"))?;
-        self.strings.push(Rc::clone(&text));
-        self.entries.insert(position, StringEntry::new(text, id));
-        self.js_string(id)
+        self.insert_string(Rc::from(text))
+    }
+
+    pub fn intern_owned(&mut self, text: String) -> Result<JsString> {
+        if let Some(id) = self.entries.get(text.as_str()).copied() {
+            return self.js_string(id);
+        }
+        self.insert_string(Rc::from(text.into_boxed_str()))
     }
 
     pub fn get(&self, id: StringId) -> Result<&str> {
@@ -126,28 +110,14 @@ impl StringHeap {
         Ok(JsString::new(id, text))
     }
 
-    fn string_position(&self, text: &str) -> std::result::Result<usize, usize> {
-        self.entries
-            .binary_search_by(|entry| entry.text().cmp(text))
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-struct StringEntry {
-    text: Rc<str>,
-    id: StringId,
-}
-
-impl StringEntry {
-    const fn new(text: Rc<str>, id: StringId) -> Self {
-        Self { text, id }
-    }
-
-    fn text(&self) -> &str {
-        self.text.as_ref()
-    }
-
-    const fn id(&self) -> StringId {
-        self.id
+    fn insert_string(&mut self, text: Rc<str>) -> Result<JsString> {
+        let id = StringId::from_index(self.strings.len())?;
+        self.bytes = self
+            .bytes
+            .checked_add(text.len())
+            .ok_or_else(|| Error::limit("string heap byte count overflowed"))?;
+        self.strings.push(Rc::clone(&text));
+        self.entries.insert(text, id);
+        self.js_string(id)
     }
 }
