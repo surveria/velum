@@ -67,10 +67,7 @@ impl BytecodeAssignmentReference {
 
     fn set(&self, context: &mut Context, value: Value) -> Result<()> {
         match self {
-            Self::Binding { name, cell } => {
-                let value = context.runtime_value(value)?;
-                cell.assign(name.name(), value)
-            }
+            Self::Binding { name, cell } => context.assign_bytecode_cell(name, cell, value),
             Self::StaticProperty { object, property } => {
                 context.set_static_property_value(object, property.name(), property.access(), value)
             }
@@ -101,7 +98,7 @@ impl BytecodeAssignmentReference {
 
 impl Context {
     pub(in crate::runtime::bytecode) fn eval_bytecode_update_binding(
-        &self,
+        &mut self,
         name: &BytecodeBinding,
         op: UpdateOp,
         prefix: bool,
@@ -112,7 +109,7 @@ impl Context {
         let old_value = binding.value(name.name())?;
         let new_value = Self::updated_bytecode_number(&old_value, op)?;
         self.checked_value(new_value.clone())?;
-        binding.assign(name.name(), new_value.clone())?;
+        self.assign_bytecode_cell(name, &binding, new_value.clone())?;
         Ok(if prefix { new_value } else { old_value })
     }
 
@@ -185,7 +182,7 @@ impl Context {
             .ok_or_else(|| Error::runtime(format!("ReferenceError: '{name}' is not defined")))?;
         let old_value = binding.value(name.name())?;
         let value = self.eval_bytecode_compound_value(op, &old_value, right)?;
-        binding.assign(name.name(), value.clone())?;
+        self.assign_bytecode_cell(name, &binding, value.clone())?;
         Ok(value)
     }
 

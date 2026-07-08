@@ -13,8 +13,9 @@ use super::{
     ARRAY_NAME, BOOLEAN_NAME, EVAL_NAME, FUNCTION_NAME, GLOBAL_DECODE_URI_COMPONENT_NAME,
     GLOBAL_DECODE_URI_NAME, GLOBAL_ENCODE_URI_COMPONENT_NAME, GLOBAL_ENCODE_URI_NAME,
     GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME,
-    INFINITY_NAME, JSON_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME, NativeFunction, NativeFunctionKind,
-    OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PROMISE_NAME, REGEXP_NAME, STRING_NAME, SYMBOL_NAME,
+    GLOBAL_THIS_NAME, INFINITY_NAME, JSON_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME, NativeFunction,
+    NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PROMISE_NAME, REGEXP_NAME,
+    STRING_NAME, SYMBOL_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -66,6 +67,7 @@ impl Context {
             GLOBAL_PARSE_INT_NAME => self
                 .global_function_value(NativeFunctionKind::GlobalParseInt)
                 .map(Some),
+            GLOBAL_THIS_NAME => self.global_this_value().map(Some),
             INFINITY_NAME => self
                 .global_constant_value(INFINITY_NAME, Value::Number(f64::INFINITY))
                 .map(Some),

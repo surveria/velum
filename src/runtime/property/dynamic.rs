@@ -49,6 +49,11 @@ impl Context {
         {
             return Ok(value);
         }
+        if let Value::Object(id) = object
+            && let Some(value) = self.global_object_property_value(*id, lookup)?
+        {
+            return Ok(value);
+        }
         let value = get_property(&self.objects, object, lookup)?;
         self.runtime_property_value(value)
     }
@@ -121,7 +126,7 @@ impl Context {
     }
 
     pub(in crate::runtime) fn has_dynamic_property_value(
-        &self,
+        &mut self,
         object: &Value,
         property: &DynamicPropertyKey,
     ) -> Result<bool> {
@@ -129,6 +134,14 @@ impl Context {
             Value::Function(id) => self.has_function_property_lookup(*id, property.lookup()),
             Value::NativeFunction(id) => {
                 self.has_native_function_property_lookup(*id, property.lookup())
+            }
+            Value::Object(id) => {
+                if let Some(has_property) =
+                    self.global_object_has_property(*id, property.lookup())?
+                {
+                    return Ok(has_property);
+                }
+                has_property(&self.objects, object, property.lookup())
             }
             _ => has_property(&self.objects, object, property.lookup()),
         }

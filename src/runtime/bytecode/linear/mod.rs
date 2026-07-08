@@ -453,7 +453,7 @@ impl Context {
             }
             BytecodeLinearOp::StoreBinding { binding, cell } => {
                 let value = state.stack.pop()?;
-                cell.assign(binding.name(), self.runtime_value(value.clone())?)?;
+                self.assign_bytecode_cell(binding, cell, value.clone())?;
                 state.stack.push(value);
             }
             BytecodeLinearOp::DeclareVarBinding {
@@ -463,7 +463,7 @@ impl Context {
             } => {
                 if *has_init {
                     let value = state.stack.pop()?;
-                    cell.assign(binding.name(), self.runtime_value(value)?)?;
+                    self.assign_bytecode_cell(binding, cell, value)?;
                 }
                 state.last = Value::Undefined;
             }
@@ -482,7 +482,7 @@ impl Context {
                 let old_value = cell.value(binding.name())?;
                 let new_value = Self::updated_bytecode_number(&old_value, *op)?;
                 self.checked_value(new_value.clone())?;
-                cell.assign(binding.name(), new_value.clone())?;
+                self.assign_bytecode_cell(binding, cell, new_value.clone())?;
                 state
                     .stack
                     .push(if *prefix { new_value } else { old_value });
@@ -491,7 +491,7 @@ impl Context {
                 let right = state.stack.pop()?;
                 let old_value = cell.value(binding.name())?;
                 let value = self.eval_bytecode_compound_value(*op, &old_value, &right)?;
-                cell.assign(binding.name(), value.clone())?;
+                self.assign_bytecode_cell(binding, cell, value.clone())?;
                 state.stack.push(value);
             }
             _ => return Err(Error::runtime("bytecode linear stack op mismatch")),
@@ -548,7 +548,7 @@ impl Context {
             } => {
                 let left = self.runtime_value(source_cell.value(source.name())?)?;
                 let value = self.eval_bytecode_number_binary(*op, &left, &Value::Number(*right))?;
-                target_cell.assign(target.name(), self.runtime_value(value)?)?;
+                self.assign_bytecode_cell(target, target_cell, value)?;
                 state.last = Value::Undefined;
             }
             BytecodeLinearOp::StoreBindingFromBindingNumberBinary {
@@ -561,7 +561,7 @@ impl Context {
             } => {
                 let left = self.runtime_value(source_cell.value(source.name())?)?;
                 let value = self.eval_bytecode_number_binary(*op, &left, &Value::Number(*right))?;
-                target_cell.assign(target.name(), self.runtime_value(value.clone())?)?;
+                self.assign_bytecode_cell(target, target_cell, value.clone())?;
                 state.last = value;
             }
             BytecodeLinearOp::AddArrayElementToBinding { .. } => {
@@ -615,7 +615,7 @@ impl Context {
             };
         let value =
             self.eval_bytecode_number_binary(BytecodeNumericBinaryOp::Add, &left, &element)?;
-        target_cell.assign(target.name(), self.runtime_value(value.clone())?)?;
+        self.assign_bytecode_cell(target, target_cell, value.clone())?;
         state.last = value;
         Ok(())
     }
