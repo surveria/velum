@@ -469,6 +469,13 @@ pub enum BytecodeInstruction {
     TemplateConcat {
         part_count: usize,
     },
+    StringConcat {
+        final_result: bool,
+    },
+    StringConcatStatic {
+        text: StaticString,
+        final_result: bool,
+    },
     CollectSpreadArgs {
         spread_flags: Rc<[bool]>,
     },

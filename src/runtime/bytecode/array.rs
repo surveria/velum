@@ -1,7 +1,7 @@
 use crate::{
     bytecode::{BytecodeArrayIndex, BytecodeProperty},
     error::Result,
-    runtime::Context,
+    runtime::{Context, property::string_length_value_if_string},
     syntax::{BinaryOp, StaticPropertyAccessId, UpdateOp},
     value::Value,
 };
@@ -18,6 +18,9 @@ impl Context {
         property: &BytecodeProperty,
     ) -> Result<Value> {
         if let Some(value) = self.get_array_length_property_value(object)? {
+            return Ok(value);
+        }
+        if let Some(value) = string_length_value_if_string(object, property.name().as_str())? {
             return Ok(value);
         }
         self.get_static_property_value(object, property.name(), property.access())

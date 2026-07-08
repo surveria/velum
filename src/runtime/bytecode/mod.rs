@@ -9,6 +9,7 @@ mod linear;
 mod ops;
 mod spread;
 mod state;
+mod string_concat;
 mod super_ops;
 
 use crate::{
@@ -22,6 +23,15 @@ use crate::{
 };
 
 use state::BytecodeState;
+
+fn eval_bytecode_push_undefined(
+    state: &mut BytecodeState,
+    next: BytecodeAddress,
+) -> Option<Completion> {
+    state.stack.push(Value::Undefined);
+    state.pc = next;
+    None
+}
 
 impl Context {
     pub(crate) fn eval_bytecode_program(
@@ -77,6 +87,8 @@ impl Context {
             BytecodeInstruction::PushLiteral(_)
             | BytecodeInstruction::PushString(_)
             | BytecodeInstruction::TemplateConcat { .. }
+            | BytecodeInstruction::StringConcat { .. }
+            | BytecodeInstruction::StringConcatStatic { .. }
             | BytecodeInstruction::CreateRegExp { .. }
             | BytecodeInstruction::PushUndefined
             | BytecodeInstruction::LoadThis
@@ -186,14 +198,14 @@ impl Context {
             BytecodeInstruction::TemplateConcat { part_count } => {
                 self.eval_bytecode_template_concat(state, *part_count, next)
             }
+            BytecodeInstruction::StringConcat { .. }
+            | BytecodeInstruction::StringConcatStatic { .. } => {
+                self.eval_bytecode_string_concat_instruction(state, instruction, next)
+            }
             BytecodeInstruction::CreateRegExp { pattern, flags } => {
                 self.eval_bytecode_create_regexp(state, pattern, flags, next)
             }
-            BytecodeInstruction::PushUndefined => {
-                state.stack.push(Value::Undefined);
-                state.pc = next;
-                Ok(None)
-            }
+            BytecodeInstruction::PushUndefined => Ok(eval_bytecode_push_undefined(state, next)),
             BytecodeInstruction::LoadThis => {
                 state.stack.push(self.current_this()?);
                 state.pc = next;

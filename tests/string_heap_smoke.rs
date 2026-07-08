@@ -69,11 +69,8 @@ fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestRe
     let concat_value = vm.context().eval(r#""front" + "-door""#)?;
     ensure_value(&concat_value, &Value::String("front-door".to_owned()))?;
     let after_concat = vm.resource_usage();
-    ensure_usize(after_concat.string_count, 4)?;
-    ensure_usize(
-        after_concat.string_bytes,
-        "undefined".len() + "front".len() + "-door".len() + "front-door".len(),
-    )?;
+    ensure_usize(after_concat.string_count, 2)?;
+    ensure_usize(after_concat.string_bytes, "undefined".len() + "front".len())?;
 
     let repeated_concat = vm.context().eval(r#""front" + "-door""#)?;
     ensure_value(&repeated_concat, &Value::String("front-door".to_owned()))?;
@@ -90,7 +87,10 @@ fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestRe
     let static_index = vm.context().eval(r#""front"[1]"#)?;
     ensure_value(&static_index, &Value::String("r".to_owned()))?;
     let after_static_index = vm.resource_usage();
-    ensure_usize(after_static_index.string_count, 5)?;
+    ensure_usize(
+        after_static_index.string_count,
+        after_concat.string_count.saturating_add(1),
+    )?;
     ensure_usize(
         after_static_index.string_bytes,
         after_concat.string_bytes + "r".len(),
@@ -123,7 +123,10 @@ fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestRe
     let unicode_index = vm.context().eval(r#""\u00e9x"[0]"#)?;
     ensure_value(&unicode_index, &Value::String("\u{00e9}".to_owned()))?;
     let after_unicode_index = vm.resource_usage();
-    ensure_usize(after_unicode_index.string_count, 7)?;
+    ensure_usize(
+        after_unicode_index.string_count,
+        after_static_index.string_count.saturating_add(2),
+    )?;
     ensure_usize(
         after_unicode_index.string_bytes,
         after_static_index.string_bytes + "\u{00e9}x".len() + "\u{00e9}".len(),
@@ -159,6 +162,29 @@ fn string_concat_uses_heap_dedup_and_respects_limits() -> TestResult {
         return Err("expected string concat limit to fail".into());
     };
     ensure_text(error.to_string().as_str(), "resource limit")
+}
+
+#[test]
+fn bytecode_string_concat_chain_skips_intermediate_heap_value() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(r#"var name = "camera"; name + "-stream-" + 7"#)?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::String("camera-stream-7".to_owned()))?;
+    let usage = vm.resource_usage();
+
+    ensure_usize(usage.string_count, 1)?;
+    ensure_usize(usage.string_bytes, "camera".len())
+}
+
+#[test]
+fn bytecode_string_concat_chain_preserves_numeric_prefix_addition() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let value = vm.context().eval(r#"1 + 2 + "-stream""#)?;
+    ensure_value(&value, &Value::String("3-stream".to_owned()))
 }
 
 #[test]

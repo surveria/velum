@@ -492,7 +492,7 @@ impl Context {
             BytecodeLinearOp::LoadBinding { binding, cell } => {
                 state
                     .stack
-                    .push(self.runtime_value(cell.value(binding.name())?)?);
+                    .push(self.checked_value(cell.value(binding.name())?)?);
             }
             BytecodeLinearOp::StoreBinding { binding, cell } => {
                 let value = state.stack.pop()?;

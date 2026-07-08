@@ -330,6 +330,12 @@ impl BytecodeCompiler<'_> {
             BinaryOp::LogicalOr => self.compile_logical_or(left, right),
             BinaryOp::NullishCoalescing => self.compile_nullish_coalescing(left, right),
             _ => {
+                if op == BinaryOp::Add
+                    && property_access.is_none()
+                    && self.compile_string_concat_chain(left, right)?
+                {
+                    return Ok(());
+                }
                 self.compile_expr(left)?;
                 self.compile_expr(right)?;
                 if property_access.is_none()
@@ -352,6 +358,82 @@ impl BytecodeCompiler<'_> {
                 }
                 Ok(())
             }
+        }
+    }
+
+    fn compile_string_concat_chain(&mut self, left: &Expr, right: &Expr) -> Result<bool> {
+        let mut operands = Vec::new();
+        Self::collect_left_add_operands(left, &mut operands);
+        operands.push(right);
+
+        if !Self::first_add_is_static_string_concat(operands.as_slice()) {
+            return Ok(false);
+        }
+
+        let mut iter = operands.into_iter().peekable();
+        let Some(first) = iter.next() else {
+            return Ok(false);
+        };
+        let Some(second) = iter.next() else {
+            return Ok(false);
+        };
+
+        self.compile_expr(first)?;
+        self.emit_string_concat_operand(second, iter.peek().is_none())?;
+
+        while let Some(operand) = iter.next() {
+            self.emit_string_concat_operand(operand, iter.peek().is_none())?;
+        }
+
+        Ok(true)
+    }
+
+    fn emit_string_concat_operand(&mut self, operand: &Expr, final_result: bool) -> Result<()> {
+        if let Some(text) = Self::expr_static_string(operand) {
+            self.emit(BytecodeInstruction::StringConcatStatic {
+                text: text.clone(),
+                final_result,
+            });
+            return Ok(());
+        }
+
+        self.compile_expr(operand)?;
+        self.emit(BytecodeInstruction::StringConcat { final_result });
+        Ok(())
+    }
+
+    fn collect_left_add_operands<'a>(expr: &'a Expr, operands: &mut Vec<&'a Expr>) {
+        match expr {
+            Expr::Parenthesized(expr) => Self::collect_left_add_operands(expr, operands),
+            Expr::Binary {
+                op: BinaryOp::Add,
+                left,
+                right,
+                property_access: None,
+            } => {
+                Self::collect_left_add_operands(left, operands);
+                operands.push(right);
+            }
+            expr => operands.push(expr),
+        }
+    }
+
+    fn first_add_is_static_string_concat(operands: &[&Expr]) -> bool {
+        let mut iter = operands.iter();
+        let Some(first) = iter.next() else {
+            return false;
+        };
+        let Some(second) = iter.next() else {
+            return false;
+        };
+        Self::expr_static_string(first).is_some() || Self::expr_static_string(second).is_some()
+    }
+
+    fn expr_static_string(expr: &Expr) -> Option<&StaticString> {
+        match expr {
+            Expr::StringLiteral(value) => Some(value),
+            Expr::Parenthesized(expr) => Self::expr_static_string(expr),
+            _ => None,
         }
     }
 
