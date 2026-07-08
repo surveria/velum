@@ -6,15 +6,15 @@ use crate::{
     value::Value,
 };
 
-#[derive(Debug, Clone)]
-pub(in crate::runtime) struct BytecodeState {
+#[derive(Debug)]
+pub(super) struct BytecodeState {
     pub(super) pc: BytecodeAddress,
     pub(super) stack: BytecodeStack,
     pub(super) last: Value,
 }
 
 impl BytecodeState {
-    pub(in crate::runtime) const fn new() -> Self {
+    pub(super) const fn new() -> Self {
         Self {
             pc: BytecodeAddress::new(0),
             stack: BytecodeStack::new(),
@@ -50,7 +50,7 @@ impl BytecodeState {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(super) struct BytecodeStack {
     values: Vec<Value>,
 }
