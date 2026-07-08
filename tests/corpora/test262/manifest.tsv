@@ -118,6 +118,22 @@ expression-statement-basic	test/language/statements/expression/S12.4_A1.js	run	o
 expression-statement-function-lookahead	test/language/statements/expression/S12.4_A2_T1.js	negative-parse	official Test262 expression statement function lookahead negative parse smoke
 expression-statement-brace-lookahead	test/language/statements/expression/S12.4_A2_T2.js	negative-parse	official Test262 expression statement brace lookahead negative parse smoke
 labeled-empty-statement	test/language/statements/labeled/S12.12_A1_T1.js	run	official Test262 labeled statement smoke
+coalesce-follows-null	test/language/expressions/coalesce/follows-null.js	run	official Test262 nullish coalescing null smoke
+coalesce-follows-undefined	test/language/expressions/coalesce/follows-undefined.js	run	official Test262 nullish coalescing undefined smoke
+coalesce-short-circuit-prevents-evaluation	test/language/expressions/coalesce/short-circuit-prevents-evaluation.js	run	official Test262 nullish coalescing short-circuit smoke
+coalesce-chainable	test/language/expressions/coalesce/chainable.js	run	official Test262 nullish coalescing chain smoke
+coalesce-parenthesized-logical-or	test/language/expressions/coalesce/chainable-if-parenthesis-covered-logical-or.js	run	official Test262 parenthesized nullish/logical-or smoke
+coalesce-parenthesized-logical-and	test/language/expressions/coalesce/chainable-if-parenthesis-covered-logical-and.js	run	official Test262 parenthesized nullish/logical-and smoke
+coalesce-logical-or-head-error	test/language/expressions/coalesce/cannot-chain-head-with-logical-or.js	negative-parse	official Test262 unparenthesized nullish/logical-or head negative parse smoke
+coalesce-logical-or-tail-error	test/language/expressions/coalesce/cannot-chain-tail-with-logical-or.js	negative-parse	official Test262 unparenthesized nullish/logical-or tail negative parse smoke
+coalesce-logical-and-head-error	test/language/expressions/coalesce/cannot-chain-head-with-logical-and.js	negative-parse	official Test262 unparenthesized nullish/logical-and head negative parse smoke
+coalesce-logical-and-tail-error	test/language/expressions/coalesce/cannot-chain-tail-with-logical-and.js	negative-parse	official Test262 unparenthesized nullish/logical-and tail negative parse smoke
+logical-assignment-and-basic	test/language/expressions/logical-assignment/lgcl-and-assignment-operator.js	run	official Test262 logical AND assignment smoke
+logical-assignment-or-basic	test/language/expressions/logical-assignment/lgcl-or-assignment-operator.js	run	official Test262 logical OR assignment smoke
+logical-assignment-nullish-basic	test/language/expressions/logical-assignment/lgcl-nullish-assignment-operator.js	run	official Test262 nullish assignment smoke
+logical-assignment-and-lhs-before-rhs	test/language/expressions/logical-assignment/lgcl-and-assignment-operator-lhs-before-rhs.js	run	official Test262 logical AND assignment evaluation-order smoke
+logical-assignment-or-lhs-before-rhs	test/language/expressions/logical-assignment/lgcl-or-assignment-operator-lhs-before-rhs.js	run	official Test262 logical OR assignment evaluation-order smoke
+logical-assignment-nullish-lhs-before-rhs	test/language/expressions/logical-assignment/lgcl-nullish-assignment-operator-lhs-before-rhs.js	run	official Test262 nullish assignment evaluation-order smoke
 labeled-continue-non-iteration	test/language/statements/labeled/continue.js	negative-parse	official Test262 labeled continue static semantics smoke
 labeled-break-completion	test/language/statements/labeled/cptn-break.js	run	official Test262 labeled break completion smoke
 labeled-normal-completion	test/language/statements/labeled/cptn-nrml.js	run	official Test262 labeled normal completion smoke
