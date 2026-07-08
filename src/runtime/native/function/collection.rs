@@ -83,6 +83,17 @@ impl Context {
                 self.eval_collection_iterator_next(iterator)
             }
             NativeFunctionKind::IteratorSelf => Ok(this_value.clone()),
+            NativeFunctionKind::SetUnion => self.eval_set_union(args, this_value),
+            NativeFunctionKind::SetIntersection => self.eval_set_intersection(args, this_value),
+            NativeFunctionKind::SetDifference => self.eval_set_difference(args, this_value),
+            NativeFunctionKind::SetSymmetricDifference => {
+                self.eval_set_symmetric_difference(args, this_value)
+            }
+            NativeFunctionKind::SetIsSubsetOf => self.eval_set_is_subset_of(args, this_value),
+            NativeFunctionKind::SetIsSupersetOf => self.eval_set_is_superset_of(args, this_value),
+            NativeFunctionKind::SetIsDisjointFrom => {
+                self.eval_set_is_disjoint_from(args, this_value)
+            }
             NativeFunctionKind::WeakMapGet => self.eval_weak_map_get(args, this_value),
             NativeFunctionKind::WeakMapSet => self.eval_weak_map_set(args, this_value),
             NativeFunctionKind::WeakMapHas => {
