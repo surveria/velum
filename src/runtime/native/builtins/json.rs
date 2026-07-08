@@ -4,7 +4,9 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime::call::RuntimeCallArgs,
+    runtime::control::Completion,
     runtime::object::{ObjectPropertyInit, PropertyEnumerable},
+    runtime::property::delete_property,
     value::{ObjectId, Value},
 };
 
@@ -14,12 +16,59 @@ const JSON_ARRAY_CLOSE: &str = "]";
 const JSON_ARRAY_OPEN: &str = "[";
 const JSON_COLON: &str = ":";
 const JSON_COMMA: &str = ",";
+const JSON_EMPTY_KEY: &str = "";
 const JSON_FALSE: &str = "false";
+const JSON_INDENT_LIMIT: usize = 10;
+const JSON_NEWLINE: &str = "\n";
 const JSON_NULL: &str = "null";
 const JSON_OBJECT_CLOSE: &str = "}";
 const JSON_OBJECT_OPEN: &str = "{";
+const JSON_SPACE: &str = " ";
+const JSON_TO_JSON_NAME: &str = "toJSON";
 const JSON_TRUE: &str = "true";
 const JSON_UNSUPPORTED_NUMBER: &str = "JSON number cannot be represented as f64";
+
+#[derive(Debug, Clone)]
+enum JsonReplacer {
+    None,
+    Function(Value),
+    PropertyList(Vec<String>),
+}
+
+#[derive(Debug)]
+struct JsonStringifyState {
+    replacer: JsonReplacer,
+    gap: String,
+    indent: String,
+    stack: Vec<ObjectId>,
+}
+
+impl JsonStringifyState {
+    const fn new(replacer: JsonReplacer, gap: String) -> Self {
+        Self {
+            replacer,
+            gap,
+            indent: String::new(),
+            stack: Vec::new(),
+        }
+    }
+
+    const fn is_compact(&self) -> bool {
+        self.gap.is_empty()
+    }
+}
+
+#[derive(Debug)]
+struct JsonObjectMember {
+    key: String,
+    value: String,
+}
+
+impl JsonObjectMember {
+    const fn new(key: String, value: String) -> Self {
+        Self { key, value }
+    }
+}
 
 impl Context {
     pub(in crate::runtime::native) fn json_object_value(&mut self) -> Result<Value> {
@@ -62,7 +111,12 @@ impl Context {
         self.check_string_len(&text)?;
         let value = serde_json::from_str(&text)
             .map_err(|error| Error::runtime(format!("JSON.parse failed: {error}")))?;
-        self.value_from_json(value)
+        let value = self.value_from_json(value)?;
+        let Some(reviver) = args.get(1).filter(|value| Self::is_json_callable(value)) else {
+            return Ok(value);
+        };
+        let holder = self.create_json_wrapper(value)?;
+        self.internalize_json_property(&holder, JSON_EMPTY_KEY, &reviver.clone())
     }
 
     pub(in crate::runtime::native) fn eval_json_stringify(
@@ -80,8 +134,11 @@ impl Context {
             return Ok(Value::Undefined);
         };
 
-        let mut stack = Vec::new();
-        let Some(text) = self.stringify_json_value(value, &mut stack)? else {
+        let replacer = self.json_replacer(args.get(1))?;
+        let gap = self.json_gap(args.get(2))?;
+        let holder = self.create_json_wrapper(value.clone())?;
+        let mut state = JsonStringifyState::new(replacer, gap);
+        let Some(text) = self.stringify_json_property(&holder, JSON_EMPTY_KEY, &mut state)? else {
             return Ok(Value::Undefined);
         };
         self.heap_string_value(&text)
@@ -144,10 +201,212 @@ impl Context {
         )
     }
 
+    fn create_json_wrapper(&mut self, value: Value) -> Result<Value> {
+        let key = self.intern_property_key(JSON_EMPTY_KEY)?;
+        let constructor_key = self.object_constructor_property_key()?;
+        self.objects.create_data_object(
+            vec![ObjectPropertyInit::new(
+                key,
+                JSON_EMPTY_KEY,
+                value,
+                PropertyEnumerable::Yes,
+            )],
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn internalize_json_property(
+        &mut self,
+        holder: &Value,
+        key: &str,
+        reviver: &Value,
+    ) -> Result<Value> {
+        let value = self.get_property_value(holder, key)?;
+        if let Value::Object(id) = value.clone() {
+            self.internalize_json_children(&value, id, reviver)?;
+        }
+        let key_value = self.heap_string_value(key)?;
+        let args = [key_value, value];
+        self.call_json_callback(reviver.clone(), holder.clone(), &args)
+    }
+
+    fn internalize_json_children(
+        &mut self,
+        holder: &Value,
+        id: ObjectId,
+        reviver: &Value,
+    ) -> Result<()> {
+        if let Some(length) = self.objects.array_len_if_array(id)? {
+            for index in 0..length {
+                self.internalize_json_child(holder, &index.to_string(), reviver)?;
+            }
+            return Ok(());
+        }
+        for key in self.objects.own_keys(id, &self.atoms)? {
+            self.internalize_json_child(holder, &key, reviver)?;
+        }
+        Ok(())
+    }
+
+    fn internalize_json_child(&mut self, holder: &Value, key: &str, reviver: &Value) -> Result<()> {
+        let value = self.internalize_json_property(holder, key, reviver)?;
+        if matches!(value, Value::Undefined) {
+            return self.delete_json_property(holder, key);
+        }
+        self.set_json_property(holder, key, value)
+    }
+
+    fn delete_json_property(&mut self, holder: &Value, key: &str) -> Result<()> {
+        let lookup = self.property_lookup(key);
+        let deleted = delete_property(&mut self.objects, holder, lookup)?;
+        if deleted {
+            return Ok(());
+        }
+        Err(Error::type_error("JSON reviver could not delete property"))
+    }
+
+    fn set_json_property(&mut self, holder: &Value, key: &str, value: Value) -> Result<()> {
+        let property = self.intern_property_key(key)?;
+        self.set_property_value_with_accessors(holder, property, key, value)
+    }
+
+    fn json_replacer(&self, value: Option<&Value>) -> Result<JsonReplacer> {
+        let Some(value) = value else {
+            return Ok(JsonReplacer::None);
+        };
+        if Self::is_json_callable(value) {
+            return Ok(JsonReplacer::Function(value.clone()));
+        }
+        let Value::Object(id) = value else {
+            return Ok(JsonReplacer::None);
+        };
+        if self.objects.array_len_if_array(*id)?.is_none() {
+            return Ok(JsonReplacer::None);
+        }
+        self.json_replacer_property_list(*id)
+            .map(JsonReplacer::PropertyList)
+    }
+
+    fn json_replacer_property_list(&self, id: ObjectId) -> Result<Vec<String>> {
+        let length = self.objects.array_len(id)?;
+        let mut keys = Vec::new();
+        for index in 0..length {
+            let value = self.objects.array_get_index(id, index)?;
+            let Some(key) = self.json_replacer_property_name(&value)? else {
+                continue;
+            };
+            if !keys.contains(&key) {
+                keys.push(key);
+            }
+        }
+        Ok(keys)
+    }
+
+    fn json_replacer_property_name(&self, value: &Value) -> Result<Option<String>> {
+        match value {
+            Value::String(value) => Ok(Some(value.clone())),
+            Value::HeapString(value) => Ok(Some(value.as_str().to_owned())),
+            Value::Number(value) => Ok(Some(Value::Number(*value).to_string())),
+            Value::Object(id) => self
+                .string_object_primitive_value(*id)
+                .map(|value| value.map(ToOwned::to_owned)),
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Symbol(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_)
+            | Value::Error(_) => Ok(None),
+        }
+    }
+
+    fn json_gap(&self, value: Option<&Value>) -> Result<String> {
+        let Some(value) = value else {
+            return Ok(String::new());
+        };
+        let gap = match value {
+            Value::Number(value) => JSON_SPACE.repeat(Self::json_gap_space_count(*value)),
+            Value::String(value) => Self::json_gap_string(value),
+            Value::HeapString(value) => Self::json_gap_string(value.as_str()),
+            Value::Object(id) => self
+                .string_object_primitive_value(*id)?
+                .map_or_else(String::new, Self::json_gap_string),
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Symbol(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_)
+            | Value::Error(_) => String::new(),
+        };
+        self.check_string_len(&gap)?;
+        Ok(gap)
+    }
+
+    fn json_gap_space_count(value: f64) -> usize {
+        if !value.is_finite() || value <= 0.0 {
+            return 0;
+        }
+        let mut count = 0usize;
+        let mut remaining = value.floor();
+        while count < JSON_INDENT_LIMIT && remaining >= 1.0 {
+            count = count.saturating_add(1);
+            remaining -= 1.0;
+        }
+        count
+    }
+
+    fn json_gap_string(value: &str) -> String {
+        value.chars().take(JSON_INDENT_LIMIT).collect()
+    }
+
+    fn stringify_json_property(
+        &mut self,
+        holder: &Value,
+        key: &str,
+        state: &mut JsonStringifyState,
+    ) -> Result<Option<String>> {
+        let mut value = self.get_property_value(holder, key)?;
+        value = self.apply_json_to_json(value, key)?;
+        value = self.apply_json_replacer(holder, key, value, &state.replacer)?;
+        self.stringify_json_value(&value, state)
+    }
+
+    fn apply_json_to_json(&mut self, value: Value, key: &str) -> Result<Value> {
+        if !matches!(value, Value::Object(_)) {
+            return Ok(value);
+        }
+        let to_json = self.get_property_value(&value, JSON_TO_JSON_NAME)?;
+        if !Self::is_json_callable(&to_json) {
+            return Ok(value);
+        }
+        let key = self.heap_string_value(key)?;
+        self.call_json_callback(to_json, value, &[key])
+    }
+
+    fn apply_json_replacer(
+        &mut self,
+        holder: &Value,
+        key: &str,
+        value: Value,
+        replacer: &JsonReplacer,
+    ) -> Result<Value> {
+        let JsonReplacer::Function(function) = replacer else {
+            return Ok(value);
+        };
+        let key = self.heap_string_value(key)?;
+        let args = [key, value];
+        self.call_json_callback(function.clone(), holder.clone(), &args)
+    }
+
     fn stringify_json_value(
         &mut self,
         value: &Value,
-        stack: &mut Vec<ObjectId>,
+        state: &mut JsonStringifyState,
     ) -> Result<Option<String>> {
         match value {
             Value::Undefined
@@ -160,72 +419,195 @@ impl Context {
             Value::Number(value) => Ok(Some(Self::stringify_json_number(*value))),
             Value::String(value) => self.stringify_json_string(value).map(Some),
             Value::HeapString(value) => self.stringify_json_string(value.as_str()).map(Some),
-            Value::Object(id) => self.stringify_json_object(*id, stack).map(Some),
+            Value::Object(id) => self.stringify_json_object(*id, state).map(Some),
             Value::Error(_) => Ok(Some(self.stringify_empty_json_object()?)),
         }
     }
 
-    fn stringify_json_object(&mut self, id: ObjectId, stack: &mut Vec<ObjectId>) -> Result<String> {
-        if let Some(length) = self.objects.array_len_if_array(id)? {
-            return self.stringify_json_array(id, length, stack);
+    fn stringify_json_object(
+        &mut self,
+        id: ObjectId,
+        state: &mut JsonStringifyState,
+    ) -> Result<String> {
+        Self::push_json_stack(id, &mut state.stack)?;
+        let result = if let Some(length) = self.objects.array_len_if_array(id)? {
+            self.stringify_json_array(id, length, state)
+        } else {
+            self.stringify_plain_json_object(id, state)
+        };
+        let pop_result = Self::pop_json_stack(id, &mut state.stack);
+        match (result, pop_result) {
+            (Ok(value), Ok(())) => Ok(value),
+            (Err(error), _) | (Ok(_), Err(error)) => Err(error),
         }
-        self.stringify_plain_json_object(id, stack)
     }
 
     fn stringify_json_array(
         &mut self,
         id: ObjectId,
         length: usize,
-        stack: &mut Vec<ObjectId>,
+        state: &mut JsonStringifyState,
     ) -> Result<String> {
-        Self::push_json_stack(id, stack)?;
-        let mut output = String::from(JSON_ARRAY_OPEN);
-        self.check_string_len(&output)?;
-
+        let stepback = state.indent.clone();
+        state.indent.push_str(&state.gap);
+        let holder = Value::Object(id);
+        let mut elements = Vec::with_capacity(length);
         for index in 0..length {
-            if index > 0 {
-                self.push_json_fragment(&mut output, JSON_COMMA)?;
-            }
-            let value = self.objects.array_get_index(id, index)?;
             let element = self
-                .stringify_json_value(&value, stack)?
+                .stringify_json_property(&holder, &index.to_string(), state)?
                 .unwrap_or_else(|| JSON_NULL.to_owned());
-            self.push_json_fragment(&mut output, &element)?;
+            elements.push(element);
         }
-
-        self.push_json_fragment(&mut output, JSON_ARRAY_CLOSE)?;
-        Self::pop_json_stack(id, stack)?;
-        Ok(output)
+        let result = self.format_json_array(&elements, state, &stepback);
+        state.indent = stepback;
+        result
     }
 
     fn stringify_plain_json_object(
         &mut self,
         id: ObjectId,
-        stack: &mut Vec<ObjectId>,
+        state: &mut JsonStringifyState,
     ) -> Result<String> {
-        Self::push_json_stack(id, stack)?;
-        let mut output = String::from(JSON_OBJECT_OPEN);
-        self.check_string_len(&output)?;
-        let mut has_property = false;
-
-        for key in self.objects.own_keys(id, &self.atoms)? {
-            let value = self.get_property_value(&Value::Object(id), &key)?;
-            let Some(serialized_value) = self.stringify_json_value(&value, stack)? else {
+        let stepback = state.indent.clone();
+        state.indent.push_str(&state.gap);
+        let holder = Value::Object(id);
+        let keys = match &state.replacer {
+            JsonReplacer::PropertyList(keys) => keys.clone(),
+            JsonReplacer::None | JsonReplacer::Function(_) => {
+                self.objects.own_keys(id, &self.atoms)?
+            }
+        };
+        let mut members = Vec::new();
+        for key in keys {
+            let Some(value) = self.stringify_json_property(&holder, &key, state)? else {
                 continue;
             };
-            if has_property {
-                self.push_json_fragment(&mut output, JSON_COMMA)?;
-            }
-            let serialized_key = self.stringify_json_string(&key)?;
-            self.push_json_fragment(&mut output, &serialized_key)?;
-            self.push_json_fragment(&mut output, JSON_COLON)?;
-            self.push_json_fragment(&mut output, &serialized_value)?;
-            has_property = true;
+            let key = self.stringify_json_string(&key)?;
+            members.push(JsonObjectMember::new(key, value));
         }
+        let result = self.format_json_object(&members, state, &stepback);
+        state.indent = stepback;
+        result
+    }
 
-        self.push_json_fragment(&mut output, JSON_OBJECT_CLOSE)?;
-        Self::pop_json_stack(id, stack)?;
+    fn format_json_array(
+        &self,
+        elements: &[String],
+        state: &JsonStringifyState,
+        stepback: &str,
+    ) -> Result<String> {
+        let mut output = String::from(JSON_ARRAY_OPEN);
+        self.check_string_len(&output)?;
+        if elements.is_empty() {
+            self.push_json_fragment(&mut output, JSON_ARRAY_CLOSE)?;
+            return Ok(output);
+        }
+        if state.is_compact() {
+            self.push_compact_json_list(&mut output, elements)?;
+        } else {
+            self.push_pretty_json_list(&mut output, elements, &state.indent, stepback)?;
+        }
+        self.push_json_fragment(&mut output, JSON_ARRAY_CLOSE)?;
         Ok(output)
+    }
+
+    fn format_json_object(
+        &self,
+        members: &[JsonObjectMember],
+        state: &JsonStringifyState,
+        stepback: &str,
+    ) -> Result<String> {
+        let mut output = String::from(JSON_OBJECT_OPEN);
+        self.check_string_len(&output)?;
+        if members.is_empty() {
+            self.push_json_fragment(&mut output, JSON_OBJECT_CLOSE)?;
+            return Ok(output);
+        }
+        if state.is_compact() {
+            self.push_compact_json_members(&mut output, members)?;
+        } else {
+            self.push_pretty_json_members(&mut output, members, &state.indent, stepback)?;
+        }
+        self.push_json_fragment(&mut output, JSON_OBJECT_CLOSE)?;
+        Ok(output)
+    }
+
+    fn push_compact_json_list(&self, output: &mut String, elements: &[String]) -> Result<()> {
+        for (index, element) in elements.iter().enumerate() {
+            if index > 0 {
+                self.push_json_fragment(output, JSON_COMMA)?;
+            }
+            self.push_json_fragment(output, element)?;
+        }
+        Ok(())
+    }
+
+    fn push_pretty_json_list(
+        &self,
+        output: &mut String,
+        elements: &[String],
+        indent: &str,
+        stepback: &str,
+    ) -> Result<()> {
+        self.push_json_fragment(output, JSON_NEWLINE)?;
+        for (index, element) in elements.iter().enumerate() {
+            if index > 0 {
+                self.push_json_fragment(output, JSON_COMMA)?;
+                self.push_json_fragment(output, JSON_NEWLINE)?;
+            }
+            self.push_json_fragment(output, indent)?;
+            self.push_json_fragment(output, element)?;
+        }
+        self.push_json_fragment(output, JSON_NEWLINE)?;
+        self.push_json_fragment(output, stepback)
+    }
+
+    fn push_compact_json_members(
+        &self,
+        output: &mut String,
+        members: &[JsonObjectMember],
+    ) -> Result<()> {
+        for (index, member) in members.iter().enumerate() {
+            if index > 0 {
+                self.push_json_fragment(output, JSON_COMMA)?;
+            }
+            self.push_json_member(output, member, false)?;
+        }
+        Ok(())
+    }
+
+    fn push_pretty_json_members(
+        &self,
+        output: &mut String,
+        members: &[JsonObjectMember],
+        indent: &str,
+        stepback: &str,
+    ) -> Result<()> {
+        self.push_json_fragment(output, JSON_NEWLINE)?;
+        for (index, member) in members.iter().enumerate() {
+            if index > 0 {
+                self.push_json_fragment(output, JSON_COMMA)?;
+                self.push_json_fragment(output, JSON_NEWLINE)?;
+            }
+            self.push_json_fragment(output, indent)?;
+            self.push_json_member(output, member, true)?;
+        }
+        self.push_json_fragment(output, JSON_NEWLINE)?;
+        self.push_json_fragment(output, stepback)
+    }
+
+    fn push_json_member(
+        &self,
+        output: &mut String,
+        member: &JsonObjectMember,
+        pretty: bool,
+    ) -> Result<()> {
+        self.push_json_fragment(output, &member.key)?;
+        self.push_json_fragment(output, JSON_COLON)?;
+        if pretty {
+            self.push_json_fragment(output, JSON_SPACE)?;
+        }
+        self.push_json_fragment(output, &member.value)
     }
 
     fn stringify_empty_json_object(&self) -> Result<String> {
@@ -248,7 +630,7 @@ impl Context {
 
     fn push_json_stack(id: ObjectId, stack: &mut Vec<ObjectId>) -> Result<()> {
         if stack.contains(&id) {
-            return Err(Error::runtime(
+            return Err(Error::type_error(
                 "JSON.stringify cannot serialize circular objects",
             ));
         }
@@ -281,5 +663,28 @@ impl Context {
             return "0".to_owned();
         }
         Value::Number(value).to_string()
+    }
+
+    fn call_json_callback(
+        &mut self,
+        function: Value,
+        this_value: Value,
+        args: &[Value],
+    ) -> Result<Value> {
+        match self.eval_call_completion(function, args, this_value)? {
+            Completion::Normal(value) => self.runtime_value(value),
+            Completion::Throw(Value::Error(error)) => {
+                Err(Error::exception(error.name(), error.message().to_owned()))
+            }
+            Completion::Throw(value) => Err(Error::runtime(format!("uncaught throw: {value}"))),
+            completion => completion.into_result(),
+        }
+    }
+
+    const fn is_json_callable(value: &Value) -> bool {
+        matches!(
+            value,
+            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_)
+        )
     }
 }
