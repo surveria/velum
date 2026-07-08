@@ -90,6 +90,22 @@ boxedString.toString = function() {
 boxedString.valueOf = function() {
     throw new Error("JSON String object conversion should prefer toString");
 };
+let orderedObject = { p1: "p1", p2: "p2", p3: "p3" };
+Object.defineProperty(orderedObject, "add", {
+    enumerable: true,
+    get: function() {
+        orderedObject.extra = "extra";
+        return "add";
+    }
+});
+orderedObject.p4 = "p4";
+orderedObject[2] = "2";
+orderedObject[0] = "0";
+orderedObject[1] = "1";
+delete orderedObject.p1;
+delete orderedObject.p3;
+orderedObject.p1 = "p1";
+let orderedText = JSON.stringify(orderedObject);
 let callbackOk =
     revived.a === 1 &&
     revived.nested.b === 42 &&
@@ -140,3 +156,4 @@ print(
     boxedListText
 );
 print(boxedPrettyText);
+print(orderedText);

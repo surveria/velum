@@ -97,6 +97,22 @@ let boxedValuesOk =
   JSON.stringify(boxedString) === '"stringified"' &&
   boxedListText === '{"toString":2}' &&
   boxedPrettyText === '{\n   "a": {\n      "b": 1\n   }\n}';
+let orderedObject = { p1: "p1", p2: "p2", p3: "p3" };
+Object.defineProperty(orderedObject, "add", {
+  enumerable: true,
+  get: function() {
+    orderedObject.extra = "extra";
+    return "add";
+  }
+});
+orderedObject.p4 = "p4";
+orderedObject[2] = "2";
+orderedObject[0] = "0";
+orderedObject[1] = "1";
+delete orderedObject.p1;
+delete orderedObject.p3;
+orderedObject.p1 = "p1";
+let orderedText = JSON.stringify(orderedObject);
 
 if (
   !primitiveOk ||
@@ -135,7 +151,8 @@ if (
   arrayReplacerText !== '[1,null,3]' ||
   toJsonKey !== "keep" ||
   toJsonText !== '{"keep":{"answer":42}}' ||
-  !boxedValuesOk
+  !boxedValuesOk ||
+  orderedText !== '{"0":"0","1":"1","2":"2","p2":"p2","add":"add","p4":"p4","p1":"p1"}'
 ) {
   throw new Test262Error("JSON basic behavior was unexpected");
 }

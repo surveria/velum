@@ -73,7 +73,8 @@ impl Object {
         }
         self.extend_virtual_string_keys(keys)?;
         if self.array_length.is_none() {
-            self.extend_named_keys(atoms, keys, false)?;
+            self.extend_named_array_index_keys(atoms, keys)?;
+            self.extend_named_keys(atoms, keys, true)?;
             return Ok(());
         }
 
@@ -87,9 +88,59 @@ impl Object {
         if self.array_length.is_some() {
             self.extend_array_element_names(keys);
             self.extend_sparse_array_element_names(atoms, keys)?;
-            self.extend_named_property_names(atoms, keys, true)?;
         } else {
-            self.extend_named_property_names(atoms, keys, false)?;
+            self.extend_named_array_index_names(atoms, keys)?;
+        }
+        self.extend_named_property_names(atoms, keys, true)?;
+        Ok(())
+    }
+
+    fn extend_named_array_index_keys(
+        &self,
+        atoms: &AtomTable,
+        keys: &mut Vec<String>,
+    ) -> Result<()> {
+        let mut entries = Vec::new();
+        for named_property in self.named_properties() {
+            let key = named_property.key();
+            let Some(atom) = key.atom() else {
+                continue;
+            };
+            let name = atoms.name(atom)?;
+            let Some(index) = ArrayIndex::parse(name) else {
+                continue;
+            };
+            if named_property.property().is_enumerable() {
+                entries.push((index, name.to_owned()));
+            }
+        }
+        entries.sort_by_key(|(index, _)| *index);
+        for (_, name) in entries {
+            push_unique_key(keys, name);
+        }
+        Ok(())
+    }
+
+    fn extend_named_array_index_names(
+        &self,
+        atoms: &AtomTable,
+        keys: &mut Vec<String>,
+    ) -> Result<()> {
+        let mut entries = Vec::new();
+        for named_property in self.named_properties() {
+            let key = named_property.key();
+            let Some(atom) = key.atom() else {
+                continue;
+            };
+            let name = atoms.name(atom)?;
+            let Some(index) = ArrayIndex::parse(name) else {
+                continue;
+            };
+            entries.push((index, name.to_owned()));
+        }
+        entries.sort_by_key(|(index, _)| *index);
+        for (_, name) in entries {
+            push_unique_key(keys, name);
         }
         Ok(())
     }
