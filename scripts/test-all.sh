@@ -11,11 +11,8 @@ export RSQJS_BUILD_REPO_ROOT="${RSQJS_BUILD_REPO_ROOT:-${repo_root}}"
 export RSQJS_BUILD_COMMIT_SHA="${RSQJS_BUILD_COMMIT_SHA:-$(git rev-parse HEAD)}"
 
 # --- Fast gates: run the cheap checks first so the pipeline stops before it
-# compiles anything or downloads corpora. On a pull request CI sets
-# RSQJS_BASE_REF, which turns on the engine version-bump check against the base.
-if [[ -n "${RSQJS_BASE_REF:-}" ]]; then
-  "${script_dir}/check-version-bump.sh" "${RSQJS_BASE_REF}"
-fi
+# compiles anything or downloads corpora. On pull requests and merge groups CI
+# sets RSQJS_BASE_REF, which turns on base-relative policy gates.
 "${script_dir}/check-touched-file-sizes.sh" "${RSQJS_BASE_REF:-origin/main}"
 cargo fmt --all -- --check
 cargo fmt --manifest-path runner/Cargo.toml --all -- --check
