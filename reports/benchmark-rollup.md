@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T130521Z.md`
-- Task: workflow_dispatch
-- Performance: 5.89x (62/63 >1.00x)
-- Memory: - (0/63 >1.00x)
-- Full Test262: 26029 passed / 76549 failed (25.37%)
+- `rsqjs-test-report-20260708T132001Z.md`
+- Task: PR #332: Add Array.prototype callback methods
+- Performance: 6.03x (63/64 >1.00x)
+- Memory: - (0/64 >1.00x)
+- Full Test262: 28268 passed / 74310 failed (27.56%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -326,3 +326,4 @@ Latest report:
 | `20260708T123531Z` `5a994d3` workflow_dispatch | 5.92x (62/63 >1.00x) | - (0/63 >1.00x) | 25758 passed / 76820 failed (25.11%) |
 | `20260708T125723Z` `00671fe` PR #331: Optimize control-flow update bytecode paths | 5.97x (62/63 >1.00x) | - (0/63 >1.00x) | 25758 passed / 76820 failed (25.11%) |
 | `20260708T130521Z` `245f33b` workflow_dispatch | 5.89x (62/63 >1.00x) | - (0/63 >1.00x) | 26029 passed / 76549 failed (25.37%) |
+| `20260708T132001Z` `36ae7c6` PR #332: Add Array.prototype callback methods | 6.03x (63/64 >1.00x) | - (0/64 >1.00x) | 28268 passed / 74310 failed (27.56%) |
