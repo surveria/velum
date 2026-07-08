@@ -66,7 +66,19 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let value = self.eval_string_argument(args.as_slice())?;
-        let value = self.intern_heap_string(&value)?;
+        self.create_string_object_from_text(&value)
+    }
+
+    pub(in crate::runtime::native) fn create_string_object_from_value(
+        &mut self,
+        value: &Value,
+    ) -> Result<Value> {
+        let value = self.string_argument_text(value)?;
+        self.create_string_object_from_text(&value)
+    }
+
+    fn create_string_object_from_text(&mut self, value: &str) -> Result<Value> {
+        let value = self.intern_heap_string(value)?;
         let prototype = self.string_constructor_prototype()?;
         let length_key = self.intern_property_key(STRING_LENGTH_PROPERTY)?;
         self.objects.create_string_object(
@@ -380,10 +392,11 @@ impl Context {
 
     pub(in crate::runtime) fn string_prototype_property_value(
         &mut self,
+        receiver: &Value,
         property: &str,
     ) -> Result<Value> {
         let prototype = self.string_constructor_prototype()?;
-        self.get_property_value(&Value::Object(prototype), property)
+        self.get_prototype_property_value_with_receiver(prototype, receiver, property)
     }
 
     fn string_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<ObjectId> {

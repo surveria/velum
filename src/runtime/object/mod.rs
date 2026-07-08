@@ -1,4 +1,5 @@
 use crate::error::{Error, Result};
+use crate::storage::symbol::JsSymbol;
 use crate::value::{ObjectId, Value};
 
 mod array;
@@ -44,6 +45,13 @@ impl ObjectPropertyValue {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub(in crate::runtime) enum ObjectPrimitiveValue {
+    Bool(bool),
+    Number(f64),
+    Symbol(JsSymbol),
+}
+
 /// How an assignment should proceed after resolving accessor properties on
 /// the receiver and its prototype chain.
 #[derive(Debug, Clone)]
@@ -64,6 +72,7 @@ struct Object {
     enumerable_property_count: usize,
     array_length: Option<ArrayLength>,
     string_value: Option<crate::storage::string_heap::JsString>,
+    primitive_value: Option<ObjectPrimitiveValue>,
     prototype: Option<ObjectId>,
 }
 
@@ -84,6 +93,7 @@ impl Object {
             enumerable_property_count: 0,
             array_length: None,
             string_value: None,
+            primitive_value: None,
             prototype: None,
         }
     }
@@ -96,6 +106,7 @@ impl Object {
             enumerable_property_count: 0,
             array_length: None,
             string_value: None,
+            primitive_value: None,
             prototype: None,
         }
     }
@@ -108,6 +119,20 @@ impl Object {
             enumerable_property_count: 0,
             array_length: Some(length),
             string_value: None,
+            primitive_value: None,
+            prototype: None,
+        }
+    }
+
+    const fn boxed_primitive(value: ObjectPrimitiveValue) -> Self {
+        Self {
+            named_properties: Vec::new(),
+            array_storage: ArrayStorage::new(),
+            shape: ShapeId::root(),
+            enumerable_property_count: 0,
+            array_length: None,
+            string_value: None,
+            primitive_value: Some(value),
             prototype: None,
         }
     }

@@ -60,12 +60,18 @@ const PATH_TEST262_NUMBER_STATIC_METHODS: &str =
     "tests/corpora/test262/active/built-ins/Number/static_methods.js";
 const PATH_TEST262_BOOLEAN_BUILTIN: &str =
     "tests/corpora/test262/active/built-ins/Boolean/constructor.js";
+const PATH_TEST262_BOOLEAN_PROTOTYPE_METHODS: &str =
+    "tests/corpora/test262/active/built-ins/Boolean/prototype_methods.js";
+const PATH_TEST262_NUMBER_PROTOTYPE_METHODS: &str =
+    "tests/corpora/test262/active/built-ins/Number/prototype_methods.js";
 const PATH_TEST262_STRING_BUILTIN: &str =
     "tests/corpora/test262/active/built-ins/String/constructor.js";
 const PATH_TEST262_STRING_PROTOTYPE_METHODS: &str =
     "tests/corpora/test262/active/built-ins/String/prototype_methods.js";
 const PATH_TEST262_STRING_STATIC_UNICODE_METHODS: &str =
     "tests/corpora/test262/active/built-ins/String/static_unicode_methods.js";
+const PATH_TEST262_SYMBOL_PROTOTYPE_METHODS: &str =
+    "tests/corpora/test262/active/built-ins/Symbol/prototype_methods.js";
 const PATH_TEST262_COMPUTED_PROPERTIES: &str =
     "tests/corpora/test262/active/language/expressions/computed_properties.js";
 const PATH_TEST262_ARRAY_LITERALS: &str =
@@ -439,12 +445,51 @@ fn test262_operator_expression_cases() -> Vec<EngineCase> {
 }
 
 fn test262_builtin_cases() -> Vec<EngineCase> {
+    let mut cases = test262_primitive_builtin_cases();
+    cases.extend(test262_global_builtin_cases());
+    cases.extend(test262_math_builtin_cases());
+    cases.extend(test262_object_builtin_cases());
+    cases.extend(test262_string_builtin_cases());
+    cases
+}
+
+fn test262_primitive_builtin_cases() -> Vec<EngineCase> {
     vec![
         EngineCase {
             id: "built-ins/Boolean/constructor",
             path: PATH_TEST262_BOOLEAN_BUILTIN,
             expectation: Expectation::Value("42"),
         },
+        EngineCase {
+            id: "built-ins/Boolean/prototype-methods",
+            path: PATH_TEST262_BOOLEAN_PROTOTYPE_METHODS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Number/constructor",
+            path: PATH_TEST262_NUMBER_BUILTIN,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Number/static-methods",
+            path: PATH_TEST262_NUMBER_STATIC_METHODS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Number/prototype-methods",
+            path: PATH_TEST262_NUMBER_PROTOTYPE_METHODS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Symbol/prototype-methods",
+            path: PATH_TEST262_SYMBOL_PROTOTYPE_METHODS,
+            expectation: Expectation::Value("42"),
+        },
+    ]
+}
+
+fn test262_global_builtin_cases() -> Vec<EngineCase> {
+    vec![
         EngineCase {
             id: "built-ins/global/numeric-constants",
             path: PATH_TEST262_GLOBAL_NUMERIC_CONSTANTS,
@@ -470,6 +515,11 @@ fn test262_builtin_cases() -> Vec<EngineCase> {
             path: PATH_TEST262_PROMISE_BUILTIN,
             expectation: Expectation::Value("42"),
         },
+    ]
+}
+
+fn test262_math_builtin_cases() -> Vec<EngineCase> {
+    vec![
         EngineCase {
             id: "built-ins/Math/basic",
             path: PATH_TEST262_MATH_BUILTIN,
@@ -490,16 +540,11 @@ fn test262_builtin_cases() -> Vec<EngineCase> {
             path: PATH_TEST262_MATH_RANDOM,
             expectation: Expectation::Value("42"),
         },
-        EngineCase {
-            id: "built-ins/Number/constructor",
-            path: PATH_TEST262_NUMBER_BUILTIN,
-            expectation: Expectation::Value("42"),
-        },
-        EngineCase {
-            id: "built-ins/Number/static-methods",
-            path: PATH_TEST262_NUMBER_STATIC_METHODS,
-            expectation: Expectation::Value("42"),
-        },
+    ]
+}
+
+fn test262_object_builtin_cases() -> Vec<EngineCase> {
+    vec![
         EngineCase {
             id: "built-ins/Object/descriptors",
             path: PATH_TEST262_OBJECT_DESCRIPTORS,
@@ -510,6 +555,11 @@ fn test262_builtin_cases() -> Vec<EngineCase> {
             path: PATH_TEST262_OBJECT_STATIC_METHODS,
             expectation: Expectation::Value("42"),
         },
+    ]
+}
+
+fn test262_string_builtin_cases() -> Vec<EngineCase> {
+    vec![
         EngineCase {
             id: "built-ins/String/constructor",
             path: PATH_TEST262_STRING_BUILTIN,

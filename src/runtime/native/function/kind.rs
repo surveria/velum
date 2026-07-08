@@ -108,8 +108,12 @@ pub(in crate::runtime) const NAN_NAME: &str = "NaN";
 const NUMBER_FUNCTION_LENGTH: f64 = 1.0;
 const NUMBER_IS_FINITE_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const NUMBER_IS_FINITE_NAME: &str = "isFinite";
+const NUMBER_IS_INTEGER_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const NUMBER_IS_INTEGER_NAME: &str = "isInteger";
 const NUMBER_IS_NAN_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const NUMBER_IS_NAN_NAME: &str = "isNaN";
+const NUMBER_IS_SAFE_INTEGER_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const NUMBER_IS_SAFE_INTEGER_NAME: &str = "isSafeInteger";
 pub(in crate::runtime::native) const NUMBER_NAME: &str = "Number";
 const OBJECT_ASSIGN_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const OBJECT_ASSIGN_NAME: &str = "assign";
@@ -203,21 +207,6 @@ pub(in crate::runtime::native) const STRING_PROTOTYPE_TRIM_RIGHT_NAME: &str = "t
 pub(in crate::runtime::native) const STRING_PROTOTYPE_TRIM_START_NAME: &str = "trimStart";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_VALUE_OF_NAME: &str = "valueOf";
 const SYMBOL_FUNCTION_LENGTH: f64 = 0.0;
-const MAP_NAME: &str = "Map";
-const SET_NAME: &str = "Set";
-const COLLECTION_METHOD_GET_NAME: &str = "get";
-const COLLECTION_METHOD_SET_NAME: &str = "set";
-const COLLECTION_METHOD_ADD_NAME: &str = "add";
-const COLLECTION_METHOD_HAS_NAME: &str = "has";
-const COLLECTION_METHOD_DELETE_NAME: &str = "delete";
-const COLLECTION_METHOD_CLEAR_NAME: &str = "clear";
-const COLLECTION_METHOD_FOR_EACH_NAME: &str = "forEach";
-const COLLECTION_METHOD_ENTRIES_NAME: &str = "entries";
-const COLLECTION_METHOD_KEYS_NAME: &str = "keys";
-const COLLECTION_METHOD_VALUES_NAME: &str = "values";
-const COLLECTION_SIZE_GETTER_NAME: &str = "size";
-const COLLECTION_ITERATOR_NEXT_NAME: &str = "next";
-const COLLECTION_ITERATOR_SELF_NAME: &str = "[Symbol.iterator]";
 pub(in crate::runtime::native) const SYMBOL_NAME: &str = "Symbol";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -237,6 +226,8 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ArrayUnshift,
     AsyncFunction,
     Boolean,
+    BooleanPrototypeToString,
+    BooleanPrototypeValueOf,
     BoundFunction(BoundFunctionId),
     CollectionIteratorNext(crate::runtime::collections::CollectionIteratorId),
     IteratorSelf,
@@ -304,7 +295,12 @@ pub(in crate::runtime) enum NativeFunctionKind {
     MapValues,
     Number,
     NumberIsFinite,
+    NumberIsInteger,
     NumberIsNan,
+    NumberIsSafeInteger,
+    NumberPrototypeToLocaleString,
+    NumberPrototypeToString,
+    NumberPrototypeValueOf,
     Object,
     ObjectAssign,
     ObjectCreate,
@@ -371,58 +367,12 @@ pub(in crate::runtime) enum NativeFunctionKind {
     SetSizeGetter,
     SetValues,
     Symbol,
+    SymbolPrototypeDescriptionGetter,
+    SymbolPrototypeToString,
+    SymbolPrototypeValueOf,
 }
 
 impl NativeFunctionKind {
-    const fn collection_length(self) -> Option<f64> {
-        match self {
-            Self::Map
-            | Self::Set
-            | Self::SetSizeGetter
-            | Self::MapSizeGetter
-            | Self::MapClear
-            | Self::SetClear
-            | Self::MapEntries
-            | Self::MapKeys
-            | Self::MapValues
-            | Self::SetEntries
-            | Self::SetValues
-            | Self::CollectionIteratorNext(_)
-            | Self::IteratorSelf => Some(0.0),
-            Self::MapGet
-            | Self::MapHas
-            | Self::MapDelete
-            | Self::MapForEach
-            | Self::SetAdd
-            | Self::SetHas
-            | Self::SetDelete
-            | Self::SetForEach => Some(1.0),
-            Self::MapSet => Some(2.0),
-            _ => None,
-        }
-    }
-
-    const fn collection_name(self) -> Option<&'static str> {
-        match self {
-            Self::Map => Some(MAP_NAME),
-            Self::Set => Some(SET_NAME),
-            Self::MapGet => Some(COLLECTION_METHOD_GET_NAME),
-            Self::MapSet => Some(COLLECTION_METHOD_SET_NAME),
-            Self::SetAdd => Some(COLLECTION_METHOD_ADD_NAME),
-            Self::MapHas | Self::SetHas => Some(COLLECTION_METHOD_HAS_NAME),
-            Self::MapDelete | Self::SetDelete => Some(COLLECTION_METHOD_DELETE_NAME),
-            Self::MapClear | Self::SetClear => Some(COLLECTION_METHOD_CLEAR_NAME),
-            Self::MapForEach | Self::SetForEach => Some(COLLECTION_METHOD_FOR_EACH_NAME),
-            Self::MapEntries | Self::SetEntries => Some(COLLECTION_METHOD_ENTRIES_NAME),
-            Self::MapKeys => Some(COLLECTION_METHOD_KEYS_NAME),
-            Self::MapValues | Self::SetValues => Some(COLLECTION_METHOD_VALUES_NAME),
-            Self::MapSizeGetter | Self::SetSizeGetter => Some(COLLECTION_SIZE_GETTER_NAME),
-            Self::CollectionIteratorNext(_) => Some(COLLECTION_ITERATOR_NEXT_NAME),
-            Self::IteratorSelf => Some(COLLECTION_ITERATOR_SELF_NAME),
-            _ => None,
-        }
-    }
-
     pub(in crate::runtime::native) const fn length(self) -> f64 {
         if let Some(length) = self.collection_length() {
             return length;
@@ -440,6 +390,9 @@ impl NativeFunctionKind {
             return length;
         }
         if let Some(length) = self.core_length() {
+            return length;
+        }
+        if let Some(length) = self.primitive_prototype_length() {
             return length;
         }
         if let Some(length) = self.string_static_length() {
@@ -481,7 +434,9 @@ impl NativeFunctionKind {
             Self::GlobalParseFloat => Some(GLOBAL_PARSE_FLOAT_FUNCTION_LENGTH),
             Self::GlobalParseInt => Some(GLOBAL_PARSE_INT_FUNCTION_LENGTH),
             Self::NumberIsFinite => Some(NUMBER_IS_FINITE_FUNCTION_LENGTH),
+            Self::NumberIsInteger => Some(NUMBER_IS_INTEGER_FUNCTION_LENGTH),
             Self::NumberIsNan => Some(NUMBER_IS_NAN_FUNCTION_LENGTH),
+            Self::NumberIsSafeInteger => Some(NUMBER_IS_SAFE_INTEGER_FUNCTION_LENGTH),
             _ => None,
         }
     }
@@ -645,6 +600,9 @@ impl NativeFunctionKind {
         if let Some(name) = self.core_name() {
             return name;
         }
+        if let Some(name) = self.primitive_prototype_name() {
+            return name;
+        }
         if let Some(name) = self.string_static_name() {
             return name;
         }
@@ -782,6 +740,8 @@ impl NativeFunctionKind {
             Self::GlobalEncodeUriComponent => Some(GLOBAL_ENCODE_URI_COMPONENT_NAME),
             Self::GlobalIsFinite | Self::NumberIsFinite => Some(GLOBAL_IS_FINITE_NAME),
             Self::GlobalIsNan | Self::NumberIsNan => Some(GLOBAL_IS_NAN_NAME),
+            Self::NumberIsInteger => Some(NUMBER_IS_INTEGER_NAME),
+            Self::NumberIsSafeInteger => Some(NUMBER_IS_SAFE_INTEGER_NAME),
             Self::GlobalParseFloat => Some(GLOBAL_PARSE_FLOAT_NAME),
             Self::GlobalParseInt => Some(GLOBAL_PARSE_INT_NAME),
             _ => None,
