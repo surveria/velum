@@ -8,7 +8,7 @@ use super::{
     AccessorPropertyUpdate, ArrayLength, OBJECT_CONSTRUCTOR_PROPERTY, Object, ObjectHeap,
     ObjectPrimitiveValue, ObjectPropertyInit, ObjectPropertyValue, ObjectStructureSnapshot,
     PROTOTYPE_PROPERTY, PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup,
-    PropertyUpdate, ShapeTable,
+    PropertyUpdate, RegExpValue, ShapeTable,
 };
 
 impl ObjectHeap {
@@ -170,6 +170,18 @@ impl ObjectHeap {
         Ok(Value::Object(id))
     }
 
+    pub(crate) fn create_regexp(
+        &mut self,
+        value: RegExpValue,
+        prototype: ObjectId,
+        max_objects: usize,
+    ) -> Result<ObjectId> {
+        let mut object = Object::ordinary();
+        object.prototype = Some(prototype);
+        object.regexp_value = Some(value);
+        self.push_object(object, max_objects)
+    }
+
     pub(crate) fn create_with_prototype_property(
         &mut self,
         prototype: Option<ObjectId>,
@@ -316,6 +328,10 @@ impl ObjectHeap {
         id: ObjectId,
     ) -> Result<Option<&ObjectPrimitiveValue>> {
         Ok(self.object(id)?.primitive_value.as_ref())
+    }
+
+    pub(in crate::runtime) fn regexp_value(&self, id: ObjectId) -> Result<Option<&RegExpValue>> {
+        Ok(self.object(id)?.regexp_value.as_ref())
     }
 
     pub fn has(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {

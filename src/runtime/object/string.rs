@@ -62,6 +62,7 @@ impl Object {
             string_value: Some(value),
             primitive_value: None,
             date_value: None,
+            regexp_value: None,
             prototype: None,
             extensibility: super::ObjectExtensibility::Extensible,
         }

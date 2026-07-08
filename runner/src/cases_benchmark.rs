@@ -87,6 +87,7 @@ const PATH_BENCH_ERROR_OBJECT_PROPERTIES: &str =
 const PATH_BENCH_GLOBAL_NUMERIC_CONSTANTS: &str =
     "tests/corpora/benchmarks/active/global_numeric_constants.js";
 const PATH_BENCH_JSON_BUILTIN: &str = "tests/corpora/benchmarks/active/json_builtin.js";
+const PATH_BENCH_REGEXP_BASELINE: &str = "tests/corpora/benchmarks/active/regexp_baseline.js";
 const PATH_BENCH_MATH_BUILTIN: &str = "tests/corpora/benchmarks/active/math_builtin.js";
 const PATH_BENCH_MATH_INTEGER_METHODS: &str =
     "tests/corpora/benchmarks/active/math_integer_methods.js";
@@ -363,6 +364,10 @@ fn benchmark_runtime_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "json_builtin",
             path: PATH_BENCH_JSON_BUILTIN,
+        },
+        BenchmarkCase {
+            id: "regexp_baseline",
+            path: PATH_BENCH_REGEXP_BASELINE,
         },
         BenchmarkCase {
             id: "math_builtin",

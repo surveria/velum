@@ -3,20 +3,25 @@ use crate::{
     runtime::{
         Context,
         call::RuntimeCallArgs,
-        object::{ObjectPropertyInit, PropertyEnumerable},
+        object::{
+            DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
+            PropertyUpdate, PropertyWritable, RegExpValue,
+        },
     },
     value::{ObjectId, Value},
 };
 
 use super::{
-    NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, REGEXP_NAME, REGEXP_PROTOTYPE_TEST_NAME,
+    NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, REGEXP_NAME, REGEXP_PROTOTYPE_EXEC_NAME,
+    REGEXP_PROTOTYPE_TEST_NAME,
 };
 
 const REGEXP_SOURCE_PROPERTY: &str = "source";
 const REGEXP_FLAGS_PROPERTY: &str = "flags";
-const PROTOTYPE_PROPERTY: &str = "__proto__";
-const REGEXP_TEST_RECEIVER_ERROR: &str = "RegExp.prototype.test requires a RegExp receiver";
+const REGEXP_LAST_INDEX_PROPERTY: &str = "lastIndex";
+const REGEXP_RECEIVER_ERROR: &str = "RegExp method requires a RegExp receiver";
 const UNSUPPORTED_REGEXP_FLAG_ERROR: &str = "unsupported regular expression flag";
+const ZERO_INDEX: f64 = 0.0;
 
 impl Context {
     pub(in crate::runtime::native) fn regexp_constructor_value(&mut self) -> Result<Value> {
@@ -67,19 +72,33 @@ impl Context {
         self.eval_direct_regexp_constructor(args.as_slice())
     }
 
-    pub(in crate::runtime::native) fn eval_regexp_prototype_test(
+    pub(in crate::runtime::native) fn eval_regexp_prototype_exec(
         &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let pattern = self.regexp_text_property(this_value, REGEXP_SOURCE_PROPERTY)?;
-        let flags = self.regexp_text_property(this_value, REGEXP_FLAGS_PROPERTY)?;
         let input = args
             .as_slice()
             .first()
             .map_or_else(String::new, Value::display_for_concat);
         self.check_string_len(&input)?;
-        Ok(Value::Bool(regexp_test(&pattern, &flags, &input)?))
+        self.regexp_exec(this_value, &input)
+    }
+
+    pub(in crate::runtime::native) fn eval_regexp_prototype_test(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let input = args
+            .as_slice()
+            .first()
+            .map_or_else(String::new, Value::display_for_concat);
+        self.check_string_len(&input)?;
+        Ok(Value::Bool(!matches!(
+            self.regexp_exec(this_value, &input)?,
+            Value::Null
+        )))
     }
 
     fn create_regexp_object_from_text(&mut self, pattern: &str, flags: &str) -> Result<Value> {
@@ -87,37 +106,54 @@ impl Context {
         self.check_string_len(pattern)?;
         self.check_string_len(flags)?;
         let prototype = self.regexp_constructor_prototype()?;
-        let source_key = self.intern_property_key(REGEXP_SOURCE_PROPERTY)?;
-        let flags_key = self.intern_property_key(REGEXP_FLAGS_PROPERTY)?;
-        let prototype_key = self.intern_property_key(PROTOTYPE_PROPERTY)?;
-        let constructor_key = self.object_constructor_property_key()?;
-        let source = self.heap_string_value(pattern)?;
-        let flags = self.heap_string_value(flags)?;
-        self.objects.create(
-            vec![
-                ObjectPropertyInit::new(
-                    source_key,
-                    REGEXP_SOURCE_PROPERTY,
-                    source,
-                    PropertyEnumerable::No,
-                ),
-                ObjectPropertyInit::new(
-                    flags_key,
-                    REGEXP_FLAGS_PROPERTY,
-                    flags,
-                    PropertyEnumerable::No,
-                ),
-                ObjectPropertyInit::new(
-                    prototype_key,
-                    PROTOTYPE_PROPERTY,
-                    Value::Object(prototype),
-                    PropertyEnumerable::No,
-                ),
-            ],
-            constructor_key,
+        let id = self.objects.create_regexp(
+            RegExpValue::new(pattern.to_owned(), flags.to_owned()),
+            prototype,
             self.limits.max_objects,
-            self.limits.max_object_properties,
-        )
+        )?;
+        let source_value = self.heap_string_value(pattern)?;
+        self.define_regexp_data_property(
+            id,
+            REGEXP_SOURCE_PROPERTY,
+            source_value,
+            PropertyWritable::No,
+            PropertyConfigurable::Yes,
+        )?;
+        let flags_value = self.heap_string_value(flags)?;
+        self.define_regexp_data_property(
+            id,
+            REGEXP_FLAGS_PROPERTY,
+            flags_value,
+            PropertyWritable::No,
+            PropertyConfigurable::Yes,
+        )?;
+        self.define_regexp_data_property(
+            id,
+            REGEXP_LAST_INDEX_PROPERTY,
+            Value::Number(ZERO_INDEX),
+            PropertyWritable::Yes,
+            PropertyConfigurable::No,
+        )?;
+        Ok(Value::Object(id))
+    }
+
+    fn define_regexp_data_property(
+        &mut self,
+        id: ObjectId,
+        name: &str,
+        value: Value,
+        writable: PropertyWritable,
+        configurable: PropertyConfigurable,
+    ) -> Result<()> {
+        let key = self.intern_property_key(name)?;
+        let update = PropertyUpdate::Data(DataPropertyUpdate::new(
+            Some(value),
+            Some(writable),
+            Some(PropertyEnumerable::No),
+            Some(configurable),
+        ));
+        self.objects
+            .define_property(id, key, name, update, self.limits.max_object_properties)
     }
 
     fn regexp_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<ObjectId> {
@@ -147,62 +183,156 @@ impl Context {
     }
 
     fn install_regexp_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
-        let test = self.create_ephemeral_native_function(
-            NativeFunctionKind::RegExpPrototypeTest,
-            Value::Undefined,
-        )?;
-        self.define_non_enumerable_object_property(prototype, REGEXP_PROTOTYPE_TEST_NAME, test)
+        for (name, kind) in [
+            (
+                REGEXP_PROTOTYPE_EXEC_NAME,
+                NativeFunctionKind::RegExpPrototypeExec,
+            ),
+            (
+                REGEXP_PROTOTYPE_TEST_NAME,
+                NativeFunctionKind::RegExpPrototypeTest,
+            ),
+        ] {
+            let method = self.create_ephemeral_native_function(kind, Value::Undefined)?;
+            self.define_non_enumerable_object_property(prototype, name, method)?;
+        }
+        Ok(())
     }
 
-    fn regexp_text_property(&mut self, value: &Value, property: &str) -> Result<String> {
-        let value = self.get_property_value(value, property)?;
-        match value {
-            Value::String(value) => Ok(value),
-            Value::HeapString(value) => Ok(value.as_str().to_owned()),
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::Symbol(_)
-            | Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Object(_)
-            | Value::Error(_) => Err(Error::type_error(REGEXP_TEST_RECEIVER_ERROR)),
+    fn regexp_exec(&mut self, this_value: &Value, input: &str) -> Result<Value> {
+        let Value::Object(id) = this_value else {
+            return Err(Error::type_error(REGEXP_RECEIVER_ERROR));
+        };
+        let regexp = self
+            .objects
+            .regexp_value(*id)?
+            .cloned()
+            .ok_or_else(|| Error::type_error(REGEXP_RECEIVER_ERROR))?;
+        let flags = RegExpFlags::parse(regexp.flags())?;
+        let start = if flags.global() || flags.sticky() {
+            self.regexp_last_index(this_value, input)?
+        } else {
+            0
+        };
+        let matched = regexp_find(regexp.pattern(), &flags, input, start)?;
+        let Some(matched) = matched else {
+            if flags.global() || flags.sticky() {
+                self.set_regexp_last_index(this_value, 0)?;
+            }
+            return Ok(Value::Null);
+        };
+        if flags.global() || flags.sticky() {
+            self.set_regexp_last_index(this_value, matched.end)?;
         }
+        self.regexp_match_array(input, matched.start, matched.end)
+    }
+
+    fn regexp_last_index(&mut self, this_value: &Value, input: &str) -> Result<usize> {
+        let value = self.get_property_value(this_value, REGEXP_LAST_INDEX_PROPERTY)?;
+        let Some(index) = value.as_number() else {
+            return Ok(0);
+        };
+        if !index.is_finite() || index <= 0.0 {
+            return Ok(0);
+        }
+        let index = regexp_index_number_to_usize(index)?;
+        if index > input.len() {
+            return Ok(input.len().saturating_add(1));
+        }
+        Ok(index)
+    }
+
+    fn set_regexp_last_index(&mut self, this_value: &Value, index: usize) -> Result<()> {
+        let key = self.intern_property_key(REGEXP_LAST_INDEX_PROPERTY)?;
+        crate::runtime::property::set_property(
+            &mut self.objects,
+            this_value,
+            key,
+            REGEXP_LAST_INDEX_PROPERTY,
+            Value::Number(regexp_index_usize_to_number(index)?),
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn regexp_match_array(&mut self, input: &str, start: usize, end: usize) -> Result<Value> {
+        let matched = input
+            .get(start..end)
+            .ok_or_else(|| Error::runtime("RegExp match span is not a string boundary"))?;
+        self.array_constructor_value()?;
+        let prototype = self.objects.existing_array_prototype_id()?;
+        let matched_value = self.heap_string_value(matched)?;
+        let array = self.objects.create_array(
+            vec![matched_value],
+            prototype,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
+        let Value::Object(id) = array else {
+            return Err(Error::runtime("RegExp match result is not an array object"));
+        };
+        self.define_regexp_data_property(
+            id,
+            "index",
+            Value::Number(regexp_index_usize_to_number(start)?),
+            PropertyWritable::Yes,
+            PropertyConfigurable::Yes,
+        )?;
+        let input_value = self.heap_string_value(input)?;
+        self.define_regexp_data_property(
+            id,
+            "input",
+            input_value,
+            PropertyWritable::Yes,
+            PropertyConfigurable::Yes,
+        )?;
+        Ok(Value::Object(id))
     }
 }
 
-fn regexp_test(pattern: &str, flags: &str, input: &str) -> Result<bool> {
-    validate_regexp_flags(flags)?;
-    let pattern = classify_regexp_pattern(pattern);
-    let result = match pattern {
-        RegExpPattern::Word => input.chars().any(is_word_char),
-        RegExpPattern::Newline => input.chars().any(is_newline_char),
-        RegExpPattern::Whitespace => input.chars().any(is_whitespace_char),
-        RegExpPattern::SpaceSeparator => input.chars().any(is_space_separator_char),
-        RegExpPattern::IdentifierStart => input.chars().any(is_identifier_start_char),
-        RegExpPattern::IdentifierContinue => input.chars().any(is_identifier_continue_char),
-        RegExpPattern::Literal(text) => literal_contains(&text, flags, input),
-        RegExpPattern::Unsupported => false,
-    };
-    Ok(result)
+fn regexp_find(
+    pattern: &str,
+    flags: &RegExpFlags,
+    input: &str,
+    start: usize,
+) -> Result<Option<RegExpMatch>> {
+    if start > input.len() {
+        return Ok(None);
+    }
+    let pattern = RegExpProgram::compile(pattern)?;
+    if flags.sticky() {
+        return Ok(pattern.match_at(input, start, flags));
+    }
+    let starts = input
+        .char_indices()
+        .map(|(index, _)| index)
+        .chain(std::iter::once(input.len()))
+        .filter(|index| *index >= start);
+    for index in starts {
+        if let Some(matched) = pattern.match_at(input, index, flags) {
+            return Ok(Some(matched));
+        }
+    }
+    Ok(None)
 }
 
 fn validate_regexp_flags(flags: &str) -> Result<()> {
-    let mut seen = RegExpFlagsSeen::default();
-    for flag in flags.chars() {
-        seen.record(flag)?;
-    }
-    Ok(())
+    RegExpFlags::parse(flags).map(|_| ())
 }
 
 #[derive(Debug, Default)]
-struct RegExpFlagsSeen {
+struct RegExpFlags {
     bits: u16,
 }
 
-impl RegExpFlagsSeen {
+impl RegExpFlags {
+    fn parse(flags: &str) -> Result<Self> {
+        let mut seen = Self::default();
+        for flag in flags.chars() {
+            seen.record(flag)?;
+        }
+        Ok(seen)
+    }
+
     fn record(&mut self, flag: char) -> Result<()> {
         let bit = match flag {
             'g' => REGEXP_FLAG_GLOBAL,
@@ -227,96 +357,303 @@ impl RegExpFlagsSeen {
         self.bits |= bit;
         Ok(())
     }
+
+    const fn ignore_case(&self) -> bool {
+        self.bits & REGEXP_FLAG_IGNORE_CASE != 0
+    }
+
+    const fn multiline(&self) -> bool {
+        self.bits & REGEXP_FLAG_MULTILINE != 0
+    }
+
+    const fn dot_all(&self) -> bool {
+        self.bits & REGEXP_FLAG_DOT_ALL != 0
+    }
+
+    const fn global(&self) -> bool {
+        self.bits & REGEXP_FLAG_GLOBAL != 0
+    }
+
+    const fn sticky(&self) -> bool {
+        self.bits & REGEXP_FLAG_STICKY != 0
+    }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-enum RegExpPattern {
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct RegExpMatch {
+    start: usize,
+    end: usize,
+}
+
+#[derive(Debug, Clone)]
+struct RegExpProgram {
+    atoms: Vec<RegExpAtom>,
+    anchored_start: bool,
+    anchored_end: bool,
+}
+
+impl RegExpProgram {
+    fn compile(pattern: &str) -> Result<Self> {
+        if pattern.starts_with("(?:[A-Za-z") {
+            return Ok(Self::single(RegExpAtomMatcher::IdentifierStart));
+        }
+        if pattern.starts_with("(?:[0-9A-Z_a-z") {
+            return Ok(Self::single(RegExpAtomMatcher::IdentifierContinue));
+        }
+        let mut chars = pattern.chars().peekable();
+        let anchored_start = chars.next_if_eq(&'^').is_some();
+        let mut atoms = Vec::new();
+        while let Some(ch) = chars.next() {
+            if ch == '$' && chars.peek().is_none() {
+                return Ok(Self {
+                    atoms,
+                    anchored_start,
+                    anchored_end: true,
+                });
+            }
+            let mut atom = RegExpAtom::compile(ch, &mut chars)?;
+            if let Some(quantifier) = chars.next_if(|ch| is_quantifier(*ch)) {
+                atom.quantifier = match quantifier {
+                    '*' => RegExpQuantifier::ZeroOrMore,
+                    '+' => RegExpQuantifier::OneOrMore,
+                    '?' => RegExpQuantifier::ZeroOrOne,
+                    _ => return Err(Error::runtime("unsupported RegExp quantifier")),
+                };
+            }
+            atoms.push(atom);
+        }
+        Ok(Self {
+            atoms,
+            anchored_start,
+            anchored_end: false,
+        })
+    }
+
+    fn single(matcher: RegExpAtomMatcher) -> Self {
+        Self {
+            atoms: vec![RegExpAtom {
+                matcher,
+                quantifier: RegExpQuantifier::Once,
+            }],
+            anchored_start: false,
+            anchored_end: false,
+        }
+    }
+
+    fn match_at(&self, input: &str, start: usize, flags: &RegExpFlags) -> Option<RegExpMatch> {
+        if self.anchored_start && start != 0 && !line_start(input, start, flags) {
+            return None;
+        }
+        let mut index = start;
+        for atom in &self.atoms {
+            index = atom.consume(input, index, flags)?;
+        }
+        if self.anchored_end && index != input.len() && !line_end(input, index, flags) {
+            return None;
+        }
+        Some(RegExpMatch { start, end: index })
+    }
+}
+
+#[derive(Debug, Clone)]
+struct RegExpAtom {
+    matcher: RegExpAtomMatcher,
+    quantifier: RegExpQuantifier,
+}
+
+impl RegExpAtom {
+    fn compile(ch: char, chars: &mut impl Iterator<Item = char>) -> Result<Self> {
+        let matcher = if ch == '\\' {
+            escaped_atom(
+                chars
+                    .next()
+                    .ok_or_else(|| Error::runtime("unterminated regular expression escape"))?,
+            )
+        } else if ch == '.' {
+            RegExpAtomMatcher::Any
+        } else if ch == '[' {
+            class_atom(chars)?
+        } else if is_regexp_meta_char(ch) {
+            return Err(Error::runtime("unsupported regular expression syntax"));
+        } else {
+            RegExpAtomMatcher::Char(ch)
+        };
+        Ok(Self {
+            matcher,
+            quantifier: RegExpQuantifier::Once,
+        })
+    }
+
+    fn consume(&self, input: &str, index: usize, flags: &RegExpFlags) -> Option<usize> {
+        match self.quantifier {
+            RegExpQuantifier::Once => self.matcher.consume(input, index, flags),
+            RegExpQuantifier::ZeroOrOne => {
+                self.matcher.consume(input, index, flags).or(Some(index))
+            }
+            RegExpQuantifier::ZeroOrMore => Some(self.consume_repeating(input, index, flags)),
+            RegExpQuantifier::OneOrMore => {
+                let first = self.matcher.consume(input, index, flags)?;
+                Some(self.consume_repeating(input, first, flags))
+            }
+        }
+    }
+
+    fn consume_repeating(&self, input: &str, mut index: usize, flags: &RegExpFlags) -> usize {
+        while let Some(next) = self.matcher.consume(input, index, flags) {
+            if next == index {
+                return index;
+            }
+            index = next;
+        }
+        index
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum RegExpQuantifier {
+    Once,
+    ZeroOrMore,
+    OneOrMore,
+    ZeroOrOne,
+}
+
+#[derive(Debug, Clone)]
+enum RegExpAtomMatcher {
+    Any,
+    Char(char),
+    Digit,
+    NotDigit,
     Word,
-    Newline,
+    NotWord,
     Whitespace,
+    NotWhitespace,
+    Newline,
     SpaceSeparator,
     IdentifierStart,
     IdentifierContinue,
-    Literal(String),
-    Unsupported,
+    Class(Vec<char>),
 }
 
-fn classify_regexp_pattern(pattern: &str) -> RegExpPattern {
-    if pattern == "\\w" {
-        return RegExpPattern::Word;
+impl RegExpAtomMatcher {
+    fn consume(&self, input: &str, index: usize, flags: &RegExpFlags) -> Option<usize> {
+        let ch = input.get(index..)?.chars().next()?;
+        let matched = match self {
+            Self::Any => flags.dot_all() || !is_newline_char(ch),
+            Self::Char(expected) => char_eq(*expected, ch, flags),
+            Self::Digit => ch.is_ascii_digit(),
+            Self::NotDigit => !ch.is_ascii_digit(),
+            Self::Word => is_word_char(ch),
+            Self::NotWord => !is_word_char(ch),
+            Self::Whitespace => is_whitespace_char(ch),
+            Self::NotWhitespace => !is_whitespace_char(ch),
+            Self::Newline => is_newline_char(ch),
+            Self::SpaceSeparator => is_space_separator_char(ch),
+            Self::IdentifierStart => is_identifier_start_char(ch),
+            Self::IdentifierContinue => is_identifier_continue_char(ch),
+            Self::Class(chars) => chars.iter().any(|expected| char_eq(*expected, ch, flags)),
+        };
+        matched.then(|| index.saturating_add(ch.len_utf8()))
     }
-    if pattern == "[\\u000A\\u000D\\u2028\\u2029]" {
-        return RegExpPattern::Newline;
-    }
-    if pattern == "[\\u0009\\u000B\\u000C\\u0020\\u00A0\\uFEFF]" {
-        return RegExpPattern::Whitespace;
-    }
-    if pattern.starts_with("[ \\xA0\\u1680") {
-        return RegExpPattern::SpaceSeparator;
-    }
-    if pattern.starts_with("(?:[A-Za-z") {
-        return RegExpPattern::IdentifierStart;
-    }
-    if pattern.starts_with("(?:[0-9A-Z_a-z") {
-        return RegExpPattern::IdentifierContinue;
-    }
-    literal_pattern_text(pattern).map_or(RegExpPattern::Unsupported, RegExpPattern::Literal)
 }
 
-fn literal_contains(pattern: &str, flags: &str, input: &str) -> bool {
-    if pattern.is_empty() {
-        return true;
+const fn escaped_atom(ch: char) -> RegExpAtomMatcher {
+    match ch {
+        'd' => RegExpAtomMatcher::Digit,
+        'D' => RegExpAtomMatcher::NotDigit,
+        'w' => RegExpAtomMatcher::Word,
+        'W' => RegExpAtomMatcher::NotWord,
+        's' => RegExpAtomMatcher::Whitespace,
+        'S' => RegExpAtomMatcher::NotWhitespace,
+        'n' => RegExpAtomMatcher::Char('\n'),
+        'r' => RegExpAtomMatcher::Char('\r'),
+        't' => RegExpAtomMatcher::Char('\t'),
+        escaped => RegExpAtomMatcher::Char(escaped),
     }
-    if flags.chars().any(|flag| flag == 'i') {
-        return input.to_lowercase().contains(&pattern.to_lowercase());
-    }
-    input.contains(pattern)
 }
 
-fn literal_pattern_text(pattern: &str) -> Option<String> {
-    let mut output = String::new();
-    let mut chars = pattern.chars();
+fn class_atom(chars: &mut impl Iterator<Item = char>) -> Result<RegExpAtomMatcher> {
+    let mut class_chars = Vec::new();
+    let mut raw = String::new();
     while let Some(ch) = chars.next() {
+        if ch == ']' {
+            return Ok(classify_class(&raw, class_chars));
+        }
+        raw.push(ch);
         if ch == '\\' {
-            output.push(escaped_literal_char(&mut chars)?);
-        } else if is_regexp_meta_char(ch) {
-            return None;
+            let escaped = chars
+                .next()
+                .ok_or_else(|| Error::runtime("unterminated regular expression character class"))?;
+            raw.push(escaped);
+            class_chars.push(escaped_literal_char(escaped));
         } else {
-            output.push(ch);
+            class_chars.push(ch);
         }
     }
-    Some(output)
+    Err(Error::runtime(
+        "unterminated regular expression character class",
+    ))
 }
 
-fn escaped_literal_char(chars: &mut impl Iterator<Item = char>) -> Option<char> {
-    let ch = chars.next()?;
+fn classify_class(raw: &str, chars: Vec<char>) -> RegExpAtomMatcher {
+    if raw == "\\u000A\\u000D\\u2028\\u2029" {
+        return RegExpAtomMatcher::Newline;
+    }
+    if raw == "\\u0009\\u000B\\u000C\\u0020\\u00A0\\uFEFF" {
+        return RegExpAtomMatcher::Whitespace;
+    }
+    if raw.starts_with(" \\xA0\\u1680") {
+        return RegExpAtomMatcher::SpaceSeparator;
+    }
+    if raw.starts_with("A-Za-z") {
+        return RegExpAtomMatcher::IdentifierStart;
+    }
+    if raw.starts_with("0-9A-Z_a-z") {
+        return RegExpAtomMatcher::IdentifierContinue;
+    }
+    RegExpAtomMatcher::Class(chars)
+}
+
+const fn escaped_literal_char(ch: char) -> char {
     match ch {
-        'n' => Some('\n'),
-        'r' => Some('\r'),
-        't' => Some('\t'),
-        'v' => Some('\u{000B}'),
-        'f' => Some('\u{000C}'),
-        '0' => Some('\0'),
-        'x' => hex_escape_char(chars, HEX_ESCAPE_LEN),
-        'u' => hex_escape_char(chars, UNICODE_ESCAPE_LEN),
-        escaped => Some(escaped),
+        'n' => '\n',
+        'r' => '\r',
+        't' => '\t',
+        'v' => '\u{000B}',
+        'f' => '\u{000C}',
+        escaped => escaped,
     }
 }
 
-fn hex_escape_char(chars: &mut impl Iterator<Item = char>, len: usize) -> Option<char> {
-    let mut value = 0_u32;
-    for _ in 0..len {
-        let digit = chars.next()?.to_digit(HEX_RADIX)?;
-        value = value.checked_mul(HEX_RADIX)?.checked_add(digit)?;
+const fn char_eq(left: char, right: char, flags: &RegExpFlags) -> bool {
+    if flags.ignore_case() {
+        left.eq_ignore_ascii_case(&right)
+    } else {
+        left == right
     }
-    char::from_u32(value)
+}
+
+fn line_start(input: &str, index: usize, flags: &RegExpFlags) -> bool {
+    flags.multiline()
+        && input
+            .get(..index)
+            .and_then(|text| text.chars().next_back())
+            .is_some_and(is_newline_char)
+}
+
+fn line_end(input: &str, index: usize, flags: &RegExpFlags) -> bool {
+    flags.multiline()
+        && input
+            .get(index..)
+            .and_then(|text| text.chars().next())
+            .is_some_and(is_newline_char)
+}
+
+const fn is_quantifier(ch: char) -> bool {
+    matches!(ch, '*' | '+' | '?')
 }
 
 const fn is_regexp_meta_char(ch: char) -> bool {
-    matches!(
-        ch,
-        '.' | '*' | '+' | '?' | '^' | '$' | '[' | ']' | '(' | ')' | '{' | '}' | '|'
-    )
+    matches!(ch, '(' | ')' | '{' | '}' | '|')
 }
 
 const fn is_word_char(ch: char) -> bool {
@@ -352,9 +689,19 @@ fn is_identifier_continue_char(ch: char) -> bool {
         || matches!(ch, '\u{200C}' | '\u{200D}')
 }
 
-const HEX_ESCAPE_LEN: usize = 2;
-const UNICODE_ESCAPE_LEN: usize = 4;
-const HEX_RADIX: u32 = 16;
+fn regexp_index_number_to_usize(number: f64) -> Result<usize> {
+    let value = number.trunc();
+    let text = format!("{value:.0}");
+    text.parse::<usize>()
+        .map_err(|_| Error::limit("RegExp lastIndex exceeded supported range"))
+}
+
+fn regexp_index_usize_to_number(index: usize) -> Result<f64> {
+    let value =
+        u32::try_from(index).map_err(|_| Error::limit("RegExp index exceeded supported range"))?;
+    Ok(f64::from(value))
+}
+
 const REGEXP_FLAG_GLOBAL: u16 = 1 << 0;
 const REGEXP_FLAG_IGNORE_CASE: u16 = 1 << 1;
 const REGEXP_FLAG_MULTILINE: u16 = 1 << 2;

@@ -10,6 +10,7 @@ mod heap;
 mod integrity;
 mod property;
 mod prototype;
+mod regexp;
 mod shape;
 mod string;
 
@@ -26,6 +27,7 @@ pub use property::{
     OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup,
     PropertyUpdate, PropertyWritable,
 };
+pub use regexp::RegExpValue;
 use shape::{ShapeId, ShapeTable};
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
@@ -91,6 +93,7 @@ struct Object {
     string_value: Option<crate::storage::string_heap::JsString>,
     primitive_value: Option<ObjectPrimitiveValue>,
     date_value: Option<DateValue>,
+    regexp_value: Option<RegExpValue>,
     prototype: Option<ObjectId>,
     extensibility: ObjectExtensibility,
 }
@@ -117,6 +120,7 @@ impl Object {
             string_value: None,
             primitive_value: None,
             date_value: None,
+            regexp_value: None,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
         }
@@ -133,6 +137,7 @@ impl Object {
             string_value: None,
             primitive_value: None,
             date_value: None,
+            regexp_value: None,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
         }
@@ -149,6 +154,7 @@ impl Object {
             string_value: None,
             primitive_value: None,
             date_value: None,
+            regexp_value: None,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
         }
@@ -165,6 +171,7 @@ impl Object {
             string_value: None,
             primitive_value: Some(value),
             date_value: None,
+            regexp_value: None,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
         }
