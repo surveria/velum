@@ -46,6 +46,7 @@ const PATH_BENCH_ARRAY_PROTOTYPE_METHODS: &str =
     "tests/corpora/benchmarks/active/array_prototype_methods.js";
 const PATH_BENCH_ARRAY_PROTOTYPE_CALLBACKS: &str =
     "tests/corpora/benchmarks/active/array_prototype_callbacks.js";
+const PATH_BENCH_ARRAY_FLAT_FLATMAP: &str = "tests/corpora/benchmarks/active/array_flat_flatmap.js";
 const PATH_BENCH_ARRAY_PROTOTYPE_CONCAT: &str =
     "tests/corpora/benchmarks/active/array_prototype_concat.js";
 const PATH_BENCH_ARRAY_PROTOTYPE_INCLUDES: &str =
@@ -244,6 +245,10 @@ fn benchmark_array_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "array_prototype_callbacks",
             path: PATH_BENCH_ARRAY_PROTOTYPE_CALLBACKS,
+        },
+        BenchmarkCase {
+            id: "array_flat_flatmap",
+            path: PATH_BENCH_ARRAY_FLAT_FLATMAP,
         },
         BenchmarkCase {
             id: "array_prototype_join",

@@ -8,6 +8,8 @@ pub enum NativeCallTarget {
     ArrayFilter,
     ArrayFind,
     ArrayFindIndex,
+    ArrayFlat,
+    ArrayFlatMap,
     ArrayForEach,
     ArrayIncludes,
     ArrayIndexOf,
@@ -153,6 +155,8 @@ impl NativeCallTarget {
                 | Self::ArrayFilter
                 | Self::ArrayFind
                 | Self::ArrayFindIndex
+                | Self::ArrayFlat
+                | Self::ArrayFlatMap
                 | Self::ArrayForEach
                 | Self::ArrayIncludes
                 | Self::ArrayIndexOf
@@ -214,6 +218,8 @@ impl NativeCallTarget {
             "filter" => Some(Self::ArrayFilter),
             "find" => Some(Self::ArrayFind),
             "findIndex" => Some(Self::ArrayFindIndex),
+            "flat" => Some(Self::ArrayFlat),
+            "flatMap" => Some(Self::ArrayFlatMap),
             "forEach" => Some(Self::ArrayForEach),
             "includes" => Some(Self::ArrayIncludes),
             "indexOf" => Some(Self::ArrayIndexOf),

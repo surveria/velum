@@ -415,7 +415,7 @@ impl Context {
         Ok(None)
     }
 
-    fn call_array_callback(
+    pub(super) fn call_array_callback(
         &mut self,
         callback: &Value,
         callback_this: Value,
@@ -447,7 +447,7 @@ impl Context {
         }
     }
 
-    fn create_array_callback_result(&mut self, length: usize) -> Result<Value> {
+    pub(super) fn create_array_callback_result(&mut self, length: usize) -> Result<Value> {
         let prototype = self.existing_array_constructor_prototype()?;
         self.objects
             .create_array_with_length(length, prototype, self.limits.max_objects)
@@ -468,7 +468,7 @@ impl Context {
         self.array_like_length(this_value)
     }
 
-    fn array_callback_and_this_arg(args: &[Value]) -> Result<(&Value, Value)> {
+    pub(super) fn array_callback_and_this_arg(args: &[Value]) -> Result<(&Value, Value)> {
         let callback = Self::array_callback_arg(args)?;
         let callback_this = args.get(1).cloned().unwrap_or(Value::Undefined);
         Ok((callback, callback_this))

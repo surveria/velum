@@ -9,6 +9,7 @@ use crate::{
 use super::{ARRAY_NAME, NativeFunctionKind};
 
 mod callbacks;
+mod flatten;
 mod generic;
 
 const ARRAY_JOIN_DEFAULT_SEPARATOR: &str = ",";
@@ -17,6 +18,8 @@ const ARRAY_PROTOTYPE_EVERY_PROPERTY: &str = "every";
 const ARRAY_PROTOTYPE_FILTER_PROPERTY: &str = "filter";
 const ARRAY_PROTOTYPE_FIND_PROPERTY: &str = "find";
 const ARRAY_PROTOTYPE_FIND_INDEX_PROPERTY: &str = "findIndex";
+const ARRAY_PROTOTYPE_FLAT_PROPERTY: &str = "flat";
+const ARRAY_PROTOTYPE_FLAT_MAP_PROPERTY: &str = "flatMap";
 const ARRAY_PROTOTYPE_FOR_EACH_PROPERTY: &str = "forEach";
 const ARRAY_PROTOTYPE_INCLUDES_PROPERTY: &str = "includes";
 const ARRAY_PROTOTYPE_INDEX_OF_PROPERTY: &str = "indexOf";
@@ -459,6 +462,11 @@ impl Context {
             (
                 ARRAY_PROTOTYPE_FIND_INDEX_PROPERTY,
                 NativeFunctionKind::ArrayFindIndex,
+            ),
+            (ARRAY_PROTOTYPE_FLAT_PROPERTY, NativeFunctionKind::ArrayFlat),
+            (
+                ARRAY_PROTOTYPE_FLAT_MAP_PROPERTY,
+                NativeFunctionKind::ArrayFlatMap,
             ),
             (
                 ARRAY_PROTOTYPE_FOR_EACH_PROPERTY,
