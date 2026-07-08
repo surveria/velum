@@ -84,6 +84,8 @@ const PATH_TEST262_ARRAY_PROTOTYPE_GENERIC_METHODS: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_generic_methods.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_CALLBACK_METHODS: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_callback_methods.js";
+const PATH_TEST262_ARRAY_STATIC_ITERATOR_METHODS: &str =
+    "tests/corpora/test262/active/built-ins/Array/static_iterator_methods.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_CONCAT: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_concat.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_INCLUDES: &str =
@@ -457,12 +459,21 @@ fn test262_operator_expression_cases() -> Vec<EngineCase> {
 
 fn test262_builtin_cases() -> Vec<EngineCase> {
     let mut cases = test262_primitive_builtin_cases();
+    cases.extend(test262_array_builtin_cases());
     cases.extend(test262_global_builtin_cases());
     cases.extend(test262_math_builtin_cases());
     cases.extend(test262_object_builtin_cases());
     cases.extend(test262_string_builtin_cases());
     cases.extend(test262_collection_builtin_cases());
     cases
+}
+
+fn test262_array_builtin_cases() -> Vec<EngineCase> {
+    vec![EngineCase {
+        id: "built-ins/Array/static-iterator-methods",
+        path: PATH_TEST262_ARRAY_STATIC_ITERATOR_METHODS,
+        expectation: Expectation::Value("42"),
+    }]
 }
 
 fn test262_primitive_builtin_cases() -> Vec<EngineCase> {
