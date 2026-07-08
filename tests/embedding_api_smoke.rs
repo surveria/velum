@@ -104,6 +104,7 @@ fn keeps_many_vms_isolated_after_one_vm_fails() -> TestResult {
             &report.resources,
             &VmResourceUsage {
                 runtime_steps: report.resources.runtime_steps,
+                bytecode_linear_segment_runs: report.resources.bytecode_linear_segment_runs,
                 output_entries: 1,
                 global_bindings: 1,
                 atom_count: report.resources.atom_count,
