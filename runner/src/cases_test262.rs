@@ -135,6 +135,7 @@ const PATH_TEST262_ARGUMENTS_OBJECT: &str =
     "tests/corpora/test262/active/language/arguments_object.js";
 const PATH_TEST262_CLASS_FIELDS: &str =
     "tests/corpora/test262/active/language/statements/class_fields.js";
+const PATH_TEST262_MAP_SET: &str = "tests/corpora/test262/active/built-ins/Map/map_set_baseline.js";
 const PATH_TEST262_FOR_IN_NULLISH_ERROR: &str =
     "tests/corpora/test262/active/language/statements/for_in_nullish_error.js";
 const PATH_TEST262_SWITCH: &str = "tests/corpora/test262/active/language/statements/switch.js";
@@ -555,6 +556,11 @@ fn test262_class_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/statements/class_fields",
             path: PATH_TEST262_CLASS_FIELDS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Map/map_set_baseline",
+            path: PATH_TEST262_MAP_SET,
             expectation: Expectation::Value("42"),
         },
     ]

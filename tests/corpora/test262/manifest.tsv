@@ -559,3 +559,8 @@ cf-expr-static-string-literal-name-init-err-contains-super	test/language/express
 cf-expr-string-literal-name-init-err-contains-super	test/language/expressions/class/elements/string-literal-name-init-err-contains-super.js	negative-parse	official Test262 class fields negative parse
 cf-expr-ternary-init-err-contains-super	test/language/expressions/class/elements/ternary-init-err-contains-super.js	negative-parse	official Test262 class fields negative parse
 cf-expr-typeof-init-err-contains-super	test/language/expressions/class/elements/typeof-init-err-contains-super.js	negative-parse	official Test262 class fields negative parse
+built-ins-Map-iterator-is-undefined-throws	test/built-ins/Map/iterator-is-undefined-throws.js	run	official Test262 Map Set smoke
+built-ins-Map-iterator-items-are-not-object	test/built-ins/Map/iterator-items-are-not-object.js	run	official Test262 Map Set smoke
+built-ins-Map-iterator-value-failure	test/built-ins/Map/iterator-value-failure.js	run	official Test262 Map Set smoke
+built-ins-Map-undefined-newtarget	test/built-ins/Map/undefined-newtarget.js	run	official Test262 Map Set smoke
+built-ins-Set-set-undefined-newtarget	test/built-ins/Set/set-undefined-newtarget.js	run	official Test262 Map Set smoke

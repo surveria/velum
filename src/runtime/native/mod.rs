@@ -2,7 +2,9 @@ mod builtins;
 mod core;
 mod function;
 
-pub(in crate::runtime::native) use builtins::number_intrinsic_property;
+pub(in crate::runtime::native) use builtins::{
+    CollectionIterationTarget, MAP_NAME, SET_NAME, number_intrinsic_property,
+};
 pub(in crate::runtime::native) use function::{
     ARRAY_NAME, BOOLEAN_NAME, EVAL_NAME, FUNCTION_NAME, FUNCTION_PROTOTYPE_BIND_NAME,
     FUNCTION_PROTOTYPE_CALL_NAME, GLOBAL_DECODE_URI_COMPONENT_NAME, GLOBAL_DECODE_URI_NAME,
