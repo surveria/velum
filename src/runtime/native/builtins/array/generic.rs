@@ -291,6 +291,11 @@ impl Context {
     }
 
     pub(super) fn set_array_like_length(&mut self, object: &Value, length: usize) -> Result<()> {
+        if let Value::Object(id) = object
+            && self.objects.array_len_if_array(*id)?.is_some()
+        {
+            return self.objects.set_array_length(*id, length);
+        }
         let value = Self::array_like_length_value(length)?;
         self.set_array_like_property(object, ARRAY_LENGTH_PROPERTY, value)
     }
@@ -325,7 +330,7 @@ impl Context {
         self.set_property_value_with_accessors(object, key, property, value)
     }
 
-    fn delete_array_like_index(&mut self, object: &Value, index: usize) -> Result<()> {
+    pub(super) fn delete_array_like_index(&mut self, object: &Value, index: usize) -> Result<()> {
         let property = Self::array_like_index_name(index)?;
         let lookup = self.property_lookup(&property);
         delete_property(&mut self.objects, object, lookup).map(|_| ())
@@ -336,6 +341,38 @@ impl Context {
             return Ok(());
         }
         Err(Error::runtime(ARRAY_LIKE_RECEIVER_ERROR))
+    }
+
+    /// `ToIntegerOrInfinity(value)` restricted to primitive coercion. Object
+    /// operands coerce to `NaN` and therefore to `0`, matching the engine's
+    /// wider `ToNumber` behavior for exotic values.
+    pub(super) fn array_to_integer_or_infinity(value: &Value) -> f64 {
+        let number = Self::value_to_number(value);
+        if number.is_nan() {
+            0.0
+        } else if number.is_infinite() {
+            number
+        } else {
+            number.trunc()
+        }
+    }
+
+    /// Clamp a numeric index into `[0, length]`.
+    pub(super) fn array_clamp_index(number: f64, length: usize) -> Result<usize> {
+        if number <= 0.0 {
+            return Ok(0);
+        }
+        if !number.is_finite() {
+            return Ok(length);
+        }
+        let clamped = number.min(Self::array_length_as_f64(length)?);
+        Self::nonnegative_integer_to_usize(clamped).map(|value| value.min(length))
+    }
+
+    fn array_length_as_f64(length: usize) -> Result<f64> {
+        u32::try_from(length)
+            .map(f64::from)
+            .map_err(|_| Error::limit(ARRAY_LIKE_LENGTH_LIMIT_ERROR))
     }
 
     fn checked_array_like_length(length: usize, additional: usize) -> Result<usize> {

@@ -98,6 +98,25 @@ impl Context {
             NativeFunctionKind::ArraySlice => Some(self.eval_array_slice(args, this_value)),
             NativeFunctionKind::ArraySome => Some(self.eval_array_some(args, this_value)),
             NativeFunctionKind::ArrayUnshift => Some(self.eval_array_unshift(args, this_value)),
+            NativeFunctionKind::ArraySort => Some(self.eval_array_sort(args, this_value)),
+            NativeFunctionKind::ArraySplice => Some(self.eval_array_splice(args, this_value)),
+            NativeFunctionKind::ArrayFill => Some(self.eval_array_fill(args, this_value)),
+            NativeFunctionKind::ArrayCopyWithin => {
+                Some(self.eval_array_copy_within(args, this_value))
+            }
+            NativeFunctionKind::ArrayAt => Some(self.eval_array_at(args, this_value)),
+            NativeFunctionKind::ArrayFindLast => Some(self.eval_array_find_last(args, this_value)),
+            NativeFunctionKind::ArrayFindLastIndex => {
+                Some(self.eval_array_find_last_index(args, this_value))
+            }
+            NativeFunctionKind::ArrayToSorted => Some(self.eval_array_to_sorted(args, this_value)),
+            NativeFunctionKind::ArrayToReversed => {
+                Some(self.eval_array_to_reversed(args, this_value))
+            }
+            NativeFunctionKind::ArrayToSpliced => {
+                Some(self.eval_array_to_spliced(args, this_value))
+            }
+            NativeFunctionKind::ArrayWith => Some(self.eval_array_with(args, this_value)),
             _ => None,
         }
     }
