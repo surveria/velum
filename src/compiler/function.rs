@@ -63,7 +63,9 @@ impl BytecodeFunction {
 fn compile_params(params: &[FunctionParam]) -> Rc<[BytecodeFunctionParam]> {
     params
         .iter()
-        .map(|param| BytecodeFunctionParam::new(param.name.clone(), param.default.is_some()))
+        .map(|param| {
+            BytecodeFunctionParam::new(param.name.clone(), param.default.is_some(), param.rest)
+        })
         .collect::<Vec<_>>()
         .into()
 }
@@ -306,6 +308,7 @@ impl CaptureBindingCollector {
                 self.collect_exprs(args);
             }
             Expr::Parenthesized(expr)
+            | Expr::Spread(expr)
             | Expr::Unary { expr, .. }
             | Expr::Update { expr, .. }
             | Expr::Await(expr) => {

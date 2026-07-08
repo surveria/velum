@@ -236,6 +236,11 @@ impl<'a> BytecodeCompiler<'a> {
                     self.compile_binding(name)?,
                 ));
             }
+            Expr::Spread(_) => {
+                return Err(Error::runtime(
+                    "spread is only valid in call arguments and literals",
+                ));
+            }
             Expr::Parenthesized(expr) => return self.compile_expr(expr),
             Expr::Await(expr) => {
                 self.compile_expr(expr)?;
@@ -392,6 +397,13 @@ impl<'a> BytecodeCompiler<'a> {
     }
 
     fn compile_new_expr(&mut self, constructor: &Expr, args: &[Expr]) -> Result<()> {
+        if has_spread_arg(args) {
+            self.compile_expr(constructor)?;
+            let spread_flags = self.compile_spread_parts(args)?;
+            self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
+            self.emit(BytecodeInstruction::ConstructValueSpread);
+            return Ok(());
+        }
         if let Some(binding) = constructor_binding_expr(constructor) {
             self.compile_args(args)?;
             self.emit(BytecodeInstruction::Construct {
@@ -663,8 +675,13 @@ impl<'a> BytecodeCompiler<'a> {
     fn compile_object_literal(&mut self, properties: &[ObjectProperty]) -> Result<()> {
         let mut operands = Vec::with_capacity(properties.len());
         for property in properties {
+            if property.kind == ObjectPropertyKind::Spread {
+                self.compile_expr(&property.value)?;
+                operands.push(BytecodeObjectProperty::Spread);
+                continue;
+            }
             let accessor = match property.kind {
-                ObjectPropertyKind::Init => None,
+                ObjectPropertyKind::Init | ObjectPropertyKind::Spread => None,
                 ObjectPropertyKind::Get => Some(AccessorKind::Getter),
                 ObjectPropertyKind::Set => Some(AccessorKind::Setter),
             };
@@ -699,6 +716,11 @@ impl<'a> BytecodeCompiler<'a> {
     }
 
     fn compile_array_literal(&mut self, elements: &[Expr]) -> Result<()> {
+        if has_spread_arg(elements) {
+            let spread_flags = self.compile_spread_parts(elements)?;
+            self.emit(BytecodeInstruction::ArrayLiteralSpread { spread_flags });
+            return Ok(());
+        }
         for element in elements {
             self.compile_expr(element)?;
         }
@@ -706,6 +728,22 @@ impl<'a> BytecodeCompiler<'a> {
             len: elements.len(),
         });
         Ok(())
+    }
+
+    /// Compiles a mixed plain/spread expression list, returning per-slot
+    /// spread flags for the matching collection instruction.
+    pub(super) fn compile_spread_parts(&mut self, parts: &[Expr]) -> Result<Rc<[bool]>> {
+        let mut spread_flags = Vec::with_capacity(parts.len());
+        for part in parts {
+            if let Expr::Spread(inner) = part {
+                self.compile_expr(inner)?;
+                spread_flags.push(true);
+            } else {
+                self.compile_expr(part)?;
+                spread_flags.push(false);
+            }
+        }
+        Ok(spread_flags.into())
     }
 
     fn emit_jump(&mut self) -> InstructionIndex {
@@ -742,6 +780,13 @@ impl<'a> BytecodeCompiler<'a> {
             BytecodeInstruction::PushLiteral(_)
             | BytecodeInstruction::PushString(_)
             | BytecodeInstruction::TemplateConcat { .. }
+            | BytecodeInstruction::CollectSpreadArgs { .. }
+            | BytecodeInstruction::CallBindingSpread { .. }
+            | BytecodeInstruction::CallValueSpread
+            | BytecodeInstruction::CallStaticMemberSpread { .. }
+            | BytecodeInstruction::CallComputedMemberSpread { .. }
+            | BytecodeInstruction::ConstructValueSpread
+            | BytecodeInstruction::ArrayLiteralSpread { .. }
             | BytecodeInstruction::CreateRegExp { .. }
             | BytecodeInstruction::PushUndefined
             | BytecodeInstruction::LoadThis
@@ -815,6 +860,10 @@ impl<'a> BytecodeCompiler<'a> {
     const fn current_address(&self) -> BytecodeAddress {
         BytecodeAddress::new(self.instructions.len())
     }
+}
+
+fn has_spread_arg(args: &[Expr]) -> bool {
+    args.iter().any(|arg| matches!(arg, Expr::Spread(_)))
 }
 
 fn checked_template_part_count(part_count: usize) -> Result<usize> {

@@ -623,6 +623,10 @@ impl Context {
                         accessor: Some(*kind),
                     });
                 }
+                BytecodeObjectProperty::Spread => {
+                    let source = next_object_literal_stack_value(&mut values)?;
+                    self.push_spread_literal_entries(&source, &mut dynamic_names, &mut entries)?;
+                }
                 BytecodeObjectProperty::Computed
                 | BytecodeObjectProperty::ComputedMethod
                 | BytecodeObjectProperty::ComputedAccessor { .. } => {
@@ -684,6 +688,32 @@ impl Context {
             self.limits.max_objects,
             self.limits.max_object_properties,
         )
+    }
+
+    /// Copies own enumerable properties of a spread source into pending
+    /// object-literal entries; null and undefined sources copy nothing.
+    fn push_spread_literal_entries(
+        &mut self,
+        source: &Value,
+        dynamic_names: &mut Vec<String>,
+        entries: &mut Vec<RuntimeObjectLiteralEntry<'_>>,
+    ) -> Result<()> {
+        if matches!(source, Value::Undefined | Value::Null) {
+            return Ok(());
+        }
+        for key in self.own_enumerable_keys(source)? {
+            let value = self.get_property_value(source, &key)?;
+            let property_key = self.intern_property_key(&key)?;
+            let name_index = dynamic_names.len();
+            dynamic_names.push(key);
+            entries.push(RuntimeObjectLiteralEntry {
+                key: property_key,
+                name: RuntimeObjectLiteralName::Dynamic(name_index),
+                value,
+                accessor: None,
+            });
+        }
+        Ok(())
     }
 
     fn set_computed_method_name(&mut self, value: &Value, name: &str) -> Result<()> {

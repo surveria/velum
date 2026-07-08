@@ -13,6 +13,8 @@ use super::{Parser, SUPER_IDENTIFIER_NAME};
 const THIS_PROPERTY_NAME: &str = "this";
 const NEW_TARGET_PROPERTY_NAME: &str = "target";
 const IMPORT_BINDING_NAME: &str = "import";
+/// Placeholder key for spread object-literal entries; the runtime ignores it.
+const SPREAD_PROPERTY_KEY: &str = "...";
 const GETTER_KEYWORD_NAME: &str = "get";
 const SETTER_KEYWORD_NAME: &str = "set";
 
@@ -329,7 +331,11 @@ impl Parser {
     fn arguments(&mut self) -> Result<Vec<Expr>> {
         let mut args = Vec::new();
         loop {
-            args.push(self.expression()?);
+            if self.match_kind(&TokenKind::DotDotDot) {
+                args.push(Expr::Spread(Box::new(self.expression()?)));
+            } else {
+                args.push(self.expression()?);
+            }
             if !self.match_kind(&TokenKind::Comma) {
                 break;
             }
@@ -538,6 +544,15 @@ impl Parser {
     }
 
     fn object_literal_property(&mut self) -> Result<ObjectProperty> {
+        if self.match_kind(&TokenKind::DotDotDot) {
+            let value = self.expression()?;
+            let key = ObjectPropertyKey::Static(self.static_name(SPREAD_PROPERTY_KEY.to_owned())?);
+            return Ok(ObjectProperty {
+                key,
+                kind: ObjectPropertyKind::Spread,
+                value,
+            });
+        }
         if self.async_object_method_start() {
             self.consume(
                 &TokenKind::Async,
@@ -624,7 +639,18 @@ impl Parser {
                     keyword_offset,
                 ));
             }
-            ObjectPropertyKind::Init | ObjectPropertyKind::Get | ObjectPropertyKind::Set => {}
+            ObjectPropertyKind::Set
+                if parameters.params.first().is_some_and(|param| param.rest) =>
+            {
+                return Err(Error::parse(
+                    "setter parameter cannot be a rest parameter",
+                    keyword_offset,
+                ));
+            }
+            ObjectPropertyKind::Init
+            | ObjectPropertyKind::Get
+            | ObjectPropertyKind::Set
+            | ObjectPropertyKind::Spread => {}
         }
         self.consume(&TokenKind::LBrace, "expected '{' before accessor body")?;
         let body = self.with_new_target_scope(|parser| parser.function_body(inherited_strict))?;
@@ -708,7 +734,11 @@ impl Parser {
         }
 
         loop {
-            elements.push(self.expression()?);
+            if self.match_kind(&TokenKind::DotDotDot) {
+                elements.push(Expr::Spread(Box::new(self.expression()?)));
+            } else {
+                elements.push(self.expression()?);
+            }
             if !self.match_kind(&TokenKind::Comma) {
                 break;
             }

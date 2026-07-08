@@ -232,6 +232,32 @@ impl Context {
     }
 }
 
+impl Context {
+    /// Repacks call arguments for a trailing rest parameter: positional
+    /// arguments stay in place and the remainder binds as one array value.
+    pub(super) fn pack_rest_arguments(
+        &mut self,
+        params: &[BytecodeFunctionParam],
+        mut args: Vec<Value>,
+    ) -> Result<Vec<Value>> {
+        let Some(last) = params.last() else {
+            return Ok(args);
+        };
+        if !last.rest() {
+            return Ok(args);
+        }
+        let rest_index = params.len().saturating_sub(1);
+        let rest = if args.len() > rest_index {
+            args.split_off(rest_index)
+        } else {
+            Vec::new()
+        };
+        let packed = self.create_array_from_elements(rest)?;
+        args.push(packed);
+        Ok(args)
+    }
+}
+
 pub(super) fn function_param_binding_ids(
     params: &[BytecodeFunctionParam],
 ) -> Rc<[StaticBindingId]> {
@@ -245,7 +271,7 @@ pub(super) fn function_param_binding_ids(
 pub(super) fn function_arity(params: &[BytecodeFunctionParam]) -> super::super::FunctionArity {
     let arity = params
         .iter()
-        .take_while(|param| !param.has_default())
+        .take_while(|param| !param.has_default() && !param.rest())
         .count();
     super::super::FunctionArity::new(arity)
 }
