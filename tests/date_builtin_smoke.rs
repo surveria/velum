@@ -175,3 +175,130 @@ fn prototype_identity_holds_for_dates() -> TestResult {
         "true:true:true",
     )
 }
+
+#[test]
+fn setter_families_update_components() -> TestResult {
+    ensure_string(
+        r#"
+        const d = new Date(0);
+        const fullYear = d.setFullYear(2001, 1, 3);
+        const month = d.setMonth(2, 4);
+        const date = d.setDate(5);
+        const hours = d.setHours(6, 7, 8, 9);
+        const minutes = d.setMinutes(10, 11, 12);
+        const seconds = d.setSeconds(13, 14);
+        const milliseconds = d.setMilliseconds(15);
+        const utc = new Date(0);
+        const utcFullYear = utc.setUTCFullYear(2022, 11, 31);
+        utc.setUTCMonth(0, 2);
+        utc.setUTCDate(3);
+        utc.setUTCHours(4, 5, 6, 7);
+        utc.setUTCMinutes(8, 9, 10);
+        utc.setUTCSeconds(11, 12);
+        utc.setUTCMilliseconds(13);
+
+        [
+            d.toISOString(),
+            utc.toISOString(),
+            fullYear === Date.UTC(2001, 1, 3),
+            month === Date.UTC(2001, 2, 4),
+            date === Date.UTC(2001, 2, 5),
+            hours === Date.UTC(2001, 2, 5, 6, 7, 8, 9),
+            minutes === Date.UTC(2001, 2, 5, 6, 10, 11, 12),
+            seconds === Date.UTC(2001, 2, 5, 6, 10, 13, 14),
+            milliseconds === Date.UTC(2001, 2, 5, 6, 10, 13, 15),
+            utcFullYear === Date.UTC(2022, 11, 31)
+        ].join("|")
+        "#,
+        "2001-03-05T06:10:13.015Z|2022-01-03T04:08:11.013Z|true|true|true|true|true|true|true|true",
+    )
+}
+
+#[test]
+fn setters_handle_invalid_dates_and_timezone_offset() -> TestResult {
+    ensure_string(
+        r#"
+        const valid = new Date(0);
+        const invalid = new Date(NaN);
+        const restored = invalid.setFullYear(2020);
+        const stillInvalid = new Date(NaN);
+        const failed = stillInvalid.setMonth(1);
+        [
+            valid.getTimezoneOffset(),
+            new Date(NaN).getTimezoneOffset() !== new Date(NaN).getTimezoneOffset(),
+            restored === Date.UTC(2020, 0, 1),
+            invalid.toISOString(),
+            failed !== failed,
+            stillInvalid.getTime() !== stillInvalid.getTime()
+        ].join("|")
+        "#,
+        "0|true|true|2020-01-01T00:00:00.000Z|true|true",
+    )
+}
+
+#[test]
+fn symbol_to_primitive_uses_date_ordering() -> TestResult {
+    ensure_string(
+        r#"
+        const method = Date.prototype[Symbol.toPrimitive];
+        const d = new Date(0);
+        let order = "";
+        const ordinary = {
+            toString() { order += "s"; return "ordinary"; },
+            valueOf() { order += "v"; return 7; }
+        };
+        const defaultValue = method.call(d, "default");
+        const stringValue = method.call(d, "string");
+        const numberValue = method.call(d, "number");
+        const ordinaryDefault = method.call(ordinary, "default");
+        const defaultOrder = order;
+        order = "";
+        const ordinaryNumber = method.call(ordinary, "number");
+        [
+            method.name,
+            method.length,
+            defaultValue === d.toString(),
+            stringValue === d.toString(),
+            numberValue,
+            ordinaryDefault,
+            defaultOrder,
+            ordinaryNumber,
+            order
+        ].join("|")
+        "#,
+        "[Symbol.toPrimitive]|1|true|true|0|ordinary|s|7|v",
+    )
+}
+
+#[test]
+fn annex_b_and_locale_date_methods_are_available() -> TestResult {
+    ensure_string(
+        r#"
+        const d = new Date(0);
+        const setYearReturn = d.setYear(99);
+        const invalid = new Date(NaN);
+        const invalidSetYear = invalid.setYear();
+        [
+            new Date(0).getYear(),
+            setYearReturn,
+            d.toISOString(),
+            invalidSetYear !== invalidSetYear,
+            invalid.getTime() !== invalid.getTime(),
+            Date.prototype.toGMTString === Date.prototype.toUTCString,
+            Date.prototype.toGMTString.name,
+            Date.prototype.toGMTString.length,
+            d.toLocaleString(),
+            d.toLocaleDateString(),
+            d.toLocaleTimeString(),
+            Date.prototype.toLocaleString.name,
+            Date.prototype.toLocaleDateString.name,
+            Date.prototype.toLocaleTimeString.name
+        ].join("|")
+        "#,
+        concat!(
+            "70|915148800000|1999-01-01T00:00:00.000Z|true|true|true|toUTCString|0|",
+            "Fri Jan 01 1999 00:00:00 GMT+0000 (UTC)|Fri Jan 01 1999|",
+            "00:00:00 GMT+0000 (UTC)|toLocaleString|toLocaleDateString|toLocaleTimeString"
+        ),
+    )
+}

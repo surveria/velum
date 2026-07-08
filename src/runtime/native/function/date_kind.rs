@@ -15,6 +15,7 @@ const DATE_PROTOTYPE_GET_MINUTES_NAME: &str = "getMinutes";
 const DATE_PROTOTYPE_GET_MONTH_NAME: &str = "getMonth";
 const DATE_PROTOTYPE_GET_SECONDS_NAME: &str = "getSeconds";
 const DATE_PROTOTYPE_GET_TIME_NAME: &str = "getTime";
+const DATE_PROTOTYPE_GET_TIMEZONE_OFFSET_NAME: &str = "getTimezoneOffset";
 const DATE_PROTOTYPE_GET_UTC_DATE_NAME: &str = "getUTCDate";
 const DATE_PROTOTYPE_GET_UTC_DAY_NAME: &str = "getUTCDay";
 const DATE_PROTOTYPE_GET_UTC_FULL_YEAR_NAME: &str = "getUTCFullYear";
@@ -23,14 +24,37 @@ const DATE_PROTOTYPE_GET_UTC_MILLISECONDS_NAME: &str = "getUTCMilliseconds";
 const DATE_PROTOTYPE_GET_UTC_MINUTES_NAME: &str = "getUTCMinutes";
 const DATE_PROTOTYPE_GET_UTC_MONTH_NAME: &str = "getUTCMonth";
 const DATE_PROTOTYPE_GET_UTC_SECONDS_NAME: &str = "getUTCSeconds";
+const DATE_PROTOTYPE_GET_YEAR_NAME: &str = "getYear";
+const DATE_PROTOTYPE_SET_DATE_NAME: &str = "setDate";
+const DATE_PROTOTYPE_SET_FULL_YEAR_NAME: &str = "setFullYear";
+const DATE_PROTOTYPE_SET_HOURS_NAME: &str = "setHours";
+const DATE_PROTOTYPE_SET_MILLISECONDS_NAME: &str = "setMilliseconds";
+const DATE_PROTOTYPE_SET_MINUTES_NAME: &str = "setMinutes";
+const DATE_PROTOTYPE_SET_MONTH_NAME: &str = "setMonth";
+const DATE_PROTOTYPE_SET_SECONDS_NAME: &str = "setSeconds";
 const DATE_PROTOTYPE_SET_TIME_NAME: &str = "setTime";
+const DATE_PROTOTYPE_SET_UTC_DATE_NAME: &str = "setUTCDate";
+const DATE_PROTOTYPE_SET_UTC_FULL_YEAR_NAME: &str = "setUTCFullYear";
+const DATE_PROTOTYPE_SET_UTC_HOURS_NAME: &str = "setUTCHours";
+const DATE_PROTOTYPE_SET_UTC_MILLISECONDS_NAME: &str = "setUTCMilliseconds";
+const DATE_PROTOTYPE_SET_UTC_MINUTES_NAME: &str = "setUTCMinutes";
+const DATE_PROTOTYPE_SET_UTC_MONTH_NAME: &str = "setUTCMonth";
+const DATE_PROTOTYPE_SET_UTC_SECONDS_NAME: &str = "setUTCSeconds";
+const DATE_PROTOTYPE_SET_YEAR_NAME: &str = "setYear";
+const DATE_PROTOTYPE_SYMBOL_TO_PRIMITIVE_NAME: &str = "[Symbol.toPrimitive]";
 const DATE_PROTOTYPE_TO_DATE_STRING_NAME: &str = "toDateString";
 const DATE_PROTOTYPE_TO_ISO_STRING_NAME: &str = "toISOString";
 const DATE_PROTOTYPE_TO_JSON_NAME: &str = "toJSON";
+const DATE_PROTOTYPE_TO_LOCALE_DATE_STRING_NAME: &str = "toLocaleDateString";
+const DATE_PROTOTYPE_TO_LOCALE_STRING_NAME: &str = "toLocaleString";
+const DATE_PROTOTYPE_TO_LOCALE_TIME_STRING_NAME: &str = "toLocaleTimeString";
 const DATE_PROTOTYPE_TO_STRING_NAME: &str = "toString";
 const DATE_PROTOTYPE_TO_TIME_STRING_NAME: &str = "toTimeString";
 const DATE_PROTOTYPE_TO_UTC_STRING_NAME: &str = "toUTCString";
 const DATE_PROTOTYPE_VALUE_OF_NAME: &str = "valueOf";
+const DATE_SETTER_LENGTH_FOUR: f64 = 4.0;
+const DATE_SETTER_LENGTH_THREE: f64 = 3.0;
+const DATE_SETTER_LENGTH_TWO: f64 = 2.0;
 const DATE_UTC_FUNCTION_LENGTH: f64 = 7.0;
 pub(in crate::runtime) const DATE_UTC_NAME: &str = "UTC";
 
@@ -48,6 +72,7 @@ pub(in crate::runtime) enum DateFunctionKind {
     PrototypeGetMonth,
     PrototypeGetSeconds,
     PrototypeGetTime,
+    PrototypeGetTimezoneOffset,
     PrototypeGetUtcDate,
     PrototypeGetUtcDay,
     PrototypeGetUtcFullYear,
@@ -56,10 +81,30 @@ pub(in crate::runtime) enum DateFunctionKind {
     PrototypeGetUtcMinutes,
     PrototypeGetUtcMonth,
     PrototypeGetUtcSeconds,
+    PrototypeGetYear,
+    PrototypeSetDate,
+    PrototypeSetFullYear,
+    PrototypeSetHours,
+    PrototypeSetMilliseconds,
+    PrototypeSetMinutes,
+    PrototypeSetMonth,
+    PrototypeSetSeconds,
     PrototypeSetTime,
+    PrototypeSetUtcDate,
+    PrototypeSetUtcFullYear,
+    PrototypeSetUtcHours,
+    PrototypeSetUtcMilliseconds,
+    PrototypeSetUtcMinutes,
+    PrototypeSetUtcMonth,
+    PrototypeSetUtcSeconds,
+    PrototypeSetYear,
+    PrototypeSymbolToPrimitive,
     PrototypeToDateString,
     PrototypeToIsoString,
     PrototypeToJson,
+    PrototypeToLocaleDateString,
+    PrototypeToLocaleString,
+    PrototypeToLocaleTimeString,
     PrototypeToString,
     PrototypeToTimeString,
     PrototypeToUtcString,
@@ -73,7 +118,23 @@ impl DateFunctionKind {
             Self::Constructor => DATE_FUNCTION_LENGTH,
             Self::Utc => DATE_UTC_FUNCTION_LENGTH,
             Self::Now => DATE_NOW_FUNCTION_LENGTH,
-            Self::Parse | Self::PrototypeSetTime => DATE_PARSE_FUNCTION_LENGTH,
+            Self::Parse
+            | Self::PrototypeSetDate
+            | Self::PrototypeSetMilliseconds
+            | Self::PrototypeSetTime
+            | Self::PrototypeSetYear
+            | Self::PrototypeSymbolToPrimitive
+            | Self::PrototypeSetUtcDate
+            | Self::PrototypeSetUtcMilliseconds => DATE_PARSE_FUNCTION_LENGTH,
+            Self::PrototypeSetMonth
+            | Self::PrototypeSetSeconds
+            | Self::PrototypeSetUtcMonth
+            | Self::PrototypeSetUtcSeconds => DATE_SETTER_LENGTH_TWO,
+            Self::PrototypeSetFullYear
+            | Self::PrototypeSetMinutes
+            | Self::PrototypeSetUtcFullYear
+            | Self::PrototypeSetUtcMinutes => DATE_SETTER_LENGTH_THREE,
+            Self::PrototypeSetHours | Self::PrototypeSetUtcHours => DATE_SETTER_LENGTH_FOUR,
             Self::PrototypeGetDate
             | Self::PrototypeGetDay
             | Self::PrototypeGetFullYear
@@ -83,6 +144,7 @@ impl DateFunctionKind {
             | Self::PrototypeGetMonth
             | Self::PrototypeGetSeconds
             | Self::PrototypeGetTime
+            | Self::PrototypeGetTimezoneOffset
             | Self::PrototypeGetUtcDate
             | Self::PrototypeGetUtcDay
             | Self::PrototypeGetUtcFullYear
@@ -91,9 +153,13 @@ impl DateFunctionKind {
             | Self::PrototypeGetUtcMinutes
             | Self::PrototypeGetUtcMonth
             | Self::PrototypeGetUtcSeconds
+            | Self::PrototypeGetYear
             | Self::PrototypeToDateString
             | Self::PrototypeToIsoString
             | Self::PrototypeToJson
+            | Self::PrototypeToLocaleDateString
+            | Self::PrototypeToLocaleString
+            | Self::PrototypeToLocaleTimeString
             | Self::PrototypeToString
             | Self::PrototypeToTimeString
             | Self::PrototypeToUtcString
@@ -115,6 +181,7 @@ impl DateFunctionKind {
             Self::PrototypeGetMonth => DATE_PROTOTYPE_GET_MONTH_NAME,
             Self::PrototypeGetSeconds => DATE_PROTOTYPE_GET_SECONDS_NAME,
             Self::PrototypeGetTime => DATE_PROTOTYPE_GET_TIME_NAME,
+            Self::PrototypeGetTimezoneOffset => DATE_PROTOTYPE_GET_TIMEZONE_OFFSET_NAME,
             Self::PrototypeGetUtcDate => DATE_PROTOTYPE_GET_UTC_DATE_NAME,
             Self::PrototypeGetUtcDay => DATE_PROTOTYPE_GET_UTC_DAY_NAME,
             Self::PrototypeGetUtcFullYear => DATE_PROTOTYPE_GET_UTC_FULL_YEAR_NAME,
@@ -123,10 +190,30 @@ impl DateFunctionKind {
             Self::PrototypeGetUtcMinutes => DATE_PROTOTYPE_GET_UTC_MINUTES_NAME,
             Self::PrototypeGetUtcMonth => DATE_PROTOTYPE_GET_UTC_MONTH_NAME,
             Self::PrototypeGetUtcSeconds => DATE_PROTOTYPE_GET_UTC_SECONDS_NAME,
+            Self::PrototypeGetYear => DATE_PROTOTYPE_GET_YEAR_NAME,
+            Self::PrototypeSetDate => DATE_PROTOTYPE_SET_DATE_NAME,
+            Self::PrototypeSetFullYear => DATE_PROTOTYPE_SET_FULL_YEAR_NAME,
+            Self::PrototypeSetHours => DATE_PROTOTYPE_SET_HOURS_NAME,
+            Self::PrototypeSetMilliseconds => DATE_PROTOTYPE_SET_MILLISECONDS_NAME,
+            Self::PrototypeSetMinutes => DATE_PROTOTYPE_SET_MINUTES_NAME,
+            Self::PrototypeSetMonth => DATE_PROTOTYPE_SET_MONTH_NAME,
+            Self::PrototypeSetSeconds => DATE_PROTOTYPE_SET_SECONDS_NAME,
             Self::PrototypeSetTime => DATE_PROTOTYPE_SET_TIME_NAME,
+            Self::PrototypeSetUtcDate => DATE_PROTOTYPE_SET_UTC_DATE_NAME,
+            Self::PrototypeSetUtcFullYear => DATE_PROTOTYPE_SET_UTC_FULL_YEAR_NAME,
+            Self::PrototypeSetUtcHours => DATE_PROTOTYPE_SET_UTC_HOURS_NAME,
+            Self::PrototypeSetUtcMilliseconds => DATE_PROTOTYPE_SET_UTC_MILLISECONDS_NAME,
+            Self::PrototypeSetUtcMinutes => DATE_PROTOTYPE_SET_UTC_MINUTES_NAME,
+            Self::PrototypeSetUtcMonth => DATE_PROTOTYPE_SET_UTC_MONTH_NAME,
+            Self::PrototypeSetUtcSeconds => DATE_PROTOTYPE_SET_UTC_SECONDS_NAME,
+            Self::PrototypeSetYear => DATE_PROTOTYPE_SET_YEAR_NAME,
+            Self::PrototypeSymbolToPrimitive => DATE_PROTOTYPE_SYMBOL_TO_PRIMITIVE_NAME,
             Self::PrototypeToDateString => DATE_PROTOTYPE_TO_DATE_STRING_NAME,
             Self::PrototypeToIsoString => DATE_PROTOTYPE_TO_ISO_STRING_NAME,
             Self::PrototypeToJson => DATE_PROTOTYPE_TO_JSON_NAME,
+            Self::PrototypeToLocaleDateString => DATE_PROTOTYPE_TO_LOCALE_DATE_STRING_NAME,
+            Self::PrototypeToLocaleString => DATE_PROTOTYPE_TO_LOCALE_STRING_NAME,
+            Self::PrototypeToLocaleTimeString => DATE_PROTOTYPE_TO_LOCALE_TIME_STRING_NAME,
             Self::PrototypeToString => DATE_PROTOTYPE_TO_STRING_NAME,
             Self::PrototypeToTimeString => DATE_PROTOTYPE_TO_TIME_STRING_NAME,
             Self::PrototypeToUtcString => DATE_PROTOTYPE_TO_UTC_STRING_NAME,
