@@ -35,6 +35,22 @@ pub(in crate::runtime::native) const EVAL_NAME: &str = "eval";
 const ERROR_FUNCTION_LENGTH: f64 = 1.0;
 const FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const FUNCTION_NAME: &str = "Function";
+const GLOBAL_DECODE_URI_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const GLOBAL_DECODE_URI_NAME: &str = "decodeURI";
+const GLOBAL_DECODE_URI_COMPONENT_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const GLOBAL_DECODE_URI_COMPONENT_NAME: &str = "decodeURIComponent";
+const GLOBAL_ENCODE_URI_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const GLOBAL_ENCODE_URI_NAME: &str = "encodeURI";
+const GLOBAL_ENCODE_URI_COMPONENT_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const GLOBAL_ENCODE_URI_COMPONENT_NAME: &str = "encodeURIComponent";
+const GLOBAL_IS_FINITE_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const GLOBAL_IS_FINITE_NAME: &str = "isFinite";
+const GLOBAL_IS_NAN_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const GLOBAL_IS_NAN_NAME: &str = "isNaN";
+const GLOBAL_PARSE_FLOAT_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const GLOBAL_PARSE_FLOAT_NAME: &str = "parseFloat";
+const GLOBAL_PARSE_INT_FUNCTION_LENGTH: f64 = 2.0;
+pub(in crate::runtime::native) const GLOBAL_PARSE_INT_NAME: &str = "parseInt";
 const FUNCTION_PROTOTYPE_BIND_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const FUNCTION_PROTOTYPE_BIND_NAME: &str = "bind";
 const FUNCTION_PROTOTYPE_CALL_LENGTH: f64 = 1.0;
@@ -88,6 +104,10 @@ pub(in crate::runtime::native) const MATH_TRUNC_NAME: &str = "trunc";
 const MATH_FUNCTION_LENGTH_ZERO: f64 = 0.0;
 pub(in crate::runtime) const NAN_NAME: &str = "NaN";
 const NUMBER_FUNCTION_LENGTH: f64 = 1.0;
+const NUMBER_IS_FINITE_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const NUMBER_IS_FINITE_NAME: &str = "isFinite";
+const NUMBER_IS_NAN_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const NUMBER_IS_NAN_NAME: &str = "isNaN";
 pub(in crate::runtime::native) const NUMBER_NAME: &str = "Number";
 const OBJECT_ASSIGN_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const OBJECT_ASSIGN_NAME: &str = "assign";
@@ -172,6 +192,14 @@ pub(in crate::runtime) enum NativeFunctionKind {
     Function,
     FunctionPrototypeBind,
     FunctionPrototypeCall,
+    GlobalDecodeUri,
+    GlobalDecodeUriComponent,
+    GlobalEncodeUri,
+    GlobalEncodeUriComponent,
+    GlobalIsFinite,
+    GlobalIsNan,
+    GlobalParseFloat,
+    GlobalParseInt,
     JsonParse,
     JsonStringify,
     MathAbs,
@@ -210,6 +238,8 @@ pub(in crate::runtime) enum NativeFunctionKind {
     MathTanh,
     MathTrunc,
     Number,
+    NumberIsFinite,
+    NumberIsNan,
     Object,
     ObjectAssign,
     ObjectCreate,
@@ -244,31 +274,62 @@ pub(in crate::runtime) enum NativeFunctionKind {
 
 impl NativeFunctionKind {
     pub(in crate::runtime::native) const fn length(self) -> f64 {
+        if let Some(length) = self.array_length() {
+            return length;
+        }
+        if let Some(length) = self.global_utility_length() {
+            return length;
+        }
+        if let Some(length) = self.math_length() {
+            return length;
+        }
+        if let Some(length) = self.object_length() {
+            return length;
+        }
+        if let Some(length) = self.core_length() {
+            return length;
+        }
+        FUNCTION_FUNCTION_LENGTH
+    }
+
+    const fn array_length(self) -> Option<f64> {
         match self {
-            Self::Array => ARRAY_FUNCTION_LENGTH,
-            Self::ArrayConcat => ARRAY_CONCAT_FUNCTION_LENGTH,
-            Self::ArrayIncludes => ARRAY_INCLUDES_FUNCTION_LENGTH,
-            Self::ArrayIndexOf => ARRAY_INDEX_OF_FUNCTION_LENGTH,
-            Self::ArrayIsArray => ARRAY_IS_ARRAY_FUNCTION_LENGTH,
-            Self::ArrayJoin => ARRAY_JOIN_FUNCTION_LENGTH,
-            Self::ArrayLastIndexOf => ARRAY_LAST_INDEX_OF_FUNCTION_LENGTH,
-            Self::ArrayPop => ARRAY_POP_FUNCTION_LENGTH,
-            Self::ArrayPush => ARRAY_PUSH_FUNCTION_LENGTH,
-            Self::ArrayReverse => ARRAY_REVERSE_FUNCTION_LENGTH,
-            Self::ArrayShift => ARRAY_SHIFT_FUNCTION_LENGTH,
-            Self::ArraySlice => ARRAY_SLICE_FUNCTION_LENGTH,
-            Self::ArrayUnshift => ARRAY_UNSHIFT_FUNCTION_LENGTH,
-            Self::AsyncFunction => ASYNC_FUNCTION_FUNCTION_LENGTH,
-            Self::Boolean => BOOLEAN_FUNCTION_LENGTH,
-            Self::BoundFunction(_) => BOUND_FUNCTION_LENGTH,
-            Self::Eval => EVAL_FUNCTION_LENGTH,
-            Self::ErrorConstructor(_) => ERROR_FUNCTION_LENGTH,
-            Self::Function => FUNCTION_FUNCTION_LENGTH,
-            Self::FunctionPrototypeBind => FUNCTION_PROTOTYPE_BIND_LENGTH,
-            Self::FunctionPrototypeCall => FUNCTION_PROTOTYPE_CALL_LENGTH,
-            Self::JsonParse => JSON_PARSE_FUNCTION_LENGTH,
-            Self::JsonStringify => JSON_STRINGIFY_FUNCTION_LENGTH,
-            Self::MathRandom => MATH_FUNCTION_LENGTH_ZERO,
+            Self::Array => Some(ARRAY_FUNCTION_LENGTH),
+            Self::ArrayConcat => Some(ARRAY_CONCAT_FUNCTION_LENGTH),
+            Self::ArrayIncludes => Some(ARRAY_INCLUDES_FUNCTION_LENGTH),
+            Self::ArrayIndexOf => Some(ARRAY_INDEX_OF_FUNCTION_LENGTH),
+            Self::ArrayIsArray => Some(ARRAY_IS_ARRAY_FUNCTION_LENGTH),
+            Self::ArrayJoin => Some(ARRAY_JOIN_FUNCTION_LENGTH),
+            Self::ArrayLastIndexOf => Some(ARRAY_LAST_INDEX_OF_FUNCTION_LENGTH),
+            Self::ArrayPop => Some(ARRAY_POP_FUNCTION_LENGTH),
+            Self::ArrayPush => Some(ARRAY_PUSH_FUNCTION_LENGTH),
+            Self::ArrayReverse => Some(ARRAY_REVERSE_FUNCTION_LENGTH),
+            Self::ArrayShift => Some(ARRAY_SHIFT_FUNCTION_LENGTH),
+            Self::ArraySlice => Some(ARRAY_SLICE_FUNCTION_LENGTH),
+            Self::ArrayUnshift => Some(ARRAY_UNSHIFT_FUNCTION_LENGTH),
+            _ => None,
+        }
+    }
+
+    const fn global_utility_length(self) -> Option<f64> {
+        match self {
+            Self::GlobalDecodeUri => Some(GLOBAL_DECODE_URI_FUNCTION_LENGTH),
+            Self::GlobalDecodeUriComponent => Some(GLOBAL_DECODE_URI_COMPONENT_FUNCTION_LENGTH),
+            Self::GlobalEncodeUri => Some(GLOBAL_ENCODE_URI_FUNCTION_LENGTH),
+            Self::GlobalEncodeUriComponent => Some(GLOBAL_ENCODE_URI_COMPONENT_FUNCTION_LENGTH),
+            Self::GlobalIsFinite => Some(GLOBAL_IS_FINITE_FUNCTION_LENGTH),
+            Self::GlobalIsNan => Some(GLOBAL_IS_NAN_FUNCTION_LENGTH),
+            Self::GlobalParseFloat => Some(GLOBAL_PARSE_FLOAT_FUNCTION_LENGTH),
+            Self::GlobalParseInt => Some(GLOBAL_PARSE_INT_FUNCTION_LENGTH),
+            Self::NumberIsFinite => Some(NUMBER_IS_FINITE_FUNCTION_LENGTH),
+            Self::NumberIsNan => Some(NUMBER_IS_NAN_FUNCTION_LENGTH),
+            _ => None,
+        }
+    }
+
+    const fn math_length(self) -> Option<f64> {
+        match self {
+            Self::MathRandom => Some(MATH_FUNCTION_LENGTH_ZERO),
             Self::MathAbs
             | Self::MathAcos
             | Self::MathAcosh
@@ -296,149 +357,224 @@ impl NativeFunctionKind {
             | Self::MathSqrt
             | Self::MathTan
             | Self::MathTanh
-            | Self::MathTrunc => MATH_FUNCTION_LENGTH_ONE,
+            | Self::MathTrunc => Some(MATH_FUNCTION_LENGTH_ONE),
             Self::MathAtan2
             | Self::MathHypot
             | Self::MathImul
             | Self::MathMax
             | Self::MathMin
-            | Self::MathPow => MATH_FUNCTION_LENGTH_TWO,
-            Self::Number => NUMBER_FUNCTION_LENGTH,
-            Self::Object => OBJECT_FUNCTION_LENGTH,
-            Self::ObjectAssign => OBJECT_ASSIGN_FUNCTION_LENGTH,
-            Self::ObjectCreate => OBJECT_CREATE_FUNCTION_LENGTH,
-            Self::ObjectDefineProperties => OBJECT_DEFINE_PROPERTIES_FUNCTION_LENGTH,
-            Self::ObjectDefineProperty => OBJECT_DEFINE_PROPERTY_FUNCTION_LENGTH,
-            Self::ObjectEntries => OBJECT_ENTRIES_FUNCTION_LENGTH,
-            Self::ObjectGetPrototypeOf => OBJECT_GET_PROTOTYPE_OF_FUNCTION_LENGTH,
+            | Self::MathPow => Some(MATH_FUNCTION_LENGTH_TWO),
+            _ => None,
+        }
+    }
+
+    const fn object_length(self) -> Option<f64> {
+        match self {
+            Self::Object => Some(OBJECT_FUNCTION_LENGTH),
+            Self::ObjectAssign => Some(OBJECT_ASSIGN_FUNCTION_LENGTH),
+            Self::ObjectCreate => Some(OBJECT_CREATE_FUNCTION_LENGTH),
+            Self::ObjectDefineProperties => Some(OBJECT_DEFINE_PROPERTIES_FUNCTION_LENGTH),
+            Self::ObjectDefineProperty => Some(OBJECT_DEFINE_PROPERTY_FUNCTION_LENGTH),
+            Self::ObjectEntries => Some(OBJECT_ENTRIES_FUNCTION_LENGTH),
+            Self::ObjectGetPrototypeOf => Some(OBJECT_GET_PROTOTYPE_OF_FUNCTION_LENGTH),
             Self::ObjectGetOwnPropertyDescriptor => {
-                OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH
+                Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH)
             }
             Self::ObjectGetOwnPropertyDescriptors => {
-                OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_FUNCTION_LENGTH
+                Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_FUNCTION_LENGTH)
             }
-            Self::ObjectGetOwnPropertyNames => OBJECT_GET_OWN_PROPERTY_NAMES_FUNCTION_LENGTH,
-            Self::ObjectHasOwn => OBJECT_HAS_OWN_FUNCTION_LENGTH,
-            Self::ObjectIs => OBJECT_IS_FUNCTION_LENGTH,
-            Self::ObjectKeys => OBJECT_KEYS_FUNCTION_LENGTH,
+            Self::ObjectGetOwnPropertyNames => Some(OBJECT_GET_OWN_PROPERTY_NAMES_FUNCTION_LENGTH),
+            Self::ObjectHasOwn => Some(OBJECT_HAS_OWN_FUNCTION_LENGTH),
+            Self::ObjectIs => Some(OBJECT_IS_FUNCTION_LENGTH),
+            Self::ObjectKeys => Some(OBJECT_KEYS_FUNCTION_LENGTH),
             Self::ObjectPrototypeHasOwnProperty => {
-                OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_FUNCTION_LENGTH
+                Some(OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_FUNCTION_LENGTH)
             }
             Self::ObjectPrototypePropertyIsEnumerable => {
-                OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_FUNCTION_LENGTH
+                Some(OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_FUNCTION_LENGTH)
             }
-            Self::ObjectSetPrototypeOf => OBJECT_SET_PROTOTYPE_OF_FUNCTION_LENGTH,
-            Self::ObjectValues => OBJECT_VALUES_FUNCTION_LENGTH,
-            Self::Promise => PROMISE_FUNCTION_LENGTH,
-            Self::PromiseResolve => PROMISE_RESOLVE_FUNCTION_LENGTH,
-            Self::PromiseReject => PROMISE_REJECT_FUNCTION_LENGTH,
-            Self::PromiseThen => PROMISE_THEN_FUNCTION_LENGTH,
-            Self::PromiseCatch => PROMISE_CATCH_FUNCTION_LENGTH,
-            Self::PromiseResolver { .. } => PROMISE_RESOLVER_FUNCTION_LENGTH,
-            Self::RegExp => REGEXP_FUNCTION_LENGTH,
-            Self::RegExpPrototypeTest => REGEXP_PROTOTYPE_TEST_LENGTH,
-            Self::String => STRING_FUNCTION_LENGTH,
-            Self::Symbol => SYMBOL_FUNCTION_LENGTH,
+            Self::ObjectSetPrototypeOf => Some(OBJECT_SET_PROTOTYPE_OF_FUNCTION_LENGTH),
+            Self::ObjectValues => Some(OBJECT_VALUES_FUNCTION_LENGTH),
+            _ => None,
+        }
+    }
+
+    const fn core_length(self) -> Option<f64> {
+        match self {
+            Self::AsyncFunction => Some(ASYNC_FUNCTION_FUNCTION_LENGTH),
+            Self::Boolean => Some(BOOLEAN_FUNCTION_LENGTH),
+            Self::BoundFunction(_) => Some(BOUND_FUNCTION_LENGTH),
+            Self::Eval => Some(EVAL_FUNCTION_LENGTH),
+            Self::ErrorConstructor(_) => Some(ERROR_FUNCTION_LENGTH),
+            Self::Function => Some(FUNCTION_FUNCTION_LENGTH),
+            Self::FunctionPrototypeBind => Some(FUNCTION_PROTOTYPE_BIND_LENGTH),
+            Self::FunctionPrototypeCall => Some(FUNCTION_PROTOTYPE_CALL_LENGTH),
+            Self::JsonParse => Some(JSON_PARSE_FUNCTION_LENGTH),
+            Self::JsonStringify => Some(JSON_STRINGIFY_FUNCTION_LENGTH),
+            Self::Number => Some(NUMBER_FUNCTION_LENGTH),
+            Self::Promise => Some(PROMISE_FUNCTION_LENGTH),
+            Self::PromiseResolve => Some(PROMISE_RESOLVE_FUNCTION_LENGTH),
+            Self::PromiseReject => Some(PROMISE_REJECT_FUNCTION_LENGTH),
+            Self::PromiseThen => Some(PROMISE_THEN_FUNCTION_LENGTH),
+            Self::PromiseCatch => Some(PROMISE_CATCH_FUNCTION_LENGTH),
+            Self::PromiseResolver { .. } => Some(PROMISE_RESOLVER_FUNCTION_LENGTH),
+            Self::RegExp => Some(REGEXP_FUNCTION_LENGTH),
+            Self::RegExpPrototypeTest => Some(REGEXP_PROTOTYPE_TEST_LENGTH),
+            Self::String => Some(STRING_FUNCTION_LENGTH),
+            Self::Symbol => Some(SYMBOL_FUNCTION_LENGTH),
+            _ => None,
         }
     }
 
     pub(in crate::runtime::native) const fn name(self) -> &'static str {
+        if let Some(name) = self.array_name() {
+            return name;
+        }
+        if let Some(name) = self.global_utility_name() {
+            return name;
+        }
+        if let Some(name) = self.math_name() {
+            return name;
+        }
+        if let Some(name) = self.object_name() {
+            return name;
+        }
+        if let Some(name) = self.core_name() {
+            return name;
+        }
+        FUNCTION_NAME
+    }
+
+    const fn array_name(self) -> Option<&'static str> {
         match self {
-            Self::Array => ARRAY_NAME,
-            Self::ArrayConcat => ARRAY_CONCAT_NAME,
-            Self::ArrayIncludes => ARRAY_INCLUDES_NAME,
-            Self::ArrayIndexOf => ARRAY_INDEX_OF_NAME,
-            Self::ArrayIsArray => ARRAY_IS_ARRAY_NAME,
-            Self::ArrayJoin => ARRAY_JOIN_NAME,
-            Self::ArrayLastIndexOf => ARRAY_LAST_INDEX_OF_NAME,
-            Self::ArrayPop => ARRAY_POP_NAME,
-            Self::ArrayPush => ARRAY_PUSH_NAME,
-            Self::ArrayReverse => ARRAY_REVERSE_NAME,
-            Self::ArrayShift => ARRAY_SHIFT_NAME,
-            Self::ArraySlice => ARRAY_SLICE_NAME,
-            Self::ArrayUnshift => ARRAY_UNSHIFT_NAME,
-            Self::AsyncFunction => ASYNC_FUNCTION_NAME,
-            Self::Boolean => BOOLEAN_NAME,
-            Self::BoundFunction(_) => BOUND_FUNCTION_NAME,
-            Self::Eval => EVAL_NAME,
-            Self::ErrorConstructor(name) => name.as_str(),
-            Self::Function => FUNCTION_NAME,
-            Self::FunctionPrototypeBind => FUNCTION_PROTOTYPE_BIND_NAME,
-            Self::FunctionPrototypeCall => FUNCTION_PROTOTYPE_CALL_NAME,
-            Self::JsonParse => JSON_PARSE_NAME,
-            Self::JsonStringify => JSON_STRINGIFY_NAME,
-            Self::MathAbs => MATH_ABS_NAME,
-            Self::MathAcos => MATH_ACOS_NAME,
-            Self::MathAcosh => MATH_ACOSH_NAME,
-            Self::MathAsin => MATH_ASIN_NAME,
-            Self::MathAsinh => MATH_ASINH_NAME,
-            Self::MathAtan => MATH_ATAN_NAME,
-            Self::MathAtan2 => MATH_ATAN2_NAME,
-            Self::MathAtanh => MATH_ATANH_NAME,
-            Self::MathCbrt => MATH_CBRT_NAME,
-            Self::MathCeil => MATH_CEIL_NAME,
-            Self::MathClz32 => MATH_CLZ32_NAME,
-            Self::MathCos => MATH_COS_NAME,
-            Self::MathCosh => MATH_COSH_NAME,
-            Self::MathExp => MATH_EXP_NAME,
-            Self::MathExpm1 => MATH_EXPM1_NAME,
-            Self::MathFloor => MATH_FLOOR_NAME,
-            Self::MathFround => MATH_FROUND_NAME,
-            Self::MathHypot => MATH_HYPOT_NAME,
-            Self::MathImul => MATH_IMUL_NAME,
-            Self::MathLog => MATH_LOG_NAME,
-            Self::MathLog10 => MATH_LOG10_NAME,
-            Self::MathLog1p => MATH_LOG1P_NAME,
-            Self::MathLog2 => MATH_LOG2_NAME,
-            Self::MathMax => MATH_MAX_NAME,
-            Self::MathMin => MATH_MIN_NAME,
-            Self::MathPow => MATH_POW_NAME,
-            Self::MathRandom => MATH_RANDOM_NAME,
-            Self::MathRound => MATH_ROUND_NAME,
-            Self::MathSign => MATH_SIGN_NAME,
-            Self::MathSin => MATH_SIN_NAME,
-            Self::MathSinh => MATH_SINH_NAME,
-            Self::MathSqrt => MATH_SQRT_NAME,
-            Self::MathTan => MATH_TAN_NAME,
-            Self::MathTanh => MATH_TANH_NAME,
-            Self::MathTrunc => MATH_TRUNC_NAME,
-            Self::Number => NUMBER_NAME,
-            Self::Object => OBJECT_NAME,
-            Self::ObjectAssign => OBJECT_ASSIGN_NAME,
-            Self::ObjectCreate => OBJECT_CREATE_NAME,
-            Self::ObjectDefineProperties => OBJECT_DEFINE_PROPERTIES_NAME,
-            Self::ObjectDefineProperty => OBJECT_DEFINE_PROPERTY_NAME,
-            Self::ObjectEntries => OBJECT_ENTRIES_NAME,
-            Self::ObjectGetPrototypeOf => OBJECT_GET_PROTOTYPE_OF_NAME,
-            Self::ObjectGetOwnPropertyDescriptor => OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
-            Self::ObjectGetOwnPropertyDescriptors => OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME,
-            Self::ObjectGetOwnPropertyNames => OBJECT_GET_OWN_PROPERTY_NAMES_NAME,
-            Self::ObjectHasOwn => OBJECT_HAS_OWN_NAME,
-            Self::ObjectIs => OBJECT_IS_NAME,
-            Self::ObjectKeys => OBJECT_KEYS_NAME,
-            Self::ObjectPrototypeHasOwnProperty => OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
+            Self::Array => Some(ARRAY_NAME),
+            Self::ArrayConcat => Some(ARRAY_CONCAT_NAME),
+            Self::ArrayIncludes => Some(ARRAY_INCLUDES_NAME),
+            Self::ArrayIndexOf => Some(ARRAY_INDEX_OF_NAME),
+            Self::ArrayIsArray => Some(ARRAY_IS_ARRAY_NAME),
+            Self::ArrayJoin => Some(ARRAY_JOIN_NAME),
+            Self::ArrayLastIndexOf => Some(ARRAY_LAST_INDEX_OF_NAME),
+            Self::ArrayPop => Some(ARRAY_POP_NAME),
+            Self::ArrayPush => Some(ARRAY_PUSH_NAME),
+            Self::ArrayReverse => Some(ARRAY_REVERSE_NAME),
+            Self::ArrayShift => Some(ARRAY_SHIFT_NAME),
+            Self::ArraySlice => Some(ARRAY_SLICE_NAME),
+            Self::ArrayUnshift => Some(ARRAY_UNSHIFT_NAME),
+            _ => None,
+        }
+    }
+
+    const fn math_name(self) -> Option<&'static str> {
+        match self {
+            Self::MathAbs => Some(MATH_ABS_NAME),
+            Self::MathAcos => Some(MATH_ACOS_NAME),
+            Self::MathAcosh => Some(MATH_ACOSH_NAME),
+            Self::MathAsin => Some(MATH_ASIN_NAME),
+            Self::MathAsinh => Some(MATH_ASINH_NAME),
+            Self::MathAtan => Some(MATH_ATAN_NAME),
+            Self::MathAtan2 => Some(MATH_ATAN2_NAME),
+            Self::MathAtanh => Some(MATH_ATANH_NAME),
+            Self::MathCbrt => Some(MATH_CBRT_NAME),
+            Self::MathCeil => Some(MATH_CEIL_NAME),
+            Self::MathClz32 => Some(MATH_CLZ32_NAME),
+            Self::MathCos => Some(MATH_COS_NAME),
+            Self::MathCosh => Some(MATH_COSH_NAME),
+            Self::MathExp => Some(MATH_EXP_NAME),
+            Self::MathExpm1 => Some(MATH_EXPM1_NAME),
+            Self::MathFloor => Some(MATH_FLOOR_NAME),
+            Self::MathFround => Some(MATH_FROUND_NAME),
+            Self::MathHypot => Some(MATH_HYPOT_NAME),
+            Self::MathImul => Some(MATH_IMUL_NAME),
+            Self::MathLog => Some(MATH_LOG_NAME),
+            Self::MathLog10 => Some(MATH_LOG10_NAME),
+            Self::MathLog1p => Some(MATH_LOG1P_NAME),
+            Self::MathLog2 => Some(MATH_LOG2_NAME),
+            Self::MathMax => Some(MATH_MAX_NAME),
+            Self::MathMin => Some(MATH_MIN_NAME),
+            Self::MathPow => Some(MATH_POW_NAME),
+            Self::MathRandom => Some(MATH_RANDOM_NAME),
+            Self::MathRound => Some(MATH_ROUND_NAME),
+            Self::MathSign => Some(MATH_SIGN_NAME),
+            Self::MathSin => Some(MATH_SIN_NAME),
+            Self::MathSinh => Some(MATH_SINH_NAME),
+            Self::MathSqrt => Some(MATH_SQRT_NAME),
+            Self::MathTan => Some(MATH_TAN_NAME),
+            Self::MathTanh => Some(MATH_TANH_NAME),
+            Self::MathTrunc => Some(MATH_TRUNC_NAME),
+            _ => None,
+        }
+    }
+
+    const fn object_name(self) -> Option<&'static str> {
+        match self {
+            Self::Object => Some(OBJECT_NAME),
+            Self::ObjectAssign => Some(OBJECT_ASSIGN_NAME),
+            Self::ObjectCreate => Some(OBJECT_CREATE_NAME),
+            Self::ObjectDefineProperties => Some(OBJECT_DEFINE_PROPERTIES_NAME),
+            Self::ObjectDefineProperty => Some(OBJECT_DEFINE_PROPERTY_NAME),
+            Self::ObjectEntries => Some(OBJECT_ENTRIES_NAME),
+            Self::ObjectGetPrototypeOf => Some(OBJECT_GET_PROTOTYPE_OF_NAME),
+            Self::ObjectGetOwnPropertyDescriptor => Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME),
+            Self::ObjectGetOwnPropertyDescriptors => Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME),
+            Self::ObjectGetOwnPropertyNames => Some(OBJECT_GET_OWN_PROPERTY_NAMES_NAME),
+            Self::ObjectHasOwn => Some(OBJECT_HAS_OWN_NAME),
+            Self::ObjectIs => Some(OBJECT_IS_NAME),
+            Self::ObjectKeys => Some(OBJECT_KEYS_NAME),
+            Self::ObjectPrototypeHasOwnProperty => Some(OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME),
             Self::ObjectPrototypePropertyIsEnumerable => {
-                OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME
+                Some(OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME)
             }
-            Self::ObjectSetPrototypeOf => OBJECT_SET_PROTOTYPE_OF_NAME,
-            Self::ObjectValues => OBJECT_VALUES_NAME,
-            Self::Promise => PROMISE_NAME,
-            Self::PromiseResolve => PROMISE_RESOLVE_NAME,
-            Self::PromiseReject => PROMISE_REJECT_NAME,
-            Self::PromiseThen => PROMISE_THEN_NAME,
-            Self::PromiseCatch => PROMISE_CATCH_NAME,
+            Self::ObjectSetPrototypeOf => Some(OBJECT_SET_PROTOTYPE_OF_NAME),
+            Self::ObjectValues => Some(OBJECT_VALUES_NAME),
+            _ => None,
+        }
+    }
+
+    const fn core_name(self) -> Option<&'static str> {
+        match self {
+            Self::AsyncFunction => Some(ASYNC_FUNCTION_NAME),
+            Self::Boolean => Some(BOOLEAN_NAME),
+            Self::BoundFunction(_) => Some(BOUND_FUNCTION_NAME),
+            Self::Eval => Some(EVAL_NAME),
+            Self::ErrorConstructor(name) => Some(name.as_str()),
+            Self::Function => Some(FUNCTION_NAME),
+            Self::FunctionPrototypeBind => Some(FUNCTION_PROTOTYPE_BIND_NAME),
+            Self::FunctionPrototypeCall => Some(FUNCTION_PROTOTYPE_CALL_NAME),
+            Self::JsonParse => Some(JSON_PARSE_NAME),
+            Self::JsonStringify => Some(JSON_STRINGIFY_NAME),
+            Self::Number => Some(NUMBER_NAME),
+            Self::Promise => Some(PROMISE_NAME),
+            Self::PromiseResolve => Some(PROMISE_RESOLVE_NAME),
+            Self::PromiseReject => Some(PROMISE_REJECT_NAME),
+            Self::PromiseThen => Some(PROMISE_THEN_NAME),
+            Self::PromiseCatch => Some(PROMISE_CATCH_NAME),
             Self::PromiseResolver {
                 kind: crate::runtime::promise::PromiseResolverKind::Resolve,
                 ..
-            } => RESOLVE_NAME,
+            } => Some(RESOLVE_NAME),
             Self::PromiseResolver {
                 kind: crate::runtime::promise::PromiseResolverKind::Reject,
                 ..
-            } => REJECT_NAME,
-            Self::RegExp => REGEXP_NAME,
-            Self::RegExpPrototypeTest => REGEXP_PROTOTYPE_TEST_NAME,
-            Self::String => STRING_NAME,
-            Self::Symbol => SYMBOL_NAME,
+            } => Some(REJECT_NAME),
+            Self::RegExp => Some(REGEXP_NAME),
+            Self::RegExpPrototypeTest => Some(REGEXP_PROTOTYPE_TEST_NAME),
+            Self::String => Some(STRING_NAME),
+            Self::Symbol => Some(SYMBOL_NAME),
+            _ => None,
+        }
+    }
+
+    const fn global_utility_name(self) -> Option<&'static str> {
+        match self {
+            Self::GlobalDecodeUri => Some(GLOBAL_DECODE_URI_NAME),
+            Self::GlobalDecodeUriComponent => Some(GLOBAL_DECODE_URI_COMPONENT_NAME),
+            Self::GlobalEncodeUri => Some(GLOBAL_ENCODE_URI_NAME),
+            Self::GlobalEncodeUriComponent => Some(GLOBAL_ENCODE_URI_COMPONENT_NAME),
+            Self::GlobalIsFinite | Self::NumberIsFinite => Some(GLOBAL_IS_FINITE_NAME),
+            Self::GlobalIsNan | Self::NumberIsNan => Some(GLOBAL_IS_NAN_NAME),
+            Self::GlobalParseFloat => Some(GLOBAL_PARSE_FLOAT_NAME),
+            Self::GlobalParseInt => Some(GLOBAL_PARSE_INT_NAME),
+            _ => None,
         }
     }
 }

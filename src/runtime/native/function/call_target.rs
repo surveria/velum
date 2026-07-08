@@ -24,6 +24,14 @@ impl NativeFunctionKind {
             NativeCallTarget::Function => Self::Function,
             NativeCallTarget::FunctionPrototypeBind => Self::FunctionPrototypeBind,
             NativeCallTarget::FunctionPrototypeCall => Self::FunctionPrototypeCall,
+            NativeCallTarget::GlobalDecodeUri => Self::GlobalDecodeUri,
+            NativeCallTarget::GlobalDecodeUriComponent => Self::GlobalDecodeUriComponent,
+            NativeCallTarget::GlobalEncodeUri => Self::GlobalEncodeUri,
+            NativeCallTarget::GlobalEncodeUriComponent => Self::GlobalEncodeUriComponent,
+            NativeCallTarget::GlobalIsFinite => Self::GlobalIsFinite,
+            NativeCallTarget::GlobalIsNan => Self::GlobalIsNan,
+            NativeCallTarget::GlobalParseFloat => Self::GlobalParseFloat,
+            NativeCallTarget::GlobalParseInt => Self::GlobalParseInt,
             NativeCallTarget::JsonParse => Self::JsonParse,
             NativeCallTarget::JsonStringify => Self::JsonStringify,
             NativeCallTarget::MathAbs => Self::MathAbs,
@@ -62,6 +70,8 @@ impl NativeFunctionKind {
             NativeCallTarget::MathTanh => Self::MathTanh,
             NativeCallTarget::MathTrunc => Self::MathTrunc,
             NativeCallTarget::Number => Self::Number,
+            NativeCallTarget::NumberIsFinite => Self::NumberIsFinite,
+            NativeCallTarget::NumberIsNan => Self::NumberIsNan,
             NativeCallTarget::Object => Self::Object,
             NativeCallTarget::ObjectAssign => Self::ObjectAssign,
             NativeCallTarget::ObjectCreate => Self::ObjectCreate,
@@ -94,6 +104,22 @@ impl NativeFunctionKind {
     }
 
     pub(super) const fn to_call_target(self) -> Option<NativeCallTarget> {
+        if let Some(target) = self.to_array_call_target() {
+            return Some(target);
+        }
+        if let Some(target) = self.to_global_utility_call_target() {
+            return Some(target);
+        }
+        if let Some(target) = self.to_math_call_target() {
+            return Some(target);
+        }
+        if let Some(target) = self.to_object_call_target() {
+            return Some(target);
+        }
+        self.to_core_call_target()
+    }
+
+    const fn to_array_call_target(self) -> Option<NativeCallTarget> {
         match self {
             Self::Array => Some(NativeCallTarget::Array),
             Self::ArrayConcat => Some(NativeCallTarget::ArrayConcat),
@@ -108,19 +134,28 @@ impl NativeFunctionKind {
             Self::ArrayShift => Some(NativeCallTarget::ArrayShift),
             Self::ArraySlice => Some(NativeCallTarget::ArraySlice),
             Self::ArrayUnshift => Some(NativeCallTarget::ArrayUnshift),
-            Self::AsyncFunction
-            | Self::BoundFunction(_)
-            | Self::ObjectPrototypeHasOwnProperty
-            | Self::ObjectPrototypePropertyIsEnumerable
-            | Self::PromiseResolver { .. } => None,
-            Self::Boolean => Some(NativeCallTarget::Boolean),
-            Self::Eval => Some(NativeCallTarget::Eval),
-            Self::ErrorConstructor(name) => Some(NativeCallTarget::ErrorConstructor(name)),
-            Self::Function => Some(NativeCallTarget::Function),
-            Self::FunctionPrototypeBind => Some(NativeCallTarget::FunctionPrototypeBind),
-            Self::FunctionPrototypeCall => Some(NativeCallTarget::FunctionPrototypeCall),
-            Self::JsonParse => Some(NativeCallTarget::JsonParse),
-            Self::JsonStringify => Some(NativeCallTarget::JsonStringify),
+            _ => None,
+        }
+    }
+
+    const fn to_global_utility_call_target(self) -> Option<NativeCallTarget> {
+        match self {
+            Self::GlobalDecodeUri => Some(NativeCallTarget::GlobalDecodeUri),
+            Self::GlobalDecodeUriComponent => Some(NativeCallTarget::GlobalDecodeUriComponent),
+            Self::GlobalEncodeUri => Some(NativeCallTarget::GlobalEncodeUri),
+            Self::GlobalEncodeUriComponent => Some(NativeCallTarget::GlobalEncodeUriComponent),
+            Self::GlobalIsFinite => Some(NativeCallTarget::GlobalIsFinite),
+            Self::GlobalIsNan => Some(NativeCallTarget::GlobalIsNan),
+            Self::GlobalParseFloat => Some(NativeCallTarget::GlobalParseFloat),
+            Self::GlobalParseInt => Some(NativeCallTarget::GlobalParseInt),
+            Self::NumberIsFinite => Some(NativeCallTarget::NumberIsFinite),
+            Self::NumberIsNan => Some(NativeCallTarget::NumberIsNan),
+            _ => None,
+        }
+    }
+
+    const fn to_math_call_target(self) -> Option<NativeCallTarget> {
+        match self {
             Self::MathAbs => Some(NativeCallTarget::MathAbs),
             Self::MathAcos => Some(NativeCallTarget::MathAcos),
             Self::MathAcosh => Some(NativeCallTarget::MathAcosh),
@@ -156,7 +191,12 @@ impl NativeFunctionKind {
             Self::MathTan => Some(NativeCallTarget::MathTan),
             Self::MathTanh => Some(NativeCallTarget::MathTanh),
             Self::MathTrunc => Some(NativeCallTarget::MathTrunc),
-            Self::Number => Some(NativeCallTarget::Number),
+            _ => None,
+        }
+    }
+
+    const fn to_object_call_target(self) -> Option<NativeCallTarget> {
+        match self {
             Self::Object => Some(NativeCallTarget::Object),
             Self::ObjectAssign => Some(NativeCallTarget::ObjectAssign),
             Self::ObjectCreate => Some(NativeCallTarget::ObjectCreate),
@@ -176,6 +216,21 @@ impl NativeFunctionKind {
             Self::ObjectKeys => Some(NativeCallTarget::ObjectKeys),
             Self::ObjectSetPrototypeOf => Some(NativeCallTarget::ObjectSetPrototypeOf),
             Self::ObjectValues => Some(NativeCallTarget::ObjectValues),
+            _ => None,
+        }
+    }
+
+    const fn to_core_call_target(self) -> Option<NativeCallTarget> {
+        match self {
+            Self::Boolean => Some(NativeCallTarget::Boolean),
+            Self::Eval => Some(NativeCallTarget::Eval),
+            Self::ErrorConstructor(name) => Some(NativeCallTarget::ErrorConstructor(name)),
+            Self::Function => Some(NativeCallTarget::Function),
+            Self::FunctionPrototypeBind => Some(NativeCallTarget::FunctionPrototypeBind),
+            Self::FunctionPrototypeCall => Some(NativeCallTarget::FunctionPrototypeCall),
+            Self::JsonParse => Some(NativeCallTarget::JsonParse),
+            Self::JsonStringify => Some(NativeCallTarget::JsonStringify),
+            Self::Number => Some(NativeCallTarget::Number),
             Self::Promise => Some(NativeCallTarget::Promise),
             Self::PromiseResolve => Some(NativeCallTarget::PromiseResolve),
             Self::PromiseReject => Some(NativeCallTarget::PromiseReject),
@@ -185,6 +240,7 @@ impl NativeFunctionKind {
             Self::RegExpPrototypeTest => Some(NativeCallTarget::RegExpPrototypeTest),
             Self::String => Some(NativeCallTarget::String),
             Self::Symbol => Some(NativeCallTarget::Symbol),
+            _ => None,
         }
     }
 }

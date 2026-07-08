@@ -90,7 +90,17 @@ const OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_SLOT: NativeFunctionSlot = NativeFunct
 const OBJECT_IS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(82);
 const OBJECT_SET_PROTOTYPE_OF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(83);
 const OBJECT_VALUES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(84);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 85;
+const GLOBAL_DECODE_URI_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(85);
+const GLOBAL_DECODE_URI_COMPONENT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(86);
+const GLOBAL_ENCODE_URI_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(87);
+const GLOBAL_ENCODE_URI_COMPONENT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(88);
+const GLOBAL_IS_FINITE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(89);
+const GLOBAL_IS_NAN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(90);
+const GLOBAL_PARSE_FLOAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(91);
+const GLOBAL_PARSE_INT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(92);
+const NUMBER_IS_FINITE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(93);
+const NUMBER_IS_NAN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(94);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 95;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -145,30 +155,16 @@ impl NativeFunctionSlot {
 }
 
 const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
+    if let Some(slot) = array_slot(kind) {
+        return Some(slot);
+    }
+    if let Some(slot) = utility_slot(kind) {
+        return Some(slot);
+    }
+
     match kind {
-        NativeFunctionKind::Array => Some(ARRAY_SLOT),
-        NativeFunctionKind::ArrayConcat => Some(ARRAY_CONCAT_SLOT),
-        NativeFunctionKind::ArrayIncludes => Some(ARRAY_INCLUDES_SLOT),
-        NativeFunctionKind::ArrayIndexOf => Some(ARRAY_INDEX_OF_SLOT),
-        NativeFunctionKind::ArrayIsArray => Some(ARRAY_IS_ARRAY_SLOT),
-        NativeFunctionKind::ArrayJoin => Some(ARRAY_JOIN_SLOT),
-        NativeFunctionKind::ArrayLastIndexOf => Some(ARRAY_LAST_INDEX_OF_SLOT),
-        NativeFunctionKind::ArrayPop => Some(ARRAY_POP_SLOT),
-        NativeFunctionKind::ArrayPush => Some(ARRAY_PUSH_SLOT),
-        NativeFunctionKind::ArrayReverse => Some(ARRAY_REVERSE_SLOT),
-        NativeFunctionKind::ArrayShift => Some(ARRAY_SHIFT_SLOT),
-        NativeFunctionKind::ArraySlice => Some(ARRAY_SLICE_SLOT),
-        NativeFunctionKind::ArrayUnshift => Some(ARRAY_UNSHIFT_SLOT),
         NativeFunctionKind::AsyncFunction => Some(ASYNC_FUNCTION_SLOT),
         NativeFunctionKind::Boolean => Some(BOOLEAN_SLOT),
-        NativeFunctionKind::BoundFunction(_)
-        | NativeFunctionKind::FunctionPrototypeBind
-        | NativeFunctionKind::FunctionPrototypeCall
-        | NativeFunctionKind::ObjectGetOwnPropertyNames
-        | NativeFunctionKind::ObjectPrototypeHasOwnProperty
-        | NativeFunctionKind::ObjectPrototypePropertyIsEnumerable
-        | NativeFunctionKind::PromiseResolver { .. }
-        | NativeFunctionKind::RegExpPrototypeTest => None,
         NativeFunctionKind::Eval => Some(EVAL_SLOT),
         NativeFunctionKind::ErrorConstructor(name) => Some(error_constructor_slot(name)),
         NativeFunctionKind::Function => Some(FUNCTION_SLOT),
@@ -236,6 +232,42 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::RegExp => Some(REGEXP_SLOT),
         NativeFunctionKind::String => Some(STRING_SLOT),
         NativeFunctionKind::Symbol => Some(SYMBOL_SLOT),
+        _ => None,
+    }
+}
+
+const fn array_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
+    match kind {
+        NativeFunctionKind::Array => Some(ARRAY_SLOT),
+        NativeFunctionKind::ArrayConcat => Some(ARRAY_CONCAT_SLOT),
+        NativeFunctionKind::ArrayIncludes => Some(ARRAY_INCLUDES_SLOT),
+        NativeFunctionKind::ArrayIndexOf => Some(ARRAY_INDEX_OF_SLOT),
+        NativeFunctionKind::ArrayIsArray => Some(ARRAY_IS_ARRAY_SLOT),
+        NativeFunctionKind::ArrayJoin => Some(ARRAY_JOIN_SLOT),
+        NativeFunctionKind::ArrayLastIndexOf => Some(ARRAY_LAST_INDEX_OF_SLOT),
+        NativeFunctionKind::ArrayPop => Some(ARRAY_POP_SLOT),
+        NativeFunctionKind::ArrayPush => Some(ARRAY_PUSH_SLOT),
+        NativeFunctionKind::ArrayReverse => Some(ARRAY_REVERSE_SLOT),
+        NativeFunctionKind::ArrayShift => Some(ARRAY_SHIFT_SLOT),
+        NativeFunctionKind::ArraySlice => Some(ARRAY_SLICE_SLOT),
+        NativeFunctionKind::ArrayUnshift => Some(ARRAY_UNSHIFT_SLOT),
+        _ => None,
+    }
+}
+
+const fn utility_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
+    match kind {
+        NativeFunctionKind::GlobalDecodeUri => Some(GLOBAL_DECODE_URI_SLOT),
+        NativeFunctionKind::GlobalDecodeUriComponent => Some(GLOBAL_DECODE_URI_COMPONENT_SLOT),
+        NativeFunctionKind::GlobalEncodeUri => Some(GLOBAL_ENCODE_URI_SLOT),
+        NativeFunctionKind::GlobalEncodeUriComponent => Some(GLOBAL_ENCODE_URI_COMPONENT_SLOT),
+        NativeFunctionKind::GlobalIsFinite => Some(GLOBAL_IS_FINITE_SLOT),
+        NativeFunctionKind::GlobalIsNan => Some(GLOBAL_IS_NAN_SLOT),
+        NativeFunctionKind::GlobalParseFloat => Some(GLOBAL_PARSE_FLOAT_SLOT),
+        NativeFunctionKind::GlobalParseInt => Some(GLOBAL_PARSE_INT_SLOT),
+        NativeFunctionKind::NumberIsFinite => Some(NUMBER_IS_FINITE_SLOT),
+        NativeFunctionKind::NumberIsNan => Some(NUMBER_IS_NAN_SLOT),
+        _ => None,
     }
 }
 

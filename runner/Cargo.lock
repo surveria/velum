@@ -745,7 +745,7 @@ dependencies = [
 
 [[package]]
 name = "rs-quickjs"
-version = "0.2.112"
+version = "0.2.113"
 dependencies = [
  "anyhow",
  "parking_lot",
