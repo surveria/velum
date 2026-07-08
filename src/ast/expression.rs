@@ -40,6 +40,13 @@ pub enum Expr {
     StringLiteral(StaticString),
     Spread(Box<Self>),
     Class(Box<crate::ast::ClassLiteral>),
+    SuperCall {
+        args: Vec<Self>,
+    },
+    SuperMember {
+        property: StaticName,
+        access: StaticPropertyAccessId,
+    },
     TemplateLiteral {
         quasis: Vec<StaticString>,
         expressions: Vec<Self>,

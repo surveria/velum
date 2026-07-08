@@ -24,6 +24,8 @@ const CLASS_GETTER_KEYWORD: &str = "get";
 const CLASS_SETTER_KEYWORD: &str = "set";
 const CLASS_CONSTRUCTOR_NAME: &str = "constructor";
 const CLASS_PROTOTYPE_NAME: &str = "prototype";
+/// Synthesized rest parameter for default derived constructors.
+const DERIVED_CONSTRUCTOR_REST_NAME: &str = "%superargs%";
 
 impl Parser {
     /// Parses a class declaration after its consumed `class` keyword.
@@ -47,21 +49,25 @@ impl Parser {
     }
 
     fn class_literal_tail(&mut self, name: Option<StaticName>) -> Result<ClassLiteral> {
-        if self.check(&TokenKind::Extends) {
-            return Err(Error::parse(
-                "class inheritance is not supported yet",
-                self.offset(),
-            ));
-        }
         let previous_strict = self.is_strict_mode();
         self.set_strict_mode(true);
-        let result = self.class_body_literal(name);
+        let heritage = if self.match_kind(&TokenKind::Extends) {
+            Some(self.call()?)
+        } else {
+            None
+        };
+        let result = self.class_body_literal(name, heritage);
         self.set_strict_mode(previous_strict);
         result
     }
 
-    fn class_body_literal(&mut self, name: Option<StaticName>) -> Result<ClassLiteral> {
+    fn class_body_literal(
+        &mut self,
+        name: Option<StaticName>,
+        heritage: Option<crate::ast::Expr>,
+    ) -> Result<ClassLiteral> {
         self.consume(&TokenKind::LBrace, "expected '{' before class body")?;
+        let derived = heritage.is_some();
         let mut constructor = None;
         let mut members = Vec::new();
         while !self.check(&TokenKind::RBrace) {
@@ -71,15 +77,17 @@ impl Parser {
             if self.match_kind(&TokenKind::Semicolon) {
                 continue;
             }
-            self.class_member(&mut constructor, &mut members)?;
+            self.class_member(&mut constructor, &mut members, derived)?;
         }
         self.consume(&TokenKind::RBrace, "expected '}' after class body")?;
         let constructor = match constructor {
             Some(constructor) => constructor,
+            None if derived => self.default_derived_class_constructor()?,
             None => self.default_class_constructor()?,
         };
         Ok(ClassLiteral {
             name,
+            heritage,
             constructor,
             members,
         })
@@ -93,10 +101,25 @@ impl Parser {
         })
     }
 
+    /// Synthesizes `constructor(...args) { super(...args); }` for derived
+    /// classes without an explicit constructor.
+    fn default_derived_class_constructor(&mut self) -> Result<ClassConstructor> {
+        let rest = self.static_binding_name(DERIVED_CONSTRUCTOR_REST_NAME.to_owned())?;
+        let forward = Expr::SuperCall {
+            args: vec![Expr::Spread(Box::new(Expr::Identifier(rest.clone())))],
+        };
+        Ok(ClassConstructor {
+            id: self.static_function()?,
+            params: vec![crate::ast::FunctionParam::rest(rest)].into(),
+            body: vec![Stmt::Expr(forward)].into(),
+        })
+    }
+
     fn class_member(
         &mut self,
         constructor: &mut Option<ClassConstructor>,
         members: &mut Vec<ClassMember>,
+        derived: bool,
     ) -> Result<()> {
         let member_offset = self.offset();
         self.reject_unsupported_class_member()?;
@@ -117,7 +140,12 @@ impl Parser {
 
         if let Some(name) = &key_name {
             if !is_static && name.as_str() == CLASS_CONSTRUCTOR_NAME {
-                return self.class_constructor_member(accessor, constructor, member_offset);
+                return self.class_constructor_member(
+                    accessor,
+                    constructor,
+                    member_offset,
+                    derived,
+                );
             }
             if is_static && name.as_str() == CLASS_PROTOTYPE_NAME {
                 return Err(Error::parse(
@@ -138,7 +166,7 @@ impl Parser {
                 member_offset,
             ));
         }
-        let function = self.class_member_function(kind, member_offset)?;
+        let function = self.class_member_function(kind, member_offset, false)?;
         members.push(ClassMember {
             key: Self::class_property_key(key),
             kind,
@@ -156,6 +184,7 @@ impl Parser {
         accessor: Option<ClassMemberKind>,
         constructor: &mut Option<ClassConstructor>,
         member_offset: usize,
+        derived: bool,
     ) -> Result<()> {
         if accessor.is_some() {
             return Err(Error::parse(
@@ -169,7 +198,8 @@ impl Parser {
                 member_offset,
             ));
         }
-        let function = self.class_member_function(ClassMemberKind::Method, member_offset)?;
+        let function =
+            self.class_member_function(ClassMemberKind::Method, member_offset, derived)?;
         *constructor = Some(ClassConstructor {
             id: function.id,
             params: function.params,
@@ -185,6 +215,7 @@ impl Parser {
         &mut self,
         kind: ClassMemberKind,
         member_offset: usize,
+        allow_super_call: bool,
     ) -> Result<ParsedClassFunction> {
         self.consume(&TokenKind::LParen, "expected '(' after class member name")?;
         let parameters = self.function_parameters()?;
@@ -216,7 +247,9 @@ impl Parser {
             ClassMemberKind::Method | ClassMemberKind::Getter | ClassMemberKind::Setter => {}
         }
         self.consume(&TokenKind::LBrace, "expected '{' before class member body")?;
-        let body = self.with_new_target_scope(|parser| parser.function_body(true))?;
+        let body = self.with_new_target_scope(|parser| {
+            parser.with_super_context(true, allow_super_call, |parser| parser.function_body(true))
+        })?;
         self.validate_function_parameters(&parameters.params, true, body.contains_use_strict)?;
         let id = self.static_function()?;
         let (params, statements) = parameters.apply_prologue(body.statements);

@@ -608,7 +608,11 @@ impl Parser {
         let parameters = self.function_parameters()?;
         self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
-        let body = self.with_new_target_scope(|parser| parser.function_body(inherited_strict))?;
+        let body = self.with_new_target_scope(|parser| {
+            parser.with_super_context(false, false, |parser| {
+                parser.function_body(inherited_strict)
+            })
+        })?;
         self.validate_function_parameters(
             &parameters.params,
             inherited_strict,

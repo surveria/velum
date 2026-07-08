@@ -328,6 +328,40 @@ impl Parser {
         })
     }
 
+    fn super_expression(&mut self, offset: usize) -> Result<Expr> {
+        if self.check(&TokenKind::LParen) {
+            if !self.allow_super_call {
+                return Err(Error::parse(
+                    "super call is only valid inside derived class constructors",
+                    offset,
+                ));
+            }
+            self.consume(&TokenKind::LParen, "expected '(' after 'super'")?;
+            let args = if self.check(&TokenKind::RParen) {
+                Vec::new()
+            } else {
+                self.arguments()?
+            };
+            self.consume(&TokenKind::RParen, "expected ')' after super arguments")?;
+            return Ok(Expr::SuperCall { args });
+        }
+        if self.match_kind(&TokenKind::Dot) {
+            if !self.allow_super_property {
+                return Err(Error::parse(
+                    "super property access is only valid inside class methods",
+                    offset,
+                ));
+            }
+            let property = self.consume_identifier("expected property name after 'super.'")?;
+            let access = self.static_property_access()?;
+            return Ok(Expr::SuperMember { property, access });
+        }
+        Err(Error::parse(
+            "super is only valid in super() calls and super.property access",
+            offset,
+        ))
+    }
+
     fn arguments(&mut self) -> Result<Vec<Expr>> {
         let mut args = Vec::new();
         loop {
@@ -366,12 +400,7 @@ impl Parser {
                     token.offset,
                 ));
             }
-            TokenKind::Super => {
-                return Err(Error::parse(
-                    "super is only valid inside class methods",
-                    token.offset,
-                ));
-            }
+            TokenKind::Super => self.super_expression(token.offset)?,
             TokenKind::Identifier(name) => Expr::Identifier(self.static_binding_name(name)?),
             TokenKind::Function => self.function_expression(false)?,
             TokenKind::Class => self.class_expression()?,
@@ -654,7 +683,11 @@ impl Parser {
             | ObjectPropertyKind::Spread => {}
         }
         self.consume(&TokenKind::LBrace, "expected '{' before accessor body")?;
-        let body = self.with_new_target_scope(|parser| parser.function_body(inherited_strict))?;
+        let body = self.with_new_target_scope(|parser| {
+            parser.with_super_context(false, false, |parser| {
+                parser.function_body(inherited_strict)
+            })
+        })?;
         self.validate_function_parameters(
             &parameters.params,
             inherited_strict,
@@ -701,7 +734,11 @@ impl Parser {
         let parameters = self.function_parameters()?;
         self.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before method body")?;
-        let body = self.with_new_target_scope(|parser| parser.function_body(inherited_strict))?;
+        let body = self.with_new_target_scope(|parser| {
+            parser.with_super_context(false, false, |parser| {
+                parser.function_body(inherited_strict)
+            })
+        })?;
         self.validate_function_parameters(
             &parameters.params,
             inherited_strict,
@@ -811,7 +848,11 @@ impl Parser {
         let parameters = self.function_parameters()?;
         self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
-        let body = self.with_new_target_scope(|parser| parser.function_body(inherited_strict))?;
+        let body = self.with_new_target_scope(|parser| {
+            parser.with_super_context(false, false, |parser| {
+                parser.function_body(inherited_strict)
+            })
+        })?;
         self.validate_function_parameters(
             &parameters.params,
             inherited_strict,

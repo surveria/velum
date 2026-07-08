@@ -10,6 +10,7 @@ use super::{FunctionParam, ObjectPropertyKey, Stmt};
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassLiteral {
     pub name: Option<StaticName>,
+    pub heritage: Option<super::Expr>,
     pub constructor: ClassConstructor,
     pub members: Vec<ClassMember>,
 }
