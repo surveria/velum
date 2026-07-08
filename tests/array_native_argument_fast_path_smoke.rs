@@ -79,22 +79,20 @@ fn direct_array_targets_preserve_argument_semantics() -> TestResult {
 }
 
 #[test]
-fn array_method_arguments_run_before_receiver_errors() -> TestResult {
+fn array_method_arguments_run_before_generic_receiver_calls() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
 
-    let Err(error) = context.eval(
+    let value = context.eval(
         r"
-        let object = {};
+        let object = { length: 2, 0: 'a', 1: 'b' };
         object.join = Array.prototype.join;
-        object.join(print('argument-before-error'));
+        object.join(print('argument-before-call')) === 'a,b' ? 42 : 0
         ",
-    ) else {
-        return Err("expected Array.prototype.join on a non-array receiver to fail".into());
-    };
+    )?;
 
-    ensure_error_contains(&error, "requires an array receiver")?;
-    ensure_output(context.output(), &["argument-before-error".to_owned()])
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(context.output(), &["argument-before-call".to_owned()])
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
@@ -103,15 +101,6 @@ fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     }
 
     Err(format!("expected value {expected:?}, got {actual:?}").into())
-}
-
-fn ensure_error_contains(error: &rs_quickjs::Error, text: &str) -> TestResult {
-    let message = error.to_string();
-    if message.contains(text) {
-        return Ok(());
-    }
-
-    Err(format!("expected error containing '{text}', got '{message}'").into())
 }
 
 fn ensure_output(actual: &[String], expected: &[String]) -> TestResult {

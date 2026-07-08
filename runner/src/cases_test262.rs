@@ -74,6 +74,8 @@ const PATH_TEST262_ARRAY_BUILTIN: &str =
     "tests/corpora/test262/active/language/expressions/array_builtin.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_METHODS: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_methods.js";
+const PATH_TEST262_ARRAY_PROTOTYPE_GENERIC_METHODS: &str =
+    "tests/corpora/test262/active/language/expressions/array_prototype_generic_methods.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_CONCAT: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_concat.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_INCLUDES: &str =
@@ -336,6 +338,11 @@ fn test262_object_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/array_prototype_methods",
             path: PATH_TEST262_ARRAY_PROTOTYPE_METHODS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/array_prototype_generic_methods",
+            path: PATH_TEST262_ARRAY_PROTOTYPE_GENERIC_METHODS,
             expectation: Expectation::Value("42"),
         },
         EngineCase {

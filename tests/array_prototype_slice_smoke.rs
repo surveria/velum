@@ -97,20 +97,22 @@ fn supports_array_slice_method() -> TestResult {
 }
 
 #[test]
-fn rejects_array_slice_on_non_array_receiver() -> TestResult {
+fn supports_array_slice_on_array_like_objects() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
 
-    let Err(error) = context.eval(
-        r"
-        let object = {};
-        object.slice = Array.prototype.slice;
-        object.slice(0, 1);
-        ",
-    ) else {
-        return Err("expected Array.prototype.slice on non-array receiver to fail".into());
-    };
-    ensure_error_contains(&error, "requires an array receiver")
+    let value = context.eval(
+        r#"
+        let object = { length: 4, 0: "a", 2: "c", 3: "d" };
+        let sliced = Array.prototype.slice.call(object, 1, 4);
+        sliced.length === 3 &&
+            !("0" in sliced) &&
+            sliced[1] === "c" &&
+            sliced[2] === "d" ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
@@ -132,13 +134,4 @@ fn ensure_output(actual: &[String], expected: &[&str]) -> TestResult {
         }
     }
     Ok(())
-}
-
-fn ensure_error_contains(error: &rs_quickjs::Error, text: &str) -> TestResult {
-    let message = error.to_string();
-    if message.contains(text) {
-        return Ok(());
-    }
-
-    Err(format!("expected error containing '{text}', got '{message}'").into())
 }

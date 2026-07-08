@@ -119,20 +119,21 @@ fn supports_array_includes_method() -> TestResult {
 }
 
 #[test]
-fn rejects_array_includes_on_non_array_receiver() -> TestResult {
+fn supports_array_includes_on_array_like_objects() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
 
-    let Err(error) = context.eval(
-        r"
-        let object = {};
-        object.includes = Array.prototype.includes;
-        object.includes(1);
-        ",
-    ) else {
-        return Err("expected Array.prototype.includes on non-array receiver to fail".into());
-    };
-    ensure_error_contains(&error, "requires an array receiver")
+    let value = context.eval(
+        r#"
+        let object = { length: 4, 0: "a", 2: NaN };
+        Array.prototype.includes.call(object, "a") &&
+            Array.prototype.includes.call(object, undefined, 1) &&
+            Array.prototype.includes.call(object, NaN) &&
+            !Array.prototype.includes.call(object, "missing") ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
@@ -154,13 +155,4 @@ fn ensure_output(actual: &[String], expected: &[&str]) -> TestResult {
         }
     }
     Ok(())
-}
-
-fn ensure_error_contains(error: &rs_quickjs::Error, text: &str) -> TestResult {
-    let message = error.to_string();
-    if message.contains(text) {
-        return Ok(());
-    }
-
-    Err(format!("expected error containing '{text}', got '{message}'").into())
 }
