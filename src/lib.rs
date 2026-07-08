@@ -4,6 +4,7 @@
 mod api;
 mod ast;
 mod binding_layout;
+mod binding_metadata;
 mod build_info;
 mod bytecode;
 mod compiled_script;

@@ -2,7 +2,7 @@ use std::{fmt, rc::Rc};
 
 use crate::{
     api::native_call::NativeCallTarget,
-    binding_layout::{BindingLayout, BindingOperand},
+    binding_metadata::{BindingLayout, BindingOperand},
     bytecode::BytecodeHoistPlan,
     error::{Error, Result},
     syntax::{

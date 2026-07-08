@@ -2,7 +2,7 @@ use std::{collections::VecDeque, rc::Rc};
 
 use crate::api::host::HostFunction;
 use crate::api::native_call::NativeCallTarget;
-use crate::binding_layout::BindingLayout;
+use crate::binding_metadata::BindingLayout;
 use crate::bytecode::{BytecodeBinding, BytecodeCallSite, BytecodeFunction, BytecodeNewTargetMode};
 use crate::compiled_script::CompiledScript;
 use crate::error::{Error, Result};

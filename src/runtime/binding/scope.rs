@@ -3,7 +3,7 @@ use std::rc::Rc;
 use parking_lot::Mutex;
 
 use crate::{
-    binding_layout::ScopeId,
+    binding_metadata::ScopeId,
     error::{Error, Result},
     runtime::control::reference_error_uninitialized,
     storage::atom::AtomId,

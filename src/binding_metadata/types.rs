@@ -1,6 +1,6 @@
 use crate::{
-    ast::StaticNameId,
     error::{Error, Result},
+    syntax::StaticNameId,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
