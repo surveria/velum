@@ -214,7 +214,7 @@ impl BytecodeBlock {
         Ok(self.instructions.get(index))
     }
 
-    pub(super) fn instructions(&self) -> &[BytecodeInstruction] {
+    pub(crate) fn instructions(&self) -> &[BytecodeInstruction] {
         &self.instructions
     }
 }
@@ -653,6 +653,7 @@ pub enum BytecodeInstruction {
     Switch {
         discriminant: BytecodeBlock,
         cases: Rc<[BytecodeSwitchCase]>,
+        scoped: bool,
     },
     Try {
         body: BytecodeBlock,
