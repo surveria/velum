@@ -341,6 +341,73 @@ fn bytecode_quickens_linear_numeric_loop_blocks() -> TestResult {
     ensure_usize(vm.resource_usage().atom_count, atoms)
 }
 
+#[test]
+fn bytecode_quickens_numeric_binding_chains() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r"
+        var total = 0;
+
+        for (var index = 0; index < 16; index = index + 1) {
+            total = total + 1 + 2 + 3 + 4 + 5 + 6;
+            total = total + 7 + 8 + 9 + 10 + 11 + 12;
+            total = total + (index & 3);
+        }
+
+        total === 1272 ? 42 : 0
+        ",
+    )?;
+    ensure_at_least(
+        script.usage().bytecode_numeric_instruction_count(),
+        16,
+        "bytecode numeric instructions",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    let atoms = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atoms)
+}
+
+#[test]
+fn bytecode_quickens_numeric_compound_binding_paths() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r"
+        var total = 0;
+        var value = 1;
+
+        for (var index = 0; index < 16; index = index + 1) {
+            total += index & 3;
+            value |= index;
+            value ^= index & 7;
+            value <<= 1;
+            value >>>= 1;
+        }
+
+        total === 24 && value === 8 ? 42 : 0
+        ",
+    )?;
+    ensure_at_least(
+        script.usage().bytecode_numeric_instruction_count(),
+        6,
+        "bytecode numeric instructions",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    let atoms = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atoms)
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
