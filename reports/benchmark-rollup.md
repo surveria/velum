@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T164028Z.md`
-- Task: PR #350: ci: hide tested source archive ref
+- `rsqjs-test-report-20260708T170231Z.md`
+- Task: PR #346: Improve Math built-in Test262 coverage
 - Performance: 6.24x (64/65 >1.00x)
 - Memory: - (0/65 >1.00x)
 - JetStream: 0.04x (1/1 <1.00x)
-- Full Test262: 30045 passed / 72533 failed (29.29%)
+- Full Test262: 30113 passed / 72465 failed (29.36%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -340,3 +340,4 @@ Latest report:
 | `20260708T155504Z` `9a81810` workflow_dispatch | 6.28x (64/65 >1.00x) | - (0/65 >1.00x) | - (0/0 <1.00x) | 30045 passed / 72533 failed (29.29%) |
 | `20260708T160617Z` `290bf5d` workflow_dispatch | 6.19x (64/65 >1.00x) | - (0/65 >1.00x) | 0.03x (1/1 <1.00x) | 30045 passed / 72533 failed (29.29%) |
 | `20260708T164028Z` `4b6e81c` PR #350: ci: hide tested source archive ref | 6.24x (64/65 >1.00x) | - (0/65 >1.00x) | 0.04x (1/1 <1.00x) | 30045 passed / 72533 failed (29.29%) |
+| `20260708T170231Z` `99b304b` PR #346: Improve Math built-in Test262 coverage | 6.24x (64/65 >1.00x) | - (0/65 >1.00x) | 0.04x (1/1 <1.00x) | 30113 passed / 72465 failed (29.36%) |
