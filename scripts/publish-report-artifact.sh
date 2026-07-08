@@ -28,6 +28,11 @@ valid_report_file() {
   [[ "${file_name}" =~ ^rsqjs-test-report-[0-9]{8}T[0-9]{6}Z\.md$ ]]
 }
 
+valid_jetstream_report_file() {
+  local file_name="$1"
+  [[ "${file_name}" =~ ^rsqjs-jetstream-report-[0-9]{8}T[0-9]{6}Z\.md$ ]]
+}
+
 download_matching_artifact() {
   local repository="$1"
   local artifact_name="$2"
@@ -72,6 +77,20 @@ download_matching_artifact() {
     if [[ ! -f "${candidate}/${RSQJS_ARTIFACT_REPORT_RELATIVE_PATH}" ]]; then
       printf 'skipping artifact %s: report file is absent\n' "${artifact_id}" >&2
       continue
+    fi
+    if [[ -n "${RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE:-}" || -n "${RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH:-}" ]]; then
+      if [[ -z "${RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE:-}" || -z "${RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH:-}" ]]; then
+        printf 'skipping artifact %s: incomplete JetStream report metadata\n' "${artifact_id}" >&2
+        continue
+      fi
+      if ! valid_jetstream_report_file "${RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE}"; then
+        printf 'skipping artifact %s: invalid JetStream report file name %s\n' "${artifact_id}" "${RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE}" >&2
+        continue
+      fi
+      if [[ ! -f "${candidate}/${RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH}" ]]; then
+        printf 'skipping artifact %s: JetStream report file is absent\n' "${artifact_id}" >&2
+        continue
+      fi
     fi
     printf '%s\n' "${candidate}"
     return 0
@@ -162,6 +181,8 @@ archive_tested_source_commit() {
 stage_report_outputs() {
   local source_report="$1"
   local report_file="$2"
+  local source_jetstream_report="${3:-}"
+  local jetstream_report_file="${4:-}"
 
   mkdir -p reports/test-runs
   local target_report="reports/test-runs/${report_file}"
@@ -169,6 +190,15 @@ stage_report_outputs() {
     fail "tracked report already exists with different content: ${target_report}"
   fi
   cp "${source_report}" "${target_report}"
+
+  if [[ -n "${source_jetstream_report}" && -n "${jetstream_report_file}" ]]; then
+    mkdir -p reports/jetstream-runs
+    local target_jetstream_report="reports/jetstream-runs/${jetstream_report_file}"
+    if [[ -f "${target_jetstream_report}" ]] && ! cmp -s "${source_jetstream_report}" "${target_jetstream_report}"; then
+      fail "tracked JetStream report already exists with different content: ${target_jetstream_report}"
+    fi
+    cp "${source_jetstream_report}" "${target_jetstream_report}"
+  fi
 
   cargo run --manifest-path runner/Cargo.toml -- --aggregate-reports reports/test-runs
 }
@@ -250,11 +280,19 @@ create_signed_main_commit() {
 
 reset_report_outputs() {
   local target_report="$1"
+  local target_jetstream_report="${2:-}"
 
   if git ls-files --error-unmatch "${target_report}" >/dev/null 2>&1; then
     git restore --worktree -- "${target_report}"
   else
     rm -f "${target_report}"
+  fi
+  if [[ -n "${target_jetstream_report}" ]]; then
+    if git ls-files --error-unmatch "${target_jetstream_report}" >/dev/null 2>&1; then
+      git restore --worktree -- "${target_jetstream_report}"
+    else
+      rm -f "${target_jetstream_report}"
+    fi
   fi
   git restore --worktree -- reports/benchmark-rollup.md reports/benchmark-summary.jpg
 }
@@ -266,7 +304,14 @@ commit_and_push() {
   local source_run="$4"
 
   local target_report="reports/test-runs/${report_file}"
-  if [[ -z "$(git status --porcelain -- "${target_report}" reports/benchmark-rollup.md reports/benchmark-summary.jpg)" ]]; then
+  local target_jetstream_report=""
+  local commit_paths=("${target_report}" reports/benchmark-rollup.md reports/benchmark-summary.jpg)
+  if [[ -n "${jetstream_report_file:-}" ]]; then
+    target_jetstream_report="reports/jetstream-runs/${jetstream_report_file}"
+    commit_paths=("${target_report}" "${target_jetstream_report}" reports/benchmark-rollup.md reports/benchmark-summary.jpg)
+  fi
+
+  if [[ -z "$(git status --porcelain -- "${commit_paths[@]}")" ]]; then
     printf 'canonical report outputs are already up to date\n'
     return 0
   fi
@@ -279,16 +324,16 @@ commit_and_push() {
     "${source_commit}" "${expected_tree}" "${source_run}")"
 
   if create_signed_main_commit "${repository}" "${headline}" "${body}" \
-    "${target_report}" reports/benchmark-rollup.md reports/benchmark-summary.jpg; then
+    "${commit_paths[@]}"; then
     return 0
   fi
 
   printf 'initial signed report commit failed; retrying once on latest origin/main\n' >&2
-  reset_report_outputs "${target_report}"
+  reset_report_outputs "${target_report}" "${target_jetstream_report}"
   checkout_latest_main
-  stage_report_outputs "${source_report}" "${report_file}"
+  stage_report_outputs "${source_report}" "${report_file}" "${source_jetstream_report:-}" "${jetstream_report_file:-}"
   create_signed_main_commit "${repository}" "${headline}" "${body}" \
-    "${target_report}" reports/benchmark-rollup.md reports/benchmark-summary.jpg
+    "${commit_paths[@]}"
 }
 
 need_cmd gh
@@ -317,11 +362,16 @@ safe_source_metadata "${metadata_file}" || fail "failed to read artifact metadat
 
 report_file="${RSQJS_ARTIFACT_REPORT_FILE}"
 source_report="${artifact_dir}/${RSQJS_ARTIFACT_REPORT_RELATIVE_PATH}"
+jetstream_report_file="${RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE:-}"
+source_jetstream_report=""
+if [[ -n "${jetstream_report_file}" ]]; then
+  source_jetstream_report="${artifact_dir}/${RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH}"
+fi
 source_commit="${RSQJS_ARTIFACT_COMMIT_SHA:-unknown}"
 source_run="${RSQJS_ARTIFACT_RUN_ID:-unknown}"
 archive_branch="${RSQJS_TESTED_SOURCE_ARCHIVE_BRANCH:-ci-tested-sources}"
 
 archive_tested_source_commit "${archive_branch}" "${source_commit}" "${expected_tree}" "${source_run}"
 checkout_latest_main
-stage_report_outputs "${source_report}" "${report_file}"
+stage_report_outputs "${source_report}" "${report_file}" "${source_jetstream_report}" "${jetstream_report_file}"
 commit_and_push "${report_file}" "${expected_tree}" "${source_commit}" "${source_run}"

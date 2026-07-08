@@ -39,9 +39,18 @@ fi
 report_file="$(basename "${report_path}")"
 report_dir="$(dirname "${report_path}")"
 reports_root="$(dirname "${report_dir}")"
+jetstream_report_file="rsqjs-jetstream-report-${timestamp}.md"
+if [[ "${report_path}" == reports/test-runs/* ]]; then
+  jetstream_report_path="reports/jetstream-runs/${jetstream_report_file}"
+else
+  jetstream_report_path="${reports_root}/jetstream-runs/${jetstream_report_file}"
+fi
 export RSQJS_REPORT_TIMESTAMP="${RSQJS_REPORT_TIMESTAMP:-${timestamp}}"
 export RSQJS_REPORT_REPORT_FILE="${RSQJS_REPORT_REPORT_FILE:-${report_file}}"
 export RSQJS_REPORT_REPORT_RELATIVE_PATH="${RSQJS_REPORT_REPORT_RELATIVE_PATH:-$(basename "${report_dir}")/${report_file}}"
+export RSQJS_JETSTREAM_REPORT_PATH="${RSQJS_JETSTREAM_REPORT_PATH:-${jetstream_report_path}}"
+export RSQJS_REPORT_JETSTREAM_REPORT_FILE="${RSQJS_REPORT_JETSTREAM_REPORT_FILE:-${jetstream_report_file}}"
+export RSQJS_REPORT_JETSTREAM_REPORT_RELATIVE_PATH="${RSQJS_REPORT_JETSTREAM_REPORT_RELATIVE_PATH:-jetstream-runs/${jetstream_report_file}}"
 export RSQJS_REPORT_COMMIT_SHA="${RSQJS_REPORT_COMMIT_SHA:-$(git rev-parse HEAD)}"
 export RSQJS_REPORT_TREE_SHA="${RSQJS_REPORT_TREE_SHA:-$(git rev-parse 'HEAD^{tree}')}"
 export RSQJS_REPORT_EVENT_NAME="${RSQJS_REPORT_EVENT_NAME:-${GITHUB_EVENT_NAME:-local}}"
@@ -80,6 +89,8 @@ metadata_path="${reports_root}/rsqjs-report-metadata.env"
   write_metadata_value 'RSQJS_ARTIFACT_SCHEMA' '1'
   write_metadata_value 'RSQJS_ARTIFACT_REPORT_FILE' "${RSQJS_REPORT_REPORT_FILE}"
   write_metadata_value 'RSQJS_ARTIFACT_REPORT_RELATIVE_PATH' "${RSQJS_REPORT_REPORT_RELATIVE_PATH}"
+  write_metadata_value 'RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE' "${RSQJS_REPORT_JETSTREAM_REPORT_FILE}"
+  write_metadata_value 'RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH' "${RSQJS_REPORT_JETSTREAM_REPORT_RELATIVE_PATH}"
   write_metadata_value 'RSQJS_ARTIFACT_TIMESTAMP' "${RSQJS_REPORT_TIMESTAMP}"
   write_metadata_value 'RSQJS_ARTIFACT_COMMIT_SHA' "${RSQJS_REPORT_COMMIT_SHA}"
   write_metadata_value 'RSQJS_ARTIFACT_TREE_SHA' "${RSQJS_REPORT_TREE_SHA}"
@@ -94,10 +105,12 @@ metadata_path="${reports_root}/rsqjs-report-metadata.env"
 
 if [[ "${report_path}" == target/rsqjs-reports/* ]]; then
   printf 'local/CI benchmark report artifact: %s\n' "${report_path}"
+  printf 'local/CI JetStream report artifact: %s\n' "${RSQJS_JETSTREAM_REPORT_PATH}"
   printf 'local/CI report artifact root: %s\n' "${reports_root}"
   printf 'report metadata artifact: %s\n' "${metadata_path}"
   printf 'do not commit this report from a feature PR; CI uploads the artifact and the post-merge publisher commits the canonical reports/test-runs copy\n'
 else
   printf 'canonical tracked test report: %s\n' "${report_path}"
+  printf 'canonical tracked JetStream report: %s\n' "${RSQJS_JETSTREAM_REPORT_PATH}"
   printf 'report metadata: %s\n' "${metadata_path}"
 fi

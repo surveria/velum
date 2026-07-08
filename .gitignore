@@ -17,6 +17,8 @@
 !/reports/*.md
 !/reports/test-runs/
 !/reports/test-runs/*.md
+!/reports/jetstream-runs/
+!/reports/jetstream-runs/*.md
 
 !/scripts/
 !/scripts/*.sh
@@ -43,4 +45,5 @@
 !/tests/**/*.md
 !/tests/**/*.rs
 !/tests/**/*.js
+!/tests/**/*.txt
 !/tests/**/*.tsv

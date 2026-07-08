@@ -31,9 +31,19 @@ Track these against QuickJS on every supported device class:
 
 Set `RSQJS_QUICKJS_AUTO_SETUP=0` to disable automatic download and build. In that mode, differential checks and QuickJS benchmark columns are reported as skipped unless `RSQJS_QUICKJS` or `qjs` is available.
 
-The standard test script runs `runner/Cargo.toml` with the `reference-quickjs` feature. Current benchmark rows compare rs-quickjs and QuickJS through the same in-process `eval` adapter, so they measure engine work instead of process startup, shell argument parsing, or report formatting. Each row reports median per-operation latency, calibrated iteration counts, sample coefficient of variation, QuickJS latency ratio when the reference is available, and the current benchmark quality status.
+The standard test script runs `runner/Cargo.toml` with the `reference-quickjs` feature. Current project benchmark rows compare rs-quickjs and QuickJS through the same in-process `eval` adapter, so they measure engine work instead of process startup, shell argument parsing, or report formatting. Each row reports median per-operation latency, calibrated iteration counts, sample coefficient of variation, QuickJS latency ratio when the reference is available, and the current benchmark quality status.
 
 The rs-quickjs benchmark adapter uses only the public runtime API. It applies a benchmark-only resource envelope that is larger than the default library limits, so active workload cases can be large enough for stable timing without changing embedder defaults. Future benchmark rows should separate parser, compiler, VM execution, host callback, and teardown costs as those subsystems become explicit.
+
+## JetStream Shell Benchmarks
+
+The runner also executes a pinned, minimized JetStream shell workload snapshot from `tests/external/jetstream/`. The full upstream JetStream repository is intentionally not vendored because it includes browser workloads, WebAssembly payloads, compressed assets, and tooling bundles that are outside the current embedded shell engine surface. The checked-in snapshot records the upstream commit and keeps only selected JavaScript workload files that can be audited in this repository without repeated network downloads.
+
+JetStream shell reports are generated in addition to the main full report. Local and CI runs write them under `target/rsqjs-reports/jetstream-runs/`; intentional tracked report refreshes write them under `reports/jetstream-runs/`. `scripts/test-all.sh` prints both paths after generation. Ordinary feature branches must not commit either generated report path. The post-merge publisher copies the already-tested JetStream artifact into `reports/jetstream-runs/` and then regenerates the shared `reports/benchmark-rollup.md` and `reports/benchmark-summary.jpg` from both `reports/test-runs/` and `reports/jetstream-runs/`.
+
+JetStream shell rows compare rs-quickjs and QuickJS on the same vendored workload source. The reported `score_ratio` is `quickjs_median / rsqjs_median`, so `1.00x` means QuickJS parity and higher is better. Rows below `1.00x` are tracked exceptions while the baseline is still below target; invalid measurement quality or execution failures remain hard failures.
+
+The current integration does not run the official JetStream `cli.js` driver. That driver and several official workloads require JavaScript syntax and async completion behavior that are not implemented in the local shell runner yet. Until those gaps are closed, supported JetStream shell cases use a runner-owned synchronous harness over vendored official workload files, and unsupported shell cases are reported as skipped with concrete reasons.
 
 ## Test262 Reference
 
