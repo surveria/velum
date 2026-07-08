@@ -17,9 +17,10 @@ impl Context {
         this_value: &Value,
     ) -> Option<Result<Value>> {
         let result = match kind {
-            NativeFunctionKind::Map | NativeFunctionKind::Set => {
-                Self::eval_collection_constructor_call()
-            }
+            NativeFunctionKind::Map
+            | NativeFunctionKind::Set
+            | NativeFunctionKind::WeakMap
+            | NativeFunctionKind::WeakSet => Self::eval_collection_constructor_call(),
             NativeFunctionKind::MapGet => self.eval_map_get(args, this_value),
             NativeFunctionKind::MapSet => self.eval_map_set(args, this_value),
             NativeFunctionKind::MapHas => {
@@ -82,6 +83,21 @@ impl Context {
                 self.eval_collection_iterator_next(iterator)
             }
             NativeFunctionKind::IteratorSelf => Ok(this_value.clone()),
+            NativeFunctionKind::WeakMapGet => self.eval_weak_map_get(args, this_value),
+            NativeFunctionKind::WeakMapSet => self.eval_weak_map_set(args, this_value),
+            NativeFunctionKind::WeakMapHas => {
+                self.eval_weak_collection_has(CollectionKind::WeakMap, args, this_value)
+            }
+            NativeFunctionKind::WeakMapDelete => {
+                self.eval_weak_collection_delete(CollectionKind::WeakMap, args, this_value)
+            }
+            NativeFunctionKind::WeakSetAdd => self.eval_weak_set_add(args, this_value),
+            NativeFunctionKind::WeakSetHas => {
+                self.eval_weak_collection_has(CollectionKind::WeakSet, args, this_value)
+            }
+            NativeFunctionKind::WeakSetDelete => {
+                self.eval_weak_collection_delete(CollectionKind::WeakSet, args, this_value)
+            }
             _ => return None,
         };
         Some(result)
