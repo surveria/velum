@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T221701Z.md`
-- Task: PR #352: Implement RegExp baseline Test262 support
-- Performance: 6.20x (65/66 >1.00x)
-- Memory: - (0/66 >1.00x)
-- JetStream: 25.29x (4/4 >1.00x)
-- Full Test262: 30699 passed / 71879 failed (29.93%)
+- `rsqjs-test-report-20260708T223249Z.md`
+- Task: PR #354: Array.prototype sort/splice/fill/copyWithin & change-by-copy tranche
+- Performance: 6.00x (66/67 >1.00x)
+- Memory: - (0/67 >1.00x)
+- JetStream: 25.16x (4/4 >1.00x)
+- Full Test262: 30880 passed / 71698 failed (30.10%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -344,3 +344,4 @@ Latest report:
 | `20260708T171058Z` `d4b1067` PR #349: [codex] Expand JetStream shell coverage | 6.31x (64/65 >1.00x) | - (0/65 >1.00x) | 24.69x (4/4 >1.00x) | 30113 passed / 72465 failed (29.36%) |
 | `20260708T215955Z` `5a3b26b` PR #353: [codex] Optimize Array callback bytecode paths | 6.08x (64/65 >1.00x) | - (0/65 >1.00x) | 25.06x (4/4 >1.00x) | 30551 passed / 72027 failed (29.78%) |
 | `20260708T221701Z` `ee58d2a` PR #352: Implement RegExp baseline Test262 support | 6.20x (65/66 >1.00x) | - (0/66 >1.00x) | 25.29x (4/4 >1.00x) | 30699 passed / 71879 failed (29.93%) |
+| `20260708T223249Z` `c95b4c2` PR #354: Array.prototype sort/splice/fill/copyWithin & change-by-copy tranche | 6.00x (66/67 >1.00x) | - (0/67 >1.00x) | 25.16x (4/4 >1.00x) | 30880 passed / 71698 failed (30.10%) |
