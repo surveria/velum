@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call_args::RuntimeCallArgs, native::NativeFunctionKind},
+    runtime::{Context, call::RuntimeCallArgs, native::NativeFunctionKind},
     value::{BoundFunctionId, Value},
 };
 
@@ -8,7 +8,7 @@ const CALL_TARGET_NOT_CALLABLE_ERROR: &str = "Function.prototype.call target is 
 const BIND_TARGET_NOT_CALLABLE_ERROR: &str = "Function.prototype.bind target is not callable";
 
 #[derive(Debug, Clone)]
-pub(super) struct BoundFunction {
+pub(in crate::runtime) struct BoundFunction {
     target: Value,
     this_value: Value,
     args: Vec<Value>,

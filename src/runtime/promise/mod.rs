@@ -1,106 +1,16 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call_args::RuntimeCallArgs, completion::Completion},
+    runtime::{Context, call::RuntimeCallArgs, control::Completion},
     value::{FunctionId, ObjectId, Value},
 };
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(in crate::runtime) struct PromiseId(usize);
+mod job;
+mod state;
 
-impl PromiseId {
-    const fn new(index: usize) -> Self {
-        Self(index)
-    }
-
-    const fn index(self) -> usize {
-        self.0
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(in crate::runtime) enum PromiseResolverKind {
-    Resolve,
-    Reject,
-}
-
-#[derive(Debug, Clone)]
-pub(in crate::runtime) struct Promise {
-    state: PromiseState,
-}
-
-impl Promise {
-    const fn pending() -> Self {
-        Self {
-            state: PromiseState::Pending {
-                reactions: Vec::new(),
-            },
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-enum PromiseState {
-    Pending { reactions: Vec<PromiseReaction> },
-    Fulfilled(Value),
-    Rejected(Value),
-}
-
-#[derive(Debug, Clone)]
-pub(in crate::runtime) struct PromiseReaction {
-    result: PromiseId,
-    on_fulfilled: Option<Value>,
-    on_rejected: Option<Value>,
-}
-
-impl PromiseReaction {
-    const fn new(
-        result: PromiseId,
-        on_fulfilled: Option<Value>,
-        on_rejected: Option<Value>,
-    ) -> Self {
-        Self {
-            result,
-            on_fulfilled,
-            on_rejected,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(in crate::runtime) enum PromiseJob {
-    Reaction {
-        reaction: PromiseReaction,
-        state: PromiseSettledState,
-    },
-}
-
-#[derive(Debug, Clone)]
-pub(in crate::runtime) struct PromiseSettledState {
-    status: PromiseStatus,
-    value: Value,
-}
-
-impl PromiseSettledState {
-    const fn fulfilled(value: Value) -> Self {
-        Self {
-            status: PromiseStatus::Fulfilled,
-            value,
-        }
-    }
-
-    const fn rejected(value: Value) -> Self {
-        Self {
-            status: PromiseStatus::Rejected,
-            value,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-enum PromiseStatus {
-    Fulfilled,
-    Rejected,
-}
+use job::PromiseStatus;
+pub(in crate::runtime) use job::{PromiseJob, PromiseReaction, PromiseSettledState};
+use state::PromiseState;
+pub(in crate::runtime) use state::{Promise, PromiseId, PromiseResolverKind};
 
 impl Context {
     pub(in crate::runtime) fn create_pending_promise(&mut self) -> Result<(PromiseId, Value)> {

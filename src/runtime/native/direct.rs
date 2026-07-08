@@ -3,7 +3,7 @@ use crate::{
     error::Result,
     runtime::{
         Context,
-        call_args::RuntimeCallArgs,
+        call::RuntimeCallArgs,
         object::{CacheableNativePropertyValue, PropertyLookup},
         property::DynamicPropertyKey,
     },

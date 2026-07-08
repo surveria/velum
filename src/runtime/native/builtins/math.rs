@@ -4,7 +4,7 @@ use crate::{
     api::native_call::NativeCallTarget,
     error::{Error, Result},
     runtime::Context,
-    runtime::call_args::RuntimeCallArgs,
+    runtime::call::RuntimeCallArgs,
     runtime::numeric::number_to_uint32,
     value::{ObjectId, Value},
 };

@@ -6,7 +6,7 @@ use crate::{
     },
     error::{Error, Result},
     runtime::{
-        Context, call_args::RuntimeCallArgs, completion::Completion, function::BytecodeFunctionInit,
+        Context, call::RuntimeCallArgs, control::Completion, function::BytecodeFunctionInit,
     },
     value::Value,
 };

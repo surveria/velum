@@ -1,7 +1,7 @@
 use crate::{
     error::Result,
     runtime::Context,
-    runtime::call_args::RuntimeCallArgs,
+    runtime::call::RuntimeCallArgs,
     runtime::object::{ObjectPropertyInit, PropertyEnumerable},
     value::{ObjectId, Value},
 };

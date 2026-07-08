@@ -8,7 +8,7 @@ use crate::{
         Context,
         binding::scope::{BindingCell, BindingScope, BindingSlot},
         binding::static_bindings::{CompiledBindingFrame, StaticBindingCacheHandle},
-        completion::Completion,
+        control::Completion,
         property::static_names::StaticNameAtomCacheHandle,
     },
     storage::atom::AtomId,

@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::{
     error::{Error, Result},
     runtime::Context,
-    runtime::call_args::RuntimeCallArgs,
+    runtime::call::RuntimeCallArgs,
     runtime::object::{
         DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
         PropertyKey, PropertyUpdate, PropertyWritable,
