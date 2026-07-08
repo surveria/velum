@@ -17,7 +17,6 @@ const REPORT_SUFFIX: &str = ".md";
 const ROLLUP_FILE: &str = "benchmark-rollup.md";
 const SUMMARY_CHART_FILE: &str = "benchmark-summary.jpg";
 const PLAN_PATH: &str = "docs/project-plan.md";
-const TEST262_FILE_SECTION: &str = "Test262 file conformance";
 const TEST262_FULL_SECTION: &str = "Test262 full corpus";
 const METADATA_TESTED_COMMIT: &str = "Tested commit";
 const METADATA_PULL_REQUEST: &str = "Pull request";
@@ -166,8 +165,7 @@ fn parse_report(path: &Path) -> anyhow::Result<ReportRecord> {
         memory_geomean: geomean(&parsed_benchmarks.memory_values),
         latency_over: parsed_benchmarks.latency_over,
         memory_over: parsed_benchmarks.memory_over,
-        full_test262: parse_corpus_counts(&text, TEST262_FILE_SECTION)
-            .or_else(|| parse_corpus_counts(&text, TEST262_FULL_SECTION)),
+        full_test262: parse_rollup_test262_counts(&text),
         context: parse_report_metadata_context(&text),
     })
 }
@@ -372,6 +370,10 @@ fn parse_corpus_counts(text: &str, section: &str) -> Option<TestCounts> {
         passed: passed?,
         failed: failed?,
     })
+}
+
+fn parse_rollup_test262_counts(text: &str) -> Option<TestCounts> {
+    parse_corpus_counts(text, TEST262_FULL_SECTION)
 }
 
 fn parse_summary_u32(line: &str, label: &str) -> Option<u32> {
@@ -666,7 +668,7 @@ fn escape_cell(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_benchmark_metrics, parse_corpus_counts};
+    use super::{parse_benchmark_metrics, parse_corpus_counts, parse_rollup_test262_counts};
 
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -732,6 +734,30 @@ mod tests {
         ensure_usize(usize::try_from(value.total)?, 100)?;
         ensure_usize(usize::try_from(value.passed)?, 25)?;
         ensure_usize(usize::try_from(value.failed)?, 75)
+    }
+
+    #[test]
+    fn rollup_prefers_variant_level_test262_counts() -> TestResult {
+        let text = r"# rs-quickjs Test Report
+
+## Test262 file conformance
+
+- Total: 53404
+- Passed: 15315
+- Failed: 38089
+
+## Test262 full corpus
+
+- Total: 102578
+- Passed: 29396
+- Failed: 73182
+";
+        let Some(value) = parse_rollup_test262_counts(text) else {
+            return Err("expected rollup Test262 counts".into());
+        };
+        ensure_usize(usize::try_from(value.total)?, 102_578)?;
+        ensure_usize(usize::try_from(value.passed)?, 29_396)?;
+        ensure_usize(usize::try_from(value.failed)?, 73_182)
     }
 
     fn ensure_usize(actual: usize, expected: usize) -> TestResult {
