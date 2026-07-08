@@ -44,6 +44,7 @@ pub struct BytecodeFunction {
     body: BytecodeBlock,
     hoist_plan: BytecodeHoistPlan,
     capture_bindings: Rc<[StaticBinding]>,
+    uses_arguments: bool,
 }
 
 impl BytecodeFunction {
@@ -53,6 +54,7 @@ impl BytecodeFunction {
         body: BytecodeBlock,
         hoist_plan: BytecodeHoistPlan,
         capture_bindings: Rc<[StaticBinding]>,
+        uses_arguments: bool,
     ) -> Self {
         Self {
             params,
@@ -60,7 +62,12 @@ impl BytecodeFunction {
             body,
             hoist_plan,
             capture_bindings,
+            uses_arguments,
         }
+    }
+
+    pub const fn uses_arguments(&self) -> bool {
+        self.uses_arguments
     }
 
     pub fn params(&self) -> &[BytecodeFunctionParam] {

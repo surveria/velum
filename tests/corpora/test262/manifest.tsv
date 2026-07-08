@@ -441,3 +441,13 @@ class-expr-static-gen-method-param-dflt-yield	test/language/expressions/class/st
 class-expr-static-init-await-binding	test/language/expressions/class/static-init-await-binding.js	negative-parse	official Test262 class negative parse
 class-expr-static-method-param-dflt-yield	test/language/expressions/class/static-method-param-dflt-yield.js	negative-parse	official Test262 class negative parse
 class-subclass-class-definition-null-proto-missing-return-override	test/language/statements/class/subclass/class-definition-null-proto-missing-return-override.js	run	official Test262 class inheritance smoke
+arguments-object-10.6-12-1	test/language/arguments-object/10.6-12-1.js	run	official Test262 arguments object smoke
+arguments-object-S10.1.6_A1_T2	test/language/arguments-object/S10.1.6_A1_T2.js	run	official Test262 arguments object smoke
+arguments-object-S10.6_A1	test/language/arguments-object/S10.6_A1.js	run	official Test262 arguments object smoke
+arguments-object-S10.6_A3_T2	test/language/arguments-object/S10.6_A3_T2.js	run	official Test262 arguments object smoke
+arguments-object-S10.6_A3_T3	test/language/arguments-object/S10.6_A3_T3.js	run	official Test262 arguments object smoke
+arguments-object-S10.6_A3_T4	test/language/arguments-object/S10.6_A3_T4.js	run	official Test262 arguments object smoke
+arguments-object-S10.6_A5_T1	test/language/arguments-object/S10.6_A5_T1.js	run	official Test262 arguments object smoke
+arguments-object-S10.6_A5_T2	test/language/arguments-object/S10.6_A5_T2.js	run	official Test262 arguments object smoke
+arguments-object-S10.6_A6	test/language/arguments-object/S10.6_A6.js	run	official Test262 arguments object smoke
+arguments-object-S10.6_A7	test/language/arguments-object/S10.6_A7.js	run	official Test262 arguments object smoke

@@ -50,12 +50,14 @@ impl BytecodeFunction {
         statements: &[Stmt],
         layout: &BindingLayout,
     ) -> Result<Self> {
+        let collected = CaptureBindingCollector::collect_function(params, statements);
         Ok(Self::new(
             compile_params(params),
             compile_param_defaults(params, layout)?,
             BytecodeBlock::compile_statements(statements, StatementValue::Store, layout)?,
             BytecodeHoistPlan::compile(statements, layout)?,
-            CaptureBindingCollector::collect_function(params, statements),
+            collected.bindings,
+            collected.uses_arguments,
         ))
     }
 }
@@ -140,14 +142,30 @@ fn function_compile_spec(expr: &Expr) -> Result<FunctionCompileSpec<'_>> {
 #[derive(Debug, Default)]
 struct CaptureBindingCollector {
     bindings: Vec<StaticBinding>,
+    uses_arguments: bool,
 }
 
+/// Free bindings referenced by a function body plus whether the body reads
+/// the implicit `arguments` binding.
+struct CollectedFunctionBindings {
+    bindings: Rc<[StaticBinding]>,
+    uses_arguments: bool,
+}
+
+const ARGUMENTS_BINDING_NAME: &str = "arguments";
+
 impl CaptureBindingCollector {
-    fn collect_function(params: &[FunctionParam], statements: &[Stmt]) -> Rc<[StaticBinding]> {
+    fn collect_function(
+        params: &[FunctionParam],
+        statements: &[Stmt],
+    ) -> CollectedFunctionBindings {
         let mut collector = Self::default();
         collector.collect_param_defaults(params);
         collector.collect_statements(statements);
-        Rc::from(collector.bindings.into_boxed_slice())
+        CollectedFunctionBindings {
+            bindings: Rc::from(collector.bindings.into_boxed_slice()),
+            uses_arguments: collector.uses_arguments,
+        }
     }
 
     fn collect_param_defaults(&mut self, params: &[FunctionParam]) {
@@ -403,6 +421,9 @@ impl CaptureBindingCollector {
     }
 
     fn collect_binding(&mut self, binding: &StaticBinding) {
+        if binding.as_str() == ARGUMENTS_BINDING_NAME {
+            self.uses_arguments = true;
+        }
         if self
             .bindings
             .iter()
