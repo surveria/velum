@@ -133,6 +133,8 @@ const PATH_QUICKJS_MATH_METHODS: &str = "tests/corpora/quickjs_differential/acti
 const PATH_QUICKJS_MATH_RANDOM: &str = "tests/corpora/quickjs_differential/active/math_random.js";
 const PATH_QUICKJS_STANDARD_ERROR_CONSTRUCTORS: &str =
     "tests/corpora/quickjs_differential/active/standard_error_constructors.js";
+const PATH_QUICKJS_ERROR_PROTOTYPE_TO_STRING: &str =
+    "tests/corpora/quickjs_differential/active/error_prototype_to_string.js";
 const PATH_QUICKJS_BOOLEAN_BUILTIN: &str =
     "tests/corpora/quickjs_differential/active/boolean_builtin.js";
 const PATH_QUICKJS_OBJECT_DESCRIPTORS: &str =
@@ -462,6 +464,10 @@ fn quickjs_runtime_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "standard_error_constructors",
             path: PATH_QUICKJS_STANDARD_ERROR_CONSTRUCTORS,
+        },
+        DifferentialCase {
+            id: "error_prototype_to_string",
+            path: PATH_QUICKJS_ERROR_PROTOTYPE_TO_STRING,
         },
         DifferentialCase {
             id: "boolean_builtin",

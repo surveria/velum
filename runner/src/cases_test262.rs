@@ -158,6 +158,8 @@ const PATH_TEST262_MATH_METHODS: &str = "tests/corpora/test262/active/built-ins/
 const PATH_TEST262_MATH_RANDOM: &str = "tests/corpora/test262/active/built-ins/Math/random.js";
 const PATH_TEST262_STANDARD_ERROR_CONSTRUCTORS: &str =
     "tests/corpora/test262/active/language/statements/standard_error_constructors.js";
+const PATH_TEST262_ERROR_PROTOTYPE_TO_STRING: &str =
+    "tests/corpora/test262/active/built-ins/Error/prototype_to_string.js";
 
 pub fn test262_cases() -> Vec<EngineCase> {
     let mut cases = test262_expression_cases();
@@ -631,6 +633,11 @@ fn test262_statement_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/statements/standard_error_constructors",
             path: PATH_TEST262_STANDARD_ERROR_CONSTRUCTORS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Error/prototype_to_string",
+            path: PATH_TEST262_ERROR_PROTOTYPE_TO_STRING,
             expectation: Expectation::Value("42"),
         },
     ]

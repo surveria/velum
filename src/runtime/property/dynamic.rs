@@ -69,7 +69,7 @@ impl Context {
         if let Some(value) = error_property_text(error, property) {
             return self.heap_string_value(value);
         }
-        Ok(Value::Undefined)
+        self.error_prototype_property_value(error.name(), property)
     }
 
     pub(in crate::runtime) fn runtime_property_value(
@@ -134,6 +134,15 @@ impl Context {
             Value::Function(id) => self.has_function_property_lookup(*id, property.lookup()),
             Value::NativeFunction(id) => {
                 self.has_native_function_property_lookup(*id, property.lookup())
+            }
+            Value::Error(error) => {
+                if matches!(
+                    property.name(),
+                    "name" | "message" | OBJECT_CONSTRUCTOR_PROPERTY
+                ) {
+                    return Ok(true);
+                }
+                self.error_prototype_has_property(error.name(), property.lookup())
             }
             Value::Object(id) => {
                 if let Some(has_property) =
