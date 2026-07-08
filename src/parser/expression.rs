@@ -609,16 +609,16 @@ impl Parser {
     ) -> Result<ObjectProperty> {
         self.consume(&TokenKind::LParen, "expected '(' after accessor name")?;
         let inherited_strict = self.is_strict_mode();
-        let params = self.function_parameters()?;
+        let parameters = self.function_parameters()?;
         self.consume(&TokenKind::RParen, "expected ')' after accessor parameters")?;
         match kind {
-            ObjectPropertyKind::Get if !params.is_empty() => {
+            ObjectPropertyKind::Get if !parameters.params.is_empty() => {
                 return Err(Error::parse(
                     "getter must not declare parameters",
                     keyword_offset,
                 ));
             }
-            ObjectPropertyKind::Set if params.len() != 1 => {
+            ObjectPropertyKind::Set if parameters.params.len() != 1 => {
                 return Err(Error::parse(
                     "setter must declare exactly one parameter",
                     keyword_offset,
@@ -628,8 +628,13 @@ impl Parser {
         }
         self.consume(&TokenKind::LBrace, "expected '{' before accessor body")?;
         let body = self.with_new_target_scope(|parser| parser.function_body(inherited_strict))?;
-        self.validate_function_parameters(&params, inherited_strict, body.contains_use_strict)?;
+        self.validate_function_parameters(
+            &parameters.params,
+            inherited_strict,
+            body.contains_use_strict,
+        )?;
         let id = self.static_function()?;
+        let (params, statements) = parameters.apply_prologue(body.statements);
         let key = name.into_key();
         let name = match &key {
             ObjectPropertyKey::Static(name) => Some(name.clone()),
@@ -639,7 +644,7 @@ impl Parser {
             id,
             name,
             params: params.into(),
-            body: body.statements.into(),
+            body: statements.into(),
             is_async: false,
         };
         Ok(ObjectProperty { key, kind, value })
