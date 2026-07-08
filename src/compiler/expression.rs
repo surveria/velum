@@ -1,12 +1,12 @@
 use std::rc::Rc;
 
 use super::{
-    ARRAY_LENGTH_PROPERTY, AccessorKind, BinaryOp, BytecodeCompiler, BytecodeInstruction,
-    BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
-    BytecodeNumericUnaryOp, BytecodeObjectProperty, Error, Expr, NativeCallTarget, ObjectProperty,
-    ObjectPropertyKey, ObjectPropertyKind, Result, StaticBinding, StaticName,
-    StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp, checked_template_part_count,
-    constructor_binding_expr, has_spread_arg, BytecodeBlock,
+    ARRAY_LENGTH_PROPERTY, AccessorKind, BinaryOp, BytecodeBlock, BytecodeCompiler,
+    BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
+    BytecodeNumericEqualityOp, BytecodeNumericUnaryOp, BytecodeObjectProperty, Error, Expr,
+    NativeCallTarget, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, Result, StaticBinding,
+    StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
+    checked_template_part_count, constructor_binding_expr, has_spread_arg,
 };
 
 impl BytecodeCompiler<'_> {
