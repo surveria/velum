@@ -273,6 +273,7 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::UpdateArrayIndexProperty { .. }
             | BytecodeInstruction::UpdateComputedProperty { .. }
             | BytecodeInstruction::Binary { .. }
+            | BytecodeInstruction::InStaticProperty { .. }
             | BytecodeInstruction::NumberBinary(_)
             | BytecodeInstruction::NumberCompare(_)
             | BytecodeInstruction::NumberEquality(_)

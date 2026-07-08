@@ -19,7 +19,14 @@ impl Context {
         let Some(op) = single_full_block_op(block, plan) else {
             return Ok(None);
         };
-        if !matches!(op, BytecodeLinearOp::CompareBindingNumber { .. }) {
+        if !matches!(
+            op,
+            BytecodeLinearOp::CompareBindingNumber { .. }
+                | BytecodeLinearOp::InStaticPropertyBinding {
+                    store_last: true,
+                    ..
+                }
+        ) {
             return Ok(None);
         }
         self.eval_bytecode_linear_direct_completion(op)
@@ -104,6 +111,17 @@ impl Context {
                 self.assign_bytecode_cell(binding, cell, new_value.clone())?;
                 Ok(Some(if *prefix { new_value } else { old_value }))
             }
+            BytecodeLinearOp::InStaticPropertyBinding {
+                binding,
+                cell,
+                property,
+                access,
+                store_last: true,
+            } => {
+                let object = self.checked_value(cell.value(binding.name())?)?;
+                self.eval_bytecode_in_static_property(&object, property, *access)
+                    .map(Some)
+            }
             BytecodeLinearOp::PushLiteral(_)
             | BytecodeLinearOp::PushUndefined
             | BytecodeLinearOp::LoadBinding { .. }
@@ -118,6 +136,8 @@ impl Context {
             | BytecodeLinearOp::CompoundStoreBinding { .. }
             | BytecodeLinearOp::DeclareVarFromBindingNumberBinary { .. }
             | BytecodeLinearOp::AddArrayElementToBinding { .. }
+            | BytecodeLinearOp::InStaticPropertyBinding { .. }
+            | BytecodeLinearOp::InArrayIndexMaskBinding { .. }
             | BytecodeLinearOp::NumericBindingChain(_)
             | BytecodeLinearOp::NumericCompoundBinding(_)
             | BytecodeLinearOp::PropertyMutation(_)

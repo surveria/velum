@@ -550,6 +550,10 @@ pub enum BytecodeInstruction {
         op: BinaryOp,
         property_access: Option<BytecodeDynamicProperty>,
     },
+    InStaticProperty {
+        property: StaticString,
+        access: BytecodeDynamicProperty,
+    },
     NumberBinary(BytecodeNumericBinaryOp),
     NumberCompare(BytecodeNumericCompareOp),
     NumberEquality(BytecodeNumericEqualityOp),

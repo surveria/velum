@@ -176,6 +176,7 @@ impl BytecodeInstruction {
                 property_access: Some(_),
                 ..
             }
+            | Self::InStaticProperty { .. }
             | Self::CompoundStaticProperty { .. }
             | Self::CompoundArrayIndexProperty { .. }
             | Self::CompoundComputedProperty { .. }
@@ -599,6 +600,7 @@ impl BytecodeInstruction {
                 | Self::TypeOfBinding(_)
                 | Self::TypeOfValue
                 | Self::Binary { .. }
+                | Self::InStaticProperty { .. }
                 | Self::NumberBinary(_)
                 | Self::NumberCompare(_)
                 | Self::NumberEquality(_)
