@@ -17,6 +17,7 @@ use crate::storage::symbol::SymbolTable;
 use crate::syntax::StaticBindingId;
 use crate::value::{ErrorName, FunctionId, Value};
 
+pub mod array_iterators;
 pub mod binding;
 pub mod bytecode;
 pub mod call;
@@ -70,6 +71,7 @@ pub struct Context {
     pub(crate) host_functions: Vec<HostFunction>,
     objects: ObjectHeap,
     global_object: Option<crate::value::ObjectId>,
+    array_iterators: Vec<array_iterators::ArrayIteratorState>,
     collections: Vec<collections::CollectionData>,
     collection_object_slots: Vec<Option<(collections::CollectionKind, collections::CollectionId)>>,
     collection_iterators: Vec<collections::CollectionIteratorState>,
@@ -239,6 +241,7 @@ impl Context {
             host_functions: Vec::new(),
             objects: ObjectHeap::new(),
             global_object: None,
+            array_iterators: Vec::new(),
             collections: Vec::new(),
             collection_object_slots: Vec::new(),
             collection_iterators: Vec::new(),
