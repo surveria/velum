@@ -305,11 +305,10 @@ impl Context {
         binding: &BytecodeBinding,
         value: Value,
     ) -> Result<()> {
-        let value = self.runtime_value(value)?;
         let Some(cell) = self.get_binding_bytecode(binding)? else {
             return Err(reference_error_undefined(binding.name()));
         };
-        cell.assign(binding.name(), value)
+        self.assign_bytecode_cell(binding, &cell, value)
     }
 
     pub(crate) fn assign_bytecode_or_builtin(
@@ -317,11 +316,39 @@ impl Context {
         binding: &BytecodeBinding,
         value: Value,
     ) -> Result<()> {
-        let value = self.runtime_value(value)?;
         let Some(cell) = self.get_or_materialize_binding_bytecode(binding)? else {
             return Err(reference_error_undefined(binding.name()));
         };
-        cell.assign(binding.name(), value)
+        self.assign_bytecode_cell(binding, &cell, value)
+    }
+
+    pub(crate) fn assign_bytecode_cell(
+        &mut self,
+        binding: &BytecodeBinding,
+        cell: &BindingCell,
+        value: Value,
+    ) -> Result<()> {
+        let value = self.runtime_value(value)?;
+        cell.assign(binding.name(), value.clone())?;
+        self.sync_builtin_binding_global_property(binding, cell, value)
+    }
+
+    fn sync_builtin_binding_global_property(
+        &mut self,
+        binding: &BytecodeBinding,
+        cell: &BindingCell,
+        value: Value,
+    ) -> Result<()> {
+        let Some(atom) = self.atom(binding.name().name()) else {
+            return Ok(());
+        };
+        let Some(builtin) = self.builtin_globals.get(atom) else {
+            return Ok(());
+        };
+        if builtin.same_cell(cell) {
+            return self.sync_global_object_binding_property(binding.name().name(), value);
+        }
+        Ok(())
     }
 
     pub(crate) fn get_or_materialize_binding_bytecode(

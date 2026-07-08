@@ -295,17 +295,13 @@ impl Context {
             && let Some(value) = self.eval_numeric_binding_chain_number(number, &chain.terms)?
         {
             let value = self.checked_value(Value::Number(value))?;
-            chain
-                .target_cell
-                .assign(chain.target.name(), value.clone())?;
+            self.assign_bytecode_cell(chain.target, &chain.target_cell, value.clone())?;
             state.last = value;
             return Ok(());
         }
 
         let value = self.eval_numeric_binding_chain_slow_path(initial, &chain.terms)?;
-        chain
-            .target_cell
-            .assign(chain.target.name(), self.runtime_value(value.clone())?)?;
+        self.assign_bytecode_cell(chain.target, &chain.target_cell, value.clone())?;
         state.last = value;
         Ok(())
     }
@@ -385,17 +381,13 @@ impl Context {
                 *left,
                 *right_number,
             )?))?;
-            compound
-                .target_cell
-                .assign(compound.target.name(), value.clone())?;
+            self.assign_bytecode_cell(compound.target, &compound.target_cell, value.clone())?;
             state.last = value;
             return Ok(());
         }
 
         let value = self.eval_bytecode_compound_value(compound.op, &current, &right)?;
-        compound
-            .target_cell
-            .assign(compound.target.name(), self.runtime_value(value.clone())?)?;
+        self.assign_bytecode_cell(compound.target, &compound.target_cell, value.clone())?;
         state.last = value;
         Ok(())
     }

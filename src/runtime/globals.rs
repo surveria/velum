@@ -1,9 +1,16 @@
 use crate::{
     error::Result,
     runtime::Context,
-    runtime::object::{OBJECT_CONSTRUCTOR_PROPERTY, PropertyKey, PropertyLookup},
+    runtime::binding::scope::BindingCell,
+    runtime::native::GLOBAL_THIS_NAME,
+    runtime::object::{
+        DataPropertyUpdate, OBJECT_CONSTRUCTOR_PROPERTY, PropertyConfigurable, PropertyEnumerable,
+        PropertyKey, PropertyLookup, PropertyUpdate, PropertyWritable,
+    },
+    runtime::property::{get_property, has_property},
     storage::atom::AtomId,
     storage::string_heap::JsString,
+    syntax::DeclKind,
     value::{ObjectId, Value},
 };
 
@@ -190,6 +197,151 @@ impl Context {
 
     pub(crate) fn object_constructor_property_key(&mut self) -> Result<PropertyKey> {
         self.intern_property_key(OBJECT_CONSTRUCTOR_PROPERTY)
+    }
+
+    pub(crate) fn global_this_value(&mut self) -> Result<Value> {
+        self.global_object_id().map(Value::Object)
+    }
+
+    pub(crate) fn global_object_id(&mut self) -> Result<ObjectId> {
+        if let Some(id) = self.global_object {
+            return Ok(id);
+        }
+
+        let constructor_key = self.object_constructor_property_key()?;
+        let id = self.objects.create_with_prototype_id(
+            None,
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
+        self.global_object = Some(id);
+        let value = Value::Object(id);
+        self.define_global_object_data_property(
+            id,
+            GLOBAL_THIS_NAME,
+            value.clone(),
+            PropertyWritable::Yes,
+            PropertyEnumerable::No,
+            PropertyConfigurable::Yes,
+        )?;
+        self.insert_mutable_global_builtin(GLOBAL_THIS_NAME, value)?;
+        Ok(id)
+    }
+
+    pub(crate) fn is_global_object_id(&self, id: ObjectId) -> bool {
+        matches!(self.global_object, Some(global) if global == id)
+    }
+
+    pub(crate) fn global_object_property_value(
+        &mut self,
+        id: ObjectId,
+        lookup: PropertyLookup<'_>,
+    ) -> Result<Option<Value>> {
+        if !self.is_global_object_id(id) {
+            return Ok(None);
+        }
+        let object = Value::Object(id);
+        if has_property(&self.objects, &object, lookup)? {
+            let value = get_property(&self.objects, &object, lookup)?;
+            return self.runtime_property_value(value).map(Some);
+        }
+        self.global_binding_property_value(lookup.name())
+    }
+
+    pub(crate) fn global_object_has_property(
+        &mut self,
+        id: ObjectId,
+        lookup: PropertyLookup<'_>,
+    ) -> Result<Option<bool>> {
+        if !self.is_global_object_id(id) {
+            return Ok(None);
+        }
+        let object = Value::Object(id);
+        if has_property(&self.objects, &object, lookup)? {
+            return Ok(Some(true));
+        }
+        self.global_binding_property_value(lookup.name())
+            .map(|value| Some(value.is_some()))
+    }
+
+    pub(crate) fn sync_global_object_binding_property(
+        &mut self,
+        name: &str,
+        value: Value,
+    ) -> Result<()> {
+        if name != GLOBAL_THIS_NAME {
+            return Ok(());
+        }
+        let Some(id) = self.global_object else {
+            return Ok(());
+        };
+        self.define_global_object_data_property(
+            id,
+            name,
+            value,
+            PropertyWritable::Yes,
+            PropertyEnumerable::No,
+            PropertyConfigurable::Yes,
+        )
+    }
+
+    pub(crate) fn sync_global_object_property_binding(
+        &mut self,
+        name: &str,
+        value: Value,
+    ) -> Result<()> {
+        if name != GLOBAL_THIS_NAME {
+            return Ok(());
+        }
+        let value = self.runtime_value(value)?;
+        if let Some(cell) = self.builtin_global_cell(name) {
+            return cell.assign(name, value);
+        }
+        Ok(())
+    }
+
+    fn global_binding_property_value(&mut self, name: &str) -> Result<Option<Value>> {
+        if let Some(binding) = self.get_binding(name) {
+            return binding.value(name).map(Some);
+        }
+        self.builtin_value(name)
+    }
+
+    fn insert_mutable_global_builtin(&mut self, name: &str, value: Value) -> Result<()> {
+        let atom = self.intern_atom(name)?;
+        if self.builtin_globals.contains(atom) {
+            return Ok(());
+        }
+        self.ensure_extra_binding_capacity(1)?;
+        self.builtin_globals
+            .insert(atom, BindingCell::new(value, true, DeclKind::Var));
+        Ok(())
+    }
+
+    fn builtin_global_cell(&self, name: &str) -> Option<BindingCell> {
+        let atom = self.atom(name)?;
+        self.builtin_globals.get(atom)
+    }
+
+    fn define_global_object_data_property(
+        &mut self,
+        id: ObjectId,
+        name: &str,
+        value: Value,
+        writable: PropertyWritable,
+        enumerable: PropertyEnumerable,
+        configurable: PropertyConfigurable,
+    ) -> Result<()> {
+        let key = self.intern_property_key(name)?;
+        let update = PropertyUpdate::Data(DataPropertyUpdate::new(
+            Some(value),
+            Some(writable),
+            Some(enumerable),
+            Some(configurable),
+        ));
+        self.objects
+            .define_property(id, key, name, update, self.limits.max_object_properties)
     }
 
     pub(crate) fn define_non_enumerable_object_property(

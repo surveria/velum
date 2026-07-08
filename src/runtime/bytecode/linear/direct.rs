@@ -88,7 +88,7 @@ impl Context {
             } => {
                 let left = self.runtime_value(source_cell.value(source.name())?)?;
                 let value = self.eval_bytecode_number_binary(*op, &left, &Value::Number(*right))?;
-                target_cell.assign(target.name(), self.runtime_value(value.clone())?)?;
+                self.assign_bytecode_cell(target, target_cell, value.clone())?;
                 Ok(Some(value))
             }
             BytecodeLinearOp::PushLiteral(_)

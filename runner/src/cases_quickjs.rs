@@ -124,6 +124,7 @@ const PATH_QUICKJS_GLOBAL_NUMERIC_CONSTANTS: &str =
     "tests/corpora/quickjs_differential/active/global_numeric_constants.js";
 const PATH_QUICKJS_GLOBAL_UTILITY_BUILTINS: &str =
     "tests/corpora/quickjs_differential/active/global_utility_builtins.js";
+const PATH_QUICKJS_GLOBAL_THIS: &str = "tests/corpora/quickjs_differential/active/global_this.js";
 const PATH_QUICKJS_JSON_BUILTIN: &str = "tests/corpora/quickjs_differential/active/json_builtin.js";
 const PATH_QUICKJS_MATH_BUILTIN: &str = "tests/corpora/quickjs_differential/active/math_builtin.js";
 const PATH_QUICKJS_MATH_INTEGER_METHODS: &str =
@@ -425,6 +426,10 @@ fn quickjs_runtime_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "global_utility_builtins",
             path: PATH_QUICKJS_GLOBAL_UTILITY_BUILTINS,
+        },
+        DifferentialCase {
+            id: "global_this",
+            path: PATH_QUICKJS_GLOBAL_THIS,
         },
         DifferentialCase {
             id: "json_builtin",
