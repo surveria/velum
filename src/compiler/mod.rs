@@ -9,11 +9,11 @@ use crate::{
     binding_metadata::BindingLayout,
     bytecode::{
         BytecodeAddress, BytecodeArrayIndex, BytecodeBinding, BytecodeBlock, BytecodeCallSite,
-        BytecodeClass, BytecodeClassMember, BytecodeClassMemberKey, BytecodeClassMemberKind,
-        BytecodeCompletion, BytecodeDynamicProperty, BytecodeFunction, BytecodeFunctionParam,
-        BytecodeHoistPlan, BytecodeInstruction, BytecodeNewTargetMode, BytecodeNumericBinaryOp,
-        BytecodeNumericCompareOp, BytecodeNumericEqualityOp, BytecodeNumericUnaryOp,
-        BytecodeObjectProperty, BytecodeProgram, BytecodeProperty,
+        BytecodeClass, BytecodeClassField, BytecodeClassMember, BytecodeClassMemberKey,
+        BytecodeClassMemberKind, BytecodeCompletion, BytecodeDynamicProperty, BytecodeFunction,
+        BytecodeFunctionParam, BytecodeHoistPlan, BytecodeInstruction, BytecodeNewTargetMode,
+        BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
+        BytecodeNumericUnaryOp, BytecodeObjectProperty, BytecodeProgram, BytecodeProperty,
     },
     error::{Error, Result},
     syntax::{AccessorKind, StaticName, StaticString},
@@ -360,6 +360,26 @@ impl<'a> BytecodeCompiler<'a> {
                 bytecode: BytecodeFunction::compile(&member.params, &member.body, self.layout)?,
             });
         }
+        let mut fields = Vec::with_capacity(class.fields.len());
+        for field in &class.fields {
+            let key = match &field.key {
+                ObjectPropertyKey::Static(name) => BytecodeClassMemberKey::Static(name.clone()),
+                ObjectPropertyKey::Computed(expr) => {
+                    self.compile_expr(expr)?;
+                    BytecodeClassMemberKey::Computed
+                }
+            };
+            fields.push(BytecodeClassField {
+                key,
+                is_static: field.is_static,
+                name: field.name.clone(),
+                initializer: field
+                    .initializer
+                    .as_ref()
+                    .map(|initializer| BytecodeBlock::compile_expression(initializer, self.layout))
+                    .transpose()?,
+            });
+        }
         self.emit(BytecodeInstruction::CreateClass {
             class: Rc::new(BytecodeClass {
                 name: class.name.clone(),
@@ -371,6 +391,7 @@ impl<'a> BytecodeCompiler<'a> {
                     self.layout,
                 )?,
                 members: members.into(),
+                fields: fields.into(),
             }),
         });
         Ok(())

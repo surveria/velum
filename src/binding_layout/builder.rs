@@ -426,6 +426,14 @@ impl LayoutBuilder {
             }
             self.analyze_function(member.id, &member.params, &member.body, scope, function)?;
         }
+        for field in &class.fields {
+            if let crate::ast::ObjectPropertyKey::Computed(key) = &field.key {
+                self.analyze_expr(key, scope, function)?;
+            }
+            if let Some(initializer) = &field.initializer {
+                self.analyze_expr(initializer, scope, function)?;
+            }
+        }
         Ok(())
     }
 

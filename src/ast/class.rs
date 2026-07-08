@@ -13,6 +13,18 @@ pub struct ClassLiteral {
     pub heritage: Option<super::Expr>,
     pub constructor: ClassConstructor,
     pub members: Vec<ClassMember>,
+    pub fields: Vec<ClassField>,
+}
+
+/// A public class field: instance fields initialize against the new object
+/// during construction, static fields initialize once against the
+/// constructor at class creation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClassField {
+    pub key: ObjectPropertyKey,
+    pub is_static: bool,
+    pub name: Option<StaticName>,
+    pub initializer: Option<super::Expr>,
 }
 
 /// The explicit `constructor` member, or a parser-synthesized empty default.

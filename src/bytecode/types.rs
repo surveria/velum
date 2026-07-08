@@ -354,6 +354,16 @@ pub struct BytecodeClass {
     pub constructor_id: StaticFunctionId,
     pub constructor: BytecodeFunction,
     pub members: Rc<[BytecodeClassMember]>,
+    pub fields: Rc<[BytecodeClassField]>,
+}
+
+/// A compiled public class field with a lazily evaluated initializer block.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BytecodeClassField {
+    pub key: BytecodeClassMemberKey,
+    pub is_static: bool,
+    pub name: Option<StaticName>,
+    pub initializer: Option<BytecodeBlock>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -41,6 +41,18 @@ use properties::{FunctionPropertyKind, PROTOTYPE_CONSTRUCTOR_PROPERTY};
 pub(in crate::runtime) struct FunctionSuperBinding {
     pub(in crate::runtime) constructor: Option<Value>,
     pub(in crate::runtime) home_prototype: Value,
+    /// The derived constructor owning this binding; its instance fields
+    /// initialize after `super()` completes.
+    pub(in crate::runtime) own_constructor: Option<FunctionId>,
+}
+
+/// A resolved public instance field: the property key computed at class
+/// definition time plus the lazily evaluated initializer block.
+#[derive(Debug)]
+pub(in crate::runtime) struct ResolvedClassField {
+    pub(in crate::runtime) key: crate::runtime::object::PropertyKey,
+    pub(in crate::runtime) name: String,
+    pub(in crate::runtime) initializer: Option<crate::bytecode::BytecodeBlock>,
 }
 
 pub(super) struct BytecodeFunctionInit<'a> {
@@ -120,6 +132,7 @@ impl Context {
                 None
             },
             static_parent: None,
+            class_fields: None,
             new_target: FunctionNewTarget::from_mode(
                 init.new_target_mode,
                 self.current_new_target()?,
@@ -441,13 +454,14 @@ impl Context {
         &mut self,
         id: FunctionId,
         args: &[Value],
-        this_value: Value,
+        this_value: &Value,
         new_target: Value,
     ) -> Result<Completion> {
+        self.initialize_class_fields(id, this_value)?;
         match self.eval_function_completion_with_this_and_new_target(
             id,
             RuntimeCallArgs::values(args),
-            this_value,
+            this_value.clone(),
             new_target,
         )? {
             Completion::Normal(_) | Completion::Return(_) => {
@@ -465,6 +479,70 @@ impl Context {
         binding: Rc<FunctionSuperBinding>,
     ) -> Result<()> {
         self.function_mut(id)?.super_binding = Some(binding);
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn set_function_class_fields(
+        &mut self,
+        id: FunctionId,
+        fields: Rc<[ResolvedClassField]>,
+    ) -> Result<()> {
+        self.function_mut(id)?.class_fields = Some(fields);
+        Ok(())
+    }
+
+    /// True when the function is a derived class constructor whose fields
+    /// initialize after `super()` instead of at construction entry.
+    pub(in crate::runtime) fn is_derived_class_constructor(&self, id: FunctionId) -> bool {
+        self.function(id).is_ok_and(|function| {
+            function
+                .super_binding
+                .as_ref()
+                .is_some_and(|binding| binding.constructor.is_some())
+        })
+    }
+
+    /// Defines the class instance fields on a freshly created object with
+    /// `this` bound to it while initializers run, in declaration order.
+    pub(in crate::runtime) fn initialize_class_fields(
+        &mut self,
+        id: FunctionId,
+        instance: &Value,
+    ) -> Result<()> {
+        let Some(fields) = self.function(id)?.class_fields.clone() else {
+            return Ok(());
+        };
+        let Value::Object(object_id) = instance else {
+            return Ok(());
+        };
+        for field in fields.iter() {
+            self.this_values.push(instance.clone());
+            let value = field
+                .initializer
+                .as_ref()
+                .map_or(Ok(Completion::Normal(Value::Undefined)), |initializer| {
+                    self.eval_bytecode_block(initializer)
+                });
+            if self.this_values.pop().is_none() {
+                return Err(Error::runtime("class field this binding disappeared"));
+            }
+            let value = value?.into_result()?;
+            let update = crate::runtime::object::PropertyUpdate::Data(
+                crate::runtime::object::DataPropertyUpdate::new(
+                    Some(value),
+                    Some(crate::runtime::object::PropertyWritable::Yes),
+                    Some(crate::runtime::object::PropertyEnumerable::Yes),
+                    Some(crate::runtime::object::PropertyConfigurable::Yes),
+                ),
+            );
+            self.objects.define_property(
+                *object_id,
+                field.key,
+                &field.name,
+                update,
+                self.limits.max_object_properties,
+            )?;
+        }
         Ok(())
     }
 

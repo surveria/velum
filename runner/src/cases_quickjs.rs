@@ -37,6 +37,7 @@ const PATH_QUICKJS_CLASS_INHERITANCE: &str =
     "tests/corpora/quickjs_differential/active/class_inheritance.js";
 const PATH_QUICKJS_ARGUMENTS_OBJECT: &str =
     "tests/corpora/quickjs_differential/active/arguments_object.js";
+const PATH_QUICKJS_CLASS_FIELDS: &str = "tests/corpora/quickjs_differential/active/class_fields.js";
 const PATH_QUICKJS_SWITCH_STATEMENTS: &str =
     "tests/corpora/quickjs_differential/active/switch_statements.js";
 const PATH_QUICKJS_BLOCK_LEXICAL_SCOPE: &str =
@@ -237,6 +238,10 @@ fn quickjs_control_flow_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "arguments_object",
             path: PATH_QUICKJS_ARGUMENTS_OBJECT,
+        },
+        DifferentialCase {
+            id: "class_fields",
+            path: PATH_QUICKJS_CLASS_FIELDS,
         },
         DifferentialCase {
             id: "switch_statements",

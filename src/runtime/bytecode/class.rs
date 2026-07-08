@@ -8,7 +8,7 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime::control::Completion,
-    runtime::function::{BytecodeFunctionInit, FunctionSuperBinding},
+    runtime::function::{BytecodeFunctionInit, FunctionSuperBinding, ResolvedClassField},
     runtime::object::{
         AccessorPropertyUpdate, DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable,
         PropertyKey, PropertyUpdate, PropertyWritable,
@@ -25,12 +25,20 @@ impl Context {
         class: &BytecodeClass,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
-        let computed_count = class
+        let member_computed = class
             .members
             .iter()
             .filter(|member| matches!(member.key, BytecodeClassMemberKey::Computed))
             .count();
-        let computed_keys = state.stack.pop_many(computed_count)?;
+        let field_computed = class
+            .fields
+            .iter()
+            .filter(|field| matches!(field.key, BytecodeClassMemberKey::Computed))
+            .count();
+        let mut computed_keys = state
+            .stack
+            .pop_many(member_computed.saturating_add(field_computed))?;
+        let field_computed_keys = computed_keys.split_off(member_computed);
         let heritage = if class.heritage {
             Some(state.stack.pop()?)
         } else {
@@ -63,6 +71,7 @@ impl Context {
                 Rc::new(FunctionSuperBinding {
                     constructor: Some(heritage.constructor.clone()),
                     home_prototype: heritage.prototype.clone(),
+                    own_constructor: Some(*constructor_id),
                 }),
             )?;
         }
@@ -103,14 +112,78 @@ impl Context {
                     Rc::new(FunctionSuperBinding {
                         constructor: None,
                         home_prototype: home,
+                        own_constructor: None,
                     }),
                 )?;
             }
         }
 
+        self.install_class_fields(class, &constructor, *constructor_id, &field_computed_keys)?;
+
         state.stack.push(constructor);
         state.pc = next;
         Ok(None)
+    }
+
+    /// Resolves field keys once at class definition time, stores instance
+    /// fields on the constructor for construction-time initialization, and
+    /// evaluates static fields immediately with `this` bound to the
+    /// constructor.
+    fn install_class_fields(
+        &mut self,
+        class: &BytecodeClass,
+        constructor: &Value,
+        constructor_id: FunctionId,
+        field_computed_keys: &[Value],
+    ) -> Result<()> {
+        let mut computed = field_computed_keys.iter();
+        let mut instance_fields = Vec::new();
+        let mut static_fields = Vec::new();
+        for field in class.fields.iter() {
+            let computed_key = match field.key {
+                BytecodeClassMemberKey::Computed => Some(
+                    computed
+                        .next()
+                        .ok_or_else(|| Error::runtime("class field key disappeared"))?,
+                ),
+                BytecodeClassMemberKey::Static(_) => None,
+            };
+            let (key, name) = self.class_member_property_key(&field.key, computed_key)?;
+            let resolved = ResolvedClassField {
+                key,
+                name,
+                initializer: field.initializer.clone(),
+            };
+            if field.is_static {
+                static_fields.push(resolved);
+            } else {
+                instance_fields.push(resolved);
+            }
+        }
+        if !instance_fields.is_empty() {
+            self.set_function_class_fields(constructor_id, instance_fields.into())?;
+        }
+        for field in static_fields {
+            self.this_values.push(constructor.clone());
+            let value = field.initializer.as_ref().map_or(
+                Ok(crate::runtime::control::Completion::Normal(
+                    Value::Undefined,
+                )),
+                |initializer| self.eval_bytecode_block(initializer),
+            );
+            if self.this_values.pop().is_none() {
+                return Err(Error::runtime("class field this binding disappeared"));
+            }
+            let value = value?.into_result()?;
+            let update = DataPropertyUpdate::new(
+                Some(value),
+                Some(PropertyWritable::Yes),
+                Some(PropertyEnumerable::Yes),
+                Some(PropertyConfigurable::Yes),
+            );
+            self.define_function_property_key(constructor_id, &field.name, field.key, update)?;
+        }
+        Ok(())
     }
 
     fn install_class_member(
