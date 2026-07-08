@@ -571,6 +571,8 @@ impl BytecodeInstruction {
                 | Self::PushLiteral(_)
                 | Self::PushString(_)
                 | Self::TemplateConcat { .. }
+                | Self::StringConcat { .. }
+                | Self::StringConcatStatic { .. }
                 | Self::CollectSpreadArgs { .. }
                 | Self::CallBindingSpread { .. }
                 | Self::CallValueSpread

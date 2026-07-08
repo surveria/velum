@@ -240,6 +240,8 @@ impl<'a> BytecodeCompiler<'a> {
             BytecodeInstruction::PushLiteral(_)
             | BytecodeInstruction::PushString(_)
             | BytecodeInstruction::TemplateConcat { .. }
+            | BytecodeInstruction::StringConcat { .. }
+            | BytecodeInstruction::StringConcatStatic { .. }
             | BytecodeInstruction::CollectSpreadArgs { .. }
             | BytecodeInstruction::CallBindingSpread { .. }
             | BytecodeInstruction::CallValueSpread

@@ -222,6 +222,20 @@ pub fn string_property_value(value: &str, property: &str) -> Result<StringProper
         .map_or(StringPropertyValue::Missing, StringPropertyValue::Character))
 }
 
+pub(in crate::runtime) fn string_length_value_if_string(
+    object: &Value,
+    property: &str,
+) -> Result<Option<Value>> {
+    if property != STRING_LENGTH_PROPERTY {
+        return Ok(None);
+    }
+    match object {
+        Value::String(value) => string_length(value).map(Value::Number).map(Some),
+        Value::HeapString(value) => string_length(value.as_str()).map(Value::Number).map(Some),
+        _ => Ok(None),
+    }
+}
+
 fn string_has_property(value: &str, property: &str) -> Result<bool> {
     if property == STRING_LENGTH_PROPERTY {
         return Ok(true);
@@ -261,7 +275,11 @@ fn string_length(value: &str) -> Result<f64> {
 }
 
 fn string_len(value: &str) -> Result<usize> {
-    let len = value.chars().count();
+    let len = if value.is_ascii() {
+        value.len()
+    } else {
+        value.chars().count()
+    };
     u32::try_from(len)
         .map_err(|_| Error::limit("string length exceeded supported property range"))
         .map(|_| len)
