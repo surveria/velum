@@ -5,6 +5,10 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 cd "${repo_root}"
 
+default_tested_source_archive_ref="refs/rsqjs/ci-tested-sources"
+default_legacy_tested_source_archive_ref="refs/heads/ci-tested-sources"
+tested_source_archive_local_branch="rsqjs-tested-source-archive"
+
 fail() {
   printf 'publish-report-artifact: %s\n' "$*" >&2
   exit 1
@@ -138,44 +142,95 @@ archive_commit_message() {
   printf 'Source workflow run: %s\n' "${source_run}"
 }
 
-checkout_archive_branch() {
-  local archive_branch="$1"
+validate_full_ref() {
+  local ref_name="$1"
+  local label="$2"
 
-  if git ls-remote --exit-code --heads origin "${archive_branch}" >/dev/null 2>&1; then
-    git fetch --no-tags origin "${archive_branch}:refs/remotes/origin/${archive_branch}"
-    git checkout -B "${archive_branch}" "refs/remotes/origin/${archive_branch}"
-    return 0
+  [[ "${ref_name}" == refs/* ]] || fail "${label} must be a full ref: ${ref_name}"
+  git check-ref-format "${ref_name}" >/dev/null ||
+    fail "invalid ${label}: ${ref_name}"
+}
+
+resolve_archive_ref() {
+  local archive_ref="${RSQJS_TESTED_SOURCE_ARCHIVE_REF:-}"
+  if [[ -z "${archive_ref}" ]]; then
+    local archive_name="${RSQJS_TESTED_SOURCE_ARCHIVE_BRANCH:-}"
+    if [[ -n "${archive_name}" ]]; then
+      archive_name="${archive_name#refs/heads/}"
+      [[ "${archive_name}" != refs/* ]] ||
+        fail "legacy archive branch must be a branch name: ${archive_name}"
+      archive_ref="refs/rsqjs/${archive_name}"
+    else
+      archive_ref="${default_tested_source_archive_ref}"
+    fi
   fi
 
+  validate_full_ref "${archive_ref}" "tested source archive ref"
+  [[ "${archive_ref}" != refs/heads/* ]] ||
+    fail "tested source archive ref must not live under refs/heads: ${archive_ref}"
+  printf '%s\n' "${archive_ref}"
+}
+
+resolve_legacy_archive_ref() {
+  local legacy_ref="${RSQJS_TESTED_SOURCE_ARCHIVE_LEGACY_REF:-${default_legacy_tested_source_archive_ref}}"
+  if [[ "${legacy_ref}" != refs/* ]]; then
+    legacy_ref="refs/heads/${legacy_ref}"
+  fi
+  validate_full_ref "${legacy_ref}" "legacy tested source archive ref"
+  printf '%s\n' "${legacy_ref}"
+}
+
+checkout_archive_ref() {
+  local archive_ref="$1"
+  local legacy_ref="$2"
+  local local_branch="$3"
+
+  if git ls-remote --exit-code origin "${archive_ref}" >/dev/null 2>&1; then
+    git fetch --no-tags origin "${archive_ref}"
+    git checkout -B "${local_branch}" FETCH_HEAD
+    printf 'tested source archive base: %s\n' "${archive_ref}"
+    return 0
+  fi
+  if git ls-remote --exit-code origin "${legacy_ref}" >/dev/null 2>&1; then
+    git fetch --no-tags origin "${legacy_ref}"
+    git checkout -B "${local_branch}" FETCH_HEAD
+    printf 'tested source archive base: %s\n' "${legacy_ref}"
+    return 0
+  fi
   return 1
 }
 
 archive_tested_source_commit() {
-  local archive_branch="$1"
-  local source_commit="$2"
-  local expected_tree="$3"
-  local source_run="$4"
+  local archive_ref="$1"
+  local legacy_ref="$2"
+  local source_commit="$3"
+  local expected_tree="$4"
+  local source_run="$5"
 
-  git check-ref-format --branch "${archive_branch}" >/dev/null ||
-    fail "invalid tested source archive branch: ${archive_branch}"
   fetch_tested_source_commit "${source_commit}" "${expected_tree}"
+  git check-ref-format --branch "${tested_source_archive_local_branch}" >/dev/null ||
+    fail "invalid tested source archive local branch: ${tested_source_archive_local_branch}"
 
   local archive_message
   archive_message="$(archive_commit_message "${source_commit}" "${expected_tree}" "${source_run}")"
 
-  if checkout_archive_branch "${archive_branch}"; then
+  if checkout_archive_ref "${archive_ref}" "${legacy_ref}" "${tested_source_archive_local_branch}"; then
     if git merge-base --is-ancestor "${source_commit}" HEAD; then
+      if ! git ls-remote --exit-code origin "${archive_ref}" >/dev/null 2>&1; then
+        git push origin "HEAD:${archive_ref}"
+        printf 'tested source archive ref migrated: %s\n' "${archive_ref}"
+      fi
       printf 'tested source commit already archived: %s\n' "${source_commit}"
       return 0
     fi
     git merge --no-ff -s ours -m "${archive_message}" "${source_commit}"
   else
-    git checkout -B "${archive_branch}" "${source_commit}"
+    git checkout -B "${tested_source_archive_local_branch}" "${source_commit}"
     git commit --allow-empty -m "${archive_message}"
   fi
 
-  git push origin "HEAD:refs/heads/${archive_branch}"
-  printf 'tested source archive branch updated: %s -> %s\n' "${archive_branch}" "${source_commit}"
+  git push origin "HEAD:${archive_ref}"
+  printf 'tested source archive ref updated: %s -> %s\n' "${archive_ref}" "${source_commit}"
 }
 
 stage_report_outputs() {
@@ -369,9 +424,10 @@ if [[ -n "${jetstream_report_file}" ]]; then
 fi
 source_commit="${RSQJS_ARTIFACT_COMMIT_SHA:-unknown}"
 source_run="${RSQJS_ARTIFACT_RUN_ID:-unknown}"
-archive_branch="${RSQJS_TESTED_SOURCE_ARCHIVE_BRANCH:-ci-tested-sources}"
+archive_ref="$(resolve_archive_ref)"
+legacy_archive_ref="$(resolve_legacy_archive_ref)"
 
-archive_tested_source_commit "${archive_branch}" "${source_commit}" "${expected_tree}" "${source_run}"
+archive_tested_source_commit "${archive_ref}" "${legacy_archive_ref}" "${source_commit}" "${expected_tree}" "${source_run}"
 checkout_latest_main
 stage_report_outputs "${source_report}" "${report_file}" "${source_jetstream_report}" "${jetstream_report_file}"
 commit_and_push "${report_file}" "${expected_tree}" "${source_commit}" "${source_run}"
