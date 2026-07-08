@@ -1,0 +1,499 @@
+use std::char;
+
+use crate::{
+    error::{Error, Result},
+    runtime::{Context, call::RuntimeCallArgs, object::PropertyEnumerable},
+    value::{ErrorName, NativeFunctionId, ObjectId, Value},
+};
+
+use super::{
+    NativeFunctionKind, STRING_FROM_CHAR_CODE_NAME, STRING_FROM_CODE_POINT_NAME,
+    STRING_PROTOTYPE_AT_NAME, STRING_PROTOTYPE_CODE_POINT_AT_NAME, STRING_PROTOTYPE_PAD_END_NAME,
+    STRING_PROTOTYPE_PAD_START_NAME, STRING_PROTOTYPE_TO_LOCALE_LOWER_CASE_NAME,
+    STRING_PROTOTYPE_TO_LOCALE_UPPER_CASE_NAME, STRING_PROTOTYPE_TO_STRING_NAME,
+    STRING_PROTOTYPE_TRIM_LEFT_NAME, STRING_PROTOTYPE_TRIM_RIGHT_NAME,
+    STRING_PROTOTYPE_VALUE_OF_NAME, STRING_RAW_NAME,
+};
+
+const DEFAULT_PAD_STRING: &str = " ";
+const MAX_CODE_POINT: f64 = 1_114_111.0;
+const RAW_PROPERTY: &str = "raw";
+const RANGE_CODE_POINT_ERROR: &str = "String.fromCodePoint code point must be valid";
+const STRING_VALUE_RECEIVER_ERROR: &str =
+    "String.prototype value method requires a string or String object";
+const TO_LENGTH_LIMIT_ERROR: &str = "String length exceeded supported range";
+const UINT16_MODULO: f64 = 65_536.0;
+
+impl Context {
+    pub(in crate::runtime::native) fn install_string_static_methods(
+        &mut self,
+        constructor: NativeFunctionId,
+    ) -> Result<()> {
+        self.define_string_static_method(
+            constructor,
+            STRING_FROM_CHAR_CODE_NAME,
+            NativeFunctionKind::StringFromCharCode,
+        )?;
+        self.define_string_static_method(
+            constructor,
+            STRING_FROM_CODE_POINT_NAME,
+            NativeFunctionKind::StringFromCodePoint,
+        )?;
+        self.define_string_static_method(
+            constructor,
+            STRING_RAW_NAME,
+            NativeFunctionKind::StringRaw,
+        )
+    }
+
+    pub(in crate::runtime::native) fn install_string_extra_prototype_methods(
+        &mut self,
+        prototype: ObjectId,
+    ) -> Result<()> {
+        for (name, kind) in STRING_EXTRA_PROTOTYPE_METHODS {
+            let function = if let Some(id) = self.native_function_id(*kind) {
+                Value::NativeFunction(id)
+            } else {
+                self.create_native_function(*kind, Value::Undefined)?
+            };
+            self.define_non_enumerable_object_property(prototype, name, function)?;
+        }
+        Ok(())
+    }
+
+    pub(in crate::runtime::native) fn eval_string_from_char_code(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_string_from_char_code(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_string_from_char_code(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let mut output = String::new();
+        for value in args {
+            let unit = Self::to_uint16(Self::value_to_number(value))?;
+            if let Some(ch) = char::from_u32(u32::from(unit)) {
+                output.push(ch);
+            } else {
+                output.push(char::REPLACEMENT_CHARACTER);
+            }
+            self.check_string_len(&output)?;
+        }
+        self.heap_string_value(&output)
+    }
+
+    pub(in crate::runtime::native) fn eval_string_from_code_point(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_string_from_code_point(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_string_from_code_point(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let mut output = String::new();
+        for value in args {
+            let code_point = Self::code_point_argument(value)?;
+            let Some(ch) = char::from_u32(code_point) else {
+                return Err(Error::exception(
+                    ErrorName::RangeError,
+                    RANGE_CODE_POINT_ERROR,
+                ));
+            };
+            output.push(ch);
+            self.check_string_len(&output)?;
+        }
+        self.heap_string_value(&output)
+    }
+
+    pub(in crate::runtime::native) fn eval_string_raw(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_string_raw(args.as_slice())
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_string_raw(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let template = Self::argument_or_undefined(args.first());
+        Self::ensure_object_like(&template, "String.raw template must be object coercible")?;
+        let raw = self.get_property_value(&template, RAW_PROPERTY)?;
+        Self::ensure_object_like(&raw, "String.raw raw property must be object coercible")?;
+        let raw_length = self.raw_length(&raw)?;
+        if raw_length == 0 {
+            return self.heap_string_value("");
+        }
+
+        let mut output = String::new();
+        for index in 0..raw_length {
+            let raw_part = self.raw_part(&raw, index)?;
+            output.push_str(&raw_part);
+            self.check_string_len(&output)?;
+            if let Some(substitution) = args.get(index.saturating_add(1)) {
+                let text = self.string_argument_text(substitution)?;
+                output.push_str(&text);
+                self.check_string_len(&output)?;
+            }
+        }
+        self.heap_string_value(&output)
+    }
+
+    pub(in crate::runtime::native) fn eval_string_prototype_at(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_direct_string_prototype_at(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_string_prototype_at(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
+        let text = self.string_receiver_value(this_value)?;
+        let length = text.chars().count();
+        let Some(index) = Self::relative_index(args.first(), length)? else {
+            return Ok(Value::Undefined);
+        };
+        let Some(ch) = text.chars().nth(index) else {
+            return Ok(Value::Undefined);
+        };
+        self.heap_string_char_value(ch)
+    }
+
+    pub(in crate::runtime::native) fn eval_string_prototype_code_point_at(
+        &self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_direct_string_prototype_code_point_at(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_string_prototype_code_point_at(
+        &self,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
+        let text = self.string_receiver_value(this_value)?;
+        let units = text.encode_utf16().collect::<Vec<_>>();
+        let position = Self::position_arg(args.first())?;
+        let Some(unit) = units.get(position).copied() else {
+            return Ok(Value::Undefined);
+        };
+        if Self::is_high_surrogate(unit)
+            && let Some(next) = units.get(position.saturating_add(1)).copied()
+            && Self::is_low_surrogate(next)
+        {
+            return Ok(Value::Number(f64::from(Self::decode_surrogate_pair(
+                unit, next,
+            ))));
+        }
+        Ok(Value::Number(f64::from(unit)))
+    }
+
+    pub(in crate::runtime::native) fn eval_string_prototype_pad_start(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_direct_string_prototype_pad(args.as_slice(), this_value, PadSide::Start)
+    }
+
+    pub(in crate::runtime::native) fn eval_string_prototype_pad_end(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_direct_string_prototype_pad(args.as_slice(), this_value, PadSide::End)
+    }
+
+    pub(in crate::runtime::native) fn eval_direct_string_prototype_pad(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+        side: PadSide,
+    ) -> Result<Value> {
+        let text = self.string_receiver_value(this_value)?;
+        let target_length = Self::to_length_arg(args.first())?;
+        let current_length = text.chars().count();
+        if target_length <= current_length {
+            return self.heap_string_value(&text);
+        }
+        let filler = match args.get(1) {
+            None | Some(Value::Undefined) => DEFAULT_PAD_STRING.to_owned(),
+            Some(value) => self.string_argument_text(value)?,
+        };
+        if filler.is_empty() {
+            return self.heap_string_value(&text);
+        }
+        let fill_count = target_length
+            .checked_sub(current_length)
+            .ok_or_else(|| Error::limit("string pad length underflowed"))?;
+        let padding = self.repeat_to_char_len(&filler, fill_count)?;
+        let output = match side {
+            PadSide::Start => format!("{padding}{text}"),
+            PadSide::End => format!("{text}{padding}"),
+        };
+        self.check_string_len(&output)?;
+        self.heap_string_value(&output)
+    }
+
+    pub(in crate::runtime::native) fn eval_string_prototype_to_string(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        Self::discard_extra_args(args.as_slice());
+        let text = self.strict_string_value(this_value)?;
+        self.heap_string_value(&text)
+    }
+
+    pub(in crate::runtime::native) fn eval_string_prototype_value_of(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        Self::discard_extra_args(args.as_slice());
+        let text = self.strict_string_value(this_value)?;
+        self.heap_string_value(&text)
+    }
+
+    fn define_string_static_method(
+        &mut self,
+        constructor: NativeFunctionId,
+        name: &str,
+        kind: NativeFunctionKind,
+    ) -> Result<()> {
+        let function = self.create_native_function(kind, Value::Undefined)?;
+        let key = self.intern_property_key(name)?;
+        self.native_function_mut(constructor)?
+            .properties_mut()
+            .define_builtin(key, function, PropertyEnumerable::No);
+        Ok(())
+    }
+
+    fn raw_length(&mut self, raw: &Value) -> Result<usize> {
+        let value = self.get_property_value(raw, "length")?;
+        Self::to_length_value(&value)
+    }
+
+    fn raw_part(&mut self, raw: &Value, index: usize) -> Result<String> {
+        let key = index.to_string();
+        let value = self.get_property_value(raw, &key)?;
+        self.string_argument_text(&value)
+    }
+
+    fn repeat_to_char_len(&self, filler: &str, target_len: usize) -> Result<String> {
+        let mut output = String::new();
+        let mut length = 0_usize;
+        for ch in filler.chars().cycle() {
+            if length >= target_len {
+                break;
+            }
+            output.push(ch);
+            length = length
+                .checked_add(1)
+                .ok_or_else(|| Error::limit("string pad character count overflowed"))?;
+            self.check_string_len(&output)?;
+        }
+        Ok(output)
+    }
+
+    fn strict_string_value(&self, value: &Value) -> Result<String> {
+        match value {
+            Value::String(value) => Ok(value.clone()),
+            Value::HeapString(value) => Ok(value.as_str().to_owned()),
+            Value::Object(id) => self
+                .objects
+                .string_object_value(*id)?
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| Error::type_error(STRING_VALUE_RECEIVER_ERROR)),
+            _ => Err(Error::type_error(STRING_VALUE_RECEIVER_ERROR)),
+        }
+    }
+
+    fn ensure_object_like(value: &Value, message: &str) -> Result<()> {
+        match value {
+            Value::Undefined | Value::Null => Err(Error::type_error(message)),
+            Value::Bool(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::HeapString(_)
+            | Value::Object(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_)
+            | Value::Symbol(_)
+            | Value::Error(_) => Ok(()),
+        }
+    }
+
+    fn relative_index(value: Option<&Value>, length: usize) -> Result<Option<usize>> {
+        let integer = Self::integer_arg(value);
+        let index = if integer < 0 {
+            let length_i64 = i64::try_from(length)
+                .map_err(|_| Error::limit("string length exceeded supported range"))?;
+            length_i64.saturating_add(integer)
+        } else {
+            integer
+        };
+        if index < 0 {
+            return Ok(None);
+        }
+        let index =
+            usize::try_from(index).map_err(|_| Error::limit("string index exceeded range"))?;
+        if index >= length {
+            return Ok(None);
+        }
+        Ok(Some(index))
+    }
+
+    fn position_arg(value: Option<&Value>) -> Result<usize> {
+        let integer = Self::integer_arg(value);
+        if integer <= 0 {
+            return Ok(0);
+        }
+        usize::try_from(integer).map_err(|_| Error::limit("string index exceeded range"))
+    }
+
+    fn integer_arg(value: Option<&Value>) -> i64 {
+        let number = value.map_or(0.0, Self::value_to_number);
+        Self::finite_integer(number).unwrap_or(i64::MAX)
+    }
+
+    fn to_length_arg(value: Option<&Value>) -> Result<usize> {
+        let value = Self::argument_or_undefined(value);
+        Self::to_length_value(&value)
+    }
+
+    fn to_length_value(value: &Value) -> Result<usize> {
+        let number = Self::value_to_number(value);
+        let Some(integer) = Self::finite_integer(number) else {
+            if number.is_sign_positive() && number.is_infinite() {
+                return Err(Error::limit(TO_LENGTH_LIMIT_ERROR));
+            }
+            return Ok(0);
+        };
+        if integer <= 0 {
+            return Ok(0);
+        }
+        usize::try_from(integer).map_err(|_| Error::limit(TO_LENGTH_LIMIT_ERROR))
+    }
+
+    fn code_point_argument(value: &Value) -> Result<u32> {
+        let number = Self::value_to_number(value);
+        if !number.is_finite() || !(0.0..=MAX_CODE_POINT).contains(&number) || number.fract() != 0.0
+        {
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                RANGE_CODE_POINT_ERROR,
+            ));
+        }
+        let text = format!("{number:.0}");
+        text.parse::<u32>()
+            .map_err(|_| Error::exception(ErrorName::RangeError, RANGE_CODE_POINT_ERROR))
+    }
+
+    fn to_uint16(number: f64) -> Result<u16> {
+        if !number.is_finite() || number == 0.0 {
+            return Ok(0);
+        }
+        let integer = if number.is_sign_negative() {
+            number.ceil()
+        } else {
+            number.floor()
+        };
+        let unit = integer.rem_euclid(UINT16_MODULO);
+        let text = format!("{unit:.0}");
+        text.parse::<u16>()
+            .map_err(|_| Error::limit("uint16 conversion exceeded supported range"))
+    }
+
+    fn finite_integer(number: f64) -> Option<i64> {
+        if !number.is_finite() {
+            return None;
+        }
+        if number == 0.0 || number.is_nan() {
+            return Some(0);
+        }
+        let value = if number.is_sign_negative() {
+            number.ceil()
+        } else {
+            number.floor()
+        };
+        format!("{value:.0}").parse::<i64>().ok()
+    }
+
+    const fn is_high_surrogate(unit: u16) -> bool {
+        unit >= 0xD800 && unit <= 0xDBFF
+    }
+
+    const fn is_low_surrogate(unit: u16) -> bool {
+        unit >= 0xDC00 && unit <= 0xDFFF
+    }
+
+    fn decode_surrogate_pair(high: u16, low: u16) -> u32 {
+        let high = u32::from(high) - 0xD800;
+        let low = u32::from(low) - 0xDC00;
+        0x1_0000 + ((high << 10) | low)
+    }
+
+    const fn discard_extra_args(_args: &[Value]) {}
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(in crate::runtime::native) enum PadSide {
+    Start,
+    End,
+}
+
+pub(super) const STRING_EXTRA_PROTOTYPE_METHODS: &[(&str, NativeFunctionKind)] = &[
+    (
+        STRING_PROTOTYPE_AT_NAME,
+        NativeFunctionKind::StringPrototypeAt,
+    ),
+    (
+        STRING_PROTOTYPE_CODE_POINT_AT_NAME,
+        NativeFunctionKind::StringPrototypeCodePointAt,
+    ),
+    (
+        STRING_PROTOTYPE_PAD_END_NAME,
+        NativeFunctionKind::StringPrototypePadEnd,
+    ),
+    (
+        STRING_PROTOTYPE_PAD_START_NAME,
+        NativeFunctionKind::StringPrototypePadStart,
+    ),
+    (
+        STRING_PROTOTYPE_TO_LOCALE_LOWER_CASE_NAME,
+        NativeFunctionKind::StringPrototypeToLocaleLowerCase,
+    ),
+    (
+        STRING_PROTOTYPE_TO_LOCALE_UPPER_CASE_NAME,
+        NativeFunctionKind::StringPrototypeToLocaleUpperCase,
+    ),
+    (
+        STRING_PROTOTYPE_TO_STRING_NAME,
+        NativeFunctionKind::StringPrototypeToString,
+    ),
+    (
+        STRING_PROTOTYPE_TRIM_LEFT_NAME,
+        NativeFunctionKind::StringPrototypeTrimStart,
+    ),
+    (
+        STRING_PROTOTYPE_TRIM_RIGHT_NAME,
+        NativeFunctionKind::StringPrototypeTrimEnd,
+    ),
+    (
+        STRING_PROTOTYPE_VALUE_OF_NAME,
+        NativeFunctionKind::StringPrototypeValueOf,
+    ),
+];

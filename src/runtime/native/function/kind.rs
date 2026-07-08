@@ -167,10 +167,15 @@ pub(in crate::runtime::native) const REGEXP_PROTOTYPE_TEST_NAME: &str = "test";
 const REJECT_NAME: &str = "reject";
 const RESOLVE_NAME: &str = "resolve";
 const STRING_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const STRING_FROM_CHAR_CODE_NAME: &str = "fromCharCode";
+pub(in crate::runtime::native) const STRING_FROM_CODE_POINT_NAME: &str = "fromCodePoint";
 pub(in crate::runtime::native) const STRING_NAME: &str = "String";
+pub(in crate::runtime::native) const STRING_RAW_NAME: &str = "raw";
 const STRING_PROTOTYPE_FUNCTION_LENGTH_ONE: f64 = 1.0;
+pub(in crate::runtime::native) const STRING_PROTOTYPE_AT_NAME: &str = "at";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_CHAR_AT_NAME: &str = "charAt";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_CHAR_CODE_AT_NAME: &str = "charCodeAt";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_CODE_POINT_AT_NAME: &str = "codePointAt";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_CONCAT_NAME: &str = "concat";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_ENDS_WITH_NAME: &str = "endsWith";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_INCLUDES_NAME: &str = "includes";
@@ -178,15 +183,25 @@ pub(in crate::runtime::native) const STRING_PROTOTYPE_INDEX_OF_NAME: &str = "ind
 pub(in crate::runtime::native) const STRING_PROTOTYPE_LAST_INDEX_OF_NAME: &str = "lastIndexOf";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_REPEAT_NAME: &str = "repeat";
 const STRING_PROTOTYPE_FUNCTION_LENGTH_TWO: f64 = 2.0;
+pub(in crate::runtime::native) const STRING_PROTOTYPE_PAD_END_NAME: &str = "padEnd";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_PAD_START_NAME: &str = "padStart";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_SLICE_NAME: &str = "slice";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_STARTS_WITH_NAME: &str = "startsWith";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_SUBSTRING_NAME: &str = "substring";
 const STRING_PROTOTYPE_FUNCTION_LENGTH_ZERO: f64 = 0.0;
+pub(in crate::runtime::native) const STRING_PROTOTYPE_TO_LOCALE_LOWER_CASE_NAME: &str =
+    "toLocaleLowerCase";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_TO_LOCALE_UPPER_CASE_NAME: &str =
+    "toLocaleUpperCase";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_TO_LOWER_CASE_NAME: &str = "toLowerCase";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_TO_STRING_NAME: &str = "toString";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_TO_UPPER_CASE_NAME: &str = "toUpperCase";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_TRIM_NAME: &str = "trim";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_TRIM_END_NAME: &str = "trimEnd";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_TRIM_LEFT_NAME: &str = "trimLeft";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_TRIM_RIGHT_NAME: &str = "trimRight";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_TRIM_START_NAME: &str = "trimStart";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_VALUE_OF_NAME: &str = "valueOf";
 const SYMBOL_FUNCTION_LENGTH: f64 = 0.0;
 pub(in crate::runtime::native) const SYMBOL_NAME: &str = "Symbol";
 
@@ -291,22 +306,33 @@ pub(in crate::runtime) enum NativeFunctionKind {
     RegExp,
     RegExpPrototypeTest,
     String,
+    StringFromCharCode,
+    StringFromCodePoint,
     StringPrototypeCharAt,
     StringPrototypeCharCodeAt,
+    StringPrototypeAt,
+    StringPrototypeCodePointAt,
     StringPrototypeConcat,
     StringPrototypeEndsWith,
     StringPrototypeIncludes,
     StringPrototypeIndexOf,
     StringPrototypeLastIndexOf,
+    StringPrototypePadEnd,
+    StringPrototypePadStart,
     StringPrototypeRepeat,
     StringPrototypeSlice,
     StringPrototypeStartsWith,
     StringPrototypeSubstring,
+    StringPrototypeToLocaleLowerCase,
+    StringPrototypeToLocaleUpperCase,
     StringPrototypeToLowerCase,
+    StringPrototypeToString,
     StringPrototypeToUpperCase,
     StringPrototypeTrim,
     StringPrototypeTrimEnd,
     StringPrototypeTrimStart,
+    StringPrototypeValueOf,
+    StringRaw,
     Symbol,
 }
 
@@ -325,6 +351,9 @@ impl NativeFunctionKind {
             return length;
         }
         if let Some(length) = self.core_length() {
+            return length;
+        }
+        if let Some(length) = self.string_static_length() {
             return length;
         }
         if let Some(length) = self.string_prototype_length() {
@@ -468,23 +497,40 @@ impl NativeFunctionKind {
         }
     }
 
+    const fn string_static_length(self) -> Option<f64> {
+        match self {
+            Self::StringFromCharCode | Self::StringFromCodePoint | Self::StringRaw => {
+                Some(STRING_PROTOTYPE_FUNCTION_LENGTH_ONE)
+            }
+            _ => None,
+        }
+    }
+
     const fn string_prototype_length(self) -> Option<f64> {
         match self {
-            Self::StringPrototypeToLowerCase
+            Self::StringPrototypeToLocaleLowerCase
+            | Self::StringPrototypeToLocaleUpperCase
+            | Self::StringPrototypeToLowerCase
             | Self::StringPrototypeToUpperCase
+            | Self::StringPrototypeToString
             | Self::StringPrototypeTrim
             | Self::StringPrototypeTrimEnd
-            | Self::StringPrototypeTrimStart => Some(STRING_PROTOTYPE_FUNCTION_LENGTH_ZERO),
+            | Self::StringPrototypeTrimStart
+            | Self::StringPrototypeValueOf => Some(STRING_PROTOTYPE_FUNCTION_LENGTH_ZERO),
             Self::StringPrototypeSlice | Self::StringPrototypeSubstring => {
                 Some(STRING_PROTOTYPE_FUNCTION_LENGTH_TWO)
             }
-            Self::StringPrototypeCharAt
+            Self::StringPrototypeAt
+            | Self::StringPrototypeCharAt
             | Self::StringPrototypeCharCodeAt
+            | Self::StringPrototypeCodePointAt
             | Self::StringPrototypeConcat
             | Self::StringPrototypeEndsWith
             | Self::StringPrototypeIncludes
             | Self::StringPrototypeIndexOf
             | Self::StringPrototypeLastIndexOf
+            | Self::StringPrototypePadEnd
+            | Self::StringPrototypePadStart
             | Self::StringPrototypeRepeat
             | Self::StringPrototypeStartsWith => Some(STRING_PROTOTYPE_FUNCTION_LENGTH_ONE),
             _ => None,
@@ -505,6 +551,9 @@ impl NativeFunctionKind {
             return name;
         }
         if let Some(name) = self.core_name() {
+            return name;
+        }
+        if let Some(name) = self.string_static_name() {
             return name;
         }
         if let Some(name) = self.string_prototype_name() {
@@ -647,24 +696,45 @@ impl NativeFunctionKind {
         }
     }
 
+    const fn string_static_name(self) -> Option<&'static str> {
+        match self {
+            Self::StringFromCharCode => Some(STRING_FROM_CHAR_CODE_NAME),
+            Self::StringFromCodePoint => Some(STRING_FROM_CODE_POINT_NAME),
+            Self::StringRaw => Some(STRING_RAW_NAME),
+            _ => None,
+        }
+    }
+
     const fn string_prototype_name(self) -> Option<&'static str> {
         match self {
+            Self::StringPrototypeAt => Some(STRING_PROTOTYPE_AT_NAME),
             Self::StringPrototypeCharAt => Some(STRING_PROTOTYPE_CHAR_AT_NAME),
             Self::StringPrototypeCharCodeAt => Some(STRING_PROTOTYPE_CHAR_CODE_AT_NAME),
+            Self::StringPrototypeCodePointAt => Some(STRING_PROTOTYPE_CODE_POINT_AT_NAME),
             Self::StringPrototypeConcat => Some(STRING_PROTOTYPE_CONCAT_NAME),
             Self::StringPrototypeEndsWith => Some(STRING_PROTOTYPE_ENDS_WITH_NAME),
             Self::StringPrototypeIncludes => Some(STRING_PROTOTYPE_INCLUDES_NAME),
             Self::StringPrototypeIndexOf => Some(STRING_PROTOTYPE_INDEX_OF_NAME),
             Self::StringPrototypeLastIndexOf => Some(STRING_PROTOTYPE_LAST_INDEX_OF_NAME),
+            Self::StringPrototypePadEnd => Some(STRING_PROTOTYPE_PAD_END_NAME),
+            Self::StringPrototypePadStart => Some(STRING_PROTOTYPE_PAD_START_NAME),
             Self::StringPrototypeRepeat => Some(STRING_PROTOTYPE_REPEAT_NAME),
             Self::StringPrototypeSlice => Some(STRING_PROTOTYPE_SLICE_NAME),
             Self::StringPrototypeStartsWith => Some(STRING_PROTOTYPE_STARTS_WITH_NAME),
             Self::StringPrototypeSubstring => Some(STRING_PROTOTYPE_SUBSTRING_NAME),
+            Self::StringPrototypeToLocaleLowerCase => {
+                Some(STRING_PROTOTYPE_TO_LOCALE_LOWER_CASE_NAME)
+            }
+            Self::StringPrototypeToLocaleUpperCase => {
+                Some(STRING_PROTOTYPE_TO_LOCALE_UPPER_CASE_NAME)
+            }
             Self::StringPrototypeToLowerCase => Some(STRING_PROTOTYPE_TO_LOWER_CASE_NAME),
+            Self::StringPrototypeToString => Some(STRING_PROTOTYPE_TO_STRING_NAME),
             Self::StringPrototypeToUpperCase => Some(STRING_PROTOTYPE_TO_UPPER_CASE_NAME),
             Self::StringPrototypeTrim => Some(STRING_PROTOTYPE_TRIM_NAME),
             Self::StringPrototypeTrimEnd => Some(STRING_PROTOTYPE_TRIM_END_NAME),
             Self::StringPrototypeTrimStart => Some(STRING_PROTOTYPE_TRIM_START_NAME),
+            Self::StringPrototypeValueOf => Some(STRING_PROTOTYPE_VALUE_OF_NAME),
             _ => None,
         }
     }

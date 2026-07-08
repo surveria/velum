@@ -250,22 +250,37 @@ impl NativeFunctionKind {
 
     const fn from_string_call_target(target: NativeCallTarget) -> Self {
         match target {
+            NativeCallTarget::StringFromCharCode => Self::StringFromCharCode,
+            NativeCallTarget::StringFromCodePoint => Self::StringFromCodePoint,
+            NativeCallTarget::StringRaw => Self::StringRaw,
+            NativeCallTarget::StringPrototypeAt => Self::StringPrototypeAt,
             NativeCallTarget::StringPrototypeCharAt => Self::StringPrototypeCharAt,
             NativeCallTarget::StringPrototypeCharCodeAt => Self::StringPrototypeCharCodeAt,
+            NativeCallTarget::StringPrototypeCodePointAt => Self::StringPrototypeCodePointAt,
             NativeCallTarget::StringPrototypeConcat => Self::StringPrototypeConcat,
             NativeCallTarget::StringPrototypeEndsWith => Self::StringPrototypeEndsWith,
             NativeCallTarget::StringPrototypeIncludes => Self::StringPrototypeIncludes,
             NativeCallTarget::StringPrototypeIndexOf => Self::StringPrototypeIndexOf,
             NativeCallTarget::StringPrototypeLastIndexOf => Self::StringPrototypeLastIndexOf,
+            NativeCallTarget::StringPrototypePadEnd => Self::StringPrototypePadEnd,
+            NativeCallTarget::StringPrototypePadStart => Self::StringPrototypePadStart,
             NativeCallTarget::StringPrototypeRepeat => Self::StringPrototypeRepeat,
             NativeCallTarget::StringPrototypeSlice => Self::StringPrototypeSlice,
             NativeCallTarget::StringPrototypeStartsWith => Self::StringPrototypeStartsWith,
             NativeCallTarget::StringPrototypeSubstring => Self::StringPrototypeSubstring,
+            NativeCallTarget::StringPrototypeToLocaleLowerCase => {
+                Self::StringPrototypeToLocaleLowerCase
+            }
+            NativeCallTarget::StringPrototypeToLocaleUpperCase => {
+                Self::StringPrototypeToLocaleUpperCase
+            }
             NativeCallTarget::StringPrototypeToLowerCase => Self::StringPrototypeToLowerCase,
+            NativeCallTarget::StringPrototypeToString => Self::StringPrototypeToString,
             NativeCallTarget::StringPrototypeToUpperCase => Self::StringPrototypeToUpperCase,
             NativeCallTarget::StringPrototypeTrim => Self::StringPrototypeTrim,
             NativeCallTarget::StringPrototypeTrimEnd => Self::StringPrototypeTrimEnd,
             NativeCallTarget::StringPrototypeTrimStart => Self::StringPrototypeTrimStart,
+            NativeCallTarget::StringPrototypeValueOf => Self::StringPrototypeValueOf,
             _ => Self::String,
         }
     }
@@ -273,22 +288,37 @@ impl NativeFunctionKind {
     const fn to_string_call_target(self) -> Option<NativeCallTarget> {
         match self {
             Self::String => Some(NativeCallTarget::String),
+            Self::StringFromCharCode => Some(NativeCallTarget::StringFromCharCode),
+            Self::StringFromCodePoint => Some(NativeCallTarget::StringFromCodePoint),
+            Self::StringRaw => Some(NativeCallTarget::StringRaw),
+            Self::StringPrototypeAt => Some(NativeCallTarget::StringPrototypeAt),
             Self::StringPrototypeCharAt => Some(NativeCallTarget::StringPrototypeCharAt),
             Self::StringPrototypeCharCodeAt => Some(NativeCallTarget::StringPrototypeCharCodeAt),
+            Self::StringPrototypeCodePointAt => Some(NativeCallTarget::StringPrototypeCodePointAt),
             Self::StringPrototypeConcat => Some(NativeCallTarget::StringPrototypeConcat),
             Self::StringPrototypeEndsWith => Some(NativeCallTarget::StringPrototypeEndsWith),
             Self::StringPrototypeIncludes => Some(NativeCallTarget::StringPrototypeIncludes),
             Self::StringPrototypeIndexOf => Some(NativeCallTarget::StringPrototypeIndexOf),
             Self::StringPrototypeLastIndexOf => Some(NativeCallTarget::StringPrototypeLastIndexOf),
+            Self::StringPrototypePadEnd => Some(NativeCallTarget::StringPrototypePadEnd),
+            Self::StringPrototypePadStart => Some(NativeCallTarget::StringPrototypePadStart),
             Self::StringPrototypeRepeat => Some(NativeCallTarget::StringPrototypeRepeat),
             Self::StringPrototypeSlice => Some(NativeCallTarget::StringPrototypeSlice),
             Self::StringPrototypeStartsWith => Some(NativeCallTarget::StringPrototypeStartsWith),
             Self::StringPrototypeSubstring => Some(NativeCallTarget::StringPrototypeSubstring),
+            Self::StringPrototypeToLocaleLowerCase => {
+                Some(NativeCallTarget::StringPrototypeToLocaleLowerCase)
+            }
+            Self::StringPrototypeToLocaleUpperCase => {
+                Some(NativeCallTarget::StringPrototypeToLocaleUpperCase)
+            }
             Self::StringPrototypeToLowerCase => Some(NativeCallTarget::StringPrototypeToLowerCase),
+            Self::StringPrototypeToString => Some(NativeCallTarget::StringPrototypeToString),
             Self::StringPrototypeToUpperCase => Some(NativeCallTarget::StringPrototypeToUpperCase),
             Self::StringPrototypeTrim => Some(NativeCallTarget::StringPrototypeTrim),
             Self::StringPrototypeTrimEnd => Some(NativeCallTarget::StringPrototypeTrimEnd),
             Self::StringPrototypeTrimStart => Some(NativeCallTarget::StringPrototypeTrimStart),
+            Self::StringPrototypeValueOf => Some(NativeCallTarget::StringPrototypeValueOf),
             _ => None,
         }
     }
