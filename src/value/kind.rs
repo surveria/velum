@@ -109,19 +109,7 @@ impl fmt::Display for Value {
             Self::Undefined => f.write_str("undefined"),
             Self::Null => f.write_str("null"),
             Self::Bool(value) => write!(f, "{value}"),
-            Self::Number(value) => {
-                if value.is_nan() {
-                    f.write_str("NaN")
-                } else if *value == f64::INFINITY {
-                    f.write_str("Infinity")
-                } else if *value == f64::NEG_INFINITY {
-                    f.write_str("-Infinity")
-                } else if value.fract() == 0.0 && value.is_finite() {
-                    write!(f, "{value:.0}")
-                } else {
-                    write!(f, "{value}")
-                }
-            }
+            Self::Number(value) => f.write_str(&format_ecmascript_number(*value)),
             Self::String(value) => f.write_str(value),
             Self::HeapString(value) => f.write_str(value.as_str()),
             Self::Symbol(value) => f.write_str(&value.display_name()),
@@ -137,5 +125,102 @@ impl fmt::Display for Value {
                 }
             }
         }
+    }
+}
+
+const ECMASCRIPT_FIXED_EXPONENT_LIMIT: i32 = 21;
+const ECMASCRIPT_SMALL_EXPONENT_LIMIT: i32 = -6;
+
+/// ECMAScript `Number::toString` in base ten: shortest round-trip significant
+/// digits rendered with the specification's fixed vs. exponential selection.
+fn format_ecmascript_number(value: f64) -> String {
+    if value.is_nan() {
+        return "NaN".to_owned();
+    }
+    if value == f64::INFINITY {
+        return "Infinity".to_owned();
+    }
+    if value == f64::NEG_INFINITY {
+        return "-Infinity".to_owned();
+    }
+    if value == 0.0 {
+        return "0".to_owned();
+    }
+    let negative = value < 0.0;
+    let (digits, point) = shortest_significant_digits(value.abs());
+    let body = render_ecmascript_digits(&digits, point);
+    if negative { format!("-{body}") } else { body }
+}
+
+/// Extract the shortest round-trip significant digits of a finite positive
+/// value and the base-ten position `n` of its decimal point, where
+/// `value == digits x 10^(n - digit_count)` and the first digit has place
+/// value `10^(n - 1)`.
+fn shortest_significant_digits(value: f64) -> (Vec<u8>, i32) {
+    let scientific = format!("{value:e}");
+    let (mantissa, exponent) = scientific
+        .split_once('e')
+        .unwrap_or((scientific.as_str(), "0"));
+    let exponent: i32 = exponent.parse().unwrap_or(0);
+    let mut digits: Vec<u8> = mantissa
+        .bytes()
+        .filter(u8::is_ascii_digit)
+        .map(|byte| byte - b'0')
+        .collect();
+    while digits.len() > 1 && digits.last() == Some(&0) {
+        digits.pop();
+    }
+    (digits, exponent + 1)
+}
+
+fn render_ecmascript_digits(digits: &[u8], point: i32) -> String {
+    let count = i32::try_from(digits.len()).unwrap_or(i32::MAX);
+    if (1..=ECMASCRIPT_FIXED_EXPONENT_LIMIT).contains(&point) {
+        return render_fixed_positive(digits, point, count);
+    }
+    if point <= 0 && point > ECMASCRIPT_SMALL_EXPONENT_LIMIT {
+        let mut out = String::from("0.");
+        for _ in 0..(-point) {
+            out.push('0');
+        }
+        push_ascii_digits(&mut out, digits);
+        return out;
+    }
+    render_exponential(digits, point)
+}
+
+fn render_fixed_positive(digits: &[u8], point: i32, count: i32) -> String {
+    let mut out = String::new();
+    if count <= point {
+        push_ascii_digits(&mut out, digits);
+        for _ in 0..(point - count) {
+            out.push('0');
+        }
+        return out;
+    }
+    let split = usize::try_from(point).unwrap_or(0);
+    push_ascii_digits(&mut out, digits.get(..split).unwrap_or(&[]));
+    out.push('.');
+    push_ascii_digits(&mut out, digits.get(split..).unwrap_or(&[]));
+    out
+}
+
+fn render_exponential(digits: &[u8], point: i32) -> String {
+    let mut out = String::new();
+    out.push(char::from(b'0' + digits.first().copied().unwrap_or(0)));
+    if digits.len() > 1 {
+        out.push('.');
+        push_ascii_digits(&mut out, digits.get(1..).unwrap_or(&[]));
+    }
+    let exponent = point - 1;
+    out.push('e');
+    out.push(if exponent < 0 { '-' } else { '+' });
+    out.push_str(&exponent.unsigned_abs().to_string());
+    out
+}
+
+fn push_ascii_digits(out: &mut String, digits: &[u8]) {
+    for digit in digits {
+        out.push(char::from(b'0' + *digit));
     }
 }

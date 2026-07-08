@@ -61,6 +61,15 @@ impl Context {
             NativeFunctionKind::NumberPrototypeValueOf => {
                 Some(self.eval_number_prototype_value_of(args, this_value))
             }
+            NativeFunctionKind::NumberPrototypeToFixed => {
+                Some(self.eval_number_prototype_to_fixed(args, this_value))
+            }
+            NativeFunctionKind::NumberPrototypeToExponential => {
+                Some(self.eval_number_prototype_to_exponential(args, this_value))
+            }
+            NativeFunctionKind::NumberPrototypeToPrecision => {
+                Some(self.eval_number_prototype_to_precision(args, this_value))
+            }
             NativeFunctionKind::SymbolPrototypeDescriptionGetter => {
                 Some(self.eval_symbol_prototype_description(args, this_value))
             }
