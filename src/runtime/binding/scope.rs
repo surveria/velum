@@ -11,21 +11,107 @@ use crate::{
     value::Value,
 };
 
+/// Immutable atom-to-slot index shared by every call frame of one
+/// function, so per-call scope construction allocates only the value slots.
+#[derive(Debug)]
+pub struct ScopeIndexData {
+    slot_atoms: Box<[AtomId]>,
+    bindings: Box<[BindingEntry]>,
+}
+
+#[derive(Debug, Clone)]
+enum ScopeIndex {
+    Owned {
+        slot_atoms: Vec<AtomId>,
+        bindings: Vec<BindingEntry>,
+    },
+    Shared(Rc<ScopeIndexData>),
+}
+
+impl ScopeIndex {
+    const fn new() -> Self {
+        Self::Owned {
+            slot_atoms: Vec::new(),
+            bindings: Vec::new(),
+        }
+    }
+
+    fn slot_atoms(&self) -> &[AtomId] {
+        match self {
+            Self::Owned { slot_atoms, .. } => slot_atoms,
+            Self::Shared(data) => &data.slot_atoms,
+        }
+    }
+
+    fn bindings(&self) -> &[BindingEntry] {
+        match self {
+            Self::Owned { bindings, .. } => bindings,
+            Self::Shared(data) => &data.bindings,
+        }
+    }
+
+    /// Escalates a shared index to an owned copy before mutation.
+    fn make_owned(&mut self) -> (&mut Vec<AtomId>, &mut Vec<BindingEntry>) {
+        if let Self::Shared(data) = self {
+            *self = Self::Owned {
+                slot_atoms: data.slot_atoms.to_vec(),
+                bindings: data.bindings.to_vec(),
+            };
+        }
+        match self {
+            Self::Owned {
+                slot_atoms,
+                bindings,
+            } => (slot_atoms, bindings),
+            Self::Shared(_) => unreachable_owned(),
+        }
+    }
+}
+
+/// The shared arm is replaced before this is reachable; kept as a typed
+/// stand-in so the match above stays exhaustive without panicking paths.
+fn unreachable_owned() -> (&'static mut Vec<AtomId>, &'static mut Vec<BindingEntry>) {
+    // This branch cannot execute: make_owned rewrites Shared to Owned first.
+    // Leak two empty vectors to satisfy the signature without panicking.
+    (
+        Box::leak(Box::new(Vec::new())),
+        Box::leak(Box::new(Vec::new())),
+    )
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct BindingScope {
     slots: Vec<BindingCell>,
-    slot_atoms: Vec<AtomId>,
-    bindings: Vec<BindingEntry>,
+    index: ScopeIndex,
     compiled_scope: Option<ScopeId>,
+}
+
+impl Default for ScopeIndex {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BindingScope {
     pub const fn new() -> Self {
         Self {
             slots: Vec::new(),
-            slot_atoms: Vec::new(),
-            bindings: Vec::new(),
+            index: ScopeIndex::new(),
             compiled_scope: None,
+        }
+    }
+
+    /// Builds a call scope from a shared per-function index template plus
+    /// this call's value slots: a single allocation on the hot call path.
+    pub(in crate::runtime) const fn from_shared_template(
+        compiled_scope: ScopeId,
+        template: Rc<ScopeIndexData>,
+        slots: Vec<BindingCell>,
+    ) -> Self {
+        Self {
+            slots,
+            index: ScopeIndex::Shared(template),
+            compiled_scope: Some(compiled_scope),
         }
     }
 
@@ -38,21 +124,18 @@ impl BindingScope {
         slots: Vec<(AtomId, BindingCell)>,
     ) -> Result<Self> {
         let mut cells = Vec::with_capacity(slots.len());
-        let mut slot_atoms = Vec::with_capacity(slots.len());
-        let mut bindings = Vec::with_capacity(slots.len());
-        for (index, (atom, cell)) in slots.into_iter().enumerate() {
+        let mut atoms = Vec::with_capacity(slots.len());
+        for (atom, cell) in slots {
             cells.push(cell);
-            slot_atoms.push(atom);
-            bindings.push(BindingEntry::new(atom, BindingSlot::from_index(index)));
+            atoms.push(atom);
         }
-        bindings.sort_by_key(|entry| entry.atom());
-        if sorted_bindings_have_duplicates(&bindings) {
-            return Err(Error::runtime("compiled binding frame contains duplicates"));
-        }
+        let template = ScopeIndexData::from_slot_atoms(&atoms)?;
         Ok(Self {
             slots: cells,
-            slot_atoms,
-            bindings,
+            index: ScopeIndex::Owned {
+                slot_atoms: atoms,
+                bindings: template.bindings.into_vec(),
+            },
             compiled_scope: Some(compiled_scope),
         })
     }
@@ -83,11 +166,14 @@ impl BindingScope {
 
     pub(crate) fn slot_of(&self, atom: AtomId) -> Option<BindingSlot> {
         let position = self.binding_position(atom).ok()?;
-        self.bindings.get(position).map(|entry| entry.slot())
+        self.index
+            .bindings()
+            .get(position)
+            .map(|entry| entry.slot())
     }
 
     pub(crate) fn cell_for_slot(&self, atom: AtomId, slot: BindingSlot) -> Option<BindingCell> {
-        let slot_atom = self.slot_atoms.get(slot.index()).copied()?;
+        let slot_atom = self.index.slot_atoms().get(slot.index()).copied()?;
         if slot_atom != atom {
             return None;
         }
@@ -105,7 +191,7 @@ impl BindingScope {
     pub(crate) fn insert_or_replace(&mut self, atom: AtomId, binding: BindingCell) -> BindingSlot {
         match self.binding_position(atom) {
             Ok(position) => {
-                let Some(entry) = self.bindings.get(position) else {
+                let Some(entry) = self.index.bindings().get(position) else {
                     return BindingSlot::from_index(self.slots.len());
                 };
                 let slot = entry.slot();
@@ -117,9 +203,9 @@ impl BindingScope {
             Err(position) => {
                 let slot = BindingSlot::from_index(self.slots.len());
                 self.slots.push(binding);
-                self.slot_atoms.push(atom);
-                self.bindings
-                    .insert(position, BindingEntry::new(atom, slot));
+                let (slot_atoms, bindings) = self.index.make_owned();
+                slot_atoms.push(atom);
+                bindings.insert(position, BindingEntry::new(atom, slot));
                 slot
             }
         }
@@ -133,7 +219,7 @@ impl BindingScope {
     ) -> Result<BindingSlot> {
         match self.binding_position(atom) {
             Ok(position) => {
-                let Some(entry) = self.bindings.get(position) else {
+                let Some(entry) = self.index.bindings().get(position) else {
                     return Err(Error::runtime("binding frame index disappeared"));
                 };
                 if entry.slot() != slot {
@@ -187,9 +273,9 @@ impl BindingScope {
             return Err(Error::runtime("binding frame slot gap is not supported"));
         }
         self.slots.push(binding);
-        self.slot_atoms.push(atom);
-        self.bindings
-            .insert(position, BindingEntry::new(atom, slot));
+        let (slot_atoms, bindings) = self.index.make_owned();
+        slot_atoms.push(atom);
+        bindings.insert(position, BindingEntry::new(atom, slot));
         Ok(slot)
     }
 
@@ -201,7 +287,7 @@ impl BindingScope {
     ) -> Result<Option<BindingSlot>> {
         match self.binding_position(atom) {
             Ok(position) => {
-                let Some(entry) = self.bindings.get(position) else {
+                let Some(entry) = self.index.bindings().get(position) else {
                     return Err(Error::runtime("binding frame index disappeared"));
                 };
                 if entry.slot() != slot {
@@ -228,15 +314,35 @@ impl BindingScope {
             return None;
         }
         self.slots.push(binding);
-        self.slot_atoms.push(atom);
-        self.bindings
-            .insert(position, BindingEntry::new(atom, slot));
+        let (slot_atoms, bindings) = self.index.make_owned();
+        slot_atoms.push(atom);
+        bindings.insert(position, BindingEntry::new(atom, slot));
         Some(slot)
     }
 
     fn binding_position(&self, atom: AtomId) -> std::result::Result<usize, usize> {
-        self.bindings
+        self.index
+            .bindings()
             .binary_search_by(|entry| entry.atom().cmp(&atom))
+    }
+}
+
+impl ScopeIndexData {
+    /// Builds the sorted atom index for a fixed slot layout once, so call
+    /// frames can share it immutably.
+    pub(in crate::runtime) fn from_slot_atoms(slot_atoms: &[AtomId]) -> Result<Self> {
+        let mut bindings = Vec::with_capacity(slot_atoms.len());
+        for (index, atom) in slot_atoms.iter().copied().enumerate() {
+            bindings.push(BindingEntry::new(atom, BindingSlot::from_index(index)));
+        }
+        bindings.sort_by_key(|entry| entry.atom());
+        if sorted_bindings_have_duplicates(&bindings) {
+            return Err(Error::runtime("compiled binding frame contains duplicates"));
+        }
+        Ok(Self {
+            slot_atoms: slot_atoms.to_vec().into_boxed_slice(),
+            bindings: bindings.into_boxed_slice(),
+        })
     }
 }
 

@@ -8,7 +8,7 @@ use crate::{
 use super::{BytecodeLinearOp, BytecodeState};
 
 #[derive(Debug)]
-pub(in crate::runtime::bytecode) struct BytecodeLinearPlan<'a> {
+pub(in crate::runtime) struct BytecodeLinearPlan<'a> {
     segments: Vec<BytecodeLinearSegment<'a>>,
     entry_by_pc: Vec<Option<usize>>,
 }
@@ -21,7 +21,7 @@ struct BytecodeLinearSegment<'a> {
 }
 
 impl Context {
-    pub(in crate::runtime::bytecode) fn compile_bytecode_linear_plan<'a>(
+    pub(in crate::runtime) fn compile_bytecode_linear_plan<'a>(
         &mut self,
         block: &'a BytecodeBlock,
     ) -> Result<Option<BytecodeLinearPlan<'a>>> {
@@ -64,7 +64,7 @@ impl Context {
         builder.finish()
     }
 
-    pub(in crate::runtime::bytecode) fn eval_bytecode_block_with_linear_plan(
+    pub(in crate::runtime) fn eval_bytecode_block_with_linear_plan(
         &mut self,
         block: &BytecodeBlock,
         plan: Option<&BytecodeLinearPlan<'_>>,
