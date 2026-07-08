@@ -10,7 +10,7 @@ use crate::{
     syntax::StaticName,
 };
 
-use super::{BytecodeCompiler, StatementValue};
+use super::{BytecodeCompiler, StatementValue, statements_need_lexical_scope};
 
 impl BytecodeCompiler<'_> {
     pub(super) fn compile_if(
@@ -248,6 +248,7 @@ impl BytecodeCompiler<'_> {
         self.emit(BytecodeInstruction::Switch {
             discriminant: BytecodeBlock::compile_expression(discriminant, self.layout)?,
             cases: std::rc::Rc::from(bytecode_cases.into_boxed_slice()),
+            scoped: switch_needs_lexical_scope(cases),
         });
         Ok(())
     }
@@ -399,4 +400,10 @@ fn for_init_needs_lexical_scope(init: Option<&Stmt>) -> bool {
         }),
         Some(_) | None => false,
     }
+}
+
+fn switch_needs_lexical_scope(cases: &[SwitchCase]) -> bool {
+    cases
+        .iter()
+        .any(|case| statements_need_lexical_scope(&case.statements))
 }
