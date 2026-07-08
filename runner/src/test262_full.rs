@@ -18,7 +18,8 @@ use super::{
     },
 };
 
-const CORPUS_NAME: &str = "Test262 full corpus";
+const FILE_CORPUS_NAME: &str = "Test262 file conformance";
+const VARIANT_CORPUS_NAME: &str = "Test262 full corpus";
 const TEST262_TEST_ROOT: &str = "test";
 const TEST262_RUN_ALL_ENV: &str = "RSQJS_TEST262_RUN_ALL";
 const TEST262_PATH_FILTER_ENV: &str = "RSQJS_TEST262_PATH_FILTER";
@@ -28,37 +29,53 @@ const UNKNOWN_AREA: &str = "unknown";
 
 type FeatureStatsByArea = BTreeMap<String, FeatureAreaStats>;
 
-pub fn run(test262_dir: Option<&Path>) -> CorpusReport {
+#[derive(Debug)]
+struct CorpusBuilder {
+    rows: Vec<CaseRow>,
+    feature_stats: FeatureStatsByArea,
+    stats: CorpusStats,
+}
+
+impl CorpusBuilder {
+    const fn new() -> Self {
+        Self {
+            rows: Vec::new(),
+            feature_stats: FeatureStatsByArea::new(),
+            stats: CorpusStats {
+                total: 0,
+                passed: 0,
+                failed: 0,
+                skipped: 0,
+            },
+        }
+    }
+
+    fn into_report(self, name: &'static str) -> CorpusReport {
+        CorpusReport {
+            name,
+            required: false,
+            stats: self.stats,
+            rows: self.rows,
+            skip_reasons: Vec::new(),
+            feature_areas: feature_area_rows(self.feature_stats.into_values().collect()),
+        }
+    }
+}
+
+pub fn run_reports(test262_dir: Option<&Path>) -> Vec<CorpusReport> {
     let Some(test262_dir) = test262_dir else {
-        return unavailable_report();
+        return vec![unavailable_report()];
     };
 
     match execute_full_corpus(test262_dir) {
-        Ok(report) => report,
-        Err(error) => CorpusReport {
-            name: CORPUS_NAME,
-            required: false,
-            stats: CorpusStats {
-                total: 1,
-                passed: 0,
-                failed: 1,
-                skipped: 0,
-            },
-            rows: vec![CaseRow {
-                case: "test262-full-discovery".to_owned(),
-                status: STATUS_FAILED.to_owned(),
-                source: test262_dir.display().to_string(),
-                detail: error.to_string(),
-            }],
-            skip_reasons: Vec::new(),
-            feature_areas: Vec::new(),
-        },
+        Ok(reports) => reports,
+        Err(error) => vec![error_report(test262_dir, &error)],
     }
 }
 
 fn unavailable_report() -> CorpusReport {
     CorpusReport {
-        name: CORPUS_NAME,
+        name: VARIANT_CORPUS_NAME,
         required: false,
         stats: CorpusStats {
             total: 0,
@@ -75,38 +92,50 @@ fn unavailable_report() -> CorpusReport {
     }
 }
 
-fn execute_full_corpus(test262_dir: &Path) -> anyhow::Result<CorpusReport> {
+fn error_report(test262_dir: &Path, error: &anyhow::Error) -> CorpusReport {
+    CorpusReport {
+        name: VARIANT_CORPUS_NAME,
+        required: false,
+        stats: CorpusStats {
+            total: 1,
+            passed: 0,
+            failed: 1,
+            skipped: 0,
+        },
+        rows: vec![CaseRow {
+            case: "test262-full-discovery".to_owned(),
+            status: STATUS_FAILED.to_owned(),
+            source: test262_dir.display().to_string(),
+            detail: error.to_string(),
+        }],
+        skip_reasons: Vec::new(),
+        feature_areas: Vec::new(),
+    }
+}
+
+fn execute_full_corpus(test262_dir: &Path) -> anyhow::Result<Vec<CorpusReport>> {
     let discovered = discover_test_files(test262_dir)?;
     let test_paths = filtered_test_paths(test262_dir, &discovered)?;
     if should_run_all() {
-        return Ok(execute_metadata_corpus(test262_dir, &test_paths));
+        return Ok(execute_metadata_corpora(test262_dir, &test_paths));
     }
-    execute_manifest_corpus(test262_dir, &test_paths)
+    Ok(vec![execute_manifest_corpus(test262_dir, &test_paths)?])
 }
 
-fn execute_metadata_corpus(test262_dir: &Path, test_paths: &[String]) -> CorpusReport {
-    let mut rows = Vec::<CaseRow>::new();
-    let mut feature_stats = FeatureStatsByArea::new();
-    record_manifest_enabled_cases(&mut feature_stats);
-    let mut stats = CorpusStats {
-        total: 0,
-        passed: 0,
-        failed: 0,
-        skipped: 0,
-    };
+fn execute_metadata_corpora(test262_dir: &Path, test_paths: &[String]) -> Vec<CorpusReport> {
+    let mut files = CorpusBuilder::new();
+    let mut variants = CorpusBuilder::new();
+    record_manifest_enabled_cases(&mut files.feature_stats);
+    record_manifest_enabled_cases(&mut variants.feature_stats);
 
     for path in test_paths {
-        run_discovered_case(test262_dir, path, &mut stats, &mut rows, &mut feature_stats);
+        run_discovered_case(test262_dir, path, &mut files, &mut variants);
     }
 
-    CorpusReport {
-        name: CORPUS_NAME,
-        required: false,
-        stats,
-        rows,
-        skip_reasons: Vec::new(),
-        feature_areas: feature_area_rows(feature_stats.into_values().collect()),
-    }
+    vec![
+        files.into_report(FILE_CORPUS_NAME),
+        variants.into_report(VARIANT_CORPUS_NAME),
+    ]
 }
 
 fn execute_manifest_corpus(
@@ -172,7 +201,7 @@ fn execute_manifest_corpus(
     }
 
     Ok(CorpusReport {
-        name: CORPUS_NAME,
+        name: VARIANT_CORPUS_NAME,
         required: false,
         stats,
         rows,
@@ -257,47 +286,62 @@ fn parse_env_list(value: &str) -> Vec<String> {
 fn run_discovered_case(
     test262_dir: &Path,
     path: &str,
-    stats: &mut CorpusStats,
-    rows: &mut Vec<CaseRow>,
-    feature_stats: &mut FeatureStatsByArea,
+    files: &mut CorpusBuilder,
+    variants: &mut CorpusBuilder,
 ) {
     match execute_test262_path(test262_dir, path) {
         Ok(results) => {
+            record_file_result(path, &results, files);
             for result in results {
-                record_discovered_result(path, result, stats, rows, feature_stats);
+                record_discovered_result(path, result, variants);
             }
         }
         Err(error) => {
-            stats.total = stats.total.saturating_add(1);
-            stats.failed = stats.failed.saturating_add(1);
-            feature_stats_for(feature_stats, path).record_failed();
-            rows.push(CaseRow {
-                case: path.to_owned(),
-                status: STATUS_FAILED.to_owned(),
-                source: source_label(path),
-                detail: error.to_string(),
-            });
+            let detail = error.to_string();
+            record_failed_case(path, path, &detail, files);
+            record_failed_case(path, path, &detail, variants);
         }
     }
 }
 
-fn record_discovered_result(
-    path: &str,
-    result: Test262CaseResult,
-    stats: &mut CorpusStats,
-    rows: &mut Vec<CaseRow>,
-    feature_stats: &mut FeatureStatsByArea,
-) {
-    stats.total = stats.total.saturating_add(1);
+fn record_file_result(path: &str, results: &[Test262CaseResult], files: &mut CorpusBuilder) {
+    let mut failed_variants = Vec::<String>::new();
+    for result in results {
+        if matches!(result.outcome, Test262Outcome::Failed(_)) {
+            failed_variants.push(variant_suffix(&result.id).to_owned());
+        }
+    }
+
+    files.stats.total = files.stats.total.saturating_add(1);
+    if failed_variants.is_empty() {
+        files.stats.passed = files.stats.passed.saturating_add(1);
+        feature_stats_for(&mut files.feature_stats, path).record_passed();
+    } else {
+        files.stats.failed = files.stats.failed.saturating_add(1);
+        feature_stats_for(&mut files.feature_stats, path).record_failed();
+        files.rows.push(CaseRow {
+            case: path.to_owned(),
+            status: STATUS_FAILED.to_owned(),
+            source: source_label(path),
+            detail: format!(
+                "required Test262 variant(s) failed: {}",
+                failed_variants.join(", ")
+            ),
+        });
+    }
+}
+
+fn record_discovered_result(path: &str, result: Test262CaseResult, variants: &mut CorpusBuilder) {
+    variants.stats.total = variants.stats.total.saturating_add(1);
     match result.outcome {
         Test262Outcome::Passed => {
-            stats.passed = stats.passed.saturating_add(1);
-            feature_stats_for(feature_stats, path).record_passed();
+            variants.stats.passed = variants.stats.passed.saturating_add(1);
+            feature_stats_for(&mut variants.feature_stats, path).record_passed();
         }
         Test262Outcome::Failed(detail) => {
-            stats.failed = stats.failed.saturating_add(1);
-            feature_stats_for(feature_stats, path).record_failed();
-            rows.push(CaseRow {
+            variants.stats.failed = variants.stats.failed.saturating_add(1);
+            feature_stats_for(&mut variants.feature_stats, path).record_failed();
+            variants.rows.push(CaseRow {
                 case: result.id,
                 status: STATUS_FAILED.to_owned(),
                 source: source_label(path),
@@ -305,6 +349,25 @@ fn record_discovered_result(
             });
         }
     }
+}
+
+fn record_failed_case(case: &str, path: &str, detail: &str, corpus: &mut CorpusBuilder) {
+    corpus.stats.total = corpus.stats.total.saturating_add(1);
+    corpus.stats.failed = corpus.stats.failed.saturating_add(1);
+    feature_stats_for(&mut corpus.feature_stats, path).record_failed();
+    corpus.rows.push(CaseRow {
+        case: case.to_owned(),
+        status: STATUS_FAILED.to_owned(),
+        source: source_label(path),
+        detail: detail.to_owned(),
+    });
+}
+
+fn variant_suffix(case_id: &str) -> &str {
+    let Some((_, variant)) = case_id.rsplit_once('#') else {
+        return "unknown";
+    };
+    variant
 }
 
 fn run_enabled_case(
@@ -493,8 +556,9 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        Test262Filter, default_skip_reason, is_standalone_js_test_file, parse_env_list,
-        test262_area, test262_feature_area,
+        CorpusBuilder, Test262CaseResult, Test262Filter, Test262Outcome, default_skip_reason,
+        is_standalone_js_test_file, parse_env_list, record_file_result, test262_area,
+        test262_feature_area,
     };
 
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -571,6 +635,56 @@ mod tests {
         ensure_texts(&items, &["async", "generated"])
     }
 
+    #[test]
+    fn collapses_passed_variants_to_one_passed_file() -> TestResult {
+        let results = vec![
+            passed_case("test/example.js#default"),
+            passed_case("test/example.js#strict"),
+        ];
+        let mut files = CorpusBuilder::new();
+
+        record_file_result("test/example.js", &results, &mut files);
+
+        ensure_usize(files.stats.total, 1)?;
+        ensure_usize(files.stats.passed, 1)?;
+        ensure_usize(files.stats.failed, 0)?;
+        ensure_usize(files.rows.len(), 0)
+    }
+
+    #[test]
+    fn collapses_failed_variant_to_one_failed_file() -> TestResult {
+        let results = vec![
+            passed_case("test/example.js#default"),
+            failed_case("test/example.js#strict"),
+        ];
+        let mut files = CorpusBuilder::new();
+
+        record_file_result("test/example.js", &results, &mut files);
+
+        ensure_usize(files.stats.total, 1)?;
+        ensure_usize(files.stats.passed, 0)?;
+        ensure_usize(files.stats.failed, 1)?;
+        let Some(row) = files.rows.first() else {
+            return Err("expected failed file row".into());
+        };
+        ensure_text(&row.case, "test/example.js")?;
+        ensure_text(&row.detail, "required Test262 variant(s) failed: strict")
+    }
+
+    fn passed_case(id: &str) -> Test262CaseResult {
+        Test262CaseResult {
+            id: id.to_owned(),
+            outcome: Test262Outcome::Passed,
+        }
+    }
+
+    fn failed_case(id: &str) -> Test262CaseResult {
+        Test262CaseResult {
+            id: id.to_owned(),
+            outcome: Test262Outcome::Failed("failed".to_owned()),
+        }
+    }
+
     fn ensure_text(actual: &str, expected: &str) -> TestResult {
         if actual == expected {
             return Ok(());
@@ -595,5 +709,12 @@ mod tests {
             return Ok(());
         }
         Err("expected true".into())
+    }
+
+    fn ensure_usize(actual: usize, expected: usize) -> TestResult {
+        if actual == expected {
+            return Ok(());
+        }
+        Err(format!("expected {expected}, got {actual}").into())
     }
 }

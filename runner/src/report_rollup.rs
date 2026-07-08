@@ -17,6 +17,7 @@ const REPORT_SUFFIX: &str = ".md";
 const ROLLUP_FILE: &str = "benchmark-rollup.md";
 const SUMMARY_CHART_FILE: &str = "benchmark-summary.jpg";
 const PLAN_PATH: &str = "docs/project-plan.md";
+const TEST262_FILE_SECTION: &str = "Test262 file conformance";
 const TEST262_FULL_SECTION: &str = "Test262 full corpus";
 const METADATA_TESTED_COMMIT: &str = "Tested commit";
 const METADATA_PULL_REQUEST: &str = "Pull request";
@@ -165,7 +166,8 @@ fn parse_report(path: &Path) -> anyhow::Result<ReportRecord> {
         memory_geomean: geomean(&parsed_benchmarks.memory_values),
         latency_over: parsed_benchmarks.latency_over,
         memory_over: parsed_benchmarks.memory_over,
-        full_test262: parse_corpus_counts(&text, TEST262_FULL_SECTION),
+        full_test262: parse_corpus_counts(&text, TEST262_FILE_SECTION)
+            .or_else(|| parse_corpus_counts(&text, TEST262_FULL_SECTION)),
         context: parse_report_metadata_context(&text),
     })
 }
