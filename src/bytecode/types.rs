@@ -16,6 +16,7 @@ use super::numeric::{
     BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
     BytecodeNumericUnaryOp,
 };
+use super::{BytecodeCatchFastPath, BytecodeDirectThrow};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeProgram {
@@ -457,6 +458,8 @@ pub struct BytecodeSwitchCase {
 pub struct BytecodeCatch {
     pub param: Option<BytecodeBinding>,
     pub body: BytecodeBlock,
+    pub body_scoped: bool,
+    pub body_fast_path: Option<BytecodeCatchFastPath>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -694,8 +697,11 @@ pub enum BytecodeInstruction {
     },
     Try {
         body: BytecodeBlock,
+        body_scoped: bool,
+        body_direct_throw: Option<BytecodeDirectThrow>,
         catch: Option<BytecodeCatch>,
         finally_body: Option<BytecodeBlock>,
+        finally_scoped: bool,
     },
     Label {
         label: StaticName,

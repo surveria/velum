@@ -1,8 +1,10 @@
+mod fast_path;
 mod hoist;
 mod metrics;
 mod numeric;
 mod types;
 
+pub use fast_path::{BytecodeCatchFastPath, BytecodeDirectThrow};
 pub use hoist::BytecodeHoistPlan;
 pub use numeric::{
     BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
