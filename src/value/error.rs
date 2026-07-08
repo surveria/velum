@@ -2,6 +2,7 @@ use std::fmt;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ErrorName {
+    AggregateError,
     Base,
     EvalError,
     RangeError,
@@ -15,6 +16,7 @@ pub enum ErrorName {
 impl ErrorName {
     pub(crate) const fn as_str(self) -> &'static str {
         match self {
+            Self::AggregateError => "AggregateError",
             Self::Base => "Error",
             Self::EvalError => "EvalError",
             Self::RangeError => "RangeError",
@@ -28,6 +30,7 @@ impl ErrorName {
 
     pub(crate) fn from_constructor_name(name: &str) -> Option<Self> {
         match name {
+            "AggregateError" => Some(Self::AggregateError),
             "Error" => Some(Self::Base),
             "EvalError" => Some(Self::EvalError),
             "RangeError" => Some(Self::RangeError),
@@ -42,6 +45,13 @@ impl ErrorName {
 
     pub(crate) const fn is_standard(self) -> bool {
         !matches!(self, Self::Test262Error)
+    }
+
+    pub(crate) const fn constructor_length(self) -> f64 {
+        if matches!(self, Self::AggregateError) {
+            return 2.0;
+        }
+        1.0
     }
 }
 

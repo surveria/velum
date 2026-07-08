@@ -32,7 +32,8 @@ const BOOLEAN_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const BOOLEAN_NAME: &str = "Boolean";
 const EVAL_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const EVAL_NAME: &str = "eval";
-const ERROR_FUNCTION_LENGTH: f64 = 1.0;
+const ERROR_PROTOTYPE_TO_STRING_LENGTH: f64 = 0.0;
+pub(in crate::runtime::native) const ERROR_PROTOTYPE_TO_STRING_NAME: &str = "toString";
 const FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const FUNCTION_NAME: &str = "Function";
 const GLOBAL_DECODE_URI_FUNCTION_LENGTH: f64 = 1.0;
@@ -209,6 +210,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     BoundFunction(BoundFunctionId),
     Eval,
     ErrorConstructor(ErrorName),
+    ErrorPrototypeToString,
     Function,
     FunctionPrototypeBind,
     FunctionPrototypeCall,
@@ -444,7 +446,8 @@ impl NativeFunctionKind {
             Self::Boolean => Some(BOOLEAN_FUNCTION_LENGTH),
             Self::BoundFunction(_) => Some(BOUND_FUNCTION_LENGTH),
             Self::Eval => Some(EVAL_FUNCTION_LENGTH),
-            Self::ErrorConstructor(_) => Some(ERROR_FUNCTION_LENGTH),
+            Self::ErrorConstructor(name) => Some(name.constructor_length()),
+            Self::ErrorPrototypeToString => Some(ERROR_PROTOTYPE_TO_STRING_LENGTH),
             Self::Function => Some(FUNCTION_FUNCTION_LENGTH),
             Self::FunctionPrototypeBind => Some(FUNCTION_PROTOTYPE_BIND_LENGTH),
             Self::FunctionPrototypeCall => Some(FUNCTION_PROTOTYPE_CALL_LENGTH),
@@ -602,6 +605,7 @@ impl NativeFunctionKind {
             Self::BoundFunction(_) => Some(BOUND_FUNCTION_NAME),
             Self::Eval => Some(EVAL_NAME),
             Self::ErrorConstructor(name) => Some(name.as_str()),
+            Self::ErrorPrototypeToString => Some(ERROR_PROTOTYPE_TO_STRING_NAME),
             Self::Function => Some(FUNCTION_NAME),
             Self::FunctionPrototypeBind => Some(FUNCTION_PROTOTYPE_BIND_NAME),
             Self::FunctionPrototypeCall => Some(FUNCTION_PROTOTYPE_CALL_NAME),

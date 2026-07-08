@@ -4,9 +4,9 @@ use crate::{
     runtime::Context,
     runtime::binding::scope::BindingCell,
     runtime::call::RuntimeCallArgs,
-    runtime::object::{ObjectPropertyInit, PropertyEnumerable},
+    runtime::object::{ObjectPropertyInit, PropertyEnumerable, PropertyLookup},
     syntax::DeclKind,
-    value::{ErrorName, ErrorObject, NativeFunctionId, Value},
+    value::{ErrorName, ErrorObject, NativeFunctionId, ObjectId, Value},
 };
 
 use super::{
@@ -19,6 +19,9 @@ use super::{
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
+const ERROR_MESSAGE_PROPERTY: &str = "message";
+const ERROR_NAME_PROPERTY: &str = "name";
+const ERROR_PROTOTYPE_TO_STRING_NAME: &str = "toString";
 
 const fn native_kind_is_constructable(kind: NativeFunctionKind) -> bool {
     matches!(
@@ -204,12 +207,25 @@ impl Context {
             return Ok(Value::NativeFunction(id));
         }
 
+        let prototype_parent = self.error_prototype_parent(name)?;
         let id = self.next_native_function_id();
         let constructor = Value::NativeFunction(id);
-        let prototype = self.error_prototype_with_constructor(constructor.clone())?;
+        let prototype =
+            self.error_prototype_with_constructor(name, constructor.clone(), prototype_parent)?;
+        let Value::Object(prototype_id) = prototype else {
+            return Err(Error::runtime("Error prototype is not an object"));
+        };
         let function_kind = NativeFunctionKind::ErrorConstructor(name);
         let function_name = self.native_function_name_value(function_kind)?;
-        self.push_native_function_with_id(id, function_kind, prototype, function_name)?;
+        self.push_native_function_with_id(
+            id,
+            function_kind,
+            Value::Object(prototype_id),
+            function_name,
+        )?;
+        if matches!(name, ErrorName::Base) {
+            self.install_error_prototype_methods(prototype_id)?;
+        }
         self.insert_global_builtin(name.as_str(), constructor.clone())?;
         Ok(constructor)
     }
@@ -264,22 +280,91 @@ impl Context {
         Ok(Value::Object(prototype))
     }
 
-    fn error_prototype_with_constructor(&mut self, constructor: Value) -> Result<Value> {
+    pub(in crate::runtime) fn error_constructor_prototype(
+        &mut self,
+        name: ErrorName,
+    ) -> Result<ObjectId> {
+        let Value::NativeFunction(id) = self.error_constructor_value(name)? else {
+            return Err(Error::runtime("Error constructor value is not native"));
+        };
+        match self.native_function(id)?.properties().prototype() {
+            Value::Object(id) => Ok(id),
+            _ => Err(Error::runtime("Error prototype is not an object")),
+        }
+    }
+
+    pub(in crate::runtime) fn error_prototype_property_value(
+        &mut self,
+        name: ErrorName,
+        property: &str,
+    ) -> Result<Value> {
+        let prototype = self.error_constructor_prototype(name)?;
+        self.get_property_value(&Value::Object(prototype), property)
+    }
+
+    pub(in crate::runtime) fn error_prototype_has_property(
+        &mut self,
+        name: ErrorName,
+        property: PropertyLookup<'_>,
+    ) -> Result<bool> {
+        let prototype = self.error_constructor_prototype(name)?;
+        self.objects.has(prototype, property)
+    }
+
+    fn error_prototype_parent(&mut self, name: ErrorName) -> Result<Option<ObjectId>> {
+        if matches!(name, ErrorName::Base) {
+            return Ok(None);
+        }
+        self.error_constructor_prototype(ErrorName::Base).map(Some)
+    }
+
+    fn error_prototype_with_constructor(
+        &mut self,
+        name: ErrorName,
+        constructor: Value,
+        prototype_parent: Option<ObjectId>,
+    ) -> Result<Value> {
         let constructor_key = self.object_constructor_property_key()?;
-        self.objects
-            .create_with_prototype_property(
-                None,
-                ObjectPropertyInit::new(
-                    constructor_key,
-                    OBJECT_CONSTRUCTOR_PROPERTY,
-                    constructor,
-                    PropertyEnumerable::No,
-                ),
+        let prototype = self.objects.create_with_prototype_property(
+            prototype_parent,
+            ObjectPropertyInit::new(
                 constructor_key,
-                self.limits.max_objects,
-                self.limits.max_object_properties,
-            )
-            .map(Value::Object)
+                OBJECT_CONSTRUCTOR_PROPERTY,
+                constructor,
+                PropertyEnumerable::No,
+            ),
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
+        self.install_error_prototype_properties(name, prototype)?;
+        Ok(Value::Object(prototype))
+    }
+
+    fn install_error_prototype_properties(
+        &mut self,
+        name: ErrorName,
+        prototype: ObjectId,
+    ) -> Result<()> {
+        let name_value = self.heap_string_value(name.as_str())?;
+        self.define_non_enumerable_object_property(prototype, ERROR_NAME_PROPERTY, name_value)?;
+        let message_value = self.heap_string_value("")?;
+        self.define_non_enumerable_object_property(
+            prototype,
+            ERROR_MESSAGE_PROPERTY,
+            message_value,
+        )?;
+        Ok(())
+    }
+
+    fn install_error_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
+        let to_string = self
+            .create_native_function(NativeFunctionKind::ErrorPrototypeToString, Value::Undefined)?;
+        self.define_non_enumerable_object_property(
+            prototype,
+            ERROR_PROTOTYPE_TO_STRING_NAME,
+            to_string,
+        )
     }
 
     pub(in crate::runtime::native) fn create_native_function(
@@ -374,10 +459,71 @@ impl Context {
         name: ErrorName,
         args: &[Value],
     ) -> Result<Value> {
-        let message = args
-            .first()
-            .map_or_else(String::new, Value::display_for_concat);
+        let message_value = Self::error_constructor_message_argument(name, args);
+        let message = message_value.map_or_else(String::new, Value::display_for_concat);
         self.check_string_len(&message)?;
         Ok(Value::Error(ErrorObject::new(name, message)))
+    }
+
+    pub(in crate::runtime) fn eval_error_prototype_to_string(
+        &mut self,
+        _args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_direct_error_prototype_to_string(this_value)
+    }
+
+    pub(in crate::runtime) fn eval_direct_error_prototype_to_string(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<Value> {
+        if matches!(this_value, Value::Undefined | Value::Null) {
+            return Err(Error::type_error(
+                "Error.prototype.toString receiver is nullish",
+            ));
+        }
+        let name = self.error_to_string_property(this_value, ERROR_NAME_PROPERTY, "Error")?;
+        let message = self.error_to_string_property(this_value, ERROR_MESSAGE_PROPERTY, "")?;
+        let text = if name.is_empty() {
+            message
+        } else if message.is_empty() {
+            name
+        } else {
+            let capacity = name
+                .len()
+                .checked_add(message.len())
+                .and_then(|value| value.checked_add(2))
+                .ok_or_else(|| Error::limit("string length exceeded supported range"))?;
+            let mut text = String::with_capacity(capacity);
+            text.push_str(&name);
+            text.push_str(": ");
+            text.push_str(&message);
+            text
+        };
+        self.heap_string_owned_value(text)
+    }
+
+    fn error_constructor_message_argument(name: ErrorName, args: &[Value]) -> Option<&Value> {
+        if matches!(name, ErrorName::AggregateError) {
+            return args.get(1);
+        }
+        args.first()
+    }
+
+    fn error_to_string_property(
+        &mut self,
+        this_value: &Value,
+        property: &str,
+        default: &str,
+    ) -> Result<String> {
+        let value = self.get_property_value(this_value, property)?;
+        let text = match value {
+            Value::Undefined => default.to_owned(),
+            Value::String(value) => value,
+            Value::HeapString(value) => value.as_str().to_owned(),
+            _ => value.display_for_concat(),
+        };
+        self.check_string_len(&text)?;
+        Ok(text)
     }
 }
