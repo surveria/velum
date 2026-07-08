@@ -89,19 +89,32 @@ const MATH_FUNCTION_LENGTH_ZERO: f64 = 0.0;
 pub(in crate::runtime) const NAN_NAME: &str = "NaN";
 const NUMBER_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const NUMBER_NAME: &str = "Number";
+const OBJECT_ASSIGN_FUNCTION_LENGTH: f64 = 2.0;
+pub(in crate::runtime::native) const OBJECT_ASSIGN_NAME: &str = "assign";
+const OBJECT_CREATE_FUNCTION_LENGTH: f64 = 2.0;
+pub(in crate::runtime::native) const OBJECT_CREATE_NAME: &str = "create";
 const OBJECT_FUNCTION_LENGTH: f64 = 1.0;
+const OBJECT_DEFINE_PROPERTIES_FUNCTION_LENGTH: f64 = 2.0;
+pub(in crate::runtime::native) const OBJECT_DEFINE_PROPERTIES_NAME: &str = "defineProperties";
 const OBJECT_DEFINE_PROPERTY_FUNCTION_LENGTH: f64 = 3.0;
 pub(in crate::runtime::native) const OBJECT_DEFINE_PROPERTY_NAME: &str = "defineProperty";
+const OBJECT_ENTRIES_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const OBJECT_ENTRIES_NAME: &str = "entries";
 const OBJECT_GET_PROTOTYPE_OF_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_GET_PROTOTYPE_OF_NAME: &str = "getPrototypeOf";
 const OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME: &str =
     "getOwnPropertyDescriptor";
+const OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME: &str =
+    "getOwnPropertyDescriptors";
 const OBJECT_GET_OWN_PROPERTY_NAMES_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_GET_OWN_PROPERTY_NAMES_NAME: &str =
     "getOwnPropertyNames";
 const OBJECT_HAS_OWN_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const OBJECT_HAS_OWN_NAME: &str = "hasOwn";
+const OBJECT_IS_FUNCTION_LENGTH: f64 = 2.0;
+pub(in crate::runtime::native) const OBJECT_IS_NAME: &str = "is";
 const OBJECT_KEYS_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_KEYS_NAME: &str = "keys";
 pub(in crate::runtime::native) const OBJECT_NAME: &str = "Object";
@@ -110,6 +123,10 @@ pub(in crate::runtime) const OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME: &str = "has
 const OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime) const OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME: &str =
     "propertyIsEnumerable";
+const OBJECT_SET_PROTOTYPE_OF_FUNCTION_LENGTH: f64 = 2.0;
+pub(in crate::runtime::native) const OBJECT_SET_PROTOTYPE_OF_NAME: &str = "setPrototypeOf";
+const OBJECT_VALUES_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const OBJECT_VALUES_NAME: &str = "values";
 const PROMISE_CATCH_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const PROMISE_CATCH_NAME: &str = "catch";
 const PROMISE_FUNCTION_LENGTH: f64 = 1.0;
@@ -194,14 +211,22 @@ pub(in crate::runtime) enum NativeFunctionKind {
     MathTrunc,
     Number,
     Object,
+    ObjectAssign,
+    ObjectCreate,
+    ObjectDefineProperties,
     ObjectDefineProperty,
+    ObjectEntries,
     ObjectGetPrototypeOf,
     ObjectGetOwnPropertyDescriptor,
+    ObjectGetOwnPropertyDescriptors,
     ObjectGetOwnPropertyNames,
     ObjectHasOwn,
+    ObjectIs,
     ObjectKeys,
     ObjectPrototypeHasOwnProperty,
     ObjectPrototypePropertyIsEnumerable,
+    ObjectSetPrototypeOf,
+    ObjectValues,
     Promise,
     PromiseResolve,
     PromiseReject,
@@ -280,13 +305,21 @@ impl NativeFunctionKind {
             | Self::MathPow => MATH_FUNCTION_LENGTH_TWO,
             Self::Number => NUMBER_FUNCTION_LENGTH,
             Self::Object => OBJECT_FUNCTION_LENGTH,
+            Self::ObjectAssign => OBJECT_ASSIGN_FUNCTION_LENGTH,
+            Self::ObjectCreate => OBJECT_CREATE_FUNCTION_LENGTH,
+            Self::ObjectDefineProperties => OBJECT_DEFINE_PROPERTIES_FUNCTION_LENGTH,
             Self::ObjectDefineProperty => OBJECT_DEFINE_PROPERTY_FUNCTION_LENGTH,
+            Self::ObjectEntries => OBJECT_ENTRIES_FUNCTION_LENGTH,
             Self::ObjectGetPrototypeOf => OBJECT_GET_PROTOTYPE_OF_FUNCTION_LENGTH,
             Self::ObjectGetOwnPropertyDescriptor => {
                 OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH
             }
+            Self::ObjectGetOwnPropertyDescriptors => {
+                OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_FUNCTION_LENGTH
+            }
             Self::ObjectGetOwnPropertyNames => OBJECT_GET_OWN_PROPERTY_NAMES_FUNCTION_LENGTH,
             Self::ObjectHasOwn => OBJECT_HAS_OWN_FUNCTION_LENGTH,
+            Self::ObjectIs => OBJECT_IS_FUNCTION_LENGTH,
             Self::ObjectKeys => OBJECT_KEYS_FUNCTION_LENGTH,
             Self::ObjectPrototypeHasOwnProperty => {
                 OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_FUNCTION_LENGTH
@@ -294,6 +327,8 @@ impl NativeFunctionKind {
             Self::ObjectPrototypePropertyIsEnumerable => {
                 OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_FUNCTION_LENGTH
             }
+            Self::ObjectSetPrototypeOf => OBJECT_SET_PROTOTYPE_OF_FUNCTION_LENGTH,
+            Self::ObjectValues => OBJECT_VALUES_FUNCTION_LENGTH,
             Self::Promise => PROMISE_FUNCTION_LENGTH,
             Self::PromiseResolve => PROMISE_RESOLVE_FUNCTION_LENGTH,
             Self::PromiseReject => PROMISE_REJECT_FUNCTION_LENGTH,
@@ -369,16 +404,24 @@ impl NativeFunctionKind {
             Self::MathTrunc => MATH_TRUNC_NAME,
             Self::Number => NUMBER_NAME,
             Self::Object => OBJECT_NAME,
+            Self::ObjectAssign => OBJECT_ASSIGN_NAME,
+            Self::ObjectCreate => OBJECT_CREATE_NAME,
+            Self::ObjectDefineProperties => OBJECT_DEFINE_PROPERTIES_NAME,
             Self::ObjectDefineProperty => OBJECT_DEFINE_PROPERTY_NAME,
+            Self::ObjectEntries => OBJECT_ENTRIES_NAME,
             Self::ObjectGetPrototypeOf => OBJECT_GET_PROTOTYPE_OF_NAME,
             Self::ObjectGetOwnPropertyDescriptor => OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
+            Self::ObjectGetOwnPropertyDescriptors => OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME,
             Self::ObjectGetOwnPropertyNames => OBJECT_GET_OWN_PROPERTY_NAMES_NAME,
             Self::ObjectHasOwn => OBJECT_HAS_OWN_NAME,
+            Self::ObjectIs => OBJECT_IS_NAME,
             Self::ObjectKeys => OBJECT_KEYS_NAME,
             Self::ObjectPrototypeHasOwnProperty => OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
             Self::ObjectPrototypePropertyIsEnumerable => {
                 OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME
             }
+            Self::ObjectSetPrototypeOf => OBJECT_SET_PROTOTYPE_OF_NAME,
+            Self::ObjectValues => OBJECT_VALUES_NAME,
             Self::Promise => PROMISE_NAME,
             Self::PromiseResolve => PROMISE_RESOLVE_NAME,
             Self::PromiseReject => PROMISE_REJECT_NAME,

@@ -63,14 +63,24 @@ impl NativeFunctionKind {
             NativeCallTarget::MathTrunc => Self::MathTrunc,
             NativeCallTarget::Number => Self::Number,
             NativeCallTarget::Object => Self::Object,
+            NativeCallTarget::ObjectAssign => Self::ObjectAssign,
+            NativeCallTarget::ObjectCreate => Self::ObjectCreate,
+            NativeCallTarget::ObjectDefineProperties => Self::ObjectDefineProperties,
             NativeCallTarget::ObjectDefineProperty => Self::ObjectDefineProperty,
+            NativeCallTarget::ObjectEntries => Self::ObjectEntries,
             NativeCallTarget::ObjectGetOwnPropertyDescriptor => {
                 Self::ObjectGetOwnPropertyDescriptor
+            }
+            NativeCallTarget::ObjectGetOwnPropertyDescriptors => {
+                Self::ObjectGetOwnPropertyDescriptors
             }
             NativeCallTarget::ObjectGetOwnPropertyNames => Self::ObjectGetOwnPropertyNames,
             NativeCallTarget::ObjectGetPrototypeOf => Self::ObjectGetPrototypeOf,
             NativeCallTarget::ObjectHasOwn => Self::ObjectHasOwn,
+            NativeCallTarget::ObjectIs => Self::ObjectIs,
             NativeCallTarget::ObjectKeys => Self::ObjectKeys,
+            NativeCallTarget::ObjectSetPrototypeOf => Self::ObjectSetPrototypeOf,
+            NativeCallTarget::ObjectValues => Self::ObjectValues,
             NativeCallTarget::Promise => Self::Promise,
             NativeCallTarget::PromiseResolve => Self::PromiseResolve,
             NativeCallTarget::PromiseReject => Self::PromiseReject,
@@ -148,14 +158,24 @@ impl NativeFunctionKind {
             Self::MathTrunc => Some(NativeCallTarget::MathTrunc),
             Self::Number => Some(NativeCallTarget::Number),
             Self::Object => Some(NativeCallTarget::Object),
+            Self::ObjectAssign => Some(NativeCallTarget::ObjectAssign),
+            Self::ObjectCreate => Some(NativeCallTarget::ObjectCreate),
+            Self::ObjectDefineProperties => Some(NativeCallTarget::ObjectDefineProperties),
             Self::ObjectDefineProperty => Some(NativeCallTarget::ObjectDefineProperty),
+            Self::ObjectEntries => Some(NativeCallTarget::ObjectEntries),
             Self::ObjectGetPrototypeOf => Some(NativeCallTarget::ObjectGetPrototypeOf),
             Self::ObjectGetOwnPropertyDescriptor => {
                 Some(NativeCallTarget::ObjectGetOwnPropertyDescriptor)
             }
+            Self::ObjectGetOwnPropertyDescriptors => {
+                Some(NativeCallTarget::ObjectGetOwnPropertyDescriptors)
+            }
             Self::ObjectGetOwnPropertyNames => Some(NativeCallTarget::ObjectGetOwnPropertyNames),
             Self::ObjectHasOwn => Some(NativeCallTarget::ObjectHasOwn),
+            Self::ObjectIs => Some(NativeCallTarget::ObjectIs),
             Self::ObjectKeys => Some(NativeCallTarget::ObjectKeys),
+            Self::ObjectSetPrototypeOf => Some(NativeCallTarget::ObjectSetPrototypeOf),
+            Self::ObjectValues => Some(NativeCallTarget::ObjectValues),
             Self::Promise => Some(NativeCallTarget::Promise),
             Self::PromiseResolve => Some(NativeCallTarget::PromiseResolve),
             Self::PromiseReject => Some(NativeCallTarget::PromiseReject),

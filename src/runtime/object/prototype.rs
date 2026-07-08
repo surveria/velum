@@ -65,7 +65,7 @@ impl ObjectHeap {
         Ok(false)
     }
 
-    pub(super) fn set_prototype_value(&mut self, id: ObjectId, value: &Value) -> Result<()> {
+    pub(crate) fn set_prototype_value(&mut self, id: ObjectId, value: &Value) -> Result<()> {
         let prototype = match value {
             Value::Object(prototype) => Some(*prototype),
             Value::Null => None,
