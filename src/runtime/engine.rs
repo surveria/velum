@@ -27,7 +27,7 @@ impl Runtime {
     }
 
     #[must_use]
-    pub const fn context(&self) -> Context {
+    pub fn context(&self) -> Context {
         Context::new(self.limits)
     }
 

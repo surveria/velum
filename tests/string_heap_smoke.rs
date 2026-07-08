@@ -131,6 +131,37 @@ fn tracks_heap_strings_without_reallocating_repeated_runtime_strings() -> TestRe
 }
 
 #[test]
+fn string_concat_uses_heap_dedup_and_respects_limits() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+
+    let value = vm
+        .context()
+        .eval(r#"var name = "camera"; name + "-stream-" + 7"#)?;
+    ensure_value(&value, &Value::String("camera-stream-7".to_owned()))?;
+    let after_first = vm.resource_usage();
+
+    let repeated = vm
+        .context()
+        .eval(r#"var name = "camera"; name + "-stream-" + 7"#)?;
+    ensure_value(&repeated, &Value::String("camera-stream-7".to_owned()))?;
+    let after_repeated = vm.resource_usage();
+    ensure_usize(after_repeated.string_count, after_first.string_count)?;
+    ensure_usize(after_repeated.string_bytes, after_first.string_bytes)?;
+
+    let max_string_len = "camera-stream".len().saturating_sub(1);
+    let runtime = rs_quickjs::Runtime::with_limits(rs_quickjs::RuntimeLimits {
+        max_string_len,
+        ..rs_quickjs::RuntimeLimits::default()
+    });
+    let mut context = runtime.context();
+    let Err(error) = context.eval(r#""camera" + "-stream""#) else {
+        return Err("expected string concat limit to fail".into());
+    };
+    ensure_text(error.to_string().as_str(), "resource limit")
+}
+
+#[test]
 fn interns_error_properties_in_vm_heap() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
@@ -436,6 +467,13 @@ fn ensure_heap_string(actual: &Value, expected: &str) -> TestResult {
         value.as_str()
     )
     .into())
+}
+
+fn ensure_text(actual: &str, expected: &str) -> TestResult {
+    if actual.contains(expected) {
+        return Ok(());
+    }
+    Err(format!("expected text {actual:?} to contain {expected:?}").into())
 }
 
 fn ensure_usize(actual: usize, expected: usize) -> TestResult {
