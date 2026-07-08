@@ -50,6 +50,9 @@ impl Context {
             BytecodeInstruction::ConstructValueSpread => {
                 self.eval_bytecode_construct_value_spread(state, next)
             }
+            BytecodeInstruction::CreateClass { class } => {
+                self.eval_bytecode_create_class(state, class, next)
+            }
             BytecodeInstruction::Construct { .. }
             | BytecodeInstruction::ConstructValue { .. }
             | BytecodeInstruction::CreateFunction { .. }
@@ -290,6 +293,7 @@ impl Context {
                     bytecode,
                     constructable: *constructable,
                     is_async: *is_async,
+                    class_constructor: false,
                     new_target_mode: *new_target_mode,
                 })?;
                 state.stack.push(function);

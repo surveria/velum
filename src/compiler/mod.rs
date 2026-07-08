@@ -9,6 +9,7 @@ use crate::{
     binding_layout::BindingLayout,
     bytecode::{
         BytecodeAddress, BytecodeArrayIndex, BytecodeBinding, BytecodeBlock, BytecodeCallSite,
+        BytecodeClass, BytecodeClassMember, BytecodeClassMemberKey, BytecodeClassMemberKind,
         BytecodeCompletion, BytecodeDynamicProperty, BytecodeFunction, BytecodeFunctionParam,
         BytecodeHoistPlan, BytecodeInstruction, BytecodeNewTargetMode, BytecodeNumericBinaryOp,
         BytecodeNumericCompareOp, BytecodeNumericEqualityOp, BytecodeNumericUnaryOp,
@@ -141,6 +142,7 @@ impl<'a> BytecodeCompiler<'a> {
                 });
                 Ok(())
             }
+            Stmt::ClassDecl { name, class } => self.compile_class_declaration(name, class),
             Stmt::Switch {
                 discriminant,
                 cases,
@@ -305,6 +307,7 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::ForIn { .. }
             | BytecodeInstruction::ForOf { .. }
             | BytecodeInstruction::DestructurePattern { .. }
+            | BytecodeInstruction::CreateClass { .. }
             | BytecodeInstruction::Switch { .. }
             | BytecodeInstruction::Try { .. }
             | BytecodeInstruction::Label { .. }
@@ -313,6 +316,59 @@ impl<'a> BytecodeCompiler<'a> {
                 "bytecode jump patch target is not a jump instruction",
             )),
         }
+    }
+
+    fn compile_class_declaration(
+        &mut self,
+        name: &StaticBinding,
+        class: &crate::ast::ClassLiteral,
+    ) -> Result<()> {
+        self.compile_class_literal(class)?;
+        self.emit(BytecodeInstruction::DeclareBinding {
+            name: self.compile_binding(name)?,
+            kind: DeclKind::Let,
+            has_init: true,
+        });
+        Ok(())
+    }
+
+    pub(super) fn compile_class_literal(&mut self, class: &crate::ast::ClassLiteral) -> Result<()> {
+        let mut members = Vec::with_capacity(class.members.len());
+        for member in &class.members {
+            let key = match &member.key {
+                ObjectPropertyKey::Static(name) => BytecodeClassMemberKey::Static(name.clone()),
+                ObjectPropertyKey::Computed(expr) => {
+                    self.compile_expr(expr)?;
+                    BytecodeClassMemberKey::Computed
+                }
+            };
+            let kind = match member.kind {
+                crate::ast::ClassMemberKind::Method => BytecodeClassMemberKind::Method,
+                crate::ast::ClassMemberKind::Getter => BytecodeClassMemberKind::Getter,
+                crate::ast::ClassMemberKind::Setter => BytecodeClassMemberKind::Setter,
+            };
+            members.push(BytecodeClassMember {
+                key,
+                kind,
+                is_static: member.is_static,
+                id: member.id,
+                name: member.name.clone(),
+                bytecode: BytecodeFunction::compile(&member.params, &member.body, self.layout)?,
+            });
+        }
+        self.emit(BytecodeInstruction::CreateClass {
+            class: Rc::new(BytecodeClass {
+                name: class.name.clone(),
+                constructor_id: class.constructor.id,
+                constructor: BytecodeFunction::compile(
+                    &class.constructor.params,
+                    &class.constructor.body,
+                    self.layout,
+                )?,
+                members: members.into(),
+            }),
+        });
+        Ok(())
     }
 
     fn emit(&mut self, instruction: BytecodeInstruction) -> InstructionIndex {

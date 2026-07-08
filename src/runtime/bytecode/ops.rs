@@ -908,7 +908,7 @@ impl Context {
         Ok(())
     }
 
-    fn set_computed_method_name(&mut self, value: &Value, name: &str) -> Result<()> {
+    pub(super) fn set_computed_method_name(&mut self, value: &Value, name: &str) -> Result<()> {
         let Value::Function(id) = value else {
             return Ok(());
         };

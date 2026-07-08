@@ -374,6 +374,7 @@ impl Parser {
             }
             TokenKind::Identifier(name) => Expr::Identifier(self.static_binding_name(name)?),
             TokenKind::Function => self.function_expression(false)?,
+            TokenKind::Class => self.class_expression()?,
             TokenKind::Async => {
                 if self.peek_kind_is_no_line_terminator(0, &TokenKind::Function) {
                     self.consume(&TokenKind::Function, "expected 'function' after 'async'")?;

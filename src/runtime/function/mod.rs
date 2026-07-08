@@ -39,6 +39,7 @@ pub(super) struct BytecodeFunctionInit<'a> {
     pub(super) bytecode: &'a BytecodeFunction,
     pub(super) constructable: bool,
     pub(super) is_async: bool,
+    pub(super) class_constructor: bool,
     pub(super) new_target_mode: BytecodeNewTargetMode,
 }
 
@@ -101,6 +102,7 @@ impl Context {
             properties: FunctionProperties::new(prototype, intrinsic_defaults),
             constructable: init.constructable,
             is_async: init.is_async,
+            class_constructor: init.class_constructor,
             new_target: FunctionNewTarget::from_mode(
                 init.new_target_mode,
                 self.current_new_target()?,
@@ -115,6 +117,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: Value,
     ) -> Result<Value> {
+        self.reject_class_constructor_call(id)?;
         let new_target = self.function_direct_call_new_target(id)?;
         if self.function(id)?.is_async {
             return self.eval_async_function_with_this(id, args, this_value, new_target);
@@ -131,6 +134,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: Value,
     ) -> Result<Completion> {
+        self.reject_class_constructor_call(id)?;
         let new_target = self.function_direct_call_new_target(id)?;
         if self.function(id)?.is_async {
             let value = self.eval_async_function_with_this(id, args, this_value, new_target)?;
@@ -376,6 +380,16 @@ impl Context {
     pub(crate) fn function_enumerable_keys(&self, id: FunctionId) -> Result<Vec<String>> {
         let function = self.function(id)?;
         function.properties.keys(&self.atoms)
+    }
+
+    /// Class constructors are constructor-only callables.
+    fn reject_class_constructor_call(&self, id: FunctionId) -> Result<()> {
+        if self.function(id)?.class_constructor {
+            return Err(Error::type_error(
+                "Class constructor cannot be invoked without 'new'",
+            ));
+        }
+        Ok(())
     }
 
     pub(crate) fn function_constructor_prototype(

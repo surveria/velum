@@ -98,6 +98,7 @@ struct Function {
     properties: function::FunctionProperties,
     constructable: bool,
     is_async: bool,
+    class_constructor: bool,
     new_target: FunctionNewTarget,
 }
 

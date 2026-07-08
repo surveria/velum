@@ -75,6 +75,9 @@ impl Parser {
         if self.match_kind(&TokenKind::Function) {
             return self.function_declaration(false);
         }
+        if self.match_kind(&TokenKind::Class) {
+            return self.class_declaration();
+        }
         if self.match_kind(&TokenKind::Let) {
             return self.var_decl(DeclKind::Let);
         }
@@ -234,6 +237,7 @@ impl Parser {
             | Stmt::Throw(_)
             | Stmt::Return(_)
             | Stmt::PatternDecl { .. }
+            | Stmt::ClassDecl { .. }
             | Stmt::VarDecl {
                 kind: DeclKind::Var,
                 ..

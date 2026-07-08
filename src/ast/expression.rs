@@ -39,6 +39,7 @@ pub enum Expr {
     Literal(Value),
     StringLiteral(StaticString),
     Spread(Box<Self>),
+    Class(Box<crate::ast::ClassLiteral>),
     TemplateLiteral {
         quasis: Vec<StaticString>,
         expressions: Vec<Self>,

@@ -39,6 +39,7 @@ impl BytecodeCompiler<'_> {
                     self.compile_binding(name)?,
                 ));
             }
+            Expr::Class(class) => return self.compile_class_literal(class),
             Expr::Spread(_) => {
                 return Err(Error::runtime(
                     "spread is only valid in call arguments and literals",

@@ -2,7 +2,9 @@ use std::rc::Rc;
 
 use crate::syntax::DeclKind;
 
-use super::{BindingPattern, Expr, FunctionParam, StaticBinding, StaticFunctionId, StaticName};
+use super::{
+    BindingPattern, ClassLiteral, Expr, FunctionParam, StaticBinding, StaticFunctionId, StaticName,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
@@ -76,6 +78,10 @@ pub enum Stmt {
         pattern: BindingPattern,
         kind: DeclKind,
         init: Expr,
+    },
+    ClassDecl {
+        name: StaticBinding,
+        class: Box<ClassLiteral>,
     },
     Expr(Expr),
 }

@@ -256,6 +256,7 @@ impl CaptureBindingCollector {
                 self.collect_expr(init);
                 self.collect_pattern(pattern);
             }
+            Stmt::ClassDecl { class, .. } => self.collect_class(class),
             Stmt::Empty | Stmt::Break(_) | Stmt::Continue(_) => {}
         }
     }
@@ -265,6 +266,16 @@ impl CaptureBindingCollector {
             ForInTarget::Binding { .. } => {}
             ForInTarget::PatternBinding { pattern, .. } => self.collect_pattern(pattern),
             ForInTarget::Assignment(expr) => self.collect_expr(expr),
+        }
+    }
+
+    fn collect_class(&mut self, class: &crate::ast::ClassLiteral) {
+        self.collect_function_body(&class.constructor.params, &class.constructor.body);
+        for member in &class.members {
+            if let crate::ast::ObjectPropertyKey::Computed(key) = &member.key {
+                self.collect_expr(key);
+            }
+            self.collect_function_body(&member.params, &member.body);
         }
     }
 
@@ -302,6 +313,7 @@ impl CaptureBindingCollector {
             Expr::Function { params, body, .. }
             | Expr::ArrowFunction { params, body, .. }
             | Expr::MethodFunction { params, body, .. } => self.collect_function_body(params, body),
+            Expr::Class(class) => self.collect_class(class),
             Expr::Identifier(binding) => self.collect_binding(binding),
             Expr::New { constructor, args } => {
                 self.collect_expr(constructor);

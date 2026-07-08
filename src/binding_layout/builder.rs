@@ -105,6 +105,7 @@ impl LayoutBuilder {
                 DeclKind::Var => self.declare_pattern(pattern, var_scope),
                 DeclKind::Let | DeclKind::Const => self.declare_pattern(pattern, scope),
             },
+            Stmt::ClassDecl { name, .. } => self.declare(scope, name),
             Stmt::FunctionDecl { .. }
             | Stmt::Empty
             | Stmt::Block(_)
@@ -210,6 +211,7 @@ impl LayoutBuilder {
             } => self.declare_pattern(pattern, var_scope),
             Stmt::VarDecl { .. }
             | Stmt::PatternDecl { .. }
+            | Stmt::ClassDecl { .. }
             | Stmt::Empty
             | Stmt::Break(_)
             | Stmt::Continue(_)
@@ -307,6 +309,7 @@ impl LayoutBuilder {
                 self.analyze_expr(init, scope, function)?;
                 self.analyze_pattern_exprs(pattern, scope, function)
             }
+            Stmt::ClassDecl { class, .. } => self.analyze_class(class, scope, function),
         }
     }
 
@@ -403,6 +406,28 @@ impl LayoutBuilder {
         pattern.for_each_expr(&mut |expr| self.analyze_expr(expr, scope, function))
     }
 
+    fn analyze_class(
+        &mut self,
+        class: &crate::ast::ClassLiteral,
+        scope: ScopeId,
+        function: FunctionScopeId,
+    ) -> Result<()> {
+        self.analyze_function(
+            class.constructor.id,
+            &class.constructor.params,
+            &class.constructor.body,
+            scope,
+            function,
+        )?;
+        for member in &class.members {
+            if let crate::ast::ObjectPropertyKey::Computed(key) = &member.key {
+                self.analyze_expr(key, scope, function)?;
+            }
+            self.analyze_function(member.id, &member.params, &member.body, scope, function)?;
+        }
+        Ok(())
+    }
+
     fn analyze_switch(
         &mut self,
         discriminant: &Expr,
@@ -481,6 +506,7 @@ impl LayoutBuilder {
                 self.analyze_exprs(expressions, scope, function)
             }
             Expr::Identifier(binding) => self.resolve(binding, scope, function),
+            Expr::Class(class) => self.analyze_class(class, scope, function),
             Expr::Parenthesized(expr)
             | Expr::Spread(expr)
             | Expr::Unary { expr, .. }
