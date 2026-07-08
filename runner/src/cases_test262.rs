@@ -1,5 +1,10 @@
 use super::{EngineCase, Expectation};
 
+#[path = "cases_test262_string.rs"]
+mod cases_test262_string;
+
+use cases_test262_string::test262_string_builtin_cases;
+
 const PATH_TEST262_ARITHMETIC: &str =
     "tests/corpora/test262/active/language/expressions/arithmetic.js";
 const PATH_TEST262_NUMERIC_LITERALS: &str =
@@ -66,12 +71,6 @@ const PATH_TEST262_BOOLEAN_PROTOTYPE_METHODS: &str =
     "tests/corpora/test262/active/built-ins/Boolean/prototype_methods.js";
 const PATH_TEST262_NUMBER_PROTOTYPE_METHODS: &str =
     "tests/corpora/test262/active/built-ins/Number/prototype_methods.js";
-const PATH_TEST262_STRING_BUILTIN: &str =
-    "tests/corpora/test262/active/built-ins/String/constructor.js";
-const PATH_TEST262_STRING_PROTOTYPE_METHODS: &str =
-    "tests/corpora/test262/active/built-ins/String/prototype_methods.js";
-const PATH_TEST262_STRING_STATIC_UNICODE_METHODS: &str =
-    "tests/corpora/test262/active/built-ins/String/static_unicode_methods.js";
 const PATH_TEST262_SYMBOL_PROTOTYPE_METHODS: &str =
     "tests/corpora/test262/active/built-ins/Symbol/prototype_methods.js";
 const PATH_TEST262_COMPUTED_PROPERTIES: &str =
@@ -611,26 +610,6 @@ fn test262_object_builtin_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "built-ins/Object/integrity-methods",
             path: PATH_TEST262_OBJECT_INTEGRITY_METHODS,
-            expectation: Expectation::Value("42"),
-        },
-    ]
-}
-
-fn test262_string_builtin_cases() -> Vec<EngineCase> {
-    vec![
-        EngineCase {
-            id: "built-ins/String/constructor",
-            path: PATH_TEST262_STRING_BUILTIN,
-            expectation: Expectation::Value("42"),
-        },
-        EngineCase {
-            id: "built-ins/String/prototype-methods",
-            path: PATH_TEST262_STRING_PROTOTYPE_METHODS,
-            expectation: Expectation::Value("42"),
-        },
-        EngineCase {
-            id: "built-ins/String/static-unicode-methods",
-            path: PATH_TEST262_STRING_STATIC_UNICODE_METHODS,
             expectation: Expectation::Value("42"),
         },
     ]

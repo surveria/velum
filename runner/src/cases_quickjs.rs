@@ -85,6 +85,8 @@ const PATH_QUICKJS_STRING_BUILTIN: &str =
     "tests/corpora/quickjs_differential/active/string_builtin.js";
 const PATH_QUICKJS_STRING_PROTOTYPE_METHODS: &str =
     "tests/corpora/quickjs_differential/active/string_prototype_methods.js";
+const PATH_QUICKJS_STRING_REGEXP_INTEROP: &str =
+    "tests/corpora/quickjs_differential/active/string_regexp_interop.js";
 const PATH_QUICKJS_STRING_STATIC_UNICODE_METHODS: &str =
     "tests/corpora/quickjs_differential/active/string_static_unicode_methods.js";
 const PATH_QUICKJS_COMPUTED_PROPERTIES: &str =
@@ -546,6 +548,10 @@ fn quickjs_runtime_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "string_prototype_methods",
             path: PATH_QUICKJS_STRING_PROTOTYPE_METHODS,
+        },
+        DifferentialCase {
+            id: "string_regexp_interop",
+            path: PATH_QUICKJS_STRING_REGEXP_INTEROP,
         },
         DifferentialCase {
             id: "string_static_unicode_methods",

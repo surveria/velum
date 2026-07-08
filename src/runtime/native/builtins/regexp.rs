@@ -199,7 +199,11 @@ impl Context {
         Ok(())
     }
 
-    fn regexp_exec(&mut self, this_value: &Value, input: &str) -> Result<Value> {
+    pub(in crate::runtime::native) fn regexp_exec(
+        &mut self,
+        this_value: &Value,
+        input: &str,
+    ) -> Result<Value> {
         let Value::Object(id) = this_value else {
             return Err(Error::type_error(REGEXP_RECEIVER_ERROR));
         };
@@ -224,6 +228,27 @@ impl Context {
         if flags.global() || flags.sticky() {
             self.set_regexp_last_index(this_value, matched.end)?;
         }
+        self.regexp_match_array(input, matched.start, matched.end)
+    }
+
+    pub(in crate::runtime::native) fn regexp_exec_from(
+        &mut self,
+        this_value: &Value,
+        input: &str,
+        start: usize,
+    ) -> Result<Value> {
+        let Value::Object(id) = this_value else {
+            return Err(Error::type_error(REGEXP_RECEIVER_ERROR));
+        };
+        let regexp = self
+            .objects
+            .regexp_value(*id)?
+            .cloned()
+            .ok_or_else(|| Error::type_error(REGEXP_RECEIVER_ERROR))?;
+        let flags = RegExpFlags::parse(regexp.flags())?;
+        let Some(matched) = regexp_find(regexp.pattern(), &flags, input, start)? else {
+            return Ok(Value::Null);
+        };
         self.regexp_match_array(input, matched.start, matched.end)
     }
 
