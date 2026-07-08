@@ -129,6 +129,7 @@ impl BytecodeCompiler<'_> {
             | Stmt::Return(_)
             | Stmt::FunctionDecl { .. }
             | Stmt::VarDecl { .. }
+            | Stmt::PatternDecl { .. }
             | Stmt::Expr(_) => {}
         }
         self.emit(BytecodeInstruction::Label {
@@ -310,6 +311,12 @@ impl BytecodeCompiler<'_> {
                 name: self.compile_binding(name)?,
                 kind: *kind,
             }),
+            ForInTarget::PatternBinding { pattern, kind } => {
+                Ok(BytecodeForInTarget::PatternBinding {
+                    pattern: Rc::new(self.compile_pattern(pattern)?),
+                    kind: *kind,
+                })
+            }
             ForInTarget::Assignment(expr) => self
                 .compile_assignment_target(expr)
                 .map(BytecodeForInTarget::Assignment),
