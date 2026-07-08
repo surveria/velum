@@ -3,8 +3,8 @@ use std::rc::Rc;
 use crate::{
     api::native_call::NativeCallTarget,
     ast::{
-        BinaryOp, DeclKind, Expr, ObjectProperty, ObjectPropertyKey, Program, StaticBinding,
-        StaticPropertyAccessId, Stmt, UnaryOp, UpdateOp,
+        BinaryOp, DeclKind, Expr, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, Program,
+        StaticBinding, StaticPropertyAccessId, Stmt, UnaryOp, UpdateOp,
     },
     binding_layout::BindingLayout,
     bytecode::{
@@ -15,7 +15,7 @@ use crate::{
         BytecodeObjectProperty, BytecodeProgram, BytecodeProperty,
     },
     error::{Error, Result},
-    syntax::{StaticName, StaticString},
+    syntax::{AccessorKind, StaticName, StaticString},
 };
 
 mod call;
@@ -649,16 +649,29 @@ impl<'a> BytecodeCompiler<'a> {
     fn compile_object_literal(&mut self, properties: &[ObjectProperty]) -> Result<()> {
         let mut operands = Vec::with_capacity(properties.len());
         for property in properties {
+            let accessor = match property.kind {
+                ObjectPropertyKind::Init => None,
+                ObjectPropertyKind::Get => Some(AccessorKind::Getter),
+                ObjectPropertyKind::Set => Some(AccessorKind::Setter),
+            };
             match &property.key {
                 ObjectPropertyKey::Static(key) => {
-                    operands.push(BytecodeObjectProperty::Static(key.clone()));
+                    operands.push(accessor.map_or_else(
+                        || BytecodeObjectProperty::Static(key.clone()),
+                        |kind| BytecodeObjectProperty::StaticAccessor {
+                            key: key.clone(),
+                            kind,
+                        },
+                    ));
                 }
                 ObjectPropertyKey::Computed(expr) => {
                     self.compile_expr(expr)?;
-                    let property = if matches!(&property.value, Expr::MethodFunction { .. }) {
-                        BytecodeObjectProperty::ComputedMethod
-                    } else {
-                        BytecodeObjectProperty::Computed
+                    let property = match accessor {
+                        Some(kind) => BytecodeObjectProperty::ComputedAccessor { kind },
+                        None if matches!(&property.value, Expr::MethodFunction { .. }) => {
+                            BytecodeObjectProperty::ComputedMethod
+                        }
+                        None => BytecodeObjectProperty::Computed,
                     };
                     operands.push(property);
                 }

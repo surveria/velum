@@ -6,8 +6,8 @@ use crate::{
     bytecode::BytecodeHoistPlan,
     error::{Error, Result},
     syntax::{
-        BinaryOp, DeclKind, StaticBinding, StaticCallSiteId, StaticFunctionId, StaticName,
-        StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
+        AccessorKind, BinaryOp, DeclKind, StaticBinding, StaticCallSiteId, StaticFunctionId,
+        StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
     },
     value::{ErrorName, Value},
 };
@@ -109,15 +109,17 @@ impl BytecodeFunctionParam {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum BytecodeObjectProperty {
     Static(StaticName),
+    StaticAccessor { key: StaticName, kind: AccessorKind },
     Computed,
     ComputedMethod,
+    ComputedAccessor { kind: AccessorKind },
 }
 
 impl BytecodeObjectProperty {
     pub const fn stack_value_count(&self) -> usize {
         match self {
-            Self::Static(_) => 1,
-            Self::Computed | Self::ComputedMethod => 2,
+            Self::Static(_) | Self::StaticAccessor { .. } => 1,
+            Self::Computed | Self::ComputedMethod | Self::ComputedAccessor { .. } => 2,
         }
     }
 }
