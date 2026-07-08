@@ -151,14 +151,22 @@ impl Context {
             | NativeFunctionKind::MathTan
             | NativeFunctionKind::MathTanh
             | NativeFunctionKind::MathTrunc
+            | NativeFunctionKind::ObjectAssign
+            | NativeFunctionKind::ObjectCreate
+            | NativeFunctionKind::ObjectDefineProperties
             | NativeFunctionKind::ObjectDefineProperty
+            | NativeFunctionKind::ObjectEntries
             | NativeFunctionKind::ObjectGetPrototypeOf
             | NativeFunctionKind::ObjectGetOwnPropertyDescriptor
+            | NativeFunctionKind::ObjectGetOwnPropertyDescriptors
             | NativeFunctionKind::ObjectGetOwnPropertyNames
             | NativeFunctionKind::ObjectHasOwn
+            | NativeFunctionKind::ObjectIs
             | NativeFunctionKind::ObjectKeys
             | NativeFunctionKind::ObjectPrototypeHasOwnProperty
             | NativeFunctionKind::ObjectPrototypePropertyIsEnumerable
+            | NativeFunctionKind::ObjectSetPrototypeOf
+            | NativeFunctionKind::ObjectValues
             | NativeFunctionKind::PromiseResolve
             | NativeFunctionKind::PromiseReject
             | NativeFunctionKind::PromiseThen
