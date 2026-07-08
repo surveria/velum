@@ -1,14 +1,16 @@
 use crate::{
-    error::Result,
+    error::{Error, Result},
     runtime::Context,
     runtime::call::RuntimeCallArgs,
-    runtime::object::{ObjectPropertyInit, PropertyEnumerable},
-    value::{NativeFunctionId, ObjectId, Value},
+    runtime::object::{ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable},
+    value::{ErrorName, NativeFunctionId, ObjectId, Value},
 };
 
 use super::{
-    GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME, NUMBER_IS_FINITE_NAME, NUMBER_IS_NAN_NAME,
-    NUMBER_NAME, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY,
+    GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME, NUMBER_IS_FINITE_NAME, NUMBER_IS_INTEGER_NAME,
+    NUMBER_IS_NAN_NAME, NUMBER_IS_SAFE_INTEGER_NAME, NUMBER_NAME,
+    NUMBER_PROTOTYPE_TO_LOCALE_STRING_NAME, NUMBER_PROTOTYPE_TO_STRING_NAME,
+    NUMBER_PROTOTYPE_VALUE_OF_NAME, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY,
 };
 
 const NUMBER_EPSILON_PROPERTY: &str = "EPSILON";
@@ -21,6 +23,11 @@ const NUMBER_MIN_VALUE_PROPERTY: &str = "MIN_VALUE";
 const NUMBER_NAN_PROPERTY: &str = "NaN";
 const NUMBER_NEGATIVE_INFINITY_PROPERTY: &str = "NEGATIVE_INFINITY";
 const NUMBER_POSITIVE_INFINITY_PROPERTY: &str = "POSITIVE_INFINITY";
+const NUMBER_RADIX_MAX: u32 = 36;
+const NUMBER_RADIX_MIN: u32 = 2;
+const NUMBER_RADIX_RANGE_ERROR: &str = "Number.prototype.toString radix must be between 2 and 36";
+const NUMBER_VALUE_RECEIVER_ERROR: &str =
+    "Number.prototype value method requires a number or Number object";
 const STRING_NEGATIVE_INFINITY: &str = "-Infinity";
 const STRING_POSITIVE_INFINITY: &str = "Infinity";
 
@@ -52,6 +59,7 @@ impl Context {
         let name = self.native_function_name_value(NativeFunctionKind::Number)?;
         self.push_native_function_with_id(id, NativeFunctionKind::Number, prototype, name)?;
         self.install_number_static_methods(id)?;
+        self.install_number_prototype_methods(prototype_id)?;
         self.insert_global_builtin(NUMBER_NAME, constructor.clone())?;
         Ok(constructor)
     }
@@ -75,15 +83,69 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let value = Self::eval_native_unary_argument_value(args);
-        let _number_value = Self::number_argument_value(value);
+        let number_value = Self::number_argument_value(value);
         let prototype = self.number_constructor_prototype()?;
-        let constructor_key = self.object_constructor_property_key()?;
-        self.objects.create_with_prototype(
-            Some(prototype),
-            constructor_key,
+        self.objects.create_boxed_primitive(
+            ObjectPrimitiveValue::Number(number_value),
+            prototype,
             self.limits.max_objects,
-            self.limits.max_object_properties,
         )
+    }
+
+    pub(in crate::runtime::native) fn create_number_object_from_value(
+        &mut self,
+        value: f64,
+    ) -> Result<Value> {
+        let prototype = self.number_constructor_prototype()?;
+        self.objects.create_boxed_primitive(
+            ObjectPrimitiveValue::Number(value),
+            prototype,
+            self.limits.max_objects,
+        )
+    }
+
+    pub(in crate::runtime::native) fn eval_number_prototype_to_string(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.eval_direct_number_prototype_to_string(args.as_slice(), this_value)
+    }
+
+    pub(in crate::runtime) fn eval_direct_number_prototype_to_string(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<Value> {
+        let number = self.number_receiver_value(this_value)?;
+        let radix = Self::number_to_string_radix_arg(args.first())?;
+        let text = Self::number_to_radix_string(number, radix)?;
+        self.heap_string_value(&text)
+    }
+
+    pub(in crate::runtime::native) fn eval_number_prototype_value_of(
+        &self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        Self::discard_number_extra_args(args.as_slice());
+        self.eval_direct_number_prototype_value_of(this_value)
+    }
+
+    pub(in crate::runtime) fn eval_direct_number_prototype_value_of(
+        &self,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.number_receiver_value(this_value).map(Value::Number)
+    }
+
+    pub(in crate::runtime) fn number_prototype_property_value(
+        &mut self,
+        receiver: &Value,
+        property: &str,
+    ) -> Result<Value> {
+        let prototype = self.number_constructor_prototype()?;
+        self.get_prototype_property_value_with_receiver(prototype, receiver, property)
     }
 
     fn number_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<ObjectId> {
@@ -124,8 +186,18 @@ impl Context {
         )?;
         self.define_number_static_method(
             constructor,
+            NUMBER_IS_INTEGER_NAME,
+            NativeFunctionKind::NumberIsInteger,
+        )?;
+        self.define_number_static_method(
+            constructor,
             NUMBER_IS_NAN_NAME,
             NativeFunctionKind::NumberIsNan,
+        )?;
+        self.define_number_static_method(
+            constructor,
+            NUMBER_IS_SAFE_INTEGER_NAME,
+            NativeFunctionKind::NumberIsSafeInteger,
         )?;
         let parse_float = self.global_function_value(NativeFunctionKind::GlobalParseFloat)?;
         self.define_number_static_function(constructor, GLOBAL_PARSE_FLOAT_NAME, parse_float)?;
@@ -156,11 +228,78 @@ impl Context {
         Ok(())
     }
 
+    fn install_number_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
+        self.define_number_prototype_method(
+            prototype,
+            NUMBER_PROTOTYPE_TO_LOCALE_STRING_NAME,
+            NativeFunctionKind::NumberPrototypeToLocaleString,
+        )?;
+        self.define_number_prototype_method(
+            prototype,
+            NUMBER_PROTOTYPE_TO_STRING_NAME,
+            NativeFunctionKind::NumberPrototypeToString,
+        )?;
+        self.define_number_prototype_method(
+            prototype,
+            NUMBER_PROTOTYPE_VALUE_OF_NAME,
+            NativeFunctionKind::NumberPrototypeValueOf,
+        )
+    }
+
+    fn define_number_prototype_method(
+        &mut self,
+        prototype: ObjectId,
+        name: &str,
+        kind: NativeFunctionKind,
+    ) -> Result<()> {
+        let function = self.create_native_function(kind, Value::Undefined)?;
+        self.define_non_enumerable_object_property(prototype, name, function)
+    }
+
     fn number_argument_value(value: Option<&Value>) -> f64 {
         let Some(value) = value else {
             return 0.0;
         };
         Self::value_to_number(value)
+    }
+
+    fn number_receiver_value(&self, value: &Value) -> Result<f64> {
+        match value {
+            Value::Number(value) => Ok(*value),
+            Value::Object(id) => match self.objects.primitive_value(*id)? {
+                Some(ObjectPrimitiveValue::Number(value)) => Ok(*value),
+                Some(ObjectPrimitiveValue::Bool(_) | ObjectPrimitiveValue::Symbol(_)) | None => {
+                    Err(Error::type_error(NUMBER_VALUE_RECEIVER_ERROR))
+                }
+            },
+            _ => Err(Error::type_error(NUMBER_VALUE_RECEIVER_ERROR)),
+        }
+    }
+
+    pub(in crate::runtime::native) fn eval_number_is_integer(args: RuntimeCallArgs<'_>) -> Value {
+        Self::eval_direct_number_is_integer(args.as_slice())
+    }
+
+    pub(in crate::runtime) fn eval_direct_number_is_integer(args: &[Value]) -> Value {
+        let is_integer = args
+            .first()
+            .and_then(Value::as_number)
+            .is_some_and(Self::is_integer_number);
+        Value::Bool(is_integer)
+    }
+
+    pub(in crate::runtime::native) fn eval_number_is_safe_integer(
+        args: RuntimeCallArgs<'_>,
+    ) -> Value {
+        Self::eval_direct_number_is_safe_integer(args.as_slice())
+    }
+
+    pub(in crate::runtime) fn eval_direct_number_is_safe_integer(args: &[Value]) -> Value {
+        let is_safe_integer = args
+            .first()
+            .and_then(Value::as_number)
+            .is_some_and(Self::is_safe_integer_number);
+        Value::Bool(is_safe_integer)
     }
 
     pub(in crate::runtime) fn value_to_number(value: &Value) -> f64 {
@@ -224,4 +363,83 @@ impl Context {
 
         u32::from_str_radix(digits, radix).map(f64::from).ok()
     }
+
+    fn number_to_string_radix_arg(value: Option<&Value>) -> Result<u32> {
+        let Some(value) = value else {
+            return Ok(10);
+        };
+        if matches!(value, Value::Undefined) {
+            return Ok(10);
+        }
+        let number = Self::value_to_number(value);
+        let Some(radix) = Self::number_finite_integer(number) else {
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                NUMBER_RADIX_RANGE_ERROR,
+            ));
+        };
+        if radix < i64::from(NUMBER_RADIX_MIN) || radix > i64::from(NUMBER_RADIX_MAX) {
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                NUMBER_RADIX_RANGE_ERROR,
+            ));
+        }
+        u32::try_from(radix).map_err(|_| Error::limit("number radix exceeded supported range"))
+    }
+
+    fn number_to_radix_string(number: f64, radix: u32) -> Result<String> {
+        if radix == 10 || !number.is_finite() || number.fract() != 0.0 {
+            return Ok(Value::Number(number).to_string());
+        }
+        if number == 0.0 {
+            return Ok("0".to_owned());
+        }
+        let integer = Self::number_finite_integer(number)
+            .ok_or_else(|| Error::limit("number radix conversion requires a finite integer"))?;
+        let magnitude = integer.unsigned_abs();
+        let mut output = Self::unsigned_integer_to_radix_string(magnitude, radix)?;
+        if integer.is_negative() {
+            output.insert(0, '-');
+        }
+        Ok(output)
+    }
+
+    fn unsigned_integer_to_radix_string(mut value: u64, radix: u32) -> Result<String> {
+        let mut digits = Vec::new();
+        let radix = u64::from(radix);
+        while value > 0 {
+            let digit = value % radix;
+            let digit = u32::try_from(digit)
+                .map_err(|_| Error::limit("number radix digit exceeded supported range"))?;
+            let ch = char::from_digit(digit, NUMBER_RADIX_MAX)
+                .ok_or_else(|| Error::limit("number radix digit is not representable"))?;
+            digits.push(ch);
+            value /= radix;
+        }
+        Ok(digits.into_iter().rev().collect())
+    }
+
+    fn number_finite_integer(number: f64) -> Option<i64> {
+        if !number.is_finite() {
+            return None;
+        }
+        let integer = if number.is_sign_negative() {
+            number.ceil()
+        } else {
+            number.floor()
+        };
+        format!("{integer:.0}").parse::<i64>().ok()
+    }
+
+    const fn is_integer_number(number: f64) -> bool {
+        number.is_finite() && number.fract() == 0.0
+    }
+
+    const fn is_safe_integer_number(number: f64) -> bool {
+        Self::is_integer_number(number)
+            && number >= NUMBER_MIN_SAFE_INTEGER
+            && number <= NUMBER_MAX_SAFE_INTEGER
+    }
+
+    const fn discard_number_extra_args(_args: &[Value]) {}
 }

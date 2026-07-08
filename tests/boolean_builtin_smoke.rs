@@ -12,6 +12,7 @@ fn exposes_boolean_constructor_and_preserves_shadowing() -> TestResult {
         let booleanConstructor = Boolean;
         let constructedFalse = new Boolean(false);
         let constructedTrue = new Boolean(1);
+        let objectFalse = Object(false);
         let originalPrototype = Boolean.prototype;
         Boolean.prototype = null;
         let prototypeStayed = Boolean.prototype === originalPrototype &&
@@ -57,7 +58,11 @@ fn exposes_boolean_constructor_and_preserves_shadowing() -> TestResult {
             typeof constructedFalse,
             constructedFalse.__proto__ === Boolean.prototype,
             constructedFalse.constructor === Boolean,
-            Boolean(constructedFalse)
+            Boolean(constructedFalse),
+            constructedFalse.valueOf(),
+            constructedTrue.valueOf(),
+            objectFalse.valueOf(),
+            objectFalse.toString()
         );
         print("keys:" + constructorKeys + "|" + prototypeKeys);
 
@@ -85,7 +90,14 @@ fn exposes_boolean_constructor_and_preserves_shadowing() -> TestResult {
             Boolean(1) === true &&
             Boolean("camera") === true &&
             Boolean(Object()) === true &&
-            Boolean(constructedFalse) === true ? 42 : 0
+            Boolean(constructedFalse) === true &&
+            constructedFalse.valueOf() === false &&
+            constructedTrue.valueOf() === true &&
+            constructedFalse.toString() === "false" &&
+            constructedTrue.toString() === "true" &&
+            objectFalse.valueOf() === false &&
+            objectFalse.toString() === "false" &&
+            Boolean.prototype.valueOf.call(true) === true ? 42 : 0
         "#,
     )?;
 
@@ -95,10 +107,27 @@ fn exposes_boolean_constructor_and_preserves_shadowing() -> TestResult {
         &[
             "function Boolean 1 true",
             "false false false false false false true true true true",
-            "object true true true",
+            "object true true true false true false false",
             "keys:|",
         ],
     )
+}
+
+#[test]
+fn rejects_boolean_prototype_value_methods_for_wrong_receivers() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let error = context.eval("Boolean.prototype.toString.call(0)");
+    let Err(error) = error else {
+        return Err("expected Boolean.prototype.toString to reject number receiver".into());
+    };
+    let text = error.to_string();
+    if text.contains("Boolean.prototype value method") {
+        return Ok(());
+    }
+
+    Err(format!("unexpected error: {text}").into())
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

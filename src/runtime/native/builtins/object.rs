@@ -67,13 +67,11 @@ impl Context {
             | Value::NativeFunction(_)
             | Value::HostFunction(_)
             | Value::Error(_) => Ok(value.clone()),
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_) => self.create_object_from_constructor(),
+            Value::Bool(value) => self.create_boolean_object_from_value(*value),
+            Value::Number(value) => self.create_number_object_from_value(*value),
+            Value::String(_) | Value::HeapString(_) => self.create_string_object_from_value(value),
+            Value::Symbol(value) => self.create_symbol_object_from_value(value.clone()),
+            Value::Undefined | Value::Null => self.create_object_from_constructor(),
         }
     }
 

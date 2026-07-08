@@ -6,9 +6,9 @@ use crate::{
 
 use super::{
     AccessorPropertyUpdate, ArrayLength, OBJECT_CONSTRUCTOR_PROPERTY, Object, ObjectHeap,
-    ObjectPropertyInit, ObjectPropertyValue, ObjectStructureSnapshot, PROTOTYPE_PROPERTY,
-    PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate,
-    ShapeTable,
+    ObjectPrimitiveValue, ObjectPropertyInit, ObjectPropertyValue, ObjectStructureSnapshot,
+    PROTOTYPE_PROPERTY, PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup,
+    PropertyUpdate, ShapeTable,
 };
 
 impl ObjectHeap {
@@ -115,6 +115,17 @@ impl ObjectHeap {
     ) -> Result<Value> {
         self.create_with_prototype_id(prototype, constructor_key, max_objects, max_properties)
             .map(Value::Object)
+    }
+
+    pub(in crate::runtime) fn create_boxed_primitive(
+        &mut self,
+        value: ObjectPrimitiveValue,
+        prototype: ObjectId,
+        max_objects: usize,
+    ) -> Result<Value> {
+        let mut object = Object::boxed_primitive(value);
+        object.prototype = Some(prototype);
+        self.push_object(object, max_objects).map(Value::Object)
     }
 
     pub(crate) fn create_with_prototype_id(
@@ -298,6 +309,13 @@ impl ObjectHeap {
 
     pub fn get(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<ObjectPropertyValue> {
         self.get_in_chain(id, property)
+    }
+
+    pub(in crate::runtime) fn primitive_value(
+        &self,
+        id: ObjectId,
+    ) -> Result<Option<&ObjectPrimitiveValue>> {
+        Ok(self.object(id)?.primitive_value.as_ref())
     }
 
     pub fn has(&self, id: ObjectId, property: PropertyLookup<'_>) -> Result<bool> {

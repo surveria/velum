@@ -149,7 +149,17 @@ const SET_FOR_EACH_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(140);
 const SET_SIZE_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(141);
 const SET_ENTRIES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(142);
 const SET_VALUES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(143);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 144;
+const NUMBER_IS_INTEGER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(144);
+const NUMBER_IS_SAFE_INTEGER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(145);
+const BOOLEAN_PROTOTYPE_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(146);
+const BOOLEAN_PROTOTYPE_VALUE_OF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(147);
+const NUMBER_PROTOTYPE_TO_LOCALE_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(148);
+const NUMBER_PROTOTYPE_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(149);
+const NUMBER_PROTOTYPE_VALUE_OF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(150);
+const SYMBOL_PROTOTYPE_DESCRIPTION_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(151);
+const SYMBOL_PROTOTYPE_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(152);
+const SYMBOL_PROTOTYPE_VALUE_OF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(153);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 154;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -208,6 +218,9 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         return Some(slot);
     }
     if let Some(slot) = utility_slot(kind) {
+        return Some(slot);
+    }
+    if let Some(slot) = primitive_prototype_slot(kind) {
         return Some(slot);
     }
     if let Some(slot) = string_static_slot(kind) {
@@ -348,7 +361,27 @@ const fn utility_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::GlobalParseFloat => Some(GLOBAL_PARSE_FLOAT_SLOT),
         NativeFunctionKind::GlobalParseInt => Some(GLOBAL_PARSE_INT_SLOT),
         NativeFunctionKind::NumberIsFinite => Some(NUMBER_IS_FINITE_SLOT),
+        NativeFunctionKind::NumberIsInteger => Some(NUMBER_IS_INTEGER_SLOT),
         NativeFunctionKind::NumberIsNan => Some(NUMBER_IS_NAN_SLOT),
+        NativeFunctionKind::NumberIsSafeInteger => Some(NUMBER_IS_SAFE_INTEGER_SLOT),
+        _ => None,
+    }
+}
+
+const fn primitive_prototype_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
+    match kind {
+        NativeFunctionKind::BooleanPrototypeToString => Some(BOOLEAN_PROTOTYPE_TO_STRING_SLOT),
+        NativeFunctionKind::BooleanPrototypeValueOf => Some(BOOLEAN_PROTOTYPE_VALUE_OF_SLOT),
+        NativeFunctionKind::NumberPrototypeToLocaleString => {
+            Some(NUMBER_PROTOTYPE_TO_LOCALE_STRING_SLOT)
+        }
+        NativeFunctionKind::NumberPrototypeToString => Some(NUMBER_PROTOTYPE_TO_STRING_SLOT),
+        NativeFunctionKind::NumberPrototypeValueOf => Some(NUMBER_PROTOTYPE_VALUE_OF_SLOT),
+        NativeFunctionKind::SymbolPrototypeDescriptionGetter => {
+            Some(SYMBOL_PROTOTYPE_DESCRIPTION_GETTER_SLOT)
+        }
+        NativeFunctionKind::SymbolPrototypeToString => Some(SYMBOL_PROTOTYPE_TO_STRING_SLOT),
+        NativeFunctionKind::SymbolPrototypeValueOf => Some(SYMBOL_PROTOTYPE_VALUE_OF_SLOT),
         _ => None,
     }
 }

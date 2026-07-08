@@ -4,8 +4,8 @@ use crate::{
     runtime::control::error_property_text,
     runtime::object::{OBJECT_CONSTRUCTOR_PROPERTY, PropertyKey},
     runtime::property::{
-        DynamicPropertyKey, PropertyValue, StringPropertyValue, get_property, has_property,
-        property_key, string_property_value,
+        DynamicPropertyKey, PropertyValue, StringPropertyValue, get_property,
+        get_property_with_receiver, has_property, property_key, string_property_value,
     },
     value::{ObjectId, Value},
 };
@@ -39,10 +39,13 @@ impl Context {
             return self.get_error_property_value(error, property);
         }
         if let Value::String(value) = object {
-            return self.get_string_property_value(value, property);
+            return self.get_string_property_value(object, value, property);
         }
         if let Value::HeapString(value) = object {
-            return self.get_string_property_value(value.as_str(), property);
+            return self.get_string_property_value(object, value.as_str(), property);
+        }
+        if let Some(value) = self.primitive_prototype_property_value(object, property)? {
+            return Ok(value);
         }
         if let Value::Object(id) = object
             && let Some(value) = self.get_string_object_property_value(*id, property)?
@@ -89,6 +92,7 @@ impl Context {
 
     pub(in crate::runtime) fn get_string_property_value(
         &mut self,
+        receiver: &Value,
         value: &str,
         property: &str,
     ) -> Result<Value> {
@@ -98,7 +102,9 @@ impl Context {
         match string_property_value(value, property)? {
             StringPropertyValue::Length(value) => Ok(Value::Number(value)),
             StringPropertyValue::Character(ch) => self.heap_string_char_value(ch),
-            StringPropertyValue::Missing => self.string_prototype_property_value(property),
+            StringPropertyValue::Missing => {
+                self.string_prototype_property_value(receiver, property)
+            }
         }
     }
 
@@ -123,6 +129,36 @@ impl Context {
         id: ObjectId,
     ) -> Result<Option<&str>> {
         self.objects.string_object_value(id)
+    }
+
+    pub(in crate::runtime) fn primitive_prototype_property_value(
+        &mut self,
+        object: &Value,
+        property: &str,
+    ) -> Result<Option<Value>> {
+        match object {
+            Value::Bool(_) => self
+                .boolean_prototype_property_value(object, property)
+                .map(Some),
+            Value::Number(_) => self
+                .number_prototype_property_value(object, property)
+                .map(Some),
+            Value::Symbol(_) => self
+                .symbol_prototype_property_value(object, property)
+                .map(Some),
+            _ => Ok(None),
+        }
+    }
+
+    pub(in crate::runtime) fn get_prototype_property_value_with_receiver(
+        &mut self,
+        prototype: ObjectId,
+        receiver: &Value,
+        property: &str,
+    ) -> Result<Value> {
+        let lookup = self.property_lookup(property);
+        let value = get_property_with_receiver(&self.objects, prototype, receiver, lookup)?;
+        self.runtime_property_value(value)
     }
 
     pub(in crate::runtime) fn has_dynamic_property_value(

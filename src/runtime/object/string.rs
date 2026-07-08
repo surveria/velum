@@ -59,6 +59,7 @@ impl Object {
             enumerable_property_count: 0,
             array_length: None,
             string_value: Some(value),
+            primitive_value: None,
             prototype: None,
         }
     }

@@ -2,7 +2,7 @@ use crate::error::{Error, Result};
 use crate::runtime::control::error_property_text;
 use crate::runtime::object::{ObjectHeap, ObjectPropertyValue, PropertyKey, PropertyLookup};
 use crate::storage::atom::AtomTable;
-use crate::value::Value;
+use crate::value::{ObjectId, Value};
 
 mod accessor;
 mod dynamic;
@@ -72,6 +72,17 @@ pub fn get_property<'a>(
             value.type_name()
         ))),
     }
+}
+
+pub fn get_property_with_receiver<'a>(
+    objects: &ObjectHeap,
+    object: ObjectId,
+    receiver: &'a Value,
+    property: PropertyLookup<'_>,
+) -> Result<PropertyValue<'a>> {
+    objects
+        .get(object, property)
+        .map(|value| PropertyValue::from_object_value(value, receiver))
 }
 
 #[derive(Debug, Clone)]

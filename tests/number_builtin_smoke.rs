@@ -84,6 +84,11 @@ fn exposes_number_constructor_and_static_properties() -> TestResult {
             nan !== nan &&
             invalid !== invalid &&
             Number.NaN !== Number.NaN &&
+            Number.isInteger(42) === true &&
+            Number.isInteger(42.5) === false &&
+            Number.isInteger("42") === false &&
+            Number.isSafeInteger(9007199254740991) === true &&
+            Number.isSafeInteger(9007199254740992) === false &&
             deleteNan === false ? 42 : 0
         "#,
     )?;
@@ -98,6 +103,53 @@ fn exposes_number_constructor_and_static_properties() -> TestResult {
             "keys:|".to_owned(),
         ],
     )
+}
+
+#[test]
+fn supports_number_prototype_value_methods() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let constructed = new Number("7");
+        let objectBox = Object(255);
+
+        print(
+            constructed.valueOf(),
+            objectBox.valueOf(),
+            objectBox.toString(16),
+            Number.prototype.toString.call(15, 2),
+            Number.prototype.toLocaleString.call(42)
+        );
+
+        constructed.valueOf() === 7 &&
+            objectBox.valueOf() === 255 &&
+            objectBox.toString(16) === "ff" &&
+            Number.prototype.toString.call(15, 2) === "1111" &&
+            Number.prototype.toLocaleString.call(42) === "42" ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_output(context.output(), &["7 255 ff 1111 42".to_owned()])
+}
+
+#[test]
+fn rejects_number_prototype_value_methods_for_wrong_receivers() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let error = context.eval("Number.prototype.valueOf.call(true)");
+    let Err(error) = error else {
+        return Err("expected Number.prototype.valueOf to reject boolean receiver".into());
+    };
+    let text = error.to_string();
+    if text.contains("Number.prototype value method") {
+        return Ok(());
+    }
+
+    Err(format!("unexpected error: {text}").into())
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
