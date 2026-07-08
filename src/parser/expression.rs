@@ -1,5 +1,8 @@
 use crate::{
-    ast::{Expr, FunctionParam, ObjectProperty, ObjectPropertyKey, StaticName, UnaryOp, UpdateOp},
+    ast::{
+        Expr, FunctionParam, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, StaticName,
+        UnaryOp, UpdateOp,
+    },
     error::{Error, Result},
     lexer::TokenKind,
     value::Value,
@@ -10,6 +13,8 @@ use super::{Parser, SUPER_IDENTIFIER_NAME};
 const THIS_PROPERTY_NAME: &str = "this";
 const NEW_TARGET_PROPERTY_NAME: &str = "target";
 const IMPORT_BINDING_NAME: &str = "import";
+const GETTER_KEYWORD_NAME: &str = "get";
+const SETTER_KEYWORD_NAME: &str = "set";
 
 enum ObjectPropertyName {
     Static {
@@ -533,11 +538,19 @@ impl Parser {
             let name = self.object_property_key()?;
             return self.object_method_property(name, true);
         }
+        if let Some(kind) = self.object_accessor_start() {
+            let keyword = self
+                .advance()
+                .ok_or_else(|| Error::parse("expected accessor keyword", self.offset()))?;
+            let name = self.object_property_key()?;
+            return self.object_accessor_property(name, kind, keyword.offset);
+        }
         let name = self.object_property_key()?;
         if self.match_kind(&TokenKind::Colon) {
             let value = self.expression()?;
             return Ok(ObjectProperty {
                 key: name.into_key(),
+                kind: ObjectPropertyKind::Init,
                 value,
             });
         }
@@ -552,6 +565,7 @@ impl Parser {
             let binding = self.static_binding(binding)?;
             return Ok(ObjectProperty {
                 key: ObjectPropertyKey::Static(key),
+                kind: ObjectPropertyKind::Init,
                 value: Expr::Identifier(binding),
             });
         }
@@ -559,6 +573,68 @@ impl Parser {
             "expected ':' after object property name",
             self.offset(),
         ))
+    }
+
+    /// Detects a `get name` / `set name` accessor definition. A `get`/`set`
+    /// identifier followed by anything that can start a property name is an
+    /// accessor; otherwise it is an ordinary key (`{get: 1}`, `{get() {}}`,
+    /// `{get}`), which falls through to the regular property paths.
+    fn object_accessor_start(&self) -> Option<ObjectPropertyKind> {
+        let TokenKind::Identifier(name) = self.peek_kind(0)? else {
+            return None;
+        };
+        let kind = match name.as_str() {
+            GETTER_KEYWORD_NAME => ObjectPropertyKind::Get,
+            SETTER_KEYWORD_NAME => ObjectPropertyKind::Set,
+            _ => return None,
+        };
+        self.peek_kind(1)
+            .is_some_and(is_object_property_name_start)
+            .then_some(kind)
+    }
+
+    fn object_accessor_property(
+        &mut self,
+        name: ObjectPropertyName,
+        kind: ObjectPropertyKind,
+        keyword_offset: usize,
+    ) -> Result<ObjectProperty> {
+        self.consume(&TokenKind::LParen, "expected '(' after accessor name")?;
+        let inherited_strict = self.is_strict_mode();
+        let params = self.function_parameters()?;
+        self.consume(&TokenKind::RParen, "expected ')' after accessor parameters")?;
+        match kind {
+            ObjectPropertyKind::Get if !params.is_empty() => {
+                return Err(Error::parse(
+                    "getter must not declare parameters",
+                    keyword_offset,
+                ));
+            }
+            ObjectPropertyKind::Set if params.len() != 1 => {
+                return Err(Error::parse(
+                    "setter must declare exactly one parameter",
+                    keyword_offset,
+                ));
+            }
+            ObjectPropertyKind::Init | ObjectPropertyKind::Get | ObjectPropertyKind::Set => {}
+        }
+        self.consume(&TokenKind::LBrace, "expected '{' before accessor body")?;
+        let body = self.with_new_target_scope(|parser| parser.function_body(inherited_strict))?;
+        self.validate_function_parameters(&params, inherited_strict, body.contains_use_strict)?;
+        let id = self.static_function()?;
+        let key = name.into_key();
+        let name = match &key {
+            ObjectPropertyKey::Static(name) => Some(name.clone()),
+            ObjectPropertyKey::Computed(_) => None,
+        };
+        let value = Expr::MethodFunction {
+            id,
+            name,
+            params: params.into(),
+            body: body.statements.into(),
+            is_async: false,
+        };
+        Ok(ObjectProperty { key, kind, value })
     }
 
     fn async_object_method_start(&self) -> bool {
@@ -600,7 +676,11 @@ impl Parser {
             body: body.statements.into(),
             is_async,
         };
-        Ok(ObjectProperty { key, value })
+        Ok(ObjectProperty {
+            key,
+            kind: ObjectPropertyKind::Init,
+            value,
+        })
     }
 
     fn array_literal(&mut self) -> Result<Expr> {
