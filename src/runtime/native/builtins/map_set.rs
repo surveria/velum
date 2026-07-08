@@ -27,6 +27,13 @@ const COLLECTION_FOR_EACH_NAME: &str = "forEach";
 const COLLECTION_ENTRIES_NAME: &str = "entries";
 const COLLECTION_KEYS_NAME: &str = "keys";
 const COLLECTION_VALUES_NAME: &str = "values";
+const SET_UNION_NAME: &str = "union";
+const SET_INTERSECTION_NAME: &str = "intersection";
+const SET_DIFFERENCE_NAME: &str = "difference";
+const SET_SYMMETRIC_DIFFERENCE_NAME: &str = "symmetricDifference";
+const SET_IS_SUBSET_OF_NAME: &str = "isSubsetOf";
+const SET_IS_SUPERSET_OF_NAME: &str = "isSupersetOf";
+const SET_IS_DISJOINT_FROM_NAME: &str = "isDisjointFrom";
 const COLLECTION_SIZE_NAME: &str = "size";
 const ITERATOR_NEXT_NAME: &str = "next";
 const ITERATOR_RESULT_VALUE_NAME: &str = "value";
@@ -53,7 +60,10 @@ impl Context {
         self.collection_constructor_value(CollectionKind::Set)
     }
 
-    fn collection_constructor_value(&mut self, kind: CollectionKind) -> Result<Value> {
+    pub(in crate::runtime::native) fn collection_constructor_value(
+        &mut self,
+        kind: CollectionKind,
+    ) -> Result<Value> {
         let constructor_kind = match kind {
             CollectionKind::Map => NativeFunctionKind::Map,
             CollectionKind::Set => NativeFunctionKind::Set,
@@ -133,6 +143,19 @@ impl Context {
                 (COLLECTION_ENTRIES_NAME, NativeFunctionKind::SetEntries),
                 (COLLECTION_KEYS_NAME, NativeFunctionKind::SetValues),
                 (COLLECTION_VALUES_NAME, NativeFunctionKind::SetValues),
+                (SET_UNION_NAME, NativeFunctionKind::SetUnion),
+                (SET_INTERSECTION_NAME, NativeFunctionKind::SetIntersection),
+                (SET_DIFFERENCE_NAME, NativeFunctionKind::SetDifference),
+                (
+                    SET_SYMMETRIC_DIFFERENCE_NAME,
+                    NativeFunctionKind::SetSymmetricDifference,
+                ),
+                (SET_IS_SUBSET_OF_NAME, NativeFunctionKind::SetIsSubsetOf),
+                (SET_IS_SUPERSET_OF_NAME, NativeFunctionKind::SetIsSupersetOf),
+                (
+                    SET_IS_DISJOINT_FROM_NAME,
+                    NativeFunctionKind::SetIsDisjointFrom,
+                ),
             ],
             CollectionKind::WeakMap | CollectionKind::WeakSet => {
                 return Err(Error::runtime(

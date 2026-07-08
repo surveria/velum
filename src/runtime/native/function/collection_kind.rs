@@ -15,6 +15,13 @@ const COLLECTION_METHOD_ENTRIES_NAME: &str = "entries";
 const COLLECTION_METHOD_KEYS_NAME: &str = "keys";
 const COLLECTION_METHOD_VALUES_NAME: &str = "values";
 const COLLECTION_SIZE_GETTER_NAME: &str = "size";
+const SET_UNION_NAME: &str = "union";
+const SET_INTERSECTION_NAME: &str = "intersection";
+const SET_DIFFERENCE_NAME: &str = "difference";
+const SET_SYMMETRIC_DIFFERENCE_NAME: &str = "symmetricDifference";
+const SET_IS_SUBSET_OF_NAME: &str = "isSubsetOf";
+const SET_IS_SUPERSET_OF_NAME: &str = "isSupersetOf";
+const SET_IS_DISJOINT_FROM_NAME: &str = "isDisjointFrom";
 const COLLECTION_ITERATOR_NEXT_NAME: &str = "next";
 const COLLECTION_ITERATOR_SELF_NAME: &str = "[Symbol.iterator]";
 
@@ -49,7 +56,14 @@ impl NativeFunctionKind {
             | Self::WeakSetHas
             | Self::SetDelete
             | Self::WeakSetDelete
-            | Self::SetForEach => Some(1.0),
+            | Self::SetForEach
+            | Self::SetUnion
+            | Self::SetIntersection
+            | Self::SetDifference
+            | Self::SetSymmetricDifference
+            | Self::SetIsSubsetOf
+            | Self::SetIsSupersetOf
+            | Self::SetIsDisjointFrom => Some(1.0),
             Self::MapSet | Self::WeakMapSet => Some(2.0),
             _ => None,
         }
@@ -80,6 +94,13 @@ impl NativeFunctionKind {
             Self::MapSizeGetter | Self::SetSizeGetter => Some(COLLECTION_SIZE_GETTER_NAME),
             Self::CollectionIteratorNext(_) => Some(COLLECTION_ITERATOR_NEXT_NAME),
             Self::IteratorSelf => Some(COLLECTION_ITERATOR_SELF_NAME),
+            Self::SetUnion => Some(SET_UNION_NAME),
+            Self::SetIntersection => Some(SET_INTERSECTION_NAME),
+            Self::SetDifference => Some(SET_DIFFERENCE_NAME),
+            Self::SetSymmetricDifference => Some(SET_SYMMETRIC_DIFFERENCE_NAME),
+            Self::SetIsSubsetOf => Some(SET_IS_SUBSET_OF_NAME),
+            Self::SetIsSupersetOf => Some(SET_IS_SUPERSET_OF_NAME),
+            Self::SetIsDisjointFrom => Some(SET_IS_DISJOINT_FROM_NAME),
             _ => None,
         }
     }
