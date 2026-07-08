@@ -13,9 +13,9 @@ use super::{
     ARRAY_NAME, BOOLEAN_NAME, EVAL_NAME, FUNCTION_NAME, GLOBAL_DECODE_URI_COMPONENT_NAME,
     GLOBAL_DECODE_URI_NAME, GLOBAL_ENCODE_URI_COMPONENT_NAME, GLOBAL_ENCODE_URI_NAME,
     GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME,
-    GLOBAL_THIS_NAME, INFINITY_NAME, JSON_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME, NativeFunction,
-    NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PROMISE_NAME, REGEXP_NAME,
-    STRING_NAME, SYMBOL_NAME,
+    GLOBAL_THIS_NAME, INFINITY_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME,
+    NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PROMISE_NAME,
+    REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -36,6 +36,8 @@ const fn native_kind_is_constructable(kind: NativeFunctionKind) -> bool {
             | NativeFunctionKind::Promise
             | NativeFunctionKind::RegExp
             | NativeFunctionKind::String
+            | NativeFunctionKind::Map
+            | NativeFunctionKind::Set
     )
 }
 
@@ -75,14 +77,17 @@ impl Context {
                 .global_constant_value(INFINITY_NAME, Value::Number(f64::INFINITY))
                 .map(Some),
             JSON_NAME => self.json_object_value().map(Some),
+            MAP_NAME => self.map_constructor_value().map(Some),
             MATH_NAME => self.math_object_value().map(Some),
             NAN_NAME => self
                 .global_constant_value(NAN_NAME, Value::Number(f64::NAN))
                 .map(Some),
+            MAP_NAME => self.map_constructor_value().map(Some),
             NUMBER_NAME => self.number_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
             PROMISE_NAME => self.promise_constructor_value().map(Some),
             REGEXP_NAME => self.regexp_constructor_value().map(Some),
+            SET_NAME => self.set_constructor_value().map(Some),
             STRING_NAME => self.string_constructor_value().map(Some),
             SYMBOL_NAME => self.symbol_constructor_value().map(Some),
             _ => {
@@ -126,10 +131,12 @@ impl Context {
             GLOBAL_PARSE_INT_NAME => self
                 .global_function_value(NativeFunctionKind::GlobalParseInt)
                 .map(Some),
+            MAP_NAME => self.map_constructor_value().map(Some),
             NUMBER_NAME => self.number_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
             PROMISE_NAME => self.promise_constructor_value().map(Some),
             REGEXP_NAME => self.regexp_constructor_value().map(Some),
+            SET_NAME => self.set_constructor_value().map(Some),
             STRING_NAME => self.string_constructor_value().map(Some),
             SYMBOL_NAME => self.symbol_constructor_value().map(Some),
             _ => {
@@ -180,6 +187,14 @@ impl Context {
             NativeFunctionKind::Number => self.construct_number_object(args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
             NativeFunctionKind::String => self.construct_string_object(args),
+            NativeFunctionKind::Map => self.construct_collection_object(
+                crate::runtime::collections::CollectionKind::Map,
+                args,
+            ),
+            NativeFunctionKind::Set => self.construct_collection_object(
+                crate::runtime::collections::CollectionKind::Set,
+                args,
+            ),
             _ => Err(Error::type_error(NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR)),
         }
     }
