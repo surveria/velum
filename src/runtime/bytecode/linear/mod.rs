@@ -18,7 +18,7 @@ use crate::{
 };
 
 use super::state::BytecodeState;
-use numeric_chain::{NumericBindingChain, NumericCompoundBinding};
+use numeric_chain::{NumericBindingChain, NumericCompoundBinding, NumericCompoundChain};
 use property_chain::PropertyMutation;
 pub(super) use segment::BytecodeLinearPlan;
 
@@ -110,6 +110,7 @@ enum BytecodeLinearOp<'a> {
     },
     NumericBindingChain(NumericBindingChain<'a>),
     NumericCompoundBinding(NumericCompoundBinding<'a>),
+    NumericCompoundChain(NumericCompoundChain<'a>),
     PropertyMutation(PropertyMutation<'a>),
     ArrayLength(&'a BytecodeProperty),
     ArrayIndexMember {
@@ -141,6 +142,12 @@ impl Context {
         if let Some(chain) = self.compile_numeric_binding_chain(instructions, index)? {
             return Ok(Some((
                 BytecodeLinearOp::NumericBindingChain(chain.op),
+                chain.consumed,
+            )));
+        }
+        if let Some(chain) = self.compile_numeric_compound_chain(instructions, index)? {
+            return Ok(Some((
+                BytecodeLinearOp::NumericCompoundChain(chain.op),
                 chain.consumed,
             )));
         }
@@ -494,6 +501,7 @@ impl Context {
             | BytecodeLinearOp::InArrayIndexMaskBinding { .. }
             | BytecodeLinearOp::NumericBindingChain(_)
             | BytecodeLinearOp::NumericCompoundBinding(_)
+            | BytecodeLinearOp::NumericCompoundChain(_)
             | BytecodeLinearOp::UpdateBindingStoreLast { .. }
             | BytecodeLinearOp::PropertyMutation(_) => self.eval_linear_peephole_op(state, op),
             BytecodeLinearOp::ArrayLength(_)
@@ -646,6 +654,9 @@ impl Context {
             }
             BytecodeLinearOp::NumericCompoundBinding(compound) => {
                 self.eval_numeric_compound_binding(state, compound)?;
+            }
+            BytecodeLinearOp::NumericCompoundChain(chain) => {
+                self.eval_numeric_compound_chain(state, chain)?;
             }
             BytecodeLinearOp::UpdateBindingStoreLast {
                 binding,
