@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Value};
+use rs_quickjs::{Engine, Error, Runtime, RuntimeLimits, Value};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -438,6 +438,60 @@ fn bytecode_runs_direct_linear_loop_condition_and_update() -> TestResult {
 }
 
 #[test]
+fn bytecode_function_fast_paths_fall_back_for_generic_add() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r#"
+        var join = function(left, right) {
+            return left + right;
+        };
+
+        join("rs", "qjs") === "rsqjs" ? 42 : 0
+        "#,
+    )?;
+    ensure_at_least(
+        script.usage().bytecode_numeric_instruction_count(),
+        1,
+        "bytecode numeric instructions",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn bytecode_function_fast_paths_preserve_runtime_step_limits() -> TestResult {
+    let runtime = Runtime::with_limits(RuntimeLimits {
+        max_runtime_steps: 24,
+        ..RuntimeLimits::default()
+    });
+    let mut context = runtime.context();
+    let error = context
+        .eval(
+            r"
+            var next = function() {
+                return 1;
+            };
+
+            next();
+            next();
+            next();
+            next();
+            next();
+            next();
+            next();
+            next();
+            next();
+            next();
+            ",
+        )
+        .err()
+        .ok_or("expected runtime step limit to fail")?;
+    ensure_resource_limit(&error)
+}
+
+#[test]
 fn bytecode_quickens_numeric_compound_binding_paths() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
@@ -492,6 +546,13 @@ fn ensure_error_contains(error: &rs_quickjs::Error, text: &str) -> TestResult {
         return Ok(());
     }
     Err(format!("expected error containing '{text}', got '{message}'").into())
+}
+
+fn ensure_resource_limit(error: &Error) -> TestResult {
+    if matches!(error, Error::ResourceLimit { .. }) {
+        return Ok(());
+    }
+    Err(format!("expected resource limit error, got {error}").into())
 }
 
 fn ensure_usize(actual: usize, expected: usize) -> TestResult {

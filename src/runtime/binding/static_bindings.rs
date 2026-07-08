@@ -181,7 +181,7 @@ impl Context {
         &self,
         binding: &StaticBinding,
     ) -> Result<Option<CompiledBindingFrame>> {
-        if self.locals.last().is_some() {
+        if self.has_visible_local_scope() {
             return self.compiled_local_binding_frame(binding);
         }
         match self.compiled_binding_operand(binding.id())? {
@@ -459,12 +459,18 @@ impl Context {
         slot: crate::binding_metadata::LocalSlot,
     ) -> Result<Option<(BindingLocation, BindingCell)>> {
         let slot = BindingSlot::from_index(slot.index()?);
-        for (index, frame) in self.locals.iter().enumerate().rev() {
+        for (index, frame) in self
+            .locals
+            .iter()
+            .enumerate()
+            .skip(self.current_local_frame_start())
+            .rev()
+        {
             if frame.compiled_scope() != Some(scope) {
                 continue;
             }
             let location = BindingLocation::ExactLocal {
-                frame: LocalScopeIndex::new(index),
+                frame: self.relative_local_scope_index(index)?,
                 compiled_scope: scope,
                 slot,
             };
@@ -502,11 +508,18 @@ impl Context {
             return Ok(None);
         };
         let slot = BindingSlot::from_index(slot.index()?);
-        for (index, frame) in self.locals.iter().enumerate().rev() {
+        for (index, frame) in self
+            .locals
+            .iter()
+            .enumerate()
+            .skip(self.current_local_frame_start())
+            .rev()
+        {
             if frame.compiled_scope() != Some(scope) {
                 continue;
             }
-            let location = BindingLocation::local(atom, LocalScopeIndex::new(index), slot);
+            let location =
+                BindingLocation::local(atom, self.relative_local_scope_index(index)?, slot);
             let Some(cell) = self.binding_at_location(location)? else {
                 return Ok(None);
             };
@@ -558,12 +571,18 @@ impl Context {
         slot: crate::binding_metadata::LocalSlot,
     ) -> Result<Option<BindingCell>> {
         let slot = BindingSlot::from_index(slot.index()?);
-        for (index, frame) in self.locals.iter().enumerate().rev() {
+        for (index, frame) in self
+            .locals
+            .iter()
+            .enumerate()
+            .skip(self.current_local_frame_start())
+            .rev()
+        {
             if frame.compiled_scope() != Some(scope) {
                 continue;
             }
             let location = BindingLocation::ExactLocal {
-                frame: LocalScopeIndex::new(index),
+                frame: self.relative_local_scope_index(index)?,
                 compiled_scope: scope,
                 slot,
             };
@@ -594,8 +613,8 @@ impl Context {
         atom: AtomId,
     ) -> Result<Option<BindingLocation>> {
         let operand = self.compiled_binding_operand(binding)?;
-        if self.locals.last().is_some() {
-            return Self::compiled_active_local_binding(atom, operand, self.locals.len());
+        if self.has_visible_local_scope() {
+            return self.compiled_active_local_binding(atom, operand);
         }
         match operand {
             BindingOperand::Global { slot } => Ok(Some(
@@ -609,25 +628,25 @@ impl Context {
     }
 
     fn compiled_active_local_binding(
+        &self,
         atom: AtomId,
         operand: BindingOperand,
-        local_count: usize,
     ) -> Result<Option<BindingLocation>> {
         let BindingOperand::Local { slot, .. } = operand else {
             return Ok(None);
         };
-        let Some(index) = local_count.checked_sub(1) else {
+        let Some(index) = self.locals.len().checked_sub(1) else {
             return Ok(None);
         };
         Ok(Some(BindingLocation::local(
             atom,
-            LocalScopeIndex::new(index),
+            self.relative_local_scope_index(index)?,
             BindingSlot::from_index(slot.index()?),
         )))
     }
 
     fn compiled_global_location(&self, atom: AtomId, slot: BindingSlot) -> BindingLocation {
-        if self.locals.last().is_none() && self.globals.cell_for_slot(atom, slot).is_some() {
+        if !self.has_visible_local_scope() && self.globals.cell_for_slot(atom, slot).is_some() {
             return BindingLocation::exact_global(slot);
         }
         BindingLocation::global(atom, slot)
@@ -680,11 +699,17 @@ impl Context {
     }
 
     fn resolve_binding_location(&self, atom: AtomId) -> Option<BindingLocation> {
-        for (index, scope) in self.locals.iter().enumerate().rev() {
+        for (index, scope) in self
+            .locals
+            .iter()
+            .enumerate()
+            .skip(self.current_local_frame_start())
+            .rev()
+        {
             if let Some(slot) = scope.slot_of(atom) {
                 return Some(BindingLocation::local(
                     atom,
-                    LocalScopeIndex::new(index),
+                    self.relative_local_scope_index(index).ok()?,
                     slot,
                 ));
             }
@@ -742,7 +767,7 @@ impl Context {
     }
 
     fn exact_global_binding_at_location(&self, slot: BindingSlot) -> Option<BindingCell> {
-        if self.locals.last().is_some() {
+        if self.has_visible_local_scope() {
             return None;
         }
         self.globals.cell_at_slot(slot)
@@ -769,14 +794,14 @@ impl Context {
         index: LocalScopeIndex,
         slot: BindingSlot,
     ) -> Result<Option<BindingCell>> {
-        let Some(scope) = self.locals.get(index.index()) else {
+        let absolute_index = self.absolute_local_scope_index(index)?;
+        let Some(scope) = self.locals.get(absolute_index) else {
             return Ok(None);
         };
         let Some(binding) = scope.cell_for_slot(atom, slot) else {
             return Ok(None);
         };
-        let start = index
-            .index()
+        let start = absolute_index
             .checked_add(1)
             .ok_or_else(|| Error::limit("local scope index overflowed"))?;
         if location.needs_shadow_guard() && self.scope_above_has_binding(start, atom) {
@@ -791,7 +816,8 @@ impl Context {
         compiled_scope: ScopeId,
         slot: BindingSlot,
     ) -> Option<BindingCell> {
-        let scope = self.locals.get(index.index())?;
+        let absolute_index = self.absolute_local_scope_index(index).ok()?;
+        let scope = self.locals.get(absolute_index)?;
         if scope.compiled_scope() != Some(compiled_scope) {
             return None;
         }
@@ -806,11 +832,25 @@ impl Context {
     }
 
     fn scope_above_has_binding(&self, start: usize, atom: AtomId) -> bool {
+        let start = start.max(self.current_local_frame_start());
         for scope in self.locals.iter().skip(start) {
             if scope.contains(atom) {
                 return true;
             }
         }
         false
+    }
+
+    fn relative_local_scope_index(&self, absolute_index: usize) -> Result<LocalScopeIndex> {
+        let relative = absolute_index
+            .checked_sub(self.current_local_frame_start())
+            .ok_or_else(|| Error::runtime("local scope index is outside the active frame"))?;
+        Ok(LocalScopeIndex::new(relative))
+    }
+
+    fn absolute_local_scope_index(&self, relative_index: LocalScopeIndex) -> Result<usize> {
+        self.current_local_frame_start()
+            .checked_add(relative_index.index())
+            .ok_or_else(|| Error::limit("local scope index overflowed"))
     }
 }
