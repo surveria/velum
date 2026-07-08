@@ -178,7 +178,9 @@ const WEAK_SET_ADD_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(169);
 const WEAK_SET_HAS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(170);
 const WEAK_SET_DELETE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(171);
 const DATE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(172);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 173;
+const ARRAY_FLAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(173);
+const ARRAY_FLAT_MAP_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(174);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 175;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -368,6 +370,8 @@ const fn array_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::ArrayFilter => Some(ARRAY_FILTER_SLOT),
         NativeFunctionKind::ArrayFind => Some(ARRAY_FIND_SLOT),
         NativeFunctionKind::ArrayFindIndex => Some(ARRAY_FIND_INDEX_SLOT),
+        NativeFunctionKind::ArrayFlat => Some(ARRAY_FLAT_SLOT),
+        NativeFunctionKind::ArrayFlatMap => Some(ARRAY_FLAT_MAP_SLOT),
         NativeFunctionKind::ArrayForEach => Some(ARRAY_FOR_EACH_SLOT),
         NativeFunctionKind::ArrayIncludes => Some(ARRAY_INCLUDES_SLOT),
         NativeFunctionKind::ArrayIndexOf => Some(ARRAY_INDEX_OF_SLOT),

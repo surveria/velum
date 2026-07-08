@@ -84,6 +84,8 @@ const PATH_TEST262_ARRAY_PROTOTYPE_GENERIC_METHODS: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_generic_methods.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_CALLBACK_METHODS: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_callback_methods.js";
+const PATH_TEST262_ARRAY_FLAT_FLATMAP: &str =
+    "tests/corpora/test262/active/built-ins/Array/flat_flatmap.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_CONCAT: &str =
     "tests/corpora/test262/active/language/expressions/array_prototype_concat.js";
 const PATH_TEST262_ARRAY_PROTOTYPE_INCLUDES: &str =
@@ -307,6 +309,12 @@ fn test262_function_expression_cases() -> Vec<EngineCase> {
 }
 
 fn test262_object_expression_cases() -> Vec<EngineCase> {
+    let mut cases = test262_plain_object_expression_cases();
+    cases.extend(test262_array_expression_cases());
+    cases
+}
+
+fn test262_plain_object_expression_cases() -> Vec<EngineCase> {
     vec![
         EngineCase {
             id: "language/expressions/object_literals",
@@ -338,6 +346,11 @@ fn test262_object_expression_cases() -> Vec<EngineCase> {
             path: PATH_TEST262_COMPUTED_PROPERTIES,
             expectation: Expectation::Value("42"),
         },
+    ]
+}
+
+fn test262_array_expression_cases() -> Vec<EngineCase> {
+    vec![
         EngineCase {
             id: "language/expressions/array_literals",
             path: PATH_TEST262_ARRAY_LITERALS,
@@ -361,6 +374,11 @@ fn test262_object_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/array_prototype_callback_methods",
             path: PATH_TEST262_ARRAY_PROTOTYPE_CALLBACK_METHODS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Array/flat_flatmap",
+            path: PATH_TEST262_ARRAY_FLAT_FLATMAP,
             expectation: Expectation::Value("42"),
         },
         EngineCase {

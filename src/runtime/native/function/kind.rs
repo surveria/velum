@@ -192,6 +192,8 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ArrayFilter,
     ArrayFind,
     ArrayFindIndex,
+    ArrayFlat,
+    ArrayFlatMap,
     ArrayForEach,
     ArrayIncludes,
     ArrayIndexOf,
