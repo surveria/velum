@@ -129,6 +129,8 @@ const PATH_TEST262_CLASS_INHERITANCE: &str =
     "tests/corpora/test262/active/language/statements/class_inheritance.js";
 const PATH_TEST262_ARGUMENTS_OBJECT: &str =
     "tests/corpora/test262/active/language/arguments_object.js";
+const PATH_TEST262_CLASS_FIELDS: &str =
+    "tests/corpora/test262/active/language/statements/class_fields.js";
 const PATH_TEST262_FOR_IN_NULLISH_ERROR: &str =
     "tests/corpora/test262/active/language/statements/for_in_nullish_error.js";
 const PATH_TEST262_SWITCH: &str = "tests/corpora/test262/active/language/statements/switch.js";
@@ -158,6 +160,7 @@ pub fn test262_cases() -> Vec<EngineCase> {
     cases.extend(test262_builtin_cases());
     cases.extend(test262_binding_cases());
     cases.extend(test262_statement_cases());
+    cases.extend(test262_class_cases());
     cases
 }
 
@@ -509,6 +512,31 @@ fn test262_binding_cases() -> Vec<EngineCase> {
     ]
 }
 
+fn test262_class_cases() -> Vec<EngineCase> {
+    vec![
+        EngineCase {
+            id: "language/statements/class_baseline",
+            path: PATH_TEST262_CLASS_BASELINE,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/statements/class_inheritance",
+            path: PATH_TEST262_CLASS_INHERITANCE,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/arguments_object",
+            path: PATH_TEST262_ARGUMENTS_OBJECT,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/statements/class_fields",
+            path: PATH_TEST262_CLASS_FIELDS,
+            expectation: Expectation::Value("42"),
+        },
+    ]
+}
+
 fn test262_statement_cases() -> Vec<EngineCase> {
     vec![
         EngineCase {
@@ -559,21 +587,6 @@ fn test262_statement_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/spread_rest",
             path: PATH_TEST262_SPREAD_REST,
-            expectation: Expectation::Value("42"),
-        },
-        EngineCase {
-            id: "language/statements/class_baseline",
-            path: PATH_TEST262_CLASS_BASELINE,
-            expectation: Expectation::Value("42"),
-        },
-        EngineCase {
-            id: "language/statements/class_inheritance",
-            path: PATH_TEST262_CLASS_INHERITANCE,
-            expectation: Expectation::Value("42"),
-        },
-        EngineCase {
-            id: "language/arguments_object",
-            path: PATH_TEST262_ARGUMENTS_OBJECT,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
