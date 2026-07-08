@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T151129Z.md`
-- Task: PR #342: tests: align Test262 runner accounting with official semantics
-- Performance: 6.20x (63/64 >1.00x)
-- Memory: - (0/64 >1.00x)
-- Full Test262: 15315 passed / 38089 failed (28.68%)
+- `rsqjs-test-report-20260708T152956Z.md`
+- Task: PR #340: Add Array flat and flatMap methods
+- Performance: 6.22x (64/65 >1.00x)
+- Memory: - (0/65 >1.00x)
+- Full Test262: 15322 passed / 38082 failed (28.69%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -332,3 +332,4 @@ Latest report:
 | `20260708T142457Z` `6a1e745` PR #341: Adopt release-only Cargo versioning | 6.13x (63/64 >1.00x) | - (0/64 >1.00x) | 29396 passed / 73182 failed (28.66%) |
 | `20260708T145413Z` `2188734` PR #338: Optimize try scope bytecode paths | 6.11x (63/64 >1.00x) | - (0/64 >1.00x) | 29396 passed / 73182 failed (28.66%) |
 | `20260708T151129Z` `b30a951` PR #342: tests: align Test262 runner accounting with official semantics | 6.20x (63/64 >1.00x) | - (0/64 >1.00x) | 15315 passed / 38089 failed (28.68%) |
+| `20260708T152956Z` `c60d27f` PR #340: Add Array flat and flatMap methods | 6.22x (64/65 >1.00x) | - (0/65 >1.00x) | 15322 passed / 38082 failed (28.69%) |
