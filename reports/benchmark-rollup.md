@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T230810Z.md`
-- Task: PR #357: Implement String RegExp interop Test262 support
-- Performance: 5.86x (67/68 >1.00x)
-- Memory: - (0/68 >1.00x)
-- JetStream: 24.84x (4/4 >1.00x)
-- Full Test262: 31119 passed / 71459 failed (30.34%)
+- `rsqjs-test-report-20260708T232321Z.md`
+- Task: PR #358: ES2025 Set.prototype set-operation methods
+- Performance: 5.95x (68/69 >1.00x)
+- Memory: - (0/69 >1.00x)
+- JetStream: 25.43x (4/4 >1.00x)
+- Full Test262: 31217 passed / 71361 failed (30.43%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -347,3 +347,4 @@ Latest report:
 | `20260708T223249Z` `c95b4c2` PR #354: Array.prototype sort/splice/fill/copyWithin & change-by-copy tranche | 6.00x (66/67 >1.00x) | - (0/67 >1.00x) | 25.16x (4/4 >1.00x) | 30880 passed / 71698 failed (30.10%) |
 | `20260708T225706Z` `0009089` PR #356: Optimize for-statement bytecode fast paths | 5.90x (66/67 >1.00x) | - (0/67 >1.00x) | 25.00x (4/4 >1.00x) | 30880 passed / 71698 failed (30.10%) |
 | `20260708T230810Z` `2d01b65` PR #357: Implement String RegExp interop Test262 support | 5.86x (67/68 >1.00x) | - (0/68 >1.00x) | 24.84x (4/4 >1.00x) | 31119 passed / 71459 failed (30.34%) |
+| `20260708T232321Z` `c66c0c0` PR #358: ES2025 Set.prototype set-operation methods | 5.95x (68/69 >1.00x) | - (0/69 >1.00x) | 25.43x (4/4 >1.00x) | 31217 passed / 71361 failed (30.43%) |
