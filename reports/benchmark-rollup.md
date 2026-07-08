@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T171058Z.md`
-- Task: PR #349: [codex] Expand JetStream shell coverage
-- Performance: 6.31x (64/65 >1.00x)
+- `rsqjs-test-report-20260708T215955Z.md`
+- Task: PR #353: [codex] Optimize Array callback bytecode paths
+- Performance: 6.08x (64/65 >1.00x)
 - Memory: - (0/65 >1.00x)
-- JetStream: 24.69x (4/4 >1.00x)
-- Full Test262: 30113 passed / 72465 failed (29.36%)
+- JetStream: 25.06x (4/4 >1.00x)
+- Full Test262: 30551 passed / 72027 failed (29.78%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -342,3 +342,4 @@ Latest report:
 | `20260708T164028Z` `4b6e81c` PR #350: ci: hide tested source archive ref | 6.24x (64/65 >1.00x) | - (0/65 >1.00x) | 25.00x (1/1 >1.00x) | 30045 passed / 72533 failed (29.29%) |
 | `20260708T170231Z` `99b304b` PR #346: Improve Math built-in Test262 coverage | 6.24x (64/65 >1.00x) | - (0/65 >1.00x) | 25.00x (1/1 >1.00x) | 30113 passed / 72465 failed (29.36%) |
 | `20260708T171058Z` `d4b1067` PR #349: [codex] Expand JetStream shell coverage | 6.31x (64/65 >1.00x) | - (0/65 >1.00x) | 24.69x (4/4 >1.00x) | 30113 passed / 72465 failed (29.36%) |
+| `20260708T215955Z` `5a3b26b` PR #353: [codex] Optimize Array callback bytecode paths | 6.08x (64/65 >1.00x) | - (0/65 >1.00x) | 25.06x (4/4 >1.00x) | 30551 passed / 72027 failed (29.78%) |
