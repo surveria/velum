@@ -11,6 +11,7 @@ mod array_kind;
 mod call_target;
 mod collection;
 mod collection_kind;
+mod date_kind;
 mod direct;
 mod kind;
 mod primitive;
@@ -20,6 +21,9 @@ mod registry;
 use super::number_intrinsic_property;
 
 pub(in crate::runtime::native) use array_kind::ARRAY_NAME;
+pub(in crate::runtime) use date_kind::{
+    DATE_NAME, DATE_NOW_NAME, DATE_PARSE_NAME, DATE_UTC_NAME, DateFunctionKind,
+};
 pub(in crate::runtime) use kind::NativeFunctionKind;
 pub(in crate::runtime::native) use kind::{
     BOOLEAN_NAME, EVAL_NAME, FUNCTION_NAME, FUNCTION_PROTOTYPE_BIND_NAME,
@@ -53,9 +57,6 @@ pub(in crate::runtime::native) use kind::{
     STRING_PROTOTYPE_TRIM_END_NAME, STRING_PROTOTYPE_TRIM_LEFT_NAME, STRING_PROTOTYPE_TRIM_NAME,
     STRING_PROTOTYPE_TRIM_RIGHT_NAME, STRING_PROTOTYPE_TRIM_START_NAME,
     STRING_PROTOTYPE_VALUE_OF_NAME, STRING_RAW_NAME, SYMBOL_NAME,
-};
-pub(in crate::runtime) use kind::{
-    DATE_NAME, DATE_NOW_NAME, DATE_PARSE_NAME, DATE_UTC_NAME, DateFunctionKind,
 };
 pub(in crate::runtime) use kind::{
     GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
