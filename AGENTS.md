@@ -111,6 +111,7 @@ These rules are mandatory for humans and agents working in any part of this repo
 - Active benchmark cases must be large enough to pass the runner measurement quality gate. The default gate rejects rows with a median operation below 1 ms, sample variation above 10%, or calibration at the iteration cap.
 - Use ordinary tests for tiny semantic checks. Do not keep microsecond-scale smoke cases in the active benchmark corpus.
 - Benchmark reports must separate local engine measurements from QuickJS measurements and mark unavailable reference runs as skipped with a concrete reason.
+- External JetStream shell candidates are allowed to remain as non-blocking failed, invalid, or skipped rows while the engine lacks required syntax, runtime APIs, async completion, browser APIs, preload resources, or WebAssembly. Keep them visible in the JetStream report instead of silently omitting official workloads, but do not let those candidate coverage rows fail ordinary CI.
 - Embedding-facing benchmark cases must include direct library measurements where possible, not only CLI process measurements.
 
 ## Rust Lints

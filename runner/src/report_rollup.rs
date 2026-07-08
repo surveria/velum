@@ -46,10 +46,10 @@ struct ReportRecord {
     latency_geomean: Option<f64>,
     memory_geomean: Option<f64>,
     jetstream_count: usize,
-    jetstream_score_geomean: Option<f64>,
+    jetstream_latency_geomean: Option<f64>,
     latency_over: usize,
     memory_over: usize,
-    jetstream_score_below: usize,
+    jetstream_latency_over: usize,
     full_test262: Option<TestCounts>,
     context: ReportContext,
 }
@@ -170,10 +170,10 @@ fn parse_report(path: &Path) -> anyhow::Result<ReportRecord> {
         latency_geomean: geomean(&parsed_benchmarks.latency_values),
         memory_geomean: geomean(&parsed_benchmarks.memory_values),
         jetstream_count: parsed_jetstream.benchmark_count,
-        jetstream_score_geomean: parsed_jetstream.score_geomean,
+        jetstream_latency_geomean: parsed_jetstream.latency_geomean,
         latency_over: parsed_benchmarks.latency_over,
         memory_over: parsed_benchmarks.memory_over,
-        jetstream_score_below: parsed_jetstream.score_below,
+        jetstream_latency_over: parsed_jetstream.latency_over,
         full_test262: parse_rollup_test262_counts(&text),
         context: parse_report_metadata_context(&text),
     })
@@ -557,11 +557,11 @@ fn render_markdown(records: &[ReportRecord]) -> String {
             .to_owned(),
         "- Memory is the geometric mean of benchmark `memory_ratio` values versus QuickJS."
             .to_owned(),
-        "- JetStream is the geometric mean of shell benchmark `score_ratio` values versus QuickJS."
+        "- JetStream is the geometric mean of shell benchmark `latency_ratio` values versus QuickJS."
             .to_owned(),
         "- Full Test262 shows passed and failed case counts from the full Test262 corpus."
             .to_owned(),
-        "- `1.00x` means QuickJS parity; lower performance and memory ratios are better, higher JetStream ratios are better."
+        "- `1.00x` means QuickJS parity; lower performance, memory, and JetStream ratios are better."
             .to_owned(),
         "- Parentheses show budget exceptions over measured rows for each benchmark family."
             .to_owned(),
@@ -591,8 +591,8 @@ fn render_markdown(records: &[ReportRecord]) -> String {
                 record.benchmark_count
             ),
             jetstream_metric_text(
-                record.jetstream_score_geomean,
-                record.jetstream_score_below,
+                record.jetstream_latency_geomean,
+                record.jetstream_latency_over,
                 record.jetstream_count
             ),
             test_counts_text(record.full_test262),
@@ -630,8 +630,8 @@ fn append_latest_section(lines: &mut Vec<String>, records: &[ReportRecord]) {
         format!(
             "- JetStream: {}",
             jetstream_metric_text(
-                latest.jetstream_score_geomean,
-                latest.jetstream_score_below,
+                latest.jetstream_latency_geomean,
+                latest.jetstream_latency_over,
                 latest.jetstream_count
             )
         ),
@@ -666,9 +666,9 @@ fn metric_text(value: Option<f64>, over: usize, total: usize) -> String {
     format!("{ratio} ({over}/{total} >{BUDGET_LABEL})")
 }
 
-fn jetstream_metric_text(value: Option<f64>, below: usize, total: usize) -> String {
+fn jetstream_metric_text(value: Option<f64>, over: usize, total: usize) -> String {
     let ratio = value.map_or_else(|| "-".to_owned(), |value| format!("{value:.2}x"));
-    format!("{ratio} ({below}/{total} <{BUDGET_LABEL})")
+    format!("{ratio} ({over}/{total} >{BUDGET_LABEL})")
 }
 
 fn percent_text(value: Option<f64>) -> String {

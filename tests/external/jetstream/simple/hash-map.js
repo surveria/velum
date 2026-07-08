@@ -40,7 +40,7 @@ and are placed here unaltered.
 (C) Copyright 1997,2004 International Business Machines Corporation.
 All rights reserved.
 
-(C) Copyright IBM Corp. 2003. 
+(C) Copyright IBM Corp. 2003.
 
 
 This software contains code derived from UNIX V7, Copyright(C)
@@ -53,7 +53,7 @@ Caldera International Inc.
 
 var HashMap = (function() {
     var DEFAULT_SIZE = 16;
-    
+
     function calculateCapacity(x)
     {
         if (x >= 1 << 30)
@@ -68,7 +68,7 @@ var HashMap = (function() {
         x |= x >> 16;
         return x + 1;
     }
-    
+
     function computeHashCode(key)
     {
         switch (typeof key) {
@@ -97,7 +97,7 @@ var HashMap = (function() {
             throw new Error("Internal error: Bad JavaScript value type");
         }
     }
-    
+
     function equals(a, b)
     {
         if (typeof a != typeof b)
@@ -118,7 +118,7 @@ var HashMap = (function() {
             return a == b;
         }
     }
-    
+
     function Entry(key, hash, value)
     {
         this._key = key;
@@ -135,23 +135,23 @@ var HashMap = (function() {
                 result._next = this._next.clone();
             return result;
         },
-        
+
         toString: function()
         {
             return this._key + "=" + this._value;
         },
-        
+
         get key()
         {
             return this._key;
         },
-        
+
         get value()
         {
             return this._value;
         }
     };
-    
+
     function AbstractMapIterator(map)
     {
         this._associatedMap = map;
@@ -161,7 +161,7 @@ var HashMap = (function() {
         this._prevEntry = null;
         this._position = 0;
     }
-    
+
     AbstractMapIterator.prototype = {
         hasNext: function()
         {
@@ -175,13 +175,13 @@ var HashMap = (function() {
             }
             return false;
         },
-        
+
         _checkConcurrentMod: function()
         {
             if (this._expectedModCount != this._associatedMap._modCount)
                 throw new Error("Concurrent HashMap modification detected");
         },
-        
+
         _makeNext: function()
         {
             this._checkConcurrentMod();
@@ -198,7 +198,7 @@ var HashMap = (function() {
             this._currentEntry = this._futureEntry;
             this._futureEntry = this._futureEntry._next;
         },
-        
+
         remove: function()
         {
             this._checkConcurrentMod();
@@ -215,12 +215,12 @@ var HashMap = (function() {
             this._associatedMap._elementCount--;
         }
     };
-    
+
     function EntryIterator(map)
     {
         AbstractMapIterator.call(this, map);
     }
-    
+
     EntryIterator.prototype = {
         next: function()
         {
@@ -229,12 +229,12 @@ var HashMap = (function() {
         }
     };
     EntryIterator.prototype.__proto__ = AbstractMapIterator.prototype;
-    
+
     function KeyIterator(map)
     {
         AbstractMapIterator.call(this, map);
     }
-    
+
     KeyIterator.prototype = {
         next: function()
         {
@@ -243,12 +243,12 @@ var HashMap = (function() {
         }
     };
     KeyIterator.prototype.__proto__ = AbstractMapIterator.prototype;
-    
+
     function ValueIterator(map)
     {
         AbstractMapIterator.call(this, map);
     }
-    
+
     ValueIterator.prototype = {
         next: function()
         {
@@ -257,23 +257,23 @@ var HashMap = (function() {
         }
     };
     ValueIterator.prototype.__proto__ = AbstractMapIterator.prototype;
-    
+
     function EntrySet(map)
     {
         this._associatedMap = map;
     }
-    
+
     EntrySet.prototype = {
         size: function()
         {
             return this._associatedMap._elementCount;
         },
-        
+
         clear: function()
         {
             this._associatedMap.clear();
         },
-        
+
         remove: function(object)
         {
             var entry = this._associatedMap._getEntry(object.key);
@@ -284,7 +284,7 @@ var HashMap = (function() {
             this._associatedMap._removeEntry(entry);
             return true;
         },
-        
+
         contains: function(object)
         {
             var entry = this._associatedMap._getEntry(object.key);
@@ -292,84 +292,84 @@ var HashMap = (function() {
                 return false;
             return equals(entry._value, object.value);
         },
-        
+
         iterator: function()
         {
             return new EntryIterator(this._associatedMap);
         }
     };
-    
+
     function KeySet(map)
     {
         this._associatedMap = map;
     }
-    
+
     KeySet.prototype = {
         contains: function(object)
         {
             return this._associatedMap.contains(object);
         },
-        
+
         size: function()
         {
             return this._associatedMap._elementCount;
         },
-        
+
         clear: function()
         {
             this._associatedMap.clear();
         },
-        
+
         remove: function(key)
         {
             return !!this._associatedMap.remove(key);
         },
-        
+
         iterator: function()
         {
             return new KeyIterator(this._associatedMap);
         }
     };
-    
+
     function ValueCollection(map)
     {
         this._associatedMap = map;
     }
-    
+
     ValueCollection.prototype = {
         contains: function(object)
         {
             return this._associatedMap.containsValue(object);
         },
-        
+
         size: function()
         {
             return this._associatedMap._elementCount;
         },
-        
+
         clear: function()
         {
             this._associatedMap.clear();
         },
-        
+
         iterator: function()
         {
             return new ValueIterator(this._associatedMap);
         }
     };
-    
+
     function HashMap(capacity, loadFactor)
     {
         if (capacity == null)
             capacity = DEFAULT_SIZE;
         if (loadFactor == null)
             loadFactor = 0.75;
-        
+
         if (capacity < 0)
             throw new Error("Invalid argument to HashMap constructor: capacity is negative");
         if (loadFactor <= 0)
             throw new Error("Invalid argument to HashMap constructor: loadFactor is not positive");
-        
+
         this._capacity = calculateCapacity(capacity);
         this._elementCount = 0;
         this._elementData = new Array(this.capacity);
@@ -377,36 +377,36 @@ var HashMap = (function() {
         this._modCount = 0;
         this._computeThreshold();
     }
-    
+
     HashMap.prototype = {
         _computeThreshold: function()
         {
             this._threshold = (this._elementData.length * this._loadFactor) | 0;
         },
-        
+
         clear: function()
         {
             if (!this._elementCount)
                 return;
-            
+
             this._elementCount = 0;
             for (var i = this._elementData.length; i--;)
                 this._elementData[i] = null;
             this._modCount++;
         },
-        
+
         clone: function()
         {
             var result = new HashMap(this._elementData.length, this._loadFactor);
             result.putAll(this);
             return result;
         },
-        
+
         containsKey: function(key)
         {
             return !!this._getEntry(key);
         },
-        
+
         containsValue: function(value)
         {
             for (var i = this._elementData.length; i--;) {
@@ -417,12 +417,12 @@ var HashMap = (function() {
             }
             return false;
         },
-        
+
         entrySet: function()
         {
             return new EntrySet(this);
         },
-        
+
         get: function(key)
         {
             var entry = this._getEntry(key);
@@ -430,14 +430,14 @@ var HashMap = (function() {
                 return entry._value;
             return null;
         },
-        
+
         _getEntry: function(key)
         {
             var hash = computeHashCode(key);
             var index = hash & (this._elementData.length - 1);
             return this._findKeyEntry(key, index, hash);
         },
-        
+
         _findKeyEntry: function(key, index, keyHash)
         {
             var entry = this._elementData[index];
@@ -445,17 +445,17 @@ var HashMap = (function() {
                 entry = entry._next;
             return entry;
         },
-        
+
         isEmpty: function()
         {
             return !this._elementCount;
         },
-        
+
         keySet: function()
         {
             return new KeySet(this);
         },
-        
+
         put: function(key, value)
         {
             var hash = computeHashCode(key);
@@ -467,12 +467,12 @@ var HashMap = (function() {
                 if (++this._elementCount > this._threshold)
                     this._rehash();
             }
-            
+
             var result = entry._value;
             entry._value = value;
             return result;
         },
-        
+
         _createHashedEntry: function(key, index, hash)
         {
             var entry = new Entry(key, hash, null);
@@ -480,7 +480,7 @@ var HashMap = (function() {
             this._elementData[index] = entry;
             return entry;
         },
-        
+
         putAll: function(map)
         {
             if (map.isEmpty())
@@ -490,12 +490,12 @@ var HashMap = (function() {
                 put(entry.key, entry.value);
             }
         },
-        
+
         _rehash: function(capacity)
         {
             if (capacity == null)
                 capacity = this._elementData.length;
-            
+
             var length = calculateCapacity(!capacity ? 1 : capacity << 1);
             var newData = new Array(length);
             for (var i = 0; i < this._elementData.length; ++i) {
@@ -512,7 +512,7 @@ var HashMap = (function() {
             this._elementData = newData;
             this._computeThreshold();
         },
-        
+
         remove: function(key)
         {
             var entry = this._removeEntryForKey(key);
@@ -520,7 +520,7 @@ var HashMap = (function() {
                 return null;
             return entry._value;
         },
-        
+
         _removeEntry: function(entry)
         {
             var index = entry._origKeyHash & (this._elementData.length - 1);
@@ -535,7 +535,7 @@ var HashMap = (function() {
             this._modCount++;
             this._elementCount--;
         },
-        
+
         _removeEntryForKey: function(key)
         {
             var hash = computeHashCode(key);
@@ -556,18 +556,18 @@ var HashMap = (function() {
             this._elementCount--;
             return entry;
         },
-        
+
         size: function()
         {
             return this._elementCount;
         },
-        
+
         values: function()
         {
             return new ValueCollection(this);
         }
     };
-    
+
     return HashMap;
 })();
 
@@ -605,4 +605,3 @@ class Benchmark {
         run();
     }
 }
-

@@ -55,16 +55,16 @@ fn draw_jetstream_panel(
     if points.is_empty() {
         return draw_empty_panel(
             area,
-            "JetStream shell score geomean versus QuickJS",
-            "No JetStream score data available",
+            "JetStream shell latency geomean versus QuickJS",
+            "No JetStream latency data available",
         );
     }
-    let values = points.iter().map(|point| point.score);
+    let values = points.iter().map(|point| point.latency);
     let bounds = chart_bounds(values, BUDGET_RATIO)?;
     let x_end = x_axis_end(points.len())?;
     let mut chart = ChartBuilder::on(area)
         .caption(
-            "JetStream shell score geomean versus QuickJS",
+            "JetStream shell latency geomean versus QuickJS",
             ("sans-serif", 30).into_font(),
         )
         .margin(18)
@@ -75,17 +75,17 @@ fn draw_jetstream_panel(
     chart
         .configure_mesh()
         .x_desc("measured report order")
-        .y_desc("score ratio")
+        .y_desc("latency ratio")
         .draw()
         .map_err(|error| anyhow!("failed to draw JetStream chart mesh: {error:?}"))?;
     draw_budget_line(&mut chart, x_end)?;
     chart
         .draw_series(LineSeries::new(
-            points.iter().map(|point| (point.x, point.score)),
+            points.iter().map(|point| (point.x, point.latency)),
             CYAN.stroke_width(3),
         ))
         .map_err(|error| anyhow!("failed to draw JetStream chart series: {error:?}"))?
-        .label("JetStream score geomean")
+        .label("JetStream latency geomean")
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 24, y)], CYAN.stroke_width(3)));
     chart
         .configure_series_labels()
@@ -261,7 +261,7 @@ struct RatioPoint {
 #[derive(Debug, Clone, Copy)]
 struct JetStreamPoint {
     x: i32,
-    score: f64,
+    latency: f64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -289,12 +289,12 @@ fn ratio_points(records: &[ReportRecord]) -> anyhow::Result<Vec<RatioPoint>> {
 fn jetstream_points(records: &[ReportRecord]) -> anyhow::Result<Vec<JetStreamPoint>> {
     let mut points = Vec::new();
     for record in records {
-        let Some(score) = record.jetstream_score_geomean else {
+        let Some(latency) = record.jetstream_latency_geomean else {
             continue;
         };
         points.push(JetStreamPoint {
             x: i32::try_from(points.len()).context("too many reports to plot")?,
-            score,
+            latency,
         });
     }
     Ok(points)

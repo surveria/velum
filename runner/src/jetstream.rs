@@ -10,6 +10,9 @@ use crate::{
     fenced_table, report_metadata,
 };
 
+#[path = "jetstream_cases.rs"]
+mod jetstream_cases;
+
 pub const BUDGET_LABEL: &str = "1.00x";
 
 const BUDGET_NUMERATOR: u128 = 100;
@@ -19,16 +22,34 @@ const STATUS_TRACKED_EXCEPTION: &str = "🟡 tracked exception";
 const STATUS_FAILED: &str = "❌ failed";
 const STATUS_SKIPPED: &str = "🟡 skipped";
 const STATUS_INVALID_BENCHMARK: &str = "❌ invalid benchmark";
-const SCORE_WITHIN: &str = "✅ >= 1.00x";
-const SCORE_BELOW: &str = "🟡 < 1.00x";
-const SCORE_NOT_AVAILABLE: &str = "🟡 unavailable";
-const SCORE_INVALID: &str = "❌ invalid";
+const LATENCY_WITHIN: &str = "✅ <= 1.00x";
+const LATENCY_OVER: &str = "🟡 > 1.00x";
+const LATENCY_NOT_AVAILABLE: &str = "🟡 unavailable";
+const LATENCY_INVALID: &str = "❌ invalid";
 const QUALITY_VALID: &str = "✅ valid";
 const QUALITY_INVALID: &str = "❌ invalid";
 const NOT_MEASURED: &str = "-";
 const DETAIL_COMPLETED: &str = "JetStream shell workload completed";
-const DETAIL_SCORE_EXCEPTION: &str = "score budget exception tracked";
+const DETAIL_LATENCY_EXCEPTION: &str = "latency budget exception tracked";
 const DETAIL_QUALITY_GATE: &str = "measurement quality gate failed";
+const SHELL_PRELUDE: &str = r#"
+var __rsqjsJetStreamNow = 0;
+var performance = {
+    now: function() { __rsqjsJetStreamNow += 1; return __rsqjsJetStreamNow; },
+    mark: function() {},
+    measure: function() {}
+};
+var console = {
+    log: function() {},
+    warn: function() {},
+    error: function() {},
+    assert: function(condition, message) {
+        if (!condition)
+            throw new Error(message || "console.assert failed");
+    }
+};
+var isInBrowser = false;
+"#;
 const SYNC_HARNESS: &str = r#"
 var __rsqjsJetStreamBenchmark = new Benchmark();
 var __rsqjsJetStreamResult = __rsqjsJetStreamBenchmark.runIteration();
@@ -44,7 +65,7 @@ pub struct JetStreamReport {
     pub failed: usize,
     pub invalid: usize,
     pub skipped: usize,
-    pub below_score_budget: usize,
+    pub over_latency_budget: usize,
 }
 
 #[derive(Debug, Tabled)]
@@ -54,8 +75,8 @@ pub struct JetStreamRow {
     source: String,
     rsqjs_time: String,
     quickjs_time: String,
-    score_ratio: String,
-    score_budget: String,
+    latency_ratio: String,
+    latency_budget: String,
     rsqjs_cv: String,
     quickjs_cv: String,
     quality: String,
@@ -65,13 +86,31 @@ pub struct JetStreamRow {
 #[derive(Debug, Clone, Copy)]
 struct JetStreamCase {
     id: &'static str,
-    path: &'static str,
+    files: &'static [&'static str],
     mode: JetStreamMode,
+}
+
+impl JetStreamCase {
+    const fn timed(id: &'static str, files: &'static [&'static str]) -> Self {
+        Self {
+            id,
+            files,
+            mode: JetStreamMode::Timed,
+        }
+    }
+
+    const fn skipped(id: &'static str, reason: &'static str) -> Self {
+        Self {
+            id,
+            files: &[],
+            mode: JetStreamMode::Skipped(reason),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
 enum JetStreamMode {
-    Sync,
+    Timed,
     Skipped(&'static str),
 }
 
@@ -81,7 +120,7 @@ struct JetStreamCounts {
     failed: usize,
     invalid: usize,
     skipped: usize,
-    below_score_budget: usize,
+    over_latency_budget: usize,
 }
 
 #[derive(Debug)]
@@ -91,9 +130,9 @@ struct JetStreamOutcome {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct ScoreCheck {
+struct BudgetCheck {
     label: &'static str,
-    below_budget: bool,
+    over_budget: bool,
 }
 
 #[must_use]
@@ -106,17 +145,17 @@ pub fn run() -> JetStreamReport {
         failed: 0,
         invalid: 0,
         skipped: 0,
-        below_score_budget: 0,
+        over_latency_budget: 0,
     };
-    for case in jetstream_cases() {
+    for case in jetstream_cases::cases() {
         let outcome = run_case(case, config, reference.as_deref());
         report.measured = report.measured.saturating_add(outcome.counts.measured);
         report.failed = report.failed.saturating_add(outcome.counts.failed);
         report.invalid = report.invalid.saturating_add(outcome.counts.invalid);
         report.skipped = report.skipped.saturating_add(outcome.counts.skipped);
-        report.below_score_budget = report
-            .below_score_budget
-            .saturating_add(outcome.counts.below_score_budget);
+        report.over_latency_budget = report
+            .over_latency_budget
+            .saturating_add(outcome.counts.over_latency_budget);
         report.rows.push(outcome.row);
     }
     report
@@ -166,38 +205,14 @@ fn render_markdown(metadata: &report_metadata::RunMetadata, report: &JetStreamRe
 
 fn summary(report: &JetStreamReport) -> String {
     format!(
-        "- Measured: {}\n- Failed: {}\n- Invalid: {}\n- Skipped: {}\n- Below score budget ({}): {}",
+        "- Measured: {}\n- Failed candidates: {}\n- Invalid measurements: {}\n- Skipped: {}\n- Over latency budget ({}): {}",
         report.measured,
         report.failed,
         report.invalid,
         report.skipped,
         BUDGET_LABEL,
-        report.below_score_budget,
+        report.over_latency_budget,
     )
-}
-
-const fn jetstream_cases() -> &'static [JetStreamCase] {
-    &[
-        JetStreamCase {
-            id: "hash-map",
-            path: "tests/external/jetstream/simple/hash-map.js",
-            mode: JetStreamMode::Sync,
-        },
-        JetStreamCase {
-            id: "doxbee-promise",
-            path: "tests/external/jetstream/simple/doxbee-promise.js",
-            mode: JetStreamMode::Skipped(
-                "requires promise-completion support in the runner shell bridge",
-            ),
-        },
-        JetStreamCase {
-            id: "doxbee-async",
-            path: "tests/external/jetstream/simple/doxbee-async.js",
-            mode: JetStreamMode::Skipped(
-                "requires async function completion support in the runner shell bridge",
-            ),
-        },
-    ]
 }
 
 fn run_case(
@@ -207,20 +222,18 @@ fn run_case(
 ) -> JetStreamOutcome {
     match case.mode {
         JetStreamMode::Skipped(reason) => skipped_outcome(case, reason),
-        JetStreamMode::Sync => run_sync_case(case, config, reference),
+        JetStreamMode::Timed => run_timed_case(case, config, reference),
     }
 }
 
-fn run_sync_case(
+fn run_timed_case(
     case: &JetStreamCase,
     config: MeasureConfig,
     reference: Option<&dyn BenchEngine>,
 ) -> JetStreamOutcome {
-    let source = match fs::read_to_string(case.path) {
-        Ok(source) => benchmark_source(&source),
-        Err(error) => {
-            return failed_outcome(case, &format!("failed to read '{}': {error}", case.path));
-        }
+    let source = match benchmark_source(case.files) {
+        Ok(source) => source,
+        Err(error) => return failed_outcome(case, &error.to_string()),
     };
     let ours = match bench_measure::measure(config, || RsqjsEngine.eval(&source)) {
         Ok(stats) => stats,
@@ -235,12 +248,21 @@ fn run_sync_case(
     }
 }
 
-fn benchmark_source(source: &str) -> String {
-    let mut script = String::with_capacity(source.len().saturating_add(SYNC_HARNESS.len()));
-    script.push_str(source);
+fn benchmark_source(files: &[&str]) -> anyhow::Result<String> {
+    let mut script = String::new();
+    script.push_str(SHELL_PRELUDE);
     script.push('\n');
+    for file in files {
+        let source = fs::read_to_string(file)
+            .with_context(|| format!("failed to read JetStream source '{file}'"))?;
+        script.push_str("// JetStream source: ");
+        script.push_str(file);
+        script.push('\n');
+        script.push_str(&source);
+        script.push('\n');
+    }
     script.push_str(SYNC_HARNESS);
-    script
+    Ok(script)
 }
 
 fn measured_with_reference(
@@ -258,24 +280,24 @@ fn measured_with_reference(
             false,
         );
     }
-    let score = score_check(ours.median().as_nanos(), reference.median().as_nanos());
+    let budget = budget_check(ours.median().as_nanos(), reference.median().as_nanos());
     JetStreamOutcome {
         row: JetStreamRow {
             benchmark: case.id.to_owned(),
-            status: jetstream_status(score.below_budget).to_owned(),
-            source: case.path.to_owned(),
+            status: jetstream_status(budget.over_budget).to_owned(),
+            source: case.source_label(),
             rsqjs_time: format_duration(ours.median()),
             quickjs_time: format_duration(reference.median()),
-            score_ratio: ratio_values(reference.median().as_nanos(), ours.median().as_nanos()),
-            score_budget: score.label.to_owned(),
+            latency_ratio: ratio_values(ours.median().as_nanos(), reference.median().as_nanos()),
+            latency_budget: budget.label.to_owned(),
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv: reference.cv_percent_text(),
             quality: QUALITY_VALID.to_owned(),
-            detail: detail_text(score.below_budget),
+            detail: detail_text(budget.over_budget),
         },
         counts: JetStreamCounts {
             measured: 1,
-            below_score_budget: count_if(score.below_budget),
+            over_latency_budget: count_if(budget.over_budget),
             ..JetStreamCounts::default()
         },
     }
@@ -296,11 +318,11 @@ fn measured_without_reference(case: &JetStreamCase, ours: MeasureStats) -> JetSt
         row: JetStreamRow {
             benchmark: case.id.to_owned(),
             status: "✅ measured".to_owned(),
-            source: case.path.to_owned(),
+            source: case.source_label(),
             rsqjs_time: format_duration(ours.median()),
             quickjs_time: "🟡 not configured".to_owned(),
-            score_ratio: NOT_MEASURED.to_owned(),
-            score_budget: "🟡 no reference".to_owned(),
+            latency_ratio: NOT_MEASURED.to_owned(),
+            latency_budget: "🟡 no reference".to_owned(),
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
@@ -329,11 +351,11 @@ fn reference_unavailable(case: &JetStreamCase, ours: MeasureStats, note: &str) -
         row: JetStreamRow {
             benchmark: case.id.to_owned(),
             status: "✅ measured".to_owned(),
-            source: case.path.to_owned(),
+            source: case.source_label(),
             rsqjs_time: format_duration(ours.median()),
             quickjs_time: "🟡 not available".to_owned(),
-            score_ratio: NOT_MEASURED.to_owned(),
-            score_budget: SCORE_NOT_AVAILABLE.to_owned(),
+            latency_ratio: NOT_MEASURED.to_owned(),
+            latency_budget: LATENCY_NOT_AVAILABLE.to_owned(),
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
@@ -359,11 +381,11 @@ fn invalid_measurement_outcome(
         row: JetStreamRow {
             benchmark: case.id.to_owned(),
             status: STATUS_INVALID_BENCHMARK.to_owned(),
-            source: case.path.to_owned(),
+            source: case.source_label(),
             rsqjs_time: format_duration(ours.median()),
             quickjs_time,
-            score_ratio: NOT_MEASURED.to_owned(),
-            score_budget: SCORE_INVALID.to_owned(),
+            latency_ratio: NOT_MEASURED.to_owned(),
+            latency_budget: LATENCY_INVALID.to_owned(),
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv,
             quality: QUALITY_INVALID.to_owned(),
@@ -384,11 +406,11 @@ fn failed_outcome(case: &JetStreamCase, detail: &str) -> JetStreamOutcome {
         row: JetStreamRow {
             benchmark: case.id.to_owned(),
             status: STATUS_FAILED.to_owned(),
-            source: case.path.to_owned(),
+            source: case.source_label(),
             rsqjs_time: NOT_MEASURED.to_owned(),
             quickjs_time: NOT_MEASURED.to_owned(),
-            score_ratio: NOT_MEASURED.to_owned(),
-            score_budget: NOT_MEASURED.to_owned(),
+            latency_ratio: NOT_MEASURED.to_owned(),
+            latency_budget: NOT_MEASURED.to_owned(),
             rsqjs_cv: NOT_MEASURED.to_owned(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: NOT_MEASURED.to_owned(),
@@ -406,11 +428,11 @@ fn skipped_outcome(case: &JetStreamCase, reason: &str) -> JetStreamOutcome {
         row: JetStreamRow {
             benchmark: case.id.to_owned(),
             status: STATUS_SKIPPED.to_owned(),
-            source: case.path.to_owned(),
+            source: case.source_label(),
             rsqjs_time: NOT_MEASURED.to_owned(),
             quickjs_time: NOT_MEASURED.to_owned(),
-            score_ratio: NOT_MEASURED.to_owned(),
-            score_budget: NOT_MEASURED.to_owned(),
+            latency_ratio: NOT_MEASURED.to_owned(),
+            latency_budget: NOT_MEASURED.to_owned(),
             rsqjs_cv: NOT_MEASURED.to_owned(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: NOT_MEASURED.to_owned(),
@@ -463,34 +485,34 @@ fn collect_quality_reasons(reasons: &mut Vec<String>, label: &str, stats: Measur
     }
 }
 
-fn detail_text(below_score_budget: bool) -> String {
-    if below_score_budget {
-        return format!("{DETAIL_COMPLETED}; {DETAIL_SCORE_EXCEPTION}");
+fn detail_text(over_latency_budget: bool) -> String {
+    if over_latency_budget {
+        return format!("{DETAIL_COMPLETED}; {DETAIL_LATENCY_EXCEPTION}");
     }
     DETAIL_COMPLETED.to_owned()
 }
 
-const fn score_check(ours: u128, reference: u128) -> ScoreCheck {
-    if ours == 0 || reference == 0 {
-        return ScoreCheck {
-            label: SCORE_NOT_AVAILABLE,
-            below_budget: false,
+const fn budget_check(ours: u128, reference: u128) -> BudgetCheck {
+    if reference == 0 {
+        return BudgetCheck {
+            label: LATENCY_NOT_AVAILABLE,
+            over_budget: false,
         };
     }
-    let below_budget =
-        reference.saturating_mul(BUDGET_DENOMINATOR) < ours.saturating_mul(BUDGET_NUMERATOR);
-    ScoreCheck {
-        label: if below_budget {
-            SCORE_BELOW
+    let over_budget =
+        ours.saturating_mul(BUDGET_DENOMINATOR) > reference.saturating_mul(BUDGET_NUMERATOR);
+    BudgetCheck {
+        label: if over_budget {
+            LATENCY_OVER
         } else {
-            SCORE_WITHIN
+            LATENCY_WITHIN
         },
-        below_budget,
+        over_budget,
     }
 }
 
-const fn jetstream_status(below_score_budget: bool) -> &'static str {
-    if below_score_budget {
+const fn jetstream_status(over_latency_budget: bool) -> &'static str {
+    if over_latency_budget {
         return STATUS_TRACKED_EXCEPTION;
     }
     STATUS_WITHIN_BUDGET
@@ -500,27 +522,37 @@ const fn count_if(condition: bool) -> usize {
     if condition { 1 } else { 0 }
 }
 
+impl JetStreamCase {
+    fn source_label(self) -> String {
+        match self.files {
+            [] => NOT_MEASURED.to_owned(),
+            [file] => (*file).to_owned(),
+            [first, ..] => format!("{} (+{} more)", first, self.files.len().saturating_sub(1)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{SCORE_BELOW, SCORE_WITHIN, benchmark_source, score_check};
+    use super::{LATENCY_OVER, LATENCY_WITHIN, benchmark_source, budget_check};
 
     #[test]
-    fn score_check_treats_faster_rsquickjs_as_within_budget() -> anyhow::Result<()> {
-        let check = score_check(90, 100);
-        ensure_bool(!check.below_budget, "faster rsqjs must be within budget")?;
-        ensure_text(check.label, SCORE_WITHIN)
+    fn budget_check_treats_faster_rsquickjs_as_within_budget() -> anyhow::Result<()> {
+        let check = budget_check(90, 100);
+        ensure_bool(!check.over_budget, "faster rsqjs must be within budget")?;
+        ensure_text(check.label, LATENCY_WITHIN)
     }
 
     #[test]
-    fn score_check_tracks_slower_rsquickjs_as_exception() -> anyhow::Result<()> {
-        let check = score_check(101, 100);
-        ensure_bool(check.below_budget, "slower rsqjs must be tracked")?;
-        ensure_text(check.label, SCORE_BELOW)
+    fn budget_check_tracks_slower_rsquickjs_as_exception() -> anyhow::Result<()> {
+        let check = budget_check(101, 100);
+        ensure_bool(check.over_budget, "slower rsqjs must be tracked")?;
+        ensure_text(check.label, LATENCY_OVER)
     }
 
     #[test]
     fn benchmark_source_appends_sync_harness() -> anyhow::Result<()> {
-        let source = benchmark_source("class Benchmark { runIteration() {} }");
+        let source = benchmark_source(&[])?;
         ensure_bool(
             source.contains("new Benchmark()"),
             "harness must construct benchmark",

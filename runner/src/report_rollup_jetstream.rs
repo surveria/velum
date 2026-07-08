@@ -14,15 +14,21 @@ const BUDGET_RATIO: f64 = 1.00;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct JetStreamMetrics {
     pub benchmark_count: usize,
-    pub score_geomean: Option<f64>,
-    pub score_below: usize,
+    pub latency_geomean: Option<f64>,
+    pub latency_over: usize,
 }
 
 #[derive(Debug, Default)]
 struct ParsedJetStream {
     benchmark_count: usize,
-    score_values: Vec<f64>,
-    score_below: usize,
+    latency_values: Vec<f64>,
+    latency_over: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum RatioColumn {
+    Latency,
+    LegacyScore,
 }
 
 pub fn parse_for_report(report_path: &Path, fallback_text: &str) -> JetStreamMetrics {
@@ -57,17 +63,18 @@ fn parse_metrics(text: &str) -> JetStreamMetrics {
     let parsed = parse_jetstream_metrics(text);
     JetStreamMetrics {
         benchmark_count: parsed.benchmark_count,
-        score_geomean: geomean(&parsed.score_values),
-        score_below: parsed.score_below,
+        latency_geomean: geomean(&parsed.latency_values),
+        latency_over: parsed.latency_over,
     }
 }
 
 fn parse_jetstream_metrics(text: &str) -> ParsedJetStream {
     let mut parsed = ParsedJetStream::default();
     let mut in_section = false;
-    let mut score_index = None;
-    let score_summary_label = format!("Below score budget ({})", super::BUDGET_LABEL);
-    let mut summary_score_below = None;
+    let mut ratio_column = None;
+    let latency_summary_label = format!("Over latency budget ({})", super::BUDGET_LABEL);
+    let legacy_score_summary_label = format!("Below score budget ({})", super::BUDGET_LABEL);
+    let mut summary_latency_over = None;
 
     for line in text.lines() {
         if line == format!("## {JETSTREAM_SECTION}") {
@@ -83,8 +90,11 @@ fn parse_jetstream_metrics(text: &str) -> ParsedJetStream {
         if let Some(count) = parse_summary_count(line, "Measured") {
             parsed.benchmark_count = count;
         }
-        if let Some(count) = parse_summary_count(line, &score_summary_label) {
-            summary_score_below = Some(count);
+        if let Some(count) = parse_summary_count(line, &latency_summary_label) {
+            summary_latency_over = Some(count);
+        }
+        if let Some(count) = parse_summary_count(line, &legacy_score_summary_label) {
+            summary_latency_over = Some(count);
         }
         if !line.starts_with('|') {
             continue;
@@ -92,31 +102,44 @@ fn parse_jetstream_metrics(text: &str) -> ParsedJetStream {
 
         let cells = split_table_row(line);
         if cells.iter().any(|cell| cell == "benchmark") {
-            score_index = cells.iter().position(|cell| cell == "score_ratio");
+            ratio_column = cells
+                .iter()
+                .position(|cell| cell == "latency_ratio")
+                .map(|index| (index, RatioColumn::Latency))
+                .or_else(|| {
+                    cells
+                        .iter()
+                        .position(|cell| cell == "score_ratio")
+                        .map(|index| (index, RatioColumn::LegacyScore))
+                });
             continue;
         }
-        record_jetstream_row(&mut parsed, &cells, score_index);
+        record_jetstream_row(&mut parsed, &cells, ratio_column);
     }
 
     if parsed.benchmark_count == 0 {
-        parsed.benchmark_count = parsed.score_values.len();
+        parsed.benchmark_count = parsed.latency_values.len();
     }
-    parsed.score_below =
-        summary_score_below.unwrap_or_else(|| count_below_budget(&parsed.score_values));
+    parsed.latency_over =
+        summary_latency_over.unwrap_or_else(|| count_over_budget(&parsed.latency_values));
     parsed
 }
 
 fn record_jetstream_row(
     parsed: &mut ParsedJetStream,
     cells: &[String],
-    score_index: Option<usize>,
+    ratio_column: Option<(usize, RatioColumn)>,
 ) {
-    if let Some(value) = score_index
-        .and_then(|index| cells.get(index))
-        .and_then(|cell| parse_ratio(cell))
-    {
-        parsed.score_values.push(value);
-    }
+    let Some((index, kind)) = ratio_column else {
+        return;
+    };
+    let Some(value) = cells.get(index).and_then(|cell| parse_ratio(cell)) else {
+        return;
+    };
+    let Some(latency_ratio) = normalize_ratio(value, kind) else {
+        return;
+    };
+    parsed.latency_values.push(latency_ratio);
 }
 
 fn parse_summary_count(line: &str, label: &str) -> Option<usize> {
@@ -139,8 +162,20 @@ fn parse_ratio(text: &str) -> Option<f64> {
     ratio.parse().ok()
 }
 
-fn count_below_budget(values: &[f64]) -> usize {
-    values.iter().filter(|value| **value < BUDGET_RATIO).count()
+fn normalize_ratio(value: f64, kind: RatioColumn) -> Option<f64> {
+    match kind {
+        RatioColumn::Latency => Some(value),
+        RatioColumn::LegacyScore => {
+            if value <= 0.0 {
+                return None;
+            }
+            Some(1.0 / value)
+        }
+    }
+}
+
+fn count_over_budget(values: &[f64]) -> usize {
+    values.iter().filter(|value| **value > BUDGET_RATIO).count()
 }
 
 fn geomean(values: &[f64]) -> Option<f64> {
@@ -176,7 +211,32 @@ mod tests {
     type TestResult = anyhow::Result<()>;
 
     #[test]
-    fn parses_jetstream_ratios_from_ascii_table() -> TestResult {
+    fn parses_jetstream_latency_ratios_from_ascii_table() -> TestResult {
+        let text = "\
+## JetStream Shell Benchmarks
+
+- Measured: 2
+- Over latency budget (1.00x): 1
+
+| benchmark | status | latency_ratio |
+| --- | --- | --- |
+| hash-map | ✅ passed | 0.50x |
+| tags | ✅ passed | 1.25x |
+";
+
+        let parsed = parse_metrics(text);
+        ensure_usize(parsed.benchmark_count, 2)?;
+        ensure_usize(parsed.latency_over, 1)?;
+        ensure_f64(
+            parsed
+                .latency_geomean
+                .context("JetStream geomean should be available")?,
+            (0.50_f64 * 1.25_f64).sqrt(),
+        )
+    }
+
+    #[test]
+    fn converts_legacy_jetstream_score_ratios() -> TestResult {
         let text = "\
 ## JetStream Shell Benchmarks
 
@@ -191,12 +251,12 @@ mod tests {
 
         let parsed = parse_metrics(text);
         ensure_usize(parsed.benchmark_count, 2)?;
-        ensure_usize(parsed.score_below, 1)?;
+        ensure_usize(parsed.latency_over, 1)?;
         ensure_f64(
             parsed
-                .score_geomean
+                .latency_geomean
                 .context("JetStream geomean should be available")?,
-            (0.50_f64 * 1.25_f64).sqrt(),
+            (2.00_f64 * 0.80_f64).sqrt(),
         )
     }
 
@@ -205,7 +265,7 @@ mod tests {
         let text = "\
 ## JetStream Shell Benchmarks
 
-| benchmark | score_ratio |
+| benchmark | latency_ratio |
 | --- | --- |
 | hash-map | 0.25x |
 | tags | 2.00x |
@@ -213,10 +273,10 @@ mod tests {
 
         let parsed = parse_metrics(text);
         ensure_usize(parsed.benchmark_count, 2)?;
-        ensure_usize(parsed.score_below, 1)?;
+        ensure_usize(parsed.latency_over, 1)?;
         ensure_f64(
             parsed
-                .score_geomean
+                .latency_geomean
                 .context("JetStream geomean should be available")?,
             (0.25_f64 * 2.00_f64).sqrt(),
         )
