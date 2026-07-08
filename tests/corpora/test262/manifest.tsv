@@ -172,3 +172,33 @@ for-of-head-using-init	test/language/statements/for-of/head-using-init.js	negati
 for-of-head-var-init	test/language/statements/for-of/head-var-init.js	negative-parse	official Test262 for-of negative parse
 for-of-head-var-no-expr	test/language/statements/for-of/head-var-no-expr.js	negative-parse	official Test262 for-of negative parse
 for-of-let-array-with-newline	test/language/statements/for-of/let-array-with-newline.js	negative-parse	official Test262 for-of negative parse
+accessor-json-value-object-abrupt	test/built-ins/JSON/stringify/value-object-abrupt.js	run	official Test262 JSON.stringify accessor evaluation coverage
+accessor-object-15-2-3-5-4-26	test/built-ins/Object/create/15.2.3.5-4-26.js	run	official Test262 accessor descriptor validation coverage
+accessor-object-15-2-3-5-4-27	test/built-ins/Object/create/15.2.3.5-4-27.js	run	official Test262 accessor descriptor validation coverage
+accessor-object-15-2-3-7-6-a-10	test/built-ins/Object/defineProperties/15.2.3.7-6-a-10.js	run	official Test262 defineProperties accessor descriptor validation coverage
+accessor-object-15-2-3-7-6-a-4	test/built-ins/Object/defineProperties/15.2.3.7-6-a-4.js	run	official Test262 defineProperties accessor descriptor validation coverage
+accessor-object-15-2-3-7-6-a-9	test/built-ins/Object/defineProperties/15.2.3.7-6-a-9.js	run	official Test262 defineProperties accessor descriptor validation coverage
+accessor-object-15-2-3-4-4-37	test/built-ins/Object/getOwnPropertyNames/15.2.3.4-4-37.js	run	official Test262 accessor own-name enumeration coverage
+accessor-object-15-2-3-14-5-10	test/built-ins/Object/keys/15.2.3.14-5-10.js	run	official Test262 accessor enumerable key coverage
+accessor-object-15-2-3-14-5-8	test/built-ins/Object/keys/15.2.3.14-5-8.js	run	official Test262 accessor enumerable key coverage
+accessor-object-15-2-3-14-5-9	test/built-ins/Object/keys/15.2.3.14-5-9.js	run	official Test262 accessor enumerable key coverage
+accessor-directive-prologue-get-accsr-inside-func-expr-runtime	test/language/directive-prologue/get-accsr-inside-func-expr-runtime.js	run	official Test262 accessor directive prologue coverage
+accessor-directive-prologue-get-accsr-runtime	test/language/directive-prologue/get-accsr-runtime.js	run	official Test262 accessor directive prologue coverage
+accessor-directive-prologue-set-accsr-runtime	test/language/directive-prologue/set-accsr-runtime.js	run	official Test262 accessor directive prologue coverage
+accessor-expressions-accessor-name-computed-err-evaluation	test/language/expressions/object/accessor-name-computed-err-evaluation.js	run	official Test262 object literal accessor coverage
+accessor-expressions-accessor-name-computed-err-unresolvable	test/language/expressions/object/accessor-name-computed-err-unresolvable.js	run	official Test262 object literal accessor coverage
+accessor-expressions-prop-dup-data-set	test/language/expressions/object/prop-dup-data-set.js	run	official Test262 object literal accessor coverage
+accessor-expressions-prop-dup-get-data	test/language/expressions/object/prop-dup-get-data.js	run	official Test262 object literal accessor coverage
+accessor-expressions-prop-dup-get-get	test/language/expressions/object/prop-dup-get-get.js	run	official Test262 object literal accessor coverage
+accessor-expressions-prop-dup-get-set-get	test/language/expressions/object/prop-dup-get-set-get.js	run	official Test262 object literal accessor coverage
+accessor-expressions-prop-dup-set-data	test/language/expressions/object/prop-dup-set-data.js	run	official Test262 object literal accessor coverage
+accessor-expressions-prop-dup-set-get-set	test/language/expressions/object/prop-dup-set-get-set.js	run	official Test262 object literal accessor coverage
+accessor-expressions-prop-dup-set-set	test/language/expressions/object/prop-dup-set-set.js	run	official Test262 object literal accessor coverage
+accessor-function-code-10-4-3-1-54gs	test/language/function-code/10.4.3-1-54gs.js	run	official Test262 accessor strict function code coverage
+accessor-function-code-10-4-3-1-55gs	test/language/function-code/10.4.3-1-55gs.js	run	official Test262 accessor strict function code coverage
+accessor-function-code-10-4-3-1-56gs	test/language/function-code/10.4.3-1-56gs.js	run	official Test262 accessor strict function code coverage
+accessor-function-code-10-4-3-1-57gs	test/language/function-code/10.4.3-1-57gs.js	run	official Test262 accessor strict function code coverage
+accessor-function-code-10-4-3-1-58gs	test/language/function-code/10.4.3-1-58gs.js	run	official Test262 accessor strict function code coverage
+accessor-function-code-10-4-3-1-59gs	test/language/function-code/10.4.3-1-59gs.js	run	official Test262 accessor strict function code coverage
+accessor-function-code-10-4-3-1-60gs	test/language/function-code/10.4.3-1-60gs.js	run	official Test262 accessor strict function code coverage
+accessor-function-code-10-4-3-1-61gs	test/language/function-code/10.4.3-1-61gs.js	run	official Test262 accessor strict function code coverage

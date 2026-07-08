@@ -9,8 +9,9 @@ use super::shape::{PropertySlot, ShapeId, ShapePropertyAttributes, ShapeTable};
 use super::{ARRAY_LENGTH_PROPERTY, Object, ObjectHeap};
 
 pub use descriptor::{
-    DataPropertyDescriptor, DataPropertyUpdate, ObjectProperty, PropertyConfigurable,
-    PropertyEnumerable, PropertyWritable,
+    AccessorPropertyUpdate, DataPropertyDescriptor, DataPropertyUpdate, ObjectProperty,
+    OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyUpdate,
+    PropertyWritable,
 };
 pub use key::{ObjectPropertyInit, PropertyKey, PropertyLookup};
 pub use lookup::{

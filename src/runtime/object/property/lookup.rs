@@ -232,6 +232,9 @@ impl ObjectHeap {
             if let Some(hit) =
                 object.cacheable_property_hit(current_id, key, depth, &self.shapes)?
             {
+                if object.named_property_at_slot(hit.slot)?.is_accessor() {
+                    return Ok(CacheablePropertyLookup::uncacheable(guard));
+                }
                 return Ok(CacheablePropertyLookup::hit(guard, key, hit));
             }
             current = object.prototype;
@@ -339,6 +342,13 @@ impl ObjectHeap {
         if hit.owner != id {
             return Ok(CacheablePropertyWrite::Uncacheable);
         }
+        if self
+            .object(hit.owner)?
+            .named_property_at_slot(hit.slot)
+            .is_ok_and(ObjectProperty::is_accessor)
+        {
+            return Ok(CacheablePropertyWrite::Uncacheable);
+        }
         let object = self.object_mut(hit.owner)?;
         if object.shape != hit.owner_shape || object.array_length.is_some() {
             return Ok(CacheablePropertyWrite::Uncacheable);
@@ -411,9 +421,10 @@ impl ObjectHeap {
         lookup: CacheablePropertyLookup,
     ) -> Result<CacheablePropertyValue> {
         match lookup.result {
-            CacheablePropertyLookupResult::Hit(hit) => self
-                .cacheable_hit_value(hit)
-                .map(CacheablePropertyValue::Hit),
+            CacheablePropertyLookupResult::Hit(hit) => Ok(self.cacheable_hit_value(hit)?.map_or(
+                CacheablePropertyValue::Uncacheable,
+                CacheablePropertyValue::Hit,
+            )),
             CacheablePropertyLookupResult::Missing => Ok(CacheablePropertyValue::Missing),
             CacheablePropertyLookupResult::Uncacheable => Ok(CacheablePropertyValue::Uncacheable),
         }
@@ -457,8 +468,12 @@ impl ObjectHeap {
         }
     }
 
-    fn cacheable_hit_value(&self, hit: CacheablePropertyHit) -> Result<Value> {
-        self.cacheable_hit_property(hit).map(ObjectProperty::value)
+    fn cacheable_hit_value(&self, hit: CacheablePropertyHit) -> Result<Option<Value>> {
+        let property = self.cacheable_hit_property(hit)?;
+        if property.is_accessor() {
+            return Ok(None);
+        }
+        Ok(Some(property.value()))
     }
 
     fn cacheable_hit_native_property(
@@ -466,6 +481,9 @@ impl ObjectHeap {
         hit: CacheablePropertyHit,
     ) -> Result<CacheableNativePropertyValue> {
         let property = self.cacheable_hit_property(hit)?;
+        if property.is_accessor() {
+            return Ok(CacheableNativePropertyValue::Uncacheable);
+        }
         match property.value() {
             Value::NativeFunction(function) => Ok(CacheableNativePropertyValue::Native {
                 function,

@@ -334,7 +334,7 @@ impl ArrayStorage {
         };
         for property in property_range {
             elements.push(ObjectProperty::ordinary(
-                property.value_ref().clone(),
+                property.value(),
                 PropertyEnumerable::Yes,
             ));
         }

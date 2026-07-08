@@ -22,7 +22,9 @@ use crate::{
         PropertyEnumerable, PropertyKey, PropertyWritable,
     },
     runtime::property::DynamicPropertyKey,
-    syntax::{BinaryOp, DeclKind, StaticName, StaticPropertyAccessId, UnaryOp, UpdateOp},
+    syntax::{
+        AccessorKind, BinaryOp, DeclKind, StaticName, StaticPropertyAccessId, UnaryOp, UpdateOp,
+    },
     value::{ErrorName, Value},
 };
 
@@ -608,11 +610,31 @@ impl Context {
                         key,
                         name: RuntimeObjectLiteralName::Static(name.as_str()),
                         value,
+                        accessor: None,
                     });
                 }
-                BytecodeObjectProperty::Computed | BytecodeObjectProperty::ComputedMethod => {
-                    let set_method_name =
-                        matches!(property, BytecodeObjectProperty::ComputedMethod);
+                BytecodeObjectProperty::StaticAccessor { key: name, kind } => {
+                    let value = next_object_literal_stack_value(&mut values)?;
+                    let key = self.intern_static_property_key(name)?;
+                    entries.push(RuntimeObjectLiteralEntry {
+                        key,
+                        name: RuntimeObjectLiteralName::Static(name.as_str()),
+                        value,
+                        accessor: Some(*kind),
+                    });
+                }
+                BytecodeObjectProperty::Computed
+                | BytecodeObjectProperty::ComputedMethod
+                | BytecodeObjectProperty::ComputedAccessor { .. } => {
+                    let set_method_name = matches!(
+                        property,
+                        BytecodeObjectProperty::ComputedMethod
+                            | BytecodeObjectProperty::ComputedAccessor { .. }
+                    );
+                    let accessor = match property {
+                        BytecodeObjectProperty::ComputedAccessor { kind } => Some(*kind),
+                        _ => None,
+                    };
                     let key_value = next_object_literal_stack_value(&mut values)?;
                     let value = next_object_literal_stack_value(&mut values)?;
                     let mut property = self.dynamic_property_key(&key_value)?;
@@ -626,6 +648,7 @@ impl Context {
                         key,
                         name: RuntimeObjectLiteralName::Dynamic(name_index),
                         value,
+                        accessor,
                     });
                 }
             }
@@ -645,7 +668,9 @@ impl Context {
                     .map(String::as_str)
                     .ok_or_else(|| Error::runtime("computed object property name disappeared"))?,
             };
-            let init = if is_dynamic {
+            let init = if let Some(kind) = entry.accessor {
+                ObjectPropertyInit::new_accessor(entry.key, name, entry.value, kind)
+            } else if is_dynamic {
                 ObjectPropertyInit::new_data(entry.key, name, entry.value, PropertyEnumerable::Yes)
             } else {
                 ObjectPropertyInit::new(entry.key, name, entry.value, PropertyEnumerable::Yes)
@@ -698,6 +723,7 @@ struct RuntimeObjectLiteralEntry<'a> {
     key: PropertyKey,
     name: RuntimeObjectLiteralName<'a>,
     value: Value,
+    accessor: Option<AccessorKind>,
 }
 
 fn object_literal_stack_value_count(properties: &[BytecodeObjectProperty]) -> Result<usize> {

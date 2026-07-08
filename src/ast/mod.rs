@@ -2,7 +2,7 @@ mod expression;
 mod function;
 mod statement;
 
-pub use expression::{Expr, ObjectProperty, ObjectPropertyKey};
+pub use expression::{Expr, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind};
 pub use function::FunctionParam;
 pub use statement::{CatchClause, ForInTarget, Program, Stmt, SwitchCase};
 

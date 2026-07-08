@@ -6,7 +6,7 @@ use crate::{
     runtime::call_args::RuntimeCallArgs,
     runtime::object::{
         DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
-        PropertyKey, PropertyWritable,
+        PropertyKey, PropertyUpdate, PropertyWritable,
     },
     value::{ErrorName, ObjectId, Value},
 };
@@ -211,12 +211,12 @@ impl Context {
             prototype,
             key,
             SYMBOL_TO_STRING_TAG_PROPERTY,
-            DataPropertyUpdate::new(
+            PropertyUpdate::Data(DataPropertyUpdate::new(
                 Some(to_string_tag),
                 Some(PropertyWritable::No),
                 Some(PropertyEnumerable::No),
                 Some(PropertyConfigurable::Yes),
-            ),
+            )),
             self.limits.max_object_properties,
         )
     }

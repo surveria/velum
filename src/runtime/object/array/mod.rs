@@ -409,7 +409,8 @@ impl ObjectHeap {
             if index > 0 {
                 Self::push_join_text(&mut joined, separator, max_string_len)?;
             }
-            Self::push_join_value_text(&mut joined, property.value_ref(), max_string_len)?;
+            let value = property.data_value_ref().unwrap_or(&Value::Undefined);
+            Self::push_join_value_text(&mut joined, value, max_string_len)?;
         }
         Ok(Some(joined))
     }
@@ -784,7 +785,7 @@ impl ObjectHeap {
         start: usize,
     ) -> Result<Value> {
         for (position, property) in properties.iter().enumerate().skip(start) {
-            if property.value_ref() == search {
+            if property.data_value_ref() == Some(search) {
                 return Self::array_index_value(position);
             }
         }
@@ -797,7 +798,7 @@ impl ObjectHeap {
         start: usize,
     ) -> Result<Value> {
         for (position, property) in properties.iter().enumerate().skip(start) {
-            if let Value::Number(value) = property.value_ref()
+            if let Some(Value::Number(value)) = property.data_value_ref()
                 && Self::number_strict_equal(*value, search)
             {
                 return Self::array_index_value(position);
@@ -808,7 +809,10 @@ impl ObjectHeap {
 
     fn packed_array_includes(properties: &[ObjectProperty], search: &Value, start: usize) -> Value {
         for property in properties.iter().skip(start) {
-            if Self::same_value_zero(property.value_ref(), search) {
+            if property
+                .data_value_ref()
+                .is_some_and(|value| Self::same_value_zero(value, search))
+            {
                 return Value::Bool(true);
             }
         }
@@ -821,7 +825,7 @@ impl ObjectHeap {
         start: usize,
     ) -> Value {
         for property in properties.iter().skip(start) {
-            if let Value::Number(value) = property.value_ref()
+            if let Some(Value::Number(value)) = property.data_value_ref()
                 && Self::number_same_value_zero(*value, search)
             {
                 return Value::Bool(true);
@@ -843,7 +847,7 @@ impl ObjectHeap {
             .checked_add(1)
             .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
         for (position, property) in properties.iter().enumerate().take(count).rev() {
-            if property.value_ref() == search {
+            if property.data_value_ref() == Some(search) {
                 return Self::array_index_value(position);
             }
         }
@@ -863,7 +867,7 @@ impl ObjectHeap {
             .checked_add(1)
             .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
         for (position, property) in properties.iter().enumerate().take(count).rev() {
-            if let Value::Number(value) = property.value_ref()
+            if let Some(Value::Number(value)) = property.data_value_ref()
                 && Self::number_strict_equal(*value, search)
             {
                 return Self::array_index_value(position);

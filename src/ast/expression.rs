@@ -13,7 +13,17 @@ use super::{
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjectProperty {
     pub key: ObjectPropertyKey,
+    pub kind: ObjectPropertyKind,
     pub value: Expr,
+}
+
+/// How an object literal property definition installs its value: as a plain
+/// data property or as the get/set half of an accessor property.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ObjectPropertyKind {
+    Init,
+    Get,
+    Set,
 }
 
 #[derive(Debug, Clone, PartialEq)]

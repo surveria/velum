@@ -17,6 +17,8 @@ pub(in crate::runtime) struct DescriptorPropertyKeys {
     writable: PropertyKey,
     enumerable: PropertyKey,
     configurable: PropertyKey,
+    get: PropertyKey,
+    set: PropertyKey,
 }
 
 impl DescriptorPropertyKeys {
@@ -25,13 +27,25 @@ impl DescriptorPropertyKeys {
         writable: PropertyKey,
         enumerable: PropertyKey,
         configurable: PropertyKey,
+        get: PropertyKey,
+        set: PropertyKey,
     ) -> Self {
         Self {
             value,
             writable,
             enumerable,
             configurable,
+            get,
+            set,
         }
+    }
+
+    pub(in crate::runtime) const fn get(self) -> PropertyKey {
+        self.get
+    }
+
+    pub(in crate::runtime) const fn set(self) -> PropertyKey {
+        self.set
     }
 
     pub(in crate::runtime) const fn value(self) -> PropertyKey {
