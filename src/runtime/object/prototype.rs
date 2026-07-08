@@ -81,6 +81,11 @@ impl ObjectHeap {
         if object.prototype == prototype {
             return Ok(());
         }
+        if !object.extensibility.is_extensible() {
+            return Err(Error::type_error(
+                "cannot change prototype of non-extensible object",
+            ));
+        }
         object.prototype = prototype;
         self.bump_if_structure_changed(id, before)
     }

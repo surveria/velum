@@ -411,6 +411,7 @@ impl Context {
             NativeCallTarget::ObjectEntries => {
                 Some(self.eval_object_entries(runtime_call_args(args)))
             }
+            NativeCallTarget::ObjectFreeze => Some(self.eval_direct_object_freeze(args)),
             NativeCallTarget::ObjectGetOwnPropertyDescriptor => {
                 Some(self.eval_object_get_own_property_descriptor(runtime_call_args(args)))
             }
@@ -427,10 +428,19 @@ impl Context {
                 Some(self.eval_object_has_own(runtime_call_args(args)))
             }
             NativeCallTarget::ObjectIs => Some(Ok(Self::eval_direct_object_is(args))),
+            NativeCallTarget::ObjectIsExtensible => {
+                Some(self.eval_direct_object_is_extensible(args))
+            }
+            NativeCallTarget::ObjectIsFrozen => Some(self.eval_direct_object_is_frozen(args)),
+            NativeCallTarget::ObjectIsSealed => Some(self.eval_direct_object_is_sealed(args)),
             NativeCallTarget::ObjectKeys => Some(self.eval_object_keys(runtime_call_args(args))),
+            NativeCallTarget::ObjectPreventExtensions => {
+                Some(self.eval_direct_object_prevent_extensions(args))
+            }
             NativeCallTarget::ObjectSetPrototypeOf => {
                 Some(self.eval_direct_object_set_prototype_of(args))
             }
+            NativeCallTarget::ObjectSeal => Some(self.eval_direct_object_seal(args)),
             NativeCallTarget::ObjectValues => {
                 Some(self.eval_object_values(runtime_call_args(args)))
             }
@@ -672,6 +682,7 @@ impl Context {
                 Some(self.eval_object_define_property(args))
             }
             NativeFunctionKind::ObjectEntries => Some(self.eval_object_entries(args)),
+            NativeFunctionKind::ObjectFreeze => Some(self.eval_object_freeze(args)),
             NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
                 Some(self.eval_object_get_own_property_descriptor(args))
             }
@@ -686,7 +697,13 @@ impl Context {
             }
             NativeFunctionKind::ObjectHasOwn => Some(self.eval_object_has_own(args)),
             NativeFunctionKind::ObjectIs => Some(Ok(Self::eval_direct_object_is(args.as_slice()))),
+            NativeFunctionKind::ObjectIsExtensible => Some(self.eval_object_is_extensible(args)),
+            NativeFunctionKind::ObjectIsFrozen => Some(self.eval_object_is_frozen(args)),
+            NativeFunctionKind::ObjectIsSealed => Some(self.eval_object_is_sealed(args)),
             NativeFunctionKind::ObjectKeys => Some(self.eval_object_keys(args)),
+            NativeFunctionKind::ObjectPreventExtensions => {
+                Some(self.eval_object_prevent_extensions(args))
+            }
             NativeFunctionKind::ObjectPrototypeHasOwnProperty => {
                 Some(self.eval_object_prototype_has_own_property(args, this_value))
             }
@@ -696,6 +713,7 @@ impl Context {
             NativeFunctionKind::ObjectSetPrototypeOf => {
                 Some(self.eval_object_set_prototype_of(args))
             }
+            NativeFunctionKind::ObjectSeal => Some(self.eval_object_seal(args)),
             NativeFunctionKind::ObjectValues => Some(self.eval_object_values(args)),
             _ => None,
         }

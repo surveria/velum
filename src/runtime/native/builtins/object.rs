@@ -13,11 +13,13 @@ use crate::{
 
 use super::{
     NativeFunctionKind, OBJECT_ASSIGN_NAME, OBJECT_CREATE_NAME, OBJECT_DEFINE_PROPERTIES_NAME,
-    OBJECT_DEFINE_PROPERTY_NAME, OBJECT_ENTRIES_NAME, OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
-    OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME, OBJECT_GET_OWN_PROPERTY_NAMES_NAME,
-    OBJECT_GET_PROTOTYPE_OF_NAME, OBJECT_HAS_OWN_NAME, OBJECT_IS_NAME, OBJECT_KEYS_NAME,
-    OBJECT_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
-    OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME, OBJECT_SET_PROTOTYPE_OF_NAME, OBJECT_VALUES_NAME,
+    OBJECT_DEFINE_PROPERTY_NAME, OBJECT_ENTRIES_NAME, OBJECT_FREEZE_NAME,
+    OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME, OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME,
+    OBJECT_GET_OWN_PROPERTY_NAMES_NAME, OBJECT_GET_PROTOTYPE_OF_NAME, OBJECT_HAS_OWN_NAME,
+    OBJECT_IS_EXTENSIBLE_NAME, OBJECT_IS_FROZEN_NAME, OBJECT_IS_NAME, OBJECT_IS_SEALED_NAME,
+    OBJECT_KEYS_NAME, OBJECT_NAME, OBJECT_PREVENT_EXTENSIONS_NAME,
+    OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME, OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
+    OBJECT_SEAL_NAME, OBJECT_SET_PROTOTYPE_OF_NAME, OBJECT_VALUES_NAME,
 };
 use crate::runtime::property::well_known::DescriptorPropertyKeys;
 
@@ -290,76 +292,58 @@ impl Context {
     }
 
     fn install_object_static_methods(&mut self, constructor: NativeFunctionId) -> Result<()> {
-        self.define_object_static_method(
-            constructor,
-            OBJECT_ASSIGN_NAME,
-            NativeFunctionKind::ObjectAssign,
-        )?;
-        self.define_object_static_method(
-            constructor,
-            OBJECT_CREATE_NAME,
-            NativeFunctionKind::ObjectCreate,
-        )?;
-        self.define_object_static_method(
-            constructor,
-            OBJECT_DEFINE_PROPERTIES_NAME,
-            NativeFunctionKind::ObjectDefineProperties,
-        )?;
-        self.define_object_static_method(
-            constructor,
-            OBJECT_DEFINE_PROPERTY_NAME,
-            NativeFunctionKind::ObjectDefineProperty,
-        )?;
-        self.define_object_static_method(
-            constructor,
-            OBJECT_ENTRIES_NAME,
-            NativeFunctionKind::ObjectEntries,
-        )?;
-        self.define_object_static_method(
-            constructor,
-            OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
-            NativeFunctionKind::ObjectGetOwnPropertyDescriptor,
-        )?;
-        self.define_object_static_method(
-            constructor,
-            OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME,
-            NativeFunctionKind::ObjectGetOwnPropertyDescriptors,
-        )?;
-        self.define_object_static_method(
-            constructor,
-            OBJECT_GET_OWN_PROPERTY_NAMES_NAME,
-            NativeFunctionKind::ObjectGetOwnPropertyNames,
-        )?;
-        self.define_object_static_method(
-            constructor,
-            OBJECT_GET_PROTOTYPE_OF_NAME,
-            NativeFunctionKind::ObjectGetPrototypeOf,
-        )?;
-        self.define_object_static_method(
-            constructor,
-            OBJECT_HAS_OWN_NAME,
-            NativeFunctionKind::ObjectHasOwn,
-        )?;
-        self.define_object_static_method(
-            constructor,
-            OBJECT_IS_NAME,
-            NativeFunctionKind::ObjectIs,
-        )?;
-        self.define_object_static_method(
-            constructor,
-            OBJECT_KEYS_NAME,
-            NativeFunctionKind::ObjectKeys,
-        )?;
-        self.define_object_static_method(
-            constructor,
-            OBJECT_SET_PROTOTYPE_OF_NAME,
-            NativeFunctionKind::ObjectSetPrototypeOf,
-        )?;
-        self.define_object_static_method(
-            constructor,
-            OBJECT_VALUES_NAME,
-            NativeFunctionKind::ObjectValues,
-        )
+        for (name, kind) in [
+            (OBJECT_ASSIGN_NAME, NativeFunctionKind::ObjectAssign),
+            (OBJECT_CREATE_NAME, NativeFunctionKind::ObjectCreate),
+            (
+                OBJECT_DEFINE_PROPERTIES_NAME,
+                NativeFunctionKind::ObjectDefineProperties,
+            ),
+            (
+                OBJECT_DEFINE_PROPERTY_NAME,
+                NativeFunctionKind::ObjectDefineProperty,
+            ),
+            (OBJECT_ENTRIES_NAME, NativeFunctionKind::ObjectEntries),
+            (OBJECT_FREEZE_NAME, NativeFunctionKind::ObjectFreeze),
+            (
+                OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME,
+                NativeFunctionKind::ObjectGetOwnPropertyDescriptor,
+            ),
+            (
+                OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME,
+                NativeFunctionKind::ObjectGetOwnPropertyDescriptors,
+            ),
+            (
+                OBJECT_GET_OWN_PROPERTY_NAMES_NAME,
+                NativeFunctionKind::ObjectGetOwnPropertyNames,
+            ),
+            (
+                OBJECT_GET_PROTOTYPE_OF_NAME,
+                NativeFunctionKind::ObjectGetPrototypeOf,
+            ),
+            (OBJECT_HAS_OWN_NAME, NativeFunctionKind::ObjectHasOwn),
+            (OBJECT_IS_NAME, NativeFunctionKind::ObjectIs),
+            (
+                OBJECT_IS_EXTENSIBLE_NAME,
+                NativeFunctionKind::ObjectIsExtensible,
+            ),
+            (OBJECT_IS_FROZEN_NAME, NativeFunctionKind::ObjectIsFrozen),
+            (OBJECT_IS_SEALED_NAME, NativeFunctionKind::ObjectIsSealed),
+            (OBJECT_KEYS_NAME, NativeFunctionKind::ObjectKeys),
+            (
+                OBJECT_PREVENT_EXTENSIONS_NAME,
+                NativeFunctionKind::ObjectPreventExtensions,
+            ),
+            (
+                OBJECT_SET_PROTOTYPE_OF_NAME,
+                NativeFunctionKind::ObjectSetPrototypeOf,
+            ),
+            (OBJECT_SEAL_NAME, NativeFunctionKind::ObjectSeal),
+            (OBJECT_VALUES_NAME, NativeFunctionKind::ObjectValues),
+        ] {
+            self.define_object_static_method(constructor, name, kind)?;
+        }
+        Ok(())
     }
 
     fn install_object_prototype_methods(&mut self, constructor: &Value) -> Result<()> {

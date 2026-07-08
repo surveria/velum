@@ -7,6 +7,7 @@ mod base;
 mod data;
 mod date;
 mod heap;
+mod integrity;
 mod property;
 mod prototype;
 mod shape;
@@ -66,17 +67,32 @@ pub enum AccessorWriteDisposition {
     NoSetter,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+enum ObjectExtensibility {
+    #[default]
+    Extensible,
+    NonExtensible,
+}
+
+impl ObjectExtensibility {
+    const fn is_extensible(self) -> bool {
+        matches!(self, Self::Extensible)
+    }
+}
+
+#[derive(Debug, Clone)]
 struct Object {
     named_properties: Vec<NamedProperty>,
     array_storage: ArrayStorage,
     shape: ShapeId,
     enumerable_property_count: usize,
     array_length: Option<ArrayLength>,
+    array_length_writable: PropertyWritable,
     string_value: Option<crate::storage::string_heap::JsString>,
     primitive_value: Option<ObjectPrimitiveValue>,
     date_value: Option<DateValue>,
     prototype: Option<ObjectId>,
+    extensibility: ObjectExtensibility,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -85,6 +101,8 @@ struct ObjectStructureSnapshot {
     property_count: usize,
     enumerable_property_count: usize,
     prototype: Option<ObjectId>,
+    extensibility: ObjectExtensibility,
+    array_length_writable: PropertyWritable,
 }
 
 impl Object {
@@ -95,10 +113,12 @@ impl Object {
             shape: ShapeId::root(),
             enumerable_property_count: 0,
             array_length: None,
+            array_length_writable: PropertyWritable::Yes,
             string_value: None,
             primitive_value: None,
             date_value: None,
             prototype: None,
+            extensibility: ObjectExtensibility::Extensible,
         }
     }
 
@@ -109,10 +129,12 @@ impl Object {
             shape: ShapeId::root(),
             enumerable_property_count: 0,
             array_length: None,
+            array_length_writable: PropertyWritable::Yes,
             string_value: None,
             primitive_value: None,
             date_value: None,
             prototype: None,
+            extensibility: ObjectExtensibility::Extensible,
         }
     }
 
@@ -123,10 +145,12 @@ impl Object {
             shape: ShapeId::root(),
             enumerable_property_count: 0,
             array_length: Some(length),
+            array_length_writable: PropertyWritable::Yes,
             string_value: None,
             primitive_value: None,
             date_value: None,
             prototype: None,
+            extensibility: ObjectExtensibility::Extensible,
         }
     }
 
@@ -137,10 +161,12 @@ impl Object {
             shape: ShapeId::root(),
             enumerable_property_count: 0,
             array_length: None,
+            array_length_writable: PropertyWritable::Yes,
             string_value: None,
             primitive_value: Some(value),
             date_value: None,
             prototype: None,
+            extensibility: ObjectExtensibility::Extensible,
         }
     }
 
@@ -167,6 +193,8 @@ impl Object {
             property_count: self.property_count(),
             enumerable_property_count: self.enumerable_property_count,
             prototype: self.prototype,
+            extensibility: self.extensibility,
+            array_length_writable: self.array_length_writable,
         }
     }
 
@@ -333,6 +361,9 @@ impl Object {
             self.shape = shapes.transition_after_update(self.shape, property, attributes)?;
             Some((was_enumerable, is_enumerable))
         } else {
+            if !self.extensibility.is_extensible() {
+                return Ok(());
+            }
             if property_count >= max_properties {
                 return Err(Error::limit(format!(
                     "object property count exceeded {max_properties}"
@@ -366,6 +397,9 @@ impl Object {
             let Some(shapes) = shapes else {
                 return Err(Error::runtime("sparse array shape table is not available"));
             };
+            if !self.extensibility.is_extensible() {
+                return Ok(());
+            }
             self.array_storage.insert_sparse_key(index, property);
             return self.set_named_property_value(
                 property,
@@ -387,6 +421,9 @@ impl Object {
             return Ok(());
         }
 
+        if !self.extensibility.is_extensible() {
+            return Ok(());
+        }
         if self.property_count() >= max_properties {
             return Err(Error::limit(format!(
                 "object property count exceeded {max_properties}"

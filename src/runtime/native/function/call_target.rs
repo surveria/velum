@@ -138,6 +138,7 @@ impl NativeFunctionKind {
             NativeCallTarget::ObjectDefineProperties => Some(Self::ObjectDefineProperties),
             NativeCallTarget::ObjectDefineProperty => Some(Self::ObjectDefineProperty),
             NativeCallTarget::ObjectEntries => Some(Self::ObjectEntries),
+            NativeCallTarget::ObjectFreeze => Some(Self::ObjectFreeze),
             NativeCallTarget::ObjectGetPrototypeOf => Some(Self::ObjectGetPrototypeOf),
             NativeCallTarget::ObjectGetOwnPropertyDescriptor => {
                 Some(Self::ObjectGetOwnPropertyDescriptor)
@@ -148,8 +149,13 @@ impl NativeFunctionKind {
             NativeCallTarget::ObjectGetOwnPropertyNames => Some(Self::ObjectGetOwnPropertyNames),
             NativeCallTarget::ObjectHasOwn => Some(Self::ObjectHasOwn),
             NativeCallTarget::ObjectIs => Some(Self::ObjectIs),
+            NativeCallTarget::ObjectIsExtensible => Some(Self::ObjectIsExtensible),
+            NativeCallTarget::ObjectIsFrozen => Some(Self::ObjectIsFrozen),
+            NativeCallTarget::ObjectIsSealed => Some(Self::ObjectIsSealed),
             NativeCallTarget::ObjectKeys => Some(Self::ObjectKeys),
+            NativeCallTarget::ObjectPreventExtensions => Some(Self::ObjectPreventExtensions),
             NativeCallTarget::ObjectSetPrototypeOf => Some(Self::ObjectSetPrototypeOf),
+            NativeCallTarget::ObjectSeal => Some(Self::ObjectSeal),
             NativeCallTarget::ObjectValues => Some(Self::ObjectValues),
             _ => None,
         }
@@ -289,6 +295,7 @@ impl NativeFunctionKind {
             Self::ObjectDefineProperties => Some(NativeCallTarget::ObjectDefineProperties),
             Self::ObjectDefineProperty => Some(NativeCallTarget::ObjectDefineProperty),
             Self::ObjectEntries => Some(NativeCallTarget::ObjectEntries),
+            Self::ObjectFreeze => Some(NativeCallTarget::ObjectFreeze),
             Self::ObjectGetPrototypeOf => Some(NativeCallTarget::ObjectGetPrototypeOf),
             Self::ObjectGetOwnPropertyDescriptor => {
                 Some(NativeCallTarget::ObjectGetOwnPropertyDescriptor)
@@ -299,8 +306,13 @@ impl NativeFunctionKind {
             Self::ObjectGetOwnPropertyNames => Some(NativeCallTarget::ObjectGetOwnPropertyNames),
             Self::ObjectHasOwn => Some(NativeCallTarget::ObjectHasOwn),
             Self::ObjectIs => Some(NativeCallTarget::ObjectIs),
+            Self::ObjectIsExtensible => Some(NativeCallTarget::ObjectIsExtensible),
+            Self::ObjectIsFrozen => Some(NativeCallTarget::ObjectIsFrozen),
+            Self::ObjectIsSealed => Some(NativeCallTarget::ObjectIsSealed),
             Self::ObjectKeys => Some(NativeCallTarget::ObjectKeys),
+            Self::ObjectPreventExtensions => Some(NativeCallTarget::ObjectPreventExtensions),
             Self::ObjectSetPrototypeOf => Some(NativeCallTarget::ObjectSetPrototypeOf),
+            Self::ObjectSeal => Some(NativeCallTarget::ObjectSeal),
             Self::ObjectValues => Some(NativeCallTarget::ObjectValues),
             _ => None,
         }

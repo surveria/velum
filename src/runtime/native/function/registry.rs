@@ -180,7 +180,13 @@ const WEAK_SET_DELETE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(171);
 const DATE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(172);
 const ARRAY_FLAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(173);
 const ARRAY_FLAT_MAP_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(174);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 175;
+const OBJECT_FREEZE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(175);
+const OBJECT_IS_EXTENSIBLE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(176);
+const OBJECT_IS_FROZEN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(177);
+const OBJECT_IS_SEALED_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(178);
+const OBJECT_PREVENT_EXTENSIONS_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(179);
+const OBJECT_SEAL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(180);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 181;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -302,6 +308,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::ObjectDefineProperties => Some(OBJECT_DEFINE_PROPERTIES_SLOT),
         NativeFunctionKind::ObjectDefineProperty => Some(OBJECT_DEFINE_PROPERTY_SLOT),
         NativeFunctionKind::ObjectEntries => Some(OBJECT_ENTRIES_SLOT),
+        NativeFunctionKind::ObjectFreeze => Some(OBJECT_FREEZE_SLOT),
         NativeFunctionKind::ObjectGetPrototypeOf => Some(OBJECT_GET_PROTOTYPE_OF_SLOT),
         NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
             Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_SLOT)
@@ -311,8 +318,13 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         }
         NativeFunctionKind::ObjectHasOwn => Some(OBJECT_HAS_OWN_SLOT),
         NativeFunctionKind::ObjectIs => Some(OBJECT_IS_SLOT),
+        NativeFunctionKind::ObjectIsExtensible => Some(OBJECT_IS_EXTENSIBLE_SLOT),
+        NativeFunctionKind::ObjectIsFrozen => Some(OBJECT_IS_FROZEN_SLOT),
+        NativeFunctionKind::ObjectIsSealed => Some(OBJECT_IS_SEALED_SLOT),
         NativeFunctionKind::ObjectKeys => Some(OBJECT_KEYS_SLOT),
+        NativeFunctionKind::ObjectPreventExtensions => Some(OBJECT_PREVENT_EXTENSIONS_SLOT),
         NativeFunctionKind::ObjectSetPrototypeOf => Some(OBJECT_SET_PROTOTYPE_OF_SLOT),
+        NativeFunctionKind::ObjectSeal => Some(OBJECT_SEAL_SLOT),
         NativeFunctionKind::ObjectValues => Some(OBJECT_VALUES_SLOT),
         NativeFunctionKind::Promise => Some(PROMISE_SLOT),
         NativeFunctionKind::PromiseResolve => Some(PROMISE_RESOLVE_SLOT),
