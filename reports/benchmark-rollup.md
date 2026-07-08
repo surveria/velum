@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T215955Z.md`
-- Task: PR #353: [codex] Optimize Array callback bytecode paths
-- Performance: 6.08x (64/65 >1.00x)
-- Memory: - (0/65 >1.00x)
-- JetStream: 25.06x (4/4 >1.00x)
-- Full Test262: 30551 passed / 72027 failed (29.78%)
+- `rsqjs-test-report-20260708T221701Z.md`
+- Task: PR #352: Implement RegExp baseline Test262 support
+- Performance: 6.20x (65/66 >1.00x)
+- Memory: - (0/66 >1.00x)
+- JetStream: 25.29x (4/4 >1.00x)
+- Full Test262: 30699 passed / 71879 failed (29.93%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -343,3 +343,4 @@ Latest report:
 | `20260708T170231Z` `99b304b` PR #346: Improve Math built-in Test262 coverage | 6.24x (64/65 >1.00x) | - (0/65 >1.00x) | 25.00x (1/1 >1.00x) | 30113 passed / 72465 failed (29.36%) |
 | `20260708T171058Z` `d4b1067` PR #349: [codex] Expand JetStream shell coverage | 6.31x (64/65 >1.00x) | - (0/65 >1.00x) | 24.69x (4/4 >1.00x) | 30113 passed / 72465 failed (29.36%) |
 | `20260708T215955Z` `5a3b26b` PR #353: [codex] Optimize Array callback bytecode paths | 6.08x (64/65 >1.00x) | - (0/65 >1.00x) | 25.06x (4/4 >1.00x) | 30551 passed / 72027 failed (29.78%) |
+| `20260708T221701Z` `ee58d2a` PR #352: Implement RegExp baseline Test262 support | 6.20x (65/66 >1.00x) | - (0/66 >1.00x) | 25.29x (4/4 >1.00x) | 30699 passed / 71879 failed (29.93%) |
