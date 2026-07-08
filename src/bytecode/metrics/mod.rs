@@ -136,6 +136,7 @@ impl BytecodeInstruction {
             Self::Switch {
                 discriminant,
                 cases,
+                ..
             } => count_switch(
                 discriminant,
                 cases,
@@ -225,6 +226,7 @@ impl BytecodeInstruction {
             Self::Switch {
                 discriminant,
                 cases,
+                ..
             } => count_switch(
                 discriminant,
                 cases,
@@ -295,6 +297,7 @@ impl BytecodeInstruction {
             Self::Switch {
                 discriminant,
                 cases,
+                ..
             } => count_switch(
                 discriminant,
                 cases,
@@ -367,6 +370,7 @@ impl BytecodeInstruction {
             Self::Switch {
                 discriminant,
                 cases,
+                ..
             } => count_switch(
                 discriminant,
                 cases,
@@ -437,6 +441,7 @@ impl BytecodeInstruction {
             Self::Switch {
                 discriminant,
                 cases,
+                ..
             } => count_switch(
                 discriminant,
                 cases,
@@ -503,6 +508,7 @@ impl BytecodeInstruction {
             Self::Switch {
                 discriminant,
                 cases,
+                ..
             } => count_switch(
                 discriminant,
                 cases,

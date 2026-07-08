@@ -64,6 +64,35 @@ fn supports_block_and_for_lexical_scopes() -> TestResult {
 }
 
 #[test]
+fn preserves_var_only_blocks_and_switch_lexical_scopes() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let total = 0;
+        {
+            var hoisted = 20;
+            total = total + hoisted;
+        }
+        switch (1) {
+            case 1:
+                let hidden = 22;
+                total = total + hidden;
+                break;
+            default:
+                total = 0;
+        }
+        total === 42 &&
+            hoisted === 20 &&
+            typeof hidden === "undefined"
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
 fn scopes_try_catch_and_finally_blocks() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

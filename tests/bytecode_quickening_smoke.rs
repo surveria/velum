@@ -307,6 +307,40 @@ fn bytecode_quickens_array_index_read_modify_write_with_fallbacks() -> TestResul
     ensure_usize(vm.resource_usage().atom_count, atoms)
 }
 
+#[test]
+fn bytecode_quickens_linear_numeric_loop_blocks() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r"
+        var values = [1, 2, 3, 4];
+        var index = 0;
+        var total = 0;
+
+        while (index < 8) {
+            var slot = index & 3;
+            total = total + values[slot];
+            index = index + 1;
+        }
+
+        total === 20 ? 42 : 0
+        ",
+    )?;
+    ensure_at_least(
+        script.usage().bytecode_numeric_instruction_count(),
+        4,
+        "bytecode numeric instructions",
+    )?;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    let atoms = vm.resource_usage().atom_count;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    ensure_usize(vm.resource_usage().atom_count, atoms)
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

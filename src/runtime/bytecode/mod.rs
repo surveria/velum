@@ -5,6 +5,7 @@ mod coercion;
 mod control;
 mod destructure;
 mod for_of;
+mod linear;
 mod ops;
 mod spread;
 mod state;
@@ -31,9 +32,18 @@ impl Context {
 
     pub(super) fn eval_bytecode_block(&mut self, block: &BytecodeBlock) -> Result<Completion> {
         let mut state = BytecodeState::new();
+        self.eval_bytecode_block_with_state(block, &mut state)
+    }
+
+    fn eval_bytecode_block_with_state(
+        &mut self,
+        block: &BytecodeBlock,
+        state: &mut BytecodeState,
+    ) -> Result<Completion> {
+        state.reset();
         while let Some(instruction) = block.instruction(state.pc)? {
             self.step()?;
-            let result = self.eval_bytecode_instruction(&mut state, instruction);
+            let result = self.eval_bytecode_instruction(state, instruction);
             let completion = match result {
                 Ok(completion) => completion,
                 Err(error) => {
@@ -49,7 +59,7 @@ impl Context {
                 return Ok(completion);
             }
         }
-        Ok(Completion::Normal(state.last))
+        Ok(Completion::Normal(state.last.clone()))
     }
 
     pub(super) fn eval_bytecode_expression(&mut self, block: &BytecodeBlock) -> Result<Value> {

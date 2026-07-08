@@ -13,8 +13,11 @@ use crate::{
     value::Value,
 };
 
-use super::state::{
-    BytecodeState, bytecode_loop_completion, init_completion_to_result, loop_label_matches,
+use super::{
+    linear::BytecodeLinearPlan,
+    state::{
+        BytecodeState, bytecode_loop_completion, init_completion_to_result, loop_label_matches,
+    },
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -107,7 +110,8 @@ impl Context {
             BytecodeInstruction::Switch {
                 discriminant,
                 cases,
-            } => self.eval_bytecode_switch(state, discriminant, cases, next),
+                scoped,
+            } => self.eval_bytecode_switch(state, discriminant, cases, *scoped, next),
             BytecodeInstruction::Try {
                 body,
                 catch,
@@ -180,14 +184,26 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let mut last = Value::Undefined;
+        let condition_plan = self.compile_bytecode_linear_plan(condition)?;
+        let body_plan = self.compile_bytecode_linear_plan(body)?;
+        let mut condition_state = BytecodeState::new();
+        let mut body_state = BytecodeState::new();
         loop {
-            match self.eval_bytecode_condition(condition)? {
+            match self.eval_bytecode_condition_with_state(
+                condition,
+                condition_plan.as_ref(),
+                &mut condition_state,
+            )? {
                 BytecodeCondition::Value(true) => {}
                 BytecodeCondition::Value(false) => break,
                 BytecodeCondition::Completion(completion) => return Ok(Some(completion)),
             }
             self.step()?;
-            match self.eval_bytecode_block(body)? {
+            match self.eval_bytecode_block_with_linear_plan(
+                body,
+                body_plan.as_ref(),
+                &mut body_state,
+            )? {
                 Completion::Normal(value) => last = value,
                 Completion::Continue(None) => {}
                 Completion::Continue(Some(target)) if loop_label_matches(labels, &target) => {}
@@ -224,9 +240,17 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let mut last = Value::Undefined;
+        let body_plan = self.compile_bytecode_linear_plan(body)?;
+        let condition_plan = self.compile_bytecode_linear_plan(condition)?;
+        let mut body_state = BytecodeState::new();
+        let mut condition_state = BytecodeState::new();
         loop {
             self.step()?;
-            match self.eval_bytecode_block(body)? {
+            match self.eval_bytecode_block_with_linear_plan(
+                body,
+                body_plan.as_ref(),
+                &mut body_state,
+            )? {
                 Completion::Normal(value) => last = value,
                 Completion::Continue(None) => {}
                 Completion::Continue(Some(target)) if loop_label_matches(labels, &target) => {}
@@ -248,7 +272,11 @@ impl Context {
                     return Ok(Some(completion));
                 }
             }
-            match self.eval_bytecode_condition(condition)? {
+            match self.eval_bytecode_condition_with_state(
+                condition,
+                condition_plan.as_ref(),
+                &mut condition_state,
+            )? {
                 BytecodeCondition::Value(true) => {}
                 BytecodeCondition::Value(false) => break,
                 BytecodeCondition::Completion(completion) => return Ok(Some(completion)),
@@ -285,19 +313,42 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         if let Some(init) = parts.init {
-            init_completion_to_result(self.eval_bytecode_block(init)?)?;
+            let mut init_state = BytecodeState::new();
+            init_completion_to_result(self.eval_bytecode_block_with_state(init, &mut init_state)?)?;
         }
         let mut last = Value::Undefined;
+        let condition_plan = if let Some(condition) = parts.condition {
+            self.compile_bytecode_linear_plan(condition)?
+        } else {
+            None
+        };
+        let body_plan = self.compile_bytecode_linear_plan(parts.body)?;
+        let update_plan = if let Some(update) = parts.update {
+            self.compile_bytecode_linear_plan(update)?
+        } else {
+            None
+        };
+        let mut condition_state = BytecodeState::new();
+        let mut body_state = BytecodeState::new();
+        let mut update_state = BytecodeState::new();
         loop {
             if let Some(condition) = parts.condition {
-                match self.eval_bytecode_condition(condition)? {
+                match self.eval_bytecode_condition_with_state(
+                    condition,
+                    condition_plan.as_ref(),
+                    &mut condition_state,
+                )? {
                     BytecodeCondition::Value(true) => {}
                     BytecodeCondition::Value(false) => break,
                     BytecodeCondition::Completion(completion) => return Ok(Some(completion)),
                 }
             }
             self.step()?;
-            match self.eval_bytecode_block(parts.body)? {
+            match self.eval_bytecode_block_with_linear_plan(
+                parts.body,
+                body_plan.as_ref(),
+                &mut body_state,
+            )? {
                 Completion::Normal(value) => last = value,
                 Completion::Continue(None) => {}
                 Completion::Continue(Some(target)) if loop_label_matches(parts.labels, &target) => {
@@ -321,7 +372,11 @@ impl Context {
                 }
             }
             if let Some(update) = parts.update {
-                self.eval_bytecode_expression(update)?;
+                self.eval_bytecode_expression_with_plan(
+                    update,
+                    update_plan.as_ref(),
+                    &mut update_state,
+                )?;
             }
         }
         state.last = last;
@@ -329,8 +384,13 @@ impl Context {
         Ok(None)
     }
 
-    fn eval_bytecode_condition(&mut self, condition: &BytecodeBlock) -> Result<BytecodeCondition> {
-        match self.eval_bytecode_block(condition)? {
+    fn eval_bytecode_condition_with_state(
+        &mut self,
+        condition: &BytecodeBlock,
+        plan: Option<&BytecodeLinearPlan<'_>>,
+        state: &mut BytecodeState,
+    ) -> Result<BytecodeCondition> {
+        match self.eval_bytecode_block_with_linear_plan(condition, plan, state)? {
             Completion::Normal(value) => Ok(BytecodeCondition::Value(value.is_truthy())),
             completion @ (Completion::Throw(_)
             | Completion::Return(_)
@@ -441,6 +501,7 @@ impl Context {
         state: &mut BytecodeState,
         discriminant: &BytecodeBlock,
         cases: &Rc<[BytecodeSwitchCase]>,
+        scoped: bool,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let discriminant = self.eval_bytecode_expression(discriminant)?;
@@ -449,13 +510,18 @@ impl Context {
             state.pc = next;
             return Ok(None);
         };
-        self.push_lexical_scope();
-        let completion = self.eval_bytecode_switch_cases(cases, start);
-        let removed = self.pop_lexical_scope();
-        if removed.is_none() {
-            return Err(Error::runtime("bytecode switch lexical scope disappeared"));
-        }
-        Ok(Self::store_or_return_completion(state, completion?, next))
+        let completion = if scoped {
+            self.push_lexical_scope();
+            let completion = self.eval_bytecode_switch_cases(cases, start);
+            let removed = self.pop_lexical_scope();
+            if removed.is_none() {
+                return Err(Error::runtime("bytecode switch lexical scope disappeared"));
+            }
+            completion?
+        } else {
+            self.eval_bytecode_switch_cases(cases, start)?
+        };
+        Ok(Self::store_or_return_completion(state, completion, next))
     }
 
     fn bytecode_switch_start_index(

@@ -99,11 +99,7 @@ impl<'a> BytecodeCompiler<'a> {
 
     fn compile_statement(&mut self, statement: &Stmt, value: StatementValue) -> Result<()> {
         match statement {
-            Stmt::Block(statements) => {
-                let block = BytecodeBlock::compile_statements(statements, value, self.layout)?;
-                self.emit(BytecodeInstruction::ScopedBlock(block));
-                Ok(())
-            }
+            Stmt::Block(statements) => self.compile_block_statement(statements, value),
             Stmt::DeclList(declarations) => self.compile_statements(declarations, value),
             Stmt::If {
                 condition,
@@ -371,6 +367,26 @@ impl<'a> BytecodeCompiler<'a> {
         Ok(())
     }
 
+    fn compile_block_statement(
+        &mut self,
+        statements: &[Stmt],
+        value: StatementValue,
+    ) -> Result<()> {
+        if statements_need_lexical_scope(statements) {
+            let block = BytecodeBlock::compile_statements(statements, value, self.layout)?;
+            self.emit(BytecodeInstruction::ScopedBlock(block));
+            return Ok(());
+        }
+
+        let before = self.instructions.len();
+        self.compile_statements(statements, value)?;
+        if value == StatementValue::Store && before == self.instructions.len() {
+            self.emit(BytecodeInstruction::PushUndefined);
+            self.emit(BytecodeInstruction::StoreLast);
+        }
+        Ok(())
+    }
+
     fn emit(&mut self, instruction: BytecodeInstruction) -> InstructionIndex {
         let index = InstructionIndex::new(self.instructions.len());
         self.instructions.push(instruction);
@@ -379,6 +395,44 @@ impl<'a> BytecodeCompiler<'a> {
 
     const fn current_address(&self) -> BytecodeAddress {
         BytecodeAddress::new(self.instructions.len())
+    }
+}
+
+fn statements_need_lexical_scope(statements: &[Stmt]) -> bool {
+    statements.iter().any(statement_needs_lexical_scope)
+}
+
+fn statement_needs_lexical_scope(statement: &Stmt) -> bool {
+    match statement {
+        Stmt::DeclList(statements) => statements_need_lexical_scope(statements),
+        Stmt::VarDecl {
+            kind: DeclKind::Let | DeclKind::Const,
+            ..
+        }
+        | Stmt::PatternDecl {
+            kind: DeclKind::Let | DeclKind::Const,
+            ..
+        }
+        | Stmt::ClassDecl { .. }
+        | Stmt::FunctionDecl { .. } => true,
+        Stmt::Block(_)
+        | Stmt::Empty
+        | Stmt::If { .. }
+        | Stmt::While { .. }
+        | Stmt::DoWhile { .. }
+        | Stmt::Label { .. }
+        | Stmt::For { .. }
+        | Stmt::ForIn { .. }
+        | Stmt::ForOf { .. }
+        | Stmt::Switch { .. }
+        | Stmt::Try { .. }
+        | Stmt::Break(_)
+        | Stmt::Continue(_)
+        | Stmt::Throw(_)
+        | Stmt::Return(_)
+        | Stmt::VarDecl { .. }
+        | Stmt::PatternDecl { .. }
+        | Stmt::Expr(_) => false,
     }
 }
 

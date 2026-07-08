@@ -22,6 +22,12 @@ impl BytecodeState {
         }
     }
 
+    pub(super) fn reset(&mut self) {
+        self.pc = BytecodeAddress::new(0);
+        self.stack.clear();
+        self.last = Value::Undefined;
+    }
+
     pub(super) fn next_pc(&self) -> Result<BytecodeAddress> {
         let next = self
             .pc
@@ -56,6 +62,10 @@ impl BytecodeStack {
 
     pub(super) fn push(&mut self, value: Value) {
         self.values.push(value);
+    }
+
+    fn clear(&mut self) {
+        self.values.clear();
     }
 
     pub(super) fn pop(&mut self) -> Result<Value> {
