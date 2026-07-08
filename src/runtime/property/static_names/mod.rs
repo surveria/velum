@@ -1,5 +1,5 @@
 use crate::{
-    binding_layout::BindingLayout,
+    binding_metadata::BindingLayout,
     error::{Error, Result},
     runtime::Context,
     runtime::binding::static_bindings::StaticBindingCacheHandle,

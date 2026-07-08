@@ -2,8 +2,8 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use crate::{
-    binding_layout::BindingLayout,
-    binding_layout::{BindingOperand, DeclarationRef, FunctionScopeId, ScopeId},
+    binding_metadata::BindingLayout,
+    binding_metadata::{BindingOperand, DeclarationRef, FunctionScopeId, ScopeId},
     bytecode::BytecodeBinding,
     error::{Error, Result},
     runtime::Context,
@@ -158,7 +158,7 @@ impl Context {
 
     pub(crate) fn current_static_binding_layout(
         &self,
-    ) -> Option<crate::binding_layout::BindingLayout> {
+    ) -> Option<crate::binding_metadata::BindingLayout> {
         self.static_binding_layouts.last().cloned()
     }
 
@@ -429,7 +429,7 @@ impl Context {
     fn direct_compiled_local_static_binding(
         &self,
         scope: ScopeId,
-        slot: crate::binding_layout::LocalSlot,
+        slot: crate::binding_metadata::LocalSlot,
     ) -> Result<Option<(BindingLocation, BindingCell)>> {
         let slot = BindingSlot::from_index(slot.index()?);
         for (index, frame) in self.locals.iter().enumerate().rev() {
@@ -528,7 +528,7 @@ impl Context {
     fn compiled_declaration_local_binding(
         &self,
         scope: ScopeId,
-        slot: crate::binding_layout::LocalSlot,
+        slot: crate::binding_metadata::LocalSlot,
     ) -> Result<Option<BindingCell>> {
         let slot = BindingSlot::from_index(slot.index()?);
         for (index, frame) in self.locals.iter().enumerate().rev() {

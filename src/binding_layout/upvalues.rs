@@ -1,5 +1,5 @@
 use crate::{
-    binding_layout::{
+    binding_metadata::{
         BindingOperand, DeclarationRef, FunctionScopeId, UpvalueSlot, types::Declaration,
     },
     error::{Error, Result},

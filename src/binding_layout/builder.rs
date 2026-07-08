@@ -4,16 +4,14 @@ use crate::{
         ObjectPropertyKey, Program, StaticBinding, StaticFunctionId, StaticNameId, Stmt,
         SwitchCase,
     },
-    binding_layout::types::{
-        Declaration, FunctionScope, GlobalSlot, Scope, ScopeContext, ScopeKind,
+    binding_metadata::{
+        BindingLayout, BindingLayoutParts, BindingOperand, FunctionScopeId, LocalSlot, ScopeId,
+        types::{Declaration, FunctionScope, GlobalSlot, Scope, ScopeContext, ScopeKind},
     },
     error::{Error, Result},
 };
 
-use super::{
-    BindingLayout, BindingOperand, FunctionScopeId, LocalSlot, ScopeId, layout::BindingLayoutParts,
-    scope_rules::for_init_needs_layout_scope,
-};
+use super::scope_rules::for_init_needs_layout_scope;
 
 pub(super) struct LayoutBuilder {
     operands: Vec<BindingOperand>,

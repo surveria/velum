@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     ast::{BindingPattern, DeclKind, ForInTarget, StaticBinding, Stmt},
-    binding_layout::BindingLayout,
+    binding_metadata::BindingLayout,
     bytecode::{BytecodeBinding, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeHoistPlan},
     error::Result,
 };

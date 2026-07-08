@@ -1,5 +1,5 @@
 use crate::{
-    binding_layout::{BindingOperand, ScopeId},
+    binding_metadata::{BindingOperand, ScopeId},
     runtime::binding::scope::BindingSlot,
     storage::atom::AtomId,
 };

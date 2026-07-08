@@ -1,33 +1,27 @@
 use crate::{
-    ast::StaticFunctionId,
-    binding_layout::{
+    binding_metadata::{
         BindingOperand, DeclarationRef, FunctionScopeId, ScopeId, UpvalueSlot,
         types::{FunctionScope, Scope},
     },
     error::{Error, Result},
+    syntax::StaticFunctionId,
 };
 
 use super::BindingLayout;
 
 impl BindingLayout {
-    pub(crate) fn function_for_static_id(
-        &self,
-        id: StaticFunctionId,
-    ) -> Result<Option<FunctionScopeId>> {
+    pub fn function_for_static_id(&self, id: StaticFunctionId) -> Result<Option<FunctionScopeId>> {
         self.static_functions
             .get(id.index()?)
             .copied()
             .ok_or_else(|| Error::runtime("static function layout slot is not defined"))
     }
 
-    pub(crate) fn parent_function(
-        &self,
-        function: FunctionScopeId,
-    ) -> Result<Option<FunctionScopeId>> {
+    pub fn parent_function(&self, function: FunctionScopeId) -> Result<Option<FunctionScopeId>> {
         self.function(function).map(|scope| scope.parent)
     }
 
-    pub(crate) fn declaration_operand(
+    pub fn declaration_operand(
         &self,
         declaration: DeclarationRef,
     ) -> Result<Option<BindingOperand>> {
@@ -37,11 +31,11 @@ impl BindingLayout {
             .map(|declaration| declaration.operand))
     }
 
-    pub(crate) fn upvalue_count_for_function(&self, function: FunctionScopeId) -> Result<usize> {
+    pub fn upvalue_count_for_function(&self, function: FunctionScopeId) -> Result<usize> {
         self.function(function).map(|scope| scope.upvalues.len())
     }
 
-    pub(crate) fn upvalue_declaration(
+    pub fn upvalue_declaration(
         &self,
         function: FunctionScopeId,
         slot: UpvalueSlot,
@@ -53,7 +47,7 @@ impl BindingLayout {
             .copied())
     }
 
-    pub(crate) fn upvalue_slot_for_declaration(
+    pub fn upvalue_slot_for_declaration(
         &self,
         function: FunctionScopeId,
         declaration: DeclarationRef,
