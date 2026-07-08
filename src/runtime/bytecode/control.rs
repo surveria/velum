@@ -390,6 +390,15 @@ impl Context {
         plan: Option<&BytecodeLinearPlan<'_>>,
         state: &mut BytecodeState,
     ) -> Result<BytecodeCondition> {
+        if let Some(completion) = self.eval_bytecode_linear_direct_condition(condition, plan)? {
+            return Ok(match completion {
+                Completion::Normal(value) => BytecodeCondition::Value(value.is_truthy()),
+                completion @ (Completion::Throw(_)
+                | Completion::Return(_)
+                | Completion::Break { .. }
+                | Completion::Continue(_)) => BytecodeCondition::Completion(completion),
+            });
+        }
         match self.eval_bytecode_block_with_linear_plan(condition, plan, state)? {
             Completion::Normal(value) => Ok(BytecodeCondition::Value(value.is_truthy())),
             completion @ (Completion::Throw(_)

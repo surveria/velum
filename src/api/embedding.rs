@@ -165,6 +165,7 @@ impl Vm {
         VmResourceUsage {
             runtime_steps: self.context.runtime_steps(),
             bytecode_linear_segment_runs: self.context.bytecode_linear_segment_runs(),
+            bytecode_linear_direct_runs: self.context.bytecode_linear_direct_runs(),
             output_entries: self.context.output().len(),
             global_bindings: self.context.global_binding_count(),
             atom_count: self.context.atom_count(),
@@ -206,6 +207,7 @@ impl Default for Vm {
 pub struct VmResourceUsage {
     pub runtime_steps: usize,
     pub bytecode_linear_segment_runs: usize,
+    pub bytecode_linear_direct_runs: usize,
     pub output_entries: usize,
     pub global_bindings: usize,
     pub atom_count: usize,
