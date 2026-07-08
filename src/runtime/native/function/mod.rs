@@ -6,6 +6,8 @@ use crate::{
     value::Value,
 };
 
+mod array;
+mod array_kind;
 mod call_target;
 mod collection;
 mod collection_kind;
@@ -17,9 +19,10 @@ mod registry;
 
 use super::number_intrinsic_property;
 
+pub(in crate::runtime::native) use array_kind::ARRAY_NAME;
 pub(in crate::runtime) use kind::NativeFunctionKind;
 pub(in crate::runtime::native) use kind::{
-    ARRAY_NAME, BOOLEAN_NAME, EVAL_NAME, FUNCTION_NAME, FUNCTION_PROTOTYPE_BIND_NAME,
+    BOOLEAN_NAME, EVAL_NAME, FUNCTION_NAME, FUNCTION_PROTOTYPE_BIND_NAME,
     FUNCTION_PROTOTYPE_CALL_NAME, GLOBAL_DECODE_URI_COMPONENT_NAME, GLOBAL_DECODE_URI_NAME,
     GLOBAL_ENCODE_URI_COMPONENT_NAME, GLOBAL_ENCODE_URI_NAME, GLOBAL_IS_FINITE_NAME,
     GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME, JSON_NAME, JSON_PARSE_NAME,

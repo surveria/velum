@@ -94,6 +94,8 @@ const PATH_QUICKJS_ARRAY_PROTOTYPE_METHODS: &str =
     "tests/corpora/quickjs_differential/active/array_prototype_methods.js";
 const PATH_QUICKJS_ARRAY_PROTOTYPE_GENERIC_METHODS: &str =
     "tests/corpora/quickjs_differential/active/array_prototype_generic_methods.js";
+const PATH_QUICKJS_ARRAY_PROTOTYPE_CALLBACK_METHODS: &str =
+    "tests/corpora/quickjs_differential/active/array_prototype_callback_methods.js";
 const PATH_QUICKJS_ARRAY_PROTOTYPE_CONCAT: &str =
     "tests/corpora/quickjs_differential/active/array_prototype_concat.js";
 const PATH_QUICKJS_ARRAY_PROTOTYPE_INCLUDES: &str =
@@ -367,6 +369,10 @@ fn quickjs_object_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "array_prototype_generic_methods",
             path: PATH_QUICKJS_ARRAY_PROTOTYPE_GENERIC_METHODS,
+        },
+        DifferentialCase {
+            id: "array_prototype_callback_methods",
+            path: PATH_QUICKJS_ARRAY_PROTOTYPE_CALLBACK_METHODS,
         },
         DifferentialCase {
             id: "array_prototype_join",

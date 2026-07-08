@@ -44,6 +44,8 @@ const PATH_BENCH_ARRAY_LITERALS: &str = "tests/corpora/benchmarks/active/array_l
 const PATH_BENCH_ARRAY_BUILTIN: &str = "tests/corpora/benchmarks/active/array_builtin.js";
 const PATH_BENCH_ARRAY_PROTOTYPE_METHODS: &str =
     "tests/corpora/benchmarks/active/array_prototype_methods.js";
+const PATH_BENCH_ARRAY_PROTOTYPE_CALLBACKS: &str =
+    "tests/corpora/benchmarks/active/array_prototype_callbacks.js";
 const PATH_BENCH_ARRAY_PROTOTYPE_CONCAT: &str =
     "tests/corpora/benchmarks/active/array_prototype_concat.js";
 const PATH_BENCH_ARRAY_PROTOTYPE_INCLUDES: &str =
@@ -100,6 +102,8 @@ pub fn benchmark_cases() -> Vec<BenchmarkCase> {
     let mut cases = benchmark_control_flow_cases();
     cases.extend(benchmark_function_cases());
     cases.extend(benchmark_object_cases());
+    cases.extend(benchmark_array_cases());
+    cases.extend(benchmark_operator_cases());
     cases.extend(benchmark_runtime_cases());
     cases
 }
@@ -220,6 +224,11 @@ fn benchmark_object_cases() -> Vec<BenchmarkCase> {
             id: "computed_properties",
             path: PATH_BENCH_COMPUTED_PROPERTIES,
         },
+    ]
+}
+
+fn benchmark_array_cases() -> Vec<BenchmarkCase> {
+    vec![
         BenchmarkCase {
             id: "array_literals",
             path: PATH_BENCH_ARRAY_LITERALS,
@@ -231,6 +240,10 @@ fn benchmark_object_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "array_prototype_methods",
             path: PATH_BENCH_ARRAY_PROTOTYPE_METHODS,
+        },
+        BenchmarkCase {
+            id: "array_prototype_callbacks",
+            path: PATH_BENCH_ARRAY_PROTOTYPE_CALLBACKS,
         },
         BenchmarkCase {
             id: "array_prototype_join",
@@ -264,6 +277,11 @@ fn benchmark_object_cases() -> Vec<BenchmarkCase> {
             id: "array_prototype_slice",
             path: PATH_BENCH_ARRAY_PROTOTYPE_SLICE,
         },
+    ]
+}
+
+fn benchmark_operator_cases() -> Vec<BenchmarkCase> {
+    vec![
         BenchmarkCase {
             id: "unary_operators",
             path: PATH_BENCH_UNARY_OPERATORS,

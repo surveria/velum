@@ -4,16 +4,25 @@ use crate::value::ErrorName;
 pub enum NativeCallTarget {
     Array,
     ArrayConcat,
+    ArrayEvery,
+    ArrayFilter,
+    ArrayFind,
+    ArrayFindIndex,
+    ArrayForEach,
     ArrayIncludes,
     ArrayIndexOf,
     ArrayIsArray,
     ArrayJoin,
     ArrayLastIndexOf,
+    ArrayMap,
     ArrayPop,
     ArrayPush,
+    ArrayReduce,
+    ArrayReduceRight,
     ArrayReverse,
     ArrayShift,
     ArraySlice,
+    ArraySome,
     ArrayUnshift,
     Boolean,
     BooleanPrototypeToString,
@@ -139,16 +148,25 @@ impl NativeCallTarget {
             self,
             Self::Array
                 | Self::ArrayConcat
+                | Self::ArrayEvery
+                | Self::ArrayFilter
+                | Self::ArrayFind
+                | Self::ArrayFindIndex
+                | Self::ArrayForEach
                 | Self::ArrayIncludes
                 | Self::ArrayIndexOf
                 | Self::ArrayIsArray
                 | Self::ArrayJoin
                 | Self::ArrayLastIndexOf
+                | Self::ArrayMap
                 | Self::ArrayPop
                 | Self::ArrayPush
+                | Self::ArrayReduce
+                | Self::ArrayReduceRight
                 | Self::ArrayReverse
                 | Self::ArrayShift
                 | Self::ArraySlice
+                | Self::ArraySome
                 | Self::ArrayUnshift
         )
     }
@@ -190,16 +208,25 @@ impl NativeCallTarget {
     fn from_array_property_name(name: &str) -> Option<Self> {
         match name {
             "concat" => Some(Self::ArrayConcat),
+            "every" => Some(Self::ArrayEvery),
+            "filter" => Some(Self::ArrayFilter),
+            "find" => Some(Self::ArrayFind),
+            "findIndex" => Some(Self::ArrayFindIndex),
+            "forEach" => Some(Self::ArrayForEach),
             "includes" => Some(Self::ArrayIncludes),
             "indexOf" => Some(Self::ArrayIndexOf),
             "isArray" => Some(Self::ArrayIsArray),
             "join" => Some(Self::ArrayJoin),
             "lastIndexOf" => Some(Self::ArrayLastIndexOf),
+            "map" => Some(Self::ArrayMap),
             "pop" => Some(Self::ArrayPop),
             "push" => Some(Self::ArrayPush),
+            "reduce" => Some(Self::ArrayReduce),
+            "reduceRight" => Some(Self::ArrayReduceRight),
             "reverse" => Some(Self::ArrayReverse),
             "shift" => Some(Self::ArrayShift),
             "slice" => Some(Self::ArraySlice),
+            "some" => Some(Self::ArraySome),
             "unshift" => Some(Self::ArrayUnshift),
             _ => None,
         }

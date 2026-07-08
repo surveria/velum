@@ -1,33 +1,7 @@
 use crate::value::{BoundFunctionId, ErrorName};
 
-const ARRAY_CONCAT_FUNCTION_LENGTH: f64 = 1.0;
-const ARRAY_CONCAT_NAME: &str = "concat";
-const ARRAY_INCLUDES_FUNCTION_LENGTH: f64 = 1.0;
-const ARRAY_INCLUDES_NAME: &str = "includes";
-const ARRAY_INDEX_OF_FUNCTION_LENGTH: f64 = 1.0;
-const ARRAY_INDEX_OF_NAME: &str = "indexOf";
-const ARRAY_IS_ARRAY_FUNCTION_LENGTH: f64 = 1.0;
-const ARRAY_IS_ARRAY_NAME: &str = "isArray";
-const ARRAY_JOIN_FUNCTION_LENGTH: f64 = 1.0;
-const ARRAY_JOIN_NAME: &str = "join";
-const ARRAY_LAST_INDEX_OF_FUNCTION_LENGTH: f64 = 1.0;
-const ARRAY_LAST_INDEX_OF_NAME: &str = "lastIndexOf";
-const ARRAY_POP_FUNCTION_LENGTH: f64 = 0.0;
-const ARRAY_POP_NAME: &str = "pop";
-const ARRAY_PUSH_FUNCTION_LENGTH: f64 = 1.0;
-const ARRAY_PUSH_NAME: &str = "push";
-const ARRAY_REVERSE_FUNCTION_LENGTH: f64 = 0.0;
-const ARRAY_REVERSE_NAME: &str = "reverse";
-const ARRAY_SHIFT_FUNCTION_LENGTH: f64 = 0.0;
-const ARRAY_SHIFT_NAME: &str = "shift";
-const ARRAY_SLICE_FUNCTION_LENGTH: f64 = 2.0;
-const ARRAY_SLICE_NAME: &str = "slice";
-const ARRAY_UNSHIFT_FUNCTION_LENGTH: f64 = 1.0;
-const ARRAY_UNSHIFT_NAME: &str = "unshift";
 const ASYNC_FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const ASYNC_FUNCTION_NAME: &str = "AsyncFunction";
-const ARRAY_FUNCTION_LENGTH: f64 = 1.0;
-pub(in crate::runtime::native) const ARRAY_NAME: &str = "Array";
 const BOOLEAN_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const BOOLEAN_NAME: &str = "Boolean";
 const EVAL_FUNCTION_LENGTH: f64 = 1.0;
@@ -213,16 +187,25 @@ pub(in crate::runtime::native) const SYMBOL_NAME: &str = "Symbol";
 pub(in crate::runtime) enum NativeFunctionKind {
     Array,
     ArrayConcat,
+    ArrayEvery,
+    ArrayFilter,
+    ArrayFind,
+    ArrayFindIndex,
+    ArrayForEach,
     ArrayIncludes,
     ArrayIndexOf,
     ArrayIsArray,
     ArrayJoin,
     ArrayLastIndexOf,
+    ArrayMap,
     ArrayPop,
     ArrayPush,
+    ArrayReduce,
+    ArrayReduceRight,
     ArrayReverse,
     ArrayShift,
     ArraySlice,
+    ArraySome,
     ArrayUnshift,
     AsyncFunction,
     Boolean,
@@ -402,25 +385,6 @@ impl NativeFunctionKind {
             return length;
         }
         FUNCTION_FUNCTION_LENGTH
-    }
-
-    const fn array_length(self) -> Option<f64> {
-        match self {
-            Self::Array => Some(ARRAY_FUNCTION_LENGTH),
-            Self::ArrayConcat => Some(ARRAY_CONCAT_FUNCTION_LENGTH),
-            Self::ArrayIncludes => Some(ARRAY_INCLUDES_FUNCTION_LENGTH),
-            Self::ArrayIndexOf => Some(ARRAY_INDEX_OF_FUNCTION_LENGTH),
-            Self::ArrayIsArray => Some(ARRAY_IS_ARRAY_FUNCTION_LENGTH),
-            Self::ArrayJoin => Some(ARRAY_JOIN_FUNCTION_LENGTH),
-            Self::ArrayLastIndexOf => Some(ARRAY_LAST_INDEX_OF_FUNCTION_LENGTH),
-            Self::ArrayPop => Some(ARRAY_POP_FUNCTION_LENGTH),
-            Self::ArrayPush => Some(ARRAY_PUSH_FUNCTION_LENGTH),
-            Self::ArrayReverse => Some(ARRAY_REVERSE_FUNCTION_LENGTH),
-            Self::ArrayShift => Some(ARRAY_SHIFT_FUNCTION_LENGTH),
-            Self::ArraySlice => Some(ARRAY_SLICE_FUNCTION_LENGTH),
-            Self::ArrayUnshift => Some(ARRAY_UNSHIFT_FUNCTION_LENGTH),
-            _ => None,
-        }
     }
 
     const fn global_utility_length(self) -> Option<f64> {
@@ -610,25 +574,6 @@ impl NativeFunctionKind {
             return name;
         }
         FUNCTION_NAME
-    }
-
-    const fn array_name(self) -> Option<&'static str> {
-        match self {
-            Self::Array => Some(ARRAY_NAME),
-            Self::ArrayConcat => Some(ARRAY_CONCAT_NAME),
-            Self::ArrayIncludes => Some(ARRAY_INCLUDES_NAME),
-            Self::ArrayIndexOf => Some(ARRAY_INDEX_OF_NAME),
-            Self::ArrayIsArray => Some(ARRAY_IS_ARRAY_NAME),
-            Self::ArrayJoin => Some(ARRAY_JOIN_NAME),
-            Self::ArrayLastIndexOf => Some(ARRAY_LAST_INDEX_OF_NAME),
-            Self::ArrayPop => Some(ARRAY_POP_NAME),
-            Self::ArrayPush => Some(ARRAY_PUSH_NAME),
-            Self::ArrayReverse => Some(ARRAY_REVERSE_NAME),
-            Self::ArrayShift => Some(ARRAY_SHIFT_NAME),
-            Self::ArraySlice => Some(ARRAY_SLICE_NAME),
-            Self::ArrayUnshift => Some(ARRAY_UNSHIFT_NAME),
-            _ => None,
-        }
     }
 
     const fn math_name(self) -> Option<&'static str> {
