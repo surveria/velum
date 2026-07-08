@@ -2,9 +2,9 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
-        assertions::runtime_exception_value,
-        call_args::RuntimeCallArgs,
-        completion::Completion,
+        call::RuntimeCallArgs,
+        control::Completion,
+        control::runtime_exception_value,
         object::{ObjectPropertyInit, PropertyEnumerable},
     },
     value::Value,

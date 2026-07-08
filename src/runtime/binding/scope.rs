@@ -5,7 +5,7 @@ use parking_lot::Mutex;
 use crate::{
     binding_layout::ScopeId,
     error::{Error, Result},
-    runtime::assertions::reference_error_uninitialized,
+    runtime::control::reference_error_uninitialized,
     storage::atom::AtomId,
     syntax::DeclKind,
     value::Value,

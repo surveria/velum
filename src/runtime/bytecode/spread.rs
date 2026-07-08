@@ -2,7 +2,7 @@ use crate::{
     bytecode::{BytecodeAddress, BytecodeBinding, BytecodeDynamicProperty, BytecodeProperty},
     error::{Error, Result},
     runtime::Context,
-    runtime::completion::Completion,
+    runtime::control::Completion,
     value::Value,
 };
 

@@ -1,7 +1,8 @@
 use crate::{
     ast::StaticFunctionId,
     binding_layout::{
-        BindingOperand, DeclarationRef, FunctionScope, FunctionScopeId, Scope, ScopeId, UpvalueSlot,
+        BindingOperand, DeclarationRef, FunctionScopeId, ScopeId, UpvalueSlot,
+        types::{FunctionScope, Scope},
     },
     error::{Error, Result},
 };

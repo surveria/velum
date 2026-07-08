@@ -1,7 +1,7 @@
 use crate::{
     error::Result,
     runtime::Context,
-    runtime::assertions::error_property_text,
+    runtime::control::error_property_text,
     runtime::object::{OBJECT_CONSTRUCTOR_PROPERTY, PropertyKey},
     runtime::property::{
         DynamicPropertyKey, PropertyValue, StringPropertyValue, get_property, has_property,

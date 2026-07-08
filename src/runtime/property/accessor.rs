@@ -1,7 +1,7 @@
 use crate::{
     error::{Error, Result},
     runtime::Context,
-    runtime::completion::Completion,
+    runtime::control::Completion,
     runtime::object::{AccessorWriteDisposition, PropertyKey, PropertyLookup},
     runtime::property::set_property,
     value::Value,

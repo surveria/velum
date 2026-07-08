@@ -6,7 +6,7 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime::binding::scope::BindingScope,
-    runtime::completion::Completion,
+    runtime::control::Completion,
     runtime::object::{OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyEnumerable},
     runtime::property::get_property,
     syntax::{DeclKind, StaticName},

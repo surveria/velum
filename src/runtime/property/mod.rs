@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use crate::runtime::assertions::error_property_text;
+use crate::runtime::control::error_property_text;
 use crate::runtime::object::{ObjectHeap, ObjectPropertyValue, PropertyKey, PropertyLookup};
 use crate::storage::atom::AtomTable;
 use crate::value::Value;

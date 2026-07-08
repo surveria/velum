@@ -3,7 +3,7 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime::binding::scope::BindingCell,
-    runtime::call_args::RuntimeCallArgs,
+    runtime::call::RuntimeCallArgs,
     runtime::object::{ObjectPropertyInit, PropertyEnumerable},
     syntax::DeclKind,
     value::{ErrorName, ErrorObject, NativeFunctionId, Value},
