@@ -29,14 +29,17 @@ const ENV_WARMUP_MS: &str = "RSQJS_BENCH_WARMUP_MS";
 const ENV_SAMPLES: &str = "RSQJS_BENCH_SAMPLES";
 const ENV_MIN_OP_US: &str = "RSQJS_BENCH_MIN_OP_US";
 const ENV_MAX_CV_PERCENT: &str = "RSQJS_BENCH_MAX_CV_PERCENT";
+const ENV_ATTEMPTS: &str = "RSQJS_BENCH_ATTEMPTS";
 
 const DEFAULT_MIN_TIME_MS: u64 = 500;
 const DEFAULT_WARMUP_MS: u64 = 150;
 const DEFAULT_SAMPLES: usize = 10;
 const DEFAULT_MIN_OP_US: u64 = 1_000;
 const DEFAULT_MAX_CV_PERCENT: u64 = 10;
+const DEFAULT_ATTEMPTS: usize = 3;
 
 const MIN_SAMPLES: usize = 3;
+const MIN_ATTEMPTS: usize = 1;
 const MAX_ITERS_PER_SAMPLE: u128 = 50_000_000;
 const PERMILLE_SCALE: u128 = 1000;
 const PERCENT_TO_PERMILLE: u64 = 10;
@@ -54,6 +57,7 @@ pub struct MeasureConfig {
     samples: usize,
     min_op_time: Duration,
     max_cv_permille: u32,
+    attempts: usize,
 }
 
 impl MeasureConfig {
@@ -67,6 +71,7 @@ impl MeasureConfig {
             samples: samples.max(MIN_SAMPLES),
             min_op_time: Duration::from_micros(DEFAULT_MIN_OP_US),
             max_cv_permille: cv_percent_to_permille(DEFAULT_MAX_CV_PERCENT),
+            attempts: MIN_ATTEMPTS,
         }
     }
 
@@ -81,12 +86,23 @@ impl MeasureConfig {
             Duration::from_micros(env_u64(ENV_MIN_OP_US, DEFAULT_MIN_OP_US)),
             cv_percent_to_permille(env_u64(ENV_MAX_CV_PERCENT, DEFAULT_MAX_CV_PERCENT)),
         )
+        .with_attempts(env_usize(ENV_ATTEMPTS, DEFAULT_ATTEMPTS))
     }
 
     #[must_use]
     pub const fn with_quality(mut self, min_op_time: Duration, max_cv_permille: u32) -> Self {
         self.min_op_time = min_op_time;
         self.max_cv_permille = max_cv_permille;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_attempts(mut self, attempts: usize) -> Self {
+        self.attempts = if attempts < MIN_ATTEMPTS {
+            MIN_ATTEMPTS
+        } else {
+            attempts
+        };
         self
     }
 }
@@ -111,6 +127,10 @@ impl MeasureStats {
     /// Coefficient of variation as a percentage with one decimal, e.g. `1.4`.
     pub fn cv_percent_text(&self) -> String {
         cv_permille_text(self.cv_permille)
+    }
+
+    pub const fn cv_permille(&self) -> u32 {
+        self.cv_permille
     }
 
     pub fn total_iters(&self) -> u64 {
@@ -172,7 +192,27 @@ pub fn measure<F>(config: MeasureConfig, mut op: F) -> anyhow::Result<MeasureSta
 where
     F: FnMut() -> anyhow::Result<()>,
 {
-    let op_cost = warmup_and_estimate(config.warmup, &mut op)?;
+    let mut best = measure_once(config, &mut op)?;
+    if best.quality().is_valid() {
+        return Ok(best);
+    }
+    for _ in MIN_ATTEMPTS..config.attempts {
+        let candidate = measure_once(config, &mut op)?;
+        if better_measurement(candidate, best) {
+            best = candidate;
+        }
+        if best.quality().is_valid() {
+            break;
+        }
+    }
+    Ok(best)
+}
+
+fn measure_once<F>(config: MeasureConfig, op: &mut F) -> anyhow::Result<MeasureStats>
+where
+    F: FnMut() -> anyhow::Result<()>,
+{
+    let op_cost = warmup_and_estimate(config.warmup, op)?;
     let calibration = calibrate_iters(config, op_cost);
     let iters_u64 = clamp_u128_to_u64(calibration.iters_per_sample);
 
@@ -194,6 +234,40 @@ where
         config,
         calibration.capped,
     ))
+}
+
+fn better_measurement(candidate: MeasureStats, current: MeasureStats) -> bool {
+    let candidate_quality = candidate.quality();
+    let current_quality = current.quality();
+    if candidate_quality.is_valid() != current_quality.is_valid() {
+        return candidate_quality.is_valid();
+    }
+
+    let candidate_score = quality_problem_count(candidate_quality);
+    let current_score = quality_problem_count(current_quality);
+    if candidate_score != current_score {
+        return candidate_score < current_score;
+    }
+
+    if candidate.cv_permille() != current.cv_permille() {
+        return candidate.cv_permille() < current.cv_permille();
+    }
+
+    candidate.median_sample() < current.median_sample()
+}
+
+const fn quality_problem_count(quality: MeasurementQuality) -> u8 {
+    let mut count = 0u8;
+    if quality.low_signal() {
+        count += 1;
+    }
+    if quality.high_variance() {
+        count += 1;
+    }
+    if quality.iteration_cap_reached() {
+        count += 1;
+    }
+    count
 }
 
 fn warmup_and_estimate<F>(warmup: Duration, op: &mut F) -> anyhow::Result<u128>
@@ -398,7 +472,10 @@ pub fn ratio_values(ours: u128, reference: u128) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{MeasureConfig, format_duration, isqrt, measure, median_of_sorted, ratio_values};
+    use super::{
+        MeasureConfig, MeasureStats, MeasurementQuality, better_measurement, format_duration,
+        isqrt, measure, median_of_sorted, ratio_values,
+    };
     use std::{
         hint::black_box,
         time::{Duration, Instant},
@@ -407,6 +484,27 @@ mod tests {
     fn fixed_config() -> MeasureConfig {
         MeasureConfig::new(Duration::from_millis(20), Duration::from_millis(60), 8)
             .with_quality(Duration::from_nanos(1), 10_000)
+    }
+
+    fn quality(low_signal: bool, high_variance: bool) -> MeasurementQuality {
+        MeasurementQuality {
+            min_op_time: Duration::from_millis(1),
+            max_cv_permille: 100,
+            low_signal,
+            high_variance,
+            iteration_cap_reached: false,
+        }
+    }
+
+    fn stats(cv_permille: u32, quality: MeasurementQuality) -> MeasureStats {
+        MeasureStats {
+            median: Duration::from_millis(2),
+            cv_permille,
+            iters_per_sample: 1,
+            samples: 3,
+            median_sample: Duration::from_millis(20),
+            quality,
+        }
     }
 
     #[test]
@@ -446,6 +544,34 @@ mod tests {
             Duration::from_micros(100).as_nanos(),
         );
         assert_eq!(above, "2.50x");
+    }
+
+    #[test]
+    fn retry_selection_prefers_valid_measurement() -> anyhow::Result<()> {
+        let invalid = stats(250, quality(false, true));
+        let valid = stats(90, quality(false, false));
+        ensure_bool(
+            better_measurement(valid, invalid),
+            "valid measurement should replace an invalid result",
+        )?;
+        ensure_bool(
+            !better_measurement(invalid, valid),
+            "invalid measurement should not replace a valid result",
+        )
+    }
+
+    #[test]
+    fn retry_selection_prefers_less_noisy_invalid_measurement() -> anyhow::Result<()> {
+        let noisy = stats(250, quality(false, true));
+        let less_noisy = stats(120, quality(false, true));
+        ensure_bool(
+            better_measurement(less_noisy, noisy),
+            "lower CV should replace an equally invalid result",
+        )?;
+        ensure_bool(
+            !better_measurement(noisy, less_noisy),
+            "higher CV should not replace a less noisy result",
+        )
     }
 
     #[test]
@@ -501,5 +627,12 @@ mod tests {
         assert!(stats.quality().low_signal());
         assert!(!stats.quality().is_valid());
         Ok(())
+    }
+
+    fn ensure_bool(actual: bool, message: &str) -> anyhow::Result<()> {
+        if actual {
+            return Ok(());
+        }
+        Err(anyhow::anyhow!(message.to_owned()))
     }
 }

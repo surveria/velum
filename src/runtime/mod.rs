@@ -167,7 +167,7 @@ impl Context {
     }
 
     #[must_use]
-    pub const fn new(limits: RuntimeLimits) -> Self {
+    pub fn new(limits: RuntimeLimits) -> Self {
         Self {
             limits,
             atoms: AtomTable::new(),
