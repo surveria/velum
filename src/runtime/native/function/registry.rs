@@ -100,7 +100,23 @@ const GLOBAL_PARSE_FLOAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(91);
 const GLOBAL_PARSE_INT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(92);
 const NUMBER_IS_FINITE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(93);
 const NUMBER_IS_NAN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(94);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 95;
+const STRING_PROTOTYPE_CHAR_AT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(95);
+const STRING_PROTOTYPE_CHAR_CODE_AT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(96);
+const STRING_PROTOTYPE_CONCAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(97);
+const STRING_PROTOTYPE_ENDS_WITH_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(98);
+const STRING_PROTOTYPE_INCLUDES_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(99);
+const STRING_PROTOTYPE_INDEX_OF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(100);
+const STRING_PROTOTYPE_LAST_INDEX_OF_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(101);
+const STRING_PROTOTYPE_REPEAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(102);
+const STRING_PROTOTYPE_SLICE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(103);
+const STRING_PROTOTYPE_STARTS_WITH_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(104);
+const STRING_PROTOTYPE_SUBSTRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(105);
+const STRING_PROTOTYPE_TO_LOWER_CASE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(106);
+const STRING_PROTOTYPE_TO_UPPER_CASE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(107);
+const STRING_PROTOTYPE_TRIM_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(108);
+const STRING_PROTOTYPE_TRIM_END_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(109);
+const STRING_PROTOTYPE_TRIM_START_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(110);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 111;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -159,6 +175,9 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         return Some(slot);
     }
     if let Some(slot) = utility_slot(kind) {
+        return Some(slot);
+    }
+    if let Some(slot) = string_prototype_slot(kind) {
         return Some(slot);
     }
 
@@ -267,6 +286,28 @@ const fn utility_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::GlobalParseInt => Some(GLOBAL_PARSE_INT_SLOT),
         NativeFunctionKind::NumberIsFinite => Some(NUMBER_IS_FINITE_SLOT),
         NativeFunctionKind::NumberIsNan => Some(NUMBER_IS_NAN_SLOT),
+        _ => None,
+    }
+}
+
+const fn string_prototype_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
+    match kind {
+        NativeFunctionKind::StringPrototypeCharAt => Some(STRING_PROTOTYPE_CHAR_AT_SLOT),
+        NativeFunctionKind::StringPrototypeCharCodeAt => Some(STRING_PROTOTYPE_CHAR_CODE_AT_SLOT),
+        NativeFunctionKind::StringPrototypeConcat => Some(STRING_PROTOTYPE_CONCAT_SLOT),
+        NativeFunctionKind::StringPrototypeEndsWith => Some(STRING_PROTOTYPE_ENDS_WITH_SLOT),
+        NativeFunctionKind::StringPrototypeIncludes => Some(STRING_PROTOTYPE_INCLUDES_SLOT),
+        NativeFunctionKind::StringPrototypeIndexOf => Some(STRING_PROTOTYPE_INDEX_OF_SLOT),
+        NativeFunctionKind::StringPrototypeLastIndexOf => Some(STRING_PROTOTYPE_LAST_INDEX_OF_SLOT),
+        NativeFunctionKind::StringPrototypeRepeat => Some(STRING_PROTOTYPE_REPEAT_SLOT),
+        NativeFunctionKind::StringPrototypeSlice => Some(STRING_PROTOTYPE_SLICE_SLOT),
+        NativeFunctionKind::StringPrototypeStartsWith => Some(STRING_PROTOTYPE_STARTS_WITH_SLOT),
+        NativeFunctionKind::StringPrototypeSubstring => Some(STRING_PROTOTYPE_SUBSTRING_SLOT),
+        NativeFunctionKind::StringPrototypeToLowerCase => Some(STRING_PROTOTYPE_TO_LOWER_CASE_SLOT),
+        NativeFunctionKind::StringPrototypeToUpperCase => Some(STRING_PROTOTYPE_TO_UPPER_CASE_SLOT),
+        NativeFunctionKind::StringPrototypeTrim => Some(STRING_PROTOTYPE_TRIM_SLOT),
+        NativeFunctionKind::StringPrototypeTrimEnd => Some(STRING_PROTOTYPE_TRIM_END_SLOT),
+        NativeFunctionKind::StringPrototypeTrimStart => Some(STRING_PROTOTYPE_TRIM_START_SLOT),
         _ => None,
     }
 }

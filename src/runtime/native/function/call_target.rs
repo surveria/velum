@@ -98,8 +98,8 @@ impl NativeFunctionKind {
             NativeCallTarget::PromiseCatch => Self::PromiseCatch,
             NativeCallTarget::RegExp => Self::RegExp,
             NativeCallTarget::RegExpPrototypeTest => Self::RegExpPrototypeTest,
-            NativeCallTarget::String => Self::String,
             NativeCallTarget::Symbol => Self::Symbol,
+            target => Self::from_string_call_target(target),
         }
     }
 
@@ -116,7 +116,10 @@ impl NativeFunctionKind {
         if let Some(target) = self.to_object_call_target() {
             return Some(target);
         }
-        self.to_core_call_target()
+        if let Some(target) = self.to_core_call_target() {
+            return Some(target);
+        }
+        self.to_string_call_target()
     }
 
     const fn to_array_call_target(self) -> Option<NativeCallTarget> {
@@ -238,8 +241,52 @@ impl NativeFunctionKind {
             Self::PromiseCatch => Some(NativeCallTarget::PromiseCatch),
             Self::RegExp => Some(NativeCallTarget::RegExp),
             Self::RegExpPrototypeTest => Some(NativeCallTarget::RegExpPrototypeTest),
-            Self::String => Some(NativeCallTarget::String),
             Self::Symbol => Some(NativeCallTarget::Symbol),
+            _ => None,
+        }
+    }
+
+    const fn from_string_call_target(target: NativeCallTarget) -> Self {
+        match target {
+            NativeCallTarget::StringPrototypeCharAt => Self::StringPrototypeCharAt,
+            NativeCallTarget::StringPrototypeCharCodeAt => Self::StringPrototypeCharCodeAt,
+            NativeCallTarget::StringPrototypeConcat => Self::StringPrototypeConcat,
+            NativeCallTarget::StringPrototypeEndsWith => Self::StringPrototypeEndsWith,
+            NativeCallTarget::StringPrototypeIncludes => Self::StringPrototypeIncludes,
+            NativeCallTarget::StringPrototypeIndexOf => Self::StringPrototypeIndexOf,
+            NativeCallTarget::StringPrototypeLastIndexOf => Self::StringPrototypeLastIndexOf,
+            NativeCallTarget::StringPrototypeRepeat => Self::StringPrototypeRepeat,
+            NativeCallTarget::StringPrototypeSlice => Self::StringPrototypeSlice,
+            NativeCallTarget::StringPrototypeStartsWith => Self::StringPrototypeStartsWith,
+            NativeCallTarget::StringPrototypeSubstring => Self::StringPrototypeSubstring,
+            NativeCallTarget::StringPrototypeToLowerCase => Self::StringPrototypeToLowerCase,
+            NativeCallTarget::StringPrototypeToUpperCase => Self::StringPrototypeToUpperCase,
+            NativeCallTarget::StringPrototypeTrim => Self::StringPrototypeTrim,
+            NativeCallTarget::StringPrototypeTrimEnd => Self::StringPrototypeTrimEnd,
+            NativeCallTarget::StringPrototypeTrimStart => Self::StringPrototypeTrimStart,
+            _ => Self::String,
+        }
+    }
+
+    const fn to_string_call_target(self) -> Option<NativeCallTarget> {
+        match self {
+            Self::String => Some(NativeCallTarget::String),
+            Self::StringPrototypeCharAt => Some(NativeCallTarget::StringPrototypeCharAt),
+            Self::StringPrototypeCharCodeAt => Some(NativeCallTarget::StringPrototypeCharCodeAt),
+            Self::StringPrototypeConcat => Some(NativeCallTarget::StringPrototypeConcat),
+            Self::StringPrototypeEndsWith => Some(NativeCallTarget::StringPrototypeEndsWith),
+            Self::StringPrototypeIncludes => Some(NativeCallTarget::StringPrototypeIncludes),
+            Self::StringPrototypeIndexOf => Some(NativeCallTarget::StringPrototypeIndexOf),
+            Self::StringPrototypeLastIndexOf => Some(NativeCallTarget::StringPrototypeLastIndexOf),
+            Self::StringPrototypeRepeat => Some(NativeCallTarget::StringPrototypeRepeat),
+            Self::StringPrototypeSlice => Some(NativeCallTarget::StringPrototypeSlice),
+            Self::StringPrototypeStartsWith => Some(NativeCallTarget::StringPrototypeStartsWith),
+            Self::StringPrototypeSubstring => Some(NativeCallTarget::StringPrototypeSubstring),
+            Self::StringPrototypeToLowerCase => Some(NativeCallTarget::StringPrototypeToLowerCase),
+            Self::StringPrototypeToUpperCase => Some(NativeCallTarget::StringPrototypeToUpperCase),
+            Self::StringPrototypeTrim => Some(NativeCallTarget::StringPrototypeTrim),
+            Self::StringPrototypeTrimEnd => Some(NativeCallTarget::StringPrototypeTrimEnd),
+            Self::StringPrototypeTrimStart => Some(NativeCallTarget::StringPrototypeTrimStart),
             _ => None,
         }
     }

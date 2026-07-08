@@ -17,6 +17,24 @@ use super::{
     OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PROMISE_NAME, REGEXP_NAME, STRING_NAME, SYMBOL_NAME,
 };
 
+const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
+
+const fn native_kind_is_constructable(kind: NativeFunctionKind) -> bool {
+    matches!(
+        kind,
+        NativeFunctionKind::Array
+            | NativeFunctionKind::AsyncFunction
+            | NativeFunctionKind::Boolean
+            | NativeFunctionKind::ErrorConstructor(_)
+            | NativeFunctionKind::Function
+            | NativeFunctionKind::Number
+            | NativeFunctionKind::Object
+            | NativeFunctionKind::Promise
+            | NativeFunctionKind::RegExp
+            | NativeFunctionKind::String
+    )
+}
+
 impl Context {
     pub(crate) fn builtin_value(&mut self, name: &str) -> Result<Option<Value>> {
         match name {
@@ -143,105 +161,21 @@ impl Context {
         kind: NativeFunctionKind,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
+        if !native_kind_is_constructable(kind) {
+            return Err(Error::type_error(NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR));
+        }
         match kind {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
             NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
             NativeFunctionKind::Function => self.eval_function_constructor(args),
             NativeFunctionKind::RegExp => self.construct_regexp_object(args),
-            NativeFunctionKind::ArrayConcat
-            | NativeFunctionKind::ArrayIncludes
-            | NativeFunctionKind::ArrayIndexOf
-            | NativeFunctionKind::ArrayIsArray
-            | NativeFunctionKind::ArrayJoin
-            | NativeFunctionKind::ArrayLastIndexOf
-            | NativeFunctionKind::ArrayPop
-            | NativeFunctionKind::ArrayPush
-            | NativeFunctionKind::ArrayReverse
-            | NativeFunctionKind::ArrayShift
-            | NativeFunctionKind::ArraySlice
-            | NativeFunctionKind::ArrayUnshift
-            | NativeFunctionKind::BoundFunction(_)
-            | NativeFunctionKind::Eval
-            | NativeFunctionKind::FunctionPrototypeBind
-            | NativeFunctionKind::FunctionPrototypeCall
-            | NativeFunctionKind::GlobalDecodeUri
-            | NativeFunctionKind::GlobalDecodeUriComponent
-            | NativeFunctionKind::GlobalEncodeUri
-            | NativeFunctionKind::GlobalEncodeUriComponent
-            | NativeFunctionKind::GlobalIsFinite
-            | NativeFunctionKind::GlobalIsNan
-            | NativeFunctionKind::GlobalParseFloat
-            | NativeFunctionKind::GlobalParseInt
-            | NativeFunctionKind::JsonParse
-            | NativeFunctionKind::JsonStringify
-            | NativeFunctionKind::MathAbs
-            | NativeFunctionKind::MathAcos
-            | NativeFunctionKind::MathAcosh
-            | NativeFunctionKind::MathAsin
-            | NativeFunctionKind::MathAsinh
-            | NativeFunctionKind::MathAtan
-            | NativeFunctionKind::MathAtan2
-            | NativeFunctionKind::MathAtanh
-            | NativeFunctionKind::MathCbrt
-            | NativeFunctionKind::MathCeil
-            | NativeFunctionKind::MathClz32
-            | NativeFunctionKind::MathCos
-            | NativeFunctionKind::MathCosh
-            | NativeFunctionKind::MathExp
-            | NativeFunctionKind::MathExpm1
-            | NativeFunctionKind::MathFloor
-            | NativeFunctionKind::MathFround
-            | NativeFunctionKind::MathHypot
-            | NativeFunctionKind::MathImul
-            | NativeFunctionKind::MathLog
-            | NativeFunctionKind::MathLog10
-            | NativeFunctionKind::MathLog1p
-            | NativeFunctionKind::MathLog2
-            | NativeFunctionKind::MathMax
-            | NativeFunctionKind::MathMin
-            | NativeFunctionKind::MathPow
-            | NativeFunctionKind::MathRandom
-            | NativeFunctionKind::MathRound
-            | NativeFunctionKind::MathSign
-            | NativeFunctionKind::MathSin
-            | NativeFunctionKind::MathSinh
-            | NativeFunctionKind::MathSqrt
-            | NativeFunctionKind::MathTan
-            | NativeFunctionKind::MathTanh
-            | NativeFunctionKind::MathTrunc
-            | NativeFunctionKind::NumberIsFinite
-            | NativeFunctionKind::NumberIsNan
-            | NativeFunctionKind::ObjectAssign
-            | NativeFunctionKind::ObjectCreate
-            | NativeFunctionKind::ObjectDefineProperties
-            | NativeFunctionKind::ObjectDefineProperty
-            | NativeFunctionKind::ObjectEntries
-            | NativeFunctionKind::ObjectGetPrototypeOf
-            | NativeFunctionKind::ObjectGetOwnPropertyDescriptor
-            | NativeFunctionKind::ObjectGetOwnPropertyDescriptors
-            | NativeFunctionKind::ObjectGetOwnPropertyNames
-            | NativeFunctionKind::ObjectHasOwn
-            | NativeFunctionKind::ObjectIs
-            | NativeFunctionKind::ObjectKeys
-            | NativeFunctionKind::ObjectPrototypeHasOwnProperty
-            | NativeFunctionKind::ObjectPrototypePropertyIsEnumerable
-            | NativeFunctionKind::ObjectSetPrototypeOf
-            | NativeFunctionKind::ObjectValues
-            | NativeFunctionKind::PromiseResolve
-            | NativeFunctionKind::PromiseReject
-            | NativeFunctionKind::PromiseThen
-            | NativeFunctionKind::PromiseCatch
-            | NativeFunctionKind::PromiseResolver { .. }
-            | NativeFunctionKind::RegExpPrototypeTest
-            | NativeFunctionKind::Symbol => {
-                Err(Error::type_error("native method is not a constructor"))
-            }
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),
             NativeFunctionKind::Boolean => self.construct_boolean_object(args),
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
             NativeFunctionKind::Number => self.construct_number_object(args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
             NativeFunctionKind::String => self.construct_string_object(args),
+            _ => Err(Error::type_error(NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR)),
         }
     }
 

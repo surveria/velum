@@ -33,7 +33,13 @@ pub(in crate::runtime::native) use kind::{
     OBJECT_IS_NAME, OBJECT_KEYS_NAME, OBJECT_NAME, OBJECT_SET_PROTOTYPE_OF_NAME,
     OBJECT_VALUES_NAME, PROMISE_CATCH_NAME, PROMISE_NAME, PROMISE_REJECT_NAME,
     PROMISE_RESOLVE_NAME, PROMISE_THEN_NAME, REGEXP_NAME, REGEXP_PROTOTYPE_TEST_NAME, STRING_NAME,
-    SYMBOL_NAME,
+    STRING_PROTOTYPE_CHAR_AT_NAME, STRING_PROTOTYPE_CHAR_CODE_AT_NAME,
+    STRING_PROTOTYPE_CONCAT_NAME, STRING_PROTOTYPE_ENDS_WITH_NAME, STRING_PROTOTYPE_INCLUDES_NAME,
+    STRING_PROTOTYPE_INDEX_OF_NAME, STRING_PROTOTYPE_LAST_INDEX_OF_NAME,
+    STRING_PROTOTYPE_REPEAT_NAME, STRING_PROTOTYPE_SLICE_NAME, STRING_PROTOTYPE_STARTS_WITH_NAME,
+    STRING_PROTOTYPE_SUBSTRING_NAME, STRING_PROTOTYPE_TO_LOWER_CASE_NAME,
+    STRING_PROTOTYPE_TO_UPPER_CASE_NAME, STRING_PROTOTYPE_TRIM_END_NAME,
+    STRING_PROTOTYPE_TRIM_NAME, STRING_PROTOTYPE_TRIM_START_NAME, SYMBOL_NAME,
 };
 pub(in crate::runtime) use kind::{
     INFINITY_NAME, NAN_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
@@ -85,101 +91,7 @@ impl NativeFunction {
     pub(in crate::runtime) fn intrinsic_property(&self, property: &str) -> Option<Value> {
         match self.kind {
             NativeFunctionKind::Number => number_intrinsic_property(property),
-            NativeFunctionKind::Array
-            | NativeFunctionKind::ArrayConcat
-            | NativeFunctionKind::ArrayIncludes
-            | NativeFunctionKind::ArrayIndexOf
-            | NativeFunctionKind::ArrayIsArray
-            | NativeFunctionKind::ArrayJoin
-            | NativeFunctionKind::ArrayLastIndexOf
-            | NativeFunctionKind::ArrayPop
-            | NativeFunctionKind::ArrayPush
-            | NativeFunctionKind::ArrayReverse
-            | NativeFunctionKind::ArrayShift
-            | NativeFunctionKind::ArraySlice
-            | NativeFunctionKind::ArrayUnshift
-            | NativeFunctionKind::AsyncFunction
-            | NativeFunctionKind::Boolean
-            | NativeFunctionKind::BoundFunction(_)
-            | NativeFunctionKind::Eval
-            | NativeFunctionKind::ErrorConstructor(_)
-            | NativeFunctionKind::Function
-            | NativeFunctionKind::FunctionPrototypeBind
-            | NativeFunctionKind::FunctionPrototypeCall
-            | NativeFunctionKind::GlobalDecodeUri
-            | NativeFunctionKind::GlobalDecodeUriComponent
-            | NativeFunctionKind::GlobalEncodeUri
-            | NativeFunctionKind::GlobalEncodeUriComponent
-            | NativeFunctionKind::GlobalIsFinite
-            | NativeFunctionKind::GlobalIsNan
-            | NativeFunctionKind::GlobalParseFloat
-            | NativeFunctionKind::GlobalParseInt
-            | NativeFunctionKind::JsonParse
-            | NativeFunctionKind::JsonStringify
-            | NativeFunctionKind::MathAbs
-            | NativeFunctionKind::MathAcos
-            | NativeFunctionKind::MathAcosh
-            | NativeFunctionKind::MathAsin
-            | NativeFunctionKind::MathAsinh
-            | NativeFunctionKind::MathAtan
-            | NativeFunctionKind::MathAtan2
-            | NativeFunctionKind::MathAtanh
-            | NativeFunctionKind::MathCbrt
-            | NativeFunctionKind::MathCeil
-            | NativeFunctionKind::MathClz32
-            | NativeFunctionKind::MathCos
-            | NativeFunctionKind::MathCosh
-            | NativeFunctionKind::MathExp
-            | NativeFunctionKind::MathExpm1
-            | NativeFunctionKind::MathFloor
-            | NativeFunctionKind::MathFround
-            | NativeFunctionKind::MathHypot
-            | NativeFunctionKind::MathImul
-            | NativeFunctionKind::MathLog
-            | NativeFunctionKind::MathLog10
-            | NativeFunctionKind::MathLog1p
-            | NativeFunctionKind::MathLog2
-            | NativeFunctionKind::MathMax
-            | NativeFunctionKind::MathMin
-            | NativeFunctionKind::MathPow
-            | NativeFunctionKind::MathRandom
-            | NativeFunctionKind::MathRound
-            | NativeFunctionKind::MathSign
-            | NativeFunctionKind::MathSin
-            | NativeFunctionKind::MathSinh
-            | NativeFunctionKind::MathSqrt
-            | NativeFunctionKind::MathTan
-            | NativeFunctionKind::MathTanh
-            | NativeFunctionKind::MathTrunc
-            | NativeFunctionKind::NumberIsFinite
-            | NativeFunctionKind::NumberIsNan
-            | NativeFunctionKind::Object
-            | NativeFunctionKind::ObjectAssign
-            | NativeFunctionKind::ObjectCreate
-            | NativeFunctionKind::ObjectDefineProperties
-            | NativeFunctionKind::ObjectDefineProperty
-            | NativeFunctionKind::ObjectEntries
-            | NativeFunctionKind::ObjectGetPrototypeOf
-            | NativeFunctionKind::ObjectGetOwnPropertyDescriptor
-            | NativeFunctionKind::ObjectGetOwnPropertyDescriptors
-            | NativeFunctionKind::ObjectGetOwnPropertyNames
-            | NativeFunctionKind::ObjectHasOwn
-            | NativeFunctionKind::ObjectIs
-            | NativeFunctionKind::ObjectKeys
-            | NativeFunctionKind::ObjectPrototypeHasOwnProperty
-            | NativeFunctionKind::ObjectPrototypePropertyIsEnumerable
-            | NativeFunctionKind::ObjectSetPrototypeOf
-            | NativeFunctionKind::ObjectValues
-            | NativeFunctionKind::Promise
-            | NativeFunctionKind::PromiseResolve
-            | NativeFunctionKind::PromiseReject
-            | NativeFunctionKind::PromiseThen
-            | NativeFunctionKind::PromiseCatch
-            | NativeFunctionKind::PromiseResolver { .. }
-            | NativeFunctionKind::RegExp
-            | NativeFunctionKind::RegExpPrototypeTest
-            | NativeFunctionKind::String
-            | NativeFunctionKind::Symbol => None,
+            _ => None,
         }
     }
 
