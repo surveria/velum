@@ -16,6 +16,7 @@ use crate::{
 };
 
 mod arguments;
+mod fast_path;
 mod intrinsic;
 mod parameters;
 mod properties;
@@ -25,6 +26,7 @@ use crate::runtime::native::{
     NativeFunctionKind, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
     OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
 };
+pub(super) use fast_path::FunctionFastPath;
 use parameters::FunctionParameterState;
 pub(super) use properties::{FunctionIntrinsicDefaults, FunctionProperties};
 
@@ -33,6 +35,18 @@ const FUNCTION_PROTOTYPE_CALL_PROPERTY: &str = "call";
 
 use super::FunctionNewTarget;
 use properties::{FunctionPropertyKind, PROTOTYPE_CONSTRUCTOR_PROPERTY};
+
+fn expected_function_local_count(base: usize, binds_arguments: bool) -> Result<usize> {
+    let with_function_scope = base
+        .checked_add(1)
+        .ok_or_else(|| Error::limit("function local scope count overflowed"))?;
+    if binds_arguments {
+        return with_function_scope
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("function local scope count overflowed"));
+    }
+    Ok(with_function_scope)
+}
 
 /// Super references available to a class constructor or method body: the
 /// callable parent constructor (derived constructors only) and the home
@@ -108,6 +122,15 @@ impl Context {
         let static_name_atom_cache = self.current_static_name_atom_cache();
         let static_binding_cache = self.current_static_binding_cache();
         let static_binding_layout = self.current_static_binding_layout();
+        let param_frames =
+            parameters::function_param_frames(params, static_binding_layout.as_ref())?;
+        let fast_path = FunctionFastPath::compile(
+            init.bytecode,
+            &param_frames,
+            init.new_target_mode,
+            init.is_async,
+            init.class_constructor,
+        )?;
         let upvalues = self.capture_function_upvalues(
             init.static_function_id,
             init.bytecode.capture_bindings(),
@@ -116,7 +139,9 @@ impl Context {
         self.functions.push(super::Function {
             param_binding_ids: parameters::function_param_binding_ids(params),
             param_atoms,
+            param_frames,
             bytecode: init.bytecode.clone(),
+            fast_path: fast_path.map(Rc::new),
             source: None,
             upvalues: upvalues.cells,
             static_name_atom_cache,
@@ -230,53 +255,67 @@ impl Context {
         this_value: Value,
         new_target: Value,
     ) -> Result<Completion> {
+        let raw_args = args.as_slice();
+        if let Some(completion) = self.try_eval_pre_setup_function_fast_path(id, raw_args)? {
+            return Ok(completion);
+        }
         let (
             param_atoms,
             param_binding_ids,
+            param_frames,
             bytecode,
             upvalues,
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
+            binds_arguments,
+            super_binding,
         ) = {
             let function = self.function(id)?;
             (
                 Rc::clone(&function.param_atoms),
                 Rc::clone(&function.param_binding_ids),
+                Rc::clone(&function.param_frames),
                 function.bytecode.clone(),
                 Rc::clone(&function.upvalues),
                 function.static_name_atom_cache.clone(),
                 function.static_binding_cache.clone(),
                 function.static_binding_layout.clone(),
+                function.bytecode.uses_arguments()
+                    && !matches!(function.new_target, FunctionNewTarget::Lexical(_)),
+                function.super_binding.clone(),
             )
         };
-        let args = args.to_owned_values();
-        let original_args = args.clone();
-        let args = self.pack_rest_arguments(bytecode.params(), args)?;
-        let has_parameter_defaults = bytecode.has_parameter_defaults();
-        let caller_locals = std::mem::take(&mut self.locals);
-        let scope = match self.function_scope(
-            &param_atoms,
-            &param_binding_ids,
-            static_binding_layout.as_ref(),
-            &args,
-            has_parameter_defaults,
-        ) {
-            Ok(scope) => scope,
-            Err(error) => {
-                self.locals = caller_locals;
-                return Err(error);
-            }
+        let packed_args = if bytecode.has_rest_parameter() {
+            Some(self.pack_rest_arguments(bytecode.params(), raw_args.to_vec())?)
+        } else {
+            None
         };
-        let binds_arguments = bytecode.uses_arguments()
-            && self.function(id).is_ok_and(|function| {
-                !matches!(function.new_target, FunctionNewTarget::Lexical(_))
-            });
+        let args = packed_args.as_deref().unwrap_or(raw_args);
+        let original_args = if binds_arguments {
+            Some(raw_args.to_vec())
+        } else {
+            None
+        };
+        let has_parameter_defaults = bytecode.has_parameter_defaults();
+        let local_base = self.enter_function_local_frame();
+        let scope =
+            match self.function_scope(&param_atoms, &param_frames, args, has_parameter_defaults) {
+                Ok(scope) => scope,
+                Err(error) => {
+                    self.leave_function_local_frame(local_base)?;
+                    return Err(error);
+                }
+            };
         if binds_arguments {
-            match self.arguments_wrapper_scope(&original_args) {
+            let Some(original_args) = original_args.as_deref() else {
+                self.leave_function_local_frame(local_base)?;
+                return Err(Error::runtime("function arguments source disappeared"));
+            };
+            match self.arguments_wrapper_scope(original_args) {
                 Ok(wrapper) => self.locals.push(wrapper),
                 Err(error) => {
-                    self.locals = caller_locals;
+                    self.leave_function_local_frame(local_base)?;
                     return Err(error);
                 }
             }
@@ -285,26 +324,21 @@ impl Context {
         self.upvalue_frames.push(upvalues);
         self.this_values.push(this_value);
         self.new_target_values.push(new_target);
-        self.super_frames
-            .push(self.function(id).ok().and_then(|f| f.super_binding.clone()));
+        self.super_frames.push(super_binding);
         let result = self.eval_function_body(
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
-            FunctionParameterState::new(&param_binding_ids, &param_atoms, &args),
+            FunctionParameterState::new(&param_binding_ids, &param_atoms, args),
             &bytecode,
         );
         let removed_super = self.super_frames.pop();
         let removed_new_target = self.new_target_values.pop();
         let removed_this = self.this_values.pop();
         let removed_upvalues = self.upvalue_frames.pop();
-        let removed = self.locals.pop();
-        let removed_arguments_scope = if binds_arguments {
-            self.locals.pop().is_some()
-        } else {
-            true
-        };
-        self.locals = caller_locals;
+        let expected_local_count = expected_function_local_count(local_base, binds_arguments)?;
+        let local_scope_stack_ok = self.locals.len() == expected_local_count;
+        self.leave_function_local_frame(local_base)?;
         if removed_this.is_none() {
             return Err(Error::runtime("function this binding disappeared"));
         }
@@ -317,13 +351,32 @@ impl Context {
         if removed_upvalues.is_none() {
             return Err(Error::runtime("function upvalue frame disappeared"));
         }
-        if removed.is_none() {
-            return Err(Error::runtime("function scope disappeared"));
-        }
-        if !removed_arguments_scope {
-            return Err(Error::runtime("function arguments scope disappeared"));
+        if !local_scope_stack_ok {
+            return Err(Error::runtime("function local scope stack mismatch"));
         }
         result
+    }
+
+    fn try_eval_pre_setup_function_fast_path(
+        &mut self,
+        id: FunctionId,
+        raw_args: &[Value],
+    ) -> Result<Option<Completion>> {
+        let Some((fast_path, fast_upvalues)) = ({
+            let function = self.function(id)?;
+            function.fast_path.as_ref().map(|fast_path| {
+                let upvalues = if fast_path.needs_upvalues() {
+                    Some(Rc::clone(&function.upvalues))
+                } else {
+                    None
+                };
+                (Rc::clone(fast_path), upvalues)
+            })
+        }) else {
+            return Ok(None);
+        };
+        let upvalues = fast_upvalues.as_deref().unwrap_or(&[]);
+        self.eval_bytecode_function_pre_setup_fast_path(&fast_path, raw_args, upvalues)
     }
 
     pub(crate) fn get_function_property_lookup(

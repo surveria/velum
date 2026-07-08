@@ -15,7 +15,7 @@ use crate::storage::atom::{AtomId, AtomTable};
 use crate::storage::string_heap::StringHeap;
 use crate::storage::symbol::SymbolTable;
 use crate::syntax::StaticBindingId;
-use crate::value::{ErrorName, Value};
+use crate::value::{ErrorName, FunctionId, Value};
 
 pub mod binding;
 pub mod bytecode;
@@ -60,6 +60,7 @@ pub struct Context {
     globals: BindingScope,
     builtin_globals: BindingScope,
     locals: Vec<BindingScope>,
+    local_frame_bases: Vec<usize>,
     upvalue_frames: Vec<FunctionUpvalues>,
     functions: Vec<Function>,
     native_functions: Vec<native::NativeFunction>,
@@ -93,7 +94,9 @@ pub struct Context {
 struct Function {
     param_binding_ids: Rc<[StaticBindingId]>,
     param_atoms: Rc<[AtomId]>,
+    param_frames: Rc<[Option<CompiledBindingFrame>]>,
     bytecode: BytecodeFunction,
+    fast_path: Option<Rc<function::FunctionFastPath>>,
     source: Option<Rc<str>>,
     upvalues: FunctionUpvalues,
     static_name_atom_cache: Option<StaticNameAtomCacheHandle>,
@@ -138,6 +141,10 @@ impl CapturedFunctionUpvalues {
 }
 
 enum CallReference {
+    Function {
+        id: FunctionId,
+        this_value: Value,
+    },
     Generic {
         callee: Value,
         this_value: Value,
@@ -166,6 +173,35 @@ impl FunctionArity {
 }
 
 impl Context {
+    pub(crate) fn current_local_frame_start(&self) -> usize {
+        self.local_frame_bases.last().copied().unwrap_or(0)
+    }
+
+    pub(crate) fn visible_local_scope_count(&self) -> usize {
+        self.locals
+            .len()
+            .saturating_sub(self.current_local_frame_start())
+    }
+
+    pub(crate) fn has_visible_local_scope(&self) -> bool {
+        self.visible_local_scope_count() > 0
+    }
+
+    pub(crate) fn enter_function_local_frame(&mut self) -> usize {
+        let base = self.locals.len();
+        self.local_frame_bases.push(base);
+        base
+    }
+
+    pub(crate) fn leave_function_local_frame(&mut self, base: usize) -> Result<()> {
+        self.locals.truncate(base);
+        let removed = self.local_frame_bases.pop();
+        if removed != Some(base) {
+            return Err(Error::runtime("function local frame base disappeared"));
+        }
+        Ok(())
+    }
+
     pub(crate) const fn set_iterator_symbol(&mut self, symbol: crate::storage::symbol::SymbolId) {
         self.iterator_symbol = Some(symbol);
     }
@@ -190,6 +226,7 @@ impl Context {
             globals: BindingScope::new(),
             builtin_globals: BindingScope::new(),
             locals: Vec::new(),
+            local_frame_bases: Vec::new(),
             upvalue_frames: Vec::new(),
             functions: Vec::new(),
             native_functions: Vec::new(),
@@ -379,6 +416,12 @@ impl Context {
         args: &[Value],
     ) -> Result<Completion> {
         match reference {
+            CallReference::Function { id, this_value } => self
+                .eval_function_call_completion_with_this(
+                    id,
+                    RuntimeCallArgs::values(args),
+                    this_value,
+                ),
             CallReference::DirectNative { target, this_value } => self
                 .eval_direct_native_call_target(target, args, &this_value)
                 .map(Completion::Normal),
@@ -412,6 +455,12 @@ impl Context {
         native: Option<NativeCallTarget>,
         function: Value,
     ) -> Result<CallReference> {
+        if let Value::Function(id) = function {
+            return Ok(CallReference::Function {
+                id,
+                this_value: Value::Undefined,
+            });
+        }
         if let Value::NativeFunction(id) = function {
             if let Some(target) = native
                 && self.direct_native_call_kind(id, target).is_some()

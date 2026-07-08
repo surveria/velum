@@ -82,6 +82,10 @@ impl BytecodeFunction {
         self.param_defaults.iter().any(Option::is_some)
     }
 
+    pub fn has_rest_parameter(&self) -> bool {
+        self.params.last().is_some_and(BytecodeFunctionParam::rest)
+    }
+
     pub const fn body(&self) -> &BytecodeBlock {
         &self.body
     }

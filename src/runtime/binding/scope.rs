@@ -33,6 +33,30 @@ impl BindingScope {
         self.slots.len()
     }
 
+    pub(crate) fn from_compiled_slots(
+        compiled_scope: ScopeId,
+        slots: Vec<(AtomId, BindingCell)>,
+    ) -> Result<Self> {
+        let mut cells = Vec::with_capacity(slots.len());
+        let mut slot_atoms = Vec::with_capacity(slots.len());
+        let mut bindings = Vec::with_capacity(slots.len());
+        for (index, (atom, cell)) in slots.into_iter().enumerate() {
+            cells.push(cell);
+            slot_atoms.push(atom);
+            bindings.push(BindingEntry::new(atom, BindingSlot::from_index(index)));
+        }
+        bindings.sort_by_key(|entry| entry.atom());
+        if sorted_bindings_have_duplicates(&bindings) {
+            return Err(Error::runtime("compiled binding frame contains duplicates"));
+        }
+        Ok(Self {
+            slots: cells,
+            slot_atoms,
+            bindings,
+            compiled_scope: Some(compiled_scope),
+        })
+    }
+
     pub(crate) fn contains(&self, atom: AtomId) -> bool {
         self.binding_position(atom).is_ok()
     }
@@ -214,6 +238,21 @@ impl BindingScope {
         self.bindings
             .binary_search_by(|entry| entry.atom().cmp(&atom))
     }
+}
+
+fn sorted_bindings_have_duplicates(bindings: &[BindingEntry]) -> bool {
+    for pair in bindings.windows(2) {
+        let Some(left) = pair.first() else {
+            continue;
+        };
+        let Some(right) = pair.get(1) else {
+            continue;
+        };
+        if left.atom() == right.atom() {
+            return true;
+        }
+    }
+    false
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -199,6 +199,20 @@ impl Context {
         Ok(())
     }
 
+    pub(crate) fn charge_runtime_steps(&mut self, steps: usize) -> Result<()> {
+        self.runtime_steps = self
+            .runtime_steps
+            .checked_add(steps)
+            .ok_or_else(|| Error::limit("runtime steps overflowed"))?;
+        if self.runtime_steps > self.limits.max_runtime_steps {
+            return Err(Error::limit(format!(
+                "runtime steps exceeded {}",
+                self.limits.max_runtime_steps
+            )));
+        }
+        Ok(())
+    }
+
     pub(crate) fn record_bytecode_linear_segment_run(&mut self) -> Result<()> {
         self.bytecode_linear_segment_runs = self
             .bytecode_linear_segment_runs

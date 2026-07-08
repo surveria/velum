@@ -153,22 +153,29 @@ impl Context {
             .len()
             .checked_add(self.builtin_globals.len())
             .ok_or_else(|| Error::limit("binding count overflowed"))?;
-        self.locals.iter().try_fold(global_count, |count, scope| {
-            count
-                .checked_add(scope.len())
-                .ok_or_else(|| Error::limit("binding count overflowed"))
-        })
+        self.locals
+            .iter()
+            .skip(self.current_local_frame_start())
+            .try_fold(global_count, |count, scope| {
+                count
+                    .checked_add(scope.len())
+                    .ok_or_else(|| Error::limit("binding count overflowed"))
+            })
     }
 
     fn active_bindings(&self) -> &BindingScope {
-        if let Some(scope) = self.locals.last() {
+        if self.has_visible_local_scope()
+            && let Some(scope) = self.locals.last()
+        {
             return scope;
         }
         &self.globals
     }
 
     pub(crate) fn active_bindings_mut(&mut self) -> &mut BindingScope {
-        if let Some(scope) = self.locals.last_mut() {
+        if self.has_visible_local_scope()
+            && let Some(scope) = self.locals.last_mut()
+        {
             return scope;
         }
         &mut self.globals
@@ -182,6 +189,7 @@ impl Context {
     pub(crate) fn get_binding_by_atom(&self, atom: AtomId) -> Option<BindingCell> {
         self.locals
             .iter()
+            .skip(self.current_local_frame_start())
             .rev()
             .find_map(|scope| scope.get(atom))
             .or_else(|| self.globals.get(atom))

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    binding_metadata::{BindingLayout, BindingOperand},
+    binding_metadata::{BindingLayout, BindingOperand, ScopeId},
     bytecode::{BytecodeBlock, BytecodeFunction, BytecodeFunctionParam},
     error::{Error, Result},
     runtime::{
@@ -52,19 +52,33 @@ impl Context {
     pub(super) fn function_scope(
         &mut self,
         params: &[AtomId],
-        binding_ids: &[StaticBindingId],
-        layout: Option<&BindingLayout>,
+        frames: &[Option<CompiledBindingFrame>],
         args: &[Value],
         has_parameter_defaults: bool,
     ) -> Result<BindingScope> {
-        if params.len() != binding_ids.len() {
+        if params.len() != frames.len() {
             return Err(Error::runtime("function parameter layout length mismatch"));
         }
+        if !has_parameter_defaults
+            && params_have_unique_atoms(params)
+            && let Some(scope) = contiguous_parameter_scope(frames)
+        {
+            self.ensure_extra_binding_capacity(params.len())?;
+            let mut slots = Vec::with_capacity(params.len());
+            for (index, atom) in params.iter().copied().enumerate() {
+                let value = args.get(index).cloned().unwrap_or(Value::Undefined);
+                slots.push((
+                    atom,
+                    BindingCell::new(self.runtime_value(value)?, true, DeclKind::Var),
+                ));
+            }
+            return BindingScope::from_compiled_slots(scope, slots);
+        }
         let mut scope = BindingScope::new();
-        for (index, (atom, binding)) in params
+        for (index, (atom, frame)) in params
             .iter()
             .copied()
-            .zip(binding_ids.iter().copied())
+            .zip(frames.iter().copied())
             .enumerate()
         {
             if !scope.contains(atom) {
@@ -76,7 +90,7 @@ impl Context {
                 let value = args.get(index).cloned().unwrap_or(Value::Undefined);
                 BindingCell::new(self.runtime_value(value)?, true, DeclKind::Var)
             };
-            if let Some(frame) = function_param_frame(binding, layout)? {
+            if let Some(frame) = frame {
                 let inserted = scope.insert_or_replace_at_slot(atom, cell, frame.slot())?;
                 Self::mark_binding_scope_frame_slot(&mut scope, frame, inserted)?;
             } else {
@@ -123,7 +137,7 @@ impl Context {
                         }
                         context
                             .hoist_bytecode_declarations(bytecode.hoist_plan())
-                            .and_then(|()| context.eval_bytecode_block(bytecode.body()))
+                            .and_then(|()| context.eval_function_body_after_setup(bytecode))
                     },
                 )
             }
@@ -140,7 +154,7 @@ impl Context {
                     }
                     context
                         .hoist_bytecode_declarations(bytecode.hoist_plan())
-                        .and_then(|()| context.eval_bytecode_block(bytecode.body()))
+                        .and_then(|()| context.eval_function_body_after_setup(bytecode))
                 })
             }
             (None, _, _) | (Some(_), Some(_), None) => {
@@ -154,9 +168,19 @@ impl Context {
                     return Ok(completion);
                 }
                 self.hoist_bytecode_declarations(bytecode.hoist_plan())
-                    .and_then(|()| self.eval_bytecode_block(bytecode.body()))
+                    .and_then(|()| self.eval_function_body_after_setup(bytecode))
             }
         }
+    }
+
+    fn eval_function_body_after_setup(
+        &mut self,
+        bytecode: &BytecodeFunction,
+    ) -> Result<Completion> {
+        if let Some(completion) = self.eval_bytecode_function_fast_path(bytecode)? {
+            return Ok(completion);
+        }
+        self.eval_bytecode_block(bytecode.body())
     }
 
     fn remember_function_params(
@@ -218,6 +242,9 @@ impl Context {
         atom: AtomId,
         layout: Option<&BindingLayout>,
     ) -> Result<BindingCell> {
+        if !self.has_visible_local_scope() {
+            return Err(Error::runtime("function parameter scope is not active"));
+        }
         let Some(scope) = self.locals.last() else {
             return Err(Error::runtime("function parameter scope is not active"));
         };
@@ -268,6 +295,17 @@ pub(super) fn function_param_binding_ids(
         .into()
 }
 
+pub(super) fn function_param_frames(
+    params: &[BytecodeFunctionParam],
+    layout: Option<&BindingLayout>,
+) -> Result<Rc<[Option<CompiledBindingFrame>]>> {
+    params
+        .iter()
+        .map(|param| function_param_frame(param.binding().id(), layout))
+        .collect::<Result<Vec<_>>>()
+        .map(Rc::from)
+}
+
 pub(super) fn function_arity(params: &[BytecodeFunctionParam]) -> super::super::FunctionArity {
     let arity = params
         .iter()
@@ -296,6 +334,38 @@ fn function_param_frame(
         )),
         BindingOperand::Unresolved => Ok(None),
     }
+}
+
+fn contiguous_parameter_scope(frames: &[Option<CompiledBindingFrame>]) -> Option<ScopeId> {
+    let mut expected_scope = None;
+    for (index, frame) in frames.iter().copied().enumerate() {
+        let frame = frame?;
+        let scope = frame.scope()?;
+        if frame.slot().index() != index {
+            return None;
+        }
+        if let Some(expected) = expected_scope {
+            if expected != scope {
+                return None;
+            }
+        } else {
+            expected_scope = Some(scope);
+        }
+    }
+    expected_scope
+}
+
+fn params_have_unique_atoms(params: &[AtomId]) -> bool {
+    for (index, atom) in params.iter().enumerate() {
+        if params
+            .iter()
+            .skip(index.saturating_add(1))
+            .any(|other| other == atom)
+        {
+            return false;
+        }
+    }
+    true
 }
 
 impl super::super::FunctionArity {
