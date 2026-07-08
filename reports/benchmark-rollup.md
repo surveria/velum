@@ -16,11 +16,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260708T105201Z.md`
-- Task: PR #320: Optimize loop condition bytecode paths
-- Performance: 5.74x (62/63 >1.00x)
+- `rsqjs-test-report-20260708T110722Z.md`
+- Task: PR #319: Expand String prototype built-ins
+- Performance: 5.85x (62/63 >1.00x)
 - Memory: - (0/63 >1.00x)
-- Full Test262: 23055 passed / 79523 failed (22.48%)
+- Full Test262: 23783 passed / 78795 failed (23.19%)
 
 | PR / task | Performance | Memory | Full Test262 |
 | --- | ---: | ---: | ---: |
@@ -316,3 +316,4 @@ Latest report:
 | `20260708T102017Z` `bbd5375` PR #318: Add bytecode linear segment planning | 6.00x (62/63 >1.00x) | - (0/63 >1.00x) | 20550 passed / 82028 failed (20.03%) |
 | `20260708T104338Z` `232acc6` PR #316: Implement global utility built-ins | 5.81x (62/63 >1.00x) | - (0/63 >1.00x) | 23055 passed / 79523 failed (22.48%) |
 | `20260708T105201Z` `5e80684` PR #320: Optimize loop condition bytecode paths | 5.74x (62/63 >1.00x) | - (0/63 >1.00x) | 23055 passed / 79523 failed (22.48%) |
+| `20260708T110722Z` `9fc0527` PR #319: Expand String prototype built-ins | 5.85x (62/63 >1.00x) | - (0/63 >1.00x) | 23783 passed / 78795 failed (23.19%) |
