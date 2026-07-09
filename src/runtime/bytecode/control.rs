@@ -1,5 +1,6 @@
 mod block_lexical_loop;
 mod for_loop;
+mod switch_for_loop;
 mod try_catch;
 mod while_loop;
 
@@ -370,7 +371,7 @@ impl Context {
         }
         if let Some(fast_path) =
             self.compile_bytecode_for_loop_fast_path(parts.condition, parts.update, parts.body)?
-            && Self::bytecode_for_loop_fast_path_ready(&fast_path)?
+            && self.bytecode_for_loop_fast_path_ready(&fast_path)?
         {
             return self.eval_bytecode_for_loop_fast_path(state, next, &fast_path);
         }
