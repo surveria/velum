@@ -8,7 +8,7 @@ use crate::{
             PropertyLookup, PropertyWritable,
         },
         object::{PropertyKey, PropertyUpdate},
-        property::{delete_property, get_property, get_property_with_receiver, has_property},
+        property::{delete_property, get_property, get_property_with_receiver},
     },
     value::{ObjectId, Value},
 };
@@ -144,7 +144,7 @@ impl Context {
         let slice = args.as_slice();
         let target = Self::require_reflect_object(slice.first())?;
         let key = self.reflect_property_key(slice.get(1))?;
-        let present = has_property(&self.objects, &target, key.lookup())?;
+        let present = self.has_dynamic_property_value(&target, &key)?;
         Ok(Value::Bool(present))
     }
 
@@ -364,7 +364,9 @@ impl Context {
         if matches!(value, Value::Object(_)) {
             let to_string = self.get_property_value(&value, "toString")?;
             if Self::is_callable(&to_string) {
-                let key = self.eval_call_value(to_string, &[], value.clone())?;
+                let key = self
+                    .eval_call_completion(to_string, &[], value.clone())?
+                    .into_native_value_result()?;
                 return self.dynamic_property_key(&key);
             }
         }
