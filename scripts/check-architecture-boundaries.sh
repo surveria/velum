@@ -172,9 +172,14 @@ src/runtime/promise/mod.rs:is_callable'
 
   semantic_object="$(
     function_owners \
-      'fn[[:space:]]+[a-z_]*(semantic_object_ref|is_object_like|constructor_return_is_object)[a-z_]*'
+      'fn[[:space:]]+[a-z_]*(semantic_object_ref|semantic_property_read|semantic_property_presence|finish_semantic_property_read|finish_semantic_property_presence|is_object_like|constructor_return_is_object)[a-z_]*'
   )"
-  expected_semantic_object='src/runtime/semantic_object.rs:semantic_object_ref'
+  expected_semantic_object='src/runtime/semantic_object.rs:finish_semantic_property_presence
+src/runtime/semantic_object.rs:finish_semantic_property_read
+src/runtime/semantic_object.rs:semantic_object_ref
+src/runtime/semantic_object.rs:semantic_property_presence
+src/runtime/semantic_object.rs:semantic_property_read
+src/runtime/semantic_object.rs:semantic_property_read_with_receiver'
   compare_set "semantic object facade allowlist" "${semantic_object}" "${expected_semantic_object}"
 
   indexing="$(
