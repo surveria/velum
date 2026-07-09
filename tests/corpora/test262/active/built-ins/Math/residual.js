@@ -19,6 +19,32 @@ let roundOk =
   1 / Math.round(0.5 - Number.EPSILON / 4) === Infinity &&
   Math.round(2 / Number.EPSILON - 1) === 2 / Number.EPSILON - 1;
 
+let coercionCalls = 0;
+let coerceToNaN = {
+  valueOf: function () {
+    coercionCalls++;
+  }
+};
+let hypotCoercions = 0;
+let coerceHypot = {
+  valueOf: function () {
+    hypotCoercions++;
+    return 3;
+  }
+};
+
+let coercionOk =
+  Math.max(NaN, coerceToNaN) !== Math.max(NaN, coerceToNaN) &&
+  Math.min(NaN, coerceToNaN) !== Math.min(NaN, coerceToNaN) &&
+  Math.hypot(Infinity, coerceHypot, NaN) === Infinity &&
+  coercionCalls === 4 &&
+  hypotCoercions === 1;
+
+let powOk =
+  Math.pow(-Infinity, NaN) !== Math.pow(-Infinity, NaN) &&
+  Math.pow(1, Infinity) !== Math.pow(1, Infinity) &&
+  Math.pow(-1, -Infinity) !== Math.pow(-1, -Infinity);
+
 let sumOk =
   Object.is(Math.sumPrecise([]), -0) &&
   Object.is(Math.sumPrecise([-0]), -0) &&
@@ -27,6 +53,23 @@ let sumOk =
   Math.sumPrecise([1e30, 0.1, -1e30]) === 0.1 &&
   Math.sumPrecise([Infinity, -Infinity]) !== Math.sumPrecise([Infinity, -Infinity]) &&
   Math.sumPrecise([Infinity]) === Infinity;
+
+function isConstructor(value) {
+  try {
+    Reflect.construct(function () {}, [], value);
+  } catch (error) {
+    return false;
+  }
+  return true;
+}
+
+let nonConstructorOk =
+  !isConstructor(Math.abs) &&
+  !isConstructor(Math.max) &&
+  !isConstructor(Math.min) &&
+  !isConstructor(Math.pow) &&
+  !isConstructor(Math.random) &&
+  !isConstructor(Math.sumPrecise);
 
 let descriptorOk =
   piDescriptor.value === Math.PI &&
@@ -52,7 +95,15 @@ let descriptorOk =
   sumDescriptor.enumerable === false &&
   sumDescriptor.configurable === true;
 
-if (!descriptorOk || !f16Ok || !roundOk || !sumOk) {
+if (
+  !descriptorOk ||
+  !f16Ok ||
+  !roundOk ||
+  !coercionOk ||
+  !powOk ||
+  !sumOk ||
+  !nonConstructorOk
+) {
   throw new Test262Error("Math residual behavior was unexpected");
 }
 
