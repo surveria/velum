@@ -5,7 +5,7 @@ use crate::{
         call::RuntimeCallArgs,
         object::{
             AccessorPropertyUpdate, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
-            PropertyEnumerable, PropertyUpdate, PropertyWritable, RegExpValue,
+            PropertyEnumerable, PropertyKey, PropertyUpdate, PropertyWritable, RegExpValue,
         },
     },
     value::{ObjectId, Value},
@@ -35,6 +35,8 @@ const REGEXP_RECEIVER_ERROR: &str = "RegExp method requires a RegExp receiver";
 const REGEXP_STICKY_PROPERTY: &str = "sticky";
 const REGEXP_UNICODE_PROPERTY: &str = "unicode";
 const REGEXP_UNICODE_SETS_PROPERTY: &str = "unicodeSets";
+const SYMBOL_MATCH_PROPERTY: &str = "match";
+const SYMBOL_SEARCH_PROPERTY: &str = "search";
 const ZERO_INDEX: f64 = 0.0;
 
 impl Context {
@@ -51,6 +53,7 @@ impl Context {
         let name = self.native_function_name_value(NativeFunctionKind::RegExp)?;
         self.push_native_function_with_id(id, NativeFunctionKind::RegExp, prototype, name)?;
         self.install_regexp_prototype_methods(prototype_id)?;
+        self.install_regexp_prototype_symbol_methods(prototype_id)?;
         self.insert_global_builtin(REGEXP_NAME, constructor.clone())?;
         Ok(constructor)
     }
@@ -149,6 +152,65 @@ impl Context {
         text.push_str(&flags);
         self.check_string_len(&text)?;
         self.heap_string_value(&text)
+    }
+
+    pub(in crate::runtime::native) fn eval_regexp_prototype_symbol_match(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let input = args
+            .as_slice()
+            .first()
+            .map_or_else(String::new, Value::display_for_concat);
+        self.check_string_len(&input)?;
+        let global = self
+            .get_property_value(this_value, REGEXP_GLOBAL_PROPERTY)?
+            .is_truthy();
+        if !global {
+            return self.regexp_exec(this_value, &input);
+        }
+        self.set_regexp_last_index(this_value, 0)?;
+        let mut matches = Vec::new();
+        while let Some(matched) = self.regexp_match_text(this_value, &input)? {
+            let is_empty = matched.is_empty();
+            matches.push(matched);
+            if matches.len() > self.limits.max_object_properties {
+                return Err(Error::limit("RegExp match result exceeded array limit"));
+            }
+            if is_empty {
+                let index = self.regexp_last_index(this_value, &input)?;
+                self.set_regexp_last_index(this_value, next_char_boundary(&input, index))?;
+            }
+        }
+        if matches.is_empty() {
+            return Ok(Value::Null);
+        }
+        self.regexp_string_array(matches)
+    }
+
+    pub(in crate::runtime::native) fn eval_regexp_prototype_symbol_search(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let input = args
+            .as_slice()
+            .first()
+            .map_or_else(String::new, Value::display_for_concat);
+        self.check_string_len(&input)?;
+        let previous = self.get_property_value(this_value, REGEXP_LAST_INDEX_PROPERTY)?;
+        self.set_regexp_last_index(this_value, 0)?;
+        let result = self.regexp_exec(this_value, &input)?;
+        self.set_regexp_last_index_value(this_value, previous)?;
+        let Value::Object(id) = result else {
+            return Ok(Value::Number(-1.0));
+        };
+        let index = self
+            .get_property_value(&Value::Object(id), "index")?
+            .as_number()
+            .ok_or_else(|| Error::runtime("RegExp search result index is not numeric"))?;
+        Ok(Value::Number(index))
     }
 
     fn create_regexp_object_from_text(&mut self, pattern: &str, flags: &str) -> Result<Value> {
@@ -301,6 +363,37 @@ impl Context {
         Ok(())
     }
 
+    fn install_regexp_prototype_symbol_methods(&mut self, prototype: ObjectId) -> Result<()> {
+        for (property, display, kind) in [
+            (
+                SYMBOL_MATCH_PROPERTY,
+                "[Symbol.match]",
+                NativeFunctionKind::RegExpPrototypeSymbolMatch,
+            ),
+            (
+                SYMBOL_SEARCH_PROPERTY,
+                "[Symbol.search]",
+                NativeFunctionKind::RegExpPrototypeSymbolSearch,
+            ),
+        ] {
+            let key = self.regexp_well_known_symbol_property_key(property)?;
+            let method = self.create_ephemeral_native_function(kind, Value::Undefined)?;
+            self.objects.define_property(
+                prototype,
+                key,
+                display,
+                PropertyUpdate::Data(DataPropertyUpdate::new(
+                    Some(method),
+                    Some(PropertyWritable::Yes),
+                    Some(PropertyEnumerable::No),
+                    Some(PropertyConfigurable::Yes),
+                )),
+                self.limits.max_object_properties,
+            )?;
+        }
+        Ok(())
+    }
+
     fn define_regexp_prototype_accessor(
         &mut self,
         prototype: ObjectId,
@@ -426,13 +519,20 @@ impl Context {
     }
 
     fn set_regexp_last_index(&mut self, this_value: &Value, index: usize) -> Result<()> {
+        self.set_regexp_last_index_value(
+            this_value,
+            Value::Number(regexp_index_usize_to_number(index)?),
+        )
+    }
+
+    fn set_regexp_last_index_value(&mut self, this_value: &Value, value: Value) -> Result<()> {
         let key = self.intern_property_key(REGEXP_LAST_INDEX_PROPERTY)?;
         crate::runtime::property::set_property(
             &mut self.objects,
             this_value,
             key,
             REGEXP_LAST_INDEX_PROPERTY,
-            Value::Number(regexp_index_usize_to_number(index)?),
+            value,
             self.limits.max_object_properties,
         )
     }
@@ -470,6 +570,41 @@ impl Context {
         )?;
         Ok(Value::Object(id))
     }
+
+    fn regexp_match_text(&mut self, pattern: &Value, input: &str) -> Result<Option<String>> {
+        let result = self.regexp_exec(pattern, input)?;
+        let Value::Object(id) = result else {
+            return Ok(None);
+        };
+        Ok(Some(
+            self.get_property_value(&Value::Object(id), "0")?
+                .to_string(),
+        ))
+    }
+
+    fn regexp_string_array(&mut self, values: Vec<String>) -> Result<Value> {
+        self.array_constructor_value()?;
+        let prototype = self.objects.existing_array_prototype_id()?;
+        let mut elements = Vec::with_capacity(values.len());
+        for value in values {
+            elements.push(self.heap_string_value(&value)?);
+        }
+        self.objects.create_array(
+            elements,
+            prototype,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn regexp_well_known_symbol_property_key(&mut self, property: &str) -> Result<PropertyKey> {
+        let constructor = self.symbol_constructor_value()?;
+        let value = self.get_property_value(&constructor, property)?;
+        let Value::Symbol(symbol) = value else {
+            return Err(Error::runtime("well-known Symbol property is not a symbol"));
+        };
+        Ok(PropertyKey::symbol(symbol.id()))
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -484,4 +619,14 @@ fn validate_regexp_flags(flags: &str) -> Result<()> {
 
 const fn value_is_undefined(value: &Value) -> bool {
     matches!(value, Value::Undefined)
+}
+
+fn next_char_boundary(text: &str, index: usize) -> usize {
+    text.get(index..)
+        .and_then(|tail| tail.chars().next())
+        .map_or_else(
+            || index.saturating_add(1),
+            |ch| index.saturating_add(ch.len_utf8()),
+        )
+        .min(text.len())
 }

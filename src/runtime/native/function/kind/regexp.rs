@@ -18,6 +18,9 @@ const REGEXP_PROTOTYPE_TO_STRING_LENGTH: f64 = 0.0;
 pub(in crate::runtime::native) const REGEXP_PROTOTYPE_TO_STRING_NAME: &str = "toString";
 const REGEXP_PROTOTYPE_UNICODE_GETTER_NAME: &str = "get unicode";
 const REGEXP_PROTOTYPE_UNICODE_SETS_GETTER_NAME: &str = "get unicodeSets";
+const REGEXP_SYMBOL_METHOD_LENGTH: f64 = 1.0;
+const REGEXP_SYMBOL_MATCH_NAME: &str = "[Symbol.match]";
+const REGEXP_SYMBOL_SEARCH_NAME: &str = "[Symbol.search]";
 
 impl NativeFunctionKind {
     pub(super) const fn regexp_length(self) -> Option<f64> {
@@ -37,6 +40,9 @@ impl NativeFunctionKind {
                 Some(REGEXP_PROTOTYPE_TEST_LENGTH)
             }
             Self::RegExpPrototypeToString => Some(REGEXP_PROTOTYPE_TO_STRING_LENGTH),
+            Self::RegExpPrototypeSymbolMatch | Self::RegExpPrototypeSymbolSearch => {
+                Some(REGEXP_SYMBOL_METHOD_LENGTH)
+            }
             _ => None,
         }
     }
@@ -59,6 +65,8 @@ impl NativeFunctionKind {
             Self::RegExpPrototypeUnicodeSetsGetter => {
                 Some(REGEXP_PROTOTYPE_UNICODE_SETS_GETTER_NAME)
             }
+            Self::RegExpPrototypeSymbolMatch => Some(REGEXP_SYMBOL_MATCH_NAME),
+            Self::RegExpPrototypeSymbolSearch => Some(REGEXP_SYMBOL_SEARCH_NAME),
             _ => None,
         }
     }

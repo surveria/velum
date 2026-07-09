@@ -2,6 +2,8 @@ let regexpConstructor = RegExp;
 let execDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "exec");
 let testDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "test");
 let toStringDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "toString");
+let symbolMatchDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.match);
+let symbolSearchDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.search);
 let sourceDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "source");
 let flagsDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "flags");
 let literal = /a+/g;
@@ -10,6 +12,8 @@ let second = literal.exec("zz");
 let sticky = /a/y;
 sticky.lastIndex = 1;
 let stickyMatch = sticky.exec("ba");
+let searchRestore = /a+/g;
+searchRestore.lastIndex = 2;
 
 let receiverError = false;
 try {
@@ -38,6 +42,16 @@ let descriptorOk =
   toStringDescriptor.writable === true &&
   toStringDescriptor.enumerable === false &&
   toStringDescriptor.configurable === true &&
+  RegExp.prototype[Symbol.match].name === "[Symbol.match]" &&
+  RegExp.prototype[Symbol.match].length === 1 &&
+  symbolMatchDescriptor.writable === true &&
+  symbolMatchDescriptor.enumerable === false &&
+  symbolMatchDescriptor.configurable === true &&
+  RegExp.prototype[Symbol.search].name === "[Symbol.search]" &&
+  RegExp.prototype[Symbol.search].length === 1 &&
+  symbolSearchDescriptor.writable === true &&
+  symbolSearchDescriptor.enumerable === false &&
+  symbolSearchDescriptor.configurable === true &&
   Object.hasOwn(literal, "source") === false &&
   Object.hasOwn(literal, "flags") === false &&
   sourceDescriptor.get.name === "get source" &&
@@ -74,6 +88,13 @@ let patternOk =
   /a/gim.toString() === "/a/gim" &&
   new RegExp("").toString() === "/(?:)/" &&
   RegExp.prototype.toString.call({ source: "x", flags: "g" }) === "/x/g" &&
+  (/a+/)[Symbol.match]("baaa")[0] === "aaa" &&
+  (/a/g)[Symbol.match]("aba").join("-") === "a-a" &&
+  (/z/)[Symbol.match]("aba") === null &&
+  (/a+/)[Symbol.search]("baaa") === 1 &&
+  searchRestore[Symbol.search]("baaa") === 1 &&
+  searchRestore.lastIndex === 2 &&
+  (/z/)[Symbol.search]("baaa") === -1 &&
   /a/gim.source === "a" &&
   /a/gim.flags === "gim" &&
   /a/gim.global === true &&

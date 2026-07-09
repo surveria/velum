@@ -21,3 +21,9 @@ print(/a/gim.source, /a/gim.flags, /a/gim.global, /a/gim.ignoreCase, /a/gim.mult
 print(/a/s.dotAll, /a/u.unicode, /a/y.sticky);
 print(/a/gim.toString(), new RegExp("").toString(), RegExp.prototype.toString.call({ source: "x", flags: "g" }));
 print(RegExp.prototype.toString.name, RegExp.prototype.toString.length);
+print(RegExp.prototype[Symbol.match].name, RegExp.prototype[Symbol.match].length);
+print(RegExp.prototype[Symbol.search].name, RegExp.prototype[Symbol.search].length);
+print((/a+/)[Symbol.match]("baaa")[0], (/a/g)[Symbol.match]("aba").join("-"), (/z/)[Symbol.match]("aba") === null);
+let searchPattern = /a+/g;
+searchPattern.lastIndex = 2;
+print(searchPattern[Symbol.search]("baaa"), searchPattern.lastIndex, (/z/)[Symbol.search]("baaa"));
