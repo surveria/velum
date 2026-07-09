@@ -17,9 +17,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260709T214557Z.md`
-- Task: PR #396: docs: define architecture stabilization and development strategy
-- Performance: 5.36x (4/5 >1.00x)
+- `rsqjs-test-report-20260709T215203Z.md`
+- Task: PR #397: docs: record architecture plan adoption evidence
+- Performance: 5.37x (4/5 >1.00x)
 - Memory: - (0/5 >1.00x)
 - JetStream: - (0/0 >1.00x)
 - Full Test262: 34002 passed / 68576 failed (33.15%)
@@ -380,3 +380,4 @@ Latest report:
 | `20260709T213104Z` `033eccc` PR #393: bench: redesign benchmark lifecycle and QuickJS baselines | 5.35x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
 | `20260709T213555Z` `79cecc6` PR #391: runtime: add VM-local performance.now() | 5.82x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
 | `20260709T214557Z` `f79056b` PR #396: docs: define architecture stabilization and development strategy | 5.36x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
+| `20260709T215203Z` `b8fbc6a` PR #397: docs: record architecture plan adoption evidence | 5.37x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
