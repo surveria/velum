@@ -1,6 +1,9 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs, object::PropertyEnumerable, object::PropertyKey},
+    runtime::{
+        Context, call::RuntimeCallArgs, object::OwnPropertyDescriptor, object::PropertyEnumerable,
+        object::PropertyKey, object::PropertyUpdate,
+    },
     value::{NativeFunctionId, ObjectId, Value},
 };
 
@@ -24,6 +27,9 @@ const PROXY_TRAP_IS_EXTENSIBLE: &str = "isExtensible";
 const PROXY_TRAP_PREVENT_EXTENSIONS: &str = "preventExtensions";
 const PROXY_TRAP_DEFINE_PROPERTY: &str = "defineProperty";
 const PROXY_TRAP_OWN_KEYS: &str = "ownKeys";
+const PROXY_TRAP_GET_OWN_DESCRIPTOR: &str = "getOwnPropertyDescriptor";
+const PROXY_DESCRIPTOR_INVALID_ERROR: &str =
+    "proxy getOwnPropertyDescriptor trap must return an object or undefined";
 const PROXY_GET_PROTOTYPE_INVALID_ERROR: &str =
     "proxy getPrototypeOf trap must return an object or null";
 
@@ -304,6 +310,41 @@ impl Context {
         };
         let result = self.eval_call_value(trap, &[target], handler)?;
         self.proxy_key_list_from_value(&result)
+    }
+
+    /// Proxy `[[GetOwnProperty]]`: dispatch the `getOwnPropertyDescriptor` trap
+    /// or read the target's own descriptor.
+    pub(in crate::runtime) fn proxy_get_own_property_descriptor(
+        &mut self,
+        id: ObjectId,
+        name: &str,
+    ) -> Result<Option<OwnPropertyDescriptor>> {
+        let (target, handler) = self.proxy_target_handler(id)?;
+        let key_value = self.heap_string_value(name)?;
+        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_GET_OWN_DESCRIPTOR)? else {
+            let key = self.dynamic_property_key(&key_value)?;
+            return self.own_property_descriptor_value(&target, &key);
+        };
+        let result = self.eval_call_value(trap, &[target, key_value], handler)?;
+        match result {
+            Value::Undefined => Ok(None),
+            Value::Object(_) => Ok(Some(self.own_property_descriptor_from_object(&result)?)),
+            _ => Err(Error::type_error(PROXY_DESCRIPTOR_INVALID_ERROR)),
+        }
+    }
+
+    /// Spec `ToPropertyDescriptor` completed with the defineProperty defaults,
+    /// producing a full own-descriptor snapshot from a descriptor object.
+    fn own_property_descriptor_from_object(
+        &mut self,
+        descriptor: &Value,
+    ) -> Result<OwnPropertyDescriptor> {
+        Ok(match self.property_update_from_value(descriptor)? {
+            PropertyUpdate::Data(data) => OwnPropertyDescriptor::Data(data.complete_for_new()),
+            PropertyUpdate::Accessor(accessor) => {
+                OwnPropertyDescriptor::Accessor(accessor.complete_for_new())
+            }
+        })
     }
 
     /// Convert the array-like result of an `ownKeys` trap into string keys.

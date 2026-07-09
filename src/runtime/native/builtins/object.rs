@@ -150,6 +150,9 @@ impl Context {
         let target = Self::argument_or_undefined(values.first());
         let property = self.object_property_key(values.get(1))?;
         let descriptor = match &target {
+            Value::Object(id) if self.objects.is_proxy(*id) => {
+                self.proxy_get_own_property_descriptor(*id, property.name())?
+            }
             Value::Object(id) => {
                 if let Some(descriptor) =
                     self.string_object_own_property_descriptor(*id, &property)?
@@ -696,6 +699,9 @@ impl Context {
         property: &DynamicPropertyKey,
     ) -> Result<Option<OwnPropertyDescriptor>> {
         match target {
+            Value::Object(id) if self.objects.is_proxy(*id) => {
+                self.proxy_get_own_property_descriptor(*id, property.name())
+            }
             Value::Object(id) => {
                 if let Some(descriptor) =
                     self.string_object_own_property_descriptor(*id, property)?
