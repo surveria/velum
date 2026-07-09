@@ -1,3 +1,4 @@
+mod block_lexical_loop;
 mod for_loop;
 mod try_catch;
 

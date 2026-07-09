@@ -469,6 +469,38 @@ fn bytecode_runs_direct_masked_continue_for_body() -> TestResult {
 }
 
 #[test]
+fn bytecode_runs_direct_block_lexical_loop_body() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r"
+        let total = 0;
+
+        for (let outer = 0; outer < 64; outer = outer + 1) {
+            let record = { value: outer & 3 };
+            {
+                let inner = record.value + 1;
+                const bump = inner + outer;
+                total = total + (bump & 7);
+            }
+        }
+
+        total === 256 ? 42 : 0
+        ",
+    )?;
+    let initial_direct_runs = vm.resource_usage().bytecode_linear_direct_runs;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    let direct_run_delta = vm
+        .resource_usage()
+        .bytecode_linear_direct_runs
+        .checked_sub(initial_direct_runs)
+        .ok_or("bytecode linear direct counter moved backwards")?;
+    ensure_at_least(direct_run_delta, 180, "bytecode linear direct runs")
+}
+
+#[test]
 fn bytecode_function_fast_paths_fall_back_for_generic_add() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
