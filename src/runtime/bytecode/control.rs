@@ -3,6 +3,7 @@ mod array_fill_loop;
 mod block_lexical_loop;
 mod compound_assignment_loop;
 mod for_loop;
+mod function_apply_has_instance_loop;
 mod loop_helpers;
 mod object_literal_loop;
 mod string_concat_loop;

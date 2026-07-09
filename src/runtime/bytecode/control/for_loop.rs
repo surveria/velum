@@ -13,7 +13,6 @@ use crate::{
         control::{Completion, runtime_exception_value},
         numeric::number_to_i32,
     },
-    syntax::UpdateOp,
     value::Value,
 };
 
@@ -22,7 +21,8 @@ use super::{
     array_fill_loop::BytecodeForArrayFillFastPath,
     block_lexical_loop::BytecodeBlockLexicalLoopFastPath,
     compound_assignment_loop::BytecodeCompoundAssignmentLoopFastPath,
-    loop_helpers::{fast_loop_compare, same_bytecode_binding},
+    function_apply_has_instance_loop::BytecodeFunctionApplyHasInstanceLoopFastPath,
+    loop_helpers::{bytecode_for_loop_update_step, fast_loop_compare, same_bytecode_binding},
     object_literal_loop::BytecodeObjectLiteralLoopFastPath,
     string_concat_loop::BytecodeForStringConcatLengthFastPath,
     switch_for_loop::BytecodeForSwitchFastPath,
@@ -59,6 +59,7 @@ pub(super) enum BytecodeForLoopBodyFastPath<'a> {
     StringConcatLength(BytecodeForStringConcatLengthFastPath<'a>),
     UpdateExpression(BytecodeUpdateExpressionLoopFastPath<'a>),
     CompoundAssignment(BytecodeCompoundAssignmentLoopFastPath<'a>),
+    FunctionApplyHasInstance(BytecodeFunctionApplyHasInstanceLoopFastPath<'a>),
     ObjectLiteral(BytecodeObjectLiteralLoopFastPath<'a>),
     BlockLexical(BytecodeBlockLexicalLoopFastPath<'a>),
     TryCatch(BytecodeForTryCatchFastPath<'a>),
@@ -99,8 +100,7 @@ impl Context {
         else {
             return Ok(None);
         };
-        let Some((update_read, update_write, update_step)) =
-            Self::bytecode_for_loop_update_step(update)
+        let Some((update_read, update_write, update_step)) = bytecode_for_loop_update_step(update)
         else {
             return Ok(None);
         };
@@ -127,37 +127,6 @@ impl Context {
             update_step,
             body,
         }))
-    }
-
-    fn bytecode_for_loop_update_step(
-        update: &BytecodeBlock,
-    ) -> Option<(&BytecodeBinding, &BytecodeBinding, f64)> {
-        match update.instructions() {
-            [
-                BytecodeInstruction::LoadBinding(update_read),
-                BytecodeInstruction::PushLiteral(Value::Number(update_step)),
-                BytecodeInstruction::NumberBinary(BytecodeNumericBinaryOp::Add),
-                BytecodeInstruction::StoreBinding(update_write),
-                BytecodeInstruction::StoreLast,
-            ] => Some((update_read, update_write, *update_step)),
-            [
-                BytecodeInstruction::UpdateBinding {
-                    name,
-                    op: UpdateOp::Increment,
-                    ..
-                },
-                BytecodeInstruction::StoreLast,
-            ] => Some((name, name, 1.0)),
-            [
-                BytecodeInstruction::UpdateBinding {
-                    name,
-                    op: UpdateOp::Decrement,
-                    ..
-                },
-                BytecodeInstruction::StoreLast,
-            ] => Some((name, name, -1.0)),
-            _ => None,
-        }
     }
 
     fn compile_bytecode_for_loop_condition_limit<'a>(
@@ -218,7 +187,8 @@ impl Context {
             BytecodeForLoopBodyFastPath::ArrayFill(body) => {
                 Self::bytecode_for_array_fill_fast_path_ready(body)
             }
-            BytecodeForLoopBodyFastPath::MaskedArrayAdd(_) => Ok(true),
+            BytecodeForLoopBodyFastPath::MaskedArrayAdd(_)
+            | BytecodeForLoopBodyFastPath::FunctionApplyHasInstance(_) => Ok(true),
             BytecodeForLoopBodyFastPath::SwitchMaskedArrayAdd(body) => {
                 self.bytecode_for_switch_fast_path_ready(body)
             }
@@ -284,6 +254,11 @@ impl Context {
         {
             return Ok(None);
         }
+        if let BytecodeForLoopBodyFastPath::FunctionApplyHasInstance(body) = &fast_path.body
+            && self.eval_function_apply_has_instance_loop_fast_path(state, next, fast_path, body)?
+        {
+            return Ok(None);
+        }
         if let BytecodeForLoopBodyFastPath::ObjectLiteral(body) = &fast_path.body
             && self.eval_object_literal_loop_fast_path(state, next, fast_path, body)?
         {
@@ -307,6 +282,7 @@ impl Context {
             BytecodeForLoopBodyFastPath::ArrayFill(_)
             | BytecodeForLoopBodyFastPath::BlockLexical(_)
             | BytecodeForLoopBodyFastPath::CompoundAssignment(_)
+            | BytecodeForLoopBodyFastPath::FunctionApplyHasInstance(_)
             | BytecodeForLoopBodyFastPath::ObjectLiteral(_)
             | BytecodeForLoopBodyFastPath::StringConcatLength(_)
             | BytecodeForLoopBodyFastPath::TryCatch(_)
@@ -431,6 +407,11 @@ impl Context {
         if let Some(body) = self.compile_compound_assignment_loop_fast_path(index, body)? {
             return Ok(Some(BytecodeForLoopBodyFastPath::CompoundAssignment(body)));
         }
+        if let Some(body) = self.compile_function_apply_has_instance_loop_fast_path(index, body)? {
+            return Ok(Some(BytecodeForLoopBodyFastPath::FunctionApplyHasInstance(
+                body,
+            )));
+        }
         if let Some(body) = self.compile_object_literal_loop_fast_path(index, body)? {
             return Ok(Some(BytecodeForLoopBodyFastPath::ObjectLiteral(body)));
         }
@@ -554,6 +535,7 @@ impl Context {
                 .map(Completion::Normal),
             BytecodeForLoopBodyFastPath::StringConcatLength(_)
             | BytecodeForLoopBodyFastPath::CompoundAssignment(_)
+            | BytecodeForLoopBodyFastPath::FunctionApplyHasInstance(_)
             | BytecodeForLoopBodyFastPath::UpdateExpression(_)
             | BytecodeForLoopBodyFastPath::ObjectLiteral(_)
             | BytecodeForLoopBodyFastPath::TryCatch(_)
