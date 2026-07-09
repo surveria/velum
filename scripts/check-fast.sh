@@ -12,6 +12,7 @@ fi
 # Cheap PR/local gate: keep source quality high without materializing external
 # corpora or running sequential QuickJS benchmark/report generation.
 "${script_dir}/check-touched-file-sizes.sh" "${RSQJS_BASE_REF:-origin/main}"
+"${script_dir}/check-architecture-boundaries.sh" --self-test
 
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings

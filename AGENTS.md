@@ -65,6 +65,7 @@ These rules are mandatory for humans and agents working in any part of this repo
 - Every VM-facing feature must define how it behaves across independent VM instances, including resource limits, teardown, errors, queued jobs, and host callbacks.
 - Host extensions are part of the core product surface. New runtime work must preserve a path for typed Rust host functions, contextual `Result` errors, async callbacks, and embedder-owned executors.
 - Do not make the CLI the only way to exercise a feature. If a feature affects embedders, add or plan direct library API tests and benchmarks in addition to CLI smoke coverage.
+- `scripts/check-architecture-boundaries.sh` is the no-growth gate for the split semantic paths recorded in `docs/semantic-architecture-inventory.md`. Update an allowlist only when the same pull request names the owning AS migration and updates the inventory or stabilization evidence; do not weaken a guard merely to land a feature.
 
 ## Rust Development Rules
 

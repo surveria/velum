@@ -421,6 +421,12 @@ document. It should run from `scripts/check-fast.sh` and the correctness gate,
 remain deterministic, and avoid brittle line-number matching. Structural token
 or normalized-text checks are preferable to raw whole-file hashes.
 
+AS-01b implements this contract in
+`scripts/check-architecture-boundaries.sh`. Both `scripts/check-fast.sh` and
+the correctness/full entrypoint run its self-test mode before compilation. The
+self-tests copy only `src/` to temporary fixtures and prove that every guarded
+allowlist rejects a representative mutation; they never modify the worktree.
+
 ## Reproducible Inventory Checks
 
 The following read-only commands produced the snapshot and are suitable inputs
