@@ -55,12 +55,13 @@ Prepared QuickJS measurements use `tests/corpora/benchmarks/quickjs-baseline.tsv
 ```bash
 RSQJS_BENCH_SET=sentinel \
 RSQJS_QUICKJS_BASELINE=refresh \
-cargo run --release --manifest-path runner/Cargo.toml \
-  --features reference-quickjs -- \
-  --benchmarks target/rsqjs-reports/sentinel-refresh.md
+./scripts/with-host-lock.sh exclusive -- \
+  cargo run --release --manifest-path runner/Cargo.toml \
+    --features reference-quickjs -- \
+    --benchmarks target/rsqjs-reports/sentinel-refresh.md
 ```
 
-The rs-quickjs benchmark adapter uses only the public runtime API and applies a benchmark-only resource envelope that is larger than default embedder limits. The five prepared sentinels are the first migrated tranche; `RSQJS_BENCH_SET=full` still includes legacy cold-eval cases while they are converted deliberately instead of being reinterpreted silently.
+Every direct local `--benchmarks` invocation must use the exclusive `scripts/with-host-lock.sh` wrapper shown above. The rs-quickjs benchmark adapter uses only the public runtime API and applies a benchmark-only resource envelope that is larger than default embedder limits. The five prepared sentinels are the first migrated tranche; `RSQJS_BENCH_SET=full` still includes legacy cold-eval cases while they are converted deliberately instead of being reinterpreted silently.
 
 ## JetStream Shell Benchmarks
 

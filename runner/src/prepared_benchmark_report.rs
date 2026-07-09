@@ -44,7 +44,7 @@ pub(super) fn outcome(case: &BenchmarkCase, run: &PreparedCaseRun) -> BenchmarkO
         BUDGET_INVALID.clone_into(&mut outcome.row.latency_budget);
         QUALITY_INVALID.clone_into(&mut outcome.row.quality);
         outcome.row.detail = benchmark_detail(error);
-        outcome.counts.failed = outcome.counts.failed.saturating_add(1);
+        outcome.counts.failed = 1;
         outcome.counts.over_latency_budget = 0;
     }
     outcome
@@ -89,4 +89,58 @@ fn render_lifecycle(lifecycle: BenchmarkLifecycle) -> String {
 
 fn optional_duration(duration: Option<std::time::Duration>) -> String {
     duration.map_or_else(|| NOT_MEASURED.to_owned(), timing::format_duration)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use crate::{
+        bench_measure::{MeasureConfig, MeasureSnapshot, MeasureStats},
+        benchmark_protocol::{BenchmarkChecksum, BenchmarkLifecycle},
+        cases::BenchmarkCase,
+        prepared_benchmarks::{PreparedCaseRun, PreparedMeasurement, PreparedReference},
+    };
+
+    type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn parity_error_does_not_double_count_an_invalid_measurement() -> TestResult {
+        let config = MeasureConfig::new(Duration::ZERO, Duration::from_millis(1), 3)
+            .with_quality(Duration::from_millis(2), u32::MAX);
+        let stats = MeasureStats::from_snapshot(
+            MeasureSnapshot {
+                median: Duration::from_millis(1),
+                cv_permille: 0,
+                iters_per_sample: 1,
+                samples: 3,
+                median_sample: Duration::from_millis(1),
+                warmup_elapsed: Duration::ZERO,
+                timed_run_elapsed: Duration::from_millis(3),
+                iteration_cap_reached: false,
+            },
+            config,
+        );
+        let run = PreparedCaseRun {
+            ours: Ok(PreparedMeasurement {
+                stats,
+                checksum: BenchmarkChecksum::number(42.0),
+                lifecycle: BenchmarkLifecycle::default(),
+                elapsed: Duration::from_millis(3),
+            }),
+            reference: PreparedReference::NotConfigured,
+            parity_error: Some("checksum mismatch".to_owned()),
+            case_elapsed: Duration::from_millis(3),
+        };
+        let case = BenchmarkCase::prepared_sentinel("sentinel", "sentinel.js");
+        let outcome = super::outcome(&case, &run);
+        if outcome.counts.failed == 1 && outcome.counts.invalid == 1 {
+            return Ok(());
+        }
+        Err(format!(
+            "expected one failed invalid row, got failed={} invalid={}",
+            outcome.counts.failed, outcome.counts.invalid
+        )
+        .into())
+    }
 }
