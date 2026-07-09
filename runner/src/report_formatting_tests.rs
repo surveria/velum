@@ -1,4 +1,10 @@
-use super::{FeatureAreaStats, coverage_percent, feature_area_rows_with_limit, report_metadata};
+use std::time::Duration;
+
+use super::{
+    CaseRow, CorpusReport, CorpusStats, FeatureAreaStats, FullReport, STATUS_PASSED, benchmarks,
+    coverage_percent, feature_area_rows_with_limit, jetstream, report_metadata,
+    report_rendering::render_timing_tsv,
+};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -69,6 +75,61 @@ fn report_metadata_includes_build_versions() -> TestResult {
     ensure_contains(&rendered, "Engine build commit")?;
     ensure_contains(&rendered, "Runner version")?;
     ensure_contains(&rendered, "Runner build commit")
+}
+
+#[test]
+fn timing_tsv_lists_case_rows_and_sanitizes_fields() -> TestResult {
+    let report = FullReport {
+        metadata: report_metadata::RunMetadata::from_env(),
+        corpora: vec![CorpusReport {
+            name: "Unit corpus",
+            required: true,
+            stats: CorpusStats {
+                total: 1,
+                passed: 1,
+                failed: 0,
+                skipped: 0,
+            },
+            rows: vec![CaseRow {
+                case: "case-1".to_owned(),
+                status: STATUS_PASSED.to_owned(),
+                source: "tests/example.js".to_owned(),
+                detail: "line one\nline two\tfield".to_owned(),
+                elapsed: Duration::from_micros(1_250),
+            }],
+            skip_reasons: Vec::new(),
+            feature_areas: Vec::new(),
+            elapsed: Duration::from_micros(1_250),
+        }],
+        benchmarks: benchmarks::BenchmarkReport {
+            rows: Vec::new(),
+            measured: 0,
+            in_process_measured: 0,
+            failed: 0,
+            invalid: 0,
+            skipped: 0,
+            over_latency_budget: 0,
+            over_memory_budget: 0,
+            elapsed: Duration::ZERO,
+        },
+        jetstream: jetstream::JetStreamReport {
+            rows: Vec::new(),
+            measured: 0,
+            failed: 0,
+            invalid: 0,
+            skipped: 0,
+            over_latency_budget: 0,
+            elapsed: Duration::ZERO,
+        },
+        elapsed: Duration::from_micros(1_250),
+    };
+
+    let tsv = render_timing_tsv(&report);
+    ensure_contains(&tsv, "kind\tphase\tcase\tstatus")?;
+    ensure_contains(
+        &tsv,
+        "test\tUnit corpus\tcase-1\t✅ passed\ttests/example.js\t\t1.250000\t\t\tline one line two field",
+    )
 }
 
 fn ensure_text(actual: &str, expected: &str) -> TestResult {

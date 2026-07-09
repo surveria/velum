@@ -3,7 +3,7 @@ use std::{fs, path::Path};
 use anyhow::{Context as _, bail};
 use tabled::Table;
 
-use crate::{REPORT_TITLE, RUNNER_NAME, benchmarks, fenced_table};
+use crate::{REPORT_TITLE, RUNNER_NAME, benchmarks, fenced_table, timing};
 
 pub fn run(report_path: &Path) -> anyhow::Result<()> {
     let report = benchmarks::run();
@@ -31,7 +31,7 @@ pub fn run(report_path: &Path) -> anyhow::Result<()> {
 
 fn render(report: &benchmarks::BenchmarkReport) -> String {
     let summary = format!(
-        "- Measured: {}\n- In-process measured: {}\n- Failed: {}\n- Invalid: {}\n- Skipped reference: {}\n- Over latency budget ({}): {}\n- Over memory budget ({}): {}",
+        "- Measured: {}\n- In-process measured: {}\n- Failed: {}\n- Invalid: {}\n- Skipped reference: {}\n- Over latency budget ({}): {}\n- Over memory budget ({}): {}\n- Elapsed: {}",
         report.measured,
         report.in_process_measured,
         report.failed,
@@ -41,6 +41,7 @@ fn render(report: &benchmarks::BenchmarkReport) -> String {
         report.over_latency_budget,
         benchmarks::BUDGET_LABEL,
         report.over_memory_budget,
+        timing::format_duration(report.elapsed),
     );
     let table = fenced_table(&Table::new(&report.rows));
     format!(

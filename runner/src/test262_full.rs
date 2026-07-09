@@ -2,13 +2,14 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::Path,
+    time::Duration,
 };
 
 use anyhow::{Context as _, bail};
 
 use super::{
-    CaseRow, CorpusReport, CorpusStats, FeatureAreaStats, STATUS_FAILED, SkipReasonRow,
-    feature_area_rows,
+    CaseRow, CorpusReport, CorpusStats, FeatureAreaStats, REASON_MATCHED, STATUS_FAILED,
+    STATUS_PASSED, SkipReasonRow, feature_area_rows,
     test262_external::{
         MODE_NEGATIVE_PARSE, MODE_RUN, MODE_SKIP, ManifestCase, REASON_TEST262_DIR_MISSING,
         execute_manifest_case, execute_negative_parse_case, manifest_cases, source_label,
@@ -16,6 +17,7 @@ use super::{
     test262_metadata::{
         Test262CaseResult, Test262Outcome, execute_test262_path, test262_path_has_all_flags,
     },
+    timing,
 };
 
 const FILE_CORPUS_NAME: &str = "Test262 file conformance";
@@ -28,12 +30,12 @@ const MODULE_FIXTURE_MARKER: &str = "_FIXTURE";
 const UNKNOWN_AREA: &str = "unknown";
 
 type FeatureStatsByArea = BTreeMap<String, FeatureAreaStats>;
-
 #[derive(Debug)]
 struct CorpusBuilder {
     rows: Vec<CaseRow>,
     feature_stats: FeatureStatsByArea,
     stats: CorpusStats,
+    elapsed: Duration,
 }
 
 impl CorpusBuilder {
@@ -47,6 +49,7 @@ impl CorpusBuilder {
                 failed: 0,
                 skipped: 0,
             },
+            elapsed: Duration::ZERO,
         }
     }
 
@@ -58,6 +61,7 @@ impl CorpusBuilder {
             rows: self.rows,
             skip_reasons: Vec::new(),
             feature_areas: feature_area_rows(self.feature_stats.into_values().collect()),
+            elapsed: self.elapsed,
         }
     }
 }
@@ -89,6 +93,7 @@ fn unavailable_report() -> CorpusReport {
             reason: REASON_TEST262_DIR_MISSING.to_owned(),
         }],
         feature_areas: Vec::new(),
+        elapsed: Duration::ZERO,
     }
 }
 
@@ -107,9 +112,11 @@ fn error_report(test262_dir: &Path, error: &anyhow::Error) -> CorpusReport {
             status: STATUS_FAILED.to_owned(),
             source: test262_dir.display().to_string(),
             detail: error.to_string(),
+            elapsed: Duration::ZERO,
         }],
         skip_reasons: Vec::new(),
         feature_areas: Vec::new(),
+        elapsed: Duration::ZERO,
     }
 }
 
@@ -142,6 +149,7 @@ fn execute_manifest_corpus(
     test262_dir: &Path,
     test_paths: &[String],
 ) -> anyhow::Result<CorpusReport> {
+    let timer = timing::RunTimer::start();
     let manifest = manifest_cases()?;
     let mut manifest_by_path = BTreeMap::<String, ManifestCase>::new();
     let mut feature_stats = FeatureStatsByArea::new();
@@ -164,6 +172,7 @@ fn execute_manifest_corpus(
                 status: STATUS_FAILED.to_owned(),
                 source: "tests/corpora/test262/manifest.tsv".to_owned(),
                 detail: "duplicate Test262 manifest path".to_owned(),
+                elapsed: Duration::ZERO,
             });
         }
     }
@@ -196,6 +205,7 @@ fn execute_manifest_corpus(
                 status: STATUS_FAILED.to_owned(),
                 source: source_label(&case.path),
                 detail: "manifest path is not present in pinned Test262 checkout".to_owned(),
+                elapsed: Duration::ZERO,
             });
         }
     }
@@ -207,6 +217,7 @@ fn execute_manifest_corpus(
         rows,
         skip_reasons: skip_reason_rows(skip_reasons),
         feature_areas: feature_area_rows(feature_stats.into_values().collect()),
+        elapsed: timer.elapsed(),
     })
 }
 
@@ -289,8 +300,11 @@ fn run_discovered_case(
     files: &mut CorpusBuilder,
     variants: &mut CorpusBuilder,
 ) {
-    match execute_test262_path(test262_dir, path) {
+    let result = timing::timed(|| execute_test262_path(test262_dir, path));
+    match result.value {
         Ok(results) => {
+            files.elapsed = files.elapsed.saturating_add(result.elapsed);
+            variants.elapsed = variants.elapsed.saturating_add(result.elapsed);
             record_file_result(path, &results, files);
             for result in results {
                 record_discovered_result(path, result, variants);
@@ -298,8 +312,10 @@ fn run_discovered_case(
         }
         Err(error) => {
             let detail = error.to_string();
-            record_failed_case(path, path, &detail, files);
-            record_failed_case(path, path, &detail, variants);
+            files.elapsed = files.elapsed.saturating_add(result.elapsed);
+            variants.elapsed = variants.elapsed.saturating_add(result.elapsed);
+            record_failed_case(path, path, &detail, result.elapsed, files);
+            record_failed_case(path, path, &detail, result.elapsed, variants);
         }
     }
 }
@@ -313,9 +329,20 @@ fn record_file_result(path: &str, results: &[Test262CaseResult], files: &mut Cor
     }
 
     files.stats.total = files.stats.total.saturating_add(1);
+    let elapsed = results
+        .iter()
+        .map(|result| result.elapsed)
+        .fold(Duration::ZERO, Duration::saturating_add);
     if failed_variants.is_empty() {
         files.stats.passed = files.stats.passed.saturating_add(1);
         feature_stats_for(&mut files.feature_stats, path).record_passed();
+        files.rows.push(CaseRow {
+            case: path.to_owned(),
+            status: STATUS_PASSED.to_owned(),
+            source: source_label(path),
+            detail: REASON_MATCHED.to_owned(),
+            elapsed,
+        });
     } else {
         files.stats.failed = files.stats.failed.saturating_add(1);
         feature_stats_for(&mut files.feature_stats, path).record_failed();
@@ -327,6 +354,7 @@ fn record_file_result(path: &str, results: &[Test262CaseResult], files: &mut Cor
                 "required Test262 variant(s) failed: {}",
                 failed_variants.join(", ")
             ),
+            elapsed,
         });
     }
 }
@@ -337,6 +365,13 @@ fn record_discovered_result(path: &str, result: Test262CaseResult, variants: &mu
         Test262Outcome::Passed => {
             variants.stats.passed = variants.stats.passed.saturating_add(1);
             feature_stats_for(&mut variants.feature_stats, path).record_passed();
+            variants.rows.push(CaseRow {
+                case: result.id,
+                status: STATUS_PASSED.to_owned(),
+                source: source_label(path),
+                detail: REASON_MATCHED.to_owned(),
+                elapsed: result.elapsed,
+            });
         }
         Test262Outcome::Failed(detail) => {
             variants.stats.failed = variants.stats.failed.saturating_add(1);
@@ -346,12 +381,19 @@ fn record_discovered_result(path: &str, result: Test262CaseResult, variants: &mu
                 status: STATUS_FAILED.to_owned(),
                 source: source_label(path),
                 detail,
+                elapsed: result.elapsed,
             });
         }
     }
 }
 
-fn record_failed_case(case: &str, path: &str, detail: &str, corpus: &mut CorpusBuilder) {
+fn record_failed_case(
+    case: &str,
+    path: &str,
+    detail: &str,
+    elapsed: Duration,
+    corpus: &mut CorpusBuilder,
+) {
     corpus.stats.total = corpus.stats.total.saturating_add(1);
     corpus.stats.failed = corpus.stats.failed.saturating_add(1);
     feature_stats_for(&mut corpus.feature_stats, path).record_failed();
@@ -360,6 +402,7 @@ fn record_failed_case(case: &str, path: &str, detail: &str, corpus: &mut CorpusB
         status: STATUS_FAILED.to_owned(),
         source: source_label(path),
         detail: detail.to_owned(),
+        elapsed,
     });
 }
 
@@ -385,18 +428,27 @@ fn run_enabled_case(
     }
     feature_stats_for(feature_stats, &case.path).record_manifest_enabled();
 
-    let result = if case.mode == MODE_RUN {
-        execute_manifest_case(test262_dir, case)
-    } else if case.mode == MODE_NEGATIVE_PARSE {
-        execute_negative_parse_case(test262_dir, case)
-    } else {
-        Err(anyhow::anyhow!("unknown manifest mode '{}'", case.mode))
-    };
+    let result = timing::timed(|| {
+        if case.mode == MODE_RUN {
+            execute_manifest_case(test262_dir, case)
+        } else if case.mode == MODE_NEGATIVE_PARSE {
+            execute_negative_parse_case(test262_dir, case)
+        } else {
+            Err(anyhow::anyhow!("unknown manifest mode '{}'", case.mode))
+        }
+    });
 
-    match result {
+    match result.value {
         Ok(()) => {
             stats.passed = stats.passed.saturating_add(1);
             feature_stats_for(feature_stats, &case.path).record_passed();
+            rows.push(CaseRow {
+                case: case.id.clone(),
+                status: STATUS_PASSED.to_owned(),
+                source: source_label(&case.path),
+                detail: REASON_MATCHED.to_owned(),
+                elapsed: result.elapsed,
+            });
         }
         Err(error) => {
             stats.failed = stats.failed.saturating_add(1);
@@ -406,6 +458,7 @@ fn run_enabled_case(
                 status: STATUS_FAILED.to_owned(),
                 source: source_label(&case.path),
                 detail: error.to_string(),
+                elapsed: result.elapsed,
             });
         }
     }
@@ -553,7 +606,7 @@ fn skip_reason_rows(reasons: BTreeMap<String, usize>) -> Vec<SkipReasonRow> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::{path::Path, time::Duration};
 
     use super::{
         CorpusBuilder, Test262CaseResult, Test262Filter, Test262Outcome, default_skip_reason,
@@ -648,7 +701,12 @@ mod tests {
         ensure_usize(files.stats.total, 1)?;
         ensure_usize(files.stats.passed, 1)?;
         ensure_usize(files.stats.failed, 0)?;
-        ensure_usize(files.rows.len(), 0)
+        ensure_usize(files.rows.len(), 1)?;
+        let Some(row) = files.rows.first() else {
+            return Err("expected passed file row".into());
+        };
+        ensure_text(&row.case, "test/example.js")?;
+        ensure_text(&row.status, super::STATUS_PASSED)
     }
 
     #[test]
@@ -675,6 +733,7 @@ mod tests {
         Test262CaseResult {
             id: id.to_owned(),
             outcome: Test262Outcome::Passed,
+            elapsed: Duration::ZERO,
         }
     }
 
@@ -682,6 +741,7 @@ mod tests {
         Test262CaseResult {
             id: id.to_owned(),
             outcome: Test262Outcome::Failed("failed".to_owned()),
+            elapsed: Duration::ZERO,
         }
     }
 
