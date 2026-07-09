@@ -128,7 +128,7 @@ fn timing_tsv_lists_case_rows_and_sanitizes_fields() -> TestResult {
     let report = ReportDocument::from_run(
         report,
         EnvironmentInfo::capture(),
-        RunConfiguration::capture(false, false),
+        RunConfiguration::capture(false, false, crate::report_schema::ReportMode::Full, false),
     )?;
     let tsv = render_timing_tsv(&report);
     ensure_contains(&tsv, "kind\tphase\tcase\tstatus")?;

@@ -15,6 +15,17 @@ All test-oriented entrypoints acquire a shared `flock` through `scripts/with-hos
 
 Feature and compatibility work should run focused tests plus `scripts/check-fast.sh`, push the draft branch, and let required CI perform the complete correctness pass once. Performance work should use an exact-id or explicit-prefix project filter while iterating and leave the canonical per-merge sentinel measurement to CI. Use `RSQJS_BENCH_SET=full` only when the complete legacy project corpus is intentionally required.
 
+## Structured Report Artifacts
+
+Every correctness or full runner invocation writes four coordinated outputs from one typed report model:
+
+- `rsqjs-test-report-<timestamp>.yaml` is the compact, schema-versioned source for tracked history and rollups. It contains run/build metadata, host environment, effective configuration, numeric `duration_ns` fields, typed statuses, suite totals, feature summaries, and all project/JetStream benchmark rows.
+- `rsqjs-test-report-<timestamp>-details.yaml` uses the same schema and additionally contains every case row. It remains in the tree-keyed CI artifact so the 100,000-plus Test262 variants do not inflate git history.
+- `rsqjs-test-report-<timestamp>.md` is the human-readable view rendered from the typed model.
+- `rsqjs-test-report-<timestamp>-timings.tsv` remains available during migration for existing analysis tools.
+
+Schema version `1` stores durations as integer nanoseconds and statuses as enums rather than presentation strings. New rollups read the compact YAML directly; historical reports without YAML retain a Markdown compatibility fallback. The post-merge publisher validates both YAML artifacts, commits only the compact YAML plus derived Markdown, and leaves the detailed YAML and TSV in the downloadable CI artifact.
+
 ## Baselines
 
 Track these against QuickJS on every supported device class:
@@ -36,7 +47,7 @@ Track these against QuickJS on every supported device class:
 
 ## QuickJS Reference
 
-The report scripts prepare a pinned QuickJS reference binary before running differential checks or reference measurements. Generated reports, rollups, charts, and artifact metadata live under `target/rsqjs-reports/`; ordinary feature branches must not commit them. Required CI uploads a correctness artifact named by the tested tree. The separate post-merge job measures the exact merge commit, uploads the performance artifact consumed by the publisher, stores that source commit on the hidden `refs/rsqjs/ci-tested-sources` archive ref, copies the report into `reports/test-runs/`, and regenerates `reports/benchmark-rollup.md` plus `reports/benchmark-summary.jpg` in a signed report-only commit. The publisher can read the legacy `refs/heads/ci-tested-sources` branch as a migration base, but new archive commits are pushed only to the hidden ref. Set `RSQJS_TRACKED_REPORT=1` or `RSQJS_TEST_REPORT_PATH=reports/test-runs/<name>.md` only for intentional manual canonical report refreshes. The setup order is:
+The report scripts prepare a pinned QuickJS reference binary before running differential checks or reference measurements. Generated reports, rollups, charts, and artifact metadata live under `target/rsqjs-reports/`; ordinary feature branches must not commit them. Required CI uploads a correctness artifact named by the tested tree. The separate post-merge job measures the exact merge commit, uploads the performance artifact consumed by the publisher, stores that source commit on the hidden `refs/rsqjs/ci-tested-sources` archive ref, copies the compact YAML source and its derived Markdown into `reports/test-runs/`, and regenerates `reports/benchmark-rollup.md` plus `reports/benchmark-summary.jpg` in a signed report-only commit. The publisher can read the legacy `refs/heads/ci-tested-sources` branch as a migration base, but new archive commits are pushed only to the hidden ref. Set `RSQJS_TRACKED_REPORT=1` or `RSQJS_TEST_REPORT_PATH=reports/test-runs/<name>.md` only for intentional manual canonical report refreshes. The setup order is:
 
 1. use `RSQJS_QUICKJS` when it points to an executable file;
 2. use `qjs` from `PATH` when available;

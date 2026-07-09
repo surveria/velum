@@ -55,6 +55,34 @@ pub enum DetailLevel {
     Summary,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReportMode {
+    Full,
+    Correctness,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeatureSelection {
+    Enabled,
+    Disabled,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InputAvailability {
+    Configured,
+    NotConfigured,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Test262Mode {
+    Full,
+    Manifest,
+}
+
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 pub struct EnvironmentInfo {
     pub(crate) operating_system: String,
@@ -69,9 +97,11 @@ pub struct EnvironmentInfo {
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RunConfiguration {
-    pub(crate) quickjs_differential_configured: bool,
-    pub(crate) test262_configured: bool,
-    pub(crate) test262_run_all: bool,
+    pub(crate) report_mode: ReportMode,
+    pub(crate) jetstream: FeatureSelection,
+    pub(crate) quickjs_differential: InputAvailability,
+    pub(crate) test262: InputAvailability,
+    pub(crate) test262_mode: Test262Mode,
     pub(crate) test262_path_filters: Vec<String>,
     pub(crate) test262_flag_filters: Vec<String>,
     pub(crate) benchmark_filter: Option<String>,
@@ -311,17 +341,9 @@ impl ReportDocument {
             .fold(0u64, u64::saturating_add);
         suite_failures.saturating_add(self.benchmarks.counts.failed)
     }
-
-    pub fn validate(&self) -> anyhow::Result<()> {
-        validate_schema(self.schema_version, self.detail_level, DetailLevel::Full)
-    }
 }
 
 impl ReportSummary {
-    pub fn validate(&self) -> anyhow::Result<()> {
-        validate_schema(self.schema_version, self.detail_level, DetailLevel::Summary)
-    }
-
     pub fn suite(&self, name: &str) -> Option<&SuiteSummary> {
         self.suites.iter().find(|suite| suite.name == name)
     }
@@ -335,13 +357,12 @@ impl SuiteReport {
             corpus.failed(),
             corpus.skipped(),
         );
-        let status = suite_status(counts);
         let cases = corpus
             .rows
             .into_iter()
             .map(CaseRecord::from_run)
             .collect::<anyhow::Result<Vec<_>>>()?;
-        let skip_reasons = corpus
+        let skip_reasons: Vec<SkipReasonSummary> = corpus
             .skip_reasons
             .into_iter()
             .map(|row| SkipReasonSummary {
@@ -349,6 +370,7 @@ impl SuiteReport {
                 reason: row.reason,
             })
             .collect();
+        let status = suite_status(counts, !skip_reasons.is_empty());
         let feature_areas = corpus
             .feature_areas
             .into_iter()
@@ -641,7 +663,9 @@ pub fn write_yaml_artifacts(
 ) -> anyhow::Result<YamlArtifactPaths> {
     report.validate()?;
     let paths = yaml_artifact_paths(report_path);
-    write_yaml(&paths.summary, &report.summary())?;
+    let summary = report.summary();
+    summary.validate()?;
+    write_yaml(&paths.summary, &summary)?;
     write_yaml(&paths.details, report)?;
     Ok(paths)
 }
@@ -681,25 +705,11 @@ fn write_yaml<T: Serialize>(path: &Path, value: &T) -> anyhow::Result<()> {
         .with_context(|| format!("failed to write YAML report '{}'", path.display()))
 }
 
-fn validate_schema(
-    actual: u32,
-    actual_level: DetailLevel,
-    expected: DetailLevel,
-) -> anyhow::Result<()> {
-    if actual != SCHEMA_VERSION {
-        bail!("unsupported report schema version {actual}; expected {SCHEMA_VERSION}");
-    }
-    if actual_level != expected {
-        bail!("unexpected report detail level {actual_level:?}; expected {expected:?}");
-    }
-    Ok(())
-}
-
-const fn suite_status(counts: CaseCounts) -> SuiteStatus {
+const fn suite_status(counts: CaseCounts, unavailable: bool) -> SuiteStatus {
     if counts.failed > 0 {
         return SuiteStatus::Failed;
     }
-    if counts.executed == 0 && counts.skipped > 0 {
+    if counts.executed == 0 && (counts.skipped > 0 || unavailable) {
         return SuiteStatus::Skipped;
     }
     SuiteStatus::Passed

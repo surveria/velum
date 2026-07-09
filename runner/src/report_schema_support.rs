@@ -4,7 +4,10 @@ use anyhow::{Context as _, bail};
 
 use crate::{
     bench_measure::MeasureConfig,
-    report_schema::{BenchmarkConfiguration, EnvironmentInfo, NO_VALUE, RunConfiguration},
+    report_schema::{
+        BenchmarkConfiguration, EnvironmentInfo, FeatureSelection, InputAvailability, NO_VALUE,
+        ReportMode, RunConfiguration, Test262Mode,
+    },
 };
 
 const BENCHMARK_FILTER_ENV: &str = "RSQJS_BENCH_FILTER";
@@ -35,13 +38,25 @@ impl EnvironmentInfo {
 }
 
 impl RunConfiguration {
-    pub fn capture(quickjs_configured: bool, test262_configured: bool) -> Self {
+    pub fn capture(
+        quickjs_configured: bool,
+        test262_configured: bool,
+        report_mode: ReportMode,
+        jetstream_enabled: bool,
+    ) -> Self {
         let benchmark = MeasureConfig::in_process_from_env();
         Self {
-            quickjs_differential_configured: quickjs_configured,
-            test262_configured,
-            test262_run_all: env::var(TEST262_RUN_ALL_ENV)
-                .is_ok_and(|value| is_truthy(value.trim())),
+            report_mode,
+            jetstream: feature_selection(jetstream_enabled),
+            quickjs_differential: input_availability(quickjs_configured),
+            test262: input_availability(test262_configured),
+            test262_mode: if env::var(TEST262_RUN_ALL_ENV)
+                .is_ok_and(|value| is_truthy(value.trim()))
+            {
+                Test262Mode::Full
+            } else {
+                Test262Mode::Manifest
+            },
             test262_path_filters: env_list(TEST262_PATH_FILTER_ENV),
             test262_flag_filters: env_list(TEST262_FLAG_FILTER_ENV),
             benchmark_filter: non_empty_env(BENCHMARK_FILTER_ENV),
@@ -56,6 +71,20 @@ impl RunConfiguration {
             },
         }
     }
+}
+
+const fn feature_selection(enabled: bool) -> FeatureSelection {
+    if enabled {
+        return FeatureSelection::Enabled;
+    }
+    FeatureSelection::Disabled
+}
+
+const fn input_availability(configured: bool) -> InputAvailability {
+    if configured {
+        return InputAvailability::Configured;
+    }
+    InputAvailability::NotConfigured
 }
 
 pub fn labeled_count(value: &str) -> anyhow::Result<u64> {

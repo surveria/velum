@@ -53,6 +53,11 @@ fi
 report_file="$(basename "${report_path}")"
 report_dir="$(dirname "${report_path}")"
 reports_root="$(dirname "${report_dir}")"
+report_stem="${report_file%.md}"
+report_yaml_file="${report_stem}.yaml"
+report_details_yaml_file="${report_stem}-details.yaml"
+report_yaml_path="${report_dir}/${report_yaml_file}"
+report_details_yaml_path="${report_dir}/${report_details_yaml_file}"
 jetstream_report_file="rsqjs-jetstream-report-${timestamp}.md"
 if [[ "${report_path}" == reports/test-runs/* ]]; then
   jetstream_report_path="reports/jetstream-runs/${jetstream_report_file}"
@@ -62,6 +67,10 @@ fi
 export RSQJS_REPORT_TIMESTAMP="${RSQJS_REPORT_TIMESTAMP:-${timestamp}}"
 export RSQJS_REPORT_REPORT_FILE="${RSQJS_REPORT_REPORT_FILE:-${report_file}}"
 export RSQJS_REPORT_REPORT_RELATIVE_PATH="${RSQJS_REPORT_REPORT_RELATIVE_PATH:-$(basename "${report_dir}")/${report_file}}"
+export RSQJS_REPORT_YAML_FILE="${report_yaml_file}"
+export RSQJS_REPORT_YAML_RELATIVE_PATH="$(basename "${report_dir}")/${report_yaml_file}"
+export RSQJS_REPORT_DETAILS_YAML_FILE="${report_details_yaml_file}"
+export RSQJS_REPORT_DETAILS_YAML_RELATIVE_PATH="$(basename "${report_dir}")/${report_details_yaml_file}"
 export RSQJS_JETSTREAM_REPORT_PATH="${RSQJS_JETSTREAM_REPORT_PATH:-${jetstream_report_path}}"
 export RSQJS_REPORT_JETSTREAM_REPORT_FILE="${RSQJS_REPORT_JETSTREAM_REPORT_FILE:-${jetstream_report_file}}"
 export RSQJS_REPORT_JETSTREAM_REPORT_RELATIVE_PATH="${RSQJS_REPORT_JETSTREAM_REPORT_RELATIVE_PATH:-jetstream-runs/${jetstream_report_file}}"
@@ -108,12 +117,25 @@ else
   cargo run --release --manifest-path runner/Cargo.toml --features reference-quickjs -- --report "${report_path}"
 fi
 
+[[ -f "${report_yaml_path}" ]] || {
+  printf 'missing structured YAML report summary: %s\n' "${report_yaml_path}" >&2
+  exit 1
+}
+[[ -f "${report_details_yaml_path}" ]] || {
+  printf 'missing structured YAML report details: %s\n' "${report_details_yaml_path}" >&2
+  exit 1
+}
+
 mkdir -p "${reports_root}"
 metadata_path="${reports_root}/rsqjs-report-metadata.env"
 {
-  write_metadata_value 'RSQJS_ARTIFACT_SCHEMA' '1'
+  write_metadata_value 'RSQJS_ARTIFACT_SCHEMA' '2'
   write_metadata_value 'RSQJS_ARTIFACT_REPORT_FILE' "${RSQJS_REPORT_REPORT_FILE}"
   write_metadata_value 'RSQJS_ARTIFACT_REPORT_RELATIVE_PATH' "${RSQJS_REPORT_REPORT_RELATIVE_PATH}"
+  write_metadata_value 'RSQJS_ARTIFACT_REPORT_YAML_FILE' "${RSQJS_REPORT_YAML_FILE}"
+  write_metadata_value 'RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH' "${RSQJS_REPORT_YAML_RELATIVE_PATH}"
+  write_metadata_value 'RSQJS_ARTIFACT_REPORT_DETAILS_YAML_FILE' "${RSQJS_REPORT_DETAILS_YAML_FILE}"
+  write_metadata_value 'RSQJS_ARTIFACT_REPORT_DETAILS_YAML_RELATIVE_PATH' "${RSQJS_REPORT_DETAILS_YAML_RELATIVE_PATH}"
   if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" != "1" && "${jetstream_enabled}" != "0" ]]; then
     write_metadata_value 'RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE' "${RSQJS_REPORT_JETSTREAM_REPORT_FILE}"
     write_metadata_value 'RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH' "${RSQJS_REPORT_JETSTREAM_REPORT_RELATIVE_PATH}"
@@ -132,6 +154,8 @@ metadata_path="${reports_root}/rsqjs-report-metadata.env"
 
 if [[ "${report_path}" == target/rsqjs-reports/* ]]; then
   printf 'local/CI report artifact: %s\n' "${report_path}"
+  printf 'local/CI structured YAML summary: %s\n' "${report_yaml_path}"
+  printf 'local/CI structured YAML details: %s\n' "${report_details_yaml_path}"
   if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" != "1" && "${jetstream_enabled}" != "0" ]]; then
     printf 'local/CI JetStream report artifact: %s\n' "${RSQJS_JETSTREAM_REPORT_PATH}"
   fi
@@ -140,6 +164,8 @@ if [[ "${report_path}" == target/rsqjs-reports/* ]]; then
   printf 'do not commit this report from a feature PR; CI uploads the artifact and the post-merge publisher commits the canonical reports/test-runs copy\n'
 else
   printf 'canonical tracked test report: %s\n' "${report_path}"
+  printf 'canonical tracked structured YAML summary: %s\n' "${report_yaml_path}"
+  printf 'untracked structured YAML details artifact: %s\n' "${report_details_yaml_path}"
   if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" != "1" && "${jetstream_enabled}" != "0" ]]; then
     printf 'canonical tracked JetStream report: %s\n' "${RSQJS_JETSTREAM_REPORT_PATH}"
   fi

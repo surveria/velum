@@ -34,6 +34,7 @@ mod report_schema;
 mod report_schema_support;
 #[cfg(test)]
 mod report_schema_tests;
+mod report_schema_validation;
 mod report_text;
 mod runner_cli;
 mod test262_baseline;
@@ -48,7 +49,7 @@ use report_rendering::{coverage_percent, feature_area_rows_with_limit};
 use report_rendering::{
     feature_area_rows, fenced_table, percent, render_report, render_timing_tsv, skip_reason_rows,
 };
-use report_schema::{EnvironmentInfo, ReportDocument, RunConfiguration};
+use report_schema::{EnvironmentInfo, ReportDocument, ReportMode, RunConfiguration};
 use runner_cli::{Config, print_rollup_outputs};
 
 const STATUS_PASSED: &str = "✅ passed";
@@ -68,6 +69,15 @@ const REASON_QUICKJS_ENV_MISSING: &str = "set RSQJS_QUICKJS=/path/to/qjs to enab
 enum ReportKind {
     Full,
     Correctness,
+}
+
+impl ReportKind {
+    const fn schema_mode(self) -> ReportMode {
+        match self {
+            Self::Full => ReportMode::Full,
+            Self::Correctness => ReportMode::Correctness,
+        }
+    }
 }
 
 fn main() {
@@ -97,7 +107,12 @@ fn run() -> anyhow::Result<()> {
     let test262 = env::var_os(TEST262_ENV).map(PathBuf::from);
     let include_jetstream = report_kind == ReportKind::Full && jetstream_enabled();
     let environment = EnvironmentInfo::capture();
-    let run_configuration = RunConfiguration::capture(quickjs.is_some(), test262.is_some());
+    let run_configuration = RunConfiguration::capture(
+        quickjs.is_some(),
+        test262.is_some(),
+        report_kind.schema_mode(),
+        include_jetstream,
+    );
     let report = build_report(
         quickjs.as_deref(),
         test262.as_deref(),
@@ -535,6 +550,15 @@ fn write_report(path: &Path, report: &ReportDocument) -> anyhow::Result<()> {
             .with_context(|| format!("failed to create report directory '{}'", parent.display()))?;
     }
 
+    let yaml_paths = report_schema::write_yaml_artifacts(path, report)?;
+    println!(
+        "structured YAML report summary: {}",
+        yaml_paths.summary.display()
+    );
+    println!(
+        "structured YAML report details: {}",
+        yaml_paths.details.display()
+    );
     let body = render_report(report);
     fs::write(path, body)
         .with_context(|| format!("failed to write test report '{}'", path.display()))?;
@@ -546,15 +570,6 @@ fn write_report(path: &Path, report: &ReportDocument) -> anyhow::Result<()> {
         )
     })?;
     println!("local/CI timing artifact: {}", timing_path.display());
-    let yaml_paths = report_schema::write_yaml_artifacts(path, report)?;
-    println!(
-        "structured YAML report summary: {}",
-        yaml_paths.summary.display()
-    );
-    println!(
-        "structured YAML report details: {}",
-        yaml_paths.details.display()
-    );
     Ok(())
 }
 

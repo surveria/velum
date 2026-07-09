@@ -18,6 +18,8 @@ fn full_yaml_round_trip_preserves_typed_report() -> TestResult {
     let yaml = serde_yaml_ng::to_string(&report)?;
     ensure_contains(&yaml, "schema_version: 1")?;
     ensure_contains(&yaml, "detail_level: full")?;
+    ensure_contains(&yaml, "report_mode: full")?;
+    ensure_contains(&yaml, "jetstream: disabled")?;
     ensure_contains(&yaml, "duration_ns: 7000000")?;
     ensure_contains(&yaml, "status: tracked_exception")?;
 
@@ -83,6 +85,20 @@ fn schema_validation_rejects_unknown_version_and_detail_level() -> TestResult {
     ensure_bool(
         summary.validate().is_err(),
         "summary must reject a full detail-level marker",
+    )
+}
+
+#[test]
+fn schema_validation_rejects_inconsistent_suite_counts() -> TestResult {
+    let report = sample_document()?;
+    let mut summary = report.summary();
+    let Some(suite) = summary.suites.first_mut() else {
+        return Err("expected one suite summary".into());
+    };
+    suite.counts.total = suite.counts.total.saturating_add(1);
+    ensure_bool(
+        summary.validate().is_err(),
+        "inconsistent suite counts must be rejected",
     )
 }
 
@@ -187,9 +203,11 @@ fn sample_environment() -> EnvironmentInfo {
 
 fn sample_configuration() -> RunConfiguration {
     RunConfiguration {
-        quickjs_differential_configured: true,
-        test262_configured: true,
-        test262_run_all: true,
+        report_mode: crate::report_schema::ReportMode::Full,
+        jetstream: crate::report_schema::FeatureSelection::Disabled,
+        quickjs_differential: crate::report_schema::InputAvailability::Configured,
+        test262: crate::report_schema::InputAvailability::Configured,
+        test262_mode: crate::report_schema::Test262Mode::Full,
         test262_path_filters: Vec::new(),
         test262_flag_filters: Vec::new(),
         benchmark_filter: None,
