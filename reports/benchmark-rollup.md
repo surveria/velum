@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260709T015135Z.md`
-- Task: workflow_dispatch
-- Performance: 5.45x (67/70 >1.00x)
-- Memory: - (0/70 >1.00x)
-- JetStream: 24.84x (4/4 >1.00x)
-- Full Test262: 31439 passed / 71139 failed (30.65%)
+- `rsqjs-test-report-20260709T024253Z.md`
+- Task: PR #365: runtime: optimize switch statement bytecode path
+- Performance: 5.20x (67/71 >1.00x)
+- Memory: - (0/71 >1.00x)
+- JetStream: 23.17x (4/4 >1.00x)
+- Full Test262: 32006 passed / 70572 failed (31.20%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -353,3 +353,4 @@ Latest report:
 | `20260709T000409Z` `3fd37e8` workflow_dispatch | 5.54x (68/69 >1.00x) | - (0/69 >1.00x) | 24.82x (4/4 >1.00x) | 31217 passed / 71361 failed (30.43%) |
 | `20260709T005317Z` `0370172` PR #363: Optimize break/continue bytecode fast paths | 5.35x (68/70 >1.00x) | - (0/70 >1.00x) | 25.27x (4/4 >1.00x) | 31399 passed / 71179 failed (30.61%) |
 | `20260709T015135Z` `2d427ca` workflow_dispatch | 5.45x (67/70 >1.00x) | - (0/70 >1.00x) | 24.84x (4/4 >1.00x) | 31439 passed / 71139 failed (30.65%) |
+| `20260709T024253Z` `0cb8ffa` PR #365: runtime: optimize switch statement bytecode path | 5.20x (67/71 >1.00x) | - (0/71 >1.00x) | 23.17x (4/4 >1.00x) | 32006 passed / 70572 failed (31.20%) |
