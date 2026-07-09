@@ -15,6 +15,7 @@ mod object;
 mod object_prototype;
 mod object_static;
 mod promise;
+mod proxy;
 mod reflect;
 mod regexp;
 mod set_operations;

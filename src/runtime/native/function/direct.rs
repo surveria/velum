@@ -497,6 +497,7 @@ impl Context {
             NativeFunctionKind::PromiseResolver { promise, kind } => {
                 self.eval_promise_resolver(promise, kind, args)
             }
+            NativeFunctionKind::Proxy => self.eval_proxy_call(args),
             NativeFunctionKind::Symbol => self.eval_symbol_constructor(args),
             kind => self
                 .eval_primitive_native_function_kind(kind, args, this_value)

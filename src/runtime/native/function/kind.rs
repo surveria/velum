@@ -139,6 +139,8 @@ const PROMISE_CATCH_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const PROMISE_CATCH_NAME: &str = "catch";
 const PROMISE_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const PROMISE_NAME: &str = "Promise";
+pub(in crate::runtime::native) const PROXY_NAME: &str = "Proxy";
+const PROXY_FUNCTION_LENGTH: f64 = 2.0;
 const PROMISE_REJECT_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const PROMISE_REJECT_NAME: &str = "reject";
 const PROMISE_RESOLVE_FUNCTION_LENGTH: f64 = 1.0;
@@ -357,6 +359,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
         promise: crate::runtime::promise::PromiseId,
         kind: crate::runtime::promise::PromiseResolverKind,
     },
+    Proxy,
     ReflectApply,
     ReflectConstruct,
     ReflectDefineProperty,
@@ -559,6 +562,7 @@ impl NativeFunctionKind {
             Self::PromiseThen => Some(PROMISE_THEN_FUNCTION_LENGTH),
             Self::PromiseCatch => Some(PROMISE_CATCH_FUNCTION_LENGTH),
             Self::PromiseResolver { .. } => Some(PROMISE_RESOLVER_FUNCTION_LENGTH),
+            Self::Proxy => Some(PROXY_FUNCTION_LENGTH),
             Self::RegExp => Some(REGEXP_FUNCTION_LENGTH),
             Self::RegExpPrototypeExec | Self::RegExpPrototypeTest => {
                 Some(REGEXP_PROTOTYPE_TEST_LENGTH)
@@ -716,6 +720,7 @@ impl NativeFunctionKind {
                 kind: crate::runtime::promise::PromiseResolverKind::Reject,
                 ..
             } => Some(REJECT_NAME),
+            Self::Proxy => Some(PROXY_NAME),
             Self::RegExp => Some(REGEXP_NAME),
             Self::RegExpPrototypeExec => Some(REGEXP_PROTOTYPE_EXEC_NAME),
             Self::RegExpPrototypeTest => Some(REGEXP_PROTOTYPE_TEST_NAME),
