@@ -501,6 +501,33 @@ fn bytecode_runs_direct_numeric_array_fill_for_body() -> TestResult {
 }
 
 #[test]
+fn bytecode_runs_direct_string_concat_length_loop_body() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r#"
+        let total = 0;
+        for (let index = 0; index < 128; index = index + 1) {
+            let name = "camera";
+            let result = name + "-stream-" + index;
+            total = total + result.length;
+        }
+        total === 2066 ? 42 : 0
+        "#,
+    )?;
+    let initial_direct_runs = vm.resource_usage().bytecode_linear_direct_runs;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    let direct_run_delta = vm
+        .resource_usage()
+        .bytecode_linear_direct_runs
+        .checked_sub(initial_direct_runs)
+        .ok_or("bytecode linear direct counter moved backwards")?;
+    ensure_at_least(direct_run_delta, 128, "bytecode linear direct runs")
+}
+
+#[test]
 fn bytecode_runs_direct_block_lexical_loop_body() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
