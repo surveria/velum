@@ -397,6 +397,12 @@ impl Context {
         lookup: PropertyLookup<'_>,
         value: Value,
     ) -> Result<bool> {
+        // Proxy exotic objects must route writes through the `set` trap, so
+        // report the cached fast-path write as a miss and let the caller fall
+        // back to `set_property_value_with_accessors`, which dispatches the trap.
+        if self.objects.is_proxy(object) {
+            return Ok(false);
+        }
         let Some(cache) = self.current_static_name_atom_cache() else {
             return Ok(false);
         };

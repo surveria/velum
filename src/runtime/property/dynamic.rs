@@ -29,6 +29,11 @@ impl Context {
 
     pub(crate) fn get_property_value(&mut self, object: &Value, property: &str) -> Result<Value> {
         let lookup = self.property_lookup(property);
+        if let Value::Object(id) = object
+            && self.objects.is_proxy(*id)
+        {
+            return self.proxy_get(*id, property, object.clone());
+        }
         if let Value::Function(id) = object {
             return self.get_function_property_lookup(*id, lookup);
         }
@@ -166,6 +171,11 @@ impl Context {
         object: &Value,
         property: &DynamicPropertyKey,
     ) -> Result<bool> {
+        if let Value::Object(id) = object
+            && self.objects.is_proxy(*id)
+        {
+            return self.proxy_has(*id, property.name());
+        }
         match object {
             Value::Function(id) => self.has_function_property_lookup(*id, property.lookup()),
             Value::NativeFunction(id) => {
