@@ -18,9 +18,11 @@ const SYMBOL_ASYNC_DISPOSE_PROPERTY: &str = "asyncDispose";
 const SYMBOL_ASYNC_ITERATOR_PROPERTY: &str = "asyncIterator";
 const SYMBOL_DESCRIPTION_PREFIX: &str = "Symbol.";
 const SYMBOL_DISPOSE_PROPERTY: &str = "dispose";
+const SYMBOL_FOR_PROPERTY: &str = "for";
 const SYMBOL_HAS_INSTANCE_PROPERTY: &str = "hasInstance";
 const SYMBOL_IS_CONCAT_SPREADABLE_PROPERTY: &str = "isConcatSpreadable";
 const SYMBOL_ITERATOR_PROPERTY: &str = "iterator";
+const SYMBOL_KEY_FOR_PROPERTY: &str = "keyFor";
 const SYMBOL_MATCH_ALL_PROPERTY: &str = "matchAll";
 const SYMBOL_MATCH_PROPERTY: &str = "match";
 const SYMBOL_METADATA_PROPERTY: &str = "metadata";
@@ -67,6 +69,7 @@ impl Context {
         let prototype = Value::Object(prototype_id);
         let name = self.native_function_name_value(NativeFunctionKind::Symbol)?;
         self.push_native_function_with_id(id, NativeFunctionKind::Symbol, prototype, name)?;
+        self.install_symbol_static_methods(id)?;
         self.install_well_known_symbols(id)?;
         self.install_symbol_prototype_methods(prototype_id)?;
         self.insert_global_builtin(SYMBOL_NAME, constructor.clone())?;
@@ -79,6 +82,27 @@ impl Context {
     ) -> Result<Value> {
         let description = self.symbol_description(args)?;
         self.create_symbol_value(description.as_deref())
+    }
+
+    pub(in crate::runtime::native) fn eval_symbol_for(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        let key = self.symbol_registry_key(args.as_slice().first())?;
+        self.symbols.for_key(key).map(Value::Symbol)
+    }
+
+    pub(in crate::runtime::native) fn eval_symbol_key_for(
+        &self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        let Some(Value::Symbol(symbol)) = args.as_slice().first() else {
+            return Err(Error::type_error("Symbol.keyFor requires a symbol value"));
+        };
+        let Some(key) = self.symbols.key_for(symbol.id())? else {
+            return Ok(Value::Undefined);
+        };
+        Ok(Value::HeapString(key))
     }
 
     pub(in crate::runtime::native) fn create_symbol_object_from_value(
@@ -206,6 +230,40 @@ impl Context {
         Ok(())
     }
 
+    fn install_symbol_static_methods(&mut self, constructor: NativeFunctionId) -> Result<()> {
+        self.define_symbol_static_method(
+            constructor,
+            SYMBOL_FOR_PROPERTY,
+            NativeFunctionKind::SymbolFor,
+        )?;
+        self.define_symbol_static_method(
+            constructor,
+            SYMBOL_KEY_FOR_PROPERTY,
+            NativeFunctionKind::SymbolKeyFor,
+        )
+    }
+
+    fn define_symbol_static_method(
+        &mut self,
+        constructor: NativeFunctionId,
+        name: &str,
+        kind: NativeFunctionKind,
+    ) -> Result<()> {
+        let function = self.create_native_function(kind, Value::Undefined)?;
+        let key = self.intern_property_key(name)?;
+        self.define_native_function_property_key(
+            constructor,
+            name,
+            key,
+            DataPropertyUpdate::new(
+                Some(function),
+                Some(PropertyWritable::Yes),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            ),
+        )
+    }
+
     fn install_symbol_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
         self.define_symbol_prototype_accessor(
             prototype,
@@ -277,6 +335,27 @@ impl Context {
                 Ok(Some(description))
             }
         }
+    }
+
+    fn symbol_registry_key(
+        &mut self,
+        value: Option<&Value>,
+    ) -> Result<crate::storage::string_heap::JsString> {
+        let text = match value {
+            Some(Value::Undefined) | None => "undefined".to_owned(),
+            Some(Value::Null) => "null".to_owned(),
+            Some(Value::Bool(value)) => value.to_string(),
+            Some(Value::Number(value)) => Value::Number(*value).to_string(),
+            Some(Value::String(value)) => value.clone(),
+            Some(Value::HeapString(value)) => value.as_str().to_owned(),
+            Some(Value::Symbol(_)) => {
+                return Err(Error::type_error(
+                    "Cannot convert a Symbol value to a string",
+                ));
+            }
+            Some(value) => value.to_string(),
+        };
+        self.intern_owned_heap_string(text)
     }
 
     fn symbol_receiver_value(&self, value: &Value) -> Result<crate::storage::symbol::JsSymbol> {

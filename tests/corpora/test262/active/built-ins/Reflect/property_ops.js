@@ -78,12 +78,26 @@ if (
 // ownKeys returns the string-keyed own properties in insertion order.
 var keysTarget = { one: 1, two: 2 };
 keysTarget.three = 3;
+Object.defineProperty(keysTarget, "hidden", {
+  value: 4,
+  enumerable: false,
+  configurable: true
+});
+var symbol = Symbol("reflect-key");
+var registered = Symbol.for("shared-reflect-key");
+keysTarget[symbol] = 5;
+keysTarget[registered] = 6;
 var keys = Reflect.ownKeys(keysTarget);
 if (
-  keys.length !== 3 ||
+  keys.length !== 6 ||
   keys[0] !== "one" ||
   keys[1] !== "two" ||
-  keys[2] !== "three"
+  keys[2] !== "three" ||
+  keys[3] !== "hidden" ||
+  keys[4] !== symbol ||
+  keys[5] !== registered ||
+  Symbol.for("shared-reflect-key") !== registered ||
+  Symbol.keyFor(registered) !== "shared-reflect-key"
 ) {
   throw new Test262Error("Reflect.ownKeys mismatch");
 }
