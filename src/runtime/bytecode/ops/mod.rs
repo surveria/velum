@@ -17,11 +17,16 @@ use crate::{
         bitwise_and, bitwise_or, bitwise_xor, number_shift_count, number_to_i32, number_to_uint32,
         numeric_binary, shift_left, shift_right, shift_right_unsigned,
     },
+    runtime::object::PropertyKey,
+    runtime::property::{DynamicPropertyKey, get_property},
     syntax::{BinaryOp, DeclKind, UnaryOp},
     value::{ErrorName, Value},
 };
 
 const INSTANCEOF_PROTOTYPE_PROPERTY: &str = "prototype";
+const HAS_INSTANCE_SYMBOL_PROPERTY: &str = "hasInstance";
+const HAS_INSTANCE_SYMBOL_DISPLAY: &str = "Symbol(Symbol.hasInstance)";
+const HAS_INSTANCE_NOT_CALLABLE_ERROR: &str = "Symbol.hasInstance method is not callable";
 const INSTANCEOF_NOT_CALLABLE_ERROR: &str = "right-hand side of 'instanceof' is not callable";
 const INSTANCEOF_NON_OBJECT_PROTOTYPE_ERROR: &str =
     "right-hand side of 'instanceof' has non-object prototype";
@@ -237,6 +242,14 @@ impl Context {
         left: &Value,
         right: &Value,
     ) -> Result<Value> {
+        if let Some(handler) = self.custom_has_instance_handler(right)? {
+            let args = [left.clone()];
+            let result = match self.eval_call_completion(handler, &args, right.clone())? {
+                Completion::Normal(value) => value,
+                completion => return completion.into_result(),
+            };
+            return Ok(Value::Bool(result.is_truthy()));
+        }
         let target = self.instanceof_target_prototype(right)?;
         let matches = if let Value::Error(error) = left {
             self.error_matches_instanceof(error.name(), right)?
@@ -246,9 +259,71 @@ impl Context {
         Ok(Value::Bool(matches))
     }
 
+    /// Resolve a callable, non-builtin `@@hasInstance` method on the right
+    /// operand of `instanceof`. Returns `None` when the method is absent or is
+    /// the builtin `Function.prototype[@@hasInstance]` (so the ordinary
+    /// prototype-chain check runs and no recursion occurs).
+    fn custom_has_instance_handler(&mut self, right: &Value) -> Result<Option<Value>> {
+        if !matches!(
+            right,
+            Value::Object(_)
+                | Value::Function(_)
+                | Value::NativeFunction(_)
+                | Value::HostFunction(_)
+        ) {
+            return Ok(None);
+        }
+        let Some(symbol) = self.has_instance_symbol()? else {
+            return Ok(None);
+        };
+        let handler = self.get_has_instance_property(right, symbol)?;
+        match &handler {
+            Value::Undefined | Value::Null => Ok(None),
+            Value::NativeFunction(id)
+                if self.native_function(*id)?.kind()
+                    == NativeFunctionKind::FunctionPrototypeHasInstance =>
+            {
+                Ok(None)
+            }
+            _ if Self::is_callable(&handler) => Ok(Some(handler)),
+            _ => Err(Error::type_error(HAS_INSTANCE_NOT_CALLABLE_ERROR)),
+        }
+    }
+
+    fn has_instance_symbol(&mut self) -> Result<Option<crate::storage::symbol::SymbolId>> {
+        let constructor = self.symbol_constructor_value()?;
+        let value = self.get_property_value(&constructor, HAS_INSTANCE_SYMBOL_PROPERTY)?;
+        Ok(match value {
+            Value::Symbol(symbol) => Some(symbol.id()),
+            _ => None,
+        })
+    }
+
+    fn get_has_instance_property(
+        &mut self,
+        value: &Value,
+        symbol: crate::storage::symbol::SymbolId,
+    ) -> Result<Value> {
+        let key = DynamicPropertyKey::new(
+            HAS_INSTANCE_SYMBOL_DISPLAY.to_owned(),
+            Some(PropertyKey::symbol(symbol)),
+        );
+        match value {
+            Value::Function(id) => self.get_function_property_lookup(*id, key.lookup()),
+            Value::NativeFunction(id) => {
+                self.get_native_function_property_lookup(*id, key.lookup())
+            }
+            Value::Object(_) => {
+                let raw = get_property(&self.objects, value, key.lookup())?;
+                self.runtime_property_value(raw)
+            }
+            _ => Ok(Value::Undefined),
+        }
+    }
+
     fn instanceof_target_prototype(&mut self, right: &Value) -> Result<crate::value::ObjectId> {
         if !Self::is_callable(right) {
-            return Err(Error::runtime(INSTANCEOF_NOT_CALLABLE_ERROR));
+            return Err(Error::type_error(INSTANCEOF_NOT_CALLABLE_ERROR));
         }
         let prototype = match right {
             Value::Function(id) => self.get_function_property_lookup(
@@ -268,10 +343,10 @@ impl Context {
             | Value::HeapString(_)
             | Value::Symbol(_)
             | Value::Object(_)
-            | Value::Error(_) => return Err(Error::runtime(INSTANCEOF_NOT_CALLABLE_ERROR)),
+            | Value::Error(_) => return Err(Error::type_error(INSTANCEOF_NOT_CALLABLE_ERROR)),
         };
         let Value::Object(id) = prototype else {
-            return Err(Error::runtime(INSTANCEOF_NON_OBJECT_PROTOTYPE_ERROR));
+            return Err(Error::type_error(INSTANCEOF_NON_OBJECT_PROTOTYPE_ERROR));
         };
         Ok(id)
     }
