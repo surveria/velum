@@ -29,19 +29,8 @@ impl Context {
 
     pub(crate) fn get_property_value(&mut self, object: &Value, property: &str) -> Result<Value> {
         let lookup = self.property_lookup(property);
-        if let Value::Object(id) = object
-            && self.objects.is_proxy(*id)
-        {
-            return self.proxy_get(*id, property, object.clone());
-        }
-        if let Value::Function(id) = object {
-            return self.get_function_property_lookup(*id, lookup);
-        }
-        if let Value::NativeFunction(id) = object {
-            return self.get_native_function_property_lookup(*id, lookup);
-        }
-        if let Value::Error(error) = object {
-            return self.get_error_property_value(error, property);
+        if let Some(read) = self.semantic_property_read(object, lookup)? {
+            return self.finish_semantic_property_read(read, object, lookup);
         }
         if let Value::String(value) = object {
             return self.get_string_property_value(object, value, property);
@@ -52,17 +41,19 @@ impl Context {
         if let Some(value) = self.primitive_prototype_property_value(object, property)? {
             return Ok(value);
         }
-        if let Value::Object(id) = object
-            && let Some(value) = self.get_string_object_property_value(*id, property)?
-        {
-            return Ok(value);
-        }
-        if let Value::Object(id) = object
-            && let Some(value) = self.global_object_property_value(*id, lookup)?
-        {
-            return Ok(value);
-        }
         let value = get_property(&self.objects, object, lookup)?;
+        self.runtime_property_value(value)
+    }
+
+    pub(in crate::runtime) fn get_property_value_with_lookup(
+        &mut self,
+        object: &Value,
+        property: crate::runtime::object::PropertyLookup<'_>,
+    ) -> Result<Value> {
+        if let Some(read) = self.semantic_property_read(object, property)? {
+            return self.finish_semantic_property_read(read, object, property);
+        }
+        let value = get_property(&self.objects, object, property)?;
         self.runtime_property_value(value)
     }
 
@@ -171,35 +162,18 @@ impl Context {
         object: &Value,
         property: &DynamicPropertyKey,
     ) -> Result<bool> {
-        if let Value::Object(id) = object
-            && self.objects.is_proxy(*id)
-        {
-            return self.proxy_has(*id, property.name());
+        self.has_property_value_with_lookup(object, property.lookup())
+    }
+
+    pub(in crate::runtime) fn has_property_value_with_lookup(
+        &mut self,
+        object: &Value,
+        property: crate::runtime::object::PropertyLookup<'_>,
+    ) -> Result<bool> {
+        if let Some(presence) = self.semantic_property_presence(object, property)? {
+            return self.finish_semantic_property_presence(presence, property);
         }
-        match object {
-            Value::Function(id) => self.has_function_property_lookup(*id, property.lookup()),
-            Value::NativeFunction(id) => {
-                self.has_native_function_property_lookup(*id, property.lookup())
-            }
-            Value::Error(error) => {
-                if matches!(
-                    property.name(),
-                    "name" | "message" | OBJECT_CONSTRUCTOR_PROPERTY
-                ) {
-                    return Ok(true);
-                }
-                self.error_prototype_has_property(error.name(), property.lookup())
-            }
-            Value::Object(id) => {
-                if let Some(has_property) =
-                    self.global_object_has_property(*id, property.lookup())?
-                {
-                    return Ok(has_property);
-                }
-                has_property(&self.objects, object, property.lookup())
-            }
-            _ => has_property(&self.objects, object, property.lookup()),
-        }
+        has_property(&self.objects, object, property)
     }
 
     pub(in crate::runtime) fn intern_dynamic_property_key(

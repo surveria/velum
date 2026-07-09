@@ -8,7 +8,7 @@ use crate::{
             PropertyLookup, PropertyWritable,
         },
         object::{PropertyKey, PropertyUpdate},
-        property::{delete_property, get_property, get_property_with_receiver},
+        property::delete_property,
     },
     value::{ObjectId, Value},
 };
@@ -104,16 +104,13 @@ impl Context {
         let slice = args.as_slice();
         let target = Self::require_reflect_object(slice.first())?;
         let key = self.reflect_property_key(slice.get(1))?;
-        let raw = match slice.get(2) {
-            Some(receiver) if !matches!(target, Value::Function(_) | Value::NativeFunction(_)) => {
-                let Value::Object(id) = &target else {
-                    return Err(Error::type_error(REFLECT_TARGET_NOT_OBJECT_ERROR));
-                };
-                get_property_with_receiver(&self.objects, *id, receiver, key.lookup())?
-            }
-            _ => get_property(&self.objects, &target, key.lookup())?,
+        let receiver = slice.get(2).unwrap_or(&target);
+        let Some(read) =
+            self.semantic_property_read_with_receiver(&target, receiver, key.lookup())?
+        else {
+            return Err(Error::type_error(REFLECT_TARGET_NOT_OBJECT_ERROR));
         };
-        self.runtime_property_value(raw)
+        self.finish_semantic_property_read(read, receiver, key.lookup())
     }
 
     pub(in crate::runtime) fn eval_reflect_set(

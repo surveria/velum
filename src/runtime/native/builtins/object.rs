@@ -505,7 +505,7 @@ impl Context {
         descriptor: &Value,
         property: &str,
     ) -> Result<Option<Value>> {
-        if !has_property(&self.objects, descriptor, self.property_lookup(property))? {
+        if !self.has_property_value_with_lookup(descriptor, self.property_lookup(property))? {
             return Ok(None);
         }
         self.get_property_value(descriptor, property).map(Some)
@@ -540,7 +540,7 @@ impl Context {
         descriptor: &Value,
         property: &str,
     ) -> Result<Option<bool>> {
-        if !has_property(&self.objects, descriptor, self.property_lookup(property))? {
+        if !self.has_property_value_with_lookup(descriptor, self.property_lookup(property))? {
             return Ok(None);
         }
         Ok(Some(

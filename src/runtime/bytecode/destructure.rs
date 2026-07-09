@@ -8,7 +8,6 @@ use crate::{
     runtime::binding::scope::BindingScope,
     runtime::control::Completion,
     runtime::object::{OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyEnumerable},
-    runtime::property::get_property,
     syntax::{DeclKind, StaticName},
     value::Value,
 };
@@ -143,8 +142,7 @@ impl Context {
                 };
                 if matches!(key_value, Value::Symbol(_)) {
                     let key = self.dynamic_property_key(&key_value)?;
-                    let value = get_property(&self.objects, source, key.lookup())?;
-                    let value = self.runtime_property_value(value)?;
+                    let value = self.get_property_value_with_lookup(source, key.lookup())?;
                     return Ok(PatternStep::Value(PatternPropertyRead {
                         name: key.name().to_owned(),
                         value,
