@@ -25,7 +25,7 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: adoption in progress
+- Current program state: adopted; AS-01a is next
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -477,7 +477,7 @@ dependencies do not overlap.
 
 | ID | Status | Program item | Depends on | Completion evidence |
 | --- | --- | --- | --- | --- |
-| AS-00 | In progress | Adopt this plan and route project documentation to it. | None | Plan merged, routing links present, documentation validation green. |
+| AS-00 | Complete | Adopt this plan and route project documentation to it. | None | PR #396 merged as `f79056b`; required CI, post-merge performance, publisher, and canonical report publication passed. |
 | AS-01 | Backlog | Inventory semantic entrypoints and add architecture guards. | AS-00 | Checked inventory for object/property/call/construct/conversion/completion paths; guards prevent new split paths. |
 | AS-02 | Backlog | Introduce the unified semantic object and internal-method boundary. | AS-01 | Ordinary objects, functions, native/host functions, errors, proxies, promises, and collections can migrate through one semantic facade. |
 | AS-03 | Backlog | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | Shared coercion, equality, property, invocation, and iterator operations used by bytecode and built-ins. |
@@ -500,6 +500,20 @@ Deliverables:
 - state how it interacts with the whole-product roadmap;
 - keep the initial review baseline for provenance;
 - validate the documentation-only change through the fast gate.
+
+Evidence:
+
+- PR: #396
+- Merge: `f79056b`
+- Tests: the fast gate passed with `RSQJS_BASE_REF=origin/main` and
+  `RSQJS_FAST_RUNNER=1`; required CI run `29052367465` passed in 46 seconds
+- Test262/QuickJS: compatibility stayed at 34,002 of 102,578 full Test262
+  variants and the existing differential baseline remained green
+- Performance/memory: post-merge performance and publisher run `29052445325`
+  passed; canonical report
+  `reports/test-runs/rsqjs-test-report-20260709T214557Z.md` was published by
+  report-only commit `5f23559`
+- Remaining: start AS-01a, the semantic entrypoint and ownership inventory
 
 ### AS-01: Semantic Inventory And Guards
 
