@@ -113,6 +113,45 @@ delete orderedObject.p1;
 delete orderedObject.p3;
 orderedObject.p1 = "p1";
 let orderedText = JSON.stringify(orderedObject);
+let rawValue = JSON.rawJSON('"raw"');
+let rawText = JSON.stringify({
+  scalar: JSON.rawJSON(1),
+  text: rawValue,
+  nested: [JSON.rawJSON(true), JSON.rawJSON(null)]
+});
+let rawShapeOk =
+  JSON.isRawJSON(rawValue) &&
+  !JSON.isRawJSON({ rawJSON: '"raw"' }) &&
+  !JSON.isRawJSON(undefined) &&
+  Object.getPrototypeOf(rawValue) === null &&
+  Object.hasOwn(rawValue, "rawJSON") &&
+  Object.getOwnPropertyNames(rawValue).join(",") === "rawJSON" &&
+  rawValue.rawJSON === '"raw"' &&
+  Object.isFrozen(rawValue);
+let rawSyntaxOk = false;
+try {
+  JSON.rawJSON("");
+} catch (error) {
+  rawSyntaxOk = error.name === "SyntaxError";
+}
+let rawWhitespaceOk = false;
+try {
+  JSON.rawJSON(" 1");
+} catch (error) {
+  rawWhitespaceOk = error.name === "SyntaxError";
+}
+let rawObjectTextOk = false;
+try {
+  JSON.rawJSON("{}");
+} catch (error) {
+  rawObjectTextOk = error.name === "SyntaxError";
+}
+let rawSymbolOk = false;
+try {
+  JSON.rawJSON(Symbol("raw"));
+} catch (error) {
+  rawSymbolOk = error.name === "TypeError";
+}
 
 if (
   !primitiveOk ||
@@ -121,6 +160,12 @@ if (
   typeof JSON.parse !== "function" ||
   JSON.parse.name !== "parse" ||
   JSON.parse.length !== 2 ||
+  typeof JSON.isRawJSON !== "function" ||
+  JSON.isRawJSON.name !== "isRawJSON" ||
+  JSON.isRawJSON.length !== 1 ||
+  typeof JSON.rawJSON !== "function" ||
+  JSON.rawJSON.name !== "rawJSON" ||
+  JSON.rawJSON.length !== 1 ||
   typeof JSON.stringify !== "function" ||
   JSON.stringify.name !== "stringify" ||
   JSON.stringify.length !== 3 ||
@@ -152,7 +197,13 @@ if (
   toJsonKey !== "keep" ||
   toJsonText !== '{"keep":{"answer":42}}' ||
   !boxedValuesOk ||
-  orderedText !== '{"0":"0","1":"1","2":"2","p2":"p2","add":"add","p4":"p4","p1":"p1"}'
+  orderedText !== '{"0":"0","1":"1","2":"2","p2":"p2","add":"add","p4":"p4","p1":"p1"}' ||
+  rawText !== '{"scalar":1,"text":"raw","nested":[true,null]}' ||
+  !rawShapeOk ||
+  !rawSyntaxOk ||
+  !rawWhitespaceOk ||
+  !rawObjectTextOk ||
+  !rawSymbolOk
 ) {
   throw new Test262Error("JSON basic behavior was unexpected");
 }

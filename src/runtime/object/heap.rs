@@ -182,6 +182,15 @@ impl ObjectHeap {
         self.push_object(object, max_objects)
     }
 
+    pub(crate) fn mark_raw_json(&mut self, id: ObjectId) -> Result<()> {
+        self.object_mut(id)?.is_raw_json = true;
+        Ok(())
+    }
+
+    pub(crate) fn is_raw_json(&self, id: ObjectId) -> Result<bool> {
+        Ok(self.object(id)?.is_raw_json)
+    }
+
     pub(crate) fn create_with_prototype_property(
         &mut self,
         prototype: Option<ObjectId>,

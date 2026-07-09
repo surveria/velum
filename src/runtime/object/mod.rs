@@ -94,6 +94,7 @@ struct Object {
     primitive_value: Option<ObjectPrimitiveValue>,
     date_value: Option<DateValue>,
     regexp_value: Option<RegExpValue>,
+    is_raw_json: bool,
     prototype: Option<ObjectId>,
     extensibility: ObjectExtensibility,
 }
@@ -121,6 +122,7 @@ impl Object {
             primitive_value: None,
             date_value: None,
             regexp_value: None,
+            is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
         }
@@ -138,6 +140,7 @@ impl Object {
             primitive_value: None,
             date_value: None,
             regexp_value: None,
+            is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
         }
@@ -155,6 +158,7 @@ impl Object {
             primitive_value: None,
             date_value: None,
             regexp_value: None,
+            is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
         }
@@ -172,6 +176,7 @@ impl Object {
             primitive_value: Some(value),
             date_value: None,
             regexp_value: None,
+            is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
         }

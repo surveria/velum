@@ -16,11 +16,15 @@ while (index < 500) {
         active: parsed.active,
         count: parsed.count,
         boxed: new Boolean(true),
+        raw: JSON.rawJSON(index + 1),
         items: parsed.items,
         nested: parsed.nested,
         missing: undefined
-    }, [boxedNumber, "camera", "active", "count", "boxed", "items", "nested"], boxedSpace);
+    }, [boxedNumber, "camera", "active", "count", "boxed", "raw", "items", "nested"], boxedSpace);
     total = total + parsed.count + text.length + JSON.stringify(new Number(index)).length;
+    if (JSON.isRawJSON(JSON.rawJSON(true))) {
+        total = total + 1;
+    }
     index = index + 1;
 }
 

@@ -189,7 +189,9 @@ const OBJECT_SEAL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(180);
 const MATH_F16ROUND_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(181);
 const MATH_SUM_PRECISE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(182);
 const REGEXP_EXEC_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(183);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 184;
+const JSON_IS_RAW_JSON_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(184);
+const JSON_RAW_JSON_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(185);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 186;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -267,7 +269,9 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::ErrorConstructor(name) => Some(error_constructor_slot(name)),
         NativeFunctionKind::ErrorPrototypeToString => Some(ERROR_PROTOTYPE_TO_STRING_SLOT),
         NativeFunctionKind::Function => Some(FUNCTION_SLOT),
+        NativeFunctionKind::JsonIsRawJson => Some(JSON_IS_RAW_JSON_SLOT),
         NativeFunctionKind::JsonParse => Some(JSON_PARSE_SLOT),
+        NativeFunctionKind::JsonRawJson => Some(JSON_RAW_JSON_SLOT),
         NativeFunctionKind::JsonStringify => Some(JSON_STRINGIFY_SLOT),
         NativeFunctionKind::MathAbs => Some(MATH_ABS_SLOT),
         NativeFunctionKind::MathAcos => Some(MATH_ACOS_SLOT),

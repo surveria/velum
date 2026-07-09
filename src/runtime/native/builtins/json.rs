@@ -10,7 +10,10 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-use super::{JSON_NAME, JSON_PARSE_NAME, JSON_STRINGIFY_NAME, NativeFunctionKind};
+use super::{
+    JSON_IS_RAW_JSON_NAME, JSON_NAME, JSON_PARSE_NAME, JSON_RAW_JSON_NAME, JSON_STRINGIFY_NAME,
+    NativeFunctionKind,
+};
 
 const JSON_ARRAY_CLOSE: &str = "]";
 const JSON_ARRAY_OPEN: &str = "[";
@@ -82,7 +85,13 @@ impl Context {
             self.limits.max_objects,
             self.limits.max_object_properties,
         )?;
+        self.define_json_method(
+            object,
+            JSON_IS_RAW_JSON_NAME,
+            NativeFunctionKind::JsonIsRawJson,
+        )?;
         self.define_json_method(object, JSON_PARSE_NAME, NativeFunctionKind::JsonParse)?;
+        self.define_json_method(object, JSON_RAW_JSON_NAME, NativeFunctionKind::JsonRawJson)?;
         self.define_json_method(
             object,
             JSON_STRINGIFY_NAME,
@@ -440,7 +449,12 @@ impl Context {
             Value::Number(value) => Ok(Some(Self::stringify_json_number(*value))),
             Value::String(value) => self.stringify_json_string(value).map(Some),
             Value::HeapString(value) => self.stringify_json_string(value.as_str()).map(Some),
-            Value::Object(id) => self.stringify_json_object(*id, state).map(Some),
+            Value::Object(id) => {
+                if let Some(text) = self.raw_json_text(*id)? {
+                    return Ok(Some(text));
+                }
+                self.stringify_json_object(*id, state).map(Some)
+            }
             Value::Error(_) => Ok(Some(self.stringify_empty_json_object()?)),
         }
     }

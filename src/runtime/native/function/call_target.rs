@@ -175,7 +175,9 @@ impl NativeFunctionKind {
             NativeCallTarget::FunctionPrototypeBind => Some(Self::FunctionPrototypeBind),
             NativeCallTarget::FunctionPrototypeCall => Some(Self::FunctionPrototypeCall),
             NativeCallTarget::Date => Some(Self::Date(DateFunctionKind::Constructor)),
+            NativeCallTarget::JsonIsRawJson => Some(Self::JsonIsRawJson),
             NativeCallTarget::JsonParse => Some(Self::JsonParse),
+            NativeCallTarget::JsonRawJson => Some(Self::JsonRawJson),
             NativeCallTarget::JsonStringify => Some(Self::JsonStringify),
             NativeCallTarget::Number => Some(Self::Number),
             NativeCallTarget::NumberPrototypeToLocaleString => {
@@ -335,7 +337,9 @@ impl NativeFunctionKind {
             Self::FunctionPrototypeBind => Some(NativeCallTarget::FunctionPrototypeBind),
             Self::FunctionPrototypeCall => Some(NativeCallTarget::FunctionPrototypeCall),
             Self::Date(DateFunctionKind::Constructor) => Some(NativeCallTarget::Date),
+            Self::JsonIsRawJson => Some(NativeCallTarget::JsonIsRawJson),
             Self::JsonParse => Some(NativeCallTarget::JsonParse),
+            Self::JsonRawJson => Some(NativeCallTarget::JsonRawJson),
             Self::JsonStringify => Some(NativeCallTarget::JsonStringify),
             Self::Number => Some(NativeCallTarget::Number),
             Self::NumberPrototypeToLocaleString => {
