@@ -172,14 +172,34 @@ src/runtime/promise/mod.rs:is_callable'
 
   semantic_object="$(
     function_owners \
-      'fn[[:space:]]+[a-z_]*(semantic_object_ref|semantic_property_read|semantic_property_presence|finish_semantic_property_read|finish_semantic_property_presence|is_object_like|constructor_return_is_object)[a-z_]*'
+      'fn[[:space:]]+[a-z_]*(semantic_object_ref|semantic_property_read|semantic_property_presence|semantic_property_write|semantic_property_delete|semantic_reflect_property_write|semantic_define_own_property|semantic_own_enumerable_string_keys|semantic_own_property|semantic_get_prototype|semantic_try_set_prototype|semantic_is_extensible|semantic_prevent_extensions|semantic_set_integrity_level|semantic_test_integrity_level|finish_semantic_property_read|finish_semantic_property_presence|finish_semantic_property_write|finish_semantic_property_delete|delete_property_value_with_lookup|is_object_like|constructor_return_is_object)[a-z_]*'
   )"
   expected_semantic_object='src/runtime/semantic_object.rs:finish_semantic_property_presence
 src/runtime/semantic_object.rs:finish_semantic_property_read
 src/runtime/semantic_object.rs:semantic_object_ref
 src/runtime/semantic_object.rs:semantic_property_presence
 src/runtime/semantic_object.rs:semantic_property_read
-src/runtime/semantic_object.rs:semantic_property_read_with_receiver'
+src/runtime/semantic_object.rs:semantic_property_read_with_receiver
+src/runtime/semantic_object/descriptor.rs:semantic_define_own_property_from_value
+src/runtime/semantic_object/descriptor.rs:semantic_define_own_property_update
+src/runtime/semantic_object/descriptor.rs:semantic_define_own_property_update_with_descriptor
+src/runtime/semantic_object/descriptor.rs:semantic_own_property_descriptor
+src/runtime/semantic_object/keys.rs:semantic_own_enumerable_string_keys
+src/runtime/semantic_object/keys.rs:semantic_own_property_keys
+src/runtime/semantic_object/keys.rs:semantic_own_property_names
+src/runtime/semantic_object/keys.rs:semantic_own_property_symbols
+src/runtime/semantic_object/mutation.rs:delete_property_value_with_lookup
+src/runtime/semantic_object/mutation.rs:finish_semantic_property_delete
+src/runtime/semantic_object/mutation.rs:finish_semantic_property_write
+src/runtime/semantic_object/mutation.rs:semantic_property_delete
+src/runtime/semantic_object/mutation.rs:semantic_property_write
+src/runtime/semantic_object/mutation.rs:semantic_reflect_property_write
+src/runtime/semantic_object/prototype_integrity.rs:semantic_get_prototype
+src/runtime/semantic_object/prototype_integrity.rs:semantic_is_extensible
+src/runtime/semantic_object/prototype_integrity.rs:semantic_prevent_extensions
+src/runtime/semantic_object/prototype_integrity.rs:semantic_set_integrity_level
+src/runtime/semantic_object/prototype_integrity.rs:semantic_test_integrity_level
+src/runtime/semantic_object/prototype_integrity.rs:semantic_try_set_prototype'
   compare_set "semantic object facade allowlist" "${semantic_object}" "${expected_semantic_object}"
 
   indexing="$(

@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, property::delete_property},
+    runtime::Context,
     value::Value,
 };
 
@@ -330,7 +330,8 @@ impl Context {
     pub(super) fn delete_array_like_index(&mut self, object: &Value, index: usize) -> Result<()> {
         let property = Self::array_like_index_name(index)?;
         let lookup = self.property_lookup(&property);
-        delete_property(&mut self.objects, object, lookup).map(|_| ())
+        self.delete_property_value_with_lookup(object, lookup)
+            .map(|_| ())
     }
 
     pub(super) fn ensure_array_like_object(object: &Value) -> Result<()> {

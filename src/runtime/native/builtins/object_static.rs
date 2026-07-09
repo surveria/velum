@@ -8,6 +8,7 @@ use crate::{
             PropertyWritable,
         },
         property::DynamicPropertyKey,
+        semantic_object::SemanticIntegrityLevel,
     },
     value::{ObjectId, Value},
 };
@@ -15,6 +16,7 @@ use crate::{
 struct PendingPropertyUpdate {
     property: DynamicPropertyKey,
     update: PropertyUpdate,
+    descriptor: Value,
 }
 
 impl Context {
@@ -100,8 +102,11 @@ impl Context {
         args: &[Value],
     ) -> Result<Value> {
         let target = Self::argument_or_undefined(args.first());
-        if let Value::Object(id) = target {
-            self.objects.freeze(id)?;
+        if self
+            .semantic_set_integrity_level(&target, SemanticIntegrityLevel::Frozen)?
+            .is_some_and(|updated| !updated)
+        {
+            return Err(Error::type_error("Object.freeze could not freeze target"));
         }
         Ok(target)
     }
@@ -156,77 +161,47 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_direct_object_is_extensible(
-        &self,
+        &mut self,
         args: &[Value],
     ) -> Result<Value> {
         let target = Self::argument_or_undefined(args.first());
-        let result = match target {
-            Value::Object(id) => self.objects.is_extensible(id)?,
-            Value::Function(_) | Value::NativeFunction(_) => true,
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => false,
-        };
+        let result = self.semantic_is_extensible(&target)?.unwrap_or(false);
         Ok(Value::Bool(result))
     }
 
     pub(in crate::runtime::native) fn eval_object_is_frozen(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         self.eval_direct_object_is_frozen(args.as_slice())
     }
 
     pub(in crate::runtime::native) fn eval_direct_object_is_frozen(
-        &self,
+        &mut self,
         args: &[Value],
     ) -> Result<Value> {
         let target = Self::argument_or_undefined(args.first());
-        let result = match target {
-            Value::Object(id) => self.objects.is_frozen(id)?,
-            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => false,
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::Error(_) => true,
-        };
+        let result = self
+            .semantic_test_integrity_level(&target, SemanticIntegrityLevel::Frozen)?
+            .unwrap_or(true);
         Ok(Value::Bool(result))
     }
 
     pub(in crate::runtime::native) fn eval_object_is_sealed(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         self.eval_direct_object_is_sealed(args.as_slice())
     }
 
     pub(in crate::runtime::native) fn eval_direct_object_is_sealed(
-        &self,
+        &mut self,
         args: &[Value],
     ) -> Result<Value> {
         let target = Self::argument_or_undefined(args.first());
-        let result = match target {
-            Value::Object(id) => self.objects.is_sealed(id)?,
-            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => false,
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::Error(_) => true,
-        };
+        let result = self
+            .semantic_test_integrity_level(&target, SemanticIntegrityLevel::Sealed)?
+            .unwrap_or(true);
         Ok(Value::Bool(result))
     }
 
@@ -242,12 +217,13 @@ impl Context {
         args: &[Value],
     ) -> Result<Value> {
         let target = Self::argument_or_undefined(args.first());
-        if let Value::Object(id) = target {
-            if self.objects.is_proxy(id) {
-                self.proxy_prevent_extensions(id)?;
-            } else {
-                self.objects.prevent_extensions(id)?;
-            }
+        if self
+            .semantic_prevent_extensions(&target)?
+            .is_some_and(|prevented| !prevented)
+        {
+            return Err(Error::type_error(
+                "Object.preventExtensions trap returned falsy",
+            ));
         }
         Ok(target)
     }
@@ -264,8 +240,11 @@ impl Context {
         args: &[Value],
     ) -> Result<Value> {
         let target = Self::argument_or_undefined(args.first());
-        if let Value::Object(id) = target {
-            self.objects.seal(id)?;
+        if self
+            .semantic_set_integrity_level(&target, SemanticIntegrityLevel::Sealed)?
+            .is_some_and(|updated| !updated)
+        {
+            return Err(Error::type_error("Object.seal could not seal target"));
         }
         Ok(target)
     }
@@ -284,29 +263,30 @@ impl Context {
         let target = Self::argument_or_undefined(args.first());
         let prototype = Self::argument_or_undefined(args.get(1));
         Self::validate_prototype_value(&prototype)?;
-        match target {
-            Value::Object(id) if self.objects.is_proxy(id) => {
-                self.proxy_set_prototype_of(id, prototype)?;
-                Ok(Value::Object(id))
-            }
-            Value::Object(id) => {
-                self.objects.set_prototype_value(id, &prototype)?;
-                Ok(Value::Object(id))
-            }
-            Value::Undefined | Value::Null => Err(Error::runtime(
-                "Object.setPrototypeOf target cannot be converted to an object",
+        match self.semantic_try_set_prototype(&target, prototype)? {
+            Some(true) => Ok(target),
+            Some(false) => Err(Error::type_error(
+                "Object.setPrototypeOf could not update target prototype",
             )),
-            Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => Err(Error::runtime(
-                "Object.setPrototypeOf target does not support prototype mutation",
-            )),
-            Value::Bool(_)
-            | Value::Number(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_) => Ok(target),
+            None => match target {
+                Value::Object(_) => Err(Error::runtime(
+                    "Object.setPrototypeOf lost its semantic object target",
+                )),
+                Value::Undefined | Value::Null => Err(Error::runtime(
+                    "Object.setPrototypeOf target cannot be converted to an object",
+                )),
+                Value::Function(_)
+                | Value::NativeFunction(_)
+                | Value::HostFunction(_)
+                | Value::Error(_) => Err(Error::runtime(
+                    "Object.setPrototypeOf target does not support prototype mutation",
+                )),
+                Value::Bool(_)
+                | Value::Number(_)
+                | Value::String(_)
+                | Value::HeapString(_)
+                | Value::Symbol(_) => Ok(target),
+            },
         }
     }
 
@@ -331,9 +311,15 @@ impl Context {
         for PendingPropertyUpdate {
             mut property,
             update,
+            descriptor,
         } in updates
         {
-            self.define_property_on_target(target, &mut property, update)?;
+            self.semantic_define_own_property_update_with_descriptor(
+                target,
+                &mut property,
+                update,
+                &descriptor,
+            )?;
         }
         Ok(())
     }
@@ -366,6 +352,7 @@ impl Context {
             updates.push(PendingPropertyUpdate {
                 property: self.named_dynamic_property(name),
                 update: self.property_update_from_value(&descriptor_value)?,
+                descriptor: descriptor_value,
             });
         }
         Ok(updates)
@@ -436,51 +423,6 @@ impl Context {
             | Value::HostFunction(_)
             | Value::Error(_) => Err(Error::runtime(
                 "Object.setPrototypeOf prototype must be an object or null",
-            )),
-        }
-    }
-
-    fn define_property_on_target(
-        &mut self,
-        target: &Value,
-        property: &mut DynamicPropertyKey,
-        update: PropertyUpdate,
-    ) -> Result<()> {
-        let key = self.intern_dynamic_property_key(property)?;
-        match target {
-            Value::Object(id) => self.objects.define_property(
-                *id,
-                key,
-                property.name(),
-                update,
-                self.limits.max_object_properties,
-            ),
-            Value::Function(id) => {
-                let PropertyUpdate::Data(update) = update else {
-                    return Err(Error::runtime(
-                        "accessor properties are not supported on function objects",
-                    ));
-                };
-                self.define_function_property_key(*id, property.name(), key, update)
-            }
-            Value::NativeFunction(id) => {
-                let PropertyUpdate::Data(update) = update else {
-                    return Err(Error::runtime(
-                        "accessor properties are not supported on function objects",
-                    ));
-                };
-                self.define_native_function_property_key(*id, property.name(), key, update)
-            }
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => Err(Error::runtime(
-                "Object.defineProperties target must be an object",
             )),
         }
     }

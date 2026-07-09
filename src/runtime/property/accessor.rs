@@ -3,8 +3,7 @@ use crate::{
     runtime::Context,
     runtime::control::Completion,
     runtime::object::{AccessorWriteDisposition, PropertyKey, PropertyLookup},
-    runtime::property::set_property,
-    value::Value,
+    value::{ObjectId, Value},
 };
 
 impl Context {
@@ -28,26 +27,41 @@ impl Context {
         property_name: &str,
         value: Value,
     ) -> Result<()> {
-        if let Value::Object(id) = object
-            && self.objects.is_proxy(*id)
-        {
-            self.proxy_set(*id, property_name, value, object.clone())?;
+        let lookup = PropertyLookup::from_key(property_name, key);
+        let Some(write) = self.semantic_property_write(object, lookup, value.clone())? else {
+            crate::runtime::property::set_property(
+                &mut self.objects,
+                object,
+                key,
+                property_name,
+                value,
+                self.limits.max_object_properties,
+            )?;
             return Ok(());
-        }
-        if let Value::Object(id) = object {
-            let lookup = PropertyLookup::from_key(property_name, key);
-            match self.objects.accessor_write_target(*id, lookup)? {
-                AccessorWriteDisposition::Setter(setter) => {
-                    self.call_accessor_function(setter, object.clone(), &[value])?;
-                    return Ok(());
-                }
-                AccessorWriteDisposition::NoSetter => return Ok(()),
-                AccessorWriteDisposition::None => {}
+        };
+        self.finish_semantic_property_write(write, lookup, value)?;
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn write_ordinary_object_property_with_accessors(
+        &mut self,
+        object: ObjectId,
+        key: PropertyKey,
+        property_name: &str,
+        value: Value,
+    ) -> Result<()> {
+        let lookup = PropertyLookup::from_key(property_name, key);
+        match self.objects.accessor_write_target(object, lookup)? {
+            AccessorWriteDisposition::Setter(setter) => {
+                self.call_accessor_function(setter, Value::Object(object), &[value])?;
+                return Ok(());
             }
+            AccessorWriteDisposition::NoSetter => return Ok(()),
+            AccessorWriteDisposition::None => {}
         }
-        set_property(
+        crate::runtime::property::set_property(
             &mut self.objects,
-            object,
+            &Value::Object(object),
             key,
             property_name,
             value,

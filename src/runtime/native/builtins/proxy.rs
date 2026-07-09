@@ -200,17 +200,19 @@ impl Context {
     pub(in crate::runtime) fn proxy_set(
         &mut self,
         id: ObjectId,
-        name: &str,
+        property: PropertyLookup<'_>,
         value: Value,
         receiver: Value,
     ) -> Result<bool> {
         let (target, handler) = self.proxy_target_handler(id)?;
         let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_SET)? else {
-            let property_key = crate::runtime::object::PropertyKey::new(self.intern_atom(name)?);
-            self.set_property_value_with_accessors(&target, property_key, name, value)?;
-            return Ok(true);
+            let key = self.proxy_property_key_value(property)?;
+            let mut dynamic = self.dynamic_property_key(&key)?;
+            return self
+                .semantic_reflect_property_write(&target, &mut dynamic, value, &receiver)?
+                .ok_or_else(|| Error::type_error("proxy target is not an object"));
         };
-        let key = self.heap_string_value(name)?;
+        let key = self.proxy_property_key_value(property)?;
         let result = self
             .eval_call_completion(trap, &[target, key, value, receiver], handler)?
             .into_native_value_result()?;
@@ -219,18 +221,16 @@ impl Context {
 
     /// Proxy `[[Delete]]`: dispatch to the `deleteProperty` trap or fall back to
     /// the target. Returns whether the deletion succeeded.
-    pub(in crate::runtime) fn proxy_delete(&mut self, id: ObjectId, name: &str) -> Result<bool> {
+    pub(in crate::runtime) fn proxy_delete(
+        &mut self,
+        id: ObjectId,
+        property: PropertyLookup<'_>,
+    ) -> Result<bool> {
         let (target, handler) = self.proxy_target_handler(id)?;
         let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_DELETE)? else {
-            let key_value = self.heap_string_value(name)?;
-            let key = self.dynamic_property_key(&key_value)?;
-            return crate::runtime::property::delete_property(
-                &mut self.objects,
-                &target,
-                key.lookup(),
-            );
+            return self.delete_property_value_with_lookup(&target, property);
         };
-        let key = self.heap_string_value(name)?;
+        let key = self.proxy_property_key_value(property)?;
         let result = self
             .eval_call_completion(trap, &[target, key], handler)?
             .into_native_value_result()?;
@@ -241,7 +241,9 @@ impl Context {
     pub(in crate::runtime) fn proxy_get_prototype_of(&mut self, id: ObjectId) -> Result<Value> {
         let (target, handler) = self.proxy_target_handler(id)?;
         let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_GET_PROTOTYPE_OF)? else {
-            return self.eval_object_get_prototype_of(RuntimeCallArgs::values(&[target]));
+            return self
+                .semantic_get_prototype(&target)?
+                .ok_or_else(|| Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR));
         };
         let result = self
             .eval_call_completion(trap, &[target], handler)?
@@ -260,8 +262,9 @@ impl Context {
     ) -> Result<bool> {
         let (target, handler) = self.proxy_target_handler(id)?;
         let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_SET_PROTOTYPE_OF)? else {
-            self.eval_direct_object_set_prototype_of(&[target, prototype])?;
-            return Ok(true);
+            return self
+                .semantic_try_set_prototype(&target, prototype)?
+                .ok_or_else(|| Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR));
         };
         let result = self
             .eval_call_completion(trap, &[target, prototype], handler)?
@@ -273,9 +276,9 @@ impl Context {
     pub(in crate::runtime) fn proxy_is_extensible(&mut self, id: ObjectId) -> Result<bool> {
         let (target, handler) = self.proxy_target_handler(id)?;
         let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_IS_EXTENSIBLE)? else {
-            return Ok(self
-                .eval_direct_object_is_extensible(&[target])?
-                .is_truthy());
+            return self
+                .semantic_is_extensible(&target)?
+                .ok_or_else(|| Error::type_error("proxy target is not an object"));
         };
         let result = self
             .eval_call_completion(trap, &[target], handler)?
@@ -287,8 +290,9 @@ impl Context {
     pub(in crate::runtime) fn proxy_prevent_extensions(&mut self, id: ObjectId) -> Result<bool> {
         let (target, handler) = self.proxy_target_handler(id)?;
         let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_PREVENT_EXTENSIONS)? else {
-            self.eval_direct_object_prevent_extensions(&[target])?;
-            return Ok(true);
+            return self
+                .semantic_prevent_extensions(&target)?
+                .ok_or_else(|| Error::type_error("proxy target is not an object"));
         };
         let result = self
             .eval_call_completion(trap, &[target], handler)?
@@ -302,14 +306,15 @@ impl Context {
     pub(in crate::runtime) fn proxy_define_property(
         &mut self,
         id: ObjectId,
-        name: &str,
+        property: PropertyLookup<'_>,
+        update: PropertyUpdate,
         descriptor: Value,
     ) -> Result<bool> {
         let (target, handler) = self.proxy_target_handler(id)?;
-        let key = self.heap_string_value(name)?;
+        let key = self.proxy_property_key_value(property)?;
         let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_DEFINE_PROPERTY)? else {
-            self.eval_object_define_property(RuntimeCallArgs::values(&[target, key, descriptor]))?;
-            return Ok(true);
+            let mut dynamic = self.dynamic_property_key(&key)?;
+            return self.semantic_define_own_property_update(&target, &mut dynamic, update);
         };
         let result = self
             .eval_call_completion(trap, &[target, key, descriptor], handler)?
@@ -318,12 +323,14 @@ impl Context {
     }
 
     /// Proxy `[[OwnPropertyKeys]]`: dispatch the `ownKeys` trap or read the
-    /// target's own string keys. Returns the trap's string keys (symbol keys
-    /// are not yet surfaced).
-    pub(in crate::runtime) fn proxy_own_keys(&mut self, id: ObjectId) -> Result<Vec<String>> {
+    /// target's own keys while preserving string and Symbol values.
+    pub(in crate::runtime) fn proxy_own_property_keys(
+        &mut self,
+        id: ObjectId,
+    ) -> Result<Vec<Value>> {
         let (target, handler) = self.proxy_target_handler(id)?;
         let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_OWN_KEYS)? else {
-            return self.own_property_names(&target);
+            return self.semantic_own_property_keys(&target);
         };
         let result = self
             .eval_call_completion(trap, &[target], handler)?
@@ -336,13 +343,13 @@ impl Context {
     pub(in crate::runtime) fn proxy_get_own_property_descriptor(
         &mut self,
         id: ObjectId,
-        name: &str,
+        property: PropertyLookup<'_>,
     ) -> Result<Option<OwnPropertyDescriptor>> {
         let (target, handler) = self.proxy_target_handler(id)?;
-        let key_value = self.heap_string_value(name)?;
+        let key_value = self.proxy_property_key_value(property)?;
         let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_GET_OWN_DESCRIPTOR)? else {
-            let key = self.dynamic_property_key(&key_value)?;
-            return self.own_property_descriptor_value(&target, &key);
+            let dynamic = self.dynamic_property_key(&key_value)?;
+            return self.semantic_own_property_descriptor(&target, &dynamic);
         };
         let result = self
             .eval_call_completion(trap, &[target, key_value], handler)?
@@ -413,14 +420,19 @@ impl Context {
         &mut self,
         id: ObjectId,
     ) -> Result<Vec<String>> {
-        let all = self.proxy_own_keys(id)?;
+        let all = self.proxy_own_property_keys(id)?;
         let mut keys = Vec::new();
         for key in all {
             self.step()?;
-            if let Some(descriptor) = self.proxy_get_own_property_descriptor(id, &key)?
+            if matches!(key, Value::Symbol(_)) {
+                continue;
+            }
+            let dynamic = self.dynamic_property_key(&key)?;
+            if let Some(descriptor) =
+                self.proxy_get_own_property_descriptor(id, dynamic.lookup())?
                 && Self::descriptor_is_enumerable(&descriptor)
             {
-                keys.push(key);
+                keys.push(dynamic.name().to_owned());
             }
         }
         Ok(keys)
@@ -437,7 +449,7 @@ impl Context {
     }
 
     /// Convert the array-like result of an `ownKeys` trap into string keys.
-    fn proxy_key_list_from_value(&mut self, value: &Value) -> Result<Vec<String>> {
+    fn proxy_key_list_from_value(&mut self, value: &Value) -> Result<Vec<Value>> {
         if !matches!(value, Value::Object(_)) {
             return Err(Error::type_error(
                 "proxy ownKeys trap must return an array-like object",
@@ -449,13 +461,20 @@ impl Context {
         for index in 0..length {
             self.step()?;
             let element = self.get_property_value(value, &index.to_string())?;
-            match element {
-                Value::String(text) => keys.push(text),
-                Value::HeapString(text) => keys.push(text.as_str().to_owned()),
+            let key = match element {
+                Value::String(_) | Value::HeapString(_) | Value::Symbol(_) => element,
                 _ => {
-                    return Err(Error::type_error("proxy ownKeys trap keys must be strings"));
+                    return Err(Error::type_error(
+                        "proxy ownKeys trap keys must be strings or symbols",
+                    ));
                 }
+            };
+            if keys.contains(&key) {
+                return Err(Error::type_error(
+                    "proxy ownKeys trap returned a duplicate key",
+                ));
             }
+            keys.push(key);
         }
         Ok(keys)
     }

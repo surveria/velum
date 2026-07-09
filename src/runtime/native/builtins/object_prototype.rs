@@ -76,22 +76,24 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let receiver = self.object_to_object(this_value)?;
-        let Value::Object(target_id) = receiver else {
+        let Some(mut current) = args.as_slice().first().cloned() else {
             return Ok(Value::Bool(false));
         };
-        let Some(Value::Object(mut current)) = args.as_slice().first().cloned() else {
+        if self.semantic_object_ref(&current)?.is_none() {
             return Ok(Value::Bool(false));
-        };
+        }
         loop {
             self.step()?;
-            let prototype = self.objects.prototype_value(current)?;
-            let Value::Object(prototype_id) = prototype else {
+            let Some(prototype) = self.semantic_get_prototype(&current)? else {
                 return Ok(Value::Bool(false));
             };
-            if prototype_id == target_id {
+            if prototype == receiver {
                 return Ok(Value::Bool(true));
             }
-            current = prototype_id;
+            if matches!(prototype, Value::Null) {
+                return Ok(Value::Bool(false));
+            }
+            current = prototype;
         }
     }
 

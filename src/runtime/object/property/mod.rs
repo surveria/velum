@@ -8,6 +8,7 @@ use super::array::ArrayIndex;
 use super::shape::{PropertySlot, ShapeId, ShapePropertyAttributes, ShapeTable};
 use super::{ARRAY_LENGTH_PROPERTY, Object, ObjectHeap};
 
+pub(in crate::runtime) use descriptor::AccessorPropertyDescriptor;
 pub use descriptor::{
     AccessorPropertyUpdate, DataPropertyDescriptor, DataPropertyUpdate, ObjectProperty,
     OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyUpdate,
