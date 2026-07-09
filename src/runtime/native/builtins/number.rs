@@ -9,8 +9,10 @@ use crate::{
 use super::{
     GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME, NUMBER_IS_FINITE_NAME, NUMBER_IS_INTEGER_NAME,
     NUMBER_IS_NAN_NAME, NUMBER_IS_SAFE_INTEGER_NAME, NUMBER_NAME,
-    NUMBER_PROTOTYPE_TO_LOCALE_STRING_NAME, NUMBER_PROTOTYPE_TO_STRING_NAME,
-    NUMBER_PROTOTYPE_VALUE_OF_NAME, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY,
+    NUMBER_PROTOTYPE_TO_EXPONENTIAL_NAME, NUMBER_PROTOTYPE_TO_FIXED_NAME,
+    NUMBER_PROTOTYPE_TO_LOCALE_STRING_NAME, NUMBER_PROTOTYPE_TO_PRECISION_NAME,
+    NUMBER_PROTOTYPE_TO_STRING_NAME, NUMBER_PROTOTYPE_VALUE_OF_NAME, NativeFunctionKind,
+    OBJECT_CONSTRUCTOR_PROPERTY,
 };
 
 const NUMBER_EPSILON_PROPERTY: &str = "EPSILON";
@@ -37,7 +39,9 @@ pub(in crate::runtime::native) fn number_intrinsic_property(property: &str) -> O
         NUMBER_MAX_SAFE_INTEGER_PROPERTY => Some(Value::Number(NUMBER_MAX_SAFE_INTEGER)),
         NUMBER_MAX_VALUE_PROPERTY => Some(Value::Number(f64::MAX)),
         NUMBER_MIN_SAFE_INTEGER_PROPERTY => Some(Value::Number(NUMBER_MIN_SAFE_INTEGER)),
-        NUMBER_MIN_VALUE_PROPERTY => Some(Value::Number(f64::MIN_POSITIVE)),
+        // Number.MIN_VALUE is the smallest positive subnormal double (5e-324),
+        // not the smallest normal one exposed by f64::MIN_POSITIVE.
+        NUMBER_MIN_VALUE_PROPERTY => Some(Value::Number(f64::from_bits(1))),
         NUMBER_NAN_PROPERTY => Some(Value::Number(f64::NAN)),
         NUMBER_NEGATIVE_INFINITY_PROPERTY => Some(Value::Number(f64::NEG_INFINITY)),
         NUMBER_POSITIVE_INFINITY_PROPERTY => Some(Value::Number(f64::INFINITY)),
@@ -243,6 +247,21 @@ impl Context {
             prototype,
             NUMBER_PROTOTYPE_VALUE_OF_NAME,
             NativeFunctionKind::NumberPrototypeValueOf,
+        )?;
+        self.define_number_prototype_method(
+            prototype,
+            NUMBER_PROTOTYPE_TO_FIXED_NAME,
+            NativeFunctionKind::NumberPrototypeToFixed,
+        )?;
+        self.define_number_prototype_method(
+            prototype,
+            NUMBER_PROTOTYPE_TO_EXPONENTIAL_NAME,
+            NativeFunctionKind::NumberPrototypeToExponential,
+        )?;
+        self.define_number_prototype_method(
+            prototype,
+            NUMBER_PROTOTYPE_TO_PRECISION_NAME,
+            NativeFunctionKind::NumberPrototypeToPrecision,
         )
     }
 
@@ -263,7 +282,7 @@ impl Context {
         Self::value_to_number(value)
     }
 
-    fn number_receiver_value(&self, value: &Value) -> Result<f64> {
+    pub(super) fn number_receiver_value(&self, value: &Value) -> Result<f64> {
         match value {
             Value::Number(value) => Ok(*value),
             Value::Object(id) => match self.objects.primitive_value(*id)? {

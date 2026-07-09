@@ -63,6 +63,8 @@ const PATH_TEST262_OBJECT_INTEGRITY_METHODS: &str =
     "tests/corpora/test262/active/built-ins/Object/integrity_methods.js";
 const PATH_TEST262_NUMBER_BUILTIN: &str =
     "tests/corpora/test262/active/built-ins/Number/constructor.js";
+const PATH_TEST262_NUMBER_FORMATTING: &str =
+    "tests/corpora/test262/active/built-ins/Number/number_formatting.js";
 const PATH_TEST262_NUMBER_STATIC_METHODS: &str =
     "tests/corpora/test262/active/built-ins/Number/static_methods.js";
 const PATH_TEST262_BOOLEAN_BUILTIN: &str =
@@ -505,6 +507,11 @@ fn test262_primitive_builtin_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "built-ins/Number/constructor",
             path: PATH_TEST262_NUMBER_BUILTIN,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Number/number-formatting",
+            path: PATH_TEST262_NUMBER_FORMATTING,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
