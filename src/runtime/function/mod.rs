@@ -580,7 +580,7 @@ impl Context {
         }
     }
 
-    fn function(&self, id: FunctionId) -> Result<&super::Function> {
+    pub(in crate::runtime) fn function(&self, id: FunctionId) -> Result<&super::Function> {
         self.functions
             .get(id.index())
             .ok_or_else(|| Error::runtime("function id is not defined"))
