@@ -2,6 +2,7 @@ mod array_add_loop;
 mod array_fill_loop;
 mod block_lexical_loop;
 mod compound_assignment_loop;
+mod constructor_prototype_loop;
 mod for_loop;
 mod function_apply_has_instance_loop;
 mod loop_helpers;

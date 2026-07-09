@@ -21,6 +21,7 @@ use super::{
     array_fill_loop::BytecodeForArrayFillFastPath,
     block_lexical_loop::BytecodeBlockLexicalLoopFastPath,
     compound_assignment_loop::BytecodeCompoundAssignmentLoopFastPath,
+    constructor_prototype_loop::BytecodeConstructorPrototypeLoopFastPath,
     function_apply_has_instance_loop::BytecodeFunctionApplyHasInstanceLoopFastPath,
     loop_helpers::{bytecode_for_loop_update_step, fast_loop_compare, same_bytecode_binding},
     object_literal_loop::BytecodeObjectLiteralLoopFastPath,
@@ -60,6 +61,7 @@ pub(super) enum BytecodeForLoopBodyFastPath<'a> {
     UpdateExpression(BytecodeUpdateExpressionLoopFastPath<'a>),
     CompoundAssignment(BytecodeCompoundAssignmentLoopFastPath<'a>),
     FunctionApplyHasInstance(BytecodeFunctionApplyHasInstanceLoopFastPath<'a>),
+    ConstructorPrototype(BytecodeConstructorPrototypeLoopFastPath<'a>),
     ObjectLiteral(BytecodeObjectLiteralLoopFastPath<'a>),
     BlockLexical(BytecodeBlockLexicalLoopFastPath<'a>),
     TryCatch(BytecodeForTryCatchFastPath<'a>),
@@ -201,6 +203,9 @@ impl Context {
             BytecodeForLoopBodyFastPath::CompoundAssignment(body) => {
                 Self::compound_assignment_loop_fast_path_ready(body)
             }
+            BytecodeForLoopBodyFastPath::ConstructorPrototype(body) => {
+                self.constructor_prototype_loop_fast_path_ready(fast_path, body)
+            }
             BytecodeForLoopBodyFastPath::ObjectLiteral(body) => {
                 Self::object_literal_loop_fast_path_ready(body)
             }
@@ -259,6 +264,11 @@ impl Context {
         {
             return Ok(None);
         }
+        if let BytecodeForLoopBodyFastPath::ConstructorPrototype(body) = &fast_path.body
+            && self.eval_constructor_prototype_loop_fast_path(state, next, fast_path, body)?
+        {
+            return Ok(None);
+        }
         if let BytecodeForLoopBodyFastPath::ObjectLiteral(body) = &fast_path.body
             && self.eval_object_literal_loop_fast_path(state, next, fast_path, body)?
         {
@@ -282,6 +292,7 @@ impl Context {
             BytecodeForLoopBodyFastPath::ArrayFill(_)
             | BytecodeForLoopBodyFastPath::BlockLexical(_)
             | BytecodeForLoopBodyFastPath::CompoundAssignment(_)
+            | BytecodeForLoopBodyFastPath::ConstructorPrototype(_)
             | BytecodeForLoopBodyFastPath::FunctionApplyHasInstance(_)
             | BytecodeForLoopBodyFastPath::ObjectLiteral(_)
             | BytecodeForLoopBodyFastPath::StringConcatLength(_)
@@ -412,6 +423,11 @@ impl Context {
                 body,
             )));
         }
+        if let Some(body) = self.compile_constructor_prototype_loop_fast_path(index, body)? {
+            return Ok(Some(BytecodeForLoopBodyFastPath::ConstructorPrototype(
+                body,
+            )));
+        }
         if let Some(body) = self.compile_object_literal_loop_fast_path(index, body)? {
             return Ok(Some(BytecodeForLoopBodyFastPath::ObjectLiteral(body)));
         }
@@ -535,6 +551,7 @@ impl Context {
                 .map(Completion::Normal),
             BytecodeForLoopBodyFastPath::StringConcatLength(_)
             | BytecodeForLoopBodyFastPath::CompoundAssignment(_)
+            | BytecodeForLoopBodyFastPath::ConstructorPrototype(_)
             | BytecodeForLoopBodyFastPath::FunctionApplyHasInstance(_)
             | BytecodeForLoopBodyFastPath::UpdateExpression(_)
             | BytecodeForLoopBodyFastPath::ObjectLiteral(_)
