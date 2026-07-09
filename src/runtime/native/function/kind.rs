@@ -1,7 +1,14 @@
 use super::date_kind::DateFunctionKind;
 use crate::value::{BoundFunctionId, ErrorName};
 
+mod regexp;
 mod string;
+mod utility;
+
+pub(in crate::runtime::native) use regexp::{
+    REGEXP_NAME, REGEXP_PROTOTYPE_EXEC_NAME, REGEXP_PROTOTYPE_TEST_NAME,
+    REGEXP_PROTOTYPE_TO_STRING_NAME,
+};
 
 const ASYNC_FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const ASYNC_FUNCTION_NAME: &str = "AsyncFunction";
@@ -146,11 +153,6 @@ pub(in crate::runtime::native) const PROMISE_RESOLVE_NAME: &str = "resolve";
 const PROMISE_RESOLVER_FUNCTION_LENGTH: f64 = 1.0;
 const PROMISE_THEN_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const PROMISE_THEN_NAME: &str = "then";
-const REGEXP_FUNCTION_LENGTH: f64 = 2.0;
-pub(in crate::runtime::native) const REGEXP_NAME: &str = "RegExp";
-pub(in crate::runtime::native) const REGEXP_PROTOTYPE_EXEC_NAME: &str = "exec";
-const REGEXP_PROTOTYPE_TEST_LENGTH: f64 = 1.0;
-pub(in crate::runtime::native) const REGEXP_PROTOTYPE_TEST_NAME: &str = "test";
 const REJECT_NAME: &str = "reject";
 const RESOLVE_NAME: &str = "resolve";
 const STRING_FUNCTION_LENGTH: f64 = 1.0;
@@ -371,8 +373,24 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ReflectSet,
     ReflectSetPrototypeOf,
     RegExp,
+    RegExpPrototypeDotAllGetter,
     RegExpPrototypeExec,
+    RegExpPrototypeFlagsGetter,
+    RegExpPrototypeGlobalGetter,
+    RegExpPrototypeHasIndicesGetter,
+    RegExpPrototypeIgnoreCaseGetter,
+    RegExpPrototypeMultilineGetter,
+    RegExpPrototypeSourceGetter,
+    RegExpPrototypeStickyGetter,
     RegExpPrototypeTest,
+    RegExpPrototypeToString,
+    RegExpPrototypeUnicodeGetter,
+    RegExpPrototypeUnicodeSetsGetter,
+    RegExpPrototypeSymbolMatch,
+    RegExpPrototypeSymbolMatchAll,
+    RegExpPrototypeSymbolReplace,
+    RegExpPrototypeSymbolSearch,
+    RegExpPrototypeSymbolSplit,
     String,
     StringFromCharCode,
     StringFromCodePoint,
@@ -471,25 +489,10 @@ impl NativeFunctionKind {
         if let Some(length) = self.reflect_length() {
             return length;
         }
-        FUNCTION_FUNCTION_LENGTH
-    }
-
-    const fn global_utility_length(self) -> Option<f64> {
-        match self {
-            Self::GlobalDecodeUri => Some(GLOBAL_DECODE_URI_FUNCTION_LENGTH),
-            Self::GlobalDecodeUriComponent => Some(GLOBAL_DECODE_URI_COMPONENT_FUNCTION_LENGTH),
-            Self::GlobalEncodeUri => Some(GLOBAL_ENCODE_URI_FUNCTION_LENGTH),
-            Self::GlobalEncodeUriComponent => Some(GLOBAL_ENCODE_URI_COMPONENT_FUNCTION_LENGTH),
-            Self::GlobalIsFinite => Some(GLOBAL_IS_FINITE_FUNCTION_LENGTH),
-            Self::GlobalIsNan => Some(GLOBAL_IS_NAN_FUNCTION_LENGTH),
-            Self::GlobalParseFloat => Some(GLOBAL_PARSE_FLOAT_FUNCTION_LENGTH),
-            Self::GlobalParseInt => Some(GLOBAL_PARSE_INT_FUNCTION_LENGTH),
-            Self::NumberIsFinite => Some(NUMBER_IS_FINITE_FUNCTION_LENGTH),
-            Self::NumberIsInteger => Some(NUMBER_IS_INTEGER_FUNCTION_LENGTH),
-            Self::NumberIsNan => Some(NUMBER_IS_NAN_FUNCTION_LENGTH),
-            Self::NumberIsSafeInteger => Some(NUMBER_IS_SAFE_INTEGER_FUNCTION_LENGTH),
-            _ => None,
+        if let Some(length) = self.regexp_length() {
+            return length;
         }
+        FUNCTION_FUNCTION_LENGTH
     }
 
     const fn math_length(self) -> Option<f64> {
@@ -559,10 +562,6 @@ impl NativeFunctionKind {
             Self::PromiseThen => Some(PROMISE_THEN_FUNCTION_LENGTH),
             Self::PromiseCatch => Some(PROMISE_CATCH_FUNCTION_LENGTH),
             Self::PromiseResolver { .. } => Some(PROMISE_RESOLVER_FUNCTION_LENGTH),
-            Self::RegExp => Some(REGEXP_FUNCTION_LENGTH),
-            Self::RegExpPrototypeExec | Self::RegExpPrototypeTest => {
-                Some(REGEXP_PROTOTYPE_TEST_LENGTH)
-            }
             Self::String => Some(STRING_FUNCTION_LENGTH),
             Self::Symbol => Some(SYMBOL_FUNCTION_LENGTH),
             _ => None,
@@ -601,6 +600,9 @@ impl NativeFunctionKind {
             return name;
         }
         if let Some(name) = self.reflect_name() {
+            return name;
+        }
+        if let Some(name) = self.regexp_name() {
             return name;
         }
         FUNCTION_NAME
@@ -716,27 +718,8 @@ impl NativeFunctionKind {
                 kind: crate::runtime::promise::PromiseResolverKind::Reject,
                 ..
             } => Some(REJECT_NAME),
-            Self::RegExp => Some(REGEXP_NAME),
-            Self::RegExpPrototypeExec => Some(REGEXP_PROTOTYPE_EXEC_NAME),
-            Self::RegExpPrototypeTest => Some(REGEXP_PROTOTYPE_TEST_NAME),
             Self::String => Some(STRING_NAME),
             Self::Symbol => Some(SYMBOL_NAME),
-            _ => None,
-        }
-    }
-
-    const fn global_utility_name(self) -> Option<&'static str> {
-        match self {
-            Self::GlobalDecodeUri => Some(GLOBAL_DECODE_URI_NAME),
-            Self::GlobalDecodeUriComponent => Some(GLOBAL_DECODE_URI_COMPONENT_NAME),
-            Self::GlobalEncodeUri => Some(GLOBAL_ENCODE_URI_NAME),
-            Self::GlobalEncodeUriComponent => Some(GLOBAL_ENCODE_URI_COMPONENT_NAME),
-            Self::GlobalIsFinite | Self::NumberIsFinite => Some(GLOBAL_IS_FINITE_NAME),
-            Self::GlobalIsNan | Self::NumberIsNan => Some(GLOBAL_IS_NAN_NAME),
-            Self::NumberIsInteger => Some(NUMBER_IS_INTEGER_NAME),
-            Self::NumberIsSafeInteger => Some(NUMBER_IS_SAFE_INTEGER_NAME),
-            Self::GlobalParseFloat => Some(GLOBAL_PARSE_FLOAT_NAME),
-            Self::GlobalParseInt => Some(GLOBAL_PARSE_INT_NAME),
             _ => None,
         }
     }
