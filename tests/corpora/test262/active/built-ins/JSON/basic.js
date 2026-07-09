@@ -150,6 +150,15 @@ let rawShapeOk =
   rawValue.rawJSON === '"raw"' &&
   Object.isFrozen(rawValue);
 let jsonTagDescriptor = Object.getOwnPropertyDescriptor(JSON, Symbol.toStringTag);
+let functionPrototypeSurfaceOk =
+  !JSON.parse.hasOwnProperty("prototype") &&
+  Object.getOwnPropertyDescriptor(JSON.parse, "prototype") === undefined &&
+  !JSON.stringify.hasOwnProperty("prototype") &&
+  Object.getOwnPropertyDescriptor(JSON.stringify, "prototype") === undefined &&
+  !JSON.rawJSON.hasOwnProperty("prototype") &&
+  Object.getOwnPropertyDescriptor(JSON.rawJSON, "prototype") === undefined &&
+  !JSON.isRawJSON.hasOwnProperty("prototype") &&
+  Object.getOwnPropertyDescriptor(JSON.isRawJSON, "prototype") === undefined;
 let jsonObjectSurfaceOk =
   Object.prototype.toString.call(JSON) === "[object JSON]" &&
   JSON[Symbol.toStringTag] === "JSON" &&
@@ -233,6 +242,7 @@ if (
   orderedText !== '{"0":"0","1":"1","2":"2","p2":"p2","add":"add","p4":"p4","p1":"p1"}' ||
   rawText !== '{"scalar":1,"text":"raw","nested":[true,null]}' ||
   !rawShapeOk ||
+  !functionPrototypeSurfaceOk ||
   !jsonObjectSurfaceOk ||
   !rawSyntaxOk ||
   !rawWhitespaceOk ||

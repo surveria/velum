@@ -65,7 +65,8 @@ fn intrinsic_prototype_defaults_are_reused_for_descriptors() -> TestResult {
         r"
         let Constructor = function Constructor() {};
         let replacement = {};
-        let native = Math.max;
+        let native = Array;
+        let nativeMethod = Math.max;
         0
         ",
     )?;
@@ -76,6 +77,8 @@ fn intrinsic_prototype_defaults_are_reused_for_descriptors() -> TestResult {
         let constructorDescriptor =
             Object.getOwnPropertyDescriptor(Constructor, 'prototype');
         let nativeDescriptor = Object.getOwnPropertyDescriptor(native, 'prototype');
+        let nativeMethodDescriptor =
+            Object.getOwnPropertyDescriptor(nativeMethod, 'prototype');
         let constructorBeforeMutation =
             constructorDescriptor.value === Constructor.prototype &&
             constructorDescriptor.configurable === false &&
@@ -85,7 +88,8 @@ fn intrinsic_prototype_defaults_are_reused_for_descriptors() -> TestResult {
             nativeDescriptor.value === native.prototype &&
             nativeDescriptor.configurable === false &&
             nativeDescriptor.enumerable === false &&
-            nativeDescriptor.writable === false;
+            nativeDescriptor.writable === false &&
+            nativeMethodDescriptor === undefined;
         Constructor.prototype = replacement;
         native.prototype = {};
         let updatedConstructorDescriptor =
@@ -110,6 +114,7 @@ fn intrinsic_prototype_defaults_are_reused_for_descriptors() -> TestResult {
         r"
         Object.getOwnPropertyDescriptor(Constructor, 'prototype').value;
         Object.getOwnPropertyDescriptor(native, 'prototype').value;
+        Object.getOwnPropertyDescriptor(nativeMethod, 'prototype');
         0
         ",
     )?;

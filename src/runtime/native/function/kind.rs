@@ -467,6 +467,28 @@ pub(in crate::runtime) enum NativeFunctionKind {
 }
 
 impl NativeFunctionKind {
+    pub(in crate::runtime::native) const fn has_own_prototype_property(self) -> bool {
+        matches!(
+            self,
+            Self::Array
+                | Self::AsyncFunction
+                | Self::Boolean
+                | Self::ErrorConstructor(_)
+                | Self::Function
+                | Self::Number
+                | Self::Object
+                | Self::Promise
+                | Self::RegExp
+                | Self::String
+                | Self::Map
+                | Self::Set
+                | Self::Symbol
+                | Self::WeakMap
+                | Self::WeakSet
+                | Self::Date(DateFunctionKind::Constructor)
+        )
+    }
+
     pub(in crate::runtime::native) const fn length(self) -> f64 {
         if let Self::Date(kind) = self {
             return kind.length();

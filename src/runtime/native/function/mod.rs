@@ -96,17 +96,16 @@ impl NativeFunction {
         prototype: Value,
         name: Value,
     ) -> Self {
-        let prototype_default = DataPropertyDescriptor::new(
-            prototype.clone(),
-            PropertyWritable::No,
-            PropertyEnumerable::No,
-            PropertyConfigurable::No,
-        );
-        let intrinsic_defaults = FunctionIntrinsicDefaults::new(
-            Value::Number(kind.length()),
-            name,
-            Some(prototype_default),
-        );
+        let prototype_default = kind.has_own_prototype_property().then(|| {
+            DataPropertyDescriptor::new(
+                prototype.clone(),
+                PropertyWritable::No,
+                PropertyEnumerable::No,
+                PropertyConfigurable::No,
+            )
+        });
+        let intrinsic_defaults =
+            FunctionIntrinsicDefaults::new(Value::Number(kind.length()), name, prototype_default);
         Self {
             kind,
             properties: FunctionProperties::new(prototype, intrinsic_defaults),
