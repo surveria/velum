@@ -1,13 +1,10 @@
 // Reflect namespace shape: it is a non-callable ordinary object exposing the
 // standard static methods with the correct name and length metadata, plus a
 // non-writable, non-enumerable, configurable Symbol.toStringTag of "Reflect".
-
-assert.sameValue(typeof Reflect, "object", "Reflect is an object");
-assert.sameValue(
-  Object.prototype.toString.call(Reflect),
-  "[object Reflect]",
-  "Reflect Symbol.toStringTag"
-);
+//
+// Self-contained active fixture: it evaluates to 42 on success and throws a
+// Test262Error (a dead branch that never resolves the identifier on success)
+// on failure, without producing any output.
 
 var methods = [
   ["apply", 3],
@@ -25,27 +22,43 @@ var methods = [
   ["setPrototypeOf", 2]
 ];
 
+var metadataOk = typeof Reflect === "object";
 for (var i = 0; i < methods.length; i++) {
-  var name = methods[i][0];
-  var length = methods[i][1];
-  var fn = Reflect[name];
-  assert.sameValue(typeof fn, "function", "Reflect." + name + " is callable");
-  assert.sameValue(fn.name, name, "Reflect." + name + ".name");
-  assert.sameValue(fn.length, length, "Reflect." + name + ".length");
+  var fn = Reflect[methods[i][0]];
+  metadataOk =
+    metadataOk &&
+    typeof fn === "function" &&
+    fn.name === methods[i][0] &&
+    fn.length === methods[i][1];
 }
 
-var tagDescriptor = Object.getOwnPropertyDescriptor(
-  Reflect,
-  Symbol.toStringTag
-);
-assert.sameValue(tagDescriptor.value, "Reflect", "toStringTag value");
-assert.sameValue(tagDescriptor.writable, false, "toStringTag writable");
-assert.sameValue(tagDescriptor.enumerable, false, "toStringTag enumerable");
-assert.sameValue(tagDescriptor.configurable, true, "toStringTag configurable");
+if (!metadataOk) {
+  throw new Test262Error("Reflect method metadata mismatch");
+}
 
-// Reflect itself is not a constructor and not callable.
-assert.throws(TypeError, function () {
+if (Object.prototype.toString.call(Reflect) !== "[object Reflect]") {
+  throw new Test262Error("Reflect Symbol.toStringTag mismatch");
+}
+
+var tagDescriptor = Object.getOwnPropertyDescriptor(Reflect, Symbol.toStringTag);
+if (
+  tagDescriptor.value !== "Reflect" ||
+  tagDescriptor.writable !== false ||
+  tagDescriptor.enumerable !== false ||
+  tagDescriptor.configurable !== true
+) {
+  throw new Test262Error("Reflect[Symbol.toStringTag] descriptor mismatch");
+}
+
+// Reflect itself is not callable.
+var reflectNotCallable = false;
+try {
   Reflect();
-});
+} catch (error) {
+  reflectNotCallable = error instanceof TypeError;
+}
+if (!reflectNotCallable) {
+  throw new Test262Error("Reflect should not be callable");
+}
 
 42

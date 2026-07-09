@@ -128,6 +128,38 @@ fn reflect_rejects_invalid_targets_with_type_errors() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))
 }
 
+// The active Test262 fixtures are executed by the runner with a raw
+// `context.eval(source)` (no Test262 harness) and must evaluate to 42 while
+// producing no output. Mirror that execution here so the fixtures stay
+// runner-compatible even without running the full corpus.
+const REFLECT_TEST262_FIXTURES: &[&str] = &[
+    "tests/corpora/test262/active/built-ins/Reflect/metadata.js",
+    "tests/corpora/test262/active/built-ins/Reflect/property_ops.js",
+    "tests/corpora/test262/active/built-ins/Reflect/prototype_extensibility.js",
+    "tests/corpora/test262/active/built-ins/Reflect/apply_construct.js",
+];
+
+#[test]
+fn reflect_test262_fixtures_evaluate_to_42_without_output() -> TestResult {
+    for path in REFLECT_TEST262_FIXTURES {
+        let source = std::fs::read_to_string(path)
+            .map_err(|error| format!("failed to read fixture '{path}': {error}"))?;
+
+        let runtime = Runtime::new();
+        let mut context = runtime.context();
+        let value = context
+            .eval(&source)
+            .map_err(|error| format!("fixture '{path}' failed to evaluate: {error}"))?;
+
+        ensure_value(&value, &Value::Number(42.0))
+            .map_err(|error| format!("fixture '{path}': {error}"))?;
+        ensure_output(context.output(), &[])
+            .map_err(|error| format!("fixture '{path}': {error}"))?;
+    }
+
+    Ok(())
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

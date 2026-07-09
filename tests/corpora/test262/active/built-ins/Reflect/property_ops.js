@@ -1,6 +1,9 @@
 // Reflect property operations: get, set, has, deleteProperty, defineProperty,
 // getOwnPropertyDescriptor and ownKeys over ordinary objects, including getter
 // dispatch, accessor definition and boolean success results.
+//
+// Self-contained active fixture: evaluates to 42 on success, throws a
+// Test262Error on failure, and produces no output.
 
 var target = { alpha: 1 };
 Object.defineProperty(target, "beta", {
@@ -10,19 +13,26 @@ Object.defineProperty(target, "beta", {
   configurable: true
 });
 
-assert.sameValue(Reflect.get(target, "alpha"), 1, "get data property");
-assert.sameValue(Reflect.get(target, "beta"), 2, "get non-enumerable property");
-assert.sameValue(Reflect.get(target, "missing"), undefined, "get absent property");
+if (
+  Reflect.get(target, "alpha") !== 1 ||
+  Reflect.get(target, "beta") !== 2 ||
+  Reflect.get(target, "missing") !== undefined ||
+  Reflect.has(target, "alpha") !== true ||
+  Reflect.has(target, "beta") !== true ||
+  Reflect.has(target, "toString") !== true ||
+  Reflect.has(target, "missing") !== false
+) {
+  throw new Test262Error("Reflect get/has mismatch");
+}
 
-assert.sameValue(Reflect.has(target, "alpha"), true, "has own property");
-assert.sameValue(Reflect.has(target, "beta"), true, "has hidden property");
-assert.sameValue(Reflect.has(target, "toString"), true, "has inherited property");
-assert.sameValue(Reflect.has(target, "missing"), false, "has absent property");
-
-assert.sameValue(Reflect.set(target, "alpha", 10), true, "set returns true");
-assert.sameValue(target.alpha, 10, "set mutates the property");
-assert.sameValue(Reflect.set(target, "gamma", 3), true, "set new property");
-assert.sameValue(target.gamma, 3, "set creates the property");
+if (
+  Reflect.set(target, "alpha", 10) !== true ||
+  target.alpha !== 10 ||
+  Reflect.set(target, "gamma", 3) !== true ||
+  target.gamma !== 3
+) {
+  throw new Test262Error("Reflect.set mismatch");
+}
 
 // Getter dispatch through Reflect.get.
 var accessed = 0;
@@ -34,8 +44,9 @@ Object.defineProperty(withGetter, "computed", {
   },
   configurable: true
 });
-assert.sameValue(Reflect.get(withGetter, "computed"), 41, "get invokes getter");
-assert.sameValue(accessed, 1, "getter invoked exactly once");
+if (Reflect.get(withGetter, "computed") !== 41 || accessed !== 1) {
+  throw new Test262Error("Reflect.get getter dispatch mismatch");
+}
 
 // defineProperty returns a boolean and installs the descriptor.
 var defined = Reflect.defineProperty(target, "delta", {
@@ -44,43 +55,56 @@ var defined = Reflect.defineProperty(target, "delta", {
   writable: false,
   configurable: false
 });
-assert.sameValue(defined, true, "defineProperty returns true");
 var deltaDescriptor = Reflect.getOwnPropertyDescriptor(target, "delta");
-assert.sameValue(deltaDescriptor.value, 4, "descriptor value");
-assert.sameValue(deltaDescriptor.writable, false, "descriptor writable");
-assert.sameValue(deltaDescriptor.enumerable, true, "descriptor enumerable");
-assert.sameValue(deltaDescriptor.configurable, false, "descriptor configurable");
-assert.sameValue(
-  Reflect.getOwnPropertyDescriptor(target, "missing"),
-  undefined,
-  "descriptor for absent property is undefined"
-);
+if (
+  defined !== true ||
+  deltaDescriptor.value !== 4 ||
+  deltaDescriptor.writable !== false ||
+  deltaDescriptor.enumerable !== true ||
+  deltaDescriptor.configurable !== false ||
+  Reflect.getOwnPropertyDescriptor(target, "missing") !== undefined
+) {
+  throw new Test262Error("Reflect.defineProperty/getOwnPropertyDescriptor mismatch");
+}
 
 // deleteProperty removes configurable properties and reports success.
-assert.sameValue(Reflect.deleteProperty(target, "gamma"), true, "delete configurable");
-assert.sameValue(Reflect.has(target, "gamma"), false, "property removed");
+if (
+  Reflect.deleteProperty(target, "gamma") !== true ||
+  Reflect.has(target, "gamma") !== false
+) {
+  throw new Test262Error("Reflect.deleteProperty mismatch");
+}
 
-// ownKeys returns the string-keyed own properties.
+// ownKeys returns the string-keyed own properties in insertion order.
 var keysTarget = { one: 1, two: 2 };
 keysTarget.three = 3;
 var keys = Reflect.ownKeys(keysTarget);
-assert.sameValue(keys.length, 3, "ownKeys length");
-assert.sameValue(keys[0], "one", "ownKeys order 0");
-assert.sameValue(keys[1], "two", "ownKeys order 1");
-assert.sameValue(keys[2], "three", "ownKeys order 2");
+if (
+  keys.length !== 3 ||
+  keys[0] !== "one" ||
+  keys[1] !== "two" ||
+  keys[2] !== "three"
+) {
+  throw new Test262Error("Reflect.ownKeys mismatch");
+}
 
 // Non-object targets raise TypeError for property operations.
-assert.throws(TypeError, function () {
-  Reflect.get(42, "x");
-});
-assert.throws(TypeError, function () {
-  Reflect.set("string", "x", 1);
-});
-assert.throws(TypeError, function () {
-  Reflect.has(null, "x");
-});
-assert.throws(TypeError, function () {
-  Reflect.ownKeys(undefined);
-});
+function throwsType(thunk) {
+  try {
+    thunk();
+    return false;
+  } catch (error) {
+    return error instanceof TypeError;
+  }
+}
+
+if (
+  !throwsType(function () { return Reflect.get(42, "x"); }) ||
+  !throwsType(function () { return Reflect.set("string", "x", 1); }) ||
+  !throwsType(function () { return Reflect.has(null, "x"); }) ||
+  !throwsType(function () { return Reflect.ownKeys(undefined); })
+) {
+  throw new Test262Error("Reflect property operations should reject non-object targets");
+}
 
 42
