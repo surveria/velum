@@ -17,6 +17,8 @@ const PATH_BENCH_FUNCTION_CUSTOM_PROPERTIES: &str =
     "tests/corpora/benchmarks/active/function_custom_properties.js";
 const PATH_BENCH_FUNCTION_DESCRIPTORS: &str =
     "tests/corpora/benchmarks/active/function_descriptors.js";
+const PATH_BENCH_FUNCTION_APPLY_HAS_INSTANCE: &str =
+    "tests/corpora/benchmarks/active/function_apply_has_instance.js";
 const PATH_BENCH_FUNCTION_INTRINSIC_DESCRIPTORS: &str =
     "tests/corpora/benchmarks/active/function_intrinsic_descriptors.js";
 const PATH_BENCH_METHOD_THIS: &str = "tests/corpora/benchmarks/active/method_this.js";
@@ -172,6 +174,10 @@ fn benchmark_function_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "function_descriptors",
             path: PATH_BENCH_FUNCTION_DESCRIPTORS,
+        },
+        BenchmarkCase {
+            id: "function_apply_has_instance",
+            path: PATH_BENCH_FUNCTION_APPLY_HAS_INSTANCE,
         },
         BenchmarkCase {
             id: "function_intrinsic_descriptors",

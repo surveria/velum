@@ -232,7 +232,11 @@ impl Context {
         self.eval_bytecode_binary(op.generic_binary(), left, right, None)
     }
 
-    fn eval_bytecode_instanceof(&mut self, left: &Value, right: &Value) -> Result<Value> {
+    pub(in crate::runtime) fn eval_bytecode_instanceof(
+        &mut self,
+        left: &Value,
+        right: &Value,
+    ) -> Result<Value> {
         let target = self.instanceof_target_prototype(right)?;
         let matches = if let Value::Error(error) = left {
             self.error_matches_instanceof(error.name(), right)?

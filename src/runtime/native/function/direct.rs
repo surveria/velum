@@ -472,6 +472,12 @@ impl Context {
             NativeFunctionKind::FunctionPrototypeCall => {
                 self.eval_function_prototype_call(args, this_value)
             }
+            NativeFunctionKind::FunctionPrototypeApply => {
+                self.eval_function_prototype_apply(args, this_value)
+            }
+            NativeFunctionKind::FunctionPrototypeHasInstance => {
+                self.eval_function_prototype_has_instance(args, this_value)
+            }
             NativeFunctionKind::Date(kind) => {
                 self.eval_date_native_function_kind(kind, args, this_value)
             }
