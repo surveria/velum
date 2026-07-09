@@ -11,6 +11,7 @@ mod fast;
 mod front;
 mod index;
 mod search;
+mod sort;
 mod storage;
 
 pub(super) use index::{ArrayIndex, ArrayLength};

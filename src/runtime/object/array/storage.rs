@@ -213,6 +213,103 @@ impl ArrayStorage {
         }
     }
 
+    pub(in crate::runtime::object) fn sort_packed_default_numbers_for_len(
+        &mut self,
+        len: usize,
+        descending: bool,
+    ) -> bool {
+        if self.has_sparse_keys() {
+            return false;
+        }
+        let ArrayElements::Packed(elements) = &mut self.elements else {
+            return false;
+        };
+        if elements.len() != len
+            || !elements
+                .iter()
+                .all(|property| Self::default_number_property_value(property).is_some())
+        {
+            return false;
+        }
+        elements.sort_by(|left, right| {
+            let Some(left) = Self::default_number_property_value(left) else {
+                return std::cmp::Ordering::Equal;
+            };
+            let Some(right) = Self::default_number_property_value(right) else {
+                return std::cmp::Ordering::Equal;
+            };
+            Self::numeric_sort_ordering(left, right, descending)
+        });
+        true
+    }
+
+    pub(in crate::runtime::object) fn splice_packed_default_for_len(
+        &mut self,
+        len: usize,
+        start: usize,
+        delete_count: usize,
+        items: &[Value],
+        max_properties: usize,
+    ) -> Option<Vec<Value>> {
+        if self.has_sparse_keys() {
+            return None;
+        }
+        let delete_end = start.checked_add(delete_count)?;
+        let new_len = len.checked_sub(delete_count)?.checked_add(items.len())?;
+        if new_len > max_properties {
+            return None;
+        }
+        let ArrayElements::Packed(elements) = &mut self.elements else {
+            return None;
+        };
+        if elements.len() != len
+            || delete_end > elements.len()
+            || !elements
+                .iter()
+                .all(ObjectProperty::has_default_array_attributes)
+        {
+            return None;
+        }
+        let removed = elements
+            .get(start..delete_end)?
+            .iter()
+            .map(ObjectProperty::value)
+            .collect();
+        let properties = items
+            .iter()
+            .cloned()
+            .map(|value| ObjectProperty::ordinary(value, PropertyEnumerable::Yes));
+        elements.splice(start..delete_end, properties);
+        self.property_count = new_len;
+        Some(removed)
+    }
+
+    fn default_number_property_value(property: &ObjectProperty) -> Option<f64> {
+        if !property.has_default_array_attributes() {
+            return None;
+        }
+        let Value::Number(number) = property.data_value_ref()? else {
+            return None;
+        };
+        Some(*number)
+    }
+
+    fn numeric_sort_ordering(left: f64, right: f64, descending: bool) -> std::cmp::Ordering {
+        let result = if descending {
+            right - left
+        } else {
+            left - right
+        };
+        if result.is_nan() || result == 0.0 {
+            return std::cmp::Ordering::Equal;
+        }
+        if result < 0.0 {
+            std::cmp::Ordering::Less
+        } else {
+            std::cmp::Ordering::Greater
+        }
+    }
+
     pub(in crate::runtime::object) fn shift_dense_for_len_if_default(
         &mut self,
         len: usize,
