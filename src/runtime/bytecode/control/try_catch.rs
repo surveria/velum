@@ -1,7 +1,7 @@
 use crate::{
     bytecode::{
         BytecodeAddress, BytecodeBinding, BytecodeBlock, BytecodeCatch, BytecodeCatchFastPath,
-        BytecodeDirectThrow, BytecodeNumericBinaryOp,
+        BytecodeDirectThrow, BytecodeNumericBinaryOp, BytecodeTryFinallyFastPath,
     },
     error::{Error, Result},
     runtime::{
@@ -9,6 +9,7 @@ use crate::{
         binding::scope::BindingCell,
         bytecode::{coercion::strict_equality, state::BytecodeState},
         control::Completion,
+        numeric::number_to_i32,
     },
     syntax::{DeclKind, StaticString},
     value::Value,
@@ -19,6 +20,7 @@ pub(super) struct BytecodeTryParts<'a> {
     body: &'a BytecodeBlock,
     body_scoped: bool,
     body_direct_throw: Option<&'a BytecodeDirectThrow>,
+    try_fast_path: Option<&'a BytecodeTryFinallyFastPath>,
     catch: Option<&'a BytecodeCatch>,
     finally_body: Option<&'a BytecodeBlock>,
     finally_scoped: bool,
@@ -29,6 +31,7 @@ impl<'a> BytecodeTryParts<'a> {
         body: &'a BytecodeBlock,
         body_scoped: bool,
         body_direct_throw: Option<&'a BytecodeDirectThrow>,
+        try_fast_path: Option<&'a BytecodeTryFinallyFastPath>,
         catch: Option<&'a BytecodeCatch>,
         finally_body: Option<&'a BytecodeBlock>,
         finally_scoped: bool,
@@ -37,6 +40,7 @@ impl<'a> BytecodeTryParts<'a> {
             body,
             body_scoped,
             body_direct_throw,
+            try_fast_path,
             catch,
             finally_body,
             finally_scoped,
@@ -51,6 +55,11 @@ impl Context {
         parts: BytecodeTryParts<'_>,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
+        if let Some(fast_path) = parts.try_fast_path
+            && let Some(completion) = self.eval_bytecode_try_finally_fast_path(fast_path)?
+        {
+            return Ok(Self::store_or_return_completion(state, completion, next));
+        }
         let mut completion = if let Some(direct_throw) = parts.body_direct_throw {
             self.eval_bytecode_direct_throw(direct_throw)?
         } else {
@@ -67,6 +76,39 @@ impl Context {
             }
         }
         Ok(Self::store_or_return_completion(state, completion, next))
+    }
+
+    fn eval_bytecode_try_finally_fast_path(
+        &mut self,
+        fast_path: &BytecodeTryFinallyFastPath,
+    ) -> Result<Option<Completion>> {
+        let Some(index_cell) = self.get_binding_bytecode(&fast_path.index)? else {
+            return Ok(None);
+        };
+        let Some(total_cell) = self.get_or_materialize_binding_bytecode(&fast_path.total)? else {
+            return Ok(None);
+        };
+        let Value::Number(index) = index_cell.value(fast_path.index.name())? else {
+            return Ok(None);
+        };
+        let Value::Number(mut total) = total_cell.value(fast_path.total.name())? else {
+            return Ok(None);
+        };
+        let mask = number_to_i32(fast_path.index_mask, "try finally mask")?;
+        let masked = f64::from(number_to_i32(index, "try finally index")? & mask);
+        let branch_add = if masked.to_bits() == fast_path.throw_right.to_bits() {
+            fast_path.throw_value
+        } else {
+            fast_path.try_add
+        };
+        self.step()?;
+        self.record_bytecode_linear_direct_run()?;
+        total += branch_add;
+        let branch_value = self.checked_value(Value::Number(total))?;
+        total += fast_path.finally_add;
+        let total_value = self.checked_value(Value::Number(total))?;
+        self.assign_fast_path_cell(&fast_path.total, &total_cell, total_value)?;
+        Ok(Some(Completion::Normal(branch_value)))
     }
 
     fn eval_bytecode_direct_throw(
