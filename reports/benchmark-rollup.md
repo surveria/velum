@@ -17,9 +17,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260709T213104Z.md`
-- Task: PR #393: bench: redesign benchmark lifecycle and QuickJS baselines
-- Performance: 5.35x (4/5 >1.00x)
+- `rsqjs-test-report-20260709T213555Z.md`
+- Task: PR #391: runtime: add VM-local performance.now()
+- Performance: 5.82x (4/5 >1.00x)
 - Memory: - (0/5 >1.00x)
 - JetStream: - (0/0 >1.00x)
 - Full Test262: 34002 passed / 68576 failed (33.15%)
@@ -378,3 +378,4 @@ Latest report:
 | `20260709T205604Z` `db8fb33` PR #390: workflow: make the required correctness gate sub-minute | 3.64x (68/83 >1.00x) | - (0/83 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
 | `20260709T211126Z` `5ebf14a` PR #394: workflow: share benchmark lock with the service runner | 3.66x (68/83 >1.00x) | - (0/83 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
 | `20260709T213104Z` `033eccc` PR #393: bench: redesign benchmark lifecycle and QuickJS baselines | 5.35x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
+| `20260709T213555Z` `79cecc6` PR #391: runtime: add VM-local performance.now() | 5.82x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
