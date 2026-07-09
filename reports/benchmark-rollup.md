@@ -17,9 +17,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260709T224900Z.md`
-- Task: PR #400: runtime: introduce checked semantic object reference
-- Performance: 5.29x (4/5 >1.00x)
+- `rsqjs-test-report-20260709T230501Z.md`
+- Task: PR #402: workflow: preserve empty run conclusions in publisher trust checks
+- Performance: 5.32x (4/5 >1.00x)
 - Memory: - (0/5 >1.00x)
 - JetStream: - (0/0 >1.00x)
 - Full Test262: 34002 passed / 68576 failed (33.15%)
@@ -384,3 +384,4 @@ Latest report:
 | `20260709T221425Z` `56e6400` PR #398: docs: inventory semantic architecture | 5.41x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
 | `20260709T223143Z` `703a3fe` PR #399: workflow: guard semantic architecture boundaries | 5.32x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
 | `20260709T224900Z` `b760177` PR #400: runtime: introduce checked semantic object reference | 5.29x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
+| `20260709T230501Z` `cf277e3` PR #402: workflow: preserve empty run conclusions in publisher trust checks | 5.32x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
