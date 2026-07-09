@@ -8,7 +8,10 @@ use crate::{
     value::Value,
 };
 
-use super::for_loop::{BytecodeForLoopFastPath, fast_loop_compare, same_bytecode_binding};
+use super::{
+    for_loop::BytecodeForLoopFastPath,
+    loop_helpers::{fast_loop_compare, same_bytecode_binding},
+};
 
 #[derive(Debug)]
 pub(super) struct BytecodeForArrayFillFastPath<'a> {

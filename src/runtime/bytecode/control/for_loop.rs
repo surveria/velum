@@ -18,10 +18,13 @@ use crate::{
 };
 
 use super::{
-    array_add_loop::BytecodeForArrayAddFastPath, array_fill_loop::BytecodeForArrayFillFastPath,
+    array_add_loop::BytecodeForArrayAddFastPath,
+    array_fill_loop::BytecodeForArrayFillFastPath,
     block_lexical_loop::BytecodeBlockLexicalLoopFastPath,
+    loop_helpers::{fast_loop_compare, same_bytecode_binding},
     string_concat_loop::BytecodeForStringConcatLengthFastPath,
     switch_for_loop::BytecodeForSwitchFastPath,
+    update_expression_loop::BytecodeUpdateExpressionLoopFastPath,
 };
 
 #[derive(Debug)]
@@ -50,6 +53,7 @@ pub(super) enum BytecodeForLoopBodyFastPath<'a> {
     MaskedArrayAdd(BytecodeForBodyFastPath<'a>),
     SwitchMaskedArrayAdd(BytecodeForSwitchFastPath<'a>),
     StringConcatLength(BytecodeForStringConcatLengthFastPath<'a>),
+    UpdateExpression(BytecodeUpdateExpressionLoopFastPath<'a>),
     BlockLexical(BytecodeBlockLexicalLoopFastPath<'a>),
 }
 
@@ -213,6 +217,9 @@ impl Context {
             BytecodeForLoopBodyFastPath::StringConcatLength(body) => {
                 Self::bytecode_for_string_concat_length_fast_path_ready(body)
             }
+            BytecodeForLoopBodyFastPath::UpdateExpression(body) => {
+                Self::update_expression_loop_fast_path_ready(body)
+            }
             BytecodeForLoopBodyFastPath::BlockLexical(body) => {
                 Self::block_lexical_loop_fast_path_ready(body)
             }
@@ -247,6 +254,11 @@ impl Context {
         {
             return Ok(None);
         }
+        if let BytecodeForLoopBodyFastPath::UpdateExpression(body) = &fast_path.body
+            && self.eval_update_expression_loop_fast_path(state, next, fast_path, body)?
+        {
+            return Ok(None);
+        }
         let mut last = Value::Undefined;
         let array_values = match &fast_path.body {
             BytecodeForLoopBodyFastPath::ArrayAdd(body) => {
@@ -254,7 +266,8 @@ impl Context {
             }
             BytecodeForLoopBodyFastPath::ArrayFill(_)
             | BytecodeForLoopBodyFastPath::BlockLexical(_)
-            | BytecodeForLoopBodyFastPath::StringConcatLength(_) => None,
+            | BytecodeForLoopBodyFastPath::StringConcatLength(_)
+            | BytecodeForLoopBodyFastPath::UpdateExpression(_) => None,
             BytecodeForLoopBodyFastPath::MaskedArrayAdd(body) => {
                 self.fast_loop_numeric_array_values(body)?
             }
@@ -368,6 +381,9 @@ impl Context {
         if let Some(body) = self.compile_bytecode_for_string_concat_length_fast_path(index, body)? {
             return Ok(Some(BytecodeForLoopBodyFastPath::StringConcatLength(body)));
         }
+        if let Some(body) = self.compile_update_expression_loop_fast_path(index, body)? {
+            return Ok(Some(BytecodeForLoopBodyFastPath::UpdateExpression(body)));
+        }
         self.compile_block_lexical_loop_fast_path(index, body)
             .map(|body| body.map(BytecodeForLoopBodyFastPath::BlockLexical))
     }
@@ -480,7 +496,8 @@ impl Context {
             BytecodeForLoopBodyFastPath::SwitchMaskedArrayAdd(body) => self
                 .eval_bytecode_for_switch_fast_path(body, array_values)
                 .map(Completion::Normal),
-            BytecodeForLoopBodyFastPath::StringConcatLength(_) => {
+            BytecodeForLoopBodyFastPath::StringConcatLength(_)
+            | BytecodeForLoopBodyFastPath::UpdateExpression(_) => {
                 Ok(Completion::Normal(Value::Undefined))
             }
             BytecodeForLoopBodyFastPath::BlockLexical(body) => {
@@ -773,18 +790,5 @@ impl Context {
             .array_index_value_if_array(*id, index)?
             .map(|value| self.runtime_value(value))
             .transpose()
-    }
-}
-
-pub(super) fn same_bytecode_binding(left: &BytecodeBinding, right: &BytecodeBinding) -> bool {
-    left.operand() == right.operand() && left.name().as_str() == right.name().as_str()
-}
-
-pub(super) fn fast_loop_compare(op: BytecodeNumericCompareOp, left: f64, right: f64) -> bool {
-    match op {
-        BytecodeNumericCompareOp::Less => left < right,
-        BytecodeNumericCompareOp::LessEqual => left <= right,
-        BytecodeNumericCompareOp::Greater => left > right,
-        BytecodeNumericCompareOp::GreaterEqual => left >= right,
     }
 }
