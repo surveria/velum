@@ -25,8 +25,8 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 in progress; AS-01a is complete and AS-01b
-  guards are in draft PR #399
+- Current program state: AS-01 in progress; AS-01a is complete and AS-01b is
+  implemented in PR #399 pending required CI and merge
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -479,7 +479,7 @@ dependencies do not overlap.
 | ID | Status | Program item | Depends on | Completion evidence |
 | --- | --- | --- | --- | --- |
 | AS-00 | Complete | Adopt this plan and route project documentation to it. | None | PR #396 merged as `f79056b`; required CI, post-merge performance, publisher, and canonical report publication passed. |
-| AS-01 | In progress | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards are in draft PR #399. |
+| AS-01 | In progress | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards are implemented in PR #399 pending required CI and merge. |
 | AS-02 | Backlog | Introduce the unified semantic object and internal-method boundary. | AS-01 | Ordinary objects, functions, native/host functions, errors, proxies, promises, and collections can migrate through one semantic facade. |
 | AS-03 | Backlog | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | Shared coercion, equality, property, invocation, and iterator operations used by bytecode and built-ins. |
 | AS-04 | Backlog | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | Real JavaScript error objects, typed throw path, no message-prefix classification, spans available to diagnostics. |
@@ -552,14 +552,19 @@ AS-01a evidence:
 - Remaining for AS-01: AS-01b in draft PR #399 must merge the deterministic
   no-growth guards
 
-AS-01b status:
+AS-01b evidence:
 
-- PR: #399 (draft during implementation and validation)
+- PR: #399
 - Scope: deterministic structural allowlists for split object/value state,
   frontend/runtime separation, source-name harness paths, duplicated semantic
   operations, optimization owners, and VM-state cloning debt
-- Validation: direct gate execution plus negative mutation probes for every
-  guarded category
+- Tests: 16 negative mutation probes passed; the fast gate passed with engine
+  and runner formatting, strict clippy, tests, and documentation
+- Test262/QuickJS: no runtime behavior or corpus baseline changed
+- Performance/memory: no hot path or owned runtime state changed; no local
+  benchmark run was warranted
+- Remaining for AS-01: required CI and merge of PR #399; AS-02a should record
+  the final merge and canonical report evidence when it starts
 
 ### AS-02: Unified Semantic Object Boundary
 
