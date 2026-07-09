@@ -3,6 +3,7 @@ mod array_fill_loop;
 mod block_lexical_loop;
 mod for_loop;
 mod loop_helpers;
+mod object_literal_loop;
 mod string_concat_loop;
 mod switch_for_loop;
 mod try_catch;

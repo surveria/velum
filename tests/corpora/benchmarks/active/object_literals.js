@@ -1,6 +1,6 @@
 let total = 0;
 
-for (let index = 0; index < 16384; index = index + 1) {
+for (let index = 0; index < 524288; index = index + 1) {
   let object = {
     first: index,
     second: index + 1,
