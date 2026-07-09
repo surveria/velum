@@ -437,6 +437,9 @@ impl Context {
         if let Some(value) = self.eval_object_native_function_kind(kind, args, this_value) {
             return value;
         }
+        if let Some(value) = self.eval_reflect_native_function_kind(kind, args, this_value) {
+            return value;
+        }
 
         self.eval_non_object_native_function_kind(kind, args, this_value)
     }
@@ -571,6 +574,48 @@ impl Context {
             }
             NativeFunctionKind::ObjectSeal => Some(self.eval_object_seal(args)),
             NativeFunctionKind::ObjectValues => Some(self.eval_object_values(args)),
+            _ => None,
+        }
+    }
+
+    fn eval_reflect_native_function_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Option<Result<Value>> {
+        match kind {
+            NativeFunctionKind::ReflectApply => Some(self.eval_reflect_apply(args, this_value)),
+            NativeFunctionKind::ReflectConstruct => {
+                Some(self.eval_reflect_construct(args, this_value))
+            }
+            NativeFunctionKind::ReflectDefineProperty => {
+                Some(self.eval_reflect_define_property(args, this_value))
+            }
+            NativeFunctionKind::ReflectDeleteProperty => {
+                Some(self.eval_reflect_delete_property(args, this_value))
+            }
+            NativeFunctionKind::ReflectGet => Some(self.eval_reflect_get(args, this_value)),
+            NativeFunctionKind::ReflectGetOwnPropertyDescriptor => {
+                Some(self.eval_reflect_get_own_property_descriptor(args, this_value))
+            }
+            NativeFunctionKind::ReflectGetPrototypeOf => {
+                Some(self.eval_reflect_get_prototype_of(args, this_value))
+            }
+            NativeFunctionKind::ReflectHas => Some(self.eval_reflect_has(args, this_value)),
+            NativeFunctionKind::ReflectIsExtensible => {
+                Some(self.eval_reflect_is_extensible(args, this_value))
+            }
+            NativeFunctionKind::ReflectOwnKeys => {
+                Some(self.eval_reflect_own_keys(args, this_value))
+            }
+            NativeFunctionKind::ReflectPreventExtensions => {
+                Some(self.eval_reflect_prevent_extensions(args, this_value))
+            }
+            NativeFunctionKind::ReflectSet => Some(self.eval_reflect_set(args, this_value)),
+            NativeFunctionKind::ReflectSetPrototypeOf => {
+                Some(self.eval_reflect_set_prototype_of(args, this_value))
+            }
             _ => None,
         }
     }

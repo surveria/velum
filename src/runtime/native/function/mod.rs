@@ -14,8 +14,10 @@ mod collection_kind;
 mod date_kind;
 mod direct;
 mod kind;
+mod object_kind;
 mod primitive;
 mod primitive_kind;
+mod reflect_kind;
 mod registry;
 mod string_kind;
 
@@ -77,6 +79,7 @@ pub(in crate::runtime::native) use primitive_kind::{
     NUMBER_PROTOTYPE_TO_STRING_NAME, NUMBER_PROTOTYPE_VALUE_OF_NAME,
     SYMBOL_PROTOTYPE_TO_STRING_NAME, SYMBOL_PROTOTYPE_VALUE_OF_NAME,
 };
+pub(in crate::runtime::native) use reflect_kind::REFLECT_NAME;
 pub(in crate::runtime) use registry::NativeFunctionRegistry;
 
 #[derive(Debug, Clone)]
