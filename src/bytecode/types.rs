@@ -463,6 +463,17 @@ pub struct BytecodeCatch {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct BytecodeTryFinallyFastPath {
+    pub(crate) index: BytecodeBinding,
+    pub(crate) index_mask: f64,
+    pub(crate) throw_right: f64,
+    pub(crate) throw_value: f64,
+    pub(crate) total: BytecodeBinding,
+    pub(crate) try_add: f64,
+    pub(crate) finally_add: f64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum BytecodeInstruction {
     PushLiteral(Value),
     PushString(StaticString),
@@ -712,6 +723,7 @@ pub enum BytecodeInstruction {
         body: BytecodeBlock,
         body_scoped: bool,
         body_direct_throw: Option<BytecodeDirectThrow>,
+        try_fast_path: Option<Box<BytecodeTryFinallyFastPath>>,
         catch: Option<BytecodeCatch>,
         finally_body: Option<BytecodeBlock>,
         finally_scoped: bool,

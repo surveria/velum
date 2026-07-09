@@ -25,6 +25,7 @@ use super::{
     object_literal_loop::BytecodeObjectLiteralLoopFastPath,
     string_concat_loop::BytecodeForStringConcatLengthFastPath,
     switch_for_loop::BytecodeForSwitchFastPath,
+    try_finally_loop::BytecodeForTryFinallyFastPath,
     update_expression_loop::BytecodeUpdateExpressionLoopFastPath,
 };
 
@@ -57,6 +58,7 @@ pub(super) enum BytecodeForLoopBodyFastPath<'a> {
     UpdateExpression(BytecodeUpdateExpressionLoopFastPath<'a>),
     ObjectLiteral(BytecodeObjectLiteralLoopFastPath<'a>),
     BlockLexical(BytecodeBlockLexicalLoopFastPath<'a>),
+    TryFinally(BytecodeForTryFinallyFastPath<'a>),
 }
 
 #[derive(Debug)]
@@ -228,6 +230,9 @@ impl Context {
             BytecodeForLoopBodyFastPath::BlockLexical(body) => {
                 Self::block_lexical_loop_fast_path_ready(body)
             }
+            BytecodeForLoopBodyFastPath::TryFinally(body) => {
+                Self::try_finally_loop_fast_path_ready(body)
+            }
         }
     }
 
@@ -269,6 +274,11 @@ impl Context {
         {
             return Ok(None);
         }
+        if let BytecodeForLoopBodyFastPath::TryFinally(body) = &fast_path.body
+            && self.eval_try_finally_loop_fast_path(state, next, fast_path, body)?
+        {
+            return Ok(None);
+        }
         let mut last = Value::Undefined;
         let array_values = match &fast_path.body {
             BytecodeForLoopBodyFastPath::ArrayAdd(body) => {
@@ -278,6 +288,7 @@ impl Context {
             | BytecodeForLoopBodyFastPath::BlockLexical(_)
             | BytecodeForLoopBodyFastPath::ObjectLiteral(_)
             | BytecodeForLoopBodyFastPath::StringConcatLength(_)
+            | BytecodeForLoopBodyFastPath::TryFinally(_)
             | BytecodeForLoopBodyFastPath::UpdateExpression(_) => None,
             BytecodeForLoopBodyFastPath::MaskedArrayAdd(body) => {
                 self.fast_loop_numeric_array_values(body)?
@@ -398,6 +409,9 @@ impl Context {
         if let Some(body) = self.compile_object_literal_loop_fast_path(index, body)? {
             return Ok(Some(BytecodeForLoopBodyFastPath::ObjectLiteral(body)));
         }
+        if let Some(body) = self.compile_try_finally_loop_fast_path(index, body)? {
+            return Ok(Some(BytecodeForLoopBodyFastPath::TryFinally(body)));
+        }
         self.compile_block_lexical_loop_fast_path(index, body)
             .map(|body| body.map(BytecodeForLoopBodyFastPath::BlockLexical))
     }
@@ -512,7 +526,8 @@ impl Context {
                 .map(Completion::Normal),
             BytecodeForLoopBodyFastPath::StringConcatLength(_)
             | BytecodeForLoopBodyFastPath::UpdateExpression(_)
-            | BytecodeForLoopBodyFastPath::ObjectLiteral(_) => {
+            | BytecodeForLoopBodyFastPath::ObjectLiteral(_)
+            | BytecodeForLoopBodyFastPath::TryFinally(_) => {
                 Ok(Completion::Normal(Value::Undefined))
             }
             BytecodeForLoopBodyFastPath::BlockLexical(body) => {
@@ -781,19 +796,5 @@ impl Context {
             &Value::Number(mask),
         )?;
         Ok((property, None))
-    }
-
-    fn fast_array_index_value(
-        &mut self,
-        object: &Value,
-        index: Option<usize>,
-    ) -> Result<Option<Value>> {
-        let (Value::Object(id), Some(index)) = (object, index) else {
-            return Ok(None);
-        };
-        self.objects
-            .array_index_value_if_array(*id, index)?
-            .map(|value| self.runtime_value(value))
-            .transpose()
     }
 }
