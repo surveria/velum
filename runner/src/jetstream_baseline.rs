@@ -342,6 +342,14 @@ impl JetStreamQuickjsBaseline {
         self.store.lookup(key)
     }
 
+    pub fn contains(&self, key: &BaselineKey) -> bool {
+        self.mode == BaselineMode::Read && self.store.lookup(key).is_some()
+    }
+
+    pub fn is_read(&self) -> bool {
+        self.mode == BaselineMode::Read
+    }
+
     pub fn is_disabled(&self) -> bool {
         self.mode == BaselineMode::Off
     }
@@ -394,6 +402,16 @@ impl JetStreamQuickjsBaseline {
         })?;
         self.dirty = false;
         Ok(())
+    }
+
+    #[cfg(test)]
+    pub fn empty_read_for_test() -> Self {
+        Self {
+            mode: BaselineMode::Read,
+            path: PathBuf::new(),
+            store: BaselineStore::default(),
+            dirty: false,
+        }
     }
 }
 

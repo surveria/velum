@@ -14,6 +14,8 @@ use crate::{
 mod jetstream_cases;
 #[path = "jetstream_model.rs"]
 mod jetstream_model;
+#[path = "jetstream_preflight.rs"]
+mod jetstream_preflight;
 #[path = "jetstream_report.rs"]
 mod jetstream_report;
 #[path = "jetstream_selection.rs"]
@@ -41,6 +43,12 @@ pub fn run() -> anyhow::Result<JetStreamReport> {
     let selected_cases = selection.select(jetstream_cases::cases())?;
     let host_profile = detect_host_profile();
     let mut baseline = JetStreamQuickjsBaseline::from_env()?;
+    let missing_reference_ids = jetstream_preflight::missing_reference_ids(
+        &selected_cases,
+        config,
+        &host_profile,
+        &baseline,
+    );
     let refresh = baseline.requires_live_reference();
     let suite_budget = jetstream_suite::budget(refresh)?;
     let reference = if refresh {
@@ -55,13 +63,24 @@ pub fn run() -> anyhow::Result<JetStreamReport> {
     let mut report = JetStreamReport::not_run();
     for case in selected_cases {
         let outcome = if timer.elapsed() >= suite_budget {
-            skipped_outcome(
-                case,
-                &format!(
+            let baseline_missing = missing_reference_ids.contains(case.id);
+            let reason = if baseline_missing {
+                format!(
+                    "JetStream suite wall budget of {} seconds was exhausted before this case; content-addressed QuickJS baseline entry is missing or stale",
+                    suite_budget.as_secs()
+                )
+            } else {
+                format!(
                     "JetStream suite wall budget of {} seconds was exhausted before this case",
                     suite_budget.as_secs()
-                ),
-            )
+                )
+            };
+            let mut outcome = skipped_outcome(case, &reason);
+            outcome.counts.reference_missing = count_if(baseline_missing);
+            if baseline_missing {
+                REFERENCE_SOURCE_MISSING.clone_into(&mut outcome.row.reference_source);
+            }
+            outcome
         } else {
             run_case(
                 case,
