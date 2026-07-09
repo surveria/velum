@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260709T074846Z.md`
-- Task: PR #366: Implement residual RegExp Test262 support
-- Performance: 4.13x (65/73 >1.00x)
+- `rsqjs-test-report-20260709T085909Z.md`
+- Task: PR #376: Improve residual Math built-in Test262 coverage
+- Performance: 4.19x (65/73 >1.00x)
 - Memory: - (0/73 >1.00x)
-- JetStream: 23.99x (4/4 >1.00x)
-- Full Test262: 32167 passed / 70411 failed (31.36%)
+- JetStream: 23.24x (4/4 >1.00x)
+- Full Test262: 32719 passed / 69859 failed (31.90%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -361,3 +361,4 @@ Latest report:
 | `20260709T060904Z` `2d8bdf3` PR #372: bytecode: optimize string concat benchmark | 4.35x (66/73 >1.00x) | - (0/73 >1.00x) | 25.19x (4/4 >1.00x) | 31883 passed / 70695 failed (31.08%) |
 | `20260709T070620Z` `e0bf69a` PR #374: bytecode: optimize update expressions benchmark | 4.13x (65/73 >1.00x) | - (0/73 >1.00x) | 23.30x (4/4 >1.00x) | 31883 passed / 70695 failed (31.08%) |
 | `20260709T074846Z` `b045683` PR #366: Implement residual RegExp Test262 support | 4.13x (65/73 >1.00x) | - (0/73 >1.00x) | 23.99x (4/4 >1.00x) | 32167 passed / 70411 failed (31.36%) |
+| `20260709T085909Z` `d8c9e6a` PR #376: Improve residual Math built-in Test262 coverage | 4.19x (65/73 >1.00x) | - (0/73 >1.00x) | 23.24x (4/4 >1.00x) | 32719 passed / 69859 failed (31.90%) |
