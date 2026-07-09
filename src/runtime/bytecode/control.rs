@@ -2,8 +2,12 @@ mod array_add_loop;
 mod array_fill_loop;
 mod block_lexical_loop;
 mod for_loop;
+mod loop_helpers;
+mod object_literal_loop;
+mod string_concat_loop;
 mod switch_for_loop;
 mod try_catch;
+mod update_expression_loop;
 mod while_loop;
 
 use std::rc::Rc;

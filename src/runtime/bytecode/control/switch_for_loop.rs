@@ -8,6 +8,8 @@ use crate::{
     value::Value,
 };
 
+use super::loop_helpers::same_bytecode_binding;
+
 #[derive(Debug)]
 pub(super) struct BytecodeForSwitchFastPath<'a> {
     pub(super) discriminant: &'a BytecodeBinding,
@@ -60,7 +62,7 @@ impl Context {
         else {
             return Ok(None);
         };
-        if !super::for_loop::same_bytecode_binding(index, discriminant_binding) {
+        if !same_bytecode_binding(index, discriminant_binding) {
             return Ok(None);
         }
         let Ok(mask_i32) = number_to_i32(*mask, "&") else {
@@ -87,18 +89,14 @@ impl Context {
                 return Ok(None);
             }
             match target {
-                Some(existing)
-                    if !super::for_loop::same_bytecode_binding(existing, parsed.target) =>
-                {
+                Some(existing) if !same_bytecode_binding(existing, parsed.target) => {
                     return Ok(None);
                 }
                 Some(_) => {}
                 None => target = Some(parsed.target),
             }
             match array {
-                Some(existing)
-                    if !super::for_loop::same_bytecode_binding(existing, parsed.array) =>
-                {
+                Some(existing) if !same_bytecode_binding(existing, parsed.array) => {
                     return Ok(None);
                 }
                 Some(_) => {}
@@ -146,14 +144,12 @@ impl Context {
                 BytecodeInstruction::StoreBinding(target_write),
                 BytecodeInstruction::StoreLast,
                 BytecodeInstruction::Complete(BytecodeCompletion::Break(None)),
-            ] if super::for_loop::same_bytecode_binding(target_read, target_write) => {
-                Ok(Some(ParsedSwitchCase {
-                    target: target_write,
-                    array,
-                    array_index: index.index()?,
-                    breaks: true,
-                }))
-            }
+            ] if same_bytecode_binding(target_read, target_write) => Ok(Some(ParsedSwitchCase {
+                target: target_write,
+                array,
+                array_index: index.index()?,
+                breaks: true,
+            })),
             [
                 BytecodeInstruction::LoadBinding(target_read),
                 BytecodeInstruction::LoadBinding(array),
@@ -161,14 +157,12 @@ impl Context {
                 BytecodeInstruction::NumberBinary(BytecodeNumericBinaryOp::Add),
                 BytecodeInstruction::StoreBinding(target_write),
                 BytecodeInstruction::StoreLast,
-            ] if super::for_loop::same_bytecode_binding(target_read, target_write) => {
-                Ok(Some(ParsedSwitchCase {
-                    target: target_write,
-                    array,
-                    array_index: index.index()?,
-                    breaks: false,
-                }))
-            }
+            ] if same_bytecode_binding(target_read, target_write) => Ok(Some(ParsedSwitchCase {
+                target: target_write,
+                array,
+                array_index: index.index()?,
+                breaks: false,
+            })),
             _ => Ok(None),
         }
     }

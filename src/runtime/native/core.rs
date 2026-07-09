@@ -181,6 +181,25 @@ impl Context {
         self.construct_native_function_kind(self.native_function(id)?.kind(), args)
     }
 
+    pub(in crate::runtime) fn is_constructor_value(&self, value: &Value) -> Result<bool> {
+        match value {
+            Value::Function(id) => self.is_function_constructable(*id),
+            Value::NativeFunction(id) => Ok(native_kind_is_constructable(
+                self.native_function(*id)?.kind(),
+            )),
+            Value::Object(_)
+            | Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::HeapString(_)
+            | Value::Symbol(_)
+            | Value::HostFunction(_)
+            | Value::Error(_) => Ok(false),
+        }
+    }
+
     pub(in crate::runtime) fn construct_native_function_kind(
         &mut self,
         kind: NativeFunctionKind,

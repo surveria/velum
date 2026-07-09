@@ -580,6 +580,10 @@ impl Context {
         }
     }
 
+    pub(in crate::runtime) fn is_function_constructable(&self, id: FunctionId) -> Result<bool> {
+        Ok(self.function(id)?.constructable)
+    }
+
     pub(in crate::runtime) fn function(&self, id: FunctionId) -> Result<&super::Function> {
         self.functions
             .get(id.index())

@@ -17,6 +17,31 @@ while (index < 8192) {
   if (match !== null) {
     total = total + match[0].length + match.index;
   }
+  let cloned = new RegExp(words, "mi");
+  if (cloned.source === "\\w+" && cloned.flags === "im") {
+    total = total + 1;
+  }
+  if (words.global && !words.ignoreCase && !words.sticky) {
+    total = total + 1;
+  }
+  if (words.toString() === "/\\w+/g") {
+    total = total + 1;
+  }
+  if (words[Symbol.match]("abc 123").length === 2) {
+    total = total + 1;
+  }
+  if (digits[Symbol.search]("id=12345") === 3) {
+    total = total + 1;
+  }
+  if (words[Symbol.replace]("abc 123", "x") === "x x") {
+    total = total + 1;
+  }
+  if (/-/[Symbol.split]("a-b-c").length === 3) {
+    total = total + 1;
+  }
+  if ((/a/g)[Symbol.matchAll]("aba").next().value[0] === "a") {
+    total = total + 1;
+  }
   index = index + 1;
 }
 
