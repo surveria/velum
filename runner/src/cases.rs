@@ -35,6 +35,8 @@ mod cases_reporting;
 mod cases_test262;
 #[path = "cases_test262_collections.rs"]
 mod cases_test262_collections;
+#[path = "cases_test262_reflect.rs"]
+mod cases_test262_reflect;
 
 pub use cases_reporting::{benchmark_cases, quickjs_differential_cases};
 pub use cases_test262::test262_cases;

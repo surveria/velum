@@ -65,14 +65,6 @@ const PATH_TEST262_OBJECT_INTEGRITY_METHODS: &str =
     "tests/corpora/test262/active/built-ins/Object/integrity_methods.js";
 const PATH_TEST262_OBJECT_PROTOTYPE_METHODS: &str =
     "tests/corpora/test262/active/built-ins/Object/prototype_methods.js";
-const PATH_TEST262_REFLECT_METADATA: &str =
-    "tests/corpora/test262/active/built-ins/Reflect/metadata.js";
-const PATH_TEST262_REFLECT_PROPERTY_OPS: &str =
-    "tests/corpora/test262/active/built-ins/Reflect/property_ops.js";
-const PATH_TEST262_REFLECT_PROTOTYPE_EXTENSIBILITY: &str =
-    "tests/corpora/test262/active/built-ins/Reflect/prototype_extensibility.js";
-const PATH_TEST262_REFLECT_APPLY_CONSTRUCT: &str =
-    "tests/corpora/test262/active/built-ins/Reflect/apply_construct.js";
 const PATH_TEST262_NUMBER_BUILTIN: &str =
     "tests/corpora/test262/active/built-ins/Number/constructor.js";
 const PATH_TEST262_NUMBER_FORMATTING: &str =
@@ -511,7 +503,7 @@ fn test262_builtin_cases() -> Vec<EngineCase> {
     cases.extend(test262_global_builtin_cases());
     cases.extend(test262_math_builtin_cases());
     cases.extend(test262_object_builtin_cases());
-    cases.extend(test262_reflect_builtin_cases());
+    cases.extend(super::cases_test262_reflect::test262_reflect_builtin_cases());
     cases.extend(test262_string_builtin_cases());
     cases.extend(super::cases_test262_collections::test262_collection_builtin_cases());
     cases
@@ -642,31 +634,6 @@ fn test262_object_builtin_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "built-ins/Object/prototype-methods",
             path: PATH_TEST262_OBJECT_PROTOTYPE_METHODS,
-            expectation: Expectation::Value("42"),
-        },
-    ]
-}
-
-fn test262_reflect_builtin_cases() -> Vec<EngineCase> {
-    vec![
-        EngineCase {
-            id: "built-ins/Reflect/metadata",
-            path: PATH_TEST262_REFLECT_METADATA,
-            expectation: Expectation::Value("42"),
-        },
-        EngineCase {
-            id: "built-ins/Reflect/property-ops",
-            path: PATH_TEST262_REFLECT_PROPERTY_OPS,
-            expectation: Expectation::Value("42"),
-        },
-        EngineCase {
-            id: "built-ins/Reflect/prototype-extensibility",
-            path: PATH_TEST262_REFLECT_PROTOTYPE_EXTENSIBILITY,
-            expectation: Expectation::Value("42"),
-        },
-        EngineCase {
-            id: "built-ins/Reflect/apply-construct",
-            path: PATH_TEST262_REFLECT_APPLY_CONSTRUCT,
             expectation: Expectation::Value("42"),
         },
     ]
