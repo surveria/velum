@@ -25,11 +25,20 @@ mod failure_classification;
 mod jetstream;
 mod prepared_benchmarks;
 mod quickjs_baseline;
+mod report_benchmark_methodology;
+mod report_composition;
 #[cfg(test)]
 mod report_formatting_tests;
 mod report_metadata;
+mod report_methodology_rendering;
 mod report_rendering;
 mod report_rollup;
+mod report_schema;
+mod report_schema_io;
+mod report_schema_support;
+#[cfg(test)]
+mod report_schema_tests;
+mod report_schema_validation;
 mod report_text;
 mod runner_cli;
 mod test262_baseline;
@@ -42,8 +51,9 @@ use cases::{DifferentialCase, EngineCase, Expectation};
 #[cfg(test)]
 use report_rendering::{coverage_percent, feature_area_rows_with_limit};
 use report_rendering::{
-    feature_area_rows, fenced_table, percent, render_report, render_timing_tsv, skip_reason_rows,
+    feature_area_rows, fenced_table, render_report, render_timing_tsv, skip_reason_rows,
 };
+use report_schema::{EnvironmentInfo, ReportDocument, ReportMode, RunConfiguration};
 use runner_cli::{Config, print_rollup_outputs};
 
 const STATUS_PASSED: &str = "✅ passed";
@@ -63,6 +73,17 @@ const REASON_QUICKJS_ENV_MISSING: &str = "set RSQJS_QUICKJS=/path/to/qjs to enab
 enum ReportKind {
     Full,
     Correctness,
+    Performance,
+}
+
+impl ReportKind {
+    const fn schema_mode(self) -> ReportMode {
+        match self {
+            Self::Full => ReportMode::Full,
+            Self::Correctness => ReportMode::Correctness,
+            Self::Performance => ReportMode::Performance,
+        }
+    }
 }
 
 fn main() {
@@ -77,8 +98,21 @@ fn run() -> anyhow::Result<()> {
     let (report_path, report_kind) = match config {
         Config::Run { report_path } => (report_path, ReportKind::Full),
         Config::Correctness { report_path } => (report_path, ReportKind::Correctness),
+        Config::Performance { report_path } => (report_path, ReportKind::Performance),
         Config::Benchmarks { report_path } => {
             return benchmark_mode::run(&report_path);
+        }
+        Config::ComposeReports {
+            expected_tree,
+            correctness_path,
+            performance_path,
+            report_path,
+        } => {
+            let correctness = report_schema_io::read_document(&correctness_path)?;
+            let performance = report_schema_io::read_document(&performance_path)?;
+            let report = report_composition::compose(correctness, performance, &expected_tree)?;
+            report_composition::validate_output_path(&report, &report_path)?;
+            return write_report(&report_path, &report);
         }
         Config::AggregateReports { report_dir } => {
             let outputs = report_rollup::generate_from_report_dir(&report_dir)?;
@@ -91,17 +125,25 @@ fn run() -> anyhow::Result<()> {
     let quickjs = env::var_os(QUICKJS_ENV).map(PathBuf::from);
     let test262 = env::var_os(TEST262_ENV).map(PathBuf::from);
     let include_jetstream = report_kind == ReportKind::Full && jetstream_enabled();
+    let environment = EnvironmentInfo::capture();
+    let run_configuration = RunConfiguration::capture(
+        quickjs.is_some(),
+        test262.is_some(),
+        report_kind.schema_mode(),
+        include_jetstream,
+    );
     let report = build_report(
         quickjs.as_deref(),
         test262.as_deref(),
         report_kind,
         include_jetstream,
     )?;
+    if include_jetstream {
+        write_jetstream_report_from_env(&report)?;
+    }
+    let report = ReportDocument::from_run(report, environment, run_configuration)?;
     write_report(&report_path, &report)?;
     if report_kind == ReportKind::Full {
-        if include_jetstream {
-            write_jetstream_report_from_env(&report)?;
-        }
         let outputs = report_rollup::generate_from_report_path(&report_path)?;
         print_rollup_outputs(&outputs);
     }
@@ -140,18 +182,6 @@ struct FullReport {
     elapsed: Duration,
 }
 
-impl FullReport {
-    fn failed_count(&self) -> usize {
-        let corpus_failures = self
-            .corpora
-            .iter()
-            .filter(|corpus| corpus.required)
-            .map(CorpusReport::failed)
-            .fold(0usize, usize::saturating_add);
-        corpus_failures.saturating_add(self.benchmarks.failed)
-    }
-}
-
 #[derive(Debug)]
 struct CorpusReport {
     name: &'static str,
@@ -182,10 +212,6 @@ impl CorpusReport {
         self.stats.total
     }
 
-    const fn executed(&self) -> usize {
-        self.stats.executed()
-    }
-
     const fn passed(&self) -> usize {
         self.stats.passed
     }
@@ -196,14 +222,6 @@ impl CorpusReport {
 
     const fn skipped(&self) -> usize {
         self.stats.skipped
-    }
-
-    fn failed_rows(&self) -> Vec<CaseRow> {
-        self.rows
-            .iter()
-            .filter(|row| row.status == STATUS_FAILED)
-            .cloned()
-            .collect()
     }
 }
 
@@ -236,10 +254,6 @@ impl CorpusStats {
             failed,
             skipped,
         }
-    }
-
-    const fn executed(self) -> usize {
-        self.passed.saturating_add(self.failed)
     }
 }
 
@@ -340,10 +354,13 @@ fn build_report(
     include_jetstream: bool,
 ) -> anyhow::Result<FullReport> {
     let timer = timing::RunTimer::start();
-    let mut corpora = vec![run_engine_corpus(), run_test262_corpus()];
-    corpora.extend(test262_full::run_reports(test262)?);
-    corpora.push(run_quickjs_corpus(quickjs));
-    let benchmarks = if report_kind == ReportKind::Full {
+    let mut corpora = Vec::new();
+    if report_kind != ReportKind::Performance {
+        corpora.extend([run_engine_corpus(), run_test262_corpus()]);
+        corpora.extend(test262_full::run_reports(test262)?);
+        corpora.push(run_quickjs_corpus(quickjs));
+    }
+    let benchmarks = if matches!(report_kind, ReportKind::Full | ReportKind::Performance) {
         benchmarks::run()
     } else {
         benchmarks::BenchmarkReport::not_run()
@@ -549,23 +566,53 @@ fn ensure_output(case_id: &str, actual: &[String], expected: &[&str]) -> anyhow:
     Ok(())
 }
 
-fn write_report(path: &Path, report: &FullReport) -> anyhow::Result<()> {
+fn write_report(path: &Path, report: &ReportDocument) -> anyhow::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create report directory '{}'", parent.display()))?;
     }
 
-    let body = render_report(report);
+    let component = report.bounded_component()?;
+    let exhaustive = report_schema_io::exhaustive_enabled().then_some(report);
+    let yaml_paths = report_schema_io::write_yaml_artifacts(path, &component, exhaustive)?;
+    println!(
+        "structured YAML report summary: {}",
+        yaml_paths.summary.display()
+    );
+    println!(
+        "bounded YAML composition source: {}",
+        yaml_paths.component.display()
+    );
+    if let Some(exhaustive_path) = &yaml_paths.exhaustive {
+        println!(
+            "exhaustive YAML report artifact: {}",
+            exhaustive_path.display()
+        );
+    }
+    let body = render_report(&component);
     fs::write(path, body)
         .with_context(|| format!("failed to write test report '{}'", path.display()))?;
     let timing_path = timing_artifact_path(path);
-    fs::write(&timing_path, render_timing_tsv(report)).with_context(|| {
+    fs::write(&timing_path, render_timing_tsv(&component)).with_context(|| {
         format!(
             "failed to write timing artifact '{}'",
             timing_path.display()
         )
     })?;
-    println!("local/CI timing artifact: {}", timing_path.display());
+    println!("bounded timing artifact: {}", timing_path.display());
+    if exhaustive.is_some() {
+        let exhaustive_timing_path = exhaustive_timing_artifact_path(path);
+        fs::write(&exhaustive_timing_path, render_timing_tsv(report)).with_context(|| {
+            format!(
+                "failed to write exhaustive timing artifact '{}'",
+                exhaustive_timing_path.display()
+            )
+        })?;
+        println!(
+            "exhaustive timing artifact: {}",
+            exhaustive_timing_path.display()
+        );
+    }
     Ok(())
 }
 
@@ -575,6 +622,14 @@ fn timing_artifact_path(report_path: &Path) -> PathBuf {
         .and_then(std::ffi::OsStr::to_str)
         .unwrap_or("rsqjs-test-report");
     report_path.with_file_name(format!("{file_stem}-timings.tsv"))
+}
+
+fn exhaustive_timing_artifact_path(report_path: &Path) -> PathBuf {
+    let file_stem = report_path
+        .file_stem()
+        .and_then(std::ffi::OsStr::to_str)
+        .unwrap_or("rsqjs-test-report");
+    report_path.with_file_name(format!("{file_stem}-exhaustive-timings.tsv"))
 }
 
 struct DisplaySlice<'a, T>(&'a [T]);

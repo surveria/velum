@@ -8,12 +8,25 @@ Correctness and performance are deliberately separate:
 
 - `scripts/check-fast.sh` is the local iteration loop. It does not download external corpora or run benchmarks.
 - `scripts/check-correctness.sh` is the required ready-PR and merge-queue gate. It runs all formatting, lint, test, documentation, active-fixture, QuickJS differential, and full Test262 checks, but no project or JetStream benchmarks.
-- After a merge, CI checks out the exact merge commit and runs the prepared project sentinel set with the committed QuickJS baseline. This preserves a merge-to-merge performance history without putting sequential measurements on the merge critical path.
-- `scripts/test-all.sh` is the explicit full/manual lane and includes JetStream. It is not a routine local prerequisite for an ordinary feature PR.
+- After a merge, CI checks out the exact merge commit and runs only the prepared project sentinel set with the committed QuickJS baseline. It does not prepare QuickJS shell/Test262 inputs or rerun correctness. The publisher composes this performance model with the already-required exact-tree correctness model, preserving both Test262 progress and merge-to-merge performance history.
+- `scripts/test-all.sh` is the explicit combined/manual lane. It defaults to the five project sentinels with JetStream disabled; set `RSQJS_BENCH_SET`, a focused filter, or the dedicated JetStream switch explicitly when deeper diagnostics are needed. It is not a routine local prerequisite for an ordinary feature PR.
 
 All test-oriented entrypoints acquire a shared `flock` through `scripts/with-host-lock.sh`; benchmark entrypoints acquire the exclusive form of the same lock. Correctness runs can therefore overlap with each other, while timing work cannot overlap with tests or another benchmark. Local worktrees use `/run/lock/rsqjs/host-performance.lock`. The runner deployment bind-mounts that host directory at `/host/rsqjs-lock`, and CI sets `RSQJS_HOST_LOCK_PATH=/host/rsqjs-lock/host-performance.lock`, so all runner containers and interactive agents lock the same inode. Container-private `/tmp` and `/run` paths are not suitable. The sibling `.owner` file is diagnostic only; lock release follows the kernel file descriptor and remains safe after a crash.
 
 Feature and compatibility work should run focused tests plus `scripts/check-fast.sh`, push the draft branch, and let required CI perform the complete correctness pass once. Performance work should use an exact-id or explicit-prefix project filter while iterating and leave the canonical per-merge sentinel measurement to CI. Use `RSQJS_BENCH_SET=full` only when the complete legacy project corpus is intentionally required.
+
+## Structured Report Artifacts
+
+Every correctness, performance, or combined runner invocation writes coordinated bounded outputs from one typed report model:
+
+- `rsqjs-test-report-<timestamp>.yaml` is the compact, schema-versioned source for tracked history and rollups.
+- `rsqjs-test-report-<timestamp>-component.yaml` is the typed artifact used for correctness/performance composition. It retains complete counts, the single full-corpus feature map, exact failure-category totals, benchmark rows, and at most 30 deterministic actionable groups with a representative case, source, reason, and detail.
+- `rsqjs-test-report-<timestamp>.md` is the human-readable view derived from the same bounded component.
+- `rsqjs-test-report-<timestamp>-timings.tsv` is a bounded migration view; it never expands back into all Test262 rows.
+
+Both ordinary YAML files have an executable 1,000-line limit, and diagnostic groups have an executable limit of 30. Feature/category totals are computed before truncation, so the bounded document remains numerically complete. `RSQJS_REPORT_EXHAUSTIVE=1` additionally writes local-only `*-exhaustive.yaml` and `*-exhaustive-timings.tsv`; GitHub Actions rejects this flag, and exhaustive paths never enter artifact metadata, uploads, publication, or git.
+
+Schema version `1` stores durations as integer nanoseconds and statuses as enums rather than presentation strings. Prepared benchmark methodology is carried from the typed runner outcome without a table-text round trip: mode and reference source are enums, lifecycle phases have exact raw `duration_ns` values or explicit boundary kinds, and checksums retain their primitive kind and exact number bits/value. Required CI uploads `rsqjs-correctness-<tree>`, while the benchmark-only post-merge lane uploads `rsqjs-reports-<tree>`. The publisher accepts only trusted successful `.github/workflows/ci.yml` runs whose head commit and artifact commit resolve to the requested tree, then composes the bounded `correctness` and `performance` components. It commits only compact YAML plus derived Markdown. New rollups read compact YAML directly; historical Markdown remains a compatibility fallback.
 
 ## Baselines
 
@@ -36,7 +49,7 @@ Track these against QuickJS on every supported device class:
 
 ## QuickJS Reference
 
-The report scripts prepare a pinned QuickJS reference binary before running differential checks or reference measurements. Generated reports, rollups, charts, and artifact metadata live under `target/rsqjs-reports/`; ordinary feature branches must not commit them. Required CI uploads a correctness artifact named by the tested tree. The separate post-merge job measures the exact merge commit, uploads the performance artifact consumed by the publisher, stores that source commit on the hidden `refs/rsqjs/ci-tested-sources` archive ref, copies the report into `reports/test-runs/`, and regenerates `reports/benchmark-rollup.md` plus `reports/benchmark-summary.jpg` in a signed report-only commit. The publisher can read the legacy `refs/heads/ci-tested-sources` branch as a migration base, but new archive commits are pushed only to the hidden ref. Set `RSQJS_TRACKED_REPORT=1` or `RSQJS_TEST_REPORT_PATH=reports/test-runs/<name>.md` only for intentional manual canonical report refreshes. The setup order is:
+Correctness/combined scripts prepare a pinned QuickJS reference binary for differential checks or explicitly requested live measurements. The performance-only post-merge path skips shell and Test262 setup, does not compile the in-process reference, and requires every sentinel to match the committed content-addressed baseline exactly; a missing or stale entry is a hard failure. Generated reports, rollups, charts, and artifact metadata live under `target/rsqjs-reports/`; ordinary feature branches must not commit them. Required CI and post-merge CI upload separate exact-tree bounded artifacts, and the publisher composes them before storing the source commit on the hidden `refs/rsqjs/ci-tested-sources` archive ref, copying compact YAML plus derived Markdown into `reports/test-runs/`, and regenerating the rollup and chart.
 
 1. use `RSQJS_QUICKJS` when it points to an executable file;
 2. use `qjs` from `PATH` when available;
@@ -48,9 +61,9 @@ The runner has two explicit project benchmark modes. Legacy `cold_eval` cases re
 
 Every prepared `run()` returns a primitive deterministic checksum. The runner compares it with the preflight result on every sampled invocation, checks it again through `__rsqjsBenchVerify()`, and requires rs-quickjs and QuickJS to produce equivalent values before reporting a latency ratio. Source loading, compilation (including parsing), setup, warmup, timed run, verification, and teardown durations are recorded separately in the lifecycle column; only the timed `run()` call contributes to per-operation latency.
 
-The default benchmark set remains `full` for backward compatibility. `RSQJS_BENCH_SET=sentinel` selects five prepared arithmetic, array-index, property-read, function-call, and string-scan cases used by the post-merge lane. `RSQJS_BENCH_FILTER` accepts comma-separated exact ids, or an explicit trailing `*` for prefix selection; a selector that matches nothing is an error instead of a silent empty run.
+The low-level runner keeps `full` as its compatibility default, but `scripts/test-all.sh` deliberately defaults to `RSQJS_BENCH_SET=sentinel`. The sentinel set contains five prepared arithmetic, array-index, property-read, function-call, and string-scan cases used by the post-merge lane. `RSQJS_BENCH_FILTER` accepts comma-separated exact ids, or an explicit trailing `*` for prefix selection; a selector that matches nothing is an error instead of a silent empty run. Run the legacy full set in focused filtered chunks so an ordinary bounded YAML report remains within its enforced size contract.
 
-Prepared QuickJS measurements use `tests/corpora/benchmarks/quickjs-baseline.tsv` by default. Each entry is content-addressed by case id, source digest, harness digest, protocol version, complete sampling configuration, reference-engine identity, and host profile (architecture, OS, CPU model, logical CPU count, kernel, and governor). `read` mode uses only an exact key match and measures QuickJS live on a missing or stale key. `refresh` mode remeasures and deterministically replaces the stale entry for the same case; `off` disables the store. Refresh the sentinel reference after a benchmark, harness, sampling, reference-engine, or target-host change:
+Prepared QuickJS measurements use `tests/corpora/benchmarks/quickjs-baseline.tsv` by default. Each entry is content-addressed by case id, source digest, harness digest, protocol version, complete sampling configuration, reference-engine identity, and host profile. `read` mode may fall back to a compiled live reference on a missing key, `require` rejects every miss and is mandatory for per-merge CI, `refresh` remeasures and replaces the case entry, and `off` disables the store. Refresh the sentinel reference explicitly after a benchmark, harness, sampling, reference-engine, or target-host change:
 
 ```bash
 RSQJS_BENCH_SET=sentinel \
@@ -67,7 +80,7 @@ Every direct local `--benchmarks` invocation must use the exclusive `scripts/wit
 
 The runner also executes a pinned, minimized JetStream shell workload snapshot from `tests/external/jetstream/`. The full upstream JetStream repository is intentionally not vendored because it includes browser workloads, WebAssembly payloads, compressed assets, and tooling bundles that are outside the current embedded shell engine surface. The checked-in snapshot records the upstream commit and keeps only selected JavaScript workload files that can be audited in this repository without repeated network downloads.
 
-JetStream shell reports belong to the explicit full/manual lane rather than the required or per-merge lane. They are generated under `target/rsqjs-reports/jetstream-runs/`; intentional tracked refreshes use `reports/jetstream-runs/`. `scripts/test-all.sh` prints both report paths. Ordinary feature branches must not commit either generated path. A canonical JetStream refresh feeds the shared `reports/benchmark-rollup.md` and `reports/benchmark-summary.jpg`, but its long-running shell workloads never delay a normal merge.
+JetStream shell reports belong to an explicit dedicated/manual lane rather than the required, combined-default, or per-merge lane. Enable that lane explicitly; generated files live under `target/rsqjs-reports/jetstream-runs/`, while intentional tracked refreshes use `reports/jetstream-runs/`. Ordinary feature branches must not commit either generated path. A canonical JetStream refresh feeds the shared rollup and chart, but its long-running shell workloads never delay a normal merge.
 
 JetStream shell rows compare rs-quickjs and QuickJS on the same vendored workload source. The reported `latency_ratio` is `rsqjs_median / quickjs_median`, so `1.00x` means QuickJS parity and lower is better. A `28.00x` row means rs-quickjs took about 28 times as long as QuickJS for that workload. Rows above `1.00x` are tracked exceptions while the baseline is still below target. Unsupported, failing, or invalid JetStream candidates stay visible in the JetStream table, but they are non-blocking coverage rows so expanding the external benchmark set does not make ordinary CI fail only because the current engine lacks a feature.
 
@@ -110,9 +123,9 @@ The timing and quality thresholds can be adjusted for local diagnosis:
 - `RSQJS_BENCH_MAX_CV_PERCENT` controls the maximum valid sample coefficient of variation.
 - `RSQJS_BENCH_MAX_OP_MS` rejects an operation after its first over-limit execution so it is not repeated blindly.
 - `RSQJS_BENCH_MAX_TOTAL_MS` bounds retries and adaptively reduces the requested sample count after the minimum robust sample count is collected.
-- `RSQJS_BENCH_SET` selects `full` (the default) or the prepared `sentinel` set.
+- `RSQJS_BENCH_SET` selects `full` (the low-level runner default) or `sentinel` (the repository script and per-merge default).
 - `RSQJS_BENCH_FILTER` selects exact case ids or explicit trailing-`*` prefixes.
-- `RSQJS_QUICKJS_BASELINE` selects `read` (the default), `refresh`, or `off`.
+- `RSQJS_QUICKJS_BASELINE` selects `read` (the local default), strict `require`, `refresh`, or `off`.
 - `RSQJS_QUICKJS_BASELINE_PATH` overrides the committed baseline path.
 
 Do not weaken these thresholds in CI to make a benchmark pass. Fix the benchmark workload or move the case back to tests if it is not a meaningful performance measurement.

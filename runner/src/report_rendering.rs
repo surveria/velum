@@ -3,29 +3,35 @@ use std::{collections::BTreeMap, time::Duration};
 use tabled::{Table, Tabled};
 
 use super::{
-    CaseRow, CorpusReport, FeatureAreaRow, FeatureAreaStats, FullReport, REPORT_TITLE, RUNNER_NAME,
-    STATUS_FAILED, STATUS_PASSED, STATUS_SKIPPED, SkipReasonRow, benchmarks,
-    failure_classification, jetstream, report_text, timing,
+    CaseRow, FeatureAreaRow, FeatureAreaStats, REPORT_TITLE, RUNNER_NAME, STATUS_FAILED,
+    STATUS_PASSED, STATUS_SKIPPED, SkipReasonRow, benchmarks, failure_classification,
+    report_methodology_rendering::{
+        methodology_checksum, methodology_lifecycle, methodology_mode, methodology_reference,
+    },
+    report_schema::{
+        BenchmarkSuite, CaseRecord, CaseStatus, FeatureAreaSummary, Measurement, ReportDocument,
+        SuiteReport, SuiteSummary,
+    },
+    report_text, timing,
 };
 
 const NO_FAILED_CASES: &str = "No failed cases.";
-const TEST262_FULL_CORPUS_NAME: &str = "Test262 full corpus";
 const FAILED_CASE_DETAIL_LIMIT: usize = 30;
 const CORPUS_TIMING_ROW_LIMIT: usize = 200;
-const FEATURE_AREA_ROW_LIMIT: usize = 40;
-const BASIS_POINTS_SCALE: usize = 10_000;
-const PERCENT_SCALE: usize = 100;
-const COVERAGE_SCALE: usize = 1_000_000;
-const COVERAGE_MINOR_SCALE: usize = 10_000;
+const FEATURE_AREA_ROW_LIMIT: usize = 32;
+const BASIS_POINTS_SCALE: u64 = 10_000;
+const PERCENT_SCALE: u64 = 100;
+const COVERAGE_SCALE: u64 = 1_000_000;
+const COVERAGE_MINOR_SCALE: u64 = 10_000;
 const OTHER_FEATURE_AREAS: &str = "other feature areas";
 const NO_SKIP_REASON: &str = "none";
-const MILLISECONDS_PER_SECOND: f64 = 1_000.0;
+const NANOS_PER_MILLISECOND: u64 = 1_000_000;
 
 #[derive(Debug, Tabled)]
 struct CorpusSummaryRow {
     corpus: String,
-    total: usize,
-    executed: usize,
+    total: u64,
+    executed: u64,
     passed: String,
     failed: String,
     skipped: String,
@@ -54,11 +60,72 @@ struct CaseTimingRow {
 #[derive(Debug, Tabled)]
 struct TimingSummaryRow {
     phase: String,
-    rows: usize,
+    rows: u64,
     elapsed: String,
 }
 
-pub fn render_report(report: &FullReport) -> String {
+#[derive(Debug, Tabled)]
+struct SkipReasonTableRow {
+    skipped: u64,
+    reason: String,
+}
+
+#[derive(Debug, Tabled)]
+struct FeatureAreaTableRow {
+    feature_area: String,
+    total: u64,
+    executed: u64,
+    passed: String,
+    failed: String,
+    skipped: String,
+    pass_rate: String,
+    manifest_enabled: u64,
+    top_skip_reason: String,
+}
+
+#[derive(Debug, Tabled)]
+struct BenchmarkTableRow {
+    benchmark: String,
+    status: String,
+    source: String,
+    iterations: u64,
+    case_elapsed: String,
+    rsqjs_measure: String,
+    quickjs_measure: String,
+    rsqjs_eval: String,
+    quickjs_eval: String,
+    latency_ratio: String,
+    latency_budget: String,
+    memory_ratio: String,
+    rsqjs_cv: String,
+    quickjs_cv: String,
+    quality: String,
+    detail: String,
+    mode: String,
+    lifecycle: String,
+    checksum: String,
+    reference_source: String,
+}
+
+#[derive(Debug, Tabled)]
+struct JetStreamTableRow {
+    benchmark: String,
+    status: String,
+    source: String,
+    case_elapsed: String,
+    rsqjs_measure: String,
+    quickjs_measure: String,
+    rsqjs_time: String,
+    quickjs_time: String,
+    latency_ratio: String,
+    latency_budget: String,
+    rsqjs_cv: String,
+    quickjs_cv: String,
+    quality: String,
+    detail: String,
+}
+
+pub fn render_report(report: &ReportDocument) -> String {
     let mut sections = vec![
         REPORT_TITLE.to_owned(),
         String::new(),
@@ -67,8 +134,8 @@ pub fn render_report(report: &FullReport) -> String {
     ];
     sections.extend(super::report_metadata::render_section(&report.metadata));
     sections.extend([
-        "Corpus failure sections list failed cases only. Timing sections list recorded case timings, capped to the slowest rows for large corpora.".to_owned(),
-        "The sibling `*-timings.tsv` artifact lists every recorded test, benchmark, and JetStream timing row.".to_owned(),
+        "Corpus sections preserve exact counts and bounded typed diagnostics. Individual case rows appear only when materialized; timing sections list only recorded rows.".to_owned(),
+        "The sibling `*.yaml` summary is the tracked machine-readable source; `*-component.yaml` and `*-timings.tsv` are bounded composition artifacts. Set `RSQJS_REPORT_EXHAUSTIVE=1` only for explicit per-case diagnostics.".to_owned(),
         "The full Test262 corpus is progress-only; the active subset remains the CI gate.".to_owned(),
         "Test262 file conformance collapses required variants by source file for dashboard comparison.".to_owned(),
         "Test262 full corpus keeps default, strict, module, and raw variants as diagnostic rows.".to_owned(),
@@ -81,56 +148,61 @@ pub fn render_report(report: &FullReport) -> String {
         String::new(),
         fenced_table(&Table::new(corpus_summary_rows(report))),
     ]);
-    for corpus in &report.corpora {
+    for suite in &report.suites {
+        let corpus = &suite.summary;
         sections.push(format!("## {}", corpus.name));
         sections.push(String::new());
         sections.push(format!(
             "- Total: {}\n- Executed: {}\n- Passed: {}\n- Failed: {}\n- Skipped: {}\n- Coverage: {}\n- Pass rate: {}",
-            corpus.total(),
-            corpus.executed(),
-            corpus.passed(),
-            corpus.failed(),
-            corpus.skipped(),
-            coverage_percent(corpus.executed(), corpus.total()),
-            percent(corpus.passed(), corpus.executed()),
+            corpus.counts.total,
+            corpus.counts.executed,
+            corpus.counts.passed,
+            corpus.counts.failed,
+            corpus.counts.skipped,
+            coverage_percent_u64(corpus.counts.executed, corpus.counts.total),
+            percent_u64(corpus.counts.passed, corpus.counts.executed),
         ));
-        sections.push(format!(
-            "- Elapsed: {}",
-            timing::format_duration(corpus.elapsed)
-        ));
+        sections.push(format!("- Elapsed: {}", duration_text(corpus.duration_ns)));
         render_skip_reasons(&mut sections, corpus);
         render_feature_map(&mut sections, corpus);
         sections.push(String::new());
-        render_case_timings(&mut sections, corpus);
-        let failed_rows = corpus.failed_rows();
-        if corpus.name == TEST262_FULL_CORPUS_NAME {
-            sections.extend(failure_classification::sections(&failed_rows));
+        render_case_timings(&mut sections, suite);
+        let failed_rows = failed_case_rows(suite);
+        if let Some(diagnostics) = &corpus.failure_diagnostics {
+            sections.extend(failure_classification::diagnostic_sections(diagnostics));
         }
-        render_failed_cases(&mut sections, &failed_rows);
+        render_failed_cases(
+            &mut sections,
+            corpus.counts.failed,
+            corpus.diagnostics_derived_from.as_deref(),
+            &failed_rows,
+        );
     }
     sections.push("## Benchmarks".to_owned());
     sections.push(String::new());
     sections.push(format!(
         "- Measured: {}\n- In-process measured: {}\n- Failed: {}\n- Invalid: {}\n- Skipped reference: {}\n- Over latency budget ({}): {}\n- Over memory budget ({}): {}\n- Elapsed: {}",
-        report.benchmarks.measured,
-        report.benchmarks.in_process_measured,
-        report.benchmarks.failed,
-        report.benchmarks.invalid,
-        report.benchmarks.skipped,
+        report.benchmarks.counts.measured,
+        report.benchmarks.counts.in_process_measured,
+        report.benchmarks.counts.failed,
+        report.benchmarks.counts.invalid,
+        report.benchmarks.counts.skipped_reference,
         benchmarks::BUDGET_LABEL,
-        report.benchmarks.over_latency_budget,
+        report.benchmarks.counts.over_latency_budget,
         benchmarks::BUDGET_LABEL,
-        report.benchmarks.over_memory_budget,
-        timing::format_duration(report.benchmarks.elapsed),
+        report.benchmarks.counts.over_memory_budget,
+        duration_text(report.benchmarks.duration_ns),
     ));
     sections.push(String::new());
-    sections.push(fenced_table(&Table::new(&report.benchmarks.rows)));
+    sections.push(fenced_table(&Table::new(benchmark_table_rows(
+        &report.benchmarks,
+    ))));
     sections.push(String::new());
-    sections.extend(jetstream::render_section(&report.jetstream));
+    sections.extend(render_jetstream_section(&report.jetstream));
     sections.join("\n")
 }
 
-pub fn render_timing_tsv(report: &FullReport) -> String {
+pub fn render_timing_tsv(report: &ReportDocument) -> String {
     let mut body = String::new();
     push_tsv_row(
         &mut body,
@@ -145,60 +217,86 @@ pub fn render_timing_tsv(report: &FullReport) -> String {
             "rsqjs_measure",
             "quickjs_measure",
             "detail",
+            "mode",
+            "lifecycle",
+            "checksum",
+            "reference_source",
         ],
     );
-    for corpus in &report.corpora {
-        for row in &corpus.rows {
-            let elapsed = duration_millis(row.elapsed);
+    for suite in &report.suites {
+        for row in &suite.cases {
+            let elapsed = duration_millis(row.duration_ns);
             push_tsv_row(
                 &mut body,
                 &[
                     "test",
-                    corpus.name,
-                    &row.case,
-                    &row.status,
+                    &suite.summary.name,
+                    &row.id,
+                    row.status.label(),
                     &row.source,
                     "",
                     &elapsed,
                     "",
                     "",
                     &row.detail,
+                    "",
+                    "",
+                    "",
+                    "",
                 ],
             );
         }
     }
     for row in &report.benchmarks.rows {
-        let iterations = row.iterations.to_string();
+        let iterations = row.iterations.unwrap_or_default().to_string();
+        let case_elapsed = optional_duration_text(row.case_duration_ns);
+        let rsqjs_measure = optional_duration_text(row.engine.wall_duration_ns);
+        let quickjs_measure = optional_duration_text(row.reference.wall_duration_ns);
+        let mode = methodology_mode(row.methodology.as_ref());
+        let lifecycle = methodology_lifecycle(row.methodology.as_ref());
+        let checksum = methodology_checksum(row.methodology.as_ref());
+        let reference_source = methodology_reference(row.methodology.as_ref());
         push_tsv_row(
             &mut body,
             &[
                 "benchmark",
                 "Benchmarks",
-                &row.benchmark,
-                &row.status,
+                &row.id,
+                row.status.label(),
                 &row.source,
                 &iterations,
-                &row.case_elapsed,
-                &row.rsqjs_measure,
-                &row.quickjs_measure,
+                &case_elapsed,
+                &rsqjs_measure,
+                &quickjs_measure,
                 &row.detail,
+                &mode,
+                &lifecycle,
+                &checksum,
+                &reference_source,
             ],
         );
     }
     for row in &report.jetstream.rows {
+        let case_elapsed = optional_duration_text(row.case_duration_ns);
+        let rsqjs_measure = optional_duration_text(row.engine.wall_duration_ns);
+        let quickjs_measure = optional_duration_text(row.reference.wall_duration_ns);
         push_tsv_row(
             &mut body,
             &[
                 "jetstream",
                 "JetStream Shell Benchmarks",
-                &row.benchmark,
-                &row.status,
+                &row.id,
+                row.status.label(),
                 &row.source,
                 "",
-                &row.case_elapsed,
-                &row.rsqjs_measure,
-                &row.quickjs_measure,
+                &case_elapsed,
+                &rsqjs_measure,
+                &quickjs_measure,
                 &row.detail,
+                "",
+                "",
+                "",
+                "",
             ],
         );
     }
@@ -227,21 +325,31 @@ fn push_tsv_field(body: &mut String, field: &str) {
     }
 }
 
-fn duration_millis(duration: Duration) -> String {
-    format!("{:.6}", duration.as_secs_f64() * MILLISECONDS_PER_SECOND)
+fn duration_millis(duration_ns: u64) -> String {
+    let milliseconds = duration_ns / NANOS_PER_MILLISECOND;
+    let fraction = duration_ns % NANOS_PER_MILLISECOND;
+    format!("{milliseconds}.{fraction:06}")
 }
 
-fn render_skip_reasons(sections: &mut Vec<String>, corpus: &CorpusReport) {
+fn render_skip_reasons(sections: &mut Vec<String>, corpus: &SuiteSummary) {
     if corpus.skip_reasons.is_empty() {
         return;
     }
     sections.push(String::new());
     sections.push("### Skip Reasons".to_owned());
     sections.push(String::new());
-    sections.push(fenced_table(&Table::new(&corpus.skip_reasons)));
+    let rows = corpus
+        .skip_reasons
+        .iter()
+        .map(|reason| SkipReasonTableRow {
+            skipped: reason.skipped,
+            reason: reason.reason.clone(),
+        })
+        .collect::<Vec<_>>();
+    sections.push(fenced_table(&Table::new(rows)));
 }
 
-fn render_feature_map(sections: &mut Vec<String>, corpus: &CorpusReport) {
+fn render_feature_map(sections: &mut Vec<String>, corpus: &SuiteSummary) {
     if corpus.feature_areas.is_empty() {
         return;
     }
@@ -253,17 +361,19 @@ fn render_feature_map(sections: &mut Vec<String>, corpus: &CorpusReport) {
             .to_owned(),
     );
     sections.push(String::new());
-    sections.push(fenced_table(&Table::new(&corpus.feature_areas)));
+    sections.push(fenced_table(&Table::new(feature_area_table_rows(
+        &corpus.feature_areas,
+    ))));
 }
 
-fn render_case_timings(sections: &mut Vec<String>, corpus: &CorpusReport) {
-    let timing_rows = case_timing_rows(corpus);
+fn render_case_timings(sections: &mut Vec<String>, suite: &SuiteReport) {
+    let timing_rows = case_timing_rows(suite);
     if timing_rows.is_empty() {
         return;
     }
     sections.push("### Case Timings".to_owned());
     sections.push(String::new());
-    let recorded = recorded_timing_count(corpus);
+    let recorded = recorded_timing_count(suite);
     if timing_rows.len() < recorded {
         sections.push(format!(
             "Showing the slowest {} of {} recorded case timings.",
@@ -276,10 +386,25 @@ fn render_case_timings(sections: &mut Vec<String>, corpus: &CorpusReport) {
     sections.push(String::new());
 }
 
-fn render_failed_cases(sections: &mut Vec<String>, failed_rows: &[CaseRow]) {
+fn render_failed_cases(
+    sections: &mut Vec<String>,
+    total_failed: u64,
+    diagnostics_derived_from: Option<&str>,
+    failed_rows: &[CaseRecord],
+) {
     sections.push("### Failed Cases".to_owned());
     sections.push(String::new());
     if failed_rows.is_empty() {
+        if total_failed > 0 {
+            let location = diagnostics_derived_from.map_or_else(
+                || "the typed actionable diagnostic groups in this section".to_owned(),
+                |suite| format!("the typed diagnostic groups in `{suite}`"),
+            );
+            sections.push(format!(
+                "Individual failed-case rows are omitted from this bounded report; use {location}."
+            ));
+            return;
+        }
         sections.push(NO_FAILED_CASES.to_owned());
         return;
     }
@@ -297,100 +422,232 @@ fn render_failed_cases(sections: &mut Vec<String>, failed_rows: &[CaseRow]) {
     ))));
 }
 
-fn last_failed_rows(rows: &[CaseRow], limit: usize) -> Vec<CaseRow> {
+fn last_failed_rows(rows: &[CaseRecord], limit: usize) -> Vec<CaseRecord> {
     let skip = rows.len().saturating_sub(limit);
     rows.iter().skip(skip).cloned().collect()
 }
 
-fn timing_summary_rows(report: &FullReport) -> Vec<TimingSummaryRow> {
+fn timing_summary_rows(report: &ReportDocument) -> Vec<TimingSummaryRow> {
     let mut rows = vec![TimingSummaryRow {
         phase: "Full runner report".to_owned(),
         rows: report
-            .corpora
+            .suites
             .iter()
-            .map(CorpusReport::total)
-            .fold(0usize, usize::saturating_add)
-            .saturating_add(report.benchmarks.rows.len())
-            .saturating_add(report.jetstream.rows.len()),
-        elapsed: timing::format_duration(report.elapsed),
+            .map(|suite| suite.summary.counts.total)
+            .fold(0u64, u64::saturating_add)
+            .saturating_add(usize_to_u64(report.benchmarks.rows.len()))
+            .saturating_add(usize_to_u64(report.jetstream.rows.len())),
+        elapsed: duration_text(report.duration_ns),
     }];
-    rows.extend(report.corpora.iter().map(|corpus| TimingSummaryRow {
-        phase: corpus.name.to_owned(),
-        rows: corpus.total(),
-        elapsed: timing::format_duration(corpus.elapsed),
+    rows.extend(report.suites.iter().map(|suite| TimingSummaryRow {
+        phase: suite.summary.name.clone(),
+        rows: suite.summary.counts.total,
+        elapsed: duration_text(suite.summary.duration_ns),
     }));
     rows.push(TimingSummaryRow {
         phase: "Benchmarks".to_owned(),
-        rows: report.benchmarks.rows.len(),
-        elapsed: timing::format_duration(report.benchmarks.elapsed),
+        rows: usize_to_u64(report.benchmarks.rows.len()),
+        elapsed: duration_text(report.benchmarks.duration_ns),
     });
     rows.push(TimingSummaryRow {
         phase: "JetStream Shell Benchmarks".to_owned(),
-        rows: report.jetstream.rows.len(),
-        elapsed: timing::format_duration(report.jetstream.elapsed),
+        rows: usize_to_u64(report.jetstream.rows.len()),
+        elapsed: duration_text(report.jetstream.duration_ns),
     });
     rows
 }
 
-fn corpus_summary_rows(report: &FullReport) -> Vec<CorpusSummaryRow> {
+fn corpus_summary_rows(report: &ReportDocument) -> Vec<CorpusSummaryRow> {
     report
-        .corpora
+        .suites
         .iter()
-        .map(|corpus| CorpusSummaryRow {
-            corpus: corpus.name.to_owned(),
-            total: corpus.total(),
-            executed: corpus.executed(),
-            passed: format!("{} {}", corpus.passed(), STATUS_PASSED),
-            failed: format!("{} {}", corpus.failed(), STATUS_FAILED),
-            skipped: format!("{} {}", corpus.skipped(), STATUS_SKIPPED),
-            coverage: coverage_percent(corpus.executed(), corpus.total()),
-            pass_rate: percent(corpus.passed(), corpus.executed()),
-            elapsed: timing::format_duration(corpus.elapsed),
+        .map(|suite| CorpusSummaryRow {
+            corpus: suite.summary.name.clone(),
+            total: suite.summary.counts.total,
+            executed: suite.summary.counts.executed,
+            passed: format!("{} {}", suite.summary.counts.passed, STATUS_PASSED),
+            failed: format!("{} {}", suite.summary.counts.failed, STATUS_FAILED),
+            skipped: format!("{} {}", suite.summary.counts.skipped, STATUS_SKIPPED),
+            coverage: coverage_percent_u64(
+                suite.summary.counts.executed,
+                suite.summary.counts.total,
+            ),
+            pass_rate: percent_u64(suite.summary.counts.passed, suite.summary.counts.executed),
+            elapsed: duration_text(suite.summary.duration_ns),
         })
         .collect()
 }
 
-fn recorded_timing_count(corpus: &CorpusReport) -> usize {
-    corpus
-        .rows
-        .iter()
-        .filter(|row| row.elapsed > Duration::ZERO)
-        .count()
+fn recorded_timing_count(suite: &SuiteReport) -> usize {
+    suite.cases.iter().filter(|row| row.duration_ns > 0).count()
 }
 
-fn case_timing_rows(corpus: &CorpusReport) -> Vec<CaseTimingRow> {
-    let mut rows = corpus
-        .rows
+fn case_timing_rows(suite: &SuiteReport) -> Vec<CaseTimingRow> {
+    let mut rows = suite
+        .cases
         .iter()
-        .filter(|row| row.elapsed > Duration::ZERO)
+        .filter(|row| row.duration_ns > 0)
         .collect::<Vec<_>>();
     rows.sort_by(|left, right| {
         right
-            .elapsed
-            .cmp(&left.elapsed)
-            .then_with(|| left.case.cmp(&right.case))
+            .duration_ns
+            .cmp(&left.duration_ns)
+            .then_with(|| left.id.cmp(&right.id))
     });
     rows.into_iter()
         .take(CORPUS_TIMING_ROW_LIMIT)
         .map(|row| CaseTimingRow {
-            case: row.case.clone(),
-            status: row.status.clone(),
+            case: row.id.clone(),
+            status: row.status.label().to_owned(),
             source: row.source.clone(),
-            elapsed: timing::format_duration(row.elapsed),
+            elapsed: duration_text(row.duration_ns),
         })
         .collect()
 }
 
-fn case_detail_rows(rows: &[CaseRow]) -> Vec<CaseDetailRow> {
+fn case_detail_rows(rows: &[CaseRecord]) -> Vec<CaseDetailRow> {
     rows.iter()
         .map(|row| CaseDetailRow {
-            case: row.case.clone(),
-            status: row.status.clone(),
+            case: row.id.clone(),
+            status: row.status.label().to_owned(),
             source: row.source.clone(),
-            elapsed: timing::format_duration(row.elapsed),
+            elapsed: duration_text(row.duration_ns),
             detail: report_text::table_detail(&row.detail),
         })
         .collect()
+}
+
+fn failed_case_rows(suite: &SuiteReport) -> Vec<CaseRecord> {
+    suite
+        .cases
+        .iter()
+        .filter(|row| row.status == CaseStatus::Failed)
+        .cloned()
+        .collect()
+}
+
+fn feature_area_table_rows(rows: &[FeatureAreaSummary]) -> Vec<FeatureAreaTableRow> {
+    rows.iter()
+        .map(|row| FeatureAreaTableRow {
+            feature_area: row.name.clone(),
+            total: row.counts.total,
+            executed: row.counts.executed,
+            passed: format!("{} {}", row.counts.passed, STATUS_PASSED),
+            failed: format!("{} {}", row.counts.failed, STATUS_FAILED),
+            skipped: format!("{} {}", row.counts.skipped, STATUS_SKIPPED),
+            pass_rate: percent_u64(row.counts.passed, row.counts.executed),
+            manifest_enabled: row.manifest_enabled,
+            top_skip_reason: row.top_skip_reason.clone(),
+        })
+        .collect()
+}
+
+fn benchmark_table_rows(suite: &BenchmarkSuite) -> Vec<BenchmarkTableRow> {
+    suite
+        .rows
+        .iter()
+        .map(|row| BenchmarkTableRow {
+            benchmark: row.id.clone(),
+            status: row.status.label().to_owned(),
+            source: row.source.clone(),
+            iterations: row.iterations.unwrap_or_default(),
+            case_elapsed: optional_duration_text(row.case_duration_ns),
+            rsqjs_measure: optional_duration_text(row.engine.wall_duration_ns),
+            quickjs_measure: optional_duration_text(row.reference.wall_duration_ns),
+            rsqjs_eval: measurement_median_text(&row.engine),
+            quickjs_eval: measurement_median_text(&row.reference),
+            latency_ratio: ratio_text(row.latency_ratio_centi_units),
+            latency_budget: row.latency_budget.label().to_owned(),
+            memory_ratio: ratio_text(row.memory_ratio_centi_units),
+            rsqjs_cv: measurement_cv_text(&row.engine),
+            quickjs_cv: measurement_cv_text(&row.reference),
+            quality: row.quality.label().to_owned(),
+            detail: row.detail.clone(),
+            mode: methodology_mode(row.methodology.as_ref()),
+            lifecycle: methodology_lifecycle(row.methodology.as_ref()),
+            checksum: methodology_checksum(row.methodology.as_ref()),
+            reference_source: methodology_reference(row.methodology.as_ref()),
+        })
+        .collect()
+}
+
+fn jetstream_table_rows(suite: &BenchmarkSuite) -> Vec<JetStreamTableRow> {
+    suite
+        .rows
+        .iter()
+        .map(|row| JetStreamTableRow {
+            benchmark: row.id.clone(),
+            status: row.status.label().to_owned(),
+            source: row.source.clone(),
+            case_elapsed: optional_duration_text(row.case_duration_ns),
+            rsqjs_measure: optional_duration_text(row.engine.wall_duration_ns),
+            quickjs_measure: optional_duration_text(row.reference.wall_duration_ns),
+            rsqjs_time: measurement_median_text(&row.engine),
+            quickjs_time: measurement_median_text(&row.reference),
+            latency_ratio: ratio_text(row.latency_ratio_centi_units),
+            latency_budget: row.latency_budget.label().to_owned(),
+            rsqjs_cv: measurement_cv_text(&row.engine),
+            quickjs_cv: measurement_cv_text(&row.reference),
+            quality: row.quality.label().to_owned(),
+            detail: row.detail.clone(),
+        })
+        .collect()
+}
+
+fn render_jetstream_section(report: &BenchmarkSuite) -> Vec<String> {
+    vec![
+        "## JetStream Shell Benchmarks".to_owned(),
+        String::new(),
+        format!(
+            "- Measured: {}\n- Failed candidates: {}\n- Invalid measurements: {}\n- Skipped: {}\n- Over latency budget ({}): {}\n- Elapsed: {}",
+            report.counts.measured,
+            report.counts.failed,
+            report.counts.invalid,
+            report.counts.skipped_reference,
+            benchmarks::BUDGET_LABEL,
+            report.counts.over_latency_budget,
+            duration_text(report.duration_ns),
+        ),
+        String::new(),
+        fenced_table(&Table::new(jetstream_table_rows(report))),
+        String::new(),
+    ]
+}
+
+fn measurement_median_text(measurement: &Measurement) -> String {
+    measurement.median_duration_ns.map_or_else(
+        || measurement.availability.label().to_owned(),
+        duration_text,
+    )
+}
+
+fn measurement_cv_text(measurement: &Measurement) -> String {
+    measurement
+        .coefficient_variation_permille
+        .map_or_else(|| "-".to_owned(), cv_text)
+}
+
+fn optional_duration_text(duration_ns: Option<u64>) -> String {
+    duration_ns.map_or_else(|| "-".to_owned(), duration_text)
+}
+
+fn duration_text(duration_ns: u64) -> String {
+    timing::format_duration(Duration::from_nanos(duration_ns))
+}
+
+fn ratio_text(ratio_centi_units: Option<u64>) -> String {
+    ratio_centi_units.map_or_else(
+        || "-".to_owned(),
+        |value| format!("{}.{:02}x", value / 100, value % 100),
+    )
+}
+
+fn cv_text(permille: u32) -> String {
+    format!("{}.{:01}%", permille / 10, permille % 10)
+}
+
+fn usize_to_u64(value: usize) -> u64 {
+    u64::try_from(value).unwrap_or(u64::MAX)
 }
 
 pub fn skip_reason_rows(rows: &[CaseRow]) -> Vec<SkipReasonRow> {
@@ -481,6 +738,10 @@ pub fn fenced_table(table: &Table) -> String {
 }
 
 pub fn percent(part: usize, total: usize) -> String {
+    percent_u64(usize_to_u64(part), usize_to_u64(total))
+}
+
+fn percent_u64(part: u64, total: u64) -> String {
     if total == 0 {
         return "0.00%".to_owned();
     }
@@ -490,7 +751,12 @@ pub fn percent(part: usize, total: usize) -> String {
     format!("{major}.{minor:02}%")
 }
 
+#[cfg(test)]
 pub fn coverage_percent(part: usize, total: usize) -> String {
+    coverage_percent_u64(usize_to_u64(part), usize_to_u64(total))
+}
+
+fn coverage_percent_u64(part: u64, total: u64) -> String {
     if total == 0 {
         return "0.0000%".to_owned();
     }

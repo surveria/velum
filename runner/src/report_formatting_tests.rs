@@ -4,6 +4,7 @@ use super::{
     CaseRow, CorpusReport, CorpusStats, FeatureAreaStats, FullReport, STATUS_PASSED, benchmarks,
     coverage_percent, feature_area_rows_with_limit, jetstream, report_metadata,
     report_rendering::render_timing_tsv,
+    report_schema::{EnvironmentInfo, ReportDocument, RunConfiguration},
 };
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -124,6 +125,11 @@ fn timing_tsv_lists_case_rows_and_sanitizes_fields() -> TestResult {
         elapsed: Duration::from_micros(1_250),
     };
 
+    let report = ReportDocument::from_run(
+        report,
+        EnvironmentInfo::capture(),
+        RunConfiguration::capture(false, false, crate::report_schema::ReportMode::Full, false),
+    )?;
     let tsv = render_timing_tsv(&report);
     ensure_contains(&tsv, "kind\tphase\tcase\tstatus")?;
     ensure_contains(

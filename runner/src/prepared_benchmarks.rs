@@ -95,7 +95,7 @@ fn measure_reference(
     baseline: &mut QuickjsBaseline,
     key: &BaselineKey,
 ) -> anyhow::Result<PreparedReference> {
-    if let Some(sample) = baseline.lookup(key) {
+    if let Some(sample) = baseline.lookup(key)? {
         return Ok(PreparedReference::Measured {
             measurement: Box::new(cached_measurement(sample, config)),
             source: ReferenceSource::Baseline,

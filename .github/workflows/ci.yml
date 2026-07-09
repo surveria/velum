@@ -62,7 +62,7 @@ jobs:
       RSQJS_CI_BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || '' }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           # Full history so base-relative gates can find the merge base and
@@ -139,7 +139,7 @@ jobs:
 
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ steps.report_metadata.outputs.artifact_name }}
           path: target/rsqjs-reports
@@ -172,7 +172,7 @@ jobs:
       RSQJS_REPORT_TASK: ${{ github.event.pull_request.title }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           persist-credentials: false
@@ -213,7 +213,7 @@ jobs:
           RSQJS_PERFORMANCE_ONLY: "1"
           RSQJS_JETSTREAM_ENABLED: "0"
           RSQJS_BENCH_SET: sentinel
-          RSQJS_QUICKJS_BASELINE: read
+          RSQJS_QUICKJS_BASELINE: require
           RSQJS_QUICKJS_BASELINE_PATH: tests/corpora/benchmarks/quickjs-baseline.tsv
         run: |
           if [[ -z "${RSQJS_DEPENDENCY_TOKEN}" ]]; then
@@ -229,7 +229,7 @@ jobs:
 
       - name: Upload performance reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ steps.report_metadata.outputs.artifact_name }}
           path: target/rsqjs-reports
@@ -266,7 +266,7 @@ jobs:
       RSQJS_TESTED_SOURCE_ARCHIVE_REF: refs/rsqjs/ci-tested-sources
       RSQJS_TESTED_SOURCE_ARCHIVE_LEGACY_REF: refs/heads/ci-tested-sources
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0

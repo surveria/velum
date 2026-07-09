@@ -17,6 +17,7 @@
 !/reports/*.md
 !/reports/test-runs/
 !/reports/test-runs/*.md
+!/reports/test-runs/rsqjs-test-report-????????T??????Z.yaml
 !/reports/jetstream-runs/
 !/reports/jetstream-runs/*.md
 
