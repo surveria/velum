@@ -15,8 +15,8 @@ use super::{
     GLOBAL_ENCODE_URI_NAME, GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME,
     GLOBAL_PARSE_INT_NAME, GLOBAL_THIS_NAME, INFINITY_NAME, JSON_NAME, MAP_NAME, MATH_NAME,
     NAN_NAME, NUMBER_NAME, NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY,
-    OBJECT_NAME, PROMISE_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME,
-    WEAK_MAP_NAME, WEAK_SET_NAME,
+    OBJECT_NAME, PROMISE_NAME, PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, STRING_NAME,
+    SYMBOL_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -35,6 +35,7 @@ const fn native_kind_is_constructable(kind: NativeFunctionKind) -> bool {
             | NativeFunctionKind::Number
             | NativeFunctionKind::Object
             | NativeFunctionKind::Promise
+            | NativeFunctionKind::Proxy
             | NativeFunctionKind::RegExp
             | NativeFunctionKind::String
             | NativeFunctionKind::Map
@@ -90,6 +91,7 @@ impl Context {
             NUMBER_NAME => self.number_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
             PROMISE_NAME => self.promise_constructor_value().map(Some),
+            PROXY_NAME => self.proxy_constructor_value().map(Some),
             REFLECT_NAME => self.reflect_object_value().map(Some),
             REGEXP_NAME => self.regexp_constructor_value().map(Some),
             SET_NAME => self.set_constructor_value().map(Some),
@@ -143,6 +145,7 @@ impl Context {
             NUMBER_NAME => self.number_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
             PROMISE_NAME => self.promise_constructor_value().map(Some),
+            PROXY_NAME => self.proxy_constructor_value().map(Some),
             REGEXP_NAME => self.regexp_constructor_value().map(Some),
             SET_NAME => self.set_constructor_value().map(Some),
             STRING_NAME => self.string_constructor_value().map(Some),
@@ -215,6 +218,7 @@ impl Context {
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
             NativeFunctionKind::Number => self.construct_number_object(args),
             NativeFunctionKind::Object => self.eval_object_constructor(args),
+            NativeFunctionKind::Proxy => self.construct_proxy_object(args),
             NativeFunctionKind::String => self.construct_string_object(args),
             NativeFunctionKind::Date(DateFunctionKind::Constructor) => {
                 self.construct_date_object(args)

@@ -348,7 +348,7 @@ impl Context {
             }
             NativeCallTarget::ObjectIs => Some(Ok(Self::eval_direct_object_is(args))),
             NativeCallTarget::ObjectIsExtensible => {
-                Some(self.eval_direct_object_is_extensible(args))
+                Some(self.eval_object_is_extensible(runtime_call_args(args)))
             }
             NativeCallTarget::ObjectIsFrozen => Some(self.eval_direct_object_is_frozen(args)),
             NativeCallTarget::ObjectIsSealed => Some(self.eval_direct_object_is_sealed(args)),
@@ -497,6 +497,9 @@ impl Context {
             NativeFunctionKind::PromiseResolver { promise, kind } => {
                 self.eval_promise_resolver(promise, kind, args)
             }
+            NativeFunctionKind::Proxy => Self::eval_proxy_call(args),
+            NativeFunctionKind::ProxyRevocable => self.eval_proxy_revocable(args),
+            NativeFunctionKind::ProxyRevoke(id) => self.eval_proxy_revoke(id),
             NativeFunctionKind::Symbol => self.eval_symbol_constructor(args),
             kind => self
                 .eval_primitive_native_function_kind(kind, args, this_value)

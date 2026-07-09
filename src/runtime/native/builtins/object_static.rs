@@ -143,10 +143,16 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_object_is_extensible(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        self.eval_direct_object_is_extensible(args.as_slice())
+        let slice = args.as_slice();
+        if let Some(Value::Object(id)) = slice.first()
+            && self.objects.is_proxy(*id)
+        {
+            return Ok(Value::Bool(self.proxy_is_extensible(*id)?));
+        }
+        self.eval_direct_object_is_extensible(slice)
     }
 
     pub(in crate::runtime::native) fn eval_direct_object_is_extensible(
@@ -237,7 +243,11 @@ impl Context {
     ) -> Result<Value> {
         let target = Self::argument_or_undefined(args.first());
         if let Value::Object(id) = target {
-            self.objects.prevent_extensions(id)?;
+            if self.objects.is_proxy(id) {
+                self.proxy_prevent_extensions(id)?;
+            } else {
+                self.objects.prevent_extensions(id)?;
+            }
         }
         Ok(target)
     }
@@ -275,6 +285,10 @@ impl Context {
         let prototype = Self::argument_or_undefined(args.get(1));
         Self::validate_prototype_value(&prototype)?;
         match target {
+            Value::Object(id) if self.objects.is_proxy(id) => {
+                self.proxy_set_prototype_of(id, prototype)?;
+                Ok(Value::Object(id))
+            }
             Value::Object(id) => {
                 self.objects.set_prototype_value(id, &prototype)?;
                 Ok(Value::Object(id))

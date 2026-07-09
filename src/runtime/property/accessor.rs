@@ -28,6 +28,12 @@ impl Context {
         property_name: &str,
         value: Value,
     ) -> Result<()> {
+        if let Value::Object(id) = object
+            && self.objects.is_proxy(*id)
+        {
+            self.proxy_set(*id, property_name, value, object.clone())?;
+            return Ok(());
+        }
         if let Value::Object(id) = object {
             let lookup = PropertyLookup::from_key(property_name, key);
             match self.objects.accessor_write_target(*id, lookup)? {

@@ -59,6 +59,7 @@ impl Object {
             primitive_value: None,
             date_value: Some(value),
             regexp_value: None,
+            proxy_value: None,
             is_raw_json: false,
             prototype: None,
             extensibility: super::ObjectExtensibility::Extensible,
