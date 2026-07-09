@@ -46,7 +46,7 @@ pub struct PreparedFailure {
 pub enum PreparedReference {
     NotConfigured,
     Measured {
-        measurement: PreparedMeasurement,
+        measurement: Box<PreparedMeasurement>,
         source: ReferenceSource,
     },
     Failed(PreparedFailure),
@@ -97,7 +97,7 @@ fn measure_reference(
 ) -> anyhow::Result<PreparedReference> {
     if let Some(sample) = baseline.lookup(key) {
         return Ok(PreparedReference::Measured {
-            measurement: cached_measurement(sample, config),
+            measurement: Box::new(cached_measurement(sample, config)),
             source: ReferenceSource::Baseline,
         });
     }
@@ -111,7 +111,7 @@ fn measure_reference(
                 BaselineSample::from_measurement(measurement.checksum.clone(), measurement.stats),
             )?;
             Ok(PreparedReference::Measured {
-                measurement,
+                measurement: Box::new(measurement),
                 source: ReferenceSource::Live,
             })
         }
@@ -267,7 +267,7 @@ mod tests {
     fn detects_cross_engine_checksum_mismatch() -> TestResult {
         let ours = Ok(measurement(42.0)?);
         let reference = PreparedReference::Measured {
-            measurement: measurement(43.0)?,
+            measurement: Box::new(measurement(43.0)?),
             source: super::ReferenceSource::Live,
         };
         if parity_error(&ours, &reference).is_some() {

@@ -343,7 +343,7 @@ where
     F: FnMut() -> anyhow::Result<()>,
 {
     let warmup = warmup_and_estimate(config, op, deadline)?;
-    let remaining = remaining_budget(deadline);
+    let remaining = deadline.map(|deadline| deadline.saturating_duration_since(Instant::now()));
     let calibration = calibrate_iters(config, warmup.op_cost, remaining);
     let iters_u64 = clamp_u128_to_u64(calibration.iters_per_sample);
 
@@ -468,8 +468,9 @@ fn calibrate_iters(
     let samples = u128::try_from(config.samples.max(1)).unwrap_or(1);
     let requested_target = config.min_total.as_nanos() / samples;
     let target_per_sample = remaining_budget
-        .map(|remaining| requested_target.min(remaining.as_nanos() / samples))
-        .unwrap_or(requested_target)
+        .map_or(requested_target, |remaining| {
+            requested_target.min(remaining.as_nanos() / samples)
+        })
         .max(op_cost);
     let iters = target_per_sample / op_cost.max(1);
     let iters_per_sample = iters.clamp(1, MAX_ITERS_PER_SAMPLE);
@@ -507,10 +508,6 @@ fn summarize(
 
 fn deadline_expired(deadline: Option<Instant>) -> bool {
     deadline.is_some_and(|deadline| Instant::now() >= deadline)
-}
-
-fn remaining_budget(deadline: Option<Instant>) -> Option<Duration> {
-    deadline.map(|deadline| deadline.saturating_duration_since(Instant::now()))
 }
 
 const fn measurement_quality(

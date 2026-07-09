@@ -1,4 +1,4 @@
-//! Content-addressed QuickJS reference measurements.
+//! Content-addressed `QuickJS` reference measurements.
 //!
 //! Baselines are keyed by every input that can change the measured value. The
 //! compact TSV is deterministic, reviewable, and deliberately independent of
@@ -94,7 +94,7 @@ pub struct BaselineSample {
 }
 
 impl BaselineSample {
-    pub fn from_measurement(checksum: BenchmarkChecksum, stats: MeasureStats) -> Self {
+    pub const fn from_measurement(checksum: BenchmarkChecksum, stats: MeasureStats) -> Self {
         Self {
             checksum,
             snapshot: stats.snapshot(),
@@ -296,8 +296,7 @@ impl QuickjsBaseline {
             ),
         };
         let path = env::var_os(ENV_BASELINE_PATH)
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(DEFAULT_BASELINE_PATH));
+            .map_or_else(|| PathBuf::from(DEFAULT_BASELINE_PATH), PathBuf::from);
         let store = if mode == BaselineMode::Off {
             BaselineStore::default()
         } else {
@@ -349,17 +348,19 @@ impl QuickjsBaseline {
 
 pub fn detect_host_profile() -> String {
     let cpu_model = read_cpu_model().unwrap_or_else(|| "unknown".to_owned());
-    let logical_cpus = std::thread::available_parallelism()
-        .map(std::num::NonZero::get)
-        .unwrap_or(1);
+    let logical_cpus = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
     let kernel = fs::read_to_string("/proc/sys/kernel/osrelease")
         .ok()
-        .map(|value| normalize_field(value.trim()))
-        .unwrap_or_else(|| "unknown".to_owned());
+        .map_or_else(
+            || "unknown".to_owned(),
+            |value| normalize_field(value.trim()),
+        );
     let governor = fs::read_to_string("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor")
         .ok()
-        .map(|value| normalize_field(value.trim()))
-        .unwrap_or_else(|| "unknown".to_owned());
+        .map_or_else(
+            || "unknown".to_owned(),
+            |value| normalize_field(value.trim()),
+        );
     format!(
         "arch={}|os={}|cpu={}|logical_cpus={logical_cpus}|kernel={kernel}|governor={governor}",
         std::env::consts::ARCH,

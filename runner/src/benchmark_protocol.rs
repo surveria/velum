@@ -83,7 +83,7 @@ impl BenchmarkChecksum {
         Self::Boolean(value)
     }
 
-    pub fn number(value: f64) -> Self {
+    pub const fn number(value: f64) -> Self {
         let normalized = if value.is_nan() { f64::NAN } else { value };
         Self::Number(normalized.to_bits())
     }
@@ -133,7 +133,7 @@ impl fmt::Display for BenchmarkChecksum {
             Self::Null => formatter.write_str("null"),
             Self::Boolean(value) => write!(formatter, "{value}"),
             Self::Number(bits) => write!(formatter, "{}", f64::from_bits(*bits)),
-            Self::String(value) => write!(formatter, "{:?}", value),
+            Self::String(value) => write!(formatter, "{value:?}"),
         }
     }
 }

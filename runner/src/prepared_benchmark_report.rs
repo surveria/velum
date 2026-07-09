@@ -33,16 +33,16 @@ pub(super) fn outcome(case: &BenchmarkCase, run: &PreparedCaseRun) -> BenchmarkO
         ),
     };
     outcome.row.mode = case.mode.to_string();
-    outcome.row.reference_source = reference_source(&run.reference).to_owned();
+    reference_source(&run.reference).clone_into(&mut outcome.row.reference_source);
     if let Ok(ours) = &run.ours {
         outcome.row.lifecycle = render_lifecycle(ours.lifecycle);
         outcome.row.checksum = ours.checksum.to_string();
     }
     if let Some(error) = &run.parity_error {
-        outcome.row.status = STATUS_FAILED.to_owned();
-        outcome.row.latency_ratio = NOT_MEASURED.to_owned();
-        outcome.row.latency_budget = BUDGET_INVALID.to_owned();
-        outcome.row.quality = QUALITY_INVALID.to_owned();
+        STATUS_FAILED.clone_into(&mut outcome.row.status);
+        NOT_MEASURED.clone_into(&mut outcome.row.latency_ratio);
+        BUDGET_INVALID.clone_into(&mut outcome.row.latency_budget);
+        QUALITY_INVALID.clone_into(&mut outcome.row.quality);
         outcome.row.detail = benchmark_detail(error);
         outcome.counts.failed = outcome.counts.failed.saturating_add(1);
         outcome.counts.over_latency_budget = 0;
@@ -66,7 +66,7 @@ fn reference_measurement(reference: &PreparedReference) -> ReferenceMeasurement 
     }
 }
 
-fn reference_source(reference: &PreparedReference) -> &'static str {
+const fn reference_source(reference: &PreparedReference) -> &'static str {
     match reference {
         PreparedReference::NotConfigured => REFERENCE_NOT_CONFIGURED,
         PreparedReference::Measured { source, .. } => source.as_str(),
@@ -88,7 +88,5 @@ fn render_lifecycle(lifecycle: BenchmarkLifecycle) -> String {
 }
 
 fn optional_duration(duration: Option<std::time::Duration>) -> String {
-    duration
-        .map(timing::format_duration)
-        .unwrap_or_else(|| NOT_MEASURED.to_owned())
+    duration.map_or_else(|| NOT_MEASURED.to_owned(), timing::format_duration)
 }

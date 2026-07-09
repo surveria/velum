@@ -302,12 +302,12 @@ fn run_benchmark_case(
         ),
     };
     outcome.row.lifecycle = cold_lifecycle(loaded.elapsed);
-    outcome.row.reference_source = if reference_configured {
+    let reference_source = if reference_configured {
         "quickjs_live"
     } else {
         REFERENCE_NOT_CONFIGURED
-    }
-    .to_owned();
+    };
+    reference_source.clone_into(&mut outcome.row.reference_source);
     outcome
 }
 

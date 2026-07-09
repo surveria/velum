@@ -1,5 +1,3 @@
-use crate::benchmark_protocol::{BenchmarkInput, BenchmarkMode};
-
 #[derive(Debug)]
 pub struct EngineCase {
     pub id: &'static str,
@@ -23,47 +21,6 @@ pub struct DifferentialCase {
     pub path: &'static str,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct BenchmarkCase {
-    pub id: &'static str,
-    pub path: &'static str,
-    pub mode: BenchmarkMode,
-    pub input: BenchmarkInput,
-    pub sentinel: bool,
-}
-
-impl BenchmarkCase {
-    pub const fn cold(id: &'static str, path: &'static str) -> Self {
-        Self {
-            id,
-            path,
-            mode: BenchmarkMode::ColdEval,
-            input: BenchmarkInput::Standard,
-            sentinel: false,
-        }
-    }
-
-    pub const fn cold_host_image(id: &'static str, path: &'static str, byte_len: usize) -> Self {
-        Self {
-            id,
-            path,
-            mode: BenchmarkMode::ColdEval,
-            input: BenchmarkInput::HostImage { byte_len },
-            sentinel: false,
-        }
-    }
-
-    pub const fn prepared_sentinel(id: &'static str, path: &'static str) -> Self {
-        Self {
-            id,
-            path,
-            mode: BenchmarkMode::PreparedExecution,
-            input: BenchmarkInput::Standard,
-            sentinel: true,
-        }
-    }
-}
-
 #[path = "cases_engine_runtime.rs"]
 mod cases_engine_runtime;
 #[path = "cases_reporting.rs"]
@@ -79,6 +36,7 @@ mod cases_test262_proxy;
 #[path = "cases_test262_reflect.rs"]
 mod cases_test262_reflect;
 
+pub use crate::benchmark_case::BenchmarkCase;
 pub use cases_reporting::{benchmark_cases, quickjs_differential_cases};
 pub use cases_test262::test262_cases;
 

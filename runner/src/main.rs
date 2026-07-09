@@ -13,6 +13,7 @@ use tabled::Tabled;
 
 mod bench_engines;
 mod bench_measure;
+mod benchmark_case;
 mod benchmark_mode;
 mod benchmark_protocol;
 mod benchmark_selection;
