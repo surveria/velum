@@ -6,7 +6,7 @@ while (rounds < 1000) {
   let index = 0;
   let total = 0;
 
-  while (index < 98304) {
+  while (index < 99500) {
     var slot = index & 3;
     total = total + values[slot];
     index = index + 1;
