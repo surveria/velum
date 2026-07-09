@@ -32,6 +32,14 @@ const ENV_MAX_CV_PERCENT: &str = "RSQJS_BENCH_MAX_CV_PERCENT";
 const ENV_ATTEMPTS: &str = "RSQJS_BENCH_ATTEMPTS";
 const ENV_MAX_OP_MS: &str = "RSQJS_BENCH_MAX_OP_MS";
 const ENV_MAX_TOTAL_MS: &str = "RSQJS_BENCH_MAX_TOTAL_MS";
+const ENV_JETSTREAM_MIN_TIME_MS: &str = "RSQJS_JETSTREAM_MIN_TIME_MS";
+const ENV_JETSTREAM_WARMUP_MS: &str = "RSQJS_JETSTREAM_WARMUP_MS";
+const ENV_JETSTREAM_SAMPLES: &str = "RSQJS_JETSTREAM_SAMPLES";
+const ENV_JETSTREAM_MIN_OP_US: &str = "RSQJS_JETSTREAM_MIN_OP_US";
+const ENV_JETSTREAM_MAX_CV_PERCENT: &str = "RSQJS_JETSTREAM_MAX_CV_PERCENT";
+const ENV_JETSTREAM_ATTEMPTS: &str = "RSQJS_JETSTREAM_ATTEMPTS";
+const ENV_JETSTREAM_MAX_OP_MS: &str = "RSQJS_JETSTREAM_MAX_OP_MS";
+const ENV_JETSTREAM_MAX_TOTAL_MS: &str = "RSQJS_JETSTREAM_MAX_TOTAL_MS";
 
 const DEFAULT_MIN_TIME_MS: u64 = 500;
 const DEFAULT_WARMUP_MS: u64 = 150;
@@ -41,6 +49,13 @@ const DEFAULT_MAX_CV_PERCENT: u64 = 10;
 const DEFAULT_ATTEMPTS: usize = 3;
 const DEFAULT_MAX_OP_MS: u64 = 2_000;
 const DEFAULT_MAX_TOTAL_MS: u64 = 3_000;
+const DEFAULT_JETSTREAM_MIN_TIME_MS: u64 = 1_500;
+const DEFAULT_JETSTREAM_WARMUP_MS: u64 = 0;
+const DEFAULT_JETSTREAM_SAMPLES: usize = 3;
+const DEFAULT_JETSTREAM_MAX_CV_PERCENT: u64 = 15;
+const DEFAULT_JETSTREAM_ATTEMPTS: usize = 1;
+const DEFAULT_JETSTREAM_MAX_OP_MS: u64 = 90_000;
+const DEFAULT_JETSTREAM_MAX_TOTAL_MS: u64 = 240_000;
 const HIGH_VARIANCE_MIN_TOTAL_MULTIPLIER: u32 = 2;
 
 const MIN_SAMPLES: usize = 3;
@@ -124,6 +139,44 @@ impl MeasureConfig {
 
     pub const fn attempts(self) -> usize {
         self.attempts
+    }
+
+    /// Build a bounded configuration for whole `JetStream` shell iterations.
+    /// These workloads can take seconds per operation, so project microbenchmark
+    /// defaults would reject valid rows and repeat expensive attempts.
+    pub fn jetstream_from_env() -> Self {
+        Self::new(
+            Duration::from_millis(env_u64(
+                ENV_JETSTREAM_WARMUP_MS,
+                DEFAULT_JETSTREAM_WARMUP_MS,
+            )),
+            Duration::from_millis(env_u64(
+                ENV_JETSTREAM_MIN_TIME_MS,
+                DEFAULT_JETSTREAM_MIN_TIME_MS,
+            )),
+            env_usize(ENV_JETSTREAM_SAMPLES, DEFAULT_JETSTREAM_SAMPLES),
+        )
+        .with_quality(
+            Duration::from_micros(env_u64(ENV_JETSTREAM_MIN_OP_US, DEFAULT_MIN_OP_US)),
+            cv_percent_to_permille(env_u64(
+                ENV_JETSTREAM_MAX_CV_PERCENT,
+                DEFAULT_JETSTREAM_MAX_CV_PERCENT,
+            )),
+        )
+        .with_attempts(env_usize(
+            ENV_JETSTREAM_ATTEMPTS,
+            DEFAULT_JETSTREAM_ATTEMPTS,
+        ))
+        .with_budget(
+            Duration::from_millis(env_u64(
+                ENV_JETSTREAM_MAX_OP_MS,
+                DEFAULT_JETSTREAM_MAX_OP_MS,
+            )),
+            Duration::from_millis(env_u64(
+                ENV_JETSTREAM_MAX_TOTAL_MS,
+                DEFAULT_JETSTREAM_MAX_TOTAL_MS,
+            )),
+        )
     }
 
     #[must_use]

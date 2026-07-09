@@ -1,8 +1,4 @@
-//! Content-addressed `QuickJS` reference measurements.
-//!
-//! Baselines are keyed by every input that can change the measured value. The
-//! compact TSV is deterministic, reviewable, and deliberately independent of
-//! the human-readable report format.
+//! Content-addressed `QuickJS` reference measurements for `JetStream` shell cases.
 
 use std::{
     collections::BTreeMap,
@@ -15,28 +11,26 @@ use anyhow::{Context as _, bail};
 
 use crate::{
     bench_measure::{MeasureConfig, MeasureSnapshot, MeasureStats},
-    benchmark_protocol::{BenchmarkChecksum, PREPARED_PROTOCOL_VERSION},
+    quickjs_baseline::{normalize_field, stable_digest},
 };
 
-pub const ENV_BASELINE_MODE: &str = "RSQJS_QUICKJS_BASELINE";
-pub const ENV_BASELINE_PATH: &str = "RSQJS_QUICKJS_BASELINE_PATH";
+pub const ENV_BASELINE_MODE: &str = "RSQJS_JETSTREAM_QUICKJS_BASELINE";
+pub const ENV_BASELINE_PATH: &str = "RSQJS_JETSTREAM_QUICKJS_BASELINE_PATH";
+pub const PROTOCOL_VERSION: &str = "jetstream-shell-v1";
 
-const DEFAULT_BASELINE_PATH: &str = "tests/corpora/benchmarks/quickjs-baseline.tsv";
+const DEFAULT_BASELINE_PATH: &str = "tests/corpora/jetstream/quickjs-baseline.tsv";
 const MODE_OFF: &str = "off";
 const MODE_READ: &str = "read";
-const MODE_REQUIRE: &str = "require";
 const MODE_REFRESH: &str = "refresh";
 const SCHEMA_VERSION: &str = "1";
-const HEADER: &str = "schema_version\tcontent_id\tcase_id\tsource_digest\tharness_digest\tprotocol\tmeasure_config\treference_engine\thost_profile\tchecksum\tmedian_ns\tcv_permille\titers_per_sample\tsamples\tmedian_sample_ns\twarmup_ns\ttimed_run_ns\titeration_cap";
-
-const FNV_OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
-const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
+const HEADER: &str = "schema_version\tcontent_id\tcase_id\tsource_digest\tharness_digest\tprotocol\tmeasure_config\treference_engine\thost_profile\toutcome\tdetail\tmedian_ns\tcv_permille\titers_per_sample\tsamples\tmedian_sample_ns\twarmup_ns\ttimed_run_ns\titeration_cap";
+const OUTCOME_MEASURED: &str = "measured";
+const OUTCOME_UNAVAILABLE: &str = "unavailable";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum BaselineMode {
     Off,
     Read,
-    Require,
     Refresh,
 }
 
@@ -64,7 +58,7 @@ impl BaselineKey {
             case_id: normalize_field(case_id),
             source_digest: stable_digest(source.as_bytes()),
             harness_digest: stable_digest(harness.as_bytes()),
-            protocol: PREPARED_PROTOCOL_VERSION.to_owned(),
+            protocol: PROTOCOL_VERSION.to_owned(),
             measure_config: measure_config.fingerprint(),
             reference_engine: normalize_field(reference_engine),
             host_profile: normalize_field(host_profile),
@@ -91,14 +85,18 @@ impl BaselineKey {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BaselineSample {
-    pub checksum: BenchmarkChecksum,
     pub snapshot: MeasureSnapshot,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum BaselineOutcome {
+    Measured(BaselineSample),
+    Unavailable(String),
+}
+
 impl BaselineSample {
-    pub const fn from_measurement(checksum: BenchmarkChecksum, stats: MeasureStats) -> Self {
+    pub const fn from_measurement(stats: MeasureStats) -> Self {
         Self {
-            checksum,
             snapshot: stats.snapshot(),
         }
     }
@@ -111,7 +109,7 @@ impl BaselineSample {
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct BaselineEntry {
     key: BaselineKey,
-    sample: BaselineSample,
+    outcome: BaselineOutcome,
 }
 
 #[derive(Debug, Default)]
@@ -124,18 +122,22 @@ impl BaselineStore {
         match fs::read_to_string(path) {
             Ok(text) => Self::parse(&text),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Self::default()),
-            Err(error) => Err(error)
-                .with_context(|| format!("failed to read QuickJS baseline '{}'", path.display())),
+            Err(error) => Err(error).with_context(|| {
+                format!(
+                    "failed to read JetStream QuickJS baseline '{}'",
+                    path.display()
+                )
+            }),
         }
     }
 
     fn parse(text: &str) -> anyhow::Result<Self> {
         let mut lines = text.lines();
         let Some(header) = lines.next() else {
-            bail!("QuickJS baseline is empty")
+            bail!("JetStream QuickJS baseline is empty")
         };
         if header != HEADER {
-            bail!("QuickJS baseline has an unsupported header")
+            bail!("JetStream QuickJS baseline has an unsupported header")
         }
         let mut store = Self::default();
         for (offset, line) in lines.enumerate() {
@@ -143,17 +145,16 @@ impl BaselineStore {
                 continue;
             }
             let line_number = offset.saturating_add(2);
-            let entry = BaselineEntry::parse(line, line_number)?;
-            store.insert(entry)?;
+            store.insert(BaselineEntry::parse(line, line_number)?)?;
         }
         Ok(store)
     }
 
-    fn lookup(&self, key: &BaselineKey) -> Option<BaselineSample> {
+    fn lookup(&self, key: &BaselineKey) -> Option<BaselineOutcome> {
         self.entries
             .get(&key.content_id())
             .filter(|entry| entry.key == *key)
-            .map(|entry| entry.sample.clone())
+            .map(|entry| entry.outcome.clone())
     }
 
     fn insert(&mut self, entry: BaselineEntry) -> anyhow::Result<()> {
@@ -161,7 +162,7 @@ impl BaselineStore {
         if let Some(existing) = self.entries.get(&content_id)
             && existing.key != entry.key
         {
-            bail!("QuickJS baseline content id collision for '{content_id}'")
+            bail!("JetStream QuickJS baseline content id collision for '{content_id}'")
         }
         self.entries.insert(content_id, entry);
         Ok(())
@@ -189,7 +190,7 @@ impl BaselineEntry {
         let mut fields = line.split('\t');
         let schema = next_field(&mut fields, line_number, "schema_version")?;
         if schema != SCHEMA_VERSION {
-            bail!("QuickJS baseline line {line_number} uses schema '{schema}'")
+            bail!("JetStream QuickJS baseline line {line_number} uses schema '{schema}'")
         }
         let stored_content_id = next_field(&mut fields, line_number, "content_id")?;
         let key = BaselineKey {
@@ -202,13 +203,10 @@ impl BaselineEntry {
             host_profile: next_field(&mut fields, line_number, "host_profile")?.to_owned(),
         };
         if key.content_id() != stored_content_id {
-            bail!("QuickJS baseline line {line_number} has a stale content id")
+            bail!("JetStream QuickJS baseline line {line_number} has a stale content id")
         }
-        let checksum = BenchmarkChecksum::from_storage_text(next_field(
-            &mut fields,
-            line_number,
-            "checksum",
-        )?)?;
+        let outcome = next_field(&mut fields, line_number, "outcome")?;
+        let detail = next_field(&mut fields, line_number, "detail")?;
         let median = parse_duration(&mut fields, line_number, "median_ns")?;
         let cv_permille = parse_field(&mut fields, line_number, "cv_permille")?;
         let iters_per_sample = parse_field(&mut fields, line_number, "iters_per_sample")?;
@@ -219,33 +217,53 @@ impl BaselineEntry {
         let iteration_cap_reached = match next_field(&mut fields, line_number, "iteration_cap")? {
             "0" => false,
             "1" => true,
-            value => {
-                bail!("QuickJS baseline line {line_number} has invalid iteration_cap '{value}'")
-            }
+            value => bail!(
+                "JetStream QuickJS baseline line {line_number} has invalid iteration_cap '{value}'"
+            ),
         };
         if let Some(extra) = fields.next() {
-            bail!("QuickJS baseline line {line_number} has an extra field '{extra}'")
+            bail!("JetStream QuickJS baseline line {line_number} has an extra field '{extra}'")
         }
-        Ok(Self {
-            key,
-            sample: BaselineSample {
-                checksum,
-                snapshot: MeasureSnapshot {
-                    median,
-                    cv_permille,
-                    iters_per_sample,
-                    samples,
-                    median_sample,
-                    warmup_elapsed,
-                    timed_run_elapsed,
-                    iteration_cap_reached,
-                },
+        let sample = BaselineSample {
+            snapshot: MeasureSnapshot {
+                median,
+                cv_permille,
+                iters_per_sample,
+                samples,
+                median_sample,
+                warmup_elapsed,
+                timed_run_elapsed,
+                iteration_cap_reached,
             },
-        })
+        };
+        let outcome = match outcome {
+            OUTCOME_MEASURED => BaselineOutcome::Measured(sample),
+            OUTCOME_UNAVAILABLE => BaselineOutcome::Unavailable(detail.to_owned()),
+            value => {
+                bail!("JetStream QuickJS baseline line {line_number} has invalid outcome '{value}'")
+            }
+        };
+        Ok(Self { key, outcome })
     }
 
     fn render(&self, content_id: &str) -> String {
-        let snapshot = self.sample.snapshot;
+        let (outcome, detail, snapshot) = match &self.outcome {
+            BaselineOutcome::Measured(sample) => (OUTCOME_MEASURED, String::new(), sample.snapshot),
+            BaselineOutcome::Unavailable(detail) => (
+                OUTCOME_UNAVAILABLE,
+                normalize_field(detail),
+                MeasureSnapshot {
+                    median: Duration::ZERO,
+                    cv_permille: 0,
+                    iters_per_sample: 0,
+                    samples: 0,
+                    median_sample: Duration::ZERO,
+                    warmup_elapsed: Duration::ZERO,
+                    timed_run_elapsed: Duration::ZERO,
+                    iteration_cap_reached: false,
+                },
+            ),
+        };
         [
             SCHEMA_VERSION.to_owned(),
             content_id.to_owned(),
@@ -256,7 +274,8 @@ impl BaselineEntry {
             self.key.measure_config.clone(),
             self.key.reference_engine.clone(),
             self.key.host_profile.clone(),
-            self.sample.checksum.storage_text(),
+            outcome.to_owned(),
+            detail,
             snapshot.median.as_nanos().to_string(),
             snapshot.cv_permille.to_string(),
             snapshot.iters_per_sample.to_string(),
@@ -275,14 +294,14 @@ impl BaselineEntry {
 }
 
 #[derive(Debug)]
-pub struct QuickjsBaseline {
+pub struct JetStreamQuickjsBaseline {
     mode: BaselineMode,
     path: PathBuf,
     store: BaselineStore,
     dirty: bool,
 }
 
-impl QuickjsBaseline {
+impl JetStreamQuickjsBaseline {
     pub fn from_env() -> anyhow::Result<Self> {
         let mode = match env::var(ENV_BASELINE_MODE)
             .ok()
@@ -291,11 +310,10 @@ impl QuickjsBaseline {
             .as_deref()
         {
             None | Some(MODE_READ) => BaselineMode::Read,
-            Some(MODE_REQUIRE) => BaselineMode::Require,
             Some(MODE_REFRESH) => BaselineMode::Refresh,
             Some(MODE_OFF) => BaselineMode::Off,
             Some(value) => bail!(
-                "unknown QuickJS baseline mode '{value}'; expected '{MODE_READ}', '{MODE_REQUIRE}', '{MODE_REFRESH}', or '{MODE_OFF}'"
+                "unknown JetStream QuickJS baseline mode '{value}'; expected '{MODE_READ}', '{MODE_REFRESH}', or '{MODE_OFF}'"
             ),
         };
         let path = env::var_os(ENV_BASELINE_PATH)
@@ -313,26 +331,45 @@ impl QuickjsBaseline {
         })
     }
 
-    pub fn lookup(&self, key: &BaselineKey) -> anyhow::Result<Option<BaselineSample>> {
-        if !matches!(self.mode, BaselineMode::Read | BaselineMode::Require) {
-            return Ok(None);
-        }
-        let sample = self.store.lookup(key);
-        if self.mode == BaselineMode::Require && sample.is_none() {
-            bail!(
-                "required QuickJS baseline entry is missing for benchmark '{}' (content id {}); refresh the committed baseline explicitly",
-                key.case_id,
-                key.content_id()
-            );
-        }
-        Ok(sample)
+    pub fn requires_live_reference(&self) -> bool {
+        self.mode == BaselineMode::Refresh
     }
 
-    pub fn record(&mut self, key: BaselineKey, sample: BaselineSample) -> anyhow::Result<()> {
+    pub fn lookup(&self, key: &BaselineKey) -> Option<BaselineOutcome> {
+        if self.mode != BaselineMode::Read {
+            return None;
+        }
+        self.store.lookup(key)
+    }
+
+    pub fn is_disabled(&self) -> bool {
+        self.mode == BaselineMode::Off
+    }
+
+    pub fn record_measured(
+        &mut self,
+        key: BaselineKey,
+        sample: BaselineSample,
+    ) -> anyhow::Result<()> {
         if self.mode != BaselineMode::Refresh {
             return Ok(());
         }
-        self.store.replace_case(BaselineEntry { key, sample })?;
+        self.store.replace_case(BaselineEntry {
+            key,
+            outcome: BaselineOutcome::Measured(sample),
+        })?;
+        self.dirty = true;
+        Ok(())
+    }
+
+    pub fn record_unavailable(&mut self, key: BaselineKey, detail: &str) -> anyhow::Result<()> {
+        if self.mode != BaselineMode::Refresh {
+            return Ok(());
+        }
+        self.store.replace_case(BaselineEntry {
+            key,
+            outcome: BaselineOutcome::Unavailable(normalize_field(detail)),
+        })?;
         self.dirty = true;
         Ok(())
     }
@@ -344,59 +381,20 @@ impl QuickjsBaseline {
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent).with_context(|| {
                 format!(
-                    "failed to create QuickJS baseline directory '{}'",
+                    "failed to create JetStream QuickJS baseline directory '{}'",
                     parent.display()
                 )
             })?;
         }
         fs::write(&self.path, self.store.render()).with_context(|| {
-            format!("failed to write QuickJS baseline '{}'", self.path.display())
+            format!(
+                "failed to write JetStream QuickJS baseline '{}'",
+                self.path.display()
+            )
         })?;
         self.dirty = false;
         Ok(())
     }
-}
-
-pub fn detect_host_profile() -> String {
-    let cpu_model = read_cpu_model().unwrap_or_else(|| "unknown".to_owned());
-    let logical_cpus = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
-    let kernel = fs::read_to_string("/proc/sys/kernel/osrelease")
-        .ok()
-        .map_or_else(
-            || "unknown".to_owned(),
-            |value| normalize_field(value.trim()),
-        );
-    let governor = fs::read_to_string("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor")
-        .ok()
-        .map_or_else(
-            || "unknown".to_owned(),
-            |value| normalize_field(value.trim()),
-        );
-    format!(
-        "arch={}|os={}|cpu={}|logical_cpus={logical_cpus}|kernel={kernel}|governor={governor}",
-        std::env::consts::ARCH,
-        std::env::consts::OS,
-        normalize_field(&cpu_model),
-    )
-}
-
-pub fn harness_descriptor(mode: &str, input: &str) -> String {
-    format!(
-        "protocol={PREPARED_PROTOCOL_VERSION}|mode={}|input={}|setup=__rsqjsBenchSetup|run=__rsqjsBenchRun|verify=__rsqjsBenchVerify|timer=rust-instant",
-        normalize_field(mode),
-        normalize_field(input),
-    )
-}
-
-fn read_cpu_model() -> Option<String> {
-    let cpuinfo = fs::read_to_string("/proc/cpuinfo").ok()?;
-    cpuinfo.lines().find_map(|line| {
-        let (name, value) = line.split_once(':')?;
-        if matches!(name.trim(), "model name" | "Hardware") {
-            return Some(value.trim().to_owned());
-        }
-        None
-    })
 }
 
 fn next_field<'a>(
@@ -404,9 +402,9 @@ fn next_field<'a>(
     line_number: usize,
     name: &str,
 ) -> anyhow::Result<&'a str> {
-    fields
-        .next()
-        .with_context(|| format!("QuickJS baseline line {line_number} is missing '{name}'"))
+    fields.next().with_context(|| {
+        format!("JetStream QuickJS baseline line {line_number} is missing '{name}'")
+    })
 }
 
 fn parse_field<'a, T>(
@@ -419,9 +417,9 @@ where
     T::Err: std::error::Error + Send + Sync + 'static,
 {
     let value = next_field(fields, line_number, name)?;
-    value
-        .parse::<T>()
-        .with_context(|| format!("QuickJS baseline line {line_number} has invalid '{name}'"))
+    value.parse::<T>().with_context(|| {
+        format!("JetStream QuickJS baseline line {line_number} has invalid '{name}'")
+    })
 }
 
 fn parse_duration<'a>(
@@ -432,84 +430,59 @@ fn parse_duration<'a>(
     parse_field(fields, line_number, name).map(Duration::from_nanos)
 }
 
-pub fn normalize_field(value: &str) -> String {
-    value
-        .chars()
-        .map(|character| match character {
-            '\t' | '\n' | '\r' => ' ',
-            _ => character,
-        })
-        .collect()
-}
-
-pub fn stable_digest(bytes: &[u8]) -> String {
-    let mut hash = FNV_OFFSET_BASIS;
-    for byte in bytes {
-        hash ^= u64::from(*byte);
-        let (next, _overflowed) = hash.overflowing_mul(FNV_PRIME);
-        hash = next;
-    }
-    format!("fnv1a64-{hash:016x}")
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        BaselineEntry, BaselineKey, BaselineMode, BaselineSample, BaselineStore, QuickjsBaseline,
-        stable_digest,
-    };
-    use crate::{
-        bench_measure::{MeasureConfig, MeasureSnapshot},
-        benchmark_protocol::BenchmarkChecksum,
-    };
+    use super::{BaselineEntry, BaselineKey, BaselineOutcome, BaselineSample, BaselineStore};
+    use crate::bench_measure::{MeasureConfig, MeasureSnapshot};
     use std::time::Duration;
 
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
     #[test]
-    fn digest_is_stable_and_content_sensitive() -> TestResult {
-        let first = stable_digest(b"benchmark");
-        let second = stable_digest(b"benchmark");
-        if first != second {
-            return Err("stable digest changed for identical input".into());
-        }
-        if first == stable_digest(b"benchmark-2") {
-            return Err("stable digest ignored changed content".into());
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn baseline_round_trip_preserves_typed_key_and_sample() -> TestResult {
-        let config = test_config();
-        let key = BaselineKey::new("case", "source", "harness", config, "quickjs", "host");
+    fn baseline_round_trip_preserves_key_and_sample() -> TestResult {
+        let key = test_key("source", "harness");
         let sample = test_sample();
         let mut store = BaselineStore::default();
         store.insert(BaselineEntry {
             key: key.clone(),
-            sample: sample.clone(),
+            outcome: BaselineOutcome::Measured(sample.clone()),
         })?;
-        let encoded = store.render();
-        let decoded = BaselineStore::parse(&encoded)?;
+        let decoded = BaselineStore::parse(&store.render())?;
         let Some(actual) = decoded.lookup(&key) else {
             return Err("round-tripped baseline did not contain its key".into());
         };
-        if actual != sample {
+        if actual != BaselineOutcome::Measured(sample) {
             return Err("round-tripped baseline changed its sample".into());
         }
         Ok(())
     }
 
     #[test]
-    fn every_key_dimension_invalidates_the_content_id() -> TestResult {
-        let config = test_config();
-        let base = BaselineKey::new("case", "source", "harness", config, "quickjs", "host");
+    fn unavailable_outcome_round_trips_without_live_fallback_data() -> TestResult {
+        let key = test_key("source", "harness");
+        let mut store = BaselineStore::default();
+        store.insert(BaselineEntry {
+            key: key.clone(),
+            outcome: BaselineOutcome::Unavailable("unsupported\tfeature".to_owned()),
+        })?;
+        let decoded = BaselineStore::parse(&store.render())?;
+        let Some(actual) = decoded.lookup(&key) else {
+            return Err("round-tripped baseline did not contain unavailable outcome".into());
+        };
+        if actual != BaselineOutcome::Unavailable("unsupported feature".to_owned()) {
+            return Err("round-tripped baseline changed unavailable detail".into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn source_harness_config_engine_and_host_are_content_addressed() -> TestResult {
+        let base = test_key("source", "harness");
         let alternatives = [
-            BaselineKey::new("case-2", "source", "harness", config, "quickjs", "host"),
-            BaselineKey::new("case", "source-2", "harness", config, "quickjs", "host"),
-            BaselineKey::new("case", "source", "harness-2", config, "quickjs", "host"),
-            BaselineKey::new("case", "source", "harness", config, "quickjs-2", "host"),
-            BaselineKey::new("case", "source", "harness", config, "quickjs", "host-2"),
+            test_key("source-2", "harness"),
+            test_key("source", "harness-2"),
+            BaselineKey::new("case", "source", "harness", test_config(), "qjs-2", "host"),
+            BaselineKey::new("case", "source", "harness", test_config(), "qjs", "host-2"),
         ];
         for alternative in alternatives {
             if alternative.content_id() == base.content_id() {
@@ -519,43 +492,8 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn refresh_replaces_stale_entry_for_the_same_case() -> TestResult {
-        let config = test_config();
-        let old_key = BaselineKey::new("case", "old", "harness", config, "quickjs", "host");
-        let new_key = BaselineKey::new("case", "new", "harness", config, "quickjs", "host");
-        let mut store = BaselineStore::default();
-        store.replace_case(BaselineEntry {
-            key: old_key.clone(),
-            sample: test_sample(),
-        })?;
-        store.replace_case(BaselineEntry {
-            key: new_key.clone(),
-            sample: test_sample(),
-        })?;
-        if store.lookup(&old_key).is_some() {
-            return Err("refresh retained a stale entry for the same case".into());
-        }
-        if store.lookup(&new_key).is_none() {
-            return Err("refresh removed the replacement baseline entry".into());
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn require_mode_rejects_a_missing_content_addressed_entry() -> TestResult {
-        let config = test_config();
-        let key = BaselineKey::new("missing", "source", "harness", config, "quickjs", "host");
-        let baseline = QuickjsBaseline {
-            mode: BaselineMode::Require,
-            path: std::path::PathBuf::from("unused"),
-            store: BaselineStore::default(),
-            dirty: false,
-        };
-        if baseline.lookup(&key).is_err() {
-            return Ok(());
-        }
-        Err("require mode accepted a missing QuickJS baseline entry".into())
+    fn test_key(source: &str, harness: &str) -> BaselineKey {
+        BaselineKey::new("case", source, harness, test_config(), "qjs", "host")
     }
 
     fn test_config() -> MeasureConfig {
@@ -564,15 +502,14 @@ mod tests {
 
     fn test_sample() -> BaselineSample {
         BaselineSample {
-            checksum: BenchmarkChecksum::number(42.0),
             snapshot: MeasureSnapshot {
                 median: Duration::from_millis(2),
-                cv_permille: 12,
-                iters_per_sample: 3,
+                cv_permille: 3,
+                iters_per_sample: 4,
                 samples: 5,
-                median_sample: Duration::from_millis(6),
+                median_sample: Duration::from_millis(8),
                 warmup_elapsed: Duration::from_millis(1),
-                timed_run_elapsed: Duration::from_millis(30),
+                timed_run_elapsed: Duration::from_millis(40),
                 iteration_cap_reached: false,
             },
         }

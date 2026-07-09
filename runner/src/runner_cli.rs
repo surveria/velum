@@ -4,7 +4,7 @@ use anyhow::{Context as _, bail};
 
 use crate::report_rollup;
 
-const USAGE: &str = "usage: rsqjs-test-runner --report <path> | --correctness <path> | --performance <path> | --benchmarks <path> | --compose-reports <tree> <correctness-component.yaml> <performance-component.yaml> <output.md> | --aggregate-reports <dir>";
+const USAGE: &str = "usage: rsqjs-test-runner --report <path> | --correctness <path> | --performance <path> | --benchmarks <path> | --jetstream <path> | --compose-reports <tree> <correctness-component.yaml> <performance-component.yaml> <output.md> | --aggregate-reports <dir>";
 
 #[derive(Debug)]
 pub enum Config {
@@ -18,6 +18,9 @@ pub enum Config {
         report_path: PathBuf,
     },
     Benchmarks {
+        report_path: PathBuf,
+    },
+    JetStream {
         report_path: PathBuf,
     },
     ComposeReports {
@@ -77,6 +80,13 @@ impl Config {
             let report_path = args.next().context("missing path after --performance")?;
             ensure_no_extra_arg(args)?;
             return Ok(Self::Performance {
+                report_path: PathBuf::from(report_path),
+            });
+        }
+        if flag == "--jetstream" {
+            let report_path = args.next().context("missing path after --jetstream")?;
+            ensure_no_extra_arg(args)?;
+            return Ok(Self::JetStream {
                 report_path: PathBuf::from(report_path),
             });
         }

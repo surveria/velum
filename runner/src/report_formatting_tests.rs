@@ -120,6 +120,7 @@ fn timing_tsv_lists_case_rows_and_sanitizes_fields() -> TestResult {
             invalid: 0,
             skipped: 0,
             over_latency_budget: 0,
+            reference_missing: 0,
             elapsed: Duration::ZERO,
         },
         elapsed: Duration::from_micros(1_250),
