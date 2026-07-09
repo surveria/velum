@@ -2,10 +2,11 @@ use crate::{
     error::Result,
     runtime::Context,
     runtime::binding::scope::BindingCell,
-    runtime::native::GLOBAL_THIS_NAME,
+    runtime::native::{GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME},
     runtime::object::{
-        DataPropertyUpdate, OBJECT_CONSTRUCTOR_PROPERTY, PropertyConfigurable, PropertyEnumerable,
-        PropertyKey, PropertyLookup, PropertyUpdate, PropertyWritable,
+        DataPropertyDescriptor, DataPropertyUpdate, OBJECT_CONSTRUCTOR_PROPERTY,
+        OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyKey,
+        PropertyLookup, PropertyUpdate, PropertyWritable,
     },
     runtime::property::{get_property, has_property},
     storage::atom::AtomId,
@@ -263,6 +264,44 @@ impl Context {
         }
         self.global_binding_property_value(lookup.name())
             .map(|value| Some(value.is_some()))
+    }
+
+    pub(crate) fn global_object_property_descriptor(
+        &mut self,
+        id: ObjectId,
+        lookup: PropertyLookup<'_>,
+    ) -> Result<Option<OwnPropertyDescriptor>> {
+        if !self.is_global_object_id(id) {
+            return Ok(None);
+        }
+        let Some(value) = self.global_binding_property_value(lookup.name())? else {
+            return Ok(None);
+        };
+        let writable = if matches!(lookup.name(), NAN_NAME | INFINITY_NAME) {
+            PropertyWritable::No
+        } else {
+            PropertyWritable::Yes
+        };
+        let configurable = if matches!(lookup.name(), NAN_NAME | INFINITY_NAME) {
+            PropertyConfigurable::No
+        } else {
+            PropertyConfigurable::Yes
+        };
+        let descriptor = DataPropertyDescriptor::new(
+            value.clone(),
+            writable,
+            PropertyEnumerable::No,
+            configurable,
+        );
+        self.define_global_object_data_property(
+            id,
+            lookup.name(),
+            value,
+            writable,
+            PropertyEnumerable::No,
+            configurable,
+        )?;
+        Ok(Some(OwnPropertyDescriptor::Data(descriptor)))
     }
 
     pub(crate) fn sync_global_object_binding_property(

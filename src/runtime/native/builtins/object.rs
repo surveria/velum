@@ -150,41 +150,7 @@ impl Context {
         let values = args.as_slice();
         let target = Self::argument_or_undefined(values.first());
         let property = self.object_property_key(values.get(1))?;
-        let descriptor = match &target {
-            Value::Object(id) if self.objects.is_proxy(*id) => {
-                self.proxy_get_own_property_descriptor(*id, property.name())?
-            }
-            Value::Object(id) => {
-                if let Some(descriptor) =
-                    self.string_object_own_property_descriptor(*id, &property)?
-                {
-                    Some(OwnPropertyDescriptor::Data(descriptor))
-                } else {
-                    self.objects
-                        .own_property_descriptor(*id, property.lookup())?
-                }
-            }
-            Value::Function(id) => self
-                .function_own_property_descriptor_lookup(*id, property.lookup())?
-                .map(OwnPropertyDescriptor::Data),
-            Value::NativeFunction(id) => self
-                .native_function_own_property_descriptor_lookup(*id, property.lookup())?
-                .map(OwnPropertyDescriptor::Data),
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => {
-                return Err(Error::runtime(
-                    "Object.getOwnPropertyDescriptor target must be an object",
-                ));
-            }
-        };
-        let Some(descriptor) = descriptor else {
+        let Some(descriptor) = self.own_property_descriptor_value(&target, &property)? else {
             return Ok(Value::Undefined);
         };
         self.create_property_descriptor_object(&descriptor)
@@ -744,7 +710,13 @@ impl Context {
                 {
                     return Ok(Some(OwnPropertyDescriptor::Data(descriptor)));
                 }
-                self.objects.own_property_descriptor(*id, property.lookup())
+                if let Some(descriptor) = self
+                    .objects
+                    .own_property_descriptor(*id, property.lookup())?
+                {
+                    return Ok(Some(descriptor));
+                }
+                self.global_object_property_descriptor(*id, property.lookup())
             }
             Value::Function(id) => Ok(self
                 .function_own_property_descriptor_lookup(*id, property.lookup())?

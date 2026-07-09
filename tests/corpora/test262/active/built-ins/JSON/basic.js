@@ -159,8 +159,13 @@ let functionPrototypeSurfaceOk =
   Object.getOwnPropertyDescriptor(JSON.rawJSON, "prototype") === undefined &&
   !JSON.isRawJSON.hasOwnProperty("prototype") &&
   Object.getOwnPropertyDescriptor(JSON.isRawJSON, "prototype") === undefined;
+let globalJsonDescriptor = Object.getOwnPropertyDescriptor(this, "JSON");
 let jsonObjectSurfaceOk =
   Object.prototype.toString.call(JSON) === "[object JSON]" &&
+  globalJsonDescriptor.value === JSON &&
+  globalJsonDescriptor.writable === true &&
+  globalJsonDescriptor.enumerable === false &&
+  globalJsonDescriptor.configurable === true &&
   JSON[Symbol.toStringTag] === "JSON" &&
   jsonTagDescriptor.value === "JSON" &&
   jsonTagDescriptor.writable === false &&
