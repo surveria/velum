@@ -497,7 +497,7 @@ impl Context {
             NativeFunctionKind::PromiseResolver { promise, kind } => {
                 self.eval_promise_resolver(promise, kind, args)
             }
-            NativeFunctionKind::Proxy => self.eval_proxy_call(args),
+            NativeFunctionKind::Proxy => Self::eval_proxy_call(args),
             NativeFunctionKind::ProxyRevocable => self.eval_proxy_revocable(args),
             NativeFunctionKind::ProxyRevoke(id) => self.eval_proxy_revoke(id),
             NativeFunctionKind::Symbol => self.eval_symbol_constructor(args),

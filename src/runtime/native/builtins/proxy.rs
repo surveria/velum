@@ -41,7 +41,8 @@ impl Context {
         if let Some(id) = self.native_function_id(NativeFunctionKind::Proxy) {
             return Ok(Value::NativeFunction(id));
         }
-        let constructor = self.create_native_function(NativeFunctionKind::Proxy, Value::Undefined)?;
+        let constructor =
+            self.create_native_function(NativeFunctionKind::Proxy, Value::Undefined)?;
         if let Value::NativeFunction(id) = constructor {
             self.define_proxy_static_method(
                 id,
@@ -70,7 +71,7 @@ impl Context {
     /// Spec `Proxy(target, handler)` / `ProxyCreate`. Both operands must be
     /// objects (ordinary objects or callables). Calling `Proxy` without `new`
     /// is a `TypeError`.
-    pub(in crate::runtime) fn eval_proxy_call(&mut self, _args: RuntimeCallArgs<'_>) -> Result<Value> {
+    pub(in crate::runtime) fn eval_proxy_call(_args: RuntimeCallArgs<'_>) -> Result<Value> {
         Err(Error::type_error(PROXY_REQUIRES_NEW_ERROR))
     }
 
@@ -388,7 +389,10 @@ impl Context {
     /// Enumerable own string keys of a proxy: the `ownKeys` trap result
     /// filtered by each key's `getOwnPropertyDescriptor` enumerability. Backs
     /// Object.keys/entries/values over a proxy.
-    pub(in crate::runtime) fn proxy_enumerable_keys(&mut self, id: ObjectId) -> Result<Vec<String>> {
+    pub(in crate::runtime) fn proxy_enumerable_keys(
+        &mut self,
+        id: ObjectId,
+    ) -> Result<Vec<String>> {
         let all = self.proxy_own_keys(id)?;
         let mut keys = Vec::new();
         for key in all {
@@ -429,9 +433,7 @@ impl Context {
                 Value::String(text) => keys.push(text),
                 Value::HeapString(text) => keys.push(text.as_str().to_owned()),
                 _ => {
-                    return Err(Error::type_error(
-                        "proxy ownKeys trap keys must be strings",
-                    ));
+                    return Err(Error::type_error("proxy ownKeys trap keys must be strings"));
                 }
             }
         }

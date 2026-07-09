@@ -24,14 +24,14 @@ impl ProxyValue {
         }
     }
 
-    pub(in crate::runtime) fn target(&self) -> Option<&Value> {
+    pub(in crate::runtime) const fn target(&self) -> Option<&Value> {
         if self.revoked {
             return None;
         }
         Some(&self.target)
     }
 
-    pub(in crate::runtime) fn handler(&self) -> Option<&Value> {
+    pub(in crate::runtime) const fn handler(&self) -> Option<&Value> {
         if self.revoked {
             return None;
         }
@@ -56,8 +56,7 @@ impl ObjectHeap {
 
     pub(in crate::runtime) fn is_proxy(&self, id: ObjectId) -> bool {
         self.object(id)
-            .map(|object| object.proxy_value.is_some())
-            .unwrap_or(false)
+            .is_ok_and(|object| object.proxy_value.is_some())
     }
 
     pub(in crate::runtime) fn revoke_proxy(&mut self, id: ObjectId) -> Result<()> {
