@@ -15,6 +15,7 @@ mod date_kind;
 mod direct;
 mod kind;
 mod object_kind;
+mod performance_kind;
 mod primitive;
 mod primitive_kind;
 mod reflect_kind;
@@ -73,6 +74,7 @@ pub(in crate::runtime) use kind::{
     OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME, OBJECT_PROTOTYPE_TO_STRING_NAME,
     OBJECT_PROTOTYPE_VALUE_OF_NAME,
 };
+pub(in crate::runtime::native) use performance_kind::{PERFORMANCE_NAME, PERFORMANCE_NOW_NAME};
 pub(in crate::runtime::native) use primitive_kind::{
     BOOLEAN_PROTOTYPE_TO_STRING_NAME, BOOLEAN_PROTOTYPE_VALUE_OF_NAME,
     NUMBER_PROTOTYPE_TO_EXPONENTIAL_NAME, NUMBER_PROTOTYPE_TO_FIXED_NAME,

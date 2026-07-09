@@ -366,6 +366,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ObjectSetPrototypeOf,
     ObjectSeal,
     ObjectValues,
+    PerformanceNow,
     Promise,
     PromiseResolve,
     PromiseReject,
@@ -518,6 +519,9 @@ impl NativeFunctionKind {
         if let Some(length) = self.object_length() {
             return length;
         }
+        if let Some(length) = self.performance_length() {
+            return length;
+        }
         if let Some(length) = self.core_length() {
             return length;
         }
@@ -636,6 +640,9 @@ impl NativeFunctionKind {
             return name;
         }
         if let Some(name) = self.object_name() {
+            return name;
+        }
+        if let Some(name) = self.performance_name() {
             return name;
         }
         if let Some(name) = self.core_name() {
