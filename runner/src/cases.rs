@@ -35,6 +35,8 @@ mod cases_reporting;
 mod cases_test262;
 #[path = "cases_test262_collections.rs"]
 mod cases_test262_collections;
+#[path = "cases_test262_proxy.rs"]
+mod cases_test262_proxy;
 #[path = "cases_test262_reflect.rs"]
 mod cases_test262_reflect;
 

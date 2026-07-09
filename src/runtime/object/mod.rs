@@ -10,6 +10,7 @@ mod heap;
 mod integrity;
 mod property;
 mod prototype;
+mod proxy;
 mod regexp;
 mod shape;
 mod string;
@@ -27,6 +28,7 @@ pub use property::{
     OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup,
     PropertyUpdate, PropertyWritable,
 };
+pub use proxy::ProxyValue;
 pub use regexp::RegExpValue;
 use shape::{ShapeId, ShapeTable};
 
@@ -94,6 +96,7 @@ struct Object {
     primitive_value: Option<ObjectPrimitiveValue>,
     date_value: Option<DateValue>,
     regexp_value: Option<RegExpValue>,
+    proxy_value: Option<ProxyValue>,
     is_raw_json: bool,
     prototype: Option<ObjectId>,
     extensibility: ObjectExtensibility,
@@ -122,6 +125,7 @@ impl Object {
             primitive_value: None,
             date_value: None,
             regexp_value: None,
+            proxy_value: None,
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
@@ -140,6 +144,7 @@ impl Object {
             primitive_value: None,
             date_value: None,
             regexp_value: None,
+            proxy_value: None,
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
@@ -158,6 +163,7 @@ impl Object {
             primitive_value: None,
             date_value: None,
             regexp_value: None,
+            proxy_value: None,
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
@@ -176,6 +182,7 @@ impl Object {
             primitive_value: Some(value),
             date_value: None,
             regexp_value: None,
+            proxy_value: None,
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,

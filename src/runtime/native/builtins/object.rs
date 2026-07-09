@@ -86,8 +86,18 @@ impl Context {
         let values = args.as_slice();
         let target = Self::argument_or_undefined(values.first());
         let mut property = self.object_property_key(values.get(1))?;
-        let key = self.intern_dynamic_property_key(&mut property)?;
         let descriptor_value = Self::argument_or_undefined(values.get(2));
+        if let Value::Object(id) = &target
+            && self.objects.is_proxy(*id)
+        {
+            if !self.proxy_define_property(*id, property.name(), descriptor_value)? {
+                return Err(Error::type_error(
+                    "proxy defineProperty trap returned falsy",
+                ));
+            }
+            return Ok(target);
+        }
+        let key = self.intern_dynamic_property_key(&mut property)?;
         let descriptor = self.property_update_from_value(&descriptor_value)?;
         match &target {
             Value::Object(id) => {
@@ -140,6 +150,9 @@ impl Context {
         let target = Self::argument_or_undefined(values.first());
         let property = self.object_property_key(values.get(1))?;
         let descriptor = match &target {
+            Value::Object(id) if self.objects.is_proxy(*id) => {
+                self.proxy_get_own_property_descriptor(*id, property.name())?
+            }
             Value::Object(id) => {
                 if let Some(descriptor) =
                     self.string_object_own_property_descriptor(*id, &property)?
@@ -183,6 +196,7 @@ impl Context {
         let values = args.as_slice();
         let target = Self::argument_or_undefined(values.first());
         match target {
+            Value::Object(id) if self.objects.is_proxy(id) => self.proxy_get_prototype_of(id),
             Value::Object(id) => self.objects.prototype_value(id),
             Value::Function(id) => self.function_object_prototype_value(id),
             Value::NativeFunction(id) => self.native_function_object_prototype_value(id),
@@ -237,7 +251,10 @@ impl Context {
     ) -> Result<Value> {
         let values = args.as_slice();
         let target = Self::argument_or_undefined(values.first());
-        let keys = self.own_enumerable_keys(&target)?;
+        let keys = match &target {
+            Value::Object(id) if self.objects.is_proxy(*id) => self.proxy_enumerable_keys(*id)?,
+            _ => self.own_enumerable_keys(&target)?,
+        };
         self.array_constructor_value()?;
         let prototype = self.objects.existing_array_prototype_id()?;
         let mut elements = Vec::with_capacity(keys.len());
@@ -258,7 +275,10 @@ impl Context {
     ) -> Result<Value> {
         let values = args.as_slice();
         let target = Self::argument_or_undefined(values.first());
-        let keys = self.own_property_names(&target)?;
+        let keys = match &target {
+            Value::Object(id) if self.objects.is_proxy(*id) => self.proxy_own_keys(*id)?,
+            _ => self.own_property_names(&target)?,
+        };
         self.array_constructor_value()?;
         let prototype = self.objects.existing_array_prototype_id()?;
         let mut elements = Vec::with_capacity(keys.len());
@@ -682,6 +702,9 @@ impl Context {
         property: &DynamicPropertyKey,
     ) -> Result<Option<OwnPropertyDescriptor>> {
         match target {
+            Value::Object(id) if self.objects.is_proxy(*id) => {
+                self.proxy_get_own_property_descriptor(*id, property.name())
+            }
             Value::Object(id) => {
                 if let Some(descriptor) =
                     self.string_object_own_property_descriptor(*id, property)?

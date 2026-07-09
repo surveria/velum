@@ -326,6 +326,9 @@ impl Context {
                 self.eval_direct_or_generic_native_function_kind(kind, args, &this_value)
             }
             Value::HostFunction(id) => self.eval_host_function(id, RuntimeCallArgs::values(args)),
+            Value::Object(id) if self.objects.is_proxy(id) => {
+                self.proxy_apply(id, args, this_value)
+            }
             value => Err(Error::type_error(format!("'{value}' is not callable"))),
         }
     }
@@ -349,6 +352,9 @@ impl Context {
             }
             Value::HostFunction(id) => self
                 .eval_host_function(id, RuntimeCallArgs::values(args))
+                .map(Completion::Normal),
+            Value::Object(id) if self.objects.is_proxy(id) => self
+                .proxy_apply(id, args, this_value)
                 .map(Completion::Normal),
             value => Err(Error::type_error(format!("'{value}' is not callable"))),
         }
@@ -543,6 +549,7 @@ impl Context {
             Value::NativeFunction(id) => {
                 self.construct_native_function(id, RuntimeCallArgs::values(args))
             }
+            Value::Object(id) if self.objects.is_proxy(id) => self.proxy_construct(id, args),
             value => Err(Error::type_error(format!("'{value}' is not a constructor"))),
         }
     }
@@ -568,6 +575,11 @@ impl Context {
                         .construct_native_function_kind(kind, RuntimeCallArgs::values(args));
                 }
                 return self.construct_native_function(id, RuntimeCallArgs::values(args));
+            }
+            if let Value::Object(object_id) = value
+                && self.objects.is_proxy(object_id)
+            {
+                return self.proxy_construct(object_id, args);
             }
             return Err(Error::type_error(format!(
                 "'{}' is not a constructor",

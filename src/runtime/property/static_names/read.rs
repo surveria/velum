@@ -161,6 +161,11 @@ impl Context {
         property: &str,
         access: StaticPropertyAccessId,
     ) -> Result<bool> {
+        if let Value::Object(id) = object
+            && self.objects.is_proxy(*id)
+        {
+            return self.proxy_has(*id, property);
+        }
         let lookup = self.property_lookup(property);
         if lookup.key().is_none()
             && matches!(object, Value::Object(_))
@@ -188,6 +193,9 @@ impl Context {
                 self.error_prototype_has_property(error.name(), lookup)
             }
             Value::Object(id) => {
+                if self.objects.is_proxy(*id) {
+                    return self.proxy_has(*id, property);
+                }
                 if let Some(has_property) = self.global_object_has_property(*id, lookup)? {
                     return Ok(has_property);
                 }
@@ -203,6 +211,9 @@ impl Context {
         access: StaticPropertyAccessId,
         lookup: PropertyLookup<'_>,
     ) -> Result<Value> {
+        if self.objects.is_proxy(object) {
+            return self.proxy_get(object, lookup.name(), Value::Object(object));
+        }
         let Some(cache) = self.current_static_name_atom_cache() else {
             let object_value = Value::Object(object);
             let value = get_property(&self.objects, &object_value, lookup)?;
