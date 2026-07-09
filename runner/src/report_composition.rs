@@ -83,6 +83,7 @@ pub fn compose(
         benchmark_filter: performance.configuration.benchmark_filter.clone(),
         quickjs_baseline: performance.configuration.quickjs_baseline,
         benchmark: performance.configuration.benchmark.clone(),
+        suite_max_duration_ns: performance.configuration.suite_max_duration_ns,
     };
     let mut components = correctness.components;
     components.extend(performance.components);
@@ -135,6 +136,7 @@ pub fn validate_components(
     let full_count = component_count(components, ReportMode::Full);
     let correctness_count = component_count(components, ReportMode::Correctness);
     let performance_count = component_count(components, ReportMode::Performance);
+    let jetstream_count = component_count(components, ReportMode::Jetstream);
     let valid = match configuration.report_mode {
         ReportMode::Full => {
             (components.len() == 1 && full_count == 1)
@@ -142,6 +144,7 @@ pub fn validate_components(
         }
         ReportMode::Correctness => components.len() == 1 && correctness_count == 1,
         ReportMode::Performance => components.len() == 1 && performance_count == 1,
+        ReportMode::Jetstream => components.len() == 1 && jetstream_count == 1,
     };
     if !valid {
         bail!("report component provenance does not cover its mode");

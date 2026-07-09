@@ -187,6 +187,7 @@ pub enum ReferenceSource {
     QuickjsBaseline,
     QuickjsLive,
     QuickjsLiveFailed,
+    QuickjsBaselineMissing,
     NotConfigured,
 }
 
@@ -196,6 +197,7 @@ impl ReferenceSource {
             Self::QuickjsBaseline => "quickjs_baseline",
             Self::QuickjsLive => "quickjs_live",
             Self::QuickjsLiveFailed => "quickjs_live_failed",
+            Self::QuickjsBaselineMissing => "quickjs_baseline_missing",
             Self::NotConfigured => "🟡 not configured",
         }
     }

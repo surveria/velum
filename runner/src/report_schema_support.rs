@@ -12,6 +12,8 @@ use crate::{
 
 const BENCHMARK_FILTER_ENV: &str = "RSQJS_BENCH_FILTER";
 const BENCHMARK_SET_ENV: &str = "RSQJS_BENCH_SET";
+const JETSTREAM_FILTER_ENV: &str = "RSQJS_JETSTREAM_FILTER";
+const JETSTREAM_QUICKJS_BASELINE_ENV: &str = "RSQJS_JETSTREAM_QUICKJS_BASELINE";
 const QUICKJS_BASELINE_ENV: &str = "RSQJS_QUICKJS_BASELINE";
 const TEST262_RUN_ALL_ENV: &str = "RSQJS_TEST262_RUN_ALL";
 const TEST262_PATH_FILTER_ENV: &str = "RSQJS_TEST262_PATH_FILTER";
@@ -64,16 +66,45 @@ impl RunConfiguration {
             benchmark_set: benchmark_set(),
             benchmark_filter: non_empty_env(BENCHMARK_FILTER_ENV),
             quickjs_baseline: quickjs_baseline_mode(),
-            benchmark: BenchmarkConfiguration {
-                reference_quickjs_compiled: cfg!(feature = "reference-quickjs"),
-                warmup_duration_ns: duration_ns(benchmark.warmup()),
-                minimum_sample_duration_ns: duration_ns(benchmark.min_total()),
-                samples: usize_to_u64(benchmark.samples()),
-                minimum_operation_duration_ns: duration_ns(benchmark.min_op_time()),
-                maximum_cv_permille: benchmark.max_cv_permille(),
-                attempts: usize_to_u64(benchmark.attempts()),
-            },
+            benchmark: benchmark_configuration(benchmark),
+            suite_max_duration_ns: None,
         }
+    }
+
+    pub fn capture_jetstream() -> anyhow::Result<Self> {
+        let benchmark = MeasureConfig::jetstream_from_env();
+        let quickjs_baseline = jetstream_quickjs_baseline_mode();
+        let suite_max_duration_ns = duration_ns(crate::jetstream::suite_budget(
+            quickjs_baseline == QuickjsBaselineMode::Refresh,
+        )?);
+        Ok(Self {
+            report_mode: ReportMode::Jetstream,
+            jetstream: FeatureSelection::Enabled,
+            quickjs_differential: InputAvailability::NotConfigured,
+            test262: InputAvailability::NotConfigured,
+            test262_mode: Test262Mode::Manifest,
+            test262_path_filters: Vec::new(),
+            test262_flag_filters: Vec::new(),
+            benchmark_set: BenchmarkSet::Full,
+            benchmark_filter: non_empty_env(JETSTREAM_FILTER_ENV),
+            quickjs_baseline,
+            benchmark: benchmark_configuration(benchmark),
+            suite_max_duration_ns: Some(suite_max_duration_ns),
+        })
+    }
+}
+
+fn benchmark_configuration(benchmark: MeasureConfig) -> BenchmarkConfiguration {
+    BenchmarkConfiguration {
+        reference_quickjs_compiled: cfg!(feature = "reference-quickjs"),
+        warmup_duration_ns: duration_ns(benchmark.warmup()),
+        minimum_sample_duration_ns: duration_ns(benchmark.min_total()),
+        samples: usize_to_u64(benchmark.samples()),
+        minimum_operation_duration_ns: duration_ns(benchmark.min_op_time()),
+        maximum_cv_permille: benchmark.max_cv_permille(),
+        attempts: usize_to_u64(benchmark.attempts()),
+        maximum_operation_duration_ns: duration_ns(benchmark.max_op_time()),
+        maximum_total_duration_ns: duration_ns(benchmark.max_total()),
     }
 }
 
@@ -90,6 +121,15 @@ fn quickjs_baseline_mode() -> QuickjsBaselineMode {
         None | Some("read") => QuickjsBaselineMode::Read,
         Some("off") => QuickjsBaselineMode::Off,
         Some("require") => QuickjsBaselineMode::Require,
+        Some("refresh") => QuickjsBaselineMode::Refresh,
+        Some(_) => QuickjsBaselineMode::Invalid,
+    }
+}
+
+fn jetstream_quickjs_baseline_mode() -> QuickjsBaselineMode {
+    match non_empty_env(JETSTREAM_QUICKJS_BASELINE_ENV).as_deref() {
+        None | Some("read") => QuickjsBaselineMode::Read,
+        Some("off") => QuickjsBaselineMode::Off,
         Some("refresh") => QuickjsBaselineMode::Refresh,
         Some(_) => QuickjsBaselineMode::Invalid,
     }

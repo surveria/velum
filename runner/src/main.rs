@@ -594,7 +594,12 @@ fn write_report(path: &Path, report: &ReportDocument) -> anyhow::Result<()> {
             exhaustive_path.display()
         );
     }
-    let body = render_report(&component);
+    let markdown_report = if report.configuration.report_mode == ReportMode::Jetstream {
+        report
+    } else {
+        &component
+    };
+    let body = render_report(markdown_report);
     fs::write(path, body)
         .with_context(|| format!("failed to write test report '{}'", path.display()))?;
     let timing_path = timing_artifact_path(path);

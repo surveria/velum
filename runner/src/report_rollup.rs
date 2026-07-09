@@ -52,6 +52,8 @@ struct ReportRecord {
     latency_over: usize,
     memory_over: usize,
     jetstream_latency_over: usize,
+    benchmark_report: bool,
+    jetstream_report: bool,
     full_test262: Option<TestCounts>,
     context: ReportContext,
 }
@@ -108,7 +110,10 @@ fn build_rollup(report_dir: &Path) -> anyhow::Result<RollupReport> {
     let mut records = parse_records(&report_dir)?;
     attach_contexts(&mut records, &report_dir);
     if records.is_empty() {
-        bail!("no test reports found in '{}'", report_dir.display());
+        bail!(
+            "no test or standalone JetStream reports found under '{}'",
+            reports_root.display()
+        );
     }
 
     Ok(RollupReport {
@@ -151,6 +156,24 @@ fn parse_records(report_dir: &Path) -> anyhow::Result<Vec<ReportRecord>> {
     for path in paths {
         records.push(parse_report(&path)?);
     }
+    let reports_root = report_dir
+        .parent()
+        .context("test report directory must have a reports parent")?;
+    for (path, timestamp) in report_rollup_jetstream::structured_reports(reports_root)? {
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .context("JetStream YAML file name must be valid UTF-8")?
+            .to_owned();
+        records.push(report_rollup_yaml::parse_jetstream(
+            &path, file_name, timestamp,
+        )?);
+    }
+    records.sort_by(|left, right| {
+        left.timestamp
+            .cmp(&right.timestamp)
+            .then_with(|| left.file_name.cmp(&right.file_name))
+    });
     Ok(records)
 }
 
@@ -180,6 +203,8 @@ fn parse_report(path: &Path) -> anyhow::Result<ReportRecord> {
         latency_over: parsed_benchmarks.latency_over,
         memory_over: parsed_benchmarks.memory_over,
         jetstream_latency_over: parsed_jetstream.latency_over,
+        benchmark_report: true,
+        jetstream_report: parsed_jetstream.benchmark_count > 0,
         full_test262: parse_rollup_test262_counts(&text),
         context: parse_report_metadata_context(&text),
     })
@@ -612,38 +637,54 @@ fn append_latest_section(lines: &mut Vec<String>, records: &[ReportRecord]) {
     let Some(latest) = records.last() else {
         return;
     };
+    let latest_benchmark = records.iter().rev().find(|record| record.benchmark_report);
+    let latest_jetstream = records.iter().rev().find(|record| record.jetstream_report);
+    let latest_test262 = records
+        .iter()
+        .rev()
+        .find(|record| record.full_test262.is_some());
     lines.extend([
         "Latest report:".to_owned(),
         String::new(),
         format!("- `{}`", latest.file_name),
         format!("- Task: {}", record_title(latest)),
-        format!(
-            "- Performance: {}",
+        latest_metric_line("Performance", latest_benchmark, |record| {
             metric_text(
-                latest.latency_geomean,
-                latest.latency_over,
-                latest.benchmark_count
+                record.latency_geomean,
+                record.latency_over,
+                record.benchmark_count,
             )
-        ),
-        format!(
-            "- Memory: {}",
+        }),
+        latest_metric_line("Memory", latest_benchmark, |record| {
             metric_text(
-                latest.memory_geomean,
-                latest.memory_over,
-                latest.benchmark_count
+                record.memory_geomean,
+                record.memory_over,
+                record.benchmark_count,
             )
-        ),
-        format!(
-            "- JetStream: {}",
+        }),
+        latest_metric_line("JetStream", latest_jetstream, |record| {
             jetstream_metric_text(
-                latest.jetstream_latency_geomean,
-                latest.jetstream_latency_over,
-                latest.jetstream_count
+                record.jetstream_latency_geomean,
+                record.jetstream_latency_over,
+                record.jetstream_count,
             )
-        ),
-        format!("- Full Test262: {}", test_counts_text(latest.full_test262)),
+        }),
+        latest_metric_line("Full Test262", latest_test262, |record| {
+            test_counts_text(record.full_test262)
+        }),
         String::new(),
     ]);
+}
+
+fn latest_metric_line(
+    label: &str,
+    record: Option<&ReportRecord>,
+    value: impl FnOnce(&ReportRecord) -> String,
+) -> String {
+    let Some(record) = record else {
+        return format!("- {label}: -");
+    };
+    format!("- {label}: {} (from `{}`)", value(record), record.file_name)
 }
 
 fn record_label(record: &ReportRecord) -> String {

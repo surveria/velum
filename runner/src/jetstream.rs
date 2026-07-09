@@ -8,6 +8,9 @@ use crate::{
     report_text, timing,
 };
 
+#[cfg(test)]
+#[path = "jetstream_fixture.rs"]
+mod fixture;
 #[path = "jetstream_cases.rs"]
 mod jetstream_cases;
 #[path = "jetstream_model.rs"]
@@ -22,22 +25,28 @@ mod jetstream_selection;
 mod jetstream_source;
 #[path = "jetstream_suite.rs"]
 mod jetstream_suite;
+#[cfg(test)]
+pub use fixture::worst_case_report_fixture;
 use jetstream_model::{
     BUDGET_DENOMINATOR, BUDGET_NUMERATOR, BudgetCheck, DETAIL_COMPLETED, DETAIL_LATENCY_EXCEPTION,
     DETAIL_QUALITY_GATE, DETAIL_REFERENCE_COMPLETED, JetStreamCase, JetStreamCounts, JetStreamMode,
     JetStreamOutcome, LATENCY_INVALID, LATENCY_NOT_AVAILABLE, LATENCY_OVER, LATENCY_WITHIN,
-    NOT_MEASURED, QUALITY_INVALID, QUALITY_VALID, REFERENCE_BASELINE_MISSING,
-    REFERENCE_MEASURE_CACHED, REFERENCE_NOT_AVAILABLE, REFERENCE_NOT_CONFIGURED,
-    REFERENCE_SOURCE_BASELINE, REFERENCE_SOURCE_DISABLED, REFERENCE_SOURCE_LIVE,
-    REFERENCE_SOURCE_MISSING, ReferenceFlags, ReferenceMeasurement, ReferenceSample, STATUS_FAILED,
-    STATUS_INVALID_BENCHMARK, STATUS_SKIPPED, STATUS_TRACKED_EXCEPTION, STATUS_WITHIN_BUDGET,
+    NOT_MEASURED, QUALITY_INVALID, QUALITY_VALID, ReferenceFlags, ReferenceMeasurement,
+    ReferenceSample, STATUS_FAILED, STATUS_INVALID_BENCHMARK, STATUS_SKIPPED,
+    STATUS_TRACKED_EXCEPTION, STATUS_WITHIN_BUDGET,
 };
 pub use jetstream_model::{BUDGET_LABEL, JetStreamReport, JetStreamRow};
-pub use jetstream_report::{render_section, write_report};
+pub use jetstream_model::{
+    REFERENCE_BASELINE_MISSING, REFERENCE_MEASURE_CACHED, REFERENCE_NOT_AVAILABLE,
+    REFERENCE_NOT_CONFIGURED, REFERENCE_SOURCE_BASELINE, REFERENCE_SOURCE_DISABLED,
+    REFERENCE_SOURCE_LIVE, REFERENCE_SOURCE_MISSING,
+};
+pub use jetstream_report::write_report;
 use jetstream_source::{
     benchmark_source_from_workload, harness_descriptor, quickjs_source_from_workload,
     workload_source,
 };
+pub use jetstream_suite::budget as suite_budget;
 
 pub fn run() -> anyhow::Result<JetStreamReport> {
     let timer = timing::RunTimer::start();
@@ -252,7 +261,7 @@ fn measured_with_reference_result(
             ours,
             case_elapsed,
             REFERENCE_BASELINE_MISSING,
-            REFERENCE_SOURCE_MISSING,
+            NOT_MEASURED,
             Some("content-addressed QuickJS baseline entry is missing or stale"),
             true,
         ),

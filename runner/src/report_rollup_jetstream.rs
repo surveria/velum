@@ -5,6 +5,7 @@ use std::{
 
 const JETSTREAM_REPORT_PREFIX: &str = "rsqjs-jetstream-report-";
 const JETSTREAM_REPORT_SUFFIX: &str = ".md";
+const JETSTREAM_YAML_SUFFIX: &str = ".yaml";
 const JETSTREAM_REPORT_DIR: &str = "jetstream-runs";
 const JETSTREAM_SECTION: &str = "JetStream Shell Benchmarks";
 const TEST_REPORT_PREFIX: &str = "rsqjs-test-report-";
@@ -16,6 +17,42 @@ pub struct JetStreamMetrics {
     pub benchmark_count: usize,
     pub latency_geomean: Option<f64>,
     pub latency_over: usize,
+}
+
+pub fn structured_reports(reports_root: &Path) -> anyhow::Result<Vec<(PathBuf, String)>> {
+    let directory = reports_root.join(JETSTREAM_REPORT_DIR);
+    if !directory.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut reports = Vec::new();
+    for entry in fs::read_dir(&directory)? {
+        let path = entry?.path();
+        let Some(timestamp) = structured_report_timestamp(&path) else {
+            continue;
+        };
+        reports.push((path, timestamp));
+    }
+    reports.sort_by(|left, right| left.1.cmp(&right.1));
+    Ok(reports)
+}
+
+fn structured_report_timestamp(path: &Path) -> Option<String> {
+    let file_name = path.file_name()?.to_str()?;
+    let timestamp = file_name
+        .strip_prefix(JETSTREAM_REPORT_PREFIX)?
+        .strip_suffix(JETSTREAM_YAML_SUFFIX)?;
+    canonical_timestamp(timestamp).then(|| timestamp.to_owned())
+}
+
+fn canonical_timestamp(timestamp: &str) -> bool {
+    let bytes = timestamp.as_bytes();
+    bytes.len() == 16
+        && bytes.get(8) == Some(&b'T')
+        && bytes.get(15) == Some(&b'Z')
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| matches!(index, 8 | 15) || byte.is_ascii_digit())
 }
 
 #[derive(Debug, Default)]

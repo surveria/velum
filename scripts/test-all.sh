@@ -46,6 +46,7 @@ if [[ "${RSQJS_PERFORMANCE_ONLY:-0}" != "1" ]]; then
   "${script_dir}/check-touched-file-sizes.sh" "${RSQJS_BASE_REF:-origin/main}"
   "${script_dir}/check-architecture-boundaries.sh" --self-test
   "${script_dir}/test-report-artifact-metadata.sh"
+  "${script_dir}/test-jetstream-artifact-metadata.sh"
   cargo fmt --all -- --check
   cargo fmt --manifest-path runner/Cargo.toml --all -- --check
   cargo clippy --all-targets --all-features -- -D warnings

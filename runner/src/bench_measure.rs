@@ -141,6 +141,14 @@ impl MeasureConfig {
         self.attempts
     }
 
+    pub const fn max_op_time(self) -> Duration {
+        self.max_op_time
+    }
+
+    pub const fn max_total(self) -> Duration {
+        self.max_total
+    }
+
     /// Build a bounded configuration for whole `JetStream` shell iterations.
     /// These workloads can take seconds per operation, so project microbenchmark
     /// defaults would reject valid rows and repeat expensive attempts.

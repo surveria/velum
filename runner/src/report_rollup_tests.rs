@@ -2,6 +2,7 @@ use std::{fs, path::PathBuf};
 
 use super::{
     build_rollup, parse_benchmark_metrics, parse_corpus_counts, parse_rollup_test262_counts,
+    render_markdown,
 };
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -131,6 +132,73 @@ fn mixed_history_uses_yaml_for_new_reports_and_markdown_fallback_for_old_reports
         return Ok(());
     }
     Err("mixed rollup history did not preserve both parser paths".into())
+}
+
+#[test]
+fn standalone_jetstream_yaml_with_an_unrelated_timestamp_is_discovered_once() -> TestResult {
+    let root = std::env::temp_dir().join(format!(
+        "rsqjs-rollup-standalone-jetstream-{}",
+        std::process::id()
+    ));
+    if root.exists() {
+        fs::remove_dir_all(&root)?;
+    }
+    let report_dir = root.join("test-runs");
+    let jetstream_dir = root.join("jetstream-runs");
+    fs::create_dir_all(&report_dir)?;
+    fs::create_dir_all(&jetstream_dir)?;
+
+    let test_name = "rsqjs-test-report-20260709T000000Z.md";
+    fs::write(report_dir.join(test_name), "derived test report")?;
+    fs::write(
+        report_dir.join("rsqjs-test-report-20260709T000000Z.yaml"),
+        serde_yaml_ng::to_string(&crate::report_schema_tests::sample_document()?.summary())?,
+    )?;
+
+    let jetstream_stem = "rsqjs-jetstream-report-20260710T031700Z";
+    let jetstream_yaml = serde_yaml_ng::to_string(
+        &crate::report_schema_tests::sample_jetstream_document()?.summary(),
+    )?;
+    fs::write(
+        jetstream_dir.join(format!("{jetstream_stem}.yaml")),
+        &jetstream_yaml,
+    )?;
+    fs::write(
+        jetstream_dir.join(format!("{jetstream_stem}-component.yaml")),
+        &jetstream_yaml,
+    )?;
+    fs::write(
+        jetstream_dir.join(format!("{jetstream_stem}-exhaustive.yaml")),
+        &jetstream_yaml,
+    )?;
+    fs::write(
+        jetstream_dir.join(format!("{jetstream_stem}.md")),
+        "derived JetStream report",
+    )?;
+
+    let rollup = build_rollup(&report_dir)?;
+    let markdown = render_markdown(&rollup.records);
+    let valid = rollup.records.len() == 2
+        && rollup
+            .records
+            .first()
+            .is_some_and(|record| record.file_name == test_name)
+        && rollup.records.get(1).is_some_and(|record| {
+            record.file_name == format!("{jetstream_stem}.yaml")
+                && record.jetstream_count == 86
+                && record.benchmark_count == 0
+        })
+        && markdown.contains(&format!(
+            "- JetStream: 0.80x (0/86 >1.00x) (from `{jetstream_stem}.yaml`)"
+        ))
+        && markdown.contains(&format!(
+            "- Performance: 1.25x (1/1 >1.00x) (from `{test_name}`)"
+        ));
+    fs::remove_dir_all(&root)?;
+    if valid {
+        return Ok(());
+    }
+    Err("standalone JetStream YAML was missing, duplicated, or misattributed".into())
 }
 
 fn temporary_report_root() -> PathBuf {

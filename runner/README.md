@@ -41,6 +41,13 @@ explicit trailing-star prefixes. Live QuickJS execution occurs only when
 `RSQJS_JETSTREAM_QUICKJS_BASELINE=refresh` is set explicitly; refresh output is
 reviewed and committed as a separate baseline change.
 
+Each run writes derived Markdown, compact schema-v1 YAML, bounded component
+YAML, and a bounded TSV view. The compact YAML keeps every selected official
+row and exact aggregate counts within the repository's 1,000-line canonical
+limit. CI rejects local-only exhaustive output. Normal read mode does not
+compile or run the QuickJS binding; canonical publication stores only Markdown
+plus compact YAML, while component/TSV files remain workflow artifacts.
+
 ## Test262 Accounting
 
 The full Test262 report keeps two progress views:
