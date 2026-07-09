@@ -156,7 +156,7 @@ impl Context {
         delete_property(&mut self.objects, object, property)
     }
 
-    /// Spec-shaped `[[Set]]` recursion used by `Reflect.set` and Proxy fallback.
+    /// Spec-shaped `[[Set]]` recursion used by `Reflect.set` and Proxy default dispatch.
     /// It preserves an explicit receiver across descriptors and prototypes.
     pub(in crate::runtime) fn semantic_reflect_property_write(
         &mut self,
