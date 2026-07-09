@@ -82,6 +82,8 @@ const PATH_BENCH_COMPOUND_ASSIGNMENT_EXTENDED: &str =
 const PATH_BENCH_EXPONENTIATION_PARENTHESES: &str =
     "tests/corpora/benchmarks/active/exponentiation_parentheses.js";
 const PATH_BENCH_IN_OPERATOR: &str = "tests/corpora/benchmarks/active/in_operator.js";
+const PATH_BENCH_INSTANCEOF_HAS_INSTANCE: &str =
+    "tests/corpora/benchmarks/active/instanceof_has_instance.js";
 const PATH_BENCH_STRING: &str = "tests/corpora/benchmarks/active/string_concat.js";
 const PATH_BENCH_STRING_ESCAPE_SEQUENCES: &str =
     "tests/corpora/benchmarks/active/string_escape_sequences.js";
@@ -341,6 +343,10 @@ fn benchmark_operator_cases() -> Vec<BenchmarkCase> {
         BenchmarkCase {
             id: "in_operator",
             path: PATH_BENCH_IN_OPERATOR,
+        },
+        BenchmarkCase {
+            id: "instanceof_has_instance",
+            path: PATH_BENCH_INSTANCEOF_HAS_INSTANCE,
         },
     ]
 }
