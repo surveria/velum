@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260709T005317Z.md`
-- Task: PR #363: Optimize break/continue bytecode fast paths
-- Performance: 5.35x (68/70 >1.00x)
+- `rsqjs-test-report-20260709T015135Z.md`
+- Task: workflow_dispatch
+- Performance: 5.45x (67/70 >1.00x)
 - Memory: - (0/70 >1.00x)
-- JetStream: 25.27x (4/4 >1.00x)
-- Full Test262: 31399 passed / 71179 failed (30.61%)
+- JetStream: 24.84x (4/4 >1.00x)
+- Full Test262: 31439 passed / 71139 failed (30.65%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -352,3 +352,4 @@ Latest report:
 | `20260708T234245Z` `a5dd6fe` PR #355: bench: run QuickJS for failed benchmark candidates | 5.84x (68/69 >1.00x) | - (0/69 >1.00x) | 24.65x (4/4 >1.00x) | 31217 passed / 71361 failed (30.43%) |
 | `20260709T000409Z` `3fd37e8` workflow_dispatch | 5.54x (68/69 >1.00x) | - (0/69 >1.00x) | 24.82x (4/4 >1.00x) | 31217 passed / 71361 failed (30.43%) |
 | `20260709T005317Z` `0370172` PR #363: Optimize break/continue bytecode fast paths | 5.35x (68/70 >1.00x) | - (0/70 >1.00x) | 25.27x (4/4 >1.00x) | 31399 passed / 71179 failed (30.61%) |
+| `20260709T015135Z` `2d427ca` workflow_dispatch | 5.45x (67/70 >1.00x) | - (0/70 >1.00x) | 24.84x (4/4 >1.00x) | 31439 passed / 71139 failed (30.65%) |
