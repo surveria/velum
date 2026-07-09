@@ -21,6 +21,7 @@ use super::{
     array_add_loop::BytecodeForArrayAddFastPath,
     array_fill_loop::BytecodeForArrayFillFastPath,
     block_lexical_loop::BytecodeBlockLexicalLoopFastPath,
+    compound_assignment_loop::BytecodeCompoundAssignmentLoopFastPath,
     loop_helpers::{fast_loop_compare, same_bytecode_binding},
     object_literal_loop::BytecodeObjectLiteralLoopFastPath,
     string_concat_loop::BytecodeForStringConcatLengthFastPath,
@@ -57,6 +58,7 @@ pub(super) enum BytecodeForLoopBodyFastPath<'a> {
     SwitchMaskedArrayAdd(BytecodeForSwitchFastPath<'a>),
     StringConcatLength(BytecodeForStringConcatLengthFastPath<'a>),
     UpdateExpression(BytecodeUpdateExpressionLoopFastPath<'a>),
+    CompoundAssignment(BytecodeCompoundAssignmentLoopFastPath<'a>),
     ObjectLiteral(BytecodeObjectLiteralLoopFastPath<'a>),
     BlockLexical(BytecodeBlockLexicalLoopFastPath<'a>),
     TryCatch(BytecodeForTryCatchFastPath<'a>),
@@ -226,6 +228,9 @@ impl Context {
             BytecodeForLoopBodyFastPath::UpdateExpression(body) => {
                 Self::update_expression_loop_fast_path_ready(body)
             }
+            BytecodeForLoopBodyFastPath::CompoundAssignment(body) => {
+                Self::compound_assignment_loop_fast_path_ready(body)
+            }
             BytecodeForLoopBodyFastPath::ObjectLiteral(body) => {
                 Self::object_literal_loop_fast_path_ready(body)
             }
@@ -274,6 +279,11 @@ impl Context {
         {
             return Ok(None);
         }
+        if let BytecodeForLoopBodyFastPath::CompoundAssignment(body) = &fast_path.body
+            && self.eval_compound_assignment_loop_fast_path(state, next, fast_path, body)?
+        {
+            return Ok(None);
+        }
         if let BytecodeForLoopBodyFastPath::ObjectLiteral(body) = &fast_path.body
             && self.eval_object_literal_loop_fast_path(state, next, fast_path, body)?
         {
@@ -296,6 +306,7 @@ impl Context {
             }
             BytecodeForLoopBodyFastPath::ArrayFill(_)
             | BytecodeForLoopBodyFastPath::BlockLexical(_)
+            | BytecodeForLoopBodyFastPath::CompoundAssignment(_)
             | BytecodeForLoopBodyFastPath::ObjectLiteral(_)
             | BytecodeForLoopBodyFastPath::StringConcatLength(_)
             | BytecodeForLoopBodyFastPath::TryCatch(_)
@@ -416,6 +427,9 @@ impl Context {
         }
         if let Some(body) = self.compile_update_expression_loop_fast_path(index, body)? {
             return Ok(Some(BytecodeForLoopBodyFastPath::UpdateExpression(body)));
+        }
+        if let Some(body) = self.compile_compound_assignment_loop_fast_path(index, body)? {
+            return Ok(Some(BytecodeForLoopBodyFastPath::CompoundAssignment(body)));
         }
         if let Some(body) = self.compile_object_literal_loop_fast_path(index, body)? {
             return Ok(Some(BytecodeForLoopBodyFastPath::ObjectLiteral(body)));
@@ -539,6 +553,7 @@ impl Context {
                 .eval_bytecode_for_switch_fast_path(body, array_values)
                 .map(Completion::Normal),
             BytecodeForLoopBodyFastPath::StringConcatLength(_)
+            | BytecodeForLoopBodyFastPath::CompoundAssignment(_)
             | BytecodeForLoopBodyFastPath::UpdateExpression(_)
             | BytecodeForLoopBodyFastPath::ObjectLiteral(_)
             | BytecodeForLoopBodyFastPath::TryCatch(_)
