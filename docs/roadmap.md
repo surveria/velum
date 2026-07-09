@@ -6,6 +6,12 @@ branch that starts or completes a compatibility, embedding, testing,
 runtime-architecture, resource-control, observability, performance, or memory
 task.
 
+Architecture prerequisites and the methodology for balancing compatibility,
+runtime foundations, and optimization live in [Architecture Stabilization And
+Development Strategy](architecture-stabilization-plan.md). Product priority
+comes from this roadmap and the project plan; architecture gates for affected
+work come from the stabilization plan.
+
 This roadmap is a short product-level view. It is not an optimization plan and
 should not be read as a queue of runtime micro-optimizations. The engine must
 become a safe, embeddable Rust library first, then grow compatibility,

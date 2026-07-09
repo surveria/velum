@@ -19,6 +19,14 @@ add production observability, and evolve runtime internals behind stable public
 interfaces. Performance and memory budgets are acceptance criteria for all of
 that work, with dedicated checkpoint tasks only when measurements show debt.
 
+The focused [Architecture Stabilization And Development
+Strategy](architecture-stabilization-plan.md) defines the architecture
+prerequisites, development gates, and ordered stabilization program used by
+cross-cutting runtime work. This document continues to decide whole-product
+priority; the focused plan decides whether an affected product task first needs
+object-model, semantic-operation, completion, ownership, execution-frame,
+heap, or optimization-boundary work.
+
 ## How To Read This Plan
 
 This document answers three different questions:
@@ -45,6 +53,11 @@ This document answers three different questions:
    measured-performance need, then chooses atoms, slots, shapes, dense arrays,
    bytecode, caches, or heap work only when that method is the right tool for
    the selected need.
+
+5. Which architecture prerequisites must be completed first?
+   Follow the gates and stable task ids in the architecture stabilization plan.
+   Update that plan with PR, merge, validation, compatibility, and measurement
+   evidence as each item is completed.
 
 Runtime architecture notes are not the project goal by themselves. Atoms,
 slots, shapes, dense arrays, bytecode, inline caches, and GC are foundations
