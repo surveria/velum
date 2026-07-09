@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260709T041104Z.md`
-- Task: PR #368: runtime: optimize Array flat and flatMap paths
-- Performance: 5.03x (68/73 >1.00x)
+- `rsqjs-test-report-20260709T052010Z.md`
+- Task: PR #371: runtime: optimize Array sort fast paths
+- Performance: 4.76x (67/73 >1.00x)
 - Memory: - (0/73 >1.00x)
-- JetStream: 23.34x (4/4 >1.00x)
-- Full Test262: 32149 passed / 70429 failed (31.34%)
+- JetStream: 24.54x (4/4 >1.00x)
+- Full Test262: 32151 passed / 70427 failed (31.34%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -357,3 +357,4 @@ Latest report:
 | `20260709T030535Z` `e3973ee` PR #367: Function.prototype.apply and Function.prototype[Symbol.hasInstance] | 5.13x (68/72 >1.00x) | - (0/72 >1.00x) | 25.18x (4/4 >1.00x) | 32126 passed / 70452 failed (31.32%) |
 | `20260709T034949Z` `db172db` PR #369: instanceof operator consults Symbol.hasInstance | 5.34x (69/73 >1.00x) | - (0/73 >1.00x) | 23.65x (4/4 >1.00x) | 32149 passed / 70429 failed (31.34%) |
 | `20260709T041104Z` `d3b28f0` PR #368: runtime: optimize Array flat and flatMap paths | 5.03x (68/73 >1.00x) | - (0/73 >1.00x) | 23.34x (4/4 >1.00x) | 32149 passed / 70429 failed (31.34%) |
+| `20260709T052010Z` `f7554a2` PR #371: runtime: optimize Array sort fast paths | 4.76x (67/73 >1.00x) | - (0/73 >1.00x) | 24.54x (4/4 >1.00x) | 32151 passed / 70427 failed (31.34%) |
