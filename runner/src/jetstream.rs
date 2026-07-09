@@ -93,6 +93,9 @@ pub fn run() -> anyhow::Result<JetStreamReport> {
                 reference.as_deref(),
             )?
         };
+        // Persist each completed refresh case so an interrupted long reference
+        // run keeps all prior deterministic outcomes for review and resumption.
+        baseline.finish()?;
         report.measured = report.measured.saturating_add(outcome.counts.measured);
         report.failed = report.failed.saturating_add(outcome.counts.failed);
         report.invalid = report.invalid.saturating_add(outcome.counts.invalid);
