@@ -178,7 +178,7 @@ impl Context {
         self.string_values_array(vec![needle.to_owned()])
     }
 
-    fn string_regexp_replace_first(
+    pub(in crate::runtime::native) fn string_regexp_replace_first(
         &mut self,
         text: &str,
         pattern: &Value,
@@ -192,7 +192,7 @@ impl Context {
         self.heap_string_value(&output)
     }
 
-    fn string_regexp_replace_global(
+    pub(in crate::runtime::native) fn string_regexp_replace_global(
         &mut self,
         text: &str,
         pattern: &Value,

@@ -36,6 +36,7 @@ const REGEXP_STICKY_PROPERTY: &str = "sticky";
 const REGEXP_UNICODE_PROPERTY: &str = "unicode";
 const REGEXP_UNICODE_SETS_PROPERTY: &str = "unicodeSets";
 const SYMBOL_MATCH_PROPERTY: &str = "match";
+const SYMBOL_REPLACE_PROPERTY: &str = "replace";
 const SYMBOL_SEARCH_PROPERTY: &str = "search";
 const ZERO_INDEX: f64 = 0.0;
 
@@ -213,6 +214,30 @@ impl Context {
         Ok(Value::Number(index))
     }
 
+    pub(in crate::runtime::native) fn eval_regexp_prototype_symbol_replace(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let input = args
+            .as_slice()
+            .first()
+            .map_or_else(String::new, Value::display_for_concat);
+        let replacement = args
+            .as_slice()
+            .get(1)
+            .map_or_else(String::new, Value::display_for_concat);
+        self.check_string_len(&input)?;
+        self.check_string_len(&replacement)?;
+        if self
+            .get_property_value(this_value, REGEXP_GLOBAL_PROPERTY)?
+            .is_truthy()
+        {
+            return self.string_regexp_replace_global(&input, this_value, &replacement);
+        }
+        self.string_regexp_replace_first(&input, this_value, &replacement)
+    }
+
     fn create_regexp_object_from_text(&mut self, pattern: &str, flags: &str) -> Result<Value> {
         validate_regexp_flags(flags)?;
         self.check_string_len(pattern)?;
@@ -369,6 +394,11 @@ impl Context {
                 SYMBOL_MATCH_PROPERTY,
                 "[Symbol.match]",
                 NativeFunctionKind::RegExpPrototypeSymbolMatch,
+            ),
+            (
+                SYMBOL_REPLACE_PROPERTY,
+                "[Symbol.replace]",
+                NativeFunctionKind::RegExpPrototypeSymbolReplace,
             ),
             (
                 SYMBOL_SEARCH_PROPERTY,

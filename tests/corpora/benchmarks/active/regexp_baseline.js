@@ -33,6 +33,9 @@ while (index < 8192) {
   if (digits[Symbol.search]("id=12345") === 3) {
     total = total + 1;
   }
+  if (words[Symbol.replace]("abc 123", "x") === "x x") {
+    total = total + 1;
+  }
   index = index + 1;
 }
 

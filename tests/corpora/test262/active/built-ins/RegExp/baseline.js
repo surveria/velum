@@ -3,6 +3,7 @@ let execDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "exec");
 let testDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "test");
 let toStringDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "toString");
 let symbolMatchDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.match);
+let symbolReplaceDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.replace);
 let symbolSearchDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.search);
 let sourceDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "source");
 let flagsDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "flags");
@@ -47,6 +48,11 @@ let descriptorOk =
   symbolMatchDescriptor.writable === true &&
   symbolMatchDescriptor.enumerable === false &&
   symbolMatchDescriptor.configurable === true &&
+  RegExp.prototype[Symbol.replace].name === "[Symbol.replace]" &&
+  RegExp.prototype[Symbol.replace].length === 2 &&
+  symbolReplaceDescriptor.writable === true &&
+  symbolReplaceDescriptor.enumerable === false &&
+  symbolReplaceDescriptor.configurable === true &&
   RegExp.prototype[Symbol.search].name === "[Symbol.search]" &&
   RegExp.prototype[Symbol.search].length === 1 &&
   symbolSearchDescriptor.writable === true &&
@@ -91,6 +97,9 @@ let patternOk =
   (/a+/)[Symbol.match]("baaa")[0] === "aaa" &&
   (/a/g)[Symbol.match]("aba").join("-") === "a-a" &&
   (/z/)[Symbol.match]("aba") === null &&
+  (/a+/)[Symbol.replace]("baaa", "x") === "bx" &&
+  (/a/g)[Symbol.replace]("aba", "x") === "xbx" &&
+  (/z/)[Symbol.replace]("aba", "x") === "aba" &&
   (/a+/)[Symbol.search]("baaa") === 1 &&
   searchRestore[Symbol.search]("baaa") === 1 &&
   searchRestore.lastIndex === 2 &&

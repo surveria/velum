@@ -20,6 +20,8 @@ const REGEXP_PROTOTYPE_UNICODE_GETTER_NAME: &str = "get unicode";
 const REGEXP_PROTOTYPE_UNICODE_SETS_GETTER_NAME: &str = "get unicodeSets";
 const REGEXP_SYMBOL_METHOD_LENGTH: f64 = 1.0;
 const REGEXP_SYMBOL_MATCH_NAME: &str = "[Symbol.match]";
+const REGEXP_SYMBOL_REPLACE_LENGTH: f64 = 2.0;
+const REGEXP_SYMBOL_REPLACE_NAME: &str = "[Symbol.replace]";
 const REGEXP_SYMBOL_SEARCH_NAME: &str = "[Symbol.search]";
 
 impl NativeFunctionKind {
@@ -43,6 +45,7 @@ impl NativeFunctionKind {
             Self::RegExpPrototypeSymbolMatch | Self::RegExpPrototypeSymbolSearch => {
                 Some(REGEXP_SYMBOL_METHOD_LENGTH)
             }
+            Self::RegExpPrototypeSymbolReplace => Some(REGEXP_SYMBOL_REPLACE_LENGTH),
             _ => None,
         }
     }
@@ -66,6 +69,7 @@ impl NativeFunctionKind {
                 Some(REGEXP_PROTOTYPE_UNICODE_SETS_GETTER_NAME)
             }
             Self::RegExpPrototypeSymbolMatch => Some(REGEXP_SYMBOL_MATCH_NAME),
+            Self::RegExpPrototypeSymbolReplace => Some(REGEXP_SYMBOL_REPLACE_NAME),
             Self::RegExpPrototypeSymbolSearch => Some(REGEXP_SYMBOL_SEARCH_NAME),
             _ => None,
         }

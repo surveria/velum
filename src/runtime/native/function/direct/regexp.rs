@@ -60,6 +60,9 @@ impl Context {
             NativeFunctionKind::RegExpPrototypeSymbolMatch => {
                 Some(self.eval_regexp_prototype_symbol_match(args, this_value))
             }
+            NativeFunctionKind::RegExpPrototypeSymbolReplace => {
+                Some(self.eval_regexp_prototype_symbol_replace(args, this_value))
+            }
             NativeFunctionKind::RegExpPrototypeSymbolSearch => {
                 Some(self.eval_regexp_prototype_symbol_search(args, this_value))
             }
