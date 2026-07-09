@@ -31,6 +31,8 @@ const PATH_TEST262_FUNCTION_DECLARATION: &str =
     "tests/corpora/test262/active/language/statements/function_declaration.js";
 const PATH_TEST262_FUNCTION_DESCRIPTORS: &str =
     "tests/corpora/test262/active/built-ins/Function/descriptors.js";
+const PATH_TEST262_FUNCTION_APPLY_HAS_INSTANCE: &str =
+    "tests/corpora/test262/active/built-ins/Function/apply_has_instance.js";
 const PATH_TEST262_FUNCTION_INTRINSIC_DESCRIPTORS: &str =
     "tests/corpora/test262/active/built-ins/Function/intrinsic_descriptors.js";
 const PATH_TEST262_METHOD_THIS: &str =
@@ -278,6 +280,11 @@ fn test262_function_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "built-ins/Function/intrinsic_descriptors",
             path: PATH_TEST262_FUNCTION_INTRINSIC_DESCRIPTORS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Function/apply-has-instance",
+            path: PATH_TEST262_FUNCTION_APPLY_HAS_INSTANCE,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
