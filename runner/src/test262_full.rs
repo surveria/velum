@@ -28,12 +28,13 @@ const TEST262_PATH_FILTER_ENV: &str = "RSQJS_TEST262_PATH_FILTER";
 const TEST262_FLAG_FILTER_ENV: &str = "RSQJS_TEST262_FLAG_FILTER";
 const MODULE_FIXTURE_MARKER: &str = "_FIXTURE";
 const UNKNOWN_AREA: &str = "unknown";
+const STORED_TIMING_ROW_LIMIT: usize = 200;
 
 type FeatureStatsByArea = BTreeMap<String, FeatureAreaStats>;
-
 #[derive(Debug)]
 struct CorpusBuilder {
     rows: Vec<CaseRow>,
+    timing_rows: Vec<CaseRow>,
     feature_stats: FeatureStatsByArea,
     stats: CorpusStats,
     elapsed: Duration,
@@ -43,6 +44,7 @@ impl CorpusBuilder {
     const fn new() -> Self {
         Self {
             rows: Vec::new(),
+            timing_rows: Vec::new(),
             feature_stats: FeatureStatsByArea::new(),
             stats: CorpusStats {
                 total: 0,
@@ -54,7 +56,8 @@ impl CorpusBuilder {
         }
     }
 
-    fn into_report(self, name: &'static str) -> CorpusReport {
+    fn into_report(mut self, name: &'static str) -> CorpusReport {
+        self.rows.extend(self.timing_rows);
         CorpusReport {
             name,
             required: false,
@@ -337,13 +340,16 @@ fn record_file_result(path: &str, results: &[Test262CaseResult], files: &mut Cor
     if failed_variants.is_empty() {
         files.stats.passed = files.stats.passed.saturating_add(1);
         feature_stats_for(&mut files.feature_stats, path).record_passed();
-        files.rows.push(CaseRow {
-            case: path.to_owned(),
-            status: STATUS_PASSED.to_owned(),
-            source: source_label(path),
-            detail: REASON_MATCHED.to_owned(),
-            elapsed,
-        });
+        record_timing_row(
+            files,
+            CaseRow {
+                case: path.to_owned(),
+                status: STATUS_PASSED.to_owned(),
+                source: source_label(path),
+                detail: REASON_MATCHED.to_owned(),
+                elapsed,
+            },
+        );
     } else {
         files.stats.failed = files.stats.failed.saturating_add(1);
         feature_stats_for(&mut files.feature_stats, path).record_failed();
@@ -366,13 +372,16 @@ fn record_discovered_result(path: &str, result: Test262CaseResult, variants: &mu
         Test262Outcome::Passed => {
             variants.stats.passed = variants.stats.passed.saturating_add(1);
             feature_stats_for(&mut variants.feature_stats, path).record_passed();
-            variants.rows.push(CaseRow {
-                case: result.id,
-                status: STATUS_PASSED.to_owned(),
-                source: source_label(path),
-                detail: REASON_MATCHED.to_owned(),
-                elapsed: result.elapsed,
-            });
+            record_timing_row(
+                variants,
+                CaseRow {
+                    case: result.id,
+                    status: STATUS_PASSED.to_owned(),
+                    source: source_label(path),
+                    detail: REASON_MATCHED.to_owned(),
+                    elapsed: result.elapsed,
+                },
+            );
         }
         Test262Outcome::Failed(detail) => {
             variants.stats.failed = variants.stats.failed.saturating_add(1);
@@ -385,6 +394,15 @@ fn record_discovered_result(path: &str, result: Test262CaseResult, variants: &mu
                 elapsed: result.elapsed,
             });
         }
+    }
+}
+
+fn record_timing_row(corpus: &mut CorpusBuilder, row: CaseRow) {
+    let rows = &mut corpus.timing_rows;
+    rows.push(row);
+    rows.sort_by_key(|row| std::cmp::Reverse(row.elapsed));
+    if rows.len() > STORED_TIMING_ROW_LIMIT {
+        rows.pop();
     }
 }
 
@@ -702,8 +720,9 @@ mod tests {
         ensure_usize(files.stats.total, 1)?;
         ensure_usize(files.stats.passed, 1)?;
         ensure_usize(files.stats.failed, 0)?;
-        ensure_usize(files.rows.len(), 1)?;
-        let Some(row) = files.rows.first() else {
+        ensure_usize(files.rows.len(), 0)?;
+        ensure_usize(files.timing_rows.len(), 1)?;
+        let Some(row) = files.timing_rows.first() else {
             return Err("expected passed file row".into());
         };
         ensure_text(&row.case, "test/example.js")?;
