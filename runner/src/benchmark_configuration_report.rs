@@ -47,6 +47,7 @@ pub(super) fn configuration_failure_outcome(error: &str) -> BenchmarkOutcome {
             checksum: NOT_MEASURED.to_owned(),
             reference_source: NOT_MEASURED.to_owned(),
             methodology: BenchmarkMethodology::not_measured(),
+            count_contribution: super::BenchmarkCountContribution::default(),
         },
         counts: BenchmarkCounts {
             failed: 1,

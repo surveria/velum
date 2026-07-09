@@ -5,12 +5,14 @@ use anyhow::{Context as _, bail};
 use crate::{
     bench_measure::MeasureConfig,
     report_schema::{
-        BenchmarkConfiguration, EnvironmentInfo, FeatureSelection, InputAvailability, NO_VALUE,
-        ReportMode, RunConfiguration, Test262Mode,
+        BenchmarkConfiguration, BenchmarkSet, EnvironmentInfo, FeatureSelection, InputAvailability,
+        NO_VALUE, QuickjsBaselineMode, ReportMode, RunConfiguration, Test262Mode,
     },
 };
 
 const BENCHMARK_FILTER_ENV: &str = "RSQJS_BENCH_FILTER";
+const BENCHMARK_SET_ENV: &str = "RSQJS_BENCH_SET";
+const QUICKJS_BASELINE_ENV: &str = "RSQJS_QUICKJS_BASELINE";
 const TEST262_RUN_ALL_ENV: &str = "RSQJS_TEST262_RUN_ALL";
 const TEST262_PATH_FILTER_ENV: &str = "RSQJS_TEST262_PATH_FILTER";
 const TEST262_FLAG_FILTER_ENV: &str = "RSQJS_TEST262_FLAG_FILTER";
@@ -59,7 +61,9 @@ impl RunConfiguration {
             },
             test262_path_filters: env_list(TEST262_PATH_FILTER_ENV),
             test262_flag_filters: env_list(TEST262_FLAG_FILTER_ENV),
+            benchmark_set: benchmark_set(),
             benchmark_filter: non_empty_env(BENCHMARK_FILTER_ENV),
+            quickjs_baseline: quickjs_baseline_mode(),
             benchmark: BenchmarkConfiguration {
                 reference_quickjs_compiled: cfg!(feature = "reference-quickjs"),
                 warmup_duration_ns: duration_ns(benchmark.warmup()),
@@ -70,6 +74,24 @@ impl RunConfiguration {
                 attempts: usize_to_u64(benchmark.attempts()),
             },
         }
+    }
+}
+
+fn benchmark_set() -> BenchmarkSet {
+    match non_empty_env(BENCHMARK_SET_ENV).as_deref() {
+        None | Some("full") => BenchmarkSet::Full,
+        Some("sentinel") => BenchmarkSet::Sentinel,
+        Some(_) => BenchmarkSet::Invalid,
+    }
+}
+
+fn quickjs_baseline_mode() -> QuickjsBaselineMode {
+    match non_empty_env(QUICKJS_BASELINE_ENV).as_deref() {
+        None | Some("read") => QuickjsBaselineMode::Read,
+        Some("off") => QuickjsBaselineMode::Off,
+        Some("require") => QuickjsBaselineMode::Require,
+        Some("refresh") => QuickjsBaselineMode::Refresh,
+        Some(_) => QuickjsBaselineMode::Invalid,
     }
 }
 

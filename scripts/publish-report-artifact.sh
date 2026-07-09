@@ -22,7 +22,7 @@ clear_metadata() {
   unset RSQJS_ARTIFACT_SCHEMA RSQJS_ARTIFACT_REPORT_MODE
   unset RSQJS_ARTIFACT_REPORT_FILE RSQJS_ARTIFACT_REPORT_RELATIVE_PATH
   unset RSQJS_ARTIFACT_REPORT_YAML_FILE RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH
-  unset RSQJS_ARTIFACT_REPORT_DETAILS_YAML_FILE RSQJS_ARTIFACT_REPORT_DETAILS_YAML_RELATIVE_PATH
+  unset RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_FILE RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH
   unset RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH
   unset RSQJS_ARTIFACT_TIMESTAMP RSQJS_ARTIFACT_COMMIT_SHA RSQJS_ARTIFACT_TREE_SHA
   unset RSQJS_ARTIFACT_EVENT_NAME RSQJS_ARTIFACT_RUN_ID RSQJS_ARTIFACT_RUN_ATTEMPT
@@ -35,7 +35,7 @@ valid_metadata_key() {
     RSQJS_ARTIFACT_SCHEMA | RSQJS_ARTIFACT_REPORT_MODE | \
       RSQJS_ARTIFACT_REPORT_FILE | RSQJS_ARTIFACT_REPORT_RELATIVE_PATH | \
       RSQJS_ARTIFACT_REPORT_YAML_FILE | RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH | \
-      RSQJS_ARTIFACT_REPORT_DETAILS_YAML_FILE | RSQJS_ARTIFACT_REPORT_DETAILS_YAML_RELATIVE_PATH | \
+      RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_FILE | RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH | \
       RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE | RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH | \
       RSQJS_ARTIFACT_TIMESTAMP | RSQJS_ARTIFACT_COMMIT_SHA | RSQJS_ARTIFACT_TREE_SHA | \
       RSQJS_ARTIFACT_EVENT_NAME | RSQJS_ARTIFACT_RUN_ID | RSQJS_ARTIFACT_RUN_ATTEMPT | \
@@ -83,9 +83,9 @@ valid_report_yaml_file() {
   [[ "${file_name}" =~ ^rsqjs-test-report-[0-9]{8}T[0-9]{6}Z\.yaml$ ]]
 }
 
-valid_report_details_yaml_file() {
+valid_report_component_yaml_file() {
   local file_name="$1"
-  [[ "${file_name}" =~ ^rsqjs-test-report-[0-9]{8}T[0-9]{6}Z-details\.yaml$ ]]
+  [[ "${file_name}" =~ ^rsqjs-test-report-[0-9]{8}T[0-9]{6}Z-component\.yaml$ ]]
 }
 
 valid_jetstream_report_file() {
@@ -100,12 +100,76 @@ valid_artifact_relative_path() {
   [[ "${relative_path}" == "${directory}/${file_name}" ]]
 }
 
+validate_workflow_run_fields() {
+  local expected_mode="$1"
+  local expected_repository="$2"
+  local expected_tree="$3"
+  local expected_run_id="$4"
+  local actual_run_id="$5"
+  local actual_repository="$6"
+  local workflow_path="$7"
+  local workflow_name="$8"
+  local event_name="$9"
+  local status="${10}"
+  local conclusion="${11}"
+  local head_tree="${12}"
+
+  [[ "${actual_run_id}" =~ ^[0-9]+$ ]] || return 1
+  [[ "${actual_repository}" == "${expected_repository}" ]] || return 1
+  [[ "${workflow_path}" == ".github/workflows/ci.yml" ]] || return 1
+  [[ "${workflow_name}" == "CI" ]] || return 1
+  [[ "${head_tree}" == "${expected_tree}" ]] || return 1
+  if [[ "${expected_mode}" == performance ]]; then
+    [[ -n "${expected_run_id}" && "${actual_run_id}" == "${expected_run_id}" ]] || return 1
+    [[ "${event_name}" == pull_request ]] || return 1
+    if [[ "${status}" == completed ]]; then
+      [[ "${conclusion}" == success ]] || return 1
+    else
+      [[ "${status}" == in_progress && -z "${conclusion}" ]] || return 1
+    fi
+    return 0
+  fi
+  [[ "${expected_mode}" == correctness ]] || return 1
+  [[ "${event_name}" == pull_request || "${event_name}" == merge_group ]] || return 1
+  [[ "${status}" == completed && "${conclusion}" == success ]]
+}
+
+load_trusted_workflow_run() {
+  local repository="$1"
+  local run_id="$2"
+  local expected_tree="$3"
+  local expected_mode="$4"
+  local expected_run_id="$5"
+
+  local fields
+  if ! fields="$(gh api "/repos/${repository}/actions/runs/${run_id}" \
+    --jq '[.id, .repository.full_name, .path, .name, .event, .status, (.conclusion // ""), .head_sha, .run_attempt] | @tsv')"; then
+    return 1
+  fi
+  IFS=$'\t' read -r RUN_ID RUN_REPOSITORY RUN_PATH RUN_NAME RUN_EVENT RUN_STATUS RUN_CONCLUSION RUN_HEAD_SHA RUN_ATTEMPT <<< "${fields}"
+  [[ "${RUN_HEAD_SHA}" =~ ^[0-9a-f]{40}$ ]] || return 1
+  if ! RUN_HEAD_TREE="$(gh api "/repos/${repository}/git/commits/${RUN_HEAD_SHA}" --jq '.tree.sha')"; then
+    return 1
+  fi
+  validate_workflow_run_fields "${expected_mode}" "${repository}" "${expected_tree}" \
+    "${expected_run_id}" "${RUN_ID}" "${RUN_REPOSITORY}" "${RUN_PATH}" "${RUN_NAME}" \
+    "${RUN_EVENT}" "${RUN_STATUS}" "${RUN_CONCLUSION}" "${RUN_HEAD_TREE}"
+}
+
+commit_tree_from_github() {
+  local repository="$1"
+  local commit_sha="$2"
+  [[ "${commit_sha}" =~ ^[0-9a-f]{40}$ ]] || return 1
+  gh api "/repos/${repository}/git/commits/${commit_sha}" --jq '.tree.sha'
+}
+
 download_matching_artifact() {
   local repository="$1"
   local artifact_name="$2"
   local expected_tree="$3"
   local expected_mode="$4"
   local target_dir="$5"
+  local expected_run_id="${6:-}"
 
   local artifact_lines
   artifact_lines="$(gh api "/repos/${repository}/actions/artifacts?name=${artifact_name}&per_page=100" \
@@ -115,6 +179,10 @@ download_matching_artifact() {
   local artifact_id run_id candidate metadata_file
   while IFS=$'\t' read -r artifact_id run_id; do
     [[ -n "${artifact_id}" && -n "${run_id}" ]] || continue
+    if ! load_trusted_workflow_run "${repository}" "${run_id}" "${expected_tree}" "${expected_mode}" "${expected_run_id}"; then
+      printf 'skipping artifact %s from untrusted workflow run %s\n' "${artifact_id}" "${run_id}" >&2
+      continue
+    fi
     candidate="${target_dir}/artifact-${artifact_id}"
     mkdir -p "${candidate}"
     if ! gh run download "${run_id}" --repo "${repository}" --name "${artifact_name}" --dir "${candidate}" >/dev/null; then
@@ -126,7 +194,7 @@ download_matching_artifact() {
       printf 'skipping artifact %s: missing or invalid metadata\n' "${artifact_id}" >&2
       continue
     fi
-    if [[ "${RSQJS_ARTIFACT_SCHEMA:-}" != "2" ]]; then
+    if [[ "${RSQJS_ARTIFACT_SCHEMA:-}" != "3" ]]; then
       printf 'skipping artifact %s: unsupported metadata schema\n' "${artifact_id}" >&2
       continue
     fi
@@ -136,6 +204,20 @@ download_matching_artifact() {
     fi
     if [[ "${RSQJS_ARTIFACT_TREE_SHA:-}" != "${expected_tree}" ]]; then
       printf 'skipping artifact %s: tree mismatch\n' "${artifact_id}" >&2
+      continue
+    fi
+    if [[ "${RSQJS_ARTIFACT_RUN_ID:-}" != "${RUN_ID}" \
+      || "${RSQJS_ARTIFACT_RUN_ATTEMPT:-}" != "${RUN_ATTEMPT}" \
+      || "${RSQJS_ARTIFACT_REPOSITORY:-}" != "${RUN_REPOSITORY}" \
+      || "${RSQJS_ARTIFACT_WORKFLOW:-}" != "${RUN_NAME}" \
+      || "${RSQJS_ARTIFACT_EVENT_NAME:-}" != "${RUN_EVENT}" ]]; then
+      printf 'skipping artifact %s: workflow metadata envelope mismatch\n' "${artifact_id}" >&2
+      continue
+    fi
+    local metadata_commit_tree
+    if ! metadata_commit_tree="$(commit_tree_from_github "${repository}" "${RSQJS_ARTIFACT_COMMIT_SHA:-}")" \
+      || [[ "${metadata_commit_tree}" != "${expected_tree}" ]]; then
+      printf 'skipping artifact %s: tested commit does not resolve to expected tree\n' "${artifact_id}" >&2
       continue
     fi
     if [[ -z "${RSQJS_ARTIFACT_REPORT_FILE:-}" || -z "${RSQJS_ARTIFACT_REPORT_RELATIVE_PATH:-}" ]]; then
@@ -154,7 +236,8 @@ download_matching_artifact() {
       printf 'skipping artifact %s: invalid report relative path\n' "${artifact_id}" >&2
       continue
     fi
-    if [[ ! -f "${candidate}/${RSQJS_ARTIFACT_REPORT_RELATIVE_PATH}" ]]; then
+    if [[ ! -f "${candidate}/${RSQJS_ARTIFACT_REPORT_RELATIVE_PATH}" \
+      || -L "${candidate}/${RSQJS_ARTIFACT_REPORT_RELATIVE_PATH}" ]]; then
       printf 'skipping artifact %s: report file is absent\n' "${artifact_id}" >&2
       continue
     fi
@@ -170,30 +253,32 @@ download_matching_artifact() {
       printf 'skipping artifact %s: invalid YAML summary relative path\n' "${artifact_id}" >&2
       continue
     fi
-    if [[ ! -f "${candidate}/${RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH}" ]]; then
+    if [[ ! -f "${candidate}/${RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH}" \
+      || -L "${candidate}/${RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH}" ]]; then
       printf 'skipping artifact %s: YAML summary file is absent\n' "${artifact_id}" >&2
       continue
     fi
-    if [[ -z "${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_FILE:-}" || -z "${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_RELATIVE_PATH:-}" ]]; then
-      printf 'skipping artifact %s: missing YAML details path metadata\n' "${artifact_id}" >&2
+    if [[ -z "${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_FILE:-}" || -z "${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH:-}" ]]; then
+      printf 'skipping artifact %s: missing YAML component path metadata\n' "${artifact_id}" >&2
       continue
     fi
-    if ! valid_report_details_yaml_file "${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_FILE}"; then
-      printf 'skipping artifact %s: invalid YAML details file name %s\n' "${artifact_id}" "${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_FILE}" >&2
+    if ! valid_report_component_yaml_file "${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_FILE}"; then
+      printf 'skipping artifact %s: invalid YAML component file name %s\n' "${artifact_id}" "${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_FILE}" >&2
       continue
     fi
-    if ! valid_artifact_relative_path "${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_RELATIVE_PATH}" test-runs "${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_FILE}"; then
-      printf 'skipping artifact %s: invalid YAML details relative path\n' "${artifact_id}" >&2
+    if ! valid_artifact_relative_path "${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}" test-runs "${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_FILE}"; then
+      printf 'skipping artifact %s: invalid YAML component relative path\n' "${artifact_id}" >&2
       continue
     fi
     local expected_yaml_file="${RSQJS_ARTIFACT_REPORT_FILE%.md}.yaml"
-    local expected_details_yaml_file="${RSQJS_ARTIFACT_REPORT_FILE%.md}-details.yaml"
-    if [[ "${RSQJS_ARTIFACT_REPORT_YAML_FILE}" != "${expected_yaml_file}" || "${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_FILE}" != "${expected_details_yaml_file}" ]]; then
+    local expected_component_yaml_file="${RSQJS_ARTIFACT_REPORT_FILE%.md}-component.yaml"
+    if [[ "${RSQJS_ARTIFACT_REPORT_YAML_FILE}" != "${expected_yaml_file}" || "${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_FILE}" != "${expected_component_yaml_file}" ]]; then
       printf 'skipping artifact %s: YAML files do not match Markdown report name\n' "${artifact_id}" >&2
       continue
     fi
-    if [[ ! -f "${candidate}/${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_RELATIVE_PATH}" ]]; then
-      printf 'skipping artifact %s: YAML details file is absent\n' "${artifact_id}" >&2
+    if [[ ! -f "${candidate}/${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}" \
+      || -L "${candidate}/${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}" ]]; then
+      printf 'skipping artifact %s: YAML component file is absent\n' "${artifact_id}" >&2
       continue
     fi
     if [[ -n "${RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE:-}" || -n "${RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH:-}" ]]; then
@@ -551,10 +636,12 @@ correctness_artifact_name="${RSQJS_CORRECTNESS_ARTIFACT_NAME:-rsqjs-correctness-
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
 
-performance_artifact_dir="$(download_matching_artifact "${repository}" "${performance_artifact_name}" "${expected_tree}" performance "${tmp_dir}/performance")"
+current_run_id="${GITHUB_RUN_ID:-}"
+[[ "${current_run_id}" =~ ^[0-9]+$ ]] || fail "GITHUB_RUN_ID is required for performance artifact binding"
+performance_artifact_dir="$(download_matching_artifact "${repository}" "${performance_artifact_name}" "${expected_tree}" performance "${tmp_dir}/performance" "${current_run_id}")"
 performance_metadata_file="${performance_artifact_dir}/rsqjs-report-metadata.env"
 read_metadata "${performance_metadata_file}" || fail "failed to read performance artifact metadata"
-performance_details="${performance_artifact_dir}/${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_RELATIVE_PATH}"
+performance_component="${performance_artifact_dir}/${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}"
 performance_timestamp="${RSQJS_ARTIFACT_TIMESTAMP:-}"
 source_commit="${RSQJS_ARTIFACT_COMMIT_SHA:-unknown}"
 performance_run="${RSQJS_ARTIFACT_RUN_ID:-unknown}"
@@ -562,7 +649,7 @@ performance_run="${RSQJS_ARTIFACT_RUN_ID:-unknown}"
 correctness_artifact_dir="$(download_matching_artifact "${repository}" "${correctness_artifact_name}" "${expected_tree}" correctness "${tmp_dir}/correctness")"
 correctness_metadata_file="${correctness_artifact_dir}/rsqjs-report-metadata.env"
 read_metadata "${correctness_metadata_file}" || fail "failed to read correctness artifact metadata"
-correctness_details="${correctness_artifact_dir}/${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_RELATIVE_PATH}"
+correctness_component="${correctness_artifact_dir}/${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}"
 correctness_run="${RSQJS_ARTIFACT_RUN_ID:-unknown}"
 
 [[ "${performance_timestamp}" =~ ^[0-9]{8}T[0-9]{6}Z$ ]] ||
@@ -574,7 +661,7 @@ source_report="${composed_dir}/${report_file}"
 source_report_yaml="${composed_dir}/${report_yaml_file}"
 mkdir -p "${composed_dir}"
 cargo run --manifest-path runner/Cargo.toml -- --compose-reports \
-  "${expected_tree}" "${correctness_details}" "${performance_details}" "${source_report}"
+  "${expected_tree}" "${correctness_component}" "${performance_component}" "${source_report}"
 
 jetstream_report_file=""
 source_jetstream_report=""

@@ -1,14 +1,15 @@
 use std::time::Duration;
 
 use crate::{
-    CaseRow, CorpusReport, CorpusStats, FullReport, STATUS_PASSED, benchmarks, jetstream,
-    report_metadata,
+    CaseRow, CorpusReport, CorpusStats, FeatureAreaRow, FullReport, STATUS_PASSED, benchmarks,
+    jetstream, report_metadata,
     report_rendering::{render_report, render_timing_tsv},
     report_schema::{
         BenchmarkConfiguration, BenchmarkStatus, CaseCounts, CaseDetailCoverage,
-        DetailCompleteness, DetailLevel, EnvironmentInfo, ReportDocument, ReportSummary,
-        RunConfiguration, SCHEMA_VERSION, SuiteStatus,
+        DetailCompleteness, DetailLevel, EnvironmentInfo, MAX_FAILURE_DIAGNOSTICS, ReportDocument,
+        ReportSummary, RunConfiguration, SCHEMA_VERSION, SuiteStatus,
     },
+    report_schema_io::MAX_CANONICAL_YAML_LINES,
 };
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -115,6 +116,26 @@ fn schema_validation_rejects_inconsistent_suite_counts() -> TestResult {
 }
 
 #[test]
+fn schema_validation_rejects_overflowing_suite_counts() -> TestResult {
+    let report = sample_document()?;
+    let mut summary = report.summary();
+    let Some(suite) = summary.suites.first_mut() else {
+        return Err("expected one suite summary".into());
+    };
+    suite.counts.passed = u64::MAX;
+    suite.counts.failed = 1;
+    suite.counts.executed = u64::MAX;
+    suite.counts.total = u64::MAX;
+    suite.case_details.recorded_rows = 0;
+    suite.case_details.omitted_rows = u64::MAX;
+    suite.case_details.completeness = DetailCompleteness::Partial;
+    ensure_bool(
+        summary.validate().is_err(),
+        "overflowing suite counts must be rejected",
+    )
+}
+
+#[test]
 fn schema_validation_accepts_explicit_partial_case_details() -> TestResult {
     let mut report = sample_document()?;
     let Some(suite) = report.suites.first_mut() else {
@@ -136,6 +157,254 @@ fn schema_validation_accepts_explicit_partial_case_details() -> TestResult {
     };
     report.validate()?;
     report.summary().validate()?;
+    Ok(())
+}
+
+#[test]
+fn partial_case_details_reject_contradictory_statuses_and_duplicate_ids() -> TestResult {
+    let mut report = sample_document()?;
+    let Some(suite) = report.suites.first_mut() else {
+        return Err("expected one suite".into());
+    };
+    let Some(case) = suite.cases.first_mut() else {
+        return Err("expected one case".into());
+    };
+    case.status = crate::report_schema::CaseStatus::Failed;
+    suite.summary.counts = CaseCounts {
+        total: 100,
+        executed: 100,
+        passed: 100,
+        failed: 0,
+        skipped: 0,
+    };
+    suite.summary.case_details = CaseDetailCoverage {
+        completeness: DetailCompleteness::Partial,
+        recorded_rows: 1,
+        omitted_rows: 99,
+    };
+    ensure_bool(
+        report.validate().is_err(),
+        "partial details accepted a failed row above the summary count",
+    )?;
+
+    let mut report = sample_document()?;
+    let Some(suite) = report.suites.first_mut() else {
+        return Err("expected one suite".into());
+    };
+    let Some(case) = suite.cases.first().cloned() else {
+        return Err("expected one case".into());
+    };
+    suite.cases.push(case);
+    suite.summary.counts = CaseCounts {
+        total: 2,
+        executed: 2,
+        passed: 2,
+        failed: 0,
+        skipped: 0,
+    };
+    suite.summary.case_details = CaseDetailCoverage {
+        completeness: DetailCompleteness::Complete,
+        recorded_rows: 2,
+        omitted_rows: 0,
+    };
+    ensure_bool(
+        report.validate().is_err(),
+        "duplicate case ids must be rejected",
+    )
+}
+
+#[test]
+fn schema_validation_rejects_inconsistent_benchmark_counts() -> TestResult {
+    let report = sample_document()?;
+    let mut summary = report.summary();
+    summary.benchmarks.counts.measured = 0;
+    if summary.validate().is_err() {
+        return Ok(());
+    }
+    Err("inconsistent benchmark counts must be rejected".into())
+}
+
+#[test]
+fn schema_validation_rejects_inconsistent_measurement_and_ratio_metadata() -> TestResult {
+    let mut report = sample_document()?;
+    let Some(row) = report.benchmarks.rows.first_mut() else {
+        return Err("expected one benchmark".into());
+    };
+    row.engine.availability = crate::report_schema::MeasurementAvailability::NotMeasured;
+    ensure_bool(
+        report.validate().is_err(),
+        "measurement availability accepted typed duration fields",
+    )?;
+
+    let mut report = sample_document()?;
+    let Some(row) = report.benchmarks.rows.first_mut() else {
+        return Err("expected one benchmark".into());
+    };
+    row.reference.availability = crate::report_schema::MeasurementAvailability::NotConfigured;
+    row.reference.wall_duration_ns = None;
+    row.reference.median_duration_ns = None;
+    row.reference.coefficient_variation_permille = None;
+    let Some(methodology) = row.methodology.as_mut() else {
+        return Err("expected benchmark methodology".into());
+    };
+    methodology.reference_source =
+        Some(crate::report_benchmark_methodology::ReferenceSource::NotConfigured);
+    ensure_bool(
+        report.validate().is_err(),
+        "ratio without both measurements must be rejected",
+    )
+}
+
+#[test]
+fn typed_count_contribution_distinguishes_parity_and_quality_failures() -> TestResult {
+    validate_parity_failure_contribution(true)?;
+    validate_parity_failure_contribution(false)
+}
+
+#[test]
+fn bounded_diagnostics_are_deterministic_complete_and_size_limited() -> TestResult {
+    let first = diagnostic_document()?;
+    let second = diagnostic_document()?;
+    let Some(first_suite) = first.suites.first() else {
+        return Err("expected diagnostic suite".into());
+    };
+    let Some(first_diagnostics) = &first_suite.summary.failure_diagnostics else {
+        return Err("expected failure diagnostics".into());
+    };
+    let Some(second_diagnostics) = second
+        .suites
+        .first()
+        .and_then(|suite| suite.summary.failure_diagnostics.as_ref())
+    else {
+        return Err("expected second failure diagnostics".into());
+    };
+    ensure_bool(
+        first_diagnostics == second_diagnostics,
+        "failure diagnostics are not deterministic",
+    )?;
+    ensure_u64(first_diagnostics.total_failed, 40)?;
+    ensure_u64(first_diagnostics.total_groups, 40)?;
+    ensure_u64(first_diagnostics.omitted_groups, 10)?;
+    ensure_bool(
+        first_diagnostics.groups.len() == MAX_FAILURE_DIAGNOSTICS,
+        "failure diagnostics exceeded or missed the global group cap",
+    )?;
+    ensure_bool(
+        first_diagnostics.categories.len() == 4,
+        "expected four exact failure categories",
+    )?;
+    let category_total = first_diagnostics
+        .categories
+        .iter()
+        .try_fold(0u64, |total, category| total.checked_add(category.failed))
+        .ok_or_else(|| anyhow::anyhow!("failure category total overflowed"))?;
+    ensure_u64(category_total, 40)?;
+
+    let bounded = first.bounded_component()?;
+    let component_yaml = serde_yaml_ng::to_string(&bounded)?;
+    let summary_yaml = serde_yaml_ng::to_string(&bounded.summary())?;
+    ensure_bool(
+        component_yaml.lines().count() <= MAX_CANONICAL_YAML_LINES,
+        "bounded component exceeded the YAML line contract",
+    )?;
+    ensure_bool(
+        summary_yaml.lines().count() <= MAX_CANONICAL_YAML_LINES,
+        "bounded summary exceeded the YAML line contract",
+    )
+}
+
+pub fn diagnostic_document() -> Result<ReportDocument, anyhow::Error> {
+    let mut rows = (0..40)
+        .map(|index| CaseRow {
+            case: format!("failed-{index:02}"),
+            status: crate::STATUS_FAILED.to_owned(),
+            source: format!("test262:test/built-ins/Feature{index:02}/failed.js"),
+            detail: diagnostic_detail(index),
+            elapsed: Duration::from_micros(1),
+        })
+        .collect::<Vec<_>>();
+    rows.extend((0..40).map(|index| CaseRow {
+        case: format!("passed-{index:02}"),
+        status: STATUS_PASSED.to_owned(),
+        source: format!("test262:test/built-ins/Feature{index:02}/passed.js"),
+        detail: "matched expected behavior".to_owned(),
+        elapsed: Duration::from_micros(1),
+    }));
+    let report = FullReport {
+        metadata: report_metadata::RunMetadata::default(),
+        corpora: vec![CorpusReport {
+            name: "Diagnostic corpus",
+            required: true,
+            stats: CorpusStats {
+                total: rows.len(),
+                passed: 40,
+                failed: 40,
+                skipped: 0,
+            },
+            rows,
+            skip_reasons: Vec::new(),
+            feature_areas: diagnostic_feature_areas(),
+            elapsed: Duration::from_millis(1),
+        }],
+        benchmarks: benchmarks::BenchmarkReport::not_run(),
+        jetstream: jetstream::JetStreamReport::not_run(),
+        elapsed: Duration::from_millis(1),
+    };
+    ReportDocument::from_run(report, sample_environment(), sample_configuration())
+}
+
+fn diagnostic_feature_areas() -> Vec<FeatureAreaRow> {
+    (0..33)
+        .map(|index| FeatureAreaRow {
+            feature_area: if index == 32 {
+                "other".to_owned()
+            } else {
+                format!("built-ins/Feature{index:02}")
+            },
+            total: if index == 32 { 16 } else { 2 },
+            executed: if index == 32 { 16 } else { 2 },
+            passed: if index == 32 { "8 passed" } else { "1 passed" }.to_owned(),
+            failed: if index == 32 { "8 failed" } else { "1 failed" }.to_owned(),
+            skipped: "0 skipped".to_owned(),
+            pass_rate: "100.0%".to_owned(),
+            manifest_enabled: 1,
+            top_skip_reason: "none".to_owned(),
+        })
+        .collect()
+}
+
+fn diagnostic_detail(index: usize) -> String {
+    match index % 4 {
+        0 => format!("parser error: expected token-{index:02}"),
+        1 => format!("runtime error: ReferenceError: 'binding{index:02}' is not defined"),
+        2 => format!("lexer error: unexpected character code-{index:02}"),
+        _ => format!("metadata error: unsupported negative phase '{index:02}'"),
+    }
+}
+
+fn validate_parity_failure_contribution(counted_invalid: bool) -> TestResult {
+    let mut report = sample_document()?;
+    let Some(row) = report.benchmarks.rows.first_mut() else {
+        return Err("expected one benchmark".into());
+    };
+    row.status = crate::report_schema::BenchmarkStatus::Failed;
+    row.quality = crate::report_schema::QualityStatus::Invalid;
+    row.latency_ratio_centi_units = None;
+    row.latency_budget = crate::report_schema::BudgetStatus::Invalid;
+    let Some(contribution) = row.count_contribution.as_mut() else {
+        return Err("expected benchmark count contribution".into());
+    };
+    contribution.failed = crate::report_schema::BenchmarkContributionFlag::Counted;
+    contribution.invalid = if counted_invalid {
+        crate::report_schema::BenchmarkContributionFlag::Counted
+    } else {
+        crate::report_schema::BenchmarkContributionFlag::NotCounted
+    };
+    contribution.over_latency_budget = crate::report_schema::BenchmarkContributionFlag::NotCounted;
+    report.benchmarks.counts.failed = 1;
+    report.benchmarks.counts.invalid = u64::from(counted_invalid);
+    report.benchmarks.counts.over_latency_budget = 0;
+    report.validate()?;
     Ok(())
 }
 
@@ -226,6 +495,19 @@ pub fn sample_document() -> Result<ReportDocument, anyhow::Error> {
                         crate::benchmark_protocol::BenchmarkReferenceSource::QuickjsBaseline,
                     ),
                 },
+                count_contribution: crate::benchmark_protocol::BenchmarkCountContribution {
+                    measured: crate::benchmark_protocol::BenchmarkContributionFlag::Counted,
+                    in_process_measured:
+                        crate::benchmark_protocol::BenchmarkContributionFlag::Counted,
+                    failed: crate::benchmark_protocol::BenchmarkContributionFlag::NotCounted,
+                    invalid: crate::benchmark_protocol::BenchmarkContributionFlag::NotCounted,
+                    skipped_reference:
+                        crate::benchmark_protocol::BenchmarkContributionFlag::NotCounted,
+                    over_latency_budget:
+                        crate::benchmark_protocol::BenchmarkContributionFlag::Counted,
+                    over_memory_budget:
+                        crate::benchmark_protocol::BenchmarkContributionFlag::NotCounted,
+                },
             }],
             measured: 1,
             in_process_measured: 1,
@@ -272,7 +554,9 @@ fn sample_configuration() -> RunConfiguration {
         test262_mode: crate::report_schema::Test262Mode::Full,
         test262_path_filters: Vec::new(),
         test262_flag_filters: Vec::new(),
+        benchmark_set: crate::report_schema::BenchmarkSet::Full,
         benchmark_filter: None,
+        quickjs_baseline: crate::report_schema::QuickjsBaselineMode::Read,
         benchmark: BenchmarkConfiguration {
             reference_quickjs_compiled: true,
             warmup_duration_ns: 150_000_000,

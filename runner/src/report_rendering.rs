@@ -16,10 +16,9 @@ use super::{
 };
 
 const NO_FAILED_CASES: &str = "No failed cases.";
-const TEST262_FULL_CORPUS_NAME: &str = "Test262 full corpus";
 const FAILED_CASE_DETAIL_LIMIT: usize = 30;
 const CORPUS_TIMING_ROW_LIMIT: usize = 200;
-const FEATURE_AREA_ROW_LIMIT: usize = 40;
+const FEATURE_AREA_ROW_LIMIT: usize = 32;
 const BASIS_POINTS_SCALE: u64 = 10_000;
 const PERCENT_SCALE: u64 = 100;
 const COVERAGE_SCALE: u64 = 1_000_000;
@@ -135,8 +134,8 @@ pub fn render_report(report: &ReportDocument) -> String {
     ];
     sections.extend(super::report_metadata::render_section(&report.metadata));
     sections.extend([
-        "Corpus failure sections list failed cases only. Timing sections list recorded case timings, capped to the slowest rows for large corpora.".to_owned(),
-        "The sibling `*.yaml` summary is the tracked machine-readable source; `*-details.yaml` and `*-timings.tsv` retain every recorded case as CI artifacts.".to_owned(),
+        "Corpus sections preserve exact counts and bounded typed diagnostics. Individual case rows appear only when materialized; timing sections list only recorded rows.".to_owned(),
+        "The sibling `*.yaml` summary is the tracked machine-readable source; `*-component.yaml` and `*-timings.tsv` are bounded composition artifacts. Set `RSQJS_REPORT_EXHAUSTIVE=1` only for explicit per-case diagnostics.".to_owned(),
         "The full Test262 corpus is progress-only; the active subset remains the CI gate.".to_owned(),
         "Test262 file conformance collapses required variants by source file for dashboard comparison.".to_owned(),
         "Test262 full corpus keeps default, strict, module, and raw variants as diagnostic rows.".to_owned(),
@@ -169,10 +168,15 @@ pub fn render_report(report: &ReportDocument) -> String {
         sections.push(String::new());
         render_case_timings(&mut sections, suite);
         let failed_rows = failed_case_rows(suite);
-        if corpus.name == TEST262_FULL_CORPUS_NAME {
-            sections.extend(failure_classification::sections(&failed_rows));
+        if let Some(diagnostics) = &corpus.failure_diagnostics {
+            sections.extend(failure_classification::diagnostic_sections(diagnostics));
         }
-        render_failed_cases(&mut sections, &failed_rows);
+        render_failed_cases(
+            &mut sections,
+            corpus.counts.failed,
+            corpus.diagnostics_derived_from.as_deref(),
+            &failed_rows,
+        );
     }
     sections.push("## Benchmarks".to_owned());
     sections.push(String::new());
@@ -382,10 +386,25 @@ fn render_case_timings(sections: &mut Vec<String>, suite: &SuiteReport) {
     sections.push(String::new());
 }
 
-fn render_failed_cases(sections: &mut Vec<String>, failed_rows: &[CaseRecord]) {
+fn render_failed_cases(
+    sections: &mut Vec<String>,
+    total_failed: u64,
+    diagnostics_derived_from: Option<&str>,
+    failed_rows: &[CaseRecord],
+) {
     sections.push("### Failed Cases".to_owned());
     sections.push(String::new());
     if failed_rows.is_empty() {
+        if total_failed > 0 {
+            let location = diagnostics_derived_from.map_or_else(
+                || "the typed actionable diagnostic groups in this section".to_owned(),
+                |suite| format!("the typed diagnostic groups in `{suite}`"),
+            );
+            sections.push(format!(
+                "Individual failed-case rows are omitted from this bounded report; use {location}."
+            ));
+            return;
+        }
         sections.push(NO_FAILED_CASES.to_owned());
         return;
     }

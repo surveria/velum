@@ -27,7 +27,7 @@ trap 'rm -rf "${tmp_dir}"' EXIT
 
 valid_metadata="${tmp_dir}/valid.env"
 {
-  printf 'RSQJS_ARTIFACT_SCHEMA=%s\n' "$(encoded 2)"
+  printf 'RSQJS_ARTIFACT_SCHEMA=%s\n' "$(encoded 3)"
   printf 'RSQJS_ARTIFACT_REPORT_MODE=%s\n' "$(encoded correctness)"
   printf 'RSQJS_ARTIFACT_TASK=%s\n' "$(encoded 'task with spaces')"
 } > "${valid_metadata}"
@@ -36,8 +36,8 @@ read_metadata "${valid_metadata}" || fail_test "rejected valid metadata"
 
 duplicate_metadata="${tmp_dir}/duplicate.env"
 {
-  printf 'RSQJS_ARTIFACT_SCHEMA=%s\n' "$(encoded 2)"
-  printf 'RSQJS_ARTIFACT_SCHEMA=%s\n' "$(encoded 2)"
+  printf 'RSQJS_ARTIFACT_SCHEMA=%s\n' "$(encoded 3)"
+  printf 'RSQJS_ARTIFACT_SCHEMA=%s\n' "$(encoded 3)"
 } > "${duplicate_metadata}"
 expect_rejected "${duplicate_metadata}" "duplicate key"
 
@@ -60,5 +60,25 @@ if valid_artifact_relative_path "../../outside" test-runs report.md; then
 fi
 valid_artifact_relative_path "test-runs/report.md" test-runs report.md ||
   fail_test "rejected canonical relative path"
+
+tree_sha="0123456789abcdef0123456789abcdef01234567"
+validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/repo \
+  .github/workflows/ci.yml CI pull_request completed success "${tree_sha}" ||
+  fail_test "rejected trusted correctness workflow run"
+if validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 101 owner/repo \
+  .github/workflows/ci.yml CI pull_request completed failure "${tree_sha}"; then
+  fail_test "accepted failed newest correctness workflow run"
+fi
+if validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 102 owner/repo \
+  .github/workflows/unrelated.yml CI pull_request completed success "${tree_sha}"; then
+  fail_test "accepted unrelated newest correctness workflow run"
+fi
+validate_workflow_run_fields performance owner/repo "${tree_sha}" 200 200 owner/repo \
+  .github/workflows/ci.yml CI pull_request in_progress "" "${tree_sha}" ||
+  fail_test "rejected current performance workflow run"
+if validate_workflow_run_fields performance owner/repo "${tree_sha}" 200 201 owner/repo \
+  .github/workflows/ci.yml CI pull_request completed success "${tree_sha}"; then
+  fail_test "accepted performance artifact from another run"
+fi
 
 printf 'report artifact metadata parser tests passed\n'

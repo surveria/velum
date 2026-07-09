@@ -1,8 +1,14 @@
 use std::collections::BTreeMap;
 
+use anyhow::Context as _;
 use tabled::{Table, Tabled};
 
-use super::{percent, report_schema::CaseRecord};
+use super::{
+    report_schema::{
+        CaseRecord, CaseStatus, DiagnosticGroup, FailureCategorySummary, FailureDiagnostics,
+    },
+    report_text,
+};
 
 const CATEGORY_ASYNC: &str = "async protocol";
 const CATEGORY_HARNESS: &str = "harness include";
@@ -38,181 +44,170 @@ const HINT_UNEXPECTED_CHARACTER: &str = "unexpected character";
 const HINT_UNSUPPORTED_ESCAPE: &str = "unsupported escape sequence";
 const SECTION_TITLE: &str = "### Failure Classification";
 const SUBTITLE_CATEGORIES: &str = "#### Error Categories";
-const SUBTITLE_DIRECTORIES: &str = "#### Top Failing Directories";
-const SUBTITLE_HINTS: &str = "#### Top Failure Hints";
-const SUBTITLE_MISSING_BINDINGS: &str = "#### Top Missing Bindings";
-const SUBTITLE_VARIANTS: &str = "#### Variant Suffixes";
 const TEST262_SOURCE_PREFIX: &str = "test262:";
-const TOP_ROW_LIMIT: usize = 15;
-const DIRECTORY_DEPTH: usize = 3;
 
 #[derive(Debug, Clone)]
-struct Counted {
-    label: String,
-    count: usize,
+struct DiagnosticAccumulator {
+    count: u64,
+    representative: CaseRecord,
 }
 
 #[derive(Debug, Tabled)]
-struct CategoryRow {
+struct DiagnosticCategoryRow {
     category: String,
-    failed: usize,
-    share: String,
+    failed: u64,
 }
 
 #[derive(Debug, Tabled)]
-struct DirectoryRow {
-    directory: String,
-    failed: usize,
-    share: String,
-}
-
-#[derive(Debug, Tabled)]
-struct VariantRow {
-    variant: String,
-    failed: usize,
-    share: String,
-}
-
-#[derive(Debug, Tabled)]
-struct BindingRow {
-    binding: String,
-    failed: usize,
-    share: String,
-}
-
-#[derive(Debug, Tabled)]
-struct HintRow {
-    hint: String,
-    failed: usize,
-    share: String,
+struct DiagnosticGroupRow {
+    failed: u64,
+    feature_area: String,
+    category: String,
+    reason: String,
+    representative_case: String,
+    representative_source: String,
+    detail: String,
 }
 
 #[must_use]
-pub fn sections(failed_rows: &[CaseRecord]) -> Vec<String> {
-    if failed_rows.is_empty() {
+pub fn diagnostic_sections(diagnostics: &FailureDiagnostics) -> Vec<String> {
+    if diagnostics.total_failed == 0 {
         return Vec::new();
     }
-
-    let mut sections = vec![SECTION_TITLE.to_owned(), String::new()];
-    push_table_section(
-        &mut sections,
-        SUBTITLE_CATEGORIES,
-        category_rows(failed_rows),
-    );
-    push_table_section(
-        &mut sections,
-        SUBTITLE_DIRECTORIES,
-        directory_rows(failed_rows),
-    );
-    push_table_section(&mut sections, SUBTITLE_VARIANTS, variant_rows(failed_rows));
-
-    let binding_rows = missing_binding_rows(failed_rows);
-    if !binding_rows.is_empty() {
-        push_table_section(&mut sections, SUBTITLE_MISSING_BINDINGS, binding_rows);
-    }
-
-    let hint_rows = failure_hint_rows(failed_rows);
-    if !hint_rows.is_empty() {
-        push_table_section(&mut sections, SUBTITLE_HINTS, hint_rows);
-    }
-
+    let mut sections = vec![
+        SECTION_TITLE.to_owned(),
+        String::new(),
+        format!(
+            "{} grouped diagnostics represent {} of {} failures; {} additional groups are omitted.",
+            diagnostics.groups.len(),
+            diagnostics.represented_failed,
+            diagnostics.total_failed,
+            diagnostics.omitted_groups,
+        ),
+        String::new(),
+        SUBTITLE_CATEGORIES.to_owned(),
+        String::new(),
+        fenced_table(&Table::new(diagnostics.categories.iter().map(|category| {
+            DiagnosticCategoryRow {
+                category: category.category.clone(),
+                failed: category.failed,
+            }
+        }))),
+        String::new(),
+        "#### Actionable Groups".to_owned(),
+        String::new(),
+    ];
+    sections.push(fenced_table(&Table::new(diagnostics.groups.iter().map(
+        |group| DiagnosticGroupRow {
+            failed: group.count,
+            feature_area: group.feature_area.clone(),
+            category: group.category.clone(),
+            reason: group.reason.clone(),
+            representative_case: group.representative_case.clone(),
+            representative_source: group.representative_source.clone(),
+            detail: group.detail.clone(),
+        },
+    ))));
+    sections.push(String::new());
     sections
 }
 
-fn push_table_section<T: Tabled>(sections: &mut Vec<String>, title: &str, rows: Vec<T>) {
-    sections.push(title.to_owned());
-    sections.push(String::new());
-    sections.push(fenced_table(&Table::new(rows)));
-    sections.push(String::new());
-}
-
-fn category_rows(failed_rows: &[CaseRecord]) -> Vec<CategoryRow> {
-    let total = failed_rows.len();
-    count_by(failed_rows, |row| {
-        Some(failure_category(&row.detail).to_owned())
-    })
-    .into_iter()
-    .map(|item| CategoryRow {
-        category: item.label,
-        failed: item.count,
-        share: percent(item.count, total),
-    })
-    .collect()
-}
-
-fn directory_rows(failed_rows: &[CaseRecord]) -> Vec<DirectoryRow> {
-    let total = failed_rows.len();
-    count_by(failed_rows, |row| Some(test262_directory(&row.source)))
-        .into_iter()
-        .take(TOP_ROW_LIMIT)
-        .map(|item| DirectoryRow {
-            directory: item.label,
-            failed: item.count,
-            share: percent(item.count, total),
-        })
-        .collect()
-}
-
-fn variant_rows(failed_rows: &[CaseRecord]) -> Vec<VariantRow> {
-    let total = failed_rows.len();
-    count_by(failed_rows, |row| Some(case_variant(&row.id).to_owned()))
-        .into_iter()
-        .map(|item| VariantRow {
-            variant: item.label,
-            failed: item.count,
-            share: percent(item.count, total),
-        })
-        .collect()
-}
-
-fn missing_binding_rows(failed_rows: &[CaseRecord]) -> Vec<BindingRow> {
-    let total = failed_rows.len();
-    count_by(failed_rows, |row| missing_binding(&row.detail))
-        .into_iter()
-        .take(TOP_ROW_LIMIT)
-        .map(|item| BindingRow {
-            binding: item.label,
-            failed: item.count,
-            share: percent(item.count, total),
-        })
-        .collect()
-}
-
-fn failure_hint_rows(failed_rows: &[CaseRecord]) -> Vec<HintRow> {
-    let total = failed_rows.len();
-    count_by(failed_rows, |row| failure_hint(&row.detail))
-        .into_iter()
-        .take(TOP_ROW_LIMIT)
-        .map(|item| HintRow {
-            hint: item.label,
-            failed: item.count,
-            share: percent(item.count, total),
-        })
-        .collect()
-}
-
-fn count_by(
-    rows: &[CaseRecord],
-    mut label_for: impl FnMut(&CaseRecord) -> Option<String>,
-) -> Vec<Counted> {
-    let mut counts = BTreeMap::<String, usize>::new();
-    for row in rows {
-        if let Some(label) = label_for(row) {
-            let count = counts.entry(label).or_default();
-            *count = count.saturating_add(1);
+pub fn diagnostic_groups(rows: &[CaseRecord]) -> anyhow::Result<Option<FailureDiagnostics>> {
+    let mut groups = BTreeMap::<(String, String, String), DiagnosticAccumulator>::new();
+    let mut category_counts = BTreeMap::<String, u64>::new();
+    let mut total_failed = 0u64;
+    for row in rows.iter().filter(|row| row.status == CaseStatus::Failed) {
+        let category = failure_category(&row.detail).to_owned();
+        total_failed = total_failed
+            .checked_add(1)
+            .context("failure diagnostic total overflows")?;
+        let category_count = category_counts.entry(category.clone()).or_default();
+        *category_count = category_count
+            .checked_add(1)
+            .context("failure category count overflows")?;
+        let reason = failure_hint(&row.detail).unwrap_or_else(|| category.clone());
+        let feature_area = diagnostic_feature_area(&row.source);
+        let key = (feature_area, category, reason);
+        let group = groups.entry(key).or_insert_with(|| DiagnosticAccumulator {
+            count: 0,
+            representative: row.clone(),
+        });
+        group.count = group
+            .count
+            .checked_add(1)
+            .context("failure diagnostic group count overflows")?;
+        if representative_key(row) < representative_key(&group.representative) {
+            row.clone_into(&mut group.representative);
         }
     }
-    let mut counted = counts
+    let mut diagnostics = groups
         .into_iter()
-        .map(|(label, count)| Counted { label, count })
+        .map(
+            |((feature_area, category, reason), group)| DiagnosticGroup {
+                count: group.count,
+                feature_area,
+                category,
+                reason,
+                representative_case: group.representative.id,
+                representative_source: group.representative.source,
+                detail: report_text::table_detail(&group.representative.detail),
+            },
+        )
         .collect::<Vec<_>>();
-    counted.sort_by(|left, right| {
+    diagnostics.sort_by(|left, right| {
         right
             .count
             .cmp(&left.count)
-            .then_with(|| left.label.cmp(&right.label))
+            .then_with(|| left.feature_area.cmp(&right.feature_area))
+            .then_with(|| left.category.cmp(&right.category))
+            .then_with(|| left.reason.cmp(&right.reason))
+            .then_with(|| left.representative_case.cmp(&right.representative_case))
     });
-    counted
+    let mut categories = category_counts
+        .into_iter()
+        .map(|(category, failed)| FailureCategorySummary { category, failed })
+        .collect::<Vec<_>>();
+    categories.sort_by(|left, right| {
+        right
+            .failed
+            .cmp(&left.failed)
+            .then_with(|| left.category.cmp(&right.category))
+    });
+    if total_failed == 0 {
+        return Ok(None);
+    }
+    let represented_failed = diagnostics.iter().try_fold(0u64, |total, diagnostic| {
+        total
+            .checked_add(diagnostic.count)
+            .context("represented failure diagnostic count overflows")
+    })?;
+    let total_groups = u64::try_from(diagnostics.len())
+        .context("failure diagnostic group count does not fit u64")?;
+    Ok(Some(FailureDiagnostics {
+        total_failed,
+        represented_failed,
+        total_groups,
+        omitted_groups: 0,
+        categories,
+        groups: diagnostics,
+    }))
+}
+
+fn representative_key(row: &CaseRecord) -> (&str, &str) {
+    (&row.id, &row.source)
+}
+
+fn diagnostic_feature_area(source: &str) -> String {
+    let path = source.strip_prefix(TEST262_SOURCE_PREFIX).unwrap_or(source);
+    let mut parts = path.split('/');
+    if parts.next() == Some("test") {
+        let area = parts.next().unwrap_or(DEFAULT_VARIANT);
+        let feature = parts.next();
+        return feature.map_or_else(|| area.to_owned(), |feature| format!("{area}/{feature}"));
+    }
+    parts
+        .next()
+        .map_or_else(|| DEFAULT_VARIANT.to_owned(), ToOwned::to_owned)
 }
 
 fn failure_category(detail: &str) -> &'static str {
@@ -244,29 +239,6 @@ fn failure_category(detail: &str) -> &'static str {
         return CATEGORY_NEGATIVE;
     }
     CATEGORY_OTHER
-}
-
-fn test262_directory(source: &str) -> String {
-    let path = source.strip_prefix(TEST262_SOURCE_PREFIX).unwrap_or(source);
-    let mut parts = path.split('/');
-    let mut selected = Vec::new();
-    for _ in 0..DIRECTORY_DEPTH {
-        let Some(part) = parts.next() else {
-            break;
-        };
-        selected.push(part);
-    }
-    if selected.is_empty() {
-        return DEFAULT_VARIANT.to_owned();
-    }
-    selected.join("/")
-}
-
-fn case_variant(case: &str) -> &str {
-    let Some((_, variant)) = case.rsplit_once('#') else {
-        return DEFAULT_VARIANT;
-    };
-    variant
 }
 
 fn missing_binding(detail: &str) -> Option<String> {
@@ -325,7 +297,7 @@ fn fenced_table(table: &Table) -> String {
 mod tests {
     use super::{
         CATEGORY_ASYNC, CATEGORY_HARNESS, CATEGORY_LEXER, CATEGORY_PARSER, CATEGORY_RUNTIME,
-        case_variant, failure_category, failure_hint, missing_binding, test262_directory,
+        failure_category, failure_hint, missing_binding,
     };
 
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -360,24 +332,6 @@ mod tests {
             ),
             CATEGORY_RUNTIME,
         )
-    }
-
-    #[test]
-    fn extracts_test262_directory_groups() -> TestResult {
-        ensure_text(
-            &test262_directory("test262:test/built-ins/Array/prototype/map/name.js"),
-            "test/built-ins/Array",
-        )?;
-        ensure_text(
-            &test262_directory("test262:test/language/statements/if/S12.js"),
-            "test/language/statements",
-        )
-    }
-
-    #[test]
-    fn extracts_variant_suffixes() -> TestResult {
-        ensure_text(case_variant("test/language/example.js#strict"), "strict")?;
-        ensure_text(case_variant("test/language/example.js"), "unknown")
     }
 
     #[test]

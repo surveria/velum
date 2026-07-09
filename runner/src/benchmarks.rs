@@ -17,7 +17,8 @@ use tabled::Tabled;
 use super::bench_engines::{BenchEngine, RsqjsEngine, make_reference};
 use super::bench_measure::{self, MeasureConfig, MeasureStats, format_duration, ratio_values};
 use super::benchmark_protocol::{
-    BenchmarkInput, BenchmarkMethodology, BenchmarkReferenceSource, ReportedLifecycle,
+    BenchmarkContributionFlag, BenchmarkCountContribution, BenchmarkInput, BenchmarkMethodology,
+    BenchmarkReferenceSource, ReportedLifecycle,
 };
 use super::benchmark_selection::BenchmarkSelection;
 use super::cases::{self, BenchmarkCase};
@@ -110,6 +111,8 @@ pub struct BenchmarkRow {
     pub(crate) reference_source: String,
     #[tabled(skip)]
     pub(crate) methodology: BenchmarkMethodology,
+    #[tabled(skip)]
+    pub(crate) count_contribution: BenchmarkCountContribution,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -120,6 +123,7 @@ struct BenchmarkCounts {
     invalid: usize,
     skipped: usize,
     over_latency_budget: usize,
+    over_memory_budget: usize,
 }
 
 #[derive(Debug)]
@@ -180,7 +184,7 @@ pub fn run() -> BenchmarkReport {
     report
 }
 
-fn push_outcome(report: &mut BenchmarkReport, outcome: BenchmarkOutcome) {
+fn push_outcome(report: &mut BenchmarkReport, mut outcome: BenchmarkOutcome) {
     report.measured = report.measured.saturating_add(outcome.counts.measured);
     report.in_process_measured = report
         .in_process_measured
@@ -191,6 +195,24 @@ fn push_outcome(report: &mut BenchmarkReport, outcome: BenchmarkOutcome) {
     report.over_latency_budget = report
         .over_latency_budget
         .saturating_add(outcome.counts.over_latency_budget);
+    report.over_memory_budget = report
+        .over_memory_budget
+        .saturating_add(outcome.counts.over_memory_budget);
+    outcome.row.count_contribution = BenchmarkCountContribution {
+        measured: BenchmarkContributionFlag::from_bool(outcome.counts.measured > 0),
+        in_process_measured: BenchmarkContributionFlag::from_bool(
+            outcome.counts.in_process_measured > 0,
+        ),
+        failed: BenchmarkContributionFlag::from_bool(outcome.counts.failed > 0),
+        invalid: BenchmarkContributionFlag::from_bool(outcome.counts.invalid > 0),
+        skipped_reference: BenchmarkContributionFlag::from_bool(outcome.counts.skipped > 0),
+        over_latency_budget: BenchmarkContributionFlag::from_bool(
+            outcome.counts.over_latency_budget > 0,
+        ),
+        over_memory_budget: BenchmarkContributionFlag::from_bool(
+            outcome.counts.over_memory_budget > 0,
+        ),
+    };
     report.rows.push(outcome.row);
 }
 
@@ -241,8 +263,12 @@ fn run_benchmark_case(
     let ours = timing::timed(|| {
         bench_measure::measure(config, || eval_benchmark(&RsqjsEngine, case, &source))
     });
-    let reference_configured = reference.is_some();
     let reference = measure_reference(config, reference, case, &source);
+    let reference_source = match &reference {
+        ReferenceMeasurement::Measured(_) => BenchmarkReferenceSource::QuickjsLive,
+        ReferenceMeasurement::Failed(_) => BenchmarkReferenceSource::QuickjsLiveFailed,
+        ReferenceMeasurement::NotConfigured => BenchmarkReferenceSource::NotConfigured,
+    };
     let case_elapsed = timing::format_duration(case_timer.elapsed());
     let mut outcome = match ours.value {
         Ok(stats) => measured_with_reference_result(
@@ -263,18 +289,15 @@ fn run_benchmark_case(
         ),
     };
     outcome.row.lifecycle = cold_lifecycle(loaded.elapsed);
-    let reference_source = if reference_configured {
-        "quickjs_live"
-    } else {
-        REFERENCE_NOT_CONFIGURED
+    let reference_source_label = match reference_source {
+        BenchmarkReferenceSource::QuickjsLive => "quickjs_live",
+        BenchmarkReferenceSource::QuickjsLiveFailed => "quickjs_live_failed",
+        BenchmarkReferenceSource::NotConfigured => REFERENCE_NOT_CONFIGURED,
+        BenchmarkReferenceSource::QuickjsBaseline => "quickjs_baseline",
     };
-    reference_source.clone_into(&mut outcome.row.reference_source);
+    reference_source_label.clone_into(&mut outcome.row.reference_source);
     outcome.row.methodology.lifecycle = Some(ReportedLifecycle::cold_eval(loaded.elapsed));
-    outcome.row.methodology.reference_source = Some(if reference_configured {
-        BenchmarkReferenceSource::QuickjsLive
-    } else {
-        BenchmarkReferenceSource::NotConfigured
-    });
+    outcome.row.methodology.reference_source = Some(reference_source);
     outcome
 }
 
@@ -469,6 +492,7 @@ fn measured_with_reference(
             checksum: NOT_MEASURED.to_owned(),
             reference_source: NOT_MEASURED.to_owned(),
             methodology: BenchmarkMethodology::for_mode(case.mode),
+            count_contribution: BenchmarkCountContribution::default(),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -519,6 +543,7 @@ fn measured_without_reference(
             checksum: NOT_MEASURED.to_owned(),
             reference_source: NOT_MEASURED.to_owned(),
             methodology: BenchmarkMethodology::for_mode(case.mode),
+            count_contribution: BenchmarkCountContribution::default(),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -576,6 +601,7 @@ fn reference_unavailable(
             checksum: NOT_MEASURED.to_owned(),
             reference_source: NOT_MEASURED.to_owned(),
             methodology: BenchmarkMethodology::for_mode(case.mode),
+            count_contribution: BenchmarkCountContribution::default(),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -617,6 +643,7 @@ fn invalid_measurement_outcome(
             checksum: NOT_MEASURED.to_owned(),
             reference_source: NOT_MEASURED.to_owned(),
             methodology: BenchmarkMethodology::for_mode(case.mode),
+            count_contribution: BenchmarkCountContribution::default(),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -676,6 +703,7 @@ fn failed_row(
         checksum: NOT_MEASURED.to_owned(),
         reference_source: NOT_MEASURED.to_owned(),
         methodology: BenchmarkMethodology::for_mode(case.mode),
+        count_contribution: BenchmarkCountContribution::default(),
     }
 }
 

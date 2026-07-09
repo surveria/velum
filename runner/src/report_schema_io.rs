@@ -12,19 +12,27 @@ use crate::report_schema::{ReportDocument, ReportSummary};
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct YamlArtifactPaths {
     pub(crate) summary: PathBuf,
-    pub(crate) details: PathBuf,
+    pub(crate) component: PathBuf,
+    pub(crate) exhaustive: Option<PathBuf>,
 }
+
+pub const MAX_CANONICAL_YAML_LINES: usize = 1_000;
 
 pub fn write_yaml_artifacts(
     report_path: &Path,
-    report: &ReportDocument,
+    component: &ReportDocument,
+    exhaustive: Option<&ReportDocument>,
 ) -> anyhow::Result<YamlArtifactPaths> {
-    report.validate()?;
+    component.validate()?;
     let paths = yaml_artifact_paths(report_path);
-    let summary = report.summary();
+    let summary = component.summary();
     summary.validate()?;
-    write_yaml(&paths.summary, &summary)?;
-    write_yaml(&paths.details, report)?;
+    write_bounded_yaml(&paths.summary, &summary)?;
+    write_bounded_yaml(&paths.component, component)?;
+    if let (Some(path), Some(report)) = (&paths.exhaustive, exhaustive) {
+        report.validate()?;
+        write_yaml(path, report)?;
+    }
     Ok(paths)
 }
 
@@ -53,8 +61,27 @@ fn yaml_artifact_paths(report_path: &Path) -> YamlArtifactPaths {
         .unwrap_or("rsqjs-test-report");
     YamlArtifactPaths {
         summary: report_path.with_extension("yaml"),
-        details: report_path.with_file_name(format!("{stem}-details.yaml")),
+        component: report_path.with_file_name(format!("{stem}-component.yaml")),
+        exhaustive: exhaustive_enabled()
+            .then(|| report_path.with_file_name(format!("{stem}-exhaustive.yaml"))),
     }
+}
+
+pub fn exhaustive_enabled() -> bool {
+    std::env::var("RSQJS_REPORT_EXHAUSTIVE").is_ok_and(|value| value.trim() == "1")
+}
+
+fn write_bounded_yaml<T: Serialize>(path: &Path, value: &T) -> anyhow::Result<()> {
+    let encoded = serde_yaml_ng::to_string(value)
+        .with_context(|| format!("failed to serialize YAML report '{}'", path.display()))?;
+    let line_count = encoded.lines().count();
+    if line_count > MAX_CANONICAL_YAML_LINES {
+        anyhow::bail!(
+            "ordinary YAML report '{}' has {line_count} lines; maximum is {MAX_CANONICAL_YAML_LINES}",
+            path.display()
+        );
+    }
+    write_text(path, &encoded)
 }
 
 fn write_yaml<T: Serialize>(path: &Path, value: &T) -> anyhow::Result<()> {
@@ -69,5 +96,18 @@ fn write_yaml<T: Serialize>(path: &Path, value: &T) -> anyhow::Result<()> {
     let file = File::create(path)
         .with_context(|| format!("failed to create YAML report '{}'", path.display()))?;
     serde_yaml_ng::to_writer(BufWriter::new(file), value)
+        .with_context(|| format!("failed to write YAML report '{}'", path.display()))
+}
+
+fn write_text(path: &Path, value: &str) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "failed to create YAML report directory '{}'",
+                parent.display()
+            )
+        })?;
+    }
+    fs::write(path, value)
         .with_context(|| format!("failed to write YAML report '{}'", path.display()))
 }

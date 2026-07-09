@@ -28,6 +28,33 @@ pub struct BenchmarkMethodology {
     pub reference_source: Option<BenchmarkReferenceSource>,
 }
 
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+pub struct BenchmarkCountContribution {
+    pub measured: BenchmarkContributionFlag,
+    pub in_process_measured: BenchmarkContributionFlag,
+    pub failed: BenchmarkContributionFlag,
+    pub invalid: BenchmarkContributionFlag,
+    pub skipped_reference: BenchmarkContributionFlag,
+    pub over_latency_budget: BenchmarkContributionFlag,
+    pub over_memory_budget: BenchmarkContributionFlag,
+}
+
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+pub enum BenchmarkContributionFlag {
+    #[default]
+    NotCounted,
+    Counted,
+}
+
+impl BenchmarkContributionFlag {
+    pub const fn from_bool(value: bool) -> Self {
+        if value {
+            return Self::Counted;
+        }
+        Self::NotCounted
+    }
+}
+
 impl BenchmarkMethodology {
     pub const fn not_measured() -> Self {
         Self {

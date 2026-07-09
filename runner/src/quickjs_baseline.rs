@@ -24,6 +24,7 @@ pub const ENV_BASELINE_PATH: &str = "RSQJS_QUICKJS_BASELINE_PATH";
 const DEFAULT_BASELINE_PATH: &str = "tests/corpora/benchmarks/quickjs-baseline.tsv";
 const MODE_OFF: &str = "off";
 const MODE_READ: &str = "read";
+const MODE_REQUIRE: &str = "require";
 const MODE_REFRESH: &str = "refresh";
 const SCHEMA_VERSION: &str = "1";
 const HEADER: &str = "schema_version\tcontent_id\tcase_id\tsource_digest\tharness_digest\tprotocol\tmeasure_config\treference_engine\thost_profile\tchecksum\tmedian_ns\tcv_permille\titers_per_sample\tsamples\tmedian_sample_ns\twarmup_ns\ttimed_run_ns\titeration_cap";
@@ -35,6 +36,7 @@ const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
 enum BaselineMode {
     Off,
     Read,
+    Require,
     Refresh,
 }
 
@@ -289,10 +291,11 @@ impl QuickjsBaseline {
             .as_deref()
         {
             None | Some(MODE_READ) => BaselineMode::Read,
+            Some(MODE_REQUIRE) => BaselineMode::Require,
             Some(MODE_REFRESH) => BaselineMode::Refresh,
             Some(MODE_OFF) => BaselineMode::Off,
             Some(value) => bail!(
-                "unknown QuickJS baseline mode '{value}'; expected '{MODE_READ}', '{MODE_REFRESH}', or '{MODE_OFF}'"
+                "unknown QuickJS baseline mode '{value}'; expected '{MODE_READ}', '{MODE_REQUIRE}', '{MODE_REFRESH}', or '{MODE_OFF}'"
             ),
         };
         let path = env::var_os(ENV_BASELINE_PATH)
@@ -310,11 +313,19 @@ impl QuickjsBaseline {
         })
     }
 
-    pub fn lookup(&self, key: &BaselineKey) -> Option<BaselineSample> {
-        if self.mode != BaselineMode::Read {
-            return None;
+    pub fn lookup(&self, key: &BaselineKey) -> anyhow::Result<Option<BaselineSample>> {
+        if !matches!(self.mode, BaselineMode::Read | BaselineMode::Require) {
+            return Ok(None);
         }
-        self.store.lookup(key)
+        let sample = self.store.lookup(key);
+        if self.mode == BaselineMode::Require && sample.is_none() {
+            bail!(
+                "required QuickJS baseline entry is missing for benchmark '{}' (content id {}); refresh the committed baseline explicitly",
+                key.case_id,
+                key.content_id()
+            );
+        }
+        Ok(sample)
     }
 
     pub fn record(&mut self, key: BaselineKey, sample: BaselineSample) -> anyhow::Result<()> {
@@ -443,7 +454,10 @@ fn stable_digest(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{BaselineEntry, BaselineKey, BaselineSample, BaselineStore, stable_digest};
+    use super::{
+        BaselineEntry, BaselineKey, BaselineMode, BaselineSample, BaselineStore, QuickjsBaseline,
+        stable_digest,
+    };
     use crate::{
         bench_measure::{MeasureConfig, MeasureSnapshot},
         benchmark_protocol::BenchmarkChecksum,
@@ -526,6 +540,22 @@ mod tests {
             return Err("refresh removed the replacement baseline entry".into());
         }
         Ok(())
+    }
+
+    #[test]
+    fn require_mode_rejects_a_missing_content_addressed_entry() -> TestResult {
+        let config = test_config();
+        let key = BaselineKey::new("missing", "source", "harness", config, "quickjs", "host");
+        let baseline = QuickjsBaseline {
+            mode: BaselineMode::Require,
+            path: std::path::PathBuf::from("unused"),
+            store: BaselineStore::default(),
+            dirty: false,
+        };
+        if baseline.lookup(&key).is_err() {
+            return Ok(());
+        }
+        Err("require mode accepted a missing QuickJS baseline entry".into())
     }
 
     fn test_config() -> MeasureConfig {

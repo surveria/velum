@@ -1,4 +1,8 @@
-use super::{parse_benchmark_metrics, parse_corpus_counts, parse_rollup_test262_counts};
+use std::{fs, path::PathBuf};
+
+use super::{
+    build_rollup, parse_benchmark_metrics, parse_corpus_counts, parse_rollup_test262_counts,
+};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -88,6 +92,49 @@ fn rollup_prefers_variant_level_test262_counts() -> TestResult {
     ensure_usize(usize::try_from(value.total)?, 102_578)?;
     ensure_usize(usize::try_from(value.passed)?, 29_396)?;
     ensure_usize(usize::try_from(value.failed)?, 73_182)
+}
+
+#[test]
+fn mixed_history_uses_yaml_for_new_reports_and_markdown_fallback_for_old_reports() -> TestResult {
+    let root = temporary_report_root();
+    if root.exists() {
+        fs::remove_dir_all(&root)?;
+    }
+    let report_dir = root.join("test-runs");
+    fs::create_dir_all(&report_dir)?;
+    let legacy_name = "rsqjs-test-report-20260708T000000Z.md";
+    fs::write(
+        report_dir.join(legacy_name),
+        "# rs-quickjs Test Report\n\n## Benchmarks\n\n- Measured: 1\n- Over latency budget (1.00x): 0\n- Over memory budget (1.00x): 0\n\n| benchmark | latency_ratio | memory_ratio |\n| old | 1.10x | - |\n",
+    )?;
+
+    let current_name = "rsqjs-test-report-20260709T000000Z.md";
+    fs::write(report_dir.join(current_name), "derived view")?;
+    let summary = crate::report_schema_tests::sample_document()?.summary();
+    let yaml = serde_yaml_ng::to_string(&summary)?;
+    fs::write(
+        report_dir.join("rsqjs-test-report-20260709T000000Z.yaml"),
+        yaml,
+    )?;
+
+    let rollup = build_rollup(&report_dir)?;
+    let valid =
+        rollup.records.len() == 2
+            && rollup.records.first().is_some_and(|record| {
+                record.file_name == legacy_name && record.benchmark_count == 1
+            })
+            && rollup.records.get(1).is_some_and(|record| {
+                record.file_name == current_name && record.benchmark_count == 1
+            });
+    fs::remove_dir_all(&root)?;
+    if valid {
+        return Ok(());
+    }
+    Err("mixed rollup history did not preserve both parser paths".into())
+}
+
+fn temporary_report_root() -> PathBuf {
+    std::env::temp_dir().join(format!("rsqjs-rollup-mixed-{}", std::process::id()))
 }
 
 fn ensure_usize(actual: usize, expected: usize) -> TestResult {

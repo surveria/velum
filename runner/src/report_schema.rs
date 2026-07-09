@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     CaseRow, CorpusReport, FullReport, STATUS_FAILED, STATUS_PASSED, STATUS_SKIPPED, benchmarks,
-    jetstream,
+    failure_classification, jetstream,
     report_benchmark_methodology::BenchmarkMethodology,
     report_composition::ReportComponent,
     report_metadata::RunMetadata,
@@ -13,8 +13,17 @@ use crate::{
     },
 };
 
+#[path = "report_schema_compaction.rs"]
+mod compaction;
+use compaction::{case_counts, case_detail_coverage, limit_diagnostics, suite_status};
+#[path = "report_schema_columns.rs"]
+mod columns;
+use columns::BenchmarkColumns;
+
 pub const SCHEMA_VERSION: u32 = 1;
+pub const MAX_FAILURE_DIAGNOSTICS: usize = 30;
 pub const TEST262_FULL_SUITE: &str = "Test262 full corpus";
+pub const TEST262_FILE_SUITE: &str = "Test262 file conformance";
 
 pub const NO_VALUE: &str = "-";
 
@@ -82,6 +91,24 @@ pub enum Test262Mode {
     Manifest,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BenchmarkSet {
+    Full,
+    Sentinel,
+    Invalid,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QuickjsBaselineMode {
+    Off,
+    Read,
+    Require,
+    Refresh,
+    Invalid,
+}
+
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 pub struct EnvironmentInfo {
     pub(crate) operating_system: String,
@@ -103,7 +130,10 @@ pub struct RunConfiguration {
     pub(crate) test262_mode: Test262Mode,
     pub(crate) test262_path_filters: Vec<String>,
     pub(crate) test262_flag_filters: Vec<String>,
+    pub(crate) benchmark_set: BenchmarkSet,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) benchmark_filter: Option<String>,
+    pub(crate) quickjs_baseline: QuickjsBaselineMode,
     pub(crate) benchmark: BenchmarkConfiguration,
 }
 
@@ -120,7 +150,9 @@ pub struct BenchmarkConfiguration {
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SuiteReport {
+    #[serde(flatten)]
     pub(crate) summary: SuiteSummary,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) cases: Vec<CaseRecord>,
 }
 
@@ -134,6 +166,10 @@ pub struct SuiteSummary {
     pub(crate) duration_ns: u64,
     pub(crate) skip_reasons: Vec<SkipReasonSummary>,
     pub(crate) feature_areas: Vec<FeatureAreaSummary>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) failure_diagnostics: Option<FailureDiagnostics>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) diagnostics_derived_from: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
@@ -160,10 +196,15 @@ pub enum SuiteStatus {
 
 #[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CaseCounts {
+    #[serde(default, skip_serializing_if = "is_default")]
     pub(crate) total: u64,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub(crate) executed: u64,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub(crate) passed: u64,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub(crate) failed: u64,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub(crate) skipped: u64,
 }
 
@@ -193,9 +234,37 @@ pub struct SkipReasonSummary {
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FeatureAreaSummary {
     pub(crate) name: String,
+    #[serde(flatten)]
     pub(crate) counts: CaseCounts,
     pub(crate) manifest_enabled: u64,
     pub(crate) top_skip_reason: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
+pub struct DiagnosticGroup {
+    pub(crate) count: u64,
+    pub(crate) feature_area: String,
+    pub(crate) category: String,
+    pub(crate) reason: String,
+    pub(crate) representative_case: String,
+    pub(crate) representative_source: String,
+    pub(crate) detail: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FailureDiagnostics {
+    pub(crate) total_failed: u64,
+    pub(crate) represented_failed: u64,
+    pub(crate) total_groups: u64,
+    pub(crate) omitted_groups: u64,
+    pub(crate) categories: Vec<FailureCategorySummary>,
+    pub(crate) groups: Vec<DiagnosticGroup>,
+}
+
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FailureCategorySummary {
+    pub(crate) category: String,
+    pub(crate) failed: u64,
 }
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
@@ -203,6 +272,7 @@ pub struct BenchmarkSuite {
     pub(crate) name: String,
     pub(crate) duration_ns: u64,
     pub(crate) counts: BenchmarkCounts,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) rows: Vec<BenchmarkRecord>,
 }
 
@@ -227,11 +297,32 @@ pub struct BenchmarkRecord {
     pub(crate) engine: Measurement,
     pub(crate) reference: Measurement,
     pub(crate) latency_ratio_centi_units: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) memory_ratio_centi_units: Option<u64>,
     pub(crate) latency_budget: BudgetStatus,
     pub(crate) quality: QualityStatus,
     pub(crate) methodology: Option<BenchmarkMethodology>,
+    pub(crate) count_contribution: Option<BenchmarkCountContribution>,
     pub(crate) detail: String,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BenchmarkCountContribution {
+    pub(crate) measured: BenchmarkContributionFlag,
+    pub(crate) in_process_measured: BenchmarkContributionFlag,
+    pub(crate) failed: BenchmarkContributionFlag,
+    pub(crate) invalid: BenchmarkContributionFlag,
+    pub(crate) skipped_reference: BenchmarkContributionFlag,
+    pub(crate) over_latency_budget: BenchmarkContributionFlag,
+    pub(crate) over_memory_budget: BenchmarkContributionFlag,
+}
+
+#[derive(Debug, Clone, Copy, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BenchmarkContributionFlag {
+    #[default]
+    NotCounted,
+    Counted,
 }
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
@@ -281,24 +372,8 @@ pub enum QualityStatus {
     NotMeasured,
 }
 
-struct BenchmarkColumns {
-    id: String,
-    status: String,
-    source: String,
-    iterations: Option<u64>,
-    case_duration: String,
-    engine_measurement: String,
-    engine_median: String,
-    engine_cv: String,
-    reference_measurement: String,
-    reference_median: String,
-    reference_cv: String,
-    latency_ratio: String,
-    memory_ratio: String,
-    latency_budget: String,
-    quality: String,
-    methodology: Option<BenchmarkMethodology>,
-    detail: String,
+fn is_default<T: Default + PartialEq>(value: &T) -> bool {
+    value == &T::default()
 }
 
 impl ReportDocument {
@@ -314,6 +389,12 @@ impl ReportDocument {
             &configuration,
             duration_ns(report.elapsed),
         );
+        let mut suites = report
+            .corpora
+            .into_iter()
+            .map(SuiteReport::from_run)
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        limit_diagnostics(&mut suites)?;
         Ok(Self {
             schema_version: SCHEMA_VERSION,
             detail_level: DetailLevel::Full,
@@ -322,11 +403,7 @@ impl ReportDocument {
             configuration,
             components: vec![component],
             duration_ns: duration_ns(report.elapsed),
-            suites: report
-                .corpora
-                .into_iter()
-                .map(SuiteReport::from_run)
-                .collect::<anyhow::Result<Vec<_>>>()?,
+            suites,
             benchmarks: BenchmarkSuite::from_benchmarks(report.benchmarks)?,
             jetstream: BenchmarkSuite::from_jetstream(report.jetstream)?,
         })
@@ -349,6 +426,25 @@ impl ReportDocument {
             benchmarks: self.benchmarks.clone(),
             jetstream: self.jetstream.clone(),
         }
+    }
+
+    pub fn bounded_component(&self) -> anyhow::Result<Self> {
+        let mut bounded = self.clone();
+        limit_diagnostics(&mut bounded.suites)?;
+        let has_full_feature_map = bounded
+            .suites
+            .iter()
+            .any(|suite| suite.summary.name == TEST262_FULL_SUITE);
+        for suite in &mut bounded.suites {
+            suite.cases.clear();
+            suite.summary.case_details =
+                case_detail_coverage(suite.summary.counts.total, usize_to_u64(suite.cases.len()))?;
+            if has_full_feature_map && suite.summary.name == TEST262_FILE_SUITE {
+                suite.summary.feature_areas.clear();
+            }
+        }
+        bounded.validate()?;
+        Ok(bounded)
     }
 
     pub fn failed_count(&self) -> u64 {
@@ -375,7 +471,7 @@ impl SuiteReport {
             corpus.passed(),
             corpus.failed(),
             corpus.skipped(),
-        );
+        )?;
         let cases = corpus
             .rows
             .into_iter()
@@ -391,6 +487,7 @@ impl SuiteReport {
             .collect();
         let status = suite_status(counts, !skip_reasons.is_empty());
         let case_details = case_detail_coverage(counts.total, usize_to_u64(cases.len()))?;
+        let diagnostics = failure_classification::diagnostic_groups(&cases)?;
         let feature_areas = corpus
             .feature_areas
             .into_iter()
@@ -406,6 +503,8 @@ impl SuiteReport {
                 duration_ns: duration_ns(corpus.elapsed),
                 skip_reasons,
                 feature_areas,
+                failure_diagnostics: diagnostics,
+                diagnostics_derived_from: None,
             },
             cases,
         })
@@ -490,7 +589,8 @@ impl BenchmarkSuite {
 
 impl BenchmarkRecord {
     fn from_benchmark(row: benchmarks::BenchmarkRow) -> anyhow::Result<Self> {
-        Self::from_columns(BenchmarkColumns {
+        let contribution = row.count_contribution;
+        let mut record = Self::from_columns(BenchmarkColumns {
             id: row.benchmark,
             status: row.status,
             source: row.source,
@@ -508,7 +608,17 @@ impl BenchmarkRecord {
             quality: row.quality,
             methodology: Some(row.methodology.into()),
             detail: row.detail,
-        })
+        })?;
+        record.count_contribution = Some(BenchmarkCountContribution {
+            measured: contribution.measured.into(),
+            in_process_measured: contribution.in_process_measured.into(),
+            failed: contribution.failed.into(),
+            invalid: contribution.invalid.into(),
+            skipped_reference: contribution.skipped_reference.into(),
+            over_latency_budget: contribution.over_latency_budget.into(),
+            over_memory_budget: contribution.over_memory_budget.into(),
+        });
+        Ok(record)
     }
 
     fn from_jetstream(row: jetstream::JetStreamRow) -> anyhow::Result<Self> {
@@ -555,6 +665,7 @@ impl BenchmarkRecord {
             latency_budget: BudgetStatus::from_label(&columns.latency_budget)?,
             quality: QualityStatus::from_label(&columns.quality)?,
             methodology: columns.methodology,
+            count_contribution: None,
             detail: columns.detail,
         })
     }
@@ -679,39 +790,4 @@ impl QualityStatus {
             _ => bail!("unknown measurement quality status '{label}'"),
         }
     }
-}
-
-const fn suite_status(counts: CaseCounts, unavailable: bool) -> SuiteStatus {
-    if counts.failed > 0 {
-        return SuiteStatus::Failed;
-    }
-    if counts.executed == 0 && (counts.skipped > 0 || unavailable) {
-        return SuiteStatus::Skipped;
-    }
-    SuiteStatus::Passed
-}
-
-fn case_counts(total: usize, passed: usize, failed: usize, skipped: usize) -> CaseCounts {
-    CaseCounts {
-        total: usize_to_u64(total),
-        executed: usize_to_u64(passed.saturating_add(failed)),
-        passed: usize_to_u64(passed),
-        failed: usize_to_u64(failed),
-        skipped: usize_to_u64(skipped),
-    }
-}
-
-fn case_detail_coverage(total: u64, recorded_rows: u64) -> anyhow::Result<CaseDetailCoverage> {
-    let Some(omitted_rows) = total.checked_sub(recorded_rows) else {
-        bail!("suite contains {recorded_rows} detail rows but reports only {total} total cases");
-    };
-    Ok(CaseDetailCoverage {
-        completeness: if omitted_rows == 0 {
-            DetailCompleteness::Complete
-        } else {
-            DetailCompleteness::Partial
-        },
-        recorded_rows,
-        omitted_rows,
-    })
 }

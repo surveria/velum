@@ -4,7 +4,7 @@ use anyhow::{Context as _, bail};
 
 use crate::report_rollup;
 
-const USAGE: &str = "usage: rsqjs-test-runner --report <path> | --correctness <path> | --performance <path> | --benchmarks <path> | --compose-reports <tree> <correctness-details.yaml> <performance-details.yaml> <output.md> | --aggregate-reports <dir>";
+const USAGE: &str = "usage: rsqjs-test-runner --report <path> | --correctness <path> | --performance <path> | --benchmarks <path> | --compose-reports <tree> <correctness-component.yaml> <performance-component.yaml> <output.md> | --aggregate-reports <dir>";
 
 #[derive(Debug)]
 pub enum Config {
@@ -58,10 +58,10 @@ impl Config {
                 .context("missing tree after --compose-reports")?;
             let correctness_path = args
                 .next()
-                .context("missing correctness details path after --compose-reports")?;
+                .context("missing correctness component path after --compose-reports")?;
             let performance_path = args
                 .next()
-                .context("missing performance details path after --compose-reports")?;
+                .context("missing performance component path after --compose-reports")?;
             let report_path = args
                 .next()
                 .context("missing output path after --compose-reports")?;

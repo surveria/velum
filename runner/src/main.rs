@@ -51,7 +51,7 @@ use cases::{DifferentialCase, EngineCase, Expectation};
 #[cfg(test)]
 use report_rendering::{coverage_percent, feature_area_rows_with_limit};
 use report_rendering::{
-    feature_area_rows, fenced_table, percent, render_report, render_timing_tsv, skip_reason_rows,
+    feature_area_rows, fenced_table, render_report, render_timing_tsv, skip_reason_rows,
 };
 use report_schema::{EnvironmentInfo, ReportDocument, ReportMode, RunConfiguration};
 use runner_cli::{Config, print_rollup_outputs};
@@ -572,26 +572,47 @@ fn write_report(path: &Path, report: &ReportDocument) -> anyhow::Result<()> {
             .with_context(|| format!("failed to create report directory '{}'", parent.display()))?;
     }
 
-    let yaml_paths = report_schema_io::write_yaml_artifacts(path, report)?;
+    let component = report.bounded_component()?;
+    let exhaustive = report_schema_io::exhaustive_enabled().then_some(report);
+    let yaml_paths = report_schema_io::write_yaml_artifacts(path, &component, exhaustive)?;
     println!(
         "structured YAML report summary: {}",
         yaml_paths.summary.display()
     );
     println!(
-        "structured YAML report details: {}",
-        yaml_paths.details.display()
+        "bounded YAML composition source: {}",
+        yaml_paths.component.display()
     );
-    let body = render_report(report);
+    if let Some(exhaustive_path) = &yaml_paths.exhaustive {
+        println!(
+            "exhaustive YAML report artifact: {}",
+            exhaustive_path.display()
+        );
+    }
+    let body = render_report(&component);
     fs::write(path, body)
         .with_context(|| format!("failed to write test report '{}'", path.display()))?;
     let timing_path = timing_artifact_path(path);
-    fs::write(&timing_path, render_timing_tsv(report)).with_context(|| {
+    fs::write(&timing_path, render_timing_tsv(&component)).with_context(|| {
         format!(
             "failed to write timing artifact '{}'",
             timing_path.display()
         )
     })?;
-    println!("local/CI timing artifact: {}", timing_path.display());
+    println!("bounded timing artifact: {}", timing_path.display());
+    if exhaustive.is_some() {
+        let exhaustive_timing_path = exhaustive_timing_artifact_path(path);
+        fs::write(&exhaustive_timing_path, render_timing_tsv(report)).with_context(|| {
+            format!(
+                "failed to write exhaustive timing artifact '{}'",
+                exhaustive_timing_path.display()
+            )
+        })?;
+        println!(
+            "exhaustive timing artifact: {}",
+            exhaustive_timing_path.display()
+        );
+    }
     Ok(())
 }
 
@@ -601,6 +622,14 @@ fn timing_artifact_path(report_path: &Path) -> PathBuf {
         .and_then(std::ffi::OsStr::to_str)
         .unwrap_or("rsqjs-test-report");
     report_path.with_file_name(format!("{file_stem}-timings.tsv"))
+}
+
+fn exhaustive_timing_artifact_path(report_path: &Path) -> PathBuf {
+    let file_stem = report_path
+        .file_stem()
+        .and_then(std::ffi::OsStr::to_str)
+        .unwrap_or("rsqjs-test-report");
+    report_path.with_file_name(format!("{file_stem}-exhaustive-timings.tsv"))
 }
 
 struct DisplaySlice<'a, T>(&'a [T]);
