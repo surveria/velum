@@ -385,6 +385,33 @@ impl Context {
         Ok(result)
     }
 
+    /// Enumerable own string keys of a proxy: the `ownKeys` trap result
+    /// filtered by each key's `getOwnPropertyDescriptor` enumerability. Backs
+    /// Object.keys/entries/values over a proxy.
+    pub(in crate::runtime) fn proxy_enumerable_keys(&mut self, id: ObjectId) -> Result<Vec<String>> {
+        let all = self.proxy_own_keys(id)?;
+        let mut keys = Vec::new();
+        for key in all {
+            self.step()?;
+            if let Some(descriptor) = self.proxy_get_own_property_descriptor(id, &key)?
+                && Self::descriptor_is_enumerable(&descriptor)
+            {
+                keys.push(key);
+            }
+        }
+        Ok(keys)
+    }
+
+    const fn descriptor_is_enumerable(descriptor: &OwnPropertyDescriptor) -> bool {
+        matches!(
+            descriptor,
+            OwnPropertyDescriptor::Data(data) if data.enumerable().is_yes()
+        ) || matches!(
+            descriptor,
+            OwnPropertyDescriptor::Accessor(accessor) if accessor.enumerable().is_yes()
+        )
+    }
+
     /// Convert the array-like result of an `ownKeys` trap into string keys.
     fn proxy_key_list_from_value(&mut self, value: &Value) -> Result<Vec<String>> {
         if !matches!(value, Value::Object(_)) {

@@ -251,7 +251,10 @@ impl Context {
     ) -> Result<Value> {
         let values = args.as_slice();
         let target = Self::argument_or_undefined(values.first());
-        let keys = self.own_enumerable_keys(&target)?;
+        let keys = match &target {
+            Value::Object(id) if self.objects.is_proxy(*id) => self.proxy_enumerable_keys(*id)?,
+            _ => self.own_enumerable_keys(&target)?,
+        };
         self.array_constructor_value()?;
         let prototype = self.objects.existing_array_prototype_id()?;
         let mut elements = Vec::with_capacity(keys.len());
