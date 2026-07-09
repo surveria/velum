@@ -20,12 +20,26 @@ searchRestore.lastIndex = 2;
 let matchAllPattern = /a/g;
 matchAllPattern.lastIndex = 1;
 let matchAllIterator = matchAllPattern[Symbol.matchAll]("aba");
+let matchAllPrototype = Object.getPrototypeOf(matchAllIterator);
+let matchAllNextDescriptor = Object.getOwnPropertyDescriptor(matchAllPrototype, "next");
+let matchAllTagDescriptor = Object.getOwnPropertyDescriptor(matchAllPrototype, Symbol.toStringTag);
 let matchAllFirst = matchAllIterator.next();
 let matchAllSecond = matchAllIterator.next();
 let matchAllNonGlobal = (/a/)[Symbol.matchAll]("aba");
 let matchAllNonGlobalFirst = matchAllNonGlobal.next();
 let matchAllNonGlobalSecond = matchAllNonGlobal.next();
 let matchAllOk =
+  Object.hasOwn(matchAllIterator, "next") === false &&
+  matchAllPrototype.next.name === "next" &&
+  matchAllPrototype.next.length === 0 &&
+  matchAllNextDescriptor.writable === true &&
+  matchAllNextDescriptor.enumerable === false &&
+  matchAllNextDescriptor.configurable === true &&
+  matchAllPrototype[Symbol.toStringTag] === "RegExp String Iterator" &&
+  matchAllTagDescriptor.writable === false &&
+  matchAllTagDescriptor.enumerable === false &&
+  matchAllTagDescriptor.configurable === true &&
+  Object.prototype.toString.call(matchAllIterator) === "[object RegExp String Iterator]" &&
   matchAllIterator[Symbol.iterator]() === matchAllIterator &&
   matchAllFirst.done === false &&
   matchAllFirst.value[0] === "a" &&

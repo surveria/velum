@@ -40,6 +40,7 @@ const SYMBOL_MATCH_PROPERTY: &str = "match";
 const SYMBOL_REPLACE_PROPERTY: &str = "replace";
 const SYMBOL_SEARCH_PROPERTY: &str = "search";
 const SYMBOL_SPLIT_PROPERTY: &str = "split";
+const REGEXP_STRING_ITERATOR_TAG: &str = "RegExp String Iterator";
 const ZERO_INDEX: f64 = 0.0;
 
 impl Context {
@@ -203,7 +204,7 @@ impl Context {
             .map_or_else(String::new, Value::display_for_concat);
         self.check_string_len(&input)?;
         let matches = self.regexp_match_all_results(this_value, &input)?;
-        self.create_collection_iterator_object(matches)
+        self.create_tagged_collection_iterator_object(matches, REGEXP_STRING_ITERATOR_TAG)
     }
 
     pub(in crate::runtime::native) fn eval_regexp_prototype_symbol_search(

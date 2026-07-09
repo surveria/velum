@@ -35,11 +35,21 @@ print((/-/)[Symbol.split]("a-b-c").join("|"), (/-/)[Symbol.split]("a-b-c", 2).jo
 let matchAllPattern = /a/g;
 matchAllPattern.lastIndex = 1;
 let matchAllIterator = matchAllPattern[Symbol.matchAll]("aba");
+let matchAllPrototype = Object.getPrototypeOf(matchAllIterator);
+let matchAllTagDescriptor = Object.getOwnPropertyDescriptor(matchAllPrototype, Symbol.toStringTag);
 let matchAllFirst = matchAllIterator.next();
 let matchAllSecond = matchAllIterator.next();
 let matchAllNonGlobal = (/a/)[Symbol.matchAll]("aba");
 let matchAllNonGlobalFirst = matchAllNonGlobal.next();
 let matchAllNonGlobalSecond = matchAllNonGlobal.next();
+print(
+  Object.hasOwn(matchAllIterator, "next"),
+  matchAllPrototype.next.name,
+  matchAllPrototype.next.length,
+  matchAllPrototype[Symbol.toStringTag],
+  matchAllTagDescriptor.writable,
+  Object.prototype.toString.call(matchAllIterator)
+);
 print(
   matchAllIterator[Symbol.iterator]() === matchAllIterator,
   matchAllFirst.done,

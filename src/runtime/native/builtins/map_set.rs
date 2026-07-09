@@ -39,6 +39,8 @@ const ITERATOR_NEXT_NAME: &str = "next";
 const ITERATOR_RESULT_VALUE_NAME: &str = "value";
 const ITERATOR_RESULT_DONE_NAME: &str = "done";
 const ITERATOR_SYMBOL_DISPLAY: &str = "[Symbol.iterator]";
+const TO_STRING_TAG_SYMBOL_DISPLAY: &str = "[Symbol.toStringTag]";
+const TO_STRING_TAG_PROPERTY: &str = "toStringTag";
 const CONSTRUCTOR_REQUIRES_NEW_ERROR: &str = "constructor requires 'new'";
 const MAP_ENTRY_NOT_OBJECT_ERROR: &str = "Map iterable entries must be objects";
 const FOR_EACH_CALLBACK_ERROR: &str = "forEach callback must be callable";
@@ -488,6 +490,89 @@ impl Context {
             )?;
         }
         Ok(object)
+    }
+
+    pub(in crate::runtime::native) fn create_tagged_collection_iterator_object(
+        &mut self,
+        items: Vec<Value>,
+        tag: &str,
+    ) -> Result<Value> {
+        let iterator_id = self.create_collection_iterator(items)?;
+        let next = self.create_native_function(
+            NativeFunctionKind::CollectionIteratorNext(iterator_id),
+            Value::Undefined,
+        )?;
+        let next_key = self.intern_property_key(ITERATOR_NEXT_NAME)?;
+        let constructor_key = self.object_constructor_property_key()?;
+        let prototype = self.objects.create_with_prototype(
+            None,
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
+        let Value::Object(prototype_id) = prototype else {
+            return Err(Error::runtime("iterator prototype creation failed"));
+        };
+        self.objects.define_property(
+            prototype_id,
+            next_key,
+            ITERATOR_NEXT_NAME,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(next),
+                Some(PropertyWritable::Yes),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )?;
+        self.install_iterator_prototype_symbols(prototype_id, tag)?;
+        self.objects.create_with_prototype(
+            Some(prototype_id),
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn install_iterator_prototype_symbols(
+        &mut self,
+        prototype: crate::value::ObjectId,
+        tag: &str,
+    ) -> Result<()> {
+        let symbol_constructor = self.symbol_constructor_value()?;
+        if let Some(symbol) = self.iterator_symbol() {
+            let self_fn =
+                self.create_native_function(NativeFunctionKind::IteratorSelf, Value::Undefined)?;
+            self.objects.define_property(
+                prototype,
+                PropertyKey::symbol(symbol),
+                ITERATOR_SYMBOL_DISPLAY,
+                PropertyUpdate::Data(DataPropertyUpdate::new(
+                    Some(self_fn),
+                    Some(PropertyWritable::Yes),
+                    Some(PropertyEnumerable::No),
+                    Some(PropertyConfigurable::Yes),
+                )),
+                self.limits.max_object_properties,
+            )?;
+        }
+        let tag_symbol = self.get_property_value(&symbol_constructor, TO_STRING_TAG_PROPERTY)?;
+        let Value::Symbol(symbol) = tag_symbol else {
+            return Err(Error::runtime("Symbol.toStringTag is not initialized"));
+        };
+        let tag_value = self.heap_string_value(tag)?;
+        self.objects.define_property(
+            prototype,
+            PropertyKey::symbol(symbol.id()),
+            TO_STRING_TAG_SYMBOL_DISPLAY,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(tag_value),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )
     }
 
     pub(in crate::runtime::native) fn eval_collection_iterator_next(
