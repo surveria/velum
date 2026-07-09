@@ -142,6 +142,8 @@ const PATH_QUICKJS_NULLISH_LOGICAL_ASSIGNMENT: &str =
 const PATH_QUICKJS_EXPONENTIATION_PARENTHESES: &str =
     "tests/corpora/quickjs_differential/active/exponentiation_parentheses.js";
 const PATH_QUICKJS_IN_OPERATOR: &str = "tests/corpora/quickjs_differential/active/in_operator.js";
+const PATH_QUICKJS_INSTANCEOF_HAS_INSTANCE: &str =
+    "tests/corpora/quickjs_differential/active/instanceof_has_instance.js";
 const PATH_QUICKJS_REFERENCE_ERROR_CATCH: &str =
     "tests/corpora/quickjs_differential/active/reference_error_catch.js";
 const PATH_QUICKJS_ERROR_OBJECT_PROPERTIES: &str =
@@ -498,6 +500,10 @@ fn quickjs_operator_expression_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "in_operator",
             path: PATH_QUICKJS_IN_OPERATOR,
+        },
+        DifferentialCase {
+            id: "instanceof_has_instance",
+            path: PATH_QUICKJS_INSTANCEOF_HAS_INSTANCE,
         },
     ]
 }
