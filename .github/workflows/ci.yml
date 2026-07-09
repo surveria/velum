@@ -212,6 +212,9 @@ jobs:
           RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
           RSQJS_PERFORMANCE_ONLY: "1"
           RSQJS_JETSTREAM_ENABLED: "0"
+          RSQJS_BENCH_SET: sentinel
+          RSQJS_QUICKJS_BASELINE: read
+          RSQJS_QUICKJS_BASELINE_PATH: tests/corpora/benchmarks/quickjs-baseline.tsv
         run: |
           if [[ -z "${RSQJS_DEPENDENCY_TOKEN}" ]]; then
             echo "RSQJS_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2

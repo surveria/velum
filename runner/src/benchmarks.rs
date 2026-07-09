@@ -16,8 +16,14 @@ use tabled::Tabled;
 
 use super::bench_engines::{BenchEngine, RsqjsEngine, make_reference};
 use super::bench_measure::{self, MeasureConfig, MeasureStats, format_duration, ratio_values};
+use super::benchmark_protocol::BenchmarkInput;
+use super::benchmark_selection::BenchmarkSelection;
 use super::cases::{self, BenchmarkCase};
-use super::{report_text, timing};
+use super::quickjs_baseline::{QuickjsBaseline, detect_host_profile};
+use super::{prepared_benchmarks, report_text, timing};
+
+#[path = "prepared_benchmark_report.rs"]
+mod prepared_report;
 
 pub const BUDGET_LABEL: &str = "1.00x";
 
@@ -42,10 +48,7 @@ const DETAIL_COMPLETED: &str = "sequential benchmark completed";
 const DETAIL_LATENCY_EXCEPTION: &str = "latency budget exception tracked";
 const DETAIL_QUALITY_GATE: &str = "measurement quality gate failed";
 const DETAIL_REFERENCE_COMPLETED: &str = "QuickJS reference completed";
-const MAX_BENCHMARK_DETAIL_CHARS: usize = 80;
-const IMAGE_72P_RGBA_BYTES: usize = 128 * 72 * 4;
-const HOST_IMAGE_PREFIX: &str = "typed_array_host_";
-const ENV_BENCH_FILTER: &str = "RSQJS_BENCH_FILTER";
+const MAX_BENCHMARK_DETAIL_CHARS: usize = 240;
 
 #[derive(Debug)]
 pub struct BenchmarkReport {
@@ -95,6 +98,10 @@ pub struct BenchmarkRow {
     quickjs_cv: String,
     quality: String,
     pub(crate) detail: String,
+    pub(crate) mode: String,
+    pub(crate) lifecycle: String,
+    pub(crate) checksum: String,
+    pub(crate) reference_source: String,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -130,39 +137,119 @@ struct BudgetCheck {
 pub fn run() -> BenchmarkReport {
     let timer = timing::RunTimer::start();
     let config = MeasureConfig::in_process_from_env();
+    let selection = match BenchmarkSelection::from_env() {
+        Ok(selection) => selection,
+        Err(error) => return configuration_failure_report(timer.elapsed(), &error.to_string()),
+    };
+    let selected_cases = match selection.select(cases::benchmark_cases()) {
+        Ok(cases) => cases,
+        Err(error) => return configuration_failure_report(timer.elapsed(), &error.to_string()),
+    };
+    let mut baseline = match QuickjsBaseline::from_env() {
+        Ok(baseline) => baseline,
+        Err(error) => return configuration_failure_report(timer.elapsed(), &error.to_string()),
+    };
+    let host_profile = detect_host_profile();
     let reference = make_reference();
-    let filter = std::env::var(ENV_BENCH_FILTER).ok();
     let mut report = BenchmarkReport::not_run();
-    for case in cases::benchmark_cases() {
-        if let Some(filter) = filter.as_deref()
-            && !case.id.contains(filter)
-        {
-            continue;
-        }
-        let outcome = run_benchmark_case(&case, config, reference.as_deref());
-        report.measured = report.measured.saturating_add(outcome.counts.measured);
-        report.in_process_measured = report
-            .in_process_measured
-            .saturating_add(outcome.counts.in_process_measured);
-        report.failed = report.failed.saturating_add(outcome.counts.failed);
-        report.invalid = report.invalid.saturating_add(outcome.counts.invalid);
-        report.skipped = report.skipped.saturating_add(outcome.counts.skipped);
-        report.over_latency_budget = report
-            .over_latency_budget
-            .saturating_add(outcome.counts.over_latency_budget);
-        report.rows.push(outcome.row);
+    for case in selected_cases {
+        let outcome = run_benchmark_case(
+            &case,
+            config,
+            reference.as_deref(),
+            &mut baseline,
+            &host_profile,
+        );
+        push_outcome(&mut report, outcome);
+    }
+    if let Err(error) = baseline.finish() {
+        push_outcome(
+            &mut report,
+            configuration_failure_outcome(&error.to_string()),
+        );
     }
     report.elapsed = timer.elapsed();
     report
+}
+
+fn push_outcome(report: &mut BenchmarkReport, outcome: BenchmarkOutcome) {
+    report.measured = report.measured.saturating_add(outcome.counts.measured);
+    report.in_process_measured = report
+        .in_process_measured
+        .saturating_add(outcome.counts.in_process_measured);
+    report.failed = report.failed.saturating_add(outcome.counts.failed);
+    report.invalid = report.invalid.saturating_add(outcome.counts.invalid);
+    report.skipped = report.skipped.saturating_add(outcome.counts.skipped);
+    report.over_latency_budget = report
+        .over_latency_budget
+        .saturating_add(outcome.counts.over_latency_budget);
+    report.rows.push(outcome.row);
+}
+
+fn configuration_failure_report(elapsed: std::time::Duration, error: &str) -> BenchmarkReport {
+    let mut report = BenchmarkReport {
+        rows: Vec::new(),
+        measured: 0,
+        in_process_measured: 0,
+        failed: 0,
+        invalid: 0,
+        skipped: 0,
+        over_latency_budget: 0,
+        over_memory_budget: 0,
+        elapsed,
+    };
+    push_outcome(&mut report, configuration_failure_outcome(error));
+    report
+}
+
+fn configuration_failure_outcome(error: &str) -> BenchmarkOutcome {
+    BenchmarkOutcome {
+        row: BenchmarkRow {
+            benchmark: "benchmark_configuration".to_owned(),
+            status: STATUS_FAILED.to_owned(),
+            source: "runner environment".to_owned(),
+            iterations: 0,
+            case_elapsed: NOT_MEASURED.to_owned(),
+            rsqjs_measure: NOT_MEASURED.to_owned(),
+            quickjs_measure: NOT_MEASURED.to_owned(),
+            rsqjs_eval: NOT_MEASURED.to_owned(),
+            quickjs_eval: NOT_MEASURED.to_owned(),
+            latency_ratio: NOT_MEASURED.to_owned(),
+            latency_budget: NOT_MEASURED.to_owned(),
+            memory_ratio: NOT_MEASURED.to_owned(),
+            rsqjs_cv: NOT_MEASURED.to_owned(),
+            quickjs_cv: NOT_MEASURED.to_owned(),
+            quality: QUALITY_INVALID.to_owned(),
+            detail: benchmark_detail(error),
+            mode: NOT_MEASURED.to_owned(),
+            lifecycle: NOT_MEASURED.to_owned(),
+            checksum: NOT_MEASURED.to_owned(),
+            reference_source: NOT_MEASURED.to_owned(),
+        },
+        counts: BenchmarkCounts {
+            failed: 1,
+            ..BenchmarkCounts::default()
+        },
+    }
+}
+
+fn cold_lifecycle(load: std::time::Duration) -> String {
+    format!(
+        "load={};compile=per_operation;setup=per_operation;warmup=measured;run=measured;verify=-;teardown=per_operation",
+        timing::format_duration(load)
+    )
 }
 
 fn run_benchmark_case(
     case: &BenchmarkCase,
     config: MeasureConfig,
     reference: Option<&dyn BenchEngine>,
+    baseline: &mut QuickjsBaseline,
+    host_profile: &str,
 ) -> BenchmarkOutcome {
     let case_timer = timing::RunTimer::start();
-    let source = match fs::read_to_string(case.path) {
+    let loaded = timing::timed(|| fs::read_to_string(case.path));
+    let source = match loaded.value {
         Ok(source) => source,
         Err(error) => {
             return failed_outcome(
@@ -172,12 +259,31 @@ fn run_benchmark_case(
             );
         }
     };
+    if case.mode.uses_prepared_protocol() {
+        return match prepared_benchmarks::run(
+            case,
+            &source,
+            loaded.elapsed,
+            config,
+            reference,
+            baseline,
+            host_profile,
+        ) {
+            Ok(run) => prepared_report::outcome(case, &run),
+            Err(error) => failed_outcome(
+                case,
+                timing::format_duration(case_timer.elapsed()),
+                &error.to_string(),
+            ),
+        };
+    }
     let ours = timing::timed(|| {
         bench_measure::measure(config, || eval_benchmark(&RsqjsEngine, case, &source))
     });
+    let reference_configured = reference.is_some();
     let reference = measure_reference(config, reference, case, &source);
     let case_elapsed = timing::format_duration(case_timer.elapsed());
-    match ours.value {
+    let mut outcome = match ours.value {
         Ok(stats) => measured_with_reference_result(
             case,
             timing::Timed {
@@ -194,7 +300,15 @@ fn run_benchmark_case(
             reference,
             case_elapsed,
         ),
-    }
+    };
+    outcome.row.lifecycle = cold_lifecycle(loaded.elapsed);
+    let reference_source = if reference_configured {
+        "quickjs_live"
+    } else {
+        REFERENCE_NOT_CONFIGURED
+    };
+    reference_source.clone_into(&mut outcome.row.reference_source);
+    outcome
 }
 
 fn measure_reference(
@@ -226,8 +340,8 @@ fn eval_benchmark(
     case: &BenchmarkCase,
     source: &str,
 ) -> anyhow::Result<()> {
-    if case.id.starts_with(HOST_IMAGE_PREFIX) {
-        return engine.eval_with_host_image(source, IMAGE_72P_RGBA_BYTES);
+    if let BenchmarkInput::HostImage { byte_len } = case.input {
+        return engine.eval_with_host_image(source, byte_len);
     }
     engine.eval(source)
 }
@@ -383,6 +497,10 @@ fn measured_with_reference(
             quickjs_cv: reference.value.cv_percent_text(),
             quality: QUALITY_VALID.to_owned(),
             detail: benchmark_detail(&detail_text(over)),
+            mode: case.mode.to_string(),
+            lifecycle: NOT_MEASURED.to_owned(),
+            checksum: NOT_MEASURED.to_owned(),
+            reference_source: NOT_MEASURED.to_owned(),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -428,6 +546,10 @@ fn measured_without_reference(
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
             detail: benchmark_detail(DETAIL_COMPLETED),
+            mode: case.mode.to_string(),
+            lifecycle: NOT_MEASURED.to_owned(),
+            checksum: NOT_MEASURED.to_owned(),
+            reference_source: NOT_MEASURED.to_owned(),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -480,6 +602,10 @@ fn reference_unavailable(
                 "{DETAIL_COMPLETED}; reference error: {}",
                 note.value
             )),
+            mode: case.mode.to_string(),
+            lifecycle: NOT_MEASURED.to_owned(),
+            checksum: NOT_MEASURED.to_owned(),
+            reference_source: NOT_MEASURED.to_owned(),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -516,6 +642,10 @@ fn invalid_measurement_outcome(
             quickjs_cv: quickjs.cv,
             quality: QUALITY_INVALID.to_owned(),
             detail: benchmark_detail(detail),
+            mode: case.mode.to_string(),
+            lifecycle: NOT_MEASURED.to_owned(),
+            checksum: NOT_MEASURED.to_owned(),
+            reference_source: NOT_MEASURED.to_owned(),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -570,6 +700,10 @@ fn failed_row(
         quickjs_cv: quickjs.cv,
         quality,
         detail: benchmark_detail(detail),
+        mode: case.mode.to_string(),
+        lifecycle: NOT_MEASURED.to_owned(),
+        checksum: NOT_MEASURED.to_owned(),
+        reference_source: NOT_MEASURED.to_owned(),
     }
 }
 
@@ -659,104 +793,5 @@ const fn count_if(condition: bool) -> usize {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{BUDGET_OVER, BUDGET_WITHIN, RsqjsEngine, bench_measure, budget_check};
-    use crate::bench_engines::BenchEngine;
-    use std::time::Duration;
-
-    type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
-
-    #[test]
-    fn marks_exact_budget_as_within_budget() -> TestResult {
-        let check = budget_check(100, 100);
-        ensure_bool(!check.over_budget, "exact budget must be accepted")?;
-        ensure_text(check.label, BUDGET_WITHIN)
-    }
-
-    #[test]
-    fn marks_above_budget_as_tracked_exception() -> TestResult {
-        let check = budget_check(101, 100);
-        ensure_bool(check.over_budget, "above budget must be tracked")?;
-        ensure_text(check.label, BUDGET_OVER)
-    }
-
-    #[test]
-    fn samples_engine_under_test_in_process() -> TestResult {
-        let config =
-            super::MeasureConfig::new(Duration::from_millis(5), Duration::from_millis(15), 3);
-        let stats =
-            bench_measure::measure(config, || RsqjsEngine.eval("let value = 40 + 2; value"))?;
-        ensure_bool(
-            stats.median() <= Duration::from_secs(1),
-            "in-process eval should finish quickly",
-        )?;
-        ensure_bool(
-            stats.total_iters() > 1,
-            "sampler must auto-scale iterations",
-        )
-    }
-
-    #[test]
-    fn failed_benchmark_preserves_quickjs_measurement() -> TestResult {
-        let case = crate::cases::BenchmarkCase {
-            id: "failed-case",
-            path: "tests/corpora/benchmarks/active/arithmetic_chain.js",
-        };
-        let reference = super::timing::Timed {
-            value: sample_stats()?,
-            elapsed: Duration::from_millis(1),
-        };
-        let outcome = super::failed_with_reference(
-            &case,
-            "rsqjs eval failed: sample",
-            "1.00 ms".to_owned(),
-            super::ReferenceMeasurement::Measured(reference),
-            "2.00 ms".to_owned(),
-        );
-        ensure_text(&outcome.row.status, super::STATUS_FAILED)?;
-        ensure_text(&outcome.row.case_elapsed, "2.00 ms")?;
-        ensure_text(&outcome.row.rsqjs_measure, "1.00 ms")?;
-        ensure_text(&outcome.row.quickjs_measure, "1.00 ms")?;
-        ensure_text(&outcome.row.rsqjs_eval, super::NOT_MEASURED)?;
-        ensure_bool(
-            outcome.row.quickjs_eval != super::NOT_MEASURED,
-            "failed row must retain QuickJS timing",
-        )?;
-        ensure_bool(
-            outcome.row.quickjs_cv != super::NOT_MEASURED,
-            "failed row must retain QuickJS variation",
-        )?;
-        ensure_usize(outcome.counts.failed, 1)
-    }
-
-    fn sample_stats() -> Result<crate::bench_measure::MeasureStats, anyhow::Error> {
-        let config =
-            super::MeasureConfig::new(Duration::from_millis(0), Duration::from_millis(1), 3)
-                .with_quality(Duration::ZERO, u32::MAX);
-        bench_measure::measure(config, || {
-            std::hint::black_box(42_u64);
-            Ok::<(), anyhow::Error>(())
-        })
-    }
-
-    fn ensure_text(actual: &str, expected: &str) -> TestResult {
-        if actual == expected {
-            return Ok(());
-        }
-        Err(format!("expected '{expected}', got '{actual}'").into())
-    }
-
-    fn ensure_bool(actual: bool, message: &str) -> TestResult {
-        if actual {
-            return Ok(());
-        }
-        Err(message.to_owned().into())
-    }
-
-    fn ensure_usize(actual: usize, expected: usize) -> TestResult {
-        if actual == expected {
-            return Ok(());
-        }
-        Err(format!("expected {expected}, got {actual}").into())
-    }
-}
+#[path = "benchmark_tests.rs"]
+mod tests;

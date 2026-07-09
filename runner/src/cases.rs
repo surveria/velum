@@ -21,12 +21,6 @@ pub struct DifferentialCase {
     pub path: &'static str,
 }
 
-#[derive(Debug)]
-pub struct BenchmarkCase {
-    pub id: &'static str,
-    pub path: &'static str,
-}
-
 #[path = "cases_engine_runtime.rs"]
 mod cases_engine_runtime;
 #[path = "cases_reporting.rs"]
@@ -42,6 +36,7 @@ mod cases_test262_proxy;
 #[path = "cases_test262_reflect.rs"]
 mod cases_test262_reflect;
 
+pub use crate::benchmark_case::BenchmarkCase;
 pub use cases_reporting::{benchmark_cases, quickjs_differential_cases};
 pub use cases_test262::test262_cases;
 

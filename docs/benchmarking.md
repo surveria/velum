@@ -8,12 +8,12 @@ Correctness and performance are deliberately separate:
 
 - `scripts/check-fast.sh` is the local iteration loop. It does not download external corpora or run benchmarks.
 - `scripts/check-correctness.sh` is the required ready-PR and merge-queue gate. It runs all formatting, lint, test, documentation, active-fixture, QuickJS differential, and full Test262 checks, but no project or JetStream benchmarks.
-- After a merge, CI checks out the exact merge commit and collects the project performance report. This preserves a merge-to-merge history without putting sequential measurements on the merge critical path.
+- After a merge, CI checks out the exact merge commit and runs the prepared project sentinel set with the committed QuickJS baseline. This preserves a merge-to-merge performance history without putting sequential measurements on the merge critical path.
 - `scripts/test-all.sh` is the explicit full/manual lane and includes JetStream. It is not a routine local prerequisite for an ordinary feature PR.
 
 All test-oriented entrypoints acquire a shared `flock` through `scripts/with-host-lock.sh`; benchmark entrypoints acquire the exclusive form of the same lock. Correctness runs can therefore overlap with each other, while timing work cannot overlap with tests or another benchmark. Local worktrees use `/run/lock/rsqjs/host-performance.lock`. The runner deployment bind-mounts that host directory at `/host/rsqjs-lock`, and CI sets `RSQJS_HOST_LOCK_PATH=/host/rsqjs-lock/host-performance.lock`, so all runner containers and interactive agents lock the same inode. Container-private `/tmp` and `/run` paths are not suitable. The sibling `.owner` file is diagnostic only; lock release follows the kernel file descriptor and remains safe after a crash.
 
-Feature and compatibility work should run focused tests plus `scripts/check-fast.sh`, push the draft branch, and let required CI perform the complete correctness pass once. Performance work should use a filtered project benchmark while iterating and leave the canonical per-merge measurement to CI.
+Feature and compatibility work should run focused tests plus `scripts/check-fast.sh`, push the draft branch, and let required CI perform the complete correctness pass once. Performance work should use an exact-id or explicit-prefix project filter while iterating and leave the canonical per-merge sentinel measurement to CI. Use `RSQJS_BENCH_SET=full` only when the complete legacy project corpus is intentionally required.
 
 ## Baselines
 
@@ -44,9 +44,24 @@ The report scripts prepare a pinned QuickJS reference binary before running diff
 
 Set `RSQJS_QUICKJS_AUTO_SETUP=0` to disable automatic download and build. In that mode, differential checks and QuickJS benchmark columns are reported as skipped unless `RSQJS_QUICKJS` or `qjs` is available.
 
-The standard test script runs `runner/Cargo.toml` with the `reference-quickjs` feature. Current project benchmark rows compare rs-quickjs and QuickJS through the same in-process `eval` adapter, so they measure engine work instead of process startup, shell argument parsing, or report formatting. Each row reports median per-operation latency, calibrated iteration counts, sample coefficient of variation, QuickJS latency ratio when the reference is available, and the current benchmark quality status.
+The runner has two explicit project benchmark modes. Legacy `cold_eval` cases retain the complete script-evaluation diagnostic, including VM creation, compilation, execution, and teardown. Prepared cases follow protocol `prepared-v1`: load source, compile the harness, create and set up one VM, validate one result, warm up, time repeated `__rsqjsBenchRun()` calls, verify the checksum, and tear the VM down. The Rust runner owns every canonical interval with `Instant`; `performance.now()` is available to JavaScript applications but is not a benchmark clock.
 
-The rs-quickjs benchmark adapter uses only the public runtime API. It applies a benchmark-only resource envelope that is larger than the default library limits, so active workload cases can be large enough for stable timing without changing embedder defaults. Future benchmark rows should separate parser, compiler, VM execution, host callback, and teardown costs as those subsystems become explicit.
+Every prepared `run()` returns a primitive deterministic checksum. The runner compares it with the preflight result on every sampled invocation, checks it again through `__rsqjsBenchVerify()`, and requires rs-quickjs and QuickJS to produce equivalent values before reporting a latency ratio. Source loading, compilation (including parsing), setup, warmup, timed run, verification, and teardown durations are recorded separately in the lifecycle column; only the timed `run()` call contributes to per-operation latency.
+
+The default benchmark set remains `full` for backward compatibility. `RSQJS_BENCH_SET=sentinel` selects five prepared arithmetic, array-index, property-read, function-call, and string-scan cases used by the post-merge lane. `RSQJS_BENCH_FILTER` accepts comma-separated exact ids, or an explicit trailing `*` for prefix selection; a selector that matches nothing is an error instead of a silent empty run.
+
+Prepared QuickJS measurements use `tests/corpora/benchmarks/quickjs-baseline.tsv` by default. Each entry is content-addressed by case id, source digest, harness digest, protocol version, complete sampling configuration, reference-engine identity, and host profile (architecture, OS, CPU model, logical CPU count, kernel, and governor). `read` mode uses only an exact key match and measures QuickJS live on a missing or stale key. `refresh` mode remeasures and deterministically replaces the stale entry for the same case; `off` disables the store. Refresh the sentinel reference after a benchmark, harness, sampling, reference-engine, or target-host change:
+
+```bash
+RSQJS_BENCH_SET=sentinel \
+RSQJS_QUICKJS_BASELINE=refresh \
+./scripts/with-host-lock.sh exclusive -- \
+  cargo run --release --manifest-path runner/Cargo.toml \
+    --features reference-quickjs -- \
+    --benchmarks target/rsqjs-reports/sentinel-refresh.md
+```
+
+Every direct local `--benchmarks` invocation must use the exclusive `scripts/with-host-lock.sh` wrapper shown above. The rs-quickjs benchmark adapter uses only the public runtime API and applies a benchmark-only resource envelope that is larger than default embedder limits. The five prepared sentinels are the first migrated tranche; `RSQJS_BENCH_SET=full` still includes legacy cold-eval cases while they are converted deliberately instead of being reinterpreted silently.
 
 ## JetStream Shell Benchmarks
 
@@ -93,7 +108,12 @@ The timing and quality thresholds can be adjusted for local diagnosis:
 - `RSQJS_BENCH_SAMPLES` controls the number of measured samples.
 - `RSQJS_BENCH_MIN_OP_US` controls the minimum valid median operation time.
 - `RSQJS_BENCH_MAX_CV_PERCENT` controls the maximum valid sample coefficient of variation.
-- `RSQJS_BENCH_FILTER` limits benchmark execution to case ids containing the supplied text.
+- `RSQJS_BENCH_MAX_OP_MS` rejects an operation after its first over-limit execution so it is not repeated blindly.
+- `RSQJS_BENCH_MAX_TOTAL_MS` bounds retries and adaptively reduces the requested sample count after the minimum robust sample count is collected.
+- `RSQJS_BENCH_SET` selects `full` (the default) or the prepared `sentinel` set.
+- `RSQJS_BENCH_FILTER` selects exact case ids or explicit trailing-`*` prefixes.
+- `RSQJS_QUICKJS_BASELINE` selects `read` (the default), `refresh`, or `off`.
+- `RSQJS_QUICKJS_BASELINE_PATH` overrides the committed baseline path.
 
 Do not weaken these thresholds in CI to make a benchmark pass. Fix the benchmark workload or move the case back to tests if it is not a meaningful performance measurement.
 
@@ -113,6 +133,8 @@ Do not weaken these thresholds in CI to make a benchmark pass. Fix the benchmark
 - Record target CPU, RAM, kernel, compiler, and optimization flags.
 - Report median latency and sample variation.
 - Separate parser, compiler, VM, and host callback costs where possible.
+- Use a deterministic primitive checksum and keep setup/verification outside the timed interval.
+- Treat JavaScript clock readings as diagnostic data, never as the canonical timer.
 - Compare release builds only.
 - Run benchmark cases sequentially.
 - Avoid benchmark stdout. Return or accumulate a final value so the measured work stays observable without polluting reports.
