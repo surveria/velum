@@ -72,6 +72,7 @@ fn main() -> rs_quickjs::Result<()> {
 
 - [Project Rules](AGENTS.md)
 - [Architecture](docs/architecture.md)
+- [Architecture Stabilization And Development Strategy](docs/architecture-stabilization-plan.md)
 - [Product Roadmap](docs/roadmap.md)
 - [Benchmarking](docs/benchmarking.md)
 - [Project Development Plan](docs/project-plan.md)
