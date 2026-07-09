@@ -111,15 +111,71 @@ const PATH_BENCH_OBJECT_DESCRIPTORS: &str = "tests/corpora/benchmarks/active/obj
 const PATH_BENCH_COMPILED_SCRIPT_REUSE: &str =
     "tests/corpora/benchmarks/active/compiled_script_reuse.js";
 const PATH_BENCH_ATOMIZED_BINDINGS: &str = "tests/corpora/benchmarks/active/atomized_bindings.js";
+const PATH_BENCH_TYPED_ARRAY_RGBA_FILL_72P: &str =
+    "tests/corpora/benchmarks/active/typed_array_rgba_fill_72p.js";
+const PATH_BENCH_TYPED_ARRAY_RGBA_GRADIENT_72P: &str =
+    "tests/corpora/benchmarks/active/typed_array_rgba_gradient_72p.js";
+const PATH_BENCH_TYPED_ARRAY_RGBA_QUANTIZE_72P: &str =
+    "tests/corpora/benchmarks/active/typed_array_rgba_quantize_72p.js";
+const PATH_BENCH_TYPED_ARRAY_RGBA_BLUR_72P: &str =
+    "tests/corpora/benchmarks/active/typed_array_rgba_blur_72p.js";
+const PATH_BENCH_TYPED_ARRAY_RGBA_SHARPEN_72P: &str =
+    "tests/corpora/benchmarks/active/typed_array_rgba_sharpen_72p.js";
 
 pub fn benchmark_cases() -> Vec<BenchmarkCase> {
     let mut cases = benchmark_control_flow_cases();
     cases.extend(benchmark_function_cases());
     cases.extend(benchmark_object_cases());
     cases.extend(benchmark_array_cases());
+    cases.extend(benchmark_typed_array_image_cases());
     cases.extend(benchmark_operator_cases());
     cases.extend(benchmark_runtime_cases());
     cases
+}
+
+fn benchmark_typed_array_image_cases() -> Vec<BenchmarkCase> {
+    vec![
+        BenchmarkCase {
+            id: "typed_array_owned_rgba_fill_72p",
+            path: PATH_BENCH_TYPED_ARRAY_RGBA_FILL_72P,
+        },
+        BenchmarkCase {
+            id: "typed_array_owned_rgba_gradient_72p",
+            path: PATH_BENCH_TYPED_ARRAY_RGBA_GRADIENT_72P,
+        },
+        BenchmarkCase {
+            id: "typed_array_owned_rgba_quantize_72p",
+            path: PATH_BENCH_TYPED_ARRAY_RGBA_QUANTIZE_72P,
+        },
+        BenchmarkCase {
+            id: "typed_array_owned_rgba_blur_72p",
+            path: PATH_BENCH_TYPED_ARRAY_RGBA_BLUR_72P,
+        },
+        BenchmarkCase {
+            id: "typed_array_owned_rgba_sharpen_72p",
+            path: PATH_BENCH_TYPED_ARRAY_RGBA_SHARPEN_72P,
+        },
+        BenchmarkCase {
+            id: "typed_array_host_rgba_fill_72p",
+            path: PATH_BENCH_TYPED_ARRAY_RGBA_FILL_72P,
+        },
+        BenchmarkCase {
+            id: "typed_array_host_rgba_gradient_72p",
+            path: PATH_BENCH_TYPED_ARRAY_RGBA_GRADIENT_72P,
+        },
+        BenchmarkCase {
+            id: "typed_array_host_rgba_quantize_72p",
+            path: PATH_BENCH_TYPED_ARRAY_RGBA_QUANTIZE_72P,
+        },
+        BenchmarkCase {
+            id: "typed_array_host_rgba_blur_72p",
+            path: PATH_BENCH_TYPED_ARRAY_RGBA_BLUR_72P,
+        },
+        BenchmarkCase {
+            id: "typed_array_host_rgba_sharpen_72p",
+            path: PATH_BENCH_TYPED_ARRAY_RGBA_SHARPEN_72P,
+        },
+    ]
 }
 
 fn benchmark_control_flow_cases() -> Vec<BenchmarkCase> {

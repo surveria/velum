@@ -14,6 +14,7 @@ mod proxy;
 mod regexp;
 mod shape;
 mod string;
+mod typed_array;
 
 use array::{ArrayIndex, ArrayLength, ArrayStorage};
 use base::LiteralPrototype;
@@ -31,6 +32,7 @@ pub use property::{
 pub use proxy::ProxyValue;
 pub use regexp::RegExpValue;
 use shape::{ShapeId, ShapeTable};
+pub use typed_array::{ByteBuffer, ByteBufferOrigin, Uint8ArrayView, byte_number};
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
 const ARRAY_INDEX_LIMIT_ERROR: &str = "array index exceeded supported range";
@@ -97,6 +99,8 @@ struct Object {
     date_value: Option<DateValue>,
     regexp_value: Option<RegExpValue>,
     proxy_value: Option<ProxyValue>,
+    byte_buffer: Option<ByteBuffer>,
+    uint8_array: Option<Uint8ArrayView>,
     is_raw_json: bool,
     prototype: Option<ObjectId>,
     extensibility: ObjectExtensibility,
@@ -126,6 +130,8 @@ impl Object {
             date_value: None,
             regexp_value: None,
             proxy_value: None,
+            byte_buffer: None,
+            uint8_array: None,
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
@@ -145,6 +151,8 @@ impl Object {
             date_value: None,
             regexp_value: None,
             proxy_value: None,
+            byte_buffer: None,
+            uint8_array: None,
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
@@ -164,6 +172,8 @@ impl Object {
             date_value: None,
             regexp_value: None,
             proxy_value: None,
+            byte_buffer: None,
+            uint8_array: None,
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
@@ -183,6 +193,8 @@ impl Object {
             date_value: None,
             regexp_value: None,
             proxy_value: None,
+            byte_buffer: None,
+            uint8_array: None,
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
@@ -231,6 +243,9 @@ impl Object {
         {
             return Ok(Some(ObjectPropertyValue::value(length.value())));
         }
+        if let Some(value) = self.typed_array_property(property.name())? {
+            return Ok(Some(ObjectPropertyValue::value(value)));
+        }
         if self.array_length.is_some()
             && let Some(index) = ArrayIndex::parse(property.name())
             && let Some(value) = self.array_element_value(index)
@@ -259,6 +274,9 @@ impl Object {
         if self.array_length.is_some() && property.name() == ARRAY_LENGTH_PROPERTY {
             return Ok(true);
         }
+        if self.has_typed_array_property(property.name())? {
+            return Ok(true);
+        }
         if self.array_length.is_some()
             && ArrayIndex::parse(property.name()).is_some_and(|index| self.has_array_element(index))
         {
@@ -283,6 +301,11 @@ impl Object {
             return Err(Error::runtime("array length assignment is not supported"));
         }
         let index = ArrayIndex::parse(property_name);
+        if let Some(index) = index
+            && self.set_typed_array_index(index, &value)?
+        {
+            return Ok(());
+        }
         if self.has_virtual_string_property_name(property_name)? {
             return Ok(());
         }
@@ -468,6 +491,9 @@ impl Object {
         if self.array_length.is_some() && property.name() == ARRAY_LENGTH_PROPERTY {
             return Ok(false);
         }
+        if self.has_typed_array_property(property.name())? {
+            return Ok(false);
+        }
         if self.array_length.is_some()
             && let Some(index) = ArrayIndex::parse(property.name())
             && self.delete_array_element(index)
@@ -517,6 +543,61 @@ impl Object {
         self.array_storage.dense_property(index).is_some()
     }
 
+    fn typed_array_property(&self, property: &str) -> Result<Option<Value>> {
+        if let Some(buffer) = self.byte_buffer.as_ref()
+            && property == "byteLength"
+        {
+            return Ok(Some(Value::Number(usize_property_number(
+                buffer.byte_length(),
+            )?)));
+        }
+        let Some(view) = self.uint8_array.as_ref() else {
+            return Ok(None);
+        };
+        match property {
+            "length" => Ok(Some(Value::Number(usize_property_number(view.length())?))),
+            "byteLength" => Ok(Some(Value::Number(usize_property_number(
+                view.byte_length(),
+            )?))),
+            "byteOffset" => Ok(Some(Value::Number(usize_property_number(
+                view.byte_offset(),
+            )?))),
+            "buffer" => Ok(Some(Value::Object(view.buffer_object()))),
+            _ => {
+                let Some(index) = ArrayIndex::parse(property) else {
+                    return Ok(None);
+                };
+                let Some(byte) = view.read(index.position()?)? else {
+                    return Ok(None);
+                };
+                Ok(Some(Value::Number(f64::from(byte))))
+            }
+        }
+    }
+
+    fn has_typed_array_property(&self, property: &str) -> Result<bool> {
+        if self.byte_buffer.is_some() && property == "byteLength" {
+            return Ok(true);
+        }
+        let Some(view) = self.uint8_array.as_ref() else {
+            return Ok(false);
+        };
+        if matches!(property, "length" | "byteLength" | "byteOffset" | "buffer") {
+            return Ok(true);
+        }
+        let Some(index) = ArrayIndex::parse(property) else {
+            return Ok(false);
+        };
+        Ok(index.position()? < view.length())
+    }
+
+    fn set_typed_array_index(&self, index: ArrayIndex, value: &Value) -> Result<bool> {
+        let Some(view) = self.uint8_array.as_ref() else {
+            return Ok(false);
+        };
+        view.write(index.position()?, byte_number(value)?)
+    }
+
     fn delete_array_element(&mut self, index: ArrayIndex) -> bool {
         let Some(property) = self.array_storage.dense_property(index) else {
             return false;
@@ -558,4 +639,10 @@ impl Object {
             .len()
             .saturating_add(self.array_storage.property_count())
     }
+}
+
+fn usize_property_number(value: usize) -> Result<f64> {
+    let value = u32::try_from(value)
+        .map_err(|_| Error::limit("typed array length exceeded supported number range"))?;
+    Ok(f64::from(value))
 }
