@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260709T052010Z.md`
-- Task: PR #371: runtime: optimize Array sort fast paths
-- Performance: 4.76x (67/73 >1.00x)
+- `rsqjs-test-report-20260709T060904Z.md`
+- Task: PR #372: bytecode: optimize string concat benchmark
+- Performance: 4.35x (66/73 >1.00x)
 - Memory: - (0/73 >1.00x)
-- JetStream: 24.54x (4/4 >1.00x)
-- Full Test262: 32151 passed / 70427 failed (31.34%)
+- JetStream: 25.19x (4/4 >1.00x)
+- Full Test262: 31883 passed / 70695 failed (31.08%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -358,3 +358,4 @@ Latest report:
 | `20260709T034949Z` `db172db` PR #369: instanceof operator consults Symbol.hasInstance | 5.34x (69/73 >1.00x) | - (0/73 >1.00x) | 23.65x (4/4 >1.00x) | 32149 passed / 70429 failed (31.34%) |
 | `20260709T041104Z` `d3b28f0` PR #368: runtime: optimize Array flat and flatMap paths | 5.03x (68/73 >1.00x) | - (0/73 >1.00x) | 23.34x (4/4 >1.00x) | 32149 passed / 70429 failed (31.34%) |
 | `20260709T052010Z` `f7554a2` PR #371: runtime: optimize Array sort fast paths | 4.76x (67/73 >1.00x) | - (0/73 >1.00x) | 24.54x (4/4 >1.00x) | 32151 passed / 70427 failed (31.34%) |
+| `20260709T060904Z` `2d8bdf3` PR #372: bytecode: optimize string concat benchmark | 4.35x (66/73 >1.00x) | - (0/73 >1.00x) | 25.19x (4/4 >1.00x) | 31883 passed / 70695 failed (31.08%) |
