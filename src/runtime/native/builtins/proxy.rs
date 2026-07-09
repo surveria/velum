@@ -119,27 +119,14 @@ impl Context {
         let slice = args.as_slice();
         let target = Self::argument_or_undefined(slice.first());
         let handler = Self::argument_or_undefined(slice.get(1));
-        if !Self::is_object_like(&target) {
+        if self.semantic_object_ref(&target)?.is_none() {
             return Err(Error::type_error(PROXY_TARGET_NOT_OBJECT_ERROR));
         }
-        if !Self::is_object_like(&handler) {
+        if self.semantic_object_ref(&handler)?.is_none() {
             return Err(Error::type_error(PROXY_HANDLER_NOT_OBJECT_ERROR));
         }
         self.objects
             .create_proxy_object(target, handler, self.limits.max_objects)
-    }
-
-    /// A value counts as an object for Proxy internal slots when it is an
-    /// ordinary object or any callable object.
-    pub(in crate::runtime) const fn is_object_like(value: &Value) -> bool {
-        matches!(
-            value,
-            Value::Object(_)
-                | Value::Function(_)
-                | Value::NativeFunction(_)
-                | Value::HostFunction(_)
-                | Value::Error(_)
-        )
     }
 
     /// Resolve the wrapped target and handler for a proxy object, raising a
@@ -404,7 +391,7 @@ impl Context {
         let result = self
             .eval_call_completion(trap, &[target, args_array, new_target], handler)?
             .into_native_value_result()?;
-        if !Self::is_object_like(&result) {
+        if self.semantic_object_ref(&result)?.is_none() {
             return Err(Error::type_error(PROXY_CONSTRUCT_INVALID_ERROR));
         }
         Ok(result)

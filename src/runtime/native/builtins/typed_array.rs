@@ -81,13 +81,16 @@ impl Context {
     ///
     /// # Errors
     ///
-    /// Returns an error if the value references an object id that is not live in
-    /// this VM.
+    /// Returns an error if the value references an object-like storage slot
+    /// that is not live in this VM.
     pub fn typed_array_debug_origin(&self, value: &Value) -> Result<Option<&'static str>> {
-        let Value::Object(id) = value else {
+        let Some(object) = self.semantic_object_ref(value)? else {
             return Ok(None);
         };
-        let Some(origin) = self.objects.typed_array_debug_origin(*id)? else {
+        let Some(id) = object.object_id() else {
+            return Ok(None);
+        };
+        let Some(origin) = self.objects.typed_array_debug_origin(id)? else {
             return Ok(None);
         };
         Ok(Some(match origin {

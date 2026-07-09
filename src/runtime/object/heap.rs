@@ -447,6 +447,10 @@ impl ObjectHeap {
             .ok_or_else(|| Error::runtime("object id is not defined"))
     }
 
+    pub(in crate::runtime) fn validate_id(&self, id: ObjectId) -> Result<()> {
+        self.object(id).map(|_| ())
+    }
+
     pub(super) fn object_mut(&mut self, id: ObjectId) -> Result<&mut Object> {
         self.objects
             .get_mut(id.index())

@@ -32,6 +32,7 @@ pub mod numeric;
 pub mod object;
 pub mod promise;
 pub mod property;
+mod semantic_object;
 pub mod values;
 
 pub use binding::static_bindings::CompiledBindingFrame;
@@ -633,23 +634,17 @@ impl Context {
             object.clone(),
             Value::Function(id),
         )? {
-            Completion::Return(value) if Self::constructor_return_is_object(&value) => Ok(value),
-            Completion::Normal(_) | Completion::Return(_) => Ok(object),
+            Completion::Return(value) => {
+                if self.semantic_object_ref(&value)?.is_some() {
+                    return Ok(value);
+                }
+                Ok(object)
+            }
+            Completion::Normal(_) => Ok(object),
             Completion::Throw(value) => Err(Error::runtime(format!("uncaught throw: {value}"))),
             Completion::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Completion::Continue(_) => Err(Error::runtime("continue statement outside loop")),
         }
-    }
-
-    const fn constructor_return_is_object(value: &Value) -> bool {
-        matches!(
-            value,
-            Value::Function(_)
-                | Value::NativeFunction(_)
-                | Value::HostFunction(_)
-                | Value::Object(_)
-                | Value::Error(_)
-        )
     }
 
     pub(crate) fn push_lexical_scope(&mut self) {

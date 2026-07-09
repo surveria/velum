@@ -65,6 +65,34 @@ All current ids are slot indexes without a VM id or generation. A stale id or a
 value moved between VMs cannot be rejected from the id alone. This is the main
 input to AS-05a.
 
+### Checked Semantic Object Facade
+
+AS-02a introduces `Context::semantic_object_ref` in
+`runtime/semantic_object.rs` as the only checked construction path for the
+incremental `SemanticObjectRef`. It preserves the current physical stores while
+giving semantic code one entrypoint with this contract:
+
+- `ObjectId` is checked by `ObjectHeap`;
+- `FunctionId` and `NativeFunctionId` are checked by their existing owning
+  `Context` accessors;
+- `HostFunctionId` is checked by the host-function owner;
+- inline `ErrorObject` values are admitted as the current object-like error
+  representation;
+- primitive values return `None` rather than producing a semantic object.
+
+The checked reference retains the source `Value` and currently exposes its
+`ObjectId` only when the payload lives in `ObjectHeap`. AS-02b and AS-02c should
+add operations to this boundary instead of exposing physical payload records.
+The first bounded migrations are Proxy target/handler and construct-result
+validation, JavaScript constructor return selection, and typed-array debug
+inspection. The architecture guard now rejects another named semantic-object
+facade or restoration of the removed local object-like classifier.
+
+This facade rejects ids whose slots are not defined in the receiving `Context`.
+It does not yet prove VM identity or generation: a foreign id can still alias a
+live local slot with the same numeric index. AS-05a remains responsible for
+VM-bound identity, generations, and public handle validation.
+
 ### Object-Backed Exotic Data
 
 `runtime/object/mod.rs` stores ordinary properties and many unrelated payloads
@@ -100,7 +128,8 @@ give bound functions constructor behavior.
 
 ### Immediate Identity Invariants
 
-Until AS-02 and AS-05 land, compatibility work must preserve these rules:
+Until AS-02b/AS-02c and AS-05 land, compatibility work must preserve these
+rules:
 
 1. Do not add another object-like `Value` variant.
 2. Do not add an object side table without recording its internal-slot owner,
@@ -388,7 +417,7 @@ decision sequence:
 | Task | Inputs from this inventory | First deletion or consolidation target |
 | --- | --- | --- |
 | AS-01b | exact `Value` allowlist, harness-name sites, runtime/frontend boundary, side-table and duplicate-operation allowlists | add mechanical no-growth guards without pretending baseline debt is fixed |
-| AS-02a | five object-like variants, object payloads, function/error stores, Promise/collection associations | introduce a checked semantic object reference that can address current physical owners |
+| AS-02a | five object-like variants, object payloads, function/error stores, Promise/collection associations | checked semantic object reference implemented in PR #400; local slot existence is validated without claiming VM identity |
 | AS-02b | property/internal-method table | route get/has/set/define/delete/keys/prototype/descriptor through the facade |
 | AS-02c | call/construct tables and repeated object-like lists | one optional call/construct internal-method dispatch, including callable/constructable Proxy and bound functions |
 | AS-03a | equality/conversion table | one equality and primitive-conversion owner; delete three `SameValueZero` copies |

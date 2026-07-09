@@ -305,6 +305,10 @@ impl Context {
             .ok_or_else(|| Error::runtime("host function id is not defined"))
     }
 
+    pub(crate) fn validate_host_function_id(&self, id: HostFunctionId) -> Result<()> {
+        self.host_function(id).map(|_| ())
+    }
+
     fn checked_host_return_value(&mut self, value: Value) -> Result<Value> {
         match value {
             Value::Function(_)
