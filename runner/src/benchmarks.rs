@@ -43,7 +43,7 @@ const DETAIL_LATENCY_EXCEPTION: &str = "latency budget exception tracked";
 const DETAIL_QUALITY_GATE: &str = "measurement quality gate failed";
 const DETAIL_REFERENCE_COMPLETED: &str = "QuickJS reference completed";
 const MAX_BENCHMARK_DETAIL_CHARS: usize = 80;
-const IMAGE_45P_RGBA_BYTES: usize = 80 * 45 * 4;
+const IMAGE_72P_RGBA_BYTES: usize = 128 * 72 * 4;
 const HOST_IMAGE_PREFIX: &str = "typed_array_host_";
 const ENV_BENCH_FILTER: &str = "RSQJS_BENCH_FILTER";
 
@@ -220,7 +220,7 @@ fn eval_benchmark(
     source: &str,
 ) -> anyhow::Result<()> {
     if case.id.starts_with(HOST_IMAGE_PREFIX) {
-        return engine.eval_with_host_image(source, IMAGE_45P_RGBA_BYTES);
+        return engine.eval_with_host_image(source, IMAGE_72P_RGBA_BYTES);
     }
     engine.eval(source)
 }

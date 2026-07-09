@@ -1,5 +1,5 @@
-const width = 80;
-const height = 45;
+const width = 128;
+const height = 72;
 const channels = 4;
 const size = width * height * channels;
 const data = typeof __imageData === "undefined" ? new Uint8Array(size) : __imageData;
