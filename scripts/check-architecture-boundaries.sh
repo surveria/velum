@@ -144,6 +144,8 @@ check_semantic_duplicate_allowlists() {
   local expected_equality
   local invocation
   local expected_invocation
+  local semantic_object
+  local expected_semantic_object
   local indexing
   local expected_indexing
 
@@ -167,6 +169,13 @@ src/runtime/object/array/search.rs:same_value_zero'
   expected_invocation='src/runtime/native/core.rs:is_constructor_value
 src/runtime/promise/mod.rs:is_callable'
   compare_set "callable/constructor predicate allowlist" "${invocation}" "${expected_invocation}"
+
+  semantic_object="$(
+    function_owners \
+      'fn[[:space:]]+[a-z_]*(semantic_object_ref|is_object_like|constructor_return_is_object)[a-z_]*'
+  )"
+  expected_semantic_object='src/runtime/semantic_object.rs:semantic_object_ref'
+  compare_set "semantic object facade allowlist" "${semantic_object}" "${expected_semantic_object}"
 
   indexing="$(
     function_owners \
@@ -416,6 +425,12 @@ mutate_invocation_predicate() {
     >>"${fixture_root}/src/runtime/values.rs"
 }
 
+mutate_semantic_object_facade() {
+  local fixture_root="$1"
+  printf '\nfn is_object_like_architecture_probe() {}\n' \
+    >>"${fixture_root}/src/runtime/values.rs"
+}
+
 mutate_index_helper() {
   local fixture_root="$1"
   printf '\nfn to_length_architecture_probe() {}\n' \
@@ -521,6 +536,8 @@ run_self_tests() {
     'equality operation allowlist changed' mutate_equality_duplicate
   expect_guard_failure "${temp_dir}" invocation-predicate \
     'callable/constructor predicate allowlist changed' mutate_invocation_predicate
+  expect_guard_failure "${temp_dir}" semantic-object-facade \
+    'semantic object facade allowlist changed' mutate_semantic_object_facade
   expect_guard_failure "${temp_dir}" index-helper \
     'length/integer operation allowlist changed' mutate_index_helper
   expect_guard_failure "${temp_dir}" context-store \
