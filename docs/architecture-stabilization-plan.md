@@ -480,7 +480,7 @@ dependencies do not overlap.
 | --- | --- | --- | --- | --- |
 | AS-00 | Complete | Adopt this plan and route project documentation to it. | None | PR #396 merged as `f79056b`; required CI, post-merge performance, publisher, and canonical report publication passed. |
 | AS-01 | Complete | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards merged in PR #399 with required CI and canonical report publication. |
-| AS-02 | In progress | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 read/presence methods are implemented in draft PR #401. |
+| AS-02 | In progress | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 read/presence methods are implemented in ready PR #401. |
 | AS-03 | Backlog | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | Shared coercion, equality, property, invocation, and iterator operations used by bytecode and built-ins. |
 | AS-04 | Backlog | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | Real JavaScript error objects, typed throw path, no message-prefix classification, spans available to diagnostics. |
 | AS-05 | Backlog | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | Non-cloneable VM state, checked cross-VM boundaries, trace/root contract, heap/stack/job/buffer counters and limits. |
@@ -610,7 +610,7 @@ AS-02a evidence:
 
 AS-02b1 evidence:
 
-- PR: #401 (draft)
+- PR: #401 (ready)
 - Scope: shared semantic-object `[[Get]]` and `[[HasProperty]]` pre-dispatch,
   explicit `Reflect.get` receiver propagation, ordinary-object cache tails,
   and generic fallbacks
@@ -622,9 +622,17 @@ AS-02b1 evidence:
   than its display string, and no-trap fallback preserves the same lookup
 - Tests: focused coverage exercises ordinary, JavaScript-function,
   native-function, Error, boxed-string, and HostFunction behavior plus Proxy
-  Symbols, accessors, explicit receivers, descriptors, and iteration
-- Remaining for AS-02b1: fast gate, required CI, merge, and canonical report;
-  AS-02b2 will migrate write/define/delete/keys/descriptor/prototype methods
+  Symbols, accessors, explicit receivers, descriptors, and iteration; the
+  exact-head fast gate passed, and the complete local correctness refresh
+  passed with all 34,006 expected Test262 variants and all 95 QuickJS
+  differential cases green
+- Test262 change: the first required CI run preserved all 34,002 existing
+  passes and detected four intentional new variants: default and strict forms
+  of `proxy-function-async.js` and `proxy-revoked.js`; the official full-corpus
+  refresh accepted exactly those four variants
+- Remaining for AS-02b1: repeat required CI on the refreshed baseline, merge,
+  and verify canonical report publication; AS-02b2 will migrate
+  write/define/delete/keys/descriptor/prototype methods
 
 ### AS-03: Abstract Operations
 
