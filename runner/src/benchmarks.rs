@@ -17,7 +17,7 @@ use tabled::Tabled;
 use super::bench_engines::{BenchEngine, RsqjsEngine, make_reference};
 use super::bench_measure::{self, MeasureConfig, MeasureStats, format_duration, ratio_values};
 use super::cases::{self, BenchmarkCase};
-use super::timing;
+use super::{report_text, timing};
 
 pub const BUDGET_LABEL: &str = "1.00x";
 
@@ -42,6 +42,7 @@ const DETAIL_COMPLETED: &str = "sequential benchmark completed";
 const DETAIL_LATENCY_EXCEPTION: &str = "latency budget exception tracked";
 const DETAIL_QUALITY_GATE: &str = "measurement quality gate failed";
 const DETAIL_REFERENCE_COMPLETED: &str = "QuickJS reference completed";
+const MAX_BENCHMARK_DETAIL_CHARS: usize = 80;
 
 #[derive(Debug)]
 pub struct BenchmarkReport {
@@ -349,7 +350,7 @@ fn measured_with_reference(
             rsqjs_cv: ours.value.cv_percent_text(),
             quickjs_cv: reference.value.cv_percent_text(),
             quality: QUALITY_VALID.to_owned(),
-            detail: detail_text(over),
+            detail: benchmark_detail(&detail_text(over)),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -394,7 +395,7 @@ fn measured_without_reference(
             rsqjs_cv: ours.value.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
-            detail: DETAIL_COMPLETED.to_owned(),
+            detail: benchmark_detail(DETAIL_COMPLETED),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -443,7 +444,10 @@ fn reference_unavailable(
             rsqjs_cv: ours.value.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
-            detail: format!("{DETAIL_COMPLETED}; reference error: {}", note.value),
+            detail: benchmark_detail(&format!(
+                "{DETAIL_COMPLETED}; reference error: {}",
+                note.value
+            )),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -479,7 +483,7 @@ fn invalid_measurement_outcome(
             rsqjs_cv: ours.value.cv_percent_text(),
             quickjs_cv: quickjs.cv,
             quality: QUALITY_INVALID.to_owned(),
-            detail: detail.to_owned(),
+            detail: benchmark_detail(detail),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -533,8 +537,12 @@ fn failed_row(
         rsqjs_cv: NOT_MEASURED.to_owned(),
         quickjs_cv: quickjs.cv,
         quality,
-        detail: detail.to_owned(),
+        detail: benchmark_detail(detail),
     }
+}
+
+fn benchmark_detail(detail: &str) -> String {
+    report_text::table_detail_with_limit(detail, MAX_BENCHMARK_DETAIL_CHARS)
 }
 
 fn quality_failure_detail(ours: MeasureStats, reference: Option<MeasureStats>) -> Option<String> {

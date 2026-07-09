@@ -5,7 +5,7 @@ use tabled::{Table, Tabled};
 use super::{
     CaseRow, CorpusReport, FeatureAreaRow, FeatureAreaStats, FullReport, REPORT_TITLE, RUNNER_NAME,
     STATUS_FAILED, STATUS_PASSED, STATUS_SKIPPED, SkipReasonRow, benchmarks,
-    failure_classification, jetstream, timing,
+    failure_classification, jetstream, report_text, timing,
 };
 
 const NO_FAILED_CASES: &str = "No failed cases.";
@@ -388,7 +388,7 @@ fn case_detail_rows(rows: &[CaseRow]) -> Vec<CaseDetailRow> {
             status: row.status.clone(),
             source: row.source.clone(),
             elapsed: timing::format_duration(row.elapsed),
-            detail: row.detail.clone(),
+            detail: report_text::table_detail(&row.detail),
         })
         .collect()
 }
@@ -403,7 +403,10 @@ pub fn skip_reason_rows(rows: &[CaseRow]) -> Vec<SkipReasonRow> {
     }
     reasons
         .into_iter()
-        .map(|(reason, skipped)| SkipReasonRow { skipped, reason })
+        .map(|(reason, skipped)| SkipReasonRow {
+            skipped,
+            reason: report_text::table_detail(&reason),
+        })
         .collect()
 }
 
@@ -468,7 +471,7 @@ fn top_skip_reason(stats: &FeatureAreaStats) -> String {
         }
     }
     if let Some((reason, skipped)) = best {
-        return format!("{skipped}: {reason}");
+        return format!("{skipped}: {}", report_text::table_detail(reason));
     }
     NO_SKIP_REASON.to_owned()
 }

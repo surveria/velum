@@ -7,7 +7,7 @@ use crate::{
     RUNNER_NAME,
     bench_engines::{BenchEngine, RsqjsEngine, make_reference},
     bench_measure::{self, MeasureConfig, MeasureStats, format_duration, ratio_values},
-    fenced_table, report_metadata, timing,
+    fenced_table, report_metadata, report_text, timing,
 };
 
 #[path = "jetstream_cases.rs"]
@@ -461,7 +461,7 @@ fn measured_with_reference(
             rsqjs_cv: ours.value.cv_percent_text(),
             quickjs_cv: reference.value.cv_percent_text(),
             quality: QUALITY_VALID.to_owned(),
-            detail: detail_text(budget.over_budget),
+            detail: jetstream_detail(&detail_text(budget.over_budget)),
         },
         counts: JetStreamCounts {
             measured: 1,
@@ -503,7 +503,7 @@ fn measured_without_reference(
             rsqjs_cv: ours.value.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
-            detail: DETAIL_COMPLETED.to_owned(),
+            detail: jetstream_detail(DETAIL_COMPLETED),
         },
         counts: JetStreamCounts {
             measured: 1,
@@ -546,7 +546,10 @@ fn reference_unavailable(
             rsqjs_cv: ours.value.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
-            detail: format!("{DETAIL_COMPLETED}; reference error: {}", note.value),
+            detail: jetstream_detail(&format!(
+                "{DETAIL_COMPLETED}; reference error: {}",
+                note.value
+            )),
         },
         counts: JetStreamCounts {
             measured: 1,
@@ -579,7 +582,7 @@ fn invalid_measurement_outcome(
             rsqjs_cv: ours.value.cv_percent_text(),
             quickjs_cv: quickjs.cv,
             quality: QUALITY_INVALID.to_owned(),
-            detail: detail.to_owned(),
+            detail: jetstream_detail(detail),
         },
         counts: JetStreamCounts {
             measured: 1,
@@ -628,7 +631,7 @@ fn failed_row(
         rsqjs_cv: NOT_MEASURED.to_owned(),
         quickjs_cv: quickjs.cv,
         quality,
-        detail: detail.to_owned(),
+        detail: jetstream_detail(detail),
     }
 }
 
@@ -648,13 +651,17 @@ fn skipped_outcome(case: &JetStreamCase, reason: &str) -> JetStreamOutcome {
             rsqjs_cv: NOT_MEASURED.to_owned(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: NOT_MEASURED.to_owned(),
-            detail: reason.to_owned(),
+            detail: jetstream_detail(reason),
         },
         counts: JetStreamCounts {
             skipped: 1,
             ..JetStreamCounts::default()
         },
     }
+}
+
+fn jetstream_detail(detail: &str) -> String {
+    report_text::table_detail(detail)
 }
 
 fn quality_failure_detail(ours: MeasureStats, reference: Option<MeasureStats>) -> Option<String> {

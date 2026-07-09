@@ -24,6 +24,7 @@ mod report_formatting_tests;
 mod report_metadata;
 mod report_rendering;
 mod report_rollup;
+mod report_text;
 mod runner_cli;
 mod test262_external;
 mod test262_full;
