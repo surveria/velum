@@ -2,6 +2,7 @@ use std::env;
 
 use crate::build_info::runner_build_info;
 use rs_quickjs::engine_build_info;
+use serde::{Deserialize, Serialize};
 
 const TIMESTAMP_ENV: &str = "RSQJS_REPORT_TIMESTAMP";
 const COMMIT_ENV: &str = "RSQJS_REPORT_COMMIT_SHA";
@@ -14,22 +15,22 @@ const WORKFLOW_ENV: &str = "RSQJS_REPORT_WORKFLOW";
 const PR_NUMBER_ENV: &str = "RSQJS_REPORT_PR_NUMBER";
 const TASK_ENV: &str = "RSQJS_REPORT_TASK";
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RunMetadata {
-    timestamp: String,
-    commit: String,
-    tree: String,
-    event: String,
-    run_id: String,
-    run_attempt: String,
-    repository: String,
-    workflow: String,
-    pull_request: String,
-    task: String,
-    engine_version: String,
-    engine_commit: String,
-    runner_version: String,
-    runner_commit: String,
+    pub(crate) timestamp: String,
+    pub(crate) commit: String,
+    pub(crate) tree: String,
+    pub(crate) event: String,
+    pub(crate) run_id: String,
+    pub(crate) run_attempt: String,
+    pub(crate) repository: String,
+    pub(crate) workflow: String,
+    pub(crate) pull_request: String,
+    pub(crate) task: String,
+    pub(crate) engine_version: String,
+    pub(crate) engine_commit: String,
+    pub(crate) runner_version: String,
+    pub(crate) runner_commit: String,
 }
 
 impl RunMetadata {

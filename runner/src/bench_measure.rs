@@ -102,6 +102,30 @@ impl MeasureConfig {
         )
     }
 
+    pub const fn warmup(self) -> Duration {
+        self.warmup
+    }
+
+    pub const fn min_total(self) -> Duration {
+        self.min_total
+    }
+
+    pub const fn samples(self) -> usize {
+        self.samples
+    }
+
+    pub const fn min_op_time(self) -> Duration {
+        self.min_op_time
+    }
+
+    pub const fn max_cv_permille(self) -> u32 {
+        self.max_cv_permille
+    }
+
+    pub const fn attempts(self) -> usize {
+        self.attempts
+    }
+
     #[must_use]
     pub const fn with_quality(mut self, min_op_time: Duration, max_cv_permille: u32) -> Self {
         self.min_op_time = min_op_time;

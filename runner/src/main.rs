@@ -30,6 +30,10 @@ mod report_formatting_tests;
 mod report_metadata;
 mod report_rendering;
 mod report_rollup;
+mod report_schema;
+mod report_schema_support;
+#[cfg(test)]
+mod report_schema_tests;
 mod report_text;
 mod runner_cli;
 mod test262_baseline;
@@ -44,6 +48,7 @@ use report_rendering::{coverage_percent, feature_area_rows_with_limit};
 use report_rendering::{
     feature_area_rows, fenced_table, percent, render_report, render_timing_tsv, skip_reason_rows,
 };
+use report_schema::{EnvironmentInfo, ReportDocument, RunConfiguration};
 use runner_cli::{Config, print_rollup_outputs};
 
 const STATUS_PASSED: &str = "✅ passed";
@@ -91,17 +96,20 @@ fn run() -> anyhow::Result<()> {
     let quickjs = env::var_os(QUICKJS_ENV).map(PathBuf::from);
     let test262 = env::var_os(TEST262_ENV).map(PathBuf::from);
     let include_jetstream = report_kind == ReportKind::Full && jetstream_enabled();
+    let environment = EnvironmentInfo::capture();
+    let run_configuration = RunConfiguration::capture(quickjs.is_some(), test262.is_some());
     let report = build_report(
         quickjs.as_deref(),
         test262.as_deref(),
         report_kind,
         include_jetstream,
     )?;
+    if include_jetstream {
+        write_jetstream_report_from_env(&report)?;
+    }
+    let report = ReportDocument::from_run(report, environment, run_configuration)?;
     write_report(&report_path, &report)?;
     if report_kind == ReportKind::Full {
-        if include_jetstream {
-            write_jetstream_report_from_env(&report)?;
-        }
         let outputs = report_rollup::generate_from_report_path(&report_path)?;
         print_rollup_outputs(&outputs);
     }
@@ -140,18 +148,6 @@ struct FullReport {
     elapsed: Duration,
 }
 
-impl FullReport {
-    fn failed_count(&self) -> usize {
-        let corpus_failures = self
-            .corpora
-            .iter()
-            .filter(|corpus| corpus.required)
-            .map(CorpusReport::failed)
-            .fold(0usize, usize::saturating_add);
-        corpus_failures.saturating_add(self.benchmarks.failed)
-    }
-}
-
 #[derive(Debug)]
 struct CorpusReport {
     name: &'static str,
@@ -182,10 +178,6 @@ impl CorpusReport {
         self.stats.total
     }
 
-    const fn executed(&self) -> usize {
-        self.stats.executed()
-    }
-
     const fn passed(&self) -> usize {
         self.stats.passed
     }
@@ -196,14 +188,6 @@ impl CorpusReport {
 
     const fn skipped(&self) -> usize {
         self.stats.skipped
-    }
-
-    fn failed_rows(&self) -> Vec<CaseRow> {
-        self.rows
-            .iter()
-            .filter(|row| row.status == STATUS_FAILED)
-            .cloned()
-            .collect()
     }
 }
 
@@ -236,10 +220,6 @@ impl CorpusStats {
             failed,
             skipped,
         }
-    }
-
-    const fn executed(self) -> usize {
-        self.passed.saturating_add(self.failed)
     }
 }
 
@@ -549,7 +529,7 @@ fn ensure_output(case_id: &str, actual: &[String], expected: &[&str]) -> anyhow:
     Ok(())
 }
 
-fn write_report(path: &Path, report: &FullReport) -> anyhow::Result<()> {
+fn write_report(path: &Path, report: &ReportDocument) -> anyhow::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create report directory '{}'", parent.display()))?;
@@ -566,6 +546,15 @@ fn write_report(path: &Path, report: &FullReport) -> anyhow::Result<()> {
         )
     })?;
     println!("local/CI timing artifact: {}", timing_path.display());
+    let yaml_paths = report_schema::write_yaml_artifacts(path, report)?;
+    println!(
+        "structured YAML report summary: {}",
+        yaml_paths.summary.display()
+    );
+    println!(
+        "structured YAML report details: {}",
+        yaml_paths.details.display()
+    );
     Ok(())
 }
 

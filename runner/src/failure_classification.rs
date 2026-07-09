@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use tabled::{Table, Tabled};
 
-use super::{CaseRow, percent};
+use super::{percent, report_schema::CaseRecord};
 
 const CATEGORY_ASYNC: &str = "async protocol";
 const CATEGORY_HARNESS: &str = "harness include";
@@ -88,7 +88,7 @@ struct HintRow {
 }
 
 #[must_use]
-pub fn sections(failed_rows: &[CaseRow]) -> Vec<String> {
+pub fn sections(failed_rows: &[CaseRecord]) -> Vec<String> {
     if failed_rows.is_empty() {
         return Vec::new();
     }
@@ -126,7 +126,7 @@ fn push_table_section<T: Tabled>(sections: &mut Vec<String>, title: &str, rows: 
     sections.push(String::new());
 }
 
-fn category_rows(failed_rows: &[CaseRow]) -> Vec<CategoryRow> {
+fn category_rows(failed_rows: &[CaseRecord]) -> Vec<CategoryRow> {
     let total = failed_rows.len();
     count_by(failed_rows, |row| {
         Some(failure_category(&row.detail).to_owned())
@@ -140,7 +140,7 @@ fn category_rows(failed_rows: &[CaseRow]) -> Vec<CategoryRow> {
     .collect()
 }
 
-fn directory_rows(failed_rows: &[CaseRow]) -> Vec<DirectoryRow> {
+fn directory_rows(failed_rows: &[CaseRecord]) -> Vec<DirectoryRow> {
     let total = failed_rows.len();
     count_by(failed_rows, |row| Some(test262_directory(&row.source)))
         .into_iter()
@@ -153,9 +153,9 @@ fn directory_rows(failed_rows: &[CaseRow]) -> Vec<DirectoryRow> {
         .collect()
 }
 
-fn variant_rows(failed_rows: &[CaseRow]) -> Vec<VariantRow> {
+fn variant_rows(failed_rows: &[CaseRecord]) -> Vec<VariantRow> {
     let total = failed_rows.len();
-    count_by(failed_rows, |row| Some(case_variant(&row.case).to_owned()))
+    count_by(failed_rows, |row| Some(case_variant(&row.id).to_owned()))
         .into_iter()
         .map(|item| VariantRow {
             variant: item.label,
@@ -165,7 +165,7 @@ fn variant_rows(failed_rows: &[CaseRow]) -> Vec<VariantRow> {
         .collect()
 }
 
-fn missing_binding_rows(failed_rows: &[CaseRow]) -> Vec<BindingRow> {
+fn missing_binding_rows(failed_rows: &[CaseRecord]) -> Vec<BindingRow> {
     let total = failed_rows.len();
     count_by(failed_rows, |row| missing_binding(&row.detail))
         .into_iter()
@@ -178,7 +178,7 @@ fn missing_binding_rows(failed_rows: &[CaseRow]) -> Vec<BindingRow> {
         .collect()
 }
 
-fn failure_hint_rows(failed_rows: &[CaseRow]) -> Vec<HintRow> {
+fn failure_hint_rows(failed_rows: &[CaseRecord]) -> Vec<HintRow> {
     let total = failed_rows.len();
     count_by(failed_rows, |row| failure_hint(&row.detail))
         .into_iter()
@@ -192,8 +192,8 @@ fn failure_hint_rows(failed_rows: &[CaseRow]) -> Vec<HintRow> {
 }
 
 fn count_by(
-    rows: &[CaseRow],
-    mut label_for: impl FnMut(&CaseRow) -> Option<String>,
+    rows: &[CaseRecord],
+    mut label_for: impl FnMut(&CaseRecord) -> Option<String>,
 ) -> Vec<Counted> {
     let mut counts = BTreeMap::<String, usize>::new();
     for row in rows {
