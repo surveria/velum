@@ -13,11 +13,12 @@ use crate::{
         control::{Completion, runtime_exception_value},
         numeric::number_to_i32,
     },
+    syntax::UpdateOp,
     value::Value,
 };
 
 use super::{
-    array_add_loop::BytecodeForArrayAddFastPath,
+    array_add_loop::BytecodeForArrayAddFastPath, array_fill_loop::BytecodeForArrayFillFastPath,
     block_lexical_loop::BytecodeBlockLexicalLoopFastPath,
     switch_for_loop::BytecodeForSwitchFastPath,
 };
@@ -44,6 +45,7 @@ enum BytecodeForLoopLimit<'a> {
 #[derive(Debug)]
 pub(super) enum BytecodeForLoopBodyFastPath<'a> {
     ArrayAdd(BytecodeForArrayAddFastPath<'a>),
+    ArrayFill(BytecodeForArrayFillFastPath<'a>),
     MaskedArrayAdd(BytecodeForBodyFastPath<'a>),
     SwitchMaskedArrayAdd(BytecodeForSwitchFastPath<'a>),
     BlockLexical(BytecodeBlockLexicalLoopFastPath<'a>),
@@ -83,13 +85,8 @@ impl Context {
         else {
             return Ok(None);
         };
-        let [
-            BytecodeInstruction::LoadBinding(update_read),
-            BytecodeInstruction::PushLiteral(Value::Number(update_step)),
-            BytecodeInstruction::NumberBinary(BytecodeNumericBinaryOp::Add),
-            BytecodeInstruction::StoreBinding(update_write),
-            BytecodeInstruction::StoreLast,
-        ] = update.instructions()
+        let Some((update_read, update_write, update_step)) =
+            Self::bytecode_for_loop_update_step(update)
         else {
             return Ok(None);
         };
@@ -113,9 +110,40 @@ impl Context {
             index_cell,
             compare: *compare,
             limit,
-            update_step: *update_step,
+            update_step,
             body,
         }))
+    }
+
+    fn bytecode_for_loop_update_step(
+        update: &BytecodeBlock,
+    ) -> Option<(&BytecodeBinding, &BytecodeBinding, f64)> {
+        match update.instructions() {
+            [
+                BytecodeInstruction::LoadBinding(update_read),
+                BytecodeInstruction::PushLiteral(Value::Number(update_step)),
+                BytecodeInstruction::NumberBinary(BytecodeNumericBinaryOp::Add),
+                BytecodeInstruction::StoreBinding(update_write),
+                BytecodeInstruction::StoreLast,
+            ] => Some((update_read, update_write, *update_step)),
+            [
+                BytecodeInstruction::UpdateBinding {
+                    name,
+                    op: UpdateOp::Increment,
+                    ..
+                },
+                BytecodeInstruction::StoreLast,
+            ] => Some((name, name, 1.0)),
+            [
+                BytecodeInstruction::UpdateBinding {
+                    name,
+                    op: UpdateOp::Decrement,
+                    ..
+                },
+                BytecodeInstruction::StoreLast,
+            ] => Some((name, name, -1.0)),
+            _ => None,
+        }
     }
 
     fn compile_bytecode_for_loop_condition_limit<'a>(
@@ -173,6 +201,9 @@ impl Context {
             BytecodeForLoopBodyFastPath::ArrayAdd(body) => self
                 .fast_loop_numeric_array_values_for_simple_add(body)
                 .map(|values| values.is_some()),
+            BytecodeForLoopBodyFastPath::ArrayFill(body) => {
+                Self::bytecode_for_array_fill_fast_path_ready(body)
+            }
             BytecodeForLoopBodyFastPath::MaskedArrayAdd(_) => Ok(true),
             BytecodeForLoopBodyFastPath::SwitchMaskedArrayAdd(body) => {
                 self.bytecode_for_switch_fast_path_ready(body)
@@ -194,6 +225,11 @@ impl Context {
         {
             return Ok(None);
         }
+        if let BytecodeForLoopBodyFastPath::ArrayFill(body) = &fast_path.body
+            && self.eval_bytecode_for_array_fill_loop_fast_path(state, next, fast_path, body)?
+        {
+            return Ok(None);
+        }
         if let BytecodeForLoopBodyFastPath::SwitchMaskedArrayAdd(body) = &fast_path.body
             && self.eval_bytecode_for_switch_loop_fast_path(state, next, fast_path, body)?
         {
@@ -204,13 +240,14 @@ impl Context {
             BytecodeForLoopBodyFastPath::ArrayAdd(body) => {
                 self.fast_loop_numeric_array_values_for_simple_add(body)?
             }
+            BytecodeForLoopBodyFastPath::ArrayFill(_)
+            | BytecodeForLoopBodyFastPath::BlockLexical(_) => None,
             BytecodeForLoopBodyFastPath::MaskedArrayAdd(body) => {
                 self.fast_loop_numeric_array_values(body)?
             }
             BytecodeForLoopBodyFastPath::SwitchMaskedArrayAdd(body) => {
                 self.switch_loop_numeric_array_values(body)?
             }
-            BytecodeForLoopBodyFastPath::BlockLexical(_) => None,
         };
         loop {
             self.step()?;
@@ -287,6 +324,12 @@ impl Context {
                 return Ok(None);
             }
             return Ok(Some(BytecodeForLoopBodyFastPath::ArrayAdd(body)));
+        }
+        if let Some(body) = self.compile_bytecode_for_array_fill_fast_path(body)? {
+            if !same_bytecode_binding(index, body.index) {
+                return Ok(None);
+            }
+            return Ok(Some(BytecodeForLoopBodyFastPath::ArrayFill(body)));
         }
         if let Some(body) = self.compile_bytecode_for_body_fast_path(body)? {
             if !same_bytecode_binding(index, body.test) || !same_bytecode_binding(index, body.index)
@@ -414,6 +457,7 @@ impl Context {
             BytecodeForLoopBodyFastPath::ArrayAdd(body) => self
                 .eval_bytecode_for_array_add_fast_path(body, array_values)
                 .map(Completion::Normal),
+            BytecodeForLoopBodyFastPath::ArrayFill(_) => Ok(Completion::Normal(Value::Undefined)),
             BytecodeForLoopBodyFastPath::MaskedArrayAdd(body) => {
                 self.eval_bytecode_for_body_fast_path_catching(body, array_values)
             }

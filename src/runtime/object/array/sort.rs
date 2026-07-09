@@ -36,6 +36,36 @@ impl ObjectHeap {
             .sort_packed_default_numbers_for_len(length, descending))
     }
 
+    pub(crate) fn append_packed_default_numbers_if_array(
+        &mut self,
+        id: ObjectId,
+        expected_length: usize,
+        values: &[f64],
+        max_properties: usize,
+    ) -> Result<bool> {
+        let Some(length) = self.array_len_if_array(id)? else {
+            return Ok(false);
+        };
+        if length != expected_length || self.object(id)?.packed_array_properties(length).is_none() {
+            return Ok(false);
+        }
+        let Some(new_length) = length.checked_add(values.len()) else {
+            return Ok(false);
+        };
+        let Ok(new_length) = ArrayLength::from_usize(new_length) else {
+            return Ok(false);
+        };
+        let before = self.object(id)?.structure_snapshot();
+        self.object_mut(id)?.append_packed_default_value_iter(
+            values.iter().copied().map(Value::Number),
+            values.len(),
+            max_properties,
+        )?;
+        self.object_mut(id)?.array_length = Some(new_length);
+        self.bump_if_structure_changed(id, before)?;
+        Ok(true)
+    }
+
     pub(crate) fn splice_packed_default_array_if_array(
         &mut self,
         id: ObjectId,
