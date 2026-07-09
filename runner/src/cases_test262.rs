@@ -127,6 +127,8 @@ const PATH_TEST262_EXPONENTIATION_UNARY_LEFT_ERROR: &str =
     "tests/corpora/test262/active/language/expressions/exponentiation_unary_left_error.js";
 const PATH_TEST262_IN_OPERATOR: &str =
     "tests/corpora/test262/active/language/expressions/in_operator.js";
+const PATH_TEST262_INSTANCEOF_HAS_INSTANCE: &str =
+    "tests/corpora/test262/active/language/expressions/instanceof_has_instance.js";
 const PATH_TEST262_IN_OPERATOR_RHS_ERROR: &str =
     "tests/corpora/test262/active/language/expressions/in_operator_rhs_error.js";
 const PATH_TEST262_LET_CONST: &str = "tests/corpora/test262/active/language/bindings/let_const.js";
@@ -481,6 +483,11 @@ fn test262_operator_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/in_operator",
             path: PATH_TEST262_IN_OPERATOR,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/expressions/instanceof_has_instance",
+            path: PATH_TEST262_INSTANCEOF_HAS_INSTANCE,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
