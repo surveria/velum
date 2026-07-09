@@ -1,4 +1,4 @@
-use std::{env, fs, time::Duration};
+use std::fs;
 
 use anyhow::{Context as _, bail};
 
@@ -18,6 +18,8 @@ mod jetstream_model;
 mod jetstream_report;
 #[path = "jetstream_selection.rs"]
 mod jetstream_selection;
+#[path = "jetstream_suite.rs"]
+mod jetstream_suite;
 use jetstream_model::{
     BUDGET_DENOMINATOR, BUDGET_NUMERATOR, BudgetCheck, DETAIL_COMPLETED, DETAIL_LATENCY_EXCEPTION,
     DETAIL_QUALITY_GATE, DETAIL_REFERENCE_COMPLETED, JetStreamCase, JetStreamCounts, JetStreamMode,
@@ -32,10 +34,6 @@ use jetstream_model::{
 pub use jetstream_model::{BUDGET_LABEL, JetStreamReport, JetStreamRow};
 pub use jetstream_report::{render_section, write_report};
 
-const ENV_SUITE_MAX_SECONDS: &str = "RSQJS_JETSTREAM_SUITE_MAX_SECONDS";
-const DEFAULT_READ_SUITE_MAX_SECONDS: u64 = 120;
-const DEFAULT_REFRESH_SUITE_MAX_SECONDS: u64 = 900;
-
 pub fn run() -> anyhow::Result<JetStreamReport> {
     let timer = timing::RunTimer::start();
     let config = MeasureConfig::jetstream_from_env();
@@ -44,7 +42,7 @@ pub fn run() -> anyhow::Result<JetStreamReport> {
     let host_profile = detect_host_profile();
     let mut baseline = JetStreamQuickjsBaseline::from_env()?;
     let refresh = baseline.requires_live_reference();
-    let suite_budget = suite_budget(refresh)?;
+    let suite_budget = jetstream_suite::budget(refresh)?;
     let reference = if refresh {
         let reference = make_reference();
         if reference.is_none() {
@@ -88,22 +86,6 @@ pub fn run() -> anyhow::Result<JetStreamReport> {
     baseline.finish()?;
     report.elapsed = timer.elapsed();
     Ok(report)
-}
-
-fn suite_budget(refresh: bool) -> anyhow::Result<Duration> {
-    let default = if refresh {
-        DEFAULT_REFRESH_SUITE_MAX_SECONDS
-    } else {
-        DEFAULT_READ_SUITE_MAX_SECONDS
-    };
-    let seconds = match env::var(ENV_SUITE_MAX_SECONDS) {
-        Ok(value) => value.trim().parse::<u64>().with_context(|| {
-            format!("{ENV_SUITE_MAX_SECONDS} must be a non-negative integer number of seconds")
-        })?,
-        Err(env::VarError::NotPresent) => default,
-        Err(error) => return Err(error).context(format!("failed to read {ENV_SUITE_MAX_SECONDS}")),
-    };
-    Ok(Duration::from_secs(seconds))
 }
 
 fn run_case(
