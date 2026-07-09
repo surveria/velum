@@ -16,7 +16,10 @@ use crate::{
     value::Value,
 };
 
-use super::block_lexical_loop::BytecodeBlockLexicalLoopFastPath;
+use super::{
+    block_lexical_loop::BytecodeBlockLexicalLoopFastPath,
+    switch_for_loop::BytecodeForSwitchFastPath,
+};
 
 #[derive(Debug)]
 pub(super) struct BytecodeForLoopFastPath<'a> {
@@ -31,6 +34,7 @@ pub(super) struct BytecodeForLoopFastPath<'a> {
 #[derive(Debug)]
 pub(super) enum BytecodeForLoopBodyFastPath<'a> {
     MaskedArrayAdd(BytecodeForBodyFastPath<'a>),
+    SwitchMaskedArrayAdd(BytecodeForSwitchFastPath<'a>),
     BlockLexical(BytecodeBlockLexicalLoopFastPath<'a>),
 }
 
@@ -108,6 +112,7 @@ impl Context {
     }
 
     pub(super) fn bytecode_for_loop_fast_path_ready(
+        &self,
         fast_path: &BytecodeForLoopFastPath<'_>,
     ) -> Result<bool> {
         if !matches!(
@@ -118,6 +123,9 @@ impl Context {
         }
         match &fast_path.body {
             BytecodeForLoopBodyFastPath::MaskedArrayAdd(_) => Ok(true),
+            BytecodeForLoopBodyFastPath::SwitchMaskedArrayAdd(body) => {
+                self.bytecode_for_switch_fast_path_ready(body)
+            }
             BytecodeForLoopBodyFastPath::BlockLexical(body) => {
                 Self::block_lexical_loop_fast_path_ready(body)
             }
@@ -130,10 +138,18 @@ impl Context {
         next: BytecodeAddress,
         fast_path: &BytecodeForLoopFastPath<'_>,
     ) -> Result<Option<Completion>> {
+        if let BytecodeForLoopBodyFastPath::SwitchMaskedArrayAdd(body) = &fast_path.body
+            && self.eval_bytecode_for_switch_loop_fast_path(state, next, fast_path, body)?
+        {
+            return Ok(None);
+        }
         let mut last = Value::Undefined;
         let array_values = match &fast_path.body {
             BytecodeForLoopBodyFastPath::MaskedArrayAdd(body) => {
                 self.fast_loop_numeric_array_values(body)?
+            }
+            BytecodeForLoopBodyFastPath::SwitchMaskedArrayAdd(body) => {
+                self.switch_loop_numeric_array_values(body)?
             }
             BytecodeForLoopBodyFastPath::BlockLexical(_) => None,
         };
@@ -159,6 +175,49 @@ impl Context {
         Ok(None)
     }
 
+    fn eval_bytecode_for_switch_loop_fast_path(
+        &mut self,
+        state: &mut crate::runtime::bytecode::state::BytecodeState,
+        next: BytecodeAddress,
+        fast_path: &BytecodeForLoopFastPath<'_>,
+        body: &BytecodeForSwitchFastPath<'_>,
+    ) -> Result<bool> {
+        let Some(array_values) = self.switch_loop_numeric_array_values(body)? else {
+            return Ok(false);
+        };
+        let Value::Number(mut index) = fast_path.index_cell.value(fast_path.index.name())? else {
+            return Ok(false);
+        };
+        let Value::Number(mut total) = body.target_cell.value(body.target.name())? else {
+            return Ok(false);
+        };
+        let mut last = Value::Undefined;
+        loop {
+            self.record_bytecode_linear_direct_run()?;
+            if !fast_loop_compare(fast_path.compare, index, fast_path.limit) {
+                break;
+            }
+            self.step()?;
+            if let Some(element) = Self::bytecode_for_switch_element(body, &array_values, index)? {
+                total += element;
+                last = self.checked_value(Value::Number(total))?;
+            } else {
+                last = Value::Undefined;
+            }
+            self.record_bytecode_linear_direct_run()?;
+            index += fast_path.update_step;
+        }
+        let index_value = self.checked_value(Value::Number(index))?;
+        fast_path
+            .index_cell
+            .assign(fast_path.index.name(), index_value)?;
+        let total_value = self.checked_value(Value::Number(total))?;
+        body.target_cell.assign(body.target.name(), total_value)?;
+        state.last = last;
+        state.pc = next;
+        Ok(true)
+    }
+
     fn compile_bytecode_for_loop_body_fast_path<'a>(
         &mut self,
         index: &'a BytecodeBinding,
@@ -173,6 +232,17 @@ impl Context {
                 return Ok(None);
             }
             return Ok(Some(BytecodeForLoopBodyFastPath::MaskedArrayAdd(body)));
+        }
+        if let Some(body) = self.compile_bytecode_for_switch_fast_path(index, body)? {
+            if !same_bytecode_binding(index, body.discriminant) {
+                return Ok(None);
+            }
+            if self.builtin_value(body.target.name().name())?.is_some() {
+                return Ok(None);
+            }
+            return Ok(Some(BytecodeForLoopBodyFastPath::SwitchMaskedArrayAdd(
+                body,
+            )));
         }
         self.compile_block_lexical_loop_fast_path(index, body)
             .map(|body| body.map(BytecodeForLoopBodyFastPath::BlockLexical))
@@ -279,6 +349,9 @@ impl Context {
             BytecodeForLoopBodyFastPath::MaskedArrayAdd(body) => {
                 self.eval_bytecode_for_body_fast_path_catching(body, array_values)
             }
+            BytecodeForLoopBodyFastPath::SwitchMaskedArrayAdd(body) => self
+                .eval_bytecode_for_switch_fast_path(body, array_values)
+                .map(Completion::Normal),
             BytecodeForLoopBodyFastPath::BlockLexical(body) => {
                 let Value::Number(index) = fast_path.index_cell.value(fast_path.index.name())?
                 else {
@@ -399,12 +472,7 @@ impl Context {
         let Value::Number(index) = fast_path.index_cell.value(fast_path.index.name())? else {
             return Ok(false);
         };
-        Ok(match fast_path.compare {
-            BytecodeNumericCompareOp::Less => index < fast_path.limit,
-            BytecodeNumericCompareOp::LessEqual => index <= fast_path.limit,
-            BytecodeNumericCompareOp::Greater => index > fast_path.limit,
-            BytecodeNumericCompareOp::GreaterEqual => index >= fast_path.limit,
-        })
+        Ok(fast_loop_compare(fast_path.compare, index, fast_path.limit))
     }
 
     fn fast_loop_update(&self, fast_path: &BytecodeForLoopFastPath<'_>) -> Result<()> {
@@ -556,6 +624,15 @@ impl Context {
     }
 }
 
-fn same_bytecode_binding(left: &BytecodeBinding, right: &BytecodeBinding) -> bool {
+pub(super) fn same_bytecode_binding(left: &BytecodeBinding, right: &BytecodeBinding) -> bool {
     left.operand() == right.operand() && left.name().as_str() == right.name().as_str()
+}
+
+fn fast_loop_compare(op: BytecodeNumericCompareOp, left: f64, right: f64) -> bool {
+    match op {
+        BytecodeNumericCompareOp::Less => left < right,
+        BytecodeNumericCompareOp::LessEqual => left <= right,
+        BytecodeNumericCompareOp::Greater => left > right,
+        BytecodeNumericCompareOp::GreaterEqual => left >= right,
+    }
 }
