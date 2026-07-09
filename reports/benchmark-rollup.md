@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260709T030535Z.md`
-- Task: PR #367: Function.prototype.apply and Function.prototype[Symbol.hasInstance]
-- Performance: 5.13x (68/72 >1.00x)
-- Memory: - (0/72 >1.00x)
-- JetStream: 25.18x (4/4 >1.00x)
-- Full Test262: 32126 passed / 70452 failed (31.32%)
+- `rsqjs-test-report-20260709T034949Z.md`
+- Task: PR #369: instanceof operator consults Symbol.hasInstance
+- Performance: 5.34x (69/73 >1.00x)
+- Memory: - (0/73 >1.00x)
+- JetStream: 23.65x (4/4 >1.00x)
+- Full Test262: 32149 passed / 70429 failed (31.34%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -355,3 +355,4 @@ Latest report:
 | `20260709T015135Z` `2d427ca` workflow_dispatch | 5.45x (67/70 >1.00x) | - (0/70 >1.00x) | 24.84x (4/4 >1.00x) | 31439 passed / 71139 failed (30.65%) |
 | `20260709T024253Z` `0cb8ffa` PR #365: runtime: optimize switch statement bytecode path | 5.20x (67/71 >1.00x) | - (0/71 >1.00x) | 23.17x (4/4 >1.00x) | 32006 passed / 70572 failed (31.20%) |
 | `20260709T030535Z` `e3973ee` PR #367: Function.prototype.apply and Function.prototype[Symbol.hasInstance] | 5.13x (68/72 >1.00x) | - (0/72 >1.00x) | 25.18x (4/4 >1.00x) | 32126 passed / 70452 failed (31.32%) |
+| `20260709T034949Z` `db172db` PR #369: instanceof operator consults Symbol.hasInstance | 5.34x (69/73 >1.00x) | - (0/73 >1.00x) | 23.65x (4/4 >1.00x) | 32149 passed / 70429 failed (31.34%) |
