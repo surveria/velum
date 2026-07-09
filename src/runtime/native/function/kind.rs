@@ -103,48 +103,28 @@ pub(in crate::runtime::native) const NUMBER_IS_NAN_NAME: &str = "isNaN";
 const NUMBER_IS_SAFE_INTEGER_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const NUMBER_IS_SAFE_INTEGER_NAME: &str = "isSafeInteger";
 pub(in crate::runtime::native) const NUMBER_NAME: &str = "Number";
-const OBJECT_ASSIGN_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const OBJECT_ASSIGN_NAME: &str = "assign";
-const OBJECT_CREATE_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const OBJECT_CREATE_NAME: &str = "create";
-const OBJECT_FUNCTION_LENGTH: f64 = 1.0;
-const OBJECT_DEFINE_PROPERTIES_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const OBJECT_DEFINE_PROPERTIES_NAME: &str = "defineProperties";
-const OBJECT_DEFINE_PROPERTY_FUNCTION_LENGTH: f64 = 3.0;
 pub(in crate::runtime::native) const OBJECT_DEFINE_PROPERTY_NAME: &str = "defineProperty";
-const OBJECT_ENTRIES_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_ENTRIES_NAME: &str = "entries";
-const OBJECT_FREEZE_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_FREEZE_NAME: &str = "freeze";
-const OBJECT_GET_PROTOTYPE_OF_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_GET_PROTOTYPE_OF_NAME: &str = "getPrototypeOf";
-const OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME: &str =
     "getOwnPropertyDescriptor";
-const OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME: &str =
     "getOwnPropertyDescriptors";
-const OBJECT_GET_OWN_PROPERTY_NAMES_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_GET_OWN_PROPERTY_NAMES_NAME: &str =
     "getOwnPropertyNames";
-const OBJECT_HAS_OWN_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const OBJECT_HAS_OWN_NAME: &str = "hasOwn";
-const OBJECT_IS_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const OBJECT_IS_NAME: &str = "is";
-const OBJECT_IS_EXTENSIBLE_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_IS_EXTENSIBLE_NAME: &str = "isExtensible";
-const OBJECT_IS_FROZEN_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_IS_FROZEN_NAME: &str = "isFrozen";
-const OBJECT_IS_SEALED_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_IS_SEALED_NAME: &str = "isSealed";
-const OBJECT_KEYS_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_KEYS_NAME: &str = "keys";
 pub(in crate::runtime::native) const OBJECT_NAME: &str = "Object";
-const OBJECT_PREVENT_EXTENSIONS_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_PREVENT_EXTENSIONS_NAME: &str = "preventExtensions";
-const OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime) const OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME: &str = "hasOwnProperty";
-const OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime) const OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME: &str =
     "propertyIsEnumerable";
 pub(in crate::runtime) const OBJECT_PROTOTYPE_TO_STRING_NAME: &str = "toString";
@@ -152,14 +132,8 @@ pub(in crate::runtime) const OBJECT_PROTOTYPE_VALUE_OF_NAME: &str = "valueOf";
 pub(in crate::runtime) const OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME: &str = "toLocaleString";
 pub(in crate::runtime) const OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME: &str = "isPrototypeOf";
 pub(in crate::runtime::native) const OBJECT_FROM_ENTRIES_NAME: &str = "fromEntries";
-const OBJECT_FROM_ENTRIES_FUNCTION_LENGTH: f64 = 1.0;
-const OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_FUNCTION_LENGTH: f64 = 1.0;
-const OBJECT_PROTOTYPE_TO_STRING_FUNCTION_LENGTH: f64 = 0.0;
-const OBJECT_SET_PROTOTYPE_OF_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const OBJECT_SET_PROTOTYPE_OF_NAME: &str = "setPrototypeOf";
-const OBJECT_SEAL_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_SEAL_NAME: &str = "seal";
-const OBJECT_VALUES_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const OBJECT_VALUES_NAME: &str = "values";
 const PROMISE_CATCH_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const PROMISE_CATCH_NAME: &str = "catch";
@@ -383,6 +357,19 @@ pub(in crate::runtime) enum NativeFunctionKind {
         promise: crate::runtime::promise::PromiseId,
         kind: crate::runtime::promise::PromiseResolverKind,
     },
+    ReflectApply,
+    ReflectConstruct,
+    ReflectDefineProperty,
+    ReflectDeleteProperty,
+    ReflectGet,
+    ReflectGetOwnPropertyDescriptor,
+    ReflectGetPrototypeOf,
+    ReflectHas,
+    ReflectIsExtensible,
+    ReflectOwnKeys,
+    ReflectPreventExtensions,
+    ReflectSet,
+    ReflectSetPrototypeOf,
     RegExp,
     RegExpPrototypeExec,
     RegExpPrototypeTest,
@@ -481,6 +468,9 @@ impl NativeFunctionKind {
         if let Some(length) = self.string_prototype_length() {
             return length;
         }
+        if let Some(length) = self.reflect_length() {
+            return length;
+        }
         FUNCTION_FUNCTION_LENGTH
     }
 
@@ -541,52 +531,6 @@ impl NativeFunctionKind {
             | Self::MathMax
             | Self::MathMin
             | Self::MathPow => Some(MATH_FUNCTION_LENGTH_TWO),
-            _ => None,
-        }
-    }
-
-    const fn object_length(self) -> Option<f64> {
-        match self {
-            Self::Object => Some(OBJECT_FUNCTION_LENGTH),
-            Self::ObjectAssign => Some(OBJECT_ASSIGN_FUNCTION_LENGTH),
-            Self::ObjectCreate => Some(OBJECT_CREATE_FUNCTION_LENGTH),
-            Self::ObjectDefineProperties => Some(OBJECT_DEFINE_PROPERTIES_FUNCTION_LENGTH),
-            Self::ObjectDefineProperty => Some(OBJECT_DEFINE_PROPERTY_FUNCTION_LENGTH),
-            Self::ObjectEntries => Some(OBJECT_ENTRIES_FUNCTION_LENGTH),
-            Self::ObjectFreeze => Some(OBJECT_FREEZE_FUNCTION_LENGTH),
-            Self::ObjectGetPrototypeOf => Some(OBJECT_GET_PROTOTYPE_OF_FUNCTION_LENGTH),
-            Self::ObjectGetOwnPropertyDescriptor => {
-                Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_FUNCTION_LENGTH)
-            }
-            Self::ObjectGetOwnPropertyDescriptors => {
-                Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_FUNCTION_LENGTH)
-            }
-            Self::ObjectGetOwnPropertyNames => Some(OBJECT_GET_OWN_PROPERTY_NAMES_FUNCTION_LENGTH),
-            Self::ObjectHasOwn => Some(OBJECT_HAS_OWN_FUNCTION_LENGTH),
-            Self::ObjectIs => Some(OBJECT_IS_FUNCTION_LENGTH),
-            Self::ObjectIsExtensible => Some(OBJECT_IS_EXTENSIBLE_FUNCTION_LENGTH),
-            Self::ObjectIsFrozen => Some(OBJECT_IS_FROZEN_FUNCTION_LENGTH),
-            Self::ObjectIsSealed => Some(OBJECT_IS_SEALED_FUNCTION_LENGTH),
-            Self::ObjectKeys => Some(OBJECT_KEYS_FUNCTION_LENGTH),
-            Self::ObjectPreventExtensions => Some(OBJECT_PREVENT_EXTENSIONS_FUNCTION_LENGTH),
-            Self::ObjectPrototypeHasOwnProperty => {
-                Some(OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_FUNCTION_LENGTH)
-            }
-            Self::ObjectPrototypePropertyIsEnumerable => {
-                Some(OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_FUNCTION_LENGTH)
-            }
-            Self::ObjectPrototypeToString
-            | Self::ObjectPrototypeValueOf
-            | Self::ObjectPrototypeToLocaleString => {
-                Some(OBJECT_PROTOTYPE_TO_STRING_FUNCTION_LENGTH)
-            }
-            Self::ObjectPrototypeIsPrototypeOf => {
-                Some(OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_FUNCTION_LENGTH)
-            }
-            Self::ObjectFromEntries => Some(OBJECT_FROM_ENTRIES_FUNCTION_LENGTH),
-            Self::ObjectSetPrototypeOf => Some(OBJECT_SET_PROTOTYPE_OF_FUNCTION_LENGTH),
-            Self::ObjectSeal => Some(OBJECT_SEAL_FUNCTION_LENGTH),
-            Self::ObjectValues => Some(OBJECT_VALUES_FUNCTION_LENGTH),
             _ => None,
         }
     }
@@ -654,6 +598,9 @@ impl NativeFunctionKind {
             return name;
         }
         if let Some(name) = self.string_prototype_name() {
+            return name;
+        }
+        if let Some(name) = self.reflect_name() {
             return name;
         }
         FUNCTION_NAME
