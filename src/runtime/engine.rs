@@ -2,6 +2,7 @@ use crate::compiled_script::CompiledScript;
 use crate::error::Result;
 use crate::runtime::Context;
 use crate::runtime::limits::RuntimeLimits;
+use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct Runtime {
@@ -29,6 +30,17 @@ impl Runtime {
     #[must_use]
     pub fn context(&self) -> Context {
         Context::new(self.limits)
+    }
+
+    /// Creates a context with an embedder-provided monotonic clock source.
+    /// The first source reading is the VM-local zero point for
+    /// `performance.now()`.
+    #[must_use]
+    pub fn context_with_clock<F>(&self, read: F) -> Context
+    where
+        F: Fn() -> Duration + 'static,
+    {
+        Context::with_monotonic_clock(self.limits, read)
     }
 
     /// # Errors

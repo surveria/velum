@@ -20,6 +20,7 @@ use crate::value::{ErrorName, FunctionId, Value};
 pub mod binding;
 pub mod bytecode;
 pub mod call;
+mod clock;
 pub mod collections;
 pub mod control;
 pub mod engine;
@@ -81,6 +82,7 @@ pub struct Context {
     new_target_values: Vec<Value>,
     super_frames: Vec<Option<Rc<function::FunctionSuperBinding>>>,
     output: Vec<String>,
+    performance_clock: clock::PerformanceClock,
     random_state: u64,
     runtime_steps: usize,
     bytecode_linear_segment_runs: usize,
@@ -218,6 +220,25 @@ impl Context {
 
     #[must_use]
     pub fn new(limits: RuntimeLimits) -> Self {
+        Self::with_performance_clock(limits, clock::PerformanceClock::system())
+    }
+
+    /// Creates a context whose VM-local `performance.now()` uses `read` as its
+    /// monotonic source. The first reading becomes this context's zero point.
+    /// Later source regressions are clamped so JavaScript observes a
+    /// non-decreasing value.
+    #[must_use]
+    pub fn with_monotonic_clock<F>(limits: RuntimeLimits, read: F) -> Self
+    where
+        F: Fn() -> std::time::Duration + 'static,
+    {
+        Self::with_performance_clock(limits, clock::PerformanceClock::from_reader(read))
+    }
+
+    fn with_performance_clock(
+        limits: RuntimeLimits,
+        performance_clock: clock::PerformanceClock,
+    ) -> Self {
         Self {
             limits,
             atoms: AtomTable::new(),
@@ -252,6 +273,7 @@ impl Context {
             new_target_values: Vec::new(),
             super_frames: Vec::new(),
             output: Vec::new(),
+            performance_clock,
             random_state: INITIAL_RANDOM_STATE,
             runtime_steps: 0,
             bytecode_linear_segment_runs: 0,

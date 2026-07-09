@@ -77,6 +77,12 @@ operands and quickening can evolve without exposing internal VM details.
 
 Multiple `Vm` instances must be able to run in the same Rust process without sharing mutable JavaScript state. A failure, resource-limit hit, pending job, or global mutation in one VM must not affect another VM. Shared data is allowed only when it is immutable or protected by explicit synchronization and resource accounting.
 
+Each `Vm` also owns the origin and last observed value for its monotonic
+`performance.now()` clock. The default source is `std::time::Instant`, while
+the embedding API accepts a duration reader for deterministic execution. A
+shared reader does not create shared JavaScript clock state: each VM captures
+its own origin and clamps regressions against its own last observation.
+
 Embedding API invariants:
 
 - Creating, running, interrupting, and dropping one `Vm` must not require stopping or mutating another `Vm`.

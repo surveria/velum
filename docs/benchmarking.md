@@ -117,6 +117,23 @@ The timing and quality thresholds can be adjusted for local diagnosis:
 
 Do not weaken these thresholds in CI to make a benchmark pass. Fix the benchmark workload or move the case back to tests if it is not a meaningful performance measurement.
 
+## In-VM Clock
+
+The engine exposes a minimal `performance.now()` for application
+instrumentation and portable workload phase markers. Its origin and
+non-decreasing state belong to one VM, and embedders can inject a duration
+reader through `Engine::create_vm_with_clock`, `Vm::with_config_and_clock`, or
+`Runtime::context_with_clock` when deterministic time is required. A source
+regression is clamped to the VM's previous reading.
+
+`performance.now()` is not the canonical benchmark timer. Calling it from
+JavaScript adds native dispatch overhead and lets workload code choose the
+measured boundary. Canonical reports must time prepared execution from the
+external Rust harness and record compile, setup, validation, execution, and
+teardown phases separately. In-script readings may be retained as diagnostic
+metadata, but they must not replace the harness measurement used for QuickJS
+comparison or regression decisions.
+
 ## Coverage Expectations
 
 - Every implemented feature should have project-specific engine tests.

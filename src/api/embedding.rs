@@ -4,6 +4,7 @@ use crate::error::Result;
 use crate::runtime::Context;
 use crate::runtime::limits::RuntimeLimits;
 use crate::value::Value;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
 pub struct EngineConfig {
@@ -47,6 +48,17 @@ impl Engine {
     pub fn create_vm(&self) -> Vm {
         Vm::with_config(self.config.default_vm_config())
     }
+
+    /// Creates a VM with an embedder-provided monotonic clock source. The
+    /// first source reading is the VM-local zero point for
+    /// `performance.now()`.
+    #[must_use]
+    pub fn create_vm_with_clock<F>(&self, read: F) -> Vm
+    where
+        F: Fn() -> Duration + 'static,
+    {
+        Vm::with_config_and_clock(self.config.default_vm_config(), read)
+    }
 }
 
 impl Default for Engine {
@@ -89,6 +101,20 @@ impl Vm {
         Self {
             config,
             context: Context::new(config.limits()),
+        }
+    }
+
+    /// Creates a configured VM with an embedder-provided monotonic clock
+    /// source. The first source reading is the VM-local zero point for
+    /// `performance.now()`.
+    #[must_use]
+    pub fn with_config_and_clock<F>(config: VmConfig, read: F) -> Self
+    where
+        F: Fn() -> Duration + 'static,
+    {
+        Self {
+            config,
+            context: Context::with_monotonic_clock(config.limits(), read),
         }
     }
 
