@@ -1,11 +1,9 @@
 use crate::{
     error::Result,
     runtime::Context,
-    runtime::object::{
-        CacheablePropertyPresence, CacheablePropertyValue, OBJECT_CONSTRUCTOR_PROPERTY,
-        PropertyLookup,
-    },
+    runtime::object::{CacheablePropertyPresence, CacheablePropertyValue, PropertyLookup},
     runtime::property::{DynamicPropertyKey, get_property, has_property},
+    runtime::semantic_object::{SemanticPropertyPresence, SemanticPropertyRead},
     syntax::{StaticName, StaticPropertyAccessId},
     value::{ObjectId, Value},
 };
@@ -53,14 +51,18 @@ impl Context {
         if let Some(value) = self.cached_static_property_fast_read(object, access, lookup)? {
             return Ok(value);
         }
-        if let Value::Function(id) = object {
-            return self.get_function_property_lookup(*id, lookup);
-        }
-        if let Value::NativeFunction(id) = object {
-            return self.get_native_function_property_lookup(*id, lookup);
-        }
-        if let Value::Error(error) = object {
-            return self.get_error_property_value(error, property.as_str());
+        if let Some(read) = self.semantic_property_read(object, lookup)? {
+            return match read {
+                SemanticPropertyRead::Resolved(value) => Ok(value),
+                SemanticPropertyRead::ObjectTail(id) if property.as_str() != PROTOTYPE_PROPERTY => {
+                    self.get_cached_object_property_value(id, access, lookup)
+                }
+                SemanticPropertyRead::ObjectTail(id) => self.finish_semantic_property_read(
+                    SemanticPropertyRead::ObjectTail(id),
+                    object,
+                    lookup,
+                ),
+            };
         }
         if let Value::String(value) = object {
             return self.get_string_property_value(object, value, property.as_str());
@@ -70,21 +72,6 @@ impl Context {
         }
         if let Some(value) = self.primitive_prototype_property_value(object, property.as_str())? {
             return Ok(value);
-        }
-        if let Value::Object(id) = object
-            && let Some(value) = self.get_string_object_property_value(*id, property.as_str())?
-        {
-            return Ok(value);
-        }
-        if let Value::Object(id) = object
-            && let Some(value) = self.global_object_property_value(*id, lookup)?
-        {
-            return Ok(value);
-        }
-        if let Value::Object(id) = object
-            && property.as_str() != PROTOTYPE_PROPERTY
-        {
-            return self.get_cached_object_property_value(*id, access, lookup);
         }
         let value = get_property(&self.objects, object, lookup)?;
         self.runtime_property_value(value)
@@ -108,14 +95,21 @@ impl Context {
         {
             return Ok(value);
         }
-        if let Value::Function(id) = object {
-            return self.get_function_property_lookup(*id, property.lookup());
-        }
-        if let Value::NativeFunction(id) = object {
-            return self.get_native_function_property_lookup(*id, property.lookup());
-        }
-        if let Value::Error(error) = object {
-            return self.get_error_property_value(error, property.name());
+        if let Some(read) = self.semantic_property_read(object, property.lookup())? {
+            return match read {
+                SemanticPropertyRead::Resolved(value) => Ok(value),
+                SemanticPropertyRead::ObjectTail(id)
+                    if property.name() != PROTOTYPE_PROPERTY
+                        && self.objects.array_len_if_array(id)?.is_none() =>
+                {
+                    self.get_cached_object_property_value(id, access, property.lookup())
+                }
+                SemanticPropertyRead::ObjectTail(id) => self.finish_semantic_property_read(
+                    SemanticPropertyRead::ObjectTail(id),
+                    object,
+                    property.lookup(),
+                ),
+            };
         }
         if let Value::String(value) = object {
             return self.get_string_property_value(object, value, property.name());
@@ -125,22 +119,6 @@ impl Context {
         }
         if let Some(value) = self.primitive_prototype_property_value(object, property.name())? {
             return Ok(value);
-        }
-        if let Value::Object(id) = object
-            && let Some(value) = self.get_string_object_property_value(*id, property.name())?
-        {
-            return Ok(value);
-        }
-        if let Value::Object(id) = object
-            && let Some(value) = self.global_object_property_value(*id, property.lookup())?
-        {
-            return Ok(value);
-        }
-        if let Value::Object(id) = object
-            && property.name() != PROTOTYPE_PROPERTY
-            && self.objects.array_len_if_array(*id)?.is_none()
-        {
-            return self.get_cached_object_property_value(*id, access, property.lookup());
         }
         let value = get_property(&self.objects, object, property.lookup())?;
         self.runtime_property_value(value)
@@ -161,18 +139,7 @@ impl Context {
         property: &str,
         access: StaticPropertyAccessId,
     ) -> Result<bool> {
-        if let Value::Object(id) = object
-            && self.objects.is_proxy(*id)
-        {
-            return self.proxy_has(*id, property);
-        }
         let lookup = self.property_lookup(property);
-        if lookup.key().is_none()
-            && matches!(object, Value::Object(_))
-            && !property_name_needs_virtual_lookup(property)
-        {
-            return Ok(false);
-        }
         self.has_cached_property_lookup_value(object, property, lookup, access)
     }
 
@@ -183,25 +150,17 @@ impl Context {
         lookup: PropertyLookup<'_>,
         access: StaticPropertyAccessId,
     ) -> Result<bool> {
-        match object {
-            Value::Function(id) => self.has_function_property_lookup(*id, lookup),
-            Value::NativeFunction(id) => self.has_native_function_property_lookup(*id, lookup),
-            Value::Error(error) => {
-                if matches!(property, "name" | "message" | OBJECT_CONSTRUCTOR_PROPERTY) {
-                    return Ok(true);
+        let Some(presence) = self.semantic_property_presence(object, lookup)? else {
+            return has_property(&self.objects, object, lookup);
+        };
+        match presence {
+            SemanticPropertyPresence::Resolved(value) => Ok(value),
+            SemanticPropertyPresence::ObjectTail(id) => {
+                if lookup.key().is_none() && !property_name_needs_virtual_lookup(property) {
+                    return Ok(false);
                 }
-                self.error_prototype_has_property(error.name(), lookup)
+                self.has_cached_object_property_lookup(id, lookup, access)
             }
-            Value::Object(id) => {
-                if self.objects.is_proxy(*id) {
-                    return self.proxy_has(*id, property);
-                }
-                if let Some(has_property) = self.global_object_has_property(*id, lookup)? {
-                    return Ok(has_property);
-                }
-                self.has_cached_object_property_lookup(*id, lookup, access)
-            }
-            _ => has_property(&self.objects, object, lookup),
         }
     }
 
@@ -211,9 +170,6 @@ impl Context {
         access: StaticPropertyAccessId,
         lookup: PropertyLookup<'_>,
     ) -> Result<Value> {
-        if self.objects.is_proxy(object) {
-            return self.proxy_get(object, lookup.name(), Value::Object(object));
-        }
         let Some(cache) = self.current_static_name_atom_cache() else {
             let object_value = Value::Object(object);
             let value = get_property(&self.objects, &object_value, lookup)?;

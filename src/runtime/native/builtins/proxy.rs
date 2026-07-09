@@ -2,7 +2,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context, call::RuntimeCallArgs, object::OwnPropertyDescriptor, object::PropertyEnumerable,
-        object::PropertyKey, object::PropertyUpdate,
+        object::PropertyKey, object::PropertyLookup, object::PropertyUpdate,
     },
     value::{NativeFunctionId, ObjectId, Value},
 };
@@ -159,31 +159,40 @@ impl Context {
     pub(in crate::runtime) fn proxy_get(
         &mut self,
         id: ObjectId,
-        name: &str,
+        property: PropertyLookup<'_>,
         receiver: Value,
     ) -> Result<Value> {
         let (target, handler) = self.proxy_target_handler(id)?;
         let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_GET)? else {
-            return self.get_property_value(&target, name);
+            return self.get_property_value_with_lookup(&target, property);
         };
-        let key = self.heap_string_value(name)?;
+        let key = self.proxy_property_key_value(property)?;
         self.eval_call_completion(trap, &[target, key, receiver], handler)?
             .into_native_value_result()
     }
 
     /// Proxy `[[Has]]`: dispatch to the `has` trap or fall back to the target.
-    pub(in crate::runtime) fn proxy_has(&mut self, id: ObjectId, name: &str) -> Result<bool> {
+    pub(in crate::runtime) fn proxy_has(
+        &mut self,
+        id: ObjectId,
+        property: PropertyLookup<'_>,
+    ) -> Result<bool> {
         let (target, handler) = self.proxy_target_handler(id)?;
         let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_HAS)? else {
-            let key_value = self.heap_string_value(name)?;
-            let key = self.dynamic_property_key(&key_value)?;
-            return self.has_dynamic_property_value(&target, &key);
+            return self.has_property_value_with_lookup(&target, property);
         };
-        let key = self.heap_string_value(name)?;
+        let key = self.proxy_property_key_value(property)?;
         let result = self
             .eval_call_completion(trap, &[target, key], handler)?
             .into_native_value_result()?;
         Ok(result.is_truthy())
+    }
+
+    fn proxy_property_key_value(&mut self, property: PropertyLookup<'_>) -> Result<Value> {
+        if let Some(symbol) = property.key().and_then(PropertyKey::symbol_id) {
+            return self.symbols.get(symbol).cloned().map(Value::Symbol);
+        }
+        self.heap_string_value(property.name())
     }
 
     /// Proxy `[[Set]]`: dispatch to the `set` trap or fall back to the target.

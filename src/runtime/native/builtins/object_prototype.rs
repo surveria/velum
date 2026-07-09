@@ -5,7 +5,7 @@ use crate::{
         call::RuntimeCallArgs,
         control::Completion,
         object::{ObjectPrimitiveValue, PropertyKey},
-        property::{DynamicPropertyKey, get_property},
+        property::DynamicPropertyKey,
     },
     value::{ObjectId, Value},
 };
@@ -185,8 +185,7 @@ impl Context {
             Some(PropertyKey::symbol(symbol)),
         );
         let receiver = Value::Object(id);
-        let raw = get_property(&self.objects, &receiver, key.lookup())?;
-        let value = self.runtime_property_value(raw)?;
+        let value = self.get_property_value_with_lookup(&receiver, key.lookup())?;
         Ok(match value {
             Value::String(text) => Some(text),
             Value::HeapString(text) => Some(text.as_str().to_owned()),

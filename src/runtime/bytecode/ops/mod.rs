@@ -18,7 +18,7 @@ use crate::{
         numeric_binary, shift_left, shift_right, shift_right_unsigned,
     },
     runtime::object::PropertyKey,
-    runtime::property::{DynamicPropertyKey, get_property},
+    runtime::property::DynamicPropertyKey,
     syntax::{BinaryOp, DeclKind, UnaryOp},
     value::{ErrorName, Value},
 };
@@ -309,15 +309,18 @@ impl Context {
             Some(PropertyKey::symbol(symbol)),
         );
         match value {
-            Value::Function(id) => self.get_function_property_lookup(*id, key.lookup()),
-            Value::NativeFunction(id) => {
-                self.get_native_function_property_lookup(*id, key.lookup())
+            Value::Function(_) | Value::NativeFunction(_) | Value::Object(_) => {
+                self.get_property_value_with_lookup(value, key.lookup())
             }
-            Value::Object(_) => {
-                let raw = get_property(&self.objects, value, key.lookup())?;
-                self.runtime_property_value(raw)
-            }
-            _ => Ok(Value::Undefined),
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::HeapString(_)
+            | Value::Symbol(_)
+            | Value::HostFunction(_)
+            | Value::Error(_) => Ok(Value::Undefined),
         }
     }
 

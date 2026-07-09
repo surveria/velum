@@ -25,8 +25,8 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 is complete; AS-02 is in progress and AS-02a is
-  implemented in draft PR #400 pending final validation
+- Current program state: AS-01 and AS-02a are complete; AS-02b is in progress
+  with its read/presence slice implemented in draft PR #401
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -480,7 +480,7 @@ dependencies do not overlap.
 | --- | --- | --- | --- | --- |
 | AS-00 | Complete | Adopt this plan and route project documentation to it. | None | PR #396 merged as `f79056b`; required CI, post-merge performance, publisher, and canonical report publication passed. |
 | AS-01 | Complete | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards merged in PR #399 with required CI and canonical report publication. |
-| AS-02 | In progress | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a checked facade is implemented in draft PR #400; property and invocation migrations remain. |
+| AS-02 | In progress | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 read/presence methods are implemented in ready PR #401. |
 | AS-03 | Backlog | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | Shared coercion, equality, property, invocation, and iterator operations used by bytecode and built-ins. |
 | AS-04 | Backlog | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | Real JavaScript error objects, typed throw path, no message-prefix classification, spans available to diagnostics. |
 | AS-05 | Backlog | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | Non-cloneable VM state, checked cross-VM boundaries, trace/root contract, heap/stack/job/buffer counters and limits. |
@@ -586,7 +586,8 @@ Physical arena consolidation is optional. Semantic duplication is not.
 
 AS-02a evidence:
 
-- PR: #400 (draft)
+- PR: #400
+- Merge: `b760177`
 - Scope: one checked `Context::semantic_object_ref` entrypoint over Object,
   JavaScript function, native function, host function, and inline Error
   storage, without changing the public `Value` representation
@@ -595,13 +596,43 @@ AS-02a evidence:
   inspection
 - Tests: focused public smoke coverage validates all five current object-like
   owners, undefined store slots, primitive exclusion, and retained
-  constructor/Proxy behavior
+  constructor/Proxy behavior; required correctness CI run `29055467174`
+  passed in 54 seconds with all 34,002 expected Test262 variants and all 95
+  QuickJS differential cases green
 - Ownership limit: AS-02a validates local slot existence but cannot identify a
   foreign VM value whose numeric slot happens to alias a live local slot;
   VM-bound identity and generations remain AS-05a
-- Remaining for AS-02a: fast gate, required CI, merge, and canonical report
-  publication; AS-02b will record the final evidence and migrate property
-  internal methods
+- Performance/memory: post-merge performance and publisher run `29055601549`
+  passed in 49 and 17 seconds; canonical report
+  `reports/test-runs/rsqjs-test-report-20260709T224900Z.md` was published by
+  report-only commit `a5b3909`
+- Remaining for AS-02a: none
+
+AS-02b1 evidence:
+
+- PR: #401 (ready)
+- Scope: shared semantic-object `[[Get]]` and `[[HasProperty]]` pre-dispatch,
+  explicit `Reflect.get` receiver propagation, ordinary-object cache tails,
+  and generic fallbacks
+- Consolidation: dynamic/static reads and presence checks, computed-symbol
+  destructuring, iterator method lookup, descriptor field reads, generic array
+  presence, `Object.prototype.toString`, and `Reflect.get` now enter through
+  the shared boundary
+- Proxy correction: get/has traps now receive the original Symbol key rather
+  than its display string, and no-trap fallback preserves the same lookup
+- Tests: focused coverage exercises ordinary, JavaScript-function,
+  native-function, Error, boxed-string, and HostFunction behavior plus Proxy
+  Symbols, accessors, explicit receivers, descriptors, and iteration; the
+  exact-head fast gate passed, and the complete local correctness refresh
+  passed with all 34,006 expected Test262 variants and all 95 QuickJS
+  differential cases green
+- Test262 change: the first required CI run preserved all 34,002 existing
+  passes and detected four intentional new variants: default and strict forms
+  of `proxy-function-async.js` and `proxy-revoked.js`; the official full-corpus
+  refresh accepted exactly those four variants
+- Remaining for AS-02b1: repeat required CI on the refreshed baseline, merge,
+  and verify canonical report publication; AS-02b2 will migrate
+  write/define/delete/keys/descriptor/prototype methods
 
 ### AS-03: Abstract Operations
 
@@ -730,24 +761,26 @@ reviewable scope.
 2. AS-01b: add architecture guards for new split object variants and
    source-name harness bytecode (complete in PR #399).
 3. AS-02a: introduce the checked semantic object reference/facade while keeping
-   current physical stores (implemented in draft PR #400).
-4. AS-02b: route get/has/set/define/delete/own-keys through common internal
-   methods.
-5. AS-02c: route JavaScript, native, host, bound, and callable Proxy values
+   current physical stores (complete in PR #400).
+4. AS-02b1: route get/has through common internal methods (implemented in draft
+   PR #401).
+5. AS-02b2: route set/define/delete/own-keys/descriptor/prototype through common
+   internal methods.
+6. AS-02c: route JavaScript, native, host, bound, and callable Proxy values
    through common call/construct internal methods.
-6. AS-03a: centralize equality and primitive conversion operations.
-7. AS-03b: centralize property-key, property, call, and iterator operations.
-8. AS-04a: separate JavaScript throw completion from engine/host/resource
+7. AS-03a: centralize equality and primitive conversion operations.
+8. AS-03b: centralize property-key, property, call, and iterator operations.
+9. AS-04a: separate JavaScript throw completion from engine/host/resource
    failures.
-9. AS-04b: migrate Error values into real objects and add source-span metadata.
-10. AS-05a: remove ambiguous VM cloning and define VM-bound handle identity.
-11. AS-05b: add root enumeration plus complete allocation accounting and
+10. AS-04b: migrate Error values into real objects and add source-span metadata.
+11. AS-05a: remove ambiguous VM cloning and define VM-bound handle identity.
+12. AS-05b: add root enumeration plus complete allocation accounting and
     limits.
-12. AS-06a: migrate synchronous calls and structured control flow to explicit
+13. AS-06a: migrate synchronous calls and structured control flow to explicit
     activation frames.
-13. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
-14. AS-07a: add safe collection over explicit roots and correct weak edges.
-15. AS-08a: move reusable optimization state behind one optimizer/quickening
+14. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
+15. AS-07a: add safe collection over explicit roots and correct weak edges.
+16. AS-08a: move reusable optimization state behind one optimizer/quickening
     boundary and remove harness-specific opcodes.
 
 ## Updating This Plan

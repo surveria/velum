@@ -1,9 +1,6 @@
 use crate::{
     error::{Error, Result},
-    runtime::{
-        Context,
-        property::{delete_property, has_property},
-    },
+    runtime::{Context, property::delete_property},
     value::Value,
 };
 
@@ -305,9 +302,9 @@ impl Context {
         self.get_property_value(object, &property)
     }
 
-    pub(super) fn has_array_like_index(&self, object: &Value, index: usize) -> Result<bool> {
+    pub(super) fn has_array_like_index(&mut self, object: &Value, index: usize) -> Result<bool> {
         let property = Self::array_like_index_name(index)?;
-        has_property(&self.objects, object, self.property_lookup(&property))
+        self.has_property_value_with_lookup(object, self.property_lookup(&property))
     }
 
     pub(super) fn set_array_like_index(

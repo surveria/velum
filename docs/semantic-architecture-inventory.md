@@ -88,6 +88,16 @@ validation, JavaScript constructor return selection, and typed-array debug
 inspection. The architecture guard now rejects another named semantic-object
 facade or restoration of the removed local object-like classifier.
 
+AS-02b1 adds `semantic_property_read`,
+`semantic_property_read_with_receiver`, and `semantic_property_presence` plus
+their ordinary-object finish paths. These methods resolve Proxy, JavaScript
+function, native function, HostFunction, Error, boxed-string, and global-object
+pre-dispatch before returning an explicit cacheable `ObjectHeap` tail. Static
+inline caches may optimize only that tail; their miss and uncacheable paths
+remain equivalent to the generic semantic finish path. Proxy get/has receives
+the original Symbol value when the lookup key is a Symbol, and `Reflect.get`
+propagates its explicit receiver through Proxy and accessor paths.
+
 This facade rejects ids whose slots are not defined in the receiving `Context`.
 It does not yet prove VM identity or generation: a foreign id can still alias a
 live local slot with the same numeric index. AS-05a remains responsible for
@@ -150,8 +160,8 @@ proxies; several built-ins repeat the same matches.
 | Operation | Widest current facade | Physical and parallel paths | Required owner |
 | --- | --- | --- | --- |
 | `ToPropertyKey`-like conversion | `property::property_key` plus `Context::dynamic_property_key` | conversion uses `Value` display text for non-string/non-symbol values; `Object` and `Reflect` wrappers add their own argument handling | AS-03b `ToPropertyKey` |
-| `[[Get]]` | `Context::get_property_value` in `property/dynamic.rs` | pre-dispatches Proxy, Function, NativeFunction, Error, primitive String, boxed String, primitive prototypes, and global object before `property::get_property`/`ObjectHeap`; static reads add caches in `property/static_names/read.rs` | AS-02b internal `get`, then AS-03b `Get` |
-| `[[HasProperty]]` | `Context::has_dynamic_property_value` | repeats Proxy/Function/NativeFunction/Error/global dispatch before `property::has_property`; `in` bytecode and built-ins enter through different wrappers | AS-02b internal `has_property` |
+| `[[Get]]` | `Context::semantic_property_read[_with_receiver]` plus `finish_semantic_property_read` | AS-02b1 now owns object-like dispatch; `get_property_value` still owns primitive string/prototype behavior, while static caches optimize only the returned ordinary-object tail | AS-02b1 complete after PR #401; AS-03b later owns spec-level `Get`/primitive coercion |
+| `[[HasProperty]]` | `Context::semantic_property_presence` plus `finish_semantic_property_presence` | AS-02b1 now owns object-like dispatch; static presence caches optimize only the returned ordinary-object tail, while primitive rejection remains in the property layer | AS-02b1 complete after PR #401; AS-03b later owns the abstract operation |
 | `[[Set]]` | `Context::set_property_value_with_accessors`, reached from static/dynamic setters | Function and NativeFunction writes are intercepted in `property/static_names/mod.rs`; Proxy and accessors are intercepted in `property/accessor.rs`; base `property::set_property` accepts only `Value::Object`; `Object.assign` repeats target dispatch | AS-02b internal `set` |
 | `[[DefineOwnProperty]]` | no value-wide facade | `ObjectHeap::define_property`; Function/NativeFunction helpers; `Object.defineProperty`, `Object.defineProperties`, Proxy, class, and literal code select paths explicitly; function paths reject accessors | AS-02b internal `define_own_property` |
 | `[[Delete]]` | static/dynamic delete helpers in `property/static_names/mod.rs` | Function/NativeFunction helpers, Proxy trap, cache path, and base `property::delete_property` are selected separately; base behavior treats several variants as trivially deletable | AS-02b internal `delete` |
@@ -169,9 +179,10 @@ proxies; several built-ins repeat the same matches.
   descriptors in some paths rather than stored as real own properties.
 - Function and native-function properties share a data structure but still
   require separate id lookup and dispatch functions.
-- Array indexed properties, string virtual properties, global bindings, and
-  Proxy traps are inserted at different layers, so a new caller can bypass one
-  by using `ObjectHeap` directly.
+- Array indexed properties, string virtual properties, and global bindings
+  still span physical and semantic layers, but object-like read/presence callers
+  now receive an explicit generic `ObjectHeap` tail instead of repeating that
+  dispatch.
 - `property::get_property` and `property::has_property` cover fewer value kinds
   than the similarly named `Context` facades. Their generic names make the
   distinction easy to miss.
@@ -418,7 +429,8 @@ decision sequence:
 | --- | --- | --- |
 | AS-01b | exact `Value` allowlist, harness-name sites, runtime/frontend boundary, side-table and duplicate-operation allowlists | add mechanical no-growth guards without pretending baseline debt is fixed |
 | AS-02a | five object-like variants, object payloads, function/error stores, Promise/collection associations | checked semantic object reference implemented in PR #400; local slot existence is validated without claiming VM identity |
-| AS-02b | property/internal-method table | route get/has/set/define/delete/keys/prototype/descriptor through the facade |
+| AS-02b1 | property/internal-method table | object-like get/has boundary implemented in PR #401, including receiver-aware and Symbol-preserving Proxy dispatch |
+| AS-02b2 | property/internal-method table | route set/define/delete/keys/prototype/descriptor through the facade |
 | AS-02c | call/construct tables and repeated object-like lists | one optional call/construct internal-method dispatch, including callable/constructable Proxy and bound functions |
 | AS-03a | equality/conversion table | one equality and primitive-conversion owner; delete three `SameValueZero` copies |
 | AS-03b | key/property/call/iterator tables | move iterator protocol out of bytecode and unify `IsCallable`/`IsConstructor` |

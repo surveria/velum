@@ -5,7 +5,7 @@ use crate::{
     runtime::binding::scope::{BindingCell, BindingScope},
     runtime::control::Completion,
     runtime::object::PropertyKey,
-    runtime::property::{DynamicPropertyKey, get_property},
+    runtime::property::DynamicPropertyKey,
     syntax::{DeclKind, StaticName},
     value::Value,
 };
@@ -125,8 +125,7 @@ impl Context {
             ITERATOR_SYMBOL_DISPLAY_NAME.to_owned(),
             Some(PropertyKey::symbol(symbol)),
         );
-        let method = get_property(&self.objects, iterable, key.lookup())?;
-        let method = self.runtime_property_value(method)?;
+        let method = self.get_property_value_with_lookup(iterable, key.lookup())?;
         if matches!(method, Value::Undefined | Value::Null) {
             return Ok(None);
         }

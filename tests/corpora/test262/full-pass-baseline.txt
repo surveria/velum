@@ -12217,6 +12217,10 @@ test/built-ins/Object/prototype/toString/not-a-constructor.js#default
 test/built-ins/Object/prototype/toString/not-a-constructor.js#strict
 test/built-ins/Object/prototype/toString/prop-desc.js#default
 test/built-ins/Object/prototype/toString/prop-desc.js#strict
+test/built-ins/Object/prototype/toString/proxy-function-async.js#default
+test/built-ins/Object/prototype/toString/proxy-function-async.js#strict
+test/built-ins/Object/prototype/toString/proxy-revoked.js#default
+test/built-ins/Object/prototype/toString/proxy-revoked.js#strict
 test/built-ins/Object/prototype/toString/symbol-tag-non-str-builtin.js#default
 test/built-ins/Object/prototype/toString/symbol-tag-non-str-builtin.js#strict
 test/built-ins/Object/prototype/toString/symbol-tag-non-str.js#default
