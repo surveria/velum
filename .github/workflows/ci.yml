@@ -56,6 +56,7 @@ jobs:
       RSQJS_QUICKJS_SOURCE: git
       RSQJS_QUICKJS_CACHE_DIR: /home/runner/.cache/cargo-target/rs-quickjs/external/quickjs
       RSQJS_TEST262_CACHE_DIR: /home/runner/.cache/cargo-target/rs-quickjs/external/test262
+      RSQJS_HOST_LOCK_PATH: /host/rsqjs-lock/host-performance.lock
       RSQJS_REPORT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
       RSQJS_REPORT_TASK: ${{ github.event.pull_request.title || github.event.merge_group.head_ref || github.event_name }}
       RSQJS_CI_BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || '' }}
@@ -75,6 +76,7 @@ jobs:
           printf 'CARGO_TARGET_DIR=%s\n' "${CARGO_TARGET_DIR}"
           printf 'RSQJS_QUICKJS_CACHE_DIR=%s\n' "${RSQJS_QUICKJS_CACHE_DIR}"
           printf 'RSQJS_TEST262_CACHE_DIR=%s\n' "${RSQJS_TEST262_CACHE_DIR}"
+          printf 'RSQJS_HOST_LOCK_PATH=%s\n' "${RSQJS_HOST_LOCK_PATH}"
           mkdir -p "${CARGO_TARGET_DIR}" "${RSQJS_QUICKJS_CACHE_DIR}" "${RSQJS_TEST262_CACHE_DIR}"
           rustc --version
           cargo --version
@@ -165,6 +167,7 @@ jobs:
       RSQJS_QUICKJS_SOURCE: git
       RSQJS_QUICKJS_CACHE_DIR: /home/runner/.cache/cargo-target/rs-quickjs/external/quickjs
       RSQJS_TEST262_CACHE_DIR: /home/runner/.cache/cargo-target/rs-quickjs/external/test262
+      RSQJS_HOST_LOCK_PATH: /host/rsqjs-lock/host-performance.lock
       RSQJS_REPORT_PR_NUMBER: ${{ github.event.pull_request.number }}
       RSQJS_REPORT_TASK: ${{ github.event.pull_request.title }}
       GH_TOKEN: ${{ github.token }}
@@ -181,6 +184,7 @@ jobs:
           printf 'CARGO_TARGET_DIR=%s\n' "${CARGO_TARGET_DIR}"
           printf 'RSQJS_QUICKJS_CACHE_DIR=%s\n' "${RSQJS_QUICKJS_CACHE_DIR}"
           printf 'RSQJS_TEST262_CACHE_DIR=%s\n' "${RSQJS_TEST262_CACHE_DIR}"
+          printf 'RSQJS_HOST_LOCK_PATH=%s\n' "${RSQJS_HOST_LOCK_PATH}"
           mkdir -p "${CARGO_TARGET_DIR}" "${RSQJS_QUICKJS_CACHE_DIR}" "${RSQJS_TEST262_CACHE_DIR}"
           rustc --version
           cargo --version
