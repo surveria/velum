@@ -17,11 +17,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260709T142301Z.md`
-- Task: PR #385: bytecode: optimize try catch benchmark
-- Performance: 3.35x (61/73 >1.00x)
+- `rsqjs-test-report-20260709T152046Z.md`
+- Task: PR #386: Optimize residual compound assignment bytecode paths
+- Performance: 3.19x (60/73 >1.00x)
 - Memory: - (0/73 >1.00x)
-- JetStream: 24.76x (4/4 >1.00x)
+- JetStream: 22.18x (4/4 >1.00x)
 - Full Test262: 33844 passed / 68734 failed (32.99%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
@@ -370,3 +370,4 @@ Latest report:
 | `20260709T125832Z` `aaca780` PR #382: bytecode: optimize try finally benchmark | 3.55x (62/73 >1.00x) | - (0/73 >1.00x) | 23.05x (4/4 >1.00x) | 33844 passed / 68734 failed (32.99%) |
 | `20260709T134810Z` `31e5c8c` PR #381: runner: add per-case timing reports | 3.50x (62/73 >1.00x) | - (0/73 >1.00x) | 23.17x (4/4 >1.00x) | 33844 passed / 68734 failed (32.99%) |
 | `20260709T142301Z` `0dc9f44` PR #385: bytecode: optimize try catch benchmark | 3.35x (61/73 >1.00x) | - (0/73 >1.00x) | 24.76x (4/4 >1.00x) | 33844 passed / 68734 failed (32.99%) |
+| `20260709T152046Z` `0aadebd` PR #386: Optimize residual compound assignment bytecode paths | 3.19x (60/73 >1.00x) | - (0/73 >1.00x) | 22.18x (4/4 >1.00x) | 33844 passed / 68734 failed (32.99%) |
