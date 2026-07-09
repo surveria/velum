@@ -17,11 +17,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260709T190938Z.md`
-- Task: PR #379: bench: add typed array image benchmarks
-- Performance: 3.73x (68/83 >1.00x)
+- `rsqjs-test-report-20260709T205604Z.md`
+- Task: PR #390: workflow: make the required correctness gate sub-minute
+- Performance: 3.64x (68/83 >1.00x)
 - Memory: - (0/83 >1.00x)
-- JetStream: 24.76x (4/4 >1.00x)
+- JetStream: - (0/0 >1.00x)
 - Full Test262: 34002 passed / 68576 failed (33.15%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
@@ -375,3 +375,4 @@ Latest report:
 | `20260709T171327Z` `338d702` PR #387: Optimize function apply and hasInstance benchmark paths | 3.12x (59/73 >1.00x) | - (0/73 >1.00x) | 25.31x (4/4 >1.00x) | 33962 passed / 68616 failed (33.11%) |
 | `20260709T182158Z` `b9b5e65` PR #389: Optimize constructor prototype benchmark paths | 2.83x (58/73 >1.00x) | - (0/73 >1.00x) | 23.09x (4/4 >1.00x) | 33962 passed / 68616 failed (33.11%) |
 | `20260709T190938Z` `500e250` PR #379: bench: add typed array image benchmarks | 3.73x (68/83 >1.00x) | - (0/83 >1.00x) | 24.76x (4/4 >1.00x) | 34002 passed / 68576 failed (33.15%) |
+| `20260709T205604Z` `db8fb33` PR #390: workflow: make the required correctness gate sub-minute | 3.64x (68/83 >1.00x) | - (0/83 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
