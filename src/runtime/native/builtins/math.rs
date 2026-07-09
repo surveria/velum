@@ -49,6 +49,8 @@ const F16_MAX_FINITE: f64 = 65_504.0;
 const F16_OVERFLOW_CUTOFF: f64 = 65_520.0;
 const F16_SIGNIFICAND_BITS: i32 = 10;
 const ROUND_INTEGER_CUTOFF: f64 = 4_503_599_627_370_496.0;
+const VALUE_OF_PROPERTY: &str = "valueOf";
+const TO_STRING_PROPERTY: &str = "toString";
 
 use super::math_sum_precise::PreciseFiniteSum;
 
@@ -197,12 +199,18 @@ impl Context {
         Self::math_number(Self::fround_to_number(number))
     }
 
-    pub(in crate::runtime::native) fn eval_math_hypot(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_direct_math_hypot(args.as_slice())
+    pub(in crate::runtime::native) fn eval_math_hypot(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_math_hypot(args.as_slice())
     }
 
-    pub(in crate::runtime::native) fn eval_direct_math_hypot(args: &[Value]) -> Result<Value> {
-        Self::eval_math_hypot_values(args)
+    pub(in crate::runtime::native) fn eval_direct_math_hypot(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        self.eval_math_hypot_values(args)
     }
 
     pub(in crate::runtime::native) fn eval_math_imul(args: RuntimeCallArgs<'_>) -> Result<Value> {
@@ -222,38 +230,56 @@ impl Context {
     math_unary_method!(eval_math_log1p, eval_direct_math_log1p, f64::ln_1p);
     math_unary_method!(eval_math_log2, eval_direct_math_log2, f64::log2);
 
-    pub(in crate::runtime::native) fn eval_math_max(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_direct_math_max(args.as_slice())
+    pub(in crate::runtime::native) fn eval_math_max(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_math_max(args.as_slice())
     }
 
-    pub(in crate::runtime::native) fn eval_direct_math_max(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_max(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
         let mut maximum = f64::NEG_INFINITY;
+        let mut has_nan = false;
         for value in args {
-            let value = Self::value_to_number(value);
+            let value = self.math_to_number(value)?;
             if value.is_nan() {
-                return Self::math_number(f64::NAN);
-            }
-            if value > maximum || Self::should_replace_max_zero(maximum, value) {
+                has_nan = true;
+            } else if value > maximum || Self::should_replace_max_zero(maximum, value) {
                 maximum = value;
             }
+        }
+        if has_nan {
+            return Self::math_number(f64::NAN);
         }
         Self::math_number(maximum)
     }
 
-    pub(in crate::runtime::native) fn eval_math_min(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_direct_math_min(args.as_slice())
+    pub(in crate::runtime::native) fn eval_math_min(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_math_min(args.as_slice())
     }
 
-    pub(in crate::runtime::native) fn eval_direct_math_min(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_min(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
         let mut minimum = f64::INFINITY;
+        let mut has_nan = false;
         for value in args {
-            let value = Self::value_to_number(value);
+            let value = self.math_to_number(value)?;
             if value.is_nan() {
-                return Self::math_number(f64::NAN);
-            }
-            if value < minimum || Self::should_replace_min_zero(minimum, value) {
+                has_nan = true;
+            } else if value < minimum || Self::should_replace_min_zero(minimum, value) {
                 minimum = value;
             }
+        }
+        if has_nan {
+            return Self::math_number(f64::NAN);
         }
         Self::math_number(minimum)
     }
@@ -266,7 +292,7 @@ impl Context {
         let (base, exponent) = Self::eval_math_binary_values(args);
         let base = Self::math_arg_or_nan(base);
         let exponent = exponent.map_or(f64::NAN, Self::value_to_number);
-        Self::math_number(base.powf(exponent))
+        Self::math_number(Self::math_pow(base, exponent))
     }
 
     pub(in crate::runtime::native) fn eval_math_random(
@@ -472,12 +498,12 @@ impl Context {
         (args.first(), args.get(1))
     }
 
-    fn eval_math_hypot_values(args: &[Value]) -> Result<Value> {
+    fn eval_math_hypot_values(&mut self, args: &[Value]) -> Result<Value> {
         let mut has_infinity = false;
         let mut has_nan = false;
         let mut magnitude = 0.0_f64;
         for value in args {
-            let value = Self::value_to_number(value);
+            let value = self.math_to_number(value)?;
             if value.is_infinite() {
                 has_infinity = true;
             } else if value.is_nan() {
@@ -493,6 +519,46 @@ impl Context {
             return Self::math_number(f64::NAN);
         }
         Self::math_number(magnitude)
+    }
+
+    fn math_to_number(&mut self, value: &Value) -> Result<f64> {
+        if !matches!(value, Value::Object(_)) {
+            return Ok(Self::value_to_number(value));
+        }
+        let primitive =
+            self.math_ordinary_to_primitive(value, &[VALUE_OF_PROPERTY, TO_STRING_PROPERTY])?;
+        Ok(Self::value_to_number(&primitive))
+    }
+
+    fn math_ordinary_to_primitive(
+        &mut self,
+        value: &Value,
+        method_names: &[&str],
+    ) -> Result<Value> {
+        for method_name in method_names {
+            let method = self.get_property_value(value, method_name)?;
+            if !Self::is_callable(&method) {
+                continue;
+            }
+            let result = self.eval_call_value(method, &[], value.clone())?;
+            if Self::is_math_primitive(&result) {
+                return Ok(result);
+            }
+        }
+        Err(Error::type_error("Cannot convert object to number"))
+    }
+
+    const fn is_math_primitive(value: &Value) -> bool {
+        matches!(
+            value,
+            Value::Undefined
+                | Value::Null
+                | Value::Bool(_)
+                | Value::Number(_)
+                | Value::String(_)
+                | Value::HeapString(_)
+                | Value::Symbol(_)
+        )
     }
 
     const fn eval_math_discard_values(_args: &[Value]) {}
@@ -534,6 +600,20 @@ impl Context {
     #[allow(clippy::unnecessary_wraps)]
     const fn math_number(value: f64) -> Result<Value> {
         Ok(Value::Number(value))
+    }
+
+    fn math_pow(base: f64, exponent: f64) -> f64 {
+        if exponent.is_nan() || (Self::is_exact_abs_one(base) && exponent.is_infinite()) {
+            return f64::NAN;
+        }
+        base.powf(exponent)
+    }
+
+    const fn is_exact_abs_one(value: f64) -> bool {
+        matches!(
+            value.to_bits(),
+            bits if bits == 1.0_f64.to_bits() || bits == (-1.0_f64).to_bits()
+        )
     }
 
     fn fround_to_number(value: f64) -> f64 {
