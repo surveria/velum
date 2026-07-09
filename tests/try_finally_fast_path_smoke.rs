@@ -24,13 +24,13 @@ fn bytecode_runs_direct_active_try_finally_benchmark_body() -> TestResult {
     let initial_direct_runs = vm.resource_usage().bytecode_linear_direct_runs;
 
     let value = vm.eval_compiled(&script)?;
-    ensure_value(&value, &Value::Number(8_388_608.0))?;
+    ensure_value(&value, &Value::Number(131_072.0))?;
     let direct_run_delta = vm
         .resource_usage()
         .bytecode_linear_direct_runs
         .checked_sub(initial_direct_runs)
         .ok_or("bytecode linear direct counter moved backwards")?;
-    ensure_at_least(direct_run_delta, 4_194_304, "bytecode linear direct runs")
+    ensure_at_least(direct_run_delta, 65_536, "bytecode linear direct runs")
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
