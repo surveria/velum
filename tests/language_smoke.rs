@@ -470,6 +470,26 @@ fn supports_array_literals_and_index_properties() -> TestResult {
         &Value::Number(2.0),
     )?;
     expect_value(
+        r#"
+        let holes = [,, 42, ,];
+        Array.prototype[0] = "proto";
+        let inherited = holes[0];
+        delete Array.prototype[0];
+        let spread = [, ...[1, 2]];
+        holes.length === 4 &&
+            !Object.hasOwn(holes, "0") &&
+            !Object.hasOwn(holes, "1") &&
+            holes[2] === 42 &&
+            !Object.hasOwn(holes, "3") &&
+            inherited === "proto" &&
+            spread.length === 3 &&
+            !Object.hasOwn(spread, "0") &&
+            spread[1] === 1 &&
+            spread[2] === 2 ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )?;
+    expect_value(
         r"
         let make = function() {
             let values = [40];

@@ -281,7 +281,7 @@ impl Context {
         let Some((array, body)) = prefix.split_last() else {
             return Ok(None);
         };
-        let BytecodeInstruction::ArrayLiteral { len } = array else {
+        let BytecodeInstruction::ArrayLiteral { len, .. } = array else {
             return Ok(None);
         };
         let mut stack = Vec::new();

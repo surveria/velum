@@ -11,6 +11,7 @@ mod binary;
 mod class;
 mod expression;
 mod function;
+mod literal;
 mod pattern;
 mod statement;
 

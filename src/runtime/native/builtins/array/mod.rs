@@ -417,6 +417,81 @@ impl Context {
         )
     }
 
+    pub(crate) fn create_array_literal_from_elements(
+        &mut self,
+        elements: impl IntoIterator<Item = Value>,
+        element_count: usize,
+        holes: &[bool],
+    ) -> Result<Value> {
+        if holes.len() != element_count {
+            return Err(Error::runtime(
+                "array literal hole metadata length mismatch",
+            ));
+        }
+        if holes.iter().all(|hole| !*hole) {
+            return self.create_array_from_element_iter(elements, element_count);
+        }
+
+        let prototype = self.array_constructor_prototype()?;
+        let array = self.objects.create_array_with_length(
+            element_count,
+            prototype,
+            self.limits.max_objects,
+        )?;
+        let mut values = elements.into_iter();
+        for (index, hole) in holes.iter().copied().enumerate() {
+            if hole {
+                continue;
+            }
+            let Some(value) = values.next() else {
+                return Err(Error::runtime("array literal value metadata mismatch"));
+            };
+            let property_name = index.to_string();
+            let key = self.intern_property_key(&property_name)?;
+            crate::runtime::property::set_property(
+                &mut self.objects,
+                &array,
+                key,
+                &property_name,
+                value,
+                self.limits.max_object_properties,
+            )?;
+        }
+        if values.next().is_some() {
+            return Err(Error::runtime("array literal value metadata mismatch"));
+        }
+        Ok(array)
+    }
+
+    pub(crate) fn create_array_literal_from_options(
+        &mut self,
+        elements: Vec<Option<Value>>,
+    ) -> Result<Value> {
+        let element_count = elements.len();
+        let prototype = self.array_constructor_prototype()?;
+        let array = self.objects.create_array_with_length(
+            element_count,
+            prototype,
+            self.limits.max_objects,
+        )?;
+        for (index, value) in elements.into_iter().enumerate() {
+            let Some(value) = value else {
+                continue;
+            };
+            let property_name = index.to_string();
+            let key = self.intern_property_key(&property_name)?;
+            crate::runtime::property::set_property(
+                &mut self.objects,
+                &array,
+                key,
+                &property_name,
+                value,
+                self.limits.max_object_properties,
+            )?;
+        }
+        Ok(array)
+    }
+
     fn array_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<ObjectId> {
         let constructor_key = self.object_constructor_property_key()?;
         self.objects.array_prototype_id_with_constructor(
