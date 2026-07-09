@@ -670,7 +670,10 @@ impl Context {
             .create_array_with_length(length, prototype, self.limits.max_objects)
     }
 
-    fn create_array_callback_result_from_values(&mut self, values: Vec<Value>) -> Result<Value> {
+    pub(super) fn create_array_callback_result_from_values(
+        &mut self,
+        values: Vec<Value>,
+    ) -> Result<Value> {
         let prototype = self.existing_array_constructor_prototype()?;
         let value_count = values.len();
         self.objects.create_array_from_iter(
