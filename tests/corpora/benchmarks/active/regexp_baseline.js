@@ -36,6 +36,9 @@ while (index < 8192) {
   if (words[Symbol.replace]("abc 123", "x") === "x x") {
     total = total + 1;
   }
+  if (/-/[Symbol.split]("a-b-c").length === 3) {
+    total = total + 1;
+  }
   index = index + 1;
 }
 

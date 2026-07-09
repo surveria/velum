@@ -389,6 +389,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     RegExpPrototypeSymbolMatch,
     RegExpPrototypeSymbolReplace,
     RegExpPrototypeSymbolSearch,
+    RegExpPrototypeSymbolSplit,
     String,
     StringFromCharCode,
     StringFromCodePoint,

@@ -205,7 +205,8 @@ const REGEXP_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(196);
 const REGEXP_SYMBOL_MATCH_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(197);
 const REGEXP_SYMBOL_SEARCH_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(198);
 const REGEXP_SYMBOL_REPLACE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(199);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 200;
+const REGEXP_SYMBOL_SPLIT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(200);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 201;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -383,6 +384,7 @@ const fn regexp_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::RegExpPrototypeSymbolMatch => Some(REGEXP_SYMBOL_MATCH_SLOT),
         NativeFunctionKind::RegExpPrototypeSymbolReplace => Some(REGEXP_SYMBOL_REPLACE_SLOT),
         NativeFunctionKind::RegExpPrototypeSymbolSearch => Some(REGEXP_SYMBOL_SEARCH_SLOT),
+        NativeFunctionKind::RegExpPrototypeSymbolSplit => Some(REGEXP_SYMBOL_SPLIT_SLOT),
         _ => None,
     }
 }

@@ -66,6 +66,9 @@ impl Context {
             NativeFunctionKind::RegExpPrototypeSymbolSearch => {
                 Some(self.eval_regexp_prototype_symbol_search(args, this_value))
             }
+            NativeFunctionKind::RegExpPrototypeSymbolSplit => {
+                Some(self.eval_regexp_prototype_symbol_split(args, this_value))
+            }
             _ => None,
         }
     }

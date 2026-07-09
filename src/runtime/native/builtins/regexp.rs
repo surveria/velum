@@ -38,6 +38,7 @@ const REGEXP_UNICODE_SETS_PROPERTY: &str = "unicodeSets";
 const SYMBOL_MATCH_PROPERTY: &str = "match";
 const SYMBOL_REPLACE_PROPERTY: &str = "replace";
 const SYMBOL_SEARCH_PROPERTY: &str = "search";
+const SYMBOL_SPLIT_PROPERTY: &str = "split";
 const ZERO_INDEX: f64 = 0.0;
 
 impl Context {
@@ -238,6 +239,24 @@ impl Context {
         self.string_regexp_replace_first(&input, this_value, &replacement)
     }
 
+    pub(in crate::runtime::native) fn eval_regexp_prototype_symbol_split(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let input = args
+            .as_slice()
+            .first()
+            .map_or_else(String::new, Value::display_for_concat);
+        self.check_string_len(&input)?;
+        let input_value = self.heap_string_value(&input)?;
+        let mut split_args = vec![this_value.clone()];
+        if let Some(limit) = args.as_slice().get(1) {
+            split_args.push(limit.clone());
+        }
+        self.eval_string_prototype_split(RuntimeCallArgs::values(&split_args), &input_value)
+    }
+
     fn create_regexp_object_from_text(&mut self, pattern: &str, flags: &str) -> Result<Value> {
         validate_regexp_flags(flags)?;
         self.check_string_len(pattern)?;
@@ -404,6 +423,11 @@ impl Context {
                 SYMBOL_SEARCH_PROPERTY,
                 "[Symbol.search]",
                 NativeFunctionKind::RegExpPrototypeSymbolSearch,
+            ),
+            (
+                SYMBOL_SPLIT_PROPERTY,
+                "[Symbol.split]",
+                NativeFunctionKind::RegExpPrototypeSymbolSplit,
             ),
         ] {
             let key = self.regexp_well_known_symbol_property_key(property)?;

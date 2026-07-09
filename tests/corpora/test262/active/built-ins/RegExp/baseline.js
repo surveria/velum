@@ -5,6 +5,7 @@ let toStringDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "toSt
 let symbolMatchDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.match);
 let symbolReplaceDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.replace);
 let symbolSearchDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.search);
+let symbolSplitDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.split);
 let sourceDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "source");
 let flagsDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "flags");
 let literal = /a+/g;
@@ -58,6 +59,11 @@ let descriptorOk =
   symbolSearchDescriptor.writable === true &&
   symbolSearchDescriptor.enumerable === false &&
   symbolSearchDescriptor.configurable === true &&
+  RegExp.prototype[Symbol.split].name === "[Symbol.split]" &&
+  RegExp.prototype[Symbol.split].length === 2 &&
+  symbolSplitDescriptor.writable === true &&
+  symbolSplitDescriptor.enumerable === false &&
+  symbolSplitDescriptor.configurable === true &&
   Object.hasOwn(literal, "source") === false &&
   Object.hasOwn(literal, "flags") === false &&
   sourceDescriptor.get.name === "get source" &&
@@ -104,6 +110,8 @@ let patternOk =
   searchRestore[Symbol.search]("baaa") === 1 &&
   searchRestore.lastIndex === 2 &&
   (/z/)[Symbol.search]("baaa") === -1 &&
+  (/-/)[Symbol.split]("a-b-c").join("|") === "a|b|c" &&
+  (/-/)[Symbol.split]("a-b-c", 2).join("|") === "a|b" &&
   /a/gim.source === "a" &&
   /a/gim.flags === "gim" &&
   /a/gim.global === true &&

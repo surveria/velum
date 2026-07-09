@@ -23,6 +23,8 @@ const REGEXP_SYMBOL_MATCH_NAME: &str = "[Symbol.match]";
 const REGEXP_SYMBOL_REPLACE_LENGTH: f64 = 2.0;
 const REGEXP_SYMBOL_REPLACE_NAME: &str = "[Symbol.replace]";
 const REGEXP_SYMBOL_SEARCH_NAME: &str = "[Symbol.search]";
+const REGEXP_SYMBOL_SPLIT_LENGTH: f64 = 2.0;
+const REGEXP_SYMBOL_SPLIT_NAME: &str = "[Symbol.split]";
 
 impl NativeFunctionKind {
     pub(super) const fn regexp_length(self) -> Option<f64> {
@@ -46,6 +48,7 @@ impl NativeFunctionKind {
                 Some(REGEXP_SYMBOL_METHOD_LENGTH)
             }
             Self::RegExpPrototypeSymbolReplace => Some(REGEXP_SYMBOL_REPLACE_LENGTH),
+            Self::RegExpPrototypeSymbolSplit => Some(REGEXP_SYMBOL_SPLIT_LENGTH),
             _ => None,
         }
     }
@@ -71,6 +74,7 @@ impl NativeFunctionKind {
             Self::RegExpPrototypeSymbolMatch => Some(REGEXP_SYMBOL_MATCH_NAME),
             Self::RegExpPrototypeSymbolReplace => Some(REGEXP_SYMBOL_REPLACE_NAME),
             Self::RegExpPrototypeSymbolSearch => Some(REGEXP_SYMBOL_SEARCH_NAME),
+            Self::RegExpPrototypeSymbolSplit => Some(REGEXP_SYMBOL_SPLIT_NAME),
             _ => None,
         }
     }
