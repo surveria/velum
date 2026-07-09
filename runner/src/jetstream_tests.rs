@@ -1,4 +1,6 @@
-use super::{LATENCY_OVER, LATENCY_WITHIN, benchmark_source, budget_check};
+use super::{
+    LATENCY_OVER, LATENCY_WITHIN, benchmark_source, budget_check, quickjs_source_from_workload,
+};
 use std::time::Duration;
 
 #[test]
@@ -25,6 +27,15 @@ fn benchmark_source_appends_sync_harness() -> anyhow::Result<()> {
     ensure_bool(
         source.contains("runIteration()"),
         "harness must run iteration",
+    )?;
+    ensure_bool(
+        !source.contains("var performance"),
+        "rsqjs harness must use the engine performance builtin",
+    )?;
+    let quickjs = quickjs_source_from_workload("");
+    ensure_bool(
+        quickjs.contains("var performance"),
+        "bare QuickJS reference must receive its compatibility prelude",
     )
 }
 

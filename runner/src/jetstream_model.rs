@@ -31,12 +31,6 @@ pub const REFERENCE_SOURCE_MISSING: &str = "baseline miss";
 pub const REFERENCE_SOURCE_DISABLED: &str = "disabled";
 pub const REFERENCE_MEASURE_CACHED: &str = "cached; not run";
 pub const SHELL_PRELUDE: &str = r#"
-var __rsqjsJetStreamNow = 0;
-var performance = {
-    now: function() { __rsqjsJetStreamNow += 1; return __rsqjsJetStreamNow; },
-    mark: function() {},
-    measure: function() {}
-};
 var console = {
     log: function() {},
     warn: function() {},
@@ -52,6 +46,15 @@ var isInBrowser = false;
 var ArrayBuffer = undefined;
 var Uint8Array = undefined;
 "#;
+pub const QUICKJS_PERFORMANCE_PRELUDE: &str = r"
+// Bare QuickJS has no Web Performance API. This reference-only compatibility
+// surface is not used as the benchmark timer; Rust Instant remains canonical.
+var performance = {
+    now: function() { return Date.now(); },
+    mark: function() {},
+    measure: function() {}
+};
+";
 pub const SYNC_HARNESS: &str = r#"
 var __rsqjsJetStreamBenchmark = new Benchmark();
 var __rsqjsJetStreamResult = __rsqjsJetStreamBenchmark.runIteration();
