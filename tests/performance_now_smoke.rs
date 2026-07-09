@@ -9,11 +9,11 @@ fn clock_reader(state: &Rc<Cell<Duration>>) -> impl Fn() -> Duration + 'static {
     move || state.get()
 }
 
-fn ensure_number(value: Value, expected: f64) -> TestResult {
+fn ensure_number(value: &Value, expected: f64) -> TestResult {
     let Value::Number(actual) = value else {
         return Err(format!("expected numeric clock value, got {value:?}").into());
     };
-    if actual == expected {
+    if (*actual - expected).abs() <= f64::EPSILON {
         return Ok(());
     }
     Err(format!("expected clock value {expected}, got {actual}").into())
@@ -65,13 +65,13 @@ fn injected_clock_is_exact_and_clamps_regressions() -> TestResult {
     let mut vm = Vm::with_config_and_clock(VmConfig::default(), clock_reader(&state));
 
     state.set(base + Duration::from_micros(1_250));
-    ensure_number(vm.eval("performance.now()")?, 1.25)?;
+    ensure_number(&vm.eval("performance.now()")?, 1.25)?;
 
     state.set(base + Duration::from_micros(3_500));
-    ensure_number(vm.eval("performance.now()")?, 3.5)?;
+    ensure_number(&vm.eval("performance.now()")?, 3.5)?;
 
-    state.set(base + Duration::from_micros(2_000));
-    ensure_number(vm.eval("performance.now()")?, 3.5)
+    state.set(base + Duration::from_millis(2));
+    ensure_number(&vm.eval("performance.now()")?, 3.5)
 }
 
 #[test]
@@ -84,8 +84,8 @@ fn independent_vms_capture_independent_clock_origins() -> TestResult {
     let mut second = engine.create_vm_with_clock(clock_reader(&state));
 
     state.set(Duration::from_millis(12_500));
-    ensure_number(first.eval("performance.now()")?, 2_500.0)?;
-    ensure_number(second.eval("performance.now()")?, 500.0)
+    ensure_number(&first.eval("performance.now()")?, 2_500.0)?;
+    ensure_number(&second.eval("performance.now()")?, 500.0)
 }
 
 #[test]
@@ -95,5 +95,5 @@ fn runtime_context_accepts_a_deterministic_clock() -> TestResult {
     let mut context = runtime.context_with_clock(clock_reader(&state));
 
     state.set(Duration::from_millis(20_125));
-    ensure_number(context.eval("performance.now()")?, 125.0)
+    ensure_number(&context.eval("performance.now()")?, 125.0)
 }
