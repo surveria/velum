@@ -49,6 +49,7 @@ const RUNNER_NAME: &str = "`rsqjs-test-runner`";
 const QUICKJS_ENV: &str = "RSQJS_QUICKJS";
 const TEST262_ENV: &str = "RSQJS_TEST262_DIR";
 const JETSTREAM_REPORT_ENV: &str = "RSQJS_JETSTREAM_REPORT_PATH";
+const JETSTREAM_ENABLED_ENV: &str = "RSQJS_JETSTREAM_ENABLED";
 
 const REASON_MATCHED: &str = "matched expected behavior";
 const REASON_QUICKJS_ENV_MISSING: &str = "set RSQJS_QUICKJS=/path/to/qjs to enable";
@@ -84,10 +85,18 @@ fn run() -> anyhow::Result<()> {
     case_registry::validate()?;
     let quickjs = env::var_os(QUICKJS_ENV).map(PathBuf::from);
     let test262 = env::var_os(TEST262_ENV).map(PathBuf::from);
-    let report = build_report(quickjs.as_deref(), test262.as_deref(), report_kind)?;
+    let include_jetstream = report_kind == ReportKind::Full && jetstream_enabled();
+    let report = build_report(
+        quickjs.as_deref(),
+        test262.as_deref(),
+        report_kind,
+        include_jetstream,
+    )?;
     write_report(&report_path, &report)?;
     if report_kind == ReportKind::Full {
-        write_jetstream_report_from_env(&report)?;
+        if include_jetstream {
+            write_jetstream_report_from_env(&report)?;
+        }
         let outputs = report_rollup::generate_from_report_path(&report_path)?;
         print_rollup_outputs(&outputs);
     }
@@ -101,6 +110,13 @@ fn run() -> anyhow::Result<()> {
         report.failed_count(),
         report_path.display()
     )
+}
+
+fn jetstream_enabled() -> bool {
+    env::var(JETSTREAM_ENABLED_ENV).map_or(true, |value| {
+        let value = value.trim();
+        value != "0" && !value.eq_ignore_ascii_case("false") && !value.eq_ignore_ascii_case("no")
+    })
 }
 
 fn write_jetstream_report_from_env(report: &FullReport) -> anyhow::Result<()> {
@@ -316,6 +332,7 @@ fn build_report(
     quickjs: Option<&Path>,
     test262: Option<&Path>,
     report_kind: ReportKind,
+    include_jetstream: bool,
 ) -> anyhow::Result<FullReport> {
     let timer = timing::RunTimer::start();
     let mut corpora = vec![run_engine_corpus(), run_test262_corpus()];
@@ -326,7 +343,7 @@ fn build_report(
     } else {
         benchmarks::BenchmarkReport::not_run()
     };
-    let jetstream = if report_kind == ReportKind::Full {
+    let jetstream = if include_jetstream {
         jetstream::run()
     } else {
         jetstream::JetStreamReport::not_run()

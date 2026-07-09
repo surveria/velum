@@ -5,25 +5,38 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 cd "${repo_root}"
 
+if [[ -z "${RSQJS_HOST_LOCK_HELD:-}" ]]; then
+  lock_mode=exclusive
+  if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" == "1" ]]; then
+    lock_mode=shared
+  fi
+  exec "${script_dir}/with-host-lock.sh" "${lock_mode}" -- "$0" "$@"
+fi
+
 # The runner lives in `runner/` as a nested workspace and depends on this local
 # engine crate through `rs-quickjs = { path = ".." }`.
 export RSQJS_BUILD_REPO_ROOT="${RSQJS_BUILD_REPO_ROOT:-${repo_root}}"
 export RSQJS_BUILD_COMMIT_SHA="${RSQJS_BUILD_COMMIT_SHA:-$(git rev-parse HEAD)}"
 
-# --- Fast gates: run the cheap checks first so the pipeline stops before it
-# compiles anything or downloads corpora. On pull requests and merge groups CI
-# sets RSQJS_BASE_REF, which turns on base-relative policy gates.
-"${script_dir}/check-touched-file-sizes.sh" "${RSQJS_BASE_REF:-origin/main}"
-cargo fmt --all -- --check
-cargo fmt --manifest-path runner/Cargo.toml --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo clippy --manifest-path runner/Cargo.toml --all-targets --all-features -- -D warnings
+# Post-merge performance collection reuses the exact tree that already passed
+# the required correctness gate. It runs only the report phase under the host's
+# exclusive benchmark lock.
+if [[ "${RSQJS_PERFORMANCE_ONLY:-0}" != "1" ]]; then
+  # --- Fast gates: run the cheap checks first so the pipeline stops before it
+  # compiles anything or downloads corpora. On pull requests and merge groups CI
+  # sets RSQJS_BASE_REF, which turns on base-relative policy gates.
+  "${script_dir}/check-touched-file-sizes.sh" "${RSQJS_BASE_REF:-origin/main}"
+  cargo fmt --all -- --check
+  cargo fmt --manifest-path runner/Cargo.toml --all -- --check
+  cargo clippy --all-targets --all-features -- -D warnings
+  cargo clippy --manifest-path runner/Cargo.toml --all-targets --all-features -- -D warnings
 
-# --- Tests and docs for both crates. ---
-cargo test --all-targets --all-features
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
-cargo test --manifest-path runner/Cargo.toml --all-targets --all-features
-RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path runner/Cargo.toml --no-deps --all-features
+  # --- Tests and docs for both crates. ---
+  cargo test --all-targets --all-features
+  RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
+  cargo test --manifest-path runner/Cargo.toml --all-targets --all-features
+  RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path runner/Cargo.toml --no-deps --all-features
+fi
 
 # --- Reference engine and corpora: only needed for the report/benchmark run, so
 # prepare them after the gates and tests have passed. ---
@@ -58,6 +71,14 @@ export RSQJS_REPORT_RUN_ID="${RSQJS_REPORT_RUN_ID:-${GITHUB_RUN_ID:-}}"
 export RSQJS_REPORT_RUN_ATTEMPT="${RSQJS_REPORT_RUN_ATTEMPT:-${GITHUB_RUN_ATTEMPT:-}}"
 export RSQJS_REPORT_REPOSITORY="${RSQJS_REPORT_REPOSITORY:-${GITHUB_REPOSITORY:-}}"
 export RSQJS_REPORT_WORKFLOW="${RSQJS_REPORT_WORKFLOW:-${GITHUB_WORKFLOW:-}}"
+case "${RSQJS_JETSTREAM_ENABLED:-1}" in
+  0|false|FALSE|no|NO)
+    jetstream_enabled=0
+    ;;
+  *)
+    jetstream_enabled=1
+    ;;
+esac
 
 write_metadata_value() {
   local key="$1"
@@ -92,8 +113,10 @@ metadata_path="${reports_root}/rsqjs-report-metadata.env"
   write_metadata_value 'RSQJS_ARTIFACT_SCHEMA' '1'
   write_metadata_value 'RSQJS_ARTIFACT_REPORT_FILE' "${RSQJS_REPORT_REPORT_FILE}"
   write_metadata_value 'RSQJS_ARTIFACT_REPORT_RELATIVE_PATH' "${RSQJS_REPORT_REPORT_RELATIVE_PATH}"
-  write_metadata_value 'RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE' "${RSQJS_REPORT_JETSTREAM_REPORT_FILE}"
-  write_metadata_value 'RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH' "${RSQJS_REPORT_JETSTREAM_REPORT_RELATIVE_PATH}"
+  if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" != "1" && "${jetstream_enabled}" != "0" ]]; then
+    write_metadata_value 'RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE' "${RSQJS_REPORT_JETSTREAM_REPORT_FILE}"
+    write_metadata_value 'RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH' "${RSQJS_REPORT_JETSTREAM_REPORT_RELATIVE_PATH}"
+  fi
   write_metadata_value 'RSQJS_ARTIFACT_TIMESTAMP' "${RSQJS_REPORT_TIMESTAMP}"
   write_metadata_value 'RSQJS_ARTIFACT_COMMIT_SHA' "${RSQJS_REPORT_COMMIT_SHA}"
   write_metadata_value 'RSQJS_ARTIFACT_TREE_SHA' "${RSQJS_REPORT_TREE_SHA}"
@@ -108,7 +131,7 @@ metadata_path="${reports_root}/rsqjs-report-metadata.env"
 
 if [[ "${report_path}" == target/rsqjs-reports/* ]]; then
   printf 'local/CI report artifact: %s\n' "${report_path}"
-  if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" != "1" ]]; then
+  if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" != "1" && "${jetstream_enabled}" != "0" ]]; then
     printf 'local/CI JetStream report artifact: %s\n' "${RSQJS_JETSTREAM_REPORT_PATH}"
   fi
   printf 'local/CI report artifact root: %s\n' "${reports_root}"
@@ -116,7 +139,7 @@ if [[ "${report_path}" == target/rsqjs-reports/* ]]; then
   printf 'do not commit this report from a feature PR; CI uploads the artifact and the post-merge publisher commits the canonical reports/test-runs copy\n'
 else
   printf 'canonical tracked test report: %s\n' "${report_path}"
-  if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" != "1" ]]; then
+  if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" != "1" && "${jetstream_enabled}" != "0" ]]; then
     printf 'canonical tracked JetStream report: %s\n' "${RSQJS_JETSTREAM_REPORT_PATH}"
   fi
   printf 'report metadata: %s\n' "${metadata_path}"
