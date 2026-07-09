@@ -4,7 +4,7 @@ use crate::{
     lexer::TokenKind,
 };
 
-use super::{Parser, expression::ObjectPropertyName};
+use super::{Parser, literal::ObjectPropertyName};
 
 impl Parser {
     pub(super) fn next_is_binding_pattern(&self) -> bool {

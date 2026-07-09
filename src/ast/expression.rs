@@ -137,6 +137,7 @@ pub enum Expr {
         is_async: bool,
     },
     Object(Vec<ObjectProperty>),
+    ArrayHole,
     Array(Vec<Self>),
     New {
         constructor: Box<Self>,

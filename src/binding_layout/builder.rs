@@ -511,7 +511,8 @@ impl LayoutBuilder {
             | Expr::RegExpLiteral { .. }
             | Expr::This
             | Expr::SuperMember { .. }
-            | Expr::NewTarget => Ok(()),
+            | Expr::NewTarget
+            | Expr::ArrayHole => Ok(()),
             Expr::TemplateLiteral { expressions, .. } => {
                 self.analyze_exprs(expressions, scope, function)
             }

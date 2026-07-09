@@ -492,6 +492,7 @@ pub enum BytecodeInstruction {
     ConstructValueSpread,
     ArrayLiteralSpread {
         spread_flags: Rc<[bool]>,
+        holes: Rc<[bool]>,
     },
     CreateRegExp {
         pattern: StaticString,
@@ -646,6 +647,7 @@ pub enum BytecodeInstruction {
     },
     ArrayLiteral {
         len: usize,
+        holes: Rc<[bool]>,
     },
     ObjectLiteral {
         properties: Rc<[BytecodeObjectProperty]>,

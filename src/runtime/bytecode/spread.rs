@@ -13,6 +13,7 @@ use super::state::BytecodeState;
 /// argument values or an abrupt completion raised by user iterator code.
 enum SpreadExpansion {
     Values(Vec<Value>),
+    ValuesWithHoles(Vec<Option<Value>>),
     Abrupt(Completion),
 }
 
@@ -31,6 +32,9 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
+            SpreadExpansion::ValuesWithHoles(_) => Err(Error::runtime(
+                "spread argument expansion unexpectedly contained array holes",
+            )),
             SpreadExpansion::Abrupt(completion) => Ok(Some(completion)),
         }
     }
@@ -39,9 +43,23 @@ impl Context {
         &mut self,
         state: &mut BytecodeState,
         spread_flags: &[bool],
+        holes: &[bool],
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
-        self.eval_bytecode_collect_spread_args(state, spread_flags, next)
+        let value_count = holes.iter().filter(|hole| !**hole).count();
+        let values = state.stack.pop_many(value_count)?;
+        match self.expand_array_literal_values(values, spread_flags, holes)? {
+            SpreadExpansion::ValuesWithHoles(values) => {
+                let array = self.create_array_literal_from_options(values)?;
+                state.stack.push(array);
+                state.pc = next;
+                Ok(None)
+            }
+            SpreadExpansion::Values(_) => Err(Error::runtime(
+                "array literal spread expansion unexpectedly omitted hole metadata",
+            )),
+            SpreadExpansion::Abrupt(completion) => Ok(Some(completion)),
+        }
     }
 
     fn expand_spread_values(
@@ -71,6 +89,48 @@ impl Context {
             }
         }
         Ok(SpreadExpansion::Values(expanded))
+    }
+
+    fn expand_array_literal_values(
+        &mut self,
+        values: Vec<Value>,
+        spread_flags: &[bool],
+        holes: &[bool],
+    ) -> Result<SpreadExpansion> {
+        if spread_flags.len() != holes.len() {
+            return Err(Error::runtime("array literal spread metadata mismatch"));
+        }
+        let expected_values = holes.iter().filter(|hole| !**hole).count();
+        if values.len() != expected_values {
+            return Err(Error::runtime("array literal spread value count mismatch"));
+        }
+        let mut value_iter = values.into_iter();
+        let mut expanded = Vec::with_capacity(spread_flags.len());
+        for (spread, hole) in spread_flags.iter().copied().zip(holes.iter().copied()) {
+            if hole {
+                expanded.push(None);
+                continue;
+            }
+            let Some(value) = value_iter.next() else {
+                return Err(Error::runtime("array literal spread value count mismatch"));
+            };
+            if !spread {
+                expanded.push(Some(value));
+                continue;
+            }
+            let mut source = self.for_of_source(value)?;
+            loop {
+                self.step()?;
+                match self.for_of_step(&mut source)? {
+                    ForOfStep::Value(value) => expanded.push(Some(value)),
+                    ForOfStep::Done => break,
+                    ForOfStep::Abrupt(completion) => {
+                        return Ok(SpreadExpansion::Abrupt(completion));
+                    }
+                }
+            }
+        }
+        Ok(SpreadExpansion::ValuesWithHoles(expanded))
     }
 
     /// Reads the packed argument array produced by `CollectSpreadArgs` back

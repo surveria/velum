@@ -338,7 +338,8 @@ impl CaptureBindingCollector {
             | Expr::RegExpLiteral { .. }
             | Expr::This
             | Expr::SuperMember { .. }
-            | Expr::NewTarget => {}
+            | Expr::NewTarget
+            | Expr::ArrayHole => {}
             Expr::TemplateLiteral { expressions, .. } => self.collect_exprs(expressions),
             Expr::Function { params, body, .. }
             | Expr::ArrowFunction { params, body, .. }

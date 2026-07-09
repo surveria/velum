@@ -36,4 +36,31 @@ if (trailing.length !== 2 || trailing[1] !== 2) {
     throw new Test262Error("trailing comma array literal had unexpected elements");
 }
 
+let holes = [,, 42, ,];
+if (holes.length !== 4) {
+    throw new Test262Error("array elisions did not set length");
+}
+
+if (Object.hasOwn(holes, "0") || Object.hasOwn(holes, "1") || Object.hasOwn(holes, "3")) {
+    throw new Test262Error("array elisions materialized own properties");
+}
+
+Array.prototype[0] = "proto";
+let inherited = [, "own"];
+let inheritedValue = inherited[0];
+delete Array.prototype[0];
+if (inheritedValue !== "proto" || inherited[1] !== "own") {
+    throw new Test262Error("array elisions did not preserve inherited element lookup");
+}
+
+let spreadAfterHole = [, ...[1, 2]];
+if (
+    spreadAfterHole.length !== 3 ||
+    Object.hasOwn(spreadAfterHole, "0") ||
+    spreadAfterHole[1] !== 1 ||
+    spreadAfterHole[2] !== 2
+) {
+    throw new Test262Error("array elision before spread had unexpected shape");
+}
+
 values.length + values[3] - 4
