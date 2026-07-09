@@ -26,6 +26,7 @@ if [[ "${RSQJS_PERFORMANCE_ONLY:-0}" != "1" ]]; then
   # compiles anything or downloads corpora. On pull requests and merge groups CI
   # sets RSQJS_BASE_REF, which turns on base-relative policy gates.
   "${script_dir}/check-touched-file-sizes.sh" "${RSQJS_BASE_REF:-origin/main}"
+  "${script_dir}/check-architecture-boundaries.sh" --self-test
   cargo fmt --all -- --check
   cargo fmt --manifest-path runner/Cargo.toml --all -- --check
   cargo clippy --all-targets --all-features -- -D warnings
