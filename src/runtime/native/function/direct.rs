@@ -348,7 +348,7 @@ impl Context {
             }
             NativeCallTarget::ObjectIs => Some(Ok(Self::eval_direct_object_is(args))),
             NativeCallTarget::ObjectIsExtensible => {
-                Some(self.eval_direct_object_is_extensible(args))
+                Some(self.eval_object_is_extensible(runtime_call_args(args)))
             }
             NativeCallTarget::ObjectIsFrozen => Some(self.eval_direct_object_is_frozen(args)),
             NativeCallTarget::ObjectIsSealed => Some(self.eval_direct_object_is_sealed(args)),

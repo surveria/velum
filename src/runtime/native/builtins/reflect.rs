@@ -176,7 +176,7 @@ impl Context {
     }
 
     pub(in crate::runtime) fn eval_reflect_is_extensible(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
         _this: &Value,
     ) -> Result<Value> {

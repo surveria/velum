@@ -15,6 +15,12 @@ const PROXY_TRAP_GET: &str = "get";
 const PROXY_TRAP_SET: &str = "set";
 const PROXY_TRAP_HAS: &str = "has";
 const PROXY_TRAP_DELETE: &str = "deleteProperty";
+const PROXY_TRAP_GET_PROTOTYPE_OF: &str = "getPrototypeOf";
+const PROXY_TRAP_SET_PROTOTYPE_OF: &str = "setPrototypeOf";
+const PROXY_TRAP_IS_EXTENSIBLE: &str = "isExtensible";
+const PROXY_TRAP_PREVENT_EXTENSIONS: &str = "preventExtensions";
+const PROXY_GET_PROTOTYPE_INVALID_ERROR: &str =
+    "proxy getPrototypeOf trap must return an object or null";
 
 impl Context {
     pub(in crate::runtime) fn proxy_constructor_value(&mut self) -> Result<Value> {
@@ -147,6 +153,57 @@ impl Context {
         };
         let key = self.heap_string_value(name)?;
         let result = self.eval_call_value(trap, &[target, key], handler)?;
+        Ok(result.is_truthy())
+    }
+
+    /// Proxy `[[GetPrototypeOf]]`.
+    pub(in crate::runtime) fn proxy_get_prototype_of(&mut self, id: ObjectId) -> Result<Value> {
+        let (target, handler) = self.proxy_target_handler(id)?;
+        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_GET_PROTOTYPE_OF)? else {
+            return self.eval_object_get_prototype_of(RuntimeCallArgs::values(&[target]));
+        };
+        let result = self.eval_call_value(trap, &[target], handler)?;
+        if !matches!(result, Value::Object(_) | Value::Null) {
+            return Err(Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR));
+        }
+        Ok(result)
+    }
+
+    /// Proxy `[[SetPrototypeOf]]`.
+    pub(in crate::runtime) fn proxy_set_prototype_of(
+        &mut self,
+        id: ObjectId,
+        prototype: Value,
+    ) -> Result<bool> {
+        let (target, handler) = self.proxy_target_handler(id)?;
+        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_SET_PROTOTYPE_OF)? else {
+            self.eval_direct_object_set_prototype_of(&[target, prototype])?;
+            return Ok(true);
+        };
+        let result = self.eval_call_value(trap, &[target, prototype], handler)?;
+        Ok(result.is_truthy())
+    }
+
+    /// Proxy `[[IsExtensible]]`.
+    pub(in crate::runtime) fn proxy_is_extensible(&mut self, id: ObjectId) -> Result<bool> {
+        let (target, handler) = self.proxy_target_handler(id)?;
+        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_IS_EXTENSIBLE)? else {
+            return Ok(self
+                .eval_direct_object_is_extensible(&[target])?
+                .is_truthy());
+        };
+        let result = self.eval_call_value(trap, &[target], handler)?;
+        Ok(result.is_truthy())
+    }
+
+    /// Proxy `[[PreventExtensions]]`.
+    pub(in crate::runtime) fn proxy_prevent_extensions(&mut self, id: ObjectId) -> Result<bool> {
+        let (target, handler) = self.proxy_target_handler(id)?;
+        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_PREVENT_EXTENSIONS)? else {
+            self.eval_direct_object_prevent_extensions(&[target])?;
+            return Ok(true);
+        };
+        let result = self.eval_call_value(trap, &[target], handler)?;
         Ok(result.is_truthy())
     }
 }

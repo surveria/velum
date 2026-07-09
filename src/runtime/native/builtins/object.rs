@@ -183,6 +183,7 @@ impl Context {
         let values = args.as_slice();
         let target = Self::argument_or_undefined(values.first());
         match target {
+            Value::Object(id) if self.objects.is_proxy(id) => self.proxy_get_prototype_of(id),
             Value::Object(id) => self.objects.prototype_value(id),
             Value::Function(id) => self.function_object_prototype_value(id),
             Value::NativeFunction(id) => self.native_function_object_prototype_value(id),
