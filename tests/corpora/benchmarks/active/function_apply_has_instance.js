@@ -13,7 +13,7 @@ var hasInstance = Function.prototype[Symbol.hasInstance];
 
 var total = 0;
 
-for (var round = 0; round < 6000; round++) {
+for (var round = 0; round < 480000; round++) {
     total += sum.apply(null, [round, round + 1, round + 2, round + 3]);
     total += sum.apply({}, { length: 3, 0: round, 1: round + 1, 2: round + 2 });
 

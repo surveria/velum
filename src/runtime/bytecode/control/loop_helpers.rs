@@ -1,7 +1,11 @@
 use crate::{
-    bytecode::{BytecodeBinding, BytecodeNumericBinaryOp, BytecodeNumericCompareOp},
+    bytecode::{
+        BytecodeBinding, BytecodeBlock, BytecodeInstruction, BytecodeNumericBinaryOp,
+        BytecodeNumericCompareOp,
+    },
     error::Result,
     runtime::{Context, binding::scope::BindingCell, numeric::number_to_i32},
+    syntax::UpdateOp,
     value::Value,
 };
 
@@ -15,6 +19,37 @@ pub(super) fn fast_loop_compare(op: BytecodeNumericCompareOp, left: f64, right: 
         BytecodeNumericCompareOp::LessEqual => left <= right,
         BytecodeNumericCompareOp::Greater => left > right,
         BytecodeNumericCompareOp::GreaterEqual => left >= right,
+    }
+}
+
+pub(super) fn bytecode_for_loop_update_step(
+    update: &BytecodeBlock,
+) -> Option<(&BytecodeBinding, &BytecodeBinding, f64)> {
+    match update.instructions() {
+        [
+            BytecodeInstruction::LoadBinding(update_read),
+            BytecodeInstruction::PushLiteral(Value::Number(update_step)),
+            BytecodeInstruction::NumberBinary(BytecodeNumericBinaryOp::Add),
+            BytecodeInstruction::StoreBinding(update_write),
+            BytecodeInstruction::StoreLast,
+        ] => Some((update_read, update_write, *update_step)),
+        [
+            BytecodeInstruction::UpdateBinding {
+                name,
+                op: UpdateOp::Increment,
+                ..
+            },
+            BytecodeInstruction::StoreLast,
+        ] => Some((name, name, 1.0)),
+        [
+            BytecodeInstruction::UpdateBinding {
+                name,
+                op: UpdateOp::Decrement,
+                ..
+            },
+            BytecodeInstruction::StoreLast,
+        ] => Some((name, name, -1.0)),
+        _ => None,
     }
 }
 
