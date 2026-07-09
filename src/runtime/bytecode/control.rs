@@ -1,4 +1,5 @@
 mod array_add_loop;
+mod array_fill_loop;
 mod block_lexical_loop;
 mod for_loop;
 mod switch_for_loop;

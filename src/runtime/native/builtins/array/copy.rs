@@ -23,6 +23,9 @@ impl Context {
     ) -> Result<Value> {
         Self::eval_array_discard_args(args);
         Self::ensure_array_like_object(this_value)?;
+        if let Some(value) = self.eval_packed_array_to_reversed(this_value)? {
+            return Ok(value);
+        }
         let length = self.array_like_length(this_value)?;
         let mut elements = Vec::new();
         for offset in 0..length {
@@ -54,6 +57,11 @@ impl Context {
         let start = Self::array_slice_bound(args.first(), length, 0)?;
         let (skip_count, items) = Self::array_splice_counts(args, length, start)?;
         let new_length = Self::array_spliced_length(length, skip_count, items.len())?;
+        if let Some(value) =
+            self.eval_packed_array_to_spliced(this_value, start, skip_count, &items, new_length)?
+        {
+            return Ok(value);
+        }
         let mut elements = Vec::new();
         for index in 0..start {
             self.step()?;
@@ -71,6 +79,50 @@ impl Context {
                 .ok_or_else(|| Error::limit(ARRAY_COPY_INDEX_ERROR))?;
         }
         self.create_array_from_elements(elements)
+    }
+
+    fn eval_packed_array_to_reversed(&mut self, this_value: &Value) -> Result<Option<Value>> {
+        let Some(mut values) = self.packed_default_array_copy_values(this_value)? else {
+            return Ok(None);
+        };
+        self.charge_runtime_steps(values.len())?;
+        values.reverse();
+        self.create_array_from_elements(values).map(Some)
+    }
+
+    fn eval_packed_array_to_spliced(
+        &mut self,
+        this_value: &Value,
+        start: usize,
+        skip_count: usize,
+        items: &[Value],
+        new_length: usize,
+    ) -> Result<Option<Value>> {
+        let Some(values) = self.packed_default_array_copy_values(this_value)? else {
+            return Ok(None);
+        };
+        let read = start
+            .checked_add(skip_count)
+            .ok_or_else(|| Error::limit(ARRAY_COPY_INDEX_ERROR))?;
+        let Some(prefix) = values.get(0..start) else {
+            return Ok(None);
+        };
+        let Some(tail) = values.get(read..) else {
+            return Ok(None);
+        };
+        let mut elements = Vec::with_capacity(new_length);
+        elements.extend_from_slice(prefix);
+        elements.extend_from_slice(items);
+        elements.extend_from_slice(tail);
+        self.charge_runtime_steps(values.len())?;
+        self.create_array_from_elements(elements).map(Some)
+    }
+
+    fn packed_default_array_copy_values(&self, value: &Value) -> Result<Option<Vec<Value>>> {
+        let Value::Object(id) = value else {
+            return Ok(None);
+        };
+        self.objects.packed_default_array_values_if_array(*id)
     }
 
     pub(in crate::runtime::native) fn eval_array_with(
