@@ -77,11 +77,14 @@ if [[ -n "${test262_path}" ]]; then
 fi
 export RSQJS_TEST262_RUN_ALL="${RSQJS_TEST262_RUN_ALL:-1}"
 
-# --- Build the engine CLI, then run the report/benchmarks through the runner,
-# which drives everything in-process and compares against an embedded QuickJS
-# reference behind the `reference-quickjs` feature. ---
-cargo build --release --bin rsqjs
-cargo run --release --manifest-path runner/Cargo.toml --features reference-quickjs -- --report "${report_path}"
+# --- Run either the required correctness report or the full performance report.
+# Correctness keeps the external QuickJS differential check but does not compile
+# the embedded QuickJS reference used only by project/JetStream benchmarks. ---
+if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" == "1" ]]; then
+  cargo run --release --manifest-path runner/Cargo.toml -- --correctness "${report_path}"
+else
+  cargo run --release --manifest-path runner/Cargo.toml --features reference-quickjs -- --report "${report_path}"
+fi
 
 mkdir -p "${reports_root}"
 metadata_path="${reports_root}/rsqjs-report-metadata.env"
@@ -104,13 +107,17 @@ metadata_path="${reports_root}/rsqjs-report-metadata.env"
 } > "${metadata_path}"
 
 if [[ "${report_path}" == target/rsqjs-reports/* ]]; then
-  printf 'local/CI benchmark report artifact: %s\n' "${report_path}"
-  printf 'local/CI JetStream report artifact: %s\n' "${RSQJS_JETSTREAM_REPORT_PATH}"
+  printf 'local/CI report artifact: %s\n' "${report_path}"
+  if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" != "1" ]]; then
+    printf 'local/CI JetStream report artifact: %s\n' "${RSQJS_JETSTREAM_REPORT_PATH}"
+  fi
   printf 'local/CI report artifact root: %s\n' "${reports_root}"
   printf 'report metadata artifact: %s\n' "${metadata_path}"
   printf 'do not commit this report from a feature PR; CI uploads the artifact and the post-merge publisher commits the canonical reports/test-runs copy\n'
 else
   printf 'canonical tracked test report: %s\n' "${report_path}"
-  printf 'canonical tracked JetStream report: %s\n' "${RSQJS_JETSTREAM_REPORT_PATH}"
+  if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" != "1" ]]; then
+    printf 'canonical tracked JetStream report: %s\n' "${RSQJS_JETSTREAM_REPORT_PATH}"
+  fi
   printf 'report metadata: %s\n' "${metadata_path}"
 fi

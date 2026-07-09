@@ -4,12 +4,12 @@ use anyhow::{Context as _, bail};
 
 use crate::report_rollup;
 
-const USAGE: &str =
-    "usage: rsqjs-test-runner --report <path> | --benchmarks <path> | --aggregate-reports <dir>";
+const USAGE: &str = "usage: rsqjs-test-runner --report <path> | --correctness <path> | --benchmarks <path> | --aggregate-reports <dir>";
 
 #[derive(Debug)]
 pub enum Config {
     Run { report_path: PathBuf },
+    Correctness { report_path: PathBuf },
     Benchmarks { report_path: PathBuf },
     AggregateReports { report_dir: PathBuf },
 }
@@ -32,6 +32,13 @@ impl Config {
             let report_path = args.next().context("missing path after --benchmarks")?;
             ensure_no_extra_arg(args)?;
             return Ok(Self::Benchmarks {
+                report_path: PathBuf::from(report_path),
+            });
+        }
+        if flag == "--correctness" {
+            let report_path = args.next().context("missing path after --correctness")?;
+            ensure_no_extra_arg(args)?;
+            return Ok(Self::Correctness {
                 report_path: PathBuf::from(report_path),
             });
         }

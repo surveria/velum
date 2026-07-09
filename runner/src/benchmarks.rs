@@ -60,6 +60,23 @@ pub struct BenchmarkReport {
     pub elapsed: std::time::Duration,
 }
 
+impl BenchmarkReport {
+    #[must_use]
+    pub const fn not_run() -> Self {
+        Self {
+            rows: Vec::new(),
+            measured: 0,
+            in_process_measured: 0,
+            failed: 0,
+            invalid: 0,
+            skipped: 0,
+            over_latency_budget: 0,
+            over_memory_budget: 0,
+            elapsed: std::time::Duration::ZERO,
+        }
+    }
+}
+
 #[derive(Debug, Tabled)]
 pub struct BenchmarkRow {
     pub(crate) benchmark: String,
@@ -115,17 +132,7 @@ pub fn run() -> BenchmarkReport {
     let config = MeasureConfig::in_process_from_env();
     let reference = make_reference();
     let filter = std::env::var(ENV_BENCH_FILTER).ok();
-    let mut report = BenchmarkReport {
-        rows: Vec::new(),
-        measured: 0,
-        in_process_measured: 0,
-        failed: 0,
-        invalid: 0,
-        skipped: 0,
-        over_latency_budget: 0,
-        over_memory_budget: 0,
-        elapsed: std::time::Duration::ZERO,
-    };
+    let mut report = BenchmarkReport::not_run();
     for case in cases::benchmark_cases() {
         if let Some(filter) = filter.as_deref()
             && !case.id.contains(filter)

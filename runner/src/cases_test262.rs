@@ -196,6 +196,7 @@ pub fn test262_cases() -> Vec<EngineCase> {
     cases.extend(test262_binding_cases());
     cases.extend(test262_statement_cases());
     cases.extend(test262_class_cases());
+    cases.extend(super::cases_test262_additions::test262_additional_cases());
     cases
 }
 
@@ -675,11 +676,6 @@ fn test262_class_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/statements/class_fields",
             path: PATH_TEST262_CLASS_FIELDS,
-            expectation: Expectation::Value("42"),
-        },
-        EngineCase {
-            id: "built-ins/Map/map_set_baseline",
-            path: super::cases_test262_collections::PATH_TEST262_MAP_SET,
             expectation: Expectation::Value("42"),
         },
         EngineCase {
