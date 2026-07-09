@@ -11,6 +11,7 @@ pub(in crate::runtime::native) use regexp::{
 };
 
 const ASYNC_FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const ARRAY_BUFFER_NAME: &str = "ArrayBuffer";
 pub(in crate::runtime::native) const ASYNC_FUNCTION_NAME: &str = "AsyncFunction";
 const BOOLEAN_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const BOOLEAN_NAME: &str = "Boolean";
@@ -205,6 +206,7 @@ pub(in crate::runtime::native) const STRING_PROTOTYPE_TRIM_START_NAME: &str = "t
 pub(in crate::runtime::native) const STRING_PROTOTYPE_VALUE_OF_NAME: &str = "valueOf";
 const SYMBOL_FUNCTION_LENGTH: f64 = 0.0;
 pub(in crate::runtime::native) const SYMBOL_NAME: &str = "Symbol";
+pub(in crate::runtime::native) const UINT8_ARRAY_NAME: &str = "Uint8Array";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(in crate::runtime) enum NativeFunctionKind {
@@ -243,6 +245,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ArrayToReversed,
     ArrayToSpliced,
     ArrayWith,
+    ArrayBuffer,
     AsyncFunction,
     Boolean,
     BooleanPrototypeToString,
@@ -457,6 +460,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     SymbolPrototypeDescriptionGetter,
     SymbolPrototypeToString,
     SymbolPrototypeValueOf,
+    Uint8Array,
     WeakMap,
     WeakMapDelete,
     WeakMapGet,
@@ -576,6 +580,7 @@ impl NativeFunctionKind {
 
     const fn core_length(self) -> Option<f64> {
         match self {
+            Self::ArrayBuffer | Self::Uint8Array => Some(1.0),
             Self::AsyncFunction => Some(ASYNC_FUNCTION_FUNCTION_LENGTH),
             Self::Boolean => Some(BOOLEAN_FUNCTION_LENGTH),
             Self::BoundFunction(_) => Some(BOUND_FUNCTION_LENGTH),
@@ -731,6 +736,7 @@ impl NativeFunctionKind {
     const fn core_name(self) -> Option<&'static str> {
         match self {
             Self::AsyncFunction => Some(ASYNC_FUNCTION_NAME),
+            Self::ArrayBuffer => Some(ARRAY_BUFFER_NAME),
             Self::Boolean => Some(BOOLEAN_NAME),
             Self::BoundFunction(_) => Some(BOUND_FUNCTION_NAME),
             Self::Eval => Some(EVAL_NAME),
@@ -766,6 +772,7 @@ impl NativeFunctionKind {
             Self::Symbol => Some(SYMBOL_NAME),
             Self::SymbolFor => Some("for"),
             Self::SymbolKeyFor => Some("keyFor"),
+            Self::Uint8Array => Some(UINT8_ARRAY_NAME),
             _ => None,
         }
     }

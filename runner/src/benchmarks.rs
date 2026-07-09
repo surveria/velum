@@ -43,6 +43,9 @@ const DETAIL_LATENCY_EXCEPTION: &str = "latency budget exception tracked";
 const DETAIL_QUALITY_GATE: &str = "measurement quality gate failed";
 const DETAIL_REFERENCE_COMPLETED: &str = "QuickJS reference completed";
 const MAX_BENCHMARK_DETAIL_CHARS: usize = 80;
+const IMAGE_45P_RGBA_BYTES: usize = 80 * 45 * 4;
+const HOST_IMAGE_PREFIX: &str = "typed_array_host_";
+const ENV_BENCH_FILTER: &str = "RSQJS_BENCH_FILTER";
 
 #[derive(Debug)]
 pub struct BenchmarkReport {
@@ -111,6 +114,7 @@ pub fn run() -> BenchmarkReport {
     let timer = timing::RunTimer::start();
     let config = MeasureConfig::in_process_from_env();
     let reference = make_reference();
+    let filter = std::env::var(ENV_BENCH_FILTER).ok();
     let mut report = BenchmarkReport {
         rows: Vec::new(),
         measured: 0,
@@ -123,6 +127,11 @@ pub fn run() -> BenchmarkReport {
         elapsed: std::time::Duration::ZERO,
     };
     for case in cases::benchmark_cases() {
+        if let Some(filter) = filter.as_deref()
+            && !case.id.contains(filter)
+        {
+            continue;
+        }
         let outcome = run_benchmark_case(&case, config, reference.as_deref());
         report.measured = report.measured.saturating_add(outcome.counts.measured);
         report.in_process_measured = report
@@ -156,8 +165,10 @@ fn run_benchmark_case(
             );
         }
     };
-    let ours = timing::timed(|| bench_measure::measure(config, || RsqjsEngine.eval(&source)));
-    let reference = measure_reference(config, reference, &source);
+    let ours = timing::timed(|| {
+        bench_measure::measure(config, || eval_benchmark(&RsqjsEngine, case, &source))
+    });
+    let reference = measure_reference(config, reference, case, &source);
     let case_elapsed = timing::format_duration(case_timer.elapsed());
     match ours.value {
         Ok(stats) => measured_with_reference_result(
@@ -182,12 +193,15 @@ fn run_benchmark_case(
 fn measure_reference(
     config: MeasureConfig,
     reference: Option<&dyn BenchEngine>,
+    case: &BenchmarkCase,
     source: &str,
 ) -> ReferenceMeasurement {
     let Some(reference) = reference else {
         return ReferenceMeasurement::NotConfigured;
     };
-    let measured = timing::timed(|| bench_measure::measure(config, || reference.eval(source)));
+    let measured = timing::timed(|| {
+        bench_measure::measure(config, || eval_benchmark(reference, case, source))
+    });
     match measured.value {
         Ok(stats) => ReferenceMeasurement::Measured(timing::Timed {
             value: stats,
@@ -198,6 +212,17 @@ fn measure_reference(
             elapsed: measured.elapsed,
         }),
     }
+}
+
+fn eval_benchmark(
+    engine: &dyn BenchEngine,
+    case: &BenchmarkCase,
+    source: &str,
+) -> anyhow::Result<()> {
+    if case.id.starts_with(HOST_IMAGE_PREFIX) {
+        return engine.eval_with_host_image(source, IMAGE_45P_RGBA_BYTES);
+    }
+    engine.eval(source)
 }
 
 fn measured_with_reference_result(

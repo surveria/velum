@@ -64,6 +64,8 @@ impl Object {
             date_value: None,
             regexp_value: None,
             proxy_value: None,
+            byte_buffer: None,
+            uint8_array: None,
             is_raw_json: false,
             prototype: None,
             extensibility: super::ObjectExtensibility::Extensible,

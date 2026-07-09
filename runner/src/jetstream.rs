@@ -52,6 +52,10 @@ var console = {
     }
 };
 var isInBrowser = false;
+// Keep JetStream feature detection on the unsupported typed-array path until
+// the engine implements the broader ArrayBufferView surface these workloads use.
+var ArrayBuffer = undefined;
+var Uint8Array = undefined;
 "#;
 const SYNC_HARNESS: &str = r#"
 var __rsqjsJetStreamBenchmark = new Benchmark();

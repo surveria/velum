@@ -4,6 +4,7 @@ use crate::{
 };
 
 use super::{ArrayIndex, ObjectHeap};
+use crate::runtime::object::byte_number;
 
 impl ObjectHeap {
     pub(crate) fn dynamic_array_index_if_array(
@@ -11,7 +12,7 @@ impl ObjectHeap {
         id: ObjectId,
         property: &Value,
     ) -> Result<Option<usize>> {
-        if self.array_length_if_array(id)?.is_none() {
+        if self.array_length_if_array(id)?.is_none() && self.uint8_array(id)?.is_none() {
             return Ok(None);
         }
         let Some(index) = array_index_from_property_value(property) else {
@@ -25,6 +26,9 @@ impl ObjectHeap {
         id: ObjectId,
         index: usize,
     ) -> Result<Option<Value>> {
+        if let Some(byte) = self.uint8_array_byte(id, index)? {
+            return Ok(Some(Value::Number(f64::from(byte))));
+        }
         if self.array_length_if_array(id)?.is_none() {
             return Ok(None);
         }
@@ -100,6 +104,10 @@ impl ObjectHeap {
         value: Value,
         max_properties: usize,
     ) -> Result<bool> {
+        if self.uint8_array(id)?.is_some() {
+            self.set_uint8_array_byte(id, index, byte_number(&value)?)?;
+            return Ok(true);
+        }
         if self.array_length_if_array(id)?.is_none() {
             return Ok(false);
         }
