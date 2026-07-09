@@ -17,11 +17,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260709T095833Z.md`
-- Task: PR #373: Proxy exotic object with handler traps
-- Performance: 3.90x (64/73 >1.00x)
+- `rsqjs-test-report-20260709T104634Z.md`
+- Task: PR #378: bytecode: optimize while statement benchmark
+- Performance: 3.81x (63/73 >1.00x)
 - Memory: - (0/73 >1.00x)
-- JetStream: 23.48x (4/4 >1.00x)
+- JetStream: 23.19x (4/4 >1.00x)
 - Full Test262: 33063 passed / 69515 failed (32.23%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
@@ -364,3 +364,4 @@ Latest report:
 | `20260709T085909Z` `d8c9e6a` PR #376: Improve residual Math built-in Test262 coverage | 4.19x (65/73 >1.00x) | - (0/73 >1.00x) | 23.24x (4/4 >1.00x) | 32719 passed / 69859 failed (31.90%) |
 | `20260709T092627Z` `6a45c6f` PR #375: bytecode: optimize object literal benchmark | 3.75x (64/73 >1.00x) | - (0/73 >1.00x) | 24.43x (4/4 >1.00x) | 32719 passed / 69859 failed (31.90%) |
 | `20260709T095833Z` `0381779` PR #373: Proxy exotic object with handler traps | 3.90x (64/73 >1.00x) | - (0/73 >1.00x) | 23.48x (4/4 >1.00x) | 33063 passed / 69515 failed (32.23%) |
+| `20260709T104634Z` `6cb74bf` PR #378: bytecode: optimize while statement benchmark | 3.81x (63/73 >1.00x) | - (0/73 >1.00x) | 23.19x (4/4 >1.00x) | 33063 passed / 69515 failed (32.23%) |
