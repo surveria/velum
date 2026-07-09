@@ -17,7 +17,7 @@ use tabled::Tabled;
 use super::bench_engines::{BenchEngine, RsqjsEngine, make_reference};
 use super::bench_measure::{self, MeasureConfig, MeasureStats, format_duration, ratio_values};
 use super::cases::{self, BenchmarkCase};
-use super::report_text;
+use super::{report_text, timing};
 
 pub const BUDGET_LABEL: &str = "1.00x";
 
@@ -54,14 +54,18 @@ pub struct BenchmarkReport {
     pub skipped: usize,
     pub over_latency_budget: usize,
     pub over_memory_budget: usize,
+    pub elapsed: std::time::Duration,
 }
 
 #[derive(Debug, Tabled)]
 pub struct BenchmarkRow {
-    benchmark: String,
-    status: String,
-    source: String,
-    iterations: usize,
+    pub(crate) benchmark: String,
+    pub(crate) status: String,
+    pub(crate) source: String,
+    pub(crate) iterations: usize,
+    pub(crate) case_elapsed: String,
+    pub(crate) rsqjs_measure: String,
+    pub(crate) quickjs_measure: String,
     rsqjs_eval: String,
     quickjs_eval: String,
     latency_ratio: String,
@@ -70,7 +74,7 @@ pub struct BenchmarkRow {
     rsqjs_cv: String,
     quickjs_cv: String,
     quality: String,
-    detail: String,
+    pub(crate) detail: String,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -92,8 +96,8 @@ struct BenchmarkOutcome {
 #[derive(Debug)]
 enum ReferenceMeasurement {
     NotConfigured,
-    Measured(MeasureStats),
-    Failed(String),
+    Measured(timing::Timed<MeasureStats>),
+    Failed(timing::Timed<String>),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -104,6 +108,7 @@ struct BudgetCheck {
 
 #[must_use]
 pub fn run() -> BenchmarkReport {
+    let timer = timing::RunTimer::start();
     let config = MeasureConfig::in_process_from_env();
     let reference = make_reference();
     let mut report = BenchmarkReport {
@@ -115,6 +120,7 @@ pub fn run() -> BenchmarkReport {
         skipped: 0,
         over_latency_budget: 0,
         over_memory_budget: 0,
+        elapsed: std::time::Duration::ZERO,
     };
     for case in cases::benchmark_cases() {
         let outcome = run_benchmark_case(&case, config, reference.as_deref());
@@ -130,6 +136,7 @@ pub fn run() -> BenchmarkReport {
             .saturating_add(outcome.counts.over_latency_budget);
         report.rows.push(outcome.row);
     }
+    report.elapsed = timer.elapsed();
     report
 }
 
@@ -138,17 +145,37 @@ fn run_benchmark_case(
     config: MeasureConfig,
     reference: Option<&dyn BenchEngine>,
 ) -> BenchmarkOutcome {
+    let case_timer = timing::RunTimer::start();
     let source = match fs::read_to_string(case.path) {
         Ok(source) => source,
         Err(error) => {
-            return failed_outcome(case, &format!("failed to read '{}': {error}", case.path));
+            return failed_outcome(
+                case,
+                timing::format_duration(case_timer.elapsed()),
+                &format!("failed to read '{}': {error}", case.path),
+            );
         }
     };
-    let ours = bench_measure::measure(config, || RsqjsEngine.eval(&source));
+    let ours = timing::timed(|| bench_measure::measure(config, || RsqjsEngine.eval(&source)));
     let reference = measure_reference(config, reference, &source);
-    match ours {
-        Ok(stats) => measured_with_reference_result(case, stats, reference),
-        Err(error) => failed_with_reference(case, &error.to_string(), reference),
+    let case_elapsed = timing::format_duration(case_timer.elapsed());
+    match ours.value {
+        Ok(stats) => measured_with_reference_result(
+            case,
+            timing::Timed {
+                value: stats,
+                elapsed: ours.elapsed,
+            },
+            reference,
+            case_elapsed,
+        ),
+        Err(error) => failed_with_reference(
+            case,
+            &error.to_string(),
+            timing::format_duration(ours.elapsed),
+            reference,
+            case_elapsed,
+        ),
     }
 }
 
@@ -160,48 +187,77 @@ fn measure_reference(
     let Some(reference) = reference else {
         return ReferenceMeasurement::NotConfigured;
     };
-    match bench_measure::measure(config, || reference.eval(source)) {
-        Ok(stats) => ReferenceMeasurement::Measured(stats),
-        Err(error) => ReferenceMeasurement::Failed(format!("{}: {error}", reference.label())),
+    let measured = timing::timed(|| bench_measure::measure(config, || reference.eval(source)));
+    match measured.value {
+        Ok(stats) => ReferenceMeasurement::Measured(timing::Timed {
+            value: stats,
+            elapsed: measured.elapsed,
+        }),
+        Err(error) => ReferenceMeasurement::Failed(timing::Timed {
+            value: format!("{}: {error}", reference.label()),
+            elapsed: measured.elapsed,
+        }),
     }
 }
 
 fn measured_with_reference_result(
     case: &BenchmarkCase,
-    ours: MeasureStats,
+    ours: timing::Timed<MeasureStats>,
     reference: ReferenceMeasurement,
+    case_elapsed: String,
 ) -> BenchmarkOutcome {
     match reference {
-        ReferenceMeasurement::Measured(reference) => measured_with_reference(case, ours, reference),
-        ReferenceMeasurement::Failed(note) => reference_unavailable(case, ours, &note),
-        ReferenceMeasurement::NotConfigured => measured_without_reference(case, ours),
+        ReferenceMeasurement::Measured(reference) => {
+            measured_with_reference(case, ours, reference, case_elapsed)
+        }
+        ReferenceMeasurement::Failed(note) => {
+            reference_unavailable(case, ours, &note, case_elapsed)
+        }
+        ReferenceMeasurement::NotConfigured => measured_without_reference(case, ours, case_elapsed),
     }
 }
 
 fn failed_with_reference(
     case: &BenchmarkCase,
     detail: &str,
+    rsqjs_measure: String,
     reference: ReferenceMeasurement,
+    case_elapsed: String,
 ) -> BenchmarkOutcome {
     match reference {
         ReferenceMeasurement::Measured(reference) => failed_with_reference_measurement(
             case,
-            format_duration(reference.median()),
-            reference.cv_percent_text(),
-            reference_quality(reference),
-            &detail_with_reference_quality(detail, reference),
+            timing::MeasurementColumns::failed_with_reference(
+                case_elapsed,
+                rsqjs_measure,
+                reference.elapsed,
+            ),
+            timing::ReferenceColumns::measured(
+                format_duration(reference.value.median()),
+                reference.value.cv_percent_text(),
+            ),
+            reference_quality(reference.value),
+            &detail_with_reference_quality(detail, reference.value),
         ),
         ReferenceMeasurement::Failed(note) => failed_with_reference_measurement(
             case,
-            REFERENCE_NOT_AVAILABLE.to_owned(),
+            timing::MeasurementColumns::failed_with_reference(
+                case_elapsed,
+                rsqjs_measure,
+                note.elapsed,
+            ),
+            timing::ReferenceColumns::not_measured(REFERENCE_NOT_AVAILABLE),
             NOT_MEASURED.to_owned(),
-            NOT_MEASURED.to_owned(),
-            &format!("{detail}; reference error: {note}"),
+            &format!("{detail}; reference error: {}", note.value),
         ),
         ReferenceMeasurement::NotConfigured => failed_with_reference_measurement(
             case,
-            REFERENCE_NOT_CONFIGURED.to_owned(),
-            NOT_MEASURED.to_owned(),
+            timing::MeasurementColumns {
+                case_elapsed,
+                rsqjs_measure,
+                quickjs_measure: NOT_MEASURED.to_owned(),
+            },
+            timing::ReferenceColumns::not_measured(REFERENCE_NOT_CONFIGURED),
             NOT_MEASURED.to_owned(),
             detail,
         ),
@@ -210,18 +266,17 @@ fn failed_with_reference(
 
 fn failed_with_reference_measurement(
     case: &BenchmarkCase,
-    quickjs_eval: String,
-    quickjs_cv: String,
+    measurements: timing::MeasurementColumns,
+    quickjs: timing::ReferenceColumns,
     quality: String,
     row_detail: &str,
 ) -> BenchmarkOutcome {
     BenchmarkOutcome {
         row: failed_row(
             case,
+            measurements,
             NOT_MEASURED.to_owned(),
-            quickjs_eval,
-            NOT_MEASURED.to_owned(),
-            quickjs_cv,
+            quickjs,
             quality,
             row_detail,
         ),
@@ -257,34 +312,43 @@ fn reference_quality_failure_detail(reference: MeasureStats) -> Option<String> {
 
 fn measured_with_reference(
     case: &BenchmarkCase,
-    ours: MeasureStats,
-    reference: MeasureStats,
+    ours: timing::Timed<MeasureStats>,
+    reference: timing::Timed<MeasureStats>,
+    case_elapsed: String,
 ) -> BenchmarkOutcome {
-    if let Some(detail) = quality_failure_detail(ours, Some(reference)) {
-        return invalid_measurement_outcome(
-            case,
-            ours,
-            format_duration(reference.median()),
-            reference.cv_percent_text(),
-            &detail,
-            false,
+    if let Some(detail) = quality_failure_detail(ours.value, Some(reference.value)) {
+        let measurements =
+            timing::MeasurementColumns::measured(case_elapsed, ours.elapsed, reference.elapsed);
+        let quickjs = timing::ReferenceColumns::measured(
+            format_duration(reference.value.median()),
+            reference.value.cv_percent_text(),
         );
+        return invalid_measurement_outcome(case, ours, measurements, quickjs, &detail, false);
     }
-    let budget = budget_check(ours.median().as_nanos(), reference.median().as_nanos());
+    let budget = budget_check(
+        ours.value.median().as_nanos(),
+        reference.value.median().as_nanos(),
+    );
     let over = budget.over_budget;
     BenchmarkOutcome {
         row: BenchmarkRow {
             benchmark: case.id.to_owned(),
             status: benchmark_status(over).to_owned(),
             source: case.path.to_owned(),
-            iterations: report_iterations(ours),
-            rsqjs_eval: format_duration(ours.median()),
-            quickjs_eval: format_duration(reference.median()),
-            latency_ratio: ratio_values(ours.median().as_nanos(), reference.median().as_nanos()),
+            iterations: report_iterations(ours.value),
+            case_elapsed,
+            rsqjs_measure: timing::format_duration(ours.elapsed),
+            quickjs_measure: timing::format_duration(reference.elapsed),
+            rsqjs_eval: format_duration(ours.value.median()),
+            quickjs_eval: format_duration(reference.value.median()),
+            latency_ratio: ratio_values(
+                ours.value.median().as_nanos(),
+                reference.value.median().as_nanos(),
+            ),
             latency_budget: budget.label.to_owned(),
             memory_ratio: NOT_MEASURED.to_owned(),
-            rsqjs_cv: ours.cv_percent_text(),
-            quickjs_cv: reference.cv_percent_text(),
+            rsqjs_cv: ours.value.cv_percent_text(),
+            quickjs_cv: reference.value.cv_percent_text(),
             quality: QUALITY_VALID.to_owned(),
             detail: benchmark_detail(&detail_text(over)),
         },
@@ -297,13 +361,19 @@ fn measured_with_reference(
     }
 }
 
-fn measured_without_reference(case: &BenchmarkCase, ours: MeasureStats) -> BenchmarkOutcome {
-    if let Some(detail) = quality_failure_detail(ours, None) {
+fn measured_without_reference(
+    case: &BenchmarkCase,
+    ours: timing::Timed<MeasureStats>,
+    case_elapsed: String,
+) -> BenchmarkOutcome {
+    if let Some(detail) = quality_failure_detail(ours.value, None) {
+        let measurements =
+            timing::MeasurementColumns::without_reference(case_elapsed, ours.elapsed);
         return invalid_measurement_outcome(
             case,
             ours,
-            REFERENCE_NOT_CONFIGURED.to_owned(),
-            NOT_MEASURED.to_owned(),
+            measurements,
+            timing::ReferenceColumns::not_measured(REFERENCE_NOT_CONFIGURED),
             &detail,
             true,
         );
@@ -313,13 +383,16 @@ fn measured_without_reference(case: &BenchmarkCase, ours: MeasureStats) -> Bench
             benchmark: case.id.to_owned(),
             status: STATUS_MEASURED.to_owned(),
             source: case.path.to_owned(),
-            iterations: report_iterations(ours),
-            rsqjs_eval: format_duration(ours.median()),
+            iterations: report_iterations(ours.value),
+            case_elapsed,
+            rsqjs_measure: timing::format_duration(ours.elapsed),
+            quickjs_measure: NOT_MEASURED.to_owned(),
+            rsqjs_eval: format_duration(ours.value.median()),
             quickjs_eval: REFERENCE_NOT_CONFIGURED.to_owned(),
             latency_ratio: NOT_MEASURED.to_owned(),
             latency_budget: BUDGET_NOT_CONFIGURED.to_owned(),
             memory_ratio: NOT_MEASURED.to_owned(),
-            rsqjs_cv: ours.cv_percent_text(),
+            rsqjs_cv: ours.value.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
             detail: benchmark_detail(DETAIL_COMPLETED),
@@ -336,14 +409,21 @@ fn measured_without_reference(case: &BenchmarkCase, ours: MeasureStats) -> Bench
 /// The engine under test was measured, but the reference could not run this
 /// script (e.g. an unsupported construct): report our number without a ratio
 /// and note the reason, rather than failing the benchmark.
-fn reference_unavailable(case: &BenchmarkCase, ours: MeasureStats, note: &str) -> BenchmarkOutcome {
-    if let Some(detail) = quality_failure_detail(ours, None) {
+fn reference_unavailable(
+    case: &BenchmarkCase,
+    ours: timing::Timed<MeasureStats>,
+    note: &timing::Timed<String>,
+    case_elapsed: String,
+) -> BenchmarkOutcome {
+    if let Some(detail) = quality_failure_detail(ours.value, None) {
+        let measurements =
+            timing::MeasurementColumns::measured(case_elapsed, ours.elapsed, note.elapsed);
         return invalid_measurement_outcome(
             case,
             ours,
-            REFERENCE_NOT_AVAILABLE.to_owned(),
-            NOT_MEASURED.to_owned(),
-            &format!("{detail}; reference error: {note}"),
+            measurements,
+            timing::ReferenceColumns::not_measured(REFERENCE_NOT_AVAILABLE),
+            &format!("{detail}; reference error: {}", note.value),
             true,
         );
     }
@@ -352,16 +432,22 @@ fn reference_unavailable(case: &BenchmarkCase, ours: MeasureStats, note: &str) -
             benchmark: case.id.to_owned(),
             status: STATUS_MEASURED.to_owned(),
             source: case.path.to_owned(),
-            iterations: report_iterations(ours),
-            rsqjs_eval: format_duration(ours.median()),
+            iterations: report_iterations(ours.value),
+            case_elapsed,
+            rsqjs_measure: timing::format_duration(ours.elapsed),
+            quickjs_measure: timing::format_duration(note.elapsed),
+            rsqjs_eval: format_duration(ours.value.median()),
             quickjs_eval: REFERENCE_NOT_AVAILABLE.to_owned(),
             latency_ratio: NOT_MEASURED.to_owned(),
             latency_budget: BUDGET_NOT_AVAILABLE.to_owned(),
             memory_ratio: NOT_MEASURED.to_owned(),
-            rsqjs_cv: ours.cv_percent_text(),
+            rsqjs_cv: ours.value.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
-            detail: benchmark_detail(&format!("{DETAIL_COMPLETED}; reference error: {note}")),
+            detail: benchmark_detail(&format!(
+                "{DETAIL_COMPLETED}; reference error: {}",
+                note.value
+            )),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -374,9 +460,9 @@ fn reference_unavailable(case: &BenchmarkCase, ours: MeasureStats, note: &str) -
 
 fn invalid_measurement_outcome(
     case: &BenchmarkCase,
-    ours: MeasureStats,
-    quickjs_eval: String,
-    quickjs_cv: String,
+    ours: timing::Timed<MeasureStats>,
+    measurements: timing::MeasurementColumns,
+    quickjs: timing::ReferenceColumns,
     detail: &str,
     skipped_reference: bool,
 ) -> BenchmarkOutcome {
@@ -385,14 +471,17 @@ fn invalid_measurement_outcome(
             benchmark: case.id.to_owned(),
             status: STATUS_INVALID_BENCHMARK.to_owned(),
             source: case.path.to_owned(),
-            iterations: report_iterations(ours),
-            rsqjs_eval: format_duration(ours.median()),
-            quickjs_eval,
+            iterations: report_iterations(ours.value),
+            case_elapsed: measurements.case_elapsed,
+            rsqjs_measure: measurements.rsqjs_measure,
+            quickjs_measure: measurements.quickjs_measure,
+            rsqjs_eval: format_duration(ours.value.median()),
+            quickjs_eval: quickjs.eval,
             latency_ratio: NOT_MEASURED.to_owned(),
             latency_budget: BUDGET_INVALID.to_owned(),
             memory_ratio: NOT_MEASURED.to_owned(),
-            rsqjs_cv: ours.cv_percent_text(),
-            quickjs_cv,
+            rsqjs_cv: ours.value.cv_percent_text(),
+            quickjs_cv: quickjs.cv,
             quality: QUALITY_INVALID.to_owned(),
             detail: benchmark_detail(detail),
         },
@@ -407,14 +496,13 @@ fn invalid_measurement_outcome(
     }
 }
 
-fn failed_outcome(case: &BenchmarkCase, detail: &str) -> BenchmarkOutcome {
+fn failed_outcome(case: &BenchmarkCase, case_elapsed: String, detail: &str) -> BenchmarkOutcome {
     BenchmarkOutcome {
         row: failed_row(
             case,
+            timing::MeasurementColumns::not_measured(case_elapsed),
             NOT_MEASURED.to_owned(),
-            NOT_MEASURED.to_owned(),
-            NOT_MEASURED.to_owned(),
-            NOT_MEASURED.to_owned(),
+            timing::ReferenceColumns::not_measured(NOT_MEASURED),
             NOT_MEASURED.to_owned(),
             detail,
         ),
@@ -427,10 +515,9 @@ fn failed_outcome(case: &BenchmarkCase, detail: &str) -> BenchmarkOutcome {
 
 fn failed_row(
     case: &BenchmarkCase,
+    measurements: timing::MeasurementColumns,
     rsqjs_eval: String,
-    quickjs_eval: String,
-    rsqjs_cv: String,
-    quickjs_cv: String,
+    quickjs: timing::ReferenceColumns,
     quality: String,
     detail: &str,
 ) -> BenchmarkRow {
@@ -439,13 +526,16 @@ fn failed_row(
         status: STATUS_FAILED.to_owned(),
         source: case.path.to_owned(),
         iterations: 0,
+        case_elapsed: measurements.case_elapsed,
+        rsqjs_measure: measurements.rsqjs_measure,
+        quickjs_measure: measurements.quickjs_measure,
         rsqjs_eval,
-        quickjs_eval,
+        quickjs_eval: quickjs.eval,
         latency_ratio: NOT_MEASURED.to_owned(),
         latency_budget: NOT_MEASURED.to_owned(),
         memory_ratio: NOT_MEASURED.to_owned(),
-        rsqjs_cv,
-        quickjs_cv,
+        rsqjs_cv: NOT_MEASURED.to_owned(),
+        quickjs_cv: quickjs.cv,
         quality,
         detail: benchmark_detail(detail),
     }
@@ -580,13 +670,21 @@ mod tests {
             id: "failed-case",
             path: "tests/corpora/benchmarks/active/arithmetic_chain.js",
         };
-        let reference = sample_stats()?;
+        let reference = super::timing::Timed {
+            value: sample_stats()?,
+            elapsed: Duration::from_millis(1),
+        };
         let outcome = super::failed_with_reference(
             &case,
             "rsqjs eval failed: sample",
+            "1.00 ms".to_owned(),
             super::ReferenceMeasurement::Measured(reference),
+            "2.00 ms".to_owned(),
         );
         ensure_text(&outcome.row.status, super::STATUS_FAILED)?;
+        ensure_text(&outcome.row.case_elapsed, "2.00 ms")?;
+        ensure_text(&outcome.row.rsqjs_measure, "1.00 ms")?;
+        ensure_text(&outcome.row.quickjs_measure, "1.00 ms")?;
         ensure_text(&outcome.row.rsqjs_eval, super::NOT_MEASURED)?;
         ensure_bool(
             outcome.row.quickjs_eval != super::NOT_MEASURED,
@@ -597,50 +695,6 @@ mod tests {
             "failed row must retain QuickJS variation",
         )?;
         ensure_usize(outcome.counts.failed, 1)
-    }
-
-    #[test]
-    fn failed_benchmark_sanitizes_multiline_details() -> TestResult {
-        let case = crate::cases::BenchmarkCase {
-            id: "failed-case",
-            path: "tests/corpora/benchmarks/active/arithmetic_chain.js",
-        };
-        let outcome = super::failed_outcome(
-            &case,
-            "lexer error: unexpected character '\u{1b}'\n    at eval_script:12:4",
-        );
-
-        ensure_bool(
-            !outcome.row.detail.contains('\n'),
-            "detail must be one line",
-        )?;
-        ensure_bool(
-            !outcome.row.detail.contains('\u{1b}'),
-            "detail must escape controls",
-        )?;
-        ensure_bool(
-            outcome.row.detail.contains("\\u{001B}"),
-            "detail must preserve escaped control context",
-        )
-    }
-
-    #[test]
-    fn reference_unavailable_keeps_detail_compact() -> TestResult {
-        let case = crate::cases::BenchmarkCase {
-            id: "reference-unavailable",
-            path: "tests/corpora/benchmarks/active/arithmetic_chain.js",
-        };
-        let note = "quickjs: Error: not a function\n    at <eval> (eval_script:19:35)";
-        let outcome = super::reference_unavailable(&case, sample_stats()?, note);
-
-        ensure_bool(
-            outcome.row.detail.chars().count() <= super::MAX_BENCHMARK_DETAIL_CHARS + 3,
-            "benchmark detail must stay compact enough for table rendering",
-        )?;
-        ensure_bool(
-            !outcome.row.detail.contains('\n'),
-            "benchmark detail must be one physical table line",
-        )
     }
 
     fn sample_stats() -> Result<crate::bench_measure::MeasureStats, anyhow::Error> {
