@@ -26,6 +26,18 @@ if (
   throw new Test262Error("Reflect.setPrototypeOf mismatch");
 }
 
+var locked = {};
+Object.preventExtensions(locked);
+var cycleA = {};
+var cycleB = Object.create(cycleA);
+if (
+  Reflect.setPrototypeOf(locked, {}) !== false ||
+  Reflect.setPrototypeOf(cycleA, cycleB) !== false ||
+  Reflect.getPrototypeOf(cycleA) !== Object.prototype
+) {
+  throw new Test262Error("Reflect.setPrototypeOf should report ordinary failures as false");
+}
+
 var extensible = {};
 if (
   Reflect.isExtensible(extensible) !== true ||

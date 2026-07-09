@@ -4,7 +4,9 @@ use crate::{
     value::ObjectId,
 };
 
-use super::{ArrayIndex, Object, ObjectHeap, ObjectProperty, PropertyKey, ShapeTable};
+use super::{
+    ARRAY_LENGTH_PROPERTY, ArrayIndex, Object, ObjectHeap, ObjectProperty, PropertyKey, ShapeTable,
+};
 
 impl ObjectHeap {
     pub fn keys(&self, id: ObjectId, atoms: &AtomTable) -> Result<Vec<String>> {
@@ -99,6 +101,7 @@ impl Object {
         if self.array_length.is_some() {
             self.extend_array_element_names(keys);
             self.extend_sparse_array_element_names(atoms, keys)?;
+            push_unique_key(keys, ARRAY_LENGTH_PROPERTY.to_owned());
         } else {
             self.extend_named_array_index_names(atoms, keys)?;
         }

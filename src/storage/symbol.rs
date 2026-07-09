@@ -57,12 +57,14 @@ impl PartialEq for JsSymbol {
 #[derive(Debug, Clone, Default)]
 pub struct SymbolTable {
     entries: Vec<JsSymbol>,
+    registry: Vec<(JsString, SymbolId)>,
 }
 
 impl SymbolTable {
     pub const fn new() -> Self {
         Self {
             entries: Vec::new(),
+            registry: Vec::new(),
         }
     }
 
@@ -75,6 +77,28 @@ impl SymbolTable {
         let symbol = JsSymbol::new(id, description);
         self.entries.push(symbol.clone());
         Ok(symbol)
+    }
+
+    pub fn for_key(&mut self, key: JsString) -> Result<JsSymbol> {
+        if let Some((_, id)) = self
+            .registry
+            .iter()
+            .find(|(registered, _)| registered == &key)
+        {
+            return self.get(*id).cloned();
+        }
+        let symbol = self.create(Some(key.clone()))?;
+        self.registry.push((key, symbol.id()));
+        Ok(symbol)
+    }
+
+    pub fn key_for(&self, id: SymbolId) -> Result<Option<JsString>> {
+        self.get(id)?;
+        Ok(self
+            .registry
+            .iter()
+            .find(|(_, registered_id)| *registered_id == id)
+            .map(|(key, _)| key.clone()))
     }
 
     pub fn get(&self, id: SymbolId) -> Result<&JsSymbol> {

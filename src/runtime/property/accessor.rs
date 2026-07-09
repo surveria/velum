@@ -58,7 +58,7 @@ impl Context {
     /// Calls an accessor function and rethrows JS `Error` throw completions
     /// as engine exceptions so surrounding `try`/`catch` blocks can observe
     /// them; other abrupt completions surface as runtime errors.
-    fn call_accessor_function(
+    pub(in crate::runtime) fn call_accessor_function(
         &mut self,
         function: Value,
         this_value: Value,

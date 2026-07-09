@@ -452,6 +452,8 @@ pub(in crate::runtime) enum NativeFunctionKind {
     SetIsSupersetOf,
     SetIsDisjointFrom,
     Symbol,
+    SymbolFor,
+    SymbolKeyFor,
     SymbolPrototypeDescriptionGetter,
     SymbolPrototypeToString,
     SymbolPrototypeValueOf,
@@ -601,6 +603,7 @@ impl NativeFunctionKind {
             Self::ProxyRevoke(_) => Some(PROXY_REVOKE_FUNCTION_LENGTH),
             Self::String => Some(STRING_FUNCTION_LENGTH),
             Self::Symbol => Some(SYMBOL_FUNCTION_LENGTH),
+            Self::SymbolFor | Self::SymbolKeyFor => Some(1.0),
             _ => None,
         }
     }
@@ -761,6 +764,8 @@ impl NativeFunctionKind {
             Self::ProxyRevoke(_) => Some(PROXY_REVOKE_NAME),
             Self::String => Some(STRING_NAME),
             Self::Symbol => Some(SYMBOL_NAME),
+            Self::SymbolFor => Some("for"),
+            Self::SymbolKeyFor => Some("keyFor"),
             _ => None,
         }
     }
