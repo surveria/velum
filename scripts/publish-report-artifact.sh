@@ -8,6 +8,7 @@ cd "${repo_root}"
 default_tested_source_archive_ref="refs/rsqjs/ci-tested-sources"
 default_legacy_tested_source_archive_ref="refs/heads/ci-tested-sources"
 tested_source_archive_local_branch="rsqjs-tested-source-archive"
+null_workflow_conclusion="__RSQJS_NULL_CONCLUSION__"
 
 fail() {
   printf 'publish-report-artifact: %s\n' "$*" >&2
@@ -125,7 +126,7 @@ validate_workflow_run_fields() {
     if [[ "${status}" == completed ]]; then
       [[ "${conclusion}" == success ]] || return 1
     else
-      [[ "${status}" == in_progress && -z "${conclusion}" ]] || return 1
+      [[ "${status}" == in_progress && "${conclusion}" == "${null_workflow_conclusion}" ]] || return 1
     fi
     return 0
   fi
@@ -143,7 +144,7 @@ load_trusted_workflow_run() {
 
   local fields
   if ! fields="$(gh api "/repos/${repository}/actions/runs/${run_id}" \
-    --jq '[.id, .repository.full_name, .path, .name, .event, .status, (.conclusion // ""), .head_sha, .run_attempt] | @tsv')"; then
+    --jq "[.id, .repository.full_name, .path, .name, .event, .status, (.conclusion // \"${null_workflow_conclusion}\"), .head_sha, .run_attempt] | @tsv")"; then
     return 1
   fi
   IFS=$'\t' read -r RUN_ID RUN_REPOSITORY RUN_PATH RUN_NAME RUN_EVENT RUN_STATUS RUN_CONCLUSION RUN_HEAD_SHA RUN_ATTEMPT <<< "${fields}"

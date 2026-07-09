@@ -62,6 +62,7 @@ valid_artifact_relative_path "test-runs/report.md" test-runs report.md ||
   fail_test "rejected canonical relative path"
 
 tree_sha="0123456789abcdef0123456789abcdef01234567"
+head_sha="89abcdef0123456789abcdef0123456789abcdef"
 validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/repo \
   .github/workflows/ci.yml CI pull_request completed success "${tree_sha}" ||
   fail_test "rejected trusted correctness workflow run"
@@ -74,11 +75,41 @@ if validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 102 owne
   fail_test "accepted unrelated newest correctness workflow run"
 fi
 validate_workflow_run_fields performance owner/repo "${tree_sha}" 200 200 owner/repo \
-  .github/workflows/ci.yml CI pull_request in_progress "" "${tree_sha}" ||
+  .github/workflows/ci.yml CI pull_request in_progress "${null_workflow_conclusion}" "${tree_sha}" ||
   fail_test "rejected current performance workflow run"
+if validate_workflow_run_fields performance owner/repo "${tree_sha}" 200 200 owner/repo \
+  .github/workflows/ci.yml CI pull_request in_progress "" "${tree_sha}"; then
+  fail_test "accepted an empty parsed performance conclusion"
+fi
 if validate_workflow_run_fields performance owner/repo "${tree_sha}" 200 201 owner/repo \
   .github/workflows/ci.yml CI pull_request completed success "${tree_sha}"; then
   fail_test "accepted performance artifact from another run"
 fi
+
+gh() {
+  local endpoint="${2:-}"
+  local query="${4:-}"
+  case "${endpoint}" in
+    /repos/owner/repo/actions/runs/200)
+      [[ "${query}" == *"${null_workflow_conclusion}"* ]] ||
+        fail_test "workflow run query omitted the null conclusion sentinel"
+      printf '200\towner/repo\t.github/workflows/ci.yml\tCI\tpull_request\tin_progress\t%s\t%s\t7\n' \
+        "${null_workflow_conclusion}" "${head_sha}"
+      ;;
+    /repos/owner/repo/git/commits/"${head_sha}")
+      printf '%s\n' "${tree_sha}"
+      ;;
+    *)
+      fail_test "unexpected mocked gh request: ${endpoint}"
+      ;;
+  esac
+}
+
+load_trusted_workflow_run owner/repo 200 "${tree_sha}" performance 200 ||
+  fail_test "shifted fields after a null workflow conclusion"
+[[ "${RUN_CONCLUSION}" == "${null_workflow_conclusion}" ]] ||
+  fail_test "changed the parsed null conclusion sentinel"
+[[ "${RUN_HEAD_SHA}" == "${head_sha}" ]] || fail_test "shifted the parsed head SHA"
+[[ "${RUN_ATTEMPT}" == 7 ]] || fail_test "shifted the parsed run attempt"
 
 printf 'report artifact metadata parser tests passed\n'
