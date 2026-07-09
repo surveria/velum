@@ -20,6 +20,7 @@ use crate::{
 use super::{
     array_add_loop::BytecodeForArrayAddFastPath, array_fill_loop::BytecodeForArrayFillFastPath,
     block_lexical_loop::BytecodeBlockLexicalLoopFastPath,
+    string_concat_loop::BytecodeForStringConcatLengthFastPath,
     switch_for_loop::BytecodeForSwitchFastPath,
 };
 
@@ -48,6 +49,7 @@ pub(super) enum BytecodeForLoopBodyFastPath<'a> {
     ArrayFill(BytecodeForArrayFillFastPath<'a>),
     MaskedArrayAdd(BytecodeForBodyFastPath<'a>),
     SwitchMaskedArrayAdd(BytecodeForSwitchFastPath<'a>),
+    StringConcatLength(BytecodeForStringConcatLengthFastPath<'a>),
     BlockLexical(BytecodeBlockLexicalLoopFastPath<'a>),
 }
 
@@ -208,6 +210,9 @@ impl Context {
             BytecodeForLoopBodyFastPath::SwitchMaskedArrayAdd(body) => {
                 self.bytecode_for_switch_fast_path_ready(body)
             }
+            BytecodeForLoopBodyFastPath::StringConcatLength(body) => {
+                Self::bytecode_for_string_concat_length_fast_path_ready(body)
+            }
             BytecodeForLoopBodyFastPath::BlockLexical(body) => {
                 Self::block_lexical_loop_fast_path_ready(body)
             }
@@ -235,13 +240,21 @@ impl Context {
         {
             return Ok(None);
         }
+        if let BytecodeForLoopBodyFastPath::StringConcatLength(body) = &fast_path.body
+            && self.eval_bytecode_for_string_concat_length_loop_fast_path(
+                state, next, fast_path, body,
+            )?
+        {
+            return Ok(None);
+        }
         let mut last = Value::Undefined;
         let array_values = match &fast_path.body {
             BytecodeForLoopBodyFastPath::ArrayAdd(body) => {
                 self.fast_loop_numeric_array_values_for_simple_add(body)?
             }
             BytecodeForLoopBodyFastPath::ArrayFill(_)
-            | BytecodeForLoopBodyFastPath::BlockLexical(_) => None,
+            | BytecodeForLoopBodyFastPath::BlockLexical(_)
+            | BytecodeForLoopBodyFastPath::StringConcatLength(_) => None,
             BytecodeForLoopBodyFastPath::MaskedArrayAdd(body) => {
                 self.fast_loop_numeric_array_values(body)?
             }
@@ -351,6 +364,9 @@ impl Context {
             return Ok(Some(BytecodeForLoopBodyFastPath::SwitchMaskedArrayAdd(
                 body,
             )));
+        }
+        if let Some(body) = self.compile_bytecode_for_string_concat_length_fast_path(index, body)? {
+            return Ok(Some(BytecodeForLoopBodyFastPath::StringConcatLength(body)));
         }
         self.compile_block_lexical_loop_fast_path(index, body)
             .map(|body| body.map(BytecodeForLoopBodyFastPath::BlockLexical))
@@ -464,6 +480,9 @@ impl Context {
             BytecodeForLoopBodyFastPath::SwitchMaskedArrayAdd(body) => self
                 .eval_bytecode_for_switch_fast_path(body, array_values)
                 .map(Completion::Normal),
+            BytecodeForLoopBodyFastPath::StringConcatLength(_) => {
+                Ok(Completion::Normal(Value::Undefined))
+            }
             BytecodeForLoopBodyFastPath::BlockLexical(body) => {
                 let Value::Number(index) = fast_path.index_cell.value(fast_path.index.name())?
                 else {
