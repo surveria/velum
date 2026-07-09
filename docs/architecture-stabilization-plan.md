@@ -25,7 +25,8 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: adopted; AS-01a is next
+- Current program state: AS-01 in progress; AS-01a inventory is in draft PR
+  #398 and AS-01b is next
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -478,7 +479,7 @@ dependencies do not overlap.
 | ID | Status | Program item | Depends on | Completion evidence |
 | --- | --- | --- | --- | --- |
 | AS-00 | Complete | Adopt this plan and route project documentation to it. | None | PR #396 merged as `f79056b`; required CI, post-merge performance, publisher, and canonical report publication passed. |
-| AS-01 | Backlog | Inventory semantic entrypoints and add architecture guards. | AS-00 | Checked inventory for object/property/call/construct/conversion/completion paths; guards prevent new split paths. |
+| AS-01 | In progress | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a inventory is in [Semantic Architecture Inventory](semantic-architecture-inventory.md) and draft PR #398; AS-01b guards remain. |
 | AS-02 | Backlog | Introduce the unified semantic object and internal-method boundary. | AS-01 | Ordinary objects, functions, native/host functions, errors, proxies, promises, and collections can migrate through one semantic facade. |
 | AS-03 | Backlog | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | Shared coercion, equality, property, invocation, and iterator operations used by bytecode and built-ins. |
 | AS-04 | Backlog | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | Real JavaScript error objects, typed throw path, no message-prefix classification, spans available to diagnostics. |
@@ -532,6 +533,16 @@ Convert the most important boundaries into architecture tests or focused lint
 scripts. Guards should reject new parser-AST runtime imports, new object-like
 value variants, source-name harness opcodes, and other mechanically detectable
 regressions.
+
+AS-01a status:
+
+- Inventory: [Semantic Architecture Inventory](semantic-architecture-inventory.md)
+- PR: #398 (draft while validation and review are in progress)
+- Covered: object-like values, physical stores, property/call/construct paths,
+  abstract-operation duplicates, completion/error paths, iteration, roots,
+  handles, accounting, and optimization owners
+- Remaining for AS-01: AS-01b must turn the recorded no-growth boundaries into
+  deterministic architecture guards
 
 ### AS-02: Unified Semantic Object Boundary
 
@@ -669,7 +680,9 @@ task may be split further if it would otherwise mix owners or exceed a
 reviewable scope.
 
 1. AS-01a: inventory all object-like `Value` variants, property/call/construct
-   entrypoints, VM stores, and semantic duplicates.
+   entrypoints, VM stores, and semantic duplicates in
+   [Semantic Architecture Inventory](semantic-architecture-inventory.md)
+   (draft PR #398).
 2. AS-01b: add architecture guards for new split object variants and
    source-name harness bytecode.
 3. AS-02a: introduce the checked semantic object reference/facade while keeping
