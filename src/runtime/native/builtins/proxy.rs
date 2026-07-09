@@ -455,7 +455,7 @@ impl Context {
 
     /// Convert the array-like result of an `ownKeys` trap into string keys.
     fn proxy_key_list_from_value(&mut self, value: &Value) -> Result<Vec<Value>> {
-        if !matches!(value, Value::Object(_)) {
+        if self.semantic_object_ref(value)?.is_none() {
             return Err(Error::type_error(
                 "proxy ownKeys trap must return an array-like object",
             ));

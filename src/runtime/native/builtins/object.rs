@@ -368,7 +368,7 @@ impl Context {
         &mut self,
         value: &Value,
     ) -> Result<PropertyUpdate> {
-        if !matches!(value, Value::Object(_)) {
+        if self.semantic_object_ref(value)?.is_none() {
             return Err(Error::runtime("property descriptor must be an object"));
         }
         let get = self.optional_descriptor_accessor(value, DESCRIPTOR_GET_PROPERTY)?;

@@ -188,7 +188,9 @@ proxies; several built-ins repeat the same matches.
 - Error properties are synthesized as writable/enumerable/configurable data
   descriptors in some paths rather than stored as real own properties.
 - Function and native-function properties share a data structure but still
-  require separate id lookup and dispatch functions.
+  require separate physical id lookup and dispatch functions; their current
+  own-key backend also exposes only enumerable custom names rather than a full
+  string/Symbol key list.
 - Array indexed properties, string virtual properties, and global bindings
   still span physical and semantic layers, but object-like read/presence callers
   now receive an explicit generic `ObjectHeap` tail instead of repeating that
@@ -196,11 +198,12 @@ proxies; several built-ins repeat the same matches.
 - `property::get_property` and `property::has_property` cover fewer value kinds
   than the similarly named `Context` facades. Their generic names make the
   distinction easy to miss.
-- Static-name caches have guarded ordinary-object fallbacks, but their outer
-  entrypoints still reproduce Function/NativeFunction dispatch.
+- Static-name caches now receive only explicit ordinary-object tails from the
+  semantic facade; the remaining cache code owns shape/version mechanics, not
+  value-kind dispatch.
 
-For new compatibility code before AS-02b, use the widest `Context` facade when
-one exists. Direct `ObjectHeap` access is acceptable only for storage creation
+For new compatibility code after AS-02b, use the semantic `Context` facade.
+Direct `ObjectHeap` access is acceptable only for storage creation
 or a proven ordinary-object-only operation; it must not silently become the
 only semantic implementation of a language feature.
 
