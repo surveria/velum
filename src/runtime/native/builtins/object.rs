@@ -13,13 +13,15 @@ use crate::{
 
 use super::{
     NativeFunctionKind, OBJECT_ASSIGN_NAME, OBJECT_CREATE_NAME, OBJECT_DEFINE_PROPERTIES_NAME,
-    OBJECT_DEFINE_PROPERTY_NAME, OBJECT_ENTRIES_NAME, OBJECT_FREEZE_NAME,
+    OBJECT_DEFINE_PROPERTY_NAME, OBJECT_ENTRIES_NAME, OBJECT_FREEZE_NAME, OBJECT_FROM_ENTRIES_NAME,
     OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME, OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME,
     OBJECT_GET_OWN_PROPERTY_NAMES_NAME, OBJECT_GET_PROTOTYPE_OF_NAME, OBJECT_HAS_OWN_NAME,
     OBJECT_IS_EXTENSIBLE_NAME, OBJECT_IS_FROZEN_NAME, OBJECT_IS_NAME, OBJECT_IS_SEALED_NAME,
     OBJECT_KEYS_NAME, OBJECT_NAME, OBJECT_PREVENT_EXTENSIONS_NAME,
-    OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME, OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
-    OBJECT_SEAL_NAME, OBJECT_SET_PROTOTYPE_OF_NAME, OBJECT_VALUES_NAME,
+    OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME, OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME,
+    OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME, OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME,
+    OBJECT_PROTOTYPE_TO_STRING_NAME, OBJECT_PROTOTYPE_VALUE_OF_NAME, OBJECT_SEAL_NAME,
+    OBJECT_SET_PROTOTYPE_OF_NAME, OBJECT_VALUES_NAME,
 };
 use crate::runtime::property::well_known::DescriptorPropertyKeys;
 
@@ -32,7 +34,7 @@ const DESCRIPTOR_WRITABLE_PROPERTY: &str = "writable";
 const OBJECT_PROTOTYPE_PROPERTY: &str = "prototype";
 
 impl Context {
-    pub(in crate::runtime::native) fn object_constructor_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime) fn object_constructor_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::Object) {
             return Ok(Value::NativeFunction(id));
         }
@@ -331,6 +333,10 @@ impl Context {
             (OBJECT_IS_SEALED_NAME, NativeFunctionKind::ObjectIsSealed),
             (OBJECT_KEYS_NAME, NativeFunctionKind::ObjectKeys),
             (
+                OBJECT_FROM_ENTRIES_NAME,
+                NativeFunctionKind::ObjectFromEntries,
+            ),
+            (
                 OBJECT_PREVENT_EXTENSIONS_NAME,
                 NativeFunctionKind::ObjectPreventExtensions,
             ),
@@ -361,6 +367,26 @@ impl Context {
             prototype,
             OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
             NativeFunctionKind::ObjectPrototypePropertyIsEnumerable,
+        )?;
+        self.define_object_prototype_method(
+            prototype,
+            OBJECT_PROTOTYPE_TO_STRING_NAME,
+            NativeFunctionKind::ObjectPrototypeToString,
+        )?;
+        self.define_object_prototype_method(
+            prototype,
+            OBJECT_PROTOTYPE_VALUE_OF_NAME,
+            NativeFunctionKind::ObjectPrototypeValueOf,
+        )?;
+        self.define_object_prototype_method(
+            prototype,
+            OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME,
+            NativeFunctionKind::ObjectPrototypeToLocaleString,
+        )?;
+        self.define_object_prototype_method(
+            prototype,
+            OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME,
+            NativeFunctionKind::ObjectPrototypeIsPrototypeOf,
         )
     }
 

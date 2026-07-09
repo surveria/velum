@@ -142,6 +142,14 @@ pub(in crate::runtime) const OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME: &str = "has
 const OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime) const OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME: &str =
     "propertyIsEnumerable";
+pub(in crate::runtime) const OBJECT_PROTOTYPE_TO_STRING_NAME: &str = "toString";
+pub(in crate::runtime) const OBJECT_PROTOTYPE_VALUE_OF_NAME: &str = "valueOf";
+pub(in crate::runtime) const OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME: &str = "toLocaleString";
+pub(in crate::runtime) const OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME: &str = "isPrototypeOf";
+pub(in crate::runtime::native) const OBJECT_FROM_ENTRIES_NAME: &str = "fromEntries";
+const OBJECT_FROM_ENTRIES_FUNCTION_LENGTH: f64 = 1.0;
+const OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_FUNCTION_LENGTH: f64 = 1.0;
+const OBJECT_PROTOTYPE_TO_STRING_FUNCTION_LENGTH: f64 = 0.0;
 const OBJECT_SET_PROTOTYPE_OF_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const OBJECT_SET_PROTOTYPE_OF_NAME: &str = "setPrototypeOf";
 const OBJECT_SEAL_FUNCTION_LENGTH: f64 = 1.0;
@@ -351,6 +359,11 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ObjectPreventExtensions,
     ObjectPrototypeHasOwnProperty,
     ObjectPrototypePropertyIsEnumerable,
+    ObjectPrototypeToString,
+    ObjectPrototypeValueOf,
+    ObjectPrototypeToLocaleString,
+    ObjectPrototypeIsPrototypeOf,
+    ObjectFromEntries,
     ObjectSetPrototypeOf,
     ObjectSeal,
     ObjectValues,
@@ -555,6 +568,15 @@ impl NativeFunctionKind {
             Self::ObjectPrototypePropertyIsEnumerable => {
                 Some(OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_FUNCTION_LENGTH)
             }
+            Self::ObjectPrototypeToString
+            | Self::ObjectPrototypeValueOf
+            | Self::ObjectPrototypeToLocaleString => {
+                Some(OBJECT_PROTOTYPE_TO_STRING_FUNCTION_LENGTH)
+            }
+            Self::ObjectPrototypeIsPrototypeOf => {
+                Some(OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_FUNCTION_LENGTH)
+            }
+            Self::ObjectFromEntries => Some(OBJECT_FROM_ENTRIES_FUNCTION_LENGTH),
             Self::ObjectSetPrototypeOf => Some(OBJECT_SET_PROTOTYPE_OF_FUNCTION_LENGTH),
             Self::ObjectSeal => Some(OBJECT_SEAL_FUNCTION_LENGTH),
             Self::ObjectValues => Some(OBJECT_VALUES_FUNCTION_LENGTH),
@@ -695,6 +717,11 @@ impl NativeFunctionKind {
             Self::ObjectPrototypePropertyIsEnumerable => {
                 Some(OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME)
             }
+            Self::ObjectPrototypeToString => Some(OBJECT_PROTOTYPE_TO_STRING_NAME),
+            Self::ObjectPrototypeValueOf => Some(OBJECT_PROTOTYPE_VALUE_OF_NAME),
+            Self::ObjectPrototypeToLocaleString => Some(OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME),
+            Self::ObjectPrototypeIsPrototypeOf => Some(OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME),
+            Self::ObjectFromEntries => Some(OBJECT_FROM_ENTRIES_NAME),
             Self::ObjectSetPrototypeOf => Some(OBJECT_SET_PROTOTYPE_OF_NAME),
             Self::ObjectSeal => Some(OBJECT_SEAL_NAME),
             Self::ObjectValues => Some(OBJECT_VALUES_NAME),
