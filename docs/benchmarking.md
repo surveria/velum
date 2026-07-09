@@ -20,7 +20,7 @@ Feature and compatibility work should run focused tests plus `scripts/check-fast
 Every correctness or full runner invocation writes four coordinated outputs from one typed report model:
 
 - `rsqjs-test-report-<timestamp>.yaml` is the compact, schema-versioned source for tracked history and rollups. It contains run/build metadata, host environment, effective configuration, numeric `duration_ns` fields, typed statuses, suite totals, feature summaries, and all project/JetStream benchmark rows.
-- `rsqjs-test-report-<timestamp>-details.yaml` uses the same schema and additionally contains every case row. It remains in the tree-keyed CI artifact so the 100,000-plus Test262 variants do not inflate git history.
+- `rsqjs-test-report-<timestamp>-details.yaml` uses the same schema and additionally contains every case row materialized by the runner. Each suite records complete or partial row coverage explicitly because delta-oriented suites intentionally retain only changed cases. The file remains in the tree-keyed CI artifact so the 100,000-plus full Test262 variants do not inflate git history.
 - `rsqjs-test-report-<timestamp>.md` is the human-readable view rendered from the typed model.
 - `rsqjs-test-report-<timestamp>-timings.tsv` remains available during migration for existing analysis tools.
 

@@ -5,8 +5,9 @@ use crate::{
     report_metadata,
     report_rendering::{render_report, render_timing_tsv},
     report_schema::{
-        BenchmarkConfiguration, BenchmarkStatus, DetailLevel, EnvironmentInfo, ReportDocument,
-        ReportSummary, RunConfiguration, SCHEMA_VERSION,
+        BenchmarkConfiguration, BenchmarkStatus, CaseCounts, CaseDetailCoverage,
+        DetailCompleteness, DetailLevel, EnvironmentInfo, ReportDocument, ReportSummary,
+        RunConfiguration, SCHEMA_VERSION, SuiteStatus,
     },
 };
 
@@ -100,6 +101,31 @@ fn schema_validation_rejects_inconsistent_suite_counts() -> TestResult {
         summary.validate().is_err(),
         "inconsistent suite counts must be rejected",
     )
+}
+
+#[test]
+fn schema_validation_accepts_explicit_partial_case_details() -> TestResult {
+    let mut report = sample_document()?;
+    let Some(suite) = report.suites.first_mut() else {
+        return Err("expected one suite".into());
+    };
+    suite.cases.clear();
+    suite.summary.status = SuiteStatus::Passed;
+    suite.summary.counts = CaseCounts {
+        total: 100,
+        executed: 100,
+        passed: 100,
+        failed: 0,
+        skipped: 0,
+    };
+    suite.summary.case_details = CaseDetailCoverage {
+        completeness: DetailCompleteness::Partial,
+        recorded_rows: 0,
+        omitted_rows: 100,
+    };
+    report.validate()?;
+    report.summary().validate()?;
+    Ok(())
 }
 
 #[test]

@@ -2,8 +2,9 @@ use anyhow::bail;
 
 use crate::{
     report_schema::{
-        BenchmarkSuite, CaseCounts, CaseStatus, DetailLevel, FeatureSelection, ReportDocument,
-        ReportMode, ReportSummary, SCHEMA_VERSION, SuiteReport, SuiteStatus, SuiteSummary,
+        BenchmarkSuite, CaseCounts, CaseStatus, DetailCompleteness, DetailLevel, FeatureSelection,
+        ReportDocument, ReportMode, ReportSummary, SCHEMA_VERSION, SuiteReport, SuiteStatus,
+        SuiteSummary,
     },
     report_schema_support::usize_to_u64,
 };
@@ -58,13 +59,16 @@ fn validate_header(
 
 fn validate_suite(suite: &SuiteReport) -> anyhow::Result<()> {
     validate_suite_summary(&suite.summary)?;
-    if usize_to_u64(suite.cases.len()) != suite.summary.counts.total {
+    if usize_to_u64(suite.cases.len()) != suite.summary.case_details.recorded_rows {
         bail!(
-            "suite '{}' has {} detail rows but total is {}",
+            "suite '{}' has {} detail rows but coverage records {}",
             suite.summary.name,
             suite.cases.len(),
-            suite.summary.counts.total
+            suite.summary.case_details.recorded_rows
         );
+    }
+    if suite.summary.case_details.completeness == DetailCompleteness::Partial {
+        return Ok(());
     }
     let counts = CaseCounts {
         total: usize_to_u64(suite.cases.len()),
@@ -95,6 +99,27 @@ fn validate_suite_summary(suite: &SuiteSummary) -> anyhow::Result<()> {
     }
     if counts.total != counts.executed.saturating_add(counts.skipped) {
         bail!("suite '{}' has inconsistent total count", suite.name);
+    }
+    let Some(covered_total) = suite
+        .case_details
+        .recorded_rows
+        .checked_add(suite.case_details.omitted_rows)
+    else {
+        bail!("suite '{}' detail coverage overflows", suite.name);
+    };
+    if covered_total != counts.total {
+        bail!("suite '{}' has inconsistent detail coverage", suite.name);
+    }
+    let expected_completeness = if suite.case_details.omitted_rows == 0 {
+        DetailCompleteness::Complete
+    } else {
+        DetailCompleteness::Partial
+    };
+    if suite.case_details.completeness != expected_completeness {
+        bail!(
+            "suite '{}' has inconsistent detail completeness",
+            suite.name
+        );
     }
     let expected_status = expected_suite_status(suite);
     if suite.status != expected_status {

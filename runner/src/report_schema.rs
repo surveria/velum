@@ -131,9 +131,24 @@ pub struct SuiteSummary {
     pub(crate) required: bool,
     pub(crate) status: SuiteStatus,
     pub(crate) counts: CaseCounts,
+    pub(crate) case_details: CaseDetailCoverage,
     pub(crate) duration_ns: u64,
     pub(crate) skip_reasons: Vec<SkipReasonSummary>,
     pub(crate) feature_areas: Vec<FeatureAreaSummary>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CaseDetailCoverage {
+    pub(crate) completeness: DetailCompleteness,
+    pub(crate) recorded_rows: u64,
+    pub(crate) omitted_rows: u64,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DetailCompleteness {
+    Complete,
+    Partial,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
@@ -371,6 +386,7 @@ impl SuiteReport {
             })
             .collect();
         let status = suite_status(counts, !skip_reasons.is_empty());
+        let case_details = case_detail_coverage(counts.total, usize_to_u64(cases.len()))?;
         let feature_areas = corpus
             .feature_areas
             .into_iter()
@@ -382,6 +398,7 @@ impl SuiteReport {
                 required: corpus.required,
                 status,
                 counts,
+                case_details,
                 duration_ns: duration_ns(corpus.elapsed),
                 skip_reasons,
                 feature_areas,
@@ -723,4 +740,19 @@ fn case_counts(total: usize, passed: usize, failed: usize, skipped: usize) -> Ca
         failed: usize_to_u64(failed),
         skipped: usize_to_u64(skipped),
     }
+}
+
+fn case_detail_coverage(total: u64, recorded_rows: u64) -> anyhow::Result<CaseDetailCoverage> {
+    let Some(omitted_rows) = total.checked_sub(recorded_rows) else {
+        bail!("suite contains {recorded_rows} detail rows but reports only {total} total cases");
+    };
+    Ok(CaseDetailCoverage {
+        completeness: if omitted_rows == 0 {
+            DetailCompleteness::Complete
+        } else {
+            DetailCompleteness::Partial
+        },
+        recorded_rows,
+        omitted_rows,
+    })
 }

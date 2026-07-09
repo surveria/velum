@@ -93,8 +93,9 @@ esac
 write_metadata_value() {
   local key="$1"
   local value="$2"
-  printf '%s=' "${key}"
-  printf '%q\n' "${value}"
+  local encoded
+  encoded="$(printf '%s' "${value}" | base64 | tr -d '\n')"
+  printf '%s=%s\n' "${key}" "${encoded}"
 }
 
 quickjs_path="$("${script_dir}/prepare-quickjs.sh")"
