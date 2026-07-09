@@ -1,6 +1,7 @@
 mod block_lexical_loop;
 mod for_loop;
 mod try_catch;
+mod while_loop;
 
 use std::rc::Rc;
 
@@ -229,6 +230,11 @@ impl Context {
         body: &BytecodeBlock,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
+        if let Some(fast_path) = self.compile_bytecode_while_loop_fast_path(condition, body)?
+            && self.bytecode_while_loop_fast_path_ready(&fast_path)?
+        {
+            return self.eval_bytecode_while_loop_fast_path(state, next, &fast_path);
+        }
         let mut last = Value::Undefined;
         let condition_plan = self.compile_bytecode_linear_plan(condition)?;
         let body_plan = self.compile_bytecode_linear_plan(body)?;
