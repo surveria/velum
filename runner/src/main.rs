@@ -32,7 +32,9 @@ mod timing;
 use cases::{DifferentialCase, EngineCase, Expectation};
 #[cfg(test)]
 use report_rendering::{coverage_percent, feature_area_rows_with_limit};
-use report_rendering::{feature_area_rows, fenced_table, percent, render_report, skip_reason_rows};
+use report_rendering::{
+    feature_area_rows, fenced_table, percent, render_report, render_timing_tsv, skip_reason_rows,
+};
 use runner_cli::{Config, print_rollup_outputs};
 
 const STATUS_PASSED: &str = "✅ passed";
@@ -507,7 +509,24 @@ fn write_report(path: &Path, report: &FullReport) -> anyhow::Result<()> {
 
     let body = render_report(report);
     fs::write(path, body)
-        .with_context(|| format!("failed to write test report '{}'", path.display()))
+        .with_context(|| format!("failed to write test report '{}'", path.display()))?;
+    let timing_path = timing_artifact_path(path);
+    fs::write(&timing_path, render_timing_tsv(report)).with_context(|| {
+        format!(
+            "failed to write timing artifact '{}'",
+            timing_path.display()
+        )
+    })?;
+    println!("local/CI timing artifact: {}", timing_path.display());
+    Ok(())
+}
+
+fn timing_artifact_path(report_path: &Path) -> PathBuf {
+    let file_stem = report_path
+        .file_stem()
+        .and_then(std::ffi::OsStr::to_str)
+        .unwrap_or("rsqjs-test-report");
+    report_path.with_file_name(format!("{file_stem}-timings.tsv"))
 }
 
 struct DisplaySlice<'a, T>(&'a [T]);

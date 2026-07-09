@@ -19,6 +19,7 @@ const COVERAGE_SCALE: usize = 1_000_000;
 const COVERAGE_MINOR_SCALE: usize = 10_000;
 const OTHER_FEATURE_AREAS: &str = "other feature areas";
 const NO_SKIP_REASON: &str = "none";
+const MILLISECONDS_PER_SECOND: f64 = 1_000.0;
 
 #[derive(Debug, Tabled)]
 struct CorpusSummaryRow {
@@ -67,6 +68,7 @@ pub fn render_report(report: &FullReport) -> String {
     sections.extend(super::report_metadata::render_section(&report.metadata));
     sections.extend([
         "Corpus failure sections list failed cases only. Timing sections list recorded case timings, capped to the slowest rows for large corpora.".to_owned(),
+        "The sibling `*-timings.tsv` artifact lists every recorded test, benchmark, and JetStream timing row.".to_owned(),
         "The full Test262 corpus is progress-only; the active subset remains the CI gate.".to_owned(),
         "Test262 file conformance collapses required variants by source file for dashboard comparison.".to_owned(),
         "Test262 full corpus keeps default, strict, module, and raw variants as diagnostic rows.".to_owned(),
@@ -126,6 +128,107 @@ pub fn render_report(report: &FullReport) -> String {
     sections.push(String::new());
     sections.extend(jetstream::render_section(&report.jetstream));
     sections.join("\n")
+}
+
+pub fn render_timing_tsv(report: &FullReport) -> String {
+    let mut body = String::new();
+    push_tsv_row(
+        &mut body,
+        &[
+            "kind",
+            "phase",
+            "case",
+            "status",
+            "source",
+            "iterations",
+            "case_elapsed",
+            "rsqjs_measure",
+            "quickjs_measure",
+            "detail",
+        ],
+    );
+    for corpus in &report.corpora {
+        for row in &corpus.rows {
+            let elapsed = duration_millis(row.elapsed);
+            push_tsv_row(
+                &mut body,
+                &[
+                    "test",
+                    corpus.name,
+                    &row.case,
+                    &row.status,
+                    &row.source,
+                    "",
+                    &elapsed,
+                    "",
+                    "",
+                    &row.detail,
+                ],
+            );
+        }
+    }
+    for row in &report.benchmarks.rows {
+        let iterations = row.iterations.to_string();
+        push_tsv_row(
+            &mut body,
+            &[
+                "benchmark",
+                "Benchmarks",
+                &row.benchmark,
+                &row.status,
+                &row.source,
+                &iterations,
+                &row.case_elapsed,
+                &row.rsqjs_measure,
+                &row.quickjs_measure,
+                &row.detail,
+            ],
+        );
+    }
+    for row in &report.jetstream.rows {
+        push_tsv_row(
+            &mut body,
+            &[
+                "jetstream",
+                "JetStream Shell Benchmarks",
+                &row.benchmark,
+                &row.status,
+                &row.source,
+                "",
+                &row.case_elapsed,
+                &row.rsqjs_measure,
+                &row.quickjs_measure,
+                &row.detail,
+            ],
+        );
+    }
+    body
+}
+
+fn push_tsv_row(body: &mut String, fields: &[&str]) {
+    let mut first = true;
+    for field in fields {
+        if first {
+            first = false;
+        } else {
+            body.push('\t');
+        }
+        push_tsv_field(body, field);
+    }
+    body.push('\n');
+}
+
+fn push_tsv_field(body: &mut String, field: &str) {
+    for character in field.chars() {
+        match character {
+            '\t' | '\n' | '\r' => body.push(' '),
+            _ => body.push(character),
+        }
+    }
+}
+
+fn duration_millis(duration: Duration) -> String {
+    format!("{:.6}", duration.as_secs_f64() * MILLISECONDS_PER_SECOND)
 }
 
 fn render_skip_reasons(sections: &mut Vec<String>, corpus: &CorpusReport) {

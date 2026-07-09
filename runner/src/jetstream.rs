@@ -74,12 +74,12 @@ pub struct JetStreamReport {
 
 #[derive(Debug, Tabled)]
 pub struct JetStreamRow {
-    benchmark: String,
-    status: String,
-    source: String,
-    case_elapsed: String,
-    rsqjs_measure: String,
-    quickjs_measure: String,
+    pub(crate) benchmark: String,
+    pub(crate) status: String,
+    pub(crate) source: String,
+    pub(crate) case_elapsed: String,
+    pub(crate) rsqjs_measure: String,
+    pub(crate) quickjs_measure: String,
     rsqjs_time: String,
     quickjs_time: String,
     latency_ratio: String,
@@ -87,7 +87,7 @@ pub struct JetStreamRow {
     rsqjs_cv: String,
     quickjs_cv: String,
     quality: String,
-    detail: String,
+    pub(crate) detail: String,
 }
 
 #[derive(Debug, Clone, Copy)]

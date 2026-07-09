@@ -58,13 +58,13 @@ pub struct BenchmarkReport {
 
 #[derive(Debug, Tabled)]
 pub struct BenchmarkRow {
-    benchmark: String,
-    status: String,
-    source: String,
-    iterations: usize,
-    case_elapsed: String,
-    rsqjs_measure: String,
-    quickjs_measure: String,
+    pub(crate) benchmark: String,
+    pub(crate) status: String,
+    pub(crate) source: String,
+    pub(crate) iterations: usize,
+    pub(crate) case_elapsed: String,
+    pub(crate) rsqjs_measure: String,
+    pub(crate) quickjs_measure: String,
     rsqjs_eval: String,
     quickjs_eval: String,
     latency_ratio: String,
@@ -73,7 +73,7 @@ pub struct BenchmarkRow {
     rsqjs_cv: String,
     quickjs_cv: String,
     quality: String,
-    detail: String,
+    pub(crate) detail: String,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
