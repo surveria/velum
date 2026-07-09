@@ -8,7 +8,7 @@ function expand(value, index) {
 }
 
 let total = 0;
-for (let round = 0; round < 40; round = round + 1) {
+for (let round = 0; round < 80; round = round + 1) {
     let flattened = nested.flat(3);
     let mapped = flattened.flatMap(expand);
     total = total + flattened.length + mapped.length;

@@ -6,7 +6,7 @@ use crate::{
         BytecodeDynamicProperty, BytecodeInstruction, BytecodeNumericBinaryOp,
         BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
     },
-    error::Result,
+    error::{Error, Result},
     runtime::{
         Context,
         binding::scope::BindingCell,
@@ -17,22 +17,33 @@ use crate::{
 };
 
 use super::{
+    array_add_loop::BytecodeForArrayAddFastPath,
     block_lexical_loop::BytecodeBlockLexicalLoopFastPath,
     switch_for_loop::BytecodeForSwitchFastPath,
 };
 
 #[derive(Debug)]
 pub(super) struct BytecodeForLoopFastPath<'a> {
-    index: &'a BytecodeBinding,
-    index_cell: BindingCell,
-    compare: BytecodeNumericCompareOp,
-    limit: f64,
-    update_step: f64,
+    pub(super) index: &'a BytecodeBinding,
+    pub(super) index_cell: BindingCell,
+    pub(super) compare: BytecodeNumericCompareOp,
+    limit: BytecodeForLoopLimit<'a>,
+    pub(super) update_step: f64,
     body: BytecodeForLoopBodyFastPath<'a>,
 }
 
 #[derive(Debug)]
+enum BytecodeForLoopLimit<'a> {
+    Literal(f64),
+    ArrayLength {
+        array: &'a BytecodeBinding,
+        array_cell: BindingCell,
+    },
+}
+
+#[derive(Debug)]
 pub(super) enum BytecodeForLoopBodyFastPath<'a> {
+    ArrayAdd(BytecodeForArrayAddFastPath<'a>),
     MaskedArrayAdd(BytecodeForBodyFastPath<'a>),
     SwitchMaskedArrayAdd(BytecodeForSwitchFastPath<'a>),
     BlockLexical(BytecodeBlockLexicalLoopFastPath<'a>),
@@ -67,12 +78,8 @@ impl Context {
         let (Some(condition), Some(update)) = (condition, update) else {
             return Ok(None);
         };
-        let [
-            BytecodeInstruction::LoadBinding(condition_index),
-            BytecodeInstruction::PushLiteral(Value::Number(limit)),
-            BytecodeInstruction::NumberCompare(compare),
-            BytecodeInstruction::StoreLast,
-        ] = condition.instructions()
+        let Some((condition_index, limit, compare)) =
+            self.compile_bytecode_for_loop_condition_limit(condition)?
         else {
             return Ok(None);
         };
@@ -105,10 +112,51 @@ impl Context {
             index: condition_index,
             index_cell,
             compare: *compare,
-            limit: *limit,
+            limit,
             update_step: *update_step,
             body,
         }))
+    }
+
+    fn compile_bytecode_for_loop_condition_limit<'a>(
+        &self,
+        condition: &'a BytecodeBlock,
+    ) -> Result<
+        Option<(
+            &'a BytecodeBinding,
+            BytecodeForLoopLimit<'a>,
+            &'a BytecodeNumericCompareOp,
+        )>,
+    > {
+        match condition.instructions() {
+            [
+                BytecodeInstruction::LoadBinding(condition_index),
+                BytecodeInstruction::PushLiteral(Value::Number(limit)),
+                BytecodeInstruction::NumberCompare(compare),
+                BytecodeInstruction::StoreLast,
+            ] => Ok(Some((
+                condition_index,
+                BytecodeForLoopLimit::Literal(*limit),
+                compare,
+            ))),
+            [
+                BytecodeInstruction::LoadBinding(condition_index),
+                BytecodeInstruction::LoadBinding(array),
+                BytecodeInstruction::ArrayLength { .. },
+                BytecodeInstruction::NumberCompare(compare),
+                BytecodeInstruction::StoreLast,
+            ] => {
+                let Some(array_cell) = self.get_binding_bytecode(array)? else {
+                    return Ok(None);
+                };
+                Ok(Some((
+                    condition_index,
+                    BytecodeForLoopLimit::ArrayLength { array, array_cell },
+                    compare,
+                )))
+            }
+            _ => Ok(None),
+        }
     }
 
     pub(super) fn bytecode_for_loop_fast_path_ready(
@@ -122,6 +170,9 @@ impl Context {
             return Ok(false);
         }
         match &fast_path.body {
+            BytecodeForLoopBodyFastPath::ArrayAdd(body) => self
+                .fast_loop_numeric_array_values_for_simple_add(body)
+                .map(|values| values.is_some()),
             BytecodeForLoopBodyFastPath::MaskedArrayAdd(_) => Ok(true),
             BytecodeForLoopBodyFastPath::SwitchMaskedArrayAdd(body) => {
                 self.bytecode_for_switch_fast_path_ready(body)
@@ -138,6 +189,11 @@ impl Context {
         next: BytecodeAddress,
         fast_path: &BytecodeForLoopFastPath<'_>,
     ) -> Result<Option<Completion>> {
+        if let BytecodeForLoopBodyFastPath::ArrayAdd(body) = &fast_path.body
+            && self.eval_bytecode_for_array_add_loop_fast_path(state, next, fast_path, body)?
+        {
+            return Ok(None);
+        }
         if let BytecodeForLoopBodyFastPath::SwitchMaskedArrayAdd(body) = &fast_path.body
             && self.eval_bytecode_for_switch_loop_fast_path(state, next, fast_path, body)?
         {
@@ -145,6 +201,9 @@ impl Context {
         }
         let mut last = Value::Undefined;
         let array_values = match &fast_path.body {
+            BytecodeForLoopBodyFastPath::ArrayAdd(body) => {
+                self.fast_loop_numeric_array_values_for_simple_add(body)?
+            }
             BytecodeForLoopBodyFastPath::MaskedArrayAdd(body) => {
                 self.fast_loop_numeric_array_values(body)?
             }
@@ -156,7 +215,7 @@ impl Context {
         loop {
             self.step()?;
             self.record_bytecode_linear_direct_run()?;
-            if !Self::fast_loop_condition(fast_path)? {
+            if !self.fast_loop_condition(fast_path)? {
                 break;
             }
             match self.eval_bytecode_for_loop_body_fast_path(fast_path, array_values.as_deref())? {
@@ -194,7 +253,7 @@ impl Context {
         let mut last = Value::Undefined;
         loop {
             self.record_bytecode_linear_direct_run()?;
-            if !fast_loop_compare(fast_path.compare, index, fast_path.limit) {
+            if !fast_loop_compare(fast_path.compare, index, self.fast_loop_limit(fast_path)?) {
                 break;
             }
             self.step()?;
@@ -223,6 +282,12 @@ impl Context {
         index: &'a BytecodeBinding,
         body: &'a BytecodeBlock,
     ) -> Result<Option<BytecodeForLoopBodyFastPath<'a>>> {
+        if let Some(body) = self.compile_bytecode_for_array_add_fast_path(body)? {
+            if !same_bytecode_binding(index, body.index) {
+                return Ok(None);
+            }
+            return Ok(Some(BytecodeForLoopBodyFastPath::ArrayAdd(body)));
+        }
         if let Some(body) = self.compile_bytecode_for_body_fast_path(body)? {
             if !same_bytecode_binding(index, body.test) || !same_bytecode_binding(index, body.index)
             {
@@ -346,6 +411,9 @@ impl Context {
     ) -> Result<Completion> {
         self.record_bytecode_linear_direct_run()?;
         match &fast_path.body {
+            BytecodeForLoopBodyFastPath::ArrayAdd(body) => self
+                .eval_bytecode_for_array_add_fast_path(body, array_values)
+                .map(Completion::Normal),
             BytecodeForLoopBodyFastPath::MaskedArrayAdd(body) => {
                 self.eval_bytecode_for_body_fast_path_catching(body, array_values)
             }
@@ -468,11 +536,32 @@ impl Context {
         Ok(Some(numbers))
     }
 
-    fn fast_loop_condition(fast_path: &BytecodeForLoopFastPath<'_>) -> Result<bool> {
+    fn fast_loop_condition(&self, fast_path: &BytecodeForLoopFastPath<'_>) -> Result<bool> {
         let Value::Number(index) = fast_path.index_cell.value(fast_path.index.name())? else {
             return Ok(false);
         };
-        Ok(fast_loop_compare(fast_path.compare, index, fast_path.limit))
+        Ok(fast_loop_compare(
+            fast_path.compare,
+            index,
+            self.fast_loop_limit(fast_path)?,
+        ))
+    }
+
+    pub(super) fn fast_loop_limit(&self, fast_path: &BytecodeForLoopFastPath<'_>) -> Result<f64> {
+        match &fast_path.limit {
+            BytecodeForLoopLimit::Literal(limit) => Ok(*limit),
+            BytecodeForLoopLimit::ArrayLength { array, array_cell } => {
+                let Value::Object(id) = array_cell.value(array.name())? else {
+                    return Ok(0.0);
+                };
+                let Some(length) = self.objects.array_len_if_array(id)? else {
+                    return Ok(0.0);
+                };
+                let length = u32::try_from(length)
+                    .map_err(|_| Error::limit("array length exceeds loop fast path range"))?;
+                Ok(f64::from(length))
+            }
+        }
     }
 
     fn fast_loop_update(&self, fast_path: &BytecodeForLoopFastPath<'_>) -> Result<()> {
@@ -560,7 +649,7 @@ impl Context {
         Ok(Some(value))
     }
 
-    fn assign_fast_path_cell(
+    pub(super) fn assign_fast_path_cell(
         &self,
         binding: &BytecodeBinding,
         cell: &BindingCell,
@@ -628,7 +717,7 @@ pub(super) fn same_bytecode_binding(left: &BytecodeBinding, right: &BytecodeBind
     left.operand() == right.operand() && left.name().as_str() == right.name().as_str()
 }
 
-fn fast_loop_compare(op: BytecodeNumericCompareOp, left: f64, right: f64) -> bool {
+pub(super) fn fast_loop_compare(op: BytecodeNumericCompareOp, left: f64, right: f64) -> bool {
     match op {
         BytecodeNumericCompareOp::Less => left < right,
         BytecodeNumericCompareOp::LessEqual => left <= right,
