@@ -90,6 +90,30 @@ impl ObjectHeap {
         self.bump_if_structure_changed(id, before)
     }
 
+    pub(crate) fn try_set_prototype_value(&mut self, id: ObjectId, value: &Value) -> Result<bool> {
+        let prototype = match value {
+            Value::Object(prototype) => Some(*prototype),
+            Value::Null => None,
+            _ => return Ok(true),
+        };
+        if let Some(prototype) = prototype
+            && self.prototype_chain_contains(prototype, id)?
+        {
+            return Ok(false);
+        }
+        let before = self.object(id)?.structure_snapshot();
+        let object = self.object_mut(id)?;
+        if object.prototype == prototype {
+            return Ok(true);
+        }
+        if !object.extensibility.is_extensible() {
+            return Ok(false);
+        }
+        object.prototype = prototype;
+        self.bump_if_structure_changed(id, before)?;
+        Ok(true)
+    }
+
     pub(crate) fn prototype_chain_has_object(
         &self,
         id: ObjectId,

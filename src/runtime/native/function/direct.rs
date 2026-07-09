@@ -504,6 +504,8 @@ impl Context {
             NativeFunctionKind::ProxyRevocable => self.eval_proxy_revocable(args),
             NativeFunctionKind::ProxyRevoke(id) => self.eval_proxy_revoke(id),
             NativeFunctionKind::Symbol => self.eval_symbol_constructor(args),
+            NativeFunctionKind::SymbolFor => self.eval_symbol_for(args),
+            NativeFunctionKind::SymbolKeyFor => self.eval_symbol_key_for(args),
             kind => self
                 .eval_primitive_native_function_kind(kind, args, this_value)
                 .unwrap_or_else(|| {

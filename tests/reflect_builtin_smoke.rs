@@ -17,6 +17,13 @@ const REFLECT_BUILTIN_SCRIPT: &str = r#"
         let setGamma = Reflect.set(target, "gamma", 3);
         let deletedAlpha = Reflect.deleteProperty(target, "alpha");
         let keys = Reflect.ownKeys(target).join(",");
+        let symbol = Symbol("reflect-key");
+        let registered = Symbol.for("shared-reflect-key");
+        target[symbol] = 5;
+        target[registered] = 6;
+        let reflectKeys = Reflect.ownKeys(target);
+        let registeredAgain = Symbol.for("shared-reflect-key");
+        let registryKey = Symbol.keyFor(registered);
 
         let proto = { marker: 7 };
         let child = Object.create(proto);
@@ -28,6 +35,9 @@ const REFLECT_BUILTIN_SCRIPT: &str = r#"
         let wasExtensible = Reflect.isExtensible(extensible);
         let prevented = Reflect.preventExtensions(extensible);
         let nowSealed = Reflect.isExtensible(extensible) === false;
+        let locked = {};
+        Object.preventExtensions(locked);
+        let rejectedPrototype = Reflect.setPrototypeOf(locked, {});
 
         function Point(x, y) {
             this.x = x;
@@ -66,12 +76,20 @@ const REFLECT_BUILTIN_SCRIPT: &str = r#"
             target.gamma === 3 &&
             deletedAlpha === true &&
             keys === "beta,gamma" &&
+            reflectKeys.length === 4 &&
+            reflectKeys[0] === "beta" &&
+            reflectKeys[1] === "gamma" &&
+            reflectKeys[2] === symbol &&
+            reflectKeys[3] === registered &&
+            registeredAgain === registered &&
+            registryKey === "shared-reflect-key" &&
             protoMatch === true &&
             swapped === true &&
             clearedProto === true &&
             wasExtensible === true &&
             prevented === true &&
             nowSealed === true &&
+            rejectedPrototype === false &&
             constructedOk === true &&
             applied === 42 ? 42 : 0
 "#;
