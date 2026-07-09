@@ -42,6 +42,7 @@ const DETAIL_COMPLETED: &str = "sequential benchmark completed";
 const DETAIL_LATENCY_EXCEPTION: &str = "latency budget exception tracked";
 const DETAIL_QUALITY_GATE: &str = "measurement quality gate failed";
 const DETAIL_REFERENCE_COMPLETED: &str = "QuickJS reference completed";
+const MAX_BENCHMARK_DETAIL_CHARS: usize = 80;
 
 #[derive(Debug)]
 pub struct BenchmarkReport {
@@ -285,7 +286,7 @@ fn measured_with_reference(
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv: reference.cv_percent_text(),
             quality: QUALITY_VALID.to_owned(),
-            detail: detail_text(over),
+            detail: benchmark_detail(&detail_text(over)),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -321,7 +322,7 @@ fn measured_without_reference(case: &BenchmarkCase, ours: MeasureStats) -> Bench
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
-            detail: DETAIL_COMPLETED.to_owned(),
+            detail: benchmark_detail(DETAIL_COMPLETED),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -360,7 +361,7 @@ fn reference_unavailable(case: &BenchmarkCase, ours: MeasureStats, note: &str) -
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
-            detail: format!("{DETAIL_COMPLETED}; reference error: {note}"),
+            detail: benchmark_detail(&format!("{DETAIL_COMPLETED}; reference error: {note}")),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -393,7 +394,7 @@ fn invalid_measurement_outcome(
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv,
             quality: QUALITY_INVALID.to_owned(),
-            detail: detail.to_owned(),
+            detail: benchmark_detail(detail),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -446,8 +447,12 @@ fn failed_row(
         rsqjs_cv,
         quickjs_cv,
         quality,
-        detail: report_text::table_detail(detail),
+        detail: benchmark_detail(detail),
     }
+}
+
+fn benchmark_detail(detail: &str) -> String {
+    report_text::table_detail_with_limit(detail, MAX_BENCHMARK_DETAIL_CHARS)
 }
 
 fn quality_failure_detail(ours: MeasureStats, reference: Option<MeasureStats>) -> Option<String> {
@@ -616,6 +621,25 @@ mod tests {
         ensure_bool(
             outcome.row.detail.contains("\\u{001B}"),
             "detail must preserve escaped control context",
+        )
+    }
+
+    #[test]
+    fn reference_unavailable_keeps_detail_compact() -> TestResult {
+        let case = crate::cases::BenchmarkCase {
+            id: "reference-unavailable",
+            path: "tests/corpora/benchmarks/active/arithmetic_chain.js",
+        };
+        let note = "quickjs: Error: not a function\n    at <eval> (eval_script:19:35)";
+        let outcome = super::reference_unavailable(&case, sample_stats()?, note);
+
+        ensure_bool(
+            outcome.row.detail.chars().count() <= super::MAX_BENCHMARK_DETAIL_CHARS + 3,
+            "benchmark detail must stay compact enough for table rendering",
+        )?;
+        ensure_bool(
+            !outcome.row.detail.contains('\n'),
+            "benchmark detail must be one physical table line",
         )
     }
 

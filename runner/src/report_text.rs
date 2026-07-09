@@ -2,8 +2,13 @@ const MAX_TABLE_DETAIL_CHARS: usize = 240;
 
 #[must_use]
 pub fn table_detail(value: &str) -> String {
+    table_detail_with_limit(value, MAX_TABLE_DETAIL_CHARS)
+}
+
+#[must_use]
+pub fn table_detail_with_limit(value: &str, max_chars: usize) -> String {
     let normalized = normalize_table_text(value);
-    truncate_chars(&normalized, MAX_TABLE_DETAIL_CHARS)
+    truncate_chars(&normalized, max_chars)
 }
 
 fn normalize_table_text(value: &str) -> String {
