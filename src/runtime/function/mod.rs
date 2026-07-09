@@ -53,6 +53,7 @@ use parameters::FunctionParameterState;
 pub(in crate::runtime) use parameters::FunctionScopeTemplate;
 pub(super) use properties::{FunctionIntrinsicDefaults, FunctionProperties};
 
+const FUNCTION_PROTOTYPE_APPLY_PROPERTY: &str = "apply";
 const FUNCTION_PROTOTYPE_BIND_PROPERTY: &str = "bind";
 const FUNCTION_PROTOTYPE_CALL_PROPERTY: &str = "call";
 
@@ -659,6 +660,7 @@ impl Context {
         property.key().is_some()
             || self.known_property_key(property.name()).is_some()
             || property.name() == PROTOTYPE_CONSTRUCTOR_PROPERTY
+            || property.name() == FUNCTION_PROTOTYPE_APPLY_PROPERTY
             || property.name() == FUNCTION_PROTOTYPE_BIND_PROPERTY
             || property.name() == FUNCTION_PROTOTYPE_CALL_PROPERTY
             || property.name() == OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME

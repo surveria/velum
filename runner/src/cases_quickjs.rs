@@ -56,6 +56,8 @@ const PATH_QUICKJS_FUNCTION_CUSTOM_PROPERTIES: &str =
     "tests/corpora/quickjs_differential/active/function_custom_properties.js";
 const PATH_QUICKJS_FUNCTION_DESCRIPTORS: &str =
     "tests/corpora/quickjs_differential/active/function_descriptors.js";
+const PATH_QUICKJS_FUNCTION_APPLY_HAS_INSTANCE: &str =
+    "tests/corpora/quickjs_differential/active/function_apply_has_instance.js";
 const PATH_QUICKJS_FUNCTION_INTRINSIC_DESCRIPTORS: &str =
     "tests/corpora/quickjs_differential/active/function_intrinsic_descriptors.js";
 const PATH_QUICKJS_METHOD_THIS: &str = "tests/corpora/quickjs_differential/active/method_this.js";
@@ -323,6 +325,10 @@ fn quickjs_control_flow_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "function_intrinsic_descriptors",
             path: PATH_QUICKJS_FUNCTION_INTRINSIC_DESCRIPTORS,
+        },
+        DifferentialCase {
+            id: "function_apply_has_instance",
+            path: PATH_QUICKJS_FUNCTION_APPLY_HAS_INSTANCE,
         },
         DifferentialCase {
             id: "method_this",

@@ -12,12 +12,14 @@ use crate::{
 };
 
 use super::{
-    FUNCTION_NAME, FUNCTION_PROTOTYPE_BIND_NAME, FUNCTION_PROTOTYPE_CALL_NAME, NativeFunctionKind,
-    OBJECT_CONSTRUCTOR_PROPERTY,
+    FUNCTION_NAME, FUNCTION_PROTOTYPE_APPLY_NAME, FUNCTION_PROTOTYPE_BIND_NAME,
+    FUNCTION_PROTOTYPE_CALL_NAME, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY,
 };
 
 const GENERATED_FUNCTION_NAME: &str = "anonymous";
 const SYMBOL_TO_STRING_TAG_PROPERTY: &str = "toStringTag";
+const SYMBOL_HAS_INSTANCE_PROPERTY: &str = "hasInstance";
+const SYMBOL_HAS_INSTANCE_DISPLAY: &str = "[Symbol.hasInstance]";
 
 impl Context {
     pub(in crate::runtime) fn function_constructor_value(&mut self) -> Result<Value> {
@@ -179,9 +181,45 @@ impl Context {
 
         let bind = self.create_ephemeral_native_function(
             NativeFunctionKind::FunctionPrototypeBind,
+            prototype_value.clone(),
+        )?;
+        self.define_non_enumerable_object_property(prototype, FUNCTION_PROTOTYPE_BIND_NAME, bind)?;
+
+        let apply = self.create_ephemeral_native_function(
+            NativeFunctionKind::FunctionPrototypeApply,
+            prototype_value.clone(),
+        )?;
+        self.define_non_enumerable_object_property(
+            prototype,
+            FUNCTION_PROTOTYPE_APPLY_NAME,
+            apply,
+        )?;
+
+        self.install_function_prototype_has_instance(prototype, prototype_value)
+    }
+
+    fn install_function_prototype_has_instance(
+        &mut self,
+        prototype: ObjectId,
+        prototype_value: Value,
+    ) -> Result<()> {
+        let has_instance = self.create_ephemeral_native_function(
+            NativeFunctionKind::FunctionPrototypeHasInstance,
             prototype_value,
         )?;
-        self.define_non_enumerable_object_property(prototype, FUNCTION_PROTOTYPE_BIND_NAME, bind)
+        let key = self.well_known_symbol_property_key(SYMBOL_HAS_INSTANCE_PROPERTY)?;
+        self.objects.define_property(
+            prototype,
+            key,
+            SYMBOL_HAS_INSTANCE_DISPLAY,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(has_instance),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::No),
+            )),
+            self.limits.max_object_properties,
+        )
     }
 
     fn async_function_prototype_id_with_constructor(

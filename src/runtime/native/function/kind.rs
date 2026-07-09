@@ -32,6 +32,11 @@ pub(in crate::runtime::native) const GLOBAL_PARSE_INT_NAME: &str = "parseInt";
 pub(in crate::runtime) const GLOBAL_THIS_NAME: &str = "globalThis";
 const FUNCTION_PROTOTYPE_BIND_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const FUNCTION_PROTOTYPE_BIND_NAME: &str = "bind";
+const FUNCTION_PROTOTYPE_APPLY_LENGTH: f64 = 2.0;
+pub(in crate::runtime::native) const FUNCTION_PROTOTYPE_APPLY_NAME: &str = "apply";
+const FUNCTION_PROTOTYPE_HAS_INSTANCE_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const FUNCTION_PROTOTYPE_HAS_INSTANCE_NAME: &str =
+    "[Symbol.hasInstance]";
 const FUNCTION_PROTOTYPE_CALL_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const FUNCTION_PROTOTYPE_CALL_NAME: &str = "call";
 const BOUND_FUNCTION_LENGTH: f64 = 0.0;
@@ -268,6 +273,8 @@ pub(in crate::runtime) enum NativeFunctionKind {
     Function,
     FunctionPrototypeBind,
     FunctionPrototypeCall,
+    FunctionPrototypeApply,
+    FunctionPrototypeHasInstance,
     GlobalDecodeUri,
     GlobalDecodeUriComponent,
     GlobalEncodeUri,
@@ -595,6 +602,8 @@ impl NativeFunctionKind {
             Self::Function => Some(FUNCTION_FUNCTION_LENGTH),
             Self::FunctionPrototypeBind => Some(FUNCTION_PROTOTYPE_BIND_LENGTH),
             Self::FunctionPrototypeCall => Some(FUNCTION_PROTOTYPE_CALL_LENGTH),
+            Self::FunctionPrototypeApply => Some(FUNCTION_PROTOTYPE_APPLY_LENGTH),
+            Self::FunctionPrototypeHasInstance => Some(FUNCTION_PROTOTYPE_HAS_INSTANCE_LENGTH),
             Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_FUNCTION_LENGTH),
             Self::JsonParse => Some(JSON_PARSE_FUNCTION_LENGTH),
             Self::JsonRawJson => Some(JSON_RAW_JSON_FUNCTION_LENGTH),
@@ -740,6 +749,8 @@ impl NativeFunctionKind {
             Self::Function => Some(FUNCTION_NAME),
             Self::FunctionPrototypeBind => Some(FUNCTION_PROTOTYPE_BIND_NAME),
             Self::FunctionPrototypeCall => Some(FUNCTION_PROTOTYPE_CALL_NAME),
+            Self::FunctionPrototypeApply => Some(FUNCTION_PROTOTYPE_APPLY_NAME),
+            Self::FunctionPrototypeHasInstance => Some(FUNCTION_PROTOTYPE_HAS_INSTANCE_NAME),
             Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_NAME),
             Self::JsonParse => Some(JSON_PARSE_NAME),
             Self::JsonRawJson => Some(JSON_RAW_JSON_NAME),
