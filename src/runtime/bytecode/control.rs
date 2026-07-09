@@ -7,6 +7,7 @@ mod object_literal_loop;
 mod string_concat_loop;
 mod switch_for_loop;
 mod try_catch;
+mod try_finally_loop;
 mod update_expression_loop;
 mod while_loop;
 
@@ -146,6 +147,7 @@ impl Context {
                 body,
                 body_scoped,
                 body_direct_throw,
+                try_fast_path,
                 catch,
                 finally_body,
                 finally_scoped,
@@ -154,6 +156,7 @@ impl Context {
                     body,
                     *body_scoped,
                     body_direct_throw.as_ref(),
+                    try_fast_path.as_deref(),
                     catch.as_ref(),
                     finally_body.as_ref(),
                     *finally_scoped,

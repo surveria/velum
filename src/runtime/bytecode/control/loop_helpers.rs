@@ -19,6 +19,20 @@ pub(super) fn fast_loop_compare(op: BytecodeNumericCompareOp, left: f64, right: 
 }
 
 impl Context {
+    pub(super) fn fast_array_index_value(
+        &mut self,
+        object: &Value,
+        index: Option<usize>,
+    ) -> Result<Option<Value>> {
+        let (Value::Object(id), Some(index)) = (object, index) else {
+            return Ok(None);
+        };
+        self.objects
+            .array_index_value_if_array(*id, index)?
+            .map(|value| self.runtime_value(value))
+            .transpose()
+    }
+
     pub(super) fn assign_fast_path_cell(
         &self,
         binding: &BytecodeBinding,
