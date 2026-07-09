@@ -19,6 +19,11 @@ fn normalize_table_text(value: &str) -> String {
             previous_space = false;
             continue;
         }
+        if character == '|' {
+            normalized.push('/');
+            previous_space = false;
+            continue;
+        }
         normalized.push(character);
         previous_space = false;
     }
@@ -75,6 +80,13 @@ mod tests {
             &detail,
             "lexer error: unexpected character '\\u{001B}\\u{0000}'",
         )
+    }
+
+    #[test]
+    fn table_detail_replaces_table_delimiters() -> TestResult {
+        let detail = table_detail("expected a | b");
+
+        ensure_text(&detail, "expected a / b")
     }
 
     #[test]
