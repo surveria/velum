@@ -248,7 +248,9 @@ impl Context {
                 self.eval_function_prototype_call(runtime_call_args(args), this_value)
             }
             NativeCallTarget::Date => self.eval_direct_date_constructor(args),
+            NativeCallTarget::JsonIsRawJson => self.eval_direct_json_is_raw_json(args),
             NativeCallTarget::JsonParse => self.eval_direct_json_parse(args),
+            NativeCallTarget::JsonRawJson => self.eval_direct_json_raw_json(args),
             NativeCallTarget::JsonStringify => self.eval_direct_json_stringify(args),
             NativeCallTarget::Number => self.eval_direct_number_constructor(args),
             NativeCallTarget::Promise => self.eval_direct_promise_constructor(args),
@@ -473,7 +475,9 @@ impl Context {
             NativeFunctionKind::Date(kind) => {
                 self.eval_date_native_function_kind(kind, args, this_value)
             }
+            NativeFunctionKind::JsonIsRawJson => self.eval_json_is_raw_json(args),
             NativeFunctionKind::JsonParse => self.eval_json_parse(args),
+            NativeFunctionKind::JsonRawJson => self.eval_json_raw_json(args),
             NativeFunctionKind::JsonStringify => self.eval_json_stringify(args),
             NativeFunctionKind::Number => self.eval_number_constructor(args),
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),

@@ -38,8 +38,12 @@ const BOUND_FUNCTION_LENGTH: f64 = 0.0;
 const BOUND_FUNCTION_NAME: &str = "bound";
 pub(in crate::runtime) const INFINITY_NAME: &str = "Infinity";
 pub(in crate::runtime::native) const JSON_NAME: &str = "JSON";
+const JSON_IS_RAW_JSON_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const JSON_IS_RAW_JSON_NAME: &str = "isRawJSON";
 const JSON_PARSE_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const JSON_PARSE_NAME: &str = "parse";
+const JSON_RAW_JSON_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const JSON_RAW_JSON_NAME: &str = "rawJSON";
 const JSON_STRINGIFY_FUNCTION_LENGTH: f64 = 3.0;
 pub(in crate::runtime::native) const JSON_STRINGIFY_NAME: &str = "stringify";
 pub(in crate::runtime::native) const MATH_ABS_NAME: &str = "abs";
@@ -264,7 +268,9 @@ pub(in crate::runtime) enum NativeFunctionKind {
     GlobalIsNan,
     GlobalParseFloat,
     GlobalParseInt,
+    JsonIsRawJson,
     JsonParse,
+    JsonRawJson,
     JsonStringify,
     MathAbs,
     MathAcos,
@@ -567,7 +573,9 @@ impl NativeFunctionKind {
             Self::Function => Some(FUNCTION_FUNCTION_LENGTH),
             Self::FunctionPrototypeBind => Some(FUNCTION_PROTOTYPE_BIND_LENGTH),
             Self::FunctionPrototypeCall => Some(FUNCTION_PROTOTYPE_CALL_LENGTH),
+            Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_FUNCTION_LENGTH),
             Self::JsonParse => Some(JSON_PARSE_FUNCTION_LENGTH),
+            Self::JsonRawJson => Some(JSON_RAW_JSON_FUNCTION_LENGTH),
             Self::JsonStringify => Some(JSON_STRINGIFY_FUNCTION_LENGTH),
             Self::Number => Some(NUMBER_FUNCTION_LENGTH),
             Self::Promise => Some(PROMISE_FUNCTION_LENGTH),
@@ -705,7 +713,9 @@ impl NativeFunctionKind {
             Self::Function => Some(FUNCTION_NAME),
             Self::FunctionPrototypeBind => Some(FUNCTION_PROTOTYPE_BIND_NAME),
             Self::FunctionPrototypeCall => Some(FUNCTION_PROTOTYPE_CALL_NAME),
+            Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_NAME),
             Self::JsonParse => Some(JSON_PARSE_NAME),
+            Self::JsonRawJson => Some(JSON_RAW_JSON_NAME),
             Self::JsonStringify => Some(JSON_STRINGIFY_NAME),
             Self::Number => Some(NUMBER_NAME),
             Self::Promise => Some(PROMISE_NAME),

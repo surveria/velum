@@ -67,6 +67,91 @@ let toJsonText = JSON.stringify({
     }
   }
 });
+let boxedNumber = new Number(10);
+boxedNumber.toString = function() {
+  return "toString";
+};
+boxedNumber.valueOf = function() {
+  throw new Test262Error("JSON replacer list should not call Number object valueOf");
+};
+let boxedListText = JSON.stringify({ 10: 1, toString: 2, valueOf: 3 }, [boxedNumber]);
+let boxedSpace = new Number(3.9);
+boxedSpace.toString = function() {
+  throw new Test262Error("JSON space should not call Number object toString");
+};
+boxedSpace.valueOf = function() {
+  return 3;
+};
+let boxedPrettyText = JSON.stringify({ a: { b: 1 } }, null, boxedSpace);
+let boxedString = new String("wrapped");
+boxedString.toString = function() {
+  return "stringified";
+};
+boxedString.valueOf = function() {
+  throw new Test262Error("JSON String object conversion should prefer toString");
+};
+let boxedValuesOk =
+  JSON.stringify(new Boolean(true)) === "true" &&
+  JSON.stringify({ key: new Boolean(false) }) === '{"key":false}' &&
+  JSON.stringify(new Number(8.5)) === "8.5" &&
+  JSON.stringify(boxedString) === '"stringified"' &&
+  boxedListText === '{"toString":2}' &&
+  boxedPrettyText === '{\n   "a": {\n      "b": 1\n   }\n}';
+let orderedObject = { p1: "p1", p2: "p2", p3: "p3" };
+Object.defineProperty(orderedObject, "add", {
+  enumerable: true,
+  get: function() {
+    orderedObject.extra = "extra";
+    return "add";
+  }
+});
+orderedObject.p4 = "p4";
+orderedObject[2] = "2";
+orderedObject[0] = "0";
+orderedObject[1] = "1";
+delete orderedObject.p1;
+delete orderedObject.p3;
+orderedObject.p1 = "p1";
+let orderedText = JSON.stringify(orderedObject);
+let rawValue = JSON.rawJSON('"raw"');
+let rawText = JSON.stringify({
+  scalar: JSON.rawJSON(1),
+  text: rawValue,
+  nested: [JSON.rawJSON(true), JSON.rawJSON(null)]
+});
+let rawShapeOk =
+  JSON.isRawJSON(rawValue) &&
+  !JSON.isRawJSON({ rawJSON: '"raw"' }) &&
+  !JSON.isRawJSON(undefined) &&
+  Object.getPrototypeOf(rawValue) === null &&
+  Object.hasOwn(rawValue, "rawJSON") &&
+  Object.getOwnPropertyNames(rawValue).join(",") === "rawJSON" &&
+  rawValue.rawJSON === '"raw"' &&
+  Object.isFrozen(rawValue);
+let rawSyntaxOk = false;
+try {
+  JSON.rawJSON("");
+} catch (error) {
+  rawSyntaxOk = error.name === "SyntaxError";
+}
+let rawWhitespaceOk = false;
+try {
+  JSON.rawJSON(" 1");
+} catch (error) {
+  rawWhitespaceOk = error.name === "SyntaxError";
+}
+let rawObjectTextOk = false;
+try {
+  JSON.rawJSON("{}");
+} catch (error) {
+  rawObjectTextOk = error.name === "SyntaxError";
+}
+let rawSymbolOk = false;
+try {
+  JSON.rawJSON(Symbol("raw"));
+} catch (error) {
+  rawSymbolOk = error.name === "TypeError";
+}
 
 if (
   !primitiveOk ||
@@ -75,6 +160,12 @@ if (
   typeof JSON.parse !== "function" ||
   JSON.parse.name !== "parse" ||
   JSON.parse.length !== 2 ||
+  typeof JSON.isRawJSON !== "function" ||
+  JSON.isRawJSON.name !== "isRawJSON" ||
+  JSON.isRawJSON.length !== 1 ||
+  typeof JSON.rawJSON !== "function" ||
+  JSON.rawJSON.name !== "rawJSON" ||
+  JSON.rawJSON.length !== 1 ||
   typeof JSON.stringify !== "function" ||
   JSON.stringify.name !== "stringify" ||
   JSON.stringify.length !== 3 ||
@@ -104,7 +195,15 @@ if (
   prettyText !== '{\n  "a": 1,\n  "nested": {\n    "b": 2\n  }\n}' ||
   arrayReplacerText !== '[1,null,3]' ||
   toJsonKey !== "keep" ||
-  toJsonText !== '{"keep":{"answer":42}}'
+  toJsonText !== '{"keep":{"answer":42}}' ||
+  !boxedValuesOk ||
+  orderedText !== '{"0":"0","1":"1","2":"2","p2":"p2","add":"add","p4":"p4","p1":"p1"}' ||
+  rawText !== '{"scalar":1,"text":"raw","nested":[true,null]}' ||
+  !rawShapeOk ||
+  !rawSyntaxOk ||
+  !rawWhitespaceOk ||
+  !rawObjectTextOk ||
+  !rawSymbolOk
 ) {
   throw new Test262Error("JSON basic behavior was unexpected");
 }
