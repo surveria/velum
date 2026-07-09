@@ -8,7 +8,10 @@ use crate::{
     value::Value,
 };
 
-use super::for_loop::{BytecodeForLoopFastPath, same_bytecode_binding};
+use super::{
+    for_loop::BytecodeForLoopFastPath,
+    loop_helpers::{fast_loop_compare, same_bytecode_binding},
+};
 
 #[derive(Debug)]
 pub(super) struct BytecodeForArrayAddFastPath<'a> {
@@ -82,7 +85,7 @@ impl Context {
         loop {
             self.step()?;
             self.record_bytecode_linear_direct_run()?;
-            if !super::for_loop::fast_loop_compare(fast_path.compare, index, limit) {
+            if !fast_loop_compare(fast_path.compare, index, limit) {
                 break;
             }
             let Ok(position) = usize::try_from(number_to_i32(index, "array index")?) else {
