@@ -283,7 +283,7 @@ impl Context {
         Ok(list)
     }
 
-    fn reflect_length_from_value(value: &Value) -> Result<usize> {
+    pub(in crate::runtime::native) fn reflect_length_from_value(value: &Value) -> Result<usize> {
         let number = Self::value_to_number(value);
         if number.is_nan() || number <= 0.0 {
             return Ok(0);

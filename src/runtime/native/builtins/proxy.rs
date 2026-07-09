@@ -22,6 +22,8 @@ const PROXY_TRAP_GET_PROTOTYPE_OF: &str = "getPrototypeOf";
 const PROXY_TRAP_SET_PROTOTYPE_OF: &str = "setPrototypeOf";
 const PROXY_TRAP_IS_EXTENSIBLE: &str = "isExtensible";
 const PROXY_TRAP_PREVENT_EXTENSIONS: &str = "preventExtensions";
+const PROXY_TRAP_DEFINE_PROPERTY: &str = "defineProperty";
+const PROXY_TRAP_OWN_KEYS: &str = "ownKeys";
 const PROXY_GET_PROTOTYPE_INVALID_ERROR: &str =
     "proxy getPrototypeOf trap must return an object or null";
 
@@ -271,5 +273,62 @@ impl Context {
         };
         let result = self.eval_call_value(trap, &[target], handler)?;
         Ok(result.is_truthy())
+    }
+
+    /// Proxy `[[DefineOwnProperty]]`: dispatch the `defineProperty` trap or
+    /// define the property on the target. Returns whether the definition
+    /// succeeded.
+    pub(in crate::runtime) fn proxy_define_property(
+        &mut self,
+        id: ObjectId,
+        name: &str,
+        descriptor: Value,
+    ) -> Result<bool> {
+        let (target, handler) = self.proxy_target_handler(id)?;
+        let key = self.heap_string_value(name)?;
+        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_DEFINE_PROPERTY)? else {
+            self.eval_object_define_property(RuntimeCallArgs::values(&[target, key, descriptor]))?;
+            return Ok(true);
+        };
+        let result = self.eval_call_value(trap, &[target, key, descriptor], handler)?;
+        Ok(result.is_truthy())
+    }
+
+    /// Proxy `[[OwnPropertyKeys]]`: dispatch the `ownKeys` trap or read the
+    /// target's own string keys. Returns the trap's string keys (symbol keys
+    /// are not yet surfaced).
+    pub(in crate::runtime) fn proxy_own_keys(&mut self, id: ObjectId) -> Result<Vec<String>> {
+        let (target, handler) = self.proxy_target_handler(id)?;
+        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_OWN_KEYS)? else {
+            return self.own_property_names(&target);
+        };
+        let result = self.eval_call_value(trap, &[target], handler)?;
+        self.proxy_key_list_from_value(&result)
+    }
+
+    /// Convert the array-like result of an `ownKeys` trap into string keys.
+    fn proxy_key_list_from_value(&mut self, value: &Value) -> Result<Vec<String>> {
+        if !matches!(value, Value::Object(_)) {
+            return Err(Error::type_error(
+                "proxy ownKeys trap must return an array-like object",
+            ));
+        }
+        let length_value = self.get_property_value(value, "length")?;
+        let length = Self::reflect_length_from_value(&length_value)?;
+        let mut keys = Vec::new();
+        for index in 0..length {
+            self.step()?;
+            let element = self.get_property_value(value, &index.to_string())?;
+            match element {
+                Value::String(text) => keys.push(text),
+                Value::HeapString(text) => keys.push(text.as_str().to_owned()),
+                _ => {
+                    return Err(Error::type_error(
+                        "proxy ownKeys trap keys must be strings",
+                    ));
+                }
+            }
+        }
+        Ok(keys)
     }
 }
