@@ -17,6 +17,7 @@ use tabled::Tabled;
 use super::bench_engines::{BenchEngine, RsqjsEngine, make_reference};
 use super::bench_measure::{self, MeasureConfig, MeasureStats, format_duration, ratio_values};
 use super::cases::{self, BenchmarkCase};
+use super::report_text;
 
 pub const BUDGET_LABEL: &str = "1.00x";
 
@@ -41,6 +42,7 @@ const DETAIL_COMPLETED: &str = "sequential benchmark completed";
 const DETAIL_LATENCY_EXCEPTION: &str = "latency budget exception tracked";
 const DETAIL_QUALITY_GATE: &str = "measurement quality gate failed";
 const DETAIL_REFERENCE_COMPLETED: &str = "QuickJS reference completed";
+const MAX_BENCHMARK_DETAIL_CHARS: usize = 80;
 
 #[derive(Debug)]
 pub struct BenchmarkReport {
@@ -284,7 +286,7 @@ fn measured_with_reference(
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv: reference.cv_percent_text(),
             quality: QUALITY_VALID.to_owned(),
-            detail: detail_text(over),
+            detail: benchmark_detail(&detail_text(over)),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -320,7 +322,7 @@ fn measured_without_reference(case: &BenchmarkCase, ours: MeasureStats) -> Bench
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
-            detail: DETAIL_COMPLETED.to_owned(),
+            detail: benchmark_detail(DETAIL_COMPLETED),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -359,7 +361,7 @@ fn reference_unavailable(case: &BenchmarkCase, ours: MeasureStats, note: &str) -
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
-            detail: format!("{DETAIL_COMPLETED}; reference error: {note}"),
+            detail: benchmark_detail(&format!("{DETAIL_COMPLETED}; reference error: {note}")),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -392,7 +394,7 @@ fn invalid_measurement_outcome(
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv,
             quality: QUALITY_INVALID.to_owned(),
-            detail: detail.to_owned(),
+            detail: benchmark_detail(detail),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -445,8 +447,12 @@ fn failed_row(
         rsqjs_cv,
         quickjs_cv,
         quality,
-        detail: detail.to_owned(),
+        detail: benchmark_detail(detail),
     }
+}
+
+fn benchmark_detail(detail: &str) -> String {
+    report_text::table_detail_with_limit(detail, MAX_BENCHMARK_DETAIL_CHARS)
 }
 
 fn quality_failure_detail(ours: MeasureStats, reference: Option<MeasureStats>) -> Option<String> {
@@ -591,6 +597,50 @@ mod tests {
             "failed row must retain QuickJS variation",
         )?;
         ensure_usize(outcome.counts.failed, 1)
+    }
+
+    #[test]
+    fn failed_benchmark_sanitizes_multiline_details() -> TestResult {
+        let case = crate::cases::BenchmarkCase {
+            id: "failed-case",
+            path: "tests/corpora/benchmarks/active/arithmetic_chain.js",
+        };
+        let outcome = super::failed_outcome(
+            &case,
+            "lexer error: unexpected character '\u{1b}'\n    at eval_script:12:4",
+        );
+
+        ensure_bool(
+            !outcome.row.detail.contains('\n'),
+            "detail must be one line",
+        )?;
+        ensure_bool(
+            !outcome.row.detail.contains('\u{1b}'),
+            "detail must escape controls",
+        )?;
+        ensure_bool(
+            outcome.row.detail.contains("\\u{001B}"),
+            "detail must preserve escaped control context",
+        )
+    }
+
+    #[test]
+    fn reference_unavailable_keeps_detail_compact() -> TestResult {
+        let case = crate::cases::BenchmarkCase {
+            id: "reference-unavailable",
+            path: "tests/corpora/benchmarks/active/arithmetic_chain.js",
+        };
+        let note = "quickjs: Error: not a function\n    at <eval> (eval_script:19:35)";
+        let outcome = super::reference_unavailable(&case, sample_stats()?, note);
+
+        ensure_bool(
+            outcome.row.detail.chars().count() <= super::MAX_BENCHMARK_DETAIL_CHARS + 3,
+            "benchmark detail must stay compact enough for table rendering",
+        )?;
+        ensure_bool(
+            !outcome.row.detail.contains('\n'),
+            "benchmark detail must be one physical table line",
+        )
     }
 
     fn sample_stats() -> Result<crate::bench_measure::MeasureStats, anyhow::Error> {

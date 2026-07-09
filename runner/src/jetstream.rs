@@ -7,7 +7,7 @@ use crate::{
     RUNNER_NAME,
     bench_engines::{BenchEngine, RsqjsEngine, make_reference},
     bench_measure::{self, MeasureConfig, MeasureStats, format_duration, ratio_values},
-    fenced_table, report_metadata,
+    fenced_table, report_metadata, report_text,
 };
 
 #[path = "jetstream_cases.rs"]
@@ -459,7 +459,9 @@ fn reference_unavailable(case: &JetStreamCase, ours: MeasureStats, note: &str) -
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
-            detail: format!("{DETAIL_COMPLETED}; reference error: {note}"),
+            detail: report_text::table_detail(&format!(
+                "{DETAIL_COMPLETED}; reference error: {note}"
+            )),
         },
         counts: JetStreamCounts {
             measured: 1,
@@ -489,7 +491,7 @@ fn invalid_measurement_outcome(
             rsqjs_cv: ours.cv_percent_text(),
             quickjs_cv,
             quality: QUALITY_INVALID.to_owned(),
-            detail: detail.to_owned(),
+            detail: report_text::table_detail(detail),
         },
         counts: JetStreamCounts {
             measured: 1,
@@ -535,7 +537,7 @@ fn failed_row(
         rsqjs_cv: NOT_MEASURED.to_owned(),
         quickjs_cv,
         quality,
-        detail: detail.to_owned(),
+        detail: report_text::table_detail(detail),
     }
 }
 
@@ -552,7 +554,7 @@ fn skipped_outcome(case: &JetStreamCase, reason: &str) -> JetStreamOutcome {
             rsqjs_cv: NOT_MEASURED.to_owned(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: NOT_MEASURED.to_owned(),
-            detail: reason.to_owned(),
+            detail: report_text::table_detail(reason),
         },
         counts: JetStreamCounts {
             skipped: 1,
@@ -703,6 +705,31 @@ mod tests {
             "failed row must retain QuickJS variation",
         )?;
         ensure_usize(outcome.counts.failed, 1)
+    }
+
+    #[test]
+    fn failed_jetstream_candidate_sanitizes_multiline_details() -> anyhow::Result<()> {
+        let case = super::JetStreamCase::timed(
+            "failed-candidate",
+            &["tests/external/jetstream/simple/hash-map.js"],
+        );
+        let outcome = super::failed_outcome(
+            &case,
+            "parser error: unexpected character '\u{0}'\n    at eval_script:42:7",
+        );
+
+        ensure_bool(
+            !outcome.row.detail.contains('\n'),
+            "detail must be one line",
+        )?;
+        ensure_bool(
+            !outcome.row.detail.contains('\u{0}'),
+            "detail must escape controls",
+        )?;
+        ensure_bool(
+            outcome.row.detail.contains("\\u{0000}"),
+            "detail must preserve escaped control context",
+        )
     }
 
     fn sample_stats() -> Result<crate::bench_measure::MeasureStats, anyhow::Error> {
