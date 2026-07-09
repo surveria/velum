@@ -1,8 +1,10 @@
-use std::{borrow::Cow, collections::BTreeSet, fs, path::Path};
+use std::{borrow::Cow, collections::BTreeSet, fs, path::Path, time::Duration};
 
 use anyhow::{Context as _, bail};
 use rs_quickjs::{Error, Runtime, RuntimeLimits};
 use serde::Deserialize;
+
+use super::timing;
 
 const FRONTMATTER_START: &str = "/*---";
 const FRONTMATTER_END: &str = "---*/";
@@ -113,6 +115,7 @@ pub enum Test262Outcome {
 pub struct Test262CaseResult {
     pub id: String,
     pub outcome: Test262Outcome,
+    pub elapsed: Duration,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Eq, PartialEq)]
@@ -165,12 +168,16 @@ pub fn execute_test262_path(
     let mut results = Vec::new();
     for plan in plans {
         let id = variant_id(relative_path, plan.name());
-        let outcome = match plan {
+        let result = timing::timed(|| match plan {
             VariantPlan::Run { strict, .. } => {
                 execute_variant(test262_dir, relative_path, &source, &metadata, strict)
             }
-        };
-        results.push(Test262CaseResult { id, outcome });
+        });
+        results.push(Test262CaseResult {
+            id,
+            outcome: result.value,
+            elapsed: result.elapsed,
+        });
     }
     Ok(results)
 }

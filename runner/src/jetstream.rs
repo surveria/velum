@@ -7,7 +7,7 @@ use crate::{
     RUNNER_NAME,
     bench_engines::{BenchEngine, RsqjsEngine, make_reference},
     bench_measure::{self, MeasureConfig, MeasureStats, format_duration, ratio_values},
-    fenced_table, report_metadata, report_text,
+    fenced_table, report_metadata, timing,
 };
 
 #[path = "jetstream_cases.rs"]
@@ -69,6 +69,7 @@ pub struct JetStreamReport {
     pub invalid: usize,
     pub skipped: usize,
     pub over_latency_budget: usize,
+    pub elapsed: std::time::Duration,
 }
 
 #[derive(Debug, Tabled)]
@@ -76,6 +77,9 @@ pub struct JetStreamRow {
     benchmark: String,
     status: String,
     source: String,
+    case_elapsed: String,
+    rsqjs_measure: String,
+    quickjs_measure: String,
     rsqjs_time: String,
     quickjs_time: String,
     latency_ratio: String,
@@ -135,8 +139,8 @@ struct JetStreamOutcome {
 #[derive(Debug)]
 enum ReferenceMeasurement {
     NotConfigured,
-    Measured(MeasureStats),
-    Failed(String),
+    Measured(timing::Timed<MeasureStats>),
+    Failed(timing::Timed<String>),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -147,6 +151,7 @@ struct BudgetCheck {
 
 #[must_use]
 pub fn run() -> JetStreamReport {
+    let timer = timing::RunTimer::start();
     let config = MeasureConfig::in_process_from_env();
     let reference = make_reference();
     let mut report = JetStreamReport {
@@ -156,6 +161,7 @@ pub fn run() -> JetStreamReport {
         invalid: 0,
         skipped: 0,
         over_latency_budget: 0,
+        elapsed: std::time::Duration::ZERO,
     };
     for case in jetstream_cases::cases() {
         let outcome = run_case(case, config, reference.as_deref());
@@ -168,6 +174,7 @@ pub fn run() -> JetStreamReport {
             .saturating_add(outcome.counts.over_latency_budget);
         report.rows.push(outcome.row);
     }
+    report.elapsed = timer.elapsed();
     report
 }
 
@@ -215,13 +222,14 @@ fn render_markdown(metadata: &report_metadata::RunMetadata, report: &JetStreamRe
 
 fn summary(report: &JetStreamReport) -> String {
     format!(
-        "- Measured: {}\n- Failed candidates: {}\n- Invalid measurements: {}\n- Skipped: {}\n- Over latency budget ({}): {}",
+        "- Measured: {}\n- Failed candidates: {}\n- Invalid measurements: {}\n- Skipped: {}\n- Over latency budget ({}): {}\n- Elapsed: {}",
         report.measured,
         report.failed,
         report.invalid,
         report.skipped,
         BUDGET_LABEL,
         report.over_latency_budget,
+        timing::format_duration(report.elapsed),
     )
 }
 
@@ -241,15 +249,37 @@ fn run_timed_case(
     config: MeasureConfig,
     reference: Option<&dyn BenchEngine>,
 ) -> JetStreamOutcome {
+    let case_timer = timing::RunTimer::start();
     let source = match benchmark_source(case.files) {
         Ok(source) => source,
-        Err(error) => return failed_outcome(case, &error.to_string()),
+        Err(error) => {
+            return failed_outcome(
+                case,
+                timing::format_duration(case_timer.elapsed()),
+                &error.to_string(),
+            );
+        }
     };
-    let ours = bench_measure::measure(config, || RsqjsEngine.eval(&source));
+    let ours = timing::timed(|| bench_measure::measure(config, || RsqjsEngine.eval(&source)));
     let reference = measure_reference(config, reference, &source);
-    match ours {
-        Ok(stats) => measured_with_reference_result(case, stats, reference),
-        Err(error) => failed_with_reference(case, &error.to_string(), reference),
+    let case_elapsed = timing::format_duration(case_timer.elapsed());
+    match ours.value {
+        Ok(stats) => measured_with_reference_result(
+            case,
+            timing::Timed {
+                value: stats,
+                elapsed: ours.elapsed,
+            },
+            reference,
+            case_elapsed,
+        ),
+        Err(error) => failed_with_reference(
+            case,
+            &error.to_string(),
+            timing::format_duration(ours.elapsed),
+            reference,
+            case_elapsed,
+        ),
     }
 }
 
@@ -261,48 +291,77 @@ fn measure_reference(
     let Some(reference) = reference else {
         return ReferenceMeasurement::NotConfigured;
     };
-    match bench_measure::measure(config, || reference.eval(source)) {
-        Ok(stats) => ReferenceMeasurement::Measured(stats),
-        Err(error) => ReferenceMeasurement::Failed(format!("{}: {error}", reference.label())),
+    let measured = timing::timed(|| bench_measure::measure(config, || reference.eval(source)));
+    match measured.value {
+        Ok(stats) => ReferenceMeasurement::Measured(timing::Timed {
+            value: stats,
+            elapsed: measured.elapsed,
+        }),
+        Err(error) => ReferenceMeasurement::Failed(timing::Timed {
+            value: format!("{}: {error}", reference.label()),
+            elapsed: measured.elapsed,
+        }),
     }
 }
 
 fn measured_with_reference_result(
     case: &JetStreamCase,
-    ours: MeasureStats,
+    ours: timing::Timed<MeasureStats>,
     reference: ReferenceMeasurement,
+    case_elapsed: String,
 ) -> JetStreamOutcome {
     match reference {
-        ReferenceMeasurement::Measured(reference) => measured_with_reference(case, ours, reference),
-        ReferenceMeasurement::Failed(note) => reference_unavailable(case, ours, &note),
-        ReferenceMeasurement::NotConfigured => measured_without_reference(case, ours),
+        ReferenceMeasurement::Measured(reference) => {
+            measured_with_reference(case, ours, reference, case_elapsed)
+        }
+        ReferenceMeasurement::Failed(note) => {
+            reference_unavailable(case, ours, &note, case_elapsed)
+        }
+        ReferenceMeasurement::NotConfigured => measured_without_reference(case, ours, case_elapsed),
     }
 }
 
 fn failed_with_reference(
     case: &JetStreamCase,
     detail: &str,
+    rsqjs_measure: String,
     reference: ReferenceMeasurement,
+    case_elapsed: String,
 ) -> JetStreamOutcome {
     match reference {
         ReferenceMeasurement::Measured(reference) => failed_with_reference_measurement(
             case,
-            format_duration(reference.median()),
-            reference.cv_percent_text(),
-            reference_quality(reference),
-            &detail_with_reference_quality(detail, reference),
+            timing::MeasurementColumns::failed_with_reference(
+                case_elapsed,
+                rsqjs_measure,
+                reference.elapsed,
+            ),
+            timing::ReferenceColumns::measured(
+                format_duration(reference.value.median()),
+                reference.value.cv_percent_text(),
+            ),
+            reference_quality(reference.value),
+            &detail_with_reference_quality(detail, reference.value),
         ),
         ReferenceMeasurement::Failed(note) => failed_with_reference_measurement(
             case,
-            REFERENCE_NOT_AVAILABLE.to_owned(),
+            timing::MeasurementColumns::failed_with_reference(
+                case_elapsed,
+                rsqjs_measure,
+                note.elapsed,
+            ),
+            timing::ReferenceColumns::not_measured(REFERENCE_NOT_AVAILABLE),
             NOT_MEASURED.to_owned(),
-            NOT_MEASURED.to_owned(),
-            &format!("{detail}; reference error: {note}"),
+            &format!("{detail}; reference error: {}", note.value),
         ),
         ReferenceMeasurement::NotConfigured => failed_with_reference_measurement(
             case,
-            REFERENCE_NOT_CONFIGURED.to_owned(),
-            NOT_MEASURED.to_owned(),
+            timing::MeasurementColumns {
+                case_elapsed,
+                rsqjs_measure,
+                quickjs_measure: NOT_MEASURED.to_owned(),
+            },
+            timing::ReferenceColumns::not_measured(REFERENCE_NOT_CONFIGURED),
             NOT_MEASURED.to_owned(),
             detail,
         ),
@@ -311,13 +370,13 @@ fn failed_with_reference(
 
 fn failed_with_reference_measurement(
     case: &JetStreamCase,
-    quickjs_time: String,
-    quickjs_cv: String,
+    measurements: timing::MeasurementColumns,
+    quickjs: timing::ReferenceColumns,
     quality: String,
     detail: &str,
 ) -> JetStreamOutcome {
     JetStreamOutcome {
-        row: failed_row(case, quickjs_time, quickjs_cv, quality, detail),
+        row: failed_row(case, measurements, quickjs, quality, detail),
         counts: JetStreamCounts {
             failed: 1,
             ..JetStreamCounts::default()
@@ -367,31 +426,40 @@ fn benchmark_source(files: &[&str]) -> anyhow::Result<String> {
 
 fn measured_with_reference(
     case: &JetStreamCase,
-    ours: MeasureStats,
-    reference: MeasureStats,
+    ours: timing::Timed<MeasureStats>,
+    reference: timing::Timed<MeasureStats>,
+    case_elapsed: String,
 ) -> JetStreamOutcome {
-    if let Some(detail) = quality_failure_detail(ours, Some(reference)) {
-        return invalid_measurement_outcome(
-            case,
-            ours,
-            format_duration(reference.median()),
-            reference.cv_percent_text(),
-            &detail,
-            false,
+    if let Some(detail) = quality_failure_detail(ours.value, Some(reference.value)) {
+        let measurements =
+            timing::MeasurementColumns::measured(case_elapsed, ours.elapsed, reference.elapsed);
+        let quickjs = timing::ReferenceColumns::measured(
+            format_duration(reference.value.median()),
+            reference.value.cv_percent_text(),
         );
+        return invalid_measurement_outcome(case, ours, measurements, quickjs, &detail, false);
     }
-    let budget = budget_check(ours.median().as_nanos(), reference.median().as_nanos());
+    let budget = budget_check(
+        ours.value.median().as_nanos(),
+        reference.value.median().as_nanos(),
+    );
     JetStreamOutcome {
         row: JetStreamRow {
             benchmark: case.id.to_owned(),
             status: jetstream_status(budget.over_budget).to_owned(),
             source: case.source_label(),
-            rsqjs_time: format_duration(ours.median()),
-            quickjs_time: format_duration(reference.median()),
-            latency_ratio: ratio_values(ours.median().as_nanos(), reference.median().as_nanos()),
+            case_elapsed,
+            rsqjs_measure: timing::format_duration(ours.elapsed),
+            quickjs_measure: timing::format_duration(reference.elapsed),
+            rsqjs_time: format_duration(ours.value.median()),
+            quickjs_time: format_duration(reference.value.median()),
+            latency_ratio: ratio_values(
+                ours.value.median().as_nanos(),
+                reference.value.median().as_nanos(),
+            ),
             latency_budget: budget.label.to_owned(),
-            rsqjs_cv: ours.cv_percent_text(),
-            quickjs_cv: reference.cv_percent_text(),
+            rsqjs_cv: ours.value.cv_percent_text(),
+            quickjs_cv: reference.value.cv_percent_text(),
             quality: QUALITY_VALID.to_owned(),
             detail: detail_text(budget.over_budget),
         },
@@ -403,13 +471,19 @@ fn measured_with_reference(
     }
 }
 
-fn measured_without_reference(case: &JetStreamCase, ours: MeasureStats) -> JetStreamOutcome {
-    if let Some(detail) = quality_failure_detail(ours, None) {
+fn measured_without_reference(
+    case: &JetStreamCase,
+    ours: timing::Timed<MeasureStats>,
+    case_elapsed: String,
+) -> JetStreamOutcome {
+    if let Some(detail) = quality_failure_detail(ours.value, None) {
+        let measurements =
+            timing::MeasurementColumns::without_reference(case_elapsed, ours.elapsed);
         return invalid_measurement_outcome(
             case,
             ours,
-            REFERENCE_NOT_CONFIGURED.to_owned(),
-            NOT_MEASURED.to_owned(),
+            measurements,
+            timing::ReferenceColumns::not_measured(REFERENCE_NOT_CONFIGURED),
             &detail,
             true,
         );
@@ -419,11 +493,14 @@ fn measured_without_reference(case: &JetStreamCase, ours: MeasureStats) -> JetSt
             benchmark: case.id.to_owned(),
             status: "✅ measured".to_owned(),
             source: case.source_label(),
-            rsqjs_time: format_duration(ours.median()),
+            case_elapsed,
+            rsqjs_measure: timing::format_duration(ours.elapsed),
+            quickjs_measure: NOT_MEASURED.to_owned(),
+            rsqjs_time: format_duration(ours.value.median()),
             quickjs_time: REFERENCE_NOT_CONFIGURED.to_owned(),
             latency_ratio: NOT_MEASURED.to_owned(),
             latency_budget: "🟡 no reference".to_owned(),
-            rsqjs_cv: ours.cv_percent_text(),
+            rsqjs_cv: ours.value.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
             detail: DETAIL_COMPLETED.to_owned(),
@@ -436,14 +513,21 @@ fn measured_without_reference(case: &JetStreamCase, ours: MeasureStats) -> JetSt
     }
 }
 
-fn reference_unavailable(case: &JetStreamCase, ours: MeasureStats, note: &str) -> JetStreamOutcome {
-    if let Some(detail) = quality_failure_detail(ours, None) {
+fn reference_unavailable(
+    case: &JetStreamCase,
+    ours: timing::Timed<MeasureStats>,
+    note: &timing::Timed<String>,
+    case_elapsed: String,
+) -> JetStreamOutcome {
+    if let Some(detail) = quality_failure_detail(ours.value, None) {
+        let measurements =
+            timing::MeasurementColumns::measured(case_elapsed, ours.elapsed, note.elapsed);
         return invalid_measurement_outcome(
             case,
             ours,
-            REFERENCE_NOT_AVAILABLE.to_owned(),
-            NOT_MEASURED.to_owned(),
-            &format!("{detail}; reference error: {note}"),
+            measurements,
+            timing::ReferenceColumns::not_measured(REFERENCE_NOT_AVAILABLE),
+            &format!("{detail}; reference error: {}", note.value),
             true,
         );
     }
@@ -452,16 +536,17 @@ fn reference_unavailable(case: &JetStreamCase, ours: MeasureStats, note: &str) -
             benchmark: case.id.to_owned(),
             status: "✅ measured".to_owned(),
             source: case.source_label(),
-            rsqjs_time: format_duration(ours.median()),
+            case_elapsed,
+            rsqjs_measure: timing::format_duration(ours.elapsed),
+            quickjs_measure: timing::format_duration(note.elapsed),
+            rsqjs_time: format_duration(ours.value.median()),
             quickjs_time: REFERENCE_NOT_AVAILABLE.to_owned(),
             latency_ratio: NOT_MEASURED.to_owned(),
             latency_budget: LATENCY_NOT_AVAILABLE.to_owned(),
-            rsqjs_cv: ours.cv_percent_text(),
+            rsqjs_cv: ours.value.cv_percent_text(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: QUALITY_VALID.to_owned(),
-            detail: report_text::table_detail(&format!(
-                "{DETAIL_COMPLETED}; reference error: {note}"
-            )),
+            detail: format!("{DETAIL_COMPLETED}; reference error: {}", note.value),
         },
         counts: JetStreamCounts {
             measured: 1,
@@ -473,9 +558,9 @@ fn reference_unavailable(case: &JetStreamCase, ours: MeasureStats, note: &str) -
 
 fn invalid_measurement_outcome(
     case: &JetStreamCase,
-    ours: MeasureStats,
-    quickjs_time: String,
-    quickjs_cv: String,
+    ours: timing::Timed<MeasureStats>,
+    measurements: timing::MeasurementColumns,
+    quickjs: timing::ReferenceColumns,
     detail: &str,
     skipped_reference: bool,
 ) -> JetStreamOutcome {
@@ -484,14 +569,17 @@ fn invalid_measurement_outcome(
             benchmark: case.id.to_owned(),
             status: STATUS_INVALID_BENCHMARK.to_owned(),
             source: case.source_label(),
-            rsqjs_time: format_duration(ours.median()),
-            quickjs_time,
+            case_elapsed: measurements.case_elapsed,
+            rsqjs_measure: measurements.rsqjs_measure,
+            quickjs_measure: measurements.quickjs_measure,
+            rsqjs_time: format_duration(ours.value.median()),
+            quickjs_time: quickjs.eval,
             latency_ratio: NOT_MEASURED.to_owned(),
             latency_budget: LATENCY_INVALID.to_owned(),
-            rsqjs_cv: ours.cv_percent_text(),
-            quickjs_cv,
+            rsqjs_cv: ours.value.cv_percent_text(),
+            quickjs_cv: quickjs.cv,
             quality: QUALITY_INVALID.to_owned(),
-            detail: report_text::table_detail(detail),
+            detail: detail.to_owned(),
         },
         counts: JetStreamCounts {
             measured: 1,
@@ -503,12 +591,12 @@ fn invalid_measurement_outcome(
     }
 }
 
-fn failed_outcome(case: &JetStreamCase, detail: &str) -> JetStreamOutcome {
+fn failed_outcome(case: &JetStreamCase, case_elapsed: String, detail: &str) -> JetStreamOutcome {
     JetStreamOutcome {
         row: failed_row(
             case,
-            NOT_MEASURED.to_owned(),
-            NOT_MEASURED.to_owned(),
+            timing::MeasurementColumns::not_measured(case_elapsed),
+            timing::ReferenceColumns::not_measured(NOT_MEASURED),
             NOT_MEASURED.to_owned(),
             detail,
         ),
@@ -521,8 +609,8 @@ fn failed_outcome(case: &JetStreamCase, detail: &str) -> JetStreamOutcome {
 
 fn failed_row(
     case: &JetStreamCase,
-    quickjs_time: String,
-    quickjs_cv: String,
+    measurements: timing::MeasurementColumns,
+    quickjs: timing::ReferenceColumns,
     quality: String,
     detail: &str,
 ) -> JetStreamRow {
@@ -530,14 +618,17 @@ fn failed_row(
         benchmark: case.id.to_owned(),
         status: STATUS_FAILED.to_owned(),
         source: case.source_label(),
+        case_elapsed: measurements.case_elapsed,
+        rsqjs_measure: measurements.rsqjs_measure,
+        quickjs_measure: measurements.quickjs_measure,
         rsqjs_time: NOT_MEASURED.to_owned(),
-        quickjs_time,
+        quickjs_time: quickjs.eval,
         latency_ratio: NOT_MEASURED.to_owned(),
         latency_budget: NOT_MEASURED.to_owned(),
         rsqjs_cv: NOT_MEASURED.to_owned(),
-        quickjs_cv,
+        quickjs_cv: quickjs.cv,
         quality,
-        detail: report_text::table_detail(detail),
+        detail: detail.to_owned(),
     }
 }
 
@@ -547,6 +638,9 @@ fn skipped_outcome(case: &JetStreamCase, reason: &str) -> JetStreamOutcome {
             benchmark: case.id.to_owned(),
             status: STATUS_SKIPPED.to_owned(),
             source: case.source_label(),
+            case_elapsed: NOT_MEASURED.to_owned(),
+            rsqjs_measure: NOT_MEASURED.to_owned(),
+            quickjs_measure: NOT_MEASURED.to_owned(),
             rsqjs_time: NOT_MEASURED.to_owned(),
             quickjs_time: NOT_MEASURED.to_owned(),
             latency_ratio: NOT_MEASURED.to_owned(),
@@ -554,7 +648,7 @@ fn skipped_outcome(case: &JetStreamCase, reason: &str) -> JetStreamOutcome {
             rsqjs_cv: NOT_MEASURED.to_owned(),
             quickjs_cv: NOT_MEASURED.to_owned(),
             quality: NOT_MEASURED.to_owned(),
-            detail: report_text::table_detail(reason),
+            detail: reason.to_owned(),
         },
         counts: JetStreamCounts {
             skipped: 1,
@@ -651,115 +745,5 @@ impl JetStreamCase {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{LATENCY_OVER, LATENCY_WITHIN, benchmark_source, budget_check};
-    use std::time::Duration;
-
-    #[test]
-    fn budget_check_treats_faster_rsquickjs_as_within_budget() -> anyhow::Result<()> {
-        let check = budget_check(90, 100);
-        ensure_bool(!check.over_budget, "faster rsqjs must be within budget")?;
-        ensure_text(check.label, LATENCY_WITHIN)
-    }
-
-    #[test]
-    fn budget_check_tracks_slower_rsquickjs_as_exception() -> anyhow::Result<()> {
-        let check = budget_check(101, 100);
-        ensure_bool(check.over_budget, "slower rsqjs must be tracked")?;
-        ensure_text(check.label, LATENCY_OVER)
-    }
-
-    #[test]
-    fn benchmark_source_appends_sync_harness() -> anyhow::Result<()> {
-        let source = benchmark_source(&[])?;
-        ensure_bool(
-            source.contains("new Benchmark()"),
-            "harness must construct benchmark",
-        )?;
-        ensure_bool(
-            source.contains("runIteration()"),
-            "harness must run iteration",
-        )
-    }
-
-    #[test]
-    fn failed_jetstream_candidate_preserves_quickjs_measurement() -> anyhow::Result<()> {
-        let case = super::JetStreamCase::timed(
-            "failed-candidate",
-            &["tests/external/jetstream/simple/hash-map.js"],
-        );
-        let reference = sample_stats()?;
-        let outcome = super::failed_with_reference(
-            &case,
-            "rsqjs eval failed: sample",
-            super::ReferenceMeasurement::Measured(reference),
-        );
-        ensure_text(&outcome.row.status, super::STATUS_FAILED)?;
-        ensure_text(&outcome.row.rsqjs_time, super::NOT_MEASURED)?;
-        ensure_bool(
-            outcome.row.quickjs_time != super::NOT_MEASURED,
-            "failed row must retain QuickJS timing",
-        )?;
-        ensure_bool(
-            outcome.row.quickjs_cv != super::NOT_MEASURED,
-            "failed row must retain QuickJS variation",
-        )?;
-        ensure_usize(outcome.counts.failed, 1)
-    }
-
-    #[test]
-    fn failed_jetstream_candidate_sanitizes_multiline_details() -> anyhow::Result<()> {
-        let case = super::JetStreamCase::timed(
-            "failed-candidate",
-            &["tests/external/jetstream/simple/hash-map.js"],
-        );
-        let outcome = super::failed_outcome(
-            &case,
-            "parser error: unexpected character '\u{0}'\n    at eval_script:42:7",
-        );
-
-        ensure_bool(
-            !outcome.row.detail.contains('\n'),
-            "detail must be one line",
-        )?;
-        ensure_bool(
-            !outcome.row.detail.contains('\u{0}'),
-            "detail must escape controls",
-        )?;
-        ensure_bool(
-            outcome.row.detail.contains("\\u{0000}"),
-            "detail must preserve escaped control context",
-        )
-    }
-
-    fn sample_stats() -> Result<crate::bench_measure::MeasureStats, anyhow::Error> {
-        let config =
-            super::MeasureConfig::new(Duration::from_millis(0), Duration::from_millis(1), 3)
-                .with_quality(Duration::ZERO, u32::MAX);
-        crate::bench_measure::measure(config, || {
-            std::hint::black_box(42_u64);
-            Ok::<(), anyhow::Error>(())
-        })
-    }
-
-    fn ensure_text(actual: &str, expected: &str) -> anyhow::Result<()> {
-        if actual == expected {
-            return Ok(());
-        }
-        Err(anyhow::anyhow!("expected '{expected}', got '{actual}'"))
-    }
-
-    fn ensure_bool(actual: bool, message: &str) -> anyhow::Result<()> {
-        if actual {
-            return Ok(());
-        }
-        Err(anyhow::anyhow!(message.to_owned()))
-    }
-
-    fn ensure_usize(actual: usize, expected: usize) -> anyhow::Result<()> {
-        if actual == expected {
-            return Ok(());
-        }
-        Err(anyhow::anyhow!("expected {expected}, got {actual}"))
-    }
-}
+#[path = "jetstream_tests.rs"]
+mod tests;
