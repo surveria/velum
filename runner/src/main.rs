@@ -22,6 +22,7 @@ mod jetstream;
 mod report_formatting_tests;
 mod report_metadata;
 mod report_rollup;
+mod report_text;
 mod runner_cli;
 mod test262_external;
 mod test262_full;
@@ -374,7 +375,7 @@ fn run_engine_case(case: &EngineCase) -> CaseRow {
             case: case.id.to_owned(),
             status: STATUS_FAILED.to_owned(),
             source: case.path.to_owned(),
-            detail: error.to_string(),
+            detail: report_text::table_detail(&error.to_string()),
         },
     }
 }
@@ -440,7 +441,7 @@ fn run_differential_case(case: &DifferentialCase, quickjs: Option<&Path>) -> Cas
             case: case.id.to_owned(),
             status: STATUS_FAILED.to_owned(),
             source: case.path.to_owned(),
-            detail: error.to_string(),
+            detail: report_text::table_detail(&error.to_string()),
         },
     }
 }
@@ -652,7 +653,10 @@ fn skip_reason_rows(rows: &[CaseRow]) -> Vec<SkipReasonRow> {
     }
     reasons
         .into_iter()
-        .map(|(reason, skipped)| SkipReasonRow { skipped, reason })
+        .map(|(reason, skipped)| SkipReasonRow {
+            skipped,
+            reason: report_text::table_detail(&reason),
+        })
         .collect()
 }
 

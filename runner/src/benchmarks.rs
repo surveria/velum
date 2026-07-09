@@ -17,6 +17,7 @@ use tabled::Tabled;
 use super::bench_engines::{BenchEngine, RsqjsEngine, make_reference};
 use super::bench_measure::{self, MeasureConfig, MeasureStats, format_duration, ratio_values};
 use super::cases::{self, BenchmarkCase};
+use super::report_text;
 
 pub const BUDGET_LABEL: &str = "1.00x";
 
@@ -445,7 +446,7 @@ fn failed_row(
         rsqjs_cv,
         quickjs_cv,
         quality,
-        detail: detail.to_owned(),
+        detail: report_text::table_detail(detail),
     }
 }
 
@@ -591,6 +592,31 @@ mod tests {
             "failed row must retain QuickJS variation",
         )?;
         ensure_usize(outcome.counts.failed, 1)
+    }
+
+    #[test]
+    fn failed_benchmark_sanitizes_multiline_details() -> TestResult {
+        let case = crate::cases::BenchmarkCase {
+            id: "failed-case",
+            path: "tests/corpora/benchmarks/active/arithmetic_chain.js",
+        };
+        let outcome = super::failed_outcome(
+            &case,
+            "lexer error: unexpected character '\u{1b}'\n    at eval_script:12:4",
+        );
+
+        ensure_bool(
+            !outcome.row.detail.contains('\n'),
+            "detail must be one line",
+        )?;
+        ensure_bool(
+            !outcome.row.detail.contains('\u{1b}'),
+            "detail must escape controls",
+        )?;
+        ensure_bool(
+            outcome.row.detail.contains("\\u{001B}"),
+            "detail must preserve escaped control context",
+        )
     }
 
     fn sample_stats() -> Result<crate::bench_measure::MeasureStats, anyhow::Error> {
