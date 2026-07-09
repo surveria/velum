@@ -25,7 +25,7 @@ impl Context {
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        let text = Self::raw_json_to_string(args.first())?;
+        let text = self.raw_json_to_string(args.first())?;
         Self::validate_raw_json_text(&text)?;
         let property_value = self.heap_string_value(&text)?;
         let Value::Object(id) = self
@@ -79,7 +79,7 @@ impl Context {
         Ok(Some(Self::raw_json_stored_text(&value)))
     }
 
-    fn raw_json_to_string(value: Option<&Value>) -> Result<String> {
+    fn raw_json_to_string(&mut self, value: Option<&Value>) -> Result<String> {
         let Some(value) = value else {
             return Ok(Value::Undefined.to_string());
         };
@@ -87,6 +87,7 @@ impl Context {
             Value::Symbol(_) => Err(Error::type_error(RAW_JSON_SYMBOL_ERROR)),
             Value::String(value) => Ok(value.clone()),
             Value::HeapString(value) => Ok(value.as_str().to_owned()),
+            Value::Object(_) => self.json_object_to_string(value),
             _ => Ok(value.to_string()),
         }
     }

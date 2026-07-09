@@ -340,6 +340,9 @@ impl Context {
             NativeCallTarget::ObjectGetOwnPropertyNames => {
                 Some(self.eval_object_get_own_property_names(runtime_call_args(args)))
             }
+            NativeCallTarget::ObjectGetOwnPropertySymbols => {
+                Some(self.eval_object_get_own_property_symbols(runtime_call_args(args)))
+            }
             NativeCallTarget::ObjectGetPrototypeOf => {
                 Some(self.eval_object_get_prototype_of(runtime_call_args(args)))
             }
@@ -540,6 +543,9 @@ impl Context {
             }
             NativeFunctionKind::ObjectGetOwnPropertyNames => {
                 Some(self.eval_object_get_own_property_names(args))
+            }
+            NativeFunctionKind::ObjectGetOwnPropertySymbols => {
+                Some(self.eval_object_get_own_property_symbols(args))
             }
             NativeFunctionKind::ObjectGetPrototypeOf => {
                 Some(self.eval_object_get_prototype_of(args))

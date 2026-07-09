@@ -715,9 +715,13 @@ impl Context {
         if property_kind.is_intrinsic_slot() && function.properties().has_intrinsic(property_kind) {
             return Ok(true);
         }
-        Ok(property_kind.is_prototype()
-            || function.has_intrinsic_property(property_name)
-            || function.properties().has(property))
+        if property_kind.is_prototype() {
+            return Ok(function
+                .properties()
+                .intrinsic_descriptor(property_kind)
+                .is_some());
+        }
+        Ok(function.has_intrinsic_property(property_name) || function.properties().has(property))
     }
 
     pub(crate) fn set_native_function_property_key(

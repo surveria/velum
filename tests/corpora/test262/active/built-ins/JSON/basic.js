@@ -10,6 +10,26 @@ let primitiveOk =
   JSON.parse("null") === null &&
   JSON.parse("42") === 42 &&
   JSON.parse('"lens"') === "lens";
+let parseSyntaxOk = false;
+try {
+  JSON.parse("not json");
+} catch (error) {
+  parseSyntaxOk = error.name === "SyntaxError";
+}
+let parseObjectText = JSON.parse({
+  toString: function() {
+    return '"object-text"';
+  },
+  valueOf: function() {
+    throw new Test262Error("JSON.parse should prefer object toString");
+  }
+});
+let parseSymbolOk = false;
+try {
+  JSON.parse(Symbol("json"));
+} catch (error) {
+  parseSymbolOk = error.name === "TypeError";
+}
 
 let generated = JSON.stringify({
   z: 1,
@@ -126,8 +146,32 @@ let rawShapeOk =
   Object.getPrototypeOf(rawValue) === null &&
   Object.hasOwn(rawValue, "rawJSON") &&
   Object.getOwnPropertyNames(rawValue).join(",") === "rawJSON" &&
+  Object.getOwnPropertySymbols(rawValue).length === 0 &&
   rawValue.rawJSON === '"raw"' &&
   Object.isFrozen(rawValue);
+let jsonTagDescriptor = Object.getOwnPropertyDescriptor(JSON, Symbol.toStringTag);
+let functionPrototypeSurfaceOk =
+  !JSON.parse.hasOwnProperty("prototype") &&
+  Object.getOwnPropertyDescriptor(JSON.parse, "prototype") === undefined &&
+  !JSON.stringify.hasOwnProperty("prototype") &&
+  Object.getOwnPropertyDescriptor(JSON.stringify, "prototype") === undefined &&
+  !JSON.rawJSON.hasOwnProperty("prototype") &&
+  Object.getOwnPropertyDescriptor(JSON.rawJSON, "prototype") === undefined &&
+  !JSON.isRawJSON.hasOwnProperty("prototype") &&
+  Object.getOwnPropertyDescriptor(JSON.isRawJSON, "prototype") === undefined;
+let globalJsonDescriptor = Object.getOwnPropertyDescriptor(this, "JSON");
+let jsonObjectSurfaceOk =
+  Object.prototype.toString.call(JSON) === "[object JSON]" &&
+  globalJsonDescriptor.value === JSON &&
+  globalJsonDescriptor.writable === true &&
+  globalJsonDescriptor.enumerable === false &&
+  globalJsonDescriptor.configurable === true &&
+  JSON[Symbol.toStringTag] === "JSON" &&
+  jsonTagDescriptor.value === "JSON" &&
+  jsonTagDescriptor.writable === false &&
+  jsonTagDescriptor.enumerable === false &&
+  jsonTagDescriptor.configurable === true &&
+  Object.getOwnPropertySymbols({ plain: true }).length === 0;
 let rawSyntaxOk = false;
 try {
   JSON.rawJSON("");
@@ -155,6 +199,9 @@ try {
 
 if (
   !primitiveOk ||
+  !parseSyntaxOk ||
+  parseObjectText !== "object-text" ||
+  !parseSymbolOk ||
   typeof JSON !== "object" ||
   JSON.__proto__ !== Object.prototype ||
   typeof JSON.parse !== "function" ||
@@ -200,6 +247,8 @@ if (
   orderedText !== '{"0":"0","1":"1","2":"2","p2":"p2","add":"add","p4":"p4","p1":"p1"}' ||
   rawText !== '{"scalar":1,"text":"raw","nested":[true,null]}' ||
   !rawShapeOk ||
+  !functionPrototypeSurfaceOk ||
+  !jsonObjectSurfaceOk ||
   !rawSyntaxOk ||
   !rawWhitespaceOk ||
   !rawObjectTextOk ||

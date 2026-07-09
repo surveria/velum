@@ -15,13 +15,14 @@ use super::{
     NativeFunctionKind, OBJECT_ASSIGN_NAME, OBJECT_CREATE_NAME, OBJECT_DEFINE_PROPERTIES_NAME,
     OBJECT_DEFINE_PROPERTY_NAME, OBJECT_ENTRIES_NAME, OBJECT_FREEZE_NAME, OBJECT_FROM_ENTRIES_NAME,
     OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME, OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME,
-    OBJECT_GET_OWN_PROPERTY_NAMES_NAME, OBJECT_GET_PROTOTYPE_OF_NAME, OBJECT_HAS_OWN_NAME,
-    OBJECT_IS_EXTENSIBLE_NAME, OBJECT_IS_FROZEN_NAME, OBJECT_IS_NAME, OBJECT_IS_SEALED_NAME,
-    OBJECT_KEYS_NAME, OBJECT_NAME, OBJECT_PREVENT_EXTENSIONS_NAME,
-    OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME, OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME,
-    OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME, OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME,
-    OBJECT_PROTOTYPE_TO_STRING_NAME, OBJECT_PROTOTYPE_VALUE_OF_NAME, OBJECT_SEAL_NAME,
-    OBJECT_SET_PROTOTYPE_OF_NAME, OBJECT_VALUES_NAME,
+    OBJECT_GET_OWN_PROPERTY_NAMES_NAME, OBJECT_GET_OWN_PROPERTY_SYMBOLS_NAME,
+    OBJECT_GET_PROTOTYPE_OF_NAME, OBJECT_HAS_OWN_NAME, OBJECT_IS_EXTENSIBLE_NAME,
+    OBJECT_IS_FROZEN_NAME, OBJECT_IS_NAME, OBJECT_IS_SEALED_NAME, OBJECT_KEYS_NAME, OBJECT_NAME,
+    OBJECT_PREVENT_EXTENSIONS_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
+    OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME, OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
+    OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME, OBJECT_PROTOTYPE_TO_STRING_NAME,
+    OBJECT_PROTOTYPE_VALUE_OF_NAME, OBJECT_SEAL_NAME, OBJECT_SET_PROTOTYPE_OF_NAME,
+    OBJECT_VALUES_NAME,
 };
 use crate::runtime::property::well_known::DescriptorPropertyKeys;
 
@@ -149,41 +150,7 @@ impl Context {
         let values = args.as_slice();
         let target = Self::argument_or_undefined(values.first());
         let property = self.object_property_key(values.get(1))?;
-        let descriptor = match &target {
-            Value::Object(id) if self.objects.is_proxy(*id) => {
-                self.proxy_get_own_property_descriptor(*id, property.name())?
-            }
-            Value::Object(id) => {
-                if let Some(descriptor) =
-                    self.string_object_own_property_descriptor(*id, &property)?
-                {
-                    Some(OwnPropertyDescriptor::Data(descriptor))
-                } else {
-                    self.objects
-                        .own_property_descriptor(*id, property.lookup())?
-                }
-            }
-            Value::Function(id) => self
-                .function_own_property_descriptor_lookup(*id, property.lookup())?
-                .map(OwnPropertyDescriptor::Data),
-            Value::NativeFunction(id) => self
-                .native_function_own_property_descriptor_lookup(*id, property.lookup())?
-                .map(OwnPropertyDescriptor::Data),
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => {
-                return Err(Error::runtime(
-                    "Object.getOwnPropertyDescriptor target must be an object",
-                ));
-            }
-        };
-        let Some(descriptor) = descriptor else {
+        let Some(descriptor) = self.own_property_descriptor_value(&target, &property)? else {
             return Ok(Value::Undefined);
         };
         self.create_property_descriptor_object(&descriptor)
@@ -215,6 +182,34 @@ impl Context {
                 "Object.getPrototypeOf target must be an object",
             )),
         }
+    }
+
+    pub(in crate::runtime::native) fn eval_object_get_own_property_symbols(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        let target = Self::argument_or_undefined(args.as_slice().first());
+        let symbols = match target {
+            Value::Object(id) => self.objects.own_property_symbols(id, &self.symbols)?,
+            Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::Error(_)
+            | Value::String(_)
+            | Value::HeapString(_)
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::Symbol(_) => Vec::new(),
+            Value::Undefined | Value::Null | Value::HostFunction(_) => {
+                return Err(Error::runtime(
+                    "Object.getOwnPropertySymbols target cannot be converted to an object",
+                ));
+            }
+        };
+        let mut values = Vec::with_capacity(symbols.len());
+        for symbol in symbols {
+            values.push(Value::Symbol(symbol));
+        }
+        self.create_array_from_elements(values)
     }
 
     fn string_object_own_property_descriptor(
@@ -338,6 +333,10 @@ impl Context {
             (
                 OBJECT_GET_OWN_PROPERTY_NAMES_NAME,
                 NativeFunctionKind::ObjectGetOwnPropertyNames,
+            ),
+            (
+                OBJECT_GET_OWN_PROPERTY_SYMBOLS_NAME,
+                NativeFunctionKind::ObjectGetOwnPropertySymbols,
             ),
             (
                 OBJECT_GET_PROTOTYPE_OF_NAME,
@@ -711,7 +710,13 @@ impl Context {
                 {
                     return Ok(Some(OwnPropertyDescriptor::Data(descriptor)));
                 }
-                self.objects.own_property_descriptor(*id, property.lookup())
+                if let Some(descriptor) = self
+                    .objects
+                    .own_property_descriptor(*id, property.lookup())?
+                {
+                    return Ok(Some(descriptor));
+                }
+                self.global_object_property_descriptor(*id, property.lookup())
             }
             Value::Function(id) => Ok(self
                 .function_own_property_descriptor_lookup(*id, property.lookup())?

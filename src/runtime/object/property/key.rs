@@ -27,6 +27,13 @@ impl PropertyKey {
             Self::Symbol(_) => None,
         }
     }
+
+    pub const fn symbol_id(self) -> Option<SymbolId> {
+        match self {
+            Self::Atom(_) => None,
+            Self::Symbol(symbol) => Some(symbol),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

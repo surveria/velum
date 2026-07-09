@@ -67,6 +67,20 @@ assert.notSameValue = function (actual, unexpected, message) {
     }
     throw new Test262Error(message || "Expected different values");
 };
+assert.compareArray = function (actual, expected, message) {
+    if (actual.length !== expected.length) {
+        throw new Test262Error(message || "Expected arrays to have the same length");
+    }
+    for (let index = 0; index < actual.length; index = index + 1) {
+        if (actual[index] === expected[index]) {
+            continue;
+        }
+        if (actual[index] !== actual[index] && expected[index] !== expected[index]) {
+            continue;
+        }
+        throw new Test262Error(message || "Expected arrays to contain the same values");
+    }
+};
 assert.throws = function (expectedErrorConstructor, func, message) {
     let threw = false;
     let error = undefined;

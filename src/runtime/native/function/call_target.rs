@@ -149,6 +149,9 @@ impl NativeFunctionKind {
                 Some(Self::ObjectGetOwnPropertyDescriptors)
             }
             NativeCallTarget::ObjectGetOwnPropertyNames => Some(Self::ObjectGetOwnPropertyNames),
+            NativeCallTarget::ObjectGetOwnPropertySymbols => {
+                Some(Self::ObjectGetOwnPropertySymbols)
+            }
             NativeCallTarget::ObjectHasOwn => Some(Self::ObjectHasOwn),
             NativeCallTarget::ObjectIs => Some(Self::ObjectIs),
             NativeCallTarget::ObjectIsExtensible => Some(Self::ObjectIsExtensible),
@@ -311,6 +314,9 @@ impl NativeFunctionKind {
                 Some(NativeCallTarget::ObjectGetOwnPropertyDescriptors)
             }
             Self::ObjectGetOwnPropertyNames => Some(NativeCallTarget::ObjectGetOwnPropertyNames),
+            Self::ObjectGetOwnPropertySymbols => {
+                Some(NativeCallTarget::ObjectGetOwnPropertySymbols)
+            }
             Self::ObjectHasOwn => Some(NativeCallTarget::ObjectHasOwn),
             Self::ObjectIs => Some(NativeCallTarget::ObjectIs),
             Self::ObjectIsExtensible => Some(NativeCallTarget::ObjectIsExtensible),

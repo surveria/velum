@@ -7,7 +7,7 @@ use crate::{
     runtime::control::Completion,
     runtime::object::{ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable},
     runtime::property::delete_property,
-    value::{ObjectId, Value},
+    value::{ErrorName, ObjectId, Value},
 };
 
 use super::{
@@ -97,6 +97,7 @@ impl Context {
             JSON_STRINGIFY_NAME,
             NativeFunctionKind::JsonStringify,
         )?;
+        self.define_json_to_string_tag(object)?;
 
         let value = Value::Object(object);
         self.insert_global_builtin(JSON_NAME, value.clone())?;
@@ -114,12 +115,10 @@ impl Context {
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        let text = args
-            .first()
-            .map_or_else(|| Value::Undefined.to_string(), ToString::to_string);
+        let text = self.json_parse_text(args.first())?;
         self.check_string_len(&text)?;
         let value = serde_json::from_str(&text)
-            .map_err(|error| Error::runtime(format!("JSON.parse failed: {error}")))?;
+            .map_err(|error| Error::exception(ErrorName::SyntaxError, error.to_string()))?;
         let value = self.value_from_json(value)?;
         let Some(reviver) = args.get(1).filter(|value| Self::is_json_callable(value)) else {
             return Ok(value);
@@ -733,7 +732,10 @@ impl Context {
         Ok(Self::value_to_number(&primitive))
     }
 
-    fn json_object_to_string(&mut self, value: &Value) -> Result<String> {
+    pub(in crate::runtime::native) fn json_object_to_string(
+        &mut self,
+        value: &Value,
+    ) -> Result<String> {
         let primitive = self.json_ordinary_to_primitive(value, &["toString", "valueOf"])?;
         self.string_argument_text(&primitive)
     }
