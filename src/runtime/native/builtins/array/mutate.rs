@@ -24,6 +24,11 @@ impl Context {
         let length = self.array_like_length(this_value)?;
         let start = Self::array_slice_bound(args.first(), length, 0)?;
         let (delete_count, items) = Self::array_splice_counts(args, length, start)?;
+        if let Some(value) =
+            self.eval_packed_array_splice(this_value, length, start, delete_count, &items)?
+        {
+            return Ok(value);
+        }
         let removed = self.array_collect_removed(this_value, start, delete_count)?;
         self.array_splice_shift(this_value, length, start, delete_count, items.len())?;
         for (offset, item) in items.iter().enumerate() {
@@ -36,6 +41,32 @@ impl Context {
         let new_length = Self::array_spliced_length(length, delete_count, items.len())?;
         self.set_array_like_length(this_value, new_length)?;
         Ok(removed)
+    }
+
+    fn eval_packed_array_splice(
+        &mut self,
+        this_value: &Value,
+        length: usize,
+        start: usize,
+        delete_count: usize,
+        items: &[Value],
+    ) -> Result<Option<Value>> {
+        let Value::Object(id) = this_value else {
+            return Ok(None);
+        };
+        let Some(removed_values) = self.objects.splice_packed_default_array_if_array(
+            *id,
+            start,
+            delete_count,
+            items,
+            self.limits.max_object_properties,
+        )?
+        else {
+            return Ok(None);
+        };
+        self.charge_runtime_steps(length)?;
+        let removed = self.create_array_from_elements(removed_values)?;
+        Ok(Some(removed))
     }
 
     /// Copy the deleted range `[start, start + delete_count)` into a fresh array.

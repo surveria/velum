@@ -469,6 +469,38 @@ fn bytecode_runs_direct_masked_continue_for_body() -> TestResult {
 }
 
 #[test]
+fn bytecode_runs_direct_numeric_array_fill_for_body() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r"
+        let values = [];
+        let seed = 1;
+
+        for (let index = 0; index < 96; index++) {
+            seed = (seed * 1103515245 + 12345) % 2147483648;
+            values[index] = seed % 1000;
+        }
+
+        values.length === 96 &&
+            seed === 1729086720 &&
+            values[0] === 590 &&
+            values[95] === 720 ? 42 : 0
+        ",
+    )?;
+    let initial_direct_runs = vm.resource_usage().bytecode_linear_direct_runs;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    let direct_run_delta = vm
+        .resource_usage()
+        .bytecode_linear_direct_runs
+        .checked_sub(initial_direct_runs)
+        .ok_or("bytecode linear direct counter moved backwards")?;
+    ensure_at_least(direct_run_delta, 96, "bytecode linear direct runs")
+}
+
+#[test]
 fn bytecode_runs_direct_block_lexical_loop_body() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();

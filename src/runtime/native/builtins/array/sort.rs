@@ -1,7 +1,9 @@
 use crate::{
+    binding_metadata::BindingOperand,
+    bytecode::{BytecodeBinding, BytecodeInstruction, BytecodeNumericBinaryOp},
     error::{Error, Result},
     runtime::{Context, call::RuntimeCallArgs, control::Completion},
-    value::Value,
+    value::{FunctionId, Value},
 };
 
 const ARRAY_SORT_COMPARATOR_ERROR: &str =
@@ -13,6 +15,18 @@ enum SortOrder {
     Less,
     Equal,
     Greater,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum NumericSortOrder {
+    Ascending,
+    Descending,
+}
+
+impl NumericSortOrder {
+    const fn is_descending(self) -> bool {
+        matches!(self, Self::Descending)
+    }
 }
 
 impl Context {
@@ -31,6 +45,9 @@ impl Context {
     ) -> Result<Value> {
         let comparator = Self::array_sort_comparator(args)?;
         Self::ensure_array_like_object(this_value)?;
+        if let Some(value) = self.eval_packed_numeric_array_sort(this_value, comparator.as_ref())? {
+            return Ok(value);
+        }
         let length = self.array_like_length(this_value)?;
         let items = self.array_collect_present(this_value, length)?;
         let present = items.len();
@@ -61,6 +78,11 @@ impl Context {
     ) -> Result<Value> {
         let comparator = Self::array_sort_comparator(args)?;
         Self::ensure_array_like_object(this_value)?;
+        if let Some(value) =
+            self.eval_packed_numeric_array_to_sorted(this_value, comparator.as_ref())?
+        {
+            return Ok(value);
+        }
         let length = self.array_like_length(this_value)?;
         let mut items = Vec::new();
         for index in 0..length {
@@ -89,6 +111,124 @@ impl Context {
             Some(value) if Self::is_callable(value) => Ok(Some(value.clone())),
             Some(_) => Err(Error::type_error(ARRAY_SORT_COMPARATOR_ERROR)),
         }
+    }
+
+    fn eval_packed_numeric_array_sort(
+        &mut self,
+        this_value: &Value,
+        comparator: Option<&Value>,
+    ) -> Result<Option<Value>> {
+        let Some(order) = self.array_numeric_sort_order(comparator)? else {
+            return Ok(None);
+        };
+        let Value::Object(id) = this_value else {
+            return Ok(None);
+        };
+        if !self
+            .objects
+            .sort_packed_default_numeric_array_if_array(*id, order.is_descending())?
+        {
+            return Ok(None);
+        }
+        if let Some(length) = self.objects.array_len_if_array(*id)? {
+            self.charge_runtime_steps(length)?;
+        }
+        Ok(Some(this_value.clone()))
+    }
+
+    fn eval_packed_numeric_array_to_sorted(
+        &mut self,
+        this_value: &Value,
+        comparator: Option<&Value>,
+    ) -> Result<Option<Value>> {
+        let Some(order) = self.array_numeric_sort_order(comparator)? else {
+            return Ok(None);
+        };
+        let Some(mut values) = self.packed_numeric_sort_values(this_value)? else {
+            return Ok(None);
+        };
+        Self::sort_numeric_values(&mut values, order);
+        self.charge_runtime_steps(values.len())?;
+        let values = values.into_iter().map(Value::Number).collect();
+        self.create_array_from_elements(values).map(Some)
+    }
+
+    fn packed_numeric_sort_values(&self, object: &Value) -> Result<Option<Vec<f64>>> {
+        let Value::Object(id) = object else {
+            return Ok(None);
+        };
+        let Some(values) = self.objects.packed_default_array_values_if_array(*id)? else {
+            return Ok(None);
+        };
+        let mut numbers = Vec::with_capacity(values.len());
+        for value in values {
+            let Value::Number(number) = value else {
+                return Ok(None);
+            };
+            numbers.push(number);
+        }
+        Ok(Some(numbers))
+    }
+
+    fn sort_numeric_values(values: &mut [f64], order: NumericSortOrder) {
+        values.sort_by(|left, right| numeric_sort_ordering(*left, *right, order));
+    }
+
+    fn array_numeric_sort_order(
+        &self,
+        comparator: Option<&Value>,
+    ) -> Result<Option<NumericSortOrder>> {
+        let Some(Value::Function(callback)) = comparator else {
+            return Ok(None);
+        };
+        self.compile_numeric_sort_comparator(*callback)
+    }
+
+    fn compile_numeric_sort_comparator(
+        &self,
+        callback: FunctionId,
+    ) -> Result<Option<NumericSortOrder>> {
+        let function = self.function(callback)?;
+        let bytecode = &function.bytecode;
+        if bytecode.hoist_plan().var_declaration_count() != 0
+            || bytecode.hoist_plan().function_declaration_count() != 0
+        {
+            return Ok(None);
+        }
+        let [
+            BytecodeInstruction::LoadBinding(left),
+            BytecodeInstruction::LoadBinding(right),
+            BytecodeInstruction::NumberBinary(BytecodeNumericBinaryOp::Sub),
+            BytecodeInstruction::Complete(crate::bytecode::BytecodeCompletion::Return),
+        ] = bytecode.body().instructions()
+        else {
+            return Ok(None);
+        };
+        let Some(left) = Self::sort_comparator_param_index(&function.param_frames, left)? else {
+            return Ok(None);
+        };
+        let Some(right) = Self::sort_comparator_param_index(&function.param_frames, right)? else {
+            return Ok(None);
+        };
+        Ok(match (left, right) {
+            (0, 1) => Some(NumericSortOrder::Ascending),
+            (1, 0) => Some(NumericSortOrder::Descending),
+            _ => None,
+        })
+    }
+
+    fn sort_comparator_param_index(
+        param_frames: &[Option<crate::runtime::CompiledBindingFrame>],
+        binding: &BytecodeBinding,
+    ) -> Result<Option<usize>> {
+        let BindingOperand::Local { scope, slot } = binding.operand() else {
+            return Ok(None);
+        };
+        let slot = slot.index()?;
+        Ok(param_frames.iter().enumerate().find_map(|(index, frame)| {
+            let frame = frame.as_ref()?;
+            (frame.scope() == Some(scope) && frame.slot().index() == slot).then_some(index)
+        }))
     }
 
     /// Stable merge sort that propagates abrupt comparator completions.
@@ -202,5 +342,20 @@ impl Context {
                 (None, None) => return SortOrder::Equal,
             }
         }
+    }
+}
+
+fn numeric_sort_ordering(left: f64, right: f64, order: NumericSortOrder) -> std::cmp::Ordering {
+    let result = match order {
+        NumericSortOrder::Ascending => left - right,
+        NumericSortOrder::Descending => right - left,
+    };
+    if result.is_nan() || result == 0.0 {
+        return std::cmp::Ordering::Equal;
+    }
+    if result < 0.0 {
+        std::cmp::Ordering::Less
+    } else {
+        std::cmp::Ordering::Greater
     }
 }
