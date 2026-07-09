@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260709T114251Z.md`
-- Task: workflow_dispatch
-- Performance: 3.76x (63/73 >1.00x)
+- `rsqjs-test-report-20260709T122442Z.md`
+- Task: PR #383: parser: support array literal elisions
+- Performance: 3.78x (63/73 >1.00x)
 - Memory: - (0/73 >1.00x)
-- JetStream: 25.05x (4/4 >1.00x)
-- Full Test262: 33634 passed / 68944 failed (32.79%)
+- JetStream: 24.35x (4/4 >1.00x)
+- Full Test262: 33844 passed / 68734 failed (32.99%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -366,3 +366,4 @@ Latest report:
 | `20260709T095833Z` `0381779` PR #373: Proxy exotic object with handler traps | 3.90x (64/73 >1.00x) | - (0/73 >1.00x) | 23.48x (4/4 >1.00x) | 33063 passed / 69515 failed (32.23%) |
 | `20260709T104634Z` `6cb74bf` PR #378: bytecode: optimize while statement benchmark | 3.81x (63/73 >1.00x) | - (0/73 >1.00x) | 23.19x (4/4 >1.00x) | 33063 passed / 69515 failed (32.23%) |
 | `20260709T114251Z` `3a545b2` workflow_dispatch | 3.76x (63/73 >1.00x) | - (0/73 >1.00x) | 25.05x (4/4 >1.00x) | 33634 passed / 68944 failed (32.79%) |
+| `20260709T122442Z` `599e7d2` PR #383: parser: support array literal elisions | 3.78x (63/73 >1.00x) | - (0/73 >1.00x) | 24.35x (4/4 >1.00x) | 33844 passed / 68734 failed (32.99%) |
