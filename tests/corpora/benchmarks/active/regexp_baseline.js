@@ -39,6 +39,9 @@ while (index < 8192) {
   if (/-/[Symbol.split]("a-b-c").length === 3) {
     total = total + 1;
   }
+  if ((/a/g)[Symbol.matchAll]("aba").next().value[0] === "a") {
+    total = total + 1;
+  }
   index = index + 1;
 }
 

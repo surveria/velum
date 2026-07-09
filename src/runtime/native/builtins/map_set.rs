@@ -437,7 +437,10 @@ impl Context {
         self.create_collection_iterator_object(items)
     }
 
-    fn create_collection_iterator_object(&mut self, items: Vec<Value>) -> Result<Value> {
+    pub(in crate::runtime::native) fn create_collection_iterator_object(
+        &mut self,
+        items: Vec<Value>,
+    ) -> Result<Value> {
         let iterator_id = self.create_collection_iterator(items)?;
         let next = self.create_native_function(
             NativeFunctionKind::CollectionIteratorNext(iterator_id),

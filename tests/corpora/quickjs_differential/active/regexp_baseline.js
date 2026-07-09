@@ -22,6 +22,7 @@ print(/a/s.dotAll, /a/u.unicode, /a/y.sticky);
 print(/a/gim.toString(), new RegExp("").toString(), RegExp.prototype.toString.call({ source: "x", flags: "g" }));
 print(RegExp.prototype.toString.name, RegExp.prototype.toString.length);
 print(RegExp.prototype[Symbol.match].name, RegExp.prototype[Symbol.match].length);
+print(RegExp.prototype[Symbol.matchAll].name, RegExp.prototype[Symbol.matchAll].length);
 print(RegExp.prototype[Symbol.replace].name, RegExp.prototype[Symbol.replace].length);
 print(RegExp.prototype[Symbol.search].name, RegExp.prototype[Symbol.search].length);
 print(RegExp.prototype[Symbol.split].name, RegExp.prototype[Symbol.split].length);
@@ -31,3 +32,25 @@ let searchPattern = /a+/g;
 searchPattern.lastIndex = 2;
 print(searchPattern[Symbol.search]("baaa"), searchPattern.lastIndex, (/z/)[Symbol.search]("baaa"));
 print((/-/)[Symbol.split]("a-b-c").join("|"), (/-/)[Symbol.split]("a-b-c", 2).join("|"));
+let matchAllPattern = /a/g;
+matchAllPattern.lastIndex = 1;
+let matchAllIterator = matchAllPattern[Symbol.matchAll]("aba");
+let matchAllFirst = matchAllIterator.next();
+let matchAllSecond = matchAllIterator.next();
+let matchAllNonGlobal = (/a/)[Symbol.matchAll]("aba");
+let matchAllNonGlobalFirst = matchAllNonGlobal.next();
+let matchAllNonGlobalSecond = matchAllNonGlobal.next();
+print(
+  matchAllIterator[Symbol.iterator]() === matchAllIterator,
+  matchAllFirst.done,
+  matchAllFirst.value[0],
+  matchAllFirst.value.index,
+  matchAllSecond.done,
+  matchAllPattern.lastIndex
+);
+print(
+  matchAllNonGlobalFirst.done,
+  matchAllNonGlobalFirst.value[0],
+  matchAllNonGlobalFirst.value.index,
+  matchAllNonGlobalSecond.done
+);

@@ -3,6 +3,7 @@ let execDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "exec");
 let testDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "test");
 let toStringDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "toString");
 let symbolMatchDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.match);
+let symbolMatchAllDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.matchAll);
 let symbolReplaceDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.replace);
 let symbolSearchDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.search);
 let symbolSplitDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, Symbol.split);
@@ -16,6 +17,26 @@ sticky.lastIndex = 1;
 let stickyMatch = sticky.exec("ba");
 let searchRestore = /a+/g;
 searchRestore.lastIndex = 2;
+let matchAllPattern = /a/g;
+matchAllPattern.lastIndex = 1;
+let matchAllIterator = matchAllPattern[Symbol.matchAll]("aba");
+let matchAllFirst = matchAllIterator.next();
+let matchAllSecond = matchAllIterator.next();
+let matchAllNonGlobal = (/a/)[Symbol.matchAll]("aba");
+let matchAllNonGlobalFirst = matchAllNonGlobal.next();
+let matchAllNonGlobalSecond = matchAllNonGlobal.next();
+let matchAllOk =
+  matchAllIterator[Symbol.iterator]() === matchAllIterator &&
+  matchAllFirst.done === false &&
+  matchAllFirst.value[0] === "a" &&
+  matchAllFirst.value.index === 2 &&
+  matchAllFirst.value.input === "aba" &&
+  matchAllSecond.done === true &&
+  matchAllPattern.lastIndex === 1 &&
+  matchAllNonGlobalFirst.done === false &&
+  matchAllNonGlobalFirst.value[0] === "a" &&
+  matchAllNonGlobalFirst.value.index === 0 &&
+  matchAllNonGlobalSecond.done === true;
 
 let receiverError = false;
 try {
@@ -49,6 +70,11 @@ let descriptorOk =
   symbolMatchDescriptor.writable === true &&
   symbolMatchDescriptor.enumerable === false &&
   symbolMatchDescriptor.configurable === true &&
+  RegExp.prototype[Symbol.matchAll].name === "[Symbol.matchAll]" &&
+  RegExp.prototype[Symbol.matchAll].length === 1 &&
+  symbolMatchAllDescriptor.writable === true &&
+  symbolMatchAllDescriptor.enumerable === false &&
+  symbolMatchAllDescriptor.configurable === true &&
   RegExp.prototype[Symbol.replace].name === "[Symbol.replace]" &&
   RegExp.prototype[Symbol.replace].length === 2 &&
   symbolReplaceDescriptor.writable === true &&
@@ -112,6 +138,7 @@ let patternOk =
   (/z/)[Symbol.search]("baaa") === -1 &&
   (/-/)[Symbol.split]("a-b-c").join("|") === "a|b|c" &&
   (/-/)[Symbol.split]("a-b-c", 2).join("|") === "a|b" &&
+  matchAllOk &&
   /a/gim.source === "a" &&
   /a/gim.flags === "gim" &&
   /a/gim.global === true &&

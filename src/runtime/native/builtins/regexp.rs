@@ -35,6 +35,7 @@ const REGEXP_RECEIVER_ERROR: &str = "RegExp method requires a RegExp receiver";
 const REGEXP_STICKY_PROPERTY: &str = "sticky";
 const REGEXP_UNICODE_PROPERTY: &str = "unicode";
 const REGEXP_UNICODE_SETS_PROPERTY: &str = "unicodeSets";
+const SYMBOL_MATCH_ALL_PROPERTY: &str = "matchAll";
 const SYMBOL_MATCH_PROPERTY: &str = "match";
 const SYMBOL_REPLACE_PROPERTY: &str = "replace";
 const SYMBOL_SEARCH_PROPERTY: &str = "search";
@@ -189,6 +190,20 @@ impl Context {
             return Ok(Value::Null);
         }
         self.regexp_string_array(matches)
+    }
+
+    pub(in crate::runtime::native) fn eval_regexp_prototype_symbol_match_all(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let input = args
+            .as_slice()
+            .first()
+            .map_or_else(String::new, Value::display_for_concat);
+        self.check_string_len(&input)?;
+        let matches = self.regexp_match_all_results(this_value, &input)?;
+        self.create_collection_iterator_object(matches)
     }
 
     pub(in crate::runtime::native) fn eval_regexp_prototype_symbol_search(
@@ -409,6 +424,11 @@ impl Context {
 
     fn install_regexp_prototype_symbol_methods(&mut self, prototype: ObjectId) -> Result<()> {
         for (property, display, kind) in [
+            (
+                SYMBOL_MATCH_ALL_PROPERTY,
+                "[Symbol.matchAll]",
+                NativeFunctionKind::RegExpPrototypeSymbolMatchAll,
+            ),
             (
                 SYMBOL_MATCH_PROPERTY,
                 "[Symbol.match]",
@@ -634,6 +654,40 @@ impl Context {
             self.get_property_value(&Value::Object(id), "0")?
                 .to_string(),
         ))
+    }
+
+    fn regexp_match_all_results(&mut self, pattern: &Value, input: &str) -> Result<Vec<Value>> {
+        let data = self.regexp_receiver_data(pattern)?;
+        let flags = RegExpFlags::parse(data.flags())?;
+        let matcher = self.create_regexp_object_from_text(data.pattern(), data.flags())?;
+        let start = self.regexp_last_index(pattern, input)?;
+        self.set_regexp_last_index(&matcher, start)?;
+        let mut results = Vec::new();
+        if !flags.global() {
+            let result = self.regexp_exec(&matcher, input)?;
+            if !matches!(result, Value::Null) {
+                results.push(result);
+            }
+            return Ok(results);
+        }
+        loop {
+            let result = self.regexp_exec(&matcher, input)?;
+            let Value::Object(id) = result else {
+                return Ok(results);
+            };
+            let match_text = self
+                .get_property_value(&Value::Object(id), "0")?
+                .to_string();
+            let is_empty = match_text.is_empty();
+            results.push(Value::Object(id));
+            if results.len() > self.limits.max_object_properties {
+                return Err(Error::limit("RegExp matchAll result exceeded array limit"));
+            }
+            if is_empty {
+                let index = self.regexp_last_index(&matcher, input)?;
+                self.set_regexp_last_index(&matcher, next_char_boundary(input, index))?;
+            }
+        }
     }
 
     fn regexp_string_array(&mut self, values: Vec<String>) -> Result<Value> {
