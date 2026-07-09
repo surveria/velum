@@ -30,6 +30,9 @@ const PROXY_TRAP_OWN_KEYS: &str = "ownKeys";
 const PROXY_TRAP_GET_OWN_DESCRIPTOR: &str = "getOwnPropertyDescriptor";
 const PROXY_DESCRIPTOR_INVALID_ERROR: &str =
     "proxy getOwnPropertyDescriptor trap must return an object or undefined";
+const PROXY_TRAP_APPLY: &str = "apply";
+const PROXY_TRAP_CONSTRUCT: &str = "construct";
+const PROXY_CONSTRUCT_INVALID_ERROR: &str = "proxy construct trap must return an object";
 const PROXY_GET_PROTOTYPE_INVALID_ERROR: &str =
     "proxy getPrototypeOf trap must return an object or null";
 
@@ -345,6 +348,41 @@ impl Context {
                 OwnPropertyDescriptor::Accessor(accessor.complete_for_new())
             }
         })
+    }
+
+    /// Proxy `[[Call]]`: dispatch the `apply` trap or call the target.
+    pub(in crate::runtime) fn proxy_apply(
+        &mut self,
+        id: ObjectId,
+        args: &[Value],
+        this_value: Value,
+    ) -> Result<Value> {
+        let (target, handler) = self.proxy_target_handler(id)?;
+        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_APPLY)? else {
+            return self.eval_call_value(target, args, this_value);
+        };
+        let args_array = self.create_array_from_elements(args.to_vec())?;
+        self.eval_call_value(trap, &[target, this_value, args_array], handler)
+    }
+
+    /// Proxy `[[Construct]]`: dispatch the `construct` trap or construct the
+    /// target. The proxy itself is passed as the new target.
+    pub(in crate::runtime) fn proxy_construct(
+        &mut self,
+        id: ObjectId,
+        args: &[Value],
+    ) -> Result<Value> {
+        let (target, handler) = self.proxy_target_handler(id)?;
+        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_CONSTRUCT)? else {
+            return self.eval_new_value(target, args);
+        };
+        let args_array = self.create_array_from_elements(args.to_vec())?;
+        let new_target = Value::Object(id);
+        let result = self.eval_call_value(trap, &[target, args_array, new_target], handler)?;
+        if !Self::is_object_like(&result) {
+            return Err(Error::type_error(PROXY_CONSTRUCT_INVALID_ERROR));
+        }
+        Ok(result)
     }
 
     /// Convert the array-like result of an `ownKeys` trap into string keys.
