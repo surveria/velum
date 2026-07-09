@@ -501,6 +501,42 @@ fn bytecode_runs_direct_block_lexical_loop_body() -> TestResult {
 }
 
 #[test]
+fn bytecode_runs_direct_break_continue_while_body() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let script = vm.compile(
+        r"
+        let values = [1, 2, 3, 4];
+        let index = 0;
+        let total = 0;
+
+        while (index < 96) {
+            index = index + 1;
+            if ((index & 3) === 0) {
+                continue;
+            }
+            if (index > 88) {
+                break;
+            }
+            total = total + values[index & 3];
+        }
+
+        total === 198 ? 42 : 0
+        ",
+    )?;
+    let initial_direct_runs = vm.resource_usage().bytecode_linear_direct_runs;
+
+    let value = vm.eval_compiled(&script)?;
+    ensure_value(&value, &Value::Number(42.0))?;
+    let direct_run_delta = vm
+        .resource_usage()
+        .bytecode_linear_direct_runs
+        .checked_sub(initial_direct_runs)
+        .ok_or("bytecode linear direct counter moved backwards")?;
+    ensure_at_least(direct_run_delta, 200, "bytecode linear direct runs")
+}
+
+#[test]
 fn bytecode_function_fast_paths_fall_back_for_generic_add() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
