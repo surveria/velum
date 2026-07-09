@@ -563,6 +563,9 @@ impl Context {
         access: StaticPropertyAccessId,
         lookup: PropertyLookup<'_>,
     ) -> Result<bool> {
+        if self.objects.is_proxy(object) {
+            return self.proxy_delete(object, lookup.name());
+        }
         let Some(cache) = self.current_static_name_atom_cache() else {
             return delete_property(&mut self.objects, &Value::Object(object), lookup);
         };

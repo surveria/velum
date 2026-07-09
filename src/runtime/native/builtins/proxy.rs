@@ -14,6 +14,7 @@ const PROXY_TRAP_NOT_CALLABLE_ERROR: &str = "Proxy handler trap is not callable"
 const PROXY_TRAP_GET: &str = "get";
 const PROXY_TRAP_SET: &str = "set";
 const PROXY_TRAP_HAS: &str = "has";
+const PROXY_TRAP_DELETE: &str = "deleteProperty";
 
 impl Context {
     pub(in crate::runtime) fn proxy_constructor_value(&mut self) -> Result<Value> {
@@ -128,6 +129,24 @@ impl Context {
         };
         let key = self.heap_string_value(name)?;
         let result = self.eval_call_value(trap, &[target, key, value, receiver], handler)?;
+        Ok(result.is_truthy())
+    }
+
+    /// Proxy `[[Delete]]`: dispatch to the `deleteProperty` trap or fall back to
+    /// the target. Returns whether the deletion succeeded.
+    pub(in crate::runtime) fn proxy_delete(&mut self, id: ObjectId, name: &str) -> Result<bool> {
+        let (target, handler) = self.proxy_target_handler(id)?;
+        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_DELETE)? else {
+            let key_value = self.heap_string_value(name)?;
+            let key = self.dynamic_property_key(&key_value)?;
+            return crate::runtime::property::delete_property(
+                &mut self.objects,
+                &target,
+                key.lookup(),
+            );
+        };
+        let key = self.heap_string_value(name)?;
+        let result = self.eval_call_value(trap, &[target, key], handler)?;
         Ok(result.is_truthy())
     }
 }
