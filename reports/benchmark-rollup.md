@@ -17,9 +17,9 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260709T223143Z.md`
-- Task: PR #399: workflow: guard semantic architecture boundaries
-- Performance: 5.32x (4/5 >1.00x)
+- `rsqjs-test-report-20260709T224900Z.md`
+- Task: PR #400: runtime: introduce checked semantic object reference
+- Performance: 5.29x (4/5 >1.00x)
 - Memory: - (0/5 >1.00x)
 - JetStream: - (0/0 >1.00x)
 - Full Test262: 34002 passed / 68576 failed (33.15%)
@@ -383,3 +383,4 @@ Latest report:
 | `20260709T215203Z` `b8fbc6a` PR #397: docs: record architecture plan adoption evidence | 5.37x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
 | `20260709T221425Z` `56e6400` PR #398: docs: inventory semantic architecture | 5.41x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
 | `20260709T223143Z` `703a3fe` PR #399: workflow: guard semantic architecture boundaries | 5.32x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
+| `20260709T224900Z` `b760177` PR #400: runtime: introduce checked semantic object reference | 5.29x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
