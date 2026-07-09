@@ -121,6 +121,18 @@ const PATH_BENCH_TYPED_ARRAY_RGBA_BLUR_72P: &str =
     "tests/corpora/benchmarks/active/typed_array_rgba_blur_72p.js";
 const PATH_BENCH_TYPED_ARRAY_RGBA_SHARPEN_72P: &str =
     "tests/corpora/benchmarks/active/typed_array_rgba_sharpen_72p.js";
+const PATH_BENCH_SENTINEL_ARITHMETIC: &str =
+    "tests/corpora/benchmarks/prepared/sentinel_arithmetic.js";
+const PATH_BENCH_SENTINEL_ARRAY_INDEX: &str =
+    "tests/corpora/benchmarks/prepared/sentinel_array_index.js";
+const PATH_BENCH_SENTINEL_PROPERTY_READ: &str =
+    "tests/corpora/benchmarks/prepared/sentinel_property_read.js";
+const PATH_BENCH_SENTINEL_FUNCTION_CALL: &str =
+    "tests/corpora/benchmarks/prepared/sentinel_function_call.js";
+const PATH_BENCH_SENTINEL_STRING_SCAN: &str =
+    "tests/corpora/benchmarks/prepared/sentinel_string_scan.js";
+
+const IMAGE_72P_RGBA_BYTES: usize = 128 * 72 * 4;
 
 pub fn benchmark_cases() -> Vec<BenchmarkCase> {
     let mut cases = benchmark_control_flow_cases();
@@ -130,372 +142,238 @@ pub fn benchmark_cases() -> Vec<BenchmarkCase> {
     cases.extend(benchmark_typed_array_image_cases());
     cases.extend(benchmark_operator_cases());
     cases.extend(benchmark_runtime_cases());
+    cases.extend(benchmark_prepared_sentinel_cases());
     cases
 }
 
 fn benchmark_typed_array_image_cases() -> Vec<BenchmarkCase> {
     vec![
-        BenchmarkCase {
-            id: "typed_array_owned_rgba_fill_72p",
-            path: PATH_BENCH_TYPED_ARRAY_RGBA_FILL_72P,
-        },
-        BenchmarkCase {
-            id: "typed_array_owned_rgba_gradient_72p",
-            path: PATH_BENCH_TYPED_ARRAY_RGBA_GRADIENT_72P,
-        },
-        BenchmarkCase {
-            id: "typed_array_owned_rgba_quantize_72p",
-            path: PATH_BENCH_TYPED_ARRAY_RGBA_QUANTIZE_72P,
-        },
-        BenchmarkCase {
-            id: "typed_array_owned_rgba_blur_72p",
-            path: PATH_BENCH_TYPED_ARRAY_RGBA_BLUR_72P,
-        },
-        BenchmarkCase {
-            id: "typed_array_owned_rgba_sharpen_72p",
-            path: PATH_BENCH_TYPED_ARRAY_RGBA_SHARPEN_72P,
-        },
-        BenchmarkCase {
-            id: "typed_array_host_rgba_fill_72p",
-            path: PATH_BENCH_TYPED_ARRAY_RGBA_FILL_72P,
-        },
-        BenchmarkCase {
-            id: "typed_array_host_rgba_gradient_72p",
-            path: PATH_BENCH_TYPED_ARRAY_RGBA_GRADIENT_72P,
-        },
-        BenchmarkCase {
-            id: "typed_array_host_rgba_quantize_72p",
-            path: PATH_BENCH_TYPED_ARRAY_RGBA_QUANTIZE_72P,
-        },
-        BenchmarkCase {
-            id: "typed_array_host_rgba_blur_72p",
-            path: PATH_BENCH_TYPED_ARRAY_RGBA_BLUR_72P,
-        },
-        BenchmarkCase {
-            id: "typed_array_host_rgba_sharpen_72p",
-            path: PATH_BENCH_TYPED_ARRAY_RGBA_SHARPEN_72P,
-        },
+        BenchmarkCase::cold(
+            "typed_array_owned_rgba_fill_72p",
+            PATH_BENCH_TYPED_ARRAY_RGBA_FILL_72P,
+        ),
+        BenchmarkCase::cold(
+            "typed_array_owned_rgba_gradient_72p",
+            PATH_BENCH_TYPED_ARRAY_RGBA_GRADIENT_72P,
+        ),
+        BenchmarkCase::cold(
+            "typed_array_owned_rgba_quantize_72p",
+            PATH_BENCH_TYPED_ARRAY_RGBA_QUANTIZE_72P,
+        ),
+        BenchmarkCase::cold(
+            "typed_array_owned_rgba_blur_72p",
+            PATH_BENCH_TYPED_ARRAY_RGBA_BLUR_72P,
+        ),
+        BenchmarkCase::cold(
+            "typed_array_owned_rgba_sharpen_72p",
+            PATH_BENCH_TYPED_ARRAY_RGBA_SHARPEN_72P,
+        ),
+        BenchmarkCase::cold_host_image(
+            "typed_array_host_rgba_fill_72p",
+            PATH_BENCH_TYPED_ARRAY_RGBA_FILL_72P,
+            IMAGE_72P_RGBA_BYTES,
+        ),
+        BenchmarkCase::cold_host_image(
+            "typed_array_host_rgba_gradient_72p",
+            PATH_BENCH_TYPED_ARRAY_RGBA_GRADIENT_72P,
+            IMAGE_72P_RGBA_BYTES,
+        ),
+        BenchmarkCase::cold_host_image(
+            "typed_array_host_rgba_quantize_72p",
+            PATH_BENCH_TYPED_ARRAY_RGBA_QUANTIZE_72P,
+            IMAGE_72P_RGBA_BYTES,
+        ),
+        BenchmarkCase::cold_host_image(
+            "typed_array_host_rgba_blur_72p",
+            PATH_BENCH_TYPED_ARRAY_RGBA_BLUR_72P,
+            IMAGE_72P_RGBA_BYTES,
+        ),
+        BenchmarkCase::cold_host_image(
+            "typed_array_host_rgba_sharpen_72p",
+            PATH_BENCH_TYPED_ARRAY_RGBA_SHARPEN_72P,
+            IMAGE_72P_RGBA_BYTES,
+        ),
     ]
 }
 
 fn benchmark_control_flow_cases() -> Vec<BenchmarkCase> {
     vec![
-        BenchmarkCase {
-            id: "arithmetic_chain",
-            path: PATH_BENCH_ARITHMETIC,
-        },
-        BenchmarkCase {
-            id: "conditional_bitand",
-            path: PATH_BENCH_CONDITIONAL_BITAND,
-        },
-        BenchmarkCase {
-            id: "while_statements",
-            path: PATH_BENCH_WHILE_STATEMENTS,
-        },
-        BenchmarkCase {
-            id: "break_continue",
-            path: PATH_BENCH_BREAK_CONTINUE,
-        },
-        BenchmarkCase {
-            id: "for_statements",
-            path: PATH_BENCH_FOR_STATEMENTS,
-        },
-        BenchmarkCase {
-            id: "for_in_statements",
-            path: PATH_BENCH_FOR_IN_STATEMENTS,
-        },
-        BenchmarkCase {
-            id: "switch_statements",
-            path: PATH_BENCH_SWITCH_STATEMENTS,
-        },
-        BenchmarkCase {
-            id: "block_lexical_scope",
-            path: PATH_BENCH_BLOCK_LEXICAL_SCOPE,
-        },
+        BenchmarkCase::cold("arithmetic_chain", PATH_BENCH_ARITHMETIC),
+        BenchmarkCase::cold("conditional_bitand", PATH_BENCH_CONDITIONAL_BITAND),
+        BenchmarkCase::cold("while_statements", PATH_BENCH_WHILE_STATEMENTS),
+        BenchmarkCase::cold("break_continue", PATH_BENCH_BREAK_CONTINUE),
+        BenchmarkCase::cold("for_statements", PATH_BENCH_FOR_STATEMENTS),
+        BenchmarkCase::cold("for_in_statements", PATH_BENCH_FOR_IN_STATEMENTS),
+        BenchmarkCase::cold("switch_statements", PATH_BENCH_SWITCH_STATEMENTS),
+        BenchmarkCase::cold("block_lexical_scope", PATH_BENCH_BLOCK_LEXICAL_SCOPE),
     ]
 }
 
 fn benchmark_function_cases() -> Vec<BenchmarkCase> {
     vec![
-        BenchmarkCase {
-            id: "function_expression",
-            path: PATH_BENCH_FUNCTION_EXPRESSION,
-        },
-        BenchmarkCase {
-            id: "function_properties",
-            path: PATH_BENCH_FUNCTION_PROPERTIES,
-        },
-        BenchmarkCase {
-            id: "function_custom_properties",
-            path: PATH_BENCH_FUNCTION_CUSTOM_PROPERTIES,
-        },
-        BenchmarkCase {
-            id: "function_descriptors",
-            path: PATH_BENCH_FUNCTION_DESCRIPTORS,
-        },
-        BenchmarkCase {
-            id: "function_apply_has_instance",
-            path: PATH_BENCH_FUNCTION_APPLY_HAS_INSTANCE,
-        },
-        BenchmarkCase {
-            id: "function_intrinsic_descriptors",
-            path: PATH_BENCH_FUNCTION_INTRINSIC_DESCRIPTORS,
-        },
-        BenchmarkCase {
-            id: "method_this",
-            path: PATH_BENCH_METHOD_THIS,
-        },
-        BenchmarkCase {
-            id: "constructor_prototypes",
-            path: PATH_BENCH_CONSTRUCTOR_PROTOTYPES,
-        },
-        BenchmarkCase {
-            id: "prototype_constructor_property",
-            path: PATH_BENCH_PROTOTYPE_CONSTRUCTOR_PROPERTY,
-        },
-        BenchmarkCase {
-            id: "function_return",
-            path: PATH_BENCH_FUNCTION_RETURN,
-        },
-        BenchmarkCase {
-            id: "function_parameters_scope",
-            path: PATH_BENCH_FUNCTION_PARAMETERS_SCOPE,
-        },
-        BenchmarkCase {
-            id: "closure_environments",
-            path: PATH_BENCH_CLOSURE_ENVIRONMENTS,
-        },
+        BenchmarkCase::cold("function_expression", PATH_BENCH_FUNCTION_EXPRESSION),
+        BenchmarkCase::cold("function_properties", PATH_BENCH_FUNCTION_PROPERTIES),
+        BenchmarkCase::cold(
+            "function_custom_properties",
+            PATH_BENCH_FUNCTION_CUSTOM_PROPERTIES,
+        ),
+        BenchmarkCase::cold("function_descriptors", PATH_BENCH_FUNCTION_DESCRIPTORS),
+        BenchmarkCase::cold(
+            "function_apply_has_instance",
+            PATH_BENCH_FUNCTION_APPLY_HAS_INSTANCE,
+        ),
+        BenchmarkCase::cold(
+            "function_intrinsic_descriptors",
+            PATH_BENCH_FUNCTION_INTRINSIC_DESCRIPTORS,
+        ),
+        BenchmarkCase::cold("method_this", PATH_BENCH_METHOD_THIS),
+        BenchmarkCase::cold("constructor_prototypes", PATH_BENCH_CONSTRUCTOR_PROTOTYPES),
+        BenchmarkCase::cold(
+            "prototype_constructor_property",
+            PATH_BENCH_PROTOTYPE_CONSTRUCTOR_PROPERTY,
+        ),
+        BenchmarkCase::cold("function_return", PATH_BENCH_FUNCTION_RETURN),
+        BenchmarkCase::cold(
+            "function_parameters_scope",
+            PATH_BENCH_FUNCTION_PARAMETERS_SCOPE,
+        ),
+        BenchmarkCase::cold("closure_environments", PATH_BENCH_CLOSURE_ENVIRONMENTS),
     ]
 }
 
 fn benchmark_object_cases() -> Vec<BenchmarkCase> {
     vec![
-        BenchmarkCase {
-            id: "object_literals",
-            path: PATH_BENCH_OBJECT_LITERALS,
-        },
-        BenchmarkCase {
-            id: "object_literal_shorthand_methods",
-            path: PATH_BENCH_OBJECT_LITERAL_SHORTHAND_METHODS,
-        },
-        BenchmarkCase {
-            id: "object_prototypes",
-            path: PATH_BENCH_OBJECT_PROTOTYPES,
-        },
-        BenchmarkCase {
-            id: "object_prototype_root",
-            path: PATH_BENCH_OBJECT_PROTOTYPE_ROOT,
-        },
-        BenchmarkCase {
-            id: "object_builtin",
-            path: PATH_BENCH_OBJECT_BUILTIN,
-        },
-        BenchmarkCase {
-            id: "object_prototype_methods",
-            path: PATH_BENCH_OBJECT_PROTOTYPE_METHODS,
-        },
-        BenchmarkCase {
-            id: "set_operations",
-            path: PATH_BENCH_SET_OPERATIONS,
-        },
-        BenchmarkCase {
-            id: "number_builtin",
-            path: PATH_BENCH_NUMBER_BUILTIN,
-        },
-        BenchmarkCase {
-            id: "number_formatting",
-            path: PATH_BENCH_NUMBER_FORMATTING,
-        },
-        BenchmarkCase {
-            id: "computed_properties",
-            path: PATH_BENCH_COMPUTED_PROPERTIES,
-        },
+        BenchmarkCase::cold("object_literals", PATH_BENCH_OBJECT_LITERALS),
+        BenchmarkCase::cold(
+            "object_literal_shorthand_methods",
+            PATH_BENCH_OBJECT_LITERAL_SHORTHAND_METHODS,
+        ),
+        BenchmarkCase::cold("object_prototypes", PATH_BENCH_OBJECT_PROTOTYPES),
+        BenchmarkCase::cold("object_prototype_root", PATH_BENCH_OBJECT_PROTOTYPE_ROOT),
+        BenchmarkCase::cold("object_builtin", PATH_BENCH_OBJECT_BUILTIN),
+        BenchmarkCase::cold(
+            "object_prototype_methods",
+            PATH_BENCH_OBJECT_PROTOTYPE_METHODS,
+        ),
+        BenchmarkCase::cold("set_operations", PATH_BENCH_SET_OPERATIONS),
+        BenchmarkCase::cold("number_builtin", PATH_BENCH_NUMBER_BUILTIN),
+        BenchmarkCase::cold("number_formatting", PATH_BENCH_NUMBER_FORMATTING),
+        BenchmarkCase::cold("computed_properties", PATH_BENCH_COMPUTED_PROPERTIES),
     ]
 }
 
 fn benchmark_array_cases() -> Vec<BenchmarkCase> {
     vec![
-        BenchmarkCase {
-            id: "array_literals",
-            path: PATH_BENCH_ARRAY_LITERALS,
-        },
-        BenchmarkCase {
-            id: "array_builtin",
-            path: PATH_BENCH_ARRAY_BUILTIN,
-        },
-        BenchmarkCase {
-            id: "array_prototype_methods",
-            path: PATH_BENCH_ARRAY_PROTOTYPE_METHODS,
-        },
-        BenchmarkCase {
-            id: "array_prototype_callbacks",
-            path: PATH_BENCH_ARRAY_PROTOTYPE_CALLBACKS,
-        },
-        BenchmarkCase {
-            id: "array_flat_flatmap",
-            path: PATH_BENCH_ARRAY_FLAT_FLATMAP,
-        },
-        BenchmarkCase {
-            id: "array_prototype_join",
-            path: PATH_BENCH_ARRAY_PROTOTYPE_JOIN,
-        },
-        BenchmarkCase {
-            id: "array_prototype_concat",
-            path: PATH_BENCH_ARRAY_PROTOTYPE_CONCAT,
-        },
-        BenchmarkCase {
-            id: "array_prototype_includes",
-            path: PATH_BENCH_ARRAY_PROTOTYPE_INCLUDES,
-        },
-        BenchmarkCase {
-            id: "array_prototype_index_of",
-            path: PATH_BENCH_ARRAY_PROTOTYPE_INDEX_OF,
-        },
-        BenchmarkCase {
-            id: "array_prototype_last_index_of",
-            path: PATH_BENCH_ARRAY_PROTOTYPE_LAST_INDEX_OF,
-        },
-        BenchmarkCase {
-            id: "array_prototype_reverse",
-            path: PATH_BENCH_ARRAY_PROTOTYPE_REVERSE,
-        },
-        BenchmarkCase {
-            id: "array_prototype_sort",
-            path: PATH_BENCH_ARRAY_PROTOTYPE_SORT,
-        },
-        BenchmarkCase {
-            id: "array_prototype_shift_unshift",
-            path: PATH_BENCH_ARRAY_PROTOTYPE_SHIFT_UNSHIFT,
-        },
-        BenchmarkCase {
-            id: "array_prototype_slice",
-            path: PATH_BENCH_ARRAY_PROTOTYPE_SLICE,
-        },
+        BenchmarkCase::cold("array_literals", PATH_BENCH_ARRAY_LITERALS),
+        BenchmarkCase::cold("array_builtin", PATH_BENCH_ARRAY_BUILTIN),
+        BenchmarkCase::cold(
+            "array_prototype_methods",
+            PATH_BENCH_ARRAY_PROTOTYPE_METHODS,
+        ),
+        BenchmarkCase::cold(
+            "array_prototype_callbacks",
+            PATH_BENCH_ARRAY_PROTOTYPE_CALLBACKS,
+        ),
+        BenchmarkCase::cold("array_flat_flatmap", PATH_BENCH_ARRAY_FLAT_FLATMAP),
+        BenchmarkCase::cold("array_prototype_join", PATH_BENCH_ARRAY_PROTOTYPE_JOIN),
+        BenchmarkCase::cold("array_prototype_concat", PATH_BENCH_ARRAY_PROTOTYPE_CONCAT),
+        BenchmarkCase::cold(
+            "array_prototype_includes",
+            PATH_BENCH_ARRAY_PROTOTYPE_INCLUDES,
+        ),
+        BenchmarkCase::cold(
+            "array_prototype_index_of",
+            PATH_BENCH_ARRAY_PROTOTYPE_INDEX_OF,
+        ),
+        BenchmarkCase::cold(
+            "array_prototype_last_index_of",
+            PATH_BENCH_ARRAY_PROTOTYPE_LAST_INDEX_OF,
+        ),
+        BenchmarkCase::cold(
+            "array_prototype_reverse",
+            PATH_BENCH_ARRAY_PROTOTYPE_REVERSE,
+        ),
+        BenchmarkCase::cold("array_prototype_sort", PATH_BENCH_ARRAY_PROTOTYPE_SORT),
+        BenchmarkCase::cold(
+            "array_prototype_shift_unshift",
+            PATH_BENCH_ARRAY_PROTOTYPE_SHIFT_UNSHIFT,
+        ),
+        BenchmarkCase::cold("array_prototype_slice", PATH_BENCH_ARRAY_PROTOTYPE_SLICE),
     ]
 }
 
 fn benchmark_operator_cases() -> Vec<BenchmarkCase> {
     vec![
-        BenchmarkCase {
-            id: "unary_operators",
-            path: PATH_BENCH_UNARY_OPERATORS,
-        },
-        BenchmarkCase {
-            id: "update_expressions",
-            path: PATH_BENCH_UPDATE_EXPRESSIONS,
-        },
-        BenchmarkCase {
-            id: "compound_assignment",
-            path: PATH_BENCH_COMPOUND_ASSIGNMENT,
-        },
-        BenchmarkCase {
-            id: "compound_assignment_extended",
-            path: PATH_BENCH_COMPOUND_ASSIGNMENT_EXTENDED,
-        },
-        BenchmarkCase {
-            id: "exponentiation_parentheses",
-            path: PATH_BENCH_EXPONENTIATION_PARENTHESES,
-        },
-        BenchmarkCase {
-            id: "in_operator",
-            path: PATH_BENCH_IN_OPERATOR,
-        },
-        BenchmarkCase {
-            id: "instanceof_has_instance",
-            path: PATH_BENCH_INSTANCEOF_HAS_INSTANCE,
-        },
+        BenchmarkCase::cold("unary_operators", PATH_BENCH_UNARY_OPERATORS),
+        BenchmarkCase::cold("update_expressions", PATH_BENCH_UPDATE_EXPRESSIONS),
+        BenchmarkCase::cold("compound_assignment", PATH_BENCH_COMPOUND_ASSIGNMENT),
+        BenchmarkCase::cold(
+            "compound_assignment_extended",
+            PATH_BENCH_COMPOUND_ASSIGNMENT_EXTENDED,
+        ),
+        BenchmarkCase::cold(
+            "exponentiation_parentheses",
+            PATH_BENCH_EXPONENTIATION_PARENTHESES,
+        ),
+        BenchmarkCase::cold("in_operator", PATH_BENCH_IN_OPERATOR),
+        BenchmarkCase::cold(
+            "instanceof_has_instance",
+            PATH_BENCH_INSTANCEOF_HAS_INSTANCE,
+        ),
     ]
 }
 
 fn benchmark_runtime_cases() -> Vec<BenchmarkCase> {
     vec![
-        BenchmarkCase {
-            id: "string_concat",
-            path: PATH_BENCH_STRING,
-        },
-        BenchmarkCase {
-            id: "string_escape_sequences",
-            path: PATH_BENCH_STRING_ESCAPE_SEQUENCES,
-        },
-        BenchmarkCase {
-            id: "string_builtin",
-            path: PATH_BENCH_STRING_BUILTIN,
-        },
-        BenchmarkCase {
-            id: "string_regexp_interop",
-            path: PATH_BENCH_STRING_REGEXP_INTEROP,
-        },
-        BenchmarkCase {
-            id: "boolean_conversion",
-            path: PATH_BENCH_BOOLEAN,
-        },
-        BenchmarkCase {
-            id: "boolean_builtin",
-            path: PATH_BENCH_BOOLEAN_BUILTIN,
-        },
-        BenchmarkCase {
-            id: "var_hoisting",
-            path: PATH_BENCH_VAR_HOISTING,
-        },
-        BenchmarkCase {
-            id: "try_catch",
-            path: PATH_BENCH_TRY_CATCH,
-        },
-        BenchmarkCase {
-            id: "try_finally",
-            path: PATH_BENCH_TRY_FINALLY,
-        },
-        BenchmarkCase {
-            id: "reference_error_catch",
-            path: PATH_BENCH_REFERENCE_ERROR_CATCH,
-        },
-        BenchmarkCase {
-            id: "error_object_properties",
-            path: PATH_BENCH_ERROR_OBJECT_PROPERTIES,
-        },
-        BenchmarkCase {
-            id: "global_numeric_constants",
-            path: PATH_BENCH_GLOBAL_NUMERIC_CONSTANTS,
-        },
-        BenchmarkCase {
-            id: "json_builtin",
-            path: PATH_BENCH_JSON_BUILTIN,
-        },
-        BenchmarkCase {
-            id: "regexp_baseline",
-            path: PATH_BENCH_REGEXP_BASELINE,
-        },
-        BenchmarkCase {
-            id: "math_builtin",
-            path: PATH_BENCH_MATH_BUILTIN,
-        },
-        BenchmarkCase {
-            id: "math_methods",
-            path: PATH_BENCH_MATH_METHODS,
-        },
-        BenchmarkCase {
-            id: "math_integer_methods",
-            path: PATH_BENCH_MATH_INTEGER_METHODS,
-        },
-        BenchmarkCase {
-            id: "math_random",
-            path: PATH_BENCH_MATH_RANDOM,
-        },
-        BenchmarkCase {
-            id: "object_descriptors",
-            path: PATH_BENCH_OBJECT_DESCRIPTORS,
-        },
-        BenchmarkCase {
-            id: "standard_error_constructors",
-            path: PATH_BENCH_STANDARD_ERROR_CONSTRUCTORS,
-        },
-        BenchmarkCase {
-            id: "compiled_script_reuse",
-            path: PATH_BENCH_COMPILED_SCRIPT_REUSE,
-        },
-        BenchmarkCase {
-            id: "atomized_bindings",
-            path: PATH_BENCH_ATOMIZED_BINDINGS,
-        },
+        BenchmarkCase::cold("string_concat", PATH_BENCH_STRING),
+        BenchmarkCase::cold(
+            "string_escape_sequences",
+            PATH_BENCH_STRING_ESCAPE_SEQUENCES,
+        ),
+        BenchmarkCase::cold("string_builtin", PATH_BENCH_STRING_BUILTIN),
+        BenchmarkCase::cold("string_regexp_interop", PATH_BENCH_STRING_REGEXP_INTEROP),
+        BenchmarkCase::cold("boolean_conversion", PATH_BENCH_BOOLEAN),
+        BenchmarkCase::cold("boolean_builtin", PATH_BENCH_BOOLEAN_BUILTIN),
+        BenchmarkCase::cold("var_hoisting", PATH_BENCH_VAR_HOISTING),
+        BenchmarkCase::cold("try_catch", PATH_BENCH_TRY_CATCH),
+        BenchmarkCase::cold("try_finally", PATH_BENCH_TRY_FINALLY),
+        BenchmarkCase::cold("reference_error_catch", PATH_BENCH_REFERENCE_ERROR_CATCH),
+        BenchmarkCase::cold(
+            "error_object_properties",
+            PATH_BENCH_ERROR_OBJECT_PROPERTIES,
+        ),
+        BenchmarkCase::cold(
+            "global_numeric_constants",
+            PATH_BENCH_GLOBAL_NUMERIC_CONSTANTS,
+        ),
+        BenchmarkCase::cold("json_builtin", PATH_BENCH_JSON_BUILTIN),
+        BenchmarkCase::cold("regexp_baseline", PATH_BENCH_REGEXP_BASELINE),
+        BenchmarkCase::cold("math_builtin", PATH_BENCH_MATH_BUILTIN),
+        BenchmarkCase::cold("math_methods", PATH_BENCH_MATH_METHODS),
+        BenchmarkCase::cold("math_integer_methods", PATH_BENCH_MATH_INTEGER_METHODS),
+        BenchmarkCase::cold("math_random", PATH_BENCH_MATH_RANDOM),
+        BenchmarkCase::cold("object_descriptors", PATH_BENCH_OBJECT_DESCRIPTORS),
+        BenchmarkCase::cold(
+            "standard_error_constructors",
+            PATH_BENCH_STANDARD_ERROR_CONSTRUCTORS,
+        ),
+        BenchmarkCase::cold("compiled_script_reuse", PATH_BENCH_COMPILED_SCRIPT_REUSE),
+        BenchmarkCase::cold("atomized_bindings", PATH_BENCH_ATOMIZED_BINDINGS),
+    ]
+}
+
+fn benchmark_prepared_sentinel_cases() -> Vec<BenchmarkCase> {
+    vec![
+        BenchmarkCase::prepared_sentinel("sentinel_arithmetic", PATH_BENCH_SENTINEL_ARITHMETIC),
+        BenchmarkCase::prepared_sentinel("sentinel_array_index", PATH_BENCH_SENTINEL_ARRAY_INDEX),
+        BenchmarkCase::prepared_sentinel(
+            "sentinel_property_read",
+            PATH_BENCH_SENTINEL_PROPERTY_READ,
+        ),
+        BenchmarkCase::prepared_sentinel(
+            "sentinel_function_call",
+            PATH_BENCH_SENTINEL_FUNCTION_CALL,
+        ),
+        BenchmarkCase::prepared_sentinel("sentinel_string_scan", PATH_BENCH_SENTINEL_STRING_SCAN),
     ]
 }

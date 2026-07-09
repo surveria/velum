@@ -30,6 +30,8 @@ const ENV_SAMPLES: &str = "RSQJS_BENCH_SAMPLES";
 const ENV_MIN_OP_US: &str = "RSQJS_BENCH_MIN_OP_US";
 const ENV_MAX_CV_PERCENT: &str = "RSQJS_BENCH_MAX_CV_PERCENT";
 const ENV_ATTEMPTS: &str = "RSQJS_BENCH_ATTEMPTS";
+const ENV_MAX_OP_MS: &str = "RSQJS_BENCH_MAX_OP_MS";
+const ENV_MAX_TOTAL_MS: &str = "RSQJS_BENCH_MAX_TOTAL_MS";
 
 const DEFAULT_MIN_TIME_MS: u64 = 500;
 const DEFAULT_WARMUP_MS: u64 = 150;
@@ -37,6 +39,8 @@ const DEFAULT_SAMPLES: usize = 10;
 const DEFAULT_MIN_OP_US: u64 = 1_000;
 const DEFAULT_MAX_CV_PERCENT: u64 = 10;
 const DEFAULT_ATTEMPTS: usize = 3;
+const DEFAULT_MAX_OP_MS: u64 = 2_000;
+const DEFAULT_MAX_TOTAL_MS: u64 = 3_000;
 const HIGH_VARIANCE_MIN_TOTAL_MULTIPLIER: u32 = 2;
 
 const MIN_SAMPLES: usize = 3;
@@ -59,6 +63,8 @@ pub struct MeasureConfig {
     min_op_time: Duration,
     max_cv_permille: u32,
     attempts: usize,
+    max_op_time: Duration,
+    max_total: Duration,
 }
 
 impl MeasureConfig {
@@ -73,6 +79,8 @@ impl MeasureConfig {
             min_op_time: Duration::from_micros(DEFAULT_MIN_OP_US),
             max_cv_permille: cv_percent_to_permille(DEFAULT_MAX_CV_PERCENT),
             attempts: MIN_ATTEMPTS,
+            max_op_time: Duration::from_millis(DEFAULT_MAX_OP_MS),
+            max_total: Duration::from_millis(DEFAULT_MAX_TOTAL_MS),
         }
     }
 
@@ -88,6 +96,10 @@ impl MeasureConfig {
             cv_percent_to_permille(env_u64(ENV_MAX_CV_PERCENT, DEFAULT_MAX_CV_PERCENT)),
         )
         .with_attempts(env_usize(ENV_ATTEMPTS, DEFAULT_ATTEMPTS))
+        .with_budget(
+            Duration::from_millis(env_u64(ENV_MAX_OP_MS, DEFAULT_MAX_OP_MS)),
+            Duration::from_millis(env_u64(ENV_MAX_TOTAL_MS, DEFAULT_MAX_TOTAL_MS)),
+        )
     }
 
     #[must_use]
@@ -107,6 +119,27 @@ impl MeasureConfig {
         self
     }
 
+    #[must_use]
+    pub const fn with_budget(mut self, max_op_time: Duration, max_total: Duration) -> Self {
+        self.max_op_time = max_op_time;
+        self.max_total = max_total;
+        self
+    }
+
+    pub fn fingerprint(self) -> String {
+        format!(
+            "warmup_ns={},min_total_ns={},samples={},min_op_ns={},max_cv_permille={},attempts={},max_op_ns={},max_total_ns={}",
+            self.warmup.as_nanos(),
+            self.min_total.as_nanos(),
+            self.samples,
+            self.min_op_time.as_nanos(),
+            self.max_cv_permille,
+            self.attempts,
+            self.max_op_time.as_nanos(),
+            self.max_total.as_nanos(),
+        )
+    }
+
     const fn with_min_total_multiplier(mut self, multiplier: u32) -> Self {
         if let Some(min_total) = self.min_total.checked_mul(multiplier) {
             self.min_total = min_total;
@@ -124,6 +157,8 @@ pub struct MeasureStats {
     iters_per_sample: u64,
     samples: usize,
     median_sample: Duration,
+    warmup_elapsed: Duration,
+    timed_run_elapsed: Duration,
     quality: MeasurementQuality,
 }
 
@@ -150,6 +185,14 @@ impl MeasureStats {
         self.median_sample
     }
 
+    pub const fn warmup_elapsed(&self) -> Duration {
+        self.warmup_elapsed
+    }
+
+    pub const fn timed_run_elapsed(&self) -> Duration {
+        self.timed_run_elapsed
+    }
+
     pub const fn quality(&self) -> MeasurementQuality {
         self.quality
     }
@@ -157,6 +200,51 @@ impl MeasureStats {
     fn sample_count_u64(&self) -> u64 {
         // sample counts are tiny; a saturating conversion never loses data here.
         u64::try_from(self.samples).unwrap_or(u64::MAX)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct MeasureSnapshot {
+    pub median: Duration,
+    pub cv_permille: u32,
+    pub iters_per_sample: u64,
+    pub samples: usize,
+    pub median_sample: Duration,
+    pub warmup_elapsed: Duration,
+    pub timed_run_elapsed: Duration,
+    pub iteration_cap_reached: bool,
+}
+
+impl MeasureStats {
+    pub const fn snapshot(self) -> MeasureSnapshot {
+        MeasureSnapshot {
+            median: self.median,
+            cv_permille: self.cv_permille,
+            iters_per_sample: self.iters_per_sample,
+            samples: self.samples,
+            median_sample: self.median_sample,
+            warmup_elapsed: self.warmup_elapsed,
+            timed_run_elapsed: self.timed_run_elapsed,
+            iteration_cap_reached: self.quality.iteration_cap_reached(),
+        }
+    }
+
+    pub const fn from_snapshot(snapshot: MeasureSnapshot, config: MeasureConfig) -> Self {
+        Self {
+            median: snapshot.median,
+            cv_permille: snapshot.cv_permille,
+            iters_per_sample: snapshot.iters_per_sample,
+            samples: snapshot.samples,
+            median_sample: snapshot.median_sample,
+            warmup_elapsed: snapshot.warmup_elapsed,
+            timed_run_elapsed: snapshot.timed_run_elapsed,
+            quality: measurement_quality(
+                config,
+                snapshot.median.as_nanos(),
+                snapshot.cv_permille,
+                snapshot.iteration_cap_reached,
+            ),
+        }
     }
 }
 
@@ -200,13 +288,14 @@ pub fn measure<F>(config: MeasureConfig, mut op: F) -> anyhow::Result<MeasureSta
 where
     F: FnMut() -> anyhow::Result<()>,
 {
-    let mut best = measure_with_attempts(config, &mut op)?;
+    let deadline = Instant::now().checked_add(config.max_total);
+    let mut best = measure_with_attempts(config, &mut op, deadline)?;
     if best.quality().is_valid() {
         return Ok(best);
     }
-    if should_retry_with_larger_sample(best.quality()) {
+    if should_retry_with_larger_sample(best.quality()) && !deadline_expired(deadline) {
         let extended = config.with_min_total_multiplier(HIGH_VARIANCE_MIN_TOTAL_MULTIPLIER);
-        let candidate = measure_with_attempts(extended, &mut op)?;
+        let candidate = measure_with_attempts(extended, &mut op, deadline)?;
         if better_measurement(candidate, best) {
             best = candidate;
         }
@@ -214,16 +303,23 @@ where
     Ok(best)
 }
 
-fn measure_with_attempts<F>(config: MeasureConfig, op: &mut F) -> anyhow::Result<MeasureStats>
+fn measure_with_attempts<F>(
+    config: MeasureConfig,
+    op: &mut F,
+    deadline: Option<Instant>,
+) -> anyhow::Result<MeasureStats>
 where
     F: FnMut() -> anyhow::Result<()>,
 {
-    let mut best = measure_once(config, op)?;
+    let mut best = measure_once(config, op, deadline)?;
     if best.quality().is_valid() {
         return Ok(best);
     }
     for _ in MIN_ATTEMPTS..config.attempts {
-        let candidate = measure_once(config, op)?;
+        if deadline_expired(deadline) {
+            break;
+        }
+        let candidate = measure_once(config, op, deadline)?;
         if better_measurement(candidate, best) {
             best = candidate;
         }
@@ -238,24 +334,41 @@ const fn should_retry_with_larger_sample(quality: MeasurementQuality) -> bool {
     quality.high_variance() && !quality.low_signal() && !quality.iteration_cap_reached()
 }
 
-fn measure_once<F>(config: MeasureConfig, op: &mut F) -> anyhow::Result<MeasureStats>
+fn measure_once<F>(
+    config: MeasureConfig,
+    op: &mut F,
+    deadline: Option<Instant>,
+) -> anyhow::Result<MeasureStats>
 where
     F: FnMut() -> anyhow::Result<()>,
 {
-    let op_cost = warmup_and_estimate(config.warmup, op)?;
-    let calibration = calibrate_iters(config, op_cost);
+    let warmup = warmup_and_estimate(config, op, deadline)?;
+    let remaining = remaining_budget(deadline);
+    let calibration = calibrate_iters(config, warmup.op_cost, remaining);
     let iters_u64 = clamp_u128_to_u64(calibration.iters_per_sample);
 
     let mut per_op = Vec::with_capacity(config.samples);
     let mut sample_times = Vec::with_capacity(config.samples);
-    for _ in 0..config.samples {
+    let sampling_start = Instant::now();
+    for sample_index in 0..config.samples {
+        if sample_index >= MIN_SAMPLES && deadline_expired(deadline) {
+            break;
+        }
         let start = Instant::now();
         for _ in 0..iters_u64 {
             op()?;
         }
         let elapsed = start.elapsed().as_nanos();
+        let measured_op = elapsed / calibration.iters_per_sample.max(1);
+        if measured_op > config.max_op_time.as_nanos() {
+            anyhow::bail!(
+                "benchmark operation exceeded maximum duration: {} ns > {} ns",
+                measured_op,
+                config.max_op_time.as_nanos()
+            );
+        }
         sample_times.push(elapsed);
-        per_op.push(elapsed / calibration.iters_per_sample.max(1));
+        per_op.push(measured_op);
     }
     Ok(summarize(
         per_op,
@@ -263,6 +376,8 @@ where
         iters_u64,
         config,
         calibration.capped,
+        warmup.elapsed,
+        sampling_start.elapsed(),
     ))
 }
 
@@ -300,21 +415,43 @@ const fn quality_problem_count(quality: MeasurementQuality) -> u8 {
     count
 }
 
-fn warmup_and_estimate<F>(warmup: Duration, op: &mut F) -> anyhow::Result<u128>
+#[derive(Debug, Clone, Copy)]
+struct WarmupEstimate {
+    op_cost: u128,
+    elapsed: Duration,
+}
+
+fn warmup_and_estimate<F>(
+    config: MeasureConfig,
+    op: &mut F,
+    deadline: Option<Instant>,
+) -> anyhow::Result<WarmupEstimate>
 where
     F: FnMut() -> anyhow::Result<()>,
 {
     let start = Instant::now();
     let mut calls: u128 = 0;
     loop {
+        let op_start = Instant::now();
         op()?;
+        let op_elapsed = op_start.elapsed();
+        if op_elapsed > config.max_op_time {
+            anyhow::bail!(
+                "benchmark operation exceeded maximum duration during warmup: {} ns > {} ns",
+                op_elapsed.as_nanos(),
+                config.max_op_time.as_nanos()
+            );
+        }
         calls = calls.saturating_add(1);
-        if start.elapsed() >= warmup {
+        if start.elapsed() >= config.warmup || deadline_expired(deadline) {
             break;
         }
     }
-    let elapsed = start.elapsed().as_nanos().max(1);
-    Ok((elapsed / calls.max(1)).max(1))
+    let elapsed = start.elapsed();
+    Ok(WarmupEstimate {
+        op_cost: (elapsed.as_nanos().max(1) / calls.max(1)).max(1),
+        elapsed,
+    })
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -323,9 +460,17 @@ struct Calibration {
     capped: bool,
 }
 
-fn calibrate_iters(config: MeasureConfig, op_cost: u128) -> Calibration {
+fn calibrate_iters(
+    config: MeasureConfig,
+    op_cost: u128,
+    remaining_budget: Option<Duration>,
+) -> Calibration {
     let samples = u128::try_from(config.samples.max(1)).unwrap_or(1);
-    let target_per_sample = config.min_total.as_nanos() / samples;
+    let requested_target = config.min_total.as_nanos() / samples;
+    let target_per_sample = remaining_budget
+        .map(|remaining| requested_target.min(remaining.as_nanos() / samples))
+        .unwrap_or(requested_target)
+        .max(op_cost);
     let iters = target_per_sample / op_cost.max(1);
     let iters_per_sample = iters.clamp(1, MAX_ITERS_PER_SAMPLE);
     Calibration {
@@ -340,6 +485,8 @@ fn summarize(
     iters_per_sample: u64,
     config: MeasureConfig,
     iteration_cap_reached: bool,
+    warmup_elapsed: Duration,
+    timed_run_elapsed: Duration,
 ) -> MeasureStats {
     per_op.sort_unstable();
     let median = median_of_sorted(&per_op);
@@ -350,10 +497,20 @@ fn summarize(
         median: duration_from_nanos(median),
         cv_permille,
         iters_per_sample,
-        samples: config.samples,
+        samples: per_op.len(),
         median_sample: duration_from_nanos(median_sample),
+        warmup_elapsed,
+        timed_run_elapsed,
         quality: measurement_quality(config, median, cv_permille, iteration_cap_reached),
     }
+}
+
+fn deadline_expired(deadline: Option<Instant>) -> bool {
+    deadline.is_some_and(|deadline| Instant::now() >= deadline)
+}
+
+fn remaining_budget(deadline: Option<Instant>) -> Option<Duration> {
+    deadline.map(|deadline| deadline.saturating_duration_since(Instant::now()))
 }
 
 const fn measurement_quality(
@@ -501,168 +658,5 @@ pub fn ratio_values(ours: u128, reference: u128) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        MeasureConfig, MeasureStats, MeasurementQuality, better_measurement, format_duration,
-        isqrt, measure, median_of_sorted, ratio_values,
-    };
-    use std::{
-        hint::black_box,
-        time::{Duration, Instant},
-    };
-
-    fn fixed_config() -> MeasureConfig {
-        MeasureConfig::new(Duration::from_millis(20), Duration::from_millis(60), 8)
-            .with_quality(Duration::from_nanos(1), 10_000)
-    }
-
-    fn quality(low_signal: bool, high_variance: bool) -> MeasurementQuality {
-        MeasurementQuality {
-            min_op_time: Duration::from_millis(1),
-            max_cv_permille: 100,
-            low_signal,
-            high_variance,
-            iteration_cap_reached: false,
-        }
-    }
-
-    fn stats(cv_permille: u32, quality: MeasurementQuality) -> MeasureStats {
-        MeasureStats {
-            median: Duration::from_millis(2),
-            cv_permille,
-            iters_per_sample: 1,
-            samples: 3,
-            median_sample: Duration::from_millis(20),
-            quality,
-        }
-    }
-
-    #[test]
-    fn isqrt_matches_reference() {
-        for value in [0u128, 1, 2, 3, 4, 15, 16, 17, 1_000_000, 1_000_003] {
-            let root = isqrt(value);
-            assert!(root * root <= value, "root too large for {value}");
-            assert!(
-                (root + 1) * (root + 1) > value,
-                "root too small for {value}"
-            );
-        }
-    }
-
-    #[test]
-    fn median_handles_even_and_odd() {
-        assert_eq!(median_of_sorted(&[1, 2, 3]), 2);
-        assert_eq!(median_of_sorted(&[10, 20, 30, 40]), 25);
-        assert_eq!(median_of_sorted(&[]), 0);
-    }
-
-    #[test]
-    fn formats_duration_with_three_significant_figures() {
-        assert_eq!(format_duration(Duration::from_micros(1_500)), "1.50 ms");
-        assert_eq!(format_duration(Duration::from_nanos(365)), "365 ns");
-    }
-
-    #[test]
-    fn formats_ratio_below_and_above_one() {
-        let below = ratio_values(
-            Duration::from_micros(5).as_nanos(),
-            Duration::from_micros(366).as_nanos(),
-        );
-        assert_eq!(below, "0.01x");
-        let above = ratio_values(
-            Duration::from_micros(250).as_nanos(),
-            Duration::from_micros(100).as_nanos(),
-        );
-        assert_eq!(above, "2.50x");
-    }
-
-    #[test]
-    fn retry_selection_prefers_valid_measurement() -> anyhow::Result<()> {
-        let invalid = stats(250, quality(false, true));
-        let valid = stats(90, quality(false, false));
-        ensure_bool(
-            better_measurement(valid, invalid),
-            "valid measurement should replace an invalid result",
-        )?;
-        ensure_bool(
-            !better_measurement(invalid, valid),
-            "invalid measurement should not replace a valid result",
-        )
-    }
-
-    #[test]
-    fn retry_selection_prefers_less_noisy_invalid_measurement() -> anyhow::Result<()> {
-        let noisy = stats(250, quality(false, true));
-        let less_noisy = stats(120, quality(false, true));
-        ensure_bool(
-            better_measurement(less_noisy, noisy),
-            "lower CV should replace an equally invalid result",
-        )?;
-        ensure_bool(
-            !better_measurement(noisy, less_noisy),
-            "higher CV should not replace a less noisy result",
-        )
-    }
-
-    #[test]
-    fn measure_scales_iterations_and_is_repeatable() -> anyhow::Result<()> {
-        // A deterministic fixed-work operation should yield a stable median
-        // across independent measurement runs. This is the property the old
-        // fixed-50-iteration mean lacked on noisy hardware.
-        let work = || -> anyhow::Result<()> {
-            let mut acc = 0u64;
-            for value in 0..2_000u64 {
-                acc = acc.wrapping_add(value.wrapping_mul(value));
-            }
-            black_box(acc);
-            Ok(())
-        };
-        let first = measure(fixed_config(), work)?;
-        let second = measure(fixed_config(), work)?;
-        // Auto-calibration must pick more than a single iteration for cheap work.
-        assert!(first.total_iters() > 1);
-        // Independent runs agree within a loose bound (robust to CI jitter).
-        let lo = first.median().as_nanos().min(second.median().as_nanos());
-        let hi = first.median().as_nanos().max(second.median().as_nanos());
-        assert!(
-            hi <= lo.saturating_mul(3).max(1),
-            "medians diverged: {lo} vs {hi}"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn measure_reports_low_variation_for_stable_work() -> anyhow::Result<()> {
-        let start = Instant::now();
-        let work = || -> anyhow::Result<()> {
-            let mut acc = 0u64;
-            for value in 0..1_500u64 {
-                acc = acc.wrapping_add(value);
-            }
-            black_box(acc);
-            Ok(())
-        };
-        let stats = measure(fixed_config(), work)?;
-        black_box(start.elapsed());
-        // Structural sanity: auto-calibration produced real iterations.
-        assert!(stats.total_iters() > 0);
-        Ok(())
-    }
-
-    #[test]
-    fn measure_marks_tiny_work_as_low_signal() -> anyhow::Result<()> {
-        let config = MeasureConfig::new(Duration::from_millis(5), Duration::from_millis(15), 3)
-            .with_quality(Duration::from_millis(1), 10_000);
-        let stats = measure(config, || Ok(()))?;
-        assert!(stats.quality().low_signal());
-        assert!(!stats.quality().is_valid());
-        Ok(())
-    }
-
-    fn ensure_bool(actual: bool, message: &str) -> anyhow::Result<()> {
-        if actual {
-            return Ok(());
-        }
-        Err(anyhow::anyhow!(message.to_owned()))
-    }
-}
+#[path = "bench_measure_tests.rs"]
+mod tests;

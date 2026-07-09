@@ -14,12 +14,16 @@ use tabled::Tabled;
 mod bench_engines;
 mod bench_measure;
 mod benchmark_mode;
+mod benchmark_protocol;
+mod benchmark_selection;
 mod benchmarks;
 mod build_info;
 mod case_registry;
 mod cases;
 mod failure_classification;
 mod jetstream;
+mod prepared_benchmarks;
+mod quickjs_baseline;
 #[cfg(test)]
 mod report_formatting_tests;
 mod report_metadata;
