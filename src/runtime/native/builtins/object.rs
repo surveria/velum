@@ -15,13 +15,14 @@ use super::{
     NativeFunctionKind, OBJECT_ASSIGN_NAME, OBJECT_CREATE_NAME, OBJECT_DEFINE_PROPERTIES_NAME,
     OBJECT_DEFINE_PROPERTY_NAME, OBJECT_ENTRIES_NAME, OBJECT_FREEZE_NAME, OBJECT_FROM_ENTRIES_NAME,
     OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME, OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME,
-    OBJECT_GET_OWN_PROPERTY_NAMES_NAME, OBJECT_GET_PROTOTYPE_OF_NAME, OBJECT_HAS_OWN_NAME,
-    OBJECT_IS_EXTENSIBLE_NAME, OBJECT_IS_FROZEN_NAME, OBJECT_IS_NAME, OBJECT_IS_SEALED_NAME,
-    OBJECT_KEYS_NAME, OBJECT_NAME, OBJECT_PREVENT_EXTENSIONS_NAME,
-    OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME, OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME,
-    OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME, OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME,
-    OBJECT_PROTOTYPE_TO_STRING_NAME, OBJECT_PROTOTYPE_VALUE_OF_NAME, OBJECT_SEAL_NAME,
-    OBJECT_SET_PROTOTYPE_OF_NAME, OBJECT_VALUES_NAME,
+    OBJECT_GET_OWN_PROPERTY_NAMES_NAME, OBJECT_GET_OWN_PROPERTY_SYMBOLS_NAME,
+    OBJECT_GET_PROTOTYPE_OF_NAME, OBJECT_HAS_OWN_NAME, OBJECT_IS_EXTENSIBLE_NAME,
+    OBJECT_IS_FROZEN_NAME, OBJECT_IS_NAME, OBJECT_IS_SEALED_NAME, OBJECT_KEYS_NAME, OBJECT_NAME,
+    OBJECT_PREVENT_EXTENSIONS_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
+    OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME, OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
+    OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME, OBJECT_PROTOTYPE_TO_STRING_NAME,
+    OBJECT_PROTOTYPE_VALUE_OF_NAME, OBJECT_SEAL_NAME, OBJECT_SET_PROTOTYPE_OF_NAME,
+    OBJECT_VALUES_NAME,
 };
 use crate::runtime::property::well_known::DescriptorPropertyKeys;
 
@@ -217,6 +218,34 @@ impl Context {
         }
     }
 
+    pub(in crate::runtime::native) fn eval_object_get_own_property_symbols(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        let target = Self::argument_or_undefined(args.as_slice().first());
+        let symbols = match target {
+            Value::Object(id) => self.objects.own_property_symbols(id, &self.symbols)?,
+            Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::Error(_)
+            | Value::String(_)
+            | Value::HeapString(_)
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::Symbol(_) => Vec::new(),
+            Value::Undefined | Value::Null | Value::HostFunction(_) => {
+                return Err(Error::runtime(
+                    "Object.getOwnPropertySymbols target cannot be converted to an object",
+                ));
+            }
+        };
+        let mut values = Vec::with_capacity(symbols.len());
+        for symbol in symbols {
+            values.push(Value::Symbol(symbol));
+        }
+        self.create_array_from_elements(values)
+    }
+
     fn string_object_own_property_descriptor(
         &mut self,
         id: ObjectId,
@@ -338,6 +367,10 @@ impl Context {
             (
                 OBJECT_GET_OWN_PROPERTY_NAMES_NAME,
                 NativeFunctionKind::ObjectGetOwnPropertyNames,
+            ),
+            (
+                OBJECT_GET_OWN_PROPERTY_SYMBOLS_NAME,
+                NativeFunctionKind::ObjectGetOwnPropertySymbols,
             ),
             (
                 OBJECT_GET_PROTOTYPE_OF_NAME,

@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    storage::atom::AtomTable,
+    storage::{atom::AtomTable, symbol::SymbolTable},
     value::ObjectId,
 };
 
@@ -30,6 +30,17 @@ impl ObjectHeap {
         let object = self.object(id)?;
         let mut keys = Vec::with_capacity(object.property_count());
         object.extend_own_property_names(atoms, &mut keys)?;
+        Ok(keys)
+    }
+
+    pub(crate) fn own_property_symbols(
+        &self,
+        id: ObjectId,
+        symbols: &SymbolTable,
+    ) -> Result<Vec<crate::storage::symbol::JsSymbol>> {
+        let object = self.object(id)?;
+        let mut keys = Vec::new();
+        object.extend_own_property_symbols(symbols, &mut keys)?;
         Ok(keys)
     }
 
@@ -92,6 +103,20 @@ impl Object {
             self.extend_named_array_index_names(atoms, keys)?;
         }
         self.extend_named_property_names(atoms, keys, true)?;
+        Ok(())
+    }
+
+    fn extend_own_property_symbols(
+        &self,
+        symbols: &SymbolTable,
+        keys: &mut Vec<crate::storage::symbol::JsSymbol>,
+    ) -> Result<()> {
+        for named_property in self.named_properties() {
+            let Some(symbol) = named_property.key().symbol_id() else {
+                continue;
+            };
+            keys.push(symbols.get(symbol)?.clone());
+        }
         Ok(())
     }
 

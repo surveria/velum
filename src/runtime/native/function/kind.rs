@@ -123,6 +123,8 @@ pub(in crate::runtime::native) const OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME: &
     "getOwnPropertyDescriptors";
 pub(in crate::runtime::native) const OBJECT_GET_OWN_PROPERTY_NAMES_NAME: &str =
     "getOwnPropertyNames";
+pub(in crate::runtime::native) const OBJECT_GET_OWN_PROPERTY_SYMBOLS_NAME: &str =
+    "getOwnPropertySymbols";
 pub(in crate::runtime::native) const OBJECT_HAS_OWN_NAME: &str = "hasOwn";
 pub(in crate::runtime::native) const OBJECT_IS_NAME: &str = "is";
 pub(in crate::runtime::native) const OBJECT_IS_EXTENSIBLE_NAME: &str = "isExtensible";
@@ -339,6 +341,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ObjectGetOwnPropertyDescriptor,
     ObjectGetOwnPropertyDescriptors,
     ObjectGetOwnPropertyNames,
+    ObjectGetOwnPropertySymbols,
     ObjectHasOwn,
     ObjectIs,
     ObjectIsExtensible,
@@ -676,6 +679,7 @@ impl NativeFunctionKind {
             Self::ObjectGetOwnPropertyDescriptor => Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_NAME),
             Self::ObjectGetOwnPropertyDescriptors => Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_NAME),
             Self::ObjectGetOwnPropertyNames => Some(OBJECT_GET_OWN_PROPERTY_NAMES_NAME),
+            Self::ObjectGetOwnPropertySymbols => Some(OBJECT_GET_OWN_PROPERTY_SYMBOLS_NAME),
             Self::ObjectHasOwn => Some(OBJECT_HAS_OWN_NAME),
             Self::ObjectIs => Some(OBJECT_IS_NAME),
             Self::ObjectIsExtensible => Some(OBJECT_IS_EXTENSIBLE_NAME),
