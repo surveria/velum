@@ -16,14 +16,20 @@ use tabled::Tabled;
 
 use super::bench_engines::{BenchEngine, RsqjsEngine, make_reference};
 use super::bench_measure::{self, MeasureConfig, MeasureStats, format_duration, ratio_values};
-use super::benchmark_protocol::BenchmarkInput;
+use super::benchmark_protocol::{
+    BenchmarkInput, BenchmarkMethodology, BenchmarkReferenceSource, ReportedLifecycle,
+};
 use super::benchmark_selection::BenchmarkSelection;
 use super::cases::{self, BenchmarkCase};
 use super::quickjs_baseline::{QuickjsBaseline, detect_host_profile};
 use super::{prepared_benchmarks, report_text, timing};
 
+#[path = "benchmark_configuration_report.rs"]
+mod configuration_report;
 #[path = "prepared_benchmark_report.rs"]
 mod prepared_report;
+
+use configuration_report::{configuration_failure_outcome, configuration_failure_report};
 
 pub const BUDGET_LABEL: &str = "1.00x";
 
@@ -102,6 +108,8 @@ pub struct BenchmarkRow {
     pub(crate) lifecycle: String,
     pub(crate) checksum: String,
     pub(crate) reference_source: String,
+    #[tabled(skip)]
+    pub(crate) methodology: BenchmarkMethodology,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -186,53 +194,6 @@ fn push_outcome(report: &mut BenchmarkReport, outcome: BenchmarkOutcome) {
     report.rows.push(outcome.row);
 }
 
-fn configuration_failure_report(elapsed: std::time::Duration, error: &str) -> BenchmarkReport {
-    let mut report = BenchmarkReport {
-        rows: Vec::new(),
-        measured: 0,
-        in_process_measured: 0,
-        failed: 0,
-        invalid: 0,
-        skipped: 0,
-        over_latency_budget: 0,
-        over_memory_budget: 0,
-        elapsed,
-    };
-    push_outcome(&mut report, configuration_failure_outcome(error));
-    report
-}
-
-fn configuration_failure_outcome(error: &str) -> BenchmarkOutcome {
-    BenchmarkOutcome {
-        row: BenchmarkRow {
-            benchmark: "benchmark_configuration".to_owned(),
-            status: STATUS_FAILED.to_owned(),
-            source: "runner environment".to_owned(),
-            iterations: 0,
-            case_elapsed: NOT_MEASURED.to_owned(),
-            rsqjs_measure: NOT_MEASURED.to_owned(),
-            quickjs_measure: NOT_MEASURED.to_owned(),
-            rsqjs_eval: NOT_MEASURED.to_owned(),
-            quickjs_eval: NOT_MEASURED.to_owned(),
-            latency_ratio: NOT_MEASURED.to_owned(),
-            latency_budget: NOT_MEASURED.to_owned(),
-            memory_ratio: NOT_MEASURED.to_owned(),
-            rsqjs_cv: NOT_MEASURED.to_owned(),
-            quickjs_cv: NOT_MEASURED.to_owned(),
-            quality: QUALITY_INVALID.to_owned(),
-            detail: benchmark_detail(error),
-            mode: NOT_MEASURED.to_owned(),
-            lifecycle: NOT_MEASURED.to_owned(),
-            checksum: NOT_MEASURED.to_owned(),
-            reference_source: NOT_MEASURED.to_owned(),
-        },
-        counts: BenchmarkCounts {
-            failed: 1,
-            ..BenchmarkCounts::default()
-        },
-    }
-}
-
 fn cold_lifecycle(load: std::time::Duration) -> String {
     format!(
         "load={};compile=per_operation;setup=per_operation;warmup=measured;run=measured;verify=-;teardown=per_operation",
@@ -308,6 +269,12 @@ fn run_benchmark_case(
         REFERENCE_NOT_CONFIGURED
     };
     reference_source.clone_into(&mut outcome.row.reference_source);
+    outcome.row.methodology.lifecycle = Some(ReportedLifecycle::cold_eval(loaded.elapsed));
+    outcome.row.methodology.reference_source = Some(if reference_configured {
+        BenchmarkReferenceSource::QuickjsLive
+    } else {
+        BenchmarkReferenceSource::NotConfigured
+    });
     outcome
 }
 
@@ -501,6 +468,7 @@ fn measured_with_reference(
             lifecycle: NOT_MEASURED.to_owned(),
             checksum: NOT_MEASURED.to_owned(),
             reference_source: NOT_MEASURED.to_owned(),
+            methodology: BenchmarkMethodology::for_mode(case.mode),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -550,6 +518,7 @@ fn measured_without_reference(
             lifecycle: NOT_MEASURED.to_owned(),
             checksum: NOT_MEASURED.to_owned(),
             reference_source: NOT_MEASURED.to_owned(),
+            methodology: BenchmarkMethodology::for_mode(case.mode),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -606,6 +575,7 @@ fn reference_unavailable(
             lifecycle: NOT_MEASURED.to_owned(),
             checksum: NOT_MEASURED.to_owned(),
             reference_source: NOT_MEASURED.to_owned(),
+            methodology: BenchmarkMethodology::for_mode(case.mode),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -646,6 +616,7 @@ fn invalid_measurement_outcome(
             lifecycle: NOT_MEASURED.to_owned(),
             checksum: NOT_MEASURED.to_owned(),
             reference_source: NOT_MEASURED.to_owned(),
+            methodology: BenchmarkMethodology::for_mode(case.mode),
         },
         counts: BenchmarkCounts {
             measured: 1,
@@ -704,6 +675,7 @@ fn failed_row(
         lifecycle: NOT_MEASURED.to_owned(),
         checksum: NOT_MEASURED.to_owned(),
         reference_source: NOT_MEASURED.to_owned(),
+        methodology: BenchmarkMethodology::for_mode(case.mode),
     }
 }
 

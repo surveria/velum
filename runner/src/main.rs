@@ -25,12 +25,16 @@ mod failure_classification;
 mod jetstream;
 mod prepared_benchmarks;
 mod quickjs_baseline;
+mod report_benchmark_methodology;
+mod report_composition;
 #[cfg(test)]
 mod report_formatting_tests;
 mod report_metadata;
+mod report_methodology_rendering;
 mod report_rendering;
 mod report_rollup;
 mod report_schema;
+mod report_schema_io;
 mod report_schema_support;
 #[cfg(test)]
 mod report_schema_tests;
@@ -69,6 +73,7 @@ const REASON_QUICKJS_ENV_MISSING: &str = "set RSQJS_QUICKJS=/path/to/qjs to enab
 enum ReportKind {
     Full,
     Correctness,
+    Performance,
 }
 
 impl ReportKind {
@@ -76,6 +81,7 @@ impl ReportKind {
         match self {
             Self::Full => ReportMode::Full,
             Self::Correctness => ReportMode::Correctness,
+            Self::Performance => ReportMode::Performance,
         }
     }
 }
@@ -92,8 +98,21 @@ fn run() -> anyhow::Result<()> {
     let (report_path, report_kind) = match config {
         Config::Run { report_path } => (report_path, ReportKind::Full),
         Config::Correctness { report_path } => (report_path, ReportKind::Correctness),
+        Config::Performance { report_path } => (report_path, ReportKind::Performance),
         Config::Benchmarks { report_path } => {
             return benchmark_mode::run(&report_path);
+        }
+        Config::ComposeReports {
+            expected_tree,
+            correctness_path,
+            performance_path,
+            report_path,
+        } => {
+            let correctness = report_schema_io::read_document(&correctness_path)?;
+            let performance = report_schema_io::read_document(&performance_path)?;
+            let report = report_composition::compose(correctness, performance, &expected_tree)?;
+            report_composition::validate_output_path(&report, &report_path)?;
+            return write_report(&report_path, &report);
         }
         Config::AggregateReports { report_dir } => {
             let outputs = report_rollup::generate_from_report_dir(&report_dir)?;
@@ -335,10 +354,13 @@ fn build_report(
     include_jetstream: bool,
 ) -> anyhow::Result<FullReport> {
     let timer = timing::RunTimer::start();
-    let mut corpora = vec![run_engine_corpus(), run_test262_corpus()];
-    corpora.extend(test262_full::run_reports(test262)?);
-    corpora.push(run_quickjs_corpus(quickjs));
-    let benchmarks = if report_kind == ReportKind::Full {
+    let mut corpora = Vec::new();
+    if report_kind != ReportKind::Performance {
+        corpora.extend([run_engine_corpus(), run_test262_corpus()]);
+        corpora.extend(test262_full::run_reports(test262)?);
+        corpora.push(run_quickjs_corpus(quickjs));
+    }
+    let benchmarks = if matches!(report_kind, ReportKind::Full | ReportKind::Performance) {
         benchmarks::run()
     } else {
         benchmarks::BenchmarkReport::not_run()
@@ -550,7 +572,7 @@ fn write_report(path: &Path, report: &ReportDocument) -> anyhow::Result<()> {
             .with_context(|| format!("failed to create report directory '{}'", parent.display()))?;
     }
 
-    let yaml_paths = report_schema::write_yaml_artifacts(path, report)?;
+    let yaml_paths = report_schema_io::write_yaml_artifacts(path, report)?;
     println!(
         "structured YAML report summary: {}",
         yaml_paths.summary.display()

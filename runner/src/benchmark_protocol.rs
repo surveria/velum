@@ -20,6 +20,100 @@ pub enum BenchmarkMode {
     PreparedExecution,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BenchmarkMethodology {
+    pub mode: Option<BenchmarkMode>,
+    pub lifecycle: Option<ReportedLifecycle>,
+    pub checksum: Option<BenchmarkChecksum>,
+    pub reference_source: Option<BenchmarkReferenceSource>,
+}
+
+impl BenchmarkMethodology {
+    pub const fn not_measured() -> Self {
+        Self {
+            mode: None,
+            lifecycle: None,
+            checksum: None,
+            reference_source: None,
+        }
+    }
+
+    pub const fn for_mode(mode: BenchmarkMode) -> Self {
+        Self {
+            mode: Some(mode),
+            lifecycle: None,
+            checksum: None,
+            reference_source: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BenchmarkReferenceSource {
+    QuickjsBaseline,
+    QuickjsLive,
+    QuickjsLiveFailed,
+    NotConfigured,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct ReportedLifecycle {
+    pub load: LifecyclePhase,
+    pub compile: LifecyclePhase,
+    pub setup: LifecyclePhase,
+    pub warmup: LifecyclePhase,
+    pub run: LifecyclePhase,
+    pub verify: LifecyclePhase,
+    pub teardown: LifecyclePhase,
+}
+
+impl ReportedLifecycle {
+    pub const fn prepared(value: BenchmarkLifecycle) -> Self {
+        Self {
+            load: LifecyclePhase::duration(value.load),
+            compile: LifecyclePhase::optional_duration(value.compile),
+            setup: LifecyclePhase::optional_duration(value.setup),
+            warmup: LifecyclePhase::duration(value.warmup),
+            run: LifecyclePhase::duration(value.timed_run),
+            verify: LifecyclePhase::optional_duration(value.verify),
+            teardown: LifecyclePhase::optional_duration(value.teardown),
+        }
+    }
+
+    pub const fn cold_eval(load: Duration) -> Self {
+        Self {
+            load: LifecyclePhase::duration(load),
+            compile: LifecyclePhase::PerOperation,
+            setup: LifecyclePhase::PerOperation,
+            warmup: LifecyclePhase::Measured,
+            run: LifecyclePhase::Measured,
+            verify: LifecyclePhase::NotMeasured,
+            teardown: LifecyclePhase::PerOperation,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum LifecyclePhase {
+    Duration(Duration),
+    Measured,
+    PerOperation,
+    NotMeasured,
+}
+
+impl LifecyclePhase {
+    const fn duration(value: Duration) -> Self {
+        Self::Duration(value)
+    }
+
+    const fn optional_duration(value: Option<Duration>) -> Self {
+        match value {
+            Some(value) => Self::Duration(value),
+            None => Self::NotMeasured,
+        }
+    }
+}
+
 impl BenchmarkMode {
     pub const fn as_str(self) -> &'static str {
         match self {

@@ -1,6 +1,7 @@
 use anyhow::bail;
 
 use crate::{
+    report_composition::validate_components,
     report_schema::{
         BenchmarkSuite, CaseCounts, CaseStatus, DetailCompleteness, DetailLevel, FeatureSelection,
         ReportDocument, ReportMode, ReportSummary, SCHEMA_VERSION, SuiteReport, SuiteStatus,
@@ -12,6 +13,7 @@ use crate::{
 impl ReportDocument {
     pub fn validate(&self) -> anyhow::Result<()> {
         validate_header(self.schema_version, self.detail_level, DetailLevel::Full)?;
+        validate_components(&self.metadata, &self.configuration, &self.components)?;
         for suite in &self.suites {
             validate_suite(suite)?;
         }
@@ -20,6 +22,7 @@ impl ReportDocument {
         validate_mode(
             self.configuration.report_mode,
             self.configuration.jetstream,
+            self.suites.len(),
             &self.benchmarks,
             &self.jetstream,
         )
@@ -29,6 +32,7 @@ impl ReportDocument {
 impl ReportSummary {
     pub fn validate(&self) -> anyhow::Result<()> {
         validate_header(self.schema_version, self.detail_level, DetailLevel::Summary)?;
+        validate_components(&self.metadata, &self.configuration, &self.components)?;
         for suite in &self.suites {
             validate_suite_summary(suite)?;
         }
@@ -37,6 +41,7 @@ impl ReportSummary {
         validate_mode(
             self.configuration.report_mode,
             self.configuration.jetstream,
+            self.suites.len(),
             &self.benchmarks,
             &self.jetstream,
         )
@@ -159,12 +164,23 @@ fn validate_benchmarks(suite: &BenchmarkSuite) -> anyhow::Result<()> {
             suite.name
         );
     }
+    for row in &suite.rows {
+        if suite.name == "Benchmarks" {
+            let Some(methodology) = &row.methodology else {
+                bail!("project benchmark '{}' is missing methodology", row.id);
+            };
+            methodology.validate()?;
+        } else if row.methodology.is_some() {
+            bail!("non-project benchmark '{}' has project methodology", row.id);
+        }
+    }
     Ok(())
 }
 
 fn validate_mode(
     report_mode: ReportMode,
     jetstream_selection: FeatureSelection,
+    suite_count: usize,
     benchmarks: &BenchmarkSuite,
     jetstream: &BenchmarkSuite,
 ) -> anyhow::Result<()> {
@@ -177,6 +193,14 @@ fn validate_mode(
         }
         if jetstream_selection == FeatureSelection::Enabled {
             bail!("JetStream cannot be enabled in a correctness report");
+        }
+    }
+    if report_mode == ReportMode::Performance {
+        if suite_count != 0 {
+            bail!("correctness suites are present in a performance report");
+        }
+        if jetstream_selection == FeatureSelection::Enabled || !jetstream.rows.is_empty() {
+            bail!("JetStream cannot be enabled in a performance report");
         }
     }
     Ok(())

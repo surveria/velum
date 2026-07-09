@@ -23,6 +23,10 @@ fn full_yaml_round_trip_preserves_typed_report() -> TestResult {
     ensure_contains(&yaml, "jetstream: disabled")?;
     ensure_contains(&yaml, "duration_ns: 7000000")?;
     ensure_contains(&yaml, "status: tracked_exception")?;
+    ensure_contains(&yaml, "mode: prepared_execution")?;
+    ensure_contains(&yaml, "reference_source: quickjs_baseline")?;
+    ensure_contains(&yaml, "duration_ns: 10000")?;
+    ensure_contains(&yaml, "bits: 4631107791820423168")?;
 
     let decoded: ReportDocument = serde_yaml_ng::from_str(&yaml)?;
     decoded.validate()?;
@@ -68,7 +72,14 @@ fn typed_rows_keep_numeric_durations_and_statuses() -> TestResult {
     ensure_optional_u64(benchmark.case_duration_ns, Some(5_000_000))?;
     ensure_optional_u64(benchmark.engine.wall_duration_ns, Some(2_000_000))?;
     ensure_optional_u64(benchmark.engine.median_duration_ns, Some(1_250_000))?;
-    ensure_optional_u64(benchmark.latency_ratio_centi_units, Some(125))
+    ensure_optional_u64(benchmark.latency_ratio_centi_units, Some(125))?;
+    let Some(methodology) = &benchmark.methodology else {
+        return Err("expected benchmark methodology".into());
+    };
+    let Some(lifecycle) = &methodology.lifecycle else {
+        return Err("expected benchmark lifecycle".into());
+    };
+    ensure_optional_u64(lifecycle.load.duration_ns, Some(10_000))
 }
 
 #[test]
@@ -136,6 +147,8 @@ fn structured_report_renders_compatible_markdown_and_tsv() -> TestResult {
     ensure_contains(&markdown, "## Unit corpus")?;
     ensure_contains(&markdown, "array-index")?;
     ensure_contains(&markdown, "1.25x")?;
+    ensure_contains(&markdown, "prepared_execution")?;
+    ensure_contains(&markdown, "quickjs_baseline")?;
 
     let tsv = render_timing_tsv(&report);
     ensure_contains(&tsv, "kind\tphase\tcase\tstatus")?;
@@ -146,7 +159,8 @@ fn structured_report_renders_compatible_markdown_and_tsv() -> TestResult {
     ensure_contains(
         &tsv,
         "benchmark\tBenchmarks\tarray-index\t🟡 tracked exception",
-    )
+    )?;
+    ensure_contains(&tsv, "prepared_execution\tload=10.00 us")
 }
 
 pub fn sample_document() -> Result<ReportDocument, anyhow::Error> {
@@ -190,6 +204,28 @@ pub fn sample_document() -> Result<ReportDocument, anyhow::Error> {
                 quickjs_cv: "1.0%".to_owned(),
                 quality: "✅ valid".to_owned(),
                 detail: "sequential benchmark completed".to_owned(),
+                mode: "prepared_execution".to_owned(),
+                lifecycle: "load=10.00 us;compile=20.00 us;setup=30.00 us;warmup=1.00 ms;run=5.00 ms;verify=40.00 us;teardown=50.00 us".to_owned(),
+                checksum: "42".to_owned(),
+                reference_source: "quickjs_baseline".to_owned(),
+                methodology: crate::benchmark_protocol::BenchmarkMethodology {
+                    mode: Some(crate::benchmark_protocol::BenchmarkMode::PreparedExecution),
+                    lifecycle: Some(crate::benchmark_protocol::ReportedLifecycle::prepared(
+                        crate::benchmark_protocol::BenchmarkLifecycle {
+                            load: Duration::from_micros(10),
+                            compile: Some(Duration::from_micros(20)),
+                            setup: Some(Duration::from_micros(30)),
+                            warmup: Duration::from_millis(1),
+                            timed_run: Duration::from_millis(5),
+                            verify: Some(Duration::from_micros(40)),
+                            teardown: Some(Duration::from_micros(50)),
+                        },
+                    )),
+                    checksum: Some(crate::benchmark_protocol::BenchmarkChecksum::number(42.0)),
+                    reference_source: Some(
+                        crate::benchmark_protocol::BenchmarkReferenceSource::QuickjsBaseline,
+                    ),
+                },
             }],
             measured: 1,
             in_process_measured: 1,

@@ -18,6 +18,18 @@ fi
 export RSQJS_BUILD_REPO_ROOT="${RSQJS_BUILD_REPO_ROOT:-${repo_root}}"
 export RSQJS_BUILD_COMMIT_SHA="${RSQJS_BUILD_COMMIT_SHA:-$(git rev-parse HEAD)}"
 
+if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" == "1" && "${RSQJS_PERFORMANCE_ONLY:-0}" == "1" ]]; then
+  printf 'correctness-only and performance-only modes are mutually exclusive\n' >&2
+  exit 1
+fi
+if [[ "${RSQJS_PERFORMANCE_ONLY:-0}" == "1" ]]; then
+  report_mode=performance
+elif [[ "${RSQJS_CORRECTNESS_ONLY:-0}" == "1" ]]; then
+  report_mode=correctness
+else
+  report_mode=full
+fi
+
 # Post-merge performance collection reuses the exact tree that already passed
 # the required correctness gate. It runs only the report phase under the host's
 # exclusive benchmark lock.
@@ -27,6 +39,7 @@ if [[ "${RSQJS_PERFORMANCE_ONLY:-0}" != "1" ]]; then
   # sets RSQJS_BASE_REF, which turns on base-relative policy gates.
   "${script_dir}/check-touched-file-sizes.sh" "${RSQJS_BASE_REF:-origin/main}"
   "${script_dir}/check-architecture-boundaries.sh" --self-test
+  "${script_dir}/test-report-artifact-metadata.sh"
   cargo fmt --all -- --check
   cargo fmt --manifest-path runner/Cargo.toml --all -- --check
   cargo clippy --all-targets --all-features -- -D warnings
@@ -98,23 +111,27 @@ write_metadata_value() {
   printf '%s=%s\n' "${key}" "${encoded}"
 }
 
-quickjs_path="$("${script_dir}/prepare-quickjs.sh")"
-if [[ -n "${quickjs_path}" ]]; then
-  export RSQJS_QUICKJS="${quickjs_path}"
-fi
-
-test262_path="$("${script_dir}/prepare-test262.sh")"
-if [[ -n "${test262_path}" ]]; then
-  export RSQJS_TEST262_DIR="${test262_path}"
-fi
-export RSQJS_TEST262_RUN_ALL="${RSQJS_TEST262_RUN_ALL:-1}"
-
 # --- Run either the required correctness report or the full performance report.
 # Correctness keeps the external QuickJS differential check but does not compile
 # the embedded QuickJS reference used only by project/JetStream benchmarks. ---
-if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" == "1" ]]; then
-  cargo run --release --manifest-path runner/Cargo.toml -- --correctness "${report_path}"
+if [[ "${report_mode}" == performance ]]; then
+  cargo run --release --manifest-path runner/Cargo.toml --features reference-quickjs -- --performance "${report_path}"
 else
+  quickjs_path="$("${script_dir}/prepare-quickjs.sh")"
+  if [[ -n "${quickjs_path}" ]]; then
+    export RSQJS_QUICKJS="${quickjs_path}"
+  fi
+
+  test262_path="$("${script_dir}/prepare-test262.sh")"
+  if [[ -n "${test262_path}" ]]; then
+    export RSQJS_TEST262_DIR="${test262_path}"
+  fi
+  export RSQJS_TEST262_RUN_ALL="${RSQJS_TEST262_RUN_ALL:-1}"
+fi
+
+if [[ "${report_mode}" == correctness ]]; then
+  cargo run --release --manifest-path runner/Cargo.toml -- --correctness "${report_path}"
+elif [[ "${report_mode}" == full ]]; then
   cargo run --release --manifest-path runner/Cargo.toml --features reference-quickjs -- --report "${report_path}"
 fi
 
@@ -131,13 +148,14 @@ mkdir -p "${reports_root}"
 metadata_path="${reports_root}/rsqjs-report-metadata.env"
 {
   write_metadata_value 'RSQJS_ARTIFACT_SCHEMA' '2'
+  write_metadata_value 'RSQJS_ARTIFACT_REPORT_MODE' "${report_mode}"
   write_metadata_value 'RSQJS_ARTIFACT_REPORT_FILE' "${RSQJS_REPORT_REPORT_FILE}"
   write_metadata_value 'RSQJS_ARTIFACT_REPORT_RELATIVE_PATH' "${RSQJS_REPORT_REPORT_RELATIVE_PATH}"
   write_metadata_value 'RSQJS_ARTIFACT_REPORT_YAML_FILE' "${RSQJS_REPORT_YAML_FILE}"
   write_metadata_value 'RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH' "${RSQJS_REPORT_YAML_RELATIVE_PATH}"
   write_metadata_value 'RSQJS_ARTIFACT_REPORT_DETAILS_YAML_FILE' "${RSQJS_REPORT_DETAILS_YAML_FILE}"
   write_metadata_value 'RSQJS_ARTIFACT_REPORT_DETAILS_YAML_RELATIVE_PATH' "${RSQJS_REPORT_DETAILS_YAML_RELATIVE_PATH}"
-  if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" != "1" && "${jetstream_enabled}" != "0" ]]; then
+  if [[ "${report_mode}" == full && "${jetstream_enabled}" != "0" ]]; then
     write_metadata_value 'RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE' "${RSQJS_REPORT_JETSTREAM_REPORT_FILE}"
     write_metadata_value 'RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH' "${RSQJS_REPORT_JETSTREAM_REPORT_RELATIVE_PATH}"
   fi
@@ -157,7 +175,7 @@ if [[ "${report_path}" == target/rsqjs-reports/* ]]; then
   printf 'local/CI report artifact: %s\n' "${report_path}"
   printf 'local/CI structured YAML summary: %s\n' "${report_yaml_path}"
   printf 'local/CI structured YAML details: %s\n' "${report_details_yaml_path}"
-  if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" != "1" && "${jetstream_enabled}" != "0" ]]; then
+  if [[ "${report_mode}" == full && "${jetstream_enabled}" != "0" ]]; then
     printf 'local/CI JetStream report artifact: %s\n' "${RSQJS_JETSTREAM_REPORT_PATH}"
   fi
   printf 'local/CI report artifact root: %s\n' "${reports_root}"
@@ -167,7 +185,7 @@ else
   printf 'canonical tracked test report: %s\n' "${report_path}"
   printf 'canonical tracked structured YAML summary: %s\n' "${report_yaml_path}"
   printf 'untracked structured YAML details artifact: %s\n' "${report_details_yaml_path}"
-  if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" != "1" && "${jetstream_enabled}" != "0" ]]; then
+  if [[ "${report_mode}" == full && "${jetstream_enabled}" != "0" ]]; then
     printf 'canonical tracked JetStream report: %s\n' "${RSQJS_JETSTREAM_REPORT_PATH}"
   fi
   printf 'report metadata: %s\n' "${metadata_path}"

@@ -5,6 +5,9 @@ use tabled::{Table, Tabled};
 use super::{
     CaseRow, FeatureAreaRow, FeatureAreaStats, REPORT_TITLE, RUNNER_NAME, STATUS_FAILED,
     STATUS_PASSED, STATUS_SKIPPED, SkipReasonRow, benchmarks, failure_classification,
+    report_methodology_rendering::{
+        methodology_checksum, methodology_lifecycle, methodology_mode, methodology_reference,
+    },
     report_schema::{
         BenchmarkSuite, CaseRecord, CaseStatus, FeatureAreaSummary, Measurement, ReportDocument,
         SuiteReport, SuiteSummary,
@@ -99,6 +102,10 @@ struct BenchmarkTableRow {
     quickjs_cv: String,
     quality: String,
     detail: String,
+    mode: String,
+    lifecycle: String,
+    checksum: String,
+    reference_source: String,
 }
 
 #[derive(Debug, Tabled)]
@@ -206,6 +213,10 @@ pub fn render_timing_tsv(report: &ReportDocument) -> String {
             "rsqjs_measure",
             "quickjs_measure",
             "detail",
+            "mode",
+            "lifecycle",
+            "checksum",
+            "reference_source",
         ],
     );
     for suite in &report.suites {
@@ -224,6 +235,10 @@ pub fn render_timing_tsv(report: &ReportDocument) -> String {
                     "",
                     "",
                     &row.detail,
+                    "",
+                    "",
+                    "",
+                    "",
                 ],
             );
         }
@@ -233,6 +248,10 @@ pub fn render_timing_tsv(report: &ReportDocument) -> String {
         let case_elapsed = optional_duration_text(row.case_duration_ns);
         let rsqjs_measure = optional_duration_text(row.engine.wall_duration_ns);
         let quickjs_measure = optional_duration_text(row.reference.wall_duration_ns);
+        let mode = methodology_mode(row.methodology.as_ref());
+        let lifecycle = methodology_lifecycle(row.methodology.as_ref());
+        let checksum = methodology_checksum(row.methodology.as_ref());
+        let reference_source = methodology_reference(row.methodology.as_ref());
         push_tsv_row(
             &mut body,
             &[
@@ -246,6 +265,10 @@ pub fn render_timing_tsv(report: &ReportDocument) -> String {
                 &rsqjs_measure,
                 &quickjs_measure,
                 &row.detail,
+                &mode,
+                &lifecycle,
+                &checksum,
+                &reference_source,
             ],
         );
     }
@@ -266,6 +289,10 @@ pub fn render_timing_tsv(report: &ReportDocument) -> String {
                 &rsqjs_measure,
                 &quickjs_measure,
                 &row.detail,
+                "",
+                "",
+                "",
+                "",
             ],
         );
     }
@@ -517,6 +544,10 @@ fn benchmark_table_rows(suite: &BenchmarkSuite) -> Vec<BenchmarkTableRow> {
             quickjs_cv: measurement_cv_text(&row.reference),
             quality: row.quality.label().to_owned(),
             detail: row.detail.clone(),
+            mode: methodology_mode(row.methodology.as_ref()),
+            lifecycle: methodology_lifecycle(row.methodology.as_ref()),
+            checksum: methodology_checksum(row.methodology.as_ref()),
+            reference_source: methodology_reference(row.methodology.as_ref()),
         })
         .collect()
 }

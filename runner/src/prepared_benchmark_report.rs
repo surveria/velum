@@ -1,5 +1,5 @@
 use crate::{
-    benchmark_protocol::BenchmarkLifecycle,
+    benchmark_protocol::{BenchmarkLifecycle, BenchmarkReferenceSource, ReportedLifecycle},
     cases::BenchmarkCase,
     prepared_benchmarks::{PreparedCaseRun, PreparedReference},
     timing,
@@ -34,9 +34,12 @@ pub(super) fn outcome(case: &BenchmarkCase, run: &PreparedCaseRun) -> BenchmarkO
     };
     outcome.row.mode = case.mode.to_string();
     reference_source(&run.reference).clone_into(&mut outcome.row.reference_source);
+    outcome.row.methodology.reference_source = Some(typed_reference_source(&run.reference));
     if let Ok(ours) = &run.ours {
         outcome.row.lifecycle = render_lifecycle(ours.lifecycle);
         outcome.row.checksum = ours.checksum.to_string();
+        outcome.row.methodology.lifecycle = Some(ReportedLifecycle::prepared(ours.lifecycle));
+        outcome.row.methodology.checksum = Some(ours.checksum.clone());
     }
     if let Some(error) = &run.parity_error {
         STATUS_FAILED.clone_into(&mut outcome.row.status);
@@ -71,6 +74,21 @@ const fn reference_source(reference: &PreparedReference) -> &'static str {
         PreparedReference::NotConfigured => REFERENCE_NOT_CONFIGURED,
         PreparedReference::Measured { source, .. } => source.as_str(),
         PreparedReference::Failed(_) => "quickjs_live_failed",
+    }
+}
+
+const fn typed_reference_source(reference: &PreparedReference) -> BenchmarkReferenceSource {
+    match reference {
+        PreparedReference::NotConfigured => BenchmarkReferenceSource::NotConfigured,
+        PreparedReference::Measured { source, .. } => match source {
+            crate::prepared_benchmarks::ReferenceSource::Baseline => {
+                BenchmarkReferenceSource::QuickjsBaseline
+            }
+            crate::prepared_benchmarks::ReferenceSource::Live => {
+                BenchmarkReferenceSource::QuickjsLive
+            }
+        },
+        PreparedReference::Failed(_) => BenchmarkReferenceSource::QuickjsLiveFailed,
     }
 }
 

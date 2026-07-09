@@ -2,7 +2,10 @@ use std::path::Path;
 
 use anyhow::Context as _;
 
-use crate::report_schema::{BenchmarkRecord, ReportSummary, TEST262_FULL_SUITE, read_summary};
+use crate::{
+    report_schema::{BenchmarkRecord, ReportSummary, TEST262_FULL_SUITE},
+    report_schema_io::read_summary,
+};
 
 use super::{ReportContext, ReportRecord, TestCounts, geomean, pr_task_title};
 

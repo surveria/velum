@@ -4,14 +4,31 @@ use anyhow::{Context as _, bail};
 
 use crate::report_rollup;
 
-const USAGE: &str = "usage: rsqjs-test-runner --report <path> | --correctness <path> | --benchmarks <path> | --aggregate-reports <dir>";
+const USAGE: &str = "usage: rsqjs-test-runner --report <path> | --correctness <path> | --performance <path> | --benchmarks <path> | --compose-reports <tree> <correctness-details.yaml> <performance-details.yaml> <output.md> | --aggregate-reports <dir>";
 
 #[derive(Debug)]
 pub enum Config {
-    Run { report_path: PathBuf },
-    Correctness { report_path: PathBuf },
-    Benchmarks { report_path: PathBuf },
-    AggregateReports { report_dir: PathBuf },
+    Run {
+        report_path: PathBuf,
+    },
+    Correctness {
+        report_path: PathBuf,
+    },
+    Performance {
+        report_path: PathBuf,
+    },
+    Benchmarks {
+        report_path: PathBuf,
+    },
+    ComposeReports {
+        expected_tree: String,
+        correctness_path: PathBuf,
+        performance_path: PathBuf,
+        report_path: PathBuf,
+    },
+    AggregateReports {
+        report_dir: PathBuf,
+    },
 }
 
 impl Config {
@@ -32,6 +49,34 @@ impl Config {
             let report_path = args.next().context("missing path after --benchmarks")?;
             ensure_no_extra_arg(args)?;
             return Ok(Self::Benchmarks {
+                report_path: PathBuf::from(report_path),
+            });
+        }
+        if flag == "--compose-reports" {
+            let expected_tree = args
+                .next()
+                .context("missing tree after --compose-reports")?;
+            let correctness_path = args
+                .next()
+                .context("missing correctness details path after --compose-reports")?;
+            let performance_path = args
+                .next()
+                .context("missing performance details path after --compose-reports")?;
+            let report_path = args
+                .next()
+                .context("missing output path after --compose-reports")?;
+            ensure_no_extra_arg(args)?;
+            return Ok(Self::ComposeReports {
+                expected_tree,
+                correctness_path: PathBuf::from(correctness_path),
+                performance_path: PathBuf::from(performance_path),
+                report_path: PathBuf::from(report_path),
+            });
+        }
+        if flag == "--performance" {
+            let report_path = args.next().context("missing path after --performance")?;
+            ensure_no_extra_arg(args)?;
+            return Ok(Self::Performance {
                 report_path: PathBuf::from(report_path),
             });
         }

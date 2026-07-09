@@ -19,7 +19,7 @@ need_cmd() {
 }
 
 clear_metadata() {
-  unset RSQJS_ARTIFACT_SCHEMA
+  unset RSQJS_ARTIFACT_SCHEMA RSQJS_ARTIFACT_REPORT_MODE
   unset RSQJS_ARTIFACT_REPORT_FILE RSQJS_ARTIFACT_REPORT_RELATIVE_PATH
   unset RSQJS_ARTIFACT_REPORT_YAML_FILE RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH
   unset RSQJS_ARTIFACT_REPORT_DETAILS_YAML_FILE RSQJS_ARTIFACT_REPORT_DETAILS_YAML_RELATIVE_PATH
@@ -32,7 +32,7 @@ clear_metadata() {
 
 valid_metadata_key() {
   case "$1" in
-    RSQJS_ARTIFACT_SCHEMA | \
+    RSQJS_ARTIFACT_SCHEMA | RSQJS_ARTIFACT_REPORT_MODE | \
       RSQJS_ARTIFACT_REPORT_FILE | RSQJS_ARTIFACT_REPORT_RELATIVE_PATH | \
       RSQJS_ARTIFACT_REPORT_YAML_FILE | RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH | \
       RSQJS_ARTIFACT_REPORT_DETAILS_YAML_FILE | RSQJS_ARTIFACT_REPORT_DETAILS_YAML_RELATIVE_PATH | \
@@ -93,11 +93,19 @@ valid_jetstream_report_file() {
   [[ "${file_name}" =~ ^rsqjs-jetstream-report-[0-9]{8}T[0-9]{6}Z\.md$ ]]
 }
 
+valid_artifact_relative_path() {
+  local relative_path="$1"
+  local directory="$2"
+  local file_name="$3"
+  [[ "${relative_path}" == "${directory}/${file_name}" ]]
+}
+
 download_matching_artifact() {
   local repository="$1"
   local artifact_name="$2"
   local expected_tree="$3"
-  local target_dir="$4"
+  local expected_mode="$4"
+  local target_dir="$5"
 
   local artifact_lines
   artifact_lines="$(gh api "/repos/${repository}/actions/artifacts?name=${artifact_name}&per_page=100" \
@@ -122,6 +130,10 @@ download_matching_artifact() {
       printf 'skipping artifact %s: unsupported metadata schema\n' "${artifact_id}" >&2
       continue
     fi
+    if [[ "${RSQJS_ARTIFACT_REPORT_MODE:-}" != "${expected_mode}" ]]; then
+      printf 'skipping artifact %s: report mode mismatch\n' "${artifact_id}" >&2
+      continue
+    fi
     if [[ "${RSQJS_ARTIFACT_TREE_SHA:-}" != "${expected_tree}" ]]; then
       printf 'skipping artifact %s: tree mismatch\n' "${artifact_id}" >&2
       continue
@@ -134,7 +146,11 @@ download_matching_artifact() {
       printf 'skipping artifact %s: invalid report file name %s\n' "${artifact_id}" "${RSQJS_ARTIFACT_REPORT_FILE}" >&2
       continue
     fi
-    if [[ "${RSQJS_ARTIFACT_REPORT_RELATIVE_PATH}" != "test-runs/${RSQJS_ARTIFACT_REPORT_FILE}" ]]; then
+    if [[ ! "${RSQJS_ARTIFACT_TIMESTAMP:-}" =~ ^[0-9]{8}T[0-9]{6}Z$ || "${RSQJS_ARTIFACT_REPORT_FILE}" != "rsqjs-test-report-${RSQJS_ARTIFACT_TIMESTAMP}.md" ]]; then
+      printf 'skipping artifact %s: report timestamp metadata does not match file name\n' "${artifact_id}" >&2
+      continue
+    fi
+    if ! valid_artifact_relative_path "${RSQJS_ARTIFACT_REPORT_RELATIVE_PATH}" test-runs "${RSQJS_ARTIFACT_REPORT_FILE}"; then
       printf 'skipping artifact %s: invalid report relative path\n' "${artifact_id}" >&2
       continue
     fi
@@ -150,7 +166,7 @@ download_matching_artifact() {
       printf 'skipping artifact %s: invalid YAML summary file name %s\n' "${artifact_id}" "${RSQJS_ARTIFACT_REPORT_YAML_FILE}" >&2
       continue
     fi
-    if [[ "${RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH}" != "test-runs/${RSQJS_ARTIFACT_REPORT_YAML_FILE}" ]]; then
+    if ! valid_artifact_relative_path "${RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH}" test-runs "${RSQJS_ARTIFACT_REPORT_YAML_FILE}"; then
       printf 'skipping artifact %s: invalid YAML summary relative path\n' "${artifact_id}" >&2
       continue
     fi
@@ -166,7 +182,7 @@ download_matching_artifact() {
       printf 'skipping artifact %s: invalid YAML details file name %s\n' "${artifact_id}" "${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_FILE}" >&2
       continue
     fi
-    if [[ "${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_RELATIVE_PATH}" != "test-runs/${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_FILE}" ]]; then
+    if ! valid_artifact_relative_path "${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_RELATIVE_PATH}" test-runs "${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_FILE}"; then
       printf 'skipping artifact %s: invalid YAML details relative path\n' "${artifact_id}" >&2
       continue
     fi
@@ -189,7 +205,7 @@ download_matching_artifact() {
         printf 'skipping artifact %s: invalid JetStream report file name %s\n' "${artifact_id}" "${RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE}" >&2
         continue
       fi
-      if [[ "${RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH}" != "jetstream-runs/${RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE}" ]]; then
+      if ! valid_artifact_relative_path "${RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH}" jetstream-runs "${RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE}"; then
         printf 'skipping artifact %s: invalid JetStream report relative path\n' "${artifact_id}" >&2
         continue
       fi
@@ -509,6 +525,10 @@ commit_and_push() {
     "${commit_paths[@]}"
 }
 
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  return 0
+fi
+
 need_cmd gh
 need_cmd git
 need_cmd cargo
@@ -525,26 +545,40 @@ expected_tree="${RSQJS_EXPECTED_TREE_SHA:-}"
 if [[ -z "${expected_tree}" ]]; then
   expected_tree="$(git rev-parse "${merge_commit}^{tree}")"
 fi
-artifact_name="${RSQJS_REPORT_ARTIFACT_NAME:-rsqjs-reports-${expected_tree}}"
+performance_artifact_name="${RSQJS_REPORT_ARTIFACT_NAME:-rsqjs-reports-${expected_tree}}"
+correctness_artifact_name="${RSQJS_CORRECTNESS_ARTIFACT_NAME:-rsqjs-correctness-${expected_tree}}"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "${tmp_dir}"' EXIT
 
-artifact_dir="$(download_matching_artifact "${repository}" "${artifact_name}" "${expected_tree}" "${tmp_dir}")"
-metadata_file="${artifact_dir}/rsqjs-report-metadata.env"
-read_metadata "${metadata_file}" || fail "failed to read artifact metadata"
-
-report_file="${RSQJS_ARTIFACT_REPORT_FILE}"
-source_report="${artifact_dir}/${RSQJS_ARTIFACT_REPORT_RELATIVE_PATH}"
-report_yaml_file="${RSQJS_ARTIFACT_REPORT_YAML_FILE}"
-source_report_yaml="${artifact_dir}/${RSQJS_ARTIFACT_REPORT_YAML_RELATIVE_PATH}"
-jetstream_report_file="${RSQJS_ARTIFACT_JETSTREAM_REPORT_FILE:-}"
-source_jetstream_report=""
-if [[ -n "${jetstream_report_file}" ]]; then
-  source_jetstream_report="${artifact_dir}/${RSQJS_ARTIFACT_JETSTREAM_REPORT_RELATIVE_PATH}"
-fi
+performance_artifact_dir="$(download_matching_artifact "${repository}" "${performance_artifact_name}" "${expected_tree}" performance "${tmp_dir}/performance")"
+performance_metadata_file="${performance_artifact_dir}/rsqjs-report-metadata.env"
+read_metadata "${performance_metadata_file}" || fail "failed to read performance artifact metadata"
+performance_details="${performance_artifact_dir}/${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_RELATIVE_PATH}"
+performance_timestamp="${RSQJS_ARTIFACT_TIMESTAMP:-}"
 source_commit="${RSQJS_ARTIFACT_COMMIT_SHA:-unknown}"
-source_run="${RSQJS_ARTIFACT_RUN_ID:-unknown}"
+performance_run="${RSQJS_ARTIFACT_RUN_ID:-unknown}"
+
+correctness_artifact_dir="$(download_matching_artifact "${repository}" "${correctness_artifact_name}" "${expected_tree}" correctness "${tmp_dir}/correctness")"
+correctness_metadata_file="${correctness_artifact_dir}/rsqjs-report-metadata.env"
+read_metadata "${correctness_metadata_file}" || fail "failed to read correctness artifact metadata"
+correctness_details="${correctness_artifact_dir}/${RSQJS_ARTIFACT_REPORT_DETAILS_YAML_RELATIVE_PATH}"
+correctness_run="${RSQJS_ARTIFACT_RUN_ID:-unknown}"
+
+[[ "${performance_timestamp}" =~ ^[0-9]{8}T[0-9]{6}Z$ ]] ||
+  fail "invalid performance artifact timestamp: ${performance_timestamp}"
+report_file="rsqjs-test-report-${performance_timestamp}.md"
+report_yaml_file="${report_file%.md}.yaml"
+composed_dir="${tmp_dir}/composed/test-runs"
+source_report="${composed_dir}/${report_file}"
+source_report_yaml="${composed_dir}/${report_yaml_file}"
+mkdir -p "${composed_dir}"
+cargo run --manifest-path runner/Cargo.toml -- --compose-reports \
+  "${expected_tree}" "${correctness_details}" "${performance_details}" "${source_report}"
+
+jetstream_report_file=""
+source_jetstream_report=""
+source_run="correctness:${correctness_run}, performance:${performance_run}"
 archive_ref="$(resolve_archive_ref)"
 legacy_archive_ref="$(resolve_legacy_archive_ref)"
 

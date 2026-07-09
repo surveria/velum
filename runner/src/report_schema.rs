@@ -1,15 +1,11 @@
-use std::{
-    fs::{self, File},
-    io::{BufReader, BufWriter},
-    path::{Path, PathBuf},
-};
-
-use anyhow::{Context as _, bail};
+use anyhow::bail;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     CaseRow, CorpusReport, FullReport, STATUS_FAILED, STATUS_PASSED, STATUS_SKIPPED, benchmarks,
     jetstream,
+    report_benchmark_methodology::BenchmarkMethodology,
+    report_composition::ReportComponent,
     report_metadata::RunMetadata,
     report_schema_support::{
         duration_ns, labeled_count, optional_cv_permille, optional_duration, optional_ratio,
@@ -29,6 +25,7 @@ pub struct ReportDocument {
     pub(crate) metadata: RunMetadata,
     pub(crate) environment: EnvironmentInfo,
     pub(crate) configuration: RunConfiguration,
+    pub(crate) components: Vec<ReportComponent>,
     pub(crate) duration_ns: u64,
     pub(crate) suites: Vec<SuiteReport>,
     pub(crate) benchmarks: BenchmarkSuite,
@@ -42,6 +39,7 @@ pub struct ReportSummary {
     pub(crate) metadata: RunMetadata,
     pub(crate) environment: EnvironmentInfo,
     pub(crate) configuration: RunConfiguration,
+    pub(crate) components: Vec<ReportComponent>,
     pub(crate) duration_ns: u64,
     pub(crate) suites: Vec<SuiteSummary>,
     pub(crate) benchmarks: BenchmarkSuite,
@@ -60,6 +58,7 @@ pub enum DetailLevel {
 pub enum ReportMode {
     Full,
     Correctness,
+    Performance,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
@@ -231,6 +230,7 @@ pub struct BenchmarkRecord {
     pub(crate) memory_ratio_centi_units: Option<u64>,
     pub(crate) latency_budget: BudgetStatus,
     pub(crate) quality: QualityStatus,
+    pub(crate) methodology: Option<BenchmarkMethodology>,
     pub(crate) detail: String,
 }
 
@@ -281,12 +281,6 @@ pub enum QualityStatus {
     NotMeasured,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct YamlArtifactPaths {
-    pub(crate) summary: PathBuf,
-    pub(crate) details: PathBuf,
-}
-
 struct BenchmarkColumns {
     id: String,
     status: String,
@@ -303,6 +297,7 @@ struct BenchmarkColumns {
     memory_ratio: String,
     latency_budget: String,
     quality: String,
+    methodology: Option<BenchmarkMethodology>,
     detail: String,
 }
 
@@ -312,12 +307,20 @@ impl ReportDocument {
         environment: EnvironmentInfo,
         configuration: RunConfiguration,
     ) -> anyhow::Result<Self> {
+        let component = ReportComponent::capture(
+            configuration.report_mode,
+            &report.metadata,
+            &environment,
+            &configuration,
+            duration_ns(report.elapsed),
+        );
         Ok(Self {
             schema_version: SCHEMA_VERSION,
             detail_level: DetailLevel::Full,
             metadata: report.metadata,
             environment,
             configuration,
+            components: vec![component],
             duration_ns: duration_ns(report.elapsed),
             suites: report
                 .corpora
@@ -336,6 +339,7 @@ impl ReportDocument {
             metadata: self.metadata.clone(),
             environment: self.environment.clone(),
             configuration: self.configuration.clone(),
+            components: self.components.clone(),
             duration_ns: self.duration_ns,
             suites: self
                 .suites
@@ -502,6 +506,7 @@ impl BenchmarkRecord {
             memory_ratio: row.memory_ratio,
             latency_budget: row.latency_budget,
             quality: row.quality,
+            methodology: Some(row.methodology.into()),
             detail: row.detail,
         })
     }
@@ -523,6 +528,7 @@ impl BenchmarkRecord {
             memory_ratio: NO_VALUE.to_owned(),
             latency_budget: row.latency_budget,
             quality: row.quality,
+            methodology: None,
             detail: row.detail,
         })
     }
@@ -548,6 +554,7 @@ impl BenchmarkRecord {
             memory_ratio_centi_units: optional_ratio(&columns.memory_ratio)?,
             latency_budget: BudgetStatus::from_label(&columns.latency_budget)?,
             quality: QualityStatus::from_label(&columns.quality)?,
+            methodology: columns.methodology,
             detail: columns.detail,
         })
     }
@@ -672,54 +679,6 @@ impl QualityStatus {
             _ => bail!("unknown measurement quality status '{label}'"),
         }
     }
-}
-
-pub fn write_yaml_artifacts(
-    report_path: &Path,
-    report: &ReportDocument,
-) -> anyhow::Result<YamlArtifactPaths> {
-    report.validate()?;
-    let paths = yaml_artifact_paths(report_path);
-    let summary = report.summary();
-    summary.validate()?;
-    write_yaml(&paths.summary, &summary)?;
-    write_yaml(&paths.details, report)?;
-    Ok(paths)
-}
-
-pub fn read_summary(path: &Path) -> anyhow::Result<ReportSummary> {
-    let file = File::open(path)
-        .with_context(|| format!("failed to open YAML report '{}'", path.display()))?;
-    let report: ReportSummary = serde_yaml_ng::from_reader(BufReader::new(file))
-        .with_context(|| format!("failed to parse YAML report '{}'", path.display()))?;
-    report.validate()?;
-    Ok(report)
-}
-
-pub fn yaml_artifact_paths(report_path: &Path) -> YamlArtifactPaths {
-    let stem = report_path
-        .file_stem()
-        .and_then(std::ffi::OsStr::to_str)
-        .unwrap_or("rsqjs-test-report");
-    YamlArtifactPaths {
-        summary: report_path.with_extension("yaml"),
-        details: report_path.with_file_name(format!("{stem}-details.yaml")),
-    }
-}
-
-fn write_yaml<T: Serialize>(path: &Path, value: &T) -> anyhow::Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).with_context(|| {
-            format!(
-                "failed to create YAML report directory '{}'",
-                parent.display()
-            )
-        })?;
-    }
-    let file = File::create(path)
-        .with_context(|| format!("failed to create YAML report '{}'", path.display()))?;
-    serde_yaml_ng::to_writer(BufWriter::new(file), value)
-        .with_context(|| format!("failed to write YAML report '{}'", path.display()))
 }
 
 const fn suite_status(counts: CaseCounts, unavailable: bool) -> SuiteStatus {
