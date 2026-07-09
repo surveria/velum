@@ -314,7 +314,12 @@ impl Context {
         let key = self.proxy_property_key_value(property)?;
         let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_DEFINE_PROPERTY)? else {
             let mut dynamic = self.dynamic_property_key(&key)?;
-            return self.semantic_define_own_property_update(&target, &mut dynamic, update);
+            return self.semantic_define_own_property_update_with_descriptor(
+                &target,
+                &mut dynamic,
+                update,
+                &descriptor,
+            );
         };
         let result = self
             .eval_call_completion(trap, &[target, key, descriptor], handler)?

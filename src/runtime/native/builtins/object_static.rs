@@ -314,12 +314,16 @@ impl Context {
             descriptor,
         } in updates
         {
-            self.semantic_define_own_property_update_with_descriptor(
+            if !self.semantic_define_own_property_update_with_descriptor(
                 target,
                 &mut property,
                 update,
                 &descriptor,
-            )?;
+            )? {
+                return Err(Error::type_error(
+                    "proxy defineProperty trap returned falsy",
+                ));
+            }
         }
         Ok(())
     }
