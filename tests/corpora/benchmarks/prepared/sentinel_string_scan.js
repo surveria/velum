@@ -12,7 +12,7 @@ function __rsqjsBenchSetup() {
 
 function __rsqjsBenchRun() {
     var total = 0;
-    for (var round = 0; round < 1; round = round + 1) {
+    for (var round = 0; round < 4; round = round + 1) {
         for (var index = 0; index < __rsqjsBenchText.length; index = index + 1) {
             total = total + __rsqjsBenchText.charCodeAt(index);
         }
@@ -22,5 +22,5 @@ function __rsqjsBenchRun() {
 }
 
 function __rsqjsBenchVerify() {
-    return 900096;
+    return 3600384;
 }

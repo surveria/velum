@@ -26,7 +26,7 @@ const MODE_OFF: &str = "off";
 const MODE_READ: &str = "read";
 const MODE_REFRESH: &str = "refresh";
 const SCHEMA_VERSION: &str = "1";
-const HEADER: &str = "schema_version\tcontent_id\tsource_digest\tharness_digest\tprotocol\tmeasure_config\treference_engine\thost_profile\tchecksum\tmedian_ns\tcv_permille\titers_per_sample\tsamples\tmedian_sample_ns\twarmup_ns\ttimed_run_ns\titeration_cap";
+const HEADER: &str = "schema_version\tcontent_id\tcase_id\tsource_digest\tharness_digest\tprotocol\tmeasure_config\treference_engine\thost_profile\tchecksum\tmedian_ns\tcv_permille\titers_per_sample\tsamples\tmedian_sample_ns\twarmup_ns\ttimed_run_ns\titeration_cap";
 
 const FNV_OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
 const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
@@ -40,6 +40,7 @@ enum BaselineMode {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BaselineKey {
+    case_id: String,
     source_digest: String,
     harness_digest: String,
     protocol: String,
@@ -50,6 +51,7 @@ pub struct BaselineKey {
 
 impl BaselineKey {
     pub fn new(
+        case_id: &str,
         source: &str,
         harness: &str,
         measure_config: MeasureConfig,
@@ -57,6 +59,7 @@ impl BaselineKey {
         host_profile: &str,
     ) -> Self {
         Self {
+            case_id: normalize_field(case_id),
             source_digest: stable_digest(source.as_bytes()),
             harness_digest: stable_digest(harness.as_bytes()),
             protocol: PREPARED_PROTOCOL_VERSION.to_owned(),
@@ -72,6 +75,7 @@ impl BaselineKey {
 
     fn canonical_text(&self) -> String {
         [
+            self.case_id.as_str(),
             self.source_digest.as_str(),
             self.harness_digest.as_str(),
             self.protocol.as_str(),
@@ -161,6 +165,12 @@ impl BaselineStore {
         Ok(())
     }
 
+    fn replace_case(&mut self, entry: BaselineEntry) -> anyhow::Result<()> {
+        self.entries
+            .retain(|_content_id, existing| existing.key.case_id != entry.key.case_id);
+        self.insert(entry)
+    }
+
     fn render(&self) -> String {
         let mut output = String::from(HEADER);
         output.push('\n');
@@ -181,6 +191,7 @@ impl BaselineEntry {
         }
         let stored_content_id = next_field(&mut fields, line_number, "content_id")?;
         let key = BaselineKey {
+            case_id: next_field(&mut fields, line_number, "case_id")?.to_owned(),
             source_digest: next_field(&mut fields, line_number, "source_digest")?.to_owned(),
             harness_digest: next_field(&mut fields, line_number, "harness_digest")?.to_owned(),
             protocol: next_field(&mut fields, line_number, "protocol")?.to_owned(),
@@ -236,6 +247,7 @@ impl BaselineEntry {
         [
             SCHEMA_VERSION.to_owned(),
             content_id.to_owned(),
+            self.key.case_id.clone(),
             self.key.source_digest.clone(),
             self.key.harness_digest.clone(),
             self.key.protocol.clone(),
@@ -310,7 +322,7 @@ impl QuickjsBaseline {
         if self.mode != BaselineMode::Refresh {
             return Ok(());
         }
-        self.store.insert(BaselineEntry { key, sample })?;
+        self.store.replace_case(BaselineEntry { key, sample })?;
         self.dirty = true;
         Ok(())
     }
@@ -455,7 +467,7 @@ mod tests {
     #[test]
     fn baseline_round_trip_preserves_typed_key_and_sample() -> TestResult {
         let config = test_config();
-        let key = BaselineKey::new("source", "harness", config, "quickjs", "host");
+        let key = BaselineKey::new("case", "source", "harness", config, "quickjs", "host");
         let sample = test_sample();
         let mut store = BaselineStore::default();
         store.insert(BaselineEntry {
@@ -476,17 +488,41 @@ mod tests {
     #[test]
     fn every_key_dimension_invalidates_the_content_id() -> TestResult {
         let config = test_config();
-        let base = BaselineKey::new("source", "harness", config, "quickjs", "host");
+        let base = BaselineKey::new("case", "source", "harness", config, "quickjs", "host");
         let alternatives = [
-            BaselineKey::new("source-2", "harness", config, "quickjs", "host"),
-            BaselineKey::new("source", "harness-2", config, "quickjs", "host"),
-            BaselineKey::new("source", "harness", config, "quickjs-2", "host"),
-            BaselineKey::new("source", "harness", config, "quickjs", "host-2"),
+            BaselineKey::new("case-2", "source", "harness", config, "quickjs", "host"),
+            BaselineKey::new("case", "source-2", "harness", config, "quickjs", "host"),
+            BaselineKey::new("case", "source", "harness-2", config, "quickjs", "host"),
+            BaselineKey::new("case", "source", "harness", config, "quickjs-2", "host"),
+            BaselineKey::new("case", "source", "harness", config, "quickjs", "host-2"),
         ];
         for alternative in alternatives {
             if alternative.content_id() == base.content_id() {
                 return Err("baseline key dimension did not change the content id".into());
             }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn refresh_replaces_stale_entry_for_the_same_case() -> TestResult {
+        let config = test_config();
+        let old_key = BaselineKey::new("case", "old", "harness", config, "quickjs", "host");
+        let new_key = BaselineKey::new("case", "new", "harness", config, "quickjs", "host");
+        let mut store = BaselineStore::default();
+        store.replace_case(BaselineEntry {
+            key: old_key.clone(),
+            sample: test_sample(),
+        })?;
+        store.replace_case(BaselineEntry {
+            key: new_key.clone(),
+            sample: test_sample(),
+        })?;
+        if store.lookup(&old_key).is_some() {
+            return Err("refresh retained a stale entry for the same case".into());
+        }
+        if store.lookup(&new_key).is_none() {
+            return Err("refresh removed the replacement baseline entry".into());
         }
         Ok(())
     }

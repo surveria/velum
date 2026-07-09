@@ -1,11 +1,11 @@
 //! Engine adapters for the benchmark runner.
 //!
 //! Both the engine under test and the optional in-process `QuickJS` reference are
-//! driven through the same minimal `BenchEngine::eval` interface, so the
-//! benchmark sampler treats them identically and the runner stays decoupled
-//! from either engine's internals. The reference is compiled only when the
-//! `reference-quickjs` feature is enabled, keeping the `QuickJS` C sources out of
-//! ordinary library builds.
+//! driven through the same `BenchEngine` lifecycle, so the benchmark sampler
+//! treats them consistently and the runner stays decoupled from either engine's
+//! internals. The reference is compiled only when the `reference-quickjs`
+//! feature is enabled, keeping the `QuickJS` C sources out of ordinary library
+//! builds.
 
 use std::{hint::black_box, time::Instant};
 

@@ -242,7 +242,14 @@ fn baseline_key(
     host_profile: &str,
 ) -> BaselineKey {
     let harness = harness_descriptor(case.mode.as_str(), &case.input.descriptor());
-    BaselineKey::new(source, &harness, config, REFERENCE_ENGINE_ID, host_profile)
+    BaselineKey::new(
+        case.id,
+        source,
+        &harness,
+        config,
+        REFERENCE_ENGINE_ID,
+        host_profile,
+    )
 }
 
 #[cfg(test)]
