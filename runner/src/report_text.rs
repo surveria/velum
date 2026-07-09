@@ -40,8 +40,41 @@ fn push_space(output: &mut String, previous_space: &mut bool) {
 
 fn push_escaped_control(output: &mut String, character: char) {
     output.push_str("\\u{");
-    output.push_str(&format!("{:04X}", u32::from(character)));
+    push_upper_hex(output, u32::from(character));
     output.push('}');
+}
+
+fn push_upper_hex(output: &mut String, value: u32) {
+    let mut emitted = false;
+    for shift in [20_u32, 16, 12, 8, 4, 0] {
+        let nibble = (value >> shift) & 0xF;
+        if nibble == 0 && !emitted && shift > 12 {
+            continue;
+        }
+        output.push(hex_digit(nibble));
+        emitted = true;
+    }
+}
+
+const fn hex_digit(value: u32) -> char {
+    match value {
+        0 => '0',
+        1 => '1',
+        2 => '2',
+        3 => '3',
+        4 => '4',
+        5 => '5',
+        6 => '6',
+        7 => '7',
+        8 => '8',
+        9 => '9',
+        10 => 'A',
+        11 => 'B',
+        12 => 'C',
+        13 => 'D',
+        14 => 'E',
+        _ => 'F',
+    }
 }
 
 fn truncate_chars(value: &str, max_chars: usize) -> String {
