@@ -10,6 +10,7 @@ Correctness and performance are deliberately separate:
 - `scripts/check-correctness.sh` is the required ready-PR and merge-queue gate. It runs all formatting, lint, test, documentation, active-fixture, QuickJS differential, and full Test262 checks, but no project or JetStream benchmarks.
 - After a merge, CI checks out the exact merge commit and runs only the prepared project sentinel set with the committed QuickJS baseline. It does not prepare QuickJS shell/Test262 inputs or rerun correctness. The publisher composes this performance model with the already-required exact-tree correctness model, preserving both Test262 progress and merge-to-merge performance history.
 - `scripts/test-all.sh` is the explicit combined/manual lane. It defaults to the five project sentinels with JetStream disabled; set `RSQJS_BENCH_SET`, a focused filter, or the dedicated JetStream switch explicitly when deeper diagnostics are needed. It is not a routine local prerequisite for an ordinary feature PR.
+- `scripts/run-jetstream.sh` is the standalone JetStream lane. It does not run engine fixtures, Test262, differential checks, or project benchmarks.
 
 All test-oriented entrypoints acquire a shared `flock` through `scripts/with-host-lock.sh`; benchmark entrypoints acquire the exclusive form of the same lock. Correctness runs can therefore overlap with each other, while timing work cannot overlap with tests or another benchmark. Local worktrees use `/run/lock/rsqjs/host-performance.lock`. The runner deployment bind-mounts that host directory at `/host/rsqjs-lock`, and CI sets `RSQJS_HOST_LOCK_PATH=/host/rsqjs-lock/host-performance.lock`, so all runner containers and interactive agents lock the same inode. Container-private `/tmp` and `/run` paths are not suitable. The sibling `.owner` file is diagnostic only; lock release follows the kernel file descriptor and remains safe after a crash.
 
@@ -80,11 +81,32 @@ Every direct local `--benchmarks` invocation must use the exclusive `scripts/wit
 
 The runner also executes a pinned, minimized JetStream shell workload snapshot from `tests/external/jetstream/`. The full upstream JetStream repository is intentionally not vendored because it includes browser workloads, WebAssembly payloads, compressed assets, and tooling bundles that are outside the current embedded shell engine surface. The checked-in snapshot records the upstream commit and keeps only selected JavaScript workload files that can be audited in this repository without repeated network downloads.
 
-JetStream shell reports belong to an explicit dedicated/manual lane rather than the required, combined-default, or per-merge lane. Enable that lane explicitly; generated files live under `target/rsqjs-reports/jetstream-runs/`, while intentional tracked refreshes use `reports/jetstream-runs/`. Ordinary feature branches must not commit either generated path. A canonical JetStream refresh feeds the shared rollup and chart, but its long-running shell workloads never delay a normal merge.
+JetStream shell reports belong to an independent lane rather than the required or per-merge lane. `scripts/run-jetstream.sh` takes the exclusive shared-host lock and writes only the JetStream report and artifact metadata under `target/rsqjs-reports/`. `.github/workflows/jetstream.yml` runs weekly at 03:17 UTC on Sunday and on explicit dispatch; it is not a dependency of `CI`, a pull request, a merge group, or post-merge sentinel publication. An unfiltered read-only run may publish a canonical report under `reports/jetstream-runs/` and update the shared rollup. Filtered and QuickJS-refresh runs remain downloadable artifacts for review.
+
+`RSQJS_JETSTREAM_FILTER` accepts comma-separated exact ids or explicit trailing-`*` prefixes. Every selector must match, and unfiltered runs retain all official candidate rows, including statically unsupported cases. Candidate execution failures, invalid measurements, and unsupported rows remain visible but non-blocking. Infrastructure errors and a missing or stale reference baseline fail the standalone command after writing the diagnostic report.
+
+Normal runs read QuickJS data from `tests/corpora/jetstream/quickjs-baseline.tsv` and never fall back to live QuickJS. Each entry is content-addressed by case id, vendored workload bytes, the exact reference prelude and shell harness, protocol version, the complete JetStream sampling configuration, reference engine identity, and host profile. Entries are tagged as either a measured snapshot or a deterministic unavailable/error outcome, so unsupported reference candidates cannot trigger accidental live work. Refresh is explicit and uses the same exclusive lock:
+
+```bash
+# Short reviewable refresh while editing one workload.
+RSQJS_JETSTREAM_FILTER=hash-map \
+RSQJS_JETSTREAM_QUICKJS_BASELINE=refresh \
+./scripts/run-jetstream.sh
+
+# Full refresh only after workload, harness, config, reference, or host changes.
+RSQJS_JETSTREAM_QUICKJS_BASELINE=refresh \
+./scripts/run-jetstream.sh
+```
+
+Inspect and commit the deterministic TSV change separately from generated reports. A full reference refresh is intentionally much slower than the normal read lane; do not run it as routine validation.
 
 JetStream shell rows compare rs-quickjs and QuickJS on the same vendored workload source. The reported `latency_ratio` is `rsqjs_median / quickjs_median`, so `1.00x` means QuickJS parity and lower is better. A `28.00x` row means rs-quickjs took about 28 times as long as QuickJS for that workload. Rows above `1.00x` are tracked exceptions while the baseline is still below target. Unsupported, failing, or invalid JetStream candidates stay visible in the JetStream table, but they are non-blocking coverage rows so expanding the external benchmark set does not make ordinary CI fail only because the current engine lacks a feature.
 
 The current integration does not run the official JetStream `cli.js` driver. That driver and several official workloads require JavaScript syntax and async completion behavior that are not implemented in the local shell runner yet. Until those gaps are closed, supported JetStream shell cases use a runner-owned synchronous harness over vendored official workload files, and unsupported shell cases are reported as skipped with concrete reasons.
+
+JetStream whole-iteration measurements have their own defaults instead of inheriting project microbenchmark budgets: one warmup call, at least three samples, one attempt, a 15% maximum coefficient of variation, a 90-second per-operation cap, and bounded adaptive sampling. `RSQJS_JETSTREAM_SUITE_MAX_SECONDS` caps the suite at 120 seconds in read/off mode and 900 seconds in explicit refresh mode. Once exhausted, all remaining selected official rows are emitted as skipped with a concrete suite-budget reason. The worst case is therefore the suite budget plus the currently executing bounded operation, not the number of candidates multiplied by the per-operation limit.
+
+The corresponding overrides are `RSQJS_JETSTREAM_WARMUP_MS`, `RSQJS_JETSTREAM_MIN_TIME_MS`, `RSQJS_JETSTREAM_SAMPLES`, `RSQJS_JETSTREAM_MIN_OP_US`, `RSQJS_JETSTREAM_MAX_CV_PERCENT`, `RSQJS_JETSTREAM_ATTEMPTS`, `RSQJS_JETSTREAM_MAX_OP_MS`, and `RSQJS_JETSTREAM_MAX_TOTAL_MS`. Do not weaken canonical workflow settings merely to turn an invalid measurement green.
 
 ## Test262 Reference
 

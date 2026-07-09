@@ -11,6 +11,7 @@
 !/.github/
 !/.github/workflows/
 !/.github/workflows/ci.yml
+!/.github/workflows/jetstream.yml
 
 !/reports/
 !/reports/*.jpg
