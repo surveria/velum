@@ -3,7 +3,7 @@ mod core;
 mod function;
 
 pub(in crate::runtime::native) use builtins::{
-    CollectionIterationTarget, MAP_NAME, SET_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
+    CollectionIterationTarget, MAP_NAME, RegExpCallMode, SET_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
     number_intrinsic_property,
 };
 pub(in crate::runtime::native) use function::{

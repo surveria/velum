@@ -1,6 +1,8 @@
 let regexpConstructor = RegExp;
 let execDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "exec");
 let testDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "test");
+let sourceDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "source");
+let flagsDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "flags");
 let literal = /a+/g;
 let first = literal.exec("baaa");
 let second = literal.exec("zz");
@@ -29,7 +31,19 @@ let descriptorOk =
   RegExp.prototype.test.length === 1 &&
   testDescriptor.writable === true &&
   testDescriptor.enumerable === false &&
-  testDescriptor.configurable === true;
+  testDescriptor.configurable === true &&
+  Object.hasOwn(literal, "source") === false &&
+  Object.hasOwn(literal, "flags") === false &&
+  sourceDescriptor.get.name === "get source" &&
+  sourceDescriptor.get.length === 0 &&
+  sourceDescriptor.set === undefined &&
+  sourceDescriptor.enumerable === false &&
+  sourceDescriptor.configurable === true &&
+  flagsDescriptor.get.name === "get flags" &&
+  flagsDescriptor.get.length === 0 &&
+  flagsDescriptor.set === undefined &&
+  flagsDescriptor.enumerable === false &&
+  flagsDescriptor.configurable === true;
 
 let execOk =
   first[0] === "aaa" &&
@@ -44,6 +58,23 @@ let execOk =
 
 let patternOk =
   new RegExp("foo", "i").test("FOO") &&
+  RegExp(literal) === literal &&
+  new RegExp(literal) !== literal &&
+  new RegExp(literal).source === "a+" &&
+  new RegExp(literal).flags === "g" &&
+  new RegExp(literal, "mi").flags === "im" &&
+  new RegExp("").source === "(?:)" &&
+  new RegExp("/\n\r\u2028\u2029").source === "\\/\\n\\r\\u2028\\u2029" &&
+  /a/gim.source === "a" &&
+  /a/gim.flags === "gim" &&
+  /a/gim.global === true &&
+  /a/gim.ignoreCase === true &&
+  /a/gim.multiline === true &&
+  /a/s.dotAll === true &&
+  /a/u.unicode === true &&
+  /a/y.sticky === true &&
+  /a/d.hasIndices === true &&
+  /a/v.unicodeSets === true &&
   /^foo/m.test("bar\nfoo") &&
   /./s.test("\n") &&
   /\d+/.exec("id=123")[0] === "123" &&

@@ -191,7 +191,17 @@ const MATH_SUM_PRECISE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(182);
 const REGEXP_EXEC_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(183);
 const JSON_IS_RAW_JSON_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(184);
 const JSON_RAW_JSON_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(185);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 186;
+const REGEXP_DOT_ALL_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(186);
+const REGEXP_FLAGS_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(187);
+const REGEXP_GLOBAL_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(188);
+const REGEXP_HAS_INDICES_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(189);
+const REGEXP_IGNORE_CASE_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(190);
+const REGEXP_MULTILINE_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(191);
+const REGEXP_SOURCE_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(192);
+const REGEXP_STICKY_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(193);
+const REGEXP_UNICODE_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(194);
+const REGEXP_UNICODE_SETS_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(195);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 196;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -259,6 +269,9 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         return Some(slot);
     }
     if let Some(slot) = string_prototype_slot(kind) {
+        return Some(slot);
+    }
+    if let Some(slot) = regexp_slot(kind) {
         return Some(slot);
     }
 
@@ -340,11 +353,29 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::PromiseReject => Some(PROMISE_REJECT_SLOT),
         NativeFunctionKind::PromiseThen => Some(PROMISE_THEN_SLOT),
         NativeFunctionKind::PromiseCatch => Some(PROMISE_CATCH_SLOT),
-        NativeFunctionKind::RegExp => Some(REGEXP_SLOT),
-        NativeFunctionKind::RegExpPrototypeExec => Some(REGEXP_EXEC_SLOT),
         NativeFunctionKind::String => Some(STRING_SLOT),
         NativeFunctionKind::Symbol => Some(SYMBOL_SLOT),
         _ => collection_slot(kind),
+    }
+}
+
+const fn regexp_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
+    match kind {
+        NativeFunctionKind::RegExp => Some(REGEXP_SLOT),
+        NativeFunctionKind::RegExpPrototypeDotAllGetter => Some(REGEXP_DOT_ALL_GETTER_SLOT),
+        NativeFunctionKind::RegExpPrototypeExec => Some(REGEXP_EXEC_SLOT),
+        NativeFunctionKind::RegExpPrototypeFlagsGetter => Some(REGEXP_FLAGS_GETTER_SLOT),
+        NativeFunctionKind::RegExpPrototypeGlobalGetter => Some(REGEXP_GLOBAL_GETTER_SLOT),
+        NativeFunctionKind::RegExpPrototypeHasIndicesGetter => Some(REGEXP_HAS_INDICES_GETTER_SLOT),
+        NativeFunctionKind::RegExpPrototypeIgnoreCaseGetter => Some(REGEXP_IGNORE_CASE_GETTER_SLOT),
+        NativeFunctionKind::RegExpPrototypeMultilineGetter => Some(REGEXP_MULTILINE_GETTER_SLOT),
+        NativeFunctionKind::RegExpPrototypeSourceGetter => Some(REGEXP_SOURCE_GETTER_SLOT),
+        NativeFunctionKind::RegExpPrototypeStickyGetter => Some(REGEXP_STICKY_GETTER_SLOT),
+        NativeFunctionKind::RegExpPrototypeUnicodeGetter => Some(REGEXP_UNICODE_GETTER_SLOT),
+        NativeFunctionKind::RegExpPrototypeUnicodeSetsGetter => {
+            Some(REGEXP_UNICODE_SETS_GETTER_SLOT)
+        }
+        _ => None,
     }
 }
 

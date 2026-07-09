@@ -10,3 +10,12 @@ print(first[0], first.index, first.input, first.length, global.lastIndex, second
 print(stickyMatch[0], stickyMatch.index, sticky.lastIndex);
 print(new RegExp("foo", "i").test("FOO"), /^foo/m.test("bar\nfoo"), /./s.test("\n"));
 print(/\d+/.exec("id=123")[0], /\w+/.exec("++abc")[0], /[abc]+/.exec("zzcab")[0]);
+let sourceDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "source");
+let flagsDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "flags");
+let cloned = new RegExp(global, "mi");
+print(Object.hasOwn(global, "source"), sourceDescriptor.get.name, sourceDescriptor.enumerable, sourceDescriptor.configurable);
+print(flagsDescriptor.get.name, flagsDescriptor.enumerable, flagsDescriptor.configurable);
+print(RegExp(global) === global, new RegExp(global) === global, cloned.source, cloned.flags);
+print(new RegExp("").source, new RegExp("/\n\r").source);
+print(/a/gim.source, /a/gim.flags, /a/gim.global, /a/gim.ignoreCase, /a/gim.multiline);
+print(/a/s.dotAll, /a/u.unicode, /a/y.sticky);

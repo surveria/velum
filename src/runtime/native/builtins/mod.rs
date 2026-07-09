@@ -27,6 +27,7 @@ mod weak_collections;
 
 pub(in crate::runtime::native) use map_set::{CollectionIterationTarget, MAP_NAME, SET_NAME};
 pub(in crate::runtime::native) use number::number_intrinsic_property;
+pub(in crate::runtime::native) use regexp::RegExpCallMode;
 pub(in crate::runtime::native) use weak_collections::{WEAK_MAP_NAME, WEAK_SET_NAME};
 
 use super::{

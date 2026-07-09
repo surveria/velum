@@ -1,7 +1,7 @@
 use crate::{
     api::native_call::NativeCallTarget,
     error::Result,
-    runtime::{Context, call::RuntimeCallArgs},
+    runtime::{Context, call::RuntimeCallArgs, native::RegExpCallMode},
     value::Value,
 };
 
@@ -15,7 +15,9 @@ impl Context {
         this_value: &Value,
     ) -> Option<Result<Value>> {
         match target {
-            NativeCallTarget::RegExp => Some(self.eval_direct_regexp_constructor(args)),
+            NativeCallTarget::RegExp => {
+                Some(self.eval_direct_regexp_constructor(args, RegExpCallMode::Call))
+            }
             NativeCallTarget::RegExpPrototypeExec => {
                 Some(self.eval_regexp_prototype_exec(RuntimeCallArgs::values(args), this_value))
             }
@@ -34,6 +36,18 @@ impl Context {
     ) -> Option<Result<Value>> {
         match kind {
             NativeFunctionKind::RegExp => Some(self.eval_regexp_constructor(args)),
+            NativeFunctionKind::RegExpPrototypeDotAllGetter
+            | NativeFunctionKind::RegExpPrototypeFlagsGetter
+            | NativeFunctionKind::RegExpPrototypeGlobalGetter
+            | NativeFunctionKind::RegExpPrototypeHasIndicesGetter
+            | NativeFunctionKind::RegExpPrototypeIgnoreCaseGetter
+            | NativeFunctionKind::RegExpPrototypeMultilineGetter
+            | NativeFunctionKind::RegExpPrototypeSourceGetter
+            | NativeFunctionKind::RegExpPrototypeStickyGetter
+            | NativeFunctionKind::RegExpPrototypeUnicodeGetter
+            | NativeFunctionKind::RegExpPrototypeUnicodeSetsGetter => {
+                Some(self.eval_regexp_prototype_getter(kind, this_value))
+            }
             NativeFunctionKind::RegExpPrototypeExec => {
                 Some(self.eval_regexp_prototype_exec(args, this_value))
             }

@@ -4,8 +4,8 @@ use crate::{
         Context,
         call::RuntimeCallArgs,
         object::{
-            DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
-            PropertyUpdate, PropertyWritable, RegExpValue,
+            AccessorPropertyUpdate, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
+            PropertyEnumerable, PropertyUpdate, PropertyWritable, RegExpValue,
         },
     },
     value::{ObjectId, Value},
@@ -16,10 +16,18 @@ use super::{
     REGEXP_PROTOTYPE_TEST_NAME,
 };
 
+const REGEXP_DOT_ALL_PROPERTY: &str = "dotAll";
 const REGEXP_SOURCE_PROPERTY: &str = "source";
 const REGEXP_FLAGS_PROPERTY: &str = "flags";
+const REGEXP_GLOBAL_PROPERTY: &str = "global";
+const REGEXP_HAS_INDICES_PROPERTY: &str = "hasIndices";
+const REGEXP_IGNORE_CASE_PROPERTY: &str = "ignoreCase";
 const REGEXP_LAST_INDEX_PROPERTY: &str = "lastIndex";
+const REGEXP_MULTILINE_PROPERTY: &str = "multiline";
 const REGEXP_RECEIVER_ERROR: &str = "RegExp method requires a RegExp receiver";
+const REGEXP_STICKY_PROPERTY: &str = "sticky";
+const REGEXP_UNICODE_PROPERTY: &str = "unicode";
+const REGEXP_UNICODE_SETS_PROPERTY: &str = "unicodeSets";
 const UNSUPPORTED_REGEXP_FLAG_ERROR: &str = "unsupported regular expression flag";
 const ZERO_INDEX: f64 = 0.0;
 
@@ -49,19 +57,26 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        self.eval_direct_regexp_constructor(args.as_slice())
+        self.eval_direct_regexp_constructor(args.as_slice(), RegExpCallMode::Call)
     }
 
     pub(in crate::runtime::native) fn eval_direct_regexp_constructor(
         &mut self,
         args: &[Value],
+        mode: RegExpCallMode,
     ) -> Result<Value> {
-        let pattern = args
-            .first()
-            .map_or_else(String::new, Value::display_for_concat);
-        let flags = args
-            .get(1)
-            .map_or_else(String::new, Value::display_for_concat);
+        let flags_value = args.get(1);
+        if let Some((pattern, flags)) = self.regexp_pattern_and_flags(args.first(), flags_value)? {
+            if mode == RegExpCallMode::Call
+                && flags_value.is_none_or(value_is_undefined)
+                && let Some(value) = args.first()
+            {
+                return Ok(value.clone());
+            }
+            return self.create_regexp_object_from_text(&pattern, &flags);
+        }
+        let pattern = args.first().map_or_else(String::new, Value::to_string);
+        let flags = flags_value.map_or_else(String::new, Value::to_string);
         self.create_regexp_object_from_text(&pattern, &flags)
     }
 
@@ -69,7 +84,7 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        self.eval_direct_regexp_constructor(args.as_slice())
+        self.eval_direct_regexp_constructor(args.as_slice(), RegExpCallMode::Construct)
     }
 
     pub(in crate::runtime::native) fn eval_regexp_prototype_exec(
@@ -111,22 +126,6 @@ impl Context {
             prototype,
             self.limits.max_objects,
         )?;
-        let source_value = self.heap_string_value(pattern)?;
-        self.define_regexp_data_property(
-            id,
-            REGEXP_SOURCE_PROPERTY,
-            source_value,
-            PropertyWritable::No,
-            PropertyConfigurable::Yes,
-        )?;
-        let flags_value = self.heap_string_value(flags)?;
-        self.define_regexp_data_property(
-            id,
-            REGEXP_FLAGS_PROPERTY,
-            flags_value,
-            PropertyWritable::No,
-            PropertyConfigurable::Yes,
-        )?;
         self.define_regexp_data_property(
             id,
             REGEXP_LAST_INDEX_PROPERTY,
@@ -135,6 +134,26 @@ impl Context {
             PropertyConfigurable::No,
         )?;
         Ok(Value::Object(id))
+    }
+
+    fn regexp_pattern_and_flags(
+        &self,
+        pattern_value: Option<&Value>,
+        flags_value: Option<&Value>,
+    ) -> Result<Option<(String, String)>> {
+        let Some(Value::Object(id)) = pattern_value else {
+            return Ok(None);
+        };
+        let Some(regexp) = self.objects.regexp_value(*id)?.cloned() else {
+            return Ok(None);
+        };
+        let pattern = regexp.pattern().to_owned();
+        let flags = if flags_value.is_none_or(value_is_undefined) {
+            regexp.flags().to_owned()
+        } else {
+            flags_value.map_or_else(String::new, Value::to_string)
+        };
+        Ok(Some((pattern, flags)))
     }
 
     fn define_regexp_data_property(
@@ -185,6 +204,50 @@ impl Context {
     fn install_regexp_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
         for (name, kind) in [
             (
+                REGEXP_DOT_ALL_PROPERTY,
+                NativeFunctionKind::RegExpPrototypeDotAllGetter,
+            ),
+            (
+                REGEXP_FLAGS_PROPERTY,
+                NativeFunctionKind::RegExpPrototypeFlagsGetter,
+            ),
+            (
+                REGEXP_GLOBAL_PROPERTY,
+                NativeFunctionKind::RegExpPrototypeGlobalGetter,
+            ),
+            (
+                REGEXP_HAS_INDICES_PROPERTY,
+                NativeFunctionKind::RegExpPrototypeHasIndicesGetter,
+            ),
+            (
+                REGEXP_IGNORE_CASE_PROPERTY,
+                NativeFunctionKind::RegExpPrototypeIgnoreCaseGetter,
+            ),
+            (
+                REGEXP_MULTILINE_PROPERTY,
+                NativeFunctionKind::RegExpPrototypeMultilineGetter,
+            ),
+            (
+                REGEXP_SOURCE_PROPERTY,
+                NativeFunctionKind::RegExpPrototypeSourceGetter,
+            ),
+            (
+                REGEXP_STICKY_PROPERTY,
+                NativeFunctionKind::RegExpPrototypeStickyGetter,
+            ),
+            (
+                REGEXP_UNICODE_PROPERTY,
+                NativeFunctionKind::RegExpPrototypeUnicodeGetter,
+            ),
+            (
+                REGEXP_UNICODE_SETS_PROPERTY,
+                NativeFunctionKind::RegExpPrototypeUnicodeSetsGetter,
+            ),
+        ] {
+            self.define_regexp_prototype_accessor(prototype, name, kind)?;
+        }
+        for (name, kind) in [
+            (
                 REGEXP_PROTOTYPE_EXEC_NAME,
                 NativeFunctionKind::RegExpPrototypeExec,
             ),
@@ -199,19 +262,80 @@ impl Context {
         Ok(())
     }
 
+    fn define_regexp_prototype_accessor(
+        &mut self,
+        prototype: ObjectId,
+        name: &str,
+        kind: NativeFunctionKind,
+    ) -> Result<()> {
+        let getter = self.create_native_function(kind, Value::Undefined)?;
+        let key = self.intern_property_key(name)?;
+        self.objects.define_property(
+            prototype,
+            key,
+            name,
+            PropertyUpdate::Accessor(AccessorPropertyUpdate::new(
+                Some(getter),
+                None,
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )
+    }
+
+    pub(in crate::runtime::native) fn eval_regexp_prototype_getter(
+        &mut self,
+        kind: NativeFunctionKind,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let regexp = self.regexp_receiver_data(this_value)?;
+        let flags = RegExpFlags::parse(regexp.flags())?;
+        match kind {
+            NativeFunctionKind::RegExpPrototypeDotAllGetter => Ok(Value::Bool(flags.dot_all())),
+            NativeFunctionKind::RegExpPrototypeFlagsGetter => {
+                let flags = flags.canonical_text();
+                self.heap_string_value(&flags)
+            }
+            NativeFunctionKind::RegExpPrototypeGlobalGetter => Ok(Value::Bool(flags.global())),
+            NativeFunctionKind::RegExpPrototypeHasIndicesGetter => {
+                Ok(Value::Bool(flags.has_indices()))
+            }
+            NativeFunctionKind::RegExpPrototypeIgnoreCaseGetter => {
+                Ok(Value::Bool(flags.ignore_case()))
+            }
+            NativeFunctionKind::RegExpPrototypeMultilineGetter => {
+                Ok(Value::Bool(flags.multiline()))
+            }
+            NativeFunctionKind::RegExpPrototypeSourceGetter => {
+                let source = escaped_regexp_source(regexp.pattern());
+                self.heap_string_value(&source)
+            }
+            NativeFunctionKind::RegExpPrototypeStickyGetter => Ok(Value::Bool(flags.sticky())),
+            NativeFunctionKind::RegExpPrototypeUnicodeGetter => Ok(Value::Bool(flags.unicode())),
+            NativeFunctionKind::RegExpPrototypeUnicodeSetsGetter => {
+                Ok(Value::Bool(flags.unicode_sets()))
+            }
+            _ => Err(Error::runtime("native function is not a RegExp getter")),
+        }
+    }
+
+    fn regexp_receiver_data(&self, this_value: &Value) -> Result<RegExpValue> {
+        let Value::Object(id) = this_value else {
+            return Err(Error::type_error(REGEXP_RECEIVER_ERROR));
+        };
+        self.objects
+            .regexp_value(*id)?
+            .cloned()
+            .ok_or_else(|| Error::type_error(REGEXP_RECEIVER_ERROR))
+    }
+
     pub(in crate::runtime::native) fn regexp_exec(
         &mut self,
         this_value: &Value,
         input: &str,
     ) -> Result<Value> {
-        let Value::Object(id) = this_value else {
-            return Err(Error::type_error(REGEXP_RECEIVER_ERROR));
-        };
-        let regexp = self
-            .objects
-            .regexp_value(*id)?
-            .cloned()
-            .ok_or_else(|| Error::type_error(REGEXP_RECEIVER_ERROR))?;
+        let regexp = self.regexp_receiver_data(this_value)?;
         let flags = RegExpFlags::parse(regexp.flags())?;
         let start = if flags.global() || flags.sticky() {
             self.regexp_last_index(this_value, input)?
@@ -237,14 +361,7 @@ impl Context {
         input: &str,
         start: usize,
     ) -> Result<Value> {
-        let Value::Object(id) = this_value else {
-            return Err(Error::type_error(REGEXP_RECEIVER_ERROR));
-        };
-        let regexp = self
-            .objects
-            .regexp_value(*id)?
-            .cloned()
-            .ok_or_else(|| Error::type_error(REGEXP_RECEIVER_ERROR))?;
+        let regexp = self.regexp_receiver_data(this_value)?;
         let flags = RegExpFlags::parse(regexp.flags())?;
         let Some(matched) = regexp_find(regexp.pattern(), &flags, input, start)? else {
             return Ok(Value::Null);
@@ -312,6 +429,12 @@ impl Context {
         )?;
         Ok(Value::Object(id))
     }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(in crate::runtime::native) enum RegExpCallMode {
+    Call,
+    Construct,
 }
 
 fn regexp_find(
@@ -402,6 +525,59 @@ impl RegExpFlags {
     const fn sticky(&self) -> bool {
         self.bits & REGEXP_FLAG_STICKY != 0
     }
+
+    const fn has_indices(&self) -> bool {
+        self.bits & REGEXP_FLAG_HAS_INDICES != 0
+    }
+
+    const fn unicode(&self) -> bool {
+        self.bits & REGEXP_FLAG_UNICODE != 0
+    }
+
+    const fn unicode_sets(&self) -> bool {
+        self.bits & REGEXP_FLAG_UNICODE_SETS != 0
+    }
+
+    fn canonical_text(&self) -> String {
+        let mut flags = String::new();
+        for (enabled, flag) in [
+            (self.has_indices(), 'd'),
+            (self.global(), 'g'),
+            (self.ignore_case(), 'i'),
+            (self.multiline(), 'm'),
+            (self.dot_all(), 's'),
+            (self.unicode(), 'u'),
+            (self.unicode_sets(), 'v'),
+            (self.sticky(), 'y'),
+        ] {
+            if enabled {
+                flags.push(flag);
+            }
+        }
+        flags
+    }
+}
+
+fn escaped_regexp_source(pattern: &str) -> String {
+    if pattern.is_empty() {
+        return "(?:)".to_owned();
+    }
+    let mut escaped = String::new();
+    for ch in pattern.chars() {
+        match ch {
+            '/' => escaped.push_str("\\/"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\u{2028}' => escaped.push_str("\\u2028"),
+            '\u{2029}' => escaped.push_str("\\u2029"),
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
+const fn value_is_undefined(value: &Value) -> bool {
+    matches!(value, Value::Undefined)
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

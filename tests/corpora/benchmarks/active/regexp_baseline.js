@@ -17,6 +17,13 @@ while (index < 8192) {
   if (match !== null) {
     total = total + match[0].length + match.index;
   }
+  let cloned = new RegExp(words, "mi");
+  if (cloned.source === "\\w+" && cloned.flags === "im") {
+    total = total + 1;
+  }
+  if (words.global && !words.ignoreCase && !words.sticky) {
+    total = total + 1;
+  }
   index = index + 1;
 }
 
