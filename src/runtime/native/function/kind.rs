@@ -3,6 +3,7 @@ use crate::value::{BoundFunctionId, ErrorName};
 
 mod regexp;
 mod string;
+mod utility;
 
 pub(in crate::runtime::native) use regexp::{
     REGEXP_NAME, REGEXP_PROTOTYPE_EXEC_NAME, REGEXP_PROTOTYPE_TEST_NAME,
@@ -491,24 +492,6 @@ impl NativeFunctionKind {
         FUNCTION_FUNCTION_LENGTH
     }
 
-    const fn global_utility_length(self) -> Option<f64> {
-        match self {
-            Self::GlobalDecodeUri => Some(GLOBAL_DECODE_URI_FUNCTION_LENGTH),
-            Self::GlobalDecodeUriComponent => Some(GLOBAL_DECODE_URI_COMPONENT_FUNCTION_LENGTH),
-            Self::GlobalEncodeUri => Some(GLOBAL_ENCODE_URI_FUNCTION_LENGTH),
-            Self::GlobalEncodeUriComponent => Some(GLOBAL_ENCODE_URI_COMPONENT_FUNCTION_LENGTH),
-            Self::GlobalIsFinite => Some(GLOBAL_IS_FINITE_FUNCTION_LENGTH),
-            Self::GlobalIsNan => Some(GLOBAL_IS_NAN_FUNCTION_LENGTH),
-            Self::GlobalParseFloat => Some(GLOBAL_PARSE_FLOAT_FUNCTION_LENGTH),
-            Self::GlobalParseInt => Some(GLOBAL_PARSE_INT_FUNCTION_LENGTH),
-            Self::NumberIsFinite => Some(NUMBER_IS_FINITE_FUNCTION_LENGTH),
-            Self::NumberIsInteger => Some(NUMBER_IS_INTEGER_FUNCTION_LENGTH),
-            Self::NumberIsNan => Some(NUMBER_IS_NAN_FUNCTION_LENGTH),
-            Self::NumberIsSafeInteger => Some(NUMBER_IS_SAFE_INTEGER_FUNCTION_LENGTH),
-            _ => None,
-        }
-    }
-
     const fn math_length(self) -> Option<f64> {
         match self {
             Self::MathRandom => Some(MATH_FUNCTION_LENGTH_ZERO),
@@ -734,22 +717,6 @@ impl NativeFunctionKind {
             } => Some(REJECT_NAME),
             Self::String => Some(STRING_NAME),
             Self::Symbol => Some(SYMBOL_NAME),
-            _ => None,
-        }
-    }
-
-    const fn global_utility_name(self) -> Option<&'static str> {
-        match self {
-            Self::GlobalDecodeUri => Some(GLOBAL_DECODE_URI_NAME),
-            Self::GlobalDecodeUriComponent => Some(GLOBAL_DECODE_URI_COMPONENT_NAME),
-            Self::GlobalEncodeUri => Some(GLOBAL_ENCODE_URI_NAME),
-            Self::GlobalEncodeUriComponent => Some(GLOBAL_ENCODE_URI_COMPONENT_NAME),
-            Self::GlobalIsFinite | Self::NumberIsFinite => Some(GLOBAL_IS_FINITE_NAME),
-            Self::GlobalIsNan | Self::NumberIsNan => Some(GLOBAL_IS_NAN_NAME),
-            Self::NumberIsInteger => Some(NUMBER_IS_INTEGER_NAME),
-            Self::NumberIsSafeInteger => Some(NUMBER_IS_SAFE_INTEGER_NAME),
-            Self::GlobalParseFloat => Some(GLOBAL_PARSE_FLOAT_NAME),
-            Self::GlobalParseInt => Some(GLOBAL_PARSE_INT_NAME),
             _ => None,
         }
     }
