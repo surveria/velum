@@ -547,6 +547,19 @@ impl Context {
             NativeFunctionKind::ObjectPrototypePropertyIsEnumerable => {
                 Some(self.eval_object_prototype_property_is_enumerable(args, this_value))
             }
+            NativeFunctionKind::ObjectPrototypeToString => {
+                Some(self.eval_object_prototype_to_string(args, this_value))
+            }
+            NativeFunctionKind::ObjectPrototypeValueOf => {
+                Some(self.eval_object_prototype_value_of(args, this_value))
+            }
+            NativeFunctionKind::ObjectPrototypeToLocaleString => {
+                Some(self.eval_object_prototype_to_locale_string(args, this_value))
+            }
+            NativeFunctionKind::ObjectPrototypeIsPrototypeOf => {
+                Some(self.eval_object_prototype_is_prototype_of(args, this_value))
+            }
+            NativeFunctionKind::ObjectFromEntries => Some(self.eval_object_from_entries(args)),
             NativeFunctionKind::ObjectSetPrototypeOf => {
                 Some(self.eval_object_set_prototype_of(args))
             }

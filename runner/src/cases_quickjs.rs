@@ -79,6 +79,8 @@ const PATH_QUICKJS_OBJECT_PROTOTYPE_ROOT: &str =
     "tests/corpora/quickjs_differential/active/object_prototype_root.js";
 const PATH_QUICKJS_OBJECT_BUILTIN: &str =
     "tests/corpora/quickjs_differential/active/object_builtin.js";
+const PATH_QUICKJS_OBJECT_PROTOTYPE_METHODS: &str =
+    "tests/corpora/quickjs_differential/active/object_prototype_methods.js";
 const PATH_QUICKJS_NUMBER_BUILTIN: &str =
     "tests/corpora/quickjs_differential/active/number_builtin.js";
 const PATH_QUICKJS_NUMBER_FORMATTING: &str =
@@ -350,7 +352,7 @@ fn quickjs_control_flow_cases() -> Vec<DifferentialCase> {
 }
 
 fn quickjs_object_cases() -> Vec<DifferentialCase> {
-    vec![
+    let mut cases = vec![
         DifferentialCase {
             id: "object_literals",
             path: PATH_QUICKJS_OBJECT_LITERALS,
@@ -372,6 +374,10 @@ fn quickjs_object_cases() -> Vec<DifferentialCase> {
             path: PATH_QUICKJS_OBJECT_BUILTIN,
         },
         DifferentialCase {
+            id: "object_prototype_methods",
+            path: PATH_QUICKJS_OBJECT_PROTOTYPE_METHODS,
+        },
+        DifferentialCase {
             id: "number_builtin",
             path: PATH_QUICKJS_NUMBER_BUILTIN,
         },
@@ -387,6 +393,13 @@ fn quickjs_object_cases() -> Vec<DifferentialCase> {
             id: "computed_properties",
             path: PATH_QUICKJS_COMPUTED_PROPERTIES,
         },
+    ];
+    cases.extend(quickjs_array_differential_cases());
+    cases
+}
+
+fn quickjs_array_differential_cases() -> Vec<DifferentialCase> {
+    vec![
         DifferentialCase {
             id: "array_literals",
             path: PATH_QUICKJS_ARRAY_LITERALS,
