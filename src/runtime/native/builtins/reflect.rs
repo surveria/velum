@@ -245,7 +245,11 @@ impl Context {
     ) -> Result<Value> {
         let slice = args.as_slice();
         let target = Self::argument_or_undefined(slice.first());
-        if !matches!(target, Value::Function(_) | Value::NativeFunction(_)) {
+        if !self.is_constructor_value(&target)? {
+            return Err(Error::type_error(REFLECT_CONSTRUCT_NOT_CONSTRUCTOR_ERROR));
+        }
+        let new_target = slice.get(2).map_or(&target, |value| value);
+        if !self.is_constructor_value(new_target)? {
             return Err(Error::type_error(REFLECT_CONSTRUCT_NOT_CONSTRUCTOR_ERROR));
         }
         let args_list = Self::argument_or_undefined(slice.get(1));
