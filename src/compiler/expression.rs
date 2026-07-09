@@ -108,6 +108,7 @@ impl BytecodeCompiler<'_> {
                 access,
             } => return self.compile_computed_member_expr(object, property, *access),
             Expr::Object(properties) => return self.compile_object_literal(properties),
+            Expr::ArrayHole => return Err(Error::runtime("array elision outside array literal")),
             Expr::Array(elements) => return self.compile_array_literal(elements),
             Expr::Update { op, prefix, expr } => {
                 return self.compile_update_expr(*op, *prefix, expr);
@@ -655,17 +656,60 @@ impl BytecodeCompiler<'_> {
 
     fn compile_array_literal(&mut self, elements: &[Expr]) -> Result<()> {
         if has_spread_arg(elements) {
-            let spread_flags = self.compile_spread_parts(elements)?;
-            self.emit(BytecodeInstruction::ArrayLiteralSpread { spread_flags });
-            return Ok(());
+            return self.compile_array_literal_spread(elements);
         }
-        for element in elements {
-            self.compile_expr(element)?;
-        }
+        let holes = self.compile_array_literal_elements(elements)?;
         self.emit(BytecodeInstruction::ArrayLiteral {
             len: elements.len(),
+            holes: holes.into(),
         });
         Ok(())
+    }
+
+    fn compile_array_literal_spread(&mut self, elements: &[Expr]) -> Result<()> {
+        let mut spread_flags = Vec::with_capacity(elements.len());
+        let mut holes = Vec::with_capacity(elements.len());
+        for element in elements {
+            match element {
+                Expr::ArrayHole => {
+                    spread_flags.push(false);
+                    holes.push(true);
+                }
+                Expr::Spread(inner) => {
+                    self.compile_expr(inner)?;
+                    spread_flags.push(true);
+                    holes.push(false);
+                }
+                _ => {
+                    self.compile_expr(element)?;
+                    spread_flags.push(false);
+                    holes.push(false);
+                }
+            }
+        }
+        self.emit(BytecodeInstruction::ArrayLiteralSpread {
+            spread_flags: spread_flags.into(),
+            holes: holes.into(),
+        });
+        Ok(())
+    }
+
+    fn compile_array_literal_elements(&mut self, elements: &[Expr]) -> Result<Vec<bool>> {
+        let mut holes = Vec::with_capacity(elements.len());
+        for element in elements {
+            if matches!(element, Expr::ArrayHole) {
+                holes.push(true);
+                continue;
+            }
+            if matches!(element, Expr::Spread(_)) {
+                return Err(Error::runtime(
+                    "array spread was not compiled on spread path",
+                ));
+            }
+            holes.push(false);
+            self.compile_expr(element)?;
+        }
+        Ok(holes)
     }
 
     /// Compiles a mixed plain/spread expression list, returning per-slot

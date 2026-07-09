@@ -32,9 +32,10 @@ impl Context {
             BytecodeInstruction::CollectSpreadArgs { spread_flags } => {
                 self.eval_bytecode_collect_spread_args(state, spread_flags, next)
             }
-            BytecodeInstruction::ArrayLiteralSpread { spread_flags } => {
-                self.eval_bytecode_array_literal_spread(state, spread_flags, next)
-            }
+            BytecodeInstruction::ArrayLiteralSpread {
+                spread_flags,
+                holes,
+            } => self.eval_bytecode_array_literal_spread(state, spread_flags, holes, next),
             BytecodeInstruction::CallBindingSpread { callee } => {
                 self.eval_bytecode_call_binding_spread(state, callee, next)
             }
@@ -317,10 +318,12 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            BytecodeInstruction::ArrayLiteral { len } => {
+            BytecodeInstruction::ArrayLiteral { len, holes } => {
                 let value = {
-                    let values = state.stack.drain_tail(*len)?;
-                    self.create_array_from_element_iter(values, *len)?
+                    let value_count =
+                        len.saturating_sub(holes.iter().filter(|hole| **hole).count());
+                    let values = state.stack.drain_tail(value_count)?;
+                    self.create_array_literal_from_elements(values, *len, holes)?
                 };
                 state.stack.push(value);
                 state.pc = next;

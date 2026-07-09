@@ -9,7 +9,7 @@ use crate::{
     syntax::StaticName,
 };
 
-use super::{Parser, expression::ObjectPropertyName};
+use super::{Parser, literal::ObjectPropertyName};
 
 /// One parsed class member function: its allocated static function id plus
 /// parameters and body statements with pattern prologues applied.

@@ -78,6 +78,12 @@ let arrayReplacerText = JSON.stringify([1, 2, 3], function(key, value) {
   }
   return value;
 });
+let holeyArrayText = JSON.stringify([,,,], function(key, value) {
+  if (key === "0" && value !== undefined) {
+    throw new Test262Error("array elision should visit as undefined");
+  }
+  return value;
+});
 let toJsonKey = "";
 let toJsonText = JSON.stringify({
   keep: {
@@ -241,6 +247,7 @@ if (
   listText !== '{"c":3,"a":1}' ||
   prettyText !== '{\n  "a": 1,\n  "nested": {\n    "b": 2\n  }\n}' ||
   arrayReplacerText !== '[1,null,3]' ||
+  holeyArrayText !== '[null,null,null]' ||
   toJsonKey !== "keep" ||
   toJsonText !== '{"keep":{"answer":42}}' ||
   !boxedValuesOk ||
