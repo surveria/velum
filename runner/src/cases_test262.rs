@@ -61,6 +61,8 @@ const PATH_TEST262_OBJECT_STATIC_METHODS: &str =
     "tests/corpora/test262/active/built-ins/Object/static_methods.js";
 const PATH_TEST262_OBJECT_INTEGRITY_METHODS: &str =
     "tests/corpora/test262/active/built-ins/Object/integrity_methods.js";
+const PATH_TEST262_OBJECT_PROTOTYPE_METHODS: &str =
+    "tests/corpora/test262/active/built-ins/Object/prototype_methods.js";
 const PATH_TEST262_NUMBER_BUILTIN: &str =
     "tests/corpora/test262/active/built-ins/Number/constructor.js";
 const PATH_TEST262_NUMBER_FORMATTING: &str =
@@ -612,6 +614,11 @@ fn test262_object_builtin_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "built-ins/Object/integrity-methods",
             path: PATH_TEST262_OBJECT_INTEGRITY_METHODS,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "built-ins/Object/prototype-methods",
+            path: PATH_TEST262_OBJECT_PROTOTYPE_METHODS,
             expectation: Expectation::Value("42"),
         },
     ]
