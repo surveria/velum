@@ -1,6 +1,7 @@
 let regexpConstructor = RegExp;
 let execDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "exec");
 let testDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "test");
+let toStringDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "toString");
 let sourceDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "source");
 let flagsDescriptor = Object.getOwnPropertyDescriptor(RegExp.prototype, "flags");
 let literal = /a+/g;
@@ -32,6 +33,11 @@ let descriptorOk =
   testDescriptor.writable === true &&
   testDescriptor.enumerable === false &&
   testDescriptor.configurable === true &&
+  RegExp.prototype.toString.name === "toString" &&
+  RegExp.prototype.toString.length === 0 &&
+  toStringDescriptor.writable === true &&
+  toStringDescriptor.enumerable === false &&
+  toStringDescriptor.configurable === true &&
   Object.hasOwn(literal, "source") === false &&
   Object.hasOwn(literal, "flags") === false &&
   sourceDescriptor.get.name === "get source" &&
@@ -65,6 +71,9 @@ let patternOk =
   new RegExp(literal, "mi").flags === "im" &&
   new RegExp("").source === "(?:)" &&
   new RegExp("/\n\r\u2028\u2029").source === "\\/\\n\\r\\u2028\\u2029" &&
+  /a/gim.toString() === "/a/gim" &&
+  new RegExp("").toString() === "/(?:)/" &&
+  RegExp.prototype.toString.call({ source: "x", flags: "g" }) === "/x/g" &&
   /a/gim.source === "a" &&
   /a/gim.flags === "gim" &&
   /a/gim.global === true &&

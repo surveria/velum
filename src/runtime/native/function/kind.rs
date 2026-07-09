@@ -1,7 +1,13 @@
 use super::date_kind::DateFunctionKind;
 use crate::value::{BoundFunctionId, ErrorName};
 
+mod regexp;
 mod string;
+
+pub(in crate::runtime::native) use regexp::{
+    REGEXP_NAME, REGEXP_PROTOTYPE_EXEC_NAME, REGEXP_PROTOTYPE_TEST_NAME,
+    REGEXP_PROTOTYPE_TO_STRING_NAME,
+};
 
 const ASYNC_FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const ASYNC_FUNCTION_NAME: &str = "AsyncFunction";
@@ -146,22 +152,6 @@ pub(in crate::runtime::native) const PROMISE_RESOLVE_NAME: &str = "resolve";
 const PROMISE_RESOLVER_FUNCTION_LENGTH: f64 = 1.0;
 const PROMISE_THEN_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const PROMISE_THEN_NAME: &str = "then";
-const REGEXP_FUNCTION_LENGTH: f64 = 2.0;
-pub(in crate::runtime::native) const REGEXP_NAME: &str = "RegExp";
-const REGEXP_PROTOTYPE_GETTER_LENGTH: f64 = 0.0;
-const REGEXP_PROTOTYPE_DOT_ALL_GETTER_NAME: &str = "get dotAll";
-pub(in crate::runtime::native) const REGEXP_PROTOTYPE_EXEC_NAME: &str = "exec";
-const REGEXP_PROTOTYPE_FLAGS_GETTER_NAME: &str = "get flags";
-const REGEXP_PROTOTYPE_GLOBAL_GETTER_NAME: &str = "get global";
-const REGEXP_PROTOTYPE_HAS_INDICES_GETTER_NAME: &str = "get hasIndices";
-const REGEXP_PROTOTYPE_IGNORE_CASE_GETTER_NAME: &str = "get ignoreCase";
-const REGEXP_PROTOTYPE_MULTILINE_GETTER_NAME: &str = "get multiline";
-const REGEXP_PROTOTYPE_SOURCE_GETTER_NAME: &str = "get source";
-const REGEXP_PROTOTYPE_STICKY_GETTER_NAME: &str = "get sticky";
-const REGEXP_PROTOTYPE_TEST_LENGTH: f64 = 1.0;
-pub(in crate::runtime::native) const REGEXP_PROTOTYPE_TEST_NAME: &str = "test";
-const REGEXP_PROTOTYPE_UNICODE_GETTER_NAME: &str = "get unicode";
-const REGEXP_PROTOTYPE_UNICODE_SETS_GETTER_NAME: &str = "get unicodeSets";
 const REJECT_NAME: &str = "reject";
 const RESOLVE_NAME: &str = "resolve";
 const STRING_FUNCTION_LENGTH: f64 = 1.0;
@@ -392,6 +382,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     RegExpPrototypeSourceGetter,
     RegExpPrototypeStickyGetter,
     RegExpPrototypeTest,
+    RegExpPrototypeToString,
     RegExpPrototypeUnicodeGetter,
     RegExpPrototypeUnicodeSetsGetter,
     String,
@@ -492,6 +483,9 @@ impl NativeFunctionKind {
         if let Some(length) = self.reflect_length() {
             return length;
         }
+        if let Some(length) = self.regexp_length() {
+            return length;
+        }
         FUNCTION_FUNCTION_LENGTH
     }
 
@@ -580,20 +574,6 @@ impl NativeFunctionKind {
             Self::PromiseThen => Some(PROMISE_THEN_FUNCTION_LENGTH),
             Self::PromiseCatch => Some(PROMISE_CATCH_FUNCTION_LENGTH),
             Self::PromiseResolver { .. } => Some(PROMISE_RESOLVER_FUNCTION_LENGTH),
-            Self::RegExp => Some(REGEXP_FUNCTION_LENGTH),
-            Self::RegExpPrototypeDotAllGetter
-            | Self::RegExpPrototypeFlagsGetter
-            | Self::RegExpPrototypeGlobalGetter
-            | Self::RegExpPrototypeHasIndicesGetter
-            | Self::RegExpPrototypeIgnoreCaseGetter
-            | Self::RegExpPrototypeMultilineGetter
-            | Self::RegExpPrototypeSourceGetter
-            | Self::RegExpPrototypeStickyGetter
-            | Self::RegExpPrototypeUnicodeGetter
-            | Self::RegExpPrototypeUnicodeSetsGetter => Some(REGEXP_PROTOTYPE_GETTER_LENGTH),
-            Self::RegExpPrototypeExec | Self::RegExpPrototypeTest => {
-                Some(REGEXP_PROTOTYPE_TEST_LENGTH)
-            }
             Self::String => Some(STRING_FUNCTION_LENGTH),
             Self::Symbol => Some(SYMBOL_FUNCTION_LENGTH),
             _ => None,
@@ -632,6 +612,9 @@ impl NativeFunctionKind {
             return name;
         }
         if let Some(name) = self.reflect_name() {
+            return name;
+        }
+        if let Some(name) = self.regexp_name() {
             return name;
         }
         FUNCTION_NAME
@@ -747,21 +730,6 @@ impl NativeFunctionKind {
                 kind: crate::runtime::promise::PromiseResolverKind::Reject,
                 ..
             } => Some(REJECT_NAME),
-            Self::RegExp => Some(REGEXP_NAME),
-            Self::RegExpPrototypeDotAllGetter => Some(REGEXP_PROTOTYPE_DOT_ALL_GETTER_NAME),
-            Self::RegExpPrototypeExec => Some(REGEXP_PROTOTYPE_EXEC_NAME),
-            Self::RegExpPrototypeFlagsGetter => Some(REGEXP_PROTOTYPE_FLAGS_GETTER_NAME),
-            Self::RegExpPrototypeGlobalGetter => Some(REGEXP_PROTOTYPE_GLOBAL_GETTER_NAME),
-            Self::RegExpPrototypeHasIndicesGetter => Some(REGEXP_PROTOTYPE_HAS_INDICES_GETTER_NAME),
-            Self::RegExpPrototypeIgnoreCaseGetter => Some(REGEXP_PROTOTYPE_IGNORE_CASE_GETTER_NAME),
-            Self::RegExpPrototypeMultilineGetter => Some(REGEXP_PROTOTYPE_MULTILINE_GETTER_NAME),
-            Self::RegExpPrototypeSourceGetter => Some(REGEXP_PROTOTYPE_SOURCE_GETTER_NAME),
-            Self::RegExpPrototypeStickyGetter => Some(REGEXP_PROTOTYPE_STICKY_GETTER_NAME),
-            Self::RegExpPrototypeTest => Some(REGEXP_PROTOTYPE_TEST_NAME),
-            Self::RegExpPrototypeUnicodeGetter => Some(REGEXP_PROTOTYPE_UNICODE_GETTER_NAME),
-            Self::RegExpPrototypeUnicodeSetsGetter => {
-                Some(REGEXP_PROTOTYPE_UNICODE_SETS_GETTER_NAME)
-            }
             Self::String => Some(STRING_NAME),
             Self::Symbol => Some(SYMBOL_NAME),
             _ => None,

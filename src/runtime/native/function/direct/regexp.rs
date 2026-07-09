@@ -54,6 +54,9 @@ impl Context {
             NativeFunctionKind::RegExpPrototypeTest => {
                 Some(self.eval_regexp_prototype_test(args, this_value))
             }
+            NativeFunctionKind::RegExpPrototypeToString => {
+                Some(self.eval_regexp_prototype_to_string(args, this_value))
+            }
             _ => None,
         }
     }

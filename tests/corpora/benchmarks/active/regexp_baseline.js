@@ -24,6 +24,9 @@ while (index < 8192) {
   if (words.global && !words.ignoreCase && !words.sticky) {
     total = total + 1;
   }
+  if (words.toString() === "/\\w+/g") {
+    total = total + 1;
+  }
   index = index + 1;
 }
 

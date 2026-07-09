@@ -19,3 +19,5 @@ print(RegExp(global) === global, new RegExp(global) === global, cloned.source, c
 print(new RegExp("").source, new RegExp("/\n\r").source);
 print(/a/gim.source, /a/gim.flags, /a/gim.global, /a/gim.ignoreCase, /a/gim.multiline);
 print(/a/s.dotAll, /a/u.unicode, /a/y.sticky);
+print(/a/gim.toString(), new RegExp("").toString(), RegExp.prototype.toString.call({ source: "x", flags: "g" }));
+print(RegExp.prototype.toString.name, RegExp.prototype.toString.length);
