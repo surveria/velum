@@ -78,6 +78,7 @@ The timing and quality thresholds can be adjusted for local diagnosis:
 - `RSQJS_BENCH_SAMPLES` controls the number of measured samples.
 - `RSQJS_BENCH_MIN_OP_US` controls the minimum valid median operation time.
 - `RSQJS_BENCH_MAX_CV_PERCENT` controls the maximum valid sample coefficient of variation.
+- `RSQJS_BENCH_FILTER` limits benchmark execution to case ids containing the supplied text.
 
 Do not weaken these thresholds in CI to make a benchmark pass. Fix the benchmark workload or move the case back to tests if it is not a meaningful performance measurement.
 

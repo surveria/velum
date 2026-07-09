@@ -15,7 +15,7 @@ const BENCH_RUNTIME_LIMITS: RuntimeLimits = RuntimeLimits {
     max_source_len: 262_144,
     max_statements: 65_536,
     max_expression_depth: 512,
-    max_runtime_steps: 100_000_000,
+    max_runtime_steps: 2_000_000_000,
     max_string_len: 1_048_576,
     max_bindings: 65_536,
     max_objects: 1_000_000,
@@ -28,6 +28,10 @@ const BENCH_RUNTIME_LIMITS: RuntimeLimits = RuntimeLimits {
 pub trait BenchEngine {
     fn label(&self) -> &'static str;
     fn eval(&self, source: &str) -> anyhow::Result<()>;
+    fn eval_with_host_image(&self, source: &str, byte_len: usize) -> anyhow::Result<()> {
+        let prelude = format!("var __imageData = new Uint8Array({byte_len});\n");
+        self.eval(&format!("{prelude}{source}"))
+    }
 }
 
 /// The engine under test, driven only through the public runtime API. Benchmark
@@ -44,6 +48,20 @@ impl BenchEngine for RsqjsEngine {
     fn eval(&self, source: &str) -> anyhow::Result<()> {
         let runtime = rs_quickjs::Runtime::with_limits(BENCH_RUNTIME_LIMITS);
         let mut context = runtime.context();
+        let value = context
+            .eval(source)
+            .map_err(|error| anyhow::anyhow!("rsqjs eval failed: {error}"))?;
+        black_box(value);
+        black_box(context.output().len());
+        Ok(())
+    }
+
+    fn eval_with_host_image(&self, source: &str, byte_len: usize) -> anyhow::Result<()> {
+        let runtime = rs_quickjs::Runtime::with_limits(BENCH_RUNTIME_LIMITS);
+        let mut context = runtime.context();
+        context
+            .create_host_uint8_array_global("__imageData", vec![0; byte_len])
+            .map_err(|error| anyhow::anyhow!("rsqjs host image setup failed: {error}"))?;
         let value = context
             .eval(source)
             .map_err(|error| anyhow::anyhow!("rsqjs eval failed: {error}"))?;

@@ -10,13 +10,14 @@ use crate::{
 };
 
 use super::{
-    ARRAY_NAME, BOOLEAN_NAME, DATE_NAME, DateFunctionKind, EVAL_NAME, FUNCTION_NAME,
-    GLOBAL_DECODE_URI_COMPONENT_NAME, GLOBAL_DECODE_URI_NAME, GLOBAL_ENCODE_URI_COMPONENT_NAME,
-    GLOBAL_ENCODE_URI_NAME, GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME,
-    GLOBAL_PARSE_INT_NAME, GLOBAL_THIS_NAME, INFINITY_NAME, JSON_NAME, MAP_NAME, MATH_NAME,
-    NAN_NAME, NUMBER_NAME, NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY,
-    OBJECT_NAME, PROMISE_NAME, PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, STRING_NAME,
-    SYMBOL_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
+    ARRAY_BUFFER_NAME, ARRAY_NAME, BOOLEAN_NAME, DATE_NAME, DateFunctionKind, EVAL_NAME,
+    FUNCTION_NAME, GLOBAL_DECODE_URI_COMPONENT_NAME, GLOBAL_DECODE_URI_NAME,
+    GLOBAL_ENCODE_URI_COMPONENT_NAME, GLOBAL_ENCODE_URI_NAME, GLOBAL_IS_FINITE_NAME,
+    GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME, GLOBAL_THIS_NAME,
+    INFINITY_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME, NativeFunction,
+    NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PROMISE_NAME, PROXY_NAME,
+    REFLECT_NAME, REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME, UINT8_ARRAY_NAME, WEAK_MAP_NAME,
+    WEAK_SET_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -28,6 +29,7 @@ const fn native_kind_is_constructable(kind: NativeFunctionKind) -> bool {
     matches!(
         kind,
         NativeFunctionKind::Array
+            | NativeFunctionKind::ArrayBuffer
             | NativeFunctionKind::AsyncFunction
             | NativeFunctionKind::Boolean
             | NativeFunctionKind::ErrorConstructor(_)
@@ -42,6 +44,7 @@ const fn native_kind_is_constructable(kind: NativeFunctionKind) -> bool {
             | NativeFunctionKind::Set
             | NativeFunctionKind::WeakMap
             | NativeFunctionKind::WeakSet
+            | NativeFunctionKind::Uint8Array
             | NativeFunctionKind::Date(DateFunctionKind::Constructor)
     )
 }
@@ -50,6 +53,7 @@ impl Context {
     pub(crate) fn builtin_value(&mut self, name: &str) -> Result<Option<Value>> {
         match name {
             ARRAY_NAME => self.array_constructor_value().map(Some),
+            ARRAY_BUFFER_NAME => self.array_buffer_constructor_value().map(Some),
             BOOLEAN_NAME => self.boolean_constructor_value().map(Some),
             EVAL_NAME => self.eval_function_value().map(Some),
             FUNCTION_NAME => self.function_constructor_value().map(Some),
@@ -97,6 +101,7 @@ impl Context {
             SET_NAME => self.set_constructor_value().map(Some),
             STRING_NAME => self.string_constructor_value().map(Some),
             SYMBOL_NAME => self.symbol_constructor_value().map(Some),
+            UINT8_ARRAY_NAME => self.uint8_array_constructor_value().map(Some),
             WEAK_MAP_NAME => self.weak_map_constructor_value().map(Some),
             WEAK_SET_NAME => self.weak_set_constructor_value().map(Some),
             _ => {
@@ -113,6 +118,7 @@ impl Context {
     pub(crate) fn direct_builtin_callable_value(&mut self, name: &str) -> Result<Option<Value>> {
         match name {
             ARRAY_NAME => self.array_constructor_value().map(Some),
+            ARRAY_BUFFER_NAME => self.array_buffer_constructor_value().map(Some),
             BOOLEAN_NAME => self.boolean_constructor_value().map(Some),
             EVAL_NAME => self.eval_function_value().map(Some),
             FUNCTION_NAME => self.function_constructor_value().map(Some),
@@ -150,6 +156,7 @@ impl Context {
             SET_NAME => self.set_constructor_value().map(Some),
             STRING_NAME => self.string_constructor_value().map(Some),
             SYMBOL_NAME => self.symbol_constructor_value().map(Some),
+            UINT8_ARRAY_NAME => self.uint8_array_constructor_value().map(Some),
             WEAK_MAP_NAME => self.weak_map_constructor_value().map(Some),
             WEAK_SET_NAME => self.weak_set_constructor_value().map(Some),
             _ => {
@@ -210,6 +217,7 @@ impl Context {
         }
         match kind {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
+            NativeFunctionKind::ArrayBuffer => self.construct_array_buffer(args),
             NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
             NativeFunctionKind::Function => self.eval_function_constructor(args),
             NativeFunctionKind::RegExp => self.construct_regexp_object(args),
@@ -223,6 +231,7 @@ impl Context {
             NativeFunctionKind::Date(DateFunctionKind::Constructor) => {
                 self.construct_date_object(args)
             }
+            NativeFunctionKind::Uint8Array => self.construct_uint8_array(args),
             NativeFunctionKind::Map => self.construct_collection_object(
                 crate::runtime::collections::CollectionKind::Map,
                 args,

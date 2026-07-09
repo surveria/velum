@@ -463,6 +463,7 @@ impl Context {
             return result;
         }
         match kind {
+            NativeFunctionKind::ArrayBuffer => self.construct_array_buffer(args),
             NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
             NativeFunctionKind::Boolean => self.eval_boolean_constructor(args),
             NativeFunctionKind::BoundFunction(id) => self.eval_bound_function(id, args),
@@ -506,6 +507,7 @@ impl Context {
             NativeFunctionKind::Symbol => self.eval_symbol_constructor(args),
             NativeFunctionKind::SymbolFor => self.eval_symbol_for(args),
             NativeFunctionKind::SymbolKeyFor => self.eval_symbol_key_for(args),
+            NativeFunctionKind::Uint8Array => self.construct_uint8_array(args),
             kind => self
                 .eval_primitive_native_function_kind(kind, args, this_value)
                 .unwrap_or_else(|| {

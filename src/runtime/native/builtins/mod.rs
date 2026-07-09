@@ -25,6 +25,7 @@ mod string_extra;
 mod string_methods;
 mod string_regexp;
 mod symbol;
+mod typed_array;
 mod weak_collections;
 
 pub(in crate::runtime::native) use map_set::{CollectionIterationTarget, MAP_NAME, SET_NAME};
