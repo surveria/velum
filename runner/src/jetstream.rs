@@ -1,6 +1,4 @@
-use std::fs;
-
-use anyhow::{Context as _, bail};
+use anyhow::bail;
 
 use crate::{
     bench_engines::{BenchEngine, REFERENCE_ENGINE_ID, RsqjsEngine, make_reference},
@@ -20,21 +18,26 @@ mod jetstream_preflight;
 mod jetstream_report;
 #[path = "jetstream_selection.rs"]
 mod jetstream_selection;
+#[path = "jetstream_source.rs"]
+mod jetstream_source;
 #[path = "jetstream_suite.rs"]
 mod jetstream_suite;
 use jetstream_model::{
     BUDGET_DENOMINATOR, BUDGET_NUMERATOR, BudgetCheck, DETAIL_COMPLETED, DETAIL_LATENCY_EXCEPTION,
     DETAIL_QUALITY_GATE, DETAIL_REFERENCE_COMPLETED, JetStreamCase, JetStreamCounts, JetStreamMode,
     JetStreamOutcome, LATENCY_INVALID, LATENCY_NOT_AVAILABLE, LATENCY_OVER, LATENCY_WITHIN,
-    NOT_MEASURED, QUALITY_INVALID, QUALITY_VALID, QUICKJS_PERFORMANCE_PRELUDE,
-    REFERENCE_BASELINE_MISSING, REFERENCE_MEASURE_CACHED, REFERENCE_NOT_AVAILABLE,
-    REFERENCE_NOT_CONFIGURED, REFERENCE_SOURCE_BASELINE, REFERENCE_SOURCE_DISABLED,
-    REFERENCE_SOURCE_LIVE, REFERENCE_SOURCE_MISSING, ReferenceFlags, ReferenceMeasurement,
-    ReferenceSample, SHELL_PRELUDE, STATUS_FAILED, STATUS_INVALID_BENCHMARK, STATUS_SKIPPED,
-    STATUS_TRACKED_EXCEPTION, STATUS_WITHIN_BUDGET, SYNC_HARNESS,
+    NOT_MEASURED, QUALITY_INVALID, QUALITY_VALID, REFERENCE_BASELINE_MISSING,
+    REFERENCE_MEASURE_CACHED, REFERENCE_NOT_AVAILABLE, REFERENCE_NOT_CONFIGURED,
+    REFERENCE_SOURCE_BASELINE, REFERENCE_SOURCE_DISABLED, REFERENCE_SOURCE_LIVE,
+    REFERENCE_SOURCE_MISSING, ReferenceFlags, ReferenceMeasurement, ReferenceSample, STATUS_FAILED,
+    STATUS_INVALID_BENCHMARK, STATUS_SKIPPED, STATUS_TRACKED_EXCEPTION, STATUS_WITHIN_BUDGET,
 };
 pub use jetstream_model::{BUDGET_LABEL, JetStreamReport, JetStreamRow};
 pub use jetstream_report::{render_section, write_report};
+use jetstream_source::{
+    benchmark_source_from_workload, harness_descriptor, quickjs_source_from_workload,
+    workload_source,
+};
 
 pub fn run() -> anyhow::Result<JetStreamReport> {
     let timer = timing::RunTimer::start();
@@ -390,39 +393,6 @@ fn reference_quality_failure_detail(reference: MeasureStats) -> Option<String> {
         return None;
     }
     Some(format!("{DETAIL_QUALITY_GATE}: {}", reasons.join("; ")))
-}
-
-#[cfg(test)]
-fn benchmark_source(files: &[&str]) -> anyhow::Result<String> {
-    workload_source(files).map(|workload| benchmark_source_from_workload(&workload))
-}
-
-fn workload_source(files: &[&str]) -> anyhow::Result<String> {
-    let mut script = String::new();
-    for file in files {
-        let source = fs::read_to_string(file)
-            .with_context(|| format!("failed to read JetStream source '{file}'"))?;
-        script.push_str("// JetStream source: ");
-        script.push_str(file);
-        script.push('\n');
-        script.push_str(&source);
-        script.push('\n');
-    }
-    Ok(script)
-}
-
-fn benchmark_source_from_workload(workload: &str) -> String {
-    format!("{SHELL_PRELUDE}\n{workload}{SYNC_HARNESS}")
-}
-
-fn quickjs_source_from_workload(workload: &str) -> String {
-    format!("{QUICKJS_PERFORMANCE_PRELUDE}\n{SHELL_PRELUDE}\n{workload}{SYNC_HARNESS}")
-}
-
-fn harness_descriptor() -> String {
-    format!(
-        "timer=rust-instant\nreference-performance-prelude:\n{QUICKJS_PERFORMANCE_PRELUDE}\nprelude:\n{SHELL_PRELUDE}\nharness:\n{SYNC_HARNESS}"
-    )
 }
 
 fn measured_with_reference(

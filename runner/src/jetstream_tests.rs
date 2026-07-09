@@ -1,6 +1,5 @@
-use super::{
-    LATENCY_OVER, LATENCY_WITHIN, benchmark_source, budget_check, quickjs_source_from_workload,
-};
+use super::jetstream_source::{benchmark_source, quickjs_source_from_workload};
+use super::{LATENCY_OVER, LATENCY_WITHIN, budget_check};
 use std::time::Duration;
 
 #[test]

@@ -1,6 +1,9 @@
 use std::collections::BTreeSet;
 
-use super::{JetStreamCase, JetStreamMode, harness_descriptor, workload_source};
+use super::{
+    JetStreamCase, JetStreamMode,
+    jetstream_source::{harness_descriptor, workload_source},
+};
 use crate::{
     bench_engines::REFERENCE_ENGINE_ID,
     bench_measure::MeasureConfig,
