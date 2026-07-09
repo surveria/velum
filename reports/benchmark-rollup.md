@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260709T230501Z.md`
-- Task: PR #402: workflow: preserve empty run conclusions in publisher trust checks
-- Performance: 5.32x (4/5 >1.00x)
+- `rsqjs-test-report-20260709T232030Z.md`
+- Task: PR #401: runtime: route property reads through semantic objects
+- Performance: 5.28x (4/5 >1.00x)
 - Memory: - (0/5 >1.00x)
 - JetStream: - (0/0 >1.00x)
-- Full Test262: 34002 passed / 68576 failed (33.15%)
+- Full Test262: 34006 passed / 68572 failed (33.15%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -385,3 +385,4 @@ Latest report:
 | `20260709T223143Z` `703a3fe` PR #399: workflow: guard semantic architecture boundaries | 5.32x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
 | `20260709T224900Z` `b760177` PR #400: runtime: introduce checked semantic object reference | 5.29x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
 | `20260709T230501Z` `cf277e3` PR #402: workflow: preserve empty run conclusions in publisher trust checks | 5.32x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
+| `20260709T232030Z` `92eac23` PR #401: runtime: route property reads through semantic objects | 5.28x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34006 passed / 68572 failed (33.15%) |
