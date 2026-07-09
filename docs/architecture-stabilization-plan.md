@@ -480,7 +480,7 @@ dependencies do not overlap.
 | --- | --- | --- | --- | --- |
 | AS-00 | Complete | Adopt this plan and route project documentation to it. | None | PR #396 merged as `f79056b`; required CI, post-merge performance, publisher, and canonical report publication passed. |
 | AS-01 | Complete | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards merged in PR #399 with required CI and canonical report publication. |
-| AS-02 | In progress | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 read/presence methods are implemented in ready PR #401. |
+| AS-02 | In progress | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 mutation/metadata methods are implemented in draft PR #403. |
 | AS-03 | Backlog | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | Shared coercion, equality, property, invocation, and iterator operations used by bytecode and built-ins. |
 | AS-04 | Backlog | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | Real JavaScript error objects, typed throw path, no message-prefix classification, spans available to diagnostics. |
 | AS-05 | Backlog | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | Non-cloneable VM state, checked cross-VM boundaries, trace/root contract, heap/stack/job/buffer counters and limits. |
@@ -610,7 +610,7 @@ AS-02a evidence:
 
 AS-02b1 evidence:
 
-- PR: #401 (ready)
+- PR: #401, squash-merged as `92eac23`
 - Scope: shared semantic-object `[[Get]]` and `[[HasProperty]]` pre-dispatch,
   explicit `Reflect.get` receiver propagation, ordinary-object cache tails,
   and generic fallbacks
@@ -630,9 +630,34 @@ AS-02b1 evidence:
   passes and detected four intentional new variants: default and strict forms
   of `proxy-function-async.js` and `proxy-revoked.js`; the official full-corpus
   refresh accepted exactly those four variants
-- Remaining for AS-02b1: repeat required CI on the refreshed baseline, merge,
-  and verify canonical report publication; AS-02b2 will migrate
-  write/define/delete/keys/descriptor/prototype methods
+- Validation/publication: required CI run `29057007323` passed in 59 seconds on
+  tree `58678b69`; post-merge performance and publisher run `29057098105`
+  passed, and report-only commit `1471b29` published matching Markdown and YAML
+  reports at `reports/test-runs/rsqjs-test-report-20260709T232030Z.*`
+- Remaining for AS-02b1: none
+
+AS-02b2 evidence:
+
+- PR: #403 (draft)
+- Scope: shared object-like `[[Set]]`, `[[Delete]]`,
+  `[[DefineOwnProperty]]`, `[[GetOwnProperty]]`, `[[OwnPropertyKeys]]`,
+  prototype, extensibility, and integrity dispatch
+- Cache boundary: static/dynamic write and delete caches receive only explicit
+  ordinary-object tails after Proxy, function, native-function, Error, and
+  HostFunction pre-dispatch
+- Proxy correction: set/delete/define/descriptor/ownKeys preserve Symbol keys;
+  `Reflect.set` preserves its explicit receiver across Proxy and prototype
+  recursion; Proxy seal/freeze uses observable internal methods rather than
+  mutating the wrapper's physical record
+- Consolidation: Object, Reflect, JSON, regexp state writes, destructuring,
+  object spread, and `Object.prototype.isPrototypeOf` delegate to the shared
+  boundary while physical stores remain backend-only
+- Tests: four new public regression cases cover Symbol mutation and metadata,
+  receiver-aware Reflect writes, function mutation, Proxy integrity, and
+  falsy prototype traps; focused suites and strict clippy pass at checkpoint
+  `fdbe3ea`
+- Remaining for AS-02b2: exact-head fast gate, required CI, merge, and
+  canonical report publication
 
 ### AS-03: Abstract Operations
 
@@ -762,10 +787,10 @@ reviewable scope.
    source-name harness bytecode (complete in PR #399).
 3. AS-02a: introduce the checked semantic object reference/facade while keeping
    current physical stores (complete in PR #400).
-4. AS-02b1: route get/has through common internal methods (implemented in draft
-   PR #401).
+4. AS-02b1: route get/has through common internal methods (complete in PR
+   #401).
 5. AS-02b2: route set/define/delete/own-keys/descriptor/prototype through common
-   internal methods.
+   internal methods (implemented in draft PR #403).
 6. AS-02c: route JavaScript, native, host, bound, and callable Proxy values
    through common call/construct internal methods.
 7. AS-03a: centralize equality and primitive conversion operations.
