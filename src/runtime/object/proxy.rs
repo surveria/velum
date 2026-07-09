@@ -37,10 +37,6 @@ impl ProxyValue {
         }
         Some(&self.handler)
     }
-
-    pub(in crate::runtime) const fn is_revoked(&self) -> bool {
-        self.revoked
-    }
 }
 
 impl ObjectHeap {

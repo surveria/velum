@@ -1,10 +1,13 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs},
-    value::{ObjectId, Value},
+    runtime::{Context, call::RuntimeCallArgs, object::PropertyEnumerable, object::PropertyKey},
+    value::{NativeFunctionId, ObjectId, Value},
 };
 
-use super::NativeFunctionKind;
+use super::{NativeFunctionKind, PROXY_REVOCABLE_NAME};
+
+const PROXY_REVOCABLE_PROXY_PROPERTY: &str = "proxy";
+const PROXY_REVOCABLE_REVOKE_PROPERTY: &str = "revoke";
 
 const PROXY_TARGET_NOT_OBJECT_ERROR: &str = "Proxy target must be an object";
 const PROXY_HANDLER_NOT_OBJECT_ERROR: &str = "Proxy handler must be an object";
@@ -24,7 +27,33 @@ const PROXY_GET_PROTOTYPE_INVALID_ERROR: &str =
 
 impl Context {
     pub(in crate::runtime) fn proxy_constructor_value(&mut self) -> Result<Value> {
-        self.global_function_value(NativeFunctionKind::Proxy)
+        if let Some(id) = self.native_function_id(NativeFunctionKind::Proxy) {
+            return Ok(Value::NativeFunction(id));
+        }
+        let constructor = self.create_native_function(NativeFunctionKind::Proxy, Value::Undefined)?;
+        if let Value::NativeFunction(id) = constructor {
+            self.define_proxy_static_method(
+                id,
+                PROXY_REVOCABLE_NAME,
+                NativeFunctionKind::ProxyRevocable,
+            )?;
+        }
+        self.insert_global_builtin(NativeFunctionKind::Proxy.name(), constructor.clone())?;
+        Ok(constructor)
+    }
+
+    fn define_proxy_static_method(
+        &mut self,
+        constructor: NativeFunctionId,
+        name: &str,
+        kind: NativeFunctionKind,
+    ) -> Result<()> {
+        let function = self.create_native_function(kind, Value::Undefined)?;
+        let key = self.intern_property_key(name)?;
+        self.native_function_mut(constructor)?
+            .properties_mut()
+            .define_builtin(key, function, PropertyEnumerable::No);
+        Ok(())
     }
 
     /// Spec `Proxy(target, handler)` / `ProxyCreate`. Both operands must be
@@ -32,6 +61,43 @@ impl Context {
     /// is a `TypeError`.
     pub(in crate::runtime) fn eval_proxy_call(&mut self, _args: RuntimeCallArgs<'_>) -> Result<Value> {
         Err(Error::type_error(PROXY_REQUIRES_NEW_ERROR))
+    }
+
+    /// Spec `Proxy.revocable(target, handler)`: create a proxy plus a revoke
+    /// function and return `{ proxy, revoke }`.
+    pub(in crate::runtime) fn eval_proxy_revocable(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        let proxy = self.construct_proxy_object(args)?;
+        let Value::Object(proxy_id) = proxy else {
+            return Err(Error::runtime("proxy construction did not yield an object"));
+        };
+        let revoke = self.create_ephemeral_native_function(
+            NativeFunctionKind::ProxyRevoke(proxy_id),
+            Value::Undefined,
+        )?;
+        let result = self.create_object_from_constructor()?;
+        self.create_proxy_data_property(&result, PROXY_REVOCABLE_PROXY_PROPERTY, proxy)?;
+        self.create_proxy_data_property(&result, PROXY_REVOCABLE_REVOKE_PROPERTY, revoke)?;
+        Ok(result)
+    }
+
+    /// The revoke function returned by `Proxy.revocable`: disconnect the proxy
+    /// from its target and handler.
+    pub(in crate::runtime) fn eval_proxy_revoke(&mut self, id: ObjectId) -> Result<Value> {
+        self.objects.revoke_proxy(id)?;
+        Ok(Value::Undefined)
+    }
+
+    fn create_proxy_data_property(
+        &mut self,
+        object: &Value,
+        name: &str,
+        value: Value,
+    ) -> Result<()> {
+        let key = PropertyKey::new(self.intern_atom(name)?);
+        self.set_property_value_with_accessors(object, key, name, value)
     }
 
     pub(in crate::runtime) fn construct_proxy_object(

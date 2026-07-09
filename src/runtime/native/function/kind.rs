@@ -1,5 +1,5 @@
 use super::date_kind::DateFunctionKind;
-use crate::value::{BoundFunctionId, ErrorName};
+use crate::value::{BoundFunctionId, ErrorName, ObjectId};
 
 mod string;
 
@@ -141,6 +141,10 @@ const PROMISE_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const PROMISE_NAME: &str = "Promise";
 pub(in crate::runtime::native) const PROXY_NAME: &str = "Proxy";
 const PROXY_FUNCTION_LENGTH: f64 = 2.0;
+pub(in crate::runtime::native) const PROXY_REVOCABLE_NAME: &str = "revocable";
+const PROXY_REVOCABLE_FUNCTION_LENGTH: f64 = 2.0;
+const PROXY_REVOKE_NAME: &str = "";
+const PROXY_REVOKE_FUNCTION_LENGTH: f64 = 0.0;
 const PROMISE_REJECT_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const PROMISE_REJECT_NAME: &str = "reject";
 const PROMISE_RESOLVE_FUNCTION_LENGTH: f64 = 1.0;
@@ -360,6 +364,8 @@ pub(in crate::runtime) enum NativeFunctionKind {
         kind: crate::runtime::promise::PromiseResolverKind,
     },
     Proxy,
+    ProxyRevocable,
+    ProxyRevoke(ObjectId),
     ReflectApply,
     ReflectConstruct,
     ReflectDefineProperty,
@@ -563,6 +569,8 @@ impl NativeFunctionKind {
             Self::PromiseCatch => Some(PROMISE_CATCH_FUNCTION_LENGTH),
             Self::PromiseResolver { .. } => Some(PROMISE_RESOLVER_FUNCTION_LENGTH),
             Self::Proxy => Some(PROXY_FUNCTION_LENGTH),
+            Self::ProxyRevocable => Some(PROXY_REVOCABLE_FUNCTION_LENGTH),
+            Self::ProxyRevoke(_) => Some(PROXY_REVOKE_FUNCTION_LENGTH),
             Self::RegExp => Some(REGEXP_FUNCTION_LENGTH),
             Self::RegExpPrototypeExec | Self::RegExpPrototypeTest => {
                 Some(REGEXP_PROTOTYPE_TEST_LENGTH)
@@ -721,6 +729,8 @@ impl NativeFunctionKind {
                 ..
             } => Some(REJECT_NAME),
             Self::Proxy => Some(PROXY_NAME),
+            Self::ProxyRevocable => Some(PROXY_REVOCABLE_NAME),
+            Self::ProxyRevoke(_) => Some(PROXY_REVOKE_NAME),
             Self::RegExp => Some(REGEXP_NAME),
             Self::RegExpPrototypeExec => Some(REGEXP_PROTOTYPE_EXEC_NAME),
             Self::RegExpPrototypeTest => Some(REGEXP_PROTOTYPE_TEST_NAME),
