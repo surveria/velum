@@ -76,6 +76,21 @@ pub struct JetStreamReport {
     pub elapsed: std::time::Duration,
 }
 
+impl JetStreamReport {
+    #[must_use]
+    pub const fn not_run() -> Self {
+        Self {
+            rows: Vec::new(),
+            measured: 0,
+            failed: 0,
+            invalid: 0,
+            skipped: 0,
+            over_latency_budget: 0,
+            elapsed: std::time::Duration::ZERO,
+        }
+    }
+}
+
 #[derive(Debug, Tabled)]
 pub struct JetStreamRow {
     pub(crate) benchmark: String,
@@ -158,15 +173,7 @@ pub fn run() -> JetStreamReport {
     let timer = timing::RunTimer::start();
     let config = MeasureConfig::in_process_from_env();
     let reference = make_reference();
-    let mut report = JetStreamReport {
-        rows: Vec::new(),
-        measured: 0,
-        failed: 0,
-        invalid: 0,
-        skipped: 0,
-        over_latency_budget: 0,
-        elapsed: std::time::Duration::ZERO,
-    };
+    let mut report = JetStreamReport::not_run();
     for case in jetstream_cases::cases() {
         let outcome = run_case(case, config, reference.as_deref());
         report.measured = report.measured.saturating_add(outcome.counts.measured);

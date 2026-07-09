@@ -2,6 +2,19 @@
 
 The target is not to beat desktop JIT engines. The target is to stay close to QuickJS-style footprint and startup while keeping the implementation safe and controllable.
 
+## Validation Lanes
+
+Correctness and performance are deliberately separate:
+
+- `scripts/check-fast.sh` is the local iteration loop. It does not download external corpora or run benchmarks.
+- `scripts/check-correctness.sh` is the required ready-PR and merge-queue gate. It runs all formatting, lint, test, documentation, active-fixture, QuickJS differential, and full Test262 checks, but no project or JetStream benchmarks.
+- After a merge, CI checks out the exact merge commit and collects the project performance report. This preserves a merge-to-merge history without putting sequential measurements on the merge critical path.
+- `scripts/test-all.sh` is the explicit full/manual lane and includes JetStream. It is not a routine local prerequisite for an ordinary feature PR.
+
+All test-oriented entrypoints acquire a shared `flock` through `scripts/with-host-lock.sh`; benchmark entrypoints acquire the exclusive form of the same lock. Correctness runs can therefore overlap with each other, while timing work cannot overlap with tests or another benchmark. The exclusive owner metadata at `/tmp/rsqjs-host-performance.lock.owner` is diagnostic only; lock release follows the kernel file descriptor and remains safe after a crash.
+
+Feature and compatibility work should run focused tests plus `scripts/check-fast.sh`, push the draft branch, and let required CI perform the complete correctness pass once. Performance work should use a filtered project benchmark while iterating and leave the canonical per-merge measurement to CI.
+
 ## Baselines
 
 Track these against QuickJS on every supported device class:
@@ -23,7 +36,7 @@ Track these against QuickJS on every supported device class:
 
 ## QuickJS Reference
 
-`scripts/test-all.sh` prepares a pinned QuickJS reference binary before running the Rust test runner. By default it writes full reports, benchmark rollups, summary charts, and artifact metadata under `target/rsqjs-reports/` so local agents and ready pull requests can inspect benchmark progress without changing tracked report history. The script prints the exact markdown report path after generation and warns that ordinary feature branches must not commit that generated report. CI uploads `target/rsqjs-reports/` as an artifact named by the tested tree SHA. After a PR is merged, GitHub Actions downloads the artifact for the tested tree, stores the tested source commit on the hidden `refs/rsqjs/ci-tested-sources` archive ref, copies the single markdown report into `reports/test-runs/`, and regenerates `reports/benchmark-rollup.md` plus `reports/benchmark-summary.jpg` in one report-only commit created through GitHub's signed commit path. Canonical reports preserve the PR artifact commit in their run metadata; on GitHub pull requests this can be a synthetic merge commit that is tree-equivalent to the eventual squash merge commit, so `refs/rsqjs/ci-tested-sources` keeps that commit reachable after PR refs or task branches are cleaned up without appearing as a normal GitHub branch. The publisher can read the legacy `refs/heads/ci-tested-sources` branch as a one-time migration base, but new archive commits are pushed only to the hidden ref. Set `RSQJS_TRACKED_REPORT=1` or `RSQJS_TEST_REPORT_PATH=reports/test-runs/<name>.md` only for intentional manual canonical report refreshes. The setup order is:
+The report scripts prepare a pinned QuickJS reference binary before running differential checks or reference measurements. Generated reports, rollups, charts, and artifact metadata live under `target/rsqjs-reports/`; ordinary feature branches must not commit them. Required CI uploads a correctness artifact named by the tested tree. The separate post-merge job measures the exact merge commit, uploads the performance artifact consumed by the publisher, stores that source commit on the hidden `refs/rsqjs/ci-tested-sources` archive ref, copies the report into `reports/test-runs/`, and regenerates `reports/benchmark-rollup.md` plus `reports/benchmark-summary.jpg` in a signed report-only commit. The publisher can read the legacy `refs/heads/ci-tested-sources` branch as a migration base, but new archive commits are pushed only to the hidden ref. Set `RSQJS_TRACKED_REPORT=1` or `RSQJS_TEST_REPORT_PATH=reports/test-runs/<name>.md` only for intentional manual canonical report refreshes. The setup order is:
 
 1. use `RSQJS_QUICKJS` when it points to an executable file;
 2. use `qjs` from `PATH` when available;
@@ -39,7 +52,7 @@ The rs-quickjs benchmark adapter uses only the public runtime API. It applies a 
 
 The runner also executes a pinned, minimized JetStream shell workload snapshot from `tests/external/jetstream/`. The full upstream JetStream repository is intentionally not vendored because it includes browser workloads, WebAssembly payloads, compressed assets, and tooling bundles that are outside the current embedded shell engine surface. The checked-in snapshot records the upstream commit and keeps only selected JavaScript workload files that can be audited in this repository without repeated network downloads.
 
-JetStream shell reports are generated in addition to the main full report. Local and CI runs write them under `target/rsqjs-reports/jetstream-runs/`; intentional tracked report refreshes write them under `reports/jetstream-runs/`. `scripts/test-all.sh` prints both paths after generation. Ordinary feature branches must not commit either generated report path. The post-merge publisher copies the already-tested JetStream artifact into `reports/jetstream-runs/` and then regenerates the shared `reports/benchmark-rollup.md` and `reports/benchmark-summary.jpg` from both `reports/test-runs/` and `reports/jetstream-runs/`.
+JetStream shell reports belong to the explicit full/manual lane rather than the required or per-merge lane. They are generated under `target/rsqjs-reports/jetstream-runs/`; intentional tracked refreshes use `reports/jetstream-runs/`. `scripts/test-all.sh` prints both report paths. Ordinary feature branches must not commit either generated path. A canonical JetStream refresh feeds the shared `reports/benchmark-rollup.md` and `reports/benchmark-summary.jpg`, but its long-running shell workloads never delay a normal merge.
 
 JetStream shell rows compare rs-quickjs and QuickJS on the same vendored workload source. The reported `latency_ratio` is `rsqjs_median / quickjs_median`, so `1.00x` means QuickJS parity and lower is better. A `28.00x` row means rs-quickjs took about 28 times as long as QuickJS for that workload. Rows above `1.00x` are tracked exceptions while the baseline is still below target. Unsupported, failing, or invalid JetStream candidates stay visible in the JetStream table, but they are non-blocking coverage rows so expanding the external benchmark set does not make ordinary CI fail only because the current engine lacks a feature.
 
@@ -47,12 +60,14 @@ The current integration does not run the official JetStream `cli.js` driver. Tha
 
 ## Test262 Reference
 
-`scripts/test-all.sh` also prepares a pinned checkout of the official Test262 corpus before running the Rust test runner. The setup order is:
+`scripts/check-correctness.sh` and `scripts/test-all.sh` prepare a pinned checkout of the official Test262 corpus before running the Rust test runner. Test files execute through a bounded Rayon pool controlled by `RSQJS_TEST_JOBS` (default four), while all variants for a file stay on one worker and report rows are sorted back into deterministic path order. The setup order is:
 
 1. use `RSQJS_TEST262_DIR` when it points to a directory;
 2. materialize Test262 commit `64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1` under `target/test262`.
 
 Set `RSQJS_TEST262_AUTO_SETUP=0` to disable automatic materialization. In that mode, upstream rows that need source files are reported as skipped.
+
+The committed `tests/corpora/test262/full-pass-baseline.txt` records every variant that passes at the pinned upstream commit. A complete unfiltered run fails if a known pass regresses or if a new pass is not acknowledged. Refresh it only for an intentional compatibility change with `RSQJS_TEST262_UPDATE_PASS_BASELINE=1 ./scripts/check-correctness.sh`, inspect the changed IDs, and commit the baseline with the implementation. The active fixture registry is checked independently so adding a JavaScript fixture without registering it cannot silently reduce coverage.
 
 ## Performance Targets
 
@@ -102,4 +117,4 @@ Do not weaken these thresholds in CI to make a benchmark pass. Fix the benchmark
 - Run benchmark cases sequentially.
 - Avoid benchmark stdout. Return or accumulate a final value so the measured work stays observable without polluting reports.
 - Report memory alongside latency once memory measurement is implemented.
-- Keep ordinary PR benchmark reports as CI artifacts. Commit tracked report files only through the post-merge report publisher or through intentional report-refresh tasks.
+- Keep required-PR correctness reports and post-merge benchmark reports as separate CI artifacts. Commit tracked report files only through the post-merge report publisher or through intentional report-refresh tasks.

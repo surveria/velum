@@ -50,6 +50,8 @@ const PATH_QUICKJS_BLOCK_LEXICAL_SCOPE: &str =
     "tests/corpora/quickjs_differential/active/block_lexical_scope.js";
 const PATH_QUICKJS_FUNCTION_EXPRESSION: &str =
     "tests/corpora/quickjs_differential/active/function_expression.js";
+const PATH_QUICKJS_FUNCTION_CONSTRUCTOR: &str =
+    "tests/corpora/quickjs_differential/active/function_constructor.js";
 const PATH_QUICKJS_FUNCTION_PROPERTIES: &str =
     "tests/corpora/quickjs_differential/active/function_properties.js";
 const PATH_QUICKJS_FUNCTION_CUSTOM_PROPERTIES: &str =
@@ -311,6 +313,10 @@ fn quickjs_control_flow_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "function_expression",
             path: PATH_QUICKJS_FUNCTION_EXPRESSION,
+        },
+        DifferentialCase {
+            id: "function_constructor",
+            path: PATH_QUICKJS_FUNCTION_CONSTRUCTOR,
         },
         DifferentialCase {
             id: "function_properties",

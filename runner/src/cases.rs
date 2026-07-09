@@ -33,6 +33,8 @@ mod cases_engine_runtime;
 mod cases_reporting;
 #[path = "cases_test262.rs"]
 mod cases_test262;
+#[path = "cases_test262_additions.rs"]
+mod cases_test262_additions;
 #[path = "cases_test262_collections.rs"]
 mod cases_test262_collections;
 #[path = "cases_test262_proxy.rs"]

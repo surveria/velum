@@ -16,6 +16,7 @@ mod bench_measure;
 mod benchmark_mode;
 mod benchmarks;
 mod build_info;
+mod case_registry;
 mod cases;
 mod failure_classification;
 mod jetstream;
@@ -26,9 +27,11 @@ mod report_rendering;
 mod report_rollup;
 mod report_text;
 mod runner_cli;
+mod test262_baseline;
 mod test262_external;
 mod test262_full;
 mod test262_metadata;
+mod test262_parallel;
 mod timing;
 use cases::{DifferentialCase, EngineCase, Expectation};
 #[cfg(test)]
@@ -46,9 +49,16 @@ const RUNNER_NAME: &str = "`rsqjs-test-runner`";
 const QUICKJS_ENV: &str = "RSQJS_QUICKJS";
 const TEST262_ENV: &str = "RSQJS_TEST262_DIR";
 const JETSTREAM_REPORT_ENV: &str = "RSQJS_JETSTREAM_REPORT_PATH";
+const JETSTREAM_ENABLED_ENV: &str = "RSQJS_JETSTREAM_ENABLED";
 
 const REASON_MATCHED: &str = "matched expected behavior";
 const REASON_QUICKJS_ENV_MISSING: &str = "set RSQJS_QUICKJS=/path/to/qjs to enable";
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum ReportKind {
+    Full,
+    Correctness,
+}
 
 fn main() {
     if let Err(error) = run() {
@@ -59,8 +69,9 @@ fn main() {
 
 fn run() -> anyhow::Result<()> {
     let config = Config::from_args(env::args().skip(1))?;
-    let report_path = match config {
-        Config::Run { report_path } => report_path,
+    let (report_path, report_kind) = match config {
+        Config::Run { report_path } => (report_path, ReportKind::Full),
+        Config::Correctness { report_path } => (report_path, ReportKind::Correctness),
         Config::Benchmarks { report_path } => {
             return benchmark_mode::run(&report_path);
         }
@@ -71,13 +82,24 @@ fn run() -> anyhow::Result<()> {
         }
     };
 
+    case_registry::validate()?;
     let quickjs = env::var_os(QUICKJS_ENV).map(PathBuf::from);
     let test262 = env::var_os(TEST262_ENV).map(PathBuf::from);
-    let report = build_report(quickjs.as_deref(), test262.as_deref());
+    let include_jetstream = report_kind == ReportKind::Full && jetstream_enabled();
+    let report = build_report(
+        quickjs.as_deref(),
+        test262.as_deref(),
+        report_kind,
+        include_jetstream,
+    )?;
     write_report(&report_path, &report)?;
-    write_jetstream_report_from_env(&report)?;
-    let outputs = report_rollup::generate_from_report_path(&report_path)?;
-    print_rollup_outputs(&outputs);
+    if report_kind == ReportKind::Full {
+        if include_jetstream {
+            write_jetstream_report_from_env(&report)?;
+        }
+        let outputs = report_rollup::generate_from_report_path(&report_path)?;
+        print_rollup_outputs(&outputs);
+    }
 
     if report.failed_count() == 0 {
         return Ok(());
@@ -88,6 +110,13 @@ fn run() -> anyhow::Result<()> {
         report.failed_count(),
         report_path.display()
     )
+}
+
+fn jetstream_enabled() -> bool {
+    env::var(JETSTREAM_ENABLED_ENV).map_or(true, |value| {
+        let value = value.trim();
+        value != "0" && !value.eq_ignore_ascii_case("false") && !value.eq_ignore_ascii_case("no")
+    })
 }
 
 fn write_jetstream_report_from_env(report: &FullReport) -> anyhow::Result<()> {
@@ -299,21 +328,34 @@ impl FeatureAreaStats {
     }
 }
 
-fn build_report(quickjs: Option<&Path>, test262: Option<&Path>) -> FullReport {
+fn build_report(
+    quickjs: Option<&Path>,
+    test262: Option<&Path>,
+    report_kind: ReportKind,
+    include_jetstream: bool,
+) -> anyhow::Result<FullReport> {
     let timer = timing::RunTimer::start();
     let mut corpora = vec![run_engine_corpus(), run_test262_corpus()];
-    corpora.extend(test262_full::run_reports(test262));
+    corpora.extend(test262_full::run_reports(test262)?);
     corpora.push(run_quickjs_corpus(quickjs));
-    let benchmarks = benchmarks::run();
-    let jetstream = jetstream::run();
+    let benchmarks = if report_kind == ReportKind::Full {
+        benchmarks::run()
+    } else {
+        benchmarks::BenchmarkReport::not_run()
+    };
+    let jetstream = if include_jetstream {
+        jetstream::run()
+    } else {
+        jetstream::JetStreamReport::not_run()
+    };
     let elapsed = timer.elapsed();
-    FullReport {
+    Ok(FullReport {
         metadata: report_metadata::RunMetadata::from_env(),
         corpora,
         benchmarks,
         jetstream,
         elapsed,
-    }
+    })
 }
 
 fn run_engine_corpus() -> CorpusReport {
