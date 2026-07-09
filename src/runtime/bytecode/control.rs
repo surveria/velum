@@ -7,6 +7,7 @@ mod object_literal_loop;
 mod string_concat_loop;
 mod switch_for_loop;
 mod try_catch;
+mod try_catch_loop;
 mod try_finally_loop;
 mod update_expression_loop;
 mod while_loop;

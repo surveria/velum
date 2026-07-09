@@ -25,6 +25,7 @@ use super::{
     object_literal_loop::BytecodeObjectLiteralLoopFastPath,
     string_concat_loop::BytecodeForStringConcatLengthFastPath,
     switch_for_loop::BytecodeForSwitchFastPath,
+    try_catch_loop::BytecodeForTryCatchFastPath,
     try_finally_loop::BytecodeForTryFinallyFastPath,
     update_expression_loop::BytecodeUpdateExpressionLoopFastPath,
 };
@@ -58,6 +59,7 @@ pub(super) enum BytecodeForLoopBodyFastPath<'a> {
     UpdateExpression(BytecodeUpdateExpressionLoopFastPath<'a>),
     ObjectLiteral(BytecodeObjectLiteralLoopFastPath<'a>),
     BlockLexical(BytecodeBlockLexicalLoopFastPath<'a>),
+    TryCatch(BytecodeForTryCatchFastPath<'a>),
     TryFinally(BytecodeForTryFinallyFastPath<'a>),
 }
 
@@ -230,6 +232,9 @@ impl Context {
             BytecodeForLoopBodyFastPath::BlockLexical(body) => {
                 Self::block_lexical_loop_fast_path_ready(body)
             }
+            BytecodeForLoopBodyFastPath::TryCatch(body) => {
+                Self::try_catch_loop_fast_path_ready(body)
+            }
             BytecodeForLoopBodyFastPath::TryFinally(body) => {
                 Self::try_finally_loop_fast_path_ready(body)
             }
@@ -274,6 +279,11 @@ impl Context {
         {
             return Ok(None);
         }
+        if let BytecodeForLoopBodyFastPath::TryCatch(body) = &fast_path.body
+            && self.eval_try_catch_loop_fast_path(state, next, fast_path, body)?
+        {
+            return Ok(None);
+        }
         if let BytecodeForLoopBodyFastPath::TryFinally(body) = &fast_path.body
             && self.eval_try_finally_loop_fast_path(state, next, fast_path, body)?
         {
@@ -288,6 +298,7 @@ impl Context {
             | BytecodeForLoopBodyFastPath::BlockLexical(_)
             | BytecodeForLoopBodyFastPath::ObjectLiteral(_)
             | BytecodeForLoopBodyFastPath::StringConcatLength(_)
+            | BytecodeForLoopBodyFastPath::TryCatch(_)
             | BytecodeForLoopBodyFastPath::TryFinally(_)
             | BytecodeForLoopBodyFastPath::UpdateExpression(_) => None,
             BytecodeForLoopBodyFastPath::MaskedArrayAdd(body) => {
@@ -409,6 +420,9 @@ impl Context {
         if let Some(body) = self.compile_object_literal_loop_fast_path(index, body)? {
             return Ok(Some(BytecodeForLoopBodyFastPath::ObjectLiteral(body)));
         }
+        if let Some(body) = self.compile_try_catch_loop_fast_path(index, body)? {
+            return Ok(Some(BytecodeForLoopBodyFastPath::TryCatch(body)));
+        }
         if let Some(body) = self.compile_try_finally_loop_fast_path(index, body)? {
             return Ok(Some(BytecodeForLoopBodyFastPath::TryFinally(body)));
         }
@@ -527,6 +541,7 @@ impl Context {
             BytecodeForLoopBodyFastPath::StringConcatLength(_)
             | BytecodeForLoopBodyFastPath::UpdateExpression(_)
             | BytecodeForLoopBodyFastPath::ObjectLiteral(_)
+            | BytecodeForLoopBodyFastPath::TryCatch(_)
             | BytecodeForLoopBodyFastPath::TryFinally(_) => {
                 Ok(Completion::Normal(Value::Undefined))
             }
@@ -757,44 +772,5 @@ impl Context {
         let value = self.checked_value(Value::Number(left + element))?;
         self.assign_fast_path_cell(fast_path.target, &fast_path.target_cell, value.clone())?;
         Ok(Some(value))
-    }
-
-    fn masked_binding_value(
-        &mut self,
-        binding: &BytecodeBinding,
-        cell: &BindingCell,
-        mask: f64,
-        mask_i32: i32,
-    ) -> Result<Value> {
-        let value = self.runtime_value(cell.value(binding.name())?)?;
-        if let Value::Number(number) = value {
-            let masked = number_to_i32(number, "&")? & mask_i32;
-            return Ok(Value::Number(f64::from(masked)));
-        }
-        self.eval_bytecode_number_binary(
-            BytecodeNumericBinaryOp::BitAnd,
-            &value,
-            &Value::Number(mask),
-        )
-    }
-
-    fn masked_binding_index(
-        &mut self,
-        binding: &BytecodeBinding,
-        cell: &BindingCell,
-        mask: f64,
-        mask_i32: i32,
-    ) -> Result<(Value, Option<usize>)> {
-        let value = self.runtime_value(cell.value(binding.name())?)?;
-        if let Value::Number(number) = value {
-            let index = number_to_i32(number, "&")? & mask_i32;
-            return Ok((Value::Number(f64::from(index)), usize::try_from(index).ok()));
-        }
-        let property = self.eval_bytecode_number_binary(
-            BytecodeNumericBinaryOp::BitAnd,
-            &value,
-            &Value::Number(mask),
-        )?;
-        Ok((property, None))
     }
 }

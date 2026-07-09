@@ -55,7 +55,7 @@ impl BytecodeCatchFastPath {
         let Some(BytecodeInstruction::LoadBinding(test)) = instructions.first() else {
             return None;
         };
-        if test != param {
+        if !same_bytecode_binding(test, param) {
             return None;
         }
         let Some(BytecodeInstruction::PushString(expected)) = instructions.get(1) else {
@@ -93,7 +93,7 @@ impl BytecodeCatchFastPath {
         let Some(BytecodeInstruction::StoreBinding(target_write)) = instructions.get(7) else {
             return None;
         };
-        if target_read != target_write {
+        if !same_bytecode_binding(target_read, target_write) {
             return None;
         }
         if !matches!(instructions.get(8), Some(BytecodeInstruction::StoreLast)) {
@@ -124,4 +124,8 @@ impl BytecodeCatchFastPath {
             addend: *addend,
         })
     }
+}
+
+fn same_bytecode_binding(left: &BytecodeBinding, right: &BytecodeBinding) -> bool {
+    left.operand() == right.operand() && left.name().as_str() == right.name().as_str()
 }
