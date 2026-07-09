@@ -109,12 +109,23 @@ const REFLECT_ERROR_SCRIPT: &str = r#"
         let ownKeysUndefined = throwsType(function () { return Reflect.ownKeys(undefined); });
         let applyNonCallable = throwsType(function () { return Reflect.apply({}, null, []); });
         let constructNonCtor = throwsType(function () { return Reflect.construct({}, []); });
+        let proxyHasThrow = false;
+        try {
+            Reflect.has(new Proxy({}, {
+                has: function () {
+                    throw new TypeError("proxy has trap");
+                }
+            }), "x");
+        } catch (error) {
+            proxyHasThrow = error instanceof TypeError;
+        }
 
         getOnPrimitive &&
             hasOnNull &&
             ownKeysUndefined &&
             applyNonCallable &&
-            constructNonCtor ? 42 : 0
+            constructNonCtor &&
+            proxyHasThrow ? 42 : 0
 "#;
 
 #[test]

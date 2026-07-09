@@ -48,4 +48,16 @@ impl Completion {
             Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),
         }
     }
+
+    pub fn into_native_value_result(self) -> Result<Value> {
+        match self {
+            Self::Normal(value) | Self::Return(value) => Ok(value),
+            Self::Throw(Value::Error(error)) => {
+                Err(Error::exception(error.name(), error.message().to_owned()))
+            }
+            Self::Throw(value) => Err(Error::runtime(format!("uncaught throw: {value}"))),
+            Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
+            Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),
+        }
+    }
 }

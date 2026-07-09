@@ -180,7 +180,8 @@ impl Context {
             return self.get_property_value(&target, name);
         };
         let key = self.heap_string_value(name)?;
-        self.eval_call_value(trap, &[target, key, receiver], handler)
+        self.eval_call_completion(trap, &[target, key, receiver], handler)?
+            .into_native_value_result()
     }
 
     /// Proxy `[[Has]]`: dispatch to the `has` trap or fall back to the target.
@@ -192,7 +193,9 @@ impl Context {
             return self.has_dynamic_property_value(&target, &key);
         };
         let key = self.heap_string_value(name)?;
-        let result = self.eval_call_value(trap, &[target, key], handler)?;
+        let result = self
+            .eval_call_completion(trap, &[target, key], handler)?
+            .into_native_value_result()?;
         Ok(result.is_truthy())
     }
 
@@ -212,7 +215,9 @@ impl Context {
             return Ok(true);
         };
         let key = self.heap_string_value(name)?;
-        let result = self.eval_call_value(trap, &[target, key, value, receiver], handler)?;
+        let result = self
+            .eval_call_completion(trap, &[target, key, value, receiver], handler)?
+            .into_native_value_result()?;
         Ok(result.is_truthy())
     }
 
@@ -230,7 +235,9 @@ impl Context {
             );
         };
         let key = self.heap_string_value(name)?;
-        let result = self.eval_call_value(trap, &[target, key], handler)?;
+        let result = self
+            .eval_call_completion(trap, &[target, key], handler)?
+            .into_native_value_result()?;
         Ok(result.is_truthy())
     }
 
@@ -240,7 +247,9 @@ impl Context {
         let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_GET_PROTOTYPE_OF)? else {
             return self.eval_object_get_prototype_of(RuntimeCallArgs::values(&[target]));
         };
-        let result = self.eval_call_value(trap, &[target], handler)?;
+        let result = self
+            .eval_call_completion(trap, &[target], handler)?
+            .into_native_value_result()?;
         if !matches!(result, Value::Object(_) | Value::Null) {
             return Err(Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR));
         }
@@ -258,7 +267,9 @@ impl Context {
             self.eval_direct_object_set_prototype_of(&[target, prototype])?;
             return Ok(true);
         };
-        let result = self.eval_call_value(trap, &[target, prototype], handler)?;
+        let result = self
+            .eval_call_completion(trap, &[target, prototype], handler)?
+            .into_native_value_result()?;
         Ok(result.is_truthy())
     }
 
@@ -270,7 +281,9 @@ impl Context {
                 .eval_direct_object_is_extensible(&[target])?
                 .is_truthy());
         };
-        let result = self.eval_call_value(trap, &[target], handler)?;
+        let result = self
+            .eval_call_completion(trap, &[target], handler)?
+            .into_native_value_result()?;
         Ok(result.is_truthy())
     }
 
@@ -281,7 +294,9 @@ impl Context {
             self.eval_direct_object_prevent_extensions(&[target])?;
             return Ok(true);
         };
-        let result = self.eval_call_value(trap, &[target], handler)?;
+        let result = self
+            .eval_call_completion(trap, &[target], handler)?
+            .into_native_value_result()?;
         Ok(result.is_truthy())
     }
 
@@ -300,7 +315,9 @@ impl Context {
             self.eval_object_define_property(RuntimeCallArgs::values(&[target, key, descriptor]))?;
             return Ok(true);
         };
-        let result = self.eval_call_value(trap, &[target, key, descriptor], handler)?;
+        let result = self
+            .eval_call_completion(trap, &[target, key, descriptor], handler)?
+            .into_native_value_result()?;
         Ok(result.is_truthy())
     }
 
@@ -312,7 +329,9 @@ impl Context {
         let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_OWN_KEYS)? else {
             return self.own_property_names(&target);
         };
-        let result = self.eval_call_value(trap, &[target], handler)?;
+        let result = self
+            .eval_call_completion(trap, &[target], handler)?
+            .into_native_value_result()?;
         self.proxy_key_list_from_value(&result)
     }
 
@@ -329,7 +348,9 @@ impl Context {
             let key = self.dynamic_property_key(&key_value)?;
             return self.own_property_descriptor_value(&target, &key);
         };
-        let result = self.eval_call_value(trap, &[target, key_value], handler)?;
+        let result = self
+            .eval_call_completion(trap, &[target, key_value], handler)?
+            .into_native_value_result()?;
         match result {
             Value::Undefined => Ok(None),
             Value::Object(_) => Ok(Some(self.own_property_descriptor_from_object(&result)?)),
@@ -363,7 +384,8 @@ impl Context {
             return self.eval_call_value(target, args, this_value);
         };
         let args_array = self.create_array_from_elements(args.to_vec())?;
-        self.eval_call_value(trap, &[target, this_value, args_array], handler)
+        self.eval_call_completion(trap, &[target, this_value, args_array], handler)?
+            .into_native_value_result()
     }
 
     /// Proxy `[[Construct]]`: dispatch the `construct` trap or construct the
@@ -379,7 +401,9 @@ impl Context {
         };
         let args_array = self.create_array_from_elements(args.to_vec())?;
         let new_target = Value::Object(id);
-        let result = self.eval_call_value(trap, &[target, args_array, new_target], handler)?;
+        let result = self
+            .eval_call_completion(trap, &[target, args_array, new_target], handler)?
+            .into_native_value_result()?;
         if !Self::is_object_like(&result) {
             return Err(Error::type_error(PROXY_CONSTRUCT_INVALID_ERROR));
         }

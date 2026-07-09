@@ -121,4 +121,18 @@ if (
   throw new Test262Error("Reflect property operations should reject non-object targets");
 }
 
+var proxyHasThrow = false;
+try {
+  Reflect.has(new Proxy({}, {
+    has: function () {
+      throw new TypeError("proxy has trap");
+    }
+  }), "x");
+} catch (error) {
+  proxyHasThrow = error instanceof TypeError;
+}
+if (proxyHasThrow !== true) {
+  throw new Test262Error("Reflect.has should preserve proxy trap throws");
+}
+
 42
