@@ -17,11 +17,11 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260709T171327Z.md`
-- Task: PR #387: Optimize function apply and hasInstance benchmark paths
-- Performance: 3.12x (59/73 >1.00x)
+- `rsqjs-test-report-20260709T182158Z.md`
+- Task: PR #389: Optimize constructor prototype benchmark paths
+- Performance: 2.83x (58/73 >1.00x)
 - Memory: - (0/73 >1.00x)
-- JetStream: 25.31x (4/4 >1.00x)
+- JetStream: 23.09x (4/4 >1.00x)
 - Full Test262: 33962 passed / 68616 failed (33.11%)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
@@ -373,3 +373,4 @@ Latest report:
 | `20260709T152046Z` `0aadebd` PR #386: Optimize residual compound assignment bytecode paths | 3.19x (60/73 >1.00x) | - (0/73 >1.00x) | 22.18x (4/4 >1.00x) | 33844 passed / 68734 failed (32.99%) |
 | `20260709T164702Z` `61c59b8` workflow_dispatch | 3.21x (60/73 >1.00x) | - (0/73 >1.00x) | 24.81x (4/4 >1.00x) | 33962 passed / 68616 failed (33.11%) |
 | `20260709T171327Z` `338d702` PR #387: Optimize function apply and hasInstance benchmark paths | 3.12x (59/73 >1.00x) | - (0/73 >1.00x) | 25.31x (4/4 >1.00x) | 33962 passed / 68616 failed (33.11%) |
+| `20260709T182158Z` `b9b5e65` PR #389: Optimize constructor prototype benchmark paths | 2.83x (58/73 >1.00x) | - (0/73 >1.00x) | 23.09x (4/4 >1.00x) | 33962 passed / 68616 failed (33.11%) |
