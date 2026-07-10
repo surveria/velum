@@ -18,12 +18,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260710T135712Z.md`
-- Task: PR #421: AS-04b2b2: bytecode and runtime source spans
-- Performance: 5.79x (4/5 >1.00x) (from `rsqjs-test-report-20260710T135712Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T135712Z.md`)
+- `rsqjs-test-report-20260710T141238Z.md`
+- Task: PR #422: AS-05a1: establish non-cloneable VM identity
+- Performance: 5.71x (4/5 >1.00x) (from `rsqjs-test-report-20260710T141238Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T141238Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T135712Z.md`)
+- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T141238Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -408,3 +408,4 @@ Latest report:
 | `20260710T124126Z` `a3d9af6` PR #419: AS-04b2a: add stable source identity | 5.28x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T132547Z` `6f887c2` PR #420: AS-04b2b1: carry source spans through frontend AST | 5.29x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T135712Z` `13b0bbe` PR #421: AS-04b2b2: bytecode and runtime source spans | 5.79x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
+| `20260710T141238Z` `4143ec4` PR #422: AS-05a1: establish non-cloneable VM identity | 5.71x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
