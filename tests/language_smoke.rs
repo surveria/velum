@@ -784,11 +784,9 @@ fn ensure_error_kind(error: &Error, expected: &str) -> TestResult {
             | (Error::JavaScript { .. }, "javascript")
             | (Error::ResourceLimit { .. }, "resource limit")
     );
-
     if matches {
         return Ok(());
     }
-
     Err(format!("expected {expected} error, got {error:?}").into())
 }
 
