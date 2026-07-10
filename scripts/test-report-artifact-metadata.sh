@@ -128,4 +128,20 @@ load_trusted_workflow_run owner/repo 200 "${tree_sha}" performance 200 ||
 [[ "${RUN_HEAD_SHA}" == "${head_sha}" ]] || fail_test "shifted the parsed head SHA"
 [[ "${RUN_ATTEMPT}" == 7 ]] || fail_test "shifted the parsed run attempt"
 
+headline="$(report_commit_headline \
+  'AS-06a2a: attach VM-owned bytecode continuations' 439 20260710T212554Z)"
+[[ "${headline}" == \
+  'AS-06a2a: attach VM-owned bytecode continuations (#439) (CI) [skip ci]' ]] ||
+  fail_test "did not derive the report commit headline from pull request metadata"
+
+headline="$(report_commit_headline \
+  'runtime: preserve an existing pull request suffix (#439)' 439 20260710T212554Z)"
+[[ "${headline}" == \
+  'runtime: preserve an existing pull request suffix (#439) (CI) [skip ci]' ]] ||
+  fail_test "duplicated an existing pull request suffix"
+
+headline="$(report_commit_headline '' '' 20260710T212554Z)"
+[[ "${headline}" == 'Add rsqjs report 20260710T212554Z (CI) [skip ci]' ]] ||
+  fail_test "changed the report commit headline fallback"
+
 printf 'report artifact metadata parser tests passed\n'

@@ -579,12 +579,32 @@ reset_report_outputs() {
   git restore --worktree -- reports/benchmark-rollup.md reports/benchmark-summary.jpg
 }
 
+report_commit_headline() {
+  local task="$1"
+  local pull_request="$2"
+  local timestamp="$3"
+
+  if [[ -n "${task}" && "${pull_request}" =~ ^[0-9]+$ ]]; then
+    local pull_request_suffix="(#${pull_request})"
+    if [[ "${task}" == *"${pull_request_suffix}" ]]; then
+      printf '%s (CI) [skip ci]' "${task}"
+    else
+      printf '%s %s (CI) [skip ci]' "${task}" "${pull_request_suffix}"
+    fi
+    return 0
+  fi
+
+  printf 'Add rsqjs report %s (CI) [skip ci]' "${timestamp}"
+}
+
 commit_and_push() {
   local report_file="$1"
   local report_yaml_file="$2"
   local expected_tree="$3"
   local source_commit="$4"
   local source_run="$5"
+  local source_task="$6"
+  local source_pull_request="$7"
 
   local target_report="reports/test-runs/${report_file}"
   local target_report_yaml="reports/test-runs/${report_yaml_file}"
@@ -602,7 +622,8 @@ commit_and_push() {
 
   local timestamp="${report_file#rsqjs-test-report-}"
   timestamp="${timestamp%.md}"
-  local headline="Add rsqjs report ${timestamp} [skip ci]"
+  local headline
+  headline="$(report_commit_headline "${source_task}" "${source_pull_request}" "${timestamp}")"
   local body
   body="$(printf 'Source commit: %s\n\nSource tree: %s\n\nSource workflow run: %s\n' \
     "${source_commit}" "${expected_tree}" "${source_run}")"
@@ -655,6 +676,8 @@ performance_component="${performance_artifact_dir}/${RSQJS_ARTIFACT_REPORT_COMPO
 performance_timestamp="${RSQJS_ARTIFACT_TIMESTAMP:-}"
 source_commit="${RSQJS_ARTIFACT_COMMIT_SHA:-unknown}"
 performance_run="${RSQJS_ARTIFACT_RUN_ID:-unknown}"
+source_pull_request="${RSQJS_ARTIFACT_PR_NUMBER:-}"
+source_task="${RSQJS_ARTIFACT_TASK:-}"
 
 correctness_artifact_dir="$(download_matching_artifact "${repository}" "${correctness_artifact_name}" "${expected_tree}" correctness "${tmp_dir}/correctness")"
 correctness_metadata_file="${correctness_artifact_dir}/rsqjs-report-metadata.env"
@@ -682,4 +705,5 @@ legacy_archive_ref="$(resolve_legacy_archive_ref)"
 archive_tested_source_commit "${archive_ref}" "${legacy_archive_ref}" "${source_commit}" "${expected_tree}" "${source_run}"
 checkout_latest_main
 stage_report_outputs "${source_report}" "${report_file}" "${source_report_yaml}" "${report_yaml_file}" "${source_jetstream_report}" "${jetstream_report_file}"
-commit_and_push "${report_file}" "${report_yaml_file}" "${expected_tree}" "${source_commit}" "${source_run}"
+commit_and_push "${report_file}" "${report_yaml_file}" "${expected_tree}" "${source_commit}" "${source_run}" \
+  "${source_task}" "${source_pull_request}"
