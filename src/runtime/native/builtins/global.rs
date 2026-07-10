@@ -19,16 +19,18 @@ enum ParseIntRadix {
 
 impl Context {
     pub(in crate::runtime::native) fn eval_global_parse_int(
+        &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        Self::eval_direct_global_parse_int(args.as_slice())
+        self.eval_direct_global_parse_int(args.as_slice())
     }
 
     pub(in crate::runtime::native) fn eval_direct_global_parse_int(
+        &mut self,
         args: &[Value],
     ) -> Result<Value> {
         let input = Self::global_string_argument(args.first());
-        let radix = Self::parse_int_radix(args.get(1))?;
+        let radix = self.parse_int_radix(args.get(1))?;
         Ok(Value::Number(Self::parse_int_string(&input, radix)))
     }
 
@@ -44,28 +46,40 @@ impl Context {
         )))
     }
 
-    pub(in crate::runtime::native) fn eval_global_is_nan(args: RuntimeCallArgs<'_>) -> Value {
-        Self::eval_direct_global_is_nan(args.as_slice())
+    pub(in crate::runtime::native) fn eval_global_is_nan(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_global_is_nan(args.as_slice())
     }
 
-    pub(in crate::runtime::native) fn eval_direct_global_is_nan(args: &[Value]) -> Value {
-        Value::Bool(
-            args.first()
-                .map_or(f64::NAN, Self::value_to_number)
-                .is_nan(),
-        )
+    pub(in crate::runtime::native) fn eval_direct_global_is_nan(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let number = match args.first() {
+            Some(value) => self.to_number(value)?,
+            None => f64::NAN,
+        };
+        Ok(Value::Bool(number.is_nan()))
     }
 
-    pub(in crate::runtime::native) fn eval_global_is_finite(args: RuntimeCallArgs<'_>) -> Value {
-        Self::eval_direct_global_is_finite(args.as_slice())
+    pub(in crate::runtime::native) fn eval_global_is_finite(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_global_is_finite(args.as_slice())
     }
 
-    pub(in crate::runtime::native) fn eval_direct_global_is_finite(args: &[Value]) -> Value {
-        Value::Bool(
-            args.first()
-                .map_or(f64::NAN, Self::value_to_number)
-                .is_finite(),
-        )
+    pub(in crate::runtime::native) fn eval_direct_global_is_finite(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let number = match args.first() {
+            Some(value) => self.to_number(value)?,
+            None => f64::NAN,
+        };
+        Ok(Value::Bool(number.is_finite()))
     }
 
     pub(in crate::runtime::native) const fn eval_number_is_nan(args: RuntimeCallArgs<'_>) -> Value {
@@ -182,11 +196,11 @@ impl Context {
         value.map_or_else(|| Value::Undefined.to_string(), ToString::to_string)
     }
 
-    fn parse_int_radix(value: Option<&Value>) -> Result<ParseIntRadix> {
+    fn parse_int_radix(&mut self, value: Option<&Value>) -> Result<ParseIntRadix> {
         let Some(value) = value else {
             return Ok(ParseIntRadix::Infer);
         };
-        let radix = number_to_i32(Self::value_to_number(value), PARSE_INT_RADIX_CONTEXT)?;
+        let radix = number_to_i32(self.to_number(value)?, PARSE_INT_RADIX_CONTEXT)?;
         if radix == 0 {
             return Ok(ParseIntRadix::Infer);
         }

@@ -25,8 +25,8 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 and the AS-02 semantic boundary are complete;
-  AS-03a1 equality consolidation is in progress in draft PR #409
+- Current program state: AS-01, AS-02, and AS-03a1 are complete; AS-03a2a
+  `ToPrimitive`/`ToNumber` consolidation is in progress in draft PR #410
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -481,7 +481,7 @@ dependencies do not overlap.
 | AS-00 | Complete | Adopt this plan and route project documentation to it. | None | PR #396 merged as `f79056b`; required CI, post-merge performance, publisher, and canonical report publication passed. |
 | AS-01 | Complete | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards merged in PR #399 with required CI and canonical report publication. |
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
-| AS-03 | In progress | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality consolidation is implemented in draft PR #409; coercion, property, invocation, and iterator operations remain. |
+| AS-03 | In progress | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality consolidation merged in PR #409; AS-03a2a `ToPrimitive`/`ToNumber` is in draft PR #410, followed by AS-03a2b `ToString`/`ToBoolean`; property, invocation, and iterator operations remain. |
 | AS-04 | Backlog | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | Real JavaScript error objects, typed throw path, no message-prefix classification, spans available to diagnostics. |
 | AS-05 | Backlog | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | Non-cloneable VM state, checked cross-VM boundaries, trace/root contract, heap/stack/job/buffer counters and limits. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
@@ -726,9 +726,9 @@ Land operations in coherent groups:
 Each migrated built-in must delete or delegate its local duplicate. Avoid a
 permanent period in which two implementations are both treated as canonical.
 
-AS-03a1 current evidence:
+AS-03a1 completion evidence:
 
-- PR: #409 (draft)
+- PR: #409, squash-merged as `d16197d`
 - Scope: one pure runtime owner for Abstract Equality, Strict Equality,
   `SameValue`, and `SameValueZero`, including their numeric specializations
 - Consolidation: bytecode, numeric quickening/control paths, `Object.is`,
@@ -740,11 +740,27 @@ AS-03a1 current evidence:
 - Tests: focused public coverage exercises primitive, boxed-string, Symbol,
   object identity, NaN, signed zero, arrays, collections, switch, callback, and
   loop paths; the complete engine/runner fast gate passes
-- Test262/QuickJS: the complete local correctness gate passes with no pass-set
-  change at 34,273/34,273 expected Test262 variants, 34,273 of 102,578 full
-  variants, and 95/95 QuickJS differential cases
-- Remaining for AS-03a1: run required exact-head CI, merge, and verify
-  exact-tree canonical report publication
+- Test262/QuickJS: required CI run `29075779553` certified tree `8eda1227`
+  with no pass-set change at 34,273/34,273 expected Test262 variants, 34,273
+  of 102,578 full variants, and 95/95 QuickJS differential cases
+- Publication: post-merge run `29075883784` measured all five project sentinels
+  and published `reports/test-runs/rsqjs-test-report-20260710T071037Z.*` in
+  report-only commit `b5e6147`
+- Remaining for AS-03a1: none
+
+The primitive-conversion group is split by dependency and review boundary:
+
+- AS-03a2a (draft PR #410) owns `ToPrimitive`, `OrdinaryToPrimitive`, and
+  `ToNumber`. It replaces the Date, Math, JSON, boxed-string equality, numeric
+  operator, numeric built-in, and numeric argument conversion paths with one
+  abrupt-completion-aware owner under `runtime/abstract_operations`.
+- AS-03a2b will own `ToString` and `ToBoolean`, and will separate observable
+  JavaScript string conversion from Rust `Display` used for diagnostics.
+
+AS-03a2a keeps numeric fast paths only when operands are already numbers. Every
+generic fallback must call the shared conversion owner; no built-in may probe
+`valueOf`/`toString` itself. The architecture guard records the complete owner
+function set and rejects a second conversion definition.
 
 ### AS-04: Completion, Errors, And Source Metadata
 
@@ -867,20 +883,22 @@ reviewable scope.
 6. AS-02c: route JavaScript, native, host, bound, and callable Proxy values
    through common call/construct internal methods (complete in PR #408).
 7. AS-03a1: centralize Abstract/Strict Equality, `SameValue`, and
-   `SameValueZero` (implemented in draft PR #409).
-8. AS-03a2: centralize primitive conversion operations.
-9. AS-03b: centralize property-key, property, call, and iterator operations.
-10. AS-04a: separate JavaScript throw completion from engine/host/resource
+   `SameValueZero` (complete in PR #409).
+8. AS-03a2a: centralize `ToPrimitive`, `OrdinaryToPrimitive`, and `ToNumber`
+   (implemented in draft PR #410).
+9. AS-03a2b: centralize `ToString` and `ToBoolean`.
+10. AS-03b: centralize property-key, property, call, and iterator operations.
+11. AS-04a: separate JavaScript throw completion from engine/host/resource
    failures.
-11. AS-04b: migrate Error values into real objects and add source-span metadata.
-12. AS-05a: remove ambiguous VM cloning and define VM-bound handle identity.
-13. AS-05b: add root enumeration plus complete allocation accounting and
+12. AS-04b: migrate Error values into real objects and add source-span metadata.
+13. AS-05a: remove ambiguous VM cloning and define VM-bound handle identity.
+14. AS-05b: add root enumeration plus complete allocation accounting and
     limits.
-14. AS-06a: migrate synchronous calls and structured control flow to explicit
+15. AS-06a: migrate synchronous calls and structured control flow to explicit
     activation frames.
-15. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
-16. AS-07a: add safe collection over explicit roots and correct weak edges.
-17. AS-08a: move reusable optimization state behind one optimizer/quickening
+16. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
+17. AS-07a: add safe collection over explicit roots and correct weak edges.
+18. AS-08a: move reusable optimization state behind one optimizer/quickening
     boundary and remove harness-specific opcodes.
 
 ## Updating This Plan

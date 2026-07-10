@@ -28,7 +28,7 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let depth = Self::flat_depth_arg(args)?;
+        let depth = self.flat_depth_arg(args)?;
         Self::ensure_array_like_object(this_value)?;
         if let Some(value) = self.eval_packed_array_flat(this_value, depth)? {
             return Ok(value);
@@ -402,18 +402,18 @@ impl Context {
         self.set_array_like_length(result, length)
     }
 
-    fn flat_depth_arg(args: &[Value]) -> Result<FlattenDepth> {
+    fn flat_depth_arg(&mut self, args: &[Value]) -> Result<FlattenDepth> {
         let Some(value) = args.first() else {
             return Ok(FlattenDepth::Finite(1));
         };
         if matches!(value, Value::Undefined) {
             return Ok(FlattenDepth::Finite(1));
         }
-        Self::value_to_flatten_depth(value)
+        self.value_to_flatten_depth(value)
     }
 
-    fn value_to_flatten_depth(value: &Value) -> Result<FlattenDepth> {
-        let number = Self::value_to_number(value);
+    fn value_to_flatten_depth(&mut self, value: &Value) -> Result<FlattenDepth> {
+        let number = self.to_number(value)?;
         if number.is_nan() || number <= 0.0 {
             return Ok(FlattenDepth::Finite(0));
         }

@@ -334,7 +334,7 @@ impl Context {
     }
 
     fn eval_bytecode_unary_instruction(
-        &self,
+        &mut self,
         state: &mut BytecodeState,
         instruction: &BytecodeInstruction,
         next: BytecodeAddress,
@@ -342,7 +342,7 @@ impl Context {
         match instruction {
             BytecodeInstruction::Unary(op) => {
                 let value = state.stack.pop()?;
-                state.stack.push(Self::eval_bytecode_unary(*op, &value)?);
+                state.stack.push(self.eval_bytecode_unary(*op, &value)?);
                 state.pc = next;
                 Ok(None)
             }

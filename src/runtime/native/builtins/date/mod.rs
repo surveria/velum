@@ -1,6 +1,8 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs, object::DateValue},
+    runtime::{
+        Context, abstract_operations::PreferredType, call::RuntimeCallArgs, object::DateValue,
+    },
     value::{ErrorName, ObjectId, Value},
 };
 
@@ -104,7 +106,7 @@ impl Context {
             DateFunctionKind::Constructor => Some(self.eval_date_constructor(args)),
             DateFunctionKind::Now => Some(Self::eval_date_now(args)),
             DateFunctionKind::Parse => Some(Self::eval_date_parse(args)),
-            DateFunctionKind::Utc => Some(Self::eval_date_utc(args)),
+            DateFunctionKind::Utc => Some(self.eval_date_utc(args)),
             _ => None,
         }
     }
@@ -268,8 +270,11 @@ impl Context {
         date_value_to_number(value).map(Value::Number)
     }
 
-    pub(in crate::runtime::native) fn eval_date_utc(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let value = Self::date_value_from_components(args.as_slice())?;
+    pub(in crate::runtime::native) fn eval_date_utc(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        let value = self.date_value_from_components(args.as_slice())?;
         date_value_to_number(value).map(Value::Number)
     }
 
@@ -432,10 +437,10 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let (id, _) = self.date_this_object_value(this_value)?;
-        let value = args
-            .as_slice()
-            .first()
-            .map_or(f64::NAN, Self::value_to_number);
+        let value = match args.as_slice().first() {
+            Some(value) => self.to_number(value)?,
+            None => f64::NAN,
+        };
         let date = time_clip(value)?;
         self.objects.set_date_value(id, date)?;
         date_value_to_number(date).map(Value::Number)
@@ -452,10 +457,10 @@ impl Context {
         let hint = Self::date_to_primitive_hint(hint)?;
         match hint {
             DATE_TO_PRIMITIVE_HINT_DEFAULT | DATE_TO_PRIMITIVE_HINT_STRING => {
-                self.ordinary_to_primitive(this_value, &["toString", "valueOf"])
+                self.ordinary_to_primitive(this_value, PreferredType::String)
             }
             DATE_TO_PRIMITIVE_HINT_NUMBER => {
-                self.ordinary_to_primitive(this_value, &["valueOf", "toString"])
+                self.ordinary_to_primitive(this_value, PreferredType::Number)
             }
             _ => Err(Error::type_error(DATE_TO_PRIMITIVE_INVALID_HINT_ERROR)),
         }
@@ -577,27 +582,6 @@ impl Context {
         }
     }
 
-    fn ordinary_to_primitive(&mut self, value: &Value, method_names: &[&str]) -> Result<Value> {
-        if Self::is_primitive_to_primitive_result(value) {
-            return Err(Error::type_error(
-                "Date @@toPrimitive requires an object receiver",
-            ));
-        }
-        for method_name in method_names {
-            let method = self.get_property_value(value, method_name)?;
-            if !self.semantic_is_callable(&method)? {
-                continue;
-            }
-            let result = self.eval_call_value(&method, &[], value.clone())?;
-            if Self::is_primitive_to_primitive_result(&result) {
-                return Ok(result);
-            }
-        }
-        Err(Error::type_error(
-            "Cannot convert object to primitive value",
-        ))
-    }
-
     fn date_to_primitive_hint(value: &Value) -> Result<&str> {
         let hint = match value {
             Value::String(value) => value.as_str(),
@@ -612,28 +596,15 @@ impl Context {
         }
     }
 
-    const fn is_primitive_to_primitive_result(value: &Value) -> bool {
-        matches!(
-            value,
-            Value::Undefined
-                | Value::Null
-                | Value::Bool(_)
-                | Value::Number(_)
-                | Value::String(_)
-                | Value::HeapString(_)
-                | Value::Symbol(_)
-        )
-    }
-
-    fn date_value_from_constructor_args(&self, args: &[Value]) -> Result<DateValue> {
+    fn date_value_from_constructor_args(&mut self, args: &[Value]) -> Result<DateValue> {
         match args.len() {
             0 => current_time_value(),
             1 => self.date_value_from_single_argument(args.first()),
-            _ => Self::date_value_from_components(args),
+            _ => self.date_value_from_components(args),
         }
     }
 
-    fn date_value_from_single_argument(&self, value: Option<&Value>) -> Result<DateValue> {
+    fn date_value_from_single_argument(&mut self, value: Option<&Value>) -> Result<DateValue> {
         let Some(value) = value else {
             return current_time_value();
         };
@@ -643,33 +614,34 @@ impl Context {
         {
             return Ok(existing);
         }
-        match value {
+        let primitive = self.to_primitive(value, PreferredType::Default)?;
+        match &primitive {
             Value::String(text) => parse_date_string(text),
             Value::HeapString(text) => parse_date_string(text.as_str()),
-            _ => time_clip(Self::value_to_number(value)),
+            _ => time_clip(self.to_number(&primitive)?),
         }
     }
 
-    fn date_value_from_components(args: &[Value]) -> Result<DateValue> {
-        let Some(year) = integer_component(args.first())? else {
+    fn date_value_from_components(&mut self, args: &[Value]) -> Result<DateValue> {
+        let Some(year) = integer_component(self, args.first())? else {
             return Ok(DateValue::Invalid);
         };
-        let Some(month) = integer_component(args.get(1))? else {
+        let Some(month) = integer_component(self, args.get(1))? else {
             return Ok(DateValue::Invalid);
         };
-        let Some(date) = integer_component_with_default(args.get(2), 1)? else {
+        let Some(date) = integer_component_with_default(self, args.get(2), 1)? else {
             return Ok(DateValue::Invalid);
         };
-        let Some(hour) = integer_component_with_default(args.get(3), 0)? else {
+        let Some(hour) = integer_component_with_default(self, args.get(3), 0)? else {
             return Ok(DateValue::Invalid);
         };
-        let Some(minute) = integer_component_with_default(args.get(4), 0)? else {
+        let Some(minute) = integer_component_with_default(self, args.get(4), 0)? else {
             return Ok(DateValue::Invalid);
         };
-        let Some(second) = integer_component_with_default(args.get(5), 0)? else {
+        let Some(second) = integer_component_with_default(self, args.get(5), 0)? else {
             return Ok(DateValue::Invalid);
         };
-        let Some(millisecond) = integer_component_with_default(args.get(6), 0)? else {
+        let Some(millisecond) = integer_component_with_default(self, args.get(6), 0)? else {
             return Ok(DateValue::Invalid);
         };
         Ok(make_date_value(

@@ -22,15 +22,31 @@ impl Context {
     }
 
     pub(crate) fn add(&mut self, left: &Value, right: &Value) -> Result<Value> {
-        match (left, right) {
-            (Value::Number(left), Value::Number(right)) => Ok(Value::Number(left + right)),
-            (Value::String(_) | Value::HeapString(_), _)
-            | (_, Value::String(_) | Value::HeapString(_)) => {
-                let value = self.concat_values(left, right)?;
-                self.heap_string_owned_value(value)
-            }
-            _ => Err(Error::runtime("operator '+' expects numbers or strings")),
+        if let (Value::Number(left), Value::Number(right)) = (left, right) {
+            return Ok(Value::Number(left + right));
         }
+        let left = self.to_primitive(
+            left,
+            crate::runtime::abstract_operations::PreferredType::Default,
+        )?;
+        let right = self.to_primitive(
+            right,
+            crate::runtime::abstract_operations::PreferredType::Default,
+        )?;
+        if matches!(left, Value::String(_) | Value::HeapString(_))
+            || matches!(right, Value::String(_) | Value::HeapString(_))
+        {
+            if matches!(left, Value::Symbol(_)) || matches!(right, Value::Symbol(_)) {
+                return Err(Error::type_error(
+                    "cannot convert a Symbol value to a string",
+                ));
+            }
+            let value = self.concat_values(&left, &right)?;
+            return self.heap_string_owned_value(value);
+        }
+        let left = self.to_number(&left)?;
+        let right = self.to_number(&right)?;
+        Ok(Value::Number(left + right))
     }
 
     pub(crate) fn string_concat_step(
@@ -39,8 +55,10 @@ impl Context {
         right: &Value,
         final_result: bool,
     ) -> Result<Value> {
-        if !matches!(left, Value::String(_) | Value::HeapString(_))
-            && !matches!(right, Value::String(_) | Value::HeapString(_))
+        if requires_generic_add(&left)
+            || requires_generic_add(right)
+            || (!matches!(left, Value::String(_) | Value::HeapString(_))
+                && !matches!(right, Value::String(_) | Value::HeapString(_)))
         {
             return self.add(&left, right);
         }
@@ -309,4 +327,8 @@ impl Context {
             .ok_or_else(|| Error::limit("bytecode linear direct runs overflowed"))?;
         Ok(())
     }
+}
+
+const fn requires_generic_add(value: &Value) -> bool {
+    !crate::runtime::abstract_operations::is_primitive(value) || matches!(value, Value::Symbol(_))
 }

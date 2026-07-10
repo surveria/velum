@@ -126,10 +126,8 @@ fn bytecode_quickens_numeric_unary_with_fallbacks() -> TestResult {
     let value = vm.eval_compiled(&script)?;
     ensure_value(&value, &Value::Number(42.0))?;
 
-    let Err(error) = vm.eval("-\"x\"") else {
-        return Err("expected non-number unary to use generic fallback error".into());
-    };
-    ensure_error_contains(&error, "unary '-' expects a number")
+    let value = vm.eval("-\"5\"")?;
+    ensure_value(&value, &Value::Number(-5.0))
 }
 
 #[test]
@@ -743,14 +741,6 @@ fn ensure_at_least(value: usize, minimum: usize, label: &str) -> TestResult {
         return Ok(());
     }
     Err(format!("expected {label} >= {minimum}, got {value}").into())
-}
-
-fn ensure_error_contains(error: &rs_quickjs::Error, text: &str) -> TestResult {
-    let message = error.to_string();
-    if message.contains(text) {
-        return Ok(());
-    }
-    Err(format!("expected error containing '{text}', got '{message}'").into())
 }
 
 fn ensure_resource_limit(error: &Error) -> TestResult {

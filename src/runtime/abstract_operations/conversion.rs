@@ -1,0 +1,192 @@
+use crate::{
+    error::{Error, Result},
+    runtime::{
+        Context,
+        object::{PropertyKey, PropertyLookup},
+    },
+    value::Value,
+};
+
+const CANNOT_CONVERT_OBJECT_ERROR: &str = "Cannot convert object to primitive value";
+const CANNOT_CONVERT_SYMBOL_ERROR: &str = "Cannot convert a Symbol value to a number";
+const SYMBOL_TO_PRIMITIVE_NAME: &str = "[Symbol.toPrimitive]";
+const SYMBOL_TO_PRIMITIVE_PROPERTY: &str = "toPrimitive";
+const TO_STRING_PROPERTY: &str = "toString";
+const VALUE_OF_PROPERTY: &str = "valueOf";
+const STRING_NEGATIVE_INFINITY: &str = "-Infinity";
+const STRING_POSITIVE_INFINITY: &str = "Infinity";
+
+/// Preferred result type supplied to ECMAScript `ToPrimitive`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::runtime) enum PreferredType {
+    Default,
+    Number,
+    String,
+}
+
+impl PreferredType {
+    const fn hint(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::Number => "number",
+            Self::String => "string",
+        }
+    }
+
+    const fn ordinary_method_names(self) -> [&'static str; 2] {
+        match self {
+            Self::String => [TO_STRING_PROPERTY, VALUE_OF_PROPERTY],
+            Self::Default | Self::Number => [VALUE_OF_PROPERTY, TO_STRING_PROPERTY],
+        }
+    }
+}
+
+impl Context {
+    /// ECMAScript `ToPrimitive`, including `@@toPrimitive` lookup and calls.
+    // The specification name is intentional; conversion can invoke JavaScript.
+    #[allow(clippy::wrong_self_convention)]
+    pub(in crate::runtime) fn to_primitive(
+        &mut self,
+        value: &Value,
+        preferred_type: PreferredType,
+    ) -> Result<Value> {
+        if is_primitive(value) {
+            return Ok(value.clone());
+        }
+
+        let exotic = self.get_to_primitive_method(value)?;
+        if !matches!(exotic, Value::Undefined | Value::Null) {
+            if !self.semantic_is_callable(&exotic)? {
+                return Err(Error::type_error("Symbol.toPrimitive is not callable"));
+            }
+            let hint = self.heap_string_value(preferred_type.hint())?;
+            let result = self.eval_call_value(&exotic, &[hint], value.clone())?;
+            if is_primitive(&result) {
+                return Ok(result);
+            }
+            return Err(Error::type_error(CANNOT_CONVERT_OBJECT_ERROR));
+        }
+
+        self.ordinary_to_primitive(value, preferred_type)
+    }
+
+    /// ECMAScript `OrdinaryToPrimitive` with observable method ordering.
+    pub(in crate::runtime) fn ordinary_to_primitive(
+        &mut self,
+        value: &Value,
+        preferred_type: PreferredType,
+    ) -> Result<Value> {
+        if is_primitive(value) {
+            return Err(Error::type_error(
+                "OrdinaryToPrimitive requires an object value",
+            ));
+        }
+        for method_name in preferred_type.ordinary_method_names() {
+            let method = self.get_property_value(value, method_name)?;
+            if !self.semantic_is_callable(&method)? {
+                continue;
+            }
+            let result = self.eval_call_value(&method, &[], value.clone())?;
+            if is_primitive(&result) {
+                return Ok(result);
+            }
+        }
+        Err(Error::type_error(CANNOT_CONVERT_OBJECT_ERROR))
+    }
+
+    /// ECMAScript `ToNumber` for the runtime's current value domain.
+    // The specification name is intentional; conversion can invoke JavaScript.
+    #[allow(clippy::wrong_self_convention)]
+    pub(in crate::runtime) fn to_number(&mut self, value: &Value) -> Result<f64> {
+        let primitive = self.to_primitive(value, PreferredType::Number)?;
+        to_number_primitive(&primitive)
+    }
+
+    fn get_to_primitive_method(&mut self, value: &Value) -> Result<Value> {
+        let constructor = self.symbol_constructor_value()?;
+        let symbol = self.get_property_value(&constructor, SYMBOL_TO_PRIMITIVE_PROPERTY)?;
+        let Value::Symbol(symbol) = symbol else {
+            return Err(Error::runtime("Symbol.toPrimitive is not a symbol"));
+        };
+        let lookup =
+            PropertyLookup::from_key(SYMBOL_TO_PRIMITIVE_NAME, PropertyKey::symbol(symbol.id()));
+        self.get_property_value_with_lookup(value, lookup)
+    }
+}
+
+pub(in crate::runtime) const fn is_primitive(value: &Value) -> bool {
+    matches!(
+        value,
+        Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::HeapString(_)
+            | Value::Symbol(_)
+    )
+}
+
+pub(in crate::runtime) fn to_number_primitive(value: &Value) -> Result<f64> {
+    match value {
+        Value::Undefined => Ok(f64::NAN),
+        Value::Null => Ok(0.0),
+        Value::Bool(value) => Ok(f64::from(u8::from(*value))),
+        Value::Number(value) => Ok(*value),
+        Value::String(value) => Ok(string_to_number(value)),
+        Value::HeapString(value) => Ok(string_to_number(value.as_str())),
+        Value::Symbol(_) => Err(Error::type_error(CANNOT_CONVERT_SYMBOL_ERROR)),
+        Value::Function(_)
+        | Value::NativeFunction(_)
+        | Value::HostFunction(_)
+        | Value::Object(_)
+        | Value::Error(_) => Err(Error::runtime(
+            "ToNumber received a non-primitive after ToPrimitive",
+        )),
+    }
+}
+
+pub(in crate::runtime) fn string_to_number(value: &str) -> f64 {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return 0.0;
+    }
+    if trimmed == STRING_POSITIVE_INFINITY {
+        return f64::INFINITY;
+    }
+    if trimmed == STRING_NEGATIVE_INFINITY {
+        return f64::NEG_INFINITY;
+    }
+    if let Some(value) = prefixed_integer_to_number(trimmed) {
+        return value;
+    }
+    trimmed.parse::<f64>().map_or(f64::NAN, |number| {
+        if number.is_infinite() {
+            return f64::NAN;
+        }
+        number
+    })
+}
+
+fn prefixed_integer_to_number(value: &str) -> Option<f64> {
+    let (digits, radix) = if let Some(digits) = value
+        .strip_prefix("0x")
+        .or_else(|| value.strip_prefix("0X"))
+    {
+        (digits, 16)
+    } else if let Some(digits) = value
+        .strip_prefix("0b")
+        .or_else(|| value.strip_prefix("0B"))
+    {
+        (digits, 2)
+    } else if let Some(digits) = value
+        .strip_prefix("0o")
+        .or_else(|| value.strip_prefix("0O"))
+    {
+        (digits, 8)
+    } else {
+        return None;
+    };
+
+    u32::from_str_radix(digits, radix).map(f64::from).ok()
+}

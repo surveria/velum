@@ -1,4 +1,5 @@
 use crate::error::{Error, Result};
+use crate::runtime::Context;
 use crate::value::Value;
 
 const TO_INT32_MODULUS: f64 = 4_294_967_296.0;
@@ -13,108 +14,63 @@ const F64_MANTISSA_MASK: u64 = (1_u64 << F64_EXPONENT_SHIFT) - 1;
 const F64_IMPLICIT_BIT: u64 = 1_u64 << F64_EXPONENT_SHIFT;
 
 pub fn numeric_binary(
+    context: &mut Context,
     left: &Value,
     right: &Value,
-    op: &str,
+    _op: &str,
     apply: impl FnOnce(f64, f64) -> f64,
 ) -> Result<Value> {
-    let Some(left) = left.as_number() else {
-        return Err(Error::runtime(format!("operator '{op}' expects numbers")));
-    };
-    let Some(right) = right.as_number() else {
-        return Err(Error::runtime(format!("operator '{op}' expects numbers")));
-    };
+    let left = context.to_number(left)?;
+    let right = context.to_number(right)?;
     Ok(Value::Number(apply(left, right)))
 }
 
-pub fn bitwise_and(left: &Value, right: &Value) -> Result<Value> {
-    let left = bitwise_i32(left, "&")?;
-    let right = bitwise_i32(right, "&")?;
+pub fn bitwise_and(context: &mut Context, left: &Value, right: &Value) -> Result<Value> {
+    let left = bitwise_i32(context, left, "&")?;
+    let right = bitwise_i32(context, right, "&")?;
     Ok(Value::Number(f64::from(left & right)))
 }
 
-pub fn bitwise_or(left: &Value, right: &Value) -> Result<Value> {
-    let left = bitwise_i32(left, "|")?;
-    let right = bitwise_i32(right, "|")?;
+pub fn bitwise_or(context: &mut Context, left: &Value, right: &Value) -> Result<Value> {
+    let left = bitwise_i32(context, left, "|")?;
+    let right = bitwise_i32(context, right, "|")?;
     Ok(Value::Number(f64::from(left | right)))
 }
 
-pub fn bitwise_xor(left: &Value, right: &Value) -> Result<Value> {
-    let left = bitwise_i32(left, "^")?;
-    let right = bitwise_i32(right, "^")?;
+pub fn bitwise_xor(context: &mut Context, left: &Value, right: &Value) -> Result<Value> {
+    let left = bitwise_i32(context, left, "^")?;
+    let right = bitwise_i32(context, right, "^")?;
     Ok(Value::Number(f64::from(left ^ right)))
 }
 
-pub fn shift_left(left: &Value, right: &Value) -> Result<Value> {
-    let left = bitwise_i32(left, "<<")?;
-    let right = shift_count(right, "<<")?;
+pub fn shift_left(context: &mut Context, left: &Value, right: &Value) -> Result<Value> {
+    let left = bitwise_i32(context, left, "<<")?;
+    let right = shift_count(context, right, "<<")?;
     Ok(Value::Number(f64::from(left.wrapping_shl(right))))
 }
 
-pub fn shift_right(left: &Value, right: &Value) -> Result<Value> {
-    let left = bitwise_i32(left, ">>")?;
-    let right = shift_count(right, ">>")?;
+pub fn shift_right(context: &mut Context, left: &Value, right: &Value) -> Result<Value> {
+    let left = bitwise_i32(context, left, ">>")?;
+    let right = shift_count(context, right, ">>")?;
     Ok(Value::Number(f64::from(left.wrapping_shr(right))))
 }
 
-pub fn shift_right_unsigned(left: &Value, right: &Value) -> Result<Value> {
-    let left = bitwise_u32(left, ">>>")?;
-    let right = shift_count(right, ">>>")?;
+pub fn shift_right_unsigned(context: &mut Context, left: &Value, right: &Value) -> Result<Value> {
+    let left = bitwise_u32(context, left, ">>>")?;
+    let right = shift_count(context, right, ">>>")?;
     Ok(Value::Number(f64::from(left.wrapping_shr(right))))
 }
 
-fn shift_count(value: &Value, op: &str) -> Result<u32> {
-    Ok(bitwise_u32(value, op)? & SHIFT_COUNT_MASK)
+fn shift_count(context: &mut Context, value: &Value, op: &str) -> Result<u32> {
+    Ok(bitwise_u32(context, value, op)? & SHIFT_COUNT_MASK)
 }
 
-fn bitwise_i32(value: &Value, op: &str) -> Result<i32> {
-    match value {
-        Value::Undefined
-        | Value::Null
-        | Value::Function(_)
-        | Value::NativeFunction(_)
-        | Value::HostFunction(_)
-        | Value::Object(_)
-        | Value::Symbol(_)
-        | Value::Error(_) => Ok(0),
-        Value::Bool(value) => Ok(i32::from(*value)),
-        Value::Number(value) => number_to_i32(*value, op),
-        Value::String(value) => string_to_i32(value, op),
-        Value::HeapString(value) => string_to_i32(value.as_str(), op),
-    }
+fn bitwise_i32(context: &mut Context, value: &Value, op: &str) -> Result<i32> {
+    number_to_i32(context.to_number(value)?, op)
 }
 
-fn bitwise_u32(value: &Value, op: &str) -> Result<u32> {
-    match value {
-        Value::Undefined
-        | Value::Null
-        | Value::Function(_)
-        | Value::NativeFunction(_)
-        | Value::HostFunction(_)
-        | Value::Object(_)
-        | Value::Symbol(_)
-        | Value::Error(_) => Ok(0),
-        Value::Bool(value) => Ok(u32::from(*value)),
-        Value::Number(value) => number_to_uint32(*value, op),
-        Value::String(value) => string_to_u32(value, op),
-        Value::HeapString(value) => string_to_u32(value.as_str(), op),
-    }
-}
-
-fn string_to_i32(value: &str, op: &str) -> Result<i32> {
-    let unsigned = string_to_u32(value, op)?;
-    uint32_to_int32(unsigned, op)
-}
-
-fn string_to_u32(value: &str, op: &str) -> Result<u32> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return Ok(0);
-    }
-    let Ok(value) = trimmed.parse::<f64>() else {
-        return Ok(0);
-    };
-    number_to_uint32(value, op)
+fn bitwise_u32(context: &mut Context, value: &Value, op: &str) -> Result<u32> {
+    number_to_uint32(context.to_number(value)?, op)
 }
 
 pub fn number_to_uint32(value: f64, context: &str) -> Result<u32> {

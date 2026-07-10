@@ -218,7 +218,7 @@ impl Context {
             && self.objects.array_len_if_array(*id)?.is_some()
         {
             let length = self.objects.array_len_for_includes(*id)?;
-            let from_index = Self::array_slice_bound(from_index, length, 0)?;
+            let from_index = self.array_slice_bound(from_index, length, 0)?;
             return self.objects.array_includes(*id, length, search, from_index);
         }
         self.generic_array_includes(search, from_index, this_value)
@@ -244,7 +244,7 @@ impl Context {
             && self.objects.array_len_if_array(*id)?.is_some()
         {
             let length = self.objects.array_len_for_index_of(*id)?;
-            let from_index = Self::array_slice_bound(from_index, length, 0)?;
+            let from_index = self.array_slice_bound(from_index, length, 0)?;
             return self.objects.array_index_of(*id, length, search, from_index);
         }
         self.generic_array_index_of(search, from_index, this_value)
@@ -270,7 +270,7 @@ impl Context {
             && self.objects.array_len_if_array(*id)?.is_some()
         {
             let length = self.objects.array_len_for_last_index_of(*id)?;
-            let from_index = Self::array_last_index_of_start(from_index, length)?;
+            let from_index = self.array_last_index_of_start(from_index, length)?;
             return self
                 .objects
                 .array_last_index_of(*id, length, search, from_index);
@@ -359,8 +359,8 @@ impl Context {
             && self.objects.array_len_if_array(*id)?.is_some()
         {
             let length = self.objects.array_len_for_slice(*id)?;
-            let start = Self::array_slice_bound(start, length, 0)?;
-            let end = Self::array_slice_bound(end, length, length)?.max(start);
+            let start = self.array_slice_bound(start, length, 0)?;
+            let end = self.array_slice_bound(end, length, length)?.max(start);
             let prototype = self.existing_array_constructor_prototype()?;
             return self.objects.array_slice(
                 *id,
@@ -621,7 +621,12 @@ impl Context {
         Ok(String::with_capacity(separator_bytes))
     }
 
-    fn array_slice_bound(value: Option<&Value>, length: usize, default: usize) -> Result<usize> {
+    fn array_slice_bound(
+        &mut self,
+        value: Option<&Value>,
+        length: usize,
+        default: usize,
+    ) -> Result<usize> {
         let Some(value) = value else {
             return Ok(default);
         };
@@ -629,31 +634,8 @@ impl Context {
             return Ok(default);
         }
 
-        let number = Self::array_slice_bound_number(value);
+        let number = self.to_number(value)?;
         Self::array_slice_bound_from_number(number, length)
-    }
-
-    fn array_slice_bound_number(value: &Value) -> f64 {
-        match value {
-            Value::Undefined
-            | Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Object(_)
-            | Value::Error(_)
-            | Value::Symbol(_)
-            | Value::Null => 0.0,
-            Value::Bool(value) => {
-                if *value {
-                    1.0
-                } else {
-                    0.0
-                }
-            }
-            Value::Number(value) => *value,
-            Value::String(value) => value.trim().parse::<f64>().unwrap_or(0.0),
-            Value::HeapString(value) => value.as_str().trim().parse::<f64>().unwrap_or(0.0),
-        }
     }
 
     fn array_slice_bound_from_number(number: f64, length: usize) -> Result<usize> {
@@ -697,7 +679,11 @@ impl Context {
             .map_err(|_| Error::limit("array index exceeded supported range"))
     }
 
-    fn array_last_index_of_start(value: Option<&Value>, length: usize) -> Result<Option<usize>> {
+    fn array_last_index_of_start(
+        &mut self,
+        value: Option<&Value>,
+        length: usize,
+    ) -> Result<Option<usize>> {
         if length == 0 {
             return Ok(None);
         }
@@ -705,7 +691,7 @@ impl Context {
             return Ok(Some(length.saturating_sub(1)));
         };
 
-        let number = Self::array_slice_bound_number(value);
+        let number = self.to_number(value)?;
         Self::array_last_index_of_start_from_number(number, length)
     }
 

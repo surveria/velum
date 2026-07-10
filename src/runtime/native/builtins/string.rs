@@ -98,7 +98,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let text = self.string_receiver_value(this_value)?;
-        let position = Self::string_position_arg(args.first());
+        let position = self.string_position_arg(args.first())?;
         let Some(ch) = Self::char_at(&text, position) else {
             return self.heap_string_value(EMPTY_STRING);
         };
@@ -106,7 +106,7 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_char_code_at(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
@@ -114,12 +114,12 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_direct_string_prototype_char_code_at(
-        &self,
+        &mut self,
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
         let text = self.string_receiver_value(this_value)?;
-        let position = Self::string_position_arg(args.first());
+        let position = self.string_position_arg(args.first())?;
         let Some(ch) = Self::char_at(&text, position) else {
             return Ok(Value::Number(f64::NAN));
         };
@@ -148,7 +148,7 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_includes(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
@@ -156,20 +156,20 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_direct_string_prototype_includes(
-        &self,
+        &mut self,
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
         let text = self.string_receiver_value(this_value)?;
         let needle = self.string_argument_or_undefined(args.first())?;
-        let position = Self::clamped_start_position(args.get(1), Self::char_len(&text))?;
+        let position = self.clamped_start_position(args.get(1), Self::char_len(&text))?;
         Ok(Value::Bool(Self::string_contains_from(
             &text, &needle, position,
         )?))
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_index_of(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
@@ -177,19 +177,19 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_direct_string_prototype_index_of(
-        &self,
+        &mut self,
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
         let text = self.string_receiver_value(this_value)?;
         let needle = self.string_argument_or_undefined(args.first())?;
-        let position = Self::clamped_start_position(args.get(1), Self::char_len(&text))?;
+        let position = self.clamped_start_position(args.get(1), Self::char_len(&text))?;
         let index = Self::string_index_of_from(&text, &needle, position)?;
         Ok(Value::Number(Self::optional_index_to_number(index)?))
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_last_index_of(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
@@ -197,13 +197,13 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_direct_string_prototype_last_index_of(
-        &self,
+        &mut self,
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
         let text = self.string_receiver_value(this_value)?;
         let needle = self.string_argument_or_undefined(args.first())?;
-        let position = Self::last_index_position(args.get(1), Self::char_len(&text))?;
+        let position = self.last_index_position(args.get(1), Self::char_len(&text))?;
         let index = Self::string_last_index_of(&text, &needle, position)?;
         Ok(Value::Number(Self::optional_index_to_number(index)?))
     }
@@ -223,8 +223,8 @@ impl Context {
     ) -> Result<Value> {
         let text = self.string_receiver_value(this_value)?;
         let length = Self::char_len(&text);
-        let start = Self::slice_bound(args.first(), length, 0)?;
-        let end = Self::slice_bound(args.get(1), length, length)?;
+        let start = self.slice_bound(args.first(), length, 0)?;
+        let end = self.slice_bound(args.get(1), length, length)?;
         let output = Self::char_range(&text, start, end)?;
         self.heap_string_value(&output)
     }
@@ -244,8 +244,8 @@ impl Context {
     ) -> Result<Value> {
         let text = self.string_receiver_value(this_value)?;
         let length = Self::char_len(&text);
-        let mut start = Self::substring_bound(args.first(), length, 0)?;
-        let mut end = Self::substring_bound(args.get(1), length, length)?;
+        let mut start = self.substring_bound(args.first(), length, 0)?;
+        let mut end = self.substring_bound(args.get(1), length, length)?;
         if start > end {
             std::mem::swap(&mut start, &mut end);
         }
@@ -254,7 +254,7 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_starts_with(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
@@ -262,20 +262,20 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_direct_string_prototype_starts_with(
-        &self,
+        &mut self,
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
         let text = self.string_receiver_value(this_value)?;
         let needle = self.string_argument_or_undefined(args.first())?;
-        let position = Self::clamped_start_position(args.get(1), Self::char_len(&text))?;
+        let position = self.clamped_start_position(args.get(1), Self::char_len(&text))?;
         Ok(Value::Bool(Self::string_starts_with_at(
             &text, &needle, position,
         )?))
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_ends_with(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
@@ -283,14 +283,14 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_direct_string_prototype_ends_with(
-        &self,
+        &mut self,
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
         let text = self.string_receiver_value(this_value)?;
         let needle = self.string_argument_or_undefined(args.first())?;
         let length = Self::char_len(&text);
-        let end_position = Self::ends_with_position(args.get(1), length)?;
+        let end_position = self.ends_with_position(args.get(1), length)?;
         Ok(Value::Bool(Self::string_ends_with_at(
             &text,
             &needle,
@@ -312,7 +312,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let text = self.string_receiver_value(this_value)?;
-        let count = Self::repeat_count(args.first())?;
+        let count = self.repeat_count(args.first())?;
         let byte_len = text
             .len()
             .checked_mul(count)
@@ -492,17 +492,17 @@ impl Context {
         }
     }
 
-    fn string_position_arg(value: Option<&Value>) -> usize {
+    fn string_position_arg(&mut self, value: Option<&Value>) -> Result<usize> {
         let Some(value) = value else {
-            return 0;
+            return Ok(0);
         };
-        match Self::to_integer_or_infinity(Self::value_to_number(value)) {
+        Ok(match Self::to_integer_or_infinity(self.to_number(value)?) {
             IntegerOrInfinity::Finite(value) if value < 0 => usize::MAX,
             IntegerOrInfinity::Finite(value) => {
                 usize::try_from(value).map_or(usize::MAX, |index| index)
             }
             IntegerOrInfinity::NegativeInfinity | IntegerOrInfinity::PositiveInfinity => usize::MAX,
-        }
+        })
     }
 
     fn char_at(text: &str, position: usize) -> Option<char> {
@@ -582,36 +582,49 @@ impl Context {
         Self::string_starts_with_at(text, needle, start)
     }
 
-    fn clamped_start_position(value: Option<&Value>, length: usize) -> Result<usize> {
-        let number = value.map_or(0.0, Self::value_to_number);
+    fn clamped_start_position(&mut self, value: Option<&Value>, length: usize) -> Result<usize> {
+        let number = match value {
+            Some(value) => self.to_number(value)?,
+            None => 0.0,
+        };
         Self::clamp_integer(number, length)
     }
 
-    fn ends_with_position(value: Option<&Value>, length: usize) -> Result<usize> {
+    fn ends_with_position(&mut self, value: Option<&Value>, length: usize) -> Result<usize> {
         match value {
             None | Some(Value::Undefined) => Ok(length),
-            Some(value) => Self::clamp_integer(Self::value_to_number(value), length),
+            Some(value) => Self::clamp_integer(self.to_number(value)?, length),
         }
     }
 
-    fn slice_bound(value: Option<&Value>, length: usize, default: usize) -> Result<usize> {
+    fn slice_bound(
+        &mut self,
+        value: Option<&Value>,
+        length: usize,
+        default: usize,
+    ) -> Result<usize> {
         match value {
             None | Some(Value::Undefined) => Ok(default),
-            Some(value) => Self::relative_bound(Self::value_to_number(value), length),
+            Some(value) => Self::relative_bound(self.to_number(value)?, length),
         }
     }
 
-    fn substring_bound(value: Option<&Value>, length: usize, default: usize) -> Result<usize> {
+    fn substring_bound(
+        &mut self,
+        value: Option<&Value>,
+        length: usize,
+        default: usize,
+    ) -> Result<usize> {
         match value {
             None | Some(Value::Undefined) => Ok(default),
-            Some(value) => Self::clamp_integer(Self::value_to_number(value), length),
+            Some(value) => Self::clamp_integer(self.to_number(value)?, length),
         }
     }
 
-    fn last_index_position(value: Option<&Value>, length: usize) -> Result<usize> {
+    fn last_index_position(&mut self, value: Option<&Value>, length: usize) -> Result<usize> {
         match value {
             None | Some(Value::Undefined) => Ok(length),
-            Some(value) => Self::clamp_integer(Self::value_to_number(value), length),
+            Some(value) => Self::clamp_integer(self.to_number(value)?, length),
         }
     }
 
@@ -649,8 +662,11 @@ impl Context {
         }
     }
 
-    fn repeat_count(value: Option<&Value>) -> Result<usize> {
-        let number = value.map_or(0.0, Self::value_to_number);
+    fn repeat_count(&mut self, value: Option<&Value>) -> Result<usize> {
+        let number = match value {
+            Some(value) => self.to_number(value)?,
+            None => 0.0,
+        };
         let integer = Self::to_integer_or_infinity(number);
         match integer {
             IntegerOrInfinity::NegativeInfinity => Err(Error::exception(

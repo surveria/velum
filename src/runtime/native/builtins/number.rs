@@ -30,8 +30,6 @@ const NUMBER_RADIX_MIN: u32 = 2;
 const NUMBER_RADIX_RANGE_ERROR: &str = "Number.prototype.toString radix must be between 2 and 36";
 const NUMBER_VALUE_RECEIVER_ERROR: &str =
     "Number.prototype value method requires a number or Number object";
-const STRING_NEGATIVE_INFINITY: &str = "-Infinity";
-const STRING_POSITIVE_INFINITY: &str = "Infinity";
 
 pub(in crate::runtime::native) fn number_intrinsic_property(property: &str) -> Option<Value> {
     match property {
@@ -69,17 +67,18 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_number_constructor(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         self.eval_direct_number_constructor(args.as_slice())
     }
 
     pub(in crate::runtime::native) fn eval_direct_number_constructor(
-        &self,
+        &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        self.checked_value(Value::Number(Self::number_argument_value(args.first())))
+        let number = self.number_argument_value(args.first())?;
+        self.checked_value(Value::Number(number))
     }
 
     pub(in crate::runtime::native) fn construct_number_object(
@@ -87,7 +86,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let value = Self::eval_native_unary_argument_value(args);
-        let number_value = Self::number_argument_value(value);
+        let number_value = self.number_argument_value(value)?;
         let prototype = self.number_constructor_prototype()?;
         self.objects.create_boxed_primitive(
             ObjectPrimitiveValue::Number(number_value),
@@ -122,7 +121,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let number = self.number_receiver_value(this_value)?;
-        let radix = Self::number_to_string_radix_arg(args.first())?;
+        let radix = self.number_to_string_radix_arg(args.first())?;
         let text = Self::number_to_radix_string(number, radix)?;
         self.heap_string_value(&text)
     }
@@ -275,11 +274,11 @@ impl Context {
         self.define_non_enumerable_object_property(prototype, name, function)
     }
 
-    fn number_argument_value(value: Option<&Value>) -> f64 {
+    fn number_argument_value(&mut self, value: Option<&Value>) -> Result<f64> {
         let Some(value) = value else {
-            return 0.0;
+            return Ok(0.0);
         };
-        Self::value_to_number(value)
+        self.to_number(value)
     }
 
     pub(super) fn number_receiver_value(&self, value: &Value) -> Result<f64> {
@@ -321,76 +320,14 @@ impl Context {
         Value::Bool(is_safe_integer)
     }
 
-    pub(in crate::runtime) fn value_to_number(value: &Value) -> f64 {
-        match value {
-            Value::Null => 0.0,
-            Value::Bool(value) => f64::from(u8::from(*value)),
-            Value::Number(value) => *value,
-            Value::String(value) => Self::string_to_number(value),
-            Value::HeapString(value) => Self::string_to_number(value.as_str()),
-            Value::Undefined
-            | Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Object(_)
-            | Value::Symbol(_)
-            | Value::Error(_) => f64::NAN,
-        }
-    }
-
-    pub(in crate::runtime) fn string_to_number(value: &str) -> f64 {
-        let trimmed = value.trim();
-        if trimmed.is_empty() {
-            return 0.0;
-        }
-        if trimmed == STRING_POSITIVE_INFINITY {
-            return f64::INFINITY;
-        }
-        if trimmed == STRING_NEGATIVE_INFINITY {
-            return f64::NEG_INFINITY;
-        }
-        if let Some(value) = Self::prefixed_integer_to_number(trimmed) {
-            return value;
-        }
-        trimmed.parse::<f64>().map_or(f64::NAN, |number| {
-            if number.is_infinite() {
-                return f64::NAN;
-            }
-            number
-        })
-    }
-
-    fn prefixed_integer_to_number(value: &str) -> Option<f64> {
-        let (digits, radix) = if let Some(digits) = value
-            .strip_prefix("0x")
-            .or_else(|| value.strip_prefix("0X"))
-        {
-            (digits, 16)
-        } else if let Some(digits) = value
-            .strip_prefix("0b")
-            .or_else(|| value.strip_prefix("0B"))
-        {
-            (digits, 2)
-        } else if let Some(digits) = value
-            .strip_prefix("0o")
-            .or_else(|| value.strip_prefix("0O"))
-        {
-            (digits, 8)
-        } else {
-            return None;
-        };
-
-        u32::from_str_radix(digits, radix).map(f64::from).ok()
-    }
-
-    fn number_to_string_radix_arg(value: Option<&Value>) -> Result<u32> {
+    fn number_to_string_radix_arg(&mut self, value: Option<&Value>) -> Result<u32> {
         let Some(value) = value else {
             return Ok(10);
         };
         if matches!(value, Value::Undefined) {
             return Ok(10);
         }
-        let number = Self::value_to_number(value);
+        let number = self.to_number(value)?;
         let Some(radix) = Self::number_finite_integer(number) else {
             return Err(Error::exception(
                 ErrorName::RangeError,

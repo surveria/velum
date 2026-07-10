@@ -1,16 +1,24 @@
-use crate::{runtime::Context, syntax::BinaryOp, value::Value};
+use crate::{
+    error::Result,
+    runtime::{Context, abstract_operations::PreferredType},
+    syntax::BinaryOp,
+    value::Value,
+};
 
-pub(super) fn relational_compare(op: BinaryOp, left: &Value, right: &Value) -> Value {
-    let result = if let (Some(left), Some(right)) = (string_value(left), string_value(right)) {
+pub(super) fn relational_compare(
+    context: &mut Context,
+    op: BinaryOp,
+    left: &Value,
+    right: &Value,
+) -> Result<Value> {
+    let left = context.to_primitive(left, PreferredType::Number)?;
+    let right = context.to_primitive(right, PreferredType::Number)?;
+    let result = if let (Some(left), Some(right)) = (string_value(&left), string_value(&right)) {
         string_relational_compare(op, left, right)
     } else {
-        number_relational_compare(
-            op,
-            Context::value_to_number(left),
-            Context::value_to_number(right),
-        )
+        number_relational_compare(op, context.to_number(&left)?, context.to_number(&right)?)
     };
-    Value::Bool(result)
+    Ok(Value::Bool(result))
 }
 
 fn string_value(value: &Value) -> Option<&str> {

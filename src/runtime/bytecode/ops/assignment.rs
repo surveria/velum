@@ -247,17 +247,17 @@ impl Context {
         }
         let value = match op {
             BinaryOp::Add => self.add(left, right)?,
-            BinaryOp::Sub => numeric_binary(left, right, "-=", |left, right| left - right)?,
-            BinaryOp::Mul => numeric_binary(left, right, "*=", |left, right| left * right)?,
-            BinaryOp::Div => numeric_binary(left, right, "/=", |left, right| left / right)?,
-            BinaryOp::Rem => numeric_binary(left, right, "%=", |left, right| left % right)?,
-            BinaryOp::Pow => numeric_binary(left, right, "**=", f64::powf)?,
-            BinaryOp::BitAnd => bitwise_and(left, right)?,
-            BinaryOp::BitOr => bitwise_or(left, right)?,
-            BinaryOp::BitXor => bitwise_xor(left, right)?,
-            BinaryOp::ShiftLeft => shift_left(left, right)?,
-            BinaryOp::ShiftRight => shift_right(left, right)?,
-            BinaryOp::ShiftRightUnsigned => shift_right_unsigned(left, right)?,
+            BinaryOp::Sub => numeric_binary(self, left, right, "-=", |left, right| left - right)?,
+            BinaryOp::Mul => numeric_binary(self, left, right, "*=", |left, right| left * right)?,
+            BinaryOp::Div => numeric_binary(self, left, right, "/=", |left, right| left / right)?,
+            BinaryOp::Rem => numeric_binary(self, left, right, "%=", |left, right| left % right)?,
+            BinaryOp::Pow => numeric_binary(self, left, right, "**=", f64::powf)?,
+            BinaryOp::BitAnd => bitwise_and(self, left, right)?,
+            BinaryOp::BitOr => bitwise_or(self, left, right)?,
+            BinaryOp::BitXor => bitwise_xor(self, left, right)?,
+            BinaryOp::ShiftLeft => shift_left(self, left, right)?,
+            BinaryOp::ShiftRight => shift_right(self, left, right)?,
+            BinaryOp::ShiftRightUnsigned => shift_right_unsigned(self, left, right)?,
             BinaryOp::Equal
             | BinaryOp::NotEqual
             | BinaryOp::StrictEqual

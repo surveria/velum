@@ -54,8 +54,8 @@ impl Context {
     ) -> Result<Value> {
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
-        let start = Self::array_slice_bound(args.first(), length, 0)?;
-        let (skip_count, items) = Self::array_splice_counts(args, length, start)?;
+        let start = self.array_slice_bound(args.first(), length, 0)?;
+        let (skip_count, items) = self.array_splice_counts(args, length, start)?;
         let new_length = Self::array_spliced_length(length, skip_count, items.len())?;
         if let Some(value) =
             self.eval_packed_array_to_spliced(this_value, start, skip_count, &items, new_length)?
@@ -141,7 +141,7 @@ impl Context {
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
         let relative =
-            Self::array_to_integer_or_infinity(args.first().unwrap_or(&Value::Undefined));
+            self.array_to_integer_or_infinity(args.first().unwrap_or(&Value::Undefined))?;
         let length_f64 = u32::try_from(length)
             .map(f64::from)
             .map_err(|_| Error::limit(ARRAY_COPY_INDEX_ERROR))?;

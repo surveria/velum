@@ -214,7 +214,7 @@ impl Context {
             return Err(Error::type_error(SET_LIKE_NOT_OBJECT_ERROR));
         }
         let raw_size = self.get_property_value(other, SET_SIZE_PROPERTY)?;
-        let size = Self::value_to_number(&raw_size);
+        let size = self.to_number(&raw_size)?;
         if size.is_nan() {
             return Err(Error::type_error(SET_LIKE_SIZE_NAN_ERROR));
         }

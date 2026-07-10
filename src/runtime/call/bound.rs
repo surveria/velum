@@ -85,7 +85,7 @@ impl Context {
             return Err(Error::type_error(APPLY_ARGUMENTS_NOT_ARRAY_LIKE_ERROR));
         }
         let length_value = self.get_property_value(value, ARRAY_LIKE_LENGTH_PROPERTY)?;
-        let length = Self::array_like_length_from_value(&length_value)?;
+        let length = self.array_like_length_from_value(&length_value)?;
         let mut list = Vec::new();
         for index in 0..length {
             self.step()?;
@@ -95,8 +95,8 @@ impl Context {
         Ok(list)
     }
 
-    fn array_like_length_from_value(value: &Value) -> Result<usize> {
-        let number = Self::value_to_number(value);
+    fn array_like_length_from_value(&mut self, value: &Value) -> Result<usize> {
+        let number = self.to_number(value)?;
         if number.is_nan() || number <= 0.0 {
             return Ok(0);
         }
