@@ -2,7 +2,7 @@ use crate::{error::Result, value::Value};
 
 use super::{Context, binding::scope::BindingScope, object::PropertyKey, promise::PromiseId};
 
-const ROOT_KIND_COUNT: usize = 9;
+const ROOT_KIND_COUNT: usize = 12;
 
 /// Direct VM root categories that exist independently of heap trace edges.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -16,6 +16,9 @@ pub enum VmRootKind {
     ActiveSuper,
     QueuedJob,
     RuntimeAnchor,
+    TransientOperand,
+    TransientCall,
+    TransientTemporary,
 }
 
 impl VmRootKind {
@@ -29,6 +32,9 @@ impl VmRootKind {
         Self::ActiveSuper,
         Self::QueuedJob,
         Self::RuntimeAnchor,
+        Self::TransientOperand,
+        Self::TransientCall,
+        Self::TransientTemporary,
     ];
 
     /// Returns every direct-root category in stable reporting order.
@@ -48,7 +54,17 @@ impl VmRootKind {
             Self::ActiveSuper => 6,
             Self::QueuedJob => 7,
             Self::RuntimeAnchor => 8,
+            Self::TransientOperand => 9,
+            Self::TransientCall => 10,
+            Self::TransientTemporary => 11,
         }
+    }
+
+    pub(in crate::runtime) const fn is_transient(self) -> bool {
+        matches!(
+            self,
+            Self::TransientOperand | Self::TransientCall | Self::TransientTemporary
+        )
     }
 }
 
@@ -204,6 +220,7 @@ impl Context {
         for job in &self.promise_jobs {
             job.visit_direct_roots(visitor)?;
         }
+        self.transient_roots.visit(visitor)?;
         Ok(())
     }
 }

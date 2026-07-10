@@ -2,7 +2,7 @@ use crate::{
     SourceSpan,
     bytecode::{BytecodeBlock, BytecodeProgram},
     error::{Error, Result},
-    runtime::{Context, control::Completion, control::runtime_exception_value},
+    runtime::{Context, control::Completion, control::runtime_exception_value, roots::VmRootKind},
     value::Value,
 };
 
@@ -62,6 +62,10 @@ impl Context {
         state.reset();
         while let Some(step) = block.step(state.pc)? {
             let span = step.span();
+            let _root_scope = self.transient_root_scope(
+                VmRootKind::TransientOperand,
+                state.transient_root_values(),
+            )?;
             self.step().map_err(|error| error.with_runtime_span(span))?;
             let completion = match self.eval_bytecode_instruction(state, step.instruction()) {
                 Ok(completion) => completion,

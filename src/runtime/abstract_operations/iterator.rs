@@ -1,6 +1,9 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, control::Completion, object::PropertyKey, property::DynamicPropertyKey},
+    runtime::{
+        Context, control::Completion, object::PropertyKey, property::DynamicPropertyKey,
+        roots::VmRootKind, transient_roots::TransientRootScope,
+    },
     value::Value,
 };
 
@@ -95,6 +98,8 @@ impl Context {
                 "iterator '{iterator}' is not an object"
             )));
         }
+        let _root_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&iterator))?;
         let next = self.get_named(&iterator, ITERATOR_NEXT_PROPERTY)?;
         Ok(IteratorSource::Protocol {
             iterator,
@@ -109,6 +114,7 @@ impl Context {
         &mut self,
         source: &mut IteratorSource,
     ) -> Result<IteratorStep> {
+        let _root_scope = self.iterator_root_scope(source)?;
         match source {
             IteratorSource::ArrayIndex { array, index } => {
                 let Value::Object(id) = array else {
@@ -156,6 +162,10 @@ impl Context {
                         "iterator result '{result}' is not an object"
                     )));
                 }
+                let _result_scope = self.transient_root_scope(
+                    VmRootKind::TransientTemporary,
+                    std::iter::once(&result),
+                )?;
                 if to_boolean(&self.get_named(&result, ITERATOR_RESULT_DONE_PROPERTY)?) {
                     set_protocol_done(source);
                     return Ok(IteratorStep::Done);
@@ -174,6 +184,11 @@ impl Context {
         source: &mut IteratorSource,
         completion: Completion,
     ) -> Result<Completion> {
+        let _source_scope = self.iterator_root_scope(source)?;
+        let _completion_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            completion_value(&completion),
+        )?;
         let Some(iterator) = protocol_iterator_to_close(source) else {
             return Ok(completion);
         };
@@ -219,6 +234,16 @@ impl Context {
         source: &mut IteratorSource,
         error: Error,
     ) -> Error {
+        let _source_scope = match self.iterator_root_scope(source) {
+            Ok(scope) => scope,
+            Err(error) => return error,
+        };
+        let _error_scope = match self
+            .transient_root_scope(VmRootKind::TransientTemporary, error.javascript_value())
+        {
+            Ok(scope) => scope,
+            Err(error) => return error,
+        };
         if is_resource_limit(&error) {
             return error;
         }
@@ -246,6 +271,20 @@ impl Context {
             Some(PropertyKey::symbol(symbol)),
         );
         self.get_method(iterable, key.lookup())
+    }
+
+    fn iterator_root_scope(&self, source: &IteratorSource) -> Result<TransientRootScope> {
+        match source {
+            IteratorSource::ArrayIndex { array, .. } => {
+                self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(array))
+            }
+            IteratorSource::Protocol { iterator, next, .. } => {
+                self.transient_root_scope(VmRootKind::TransientTemporary, [iterator, next])
+            }
+            IteratorSource::Chars { .. } => {
+                self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::empty())
+            }
+        }
     }
 }
 
@@ -278,4 +317,14 @@ fn protocol_iterator_to_close(source: &mut IteratorSource) -> Option<Value> {
 
 const fn is_resource_limit(error: &Error) -> bool {
     matches!(error, Error::ResourceLimit { .. })
+}
+
+const fn completion_value(completion: &Completion) -> Option<&Value> {
+    match completion {
+        Completion::Normal(value)
+        | Completion::Throw(value)
+        | Completion::Return(value)
+        | Completion::Break { value, .. } => Some(value),
+        Completion::Continue(_) => None,
+    }
 }

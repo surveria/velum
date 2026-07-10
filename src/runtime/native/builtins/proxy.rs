@@ -3,7 +3,7 @@ use crate::{
     runtime::{
         Context, abstract_operations::to_boolean, call::RuntimeCallArgs,
         object::OwnPropertyDescriptor, object::PropertyEnumerable, object::PropertyKey,
-        object::PropertyLookup, object::PropertyUpdate,
+        object::PropertyLookup, object::PropertyUpdate, roots::VmRootKind,
     },
     value::{NativeFunctionId, ObjectId, Value},
 };
@@ -336,6 +336,8 @@ impl Context {
         let result = self
             .call(&trap, std::slice::from_ref(&target), handler)?
             .into_native_value_result()?;
+        let _result_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
         let keys = self.proxy_key_list_from_value(&result)?;
         self.validate_proxy_own_property_keys(&target, &keys)?;
         Ok(keys)
@@ -357,6 +359,8 @@ impl Context {
         let result = self
             .call(&trap, &[target, key_value], handler)?
             .into_native_value_result()?;
+        let _result_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&result))?;
         match result {
             Value::Undefined => Ok(None),
             Value::Object(_) => Ok(Some(self.own_property_descriptor_from_object(&result)?)),
@@ -425,6 +429,7 @@ impl Context {
     ) -> Result<Vec<String>> {
         let all = self.proxy_own_property_keys(id)?;
         let mut keys = Vec::new();
+        let _keys_scope = self.transient_root_scope(VmRootKind::TransientTemporary, all.iter())?;
         for key in all {
             self.step()?;
             if matches!(key, Value::Symbol(_)) {

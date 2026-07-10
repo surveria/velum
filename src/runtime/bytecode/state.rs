@@ -37,6 +37,13 @@ impl BytecodeState {
         Ok(BytecodeAddress::new(next))
     }
 
+    pub(super) fn transient_root_values(&self) -> impl Iterator<Item = &Value> {
+        self.stack
+            .values()
+            .iter()
+            .chain(std::iter::once(&self.last))
+    }
+
     pub(super) fn complete(&mut self, completion: BytecodeCompletion) -> Result<Completion> {
         match completion {
             BytecodeCompletion::Break(label) => Ok(Completion::Break {
@@ -62,6 +69,10 @@ impl BytecodeStack {
 
     pub(super) fn push(&mut self, value: Value) {
         self.values.push(value);
+    }
+
+    const fn values(&self) -> &[Value] {
+        self.values.as_slice()
     }
 
     fn clear(&mut self) {

@@ -358,6 +358,8 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let values = args.to_owned_values();
+        let _root_scope =
+            self.transient_root_scope(crate::runtime::VmRootKind::TransientCall, values.iter())?;
         let function = self.host_function(id)?.clone();
         let roots = self.root_snapshot()?;
         let value = function.call(self.identity(), roots, &values)?;

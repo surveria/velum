@@ -25,9 +25,9 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 through AS-04, AS-05a1 through AS-05a2c,
-  AS-05b1a through AS-05b1b2 are complete; AS-05b1b3 asynchronous edge
-  enumeration is implemented in draft PR #429
+- Current program state: AS-01 through AS-04, AS-05a1 through AS-05a2c, and
+  AS-05b1a through AS-05b1b3 are complete; AS-05b1c transient root coverage
+  is implemented in draft PR #430
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -485,7 +485,7 @@ dependencies do not overlap.
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
 | AS-04 | Complete | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans merged in PR #421 with exact-tree correctness and canonical report publication. |
-| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 non-cloneable VM identity merged in PR #422; AS-05a2a primitive owner validation merged in PR #423; AS-05a2b host-local JavaScript errors merged in PR #424; AS-05a2c portable owned values merged in PR #425; AS-05b1a direct roots merged in PR #426; AS-05b1b1 callable edges merged in PR #427; AS-05b1b2 object-arena edges merged in PR #428; AS-05b1b3 asynchronous edges are implemented in draft PR #429; transient/embedder roots, retained handles, and heap/stack/job/buffer counters and limits remain. |
+| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 non-cloneable VM identity merged in PR #422; AS-05a2a primitive owner validation merged in PR #423; AS-05a2b host-local JavaScript errors merged in PR #424; AS-05a2c portable owned values merged in PR #425; AS-05b1a direct roots merged in PR #426; AS-05b1b1 callable edges merged in PR #427; AS-05b1b2 object-arena edges merged in PR #428; AS-05b1b3 asynchronous edges merged in PR #429; AS-05b1c transient roots are implemented in draft PR #430; retained handles and heap/stack/job/buffer counters and limits remain. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
 | AS-08 | Backlog | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | Optimizer on/off equivalence, harness opcodes removed, workload-shaped paths replaced or justified by broad evidence. |
@@ -1378,7 +1378,7 @@ AS-05a2c completion evidence:
 
 AS-05b1a local implementation evidence:
 
-- `VmRootKind` defines nine stable direct-root categories: global, builtin,
+- `VmRootKind` initially defined nine durable direct-root categories: global, builtin,
   local, and captured bindings; active `this`, `new.target`, and `super`;
   queued jobs; and runtime anchors;
 - one internal `DirectRootVisitor` walks initialized `BindingCell` values,
@@ -1395,7 +1395,7 @@ AS-05b1a local implementation evidence:
   and builtins, local and captured cells, active `this`/`new.target`/`super`,
   runtime anchors, queued Promise values, and complete removal of transient
   call/job categories after evaluation;
-- the architecture guard fixes all nine categories and every current Context
+- the architecture guard fixes the original nine categories and every current Context
   source, requires Promise-job and public snapshot entrypoints, and includes a
   mutation test that removes an active root source;
 - AS-05b1a deliberately does not classify values stored behind object,
@@ -1520,6 +1520,53 @@ AS-05b1b3 local implementation evidence:
 - architecture mutation tests reject removal of a Promise reaction result or
   a WeakMap ephemeron source. AS-05b1c remains responsible for transient
   allocation-point and embedder roots;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
+
+AS-05b1b3 completion evidence:
+
+- PR #429 merged as `74ef846` after required CI run `29106389366`
+  certified exact tree `4a44f9220f4319503b8b21df0a3a0904a9a53114`;
+- the required corpus preserved all 36,659 expected Test262 variants, the
+  exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
+  cases;
+- post-merge run `29106620598` measured all five project sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T161351Z.*` in
+  report-only commit `73334c7`.
+
+AS-05b1c local implementation evidence:
+
+- `VmRootKind` adds `TransientOperand`, `TransientCall`, and
+  `TransientTemporary`, extending the executable direct-root registry from
+  nine durable categories to twelve total categories;
+- one VM-owned `TransientRootRegistry` stores only arena-bearing Values behind
+  `Rc<parking_lot::Mutex<_>>`. Scopes own checked ids, can accumulate values,
+  and remove exactly their entries through `Drop`, including error or unwind
+  exits. Primitive-only scopes remain inactive and take no registry lock;
+- every bytecode instruction registers the traceable operand stack and last
+  value before its allocation/call safepoint. Shared call and construct entry
+  points register callee/constructor, receiver/new-target, and arguments;
+  direct host dispatch registers its owned argument snapshot before producing
+  `HostCall::root_snapshot`;
+- protocol iterator records and returned iterator-result objects stay rooted
+  across `next`, `done`, `value`, and `return` callbacks. Descriptor parsing
+  accumulates getter, setter, and data Values while later descriptor getters
+  run. Proxy own-key/descriptor results and key lists stay rooted during
+  validation and nested traps;
+- computed class keys and heritage remain covered after they are removed from
+  `BytecodeState`, because the instruction scope snapshots operands before
+  dispatch;
+- six focused re-entrant host tests observe operand, call, iterator,
+  descriptor, Proxy-result, and class-key roots, then prove exact cleanup on
+  both success and host error;
+- the future collector may start only after the relevant instruction/call
+  scope is installed. Raw allocation helpers are not collector safepoints.
+  AS-06 replaces this bridge with durable activation frames;
+- opaque Rust callback captures and raw Values retained after an embedding
+  call cannot be inspected safely. Collection remains gated until AS-05a2d
+  replaces that ambiguity with identity-stamped retained handles and explicit
+  release;
 - `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
@@ -1654,8 +1701,9 @@ reviewable scope.
     stores (complete in PR #427).
 25. AS-05b1b2: enumerate object-arena strong edges (complete in PR #428).
 26. AS-05b1b3: enumerate Promise/collection/iterator edges and classify weak
-    collection keys (implemented in draft PR #429).
-27. AS-05b1c: close transient allocation-point and embedder-root gaps.
+    collection keys (complete in PR #429).
+27. AS-05b1c: close transient allocation-point roots and define the remaining
+    embedder-handle boundary (implemented in draft PR #430).
 28. AS-05a2d: define retained object/function handles and explicit release.
 29. AS-05b2: add complete allocation accounting, hard limits, and teardown
     reconciliation.

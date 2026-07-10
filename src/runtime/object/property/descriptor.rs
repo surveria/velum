@@ -116,6 +116,10 @@ impl DataPropertyUpdate {
         self.value.clone()
     }
 
+    pub(in crate::runtime) const fn trace_values(&self) -> [Option<&Value>; 2] {
+        [self.value.as_ref(), None]
+    }
+
     pub const fn writable(&self) -> Option<PropertyWritable> {
         self.writable
     }
@@ -229,6 +233,10 @@ impl AccessorPropertyUpdate {
             self.configurable.unwrap_or(PropertyConfigurable::No),
         )
     }
+
+    pub(in crate::runtime) const fn trace_values(&self) -> [Option<&Value>; 2] {
+        [self.get.as_ref(), self.set.as_ref()]
+    }
 }
 
 /// A property definition request that either carries data-descriptor fields
@@ -240,6 +248,13 @@ pub enum PropertyUpdate {
 }
 
 impl PropertyUpdate {
+    pub(in crate::runtime) const fn trace_values(&self) -> [Option<&Value>; 2] {
+        match self {
+            Self::Data(update) => update.trace_values(),
+            Self::Accessor(update) => update.trace_values(),
+        }
+    }
+
     fn complete_for_new(self) -> ObjectProperty {
         match self {
             Self::Data(update) => ObjectProperty::from_descriptor(update.complete_for_new()),

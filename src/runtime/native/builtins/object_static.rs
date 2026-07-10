@@ -9,6 +9,7 @@ use crate::{
             PropertyWritable,
         },
         property::DynamicPropertyKey,
+        roots::VmRootKind,
         semantic_object::SemanticIntegrityLevel,
     },
     value::{ObjectId, Value},
@@ -350,11 +351,17 @@ impl Context {
     ) -> Result<Vec<PendingPropertyUpdate>> {
         let keys = self.own_enumerable_keys(properties)?;
         let mut updates = Vec::with_capacity(keys.len());
+        let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
         for name in keys {
             let descriptor_value = self.get_named(properties, &name)?;
+            let update = self.property_update_from_value(&descriptor_value)?;
+            roots.add_values(
+                std::iter::once(&descriptor_value)
+                    .chain(update.trace_values().into_iter().flatten()),
+            )?;
             updates.push(PendingPropertyUpdate {
                 property: self.named_dynamic_property(name),
-                update: self.property_update_from_value(&descriptor_value)?,
+                update,
                 descriptor: descriptor_value,
             });
         }

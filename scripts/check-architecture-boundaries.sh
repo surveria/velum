@@ -543,7 +543,7 @@ check_direct_root_boundary() {
       inside { print }
     ' "${repo_root}/src/runtime/roots.rs"
   } | sed '/^[[:space:]]*\/\//d' | tr -d '[:space:]')"
-  if [[ "${root_kinds}" != 'GlobalBinding,BuiltinBinding,LocalBinding,CapturedBinding,ActiveThis,ActiveNewTarget,ActiveSuper,QueuedJob,RuntimeAnchor,' ]]; then
+  if [[ "${root_kinds}" != 'GlobalBinding,BuiltinBinding,LocalBinding,CapturedBinding,ActiveThis,ActiveNewTarget,ActiveSuper,QueuedJob,RuntimeAnchor,TransientOperand,TransientCall,TransientTemporary,' ]]; then
     fail "direct root boundary changed; VmRootKind categories require an assigned AS migration"
   fi
 
@@ -562,7 +562,8 @@ check_direct_root_boundary() {
     'if let Some(keys) = self.descriptor_property_keys {' \
     'for id in self.native_function_registry.ids() {' \
     'self.objects.visit_direct_roots(visitor)?;' \
-    'for job in &self.promise_jobs {'; do
+    'for job in &self.promise_jobs {' \
+    'self.transient_roots.visit(visitor)?;'; do
     if ! grep -F -q "${source}" "${repo_root}/src/runtime/roots.rs"; then
       fail "direct root boundary changed; required Context root source '${source}' is missing"
     fi
@@ -577,6 +578,40 @@ check_direct_root_boundary() {
     || ! grep -F -q 'pub const fn root_snapshot(self) -> VmRootSnapshot' \
       "${repo_root}/src/api/host.rs"; then
     fail "direct root boundary changed; jobs, Vm, and active host callbacks require one executable root contract"
+  fi
+
+  for source in \
+    'pub(in crate::runtime) struct TransientRootRegistry {' \
+    '#[must_use = "transient roots must stay alive across the allocation point"]' \
+    'impl Drop for TransientRootScope {' \
+    '.retain(|root| root.scope != self.scope);'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/transient_roots.rs"; then
+      fail "direct root boundary changed; transient registry source '${source}' is missing"
+    fi
+  done
+
+  if ! grep -F -q 'VmRootKind::TransientOperand,' \
+      "${repo_root}/src/runtime/bytecode/execution.rs" \
+    || [[ "$(grep -F -c 'VmRootKind::TransientCall,' \
+      "${repo_root}/src/runtime/semantic_object/invocation.rs")" != "2" ]] \
+    || ! grep -F -q 'crate::runtime::VmRootKind::TransientCall,' \
+      "${repo_root}/src/api/host.rs" \
+    || ! grep -F -q 'let _root_scope = self.iterator_root_scope(source)?;' \
+      "${repo_root}/src/runtime/abstract_operations/iterator.rs"; then
+    fail "direct root boundary changed; operand, call, host, and iterator safepoints require transient scopes"
+  fi
+
+  if ! grep -F -q 'let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;' \
+      "${repo_root}/src/runtime/native/builtins/object.rs" \
+    || ! grep -F -q 'roots.add_values(get.iter())?;' \
+      "${repo_root}/src/runtime/native/builtins/object.rs" \
+    || ! grep -F -q 'roots.add_values(' \
+      "${repo_root}/src/runtime/native/builtins/object_static.rs" \
+    || [[ "$(grep -F -c 'VmRootKind::TransientTemporary,' \
+      "${repo_root}/src/runtime/native/builtins/proxy.rs")" != "3" ]] \
+    || ! grep -F -q 'pub(in crate::runtime) const fn trace_values(&self)' \
+      "${repo_root}/src/runtime/object/property/descriptor.rs"; then
+    fail "direct root boundary changed; descriptor and Proxy temporary safepoints require scoped values"
   fi
 }
 
@@ -851,6 +886,7 @@ promises
 promise_object_slots
 promise_jobs
 promise_prototype
+transient_roots
 this_values
 new_target_values
 super_frames
@@ -1007,6 +1043,7 @@ run_checks() {
   require_file src/runtime/roots.rs
   require_file src/runtime/trace.rs
   require_file src/runtime/async_trace.rs
+  require_file src/runtime/transient_roots.rs
   require_file src/runtime/object/trace.rs
   require_file src/ownership.rs
   require_file src/source.rs
@@ -1167,6 +1204,24 @@ mutate_native_registry_root() {
   local fixture_root="$1"
   sed -i '/for id in self.native_function_registry.ids() {/d' \
     "${fixture_root}/src/runtime/roots.rs"
+}
+
+mutate_transient_operand_root() {
+  local fixture_root="$1"
+  sed -i '/VmRootKind::TransientOperand,/d' \
+    "${fixture_root}/src/runtime/bytecode/execution.rs"
+}
+
+mutate_iterator_temporary_root() {
+  local fixture_root="$1"
+  sed -i '/let _root_scope = self.iterator_root_scope(source)?;/d' \
+    "${fixture_root}/src/runtime/abstract_operations/iterator.rs"
+}
+
+mutate_descriptor_temporary_root() {
+  local fixture_root="$1"
+  sed -i '/roots.add_values(get.iter())?;/d' \
+    "${fixture_root}/src/runtime/native/builtins/object.rs"
 }
 
 mutate_bound_function_edge() {
@@ -1342,6 +1397,12 @@ run_self_tests() {
     'direct root boundary changed' mutate_direct_root_source
   expect_guard_failure "${temp_dir}" native-registry-root \
     'direct root boundary changed' mutate_native_registry_root
+  expect_guard_failure "${temp_dir}" transient-operand-root \
+    'direct root boundary changed' mutate_transient_operand_root
+  expect_guard_failure "${temp_dir}" iterator-temporary-root \
+    'direct root boundary changed' mutate_iterator_temporary_root
+  expect_guard_failure "${temp_dir}" descriptor-temporary-root \
+    'direct root boundary changed' mutate_descriptor_temporary_root
   expect_guard_failure "${temp_dir}" bound-function-edge \
     'callable edge boundary changed' mutate_bound_function_edge
   expect_guard_failure "${temp_dir}" object-internal-edge \
