@@ -2,7 +2,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::{
     error::{Error, Result},
-    runtime::{Context, object::DateValue},
+    runtime::{Context, abstract_operations::integer_or_infinity_from_number, object::DateValue},
     value::Value,
 };
 
@@ -116,11 +116,11 @@ pub(super) fn time_clip(value: f64) -> Result<DateValue> {
     if !value.is_finite() || value.abs() > MAX_TIME_MS_NUMBER {
         return Ok(DateValue::Invalid);
     }
-    finite_number_to_integer(value).map(DateValue::from_millis)
+    date_integer_from_number(value).map(DateValue::from_millis)
 }
 
-fn finite_number_to_integer(value: f64) -> Result<i64> {
-    let integer = value.trunc();
+fn date_integer_from_number(value: f64) -> Result<i64> {
+    let integer = integer_or_infinity_from_number(value);
     format!("{integer:.0}")
         .parse::<i64>()
         .map_err(|error| Error::runtime(format!("failed to convert Date number: {error}")))
@@ -144,7 +144,7 @@ pub(super) fn integer_component(
     if !number.is_finite() || number.abs() > MAX_TIME_MS_NUMBER {
         return Ok(None);
     }
-    let integer = finite_number_to_integer(number)?;
+    let integer = date_integer_from_number(number)?;
     if integer.abs() > MAX_COMPONENT_ABS {
         return Ok(None);
     }

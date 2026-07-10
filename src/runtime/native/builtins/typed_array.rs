@@ -9,9 +9,7 @@ use crate::{
     value::{ObjectId, Value},
 };
 
-const ARRAY_BUFFER_CONSTRUCTOR_ERROR: &str = "ArrayBuffer constructor requires a byte length";
-const UINT8_ARRAY_CONSTRUCTOR_ERROR: &str =
-    "Uint8Array constructor requires a byte length or ArrayBuffer";
+const TYPED_ARRAY_LENGTH_LIMIT_ERROR: &str = "typed array length exceeded supported range";
 
 impl Context {
     pub(in crate::runtime::native) fn array_buffer_constructor_value(&mut self) -> Result<Value> {
@@ -38,8 +36,8 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let length =
-            Self::length_argument(args.as_slice().first(), ARRAY_BUFFER_CONSTRUCTOR_ERROR)?;
+        let index = self.to_index(args.as_slice().first())?;
+        let length = Self::length_to_usize(index, TYPED_ARRAY_LENGTH_LIMIT_ERROR)?;
         self.check_byte_buffer_length(length)?;
         let buffer = ByteBuffer::new(length, ByteBufferOrigin::EngineOwned);
         self.create_array_buffer_value(buffer)
@@ -49,15 +47,14 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let Some(source) = args.as_slice().first() else {
-            return Err(Error::type_error(UINT8_ARRAY_CONSTRUCTOR_ERROR));
-        };
-        if let Value::Object(buffer_object) = source
+        let source = args.as_slice().first();
+        if let Some(Value::Object(buffer_object)) = source
             && let Some(buffer) = self.objects.array_buffer(*buffer_object)?
         {
             return self.create_uint8_array_value(buffer, *buffer_object);
         }
-        let length = Self::length_argument(Some(source), UINT8_ARRAY_CONSTRUCTOR_ERROR)?;
+        let index = self.to_index(source)?;
+        let length = Self::length_to_usize(index, TYPED_ARRAY_LENGTH_LIMIT_ERROR)?;
         self.check_byte_buffer_length(length)?;
         let buffer = ByteBuffer::new(length, ByteBufferOrigin::EngineOwned);
         self.create_uint8_array_with_buffer(buffer)
@@ -144,20 +141,5 @@ impl Context {
             )));
         }
         Ok(())
-    }
-
-    fn length_argument(value: Option<&Value>, error: &str) -> Result<usize> {
-        let Some(Value::Number(length)) = value else {
-            return Err(Error::type_error(error));
-        };
-        if !length.is_finite() || *length < 0.0 || length.fract() != 0.0 {
-            return Err(Error::runtime(
-                "typed array length must be a non-negative integer",
-            ));
-        }
-        length
-            .to_string()
-            .parse::<usize>()
-            .map_err(|_| Error::limit("typed array length exceeded supported range"))
     }
 }

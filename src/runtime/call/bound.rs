@@ -96,14 +96,11 @@ impl Context {
     }
 
     fn array_like_length_from_value(&mut self, value: &Value) -> Result<usize> {
-        let number = self.to_number(value)?;
-        if number.is_nan() || number <= 0.0 {
-            return Ok(0);
-        }
-        let capped = number.floor().min(f64::from(u32::MAX));
-        format!("{capped:.0}")
-            .parse::<usize>()
-            .map_err(|_| Error::limit("apply argument list length exceeded supported range"))
+        let length = self.to_length(value)?;
+        Self::length_to_usize(
+            length,
+            "apply argument list length exceeded supported range",
+        )
     }
 
     pub(in crate::runtime) fn eval_function_prototype_bind(

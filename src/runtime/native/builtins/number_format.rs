@@ -102,14 +102,7 @@ impl Context {
     }
 
     fn number_digit_value(&mut self, value: &Value) -> Result<f64> {
-        let number = self.to_number(value)?;
-        Ok(if number.is_nan() {
-            0.0
-        } else if number.is_infinite() {
-            number
-        } else {
-            number.trunc()
-        })
+        self.to_integer_or_infinity(value)
     }
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]

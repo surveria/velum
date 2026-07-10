@@ -445,13 +445,6 @@ fn is_identifier_continue_char(ch: char) -> bool {
         || matches!(ch, '\u{200C}' | '\u{200D}')
 }
 
-pub(super) fn regexp_index_number_to_usize(number: f64) -> Result<usize> {
-    let value = number.trunc();
-    let text = format!("{value:.0}");
-    text.parse::<usize>()
-        .map_err(|_| Error::limit("RegExp lastIndex exceeded supported range"))
-}
-
 pub(super) fn regexp_index_usize_to_number(index: usize) -> Result<f64> {
     let value =
         u32::try_from(index).map_err(|_| Error::limit("RegExp index exceeded supported range"))?;

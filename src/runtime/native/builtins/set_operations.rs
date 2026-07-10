@@ -2,7 +2,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
-        abstract_operations::to_boolean,
+        abstract_operations::{integer_or_infinity_from_number, to_boolean},
         call::RuntimeCallArgs,
         collections::{CollectionId, CollectionKind},
         control::Completion,
@@ -219,11 +219,7 @@ impl Context {
         if size.is_nan() {
             return Err(Error::type_error(SET_LIKE_SIZE_NAN_ERROR));
         }
-        let size = if size.is_infinite() {
-            size
-        } else {
-            size.trunc()
-        };
+        let size = integer_or_infinity_from_number(size);
         if size < 0.0 {
             return Err(Error::exception(
                 ErrorName::RangeError,

@@ -352,17 +352,6 @@ impl Context {
         Err(Error::runtime(ARRAY_LIKE_RECEIVER_ERROR))
     }
 
-    pub(super) fn array_to_integer_or_infinity(&mut self, value: &Value) -> Result<f64> {
-        let number = self.to_number(value)?;
-        Ok(if number.is_nan() {
-            0.0
-        } else if number.is_infinite() {
-            number
-        } else {
-            number.trunc()
-        })
-    }
-
     /// Clamp a numeric index into `[0, length]`.
     pub(super) fn array_clamp_index(number: f64, length: usize) -> Result<usize> {
         if number <= 0.0 {
@@ -376,9 +365,7 @@ impl Context {
     }
 
     fn array_length_as_f64(length: usize) -> Result<f64> {
-        u32::try_from(length)
-            .map(f64::from)
-            .map_err(|_| Error::limit(ARRAY_LIKE_LENGTH_LIMIT_ERROR))
+        Self::usize_to_number(length, ARRAY_LIKE_LENGTH_LIMIT_ERROR)
     }
 
     fn checked_array_like_length(length: usize, additional: usize) -> Result<usize> {
@@ -393,27 +380,16 @@ impl Context {
     }
 
     fn length_value_to_usize(&mut self, value: &Value) -> Result<usize> {
-        let number = self.to_number(value)?;
-        if number.is_nan() || number <= 0.0 {
-            return Ok(0);
-        }
-        let max = Self::max_array_like_length()?;
-        if !number.is_finite() {
-            return Ok(max);
-        }
-        let floored = number.floor().min(f64::from(u32::MAX));
-        Self::nonnegative_integer_to_usize(floored).map(|value| value.min(max))
+        let length = self.to_length(value)?;
+        Self::length_to_usize(length, ARRAY_LIKE_LENGTH_LIMIT_ERROR)
     }
 
     pub(super) fn array_like_length_value(length: usize) -> Result<Value> {
-        let value =
-            u32::try_from(length).map_err(|_| Error::limit(ARRAY_LIKE_LENGTH_LIMIT_ERROR))?;
-        Ok(Value::Number(f64::from(value)))
+        Self::usize_to_number(length, ARRAY_LIKE_LENGTH_LIMIT_ERROR).map(Value::Number)
     }
 
     pub(super) fn array_like_index_value(index: usize) -> Result<Value> {
-        let value = u32::try_from(index).map_err(|_| Error::limit(ARRAY_LIKE_INDEX_LIMIT_ERROR))?;
-        Ok(Value::Number(f64::from(value)))
+        Self::usize_to_number(index, ARRAY_LIKE_INDEX_LIMIT_ERROR).map(Value::Number)
     }
 
     fn array_like_index_name(index: usize) -> Result<String> {
@@ -425,19 +401,14 @@ impl Context {
     }
 
     fn max_array_like_length() -> Result<usize> {
-        usize::try_from(u32::MAX).map_err(|_| Error::limit(ARRAY_LIKE_LENGTH_LIMIT_ERROR))
+        Self::length_to_usize(9_007_199_254_740_991, ARRAY_LIKE_LENGTH_LIMIT_ERROR)
     }
 
     fn max_array_like_index() -> Result<usize> {
-        usize::try_from(u32::MAX - 1).map_err(|_| Error::limit(ARRAY_LIKE_INDEX_LIMIT_ERROR))
+        Self::length_to_usize(9_007_199_254_740_990, ARRAY_LIKE_INDEX_LIMIT_ERROR)
     }
 
     fn nonnegative_integer_to_usize(value: f64) -> Result<usize> {
-        if value == 0.0 {
-            return Ok(0);
-        }
-        format!("{value:.0}")
-            .parse::<usize>()
-            .map_err(|_| Error::limit(ARRAY_LIKE_LENGTH_LIMIT_ERROR))
+        Self::finite_nonnegative_integer_to_usize(value, ARRAY_LIKE_LENGTH_LIMIT_ERROR)
     }
 }
