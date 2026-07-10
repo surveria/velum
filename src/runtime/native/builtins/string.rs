@@ -480,13 +480,15 @@ impl Context {
         let Some(value) = value else {
             return Ok(0);
         };
-        Ok(match Self::to_integer_or_infinity(self.to_number(value)?) {
-            IntegerOrInfinity::Finite(value) if value < 0 => usize::MAX,
-            IntegerOrInfinity::Finite(value) => {
-                usize::try_from(value).map_or(usize::MAX, |index| index)
-            }
-            IntegerOrInfinity::NegativeInfinity | IntegerOrInfinity::PositiveInfinity => usize::MAX,
-        })
+        let integer = self.to_integer_or_infinity(value)?;
+        if integer < 0.0 || !integer.is_finite() {
+            return Ok(usize::MAX);
+        }
+        Ok(Self::finite_nonnegative_integer_to_usize(
+            integer,
+            "string index exceeded supported range",
+        )
+        .map_or(usize::MAX, |index| index))
     }
 
     fn char_at(text: &str, position: usize) -> Option<char> {
@@ -567,17 +569,20 @@ impl Context {
     }
 
     fn clamped_start_position(&mut self, value: Option<&Value>, length: usize) -> Result<usize> {
-        let number = match value {
-            Some(value) => self.to_number(value)?,
+        let integer = match value {
+            Some(value) => self.to_integer_or_infinity(value)?,
             None => 0.0,
         };
-        Self::clamp_integer(number, length)
+        Self::clamp_integer(integer, length)
     }
 
     fn ends_with_position(&mut self, value: Option<&Value>, length: usize) -> Result<usize> {
         match value {
             None | Some(Value::Undefined) => Ok(length),
-            Some(value) => Self::clamp_integer(self.to_number(value)?, length),
+            Some(value) => {
+                let integer = self.to_integer_or_infinity(value)?;
+                Self::clamp_integer(integer, length)
+            }
         }
     }
 
@@ -589,7 +594,10 @@ impl Context {
     ) -> Result<usize> {
         match value {
             None | Some(Value::Undefined) => Ok(default),
-            Some(value) => Self::relative_bound(self.to_number(value)?, length),
+            Some(value) => {
+                let integer = self.to_integer_or_infinity(value)?;
+                Self::relative_bound(integer, length)
+            }
         }
     }
 
@@ -601,99 +609,73 @@ impl Context {
     ) -> Result<usize> {
         match value {
             None | Some(Value::Undefined) => Ok(default),
-            Some(value) => Self::clamp_integer(self.to_number(value)?, length),
+            Some(value) => {
+                let integer = self.to_integer_or_infinity(value)?;
+                Self::clamp_integer(integer, length)
+            }
         }
     }
 
     fn last_index_position(&mut self, value: Option<&Value>, length: usize) -> Result<usize> {
         match value {
             None | Some(Value::Undefined) => Ok(length),
-            Some(value) => Self::clamp_integer(self.to_number(value)?, length),
-        }
-    }
-
-    fn relative_bound(number: f64, length: usize) -> Result<usize> {
-        let integer = Self::to_integer_or_infinity(number);
-        match integer {
-            IntegerOrInfinity::NegativeInfinity => Ok(0),
-            IntegerOrInfinity::PositiveInfinity => Ok(length),
-            IntegerOrInfinity::Finite(value) if value < 0 => {
-                let length_i64 = i64::try_from(length)
-                    .map_err(|_| Error::limit("string length exceeded supported range"))?;
-                let index = length_i64.saturating_add(value);
-                if index <= 0 {
-                    return Ok(0);
-                }
-                usize::try_from(index)
-                    .map(|index| index.min(length))
-                    .map_err(|_| Error::limit("string index exceeded supported range"))
+            Some(value) => {
+                let integer = self.to_integer_or_infinity(value)?;
+                Self::clamp_integer(integer, length)
             }
-            IntegerOrInfinity::Finite(value) => usize::try_from(value)
-                .map(|index| index.min(length))
-                .map_err(|_| Error::limit("string index exceeded supported range")),
         }
     }
 
-    fn clamp_integer(number: f64, length: usize) -> Result<usize> {
-        let integer = Self::to_integer_or_infinity(number);
-        match integer {
-            IntegerOrInfinity::NegativeInfinity => Ok(0),
-            IntegerOrInfinity::PositiveInfinity => Ok(length),
-            IntegerOrInfinity::Finite(value) if value <= 0 => Ok(0),
-            IntegerOrInfinity::Finite(value) => usize::try_from(value)
-                .map(|index| index.min(length))
-                .map_err(|_| Error::limit("string index exceeded supported range")),
+    fn relative_bound(integer: f64, length: usize) -> Result<usize> {
+        if integer == f64::NEG_INFINITY {
+            return Ok(0);
         }
+        if integer == f64::INFINITY {
+            return Ok(length);
+        }
+        let length_number =
+            Self::usize_to_number(length, "string length exceeded supported range")?;
+        let index = if integer < 0.0 {
+            (length_number + integer).max(0.0)
+        } else {
+            integer.min(length_number)
+        };
+        Self::finite_nonnegative_integer_to_usize(index, "string index exceeded supported range")
+    }
+
+    fn clamp_integer(integer: f64, length: usize) -> Result<usize> {
+        if integer <= 0.0 {
+            return Ok(0);
+        }
+        if integer == f64::INFINITY {
+            return Ok(length);
+        }
+        let length_number =
+            Self::usize_to_number(length, "string length exceeded supported range")?;
+        Self::finite_nonnegative_integer_to_usize(
+            integer.min(length_number),
+            "string index exceeded supported range",
+        )
     }
 
     fn repeat_count(&mut self, value: Option<&Value>) -> Result<usize> {
-        let number = match value {
-            Some(value) => self.to_number(value)?,
-            None => 0.0,
-        };
-        let integer = Self::to_integer_or_infinity(number);
-        match integer {
-            IntegerOrInfinity::NegativeInfinity => Err(Error::exception(
+        let argument = value.cloned().unwrap_or(Value::Undefined);
+        let integer = self.to_integer_or_infinity(&argument)?;
+        if integer < 0.0 {
+            return Err(Error::exception(
                 ErrorName::RangeError,
                 STRING_REPEAT_NEGATIVE_ERROR,
-            )),
-            IntegerOrInfinity::PositiveInfinity => Err(Error::exception(
+            ));
+        }
+        if !integer.is_finite() {
+            return Err(Error::exception(
                 ErrorName::RangeError,
                 STRING_REPEAT_INFINITE_ERROR,
-            )),
-            IntegerOrInfinity::Finite(value) if value < 0 => Err(Error::exception(
-                ErrorName::RangeError,
-                STRING_REPEAT_NEGATIVE_ERROR,
-            )),
-            IntegerOrInfinity::Finite(value) => usize::try_from(value)
-                .map_err(|_| Error::limit("string repeat count exceeded supported range")),
+            ));
         }
-    }
-
-    fn to_integer_or_infinity(number: f64) -> IntegerOrInfinity {
-        if number.is_nan() || number == 0.0 {
-            return IntegerOrInfinity::Finite(0);
-        }
-        if number == f64::INFINITY {
-            return IntegerOrInfinity::PositiveInfinity;
-        }
-        if number == f64::NEG_INFINITY {
-            return IntegerOrInfinity::NegativeInfinity;
-        }
-        let value = if number.is_sign_negative() {
-            number.ceil()
-        } else {
-            number.floor()
-        };
-        format!("{value:.0}").parse::<i64>().map_or_else(
-            |_| {
-                if value.is_sign_negative() {
-                    IntegerOrInfinity::NegativeInfinity
-                } else {
-                    IntegerOrInfinity::PositiveInfinity
-                }
-            },
-            IntegerOrInfinity::Finite,
+        Self::finite_nonnegative_integer_to_usize(
+            integer,
+            "string repeat count exceeded supported range",
         )
     }
 
@@ -707,11 +689,4 @@ impl Context {
     }
 
     const fn discard_string_args(_args: &[Value]) {}
-}
-
-#[derive(Debug, Clone, Copy)]
-enum IntegerOrInfinity {
-    NegativeInfinity,
-    Finite(i64),
-    PositiveInfinity,
 }

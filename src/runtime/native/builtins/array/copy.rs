@@ -140,11 +140,8 @@ impl Context {
     ) -> Result<Value> {
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
-        let relative =
-            self.array_to_integer_or_infinity(args.first().unwrap_or(&Value::Undefined))?;
-        let length_f64 = u32::try_from(length)
-            .map(f64::from)
-            .map_err(|_| Error::limit(ARRAY_COPY_INDEX_ERROR))?;
+        let relative = self.to_integer_or_infinity(args.first().unwrap_or(&Value::Undefined))?;
+        let length_f64 = Self::usize_to_number(length, ARRAY_COPY_INDEX_ERROR)?;
         let target = if relative >= 0.0 {
             relative
         } else {

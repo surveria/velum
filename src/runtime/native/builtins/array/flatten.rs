@@ -413,21 +413,22 @@ impl Context {
     }
 
     fn value_to_flatten_depth(&mut self, value: &Value) -> Result<FlattenDepth> {
-        let number = self.to_number(value)?;
-        if number.is_nan() || number <= 0.0 {
+        let integer = self.to_integer_or_infinity(value)?;
+        if integer <= 0.0 {
             return Ok(FlattenDepth::Finite(0));
         }
-        if !number.is_finite() {
+        if !integer.is_finite() {
             return Ok(FlattenDepth::Infinity);
         }
-        Self::finite_flatten_depth(number)
+        Self::finite_flatten_depth(integer)
     }
 
     fn finite_flatten_depth(value: f64) -> Result<FlattenDepth> {
-        format!("{:.0}", value.floor())
-            .parse::<usize>()
-            .map(FlattenDepth::Finite)
-            .map_err(|_| Error::limit("array flatten depth exceeded supported range"))
+        Self::finite_nonnegative_integer_to_usize(
+            value,
+            "array flatten depth exceeded supported range",
+        )
+        .map(FlattenDepth::Finite)
     }
 }
 

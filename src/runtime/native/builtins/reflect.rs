@@ -329,13 +329,10 @@ impl Context {
         &mut self,
         value: &Value,
     ) -> Result<usize> {
-        let number = self.to_number(value)?;
-        if number.is_nan() || number <= 0.0 {
-            return Ok(0);
-        }
-        let capped = number.floor().min(f64::from(u32::MAX));
-        format!("{capped:.0}")
-            .parse::<usize>()
-            .map_err(|_| Error::limit("Reflect argument list length exceeded supported range"))
+        let length = self.to_length(value)?;
+        Self::length_to_usize(
+            length,
+            "Reflect argument list length exceeded supported range",
+        )
     }
 }

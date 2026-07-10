@@ -327,20 +327,19 @@ impl Context {
         if matches!(value, Value::Undefined) {
             return Ok(10);
         }
-        let number = self.to_number(value)?;
-        let Some(radix) = Self::number_finite_integer(number) else {
-            return Err(Error::exception(
-                ErrorName::RangeError,
-                NUMBER_RADIX_RANGE_ERROR,
-            ));
-        };
-        if radix < i64::from(NUMBER_RADIX_MIN) || radix > i64::from(NUMBER_RADIX_MAX) {
+        let radix = self.to_integer_or_infinity(value)?;
+        if !radix.is_finite()
+            || radix < f64::from(NUMBER_RADIX_MIN)
+            || radix > f64::from(NUMBER_RADIX_MAX)
+        {
             return Err(Error::exception(
                 ErrorName::RangeError,
                 NUMBER_RADIX_RANGE_ERROR,
             ));
         }
-        u32::try_from(radix).map_err(|_| Error::limit("number radix exceeded supported range"))
+        format!("{radix:.0}")
+            .parse::<u32>()
+            .map_err(|_| Error::limit("number radix exceeded supported range"))
     }
 
     fn number_to_radix_string(number: f64, radix: u32) -> Result<String> {

@@ -227,20 +227,18 @@ src/runtime/semantic_object/prototype_integrity.rs:semantic_try_set_prototype'
 
   indexing="$(
     function_owners \
-      'fn[[:space:]]+[a-z_]*(array_like_length|to_length|to_integer)[a-z_]*'
+      'fn[[:space:]]+[a-z_]*(array_like_length|to_length|to_integer|to_index)[a-z_]*'
   )"
-  expected_indexing='src/runtime/call/bound.rs:array_like_length_from_value
+  expected_indexing='src/runtime/abstract_operations/conversion.rs:to_index
+src/runtime/abstract_operations/conversion.rs:to_integer_or_infinity
+src/runtime/abstract_operations/conversion.rs:to_length
+src/runtime/call/bound.rs:array_like_length_from_value
 src/runtime/native/builtins/array/callbacks.rs:array_like_length_for_callback
 src/runtime/native/builtins/array/generic.rs:array_like_length
 src/runtime/native/builtins/array/generic.rs:array_like_length_value
-src/runtime/native/builtins/array/generic.rs:array_to_integer_or_infinity
 src/runtime/native/builtins/array/generic.rs:checked_array_like_length
 src/runtime/native/builtins/array/generic.rs:max_array_like_length
-src/runtime/native/builtins/array/generic.rs:set_array_like_length
-src/runtime/native/builtins/date/support.rs:finite_number_to_integer
-src/runtime/native/builtins/string.rs:to_integer_or_infinity
-src/runtime/native/builtins/string_extra.rs:to_length_arg
-src/runtime/native/builtins/string_extra.rs:to_length_value'
+src/runtime/native/builtins/array/generic.rs:set_array_like_length'
   compare_set "length/integer operation allowlist" "${indexing}" "${expected_indexing}"
 }
 

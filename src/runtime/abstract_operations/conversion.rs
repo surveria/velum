@@ -5,7 +5,7 @@ use crate::{
         object::{PropertyKey, PropertyLookup},
         property::DynamicPropertyKey,
     },
-    value::{Value, format_ecmascript_number},
+    value::{ErrorName, Value, format_ecmascript_number},
 };
 
 const CANNOT_CONVERT_OBJECT_ERROR: &str = "Cannot convert object to primitive value";
@@ -17,6 +17,9 @@ const TO_STRING_PROPERTY: &str = "toString";
 const VALUE_OF_PROPERTY: &str = "valueOf";
 const STRING_NEGATIVE_INFINITY: &str = "-Infinity";
 const STRING_POSITIVE_INFINITY: &str = "Infinity";
+const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+const MAX_SAFE_INTEGER_NUMBER: f64 = 9_007_199_254_740_991.0;
+const TO_INDEX_RANGE_ERROR: &str = "Index must be between 0 and Number.MAX_SAFE_INTEGER";
 
 /// Preferred result type supplied to ECMAScript `ToPrimitive`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -104,6 +107,68 @@ impl Context {
         to_number_primitive(&primitive)
     }
 
+    /// ECMAScript `ToIntegerOrInfinity`, including observable number conversion.
+    // The specification name is intentional; conversion can invoke JavaScript.
+    #[allow(clippy::wrong_self_convention)]
+    pub(in crate::runtime) fn to_integer_or_infinity(&mut self, value: &Value) -> Result<f64> {
+        self.to_number(value).map(integer_or_infinity_from_number)
+    }
+
+    /// ECMAScript `ToLength` in its full specification range.
+    // The specification name is intentional; conversion can invoke JavaScript.
+    #[allow(clippy::wrong_self_convention)]
+    pub(in crate::runtime) fn to_length(&mut self, value: &Value) -> Result<u64> {
+        let integer = self.to_integer_or_infinity(value)?;
+        length_from_integer(integer)
+    }
+
+    /// ECMAScript `ToIndex`, with `undefined` defaulting to zero.
+    // The specification name is intentional; conversion can invoke JavaScript.
+    #[allow(clippy::wrong_self_convention)]
+    pub(in crate::runtime) fn to_index(&mut self, value: Option<&Value>) -> Result<u64> {
+        let Some(value) = value else {
+            return Ok(0);
+        };
+        if matches!(value, Value::Undefined) {
+            return Ok(0);
+        }
+        let integer = self.to_integer_or_infinity(value)?;
+        if !(0.0..=MAX_SAFE_INTEGER_NUMBER).contains(&integer) {
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                TO_INDEX_RANGE_ERROR,
+            ));
+        }
+        length_from_integer(integer)
+    }
+
+    pub(in crate::runtime) fn length_to_usize(length: u64, error: &str) -> Result<usize> {
+        usize::try_from(length).map_err(|_| Error::limit(error))
+    }
+
+    pub(in crate::runtime) fn finite_nonnegative_integer_to_usize(
+        integer: f64,
+        error: &str,
+    ) -> Result<usize> {
+        if !integer.is_finite() || integer < 0.0 || integer.fract() != 0.0 {
+            return Err(Error::limit(error));
+        }
+        format!("{integer:.0}")
+            .parse::<usize>()
+            .map_err(|_| Error::limit(error))
+    }
+
+    pub(in crate::runtime) fn usize_to_number(value: usize, error: &str) -> Result<f64> {
+        let value = u64::try_from(value).map_err(|_| Error::limit(error))?;
+        if value > MAX_SAFE_INTEGER {
+            return Err(Error::limit(error));
+        }
+        value
+            .to_string()
+            .parse::<f64>()
+            .map_err(|_| Error::limit(error))
+    }
+
     /// ECMAScript `ToString`, including observable object conversion.
     // The specification name is intentional; conversion can invoke JavaScript.
     #[allow(clippy::wrong_self_convention)]
@@ -146,6 +211,28 @@ impl Context {
             PropertyLookup::from_key(SYMBOL_TO_PRIMITIVE_NAME, PropertyKey::symbol(symbol.id()));
         self.get_property_value_with_lookup(value, lookup)
     }
+}
+
+pub(in crate::runtime) fn integer_or_infinity_from_number(number: f64) -> f64 {
+    if number.is_nan() || number == 0.0 {
+        return 0.0;
+    }
+    if number.is_infinite() {
+        return number;
+    }
+    number.trunc()
+}
+
+fn length_from_integer(integer: f64) -> Result<u64> {
+    if integer <= 0.0 {
+        return Ok(0);
+    }
+    if integer >= MAX_SAFE_INTEGER_NUMBER {
+        return Ok(MAX_SAFE_INTEGER);
+    }
+    format!("{integer:.0}")
+        .parse::<u64>()
+        .map_err(|_| Error::limit("length conversion exceeded supported range"))
 }
 
 pub(in crate::runtime) const fn is_primitive(value: &Value) -> bool {
@@ -230,12 +317,7 @@ pub(in crate::runtime) fn string_to_number(value: &str) -> f64 {
     if let Some(value) = prefixed_integer_to_number(trimmed) {
         return value;
     }
-    trimmed.parse::<f64>().map_or(f64::NAN, |number| {
-        if number.is_infinite() {
-            return f64::NAN;
-        }
-        number
-    })
+    trimmed.parse::<f64>().unwrap_or(f64::NAN)
 }
 
 fn prefixed_integer_to_number(value: &str) -> Option<f64> {

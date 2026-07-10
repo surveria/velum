@@ -222,7 +222,7 @@ impl Context {
         side: PadSide,
     ) -> Result<Value> {
         let text = self.string_receiver_value(this_value)?;
-        let target_length = self.to_length_arg(args.first())?;
+        let target_length = self.string_length_arg(args.first())?;
         let current_length = text.chars().count();
         if target_length <= current_length {
             return self.heap_string_value(&text);
@@ -282,7 +282,7 @@ impl Context {
 
     fn raw_length(&mut self, raw: &Value) -> Result<usize> {
         let value = self.get_property_value(raw, "length")?;
-        self.to_length_value(&value)
+        self.string_length_value(&value)
     }
 
     fn raw_part(&mut self, raw: &Value, index: usize) -> Result<String> {
@@ -337,62 +337,44 @@ impl Context {
     }
 
     fn relative_index(&mut self, value: Option<&Value>, length: usize) -> Result<Option<usize>> {
-        let integer = self.integer_arg(value)?;
-        let index = if integer < 0 {
-            let length_i64 = i64::try_from(length)
-                .map_err(|_| Error::limit("string length exceeded supported range"))?;
-            length_i64.saturating_add(integer)
+        let argument = value.cloned().unwrap_or(Value::Undefined);
+        let integer = self.to_integer_or_infinity(&argument)?;
+        let length_number =
+            Self::usize_to_number(length, "string length exceeded supported range")?;
+        let index = if integer < 0.0 {
+            length_number + integer
         } else {
             integer
         };
-        if index < 0 {
+        if index < 0.0 || index >= length_number {
             return Ok(None);
         }
-        let index =
-            usize::try_from(index).map_err(|_| Error::limit("string index exceeded range"))?;
-        if index >= length {
-            return Ok(None);
-        }
-        Ok(Some(index))
+        Self::finite_nonnegative_integer_to_usize(index, "string index exceeded range").map(Some)
     }
 
     fn position_arg(&mut self, value: Option<&Value>) -> Result<usize> {
-        let integer = self.integer_arg(value)?;
-        if integer <= 0 {
+        let argument = value.cloned().unwrap_or(Value::Undefined);
+        let integer = self.to_integer_or_infinity(&argument)?;
+        if integer <= 0.0 {
             return Ok(0);
         }
-        usize::try_from(integer).map_err(|_| Error::limit("string index exceeded range"))
+        if !integer.is_finite() {
+            return Ok(usize::MAX);
+        }
+        Ok(
+            Self::finite_nonnegative_integer_to_usize(integer, "string index exceeded range")
+                .map_or(usize::MAX, |index| index),
+        )
     }
 
-    fn integer_arg(&mut self, value: Option<&Value>) -> Result<i64> {
-        let number = match value {
-            Some(value) => self.to_number(value)?,
-            None => 0.0,
-        };
-        Ok(Self::finite_integer(number).unwrap_or(i64::MAX))
-    }
-
-    // Keep the specification-derived name until AS-03b centralizes ToLength.
-    #[allow(clippy::wrong_self_convention)]
-    fn to_length_arg(&mut self, value: Option<&Value>) -> Result<usize> {
+    fn string_length_arg(&mut self, value: Option<&Value>) -> Result<usize> {
         let value = Self::argument_or_undefined(value);
-        self.to_length_value(&value)
+        self.string_length_value(&value)
     }
 
-    // Keep the specification-derived name until AS-03b centralizes ToLength.
-    #[allow(clippy::wrong_self_convention)]
-    fn to_length_value(&mut self, value: &Value) -> Result<usize> {
-        let number = self.to_number(value)?;
-        let Some(integer) = Self::finite_integer(number) else {
-            if number.is_sign_positive() && number.is_infinite() {
-                return Err(Error::limit(TO_LENGTH_LIMIT_ERROR));
-            }
-            return Ok(0);
-        };
-        if integer <= 0 {
-            return Ok(0);
-        }
-        usize::try_from(integer).map_err(|_| Error::limit(TO_LENGTH_LIMIT_ERROR))
+    fn string_length_value(&mut self, value: &Value) -> Result<usize> {
+        let length = self.to_length(value)?;
+        Self::length_to_usize(length, TO_LENGTH_LIMIT_ERROR)
     }
 
     fn code_point_argument(&mut self, value: &Value) -> Result<u32> {
@@ -422,21 +404,6 @@ impl Context {
         let text = format!("{unit:.0}");
         text.parse::<u16>()
             .map_err(|_| Error::limit("uint16 conversion exceeded supported range"))
-    }
-
-    fn finite_integer(number: f64) -> Option<i64> {
-        if !number.is_finite() {
-            return None;
-        }
-        if number == 0.0 || number.is_nan() {
-            return Some(0);
-        }
-        let value = if number.is_sign_negative() {
-            number.ceil()
-        } else {
-            number.floor()
-        };
-        format!("{value:.0}").parse::<i64>().ok()
     }
 
     const fn is_high_surrogate(unit: u16) -> bool {

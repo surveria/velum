@@ -14,10 +14,7 @@ use crate::{
 
 mod engine;
 
-use engine::{
-    RegExpFlags, escaped_regexp_source, regexp_find, regexp_index_number_to_usize,
-    regexp_index_usize_to_number,
-};
+use engine::{RegExpFlags, escaped_regexp_source, regexp_find, regexp_index_usize_to_number};
 
 use super::{
     NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, REGEXP_NAME, REGEXP_PROTOTYPE_EXEC_NAME,
@@ -558,17 +555,13 @@ impl Context {
 
     fn regexp_last_index(&mut self, this_value: &Value, input: &str) -> Result<usize> {
         let value = self.get_property_value(this_value, REGEXP_LAST_INDEX_PROPERTY)?;
-        let Some(index) = value.as_number() else {
-            return Ok(0);
-        };
-        if !index.is_finite() || index <= 0.0 {
-            return Ok(0);
-        }
-        let index = regexp_index_number_to_usize(index)?;
-        if index > input.len() {
+        let index = self.to_length(&value)?;
+        let input_length = u64::try_from(input.len())
+            .map_err(|_| Error::limit("RegExp input length exceeded supported range"))?;
+        if index > input_length {
             return Ok(input.len().saturating_add(1));
         }
-        Ok(index)
+        Self::length_to_usize(index, "RegExp lastIndex exceeded supported range")
     }
 
     fn set_regexp_last_index(&mut self, this_value: &Value, index: usize) -> Result<()> {

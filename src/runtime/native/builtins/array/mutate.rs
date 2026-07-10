@@ -155,8 +155,7 @@ impl Context {
             let delete_count = if args.is_empty() { 0 } else { max_delete };
             return Ok((delete_count, Vec::new()));
         }
-        let requested =
-            self.array_to_integer_or_infinity(args.get(1).unwrap_or(&Value::Undefined))?;
+        let requested = self.to_integer_or_infinity(args.get(1).unwrap_or(&Value::Undefined))?;
         let delete_count = Self::array_clamp_index(requested, max_delete)?;
         let items = args.get(2..).unwrap_or(&[]).to_vec();
         Ok((delete_count, items))
@@ -266,11 +265,8 @@ impl Context {
     ) -> Result<Value> {
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
-        let relative =
-            self.array_to_integer_or_infinity(args.first().unwrap_or(&Value::Undefined))?;
-        let length_f64 = u32::try_from(length)
-            .map(f64::from)
-            .map_err(|_| Error::limit(ARRAY_MUTATE_INDEX_ERROR))?;
+        let relative = self.to_integer_or_infinity(args.first().unwrap_or(&Value::Undefined))?;
+        let length_f64 = Self::usize_to_number(length, ARRAY_MUTATE_INDEX_ERROR)?;
         let target = if relative >= 0.0 {
             relative
         } else {

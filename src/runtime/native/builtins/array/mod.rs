@@ -629,16 +629,16 @@ impl Context {
             return Ok(default);
         }
 
-        let number = self.to_number(value)?;
-        Self::array_slice_bound_from_number(number, length)
+        let integer = self.to_integer_or_infinity(value)?;
+        Self::array_slice_bound_from_integer(integer, length)
     }
 
-    fn array_slice_bound_from_number(number: f64, length: usize) -> Result<usize> {
-        if number.is_nan() || number == 0.0 {
+    fn array_slice_bound_from_integer(integer: f64, length: usize) -> Result<usize> {
+        if integer == 0.0 {
             return Ok(0);
         }
-        if !number.is_finite() {
-            return if number.is_sign_negative() {
+        if !integer.is_finite() {
+            return if integer.is_sign_negative() {
                 Ok(0)
             } else {
                 Ok(length)
@@ -646,11 +646,6 @@ impl Context {
         }
 
         let length_f64 = Self::array_slice_length_as_f64(length)?;
-        let integer = if number.is_sign_negative() {
-            number.ceil()
-        } else {
-            number.floor()
-        };
         let clamped = if integer < 0.0 {
             (length_f64 + integer).clamp(0.0, length_f64)
         } else {
@@ -660,18 +655,11 @@ impl Context {
     }
 
     fn array_slice_length_as_f64(length: usize) -> Result<f64> {
-        let length = u32::try_from(length)
-            .map_err(|_| Error::limit("array length exceeded supported range"))?;
-        Ok(f64::from(length))
+        Self::usize_to_number(length, "array length exceeded supported range")
     }
 
     fn array_slice_nonnegative_usize(value: f64) -> Result<usize> {
-        if value == 0.0 {
-            return Ok(0);
-        }
-        format!("{value:.0}")
-            .parse::<usize>()
-            .map_err(|_| Error::limit("array index exceeded supported range"))
+        Self::finite_nonnegative_integer_to_usize(value, "array index exceeded supported range")
     }
 
     fn array_last_index_of_start(
@@ -686,16 +674,19 @@ impl Context {
             return Ok(Some(length.saturating_sub(1)));
         };
 
-        let number = self.to_number(value)?;
-        Self::array_last_index_of_start_from_number(number, length)
+        let integer = self.to_integer_or_infinity(value)?;
+        Self::array_last_index_of_start_from_integer(integer, length)
     }
 
-    fn array_last_index_of_start_from_number(number: f64, length: usize) -> Result<Option<usize>> {
-        if number.is_nan() || number == 0.0 {
+    fn array_last_index_of_start_from_integer(
+        integer: f64,
+        length: usize,
+    ) -> Result<Option<usize>> {
+        if integer == 0.0 {
             return Ok(Some(0));
         }
-        if !number.is_finite() {
-            return if number.is_sign_negative() {
+        if !integer.is_finite() {
+            return if integer.is_sign_negative() {
                 Ok(None)
             } else {
                 Ok(Some(length.saturating_sub(1)))
@@ -703,11 +694,6 @@ impl Context {
         }
 
         let length_f64 = Self::array_slice_length_as_f64(length)?;
-        let integer = if number.is_sign_negative() {
-            number.ceil()
-        } else {
-            number.floor()
-        };
         if integer < 0.0 {
             let index = length_f64 + integer;
             if index < 0.0 {
