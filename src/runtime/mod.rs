@@ -17,6 +17,7 @@ use crate::storage::symbol::SymbolTable;
 use crate::syntax::StaticBindingId;
 use crate::value::{ErrorName, FunctionId, Value};
 
+mod abstract_operations;
 pub mod binding;
 pub mod bytecode;
 pub mod call;

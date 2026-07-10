@@ -4,7 +4,10 @@ use crate::{
         BytecodeNumericBinaryOp,
     },
     error::Result,
-    runtime::{Context, binding::scope::BindingCell, numeric::number_to_i32},
+    runtime::{
+        Context, abstract_operations::number_strict_equality, binding::scope::BindingCell,
+        numeric::number_to_i32,
+    },
     value::Value,
 };
 
@@ -257,7 +260,7 @@ impl Context {
             let Some(test) = case.test else {
                 continue;
             };
-            if super::bytecode_switch_number_equal(test, masked) {
+            if number_strict_equality(test, masked) {
                 return Ok(Some(index));
             }
         }

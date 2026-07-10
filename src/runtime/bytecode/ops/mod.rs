@@ -7,8 +7,7 @@ use crate::{
         BytecodeNumericCompareOp, BytecodeNumericEqualityOp, BytecodeNumericUnaryOp,
     },
     error::{Error, Result},
-    runtime::Context,
-    runtime::bytecode::coercion::{abstract_equality, relational_compare, strict_equality},
+    runtime::bytecode::coercion::relational_compare,
     runtime::call::RuntimeCallArgs,
     runtime::control::Completion,
     runtime::control::thrown_value_matches,
@@ -19,6 +18,10 @@ use crate::{
     },
     runtime::object::PropertyKey,
     runtime::property::DynamicPropertyKey,
+    runtime::{
+        Context,
+        abstract_operations::{abstract_equality, number_strict_equality, strict_equality},
+    },
     syntax::{BinaryOp, DeclKind, UnaryOp},
     value::{ErrorName, Value},
 };
@@ -228,7 +231,7 @@ impl Context {
         right: &Value,
     ) -> Result<Value> {
         if let (Value::Number(left), Value::Number(right)) = (left, right) {
-            let equal = bytecode_numbers_equal(*left, *right);
+            let equal = number_strict_equality(*left, *right);
             let value = match op {
                 BytecodeNumericEqualityOp::Equal | BytecodeNumericEqualityOp::StrictEqual => equal,
                 BytecodeNumericEqualityOp::NotEqual | BytecodeNumericEqualityOp::StrictNotEqual => {
@@ -427,18 +430,4 @@ impl Context {
             }
         }
     }
-}
-
-const fn bytecode_numbers_equal(left: f64, right: f64) -> bool {
-    if left.is_nan() || right.is_nan() {
-        return false;
-    }
-    if bytecode_number_is_zero(left) && bytecode_number_is_zero(right) {
-        return true;
-    }
-    left.to_bits() == right.to_bits()
-}
-
-const fn bytecode_number_is_zero(value: f64) -> bool {
-    value.to_bits() << 1 == 0
 }

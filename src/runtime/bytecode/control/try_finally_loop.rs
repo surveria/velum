@@ -4,7 +4,10 @@ use crate::{
         BytecodeNumericCompareOp, BytecodeTryFinallyFastPath,
     },
     error::{Error, Result},
-    runtime::{Context, binding::scope::BindingCell, numeric::number_to_i32},
+    runtime::{
+        Context, abstract_operations::number_strict_equality, binding::scope::BindingCell,
+        numeric::number_to_i32,
+    },
     value::Value,
 };
 
@@ -189,7 +192,7 @@ fn masked_match_count(
     let matches_per_period = (0..period)
         .filter(|offset| {
             let masked = *offset & mask;
-            usize_to_f64(masked).is_ok_and(|value| value.to_bits() == right.to_bits())
+            usize_to_f64(masked).is_ok_and(|value| number_strict_equality(value, right))
         })
         .count();
     let mut count = matches_per_period
@@ -216,7 +219,7 @@ fn masked_index_matches(index: usize, mask: f64, right: f64) -> Result<bool> {
 
 fn masked_index_matches_usize(index: usize, mask: usize, right: f64) -> Result<bool> {
     let masked = index & mask;
-    Ok(usize_to_f64(masked)?.to_bits() == right.to_bits())
+    Ok(number_strict_equality(usize_to_f64(masked)?, right))
 }
 
 fn non_negative_integer_index(value: f64) -> Option<usize> {

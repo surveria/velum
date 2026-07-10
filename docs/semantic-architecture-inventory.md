@@ -267,14 +267,16 @@ to AS-03b, while complete derived-constructor activation belongs to AS-06.
 
 | Semantics | Current owner(s) | Split |
 | --- | --- | --- |
-| Rust `PartialEq<Value>` | `value/kind.rs` | identity/value equality used as a building block, but not named as one ECMAScript operation |
-| abstract and strict equality | `runtime/bytecode/coercion.rs` | bytecode-owned rather than a runtime abstract-operation owner; numeric bytecode has additional specialized equality instructions |
-| `SameValueZero` | `runtime/collections.rs`, `runtime/object/array/search.rs`, and `runtime/native/builtins/array/generic.rs` | three implementations plus an array numeric helper |
-| `SameValue` | `runtime/native/builtins/object_static.rs` | local to `Object.is` |
+| Rust `PartialEq<Value>` | `value/kind.rs` | representation-level identity/value building block; observable JavaScript callers no longer select an equality relation by using it directly |
+| abstract and strict equality | `runtime/abstract_operations/equality.rs` | AS-03a1 owns the relation; boxed-string conversion remains a documented temporary dependency until shared `ToPrimitive` lands in AS-03a2 |
+| `SameValueZero` | `runtime/abstract_operations/equality.rs` | Map/Set and generic/packed/holey array paths delegate to the same value and numeric operations |
+| `SameValue` | `runtime/abstract_operations/equality.rs` | `Object.is` delegates to the shared owner |
+| optimized numeric equality | the same owner plus guarded operand-selection paths in bytecode/control/function modules | fast paths call `number_strict_equality`; they may invert the result for `!=` but do not redefine NaN or signed-zero behavior |
 
-AS-03a should create one equality owner and make optimized numeric instructions
-call or prove equivalence to it. Migration should delete local implementations
-in the same pull request that redirects their callers.
+AS-03a1 establishes this owner in draft PR #409 and deletes the former local
+implementations in the same change. `Value::Error` still lacks JavaScript object
+identity, so every equality relation inherits its structural inline-error debt;
+AS-04b removes that representation rather than adding an equality exception.
 
 ### Conversion And Numeric Indexing
 
@@ -460,8 +462,9 @@ decision sequence:
 | AS-02a | five object-like variants, object payloads, function/error stores, Promise/collection associations | checked semantic object reference implemented in PR #400; local slot existence is validated without claiming VM identity |
 | AS-02b1 | property/internal-method table | object-like get/has boundary implemented in PR #401, including receiver-aware and Symbol-preserving Proxy dispatch |
 | AS-02b2 | property/internal-method table | set/define/delete/keys/prototype/descriptor/integrity boundary implemented in PR #403 with ordinary cache tails and Symbol-preserving Proxy dispatch |
-| AS-02c | call/construct tables and repeated object-like lists | shared call/construct predicates and dispatch implemented in draft PR #408, including callable/constructable Proxy and bound functions |
-| AS-03a | equality/conversion table | one equality and primitive-conversion owner; delete three `SameValueZero` copies |
+| AS-02c | call/construct tables and repeated object-like lists | shared call/construct predicates and dispatch completed in PR #408, including callable/constructable Proxy and bound functions |
+| AS-03a1 | equality table and numeric fast paths | shared equality owner implemented in draft PR #409; bytecode, Object.is, collections, and arrays delegate to it |
+| AS-03a2 | conversion table | add one primitive-conversion owner and replace boxed-string-specific Abstract Equality conversion |
 | AS-03b | key/property/call/iterator tables | move iterator protocol out of bytecode and add spec-level method lookup and invocation operations over the AS-02c internal methods |
 | AS-04a/b | completion/error table and inline Error representation | preserve arbitrary throws across native frames; remove ReferenceError prefix parsing; add real errors/spans |
 | AS-05a/b | id, clone, store, root, handle, and limit maps | remove ambiguous VM cloning; add VM identity/generation and root/accounting contracts |
@@ -481,7 +484,7 @@ must fail on growth.
 | runtime/frontend separation | no `crate::ast`, parser, or lexer imports under `src/runtime` or `src/bytecode` | a runtime dependency on parser AST/frontend implementation |
 | harness source names | compiler recognition of only `print` and `assert.throws`, plus the constructor fallback for `Test262Error` | another compiler/runtime source-name special case or harness opcode |
 | harness opcodes | only `Print` and `AssertThrows` | another harness-only bytecode instruction or use site |
-| semantic duplicates | three `SameValueZero` owners, one `SameValue` owner, the recorded length/integer helpers, and the AS-02c callable/constructor predicates | a new definition instead of delegation to an existing or new shared operation |
+| semantic duplicates | the AS-03a1 equality owner, including legacy numeric-helper naming patterns, recorded length/integer helpers, and the AS-02c callable/constructor predicates | a new definition instead of delegation to an existing or new shared operation |
 | object side tables | Promise, collection, and iterator associations recorded above; bound-function payload store | a new object-id-indexed association without an inventory/plan update |
 | optimization owners | current linear/function/control modules | a new workload-shaped control module or compiler source-shape recognizer without plan evidence |
 | clone debt | current `Clone` implementations on `Vm` and `Context` | another public VM-state clone boundary or use of cloning as handle transfer |
@@ -507,7 +510,7 @@ rg -n 'pub enum Value|Function\(|NativeFunction\(|HostFunction\(|Object\(|Error\
 rg -n 'crate::ast|crate::parser|crate::lexer' src/runtime src/bytecode
 rg -n 'BytecodeInstruction::(Print|AssertThrows)' src/compiler src/runtime src/bytecode
 rg -n 'name\.as_str\(\) == "print"|assert\.throws|Test262Error' src/compiler src/runtime
-rg -n 'fn (same_value_zero|same_value|semantic_is_callable|semantic_is_constructor)' src/runtime
+rg -n 'fn (abstract_equality|strict_equality|same_value|same_value_zero|semantic_is_callable|semantic_is_constructor)' src/runtime
 rg -n 'pub struct Context|collections:|promises:|_object_slots:|_jobs:' src/runtime
 rg -n 'trait .*Trace|fn trace|root_set|roots|garbage|collect' src tests
 git ls-files 'src/runtime/bytecode/control/*.rs'
@@ -521,8 +524,9 @@ Snapshot observations:
   recognizers;
 - `Print` and `AssertThrows` each appear in compiler, bytecode type/metrics,
   runtime dispatch, and runtime implementation paths;
-- `SameValueZero` has three owners, plus a numeric array helper; `SameValue` has
-  a fourth local owner;
+- the initial snapshot found three `SameValueZero` owners plus numeric array
+  helpers and a fourth local `SameValue` owner; AS-03a1 collapses them into
+  `runtime/abstract_operations/equality.rs`;
 - the runtime has no root enumeration or trace contract;
 - the structured-control and linear optimizer areas contain sixteen and seven
   tracked Rust files respectively.

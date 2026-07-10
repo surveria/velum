@@ -2,6 +2,9 @@ use std::fmt::Write as _;
 
 use crate::{
     error::{Error, Result},
+    runtime::abstract_operations::{
+        number_same_value_zero, number_strict_equality, same_value_zero, strict_equality,
+    },
     value::Value,
 };
 
@@ -11,35 +14,6 @@ impl ObjectHeap {
     pub(super) fn array_index_value(index: usize) -> Result<Value> {
         let index = u32::try_from(index).map_err(|_| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
         Ok(Value::Number(f64::from(index)))
-    }
-
-    pub(super) fn same_value_zero(left: &Value, right: &Value) -> bool {
-        match (left, right) {
-            (Value::Number(left), Value::Number(right)) => {
-                Self::number_same_value_zero(*left, *right)
-            }
-            _ => left == right,
-        }
-    }
-
-    pub(super) const fn number_same_value_zero(left: f64, right: f64) -> bool {
-        (left.to_bits() == right.to_bits())
-            || (left.is_nan() && right.is_nan())
-            || (Self::number_is_zero(left) && Self::number_is_zero(right))
-    }
-
-    pub(super) const fn number_strict_equal(left: f64, right: f64) -> bool {
-        if left.is_nan() || right.is_nan() {
-            return false;
-        }
-        if Self::number_is_zero(left) && Self::number_is_zero(right) {
-            return true;
-        }
-        left.to_bits() == right.to_bits()
-    }
-
-    const fn number_is_zero(value: f64) -> bool {
-        matches!(value.classify(), std::num::FpCategory::Zero)
     }
 
     pub(super) fn push_join_text(
@@ -112,7 +86,10 @@ impl ObjectHeap {
         start: usize,
     ) -> Result<Value> {
         for (position, property) in properties.iter().enumerate().skip(start) {
-            if property.data_value_ref() == Some(search) {
+            if property
+                .data_value_ref()
+                .is_some_and(|value| strict_equality(value, search))
+            {
                 return Self::array_index_value(position);
             }
         }
@@ -126,7 +103,7 @@ impl ObjectHeap {
     ) -> Result<Value> {
         for (position, property) in properties.iter().enumerate().skip(start) {
             if let Some(Value::Number(value)) = property.data_value_ref()
-                && Self::number_strict_equal(*value, search)
+                && number_strict_equality(*value, search)
             {
                 return Self::array_index_value(position);
             }
@@ -142,7 +119,7 @@ impl ObjectHeap {
         for property in properties.iter().skip(start) {
             if property
                 .data_value_ref()
-                .is_some_and(|value| Self::same_value_zero(value, search))
+                .is_some_and(|value| same_value_zero(value, search))
             {
                 return Value::Bool(true);
             }
@@ -157,7 +134,7 @@ impl ObjectHeap {
     ) -> Value {
         for property in properties.iter().skip(start) {
             if let Some(Value::Number(value)) = property.data_value_ref()
-                && Self::number_same_value_zero(*value, search)
+                && number_same_value_zero(*value, search)
             {
                 return Value::Bool(true);
             }
@@ -178,7 +155,10 @@ impl ObjectHeap {
             .checked_add(1)
             .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
         for (position, property) in properties.iter().enumerate().take(count).rev() {
-            if property.data_value_ref() == Some(search) {
+            if property
+                .data_value_ref()
+                .is_some_and(|value| strict_equality(value, search))
+            {
                 return Self::array_index_value(position);
             }
         }
@@ -199,7 +179,7 @@ impl ObjectHeap {
             .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
         for (position, property) in properties.iter().enumerate().take(count).rev() {
             if let Some(Value::Number(value)) = property.data_value_ref()
-                && Self::number_strict_equal(*value, search)
+                && number_strict_equality(*value, search)
             {
                 return Self::array_index_value(position);
             }

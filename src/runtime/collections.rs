@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    runtime::Context,
+    runtime::{Context, abstract_operations::same_value_zero},
     value::{ObjectId, Value},
 };
 
@@ -232,17 +232,6 @@ impl Context {
             .ok_or_else(|| Error::limit("collection iterator cursor overflowed"))?;
         Ok(Some(item))
     }
-}
-
-/// `SameValueZero`: strict equality except NaN equals NaN and +0 equals -0.
-fn same_value_zero(left: &Value, right: &Value) -> bool {
-    if let (Value::Number(left), Value::Number(right)) = (left, right) {
-        if left.is_nan() && right.is_nan() {
-            return true;
-        }
-        return left.to_bits() == right.to_bits() || (*left == 0.0 && *right == 0.0);
-    }
-    left == right
 }
 
 /// Map and Set normalize a -0 key to +0 on insertion.

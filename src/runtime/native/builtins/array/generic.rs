@@ -1,6 +1,9 @@
 use crate::{
     error::{Error, Result},
-    runtime::Context,
+    runtime::{
+        Context,
+        abstract_operations::{same_value_zero, strict_equality},
+    },
     value::Value,
 };
 
@@ -8,7 +11,6 @@ const ARRAY_LENGTH_PROPERTY: &str = "length";
 const ARRAY_LIKE_RECEIVER_ERROR: &str = "Array.prototype method requires an object receiver";
 const ARRAY_LIKE_LENGTH_LIMIT_ERROR: &str = "array-like length exceeded supported range";
 const ARRAY_LIKE_INDEX_LIMIT_ERROR: &str = "array-like index exceeded supported range";
-const F64_MAGNITUDE_MASK: u64 = 0x7fff_ffff_ffff_ffff;
 const INDEX_NOT_FOUND: f64 = -1.0;
 
 impl Context {
@@ -174,7 +176,7 @@ impl Context {
             self.step()?;
             if self.has_array_like_index(this_value, index)? {
                 let value = self.get_array_like_index(this_value, index)?;
-                if &value == search {
+                if strict_equality(&value, search) {
                     return Self::array_like_index_value(index);
                 }
             }
@@ -197,7 +199,7 @@ impl Context {
         for index in start..length {
             self.step()?;
             let value = self.get_array_like_index(this_value, index)?;
-            if Self::same_value_zero(&value, search) {
+            if same_value_zero(&value, search) {
                 return Ok(Value::Bool(true));
             }
         }
@@ -219,7 +221,7 @@ impl Context {
             self.step()?;
             if self.has_array_like_index(this_value, index)? {
                 let value = self.get_array_like_index(this_value, index)?;
-                if &value == search {
+                if strict_equality(&value, search) {
                     return Self::array_like_index_value(index);
                 }
             }
@@ -454,18 +456,5 @@ impl Context {
         format!("{value:.0}")
             .parse::<usize>()
             .map_err(|_| Error::limit(ARRAY_LIKE_LENGTH_LIMIT_ERROR))
-    }
-
-    fn same_value_zero(left: &Value, right: &Value) -> bool {
-        match (left, right) {
-            (Value::Number(left), Value::Number(right)) => {
-                let left_bits = left.to_bits();
-                let right_bits = right.to_bits();
-                left_bits == right_bits
-                    || left_bits & F64_MAGNITUDE_MASK == 0 && right_bits & F64_MAGNITUDE_MASK == 0
-                    || left.is_nan() && right.is_nan()
-            }
-            _ => left == right,
-        }
     }
 }

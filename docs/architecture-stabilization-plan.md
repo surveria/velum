@@ -25,8 +25,8 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01, AS-02a, and AS-02b are complete; AS-02c is in
-  progress in draft PR #408
+- Current program state: AS-01 and the AS-02 semantic boundary are complete;
+  AS-03a1 equality consolidation is in progress in draft PR #409
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -480,8 +480,8 @@ dependencies do not overlap.
 | --- | --- | --- | --- | --- |
 | AS-00 | Complete | Adopt this plan and route project documentation to it. | None | PR #396 merged as `f79056b`; required CI, post-merge performance, publisher, and canonical report publication passed. |
 | AS-01 | Complete | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards merged in PR #399 with required CI and canonical report publication. |
-| AS-02 | In progress | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c call/construct methods are implemented in draft PR #408. |
-| AS-03 | Backlog | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | Shared coercion, equality, property, invocation, and iterator operations used by bytecode and built-ins. |
+| AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
+| AS-03 | In progress | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality consolidation is implemented in draft PR #409; coercion, property, invocation, and iterator operations remain. |
 | AS-04 | Backlog | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | Real JavaScript error objects, typed throw path, no message-prefix classification, spans available to diagnostics. |
 | AS-05 | Backlog | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | Non-cloneable VM state, checked cross-VM boundaries, trace/root contract, heap/stack/job/buffer counters and limits. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
@@ -673,9 +673,9 @@ AS-02b2 evidence:
   without accepting caller-supplied artifacts or tree claims
 - Remaining for AS-02b2: none
 
-AS-02c current evidence:
+AS-02c evidence:
 
-- PR: #408 (draft)
+- PR: #408, squash-merged as `1b51bed`
 - Scope: one checked `semantic_is_callable`/`semantic_call` and
   `semantic_is_constructor`/`semantic_construct` owner for JavaScript, native,
   host, bound-function, and callable/constructable Proxy values
@@ -698,22 +698,50 @@ AS-02c current evidence:
 - Recorded residuals: alternate `newTarget.prototype` is not yet applied by
   native constructor payloads, and derived-class `super()` still initializes a
   pre-created receiver in place; AS-03b and AS-06 own those migrations
-- Remaining for AS-02c: commit the reviewed baseline, run required exact-head
-  CI, merge, and verify exact-tree report publication
+- Validation/publication: required correctness run `29074703586` certified
+  tree `eed7d1ab` at 34,273/34,273 expected Test262 variants and 95/95 QuickJS;
+  post-merge run `29074810069` measured the five project sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T064817Z.*` in
+  report-only commit `ed25948`
+- Remaining for AS-02c: none
+
+AS-02 completion means observable property and invocation dispatch now has one
+semantic boundary. Representation migrations that require real Error identity,
+VM-bound handles, complete typed internal slots, roots, or collection are
+explicitly owned by AS-04, AS-05, and AS-07 rather than keeping AS-03 blocked
+behind physical arena consolidation.
 
 ### AS-03: Abstract Operations
 
 Land operations in coherent groups:
 
-1. equality and primitive conversion;
-2. property-key and numeric-index conversion;
-3. generic object property operations;
-4. call/construct and method lookup;
-5. iterator operations and iterator closing;
-6. promise resolution after resumable execution is available.
+1. equality relations;
+2. primitive conversion;
+3. property-key and numeric-index conversion;
+4. generic object property operations;
+5. call/construct and method lookup;
+6. iterator operations and iterator closing;
+7. promise resolution after resumable execution is available.
 
 Each migrated built-in must delete or delegate its local duplicate. Avoid a
 permanent period in which two implementations are both treated as canonical.
+
+AS-03a1 current evidence:
+
+- PR: #409 (draft)
+- Scope: one pure runtime owner for Abstract Equality, Strict Equality,
+  `SameValue`, and `SameValueZero`, including their numeric specializations
+- Consolidation: bytecode, numeric quickening/control paths, `Object.is`,
+  Map/Set, generic arrays, and packed/holey array paths delegate equality truth
+  to `runtime/abstract_operations/equality.rs`
+- Guard: the equality duplicate allowlist permits definitions only in that
+  owner; optimized paths may select operands and negate a result but may not
+  redefine NaN or signed-zero semantics
+- Tests: focused public coverage exercises primitive, boxed-string, Symbol,
+  object identity, NaN, signed zero, arrays, collections, switch, callback, and
+  loop paths
+- Remaining for AS-03a1: complete fast/correctness validation, review any
+  Test262 delta, merge, and verify canonical report publication
 
 ### AS-04: Completion, Errors, And Source Metadata
 
@@ -834,21 +862,22 @@ reviewable scope.
 5. AS-02b2: route set/define/delete/own-keys/descriptor/prototype through common
    internal methods (complete in PR #403).
 6. AS-02c: route JavaScript, native, host, bound, and callable Proxy values
-   through common call/construct internal methods (implemented in draft PR
-   #408).
-7. AS-03a: centralize equality and primitive conversion operations.
-8. AS-03b: centralize property-key, property, call, and iterator operations.
-9. AS-04a: separate JavaScript throw completion from engine/host/resource
+   through common call/construct internal methods (complete in PR #408).
+7. AS-03a1: centralize Abstract/Strict Equality, `SameValue`, and
+   `SameValueZero` (implemented in draft PR #409).
+8. AS-03a2: centralize primitive conversion operations.
+9. AS-03b: centralize property-key, property, call, and iterator operations.
+10. AS-04a: separate JavaScript throw completion from engine/host/resource
    failures.
-10. AS-04b: migrate Error values into real objects and add source-span metadata.
-11. AS-05a: remove ambiguous VM cloning and define VM-bound handle identity.
-12. AS-05b: add root enumeration plus complete allocation accounting and
+11. AS-04b: migrate Error values into real objects and add source-span metadata.
+12. AS-05a: remove ambiguous VM cloning and define VM-bound handle identity.
+13. AS-05b: add root enumeration plus complete allocation accounting and
     limits.
-13. AS-06a: migrate synchronous calls and structured control flow to explicit
+14. AS-06a: migrate synchronous calls and structured control flow to explicit
     activation frames.
-14. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
-15. AS-07a: add safe collection over explicit roots and correct weak edges.
-16. AS-08a: move reusable optimization state behind one optimizer/quickening
+15. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
+16. AS-07a: add safe collection over explicit roots and correct weak edges.
+17. AS-08a: move reusable optimization state behind one optimizer/quickening
     boundary and remove harness-specific opcodes.
 
 ## Updating This Plan

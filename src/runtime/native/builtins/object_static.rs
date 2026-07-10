@@ -2,6 +2,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
+        abstract_operations::same_value,
         call::RuntimeCallArgs,
         object::{
             DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable, PropertyUpdate,
@@ -144,7 +145,7 @@ impl Context {
     pub(in crate::runtime::native) fn eval_direct_object_is(args: &[Value]) -> Value {
         let left = Self::argument_or_undefined(args.first());
         let right = Self::argument_or_undefined(args.get(1));
-        Value::Bool(Self::same_value(&left, &right))
+        Value::Bool(same_value(&left, &right))
     }
 
     pub(in crate::runtime::native) fn eval_object_is_extensible(
@@ -501,22 +502,5 @@ impl Context {
     fn named_dynamic_property(&self, name: String) -> DynamicPropertyKey {
         let key = self.known_property_key(&name);
         DynamicPropertyKey::new(name, key)
-    }
-
-    fn same_value(left: &Value, right: &Value) -> bool {
-        match (left, right) {
-            (Value::Number(left), Value::Number(right)) => Self::same_number_value(*left, *right),
-            _ => left == right,
-        }
-    }
-
-    fn same_number_value(left: f64, right: f64) -> bool {
-        if left.is_nan() && right.is_nan() {
-            return true;
-        }
-        if left == 0.0 && right == 0.0 {
-            return left.to_bits() == right.to_bits();
-        }
-        left.to_bits() == right.to_bits()
     }
 }

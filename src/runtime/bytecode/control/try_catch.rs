@@ -6,8 +6,9 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
+        abstract_operations::{number_strict_equality, strict_equality},
         binding::scope::BindingCell,
-        bytecode::{coercion::strict_equality, state::BytecodeState},
+        bytecode::state::BytecodeState,
         control::Completion,
         numeric::number_to_i32,
     },
@@ -96,7 +97,7 @@ impl Context {
         };
         let mask = number_to_i32(fast_path.index_mask, "try finally mask")?;
         let masked = f64::from(number_to_i32(index, "try finally index")? & mask);
-        let branch_add = if masked.to_bits() == fast_path.throw_right.to_bits() {
+        let branch_add = if number_strict_equality(masked, fast_path.throw_right) {
             fast_path.throw_value
         } else {
             fast_path.try_add

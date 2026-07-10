@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::{
     bytecode::{BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp},
     error::Result,
-    runtime::{Context, control::Completion},
+    runtime::{Context, abstract_operations::number_strict_equality, control::Completion},
     value::Value,
 };
 
@@ -72,9 +72,7 @@ impl Context {
         let (Value::Number(left), Value::Number(right)) = (left, right) else {
             return Ok(None);
         };
-        let equal = left
-            .partial_cmp(right)
-            .is_some_and(std::cmp::Ordering::is_eq);
+        let equal = number_strict_equality(*left, *right);
         let value = match op {
             BytecodeNumericEqualityOp::Equal | BytecodeNumericEqualityOp::StrictEqual => equal,
             BytecodeNumericEqualityOp::NotEqual | BytecodeNumericEqualityOp::StrictNotEqual => {
