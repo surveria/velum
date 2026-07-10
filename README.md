@@ -51,7 +51,7 @@ fn main() -> rs_quickjs::Result<()> {
     })?;
 
     vm.eval(r#"let camera = cameraLabel("front");"#)?;
-    let script = vm.compile("print(camera); camera")?;
+    let script = vm.compile_named("camera-session.js", "print(camera); camera")?;
     let value = vm.eval_compiled(&script)?;
     let output = vm.take_output();
 

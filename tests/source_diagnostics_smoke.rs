@@ -24,6 +24,10 @@ fn keeps_stable_source_identity_without_retaining_source_text() -> TestResult {
     ensure_different_source_id(first.source_id(), anonymous.source_id())?;
     ensure_different_source_id(first.source_id(), renamed.source_id())?;
     ensure_different_source_id(first.source_id(), changed.source_id())?;
+    ensure_different_source_id(
+        SourceId::for_named_source("a\u{2}", "b"),
+        SourceId::for_named_source("a", "\u{2}b"),
+    )?;
     ensure_source_id(anonymous.source_id(), SourceId::for_source(NAMED_SOURCE))
 }
 

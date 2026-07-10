@@ -350,13 +350,13 @@ The engine already has a useful JavaScript `Completion` enum with `Normal`,
 
 | Boundary | Current behavior | Required migration |
 | --- | --- | --- |
-| Public `eval` | every `Throw(Value)` returns a value-preserving `Error::JavaScript`; built-in Error objects also carry structured diagnostic metadata | AS-04a merged in PR #416; AS-04b1 implemented in draft PR #418; AS-05 later adds VM-bound handle identity |
-| Native built-ins | `Result<Value>` boundaries preserve arbitrary throws; typed built-in exception requests allocate an ordinary Error object in the active VM before becoming `Throw(Value)` | AS-04a merged in PR #416; AS-04b1 implemented in draft PR #418 |
-| Runtime-to-throw conversion | `runtime_exception_value` unwraps only typed JavaScript values or allocates a typed built-in error request; Runtime, host, parser, and resource errors are never classified by message text | AS-04a merged in PR #416; AS-04b1 object allocation implemented in draft PR #418 |
-| Reference errors | `reference_error_undefined` and `reference_error_uninitialized` create typed ReferenceError requests that become ordinary objects in the active VM | AS-04a merged in PR #416; AS-04b1 implemented in draft PR #418 |
+| Public `eval` | every `Throw(Value)` returns a value-preserving `Error::JavaScript`; built-in Error objects also carry structured diagnostic metadata | AS-04a merged in PR #416; AS-04b1 merged in PR #418; AS-05 later adds VM-bound handle identity |
+| Native built-ins | `Result<Value>` boundaries preserve arbitrary throws; typed built-in exception requests allocate an ordinary Error object in the active VM before becoming `Throw(Value)` | AS-04a merged in PR #416; AS-04b1 merged in PR #418 |
+| Runtime-to-throw conversion | `runtime_exception_value` unwraps only typed JavaScript values or allocates a typed built-in error request; Runtime, host, parser, and resource errors are never classified by message text | AS-04a merged in PR #416; AS-04b1 object allocation merged in PR #418 |
+| Reference errors | `reference_error_undefined` and `reference_error_uninitialized` create typed ReferenceError requests that become ordinary objects in the active VM | AS-04a merged in PR #416; AS-04b1 merged in PR #418 |
 | Accessors and native callbacks | Completion conversion preserves primitive, Symbol, object, and Error throws; public host callbacks may use `Error::javascript(value)` intentionally | AS-04a merged in PR #416 |
-| Error instances | `Value::Object(ObjectId)` with ordinary properties/prototype plus an `error_metadata` internal slot | AS-04b1 implemented in draft PR #418; no synthetic property or equality path remains |
-| Source diagnostics | lexer/parser errors carry an offset; runtime bytecode and Error metadata carry no `SourceId`/span | AS-04b2 adds stable source metadata without retaining the AST at runtime |
+| Error instances | `Value::Object(ObjectId)` with ordinary properties/prototype plus an `error_metadata` internal slot | AS-04b1 merged in PR #418; no synthetic property or equality path remains |
+| Source diagnostics | `CompiledScript` owns deterministic `SourceId` plus an optional bounded source name; lexer/parser errors expose `SourceSpan` byte ranges; runtime bytecode and Error metadata do not yet carry instruction spans | AS-04b2a implemented in draft PR #419; AS-04b2b propagates AST ranges into parallel bytecode/runtime metadata without retaining the AST |
 
 Resource limits should continue to bypass JavaScript catch unless the embedding
 contract explicitly changes. Host failures and invariant failures also need
@@ -381,6 +381,15 @@ correct intrinsic or `newTarget` prototype; stable class/message diagnostics
 live in one Object internal slot. The complete local corpus retains all 36,553
 previous expected variants and adds 106 reviewed Object, Array, Promise, Error,
 and NativeError variants, for 36,659 of 102,578 with 95 of 95 QuickJS cases.
+
+AS-04b2a adds canonical diagnostic identity without changing executable
+semantics. `SourceId` derives from framed source name/text bytes and stays
+stable across compiled-script reuse; `SourceSpan` carries half-open byte ranges.
+Named and anonymous compilation bind lexer/parser failures to that identity,
+while `CompiledScript` retains neither source text nor AST. The existing
+runtime/frontend boundary guard remains intact. AS-04b2b must add AST node
+ranges and a parallel bytecode span table before runtime exceptions can name
+their executing source location.
 
 ## VM Store, Root, And Accounting Map
 
@@ -517,8 +526,9 @@ decision sequence:
 | AS-03b2 | property and call tables | shared `Get`, `Set`, `Call`, and `GetMethod` operations merged in PR #414; legacy facades are deleted and guarded against return |
 | AS-03b3 | iterator map | shared iterator protocol and closing owner merged in PR #415; bytecode owns only loop control and all consumers delegate |
 | AS-04a | completion/error table | typed arbitrary-throw round trip and ReferenceError prefix removal merged in PR #416; engine and resource failures stay non-catchable |
-| AS-04b1 | inline Error representation | ordinary Error object identity and one metadata internal slot implemented in draft PR #418; `Value::Error` and synthetic semantic branches are deleted |
-| AS-04b2 | source diagnostics | add stable source ids/spans without retaining parser AST in runtime state |
+| AS-04b1 | inline Error representation | ordinary Error object identity and one metadata internal slot merged in PR #418; `Value::Error` and synthetic semantic branches are deleted |
+| AS-04b2a | frontend source diagnostics | canonical source ids, named compilation, and lexer/parser spans implemented in draft PR #419 without retaining source text or parser AST |
+| AS-04b2b | bytecode/runtime source diagnostics | carry AST ranges into a parallel bytecode span table and expose the executing span on runtime diagnostics |
 | AS-05a/b | id, clone, store, root, handle, and limit maps | remove ambiguous VM cloning; add VM identity/generation and root/accounting contracts |
 | AS-06 | active execution roots and structured nested bytecode | explicit activation/block stacks and suspend/resume results |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |
