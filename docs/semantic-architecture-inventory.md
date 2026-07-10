@@ -619,7 +619,7 @@ decision sequence:
 | AS-05b1b2 | object arena edges and object/property-key cache anchors | three object categories cover properties, prototypes, boxed strings/Symbols, Proxy state, typed views, and bounded Context/Vm diagnostics; merged in PR #428 |
 | AS-05b1b3 | Promise, collection, iterator, weak-key, and ephemeron edges | typed side-store associations, eight strength-classified categories, and bounded Context/Vm diagnostics merged in PR #429 |
 | AS-05b1c | transient operand, call, iterator, descriptor, Proxy, and class-key values | scoped RAII registry plus three direct-root categories and collector safepoint contract merged in PR #430 |
-| AS-05a2d | retained object/function ids and handles | non-cloneable identity/registry/slot-generation capability, source-proven creation, consuming release, Drop fallback, and retained-root category in draft PR #431 |
+| AS-05a2d | retained object/function ids and handles | non-cloneable identity/registry/slot-generation capability, source-proven creation, consuming release, Drop safety-net cleanup, and retained-root category in draft PR #431 |
 | AS-05b2 | heap, stack, job, callback, output, and buffer limit maps | add complete accounting contracts and teardown reconciliation |
 | AS-06 | active execution roots and structured nested bytecode | explicit activation/block stacks and suspend/resume results |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |

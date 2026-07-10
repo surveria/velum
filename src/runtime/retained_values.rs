@@ -123,7 +123,7 @@ impl RetainedValueState {
 /// A non-cloneable root for one value owned by a specific VM generation.
 ///
 /// The handle does not expose arena ids. Dropping it releases the root as a
-/// fallback; [`Self::release`] provides deterministic release with error
+/// safety net; [`Self::release`] provides deterministic release with error
 /// reporting.
 #[must_use = "a retained value keeps its JavaScript value rooted until release or drop"]
 pub struct RetainedValue {

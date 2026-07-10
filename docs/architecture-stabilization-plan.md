@@ -1596,7 +1596,7 @@ AS-05a2d local implementation evidence:
   is already known. There is deliberately no public `retain(Value)` operation
   that could relabel a foreign raw object/function id after the fact;
 - `RetainedValue::release` consumes the handle and reports teardown or stale
-  state. `Drop` performs a non-failing fallback release, while the weak
+  state. `Drop` performs a non-failing safety-net release, while the weak
   registry link avoids a VM/host-callback ownership cycle and makes Context
   teardown authoritative;
 - `VmRootKind::RetainedHandle` extends the direct-root registry from twelve to
