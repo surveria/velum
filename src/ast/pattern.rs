@@ -1,4 +1,4 @@
-use super::{Expr, StaticBinding, StaticName};
+use super::{Expression, StaticBinding, StaticName};
 
 /// A destructuring binding target used by declarations, function parameters,
 /// and `for-in`/`for-of` heads.
@@ -20,19 +20,19 @@ pub enum BindingPattern {
 pub struct ObjectBindingProperty {
     pub key: BindingPropertyKey,
     pub target: BindingPattern,
-    pub default: Option<Expr>,
+    pub default: Option<Expression>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BindingPropertyKey {
     Static(StaticName),
-    Computed(Expr),
+    Computed(Expression),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArrayBindingElement {
     pub target: BindingPattern,
-    pub default: Option<Expr>,
+    pub default: Option<Expression>,
 }
 
 impl BindingPattern {
@@ -69,7 +69,7 @@ impl BindingPattern {
     /// keys and default initializers, in source order.
     pub fn for_each_expr<E>(
         &self,
-        visit: &mut impl FnMut(&Expr) -> Result<(), E>,
+        visit: &mut impl FnMut(&Expression) -> Result<(), E>,
     ) -> Result<(), E> {
         match self {
             Self::Identifier(_) => Ok(()),

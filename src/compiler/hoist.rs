@@ -1,14 +1,14 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{BindingPattern, DeclKind, ForInTarget, StaticBinding, Stmt},
+    ast::{BindingPattern, DeclKind, ForInTarget, Statement, StaticBinding, Stmt},
     binding_metadata::BindingLayout,
     bytecode::{BytecodeBinding, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeHoistPlan},
     error::Result,
 };
 
 impl BytecodeHoistPlan {
-    pub fn compile(statements: &[Stmt], layout: &BindingLayout) -> Result<Self> {
+    pub fn compile(statements: &[Statement], layout: &BindingLayout) -> Result<Self> {
         let mut collector = HoistCollector::new(layout);
         collector.collect_statements(statements)?;
         Ok(Self::new(
@@ -34,7 +34,7 @@ impl<'a> HoistCollector<'a> {
         }
     }
 
-    fn collect_statements(&mut self, statements: &[Stmt]) -> Result<()> {
+    fn collect_statements(&mut self, statements: &[Statement]) -> Result<()> {
         for statement in statements {
             self.collect_statement(statement)?;
         }
@@ -46,7 +46,7 @@ impl<'a> HoistCollector<'a> {
         name: &StaticBinding,
         id: crate::syntax::StaticFunctionId,
         params: &std::rc::Rc<[crate::ast::FunctionParam]>,
-        body: &std::rc::Rc<[Stmt]>,
+        body: &std::rc::Rc<[Statement]>,
         is_async: bool,
     ) -> Result<()> {
         self.var_declarations.push(name.clone());
@@ -72,8 +72,8 @@ impl<'a> HoistCollector<'a> {
         }
     }
 
-    fn collect_statement(&mut self, statement: &Stmt) -> Result<()> {
-        match statement {
+    fn collect_statement(&mut self, statement: &Statement) -> Result<()> {
+        match statement.kind() {
             Stmt::Block(statements) | Stmt::DeclList(statements) => {
                 self.collect_statements(statements)
             }

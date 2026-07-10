@@ -1,4 +1,4 @@
-use crate::ast::{Expr, FunctionParam, StaticBinding, StaticName, Stmt};
+use crate::ast::{Expr, FunctionParam, Statement, StaticBinding, StaticName, Stmt};
 use crate::error::Result;
 
 use super::{ARGUMENTS_IDENTIFIER_NAME, EVAL_IDENTIFIER_NAME, Parser, USE_STRICT_DIRECTIVE};
@@ -7,7 +7,7 @@ impl Parser {
     pub(super) fn update_directive_prologue(
         &mut self,
         directive_prologue: &mut bool,
-        statement: &Stmt,
+        statement: &Statement,
     ) {
         if !*directive_prologue {
             return;
@@ -82,18 +82,21 @@ impl Parser {
         Ok(())
     }
 
-    fn string_directive_value(statement: &Stmt) -> Option<&str> {
-        let Stmt::Expr(Expr::StringLiteral(value)) = statement else {
+    fn string_directive_value(statement: &Statement) -> Option<&str> {
+        let Stmt::Expr(expression) = statement.kind() else {
+            return None;
+        };
+        let Expr::StringLiteral(value) = expression.kind() else {
             return None;
         };
         Some(value.as_str())
     }
 
-    fn is_string_directive(statement: &Stmt) -> bool {
+    fn is_string_directive(statement: &Statement) -> bool {
         Self::string_directive_value(statement).is_some()
     }
 
-    pub(super) fn is_use_strict_directive(statement: &Stmt) -> bool {
+    pub(super) fn is_use_strict_directive(statement: &Statement) -> bool {
         Self::string_directive_value(statement).is_some_and(|value| value == USE_STRICT_DIRECTIVE)
     }
 

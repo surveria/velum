@@ -6,15 +6,17 @@ use crate::{
 };
 
 use super::{
-    FunctionParam, StaticBinding, StaticCallSiteId, StaticFunctionId, StaticName,
-    StaticPropertyAccessId, StaticString, Stmt,
+    AstNode, FunctionParam, Statement, StaticBinding, StaticCallSiteId, StaticFunctionId,
+    StaticName, StaticPropertyAccessId, StaticString,
 };
+
+pub type Expression = AstNode<Expr>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjectProperty {
     pub key: ObjectPropertyKey,
     pub kind: ObjectPropertyKind,
-    pub value: Expr,
+    pub value: Expression,
 }
 
 /// How an object literal property definition installs its value: as a plain
@@ -31,17 +33,17 @@ pub enum ObjectPropertyKind {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ObjectPropertyKey {
     Static(StaticName),
-    Computed(Box<Expr>),
+    Computed(Box<Expression>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Literal(Value),
     StringLiteral(StaticString),
-    Spread(Box<Self>),
+    Spread(Box<Expression>),
     Class(Box<crate::ast::ClassLiteral>),
     SuperCall {
-        args: Vec<Self>,
+        args: Vec<Expression>,
     },
     SuperMember {
         property: StaticName,
@@ -49,7 +51,7 @@ pub enum Expr {
     },
     TemplateLiteral {
         quasis: Vec<StaticString>,
-        expressions: Vec<Self>,
+        expressions: Vec<Expression>,
     },
     RegExpLiteral {
         pattern: StaticString,
@@ -58,89 +60,89 @@ pub enum Expr {
     This,
     NewTarget,
     Identifier(StaticBinding),
-    Parenthesized(Box<Self>),
+    Parenthesized(Box<Expression>),
     Unary {
         op: UnaryOp,
-        expr: Box<Self>,
+        expr: Box<Expression>,
     },
-    Await(Box<Self>),
+    Await(Box<Expression>),
     Update {
         op: UpdateOp,
         prefix: bool,
-        expr: Box<Self>,
+        expr: Box<Expression>,
     },
     Binary {
         op: BinaryOp,
-        left: Box<Self>,
-        right: Box<Self>,
+        left: Box<Expression>,
+        right: Box<Expression>,
         property_access: Option<StaticPropertyAccessId>,
     },
     Conditional {
-        condition: Box<Self>,
-        consequent: Box<Self>,
-        alternate: Box<Self>,
+        condition: Box<Expression>,
+        consequent: Box<Expression>,
+        alternate: Box<Expression>,
     },
     Assignment {
         name: StaticBinding,
-        expr: Box<Self>,
+        expr: Box<Expression>,
     },
     CompoundAssignment {
         op: BinaryOp,
-        target: Box<Self>,
-        expr: Box<Self>,
+        target: Box<Expression>,
+        expr: Box<Expression>,
     },
     PropertyAssignment {
-        object: Box<Self>,
+        object: Box<Expression>,
         property: StaticName,
         access: StaticPropertyAccessId,
-        expr: Box<Self>,
+        expr: Box<Expression>,
     },
     ComputedPropertyAssignment {
-        object: Box<Self>,
-        property: Box<Self>,
+        object: Box<Expression>,
+        property: Box<Expression>,
         access: StaticPropertyAccessId,
-        expr: Box<Self>,
+        expr: Box<Expression>,
     },
     Member {
-        object: Box<Self>,
+        object: Box<Expression>,
         property: StaticName,
         access: StaticPropertyAccessId,
     },
     ComputedMember {
-        object: Box<Self>,
-        property: Box<Self>,
+        object: Box<Expression>,
+        property: Box<Expression>,
         access: StaticPropertyAccessId,
     },
     Call {
-        callee: Box<Self>,
+        callee: Box<Expression>,
         site: StaticCallSiteId,
-        args: Vec<Self>,
+        args: Vec<Expression>,
     },
     Function {
         id: StaticFunctionId,
         name: Option<StaticName>,
         params: Rc<[FunctionParam]>,
-        body: Rc<[Stmt]>,
+        body: Rc<[Statement]>,
         is_async: bool,
     },
     ArrowFunction {
         id: StaticFunctionId,
         params: Rc<[FunctionParam]>,
-        body: Rc<[Stmt]>,
+        body: Rc<[Statement]>,
         is_async: bool,
     },
     MethodFunction {
         id: StaticFunctionId,
         name: Option<StaticName>,
         params: Rc<[FunctionParam]>,
-        body: Rc<[Stmt]>,
+        body: Rc<[Statement]>,
         is_async: bool,
     },
     Object(Vec<ObjectProperty>),
     ArrayHole,
-    Array(Vec<Self>),
+    Array(Vec<Expression>),
     New {
-        constructor: Box<Self>,
-        args: Vec<Self>,
+        constructor: Box<Expression>,
+        args: Vec<Expression>,
     },
 }

@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expr, FunctionParam, StaticName, UnaryOp, UpdateOp},
+    ast::{Expr, Expression, FunctionParam, Statement, StaticName, Stmt, UnaryOp, UpdateOp},
     error::{Error, Result},
     lexer::TokenKind,
     value::Value,
@@ -24,88 +24,111 @@ struct ArrowSignature {
 }
 
 impl Parser {
-    pub(super) fn expression(&mut self) -> Result<Expr> {
+    pub(super) fn expression(&mut self) -> Result<Expression> {
         self.with_expression_depth(Self::assignment)
     }
 
-    pub(super) fn unary(&mut self) -> Result<Expr> {
+    pub(super) fn unary(&mut self) -> Result<Expression> {
+        let start = self.current_span();
         if self.match_kind(&TokenKind::Await) {
             let expr = self.unary()?;
-            return Ok(Expr::Await(Box::new(expr)));
+            return Ok(self.expression_node(start, Expr::Await(Box::new(expr))));
         }
         if self.match_kind(&TokenKind::New) {
             return self.new_expr();
         }
         if self.match_kind(&TokenKind::PlusPlus) {
-            let offset = self.previous_offset();
+            let operator = self.previous_span();
             let expr = self.unary()?;
-            return Self::update_expr(UpdateOp::Increment, true, expr, offset);
+            return self.update_expr(UpdateOp::Increment, true, expr, operator);
         }
         if self.match_kind(&TokenKind::MinusMinus) {
-            let offset = self.previous_offset();
+            let operator = self.previous_span();
             let expr = self.unary()?;
-            return Self::update_expr(UpdateOp::Decrement, true, expr, offset);
+            return self.update_expr(UpdateOp::Decrement, true, expr, operator);
         }
         if self.match_kind(&TokenKind::Typeof) {
             let expr = self.unary()?;
-            return Ok(Expr::Unary {
-                op: UnaryOp::Typeof,
-                expr: Box::new(expr),
-            });
+            return Ok(self.expression_node(
+                start,
+                Expr::Unary {
+                    op: UnaryOp::Typeof,
+                    expr: Box::new(expr),
+                },
+            ));
         }
         if self.match_kind(&TokenKind::Void) {
             let expr = self.unary()?;
-            return Ok(Expr::Unary {
-                op: UnaryOp::Void,
-                expr: Box::new(expr),
-            });
+            return Ok(self.expression_node(
+                start,
+                Expr::Unary {
+                    op: UnaryOp::Void,
+                    expr: Box::new(expr),
+                },
+            ));
         }
         if self.match_kind(&TokenKind::Delete) {
             let expr = self.unary()?;
-            return Ok(Expr::Unary {
-                op: UnaryOp::Delete,
-                expr: Box::new(expr),
-            });
+            return Ok(self.expression_node(
+                start,
+                Expr::Unary {
+                    op: UnaryOp::Delete,
+                    expr: Box::new(expr),
+                },
+            ));
         }
         if self.match_kind(&TokenKind::Bang) {
             let expr = self.unary()?;
-            return Ok(Expr::Unary {
-                op: UnaryOp::Not,
-                expr: Box::new(expr),
-            });
+            return Ok(self.expression_node(
+                start,
+                Expr::Unary {
+                    op: UnaryOp::Not,
+                    expr: Box::new(expr),
+                },
+            ));
         }
         if self.match_kind(&TokenKind::Minus) {
             let expr = self.unary()?;
-            return Ok(Expr::Unary {
-                op: UnaryOp::Negate,
-                expr: Box::new(expr),
-            });
+            return Ok(self.expression_node(
+                start,
+                Expr::Unary {
+                    op: UnaryOp::Negate,
+                    expr: Box::new(expr),
+                },
+            ));
         }
         if self.match_kind(&TokenKind::Plus) {
             let expr = self.unary()?;
-            return Ok(Expr::Unary {
-                op: UnaryOp::Plus,
-                expr: Box::new(expr),
-            });
+            return Ok(self.expression_node(
+                start,
+                Expr::Unary {
+                    op: UnaryOp::Plus,
+                    expr: Box::new(expr),
+                },
+            ));
         }
         self.call()
     }
 
-    pub(super) fn call(&mut self) -> Result<Expr> {
+    pub(super) fn call(&mut self) -> Result<Expression> {
         let expr = self.primary()?;
         self.call_suffix(expr)
     }
 
-    fn call_suffix(&mut self, mut expr: Expr) -> Result<Expr> {
+    fn call_suffix(&mut self, mut expr: Expression) -> Result<Expression> {
         loop {
             if self.match_kind(&TokenKind::Dot) {
                 let property = self.consume_property_name("expected property name after '.'")?;
                 let access = self.static_property_access()?;
-                expr = Expr::Member {
-                    object: Box::new(expr),
-                    property,
-                    access,
-                };
+                let start = expr.span();
+                expr = self.expression_node(
+                    start,
+                    Expr::Member {
+                        object: Box::new(expr),
+                        property,
+                        access,
+                    },
+                );
                 continue;
             }
             if self.match_kind(&TokenKind::LBracket) {
@@ -116,19 +139,27 @@ impl Parser {
                 )?;
                 if let Some(property) = self.static_computed_property_key(&property)? {
                     let access = self.static_property_access()?;
-                    expr = Expr::Member {
-                        object: Box::new(expr),
-                        property,
-                        access,
-                    };
+                    let start = expr.span();
+                    expr = self.expression_node(
+                        start,
+                        Expr::Member {
+                            object: Box::new(expr),
+                            property,
+                            access,
+                        },
+                    );
                     continue;
                 }
                 let access = self.static_property_access()?;
-                expr = Expr::ComputedMember {
-                    object: Box::new(expr),
-                    property: Box::new(property),
-                    access,
-                };
+                let start = expr.span();
+                expr = self.expression_node(
+                    start,
+                    Expr::ComputedMember {
+                        object: Box::new(expr),
+                        property: Box::new(property),
+                        access,
+                    },
+                );
                 continue;
             }
             if !self.match_kind(&TokenKind::LParen) {
@@ -141,33 +172,40 @@ impl Parser {
             };
             self.consume(&TokenKind::RParen, "expected ')' after arguments")?;
             let site = self.static_call_site()?;
-            expr = Expr::Call {
-                callee: Box::new(expr),
-                site,
-                args,
-            };
+            let start = expr.span();
+            expr = self.expression_node(
+                start,
+                Expr::Call {
+                    callee: Box::new(expr),
+                    site,
+                    args,
+                },
+            );
         }
         if self.match_kind(&TokenKind::PlusPlus) {
-            return Self::update_expr(UpdateOp::Increment, false, expr, self.previous_offset());
+            return self.update_expr(UpdateOp::Increment, false, expr, self.previous_span());
         }
         if self.match_kind(&TokenKind::MinusMinus) {
-            return Self::update_expr(UpdateOp::Decrement, false, expr, self.previous_offset());
+            return self.update_expr(UpdateOp::Decrement, false, expr, self.previous_span());
         }
         Ok(expr)
     }
 
-    pub(super) fn assignment_target(expr: Expr) -> Option<Expr> {
-        match expr {
-            Expr::Identifier(_) | Expr::Member { .. } | Expr::ComputedMember { .. } => Some(expr),
-            Expr::Parenthesized(expr) => Self::assignment_target(*expr),
+    pub(super) fn assignment_target(expr: Expression) -> Option<Expression> {
+        let span = expr.span();
+        match expr.into_kind() {
+            kind @ (Expr::Identifier(_) | Expr::Member { .. } | Expr::ComputedMember { .. }) => {
+                Some(Expression::new(kind, span))
+            }
+            Expr::Parenthesized(inner) => Self::assignment_target(*inner),
             _ => None,
         }
     }
 
-    fn new_expr(&mut self) -> Result<Expr> {
-        let new_offset = self.previous_offset();
+    fn new_expr(&mut self) -> Result<Expression> {
+        let new_span = self.previous_span();
         if self.match_kind(&TokenKind::Dot) {
-            let expr = self.new_target_expr(new_offset)?;
+            let expr = self.new_target_expr(new_span)?;
             return self.call_suffix(expr);
         }
         let constructor = if self.match_kind(&TokenKind::Import) {
@@ -177,9 +215,9 @@ impl Parser {
         };
         let constructor = self.member_suffix(constructor)?;
         if Self::constructor_starts_with_import(&constructor) {
-            return Err(Error::parse(
+            return Err(Error::parse_at(
                 "import call cannot be used as a constructor",
-                new_offset,
+                new_span,
             ));
         }
         let args = if self.match_kind(&TokenKind::LParen) {
@@ -193,21 +231,25 @@ impl Parser {
         } else {
             Vec::new()
         };
-        let expr = Expr::New {
-            constructor: Box::new(constructor),
-            args,
-        };
+        let expr = self.expression_node(
+            new_span,
+            Expr::New {
+                constructor: Box::new(constructor),
+                args,
+            },
+        );
         self.call_suffix(expr)
     }
 
-    fn import_constructor_seed(&mut self) -> Result<Expr> {
+    fn import_constructor_seed(&mut self) -> Result<Expression> {
+        let start = self.previous_span();
         let name = self.borrowed_static_name(IMPORT_BINDING_NAME)?;
         let binding = self.static_binding(name)?;
-        Ok(Expr::Identifier(binding))
+        Ok(self.expression_node(start, Expr::Identifier(binding)))
     }
 
-    fn constructor_starts_with_import(expr: &Expr) -> bool {
-        match expr {
+    fn constructor_starts_with_import(expr: &Expression) -> bool {
+        match expr.kind() {
             Expr::Identifier(name) => name.as_str() == IMPORT_BINDING_NAME,
             Expr::Member { object, .. } | Expr::ComputedMember { object, .. } => {
                 Self::constructor_starts_with_import(object)
@@ -217,16 +259,20 @@ impl Parser {
         }
     }
 
-    fn member_suffix(&mut self, mut expr: Expr) -> Result<Expr> {
+    fn member_suffix(&mut self, mut expr: Expression) -> Result<Expression> {
         loop {
             if self.match_kind(&TokenKind::Dot) {
                 let property = self.consume_property_name("expected property name after '.'")?;
                 let access = self.static_property_access()?;
-                expr = Expr::Member {
-                    object: Box::new(expr),
-                    property,
-                    access,
-                };
+                let start = expr.span();
+                expr = self.expression_node(
+                    start,
+                    Expr::Member {
+                        object: Box::new(expr),
+                        property,
+                        access,
+                    },
+                );
                 continue;
             }
             if !self.match_kind(&TokenKind::LBracket) {
@@ -239,24 +285,32 @@ impl Parser {
             )?;
             if let Some(property) = self.static_computed_property_key(&property)? {
                 let access = self.static_property_access()?;
-                expr = Expr::Member {
-                    object: Box::new(expr),
-                    property,
-                    access,
-                };
+                let start = expr.span();
+                expr = self.expression_node(
+                    start,
+                    Expr::Member {
+                        object: Box::new(expr),
+                        property,
+                        access,
+                    },
+                );
                 continue;
             }
             let access = self.static_property_access()?;
-            expr = Expr::ComputedMember {
-                object: Box::new(expr),
-                property: Box::new(property),
-                access,
-            };
+            let start = expr.span();
+            expr = self.expression_node(
+                start,
+                Expr::ComputedMember {
+                    object: Box::new(expr),
+                    property: Box::new(property),
+                    access,
+                },
+            );
         }
         Ok(expr)
     }
 
-    fn new_target_expr(&mut self, new_offset: usize) -> Result<Expr> {
+    fn new_target_expr(&mut self, new_span: crate::SourceSpan) -> Result<Expression> {
         let token = self
             .advance()
             .ok_or_else(|| self.parse_error("expected 'target' after 'new.'"))?;
@@ -274,25 +328,35 @@ impl Parser {
             ));
         }
         if !self.allows_new_target() {
-            return Err(Error::parse(
+            return Err(Error::parse_at(
                 "new.target is only valid inside functions",
-                new_offset,
+                new_span,
             ));
         }
-        Ok(Expr::NewTarget)
+        Ok(self.expression_node(new_span, Expr::NewTarget))
     }
 
-    fn update_expr(op: UpdateOp, prefix: bool, expr: Expr, offset: usize) -> Result<Expr> {
+    fn update_expr(
+        &self,
+        op: UpdateOp,
+        prefix: bool,
+        expr: Expression,
+        operator: crate::SourceSpan,
+    ) -> Result<Expression> {
+        let start = if prefix { operator } else { expr.span() };
         let expr = Self::assignment_target(expr)
-            .ok_or_else(|| Error::parse("invalid update target", offset))?;
-        Ok(Expr::Update {
-            op,
-            prefix,
-            expr: Box::new(expr),
-        })
+            .ok_or_else(|| Error::parse_at("invalid update target", operator))?;
+        Ok(self.expression_node(
+            start,
+            Expr::Update {
+                op,
+                prefix,
+                expr: Box::new(expr),
+            },
+        ))
     }
 
-    fn template_literal(&mut self, head: String) -> Result<Expr> {
+    fn template_literal(&mut self, head: String, start: crate::SourceSpan) -> Result<Expression> {
         let mut quasis = vec![self.static_string(head)?];
         let mut expressions = Vec::new();
         loop {
@@ -315,18 +379,21 @@ impl Parser {
                 }
             }
         }
-        Ok(Expr::TemplateLiteral {
-            quasis,
-            expressions,
-        })
+        Ok(self.expression_node(
+            start,
+            Expr::TemplateLiteral {
+                quasis,
+                expressions,
+            },
+        ))
     }
 
-    fn super_expression(&mut self, offset: usize) -> Result<Expr> {
+    fn super_expression(&mut self, start: crate::SourceSpan) -> Result<Expression> {
         if self.check(&TokenKind::LParen) {
             if !self.allow_super_call {
-                return Err(Error::parse(
+                return Err(Error::parse_at(
                     "super call is only valid inside derived class constructors",
-                    offset,
+                    start,
                 ));
             }
             self.consume(&TokenKind::LParen, "expected '(' after 'super'")?;
@@ -336,30 +403,32 @@ impl Parser {
                 self.arguments()?
             };
             self.consume(&TokenKind::RParen, "expected ')' after super arguments")?;
-            return Ok(Expr::SuperCall { args });
+            return Ok(self.expression_node(start, Expr::SuperCall { args }));
         }
         if self.match_kind(&TokenKind::Dot) {
             if !self.allow_super_property {
-                return Err(Error::parse(
+                return Err(Error::parse_at(
                     "super property access is only valid inside class methods",
-                    offset,
+                    start,
                 ));
             }
             let property = self.consume_identifier("expected property name after 'super.'")?;
             let access = self.static_property_access()?;
-            return Ok(Expr::SuperMember { property, access });
+            return Ok(self.expression_node(start, Expr::SuperMember { property, access }));
         }
-        Err(Error::parse(
+        Err(Error::parse_at(
             "super is only valid in super() calls and super.property access",
-            offset,
+            start,
         ))
     }
 
-    fn arguments(&mut self) -> Result<Vec<Expr>> {
+    fn arguments(&mut self) -> Result<Vec<Expression>> {
         let mut args = Vec::new();
         loop {
             if self.match_kind(&TokenKind::DotDotDot) {
-                args.push(Expr::Spread(Box::new(self.expression()?)));
+                let start = self.previous_span();
+                let expression = self.expression()?;
+                args.push(self.expression_node(start, Expr::Spread(Box::new(expression))));
             } else {
                 args.push(self.expression()?);
             }
@@ -370,33 +439,42 @@ impl Parser {
         Ok(args)
     }
 
-    fn primary(&mut self) -> Result<Expr> {
+    fn primary(&mut self) -> Result<Expression> {
         let token = self
             .advance()
             .ok_or_else(|| self.parse_error("expected expression"))?;
         let token_span = token.span;
-        let token_offset = token.offset();
         let expr = match token.kind {
-            TokenKind::Number(value) => Expr::Literal(Value::Number(value)),
-            TokenKind::String(value) => Expr::StringLiteral(self.static_string(value)?),
-            TokenKind::TemplateHead(head) => self.template_literal(head)?,
-            TokenKind::RegExp { pattern, flags } => Expr::RegExpLiteral {
-                pattern: self.static_string(pattern)?,
-                flags: self.static_string(flags)?,
-            },
-            TokenKind::True => Expr::Literal(Value::Bool(true)),
-            TokenKind::False => Expr::Literal(Value::Bool(false)),
-            TokenKind::Null => Expr::Literal(Value::Null),
-            TokenKind::Undefined => Expr::Literal(Value::Undefined),
-            TokenKind::This => Expr::This,
+            TokenKind::Number(value) => {
+                Expression::new(Expr::Literal(Value::Number(value)), token_span)
+            }
+            TokenKind::String(value) => {
+                Expression::new(Expr::StringLiteral(self.static_string(value)?), token_span)
+            }
+            TokenKind::TemplateHead(head) => self.template_literal(head, token_span)?,
+            TokenKind::RegExp { pattern, flags } => Expression::new(
+                Expr::RegExpLiteral {
+                    pattern: self.static_string(pattern)?,
+                    flags: self.static_string(flags)?,
+                },
+                token_span,
+            ),
+            TokenKind::True => Expression::new(Expr::Literal(Value::Bool(true)), token_span),
+            TokenKind::False => Expression::new(Expr::Literal(Value::Bool(false)), token_span),
+            TokenKind::Null => Expression::new(Expr::Literal(Value::Null), token_span),
+            TokenKind::Undefined => Expression::new(Expr::Literal(Value::Undefined), token_span),
+            TokenKind::This => Expression::new(Expr::This, token_span),
             TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME => {
                 return Err(Error::parse_at(
                     "super is only valid inside class methods",
                     token_span,
                 ));
             }
-            TokenKind::Super => self.super_expression(token_offset)?,
-            TokenKind::Identifier(name) => Expr::Identifier(self.static_binding_name(name)?),
+            TokenKind::Super => self.super_expression(token_span)?,
+            TokenKind::Identifier(name) => Expression::new(
+                Expr::Identifier(self.static_binding_name(name)?),
+                token_span,
+            ),
             TokenKind::Function => self.function_expression(false)?,
             TokenKind::Class => self.class_expression()?,
             TokenKind::Async => {
@@ -404,7 +482,10 @@ impl Parser {
                     self.consume(&TokenKind::Function, "expected 'function' after 'async'")?;
                     self.function_expression(true)?
                 } else {
-                    Expr::Identifier(self.contextual_async_binding(token_offset)?)
+                    Expression::new(
+                        Expr::Identifier(self.contextual_async_binding(token_span.start())?),
+                        token_span,
+                    )
                 }
             }
             TokenKind::LBrace => self.object_literal()?,
@@ -412,17 +493,18 @@ impl Parser {
             TokenKind::LParen => {
                 let expr = self.expression()?;
                 self.consume(&TokenKind::RParen, "expected ')' after expression")?;
-                Expr::Parenthesized(Box::new(expr))
+                self.expression_node(token_span, Expr::Parenthesized(Box::new(expr)))
             }
             _ => return Err(Error::parse_at("expected expression", token_span)),
         };
         Ok(expr)
     }
 
-    pub(super) fn arrow_function(&mut self) -> Result<Option<Expr>> {
+    pub(super) fn arrow_function(&mut self) -> Result<Option<Expression>> {
         let Some(signature) = self.arrow_signature() else {
             return Ok(None);
         };
+        let start = self.current_span();
         let inherited_strict = self.is_strict_mode();
         if signature.is_async {
             self.consume(
@@ -454,12 +536,15 @@ impl Parser {
         )?;
         let id = self.static_function()?;
         let (params, statements) = parameters.apply_prologue(body.statements);
-        Ok(Some(Expr::ArrowFunction {
-            id,
-            params: params.into(),
-            body: statements.into(),
-            is_async: signature.is_async,
-        }))
+        Ok(Some(self.expression_node(
+            start,
+            Expr::ArrowFunction {
+                id,
+                params: params.into(),
+                body: statements.into(),
+                is_async: signature.is_async,
+            },
+        )))
     }
 
     fn arrow_body(&mut self, inherited_strict: bool) -> Result<super::ParsedFunctionBody> {
@@ -467,8 +552,9 @@ impl Parser {
             return self.function_body(inherited_strict);
         }
         let value = self.assignment()?;
+        let span = value.span();
         Ok(super::ParsedFunctionBody {
-            statements: vec![crate::ast::Stmt::Return(Some(value))],
+            statements: vec![Statement::new(Stmt::Return(Some(value)), span)],
             contains_use_strict: false,
         })
     }
@@ -548,7 +634,8 @@ impl Parser {
             offset = offset.checked_add(1)?;
         }
     }
-    fn function_expression(&mut self, is_async: bool) -> Result<Expr> {
+    fn function_expression(&mut self, is_async: bool) -> Result<Expression> {
+        let start = self.previous_span();
         let inherited_strict = self.is_strict_mode();
         let name = if self.next_is_identifier() {
             let name = self.consume_identifier("expected function name")?;
@@ -575,19 +662,22 @@ impl Parser {
         )?;
         let id = self.static_function()?;
         let (params, statements) = parameters.apply_prologue(body.statements);
-        Ok(Expr::Function {
-            id,
-            name,
-            params: params.into(),
-            body: statements.into(),
-            is_async,
-        })
+        Ok(self.expression_node(
+            start,
+            Expr::Function {
+                id,
+                name,
+                params: params.into(),
+                body: statements.into(),
+                is_async,
+            },
+        ))
     }
 
     fn with_expression_depth(
         &mut self,
-        parse: impl FnOnce(&mut Self) -> Result<Expr>,
-    ) -> Result<Expr> {
+        parse: impl FnOnce(&mut Self) -> Result<Expression>,
+    ) -> Result<Expression> {
         self.expression_depth = self
             .expression_depth
             .checked_add(1)
@@ -619,8 +709,11 @@ impl Parser {
         }
     }
 
-    fn static_computed_property_key(&mut self, property: &Expr) -> Result<Option<StaticName>> {
-        match property {
+    fn static_computed_property_key(
+        &mut self,
+        property: &Expression,
+    ) -> Result<Option<StaticName>> {
+        match property.kind() {
             Expr::StringLiteral(value) => self.borrowed_static_name(value.as_str()).map(Some),
             Expr::Literal(
                 value @ (Value::Undefined | Value::Null | Value::Bool(_) | Value::Number(_)),

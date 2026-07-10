@@ -1,6 +1,6 @@
 use crate::{
     api::native_call::NativeCallTarget,
-    ast::{Expr, StaticCallSiteId},
+    ast::{Expr, Expression, StaticCallSiteId},
     error::{Error, Result},
     value::{ErrorName, Value},
 };
@@ -10,9 +10,9 @@ use super::{BytecodeCallSite, BytecodeCompiler, BytecodeInstruction, has_spread_
 impl BytecodeCompiler<'_> {
     pub(super) fn compile_call_expr(
         &mut self,
-        callee: &Expr,
+        callee: &Expression,
         site: StaticCallSiteId,
-        args: &[Expr],
+        args: &[Expression],
     ) -> Result<()> {
         if has_spread_arg(args) {
             return self.compile_spread_call_expr(callee, args);
@@ -37,7 +37,7 @@ impl BytecodeCompiler<'_> {
             return Ok(());
         }
 
-        match callee {
+        match callee.kind() {
             Expr::Identifier(name) if name.as_str() == "print" => {
                 self.compile_args(args)?;
                 self.emit(BytecodeInstruction::Print {
@@ -92,7 +92,7 @@ impl BytecodeCompiler<'_> {
                 Ok(())
             }
             Expr::Parenthesized(callee) => self.compile_call_expr(callee, site, args),
-            callee => {
+            _ => {
                 self.compile_expr(callee)?;
                 self.compile_args(args)?;
                 self.emit(BytecodeInstruction::CallValue {
@@ -104,8 +104,8 @@ impl BytecodeCompiler<'_> {
         }
     }
 
-    fn compile_spread_call_expr(&mut self, callee: &Expr, args: &[Expr]) -> Result<()> {
-        match callee {
+    fn compile_spread_call_expr(&mut self, callee: &Expression, args: &[Expression]) -> Result<()> {
+        match callee.kind() {
             Expr::Identifier(name) => {
                 let spread_flags = self.compile_spread_parts(args)?;
                 self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
@@ -150,7 +150,7 @@ impl BytecodeCompiler<'_> {
                 Ok(())
             }
             Expr::Parenthesized(callee) => self.compile_spread_call_expr(callee, args),
-            callee => {
+            _ => {
                 self.compile_expr(callee)?;
                 let spread_flags = self.compile_spread_parts(args)?;
                 self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
@@ -160,7 +160,7 @@ impl BytecodeCompiler<'_> {
         }
     }
 
-    pub(super) fn compile_args(&mut self, args: &[Expr]) -> Result<()> {
+    pub(super) fn compile_args(&mut self, args: &[Expression]) -> Result<()> {
         for arg in args {
             self.compile_expr(arg)?;
         }
@@ -168,8 +168,8 @@ impl BytecodeCompiler<'_> {
     }
 }
 
-fn computed_property_native_target(property: &Expr) -> Option<NativeCallTarget> {
-    match property {
+fn computed_property_native_target(property: &Expression) -> Option<NativeCallTarget> {
+    match property.kind() {
         Expr::StringLiteral(value) => NativeCallTarget::from_property_name(value.as_str()),
         Expr::Literal(
             value @ (Value::Undefined | Value::Null | Value::Bool(_) | Value::Number(_)),
@@ -178,14 +178,17 @@ fn computed_property_native_target(property: &Expr) -> Option<NativeCallTarget> 
     }
 }
 
-fn assert_throws_expected_error(callee: &Expr, args: &[Expr]) -> Result<Option<ErrorName>> {
+fn assert_throws_expected_error(
+    callee: &Expression,
+    args: &[Expression],
+) -> Result<Option<ErrorName>> {
     let Expr::Member {
         object, property, ..
-    } = callee
+    } = callee.kind()
     else {
         return Ok(None);
     };
-    if !matches!(object.as_ref(), Expr::Identifier(name) if name.as_str() == "assert")
+    if !matches!(object.kind(), Expr::Identifier(name) if name.as_str() == "assert")
         || property.as_str() != "throws"
     {
         return Ok(None);
@@ -193,7 +196,7 @@ fn assert_throws_expected_error(callee: &Expr, args: &[Expr]) -> Result<Option<E
     let Some(expected) = args.first() else {
         return Err(Error::runtime("assert.throws requires an expected error"));
     };
-    let Expr::Identifier(name) = expected else {
+    let Expr::Identifier(name) = expected.kind() else {
         return Err(Error::runtime(
             "assert.throws first argument must be an error constructor",
         ));

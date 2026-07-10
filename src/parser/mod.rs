@@ -1,6 +1,7 @@
 use crate::ast::{
-    Program, StaticBinding, StaticBindingId, StaticCallSiteId, StaticFunctionId, StaticName,
-    StaticNameId, StaticPropertyAccessId, StaticString, StaticStringId, Stmt,
+    Expr, Expression, Program, Statement, StaticBinding, StaticBindingId, StaticCallSiteId,
+    StaticFunctionId, StaticName, StaticNameId, StaticPropertyAccessId, StaticString,
+    StaticStringId, Stmt,
 };
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
@@ -24,7 +25,7 @@ const SUPER_IDENTIFIER_NAME: &str = "super";
 const USE_STRICT_DIRECTIVE: &str = "use strict";
 
 pub struct ParsedFunctionBody {
-    pub statements: Vec<Stmt>,
+    pub statements: Vec<Statement>,
     pub contains_use_strict: bool,
 }
 
@@ -366,6 +367,21 @@ impl Parser {
 
     pub(super) fn parse_error(&self, message: impl Into<String>) -> Error {
         Error::parse_at(message, self.current_span())
+    }
+
+    pub(super) fn span_since(&self, start: SourceSpan) -> SourceSpan {
+        let Some(span) = start.cover(self.previous_span()) else {
+            return start;
+        };
+        span
+    }
+
+    pub(super) fn expression_node(&self, start: SourceSpan, kind: Expr) -> Expression {
+        Expression::new(kind, self.span_since(start))
+    }
+
+    pub(super) fn statement_node(&self, start: SourceSpan, kind: Stmt) -> Statement {
+        Statement::new(kind, self.span_since(start))
     }
 
     pub(super) fn with_new_target_scope<T>(

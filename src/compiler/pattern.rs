@@ -1,7 +1,9 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{ArrayBindingElement, BindingPattern, BindingPropertyKey, Expr, ObjectBindingProperty},
+    ast::{
+        ArrayBindingElement, BindingPattern, BindingPropertyKey, Expression, ObjectBindingProperty,
+    },
     bytecode::{
         BytecodeBlock, BytecodePattern, BytecodePatternKey, BytecodePatternProperty,
         BytecodePatternTarget,
@@ -79,7 +81,7 @@ impl BytecodeCompiler<'_> {
     fn compile_pattern_target(
         &self,
         pattern: &BindingPattern,
-        default: Option<&Expr>,
+        default: Option<&Expression>,
     ) -> Result<BytecodePatternTarget> {
         Ok(BytecodePatternTarget {
             pattern: self.compile_pattern(pattern)?,

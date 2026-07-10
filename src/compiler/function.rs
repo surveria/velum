@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use crate::{
     ast::{
-        BindingPattern, CatchClause, Expr, ForInTarget, FunctionParam, ObjectProperty,
-        ObjectPropertyKey, StaticBinding, Stmt, SwitchCase,
+        BindingPattern, CatchClause, Expr, Expression, ForInTarget, FunctionParam, ObjectProperty,
+        ObjectPropertyKey, Statement, StaticBinding, Stmt, SwitchCase,
     },
     binding_metadata::BindingLayout,
     error::{Error, Result},
@@ -19,14 +19,14 @@ struct FunctionCompileSpec<'a> {
     id: StaticFunctionId,
     name: Option<StaticName>,
     params: &'a Rc<[FunctionParam]>,
-    body: &'a [Stmt],
+    body: &'a [Statement],
     constructable: bool,
     is_async: bool,
     new_target_mode: BytecodeNewTargetMode,
 }
 
 impl BytecodeCompiler<'_> {
-    pub(super) fn compile_function_literal(&mut self, expr: &Expr) -> Result<()> {
+    pub(super) fn compile_function_literal(&mut self, expr: &Expression) -> Result<()> {
         let spec = function_compile_spec(expr)?;
         self.compile_function_expr(spec)
     }
@@ -47,7 +47,7 @@ impl BytecodeCompiler<'_> {
 impl BytecodeFunction {
     pub fn compile(
         params: &[FunctionParam],
-        statements: &[Stmt],
+        statements: &[Statement],
         layout: &BindingLayout,
     ) -> Result<Self> {
         let collected = CaptureBindingCollector::collect_function(params, statements);
@@ -89,8 +89,8 @@ fn compile_param_defaults(
         .map(Into::into)
 }
 
-fn function_compile_spec(expr: &Expr) -> Result<FunctionCompileSpec<'_>> {
-    match expr {
+fn function_compile_spec(expr: &Expression) -> Result<FunctionCompileSpec<'_>> {
+    match expr.kind() {
         Expr::Function {
             id,
             name,
@@ -157,7 +157,7 @@ const ARGUMENTS_BINDING_NAME: &str = "arguments";
 impl CaptureBindingCollector {
     fn collect_function(
         params: &[FunctionParam],
-        statements: &[Stmt],
+        statements: &[Statement],
     ) -> CollectedFunctionBindings {
         let mut collector = Self::default();
         collector.collect_param_defaults(params);
@@ -176,14 +176,14 @@ impl CaptureBindingCollector {
         }
     }
 
-    fn collect_statements(&mut self, statements: &[Stmt]) {
+    fn collect_statements(&mut self, statements: &[Statement]) {
         for statement in statements {
             self.collect_statement(statement);
         }
     }
 
-    fn collect_statement(&mut self, statement: &Stmt) {
-        match statement {
+    fn collect_statement(&mut self, statement: &Statement) {
+        match statement.kind() {
             Stmt::Block(statements) | Stmt::DeclList(statements) => {
                 self.collect_statements(statements);
             }
@@ -309,7 +309,7 @@ impl CaptureBindingCollector {
     }
 
     fn collect_pattern(&mut self, pattern: &BindingPattern) {
-        let mut visit = |expr: &Expr| -> std::result::Result<(), std::convert::Infallible> {
+        let mut visit = |expr: &Expression| -> std::result::Result<(), std::convert::Infallible> {
             self.collect_expr(expr);
             Ok(())
         };
@@ -331,8 +331,8 @@ impl CaptureBindingCollector {
         self.collect_statements(&catch.body);
     }
 
-    fn collect_expr(&mut self, expr: &Expr) {
-        match expr {
+    fn collect_expr(&mut self, expr: &Expression) {
+        match expr.kind() {
             Expr::Literal(_)
             | Expr::StringLiteral(_)
             | Expr::RegExpLiteral { .. }
@@ -418,13 +418,13 @@ impl CaptureBindingCollector {
         }
     }
 
-    fn collect_exprs(&mut self, exprs: &[Expr]) {
+    fn collect_exprs(&mut self, exprs: &[Expression]) {
         for expr in exprs {
             self.collect_expr(expr);
         }
     }
 
-    fn collect_function_body(&mut self, params: &[FunctionParam], body: &[Stmt]) {
+    fn collect_function_body(&mut self, params: &[FunctionParam], body: &[Statement]) {
         self.collect_param_defaults(params);
         self.collect_statements(body);
     }

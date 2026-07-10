@@ -111,7 +111,7 @@ impl Parser {
         Ok(BindingPattern::Array { elements, rest })
     }
 
-    fn optional_binding_default(&mut self) -> Result<Option<crate::ast::Expr>> {
+    fn optional_binding_default(&mut self) -> Result<Option<crate::ast::Expression>> {
         if self.match_kind(&TokenKind::Equal) {
             return Ok(Some(self.expression()?));
         }

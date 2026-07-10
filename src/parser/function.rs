@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expr, FunctionParam, Stmt},
+    ast::{Expr, Expression, FunctionParam, Statement, Stmt},
     error::Result,
     lexer::TokenKind,
     syntax::DeclKind,
@@ -21,12 +21,15 @@ const REST_PATTERN_PARAM_NAME: &str = "%rest%";
 /// before the function body.
 pub(super) struct ParsedParameters {
     pub(super) params: Vec<FunctionParam>,
-    pub(super) pattern_prologue: Vec<Stmt>,
+    pub(super) pattern_prologue: Vec<Statement>,
 }
 
 impl ParsedParameters {
     /// Prepends the pattern-unpacking prologue to the parsed body statements.
-    pub(super) fn apply_prologue(self, mut body: Vec<Stmt>) -> (Vec<FunctionParam>, Vec<Stmt>) {
+    pub(super) fn apply_prologue(
+        self,
+        mut body: Vec<Statement>,
+    ) -> (Vec<FunctionParam>, Vec<Statement>) {
         if self.pattern_prologue.is_empty() {
             return (self.params, body);
         }
@@ -84,17 +87,22 @@ impl Parser {
     fn rest_parameter(
         &mut self,
         params: &mut Vec<FunctionParam>,
-        pattern_prologue: &mut Vec<Stmt>,
+        pattern_prologue: &mut Vec<Statement>,
     ) -> Result<()> {
+        let start = self.previous_span();
         if self.next_is_binding_pattern() {
             let pattern = self.binding_pattern()?;
             let synthetic = self.static_binding_name(REST_PATTERN_PARAM_NAME.to_owned())?;
             params.push(FunctionParam::rest(synthetic.clone()));
-            pattern_prologue.push(Stmt::PatternDecl {
-                pattern,
-                kind: DeclKind::Var,
-                init: Expr::Identifier(synthetic),
-            });
+            let span = self.span_since(start);
+            pattern_prologue.push(Statement::new(
+                Stmt::PatternDecl {
+                    pattern,
+                    kind: DeclKind::Var,
+                    init: Expression::new(Expr::Identifier(synthetic), span),
+                },
+                span,
+            ));
         } else {
             let name = self.consume_binding_identifier("expected rest parameter name")?;
             params.push(FunctionParam::rest(name));
@@ -113,8 +121,9 @@ impl Parser {
     fn pattern_parameter(
         &mut self,
         params: &mut Vec<FunctionParam>,
-        pattern_prologue: &mut Vec<Stmt>,
+        pattern_prologue: &mut Vec<Statement>,
     ) -> Result<()> {
+        let start = self.current_span();
         let pattern = self.binding_pattern()?;
         let default = if self.match_kind(&TokenKind::Equal) {
             Some(self.assignment()?)
@@ -127,11 +136,15 @@ impl Parser {
         );
         let synthetic = self.static_binding_name(synthetic_name)?;
         params.push(FunctionParam::new(synthetic.clone(), default));
-        pattern_prologue.push(Stmt::PatternDecl {
-            pattern,
-            kind: DeclKind::Var,
-            init: Expr::Identifier(synthetic),
-        });
+        let span = self.span_since(start);
+        pattern_prologue.push(Statement::new(
+            Stmt::PatternDecl {
+                pattern,
+                kind: DeclKind::Var,
+                init: Expression::new(Expr::Identifier(synthetic), span),
+            },
+            span,
+        ));
         Ok(())
     }
 }
