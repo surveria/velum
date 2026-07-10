@@ -18,12 +18,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260710T115629Z.md`
-- Task: PR #417: runner: align benchmark charts to main commit history
-- Performance: 5.38x (4/5 >1.00x) (from `rsqjs-test-report-20260710T115629Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T115629Z.md`)
+- `rsqjs-test-report-20260710T121755Z.md`
+- Task: PR #418: runtime: unify Error object identity
+- Performance: 5.32x (4/5 >1.00x) (from `rsqjs-test-report-20260710T121755Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T121755Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 36553 passed / 66025 failed (35.63%) (from `rsqjs-test-report-20260710T115629Z.md`)
+- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T121755Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -404,3 +404,4 @@ Latest report:
 | `20260710T110040Z` `fb9917e` PR #415: runtime: centralize iterator operations and closing | 5.49x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36221 passed / 66357 failed (35.31%) |
 | `20260710T114057Z` `d9ae782` PR #416: runtime: separate JavaScript throws from engine failures | 5.38x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36553 passed / 66025 failed (35.63%) |
 | `20260710T115629Z` `c67a2fa` PR #417: runner: align benchmark charts to main commit history | 5.38x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36553 passed / 66025 failed (35.63%) |
+| `20260710T121755Z` `e00884d` PR #418: runtime: unify Error object identity | 5.32x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
