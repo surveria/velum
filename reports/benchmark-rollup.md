@@ -18,12 +18,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260710T163712Z.md`
-- Task: PR #430: AS-05b1c: close transient root gaps
-- Performance: 5.29x (4/5 >1.00x) (from `rsqjs-test-report-20260710T163712Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T163712Z.md`)
+- `rsqjs-test-report-20260710T165910Z.md`
+- Task: PR #431: AS-05a2d: add retained VM handles
+- Performance: 5.49x (4/5 >1.00x) (from `rsqjs-test-report-20260710T165910Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T165910Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T163712Z.md`)
+- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T165910Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -417,3 +417,4 @@ Latest report:
 | `20260710T155616Z` `778fe2a` PR #428: AS-05b1b2: enumerate object arena edges | 5.52x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T161351Z` `74ef846` PR #429: AS-05b1b3: enumerate asynchronous arena edges | 5.36x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T163712Z` `ffb2102` PR #430: AS-05b1c: close transient root gaps | 5.29x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
+| `20260710T165910Z` `30dfc0a` PR #431: AS-05a2d: add retained VM handles | 5.49x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
