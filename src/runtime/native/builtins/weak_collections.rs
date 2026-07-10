@@ -144,7 +144,7 @@ impl Context {
         let Value::Object(object_id) = &object else {
             return Err(Error::runtime("weak collection object creation failed"));
         };
-        let collection = self.create_collection()?;
+        let collection = self.create_collection(kind)?;
         self.bind_collection_object(*object_id, kind, collection)?;
         let iterable = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
         if !matches!(iterable, Value::Undefined | Value::Null) {

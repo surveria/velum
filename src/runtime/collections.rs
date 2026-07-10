@@ -1,6 +1,11 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, abstract_operations::same_value_zero},
+    runtime::{
+        Context,
+        abstract_operations::same_value_zero,
+        async_trace::VmAsyncEdgeKind,
+        trace::{StrongEdgeReference, StrongEdgeVisitor, WeakEdgeReference, WeakEdgeVisitor},
+    },
     value::{ObjectId, Value},
 };
 
@@ -27,13 +32,56 @@ pub(in crate::runtime) enum CollectionKind {
 
 /// Insertion-ordered entry storage shared by Map (key/value pairs) and Set
 /// (the key doubles as the value). Keys compare with `SameValueZero`.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub(in crate::runtime) struct CollectionData {
+    kind: CollectionKind,
     entries: Vec<(Value, Value)>,
 }
 
+impl CollectionData {
+    const fn new(kind: CollectionKind) -> Self {
+        Self {
+            kind,
+            entries: Vec::new(),
+        }
+    }
+
+    pub(in crate::runtime) fn visit_edges<V>(&self, visitor: &mut V) -> Result<()>
+    where
+        V: StrongEdgeVisitor<VmAsyncEdgeKind> + WeakEdgeVisitor<VmAsyncEdgeKind>,
+    {
+        for (key, value) in &self.entries {
+            match self.kind {
+                CollectionKind::Map | CollectionKind::Set => {
+                    visitor.visit(
+                        VmAsyncEdgeKind::CollectionEntry,
+                        StrongEdgeReference::Value(key),
+                    )?;
+                    visitor.visit(
+                        VmAsyncEdgeKind::CollectionEntry,
+                        StrongEdgeReference::Value(value),
+                    )?;
+                }
+                CollectionKind::WeakMap => visitor.visit_ephemeron(
+                    VmAsyncEdgeKind::WeakCollectionEphemeron,
+                    WeakEdgeReference::Value(key),
+                    WeakEdgeReference::Value(value),
+                )?,
+                CollectionKind::WeakSet => visitor.visit_weak(
+                    VmAsyncEdgeKind::WeakCollectionKey,
+                    WeakEdgeReference::Value(key),
+                )?,
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Context {
-    pub(in crate::runtime) fn create_collection(&mut self) -> Result<CollectionId> {
+    pub(in crate::runtime) fn create_collection(
+        &mut self,
+        kind: CollectionKind,
+    ) -> Result<CollectionId> {
         if self.collections.len() >= self.limits.max_objects {
             return Err(Error::limit(format!(
                 "collection count exceeded {}",
@@ -41,7 +89,7 @@ impl Context {
             )));
         }
         let id = CollectionId(self.collections.len());
-        self.collections.push(CollectionData::default());
+        self.collections.push(CollectionData::new(kind));
         Ok(id)
     }
 
@@ -51,6 +99,11 @@ impl Context {
         kind: CollectionKind,
         collection: CollectionId,
     ) -> Result<()> {
+        if self.collection(collection)?.kind != kind {
+            return Err(Error::runtime(
+                "collection object kind does not match its backing store",
+            ));
+        }
         let index = object.index();
         let required = index
             .checked_add(1)
@@ -195,6 +248,21 @@ impl CollectionIteratorId {
 pub(in crate::runtime) struct CollectionIteratorState {
     items: Vec<Value>,
     cursor: usize,
+}
+
+impl CollectionIteratorState {
+    pub(in crate::runtime) fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
+    where
+        V: StrongEdgeVisitor<VmAsyncEdgeKind>,
+    {
+        for item in &self.items {
+            visitor.visit(
+                VmAsyncEdgeKind::IteratorItem,
+                StrongEdgeReference::Value(item),
+            )?;
+        }
+        Ok(())
+    }
 }
 
 impl Context {

@@ -732,6 +732,79 @@ check_object_edge_boundary() {
   fi
 }
 
+check_async_edge_boundary() {
+  local edge_kinds
+  local source
+  edge_kinds="$({
+    awk '
+      /^pub enum VmAsyncEdgeKind \{/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/runtime/async_trace.rs"
+  } | sed '/^[[:space:]]*\/\//d' | tr -d '[:space:]')"
+  if [[ "${edge_kinds}" != 'PromiseState,PromiseReaction,PromiseObjectAssociation,CollectionObjectAssociation,CollectionEntry,IteratorItem,WeakCollectionKey,WeakCollectionEphemeron,' ]]; then
+    fail "asynchronous edge boundary changed; categories require an assigned AS migration"
+  fi
+
+  for source in \
+    'pub(in crate::runtime) trait WeakEdgeVisitor<Kind>' \
+    'fn visit_weak(&mut self, kind: Kind' \
+    'fn visit_ephemeron(' \
+    'PromiseAssociation {' \
+    'CollectionAssociation {'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/trace.rs"; then
+      fail "asynchronous edge boundary changed; typed trace source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    'for (index, promise) in self.promise_object_slots.iter().enumerate() {' \
+    'for promise in &self.promises {' \
+    'for (index, slot) in self.collection_object_slots.iter().enumerate() {' \
+    'for collection in &self.collections {' \
+    'for iterator in &self.collection_iterators {' \
+    'Self::WeakCollectionKey => VmAsyncEdgeStrength::Weak' \
+    'Self::WeakCollectionEphemeron => VmAsyncEdgeStrength::Ephemeron'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/async_trace.rs"; then
+      fail "asynchronous edge boundary changed; Context source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    'PromiseState::Pending { reactions }' \
+    'PromiseState::Fulfilled(value) | PromiseState::Rejected(value)' \
+    'VmAsyncEdgeKind::PromiseState'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/promise/state.rs"; then
+      fail "asynchronous edge boundary changed; Promise state source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    'StrongEdgeReference::Promise(self.result)' \
+    'if let Some(handler) = &self.on_fulfilled {' \
+    'if let Some(handler) = &self.on_rejected {'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/promise/job.rs"; then
+      fail "asynchronous edge boundary changed; Promise reaction source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    'kind: CollectionKind,' \
+    'CollectionKind::Map | CollectionKind::Set' \
+    'CollectionKind::WeakMap => visitor.visit_ephemeron(' \
+    'CollectionKind::WeakSet => visitor.visit_weak(' \
+    'for item in &self.items {'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/collections.rs"; then
+      fail "asynchronous edge boundary changed; collection source '${source}' is missing"
+    fi
+  done
+
+  if ! grep -F -q 'pub fn async_edge_snapshot(&self) -> Result<VmAsyncEdgeSnapshot>' \
+      "${repo_root}/src/api/embedding.rs"; then
+    fail "asynchronous edge boundary changed; Vm requires a strength-classified snapshot"
+  fi
+}
+
 check_state_owner_allowlists() {
   local context_fields
   local expected_context_fields
@@ -933,6 +1006,7 @@ run_checks() {
   require_file src/runtime/mod.rs
   require_file src/runtime/roots.rs
   require_file src/runtime/trace.rs
+  require_file src/runtime/async_trace.rs
   require_file src/runtime/object/trace.rs
   require_file src/ownership.rs
   require_file src/source.rs
@@ -957,6 +1031,7 @@ run_checks() {
   check_direct_root_boundary
   check_callable_edge_boundary
   check_object_edge_boundary
+  check_async_edge_boundary
   check_state_owner_allowlists
   check_optimization_owner_allowlists
   printf '%s: ok\n' "${script_name}"
@@ -1112,6 +1187,18 @@ mutate_object_shape_root() {
     "${fixture_root}/src/runtime/object/trace.rs"
 }
 
+mutate_promise_reaction_edge() {
+  local fixture_root="$1"
+  sed -i '/StrongEdgeReference::Promise(self.result)/d' \
+    "${fixture_root}/src/runtime/promise/job.rs"
+}
+
+mutate_weak_collection_edge() {
+  local fixture_root="$1"
+  sed -i '/CollectionKind::WeakMap => visitor.visit_ephemeron(/d' \
+    "${fixture_root}/src/runtime/collections.rs"
+}
+
 mutate_test262_source_name() {
   local fixture_root="$1"
   printf '\nconst ARCHITECTURE_PROBE: &str = TEST262_ERROR_NAME;\n' \
@@ -1261,6 +1348,10 @@ run_self_tests() {
     'object edge boundary changed' mutate_object_internal_edge
   expect_guard_failure "${temp_dir}" object-shape-root \
     'object edge boundary changed' mutate_object_shape_root
+  expect_guard_failure "${temp_dir}" promise-reaction-edge \
+    'asynchronous edge boundary changed' mutate_promise_reaction_edge
+  expect_guard_failure "${temp_dir}" weak-collection-edge \
+    'asynchronous edge boundary changed' mutate_weak_collection_edge
   expect_guard_failure "${temp_dir}" context-store \
     'Context state-owner field allowlist changed' mutate_context_store
   expect_guard_failure "${temp_dir}" object-payload \
