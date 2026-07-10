@@ -281,12 +281,20 @@ test/built-ins/AggregateError/is-a-constructor.js#default
 test/built-ins/AggregateError/is-a-constructor.js#strict
 test/built-ins/AggregateError/length.js#default
 test/built-ins/AggregateError/length.js#strict
+test/built-ins/AggregateError/message-method-prop-cast.js#default
+test/built-ins/AggregateError/message-method-prop-cast.js#strict
+test/built-ins/AggregateError/message-method-prop.js#default
+test/built-ins/AggregateError/message-method-prop.js#strict
 test/built-ins/AggregateError/message-tostring-abrupt-symbol.js#default
 test/built-ins/AggregateError/message-tostring-abrupt-symbol.js#strict
+test/built-ins/AggregateError/message-undefined-no-prop.js#default
+test/built-ins/AggregateError/message-undefined-no-prop.js#strict
 test/built-ins/AggregateError/name.js#default
 test/built-ins/AggregateError/name.js#strict
 test/built-ins/AggregateError/newtarget-is-undefined.js#default
 test/built-ins/AggregateError/newtarget-is-undefined.js#strict
+test/built-ins/AggregateError/newtarget-proto-custom.js#default
+test/built-ins/AggregateError/newtarget-proto-custom.js#strict
 test/built-ins/AggregateError/newtarget-proto-fallback.js#default
 test/built-ins/AggregateError/newtarget-proto-fallback.js#strict
 test/built-ins/AggregateError/newtarget-proto.js#default
@@ -617,6 +625,8 @@ test/built-ins/Array/prototype/every/15.4.4.16-1-12.js#default
 test/built-ins/Array/prototype/every/15.4.4.16-1-12.js#strict
 test/built-ins/Array/prototype/every/15.4.4.16-1-13.js#default
 test/built-ins/Array/prototype/every/15.4.4.16-1-13.js#strict
+test/built-ins/Array/prototype/every/15.4.4.16-1-14.js#default
+test/built-ins/Array/prototype/every/15.4.4.16-1-14.js#strict
 test/built-ins/Array/prototype/every/15.4.4.16-1-2.js#default
 test/built-ins/Array/prototype/every/15.4.4.16-1-2.js#strict
 test/built-ins/Array/prototype/every/15.4.4.16-1-4.js#default
@@ -1004,6 +1014,8 @@ test/built-ins/Array/prototype/filter/15.4.4.20-1-12.js#default
 test/built-ins/Array/prototype/filter/15.4.4.20-1-12.js#strict
 test/built-ins/Array/prototype/filter/15.4.4.20-1-13.js#default
 test/built-ins/Array/prototype/filter/15.4.4.20-1-13.js#strict
+test/built-ins/Array/prototype/filter/15.4.4.20-1-14.js#default
+test/built-ins/Array/prototype/filter/15.4.4.20-1-14.js#strict
 test/built-ins/Array/prototype/filter/15.4.4.20-1-2.js#default
 test/built-ins/Array/prototype/filter/15.4.4.20-1-2.js#strict
 test/built-ins/Array/prototype/filter/15.4.4.20-1-4.js#default
@@ -1544,6 +1556,8 @@ test/built-ins/Array/prototype/forEach/15.4.4.18-1-12.js#default
 test/built-ins/Array/prototype/forEach/15.4.4.18-1-12.js#strict
 test/built-ins/Array/prototype/forEach/15.4.4.18-1-13.js#default
 test/built-ins/Array/prototype/forEach/15.4.4.18-1-13.js#strict
+test/built-ins/Array/prototype/forEach/15.4.4.18-1-14.js#default
+test/built-ins/Array/prototype/forEach/15.4.4.18-1-14.js#strict
 test/built-ins/Array/prototype/forEach/15.4.4.18-1-2.js#default
 test/built-ins/Array/prototype/forEach/15.4.4.18-1-2.js#strict
 test/built-ins/Array/prototype/forEach/15.4.4.18-1-4.js#default
@@ -1889,6 +1903,8 @@ test/built-ins/Array/prototype/indexOf/15.4.4.14-1-12.js#default
 test/built-ins/Array/prototype/indexOf/15.4.4.14-1-12.js#strict
 test/built-ins/Array/prototype/indexOf/15.4.4.14-1-13.js#default
 test/built-ins/Array/prototype/indexOf/15.4.4.14-1-13.js#strict
+test/built-ins/Array/prototype/indexOf/15.4.4.14-1-14.js#default
+test/built-ins/Array/prototype/indexOf/15.4.4.14-1-14.js#strict
 test/built-ins/Array/prototype/indexOf/15.4.4.14-1-15.js#default
 test/built-ins/Array/prototype/indexOf/15.4.4.14-1-15.js#strict
 test/built-ins/Array/prototype/indexOf/15.4.4.14-1-4.js#default
@@ -2259,6 +2275,8 @@ test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-12.js#default
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-12.js#strict
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-13.js#default
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-13.js#strict
+test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-14.js#default
+test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-14.js#strict
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-15.js#default
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-15.js#strict
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-1-4.js#default
@@ -2591,6 +2609,8 @@ test/built-ins/Array/prototype/map/15.4.4.19-1-12.js#default
 test/built-ins/Array/prototype/map/15.4.4.19-1-12.js#strict
 test/built-ins/Array/prototype/map/15.4.4.19-1-13.js#default
 test/built-ins/Array/prototype/map/15.4.4.19-1-13.js#strict
+test/built-ins/Array/prototype/map/15.4.4.19-1-14.js#default
+test/built-ins/Array/prototype/map/15.4.4.19-1-14.js#strict
 test/built-ins/Array/prototype/map/15.4.4.19-1-2.js#default
 test/built-ins/Array/prototype/map/15.4.4.19-1-2.js#strict
 test/built-ins/Array/prototype/map/15.4.4.19-1-4.js#default
@@ -2972,6 +2992,8 @@ test/built-ins/Array/prototype/reduce/15.4.4.21-1-12.js#default
 test/built-ins/Array/prototype/reduce/15.4.4.21-1-12.js#strict
 test/built-ins/Array/prototype/reduce/15.4.4.21-1-13.js#default
 test/built-ins/Array/prototype/reduce/15.4.4.21-1-13.js#strict
+test/built-ins/Array/prototype/reduce/15.4.4.21-1-14.js#default
+test/built-ins/Array/prototype/reduce/15.4.4.21-1-14.js#strict
 test/built-ins/Array/prototype/reduce/15.4.4.21-1-2.js#default
 test/built-ins/Array/prototype/reduce/15.4.4.21-1-2.js#strict
 test/built-ins/Array/prototype/reduce/15.4.4.21-1-4.js#default
@@ -3379,6 +3401,8 @@ test/built-ins/Array/prototype/reduceRight/15.4.4.22-1-12.js#default
 test/built-ins/Array/prototype/reduceRight/15.4.4.22-1-12.js#strict
 test/built-ins/Array/prototype/reduceRight/15.4.4.22-1-13.js#default
 test/built-ins/Array/prototype/reduceRight/15.4.4.22-1-13.js#strict
+test/built-ins/Array/prototype/reduceRight/15.4.4.22-1-14.js#default
+test/built-ins/Array/prototype/reduceRight/15.4.4.22-1-14.js#strict
 test/built-ins/Array/prototype/reduceRight/15.4.4.22-1-2.js#default
 test/built-ins/Array/prototype/reduceRight/15.4.4.22-1-2.js#strict
 test/built-ins/Array/prototype/reduceRight/15.4.4.22-1-4.js#default
@@ -3940,6 +3964,8 @@ test/built-ins/Array/prototype/some/15.4.4.17-1-12.js#default
 test/built-ins/Array/prototype/some/15.4.4.17-1-12.js#strict
 test/built-ins/Array/prototype/some/15.4.4.17-1-13.js#default
 test/built-ins/Array/prototype/some/15.4.4.17-1-13.js#strict
+test/built-ins/Array/prototype/some/15.4.4.17-1-14.js#default
+test/built-ins/Array/prototype/some/15.4.4.17-1-14.js#strict
 test/built-ins/Array/prototype/some/15.4.4.17-1-2.js#default
 test/built-ins/Array/prototype/some/15.4.4.17-1-2.js#strict
 test/built-ins/Array/prototype/some/15.4.4.17-1-4.js#default
@@ -5814,6 +5840,8 @@ test/built-ins/Error/is-a-constructor.js#default
 test/built-ins/Error/is-a-constructor.js#strict
 test/built-ins/Error/length.js#default
 test/built-ins/Error/length.js#strict
+test/built-ins/Error/message_property.js#default
+test/built-ins/Error/message_property.js#strict
 test/built-ins/Error/name.js#default
 test/built-ins/Error/name.js#strict
 test/built-ins/Error/prop-desc.js#default
@@ -5844,10 +5872,18 @@ test/built-ins/Error/prototype/no-error-data.js#default
 test/built-ins/Error/prototype/no-error-data.js#strict
 test/built-ins/Error/prototype/stack/instance-not-enumerable.js#default
 test/built-ins/Error/prototype/stack/instance-not-enumerable.js#strict
+test/built-ins/Error/prototype/toString/15.11.4.4-10-1.js#default
+test/built-ins/Error/prototype/toString/15.11.4.4-10-1.js#strict
 test/built-ins/Error/prototype/toString/15.11.4.4-6-1.js#default
 test/built-ins/Error/prototype/toString/15.11.4.4-6-1.js#strict
 test/built-ins/Error/prototype/toString/15.11.4.4-6-2.js#default
 test/built-ins/Error/prototype/toString/15.11.4.4-6-2.js#strict
+test/built-ins/Error/prototype/toString/15.11.4.4-8-1.js#default
+test/built-ins/Error/prototype/toString/15.11.4.4-8-1.js#strict
+test/built-ins/Error/prototype/toString/15.11.4.4-8-2.js#default
+test/built-ins/Error/prototype/toString/15.11.4.4-8-2.js#strict
+test/built-ins/Error/prototype/toString/15.11.4.4-9-1.js#default
+test/built-ins/Error/prototype/toString/15.11.4.4-9-1.js#strict
 test/built-ins/Error/prototype/toString/S15.11.4.4_A2.js#default
 test/built-ins/Error/prototype/toString/S15.11.4.4_A2.js#strict
 test/built-ins/Error/prototype/toString/called-as-function.js#default
@@ -7692,6 +7728,8 @@ test/built-ins/NativeErrors/URIError/prototype/not-error-object.js#default
 test/built-ins/NativeErrors/URIError/prototype/not-error-object.js#strict
 test/built-ins/NativeErrors/URIError/prototype/proto.js#default
 test/built-ins/NativeErrors/URIError/prototype/proto.js#strict
+test/built-ins/NativeErrors/message_property_native_error.js#default
+test/built-ins/NativeErrors/message_property_native_error.js#strict
 test/built-ins/NativeErrors/nativeerror-tostring-message-throws-symbol.js#default
 test/built-ins/NativeErrors/nativeerror-tostring-message-throws-symbol.js#strict
 test/built-ins/NativeErrors/nativeerror-tostring-message-throws-toprimitive.js#default
@@ -8388,6 +8426,8 @@ test/built-ins/Object/create/15.2.3.5-4-12.js#default
 test/built-ins/Object/create/15.2.3.5-4-12.js#strict
 test/built-ins/Object/create/15.2.3.5-4-120.js#default
 test/built-ins/Object/create/15.2.3.5-4-120.js#strict
+test/built-ins/Object/create/15.2.3.5-4-121.js#default
+test/built-ins/Object/create/15.2.3.5-4-121.js#strict
 test/built-ins/Object/create/15.2.3.5-4-122.js#default
 test/built-ins/Object/create/15.2.3.5-4-122.js#strict
 test/built-ins/Object/create/15.2.3.5-4-124.js#default
@@ -8424,6 +8464,8 @@ test/built-ins/Object/create/15.2.3.5-4-138.js#default
 test/built-ins/Object/create/15.2.3.5-4-138.js#strict
 test/built-ins/Object/create/15.2.3.5-4-139.js#default
 test/built-ins/Object/create/15.2.3.5-4-139.js#strict
+test/built-ins/Object/create/15.2.3.5-4-14.js#default
+test/built-ins/Object/create/15.2.3.5-4-14.js#strict
 test/built-ins/Object/create/15.2.3.5-4-140.js#default
 test/built-ins/Object/create/15.2.3.5-4-140.js#strict
 test/built-ins/Object/create/15.2.3.5-4-141.js#default
@@ -8494,6 +8536,8 @@ test/built-ins/Object/create/15.2.3.5-4-172.js#default
 test/built-ins/Object/create/15.2.3.5-4-172.js#strict
 test/built-ins/Object/create/15.2.3.5-4-173.js#default
 test/built-ins/Object/create/15.2.3.5-4-173.js#strict
+test/built-ins/Object/create/15.2.3.5-4-174.js#default
+test/built-ins/Object/create/15.2.3.5-4-174.js#strict
 test/built-ins/Object/create/15.2.3.5-4-175.js#default
 test/built-ins/Object/create/15.2.3.5-4-175.js#strict
 test/built-ins/Object/create/15.2.3.5-4-177.js#default
@@ -8550,6 +8594,8 @@ test/built-ins/Object/create/15.2.3.5-4-2.js#default
 test/built-ins/Object/create/15.2.3.5-4-2.js#strict
 test/built-ins/Object/create/15.2.3.5-4-20.js#default
 test/built-ins/Object/create/15.2.3.5-4-20.js#strict
+test/built-ins/Object/create/15.2.3.5-4-200.js#default
+test/built-ins/Object/create/15.2.3.5-4-200.js#strict
 test/built-ins/Object/create/15.2.3.5-4-201.js#default
 test/built-ins/Object/create/15.2.3.5-4-201.js#strict
 test/built-ins/Object/create/15.2.3.5-4-203.js#default
@@ -8660,6 +8706,8 @@ test/built-ins/Object/create/15.2.3.5-4-251.js#default
 test/built-ins/Object/create/15.2.3.5-4-251.js#strict
 test/built-ins/Object/create/15.2.3.5-4-252.js#default
 test/built-ins/Object/create/15.2.3.5-4-252.js#strict
+test/built-ins/Object/create/15.2.3.5-4-253.js#default
+test/built-ins/Object/create/15.2.3.5-4-253.js#strict
 test/built-ins/Object/create/15.2.3.5-4-254.js#default
 test/built-ins/Object/create/15.2.3.5-4-254.js#strict
 test/built-ins/Object/create/15.2.3.5-4-256.js#default
@@ -8724,6 +8772,8 @@ test/built-ins/Object/create/15.2.3.5-4-286.js#default
 test/built-ins/Object/create/15.2.3.5-4-286.js#strict
 test/built-ins/Object/create/15.2.3.5-4-287.js#default
 test/built-ins/Object/create/15.2.3.5-4-287.js#strict
+test/built-ins/Object/create/15.2.3.5-4-288.js#default
+test/built-ins/Object/create/15.2.3.5-4-288.js#strict
 test/built-ins/Object/create/15.2.3.5-4-289.js#default
 test/built-ins/Object/create/15.2.3.5-4-289.js#strict
 test/built-ins/Object/create/15.2.3.5-4-29.js#default
@@ -8792,6 +8842,8 @@ test/built-ins/Object/create/15.2.3.5-4-35.js#default
 test/built-ins/Object/create/15.2.3.5-4-35.js#strict
 test/built-ins/Object/create/15.2.3.5-4-36.js#default
 test/built-ins/Object/create/15.2.3.5-4-36.js#strict
+test/built-ins/Object/create/15.2.3.5-4-37.js#default
+test/built-ins/Object/create/15.2.3.5-4-37.js#strict
 test/built-ins/Object/create/15.2.3.5-4-38.js#default
 test/built-ins/Object/create/15.2.3.5-4-38.js#strict
 test/built-ins/Object/create/15.2.3.5-4-39.js#default
@@ -8846,6 +8898,8 @@ test/built-ins/Object/create/15.2.3.5-4-66.js#default
 test/built-ins/Object/create/15.2.3.5-4-66.js#strict
 test/built-ins/Object/create/15.2.3.5-4-67.js#default
 test/built-ins/Object/create/15.2.3.5-4-67.js#strict
+test/built-ins/Object/create/15.2.3.5-4-68.js#default
+test/built-ins/Object/create/15.2.3.5-4-68.js#strict
 test/built-ins/Object/create/15.2.3.5-4-69.js#default
 test/built-ins/Object/create/15.2.3.5-4-69.js#strict
 test/built-ins/Object/create/15.2.3.5-4-7.js#default
@@ -8930,6 +8984,8 @@ test/built-ins/Object/defineProperties/15.2.3.7-2-13.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-2-13.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-2-14.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-2-14.js#strict
+test/built-ins/Object/defineProperties/15.2.3.7-2-15.js#default
+test/built-ins/Object/defineProperties/15.2.3.7-2-15.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-2-18.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-2-18.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-2-3.js#default
@@ -8974,6 +9030,8 @@ test/built-ins/Object/defineProperties/15.2.3.7-5-a-14.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-a-14.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-a-15.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-a-15.js#strict
+test/built-ins/Object/defineProperties/15.2.3.7-5-a-16.js#default
+test/built-ins/Object/defineProperties/15.2.3.7-5-a-16.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-a-17.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-a-17.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-a-2.js#default
@@ -9066,6 +9124,8 @@ test/built-ins/Object/defineProperties/15.2.3.7-5-b-132.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-132.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-133.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-133.js#strict
+test/built-ins/Object/defineProperties/15.2.3.7-5-b-134.js#default
+test/built-ins/Object/defineProperties/15.2.3.7-5-b-134.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-135.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-135.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-137.js#default
@@ -9120,6 +9180,8 @@ test/built-ins/Object/defineProperties/15.2.3.7-5-b-159.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-159.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-16.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-16.js#strict
+test/built-ins/Object/defineProperties/15.2.3.7-5-b-160.js#default
+test/built-ins/Object/defineProperties/15.2.3.7-5-b-160.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-161.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-161.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-163.js#default
@@ -9230,6 +9292,8 @@ test/built-ins/Object/defineProperties/15.2.3.7-5-b-211.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-211.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-212.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-212.js#strict
+test/built-ins/Object/defineProperties/15.2.3.7-5-b-213.js#default
+test/built-ins/Object/defineProperties/15.2.3.7-5-b-213.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-214.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-214.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-216.js#default
@@ -9298,6 +9362,8 @@ test/built-ins/Object/defineProperties/15.2.3.7-5-b-246.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-246.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-247.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-247.js#strict
+test/built-ins/Object/defineProperties/15.2.3.7-5-b-248.js#default
+test/built-ins/Object/defineProperties/15.2.3.7-5-b-248.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-249.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-249.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-25.js#default
@@ -9328,6 +9394,8 @@ test/built-ins/Object/defineProperties/15.2.3.7-5-b-264.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-264.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-27.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-27.js#strict
+test/built-ins/Object/defineProperties/15.2.3.7-5-b-28.js#default
+test/built-ins/Object/defineProperties/15.2.3.7-5-b-28.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-29.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-29.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-31.js#default
@@ -9434,6 +9502,8 @@ test/built-ins/Object/defineProperties/15.2.3.7-5-b-8.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-8.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-80.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-80.js#strict
+test/built-ins/Object/defineProperties/15.2.3.7-5-b-81.js#default
+test/built-ins/Object/defineProperties/15.2.3.7-5-b-81.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-82.js#default
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-82.js#strict
 test/built-ins/Object/defineProperties/15.2.3.7-5-b-84.js#default
@@ -9956,6 +10026,8 @@ test/built-ins/Object/defineProperty/15.2.3.6-3-147.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-147.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-148-1.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-148-1.js#strict
+test/built-ins/Object/defineProperty/15.2.3.6-3-148.js#default
+test/built-ins/Object/defineProperty/15.2.3.6-3-148.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-149-1.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-149-1.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-149.js#default
@@ -10024,6 +10096,8 @@ test/built-ins/Object/defineProperty/15.2.3.6-3-173.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-173.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-174-1.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-174-1.js#strict
+test/built-ins/Object/defineProperty/15.2.3.6-3-174.js#default
+test/built-ins/Object/defineProperty/15.2.3.6-3-174.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-175-1.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-175-1.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-175.js#default
@@ -10152,6 +10226,8 @@ test/built-ins/Object/defineProperty/15.2.3.6-3-226.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-226.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-227-1.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-227-1.js#strict
+test/built-ins/Object/defineProperty/15.2.3.6-3-227.js#default
+test/built-ins/Object/defineProperty/15.2.3.6-3-227.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-228-1.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-228-1.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-228.js#default
@@ -10230,6 +10306,8 @@ test/built-ins/Object/defineProperty/15.2.3.6-3-256.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-256.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-257-1.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-257-1.js#strict
+test/built-ins/Object/defineProperty/15.2.3.6-3-257.js#default
+test/built-ins/Object/defineProperty/15.2.3.6-3-257.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-258-1.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-258-1.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-258.js#default
@@ -10294,6 +10372,8 @@ test/built-ins/Object/defineProperty/15.2.3.6-3-41.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-41.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-42-1.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-42-1.js#strict
+test/built-ins/Object/defineProperty/15.2.3.6-3-42.js#default
+test/built-ins/Object/defineProperty/15.2.3.6-3-42.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-43-1.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-43-1.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-43.js#default
@@ -10424,6 +10504,8 @@ test/built-ins/Object/defineProperty/15.2.3.6-3-94.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-94.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-95-1.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-95-1.js#strict
+test/built-ins/Object/defineProperty/15.2.3.6-3-95.js#default
+test/built-ins/Object/defineProperty/15.2.3.6-3-95.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-96-1.js#default
 test/built-ins/Object/defineProperty/15.2.3.6-3-96-1.js#strict
 test/built-ins/Object/defineProperty/15.2.3.6-3-96.js#default
@@ -12810,6 +12892,8 @@ test/built-ins/Object/preventExtensions/15.2.3.10-2.js#default
 test/built-ins/Object/preventExtensions/15.2.3.10-2.js#strict
 test/built-ins/Object/preventExtensions/15.2.3.10-3-1.js#default
 test/built-ins/Object/preventExtensions/15.2.3.10-3-1.js#strict
+test/built-ins/Object/preventExtensions/15.2.3.10-3-10.js#default
+test/built-ins/Object/preventExtensions/15.2.3.10-3-10.js#strict
 test/built-ins/Object/preventExtensions/15.2.3.10-3-11.js#default
 test/built-ins/Object/preventExtensions/15.2.3.10-3-11.js#strict
 test/built-ins/Object/preventExtensions/15.2.3.10-3-12.js#default
@@ -12828,6 +12912,8 @@ test/built-ins/Object/preventExtensions/15.2.3.10-3-19.js#default
 test/built-ins/Object/preventExtensions/15.2.3.10-3-19.js#strict
 test/built-ins/Object/preventExtensions/15.2.3.10-3-2.js#default
 test/built-ins/Object/preventExtensions/15.2.3.10-3-2.js#strict
+test/built-ins/Object/preventExtensions/15.2.3.10-3-20.js#default
+test/built-ins/Object/preventExtensions/15.2.3.10-3-20.js#strict
 test/built-ins/Object/preventExtensions/15.2.3.10-3-21.js#default
 test/built-ins/Object/preventExtensions/15.2.3.10-3-21.js#strict
 test/built-ins/Object/preventExtensions/15.2.3.10-3-22.js#default
@@ -13187,6 +13273,8 @@ test/built-ins/Object/seal/object-seal-o-is-an-arguments-object.js#default
 test/built-ins/Object/seal/object-seal-o-is-an-arguments-object.js#strict
 test/built-ins/Object/seal/object-seal-o-is-an-array-object.js#default
 test/built-ins/Object/seal/object-seal-o-is-an-array-object.js#strict
+test/built-ins/Object/seal/object-seal-o-is-an-error-object.js#default
+test/built-ins/Object/seal/object-seal-o-is-an-error-object.js#strict
 test/built-ins/Object/seal/object-seal-o-is-frozen-already.js#default
 test/built-ins/Object/seal/object-seal-o-is-frozen-already.js#strict
 test/built-ins/Object/seal/object-seal-o-is-sealed-already.js#default
@@ -13217,6 +13305,8 @@ test/built-ins/Object/seal/object-seal-p-is-own-property-of-an-arguments-object-
 test/built-ins/Object/seal/object-seal-p-is-own-property-of-an-arguments-object-which-implements-its-own-get-own-property.js#strict
 test/built-ins/Object/seal/object-seal-p-is-own-property-of-an-array-object-that-uses-object-s-get-own-property.js#default
 test/built-ins/Object/seal/object-seal-p-is-own-property-of-an-array-object-that-uses-object-s-get-own-property.js#strict
+test/built-ins/Object/seal/object-seal-p-is-own-property-of-an-error-object-that-uses-object-s-get-own-property.js#default
+test/built-ins/Object/seal/object-seal-p-is-own-property-of-an-error-object-that-uses-object-s-get-own-property.js#strict
 test/built-ins/Object/seal/object-seal-returned-object-is-not-extensible.js#default
 test/built-ins/Object/seal/object-seal-returned-object-is-not-extensible.js#strict
 test/built-ins/Object/seal/object-seal-the-extension-of-o-is-prevented-already.js#default
@@ -13427,6 +13517,14 @@ test/built-ins/Promise/prototype/then/prfm-rejected.js#default
 test/built-ins/Promise/prototype/then/prfm-rejected.js#strict
 test/built-ins/Promise/prototype/then/prop-desc.js#default
 test/built-ins/Promise/prototype/then/prop-desc.js#strict
+test/built-ins/Promise/prototype/then/reject-pending-fulfilled.js#default
+test/built-ins/Promise/prototype/then/reject-pending-fulfilled.js#strict
+test/built-ins/Promise/prototype/then/reject-pending-rejected.js#default
+test/built-ins/Promise/prototype/then/reject-pending-rejected.js#strict
+test/built-ins/Promise/prototype/then/reject-settled-fulfilled.js#default
+test/built-ins/Promise/prototype/then/reject-settled-fulfilled.js#strict
+test/built-ins/Promise/prototype/then/reject-settled-rejected.js#default
+test/built-ins/Promise/prototype/then/reject-settled-rejected.js#strict
 test/built-ins/Promise/prototype/then/resolve-pending-fulfilled-non-obj.js#default
 test/built-ins/Promise/prototype/then/resolve-pending-fulfilled-non-obj.js#strict
 test/built-ins/Promise/prototype/then/resolve-pending-fulfilled-non-thenable.js#default
@@ -13464,6 +13562,8 @@ test/built-ins/Promise/prototype/then/rxn-handler-fulfilled-next-abrupt.js#defau
 test/built-ins/Promise/prototype/then/rxn-handler-fulfilled-next-abrupt.js#strict
 test/built-ins/Promise/prototype/then/rxn-handler-fulfilled-next.js#default
 test/built-ins/Promise/prototype/then/rxn-handler-fulfilled-next.js#strict
+test/built-ins/Promise/prototype/then/rxn-handler-fulfilled-return-abrupt.js#default
+test/built-ins/Promise/prototype/then/rxn-handler-fulfilled-return-abrupt.js#strict
 test/built-ins/Promise/prototype/then/rxn-handler-fulfilled-return-normal.js#default
 test/built-ins/Promise/prototype/then/rxn-handler-fulfilled-return-normal.js#strict
 test/built-ins/Promise/prototype/then/rxn-handler-identity.js#default
@@ -13473,6 +13573,8 @@ test/built-ins/Promise/prototype/then/rxn-handler-rejected-next-abrupt.js#defaul
 test/built-ins/Promise/prototype/then/rxn-handler-rejected-next-abrupt.js#strict
 test/built-ins/Promise/prototype/then/rxn-handler-rejected-next.js#default
 test/built-ins/Promise/prototype/then/rxn-handler-rejected-next.js#strict
+test/built-ins/Promise/prototype/then/rxn-handler-rejected-return-abrupt.js#default
+test/built-ins/Promise/prototype/then/rxn-handler-rejected-return-abrupt.js#strict
 test/built-ins/Promise/prototype/then/rxn-handler-rejected-return-normal.js#default
 test/built-ins/Promise/prototype/then/rxn-handler-rejected-return-normal.js#strict
 test/built-ins/Promise/prototype/then/rxn-handler-thrower.js#default
@@ -35972,6 +36074,10 @@ test/staging/sm/Date/toISOString.js#default
 test/staging/sm/Date/toISOString.js#strict
 test/staging/sm/Error/constructor-ordering.js#default
 test/staging/sm/Error/constructor-ordering.js#strict
+test/staging/sm/Exceptions/error-expando-reconfigure.js#default
+test/staging/sm/Exceptions/error-expando-reconfigure.js#strict
+test/staging/sm/Exceptions/error-property-enumerability.js#default
+test/staging/sm/Exceptions/error-property-enumerability.js#strict
 test/staging/sm/Function/Function-with-eval.js#default
 test/staging/sm/Function/Function-with-eval.js#strict
 test/staging/sm/Function/arguments-extra-property.js#default
