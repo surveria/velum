@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260710T081035Z.md`
-- Task: PR #410: runtime: centralize ToPrimitive and ToNumber semantics
-- Performance: 5.40x (4/5 >1.00x) (from `rsqjs-test-report-20260710T081035Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T081035Z.md`)
+- `rsqjs-test-report-20260710T085419Z.md`
+- Task: PR #411: runtime: centralize ToString and ToBoolean semantics
+- Performance: 5.47x (4/5 >1.00x) (from `rsqjs-test-report-20260710T085419Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T085419Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 35603 passed / 66975 failed (34.71%) (from `rsqjs-test-report-20260710T081035Z.md`)
+- Full Test262: 35987 passed / 66591 failed (35.08%) (from `rsqjs-test-report-20260710T085419Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -396,3 +396,4 @@ Latest report:
 | `20260710T064817Z` `1b51bed` PR #408: runtime: centralize call and construct semantics | 5.23x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34273 passed / 68305 failed (33.41%) |
 | `20260710T071037Z` `d16197d` PR #409: runtime: centralize equality semantics | 5.28x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34273 passed / 68305 failed (33.41%) |
 | `20260710T081035Z` `4ec0e11` PR #410: runtime: centralize ToPrimitive and ToNumber semantics | 5.40x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 35603 passed / 66975 failed (34.71%) |
+| `20260710T085419Z` `49b1faa` PR #411: runtime: centralize ToString and ToBoolean semantics | 5.47x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 35987 passed / 66591 failed (35.08%) |
