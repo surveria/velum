@@ -1554,8 +1554,10 @@ AS-06a2a1 local implementation evidence:
   the paired 163.05 ms base, 4.1% faster than the canonical 162.01 ms report,
   and within 1.7% of the 152.77 ms pre-AS-06a2a control;
 - focused function/default-parameter, bytecode, quickening, root, and
-  execution-limit tests plus the full architecture mutation suite pass. The
-  full fast gate remains required before PR #440 becomes ready.
+  execution-limit tests plus the full architecture mutation suite pass;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 119 runner tests.
 
 AS-05a1 completion evidence:
 
