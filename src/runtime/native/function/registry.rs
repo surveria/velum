@@ -209,7 +209,8 @@ const REGEXP_SYMBOL_SPLIT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(200
 const REGEXP_SYMBOL_MATCH_ALL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(201);
 const SYMBOL_FOR_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(202);
 const SYMBOL_KEY_FOR_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(203);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 204;
+const FUNCTION_PROTOTYPE_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(204);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 205;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -469,6 +470,7 @@ const fn utility_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::GlobalIsNan => Some(GLOBAL_IS_NAN_SLOT),
         NativeFunctionKind::GlobalParseFloat => Some(GLOBAL_PARSE_FLOAT_SLOT),
         NativeFunctionKind::GlobalParseInt => Some(GLOBAL_PARSE_INT_SLOT),
+        NativeFunctionKind::FunctionPrototypeToString => Some(FUNCTION_PROTOTYPE_TO_STRING_SLOT),
         NativeFunctionKind::NumberIsFinite => Some(NUMBER_IS_FINITE_SLOT),
         NativeFunctionKind::NumberIsInteger => Some(NUMBER_IS_INTEGER_SLOT),
         NativeFunctionKind::NumberIsNan => Some(NUMBER_IS_NAN_SLOT),

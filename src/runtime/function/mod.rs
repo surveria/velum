@@ -56,6 +56,7 @@ pub(super) use properties::{FunctionIntrinsicDefaults, FunctionProperties};
 const FUNCTION_PROTOTYPE_APPLY_PROPERTY: &str = "apply";
 const FUNCTION_PROTOTYPE_BIND_PROPERTY: &str = "bind";
 const FUNCTION_PROTOTYPE_CALL_PROPERTY: &str = "call";
+const FUNCTION_PROTOTYPE_TO_STRING_PROPERTY: &str = "toString";
 
 use super::FunctionNewTarget;
 use properties::{FunctionPropertyKind, PROTOTYPE_CONSTRUCTOR_PROPERTY};
@@ -650,6 +651,7 @@ impl Context {
             || property.name() == FUNCTION_PROTOTYPE_APPLY_PROPERTY
             || property.name() == FUNCTION_PROTOTYPE_BIND_PROPERTY
             || property.name() == FUNCTION_PROTOTYPE_CALL_PROPERTY
+            || property.name() == FUNCTION_PROTOTYPE_TO_STRING_PROPERTY
             || property.name() == OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME
             || property.name() == OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME
     }

@@ -133,11 +133,14 @@ pub(super) fn integer_to_number(value: i64) -> Result<f64> {
         .map_err(|error| Error::runtime(format!("failed to convert Date integer: {error}")))
 }
 
-pub(super) fn integer_component(value: Option<&Value>) -> Result<Option<i64>> {
+pub(super) fn integer_component(
+    context: &mut Context,
+    value: Option<&Value>,
+) -> Result<Option<i64>> {
     let Some(value) = value else {
         return Ok(None);
     };
-    let number = Context::value_to_number(value);
+    let number = context.to_number(value)?;
     if !number.is_finite() || number.abs() > MAX_TIME_MS_NUMBER {
         return Ok(None);
     }
@@ -149,13 +152,14 @@ pub(super) fn integer_component(value: Option<&Value>) -> Result<Option<i64>> {
 }
 
 pub(super) fn integer_component_with_default(
+    context: &mut Context,
     value: Option<&Value>,
     default: i64,
 ) -> Result<Option<i64>> {
     if value.is_none() {
         return Ok(Some(default));
     }
-    integer_component(value)
+    integer_component(context, value)
 }
 
 pub(super) fn normalize_component_year(year: i64) -> i64 {

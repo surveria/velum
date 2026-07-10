@@ -485,10 +485,10 @@ fn supports_array_literals_and_index_properties() -> TestResult {
         &Value::Number(42.0),
     )?;
 
-    let Err(error) = eval("let values = [1, 2]; values.length = 1;") else {
-        return Err("expected array length assignment to fail".into());
-    };
-    ensure_error_contains(&error, "array length assignment")
+    expect_value(
+        "let values = [1, 2]; values.length = 1; values.length === 1 && values[1] === undefined ? 42 : 0",
+        &Value::Number(42.0),
+    )
 }
 
 #[test]

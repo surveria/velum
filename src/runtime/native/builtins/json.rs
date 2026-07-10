@@ -2,10 +2,10 @@ use serde_json::{Map as JsonMap, Value as JsonValue};
 
 use crate::{
     error::{Error, Result},
-    runtime::Context,
     runtime::call::RuntimeCallArgs,
     runtime::control::Completion,
     runtime::object::{ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable},
+    runtime::{Context, abstract_operations::PreferredType},
     value::{ErrorName, ObjectId, Value},
 };
 
@@ -730,45 +730,15 @@ impl Context {
     }
 
     fn json_object_to_number(&mut self, value: &Value) -> Result<f64> {
-        let primitive = self.json_ordinary_to_primitive(value, &["valueOf", "toString"])?;
-        Ok(Self::value_to_number(&primitive))
+        self.to_number(value)
     }
 
     pub(in crate::runtime::native) fn json_object_to_string(
         &mut self,
         value: &Value,
     ) -> Result<String> {
-        let primitive = self.json_ordinary_to_primitive(value, &["toString", "valueOf"])?;
+        let primitive = self.to_primitive(value, PreferredType::String)?;
         self.string_argument_text(&primitive)
-    }
-
-    fn json_ordinary_to_primitive(&mut self, value: &Value, names: &[&str]) -> Result<Value> {
-        for name in names {
-            let method = self.get_property_value(value, name)?;
-            if !self.semantic_is_callable(&method)? {
-                continue;
-            }
-            let result = self.call_json_callback(&method, value.clone(), &[])?;
-            if Self::is_json_primitive(&result) {
-                return Ok(result);
-            }
-        }
-        Err(Error::type_error(
-            "JSON object could not convert to primitive",
-        ))
-    }
-
-    const fn is_json_primitive(value: &Value) -> bool {
-        matches!(
-            value,
-            Value::Undefined
-                | Value::Null
-                | Value::Bool(_)
-                | Value::Number(_)
-                | Value::String(_)
-                | Value::HeapString(_)
-                | Value::Symbol(_)
-        )
     }
 
     fn call_json_callback(

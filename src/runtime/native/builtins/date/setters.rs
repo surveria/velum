@@ -35,7 +35,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let (id, current) = self.date_this_object_value(this_value)?;
-        let Some(year) = integer_component(args.as_slice().first())? else {
+        let Some(year) = integer_component(self, args.as_slice().first())? else {
             self.objects.set_date_value(id, DateValue::Invalid)?;
             return Ok(Value::Number(f64::NAN));
         };
@@ -108,36 +108,41 @@ impl Context {
         kind: DateSetterKind,
     ) -> Result<Value> {
         let (id, current) = self.date_this_object_value(this_value)?;
-        let date = Self::date_value_after_setter(current, args.as_slice(), kind)?;
+        let date = self.date_value_after_setter(current, args.as_slice(), kind)?;
         self.objects.set_date_value(id, date)?;
         date_value_to_number(date).map(Value::Number)
     }
 
     fn date_value_after_setter(
+        &mut self,
         current: DateValue,
         args: &[Value],
         kind: DateSetterKind,
     ) -> Result<DateValue> {
         match kind {
-            DateSetterKind::FullYear => Self::date_value_after_set_full_year(current, args),
-            DateSetterKind::Month => Self::date_value_after_set_month(current, args),
-            DateSetterKind::Date => Self::date_value_after_set_date(current, args),
-            DateSetterKind::Hours => Self::date_value_after_set_hours(current, args),
-            DateSetterKind::Minutes => Self::date_value_after_set_minutes(current, args),
-            DateSetterKind::Seconds => Self::date_value_after_set_seconds(current, args),
-            DateSetterKind::Milliseconds => Self::date_value_after_set_milliseconds(current, args),
+            DateSetterKind::FullYear => self.date_value_after_set_full_year(current, args),
+            DateSetterKind::Month => self.date_value_after_set_month(current, args),
+            DateSetterKind::Date => self.date_value_after_set_date(current, args),
+            DateSetterKind::Hours => self.date_value_after_set_hours(current, args),
+            DateSetterKind::Minutes => self.date_value_after_set_minutes(current, args),
+            DateSetterKind::Seconds => self.date_value_after_set_seconds(current, args),
+            DateSetterKind::Milliseconds => self.date_value_after_set_milliseconds(current, args),
         }
     }
 
-    fn date_value_after_set_full_year(current: DateValue, args: &[Value]) -> Result<DateValue> {
-        let Some(year) = integer_component(args.first())? else {
+    fn date_value_after_set_full_year(
+        &mut self,
+        current: DateValue,
+        args: &[Value],
+    ) -> Result<DateValue> {
+        let Some(year) = integer_component(self, args.first())? else {
             return Ok(DateValue::Invalid);
         };
         let parts = Self::date_parts_or_epoch(current)?;
-        let Some(month) = integer_component_with_default(args.get(1), parts.month)? else {
+        let Some(month) = integer_component_with_default(self, args.get(1), parts.month)? else {
             return Ok(DateValue::Invalid);
         };
-        let Some(date) = integer_component_with_default(args.get(2), parts.date)? else {
+        let Some(date) = integer_component_with_default(self, args.get(2), parts.date)? else {
             return Ok(DateValue::Invalid);
         };
         Ok(make_date_value(
@@ -151,14 +156,18 @@ impl Context {
         ))
     }
 
-    fn date_value_after_set_month(current: DateValue, args: &[Value]) -> Result<DateValue> {
-        let Some(month) = integer_component(args.first())? else {
+    fn date_value_after_set_month(
+        &mut self,
+        current: DateValue,
+        args: &[Value],
+    ) -> Result<DateValue> {
+        let Some(month) = integer_component(self, args.first())? else {
             return Ok(DateValue::Invalid);
         };
         let Some(parts) = Self::date_parts_or_valid(current)? else {
             return Ok(DateValue::Invalid);
         };
-        let Some(date) = integer_component_with_default(args.get(1), parts.date)? else {
+        let Some(date) = integer_component_with_default(self, args.get(1), parts.date)? else {
             return Ok(DateValue::Invalid);
         };
         Ok(make_date_value(
@@ -172,8 +181,12 @@ impl Context {
         ))
     }
 
-    fn date_value_after_set_date(current: DateValue, args: &[Value]) -> Result<DateValue> {
-        let Some(date) = integer_component(args.first())? else {
+    fn date_value_after_set_date(
+        &mut self,
+        current: DateValue,
+        args: &[Value],
+    ) -> Result<DateValue> {
+        let Some(date) = integer_component(self, args.first())? else {
             return Ok(DateValue::Invalid);
         };
         let Some(parts) = Self::date_parts_or_valid(current)? else {
@@ -190,20 +203,25 @@ impl Context {
         ))
     }
 
-    fn date_value_after_set_hours(current: DateValue, args: &[Value]) -> Result<DateValue> {
-        let Some(hour) = integer_component(args.first())? else {
+    fn date_value_after_set_hours(
+        &mut self,
+        current: DateValue,
+        args: &[Value],
+    ) -> Result<DateValue> {
+        let Some(hour) = integer_component(self, args.first())? else {
             return Ok(DateValue::Invalid);
         };
         let Some(parts) = Self::date_parts_or_valid(current)? else {
             return Ok(DateValue::Invalid);
         };
-        let Some(minute) = integer_component_with_default(args.get(1), parts.minute)? else {
+        let Some(minute) = integer_component_with_default(self, args.get(1), parts.minute)? else {
             return Ok(DateValue::Invalid);
         };
-        let Some(second) = integer_component_with_default(args.get(2), parts.second)? else {
+        let Some(second) = integer_component_with_default(self, args.get(2), parts.second)? else {
             return Ok(DateValue::Invalid);
         };
-        let Some(millisecond) = integer_component_with_default(args.get(3), parts.millisecond)?
+        let Some(millisecond) =
+            integer_component_with_default(self, args.get(3), parts.millisecond)?
         else {
             return Ok(DateValue::Invalid);
         };
@@ -218,17 +236,22 @@ impl Context {
         ))
     }
 
-    fn date_value_after_set_minutes(current: DateValue, args: &[Value]) -> Result<DateValue> {
-        let Some(minute) = integer_component(args.first())? else {
+    fn date_value_after_set_minutes(
+        &mut self,
+        current: DateValue,
+        args: &[Value],
+    ) -> Result<DateValue> {
+        let Some(minute) = integer_component(self, args.first())? else {
             return Ok(DateValue::Invalid);
         };
         let Some(parts) = Self::date_parts_or_valid(current)? else {
             return Ok(DateValue::Invalid);
         };
-        let Some(second) = integer_component_with_default(args.get(1), parts.second)? else {
+        let Some(second) = integer_component_with_default(self, args.get(1), parts.second)? else {
             return Ok(DateValue::Invalid);
         };
-        let Some(millisecond) = integer_component_with_default(args.get(2), parts.millisecond)?
+        let Some(millisecond) =
+            integer_component_with_default(self, args.get(2), parts.millisecond)?
         else {
             return Ok(DateValue::Invalid);
         };
@@ -243,14 +266,19 @@ impl Context {
         ))
     }
 
-    fn date_value_after_set_seconds(current: DateValue, args: &[Value]) -> Result<DateValue> {
-        let Some(second) = integer_component(args.first())? else {
+    fn date_value_after_set_seconds(
+        &mut self,
+        current: DateValue,
+        args: &[Value],
+    ) -> Result<DateValue> {
+        let Some(second) = integer_component(self, args.first())? else {
             return Ok(DateValue::Invalid);
         };
         let Some(parts) = Self::date_parts_or_valid(current)? else {
             return Ok(DateValue::Invalid);
         };
-        let Some(millisecond) = integer_component_with_default(args.get(1), parts.millisecond)?
+        let Some(millisecond) =
+            integer_component_with_default(self, args.get(1), parts.millisecond)?
         else {
             return Ok(DateValue::Invalid);
         };
@@ -265,8 +293,12 @@ impl Context {
         ))
     }
 
-    fn date_value_after_set_milliseconds(current: DateValue, args: &[Value]) -> Result<DateValue> {
-        let Some(millisecond) = integer_component(args.first())? else {
+    fn date_value_after_set_milliseconds(
+        &mut self,
+        current: DateValue,
+        args: &[Value],
+    ) -> Result<DateValue> {
+        let Some(millisecond) = integer_component(self, args.first())? else {
             return Ok(DateValue::Invalid);
         };
         let Some(parts) = Self::date_parts_or_valid(current)? else {

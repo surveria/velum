@@ -3,8 +3,11 @@ use crate::{
     runtime::Context,
     runtime::control::Completion,
     runtime::object::{AccessorWriteDisposition, PropertyKey, PropertyLookup},
-    value::{ObjectId, Value},
+    value::{ErrorName, ObjectId, Value},
 };
+
+const ARRAY_LENGTH_PROPERTY: &str = "length";
+const ARRAY_LENGTH_RANGE_ERROR: &str = "Invalid array length";
 
 impl Context {
     /// Invokes a getter function with the property read receiver as `this`.
@@ -59,6 +62,12 @@ impl Context {
             AccessorWriteDisposition::NoSetter => return Ok(()),
             AccessorWriteDisposition::None => {}
         }
+        if property_name == ARRAY_LENGTH_PROPERTY
+            && self.objects.array_len_if_array(object)?.is_some()
+        {
+            let length = self.array_length_from_value(&value)?;
+            return self.objects.set_array_length(object, length);
+        }
         crate::runtime::property::set_property(
             &mut self.objects,
             &Value::Object(object),
@@ -67,6 +76,25 @@ impl Context {
             value,
             self.limits.max_object_properties,
         )
+    }
+
+    fn array_length_from_value(&mut self, value: &Value) -> Result<usize> {
+        let number = self.to_number(value)?;
+        if !number.is_finite()
+            || number < 0.0
+            || number.fract() != 0.0
+            || number > f64::from(u32::MAX)
+        {
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                ARRAY_LENGTH_RANGE_ERROR,
+            ));
+        }
+        let length = format!("{number:.0}")
+            .parse::<u32>()
+            .map_err(|_| Error::exception(ErrorName::RangeError, ARRAY_LENGTH_RANGE_ERROR))?;
+        usize::try_from(length)
+            .map_err(|_| Error::exception(ErrorName::RangeError, ARRAY_LENGTH_RANGE_ERROR))
     }
 
     /// Calls an accessor function and rethrows JS `Error` throw completions

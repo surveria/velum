@@ -49,21 +49,20 @@ const F16_MAX_FINITE: f64 = 65_504.0;
 const F16_OVERFLOW_CUTOFF: f64 = 65_520.0;
 const F16_SIGNIFICAND_BITS: i32 = 10;
 const ROUND_INTEGER_CUTOFF: f64 = 4_503_599_627_370_496.0;
-const VALUE_OF_PROPERTY: &str = "valueOf";
-const TO_STRING_PROPERTY: &str = "toString";
 
 use super::math_sum_precise::PreciseFiniteSum;
 
 macro_rules! math_unary_method {
     ($runtime_name:ident, $direct_name:ident, $operation:path) => {
         pub(in crate::runtime::native) fn $runtime_name(
+            &mut self,
             args: RuntimeCallArgs<'_>,
         ) -> Result<Value> {
-            Self::$direct_name(args.as_slice())
+            self.$direct_name(args.as_slice())
         }
 
-        pub(in crate::runtime::native) fn $direct_name(args: &[Value]) -> Result<Value> {
-            Self::eval_math_unary_value(args.first(), $operation)
+        pub(in crate::runtime::native) fn $direct_name(&mut self, args: &[Value]) -> Result<Value> {
+            self.eval_math_unary_value(args.first(), $operation)
         }
     };
 }
@@ -148,14 +147,20 @@ impl Context {
     math_unary_method!(eval_math_asinh, eval_direct_math_asinh, f64::asinh);
     math_unary_method!(eval_math_atan, eval_direct_math_atan, f64::atan);
 
-    pub(in crate::runtime::native) fn eval_math_atan2(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_direct_math_atan2(args.as_slice())
+    pub(in crate::runtime::native) fn eval_math_atan2(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_math_atan2(args.as_slice())
     }
 
-    pub(in crate::runtime::native) fn eval_direct_math_atan2(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_atan2(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
         let (y, x) = Self::eval_math_binary_values(args);
-        let y = Self::math_arg_or_nan(y);
-        let x = x.map_or(f64::NAN, Self::value_to_number);
+        let y = self.math_arg_or_nan(y)?;
+        let x = self.math_arg_or_nan(x)?;
         Self::math_number(y.atan2(x))
     }
 
@@ -163,12 +168,18 @@ impl Context {
     math_unary_method!(eval_math_cbrt, eval_direct_math_cbrt, f64::cbrt);
     math_unary_method!(eval_math_ceil, eval_direct_math_ceil, f64::ceil);
 
-    pub(in crate::runtime::native) fn eval_math_clz32(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_direct_math_clz32(args.as_slice())
+    pub(in crate::runtime::native) fn eval_math_clz32(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_math_clz32(args.as_slice())
     }
 
-    pub(in crate::runtime::native) fn eval_direct_math_clz32(args: &[Value]) -> Result<Value> {
-        let unsigned = Self::math_uint32_arg_or_zero(args.first(), MATH_CLZ32_NAME)?;
+    pub(in crate::runtime::native) fn eval_direct_math_clz32(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let unsigned = self.math_uint32_arg_or_zero(args.first(), MATH_CLZ32_NAME)?;
         Self::math_number(f64::from(unsigned.leading_zeros()))
     }
 
@@ -178,24 +189,34 @@ impl Context {
     math_unary_method!(eval_math_expm1, eval_direct_math_expm1, f64::exp_m1);
 
     pub(in crate::runtime::native) fn eval_math_f16round(
+        &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        Self::eval_direct_math_f16round(args.as_slice())
+        self.eval_direct_math_f16round(args.as_slice())
     }
 
-    pub(in crate::runtime::native) fn eval_direct_math_f16round(args: &[Value]) -> Result<Value> {
-        let number = Self::math_arg_or_nan(args.first());
+    pub(in crate::runtime::native) fn eval_direct_math_f16round(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let number = self.math_arg_or_nan(args.first())?;
         Self::math_number(Self::f16round_to_number(number))
     }
 
     math_unary_method!(eval_math_floor, eval_direct_math_floor, f64::floor);
 
-    pub(in crate::runtime::native) fn eval_math_fround(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_direct_math_fround(args.as_slice())
+    pub(in crate::runtime::native) fn eval_math_fround(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_math_fround(args.as_slice())
     }
 
-    pub(in crate::runtime::native) fn eval_direct_math_fround(args: &[Value]) -> Result<Value> {
-        let number = Self::math_arg_or_nan(args.first());
+    pub(in crate::runtime::native) fn eval_direct_math_fround(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let number = self.math_arg_or_nan(args.first())?;
         Self::math_number(Self::fround_to_number(number))
     }
 
@@ -213,14 +234,20 @@ impl Context {
         self.eval_math_hypot_values(args)
     }
 
-    pub(in crate::runtime::native) fn eval_math_imul(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_direct_math_imul(args.as_slice())
+    pub(in crate::runtime::native) fn eval_math_imul(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_math_imul(args.as_slice())
     }
 
-    pub(in crate::runtime::native) fn eval_direct_math_imul(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_imul(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
         let (left, right) = Self::eval_math_binary_values(args);
-        let left = Self::math_uint32_arg_or_zero(left, MATH_IMUL_NAME)?;
-        let right = Self::math_uint32_arg_or_zero(right, MATH_IMUL_NAME)?;
+        let left = self.math_uint32_arg_or_zero(left, MATH_IMUL_NAME)?;
+        let right = self.math_uint32_arg_or_zero(right, MATH_IMUL_NAME)?;
         let product = left.wrapping_mul(right);
         Self::math_number(f64::from(i32::from_ne_bytes(product.to_ne_bytes())))
     }
@@ -284,14 +311,20 @@ impl Context {
         Self::math_number(minimum)
     }
 
-    pub(in crate::runtime::native) fn eval_math_pow(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_direct_math_pow(args.as_slice())
+    pub(in crate::runtime::native) fn eval_math_pow(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_math_pow(args.as_slice())
     }
 
-    pub(in crate::runtime::native) fn eval_direct_math_pow(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_pow(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
         let (base, exponent) = Self::eval_math_binary_values(args);
-        let base = Self::math_arg_or_nan(base);
-        let exponent = exponent.map_or(f64::NAN, Self::value_to_number);
+        let base = self.math_arg_or_nan(base)?;
+        let exponent = self.math_arg_or_nan(exponent)?;
         Self::math_number(Self::math_pow(base, exponent))
     }
 
@@ -310,24 +343,36 @@ impl Context {
         Ok(Value::Number(self.next_math_random()?))
     }
 
-    pub(in crate::runtime::native) fn eval_math_round(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_direct_math_round(args.as_slice())
+    pub(in crate::runtime::native) fn eval_math_round(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_math_round(args.as_slice())
     }
 
-    pub(in crate::runtime::native) fn eval_direct_math_round(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_round(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
         let value = args.first();
         Self::math_number(Self::round_to_nearest_toward_positive(
-            Self::math_arg_or_nan(value),
+            self.math_arg_or_nan(value)?,
         ))
     }
 
-    pub(in crate::runtime::native) fn eval_math_sign(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        Self::eval_direct_math_sign(args.as_slice())
+    pub(in crate::runtime::native) fn eval_math_sign(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_math_sign(args.as_slice())
     }
 
-    pub(in crate::runtime::native) fn eval_direct_math_sign(args: &[Value]) -> Result<Value> {
+    pub(in crate::runtime::native) fn eval_direct_math_sign(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
         let value = args.first();
-        let value = Self::math_arg_or_nan(value);
+        let value = self.math_arg_or_nan(value)?;
         if value.is_nan() || value == 0.0 {
             return Self::math_number(value);
         }
@@ -490,8 +535,12 @@ impl Context {
         self.define_non_enumerable_object_property(object, name, function)
     }
 
-    fn eval_math_unary_value(value: Option<&Value>, operation: fn(f64) -> f64) -> Result<Value> {
-        Self::math_number(operation(Self::math_arg_or_nan(value)))
+    fn eval_math_unary_value(
+        &mut self,
+        value: Option<&Value>,
+        operation: fn(f64) -> f64,
+    ) -> Result<Value> {
+        Self::math_number(operation(self.math_arg_or_nan(value)?))
     }
 
     fn eval_math_binary_values(args: &[Value]) -> (Option<&Value>, Option<&Value>) {
@@ -522,62 +571,22 @@ impl Context {
     }
 
     fn math_to_number(&mut self, value: &Value) -> Result<f64> {
-        if !matches!(value, Value::Object(_)) {
-            return Ok(Self::value_to_number(value));
-        }
-        let primitive =
-            self.math_ordinary_to_primitive(value, &[VALUE_OF_PROPERTY, TO_STRING_PROPERTY])?;
-        Ok(Self::value_to_number(&primitive))
-    }
-
-    fn math_ordinary_to_primitive(
-        &mut self,
-        value: &Value,
-        method_names: &[&str],
-    ) -> Result<Value> {
-        for method_name in method_names {
-            let method = self.get_property_value(value, method_name)?;
-            if !self.semantic_is_callable(&method)? {
-                continue;
-            }
-            let result = self.eval_call_value(&method, &[], value.clone())?;
-            if Self::is_math_primitive(&result) {
-                return Ok(result);
-            }
-        }
-        Err(Error::type_error("Cannot convert object to number"))
-    }
-
-    const fn is_math_primitive(value: &Value) -> bool {
-        matches!(
-            value,
-            Value::Undefined
-                | Value::Null
-                | Value::Bool(_)
-                | Value::Number(_)
-                | Value::String(_)
-                | Value::HeapString(_)
-                | Value::Symbol(_)
-        )
+        self.to_number(value)
     }
 
     const fn eval_math_discard_values(_args: &[Value]) {}
 
-    fn math_arg_or_nan(value: Option<&Value>) -> f64 {
-        match value {
-            Some(Value::Number(value)) => *value,
-            Some(value) => Self::value_to_number(value),
-            None => f64::NAN,
-        }
+    fn math_arg_or_nan(&mut self, value: Option<&Value>) -> Result<f64> {
+        value.map_or(Ok(f64::NAN), |value| self.to_number(value))
     }
 
-    fn math_uint32_arg_or_zero(value: Option<&Value>, context: &str) -> Result<u32> {
+    fn math_uint32_arg_or_zero(&mut self, value: Option<&Value>, context: &str) -> Result<u32> {
         let Some(value) = value else {
             return Ok(0);
         };
         match value {
             Value::Number(value) => Self::math_number_to_uint32(*value, context),
-            value => number_to_uint32(Self::value_to_number(value), context),
+            value => number_to_uint32(self.to_number(value)?, context),
         }
     }
 

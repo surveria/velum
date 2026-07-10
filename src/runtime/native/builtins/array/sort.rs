@@ -300,7 +300,7 @@ impl Context {
         }
         if let Some(comparator) = comparator {
             let result = self.array_call_comparator(comparator, x, y)?;
-            let number = Self::value_to_number(&result);
+            let number = self.to_number(&result)?;
             return Ok(if number.is_nan() || number == 0.0 {
                 SortOrder::Equal
             } else if number < 0.0 {

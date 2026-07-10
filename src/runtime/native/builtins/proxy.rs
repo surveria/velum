@@ -511,7 +511,7 @@ impl Context {
             ));
         }
         let length_value = self.get_property_value(value, "length")?;
-        let length = Self::reflect_length_from_value(&length_value)?;
+        let length = self.reflect_length_from_value(&length_value)?;
         let mut keys = Vec::new();
         for index in 0..length {
             self.step()?;

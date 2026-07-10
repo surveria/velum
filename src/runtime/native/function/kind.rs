@@ -48,6 +48,8 @@ pub(in crate::runtime::native) const FUNCTION_PROTOTYPE_HAS_INSTANCE_NAME: &str 
     "[Symbol.hasInstance]";
 const FUNCTION_PROTOTYPE_CALL_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const FUNCTION_PROTOTYPE_CALL_NAME: &str = "call";
+const FUNCTION_PROTOTYPE_TO_STRING_LENGTH: f64 = 0.0;
+pub(in crate::runtime::native) const FUNCTION_PROTOTYPE_TO_STRING_NAME: &str = "toString";
 const BOUND_FUNCTION_LENGTH: f64 = 0.0;
 const BOUND_FUNCTION_NAME: &str = "bound";
 pub(in crate::runtime) const INFINITY_NAME: &str = "Infinity";
@@ -266,6 +268,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     FunctionPrototypeCall,
     FunctionPrototypeApply,
     FunctionPrototypeHasInstance,
+    FunctionPrototypeToString,
     GlobalDecodeUri,
     GlobalDecodeUriComponent,
     GlobalEncodeUri,
@@ -601,6 +604,7 @@ impl NativeFunctionKind {
             Self::FunctionPrototypeCall => Some(FUNCTION_PROTOTYPE_CALL_LENGTH),
             Self::FunctionPrototypeApply => Some(FUNCTION_PROTOTYPE_APPLY_LENGTH),
             Self::FunctionPrototypeHasInstance => Some(FUNCTION_PROTOTYPE_HAS_INSTANCE_LENGTH),
+            Self::FunctionPrototypeToString => Some(FUNCTION_PROTOTYPE_TO_STRING_LENGTH),
             Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_FUNCTION_LENGTH),
             Self::JsonParse => Some(JSON_PARSE_FUNCTION_LENGTH),
             Self::JsonRawJson => Some(JSON_RAW_JSON_FUNCTION_LENGTH),
@@ -760,6 +764,7 @@ impl NativeFunctionKind {
             Self::FunctionPrototypeCall => Some(FUNCTION_PROTOTYPE_CALL_NAME),
             Self::FunctionPrototypeApply => Some(FUNCTION_PROTOTYPE_APPLY_NAME),
             Self::FunctionPrototypeHasInstance => Some(FUNCTION_PROTOTYPE_HAS_INSTANCE_NAME),
+            Self::FunctionPrototypeToString => Some(FUNCTION_PROTOTYPE_TO_STRING_NAME),
             Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_NAME),
             Self::JsonParse => Some(JSON_PARSE_NAME),
             Self::JsonRawJson => Some(JSON_RAW_JSON_NAME),

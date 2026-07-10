@@ -22,8 +22,8 @@ impl Context {
     ) -> Result<Value> {
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
-        let start = Self::array_slice_bound(args.first(), length, 0)?;
-        let (delete_count, items) = Self::array_splice_counts(args, length, start)?;
+        let start = self.array_slice_bound(args.first(), length, 0)?;
+        let (delete_count, items) = self.array_splice_counts(args, length, start)?;
         if let Some(value) =
             self.eval_packed_array_splice(this_value, length, start, delete_count, &items)?
         {
@@ -143,6 +143,7 @@ impl Context {
     }
 
     pub(super) fn array_splice_counts(
+        &mut self,
         args: &[Value],
         length: usize,
         start: usize,
@@ -155,7 +156,7 @@ impl Context {
             return Ok((delete_count, Vec::new()));
         }
         let requested =
-            Self::array_to_integer_or_infinity(args.get(1).unwrap_or(&Value::Undefined));
+            self.array_to_integer_or_infinity(args.get(1).unwrap_or(&Value::Undefined))?;
         let delete_count = Self::array_clamp_index(requested, max_delete)?;
         let items = args.get(2..).unwrap_or(&[]).to_vec();
         Ok((delete_count, items))
@@ -188,8 +189,8 @@ impl Context {
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
         let value = args.first().cloned().unwrap_or(Value::Undefined);
-        let start = Self::array_slice_bound(args.get(1), length, 0)?;
-        let end = Self::array_slice_bound(args.get(2), length, length)?;
+        let start = self.array_slice_bound(args.get(1), length, 0)?;
+        let end = self.array_slice_bound(args.get(2), length, length)?;
         for index in start..end {
             self.step()?;
             self.set_array_like_index(this_value, index, value.clone())?;
@@ -212,9 +213,9 @@ impl Context {
     ) -> Result<Value> {
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
-        let to = Self::array_slice_bound(args.first(), length, 0)?;
-        let from = Self::array_slice_bound(args.get(1), length, 0)?;
-        let end = Self::array_slice_bound(args.get(2), length, length)?;
+        let to = self.array_slice_bound(args.first(), length, 0)?;
+        let from = self.array_slice_bound(args.get(1), length, 0)?;
+        let end = self.array_slice_bound(args.get(2), length, length)?;
         let count = end.saturating_sub(from).min(length.saturating_sub(to));
         if count == 0 {
             return Ok(this_value.clone());
@@ -266,7 +267,7 @@ impl Context {
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
         let relative =
-            Self::array_to_integer_or_infinity(args.first().unwrap_or(&Value::Undefined));
+            self.array_to_integer_or_infinity(args.first().unwrap_or(&Value::Undefined))?;
         let length_f64 = u32::try_from(length)
             .map(f64::from)
             .map_err(|_| Error::limit(ARRAY_MUTATE_INDEX_ERROR))?;

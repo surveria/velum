@@ -142,6 +142,8 @@ src/runtime/bytecode/mod.rs'
 check_semantic_duplicate_allowlists() {
   local equality
   local expected_equality
+  local conversion
+  local expected_conversion
   local invocation
   local expected_invocation
   local semantic_object
@@ -161,6 +163,20 @@ src/runtime/abstract_operations/equality.rs:same_value
 src/runtime/abstract_operations/equality.rs:same_value_zero
 src/runtime/abstract_operations/equality.rs:strict_equality'
   compare_set "equality operation allowlist" "${equality}" "${expected_equality}"
+
+  conversion="$(
+    function_owners \
+      'fn[[:space:]]+(get_to_primitive_method|is_primitive|ordinary_to_primitive|prefixed_integer_to_number|string_to_number|to_number_primitive|to_number|to_primitive)'
+  )"
+  expected_conversion='src/runtime/abstract_operations/conversion.rs:get_to_primitive_method
+src/runtime/abstract_operations/conversion.rs:is_primitive
+src/runtime/abstract_operations/conversion.rs:ordinary_to_primitive
+src/runtime/abstract_operations/conversion.rs:prefixed_integer_to_number
+src/runtime/abstract_operations/conversion.rs:string_to_number
+src/runtime/abstract_operations/conversion.rs:to_number
+src/runtime/abstract_operations/conversion.rs:to_number_primitive
+src/runtime/abstract_operations/conversion.rs:to_primitive'
+  compare_set "primitive conversion operation allowlist" "${conversion}" "${expected_conversion}"
 
   invocation="$(
     function_owners 'fn[[:space:]]+[a-z_]*(is_callable|is_constructor)[a-z_]*'
@@ -216,7 +232,6 @@ src/runtime/native/builtins/array/generic.rs:array_to_integer_or_infinity
 src/runtime/native/builtins/array/generic.rs:checked_array_like_length
 src/runtime/native/builtins/array/generic.rs:max_array_like_length
 src/runtime/native/builtins/array/generic.rs:set_array_like_length
-src/runtime/native/builtins/array/generic.rs:value_to_length_number
 src/runtime/native/builtins/date/support.rs:finite_number_to_integer
 src/runtime/native/builtins/string.rs:to_integer_or_infinity
 src/runtime/native/builtins/string_extra.rs:to_length_arg

@@ -119,8 +119,8 @@ impl Context {
     ) -> Result<Value> {
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
-        let start = Self::array_slice_bound(start, length, 0)?;
-        let end = Self::array_slice_bound(end, length, length)?.max(start);
+        let start = self.array_slice_bound(start, length, 0)?;
+        let end = self.array_slice_bound(end, length, length)?.max(start);
         let count = end
             .checked_sub(start)
             .ok_or_else(|| Error::limit(ARRAY_LIKE_LENGTH_LIMIT_ERROR))?;
@@ -168,7 +168,10 @@ impl Context {
     ) -> Result<Value> {
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
-        let start = Self::array_slice_bound(from_index, length, 0)?;
+        if length == 0 {
+            return Ok(Value::Number(INDEX_NOT_FOUND));
+        }
+        let start = self.array_slice_bound(from_index, length, 0)?;
         if start >= length {
             return Ok(Value::Number(INDEX_NOT_FOUND));
         }
@@ -192,7 +195,10 @@ impl Context {
     ) -> Result<Value> {
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
-        let start = Self::array_slice_bound(from_index, length, 0)?;
+        if length == 0 {
+            return Ok(Value::Bool(false));
+        }
+        let start = self.array_slice_bound(from_index, length, 0)?;
         if start >= length {
             return Ok(Value::Bool(false));
         }
@@ -214,7 +220,10 @@ impl Context {
     ) -> Result<Value> {
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
-        let Some(start) = Self::array_last_index_of_start(from_index, length)? else {
+        if length == 0 {
+            return Ok(Value::Number(INDEX_NOT_FOUND));
+        }
+        let Some(start) = self.array_last_index_of_start(from_index, length)? else {
             return Ok(Value::Number(INDEX_NOT_FOUND));
         };
         for index in (0..=start).rev() {
@@ -286,7 +295,7 @@ impl Context {
 
     pub(super) fn array_like_length(&mut self, object: &Value) -> Result<usize> {
         let length = self.get_property_value(object, ARRAY_LENGTH_PROPERTY)?;
-        Self::length_value_to_usize(&length)
+        self.length_value_to_usize(&length)
     }
 
     pub(super) fn set_array_like_length(&mut self, object: &Value, length: usize) -> Result<()> {
@@ -343,18 +352,15 @@ impl Context {
         Err(Error::runtime(ARRAY_LIKE_RECEIVER_ERROR))
     }
 
-    /// `ToIntegerOrInfinity(value)` restricted to primitive coercion. Object
-    /// operands coerce to `NaN` and therefore to `0`, matching the engine's
-    /// wider `ToNumber` behavior for exotic values.
-    pub(super) fn array_to_integer_or_infinity(value: &Value) -> f64 {
-        let number = Self::value_to_number(value);
-        if number.is_nan() {
+    pub(super) fn array_to_integer_or_infinity(&mut self, value: &Value) -> Result<f64> {
+        let number = self.to_number(value)?;
+        Ok(if number.is_nan() {
             0.0
         } else if number.is_infinite() {
             number
         } else {
             number.trunc()
-        }
+        })
     }
 
     /// Clamp a numeric index into `[0, length]`.
@@ -386,8 +392,8 @@ impl Context {
         Ok(length)
     }
 
-    fn length_value_to_usize(value: &Value) -> Result<usize> {
-        let number = Self::value_to_length_number(value);
+    fn length_value_to_usize(&mut self, value: &Value) -> Result<usize> {
+        let number = self.to_number(value)?;
         if number.is_nan() || number <= 0.0 {
             return Ok(0);
         }
@@ -397,29 +403,6 @@ impl Context {
         }
         let floored = number.floor().min(f64::from(u32::MAX));
         Self::nonnegative_integer_to_usize(floored).map(|value| value.min(max))
-    }
-
-    fn value_to_length_number(value: &Value) -> f64 {
-        match value {
-            Value::Undefined
-            | Value::Null
-            | Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Object(_)
-            | Value::Error(_)
-            | Value::Symbol(_) => 0.0,
-            Value::Bool(value) => {
-                if *value {
-                    1.0
-                } else {
-                    0.0
-                }
-            }
-            Value::Number(value) => *value,
-            Value::String(value) => Self::string_to_number(value),
-            Value::HeapString(value) => Self::string_to_number(value.as_str()),
-        }
     }
 
     pub(super) fn array_like_length_value(length: usize) -> Result<Value> {

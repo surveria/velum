@@ -1,4 +1,11 @@
-use crate::{error::Result, runtime::Context, value::Value};
+use crate::{
+    error::Result,
+    runtime::{
+        Context,
+        abstract_operations::{PreferredType, is_primitive},
+    },
+    value::Value,
+};
 
 /// ECMAScript Strict Equality Comparison.
 pub(in crate::runtime) fn strict_equality(left: &Value, right: &Value) -> bool {
@@ -8,25 +15,12 @@ pub(in crate::runtime) fn strict_equality(left: &Value, right: &Value) -> bool {
     }
 }
 
-/// ECMAScript Abstract Equality Comparison over the conversions currently
-/// supported by the runtime. AS-03a2 will replace the boxed-string-specific
-/// conversion with the shared `ToPrimitive` operation.
+/// ECMAScript Abstract Equality Comparison.
 pub(in crate::runtime) fn abstract_equality(
-    context: &Context,
+    context: &mut Context,
     left: &Value,
     right: &Value,
 ) -> Result<bool> {
-    if !matches!(right, Value::Object(_))
-        && let Some(left) = string_object_primitive(context, left)?
-    {
-        return compare_string_primitive(context, left, right);
-    }
-    if !matches!(left, Value::Object(_))
-        && let Some(right) = string_object_primitive(context, right)?
-    {
-        return compare_string_primitive(context, right, left);
-    }
-
     match (left, right) {
         (Value::Undefined, Value::Null) | (Value::Null, Value::Undefined) => Ok(true),
         (Value::Bool(left), _) => {
@@ -36,11 +30,16 @@ pub(in crate::runtime) fn abstract_equality(
             abstract_equality(context, left, &Value::Number(bool_to_number(*right)))
         }
         (Value::String(_) | Value::HeapString(_), Value::Number(_))
-        | (Value::Number(_), Value::String(_) | Value::HeapString(_)) => {
-            Ok(number_strict_equality(
-                Context::value_to_number(left),
-                Context::value_to_number(right),
-            ))
+        | (Value::Number(_), Value::String(_) | Value::HeapString(_)) => Ok(
+            number_strict_equality(context.to_number(left)?, context.to_number(right)?),
+        ),
+        (left, right) if !is_primitive(left) && is_primitive(right) => {
+            let primitive = context.to_primitive(left, PreferredType::Default)?;
+            abstract_equality(context, &primitive, right)
+        }
+        (left, right) if is_primitive(left) && !is_primitive(right) => {
+            let primitive = context.to_primitive(right, PreferredType::Default)?;
+            abstract_equality(context, left, &primitive)
         }
         _ => Ok(strict_equality(left, right)),
     }
@@ -87,38 +86,6 @@ pub(in crate::runtime) const fn number_same_value_zero(left: f64, right: f64) ->
         return true;
     }
     left.to_bits() == right.to_bits()
-}
-
-fn string_object_primitive<'a>(context: &'a Context, value: &Value) -> Result<Option<&'a str>> {
-    let Value::Object(id) = value else {
-        return Ok(None);
-    };
-    context.string_object_primitive_value(*id)
-}
-
-fn compare_string_primitive(context: &Context, left: &str, right: &Value) -> Result<bool> {
-    let result = match right {
-        Value::Bool(value) => {
-            number_strict_equality(Context::string_to_number(left), bool_to_number(*value))
-        }
-        Value::Number(value) => number_strict_equality(Context::string_to_number(left), *value),
-        Value::String(value) => left == value,
-        Value::HeapString(value) => left == value.as_str(),
-        Value::Object(_) => {
-            let Some(right) = string_object_primitive(context, right)? else {
-                return Ok(false);
-            };
-            left == right
-        }
-        Value::Undefined
-        | Value::Null
-        | Value::Symbol(_)
-        | Value::Function(_)
-        | Value::NativeFunction(_)
-        | Value::HostFunction(_)
-        | Value::Error(_) => false,
-    };
-    Ok(result)
 }
 
 const fn bool_to_number(value: bool) -> f64 {

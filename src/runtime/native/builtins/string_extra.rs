@@ -74,7 +74,7 @@ impl Context {
     ) -> Result<Value> {
         let mut output = String::new();
         for value in args {
-            let unit = Self::to_uint16(Self::value_to_number(value))?;
+            let unit = Self::to_uint16(self.to_number(value)?)?;
             if let Some(ch) = char::from_u32(u32::from(unit)) {
                 output.push(ch);
             } else {
@@ -98,7 +98,7 @@ impl Context {
     ) -> Result<Value> {
         let mut output = String::new();
         for value in args {
-            let code_point = Self::code_point_argument(value)?;
+            let code_point = self.code_point_argument(value)?;
             let Some(ch) = char::from_u32(code_point) else {
                 return Err(Error::exception(
                     ErrorName::RangeError,
@@ -160,7 +160,7 @@ impl Context {
     ) -> Result<Value> {
         let text = self.string_receiver_value(this_value)?;
         let length = text.chars().count();
-        let Some(index) = Self::relative_index(args.first(), length)? else {
+        let Some(index) = self.relative_index(args.first(), length)? else {
             return Ok(Value::Undefined);
         };
         let Some(ch) = text.chars().nth(index) else {
@@ -170,7 +170,7 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_code_point_at(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
@@ -178,13 +178,13 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_direct_string_prototype_code_point_at(
-        &self,
+        &mut self,
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
         let text = self.string_receiver_value(this_value)?;
         let units = text.encode_utf16().collect::<Vec<_>>();
-        let position = Self::position_arg(args.first())?;
+        let position = self.position_arg(args.first())?;
         let Some(unit) = units.get(position).copied() else {
             return Ok(Value::Undefined);
         };
@@ -222,7 +222,7 @@ impl Context {
         side: PadSide,
     ) -> Result<Value> {
         let text = self.string_receiver_value(this_value)?;
-        let target_length = Self::to_length_arg(args.first())?;
+        let target_length = self.to_length_arg(args.first())?;
         let current_length = text.chars().count();
         if target_length <= current_length {
             return self.heap_string_value(&text);
@@ -282,7 +282,7 @@ impl Context {
 
     fn raw_length(&mut self, raw: &Value) -> Result<usize> {
         let value = self.get_property_value(raw, "length")?;
-        Self::to_length_value(&value)
+        self.to_length_value(&value)
     }
 
     fn raw_part(&mut self, raw: &Value, index: usize) -> Result<String> {
@@ -336,8 +336,8 @@ impl Context {
         }
     }
 
-    fn relative_index(value: Option<&Value>, length: usize) -> Result<Option<usize>> {
-        let integer = Self::integer_arg(value);
+    fn relative_index(&mut self, value: Option<&Value>, length: usize) -> Result<Option<usize>> {
+        let integer = self.integer_arg(value)?;
         let index = if integer < 0 {
             let length_i64 = i64::try_from(length)
                 .map_err(|_| Error::limit("string length exceeded supported range"))?;
@@ -356,26 +356,33 @@ impl Context {
         Ok(Some(index))
     }
 
-    fn position_arg(value: Option<&Value>) -> Result<usize> {
-        let integer = Self::integer_arg(value);
+    fn position_arg(&mut self, value: Option<&Value>) -> Result<usize> {
+        let integer = self.integer_arg(value)?;
         if integer <= 0 {
             return Ok(0);
         }
         usize::try_from(integer).map_err(|_| Error::limit("string index exceeded range"))
     }
 
-    fn integer_arg(value: Option<&Value>) -> i64 {
-        let number = value.map_or(0.0, Self::value_to_number);
-        Self::finite_integer(number).unwrap_or(i64::MAX)
+    fn integer_arg(&mut self, value: Option<&Value>) -> Result<i64> {
+        let number = match value {
+            Some(value) => self.to_number(value)?,
+            None => 0.0,
+        };
+        Ok(Self::finite_integer(number).unwrap_or(i64::MAX))
     }
 
-    fn to_length_arg(value: Option<&Value>) -> Result<usize> {
+    // Keep the specification-derived name until AS-03b centralizes ToLength.
+    #[allow(clippy::wrong_self_convention)]
+    fn to_length_arg(&mut self, value: Option<&Value>) -> Result<usize> {
         let value = Self::argument_or_undefined(value);
-        Self::to_length_value(&value)
+        self.to_length_value(&value)
     }
 
-    fn to_length_value(value: &Value) -> Result<usize> {
-        let number = Self::value_to_number(value);
+    // Keep the specification-derived name until AS-03b centralizes ToLength.
+    #[allow(clippy::wrong_self_convention)]
+    fn to_length_value(&mut self, value: &Value) -> Result<usize> {
+        let number = self.to_number(value)?;
         let Some(integer) = Self::finite_integer(number) else {
             if number.is_sign_positive() && number.is_infinite() {
                 return Err(Error::limit(TO_LENGTH_LIMIT_ERROR));
@@ -388,8 +395,8 @@ impl Context {
         usize::try_from(integer).map_err(|_| Error::limit(TO_LENGTH_LIMIT_ERROR))
     }
 
-    fn code_point_argument(value: &Value) -> Result<u32> {
-        let number = Self::value_to_number(value);
+    fn code_point_argument(&mut self, value: &Value) -> Result<u32> {
+        let number = self.to_number(value)?;
         if !number.is_finite() || !(0.0..=MAX_CODE_POINT).contains(&number) || number.fract() != 0.0
         {
             return Err(Error::exception(

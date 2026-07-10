@@ -21,7 +21,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let digits = Self::number_digit_argument(args.as_slice().first());
+        let digits = self.number_digit_argument(args.as_slice().first())?;
         if !(0.0..=f64::from(DIGIT_LIMIT)).contains(&digits) {
             return Err(Error::exception(
                 ErrorName::RangeError,
@@ -56,7 +56,7 @@ impl Context {
         let fraction = match argument {
             None | Some(Value::Undefined) => None,
             Some(value) => {
-                let requested = Self::number_digit_value(&value);
+                let requested = self.number_digit_value(&value)?;
                 if !(0.0..=f64::from(DIGIT_LIMIT)).contains(&requested) {
                     return Err(Error::exception(
                         ErrorName::RangeError,
@@ -86,7 +86,7 @@ impl Context {
         if !value.is_finite() {
             return self.heap_string_value(&Value::Number(value).to_string());
         }
-        let precision = Self::number_digit_value(&argument.unwrap_or(Value::Undefined));
+        let precision = self.number_digit_value(&argument.unwrap_or(Value::Undefined))?;
         if !(1.0..=f64::from(DIGIT_LIMIT)).contains(&precision) {
             return Err(Error::exception(
                 ErrorName::RangeError,
@@ -97,20 +97,19 @@ impl Context {
         self.heap_string_value(&text)
     }
 
-    fn number_digit_argument(value: Option<&Value>) -> f64 {
-        value.map_or(0.0, Self::number_digit_value)
+    fn number_digit_argument(&mut self, value: Option<&Value>) -> Result<f64> {
+        value.map_or(Ok(0.0), |value| self.number_digit_value(value))
     }
 
-    /// `ToIntegerOrInfinity` restricted to primitive coercion.
-    fn number_digit_value(value: &Value) -> f64 {
-        let number = Self::value_to_number(value);
-        if number.is_nan() {
+    fn number_digit_value(&mut self, value: &Value) -> Result<f64> {
+        let number = self.to_number(value)?;
+        Ok(if number.is_nan() {
             0.0
         } else if number.is_infinite() {
             number
         } else {
             number.trunc()
-        }
+        })
     }
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]

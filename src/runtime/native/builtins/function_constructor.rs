@@ -13,7 +13,8 @@ use crate::{
 
 use super::{
     FUNCTION_NAME, FUNCTION_PROTOTYPE_APPLY_NAME, FUNCTION_PROTOTYPE_BIND_NAME,
-    FUNCTION_PROTOTYPE_CALL_NAME, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY,
+    FUNCTION_PROTOTYPE_CALL_NAME, FUNCTION_PROTOTYPE_TO_STRING_NAME, NativeFunctionKind,
+    OBJECT_CONSTRUCTOR_PROPERTY,
 };
 
 const GENERATED_FUNCTION_NAME: &str = "anonymous";
@@ -195,7 +196,34 @@ impl Context {
             apply,
         )?;
 
+        let to_string = self.create_ephemeral_native_function(
+            NativeFunctionKind::FunctionPrototypeToString,
+            prototype_value.clone(),
+        )?;
+        self.define_non_enumerable_object_property(
+            prototype,
+            FUNCTION_PROTOTYPE_TO_STRING_NAME,
+            to_string,
+        )?;
+
         self.install_function_prototype_has_instance(prototype, prototype_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_function_prototype_to_string(
+        &mut self,
+        _args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let source = if let Value::Function(id) = this_value {
+            self.function_source_text(*id)?
+        } else if self.semantic_is_callable(this_value)? {
+            "function()".to_owned()
+        } else {
+            return Err(Error::type_error(
+                "Function.prototype.toString requires a callable receiver",
+            ));
+        };
+        self.heap_string_value(&source)
     }
 
     fn install_function_prototype_has_instance(

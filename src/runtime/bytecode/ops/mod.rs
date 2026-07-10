@@ -91,17 +91,11 @@ impl Context {
         self.heap_string_value(Value::Undefined.type_name())
     }
 
-    pub(super) fn eval_bytecode_unary(op: UnaryOp, value: &Value) -> Result<Value> {
+    pub(super) fn eval_bytecode_unary(&mut self, op: UnaryOp, value: &Value) -> Result<Value> {
         match op {
             UnaryOp::Not => Ok(Value::Bool(!value.is_truthy())),
-            UnaryOp::Negate => value
-                .as_number()
-                .map(|value| Value::Number(-value))
-                .ok_or_else(|| Error::runtime("unary '-' expects a number")),
-            UnaryOp::Plus => value
-                .as_number()
-                .map(Value::Number)
-                .ok_or_else(|| Error::runtime("unary '+' expects a number")),
+            UnaryOp::Negate => self.to_number(value).map(|value| Value::Number(-value)),
+            UnaryOp::Plus => self.to_number(value).map(Value::Number),
             UnaryOp::Void => Ok(Value::Undefined),
             UnaryOp::Typeof | UnaryOp::Delete => Err(Error::runtime(
                 "non-bytecode unary operator reached bytecode unary path",
@@ -110,7 +104,7 @@ impl Context {
     }
 
     pub(super) fn eval_bytecode_number_unary(
-        &self,
+        &mut self,
         op: BytecodeNumericUnaryOp,
         value: &Value,
     ) -> Result<Value> {
@@ -121,7 +115,7 @@ impl Context {
             };
             return self.checked_value(Value::Number(value));
         }
-        Self::eval_bytecode_unary(op.generic_unary(), value)
+        self.eval_bytecode_unary(op.generic_unary(), value)
     }
 
     pub(super) fn eval_bytecode_binary(
@@ -133,26 +127,26 @@ impl Context {
     ) -> Result<Value> {
         let value = match op {
             BinaryOp::Add => self.add(left, right)?,
-            BinaryOp::Sub => numeric_binary(left, right, "-", |left, right| left - right)?,
-            BinaryOp::Mul => numeric_binary(left, right, "*", |left, right| left * right)?,
-            BinaryOp::Div => numeric_binary(left, right, "/", |left, right| left / right)?,
-            BinaryOp::Rem => numeric_binary(left, right, "%", |left, right| left % right)?,
-            BinaryOp::Pow => numeric_binary(left, right, "**", f64::powf)?,
+            BinaryOp::Sub => numeric_binary(self, left, right, "-", |left, right| left - right)?,
+            BinaryOp::Mul => numeric_binary(self, left, right, "*", |left, right| left * right)?,
+            BinaryOp::Div => numeric_binary(self, left, right, "/", |left, right| left / right)?,
+            BinaryOp::Rem => numeric_binary(self, left, right, "%", |left, right| left % right)?,
+            BinaryOp::Pow => numeric_binary(self, left, right, "**", f64::powf)?,
             BinaryOp::Equal => Value::Bool(abstract_equality(self, left, right)?),
             BinaryOp::NotEqual => Value::Bool(!abstract_equality(self, left, right)?),
             BinaryOp::StrictEqual => Value::Bool(strict_equality(left, right)),
             BinaryOp::StrictNotEqual => Value::Bool(!strict_equality(left, right)),
             BinaryOp::Less | BinaryOp::LessEqual | BinaryOp::Greater | BinaryOp::GreaterEqual => {
-                relational_compare(op, left, right)
+                relational_compare(self, op, left, right)?
             }
             BinaryOp::In => self.eval_bytecode_in(left, right, property_access)?,
             BinaryOp::InstanceOf => self.eval_bytecode_instanceof(left, right)?,
-            BinaryOp::BitAnd => bitwise_and(left, right)?,
-            BinaryOp::BitOr => bitwise_or(left, right)?,
-            BinaryOp::BitXor => bitwise_xor(left, right)?,
-            BinaryOp::ShiftLeft => shift_left(left, right)?,
-            BinaryOp::ShiftRight => shift_right(left, right)?,
-            BinaryOp::ShiftRightUnsigned => shift_right_unsigned(left, right)?,
+            BinaryOp::BitAnd => bitwise_and(self, left, right)?,
+            BinaryOp::BitOr => bitwise_or(self, left, right)?,
+            BinaryOp::BitXor => bitwise_xor(self, left, right)?,
+            BinaryOp::ShiftLeft => shift_left(self, left, right)?,
+            BinaryOp::ShiftRight => shift_right(self, left, right)?,
+            BinaryOp::ShiftRightUnsigned => shift_right_unsigned(self, left, right)?,
             BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing => {
                 return Err(Error::runtime(
                     "logical operator reached bytecode eager evaluation",
