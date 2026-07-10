@@ -173,7 +173,7 @@ impl CommitTimeline {
     }
 }
 
-fn repository_root() -> anyhow::Result<Option<PathBuf>> {
+pub(super) fn repository_root() -> anyhow::Result<Option<PathBuf>> {
     let output = Command::new("git")
         .args(["rev-parse", "--show-toplevel"])
         .output()
@@ -361,13 +361,11 @@ fn short_commit(commit: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::{BTreeMap, BTreeSet},
-        path::Path,
-    };
+    use std::collections::{BTreeMap, BTreeSet};
 
     use super::{
-        CommitTimeline, MAIN_AXIS_DESCRIPTION, history_has_shallow_boundary, parse_report_additions,
+        CommitTimeline, MAIN_AXIS_DESCRIPTION, history_has_shallow_boundary,
+        parse_report_additions, repository_root,
     };
     use crate::report_rollup::{ReportContext, ReportRecord, parse_records};
 
@@ -412,9 +410,7 @@ mod tests {
 
     #[test]
     fn every_tracked_report_maps_to_the_current_main_commit_domain() -> TestResult {
-        let repository_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .ok_or("runner manifest directory has no repository parent")?;
+        let repository_root = repository_root()?.ok_or("test is outside a git repository")?;
         let report_dir = repository_root.join("reports/test-runs");
         let records = parse_records(&report_dir)?;
         let timeline = CommitTimeline::discover(&report_dir, &records)?;
@@ -438,16 +434,14 @@ mod tests {
 
     #[test]
     fn untracked_publisher_report_uses_one_pending_commit_slot() -> TestResult {
-        let repository_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .ok_or("runner manifest directory has no repository parent")?;
+        let repository_root = repository_root()?.ok_or("test is outside a git repository")?;
         let reports_root = repository_root.join("target/rollup-pending");
         let report_dir = reports_root.join("test-runs");
         let records = vec![empty_record("rsqjs-test-report-20260710T020000Z.md")];
         let timeline = CommitTimeline::from_main_history(
             &report_dir,
             &reports_root,
-            repository_root,
+            &repository_root,
             &records,
             &["1111111111111111111111111111111111111111".to_owned()],
             &BTreeMap::new(),
