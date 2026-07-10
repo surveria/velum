@@ -23,6 +23,8 @@ mod case_registry;
 mod cases;
 mod failure_classification;
 mod jetstream;
+mod jetstream_baseline;
+mod jetstream_mode;
 mod prepared_benchmarks;
 mod quickjs_baseline;
 mod report_benchmark_methodology;
@@ -113,6 +115,9 @@ fn run() -> anyhow::Result<()> {
             let report = report_composition::compose(correctness, performance, &expected_tree)?;
             report_composition::validate_output_path(&report, &report_path)?;
             return write_report(&report_path, &report);
+        }
+        Config::JetStream { report_path } => {
+            return jetstream_mode::run(&report_path);
         }
         Config::AggregateReports { report_dir } => {
             let outputs = report_rollup::generate_from_report_dir(&report_dir)?;
@@ -366,7 +371,7 @@ fn build_report(
         benchmarks::BenchmarkReport::not_run()
     };
     let jetstream = if include_jetstream {
-        jetstream::run()
+        jetstream::run()?
     } else {
         jetstream::JetStreamReport::not_run()
     };
@@ -589,7 +594,12 @@ fn write_report(path: &Path, report: &ReportDocument) -> anyhow::Result<()> {
             exhaustive_path.display()
         );
     }
-    let body = render_report(&component);
+    let markdown_report = if report.configuration.report_mode == ReportMode::Jetstream {
+        report
+    } else {
+        &component
+    };
+    let body = render_report(markdown_report);
     fs::write(path, body)
         .with_context(|| format!("failed to write test report '{}'", path.display()))?;
     let timing_path = timing_artifact_path(path);

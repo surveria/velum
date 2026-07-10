@@ -35,6 +35,93 @@ fn full_yaml_round_trip_preserves_typed_report() -> TestResult {
 }
 
 #[test]
+fn compact_jetstream_yaml_keeps_every_official_row_within_the_line_contract() -> TestResult {
+    const JETSTREAM_LINE_HEADROOM_TARGET: usize = 950;
+    let source = jetstream::worst_case_report_fixture();
+    let expected_rows = source.rows.len();
+    let report = ReportDocument::from_jetstream_run(
+        &source,
+        report_metadata::RunMetadata::default(),
+        sample_environment(),
+        sample_jetstream_configuration(),
+    )?;
+    let markdown = render_report(&report);
+    ensure_contains(&markdown, "case_elapsed")?;
+    ensure_contains(&markdown, "rsqjs_measure")?;
+    ensure_contains(&markdown, "quickjs_measure")?;
+    ensure_contains(&markdown, "latency_budget")?;
+    ensure_contains(&markdown, "quality")?;
+    ensure_contains(&markdown, "quickjs_baseline")?;
+    let tsv = render_timing_tsv(&report);
+    let jetstream_line = tsv
+        .lines()
+        .find(|line| line.starts_with("jetstream\tJetStream Shell Benchmarks\tAir\t"))
+        .ok_or("expected JetStream TSV row for Air")?;
+    let fields = jetstream_line.split('\t').collect::<Vec<_>>();
+    ensure_bool(
+        fields.get(5) == Some(&"")
+            && fields.get(6) == Some(&"2.00 ms")
+            && fields.get(7) == Some(&"1.50 ms")
+            && fields.get(8) == Some(&"1.50 ms"),
+        "JetStream TSV lifecycle columns are misaligned",
+    )?;
+    let bounded = report.bounded_component()?;
+    let bounded_markdown = render_report(&bounded);
+    ensure_contains(&bounded_markdown, "case_elapsed")?;
+    ensure_contains(&bounded_markdown, "2.00 ms")?;
+    ensure_contains(&bounded_markdown, "✅ valid")?;
+    ensure_bool(
+        bounded.jetstream.rows.len() == expected_rows,
+        "bounded JetStream YAML omitted official rows",
+    )?;
+    let component_yaml = serde_yaml_ng::to_string(&bounded)?;
+    let summary_yaml = serde_yaml_ng::to_string(&bounded.summary())?;
+    let component_lines = component_yaml.lines().count();
+    let summary_lines = summary_yaml.lines().count();
+    ensure_bool(
+        component_lines <= JETSTREAM_LINE_HEADROOM_TARGET
+            && summary_lines <= JETSTREAM_LINE_HEADROOM_TARGET,
+        &format!(
+            "worst-case JetStream YAML exceeded {JETSTREAM_LINE_HEADROOM_TARGET}-line headroom target (hard maximum {MAX_CANONICAL_YAML_LINES}): component={component_lines}, summary={summary_lines}"
+        ),
+    )?;
+    ensure_contains(&summary_yaml, "reference_source: quickjs_baseline")?;
+    ensure_contains(&summary_yaml, "total: 86")
+}
+
+#[test]
+fn current_schema_reads_the_tracked_pre_compact_v1_summary() -> TestResult {
+    let yaml = include_str!("../../reports/test-runs/rsqjs-test-report-20260709T230501Z.yaml");
+    let report: ReportSummary = serde_yaml_ng::from_str(yaml)?;
+    report.validate()?;
+    ensure_bool(
+        report.jetstream.rows.is_empty(),
+        "tracked compatibility fixture unexpectedly contains JetStream rows",
+    )
+}
+
+#[test]
+fn jetstream_validation_rejects_aggregate_drift_and_quickjs_in_strict_read() -> TestResult {
+    let mut aggregate_drift = sample_jetstream_document()?;
+    aggregate_drift.jetstream.counts.measured =
+        aggregate_drift.jetstream.counts.measured.saturating_sub(1);
+    ensure_bool(
+        aggregate_drift.validate().is_err(),
+        "JetStream aggregate drift was accepted",
+    )?;
+
+    let mut strict_read = sample_jetstream_document()?;
+    strict_read
+        .configuration
+        .benchmark
+        .reference_quickjs_compiled = true;
+    ensure_bool(
+        strict_read.validate().is_err(),
+        "strict JetStream read accepted a compiled QuickJS reference",
+    )
+}
+
+#[test]
 fn summary_yaml_omits_large_case_details() -> TestResult {
     let report = sample_document()?;
     let summary = report.summary();
@@ -525,11 +612,22 @@ pub fn sample_document() -> Result<ReportDocument, anyhow::Error> {
             invalid: 0,
             skipped: 0,
             over_latency_budget: 0,
+            reference_missing: 0,
             elapsed: Duration::ZERO,
         },
         elapsed: Duration::from_millis(7),
     };
     ReportDocument::from_run(report, sample_environment(), sample_configuration())
+}
+
+pub fn sample_jetstream_document() -> Result<ReportDocument, anyhow::Error> {
+    let report = jetstream::worst_case_report_fixture();
+    ReportDocument::from_jetstream_run(
+        &report,
+        report_metadata::RunMetadata::default(),
+        sample_environment(),
+        sample_jetstream_configuration(),
+    )
 }
 
 fn sample_environment() -> EnvironmentInfo {
@@ -565,8 +663,23 @@ fn sample_configuration() -> RunConfiguration {
             minimum_operation_duration_ns: 1_000_000,
             maximum_cv_permille: 100,
             attempts: 3,
+            maximum_operation_duration_ns: 2_000_000_000,
+            maximum_total_duration_ns: 3_000_000_000,
         },
+        suite_max_duration_ns: None,
     }
+}
+
+fn sample_jetstream_configuration() -> RunConfiguration {
+    let mut configuration = sample_configuration();
+    configuration.report_mode = crate::report_schema::ReportMode::Jetstream;
+    configuration.jetstream = crate::report_schema::FeatureSelection::Enabled;
+    configuration.quickjs_differential = crate::report_schema::InputAvailability::NotConfigured;
+    configuration.test262 = crate::report_schema::InputAvailability::NotConfigured;
+    configuration.test262_mode = crate::report_schema::Test262Mode::Manifest;
+    configuration.benchmark.reference_quickjs_compiled = false;
+    configuration.suite_max_duration_ns = Some(120_000_000_000);
+    configuration
 }
 
 fn ensure_contains(actual: &str, expected: &str) -> TestResult {

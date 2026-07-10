@@ -26,6 +26,28 @@ cargo build --manifest-path runner/Cargo.toml --features reference-quickjs
 The `reference-quickjs` feature adds an in-process QuickJS reference (via the
 `rquickjs` binding) for benchmark comparison.
 
+## Standalone JetStream
+
+Run the shell corpus without repeating correctness, Test262, differential, or
+project benchmark work:
+
+```sh
+./scripts/run-jetstream.sh
+```
+
+The script owns the exclusive host lock and uses the committed content-addressed
+QuickJS baseline in read mode. `RSQJS_JETSTREAM_FILTER` accepts exact ids and
+explicit trailing-star prefixes. Live QuickJS execution occurs only when
+`RSQJS_JETSTREAM_QUICKJS_BASELINE=refresh` is set explicitly; refresh output is
+reviewed and committed as a separate baseline change.
+
+Each run writes derived Markdown, compact schema-v1 YAML, bounded component
+YAML, and a bounded TSV view. The compact YAML keeps every selected official
+row and exact aggregate counts within the repository's 1,000-line canonical
+limit. CI rejects local-only exhaustive output. Normal read mode does not
+compile or run the QuickJS binding; canonical publication stores only Markdown
+plus compact YAML, while component/TSV files remain workflow artifacts.
+
 ## Test262 Accounting
 
 The full Test262 report keeps two progress views:

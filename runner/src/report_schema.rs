@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     CaseRow, CorpusReport, FullReport, STATUS_FAILED, STATUS_PASSED, STATUS_SKIPPED, benchmarks,
-    failure_classification, jetstream,
+    failure_classification,
     report_benchmark_methodology::BenchmarkMethodology,
     report_composition::ReportComponent,
     report_metadata::RunMetadata,
@@ -19,6 +19,9 @@ use compaction::{case_counts, case_detail_coverage, limit_diagnostics, suite_sta
 #[path = "report_schema_columns.rs"]
 mod columns;
 use columns::BenchmarkColumns;
+#[path = "report_schema_jetstream.rs"]
+mod jetstream_schema;
+pub use jetstream_schema::{JetStreamDetailRecord, JetStreamRecord, JetStreamSuite};
 
 pub const SCHEMA_VERSION: u32 = 1;
 pub const MAX_FAILURE_DIAGNOSTICS: usize = 30;
@@ -38,7 +41,8 @@ pub struct ReportDocument {
     pub(crate) duration_ns: u64,
     pub(crate) suites: Vec<SuiteReport>,
     pub(crate) benchmarks: BenchmarkSuite,
-    pub(crate) jetstream: BenchmarkSuite,
+    #[serde(default, skip_serializing_if = "JetStreamSuite::is_empty")]
+    pub(crate) jetstream: JetStreamSuite,
 }
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
@@ -52,7 +56,8 @@ pub struct ReportSummary {
     pub(crate) duration_ns: u64,
     pub(crate) suites: Vec<SuiteSummary>,
     pub(crate) benchmarks: BenchmarkSuite,
-    pub(crate) jetstream: BenchmarkSuite,
+    #[serde(default, skip_serializing_if = "JetStreamSuite::is_empty")]
+    pub(crate) jetstream: JetStreamSuite,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
@@ -68,6 +73,7 @@ pub enum ReportMode {
     Full,
     Correctness,
     Performance,
+    Jetstream,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Eq, PartialEq, Serialize)]
@@ -135,6 +141,8 @@ pub struct RunConfiguration {
     pub(crate) benchmark_filter: Option<String>,
     pub(crate) quickjs_baseline: QuickjsBaselineMode,
     pub(crate) benchmark: BenchmarkConfiguration,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) suite_max_duration_ns: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
@@ -146,6 +154,10 @@ pub struct BenchmarkConfiguration {
     pub(crate) minimum_operation_duration_ns: u64,
     pub(crate) maximum_cv_permille: u32,
     pub(crate) attempts: u64,
+    #[serde(default)]
+    pub(crate) maximum_operation_duration_ns: u64,
+    #[serde(default)]
+    pub(crate) maximum_total_duration_ns: u64,
 }
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
@@ -382,6 +394,7 @@ impl ReportDocument {
         environment: EnvironmentInfo,
         configuration: RunConfiguration,
     ) -> anyhow::Result<Self> {
+        let jetstream = JetStreamSuite::from_jetstream(&report.jetstream)?;
         let component = ReportComponent::capture(
             configuration.report_mode,
             &report.metadata,
@@ -405,7 +418,7 @@ impl ReportDocument {
             duration_ns: duration_ns(report.elapsed),
             suites,
             benchmarks: BenchmarkSuite::from_benchmarks(report.benchmarks)?,
-            jetstream: BenchmarkSuite::from_jetstream(report.jetstream)?,
+            jetstream,
         })
     }
 
@@ -564,27 +577,6 @@ impl BenchmarkSuite {
                 .collect::<anyhow::Result<Vec<_>>>()?,
         })
     }
-
-    fn from_jetstream(report: jetstream::JetStreamReport) -> anyhow::Result<Self> {
-        Ok(Self {
-            name: "JetStream Shell Benchmarks".to_owned(),
-            duration_ns: duration_ns(report.elapsed),
-            counts: BenchmarkCounts {
-                measured: usize_to_u64(report.measured),
-                in_process_measured: usize_to_u64(report.measured),
-                failed: usize_to_u64(report.failed),
-                invalid: usize_to_u64(report.invalid),
-                skipped_reference: usize_to_u64(report.skipped),
-                over_latency_budget: usize_to_u64(report.over_latency_budget),
-                over_memory_budget: 0,
-            },
-            rows: report
-                .rows
-                .into_iter()
-                .map(BenchmarkRecord::from_jetstream)
-                .collect::<anyhow::Result<Vec<_>>>()?,
-        })
-    }
 }
 
 impl BenchmarkRecord {
@@ -619,28 +611,6 @@ impl BenchmarkRecord {
             over_memory_budget: contribution.over_memory_budget.into(),
         });
         Ok(record)
-    }
-
-    fn from_jetstream(row: jetstream::JetStreamRow) -> anyhow::Result<Self> {
-        Self::from_columns(BenchmarkColumns {
-            id: row.benchmark,
-            status: row.status,
-            source: row.source,
-            iterations: None,
-            case_duration: row.case_elapsed,
-            engine_measurement: row.rsqjs_measure,
-            engine_median: row.rsqjs_time,
-            engine_cv: row.rsqjs_cv,
-            reference_measurement: row.quickjs_measure,
-            reference_median: row.quickjs_time,
-            reference_cv: row.quickjs_cv,
-            latency_ratio: row.latency_ratio,
-            memory_ratio: NO_VALUE.to_owned(),
-            latency_budget: row.latency_budget,
-            quality: row.quality,
-            methodology: None,
-            detail: row.detail,
-        })
     }
 
     fn from_columns(columns: BenchmarkColumns) -> anyhow::Result<Self> {

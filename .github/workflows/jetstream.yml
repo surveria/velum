@@ -1,0 +1,147 @@
+name: JetStream
+
+on:
+  schedule:
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: "Exact ids or explicit trailing-star prefixes, comma-separated"
+        required: false
+        default: ""
+        type: string
+      refresh_quickjs:
+        description: "Measure QuickJS live and upload a refreshed baseline for review"
+        required: false
+        default: false
+        type: boolean
+      publish:
+        description: "Publish an unfiltered read-only run to canonical history"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: rsqjs-jetstream-main
+  cancel-in-progress: false
+
+jobs:
+  jetstream:
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - surveria
+      - rust
+      - isolated
+      - gha-runner-ctrl-test
+    env:
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      CARGO_TARGET_DIR: /home/runner/.cache/cargo-target/rs-quickjs
+      RSQJS_HOST_LOCK_PATH: /host/rsqjs-lock/host-performance.lock
+      RSQJS_JETSTREAM_FILTER: ${{ inputs.filter || '' }}
+      RSQJS_JETSTREAM_QUICKJS_BASELINE: ${{ inputs.refresh_quickjs && 'refresh' || 'read' }}
+      RSQJS_JETSTREAM_QUICKJS_BASELINE_PATH: tests/corpora/jetstream/quickjs-baseline.tsv
+      RSQJS_REPORT_EVENT_NAME: ${{ github.event_name }}
+      RSQJS_REPORT_RUN_ID: ${{ github.run_id }}
+      RSQJS_REPORT_RUN_ATTEMPT: ${{ github.run_attempt }}
+      RSQJS_REPORT_REPOSITORY: ${{ github.repository }}
+      RSQJS_REPORT_WORKFLOW: ${{ github.workflow }}
+      RSQJS_REPORT_TASK: JetStream shell benchmark lane
+      RSQJS_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Check self-hosted runner
+        run: |
+          printf 'RUNNER_NAME=%s\n' "${RUNNER_NAME:-unknown}"
+          printf 'CARGO_TARGET_DIR=%s\n' "${CARGO_TARGET_DIR}"
+          printf 'RSQJS_HOST_LOCK_PATH=%s\n' "${RSQJS_HOST_LOCK_PATH}"
+          mkdir -p "${CARGO_TARGET_DIR}"
+          rustc --version
+          cargo --version
+          gh --version
+
+      - name: Prepare JetStream artifact metadata
+        id: metadata
+        run: |
+          timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          commit_sha="$(git rev-parse HEAD)"
+          tree_sha="$(git rev-parse 'HEAD^{tree}')"
+          report_path="target/rsqjs-reports/jetstream-runs/rsqjs-jetstream-report-${timestamp}.md"
+          report_yaml_path="${report_path%.md}.yaml"
+          report_component_yaml_path="${report_path%.md}-component.yaml"
+          report_timing_path="${report_path%.md}-timings.tsv"
+          metadata_path="target/rsqjs-reports/rsqjs-jetstream-metadata.env"
+          artifact_name="rsqjs-jetstream-${tree_sha}"
+          {
+            printf 'timestamp=%s\n' "${timestamp}"
+            printf 'commit_sha=%s\n' "${commit_sha}"
+            printf 'tree_sha=%s\n' "${tree_sha}"
+            printf 'report_path=%s\n' "${report_path}"
+            printf 'report_yaml_path=%s\n' "${report_yaml_path}"
+            printf 'report_component_yaml_path=%s\n' "${report_component_yaml_path}"
+            printf 'report_timing_path=%s\n' "${report_timing_path}"
+            printf 'metadata_path=%s\n' "${metadata_path}"
+            printf 'artifact_name=%s\n' "${artifact_name}"
+          } >> "${GITHUB_OUTPUT}"
+          {
+            printf 'RSQJS_REPORT_TIMESTAMP=%s\n' "${timestamp}"
+            printf 'RSQJS_REPORT_COMMIT_SHA=%s\n' "${commit_sha}"
+            printf 'RSQJS_REPORT_TREE_SHA=%s\n' "${tree_sha}"
+            printf 'RSQJS_JETSTREAM_REPORT_PATH=%s\n' "${report_path}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Run standalone JetStream lane
+        env:
+          RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
+        run: |
+          if [[ -z "${RSQJS_DEPENDENCY_TOKEN}" ]]; then
+            echo "RSQJS_DEPENDENCY_TOKEN is required for private Rust dependencies" >&2
+            exit 1
+          fi
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/chertov/.insteadOf"
+          export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
+          ./scripts/run-jetstream.sh
+
+      - name: Upload tree-keyed JetStream artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.metadata.outputs.artifact_name }}
+          path: |
+            ${{ steps.metadata.outputs.report_path }}
+            ${{ steps.metadata.outputs.report_yaml_path }}
+            ${{ steps.metadata.outputs.report_component_yaml_path }}
+            ${{ steps.metadata.outputs.report_timing_path }}
+            ${{ steps.metadata.outputs.metadata_path }}
+          if-no-files-found: error
+
+      - name: Upload refreshed QuickJS baseline for review
+        if: always() && inputs.refresh_quickjs == true
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.metadata.outputs.artifact_name }}-quickjs-baseline
+          path: tests/corpora/jetstream/quickjs-baseline.tsv
+          if-no-files-found: error
+
+      - name: Publish canonical JetStream report
+        if: >-
+          success() &&
+          github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+          (inputs.filter || '') == '' &&
+          inputs.refresh_quickjs != true &&
+          (github.event_name == 'schedule' || inputs.publish == true)
+        env:
+          RSQJS_DEPENDENCY_TOKEN: ${{ secrets.RSQJS_DEPENDENCY_TOKEN }}
+          RSQJS_JETSTREAM_METADATA_PATH: target/rsqjs-reports/rsqjs-jetstream-metadata.env
+        run: ./scripts/publish-jetstream-report.sh

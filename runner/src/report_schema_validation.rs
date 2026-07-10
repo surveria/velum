@@ -8,9 +8,9 @@ use crate::{
     report_schema::{
         BenchmarkContributionFlag, BenchmarkCountContribution, BenchmarkStatus, BenchmarkSuite,
         BudgetStatus, CaseCounts, CaseStatus, DetailCompleteness, DetailLevel, FeatureSelection,
-        MAX_FAILURE_DIAGNOSTICS, Measurement, MeasurementAvailability, ReportDocument, ReportMode,
-        ReportSummary, SCHEMA_VERSION, SuiteReport, SuiteStatus, SuiteSummary, TEST262_FILE_SUITE,
-        TEST262_FULL_SUITE,
+        JetStreamSuite, MAX_FAILURE_DIAGNOSTICS, Measurement, MeasurementAvailability,
+        ReportDocument, ReportMode, ReportSummary, SCHEMA_VERSION, SuiteReport, SuiteStatus,
+        SuiteSummary, TEST262_FILE_SUITE, TEST262_FULL_SUITE,
     },
     report_schema_support::usize_to_u64,
 };
@@ -26,10 +26,9 @@ impl ReportDocument {
         }
         validate_diagnostic_sources(self.suites.iter().map(|suite| &suite.summary))?;
         validate_benchmarks(&self.benchmarks)?;
-        validate_benchmarks(&self.jetstream)?;
+        validate_jetstream(&self.jetstream)?;
         validate_mode(
-            self.configuration.report_mode,
-            self.configuration.jetstream,
+            &self.configuration,
             self.suites.len(),
             &self.benchmarks,
             &self.jetstream,
@@ -48,10 +47,9 @@ impl ReportSummary {
         }
         validate_diagnostic_sources(self.suites.iter())?;
         validate_benchmarks(&self.benchmarks)?;
-        validate_benchmarks(&self.jetstream)?;
+        validate_jetstream(&self.jetstream)?;
         validate_mode(
-            self.configuration.report_mode,
-            self.configuration.jetstream,
+            &self.configuration,
             self.suites.len(),
             &self.benchmarks,
             &self.jetstream,
@@ -431,6 +429,111 @@ fn validate_benchmarks(suite: &BenchmarkSuite) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn validate_jetstream(suite: &JetStreamSuite) -> anyhow::Result<()> {
+    let recorded = usize_to_u64(suite.rows.len());
+    if recorded != suite.row_details.recorded_rows {
+        bail!(
+            "JetStream suite has {} rows but coverage records {}",
+            suite.rows.len(),
+            suite.row_details.recorded_rows
+        );
+    }
+    let Some(total) = suite
+        .row_details
+        .recorded_rows
+        .checked_add(suite.row_details.omitted_rows)
+    else {
+        bail!("JetStream row coverage overflows");
+    };
+    if total != suite.counts.total || suite.row_details.omitted_rows != 0 {
+        bail!("JetStream report must retain every official selected row");
+    }
+    if suite.row_details.completeness != DetailCompleteness::Complete {
+        bail!("JetStream report has incomplete row coverage");
+    }
+    for count in [
+        suite.counts.measured,
+        suite.counts.failed,
+        suite.counts.invalid,
+        suite.counts.skipped,
+        suite.counts.unavailable_reference,
+        suite.counts.missing_reference,
+        suite.counts.over_latency_budget,
+    ] {
+        if count > total {
+            bail!("JetStream count exceeds selected row count");
+        }
+    }
+    if suite.counts.invalid > suite.counts.failed
+        || suite.counts.over_latency_budget > suite.counts.measured
+    {
+        bail!("JetStream aggregate counts are inconsistent");
+    }
+    let mut row_ids = BTreeSet::new();
+    for row in &suite.rows {
+        if !row_ids.insert(row.id.as_str()) {
+            bail!("JetStream suite has duplicate row id '{}'", row.id);
+        }
+        if row.engine_cv_permille.is_some() && row.engine_median_duration_ns.is_none() {
+            bail!("JetStream row '{}' has engine CV without a median", row.id);
+        }
+        if row.reference_cv_permille.is_some() && row.reference_median_duration_ns.is_none() {
+            bail!(
+                "JetStream row '{}' has reference CV without a median",
+                row.id
+            );
+        }
+        if row.latency_ratio_centi_units.is_some()
+            && (row.engine_median_duration_ns.is_none()
+                || row.reference_median_duration_ns.is_none())
+        {
+            bail!(
+                "JetStream row '{}' has a ratio without both medians",
+                row.id
+            );
+        }
+        validate_jetstream_reference(row)?;
+    }
+    if !suite.details.is_empty() {
+        if suite.details.len() != suite.rows.len() {
+            bail!("JetStream diagnostic details do not cover every row");
+        }
+        let detail_ids = suite
+            .details
+            .iter()
+            .map(|detail| detail.id.as_str())
+            .collect::<BTreeSet<_>>();
+        if detail_ids != row_ids {
+            bail!("JetStream diagnostic detail ids do not match compact rows");
+        }
+    }
+    if suite.derived_counts()? != suite.counts {
+        bail!("JetStream aggregate counts do not match their rows");
+    }
+    Ok(())
+}
+
+fn validate_jetstream_reference(row: &crate::report_schema::JetStreamRecord) -> anyhow::Result<()> {
+    let measured = row.reference_median_duration_ns.is_some();
+    let valid = match row.reference_source {
+        Some(ReferenceSource::QuickjsBaseline) => true,
+        Some(ReferenceSource::QuickjsLive) => measured,
+        Some(
+            ReferenceSource::QuickjsLiveFailed
+            | ReferenceSource::QuickjsBaselineMissing
+            | ReferenceSource::NotConfigured,
+        )
+        | None => !measured,
+    };
+    if !valid {
+        bail!(
+            "JetStream row '{}' has inconsistent reference provenance",
+            row.id
+        );
+    }
+    Ok(())
+}
+
 fn validate_project_benchmark_counts(suite: &BenchmarkSuite) -> anyhow::Result<()> {
     let mut actual = crate::report_schema::BenchmarkCounts {
         measured: 0,
@@ -519,6 +622,7 @@ fn validate_reference_source(row: &crate::report_schema::BenchmarkRecord) -> any
         Some(ReferenceSource::NotConfigured) => {
             row.reference.availability == MeasurementAvailability::NotConfigured
         }
+        Some(ReferenceSource::QuickjsBaselineMissing) => false,
         None => row.reference.availability == MeasurementAvailability::NotMeasured,
     };
     if !consistent {
@@ -598,12 +702,13 @@ fn checked_sum(mut values: impl Iterator<Item = u64>, label: &str) -> anyhow::Re
 }
 
 fn validate_mode(
-    report_mode: ReportMode,
-    jetstream_selection: FeatureSelection,
+    configuration: &crate::report_schema::RunConfiguration,
     suite_count: usize,
     benchmarks: &BenchmarkSuite,
-    jetstream: &BenchmarkSuite,
+    jetstream: &JetStreamSuite,
 ) -> anyhow::Result<()> {
+    let report_mode = configuration.report_mode;
+    let jetstream_selection = configuration.jetstream;
     if jetstream_selection == FeatureSelection::Disabled && !jetstream.rows.is_empty() {
         bail!("JetStream rows are present while JetStream is disabled");
     }
@@ -621,6 +726,27 @@ fn validate_mode(
         }
         if jetstream_selection == FeatureSelection::Enabled || !jetstream.rows.is_empty() {
             bail!("JetStream cannot be enabled in a performance report");
+        }
+    }
+    if report_mode == ReportMode::Jetstream {
+        if suite_count != 0 || !benchmarks.rows.is_empty() {
+            bail!("non-JetStream suites are present in a JetStream report");
+        }
+        if jetstream_selection != FeatureSelection::Enabled {
+            bail!("JetStream must be enabled in a JetStream report");
+        }
+        if configuration.suite_max_duration_ns.is_none() {
+            bail!("JetStream report is missing its suite wall budget");
+        }
+        if configuration.quickjs_baseline == crate::report_schema::QuickjsBaselineMode::Read
+            && configuration.benchmark.reference_quickjs_compiled
+        {
+            bail!("strict JetStream baseline reads must not compile QuickJS");
+        }
+        if configuration.quickjs_baseline == crate::report_schema::QuickjsBaselineMode::Refresh
+            && !configuration.benchmark.reference_quickjs_compiled
+        {
+            bail!("JetStream baseline refresh requires compiled QuickJS");
         }
     }
     Ok(())

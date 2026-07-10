@@ -3,7 +3,7 @@ use std::path::Path;
 use anyhow::Context as _;
 
 use crate::{
-    report_schema::{BenchmarkRecord, ReportSummary, TEST262_FULL_SUITE},
+    report_schema::{ReportMode, ReportSummary, TEST262_FULL_SUITE},
     report_schema_io::read_summary,
 };
 
@@ -18,17 +18,48 @@ pub(super) fn parse(
     from_summary(file_name, timestamp, &summary)
 }
 
+pub(super) fn parse_jetstream(
+    path: &Path,
+    file_name: String,
+    timestamp: String,
+) -> anyhow::Result<ReportRecord> {
+    let summary = read_summary(path)?;
+    if summary.configuration.report_mode != ReportMode::Jetstream {
+        anyhow::bail!(
+            "structured JetStream report '{}' has mode {:?}",
+            path.display(),
+            summary.configuration.report_mode
+        );
+    }
+    from_summary(file_name, timestamp, &summary)
+}
+
 fn from_summary(
     file_name: String,
     timestamp: String,
     summary: &ReportSummary,
 ) -> anyhow::Result<ReportRecord> {
-    let latency_values = ratio_values(&summary.benchmarks.rows, |row| {
-        row.latency_ratio_centi_units
-    })?;
-    let memory_values = ratio_values(&summary.benchmarks.rows, |row| row.memory_ratio_centi_units)?;
-    let jetstream_values =
-        ratio_values(&summary.jetstream.rows, |row| row.latency_ratio_centi_units)?;
+    let latency_values = ratio_values(
+        summary
+            .benchmarks
+            .rows
+            .iter()
+            .map(|row| row.latency_ratio_centi_units),
+    )?;
+    let memory_values = ratio_values(
+        summary
+            .benchmarks
+            .rows
+            .iter()
+            .map(|row| row.memory_ratio_centi_units),
+    )?;
+    let jetstream_values = ratio_values(
+        summary
+            .jetstream
+            .rows
+            .iter()
+            .map(|row| row.latency_ratio_centi_units),
+    )?;
     Ok(ReportRecord {
         file_name,
         timestamp,
@@ -40,6 +71,12 @@ fn from_summary(
         latency_over: u64_to_usize(summary.benchmarks.counts.over_latency_budget)?,
         memory_over: u64_to_usize(summary.benchmarks.counts.over_memory_budget)?,
         jetstream_latency_over: u64_to_usize(summary.jetstream.counts.over_latency_budget)?,
+        benchmark_report: matches!(
+            summary.configuration.report_mode,
+            ReportMode::Full | ReportMode::Performance
+        ),
+        jetstream_report: summary.configuration.report_mode == ReportMode::Jetstream
+            || summary.jetstream.counts.total > 0,
         full_test262: summary
             .suite(TEST262_FULL_SUITE)
             .map(|suite| test_counts(suite.counts))
@@ -48,16 +85,13 @@ fn from_summary(
     })
 }
 
-fn ratio_values(
-    rows: &[BenchmarkRecord],
-    select: impl Fn(&BenchmarkRecord) -> Option<u64>,
-) -> anyhow::Result<Vec<f64>> {
-    let mut values = Vec::new();
-    for value in rows.iter().filter_map(select) {
+fn ratio_values(values: impl Iterator<Item = Option<u64>>) -> anyhow::Result<Vec<f64>> {
+    let mut ratios = Vec::new();
+    for value in values.flatten() {
         let value = u32::try_from(value).context("benchmark ratio exceeds rollup range")?;
-        values.push(f64::from(value) / 100.0);
+        ratios.push(f64::from(value) / 100.0);
     }
-    Ok(values)
+    Ok(ratios)
 }
 
 fn test_counts(counts: crate::report_schema::CaseCounts) -> anyhow::Result<TestCounts> {

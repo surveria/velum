@@ -15,6 +15,9 @@ use super::{
     report_text, timing,
 };
 
+#[path = "report_rendering_jetstream.rs"]
+mod jetstream_rendering;
+
 const NO_FAILED_CASES: &str = "No failed cases.";
 const FAILED_CASE_DETAIL_LIMIT: usize = 30;
 const CORPUS_TIMING_ROW_LIMIT: usize = 200;
@@ -107,24 +110,6 @@ struct BenchmarkTableRow {
     reference_source: String,
 }
 
-#[derive(Debug, Tabled)]
-struct JetStreamTableRow {
-    benchmark: String,
-    status: String,
-    source: String,
-    case_elapsed: String,
-    rsqjs_measure: String,
-    quickjs_measure: String,
-    rsqjs_time: String,
-    quickjs_time: String,
-    latency_ratio: String,
-    latency_budget: String,
-    rsqjs_cv: String,
-    quickjs_cv: String,
-    quality: String,
-    detail: String,
-}
-
 pub fn render_report(report: &ReportDocument) -> String {
     let mut sections = vec![
         REPORT_TITLE.to_owned(),
@@ -198,7 +183,7 @@ pub fn render_report(report: &ReportDocument) -> String {
         &report.benchmarks,
     ))));
     sections.push(String::new());
-    sections.extend(render_jetstream_section(&report.jetstream));
+    sections.extend(jetstream_rendering::render_section(&report.jetstream));
     sections.join("\n")
 }
 
@@ -276,30 +261,7 @@ pub fn render_timing_tsv(report: &ReportDocument) -> String {
             ],
         );
     }
-    for row in &report.jetstream.rows {
-        let case_elapsed = optional_duration_text(row.case_duration_ns);
-        let rsqjs_measure = optional_duration_text(row.engine.wall_duration_ns);
-        let quickjs_measure = optional_duration_text(row.reference.wall_duration_ns);
-        push_tsv_row(
-            &mut body,
-            &[
-                "jetstream",
-                "JetStream Shell Benchmarks",
-                &row.id,
-                row.status.label(),
-                &row.source,
-                "",
-                &case_elapsed,
-                &rsqjs_measure,
-                &quickjs_measure,
-                &row.detail,
-                "",
-                "",
-                "",
-                "",
-            ],
-        );
-    }
+    jetstream_rendering::append_timing_rows(&mut body, &report.jetstream);
     body
 }
 
@@ -569,49 +531,6 @@ fn benchmark_table_rows(suite: &BenchmarkSuite) -> Vec<BenchmarkTableRow> {
             reference_source: methodology_reference(row.methodology.as_ref()),
         })
         .collect()
-}
-
-fn jetstream_table_rows(suite: &BenchmarkSuite) -> Vec<JetStreamTableRow> {
-    suite
-        .rows
-        .iter()
-        .map(|row| JetStreamTableRow {
-            benchmark: row.id.clone(),
-            status: row.status.label().to_owned(),
-            source: row.source.clone(),
-            case_elapsed: optional_duration_text(row.case_duration_ns),
-            rsqjs_measure: optional_duration_text(row.engine.wall_duration_ns),
-            quickjs_measure: optional_duration_text(row.reference.wall_duration_ns),
-            rsqjs_time: measurement_median_text(&row.engine),
-            quickjs_time: measurement_median_text(&row.reference),
-            latency_ratio: ratio_text(row.latency_ratio_centi_units),
-            latency_budget: row.latency_budget.label().to_owned(),
-            rsqjs_cv: measurement_cv_text(&row.engine),
-            quickjs_cv: measurement_cv_text(&row.reference),
-            quality: row.quality.label().to_owned(),
-            detail: row.detail.clone(),
-        })
-        .collect()
-}
-
-fn render_jetstream_section(report: &BenchmarkSuite) -> Vec<String> {
-    vec![
-        "## JetStream Shell Benchmarks".to_owned(),
-        String::new(),
-        format!(
-            "- Measured: {}\n- Failed candidates: {}\n- Invalid measurements: {}\n- Skipped: {}\n- Over latency budget ({}): {}\n- Elapsed: {}",
-            report.counts.measured,
-            report.counts.failed,
-            report.counts.invalid,
-            report.counts.skipped_reference,
-            benchmarks::BUDGET_LABEL,
-            report.counts.over_latency_budget,
-            duration_text(report.duration_ns),
-        ),
-        String::new(),
-        fenced_table(&Table::new(jetstream_table_rows(report))),
-        String::new(),
-    ]
 }
 
 fn measurement_median_text(measurement: &Measurement) -> String {
