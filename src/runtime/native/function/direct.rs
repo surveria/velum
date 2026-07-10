@@ -485,6 +485,9 @@ impl Context {
             NativeFunctionKind::FunctionPrototypeHasInstance => {
                 self.eval_function_prototype_has_instance(args, this_value)
             }
+            NativeFunctionKind::FunctionPrototypeToString => {
+                self.eval_function_prototype_to_string(args, this_value)
+            }
             NativeFunctionKind::Date(kind) => {
                 self.eval_date_native_function_kind(kind, args, this_value)
             }

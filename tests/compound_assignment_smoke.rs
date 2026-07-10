@@ -86,7 +86,10 @@ fn rejects_invalid_compound_assignment_targets() -> TestResult {
         "invalid assignment target",
     )?;
     ensure_error_contains("const fixed = 1; fixed += 1", "assignment to constant")?;
-    ensure_error_contains(r#"let value = "camera"; value -= 1"#, "expects numbers")
+    ensure_source_value(
+        r#"let value = "camera"; value -= 1; Number.isNaN(value)"#,
+        &Value::Bool(true),
+    )
 }
 
 #[test]
@@ -180,7 +183,10 @@ fn supports_extended_compound_assignment_operators() -> TestResult {
             "kr 42 42".to_owned(),
         ],
     )?;
-    ensure_error_contains(r#"let value = "camera"; value **= 2"#, "expects numbers")
+    ensure_source_value(
+        r#"let value = "camera"; value **= 2; Number.isNaN(value)"#,
+        &Value::Bool(true),
+    )
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
@@ -197,6 +203,13 @@ fn ensure_output(actual: &[String], expected: &[String]) -> TestResult {
     }
 
     Err(format!("expected output {expected:?}, got {actual:?}").into())
+}
+
+fn ensure_source_value(source: &str, expected: &Value) -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let actual = context.eval(source)?;
+    ensure_value(&actual, expected)
 }
 
 fn ensure_error_contains(source: &str, expected: &str) -> TestResult {

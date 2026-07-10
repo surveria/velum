@@ -753,7 +753,10 @@ The primitive-conversion group is split by dependency and review boundary:
 - AS-03a2a (draft PR #410) owns `ToPrimitive`, `OrdinaryToPrimitive`, and
   `ToNumber`. It replaces the Date, Math, JSON, boxed-string equality, numeric
   operator, numeric built-in, and numeric argument conversion paths with one
-  abrupt-completion-aware owner under `runtime/abstract_operations`.
+  abrupt-completion-aware owner under `runtime/abstract_operations`. It also
+  installs the missing `Function.prototype.toString` intrinsic so function
+  source coercion reaches the ordinary property/call path instead of a concat
+  formatter exception.
 - AS-03a2b will own `ToString` and `ToBoolean`, and will separate observable
   JavaScript string conversion from Rust `Display` used for diagnostics.
 

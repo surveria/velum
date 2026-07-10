@@ -290,7 +290,7 @@ Test262 variants and 95/95 QuickJS differential cases.
 | integer-or-infinity | String and Array built-ins contain separate helpers | semantics and supported numeric ranges differ by caller |
 | length/index conversion | Array generic code, Function.apply, Reflect list creation, and String helpers each convert/cap lengths | several maxima use current storage limits rather than one `ToLength`/`ToIndex` contract |
 | boolean conversion | `Value::is_truthy` | broadly reused and a good candidate to move behind AS-03a without changing representation |
-| string conversion | `Display for Value`, string constructors, concatenation helpers, JSON, Date, and property-key code | formatting and semantic conversion are not cleanly separated |
+| string conversion | `Display for Value`, string constructors, concatenation helpers, JSON, Date, and property-key code; `Function.prototype.toString` is now a real intrinsic used by `ToPrimitive` | formatting and semantic conversion are not cleanly separated; AS-03a2b owns the remaining split |
 
 AS-03a2 is split into AS-03a2a (`ToPrimitive`/`ToNumber`) and AS-03a2b
 (`ToString`/`ToBoolean`) because the two groups have independent consumer
