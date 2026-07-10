@@ -25,9 +25,9 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 through AS-04, AS-05a1 through AS-05a2d, and
-  AS-05b1a through AS-05b1c are complete; AS-05b2a storage owner count
-  accounting is implemented in draft PR #432
+- Current program state: AS-01 through AS-04, AS-05a1 through AS-05a2d,
+  AS-05b1a through AS-05b1c, and AS-05b2a are complete; AS-05b2b logical
+  retained payload-byte accounting is implemented in draft PR #433
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -485,7 +485,7 @@ dependencies do not overlap.
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
 | AS-04 | Complete | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans merged in PR #421 with exact-tree correctness and canonical report publication. |
-| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05a2d ownership/handle work is merged through PR #431; AS-05b1a through AS-05b1c root/edge work is merged through PR #430; AS-05b2a complete owner counts are implemented in draft PR #432; logical payload bytes and hard count/byte limits remain AS-05b2b/c. |
+| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05a2d ownership/handle work is merged through PR #431; AS-05b1a through AS-05b1c root/edge work is merged through PR #430; AS-05b2a complete owner counts merged in PR #432; AS-05b2b logical payload bytes are implemented in draft PR #433; hard count/byte limits remain AS-05b2c. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
 | AS-08 | Backlog | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | Optimizer on/off equivalence, harness opcodes removed, workload-shaped paths replaced or justified by broad evidence. |
@@ -1252,6 +1252,46 @@ AS-05a1 local implementation evidence:
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
+AS-05b2a completion evidence:
+
+- PR #432 merged as `afcbe6b` after required CI run `29110640594`
+  certified exact tree `45a63d62baafe68c5746633f5dffa0078f5cc504`;
+- the required corpus preserved all 36,659 expected Test262 variants, the
+  exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
+  cases;
+- post-merge run `29110845591` measured all five project sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T172423Z.*` in
+  report-only commit `0132afa`.
+
+AS-05b2b local implementation evidence:
+
+- `VmStorageSnapshot` keeps independent fixed per-kind arrays and checked
+  totals for logical records and variable-size payload bytes. The original
+  count semantics remain unchanged;
+- payload bytes have a stable cross-platform meaning: owned UTF-8 length and
+  raw buffer length, excluding allocator headers, pointer width, fixed record
+  layout, spare capacity, and duplicate references to shared payload;
+- the current non-zero sources are canonical atom names, interned heap-string
+  text, host callback names, RegExp pattern/flag text, `ArrayBuffer` backing
+  bytes, captured output text, and retained Function-constructor source;
+- fixed-size bindings, functions, properties, collections, Promise records,
+  roots, frames, caches, associations, and future modules remain represented
+  by their complete counts and therefore report zero payload bytes unless
+  they later acquire directly owned variable data;
+- immutable `CompiledScript`/bytecode data remains governed by
+  `CompiledScriptUsage` rather than being multiplied for every VM reference.
+  Opaque Rust callback captures remain embedder-owned and are bounded by the
+  host-callback count, not guessed by the engine;
+- atom text bytes are maintained with checked arithmetic at the unique intern
+  point. Other byte sources are scanned only by the explicit diagnostic
+  snapshot, so evaluation and callback paths gain no hidden full-heap scan;
+- focused tests prove an all-zero fresh map, exact category and byte sums,
+  exact host/RegExp/buffer/output payloads, retained-handle release, and exact
+  preview/finish reconciliation;
+- the architecture guard fixes both compact arrays, both checked totals, and
+  every current payload source. Its mutation suite rejects removal of buffer
+  byte accounting.
+
 AS-05a1 completion evidence:
 
 - PR #422 merged as `4143ec4` after required CI run `29098691127`
@@ -1804,8 +1844,9 @@ reviewable scope.
 28. AS-05a2d: define retained object/function handles and explicit release
     (complete in PR #431).
 29. AS-05b2a: add complete logical owner counts and teardown reconciliation
-    (implemented in draft PR #432).
-30. AS-05b2b: add logical retained payload-byte accounting.
+    (complete in PR #432).
+30. AS-05b2b: add logical retained payload-byte accounting (implemented in
+    draft PR #433).
 31. AS-05b2c: enforce complete count and byte limits at growth points.
 32. AS-06a: migrate synchronous calls and structured control flow to explicit
     activation frames.

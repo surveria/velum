@@ -107,52 +107,79 @@ impl VmStorageKind {
     }
 }
 
-/// Checked count snapshot across every current VM storage owner.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Checked count and logical payload-byte snapshot across every current VM
+/// storage owner.
+///
+/// Payload bytes cover variable-size UTF-8 text and raw byte buffers retained
+/// directly by the VM. Fixed-size record layouts remain represented by
+/// counts, so this contract stays independent of pointer width, allocator
+/// headers, and spare capacity.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VmStorageSnapshot {
     counts: [usize; STORAGE_KIND_COUNT],
+    payload_bytes: [usize; STORAGE_KIND_COUNT],
     total: usize,
+    total_payload_bytes: usize,
 }
 
 impl VmStorageSnapshot {
     fn capture(context: &Context) -> Result<Self> {
         let mut counter = StorageCounter::new();
         context.record_storage_counts(&mut counter)?;
+        context.record_storage_payload_bytes(&mut counter)?;
         Ok(Self {
             counts: counter.counts,
+            payload_bytes: counter.payload_bytes,
             total: counter.total,
+            total_payload_bytes: counter.total_payload_bytes,
         })
     }
 
     /// Returns the logical record count for one owner category.
     #[must_use]
-    pub fn count(self, kind: VmStorageKind) -> usize {
+    pub fn count(&self, kind: VmStorageKind) -> usize {
         self.counts.get(kind.index()).copied().unwrap_or(0)
+    }
+
+    /// Returns variable-size logical payload bytes for one owner category.
+    #[must_use]
+    pub fn payload_bytes(&self, kind: VmStorageKind) -> usize {
+        self.payload_bytes.get(kind.index()).copied().unwrap_or(0)
     }
 
     /// Returns the checked sum of all category counts.
     #[must_use]
-    pub const fn total(self) -> usize {
+    pub const fn total(&self) -> usize {
         self.total
+    }
+
+    /// Returns the checked sum of logical payload bytes across all categories.
+    #[must_use]
+    pub const fn total_payload_bytes(&self) -> usize {
+        self.total_payload_bytes
     }
 
     /// Returns whether every current variable-size VM owner is empty.
     #[must_use]
-    pub const fn is_empty(self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.total == 0
     }
 }
 
 struct StorageCounter {
     counts: [usize; STORAGE_KIND_COUNT],
+    payload_bytes: [usize; STORAGE_KIND_COUNT],
     total: usize,
+    total_payload_bytes: usize,
 }
 
 impl StorageCounter {
     const fn new() -> Self {
         Self {
             counts: [0; STORAGE_KIND_COUNT],
+            payload_bytes: [0; STORAGE_KIND_COUNT],
             total: 0,
+            total_payload_bytes: 0,
         }
     }
 
@@ -170,13 +197,30 @@ impl StorageCounter {
             .ok_or_else(|| Error::limit("storage record count overflowed"))?;
         Ok(())
     }
+
+    fn record_payload_bytes(&mut self, kind: VmStorageKind, bytes: usize) -> Result<()> {
+        let current = self
+            .payload_bytes
+            .get_mut(kind.index())
+            .ok_or_else(|| Error::runtime("storage kind index is not defined"))?;
+        *current = current
+            .checked_add(bytes)
+            .ok_or_else(|| Error::limit("storage category payload bytes overflowed"))?;
+        self.total_payload_bytes = self
+            .total_payload_bytes
+            .checked_add(bytes)
+            .ok_or_else(|| Error::limit("storage payload bytes overflowed"))?;
+        Ok(())
+    }
 }
 
 impl Context {
-    /// Counts logical records retained by every current variable-size owner.
+    /// Counts logical records and variable-size payload bytes retained by
+    /// every current VM storage owner.
     ///
     /// # Errors
-    /// Fails if a category or total count exceeds the supported range.
+    /// Fails if a category or total count or payload byte sum exceeds the
+    /// supported range.
     pub fn storage_snapshot(&self) -> Result<VmStorageSnapshot> {
         VmStorageSnapshot::capture(self)
     }
@@ -194,6 +238,51 @@ impl Context {
         self.record_cache_storage(counter)?;
         self.record_association_storage(counter)?;
         counter.record(VmStorageKind::Module, 0)
+    }
+
+    fn record_storage_payload_bytes(&self, counter: &mut StorageCounter) -> Result<()> {
+        counter.record_payload_bytes(VmStorageKind::Atom, self.atoms.bytes())?;
+        counter.record_payload_bytes(VmStorageKind::HeapString, self.strings.bytes())?;
+        counter.record_payload_bytes(
+            VmStorageKind::HostCallback,
+            self.host_callback_name_bytes()?,
+        )?;
+
+        let object_counts = self.objects.storage_counts()?;
+        counter
+            .record_payload_bytes(VmStorageKind::Object, object_counts.object_payload_bytes())?;
+        counter.record_payload_bytes(
+            VmStorageKind::ByteBuffer,
+            object_counts.byte_buffer_payload_bytes(),
+        )?;
+        counter.record_payload_bytes(VmStorageKind::OutputEntry, self.output_payload_bytes()?)?;
+        counter.record_payload_bytes(VmStorageKind::SourceRecord, self.source_record_bytes()?)
+    }
+
+    fn host_callback_name_bytes(&self) -> Result<usize> {
+        self.host_functions
+            .iter()
+            .try_fold(0_usize, |total, function| {
+                total
+                    .checked_add(function.storage_name_bytes())
+                    .ok_or_else(|| Error::limit("host callback name bytes overflowed"))
+            })
+    }
+
+    fn output_payload_bytes(&self) -> Result<usize> {
+        self.output.iter().try_fold(0_usize, |total, entry| {
+            total
+                .checked_add(entry.len())
+                .ok_or_else(|| Error::limit("output payload bytes overflowed"))
+        })
+    }
+
+    fn source_record_bytes(&self) -> Result<usize> {
+        self.functions.iter().try_fold(0_usize, |total, function| {
+            total
+                .checked_add(function.source.as_deref().map_or(0, str::len))
+                .ok_or_else(|| Error::limit("source record bytes overflowed"))
+        })
     }
 
     fn record_binding_storage(&self, counter: &mut StorageCounter) -> Result<()> {

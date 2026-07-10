@@ -340,10 +340,12 @@ impl Vm {
         self.context.async_edge_snapshot()
     }
 
-    /// Counts logical records retained by every current VM storage owner.
+    /// Counts logical records and variable-size payload bytes retained by
+    /// every current VM storage owner.
     ///
     /// # Errors
-    /// Fails if a category or total count exceeds the supported range.
+    /// Fails if a category or total count or payload byte sum exceeds the
+    /// supported range.
     pub fn storage_snapshot(&self) -> Result<VmStorageSnapshot> {
         self.context.storage_snapshot()
     }
@@ -352,7 +354,8 @@ impl Vm {
     /// this VM would release.
     ///
     /// # Errors
-    /// Fails if a storage category or total count exceeds the supported range.
+    /// Fails if a storage category or total count or payload byte sum exceeds
+    /// the supported range.
     pub fn teardown_report(&self) -> Result<VmTeardownReport> {
         Ok(VmTeardownReport {
             resources: self.resource_usage(),
@@ -364,7 +367,8 @@ impl Vm {
     /// deterministic Rust teardown.
     ///
     /// # Errors
-    /// Fails if a storage category or total count exceeds the supported range.
+    /// Fails if a storage category or total count or payload byte sum exceeds
+    /// the supported range.
     pub fn finish(self) -> Result<VmTeardownReport> {
         self.teardown_report()
     }
@@ -398,7 +402,7 @@ pub struct VmResourceUsage {
     pub call_value_cache_slow_paths: usize,
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct VmTeardownReport {
     pub resources: VmResourceUsage,
     pub storage: VmStorageSnapshot,

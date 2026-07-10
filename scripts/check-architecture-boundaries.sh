@@ -169,8 +169,8 @@ check_storage_accounting_boundary() {
       inside { print }
     ' "${repo_root}/src/runtime/accounting.rs"
   } | tr -d '[:space:]')"
-  if [[ "${snapshot_fields}" != 'counts:[usize;STORAGE_KIND_COUNT],total:usize,' ]]; then
-    fail "storage accounting boundary changed; snapshot requires checked category and total counts"
+  if [[ "${snapshot_fields}" != 'counts:[usize;STORAGE_KIND_COUNT],payload_bytes:[usize;STORAGE_KIND_COUNT],total:usize,total_payload_bytes:usize,' ]]; then
+    fail "storage accounting boundary changed; snapshot requires checked category and total counts and payload bytes"
   fi
 
   for source in \
@@ -219,6 +219,31 @@ check_storage_accounting_boundary() {
     'counter.record(VmStorageKind::Module, 0)'; do
     if ! grep -F -q "${source}" "${repo_root}/src/runtime/accounting.rs"; then
       fail "storage accounting boundary changed; required owner source '${source}' is missing"
+    fi
+  done
+
+  if ! grep -F -q 'self.bytes = updated_bytes;' \
+      "${repo_root}/src/storage/atom.rs" \
+    || ! grep -F -q 'self.name.len()' \
+      "${repo_root}/src/api/host.rs" \
+    || ! grep -F -q 'regexp.pattern().len()' \
+      "${repo_root}/src/runtime/object/accounting.rs" \
+    || ! grep -F -q 'buffer.byte_length()' \
+      "${repo_root}/src/runtime/object/accounting.rs"; then
+    fail "storage accounting boundary changed; payload producers must maintain their logical byte sources"
+  fi
+
+  for source in \
+    'context.record_storage_payload_bytes(&mut counter)?;' \
+    'counter.record_payload_bytes(VmStorageKind::Atom, self.atoms.bytes())?;' \
+    'counter.record_payload_bytes(VmStorageKind::HeapString, self.strings.bytes())?;' \
+    'self.host_callback_name_bytes()?,' \
+    'object_counts.object_payload_bytes())?;' \
+    'object_counts.byte_buffer_payload_bytes(),' \
+    'counter.record_payload_bytes(VmStorageKind::OutputEntry, self.output_payload_bytes()?)?;' \
+    'counter.record_payload_bytes(VmStorageKind::SourceRecord, self.source_record_bytes()?)'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/accounting.rs"; then
+      fail "storage accounting boundary changed; required payload source '${source}' is missing"
     fi
   done
 
@@ -1385,6 +1410,18 @@ mutate_storage_owner_source() {
     "${fixture_root}/src/runtime/accounting.rs"
 }
 
+mutate_storage_payload_source() {
+  local fixture_root="$1"
+  sed -i '/object_counts.byte_buffer_payload_bytes(),/d' \
+    "${fixture_root}/src/runtime/accounting.rs"
+}
+
+mutate_storage_payload_accumulator() {
+  local fixture_root="$1"
+  sed -i '/self.bytes = updated_bytes;/d' \
+    "${fixture_root}/src/storage/atom.rs"
+}
+
 mutate_teardown_storage_snapshot() {
   local fixture_root="$1"
   sed -i '/            storage: self.storage_snapshot()?,/d' \
@@ -1576,6 +1613,10 @@ run_self_tests() {
     'retained value boundary changed' mutate_retained_slot_generation
   expect_guard_failure "${temp_dir}" storage-owner-source \
     'storage accounting boundary changed' mutate_storage_owner_source
+  expect_guard_failure "${temp_dir}" storage-payload-source \
+    'storage accounting boundary changed' mutate_storage_payload_source
+  expect_guard_failure "${temp_dir}" storage-payload-accumulator \
+    'storage accounting boundary changed' mutate_storage_payload_accumulator
   expect_guard_failure "${temp_dir}" teardown-storage-snapshot \
     'storage accounting boundary changed' mutate_teardown_storage_snapshot
   expect_guard_failure "${temp_dir}" bound-function-edge \

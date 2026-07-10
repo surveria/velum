@@ -453,9 +453,12 @@ budget.
 
 `VmResourceUsage` retains its existing hot counters. AS-05b2a adds a separate
 on-demand `VmStorageSnapshot` with twenty-six stable logical owner categories
-and checked category/total sums. `VmTeardownReport` now includes the complete
-snapshot released by consuming `Vm::finish`. Logical retained bytes and hard
-limits remain AS-05b2b/c rather than being approximated by these record counts.
+and checked category/total record sums. AS-05b2b adds an independent per-kind
+logical payload-byte array and checked total for directly owned UTF-8 and raw
+buffer data. Fixed record layout, capacity, allocator metadata, immutable
+compiled artifacts, and opaque host captures are deliberately excluded.
+`VmTeardownReport` includes the complete snapshot released by consuming
+`Vm::finish`; hard enforcement remains AS-05b2c.
 
 ### Public Handle Boundary
 
@@ -622,8 +625,8 @@ decision sequence:
 | AS-05b1b3 | Promise, collection, iterator, weak-key, and ephemeron edges | typed side-store associations, eight strength-classified categories, and bounded Context/Vm diagnostics merged in PR #429 |
 | AS-05b1c | transient operand, call, iterator, descriptor, Proxy, and class-key values | scoped RAII registry plus three direct-root categories and collector safepoint contract merged in PR #430 |
 | AS-05a2d | retained object/function ids and handles | non-cloneable identity/registry/slot-generation capability, source-proven creation, consuming release, Drop safety-net cleanup, and retained-root category merged in PR #431 |
-| AS-05b2a | every current variable-size Context owner and nested logical record | twenty-six-category checked snapshot plus consuming teardown reconciliation in draft PR #432 |
-| AS-05b2b | retained payload bytes by the same owner map | add deterministic logical bytes without claiming allocator-resident RSS |
+| AS-05b2a | every current variable-size Context owner and nested logical record | twenty-six-category checked snapshot plus consuming teardown reconciliation merged in PR #432 |
+| AS-05b2b | retained payload bytes by the same owner map | independent checked UTF-8/raw-buffer payload map implemented in draft PR #433 without claiming allocator-resident RSS |
 | AS-05b2c | heap, stack, job, callback, output, and buffer limit maps | enforce count and byte budgets at every growth point |
 | AS-06 | active execution roots and structured nested bytecode | explicit activation/block stacks and suspend/resume results |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |
