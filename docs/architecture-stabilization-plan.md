@@ -1466,7 +1466,10 @@ AS-06a1 local implementation evidence:
   reconciliation;
 - AS-06a2 still owns bytecode program counters, operand stacks, and structured
   loop/try/finally continuation records. AS-06a1 deliberately does not claim
-  that the current recursive bytecode executor can suspend yet.
+  that the current recursive bytecode executor can suspend yet;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
 
 AS-05a1 completion evidence:
 
