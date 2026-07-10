@@ -89,6 +89,10 @@ auth_log="${tmp_dir}/git-args.log"
 mkdir -p "${auth_bin}"
 printf '%s\n' \
   '#!/usr/bin/env bash' \
+  'if [[ "$1" == "rev-parse" && "$2" == "--is-shallow-repository" ]]; then' \
+  '  printf '\''%s\n'\'' "${RSQJS_TEST_SHALLOW:-false}"' \
+  '  exit 0' \
+  'fi' \
   'printf '\''%s\n'\'' "$@" > "${RSQJS_GIT_ARGS_LOG}"' \
   > "${auth_bin}/git"
 chmod +x "${auth_bin}/git"
@@ -106,7 +110,7 @@ printf '%s\n' \
   fetch \
   --no-tags \
   origin \
-  main \
+  '+refs/heads/main:refs/remotes/origin/main' \
   > "${expected_auth_args}"
 cmp -s "${expected_auth_args}" "${auth_log}" || {
   printf 'publisher fetch did not use the scoped GitHub CLI credential helper\n' >&2
@@ -116,6 +120,27 @@ if grep -q 'must-not-appear' "${auth_log}"; then
   printf 'publisher fetch exposed GH_TOKEN in git arguments\n' >&2
   exit 1
 fi
+PATH="${auth_bin}:${PATH}" \
+  GH_TOKEN='must-not-appear-in-git-arguments' \
+  RSQJS_GIT_ARGS_LOG="${auth_log}" \
+  RSQJS_TEST_SHALLOW=true \
+  bash -c 'source "$1"; fetch_origin_main' bash \
+  "${script_dir}/publish-jetstream-report.sh"
+printf '%s\n' \
+  -c \
+  credential.https://github.com.helper= \
+  -c \
+  'credential.https://github.com.helper=!gh auth git-credential' \
+  fetch \
+  --no-tags \
+  --unshallow \
+  origin \
+  '+refs/heads/main:refs/remotes/origin/main' \
+  > "${expected_auth_args}"
+cmp -s "${expected_auth_args}" "${auth_log}" || {
+  printf 'publisher fetch did not unshallow the main history\n' >&2
+  exit 1
+}
 missing_token_output="$(
   PATH="${auth_bin}:${PATH}" \
     RSQJS_GIT_ARGS_LOG="${auth_log}" \

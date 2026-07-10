@@ -85,10 +85,15 @@ read_metadata() {
 
 fetch_origin_main() {
   [[ -n "${GH_TOKEN:-}" ]] || fail "GH_TOKEN is required for the publisher fetch"
+  local fetch_args=(--no-tags)
+  if [[ "$(git rev-parse --is-shallow-repository)" == "true" ]]; then
+    fetch_args+=(--unshallow)
+  fi
   git \
     -c credential.https://github.com.helper= \
     -c 'credential.https://github.com.helper=!gh auth git-credential' \
-    fetch --no-tags origin main
+    fetch "${fetch_args[@]}" origin \
+      '+refs/heads/main:refs/remotes/origin/main'
 }
 
 checkout_latest_main() {

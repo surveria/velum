@@ -153,6 +153,15 @@ jobs:
           export GIT_CONFIG_VALUE_0="https://github.com/chertov/"
           export GIT_CONFIG_KEY_1="url.https://x-access-token:${RSQJS_DEPENDENCY_TOKEN}@github.com/surveria/.insteadOf"
           export GIT_CONFIG_VALUE_1="https://github.com/surveria/"
+          # Persistent self-hosted workspaces can retain .git/shallow from an
+          # older checkout even when checkout requests fetch-depth: 0. The
+          # rollup needs the complete first-parent main history.
+          main_fetch_args=(--no-tags --quiet)
+          if [[ "$(git rev-parse --is-shallow-repository)" == "true" ]]; then
+            main_fetch_args+=(--unshallow)
+          fi
+          git fetch "${main_fetch_args[@]}" origin \
+            '+refs/heads/main:refs/remotes/origin/main'
           # On pull_request and merge_group events, fetch the target base branch
           # and turn on base-relative policy gates.
           ci_base_ref="${RSQJS_CI_BASE_REF:-}"

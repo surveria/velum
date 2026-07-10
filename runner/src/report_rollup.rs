@@ -11,10 +11,13 @@ use anyhow::{Context as _, bail};
 mod report_rollup_chart;
 #[path = "report_rollup_jetstream.rs"]
 mod report_rollup_jetstream;
+#[path = "report_rollup_timeline.rs"]
+mod report_rollup_timeline;
 #[path = "report_rollup_yaml.rs"]
 mod report_rollup_yaml;
 
 use report_rollup_chart::write_chart;
+use report_rollup_timeline::CommitTimeline;
 
 const REPORT_PREFIX: &str = "rsqjs-test-report-";
 const REPORT_SUFFIX: &str = ".md";
@@ -37,6 +40,7 @@ pub struct RollupOutputs {
 #[derive(Debug)]
 struct RollupReport {
     records: Vec<ReportRecord>,
+    timeline: CommitTimeline,
     outputs: RollupOutputs,
 }
 
@@ -115,9 +119,11 @@ fn build_rollup(report_dir: &Path) -> anyhow::Result<RollupReport> {
             reports_root.display()
         );
     }
+    let timeline = CommitTimeline::discover(&report_dir, &records)?;
 
     Ok(RollupReport {
         records,
+        timeline,
         outputs: RollupOutputs {
             markdown: reports_root.join(ROLLUP_FILE),
             summary_chart: reports_root.join(SUMMARY_CHART_FILE),
@@ -573,7 +579,11 @@ fn write_rollup(rollup: &RollupReport) -> anyhow::Result<()> {
             rollup.outputs.markdown.display()
         )
     })?;
-    write_chart(&rollup.records, &rollup.outputs.summary_chart)
+    write_chart(
+        &rollup.records,
+        &rollup.timeline,
+        &rollup.outputs.summary_chart,
+    )
 }
 
 fn render_markdown(records: &[ReportRecord]) -> String {
@@ -595,6 +605,8 @@ fn render_markdown(records: &[ReportRecord]) -> String {
         "- `1.00x` means QuickJS parity; lower performance, memory, and JetStream ratios are better."
             .to_owned(),
         "- Parentheses show budget exceptions over measured rows for each benchmark family."
+            .to_owned(),
+        "- Every chart panel uses the same first-parent `main` commit axis; a point is placed at the commit that added its canonical report."
             .to_owned(),
         String::new(),
         "Artifacts:".to_owned(),

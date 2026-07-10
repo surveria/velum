@@ -312,7 +312,12 @@ download_matching_artifact() {
 }
 
 checkout_latest_main() {
-  git fetch --no-tags origin main
+  local fetch_args=(--no-tags)
+  if [[ "$(git rev-parse --is-shallow-repository)" == "true" ]]; then
+    fetch_args+=(--unshallow)
+  fi
+  git fetch "${fetch_args[@]}" origin \
+    '+refs/heads/main:refs/remotes/origin/main'
   if git show-ref --verify --quiet refs/heads/main; then
     git checkout main
     git merge --ff-only origin/main
