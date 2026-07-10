@@ -63,6 +63,18 @@ impl DescriptorPropertyKeys {
     pub(in crate::runtime) const fn configurable(self) -> PropertyKey {
         self.configurable
     }
+
+    pub(in crate::runtime) fn keys(self) -> impl Iterator<Item = PropertyKey> {
+        [
+            self.value,
+            self.writable,
+            self.enumerable,
+            self.configurable,
+            self.get,
+            self.set,
+        ]
+        .into_iter()
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -126,6 +138,23 @@ impl WellKnownPropertyKeys {
             WRITABLE_PROPERTY => self.writable = Some(key),
             _ => {}
         }
+    }
+
+    pub(in crate::runtime) fn keys(self) -> impl Iterator<Item = PropertyKey> {
+        [
+            self.configurable,
+            self.constructor,
+            self.enumerable,
+            self.get,
+            self.length,
+            self.name,
+            self.prototype,
+            self.set,
+            self.value,
+            self.writable,
+        ]
+        .into_iter()
+        .flatten()
     }
 }
 

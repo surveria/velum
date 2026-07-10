@@ -1,7 +1,10 @@
 use std::collections::BTreeMap;
 
-use crate::error::{Error, Result};
 use crate::value::Value;
+use crate::{
+    error::{Error, Result},
+    runtime::trace::{StrongEdgeReference, StrongEdgeVisitor, VmObjectEdgeKind},
+};
 
 use super::super::{PropertyEnumerable, PropertyKey};
 use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, ObjectProperty};
@@ -620,6 +623,31 @@ impl ArrayStorage {
 
     pub(in crate::runtime::object) fn has_sparse_keys(&self) -> bool {
         !self.sparse_keys.is_empty()
+    }
+
+    pub(in crate::runtime::object) fn visit_strong_edges<V: StrongEdgeVisitor<VmObjectEdgeKind>>(
+        &self,
+        visitor: &mut V,
+    ) -> Result<()> {
+        match &self.elements {
+            ArrayElements::Packed(elements) => {
+                for property in elements {
+                    property.visit_strong_edges(VmObjectEdgeKind::Property, visitor)?;
+                }
+            }
+            ArrayElements::Holey(elements) => {
+                for property in elements.iter().flatten() {
+                    property.visit_strong_edges(VmObjectEdgeKind::Property, visitor)?;
+                }
+            }
+        }
+        for key in self.sparse_keys.values() {
+            visitor.visit(
+                VmObjectEdgeKind::Property,
+                StrongEdgeReference::PropertyKey(*key),
+            )?;
+        }
+        Ok(())
     }
 
     fn checked_dense_len(position: usize) -> Result<usize> {

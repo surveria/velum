@@ -48,7 +48,9 @@ use promise::{Promise, PromiseId, PromiseJob};
 use property::static_names::{CallValueCache, StaticNameAtomCacheHandle};
 use property::well_known::{DescriptorPropertyKeys, WellKnownPropertyKeys};
 pub use roots::{VmRootKind, VmRootSnapshot};
-pub use trace::{VmCallableEdgeKind, VmCallableEdgeSnapshot};
+pub use trace::{
+    VmCallableEdgeKind, VmCallableEdgeSnapshot, VmObjectEdgeKind, VmObjectEdgeSnapshot,
+};
 
 const INITIAL_RANDOM_STATE: u64 = 0x9e37_79b9_7f4a_7c15;
 const CONSTRUCTOR_PROTOTYPE_PROPERTY: &str = "prototype";

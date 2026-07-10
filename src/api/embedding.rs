@@ -4,9 +4,9 @@ use crate::compiled_script::CompiledScript;
 use crate::error::Result;
 use crate::ownership::VmIdentity;
 use crate::runtime::Context;
-use crate::runtime::VmCallableEdgeSnapshot;
 use crate::runtime::VmRootSnapshot;
 use crate::runtime::limits::RuntimeLimits;
+use crate::runtime::{VmCallableEdgeSnapshot, VmObjectEdgeSnapshot};
 use crate::value::Value;
 use std::time::Duration;
 
@@ -264,6 +264,14 @@ impl Vm {
     /// Fails if an edge counter exceeds the supported range.
     pub fn callable_edge_snapshot(&self) -> Result<VmCallableEdgeSnapshot> {
         self.context.callable_edge_snapshot()
+    }
+
+    /// Counts physical strong-reference slots in the ordinary object arena.
+    ///
+    /// # Errors
+    /// Fails if an edge counter exceeds the supported range.
+    pub fn object_edge_snapshot(&self) -> Result<VmObjectEdgeSnapshot> {
+        self.context.object_edge_snapshot()
     }
 
     #[must_use]

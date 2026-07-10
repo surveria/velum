@@ -1,6 +1,6 @@
 use crate::{error::Result, value::Value};
 
-use super::{Context, binding::scope::BindingScope, promise::PromiseId};
+use super::{Context, binding::scope::BindingScope, object::PropertyKey, promise::PromiseId};
 
 const ROOT_KIND_COUNT: usize = 9;
 
@@ -96,6 +96,8 @@ pub(in crate::runtime) trait DirectRootVisitor {
     fn visit_value(&mut self, kind: VmRootKind, value: &Value) -> Result<()>;
 
     fn visit_promise(&mut self, kind: VmRootKind, promise: PromiseId) -> Result<()>;
+
+    fn visit_property_key(&mut self, kind: VmRootKind, key: PropertyKey) -> Result<()>;
 }
 
 struct RootCounter {
@@ -118,6 +120,10 @@ impl DirectRootVisitor for RootCounter {
     }
 
     fn visit_promise(&mut self, kind: VmRootKind, _promise: PromiseId) -> Result<()> {
+        self.record(kind)
+    }
+
+    fn visit_property_key(&mut self, kind: VmRootKind, _key: PropertyKey) -> Result<()> {
         self.record(kind)
     }
 }
@@ -180,9 +186,21 @@ impl Context {
         if let Some(id) = self.promise_prototype {
             visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
         }
+        if let Some(symbol) = self.iterator_symbol {
+            visitor.visit_property_key(VmRootKind::RuntimeAnchor, PropertyKey::symbol(symbol))?;
+        }
+        for key in self.well_known_properties.keys() {
+            visitor.visit_property_key(VmRootKind::RuntimeAnchor, key)?;
+        }
+        if let Some(keys) = self.descriptor_property_keys {
+            for key in keys.keys() {
+                visitor.visit_property_key(VmRootKind::RuntimeAnchor, key)?;
+            }
+        }
         for id in self.native_function_registry.ids() {
             visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::NativeFunction(id))?;
         }
+        self.objects.visit_direct_roots(visitor)?;
         for job in &self.promise_jobs {
             job.visit_direct_roots(visitor)?;
         }

@@ -1,12 +1,14 @@
 use crate::{
     error::Result,
     runtime::{collections::CollectionIteratorId, object::PropertyKey, promise::PromiseId},
+    storage::{string_heap::JsString, symbol::JsSymbol},
     value::{BoundFunctionId, FunctionId, ObjectId, Value},
 };
 
 use super::{Context, Function, FunctionNewTarget};
 
 const CALLABLE_EDGE_KIND_COUNT: usize = 6;
+const OBJECT_EDGE_KIND_COUNT: usize = 3;
 
 /// Strong-reference slot categories currently owned by callable stores.
 ///
@@ -51,6 +53,35 @@ impl VmCallableEdgeKind {
     }
 }
 
+/// Strong-reference slot categories currently owned by ordinary object
+/// storage.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum VmObjectEdgeKind {
+    Property,
+    Prototype,
+    InternalSlot,
+}
+
+impl VmObjectEdgeKind {
+    const ALL: [Self; OBJECT_EDGE_KIND_COUNT] =
+        [Self::Property, Self::Prototype, Self::InternalSlot];
+
+    /// Returns every object edge category in stable reporting order.
+    #[must_use]
+    pub const fn all() -> &'static [Self] {
+        &Self::ALL
+    }
+
+    const fn index(self) -> usize {
+        match self {
+            Self::Property => 0,
+            Self::Prototype => 1,
+            Self::InternalSlot => 2,
+        }
+    }
+}
+
 /// Counted view of strong-reference slots stored in callable arenas.
 ///
 /// Counts describe physical reference slots, not unique or reachable heap
@@ -91,6 +122,44 @@ impl VmCallableEdgeSnapshot {
     }
 }
 
+/// Counted view of strong-reference slots stored in the ordinary object
+/// arena. Context side-table associations are intentionally excluded until
+/// AS-05b1b3.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct VmObjectEdgeSnapshot {
+    counts: [usize; OBJECT_EDGE_KIND_COUNT],
+    total: usize,
+}
+
+impl VmObjectEdgeSnapshot {
+    fn capture(context: &Context) -> Result<Self> {
+        let mut counter = ObjectEdgeCounter::new();
+        context.visit_object_edges(&mut counter)?;
+        Ok(Self {
+            counts: counter.counts,
+            total: counter.total,
+        })
+    }
+
+    /// Returns the number of physical reference slots in one category.
+    #[must_use]
+    pub fn count(self, kind: VmObjectEdgeKind) -> usize {
+        self.counts.get(kind.index()).copied().unwrap_or(0)
+    }
+
+    /// Returns the total number of object-arena reference slots.
+    #[must_use]
+    pub const fn total(self) -> usize {
+        self.total
+    }
+
+    /// Returns whether the object arena currently contains zero strong edges.
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.total == 0
+    }
+}
+
 /// Typed target of one strong VM edge.
 ///
 /// The payload remains internal so diagnostic snapshots expose counts without
@@ -105,6 +174,8 @@ pub(in crate::runtime) enum StrongEdgeReference<'value> {
     BoundFunction(BoundFunctionId),
     CollectionIterator(CollectionIteratorId),
     PropertyKey(PropertyKey),
+    String(&'value JsString),
+    Symbol(&'value JsSymbol),
 }
 
 pub(in crate::runtime) trait StrongEdgeVisitor<Kind> {
@@ -114,6 +185,20 @@ pub(in crate::runtime) trait StrongEdgeVisitor<Kind> {
 struct CallableEdgeCounter {
     counts: [usize; CALLABLE_EDGE_KIND_COUNT],
     total: usize,
+}
+
+struct ObjectEdgeCounter {
+    counts: [usize; OBJECT_EDGE_KIND_COUNT],
+    total: usize,
+}
+
+impl ObjectEdgeCounter {
+    const fn new() -> Self {
+        Self {
+            counts: [0; OBJECT_EDGE_KIND_COUNT],
+            total: 0,
+        }
+    }
 }
 
 impl CallableEdgeCounter {
@@ -147,6 +232,24 @@ impl StrongEdgeVisitor<VmCallableEdgeKind> for CallableEdgeCounter {
     }
 }
 
+impl StrongEdgeVisitor<VmObjectEdgeKind> for ObjectEdgeCounter {
+    fn visit(&mut self, kind: VmObjectEdgeKind, reference: StrongEdgeReference<'_>) -> Result<()> {
+        consume_reference(&reference);
+        let count = self
+            .counts
+            .get_mut(kind.index())
+            .ok_or_else(|| crate::Error::runtime("object edge kind index is not defined"))?;
+        *count = count
+            .checked_add(1)
+            .ok_or_else(|| crate::Error::limit("object edge category count overflowed"))?;
+        self.total = self
+            .total
+            .checked_add(1)
+            .ok_or_else(|| crate::Error::limit("object edge count overflowed"))?;
+        Ok(())
+    }
+}
+
 impl Context {
     /// Counts strong-reference slots in JavaScript, native, and bound function
     /// stores. This does not include object or asynchronous arenas.
@@ -155,6 +258,22 @@ impl Context {
     /// Fails if an edge counter exceeds the supported range.
     pub fn callable_edge_snapshot(&self) -> Result<VmCallableEdgeSnapshot> {
         VmCallableEdgeSnapshot::capture(self)
+    }
+
+    /// Counts strong-reference slots stored directly in the ordinary object
+    /// arena. Promise and collection side-table associations are excluded.
+    ///
+    /// # Errors
+    /// Fails if an edge counter exceeds the supported range.
+    pub fn object_edge_snapshot(&self) -> Result<VmObjectEdgeSnapshot> {
+        VmObjectEdgeSnapshot::capture(self)
+    }
+
+    pub(in crate::runtime) fn visit_object_edges<V: StrongEdgeVisitor<VmObjectEdgeKind>>(
+        &self,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.objects.visit_strong_edges(visitor)
     }
 
     pub(in crate::runtime) fn visit_callable_edges<V: StrongEdgeVisitor<VmCallableEdgeKind>>(
@@ -242,5 +361,7 @@ const fn consume_reference(reference: &StrongEdgeReference<'_>) {
         StrongEdgeReference::BoundFunction(_id) => {}
         StrongEdgeReference::CollectionIterator(_id) => {}
         StrongEdgeReference::PropertyKey(_key) => {}
+        StrongEdgeReference::String(_string) => {}
+        StrongEdgeReference::Symbol(_symbol) => {}
     }
 }

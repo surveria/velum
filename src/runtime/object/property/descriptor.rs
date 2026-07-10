@@ -1,11 +1,13 @@
-use crate::value::Value;
+use crate::{
+    error::Result,
+    runtime::trace::{StrongEdgeReference, StrongEdgeVisitor},
+    value::{ObjectId, Value},
+};
 
 use super::{
     ARRAY_LENGTH_PROPERTY, ArrayIndex, Object, ObjectHeap, PropertyKey, PropertyLookup,
     ShapePropertyAttributes, ShapeTable,
 };
-use crate::error::Result;
-use crate::value::ObjectId;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum PropertyEnumerable {
@@ -169,6 +171,14 @@ impl AccessorPropertyDescriptor {
         self.set.clone()
     }
 
+    pub const fn get_ref(&self) -> &Value {
+        &self.get
+    }
+
+    pub const fn set_ref(&self) -> &Value {
+        &self.set
+    }
+
     pub const fn has_getter(&self) -> bool {
         !matches!(self.get, Value::Undefined)
     }
@@ -299,6 +309,22 @@ impl ObjectProperty {
         match &self.payload {
             ObjectPropertyPayload::Data(descriptor) => Some(descriptor.value_ref()),
             ObjectPropertyPayload::Accessor(_) => None,
+        }
+    }
+
+    pub(in crate::runtime::object) fn visit_strong_edges<Kind: Copy, V: StrongEdgeVisitor<Kind>>(
+        &self,
+        kind: Kind,
+        visitor: &mut V,
+    ) -> Result<()> {
+        match &self.payload {
+            ObjectPropertyPayload::Data(descriptor) => {
+                visitor.visit(kind, StrongEdgeReference::Value(descriptor.value_ref()))
+            }
+            ObjectPropertyPayload::Accessor(descriptor) => {
+                visitor.visit(kind, StrongEdgeReference::Value(descriptor.get_ref()))?;
+                visitor.visit(kind, StrongEdgeReference::Value(descriptor.set_ref()))
+            }
         }
     }
 
