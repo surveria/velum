@@ -25,10 +25,10 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 through AS-05, AS-06a1, and AS-06a2a are
-  complete. Draft PR #440 moves function continuations onto stable function
-  ids and removes synchronous checkout/restore overhead before AS-06a2b adds
-  structured control records
+- Current program state: AS-01 through AS-05, AS-06a1, AS-06a2a, and its
+  AS-06a2a1 performance follow-up are complete through PR #440. Draft PR #442
+  moves loop, switch, iterator, and try/finally state into structured control
+  records before AS-06b adds suspended outcomes
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -487,7 +487,7 @@ dependencies do not overlap.
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
 | AS-04 | Complete | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans merged in PR #421 with exact-tree correctness and canonical report publication. |
 | AS-05 | Complete | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05b2c3 are merged through PR #436 with exact-tree correctness, complete owner-limit reconciliation, and canonical report publication. |
-| AS-06 | In progress | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 call activations and AS-06a2a outer block continuations merged in PRs #438 and #439. PR #440 removes measured synchronous function-continuation overhead; explicit loop/try/finally control records remain AS-06a2b before suspend/resume outcomes. |
+| AS-06 | In progress | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 call activations, AS-06a2a outer block continuations, and the AS-06a2a1 synchronous-overhead follow-up merged in PRs #438 through #440. Draft PR #442 owns AS-06a2b structured control records before suspend/resume outcomes. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
 | AS-08 | Backlog | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | Optimizer on/off equivalence, harness opcodes removed, workload-shaped paths replaced or justified by broad evidence. |
 | AS-09 | Backlog | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | Multiple feature clusters land through shared semantics without new architecture exceptions. |
@@ -1558,6 +1558,44 @@ AS-06a2a1 local implementation evidence:
 - `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 119 runner tests.
+
+AS-06a2a1 completion evidence:
+
+- PR #440 merged as verified `544a7d6` after required CI run `29126038777`
+  certified exact tree `a9d832d98d48b166e28d00dbca135b0f68a40aaa`;
+- the required corpus preserved all 36,659 expected Test262 variants, the
+  exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
+  cases;
+- post-merge run `29126229568` published
+  `reports/test-runs/rsqjs-test-report-20260710T215609Z.*` in verified
+  report-only commit `8934889`;
+- canonical function-call latency returned from 162.77 ms to 155.36 ms
+  (-4.6%). The other sentinel deltas were mixed across independent paths and
+  remain trend evidence rather than a reason to reverse the targeted change.
+
+AS-06a2b local implementation evidence (draft PR #442):
+
+- one continuation-owned stack holds typed loop, `for-in`, `for-of`, switch,
+  and try/catch/finally records. Each record carries its current phase,
+  reusable segment states, accumulated completion value, cursor or iterator
+  source, and pending abrupt completion where applicable;
+- the synchronous driver checks a record out once for the complete construct
+  and mutates it in place. Running carried values use scoped transient roots;
+  parked records are traced through `VmRootKind::BytecodeFrame`. No record is
+  allocated, moved, or pushed per iteration;
+- structured records are charged as `ExecutionFrame` owners, checked during
+  activation unwind, and included in independent storage reconciliation.
+  Focused tests prove pending-value roots, exact control-frame limits, nested
+  rejection, and complete release after errors;
+- generic loop, switch, iterator-close, destructuring, catch/finally, labels,
+  and fast-path semantics pass. Architecture mutations protect the control
+  owner, in-place lifecycle, roots, accounting, and unwind contract;
+- an initial per-segment checkout design regressed the arithmetic sentinel to
+  128.76 ms and was rejected. The in-place design measures 82.91 ms at 1.6%
+  CV against a paired 83.10 ms `origin/main` control. The final five-sentinel
+  run is valid throughout: arithmetic 79.32 ms, array-index 2.33 ms,
+  property-read 224.59 ms, function-call 150.26 ms, and string-scan 70.75 ms;
+  relative to the latest canonical report, changes range from -7.2% to +2.1%.
 
 AS-05a1 completion evidence:
 

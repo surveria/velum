@@ -1040,6 +1040,41 @@ check_bytecode_continuation_boundary() {
   done
 }
 
+check_structured_control_boundary() {
+  for source in \
+    'control_stack: Vec<Option<BytecodeControlRecord>>,' \
+    '.flat_map(BytecodeControlRecord::root_values),' \
+    'pub(super) fn push_control(' \
+    'pub(super) fn checkout_control(' \
+    'pub(super) fn finish_control('; do
+    if ! grep -F -q "${source}" \
+        "${repo_root}/src/runtime/bytecode/continuation.rs"; then
+      fail "structured control boundary changed; AS-06a2b requires one continuation-owned control stack"
+    fi
+  done
+
+  for source in \
+    'pub(super) enum BytecodeControlRecord {' \
+    'Loop {' \
+    'ForIn {' \
+    'ForOf {' \
+    'Switch {' \
+    'Try {' \
+    'record: &mut BytecodeControlRecord,' \
+    'record.transient_root_values(),' \
+    'pub(super) fn finish_bytecode_control_result'; do
+    if ! grep -F -q "${source}" \
+        "${repo_root}/src/runtime/bytecode/control_continuation.rs"; then
+      fail "structured control boundary changed; running records require one in-place state owner and transient roots"
+    fi
+  done
+
+  if ! grep -F -q 'counter.record(VmStorageKind::ExecutionFrame, continuation.control_count())?;' \
+      "${repo_root}/src/runtime/accounting.rs"; then
+    fail "structured control boundary changed; control records must remain charged as execution frames"
+  fi
+}
+
 check_callable_edge_boundary() {
   local edge_kinds
   local native_id_variants
@@ -1424,11 +1459,13 @@ src/runtime/bytecode/control/array_fill_loop.rs
 src/runtime/bytecode/control/block_lexical_loop.rs
 src/runtime/bytecode/control/compound_assignment_loop.rs
 src/runtime/bytecode/control/constructor_prototype_loop.rs
+src/runtime/bytecode/control/for_in.rs
 src/runtime/bytecode/control/for_loop.rs
 src/runtime/bytecode/control/function_apply_has_instance_loop.rs
 src/runtime/bytecode/control/loop_helpers.rs
 src/runtime/bytecode/control/object_literal_loop.rs
 src/runtime/bytecode/control/string_concat_loop.rs
+src/runtime/bytecode/control/structured_do_while.rs
 src/runtime/bytecode/control/switch_for_loop.rs
 src/runtime/bytecode/control/try_catch.rs
 src/runtime/bytecode/control/try_catch_loop.rs
@@ -1468,6 +1505,7 @@ run_checks() {
   require_file src/runtime/accounting.rs
   require_file src/runtime/activation.rs
   require_file src/runtime/bytecode/continuation.rs
+  require_file src/runtime/bytecode/control_continuation.rs
   require_file src/runtime/object/accounting.rs
   require_file src/runtime/mod.rs
   require_file src/runtime/roots.rs
@@ -1501,6 +1539,7 @@ run_checks() {
   check_direct_root_boundary
   check_activation_frame_boundary
   check_bytecode_continuation_boundary
+  check_structured_control_boundary
   check_callable_edge_boundary
   check_object_edge_boundary
   check_async_edge_boundary
@@ -1663,6 +1702,18 @@ mutate_bytecode_function_program() {
   local fixture_root="$1"
   sed -i '/    Function(FunctionId),/d' \
     "${fixture_root}/src/runtime/bytecode/continuation.rs"
+}
+
+mutate_structured_control_owner() {
+  local fixture_root="$1"
+  sed -i '/    control_stack: Vec<Option<BytecodeControlRecord>>,/d' \
+    "${fixture_root}/src/runtime/bytecode/continuation.rs"
+}
+
+mutate_structured_control_in_place() {
+  local fixture_root="$1"
+  sed -i 's/        record: &mut BytecodeControlRecord,/        record: BytecodeControlRecord,/g' \
+    "${fixture_root}/src/runtime/bytecode/control_continuation.rs"
 }
 
 mutate_bytecode_frame_root() {
@@ -1990,6 +2041,10 @@ run_self_tests() {
     'bytecode continuation boundary changed' mutate_bytecode_continuation_clone_count
   expect_guard_failure "${temp_dir}" bytecode-function-program \
     'bytecode continuation boundary changed' mutate_bytecode_function_program
+  expect_guard_failure "${temp_dir}" structured-control-owner \
+    'structured control boundary changed' mutate_structured_control_owner
+  expect_guard_failure "${temp_dir}" structured-control-in-place \
+    'structured control boundary changed' mutate_structured_control_in_place
   expect_guard_failure "${temp_dir}" bytecode-frame-root \
     'direct root boundary changed' mutate_bytecode_frame_root
   expect_guard_failure "${temp_dir}" native-registry-root \

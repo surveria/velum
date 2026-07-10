@@ -422,7 +422,7 @@ and values retained after an embedding call.
 | objects | `ObjectHeap`, shapes, prototypes, properties, arrays, buffers, typed-array views | typed AS-05b1b2 edges cover named/dense/sparse properties, accessors, prototypes, boxed strings/Symbols, Proxy state, and typed-array buffer-object links; cached prototypes and shape/property-key metadata are direct anchors | logical Object/ObjectProperty/ByteBuffer counts plus shape CacheEntry and anchor Association counts; payload bytes remain AS-05b2b |
 | collections | collection stores with retained kind, object slots, iterator snapshots | typed object associations, strong Map/Set entries and iterator items, weak WeakSet keys, and WeakMap ephemerons | logical Collection/CollectionEntry/CollectionIterator/IteratorItem and Association counts plus asynchronous edge snapshot |
 | promises/jobs | promises, object slots, reaction queue | typed object associations, strong results/handlers/settled values, and direct queued-job roots | logical Promise/PromiseReaction/PromiseJob and Association counts plus asynchronous edge snapshot |
-| active execution | one `activation_frames` stack owns call local bases, upvalues, `this`, `new.target`, super, a function-id or owned-block continuation program key, and future parked interpreter state plus temporary-this/eval-boundary/standalone-bytecode variants; scoped transient registry | explicit call/block activations, active function program roots, parked bytecode operands, and scoped traceable operand/call/iterator/descriptor/Proxy values | one logical ExecutionFrame per activation and lexical scope plus TransientRoot counts and a fourteen-category root snapshot; loop/try/finally control records remain AS-06a2b |
+| active execution | one `activation_frames` stack owns call local bases, upvalues, `this`, `new.target`, super, a function-id or owned-block continuation program key, parked interpreter state, and a typed structured-control stack plus temporary-this/eval-boundary/standalone-bytecode variants; scoped transient registry | explicit call/block activations, active function program roots, parked bytecode/control operands, and scoped traceable operand/call/iterator/descriptor/Proxy values | one logical ExecutionFrame per activation, lexical scope, and structured-control record plus TransientRoot counts and a fourteen-category root snapshot; suspended outcomes remain AS-06b |
 | caches | static name/binding caches, call caches, function fast paths | ids, shapes, native kinds, metadata | logical CacheEntry counts plus hit/miss counters for selected call caches |
 | embedder-visible state | output, host callbacks, `Vm`, public `Value`, retained registry | callback arguments are scoped roots; opaque captures and durable results use retained handles; raw Values remain compatibility-only and non-durable | logical HostCallback/RetainedHandle/OutputEntry counts; retained handles also participate in root snapshots |
 | nondeterministic/runtime state | clock, random state, step counters | no JS edges | runtime steps and selected execution counters |
@@ -556,7 +556,7 @@ that several optimization owners can perform semantic work directly.
 | call caches/direct native calls | `CallValueCache`, `CallReference`, `NativeCallTarget`, `runtime/native/function/direct.rs` | most guarded misses return to native-kind or generic value dispatch | AS-08, after common `Call` |
 | linear plans/superinstructions | seven files under `runtime/bytecode/linear` | pattern compilation is optional; executor contains specialized member/numeric/property paths | AS-08 equivalence and optimizer-off coverage |
 | function fast paths | `bytecode/fast_path.rs` and `runtime/function/fast_path.rs` | optional compilation with normal bytecode fallback | AS-08 equivalence and accounting |
-| structured-control specializations | sixteen files under `runtime/bytecode/control`, including many named `*_loop.rs` recognizers | each recognizer may decline, but accepted paths often reproduce property/call/control semantics | AS-08 audit after resumable frames |
+| structured control and specializations | eighteen files under `runtime/bytecode/control`; `for_in`, `structured_do_while`, `try_catch`, and `loop_helpers` are reusable semantic owners while many named `*_loop.rs` files are recognizers | semantic owners feed the shared continuation record; each optimizer recognizer may decline, but accepted paths often reproduce property/call/control semantics | AS-06a2b owns durable control state; AS-08 audits optimizer equivalence |
 | dense array/native built-in paths | object array modules and `runtime/native/function` | a mix of explicit generic fallback and separate implementations | AS-03 first, AS-08 guards second |
 | harness opcodes | compiler/runtime handling of `Print` and `AssertThrows` | selected from source names rather than ordinary binding semantics | remove in AS-08; prevent growth in AS-01b |
 
@@ -568,7 +568,8 @@ harness or benchmark name may enter language compilation.
 
 The control specialization directory currently contains:
 
-- reusable control machinery: `try_catch.rs`, `loop_helpers.rs`;
+- reusable control machinery: `for_in.rs`, `structured_do_while.rs`,
+  `try_catch.rs`, and `loop_helpers.rs`;
 - named recognizers/executors: `array_add_loop`, `array_fill_loop`,
   `block_lexical_loop`, `compound_assignment_loop`,
   `constructor_prototype_loop`, `for_loop`,
@@ -637,8 +638,8 @@ decision sequence:
 | AS-05b2c2 | binding, callable, property, and cache growth | VM-local O(1) ledger, pre-commit reservations, release/rollback paths, and independent snapshot reconciliation merged in PR #435 |
 | AS-05b2c3 | async, root, frame, and association growth | exact collection/Promise/root/frame/anchor transitions plus full snapshot-to-limit reconciliation merged in PR #436 |
 | AS-06a1 | parallel call-state vectors | one VM-owned call/temporary/evaluation activation stack merged in PR #438 |
-| AS-06a2a | outer block state and program position | activation-owned block/program-counter/operand continuation implemented in draft PR #439 |
-| AS-06a2b | recursive loop/try/finally state | explicit durable structured-control continuation records |
+| AS-06a2a | outer block state and program position | activation-owned block/program-counter/operand continuation merged in PR #439; synchronous function overhead removed in PR #440 |
+| AS-06a2b | recursive loop/try/finally state | typed continuation-owned loop/switch/iterator/try records implemented in draft PR #442 with one in-place record per construct |
 | AS-06b | pending async execution | suspend/resume outcomes and embedder-controlled job/frame APIs |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |
 | AS-08 | caches, direct calls, linear/function/control paths, harness opcodes | one optimizer owner, optimizer-off equivalence, and removal of source-name semantics |
