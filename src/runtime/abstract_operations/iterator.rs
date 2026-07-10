@@ -181,7 +181,9 @@ impl Context {
         let original_is_throw = matches!(completion, Completion::Throw(_));
         let return_method = match self.get_named_method(&iterator, ITERATOR_RETURN_PROPERTY) {
             Ok(method) => method,
-            Err(_error) if original_is_throw => return Ok(completion),
+            Err(error) if original_is_throw && !is_resource_limit(&error) => {
+                return Ok(completion);
+            }
             Err(error) => return Err(error),
         };
         let Some(return_method) = return_method else {
@@ -189,7 +191,9 @@ impl Context {
         };
         let close_completion = match self.call(&return_method, &[], iterator) {
             Ok(close_completion) => close_completion,
-            Err(_error) if original_is_throw => return Ok(completion),
+            Err(error) if original_is_throw && !is_resource_limit(&error) => {
+                return Ok(completion);
+            }
             Err(error) => return Err(error),
         };
         if original_is_throw {
@@ -216,15 +220,22 @@ impl Context {
         source: &mut IteratorSource,
         error: Error,
     ) -> Error {
+        if is_resource_limit(&error) {
+            return error;
+        }
         let Some(iterator) = protocol_iterator_to_close(source) else {
             return error;
         };
-        if let Ok(Some(return_method)) = self.get_named_method(&iterator, ITERATOR_RETURN_PROPERTY)
-        {
-            let close_result = self.call(&return_method, &[], iterator);
-            drop(close_result);
+        let return_method = match self.get_named_method(&iterator, ITERATOR_RETURN_PROPERTY) {
+            Ok(Some(return_method)) => return_method,
+            Ok(None) => return error,
+            Err(close_error) if is_resource_limit(&close_error) => return close_error,
+            Err(_close_error) => return error,
+        };
+        match self.call(&return_method, &[], iterator) {
+            Err(close_error) if is_resource_limit(&close_error) => close_error,
+            Ok(_) | Err(_) => error,
         }
-        error
     }
 
     fn iterator_method(&mut self, iterable: &Value) -> Result<Option<Value>> {
@@ -264,4 +275,8 @@ fn protocol_iterator_to_close(source: &mut IteratorSource) -> Option<Value> {
     }
     *done = true;
     Some(iterator.clone())
+}
+
+const fn is_resource_limit(error: &Error) -> bool {
+    matches!(error, Error::ResourceLimit { .. })
 }
