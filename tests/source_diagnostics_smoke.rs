@@ -134,6 +134,111 @@ fn preserves_source_span_when_adding_error_context() -> TestResult {
 }
 
 #[test]
+fn exposes_the_executing_identifier_span_on_runtime_reference_errors() -> TestResult {
+    let runtime = Runtime::new();
+    let source_name = "runtime-reference.js";
+    let source = "let ready = true;\nmissingCamera;";
+    let expected = named_marker_span(source_name, source, "missingCamera")?;
+    let script = runtime.compile_named(source_name, source)?;
+    let mut context = runtime.context();
+    let Err(error) = context.eval_compiled(&script) else {
+        return Err("expected missing binding evaluation to fail".into());
+    };
+
+    ensure_optional_text(error.javascript_error_name(), Some("ReferenceError"))?;
+    ensure_optional_span(error.source_span(), Some(expected))?;
+    let metadata = error
+        .javascript_error_metadata()
+        .ok_or("expected built-in Error metadata")?;
+    ensure_optional_span(metadata.source_span(), Some(expected))
+}
+
+#[test]
+fn exposes_the_executing_call_span_on_host_runtime_failures() -> TestResult {
+    let runtime = Runtime::new();
+    let source_name = "host-runtime.js";
+    let source = "hostFail();";
+    let expected = named_marker_span(source_name, source, "hostFail()")?;
+    let script = runtime.compile_named(source_name, source)?;
+    let mut context = runtime.context();
+    context.register_host_function("hostFail", |_call| Err(Error::runtime("camera offline")))?;
+    let Err(error) = context.eval_compiled(&script) else {
+        return Err("expected host runtime failure".into());
+    };
+
+    if !matches!(error, Error::Runtime { .. }) {
+        return Err(format!("expected Runtime error, got {error:?}").into());
+    }
+    ensure_optional_span(error.source_span(), Some(expected))
+}
+
+#[test]
+fn preserves_the_resource_limit_channel_with_an_executing_span() -> TestResult {
+    let runtime = Runtime::new();
+    let source_name = "host-limit.js";
+    let source = "hostLimit();";
+    let expected = named_marker_span(source_name, source, "hostLimit()")?;
+    let script = runtime.compile_named(source_name, source)?;
+    let mut context = runtime.context();
+    context.register_host_function("hostLimit", |_call| {
+        Err(Error::limit("host budget exhausted"))
+    })?;
+    let Err(error) = context.eval_compiled(&script) else {
+        return Err("expected host resource limit".into());
+    };
+
+    if !matches!(error, Error::ResourceLimit { .. }) {
+        return Err(format!("expected ResourceLimit error, got {error:?}").into());
+    }
+    ensure_optional_span(error.source_span(), Some(expected))
+}
+
+#[test]
+fn exposes_the_throw_statement_span_for_primitive_values() -> TestResult {
+    let runtime = Runtime::new();
+    let source_name = "primitive-throw.js";
+    let source = "throw 42;";
+    let expected = named_marker_span(source_name, source, source)?;
+    let script = runtime.compile_named(source_name, source)?;
+    let mut context = runtime.context();
+    let Err(error) = context.eval_compiled(&script) else {
+        return Err("expected primitive throw".into());
+    };
+
+    ensure_value(
+        error
+            .javascript_value()
+            .ok_or("expected original thrown value")?,
+        &Value::Number(42.0),
+    )?;
+    ensure_optional_span(error.source_span(), Some(expected))
+}
+
+#[test]
+fn preserves_the_inner_error_origin_across_function_frames() -> TestResult {
+    let runtime = Runtime::new();
+    let source_name = "nested-error.js";
+    let source = concat!(
+        "function fail() { throw new TypeError(\"camera\"); }\n",
+        "fail();"
+    );
+    let marker = "throw new TypeError(\"camera\");";
+    let expected = named_marker_span(source_name, source, marker)?;
+    let script = runtime.compile_named(source_name, source)?;
+    let mut context = runtime.context();
+    let Err(error) = context.eval_compiled(&script) else {
+        return Err("expected nested TypeError".into());
+    };
+
+    ensure_optional_text(error.javascript_error_name(), Some("TypeError"))?;
+    ensure_optional_span(error.source_span(), Some(expected))?;
+    let metadata = error
+        .javascript_error_metadata()
+        .ok_or("expected nested Error metadata")?;
+    ensure_optional_span(metadata.source_span(), Some(expected))
+}
+
+#[test]
 fn enforces_source_name_limits_for_compile_and_execution() -> TestResult {
     let permissive_runtime = Runtime::new();
     let script = permissive_runtime.compile_named("long-name.js", "42")?;
@@ -218,3 +323,16 @@ fn ensure_resource_limit(error: &Error) -> TestResult {
     }
     Err(format!("expected resource limit error, got {error}").into())
 }
+
+fn named_marker_span(source_name: &str, source: &str, marker: &str) -> TestResultSpan {
+    let start = source
+        .find(marker)
+        .ok_or_else(|| format!("marker {marker:?} is not present in source"))?;
+    let end = start
+        .checked_add(marker.len())
+        .ok_or("source marker range overflowed")?;
+    SourceSpan::new(SourceId::for_named_source(source_name, source), start, end)
+        .ok_or_else(|| "source marker range is reversed".into())
+}
+
+type TestResultSpan = std::result::Result<SourceSpan, Box<dyn std::error::Error>>;

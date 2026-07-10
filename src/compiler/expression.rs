@@ -25,7 +25,13 @@ impl BytecodeCompiler<'_> {
     }
 
     pub(super) fn compile_expr(&mut self, expr: &Expression) -> Result<()> {
-        match expr.kind() {
+        self.with_source_span(expr.span(), |compiler| {
+            compiler.compile_expr_kind(expr.kind())
+        })
+    }
+
+    fn compile_expr_kind(&mut self, expr: &Expr) -> Result<()> {
+        match expr {
             Expr::Literal(value) => {
                 self.emit(BytecodeInstruction::PushLiteral(value.clone()));
             }

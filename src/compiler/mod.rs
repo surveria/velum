@@ -17,6 +17,7 @@ use crate::{
         BytecodeNumericUnaryOp, BytecodeObjectProperty, BytecodeProgram, BytecodeProperty,
     },
     error::{Error, Result},
+    source::{SourceId, SourceSpan},
     syntax::{AccessorKind, StaticName, StaticString},
 };
 
@@ -42,16 +43,19 @@ impl BytecodeBlock {
         value: StatementValue,
         layout: &BindingLayout,
     ) -> Result<Self> {
-        let mut compiler = BytecodeCompiler::new(layout);
+        let fallback_span = statements
+            .first()
+            .map_or_else(|| SourceSpan::point(SourceId::UNKNOWN, 0), Statement::span);
+        let mut compiler = BytecodeCompiler::new(layout, fallback_span);
         compiler.compile_statements(statements, value)?;
-        Ok(Self::from_instructions(compiler.instructions))
+        compiler.finish()
     }
 
     fn compile_expression(expr: &Expression, layout: &BindingLayout) -> Result<Self> {
-        let mut compiler = BytecodeCompiler::new(layout);
+        let mut compiler = BytecodeCompiler::new(layout, expr.span());
         compiler.compile_expr(expr)?;
         compiler.emit(BytecodeInstruction::StoreLast);
-        Ok(Self::from_instructions(compiler.instructions))
+        compiler.finish()
     }
 }
 
@@ -65,14 +69,33 @@ enum StatementValue {
 struct BytecodeCompiler<'a> {
     layout: &'a BindingLayout,
     instructions: Vec<BytecodeInstruction>,
+    spans: Vec<SourceSpan>,
+    current_span: SourceSpan,
 }
 
 impl<'a> BytecodeCompiler<'a> {
-    const fn new(layout: &'a BindingLayout) -> Self {
+    const fn new(layout: &'a BindingLayout, current_span: SourceSpan) -> Self {
         Self {
             layout,
             instructions: Vec::new(),
+            spans: Vec::new(),
+            current_span,
         }
+    }
+
+    fn finish(self) -> Result<BytecodeBlock> {
+        BytecodeBlock::from_parts(self.instructions, self.spans)
+    }
+
+    fn with_source_span<T>(
+        &mut self,
+        span: SourceSpan,
+        compile: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let previous = std::mem::replace(&mut self.current_span, span);
+        let result = compile(self);
+        self.current_span = previous;
+        result
     }
 
     fn compile_binding(&self, binding: &StaticBinding) -> Result<BytecodeBinding> {
@@ -103,7 +126,13 @@ impl<'a> BytecodeCompiler<'a> {
     }
 
     fn compile_statement(&mut self, statement: &Statement, value: StatementValue) -> Result<()> {
-        match statement.kind() {
+        self.with_source_span(statement.span(), |compiler| {
+            compiler.compile_statement_kind(statement.kind(), value)
+        })
+    }
+
+    fn compile_statement_kind(&mut self, statement: &Stmt, value: StatementValue) -> Result<()> {
+        match statement {
             Stmt::Block(statements) => self.compile_block_statement(statements, value),
             Stmt::DeclList(declarations) => self.compile_statements(declarations, value),
             Stmt::If {
@@ -428,6 +457,7 @@ impl<'a> BytecodeCompiler<'a> {
     fn emit(&mut self, instruction: BytecodeInstruction) -> InstructionIndex {
         let index = InstructionIndex::new(self.instructions.len());
         self.instructions.push(instruction);
+        self.spans.push(self.current_span);
         index
     }
 

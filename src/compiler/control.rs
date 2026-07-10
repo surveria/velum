@@ -326,9 +326,9 @@ impl BytecodeCompiler<'_> {
         statement: &Statement,
         value: StatementValue,
     ) -> Result<BytecodeBlock> {
-        let mut compiler = Self::new(self.layout);
+        let mut compiler = Self::new(self.layout, statement.span());
         compiler.compile_statement(statement, value)?;
-        Ok(BytecodeBlock::from_instructions(compiler.instructions))
+        compiler.finish()
     }
 
     fn emit_discard_branch_last(&mut self, value: StatementValue) {

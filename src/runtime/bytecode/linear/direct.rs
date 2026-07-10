@@ -1,10 +1,8 @@
 use crate::{
+    SourceSpan,
     bytecode::BytecodeBlock,
     error::Result,
-    runtime::{
-        Context,
-        control::{Completion, runtime_exception_value},
-    },
+    runtime::{Context, control::Completion},
     value::Value,
 };
 
@@ -16,7 +14,7 @@ impl Context {
         block: &BytecodeBlock,
         plan: Option<&BytecodeLinearPlan<'_>>,
     ) -> Result<Option<Completion>> {
-        let Some(op) = single_full_block_op(block, plan) else {
+        let Some((op, span)) = single_full_block_op(block, plan) else {
             return Ok(None);
         };
         if !matches!(
@@ -29,7 +27,7 @@ impl Context {
         ) {
             return Ok(None);
         }
-        self.eval_bytecode_linear_direct_completion(op)
+        self.eval_bytecode_linear_direct_completion(op, span)
     }
 
     pub(super) fn eval_bytecode_linear_direct_expression(
@@ -37,7 +35,7 @@ impl Context {
         block: &BytecodeBlock,
         plan: Option<&BytecodeLinearPlan<'_>>,
     ) -> Result<Option<Value>> {
-        let Some(op) = single_full_block_op(block, plan) else {
+        let Some((op, span)) = single_full_block_op(block, plan) else {
             return Ok(None);
         };
         if !matches!(
@@ -47,7 +45,7 @@ impl Context {
         ) {
             return Ok(None);
         }
-        self.eval_bytecode_linear_direct_completion(op)?
+        self.eval_bytecode_linear_direct_completion(op, span)?
             .map(Completion::into_result)
             .transpose()
     }
@@ -55,19 +53,15 @@ impl Context {
     fn eval_bytecode_linear_direct_completion(
         &mut self,
         op: &BytecodeLinearOp<'_>,
+        span: SourceSpan,
     ) -> Result<Option<Completion>> {
-        self.record_bytecode_linear_direct_run()?;
-        self.step()?;
+        self.record_bytecode_linear_direct_run()
+            .map_err(|error| error.with_runtime_span(span))?;
+        self.step().map_err(|error| error.with_runtime_span(span))?;
         match self.eval_bytecode_linear_direct_value(op) {
             Ok(Some(value)) => Ok(Some(Completion::Normal(value))),
             Ok(None) => Ok(None),
-            Err(error) => {
-                if let Some(value) = runtime_exception_value(self, &error)? {
-                    self.checked_value(value.clone())?;
-                    return Ok(Some(Completion::Throw(value)));
-                }
-                Err(error)
-            }
+            Err(error) => self.bytecode_error_completion(error, span),
         }
     }
 
@@ -152,6 +146,6 @@ impl Context {
 fn single_full_block_op<'plan, 'bytecode>(
     block: &BytecodeBlock,
     plan: Option<&'plan BytecodeLinearPlan<'bytecode>>,
-) -> Option<&'plan BytecodeLinearOp<'bytecode>> {
+) -> Option<(&'plan BytecodeLinearOp<'bytecode>, SourceSpan)> {
     plan?.single_full_block_op(block)
 }

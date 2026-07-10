@@ -14,6 +14,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub struct JavaScriptErrorMetadata {
     name: ErrorName,
     message: String,
+    span: Option<Box<SourceSpan>>,
 }
 
 impl JavaScriptErrorMetadata {
@@ -21,6 +22,7 @@ impl JavaScriptErrorMetadata {
         Self {
             name,
             message: message.into(),
+            span: None,
         }
     }
 
@@ -38,6 +40,23 @@ impl JavaScriptErrorMetadata {
     #[must_use]
     pub const fn message(&self) -> &str {
         self.message.as_str()
+    }
+
+    /// Returns the source range where this error originated, when known.
+    #[must_use]
+    pub fn source_span(&self) -> Option<SourceSpan> {
+        self.span.as_deref().copied()
+    }
+
+    pub(crate) fn set_source_span_if_missing(&mut self, span: SourceSpan) {
+        if self.span.is_none() {
+            self.span = Some(Box::new(span));
+        }
+    }
+
+    fn with_source_span(mut self, span: SourceSpan) -> Self {
+        self.set_source_span_if_missing(span);
+        self
     }
 }
 
@@ -57,13 +76,17 @@ pub enum Error {
     #[error("parser error at {}: {message}", span.start())]
     Parse { message: String, span: SourceSpan },
     #[error("runtime error: {message}")]
-    Runtime { message: String },
+    Runtime {
+        message: String,
+        span: Option<SourceSpan>,
+    },
     /// An arbitrary JavaScript thrown value owned by the VM that produced it.
     #[error("javascript exception: {display}")]
     JavaScript {
         value: Value,
-        metadata: Option<JavaScriptErrorMetadata>,
-        display: String,
+        metadata: Option<Box<JavaScriptErrorMetadata>>,
+        display: Box<str>,
+        span: Option<Box<SourceSpan>>,
     },
     /// A typed built-in exception request awaiting allocation in the active VM.
     /// This internal form must be converted to a real JavaScript object before
@@ -72,7 +95,10 @@ pub enum Error {
     #[error("javascript exception: {metadata}")]
     JavaScriptError { metadata: JavaScriptErrorMetadata },
     #[error("resource limit exceeded: {message}")]
-    ResourceLimit { message: String },
+    ResourceLimit {
+        message: String,
+        span: Option<SourceSpan>,
+    },
 }
 
 impl Error {
@@ -101,6 +127,7 @@ impl Error {
     pub fn runtime(message: impl Into<String>) -> Self {
         Self::Runtime {
             message: message.into(),
+            span: None,
         }
     }
 
@@ -116,25 +143,33 @@ impl Error {
     /// active call supplied them.
     #[must_use]
     pub fn javascript(value: Value) -> Self {
-        let display = value.to_string();
+        let display = value.to_string().into_boxed_str();
         Self::JavaScript {
             value,
             metadata: None,
             display,
+            span: None,
         }
     }
 
     pub(crate) fn javascript_with_metadata(
         value: Value,
         metadata: Option<JavaScriptErrorMetadata>,
+        fallback_span: Option<SourceSpan>,
     ) -> Self {
         let display = metadata
             .as_ref()
-            .map_or_else(|| value.to_string(), ToString::to_string);
+            .map_or_else(|| value.to_string(), ToString::to_string)
+            .into_boxed_str();
+        let span = metadata
+            .as_ref()
+            .and_then(JavaScriptErrorMetadata::source_span)
+            .or(fallback_span);
         Self::JavaScript {
             value,
-            metadata,
+            metadata: metadata.map(Box::new),
             display,
+            span: span.map(Box::new),
         }
     }
 
@@ -151,41 +186,36 @@ impl Error {
 
     /// Returns structured metadata for a built-in JavaScript Error instance.
     #[must_use]
-    pub const fn javascript_error_metadata(&self) -> Option<&JavaScriptErrorMetadata> {
+    pub fn javascript_error_metadata(&self) -> Option<&JavaScriptErrorMetadata> {
         let Self::JavaScript { metadata, .. } = self else {
             return None;
         };
-        metadata.as_ref()
+        metadata.as_deref()
     }
 
     /// Returns the standard error name when the thrown value is a built-in
     /// Error instance.
     #[must_use]
-    pub const fn javascript_error_name(&self) -> Option<&'static str> {
-        let Some(metadata) = self.javascript_error_metadata() else {
-            return None;
-        };
+    pub fn javascript_error_name(&self) -> Option<&'static str> {
+        let metadata = self.javascript_error_metadata()?;
         Some(metadata.name())
     }
 
     /// Returns the diagnostic message captured for a built-in Error instance.
     #[must_use]
-    pub const fn javascript_error_message(&self) -> Option<&str> {
-        let Some(metadata) = self.javascript_error_metadata() else {
-            return None;
-        };
+    pub fn javascript_error_message(&self) -> Option<&str> {
+        let metadata = self.javascript_error_metadata()?;
         Some(metadata.message())
     }
 
-    /// Returns the source range for a lexer or parser diagnostic.
+    /// Returns the source range for a frontend or runtime diagnostic.
     #[must_use]
-    pub const fn source_span(&self) -> Option<SourceSpan> {
+    pub fn source_span(&self) -> Option<SourceSpan> {
         match self {
             Self::Lex { span, .. } | Self::Parse { span, .. } => Some(*span),
-            Self::Runtime { .. }
-            | Self::JavaScript { .. }
-            | Self::JavaScriptError { .. }
-            | Self::ResourceLimit { .. } => None,
+            Self::Runtime { span, .. } | Self::ResourceLimit { span, .. } => *span,
+            Self::JavaScript { span, .. } => span.as_deref().copied(),
+            Self::JavaScriptError { metadata } => metadata.source_span(),
         }
     }
 
@@ -205,6 +235,7 @@ impl Error {
     pub fn limit(message: impl Into<String>) -> Self {
         Self::ResourceLimit {
             message: message.into(),
+            span: None,
         }
     }
 
@@ -220,21 +251,25 @@ impl Error {
                 message: format!("{context}: {message}"),
                 span,
             },
-            Self::Runtime { message } => Self::Runtime {
+            Self::Runtime { message, span } => Self::Runtime {
                 message: format!("{context}: {message}"),
+                span,
             },
             Self::JavaScript {
                 value,
                 metadata,
                 display,
+                span,
             } => Self::JavaScript {
                 value,
                 metadata,
                 display,
+                span,
             },
             Self::JavaScriptError { metadata } => Self::JavaScriptError { metadata },
-            Self::ResourceLimit { message } => Self::ResourceLimit {
+            Self::ResourceLimit { message, span } => Self::ResourceLimit {
                 message: format!("{context}: {message}"),
+                span,
             },
         }
     }
@@ -250,6 +285,40 @@ impl Error {
                 span: rebind_source_span(span, source_id, source),
             },
             error => error,
+        }
+    }
+
+    pub(crate) fn with_runtime_span(self, span: SourceSpan) -> Self {
+        match self {
+            Self::Runtime {
+                message,
+                span: existing,
+            } => Self::Runtime {
+                message,
+                span: existing.or(Some(span)),
+            },
+            Self::JavaScript {
+                value,
+                metadata,
+                display,
+                span: existing,
+            } => Self::JavaScript {
+                value,
+                metadata,
+                display,
+                span: existing.or_else(|| Some(Box::new(span))),
+            },
+            Self::JavaScriptError { metadata } => Self::JavaScriptError {
+                metadata: metadata.with_source_span(span),
+            },
+            Self::ResourceLimit {
+                message,
+                span: existing,
+            } => Self::ResourceLimit {
+                message,
+                span: existing.or(Some(span)),
+            },
+            error @ (Self::Lex { .. } | Self::Parse { .. }) => error,
         }
     }
 }
