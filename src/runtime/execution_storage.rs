@@ -9,6 +9,36 @@ use super::{
 };
 
 impl Context {
+    pub(super) fn discard_execution_suffix(
+        &mut self,
+        local_base: usize,
+        activation_base: usize,
+    ) -> Result<()> {
+        while self.locals.len() > local_base {
+            if self.pop_lexical_scope()?.is_none() {
+                return Err(Error::runtime("discarded local scope disappeared"));
+            }
+        }
+        let frames = self.activation_frames.split_off(activation_base);
+        let upvalue_count = frames.iter().try_fold(0_usize, |count, frame| {
+            count
+                .checked_add(frame.upvalues().map_or(0, |upvalues| upvalues.len()))
+                .ok_or_else(|| Error::limit("discarded upvalue count overflowed"))
+        })?;
+        let execution_frame_count = frames.iter().try_fold(frames.len(), |count, frame| {
+            count
+                .checked_add(frame.continuation().map_or(
+                    0,
+                    crate::runtime::bytecode::BytecodeContinuationFrame::control_count,
+                ))
+                .ok_or_else(|| Error::limit("discarded execution frame count overflowed"))
+        })?;
+        self.storage_ledger
+            .release_count(VmStorageKind::Binding, upvalue_count)?;
+        self.storage_ledger
+            .release_count(VmStorageKind::ExecutionFrame, execution_frame_count)
+    }
+
     pub(super) fn push_call_activation(
         &mut self,
         function: FunctionId,
@@ -44,7 +74,11 @@ impl Context {
             return Err(Error::runtime("function activation frame disappeared"));
         };
         if !frame.is_call() || frame.local_base() != Some(base) {
-            return Err(Error::runtime("function activation frame mismatch"));
+            return Err(Error::runtime(format!(
+                "function activation frame mismatch: expected local base {base}, actual {:?}, call {}",
+                frame.local_base(),
+                frame.is_call()
+            )));
         }
         if self.locals.len() != base {
             return Err(Error::runtime("function local scope stack mismatch"));

@@ -81,10 +81,13 @@ impl Context {
         binds_arguments: bool,
     ) -> Result<()> {
         let expected_local_count = expected_function_local_count(local_base, binds_arguments)?;
-        let local_scope_stack_ok = self.locals.len() == expected_local_count;
+        let actual_local_count = self.locals.len();
+        let local_scope_stack_ok = actual_local_count == expected_local_count;
         self.leave_function_local_frame(local_base)?;
         if !local_scope_stack_ok {
-            return Err(Error::runtime("function local scope stack mismatch"));
+            return Err(Error::runtime(format!(
+                "function local scope stack mismatch: expected {expected_local_count}, actual {actual_local_count}"
+            )));
         }
         Ok(())
     }

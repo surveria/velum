@@ -288,6 +288,7 @@ impl Context {
             completion @ (Completion::Return(_)
             | Completion::Break { .. }
             | Completion::Continue(_)) => completion.into_result().map(PatternStep::Value),
+            completion @ Completion::Suspended(_) => Ok(PatternStep::Abrupt(completion)),
         }
     }
 

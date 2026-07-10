@@ -463,6 +463,10 @@ impl Context {
     fn record_active_storage(&self, counter: &mut StorageCounter) -> Result<()> {
         counter.record(VmStorageKind::ExecutionFrame, self.locals.len())?;
         counter.record(VmStorageKind::ExecutionFrame, self.activation_frames.len())?;
+        counter.record(
+            VmStorageKind::ExecutionFrame,
+            self.suspended_async_execution_frame_count()?,
+        )?;
         for frame in &self.activation_frames {
             if let Some(continuation) = frame.continuation() {
                 counter.record(VmStorageKind::ExecutionFrame, continuation.control_count())?;
@@ -486,6 +490,10 @@ impl Context {
         for scope in &self.locals {
             counter.record(VmStorageKind::CacheEntry, scope.index_entry_count()?)?;
         }
+        counter.record(
+            VmStorageKind::CacheEntry,
+            self.suspended_async_cache_entry_count()?,
+        )?;
         if let Some(keys) = self.descriptor_property_keys {
             counter.record(VmStorageKind::CacheEntry, keys.keys().count())?;
         }

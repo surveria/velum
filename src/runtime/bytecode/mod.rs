@@ -260,6 +260,11 @@ impl Context {
                 Ok(None)
             }
             Completion::Throw(value) => Ok(Some(Completion::Throw(value))),
+            completion @ Completion::Suspended(_) => {
+                state.pc = next;
+                state.mark_suspended();
+                Ok(Some(completion))
+            }
             completion @ (Completion::Return(_)
             | Completion::Break { .. }
             | Completion::Continue(_)) => completion.into_result().map(|_| None),

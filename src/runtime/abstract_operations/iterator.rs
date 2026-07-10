@@ -239,6 +239,7 @@ impl Context {
             completion @ (Completion::Return(_)
             | Completion::Break { .. }
             | Completion::Continue(_)) => completion.into_result().map(Completion::Normal),
+            completion @ Completion::Suspended(_) => Ok(completion),
         }
     }
 
@@ -341,5 +342,6 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         | Completion::Return(value)
         | Completion::Break { value, .. } => Some(value),
         Completion::Continue(_) => None,
+        Completion::Suspended(_) => None,
     }
 }

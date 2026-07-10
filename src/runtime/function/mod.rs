@@ -23,6 +23,7 @@ mod intrinsic;
 mod parameters;
 mod properties;
 mod storage;
+mod suspended;
 mod upvalues;
 
 use crate::runtime::native::{
@@ -53,6 +54,7 @@ pub(super) use fast_path::FunctionFastPath;
 use parameters::FunctionParameterState;
 pub(in crate::runtime) use parameters::FunctionScopeTemplate;
 pub(super) use properties::{FunctionIntrinsicDefaults, FunctionProperties};
+pub(in crate::runtime) use suspended::SuspendedAsyncFunction;
 
 const FUNCTION_PROTOTYPE_APPLY_PROPERTY: &str = "apply";
 const FUNCTION_PROTOTYPE_BIND_PROPERTY: &str = "bind";
@@ -353,6 +355,12 @@ impl Context {
             &bytecode,
             remember_params,
         );
+        if result
+            .as_ref()
+            .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
+        {
+            return result;
+        }
         let binding_result = self.pop_function_binding_storage(local_base, binds_arguments);
         let activation_result = self.pop_call_activation(local_base);
         binding_result?;

@@ -143,6 +143,29 @@ impl Vm {
         &mut self.context
     }
 
+    /// Runs queued Promise reactions until the VM job queue is empty.
+    ///
+    /// # Errors
+    /// Fails when a job raises an unhandled runtime or resource-limit error.
+    pub fn run_jobs(&mut self) -> Result<usize> {
+        self.context.run_jobs()
+    }
+
+    /// Returns the number of Promise jobs currently ready to run.
+    #[must_use]
+    pub fn pending_job_count(&self) -> usize {
+        self.context.pending_job_count()
+    }
+
+    /// Discards all ready Promise jobs and reactions waiting on pending
+    /// Promises, including parked async function activations.
+    ///
+    /// # Errors
+    /// Fails if VM storage-accounting invariants cannot be reconciled.
+    pub fn cancel_jobs(&mut self) -> Result<usize> {
+        self.context.cancel_jobs()
+    }
+
     /// # Errors
     /// Fails when lexing, parsing, evaluation, or configured resource limits
     /// fail. An uncaught JavaScript value is returned as

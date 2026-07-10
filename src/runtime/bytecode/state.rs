@@ -11,6 +11,9 @@ pub(in crate::runtime) struct BytecodeState {
     pub(super) pc: BytecodeAddress,
     pub(super) stack: BytecodeStack,
     pub(super) last: Value,
+    suspended: bool,
+    resume_ready: bool,
+    resume_completion: Option<Completion>,
 }
 
 impl BytecodeState {
@@ -19,6 +22,9 @@ impl BytecodeState {
             pc: BytecodeAddress::new(0),
             stack: BytecodeStack::new(),
             last: Value::Undefined,
+            suspended: false,
+            resume_ready: false,
+            resume_completion: None,
         }
     }
 
@@ -26,6 +32,59 @@ impl BytecodeState {
         self.pc = BytecodeAddress::new(0);
         self.stack.clear();
         self.last = Value::Undefined;
+        self.suspended = false;
+        self.resume_ready = false;
+        self.resume_completion = None;
+    }
+
+    pub(super) fn prepare_run(&mut self) -> Result<()> {
+        if self.suspended {
+            return Err(Error::runtime(
+                "suspended bytecode state has no resume value",
+            ));
+        }
+        if self.resume_ready {
+            self.resume_ready = false;
+            return Ok(());
+        }
+        self.reset();
+        Ok(())
+    }
+
+    pub(super) const fn mark_suspended(&mut self) {
+        self.suspended = true;
+    }
+
+    pub(super) const fn is_suspended(&self) -> bool {
+        self.suspended
+    }
+
+    pub(super) const fn is_resuming(&self) -> bool {
+        self.suspended || self.resume_ready
+    }
+
+    pub(super) fn resume_await(&mut self, completion: Completion) -> Result<()> {
+        if !self.suspended {
+            return Err(Error::runtime(
+                "bytecode state is not awaiting a resume value",
+            ));
+        }
+        self.suspended = false;
+        self.resume_ready = true;
+        match completion {
+            Completion::Normal(value) => self.stack.push(value),
+            completion @ Completion::Throw(_) => self.resume_completion = Some(completion),
+            completion => return completion.into_result().map(|_| ()),
+        }
+        Ok(())
+    }
+
+    pub(super) fn take_resume_completion(&mut self) -> Option<Completion> {
+        self.resume_completion.take()
+    }
+
+    pub(super) const fn begin_run(&mut self) {
+        self.resume_ready = false;
     }
 
     pub(super) fn next_pc(&self) -> Result<BytecodeAddress> {
@@ -42,6 +101,7 @@ impl BytecodeState {
             .values()
             .iter()
             .chain(std::iter::once(&self.last))
+            .chain(self.resume_completion.iter().filter_map(completion_value))
     }
 
     pub(super) fn complete(&mut self, completion: BytecodeCompletion) -> Result<Completion> {
@@ -54,6 +114,16 @@ impl BytecodeState {
             BytecodeCompletion::Return => Ok(Completion::Return(self.stack.pop_single()?)),
             BytecodeCompletion::Throw => Ok(Completion::Throw(self.stack.pop_single()?)),
         }
+    }
+}
+
+const fn completion_value(completion: &Completion) -> Option<&Value> {
+    match completion {
+        Completion::Normal(value)
+        | Completion::Throw(value)
+        | Completion::Return(value)
+        | Completion::Break { value, .. } => Some(value),
+        Completion::Continue(_) | Completion::Suspended(_) => None,
     }
 }
 
@@ -172,7 +242,8 @@ pub(super) fn bytecode_loop_completion(
         completion @ (Completion::Break { .. }
         | Completion::Continue(Some(_))
         | Completion::Throw(_)
-        | Completion::Return(_)) => Some(completion),
+        | Completion::Return(_)
+        | Completion::Suspended(_)) => Some(completion),
     }
 }
 

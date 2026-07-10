@@ -10,7 +10,7 @@ use crate::{
 use super::job::PromiseReaction;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(in crate::runtime) struct PromiseId(usize);
+pub struct PromiseId(usize);
 
 impl PromiseId {
     pub(super) const fn new(index: usize) -> Self {
@@ -28,7 +28,7 @@ pub(in crate::runtime) enum PromiseResolverKind {
     Reject,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(in crate::runtime) struct Promise {
     pub(super) state: PromiseState,
 }
@@ -59,9 +59,31 @@ impl Promise {
         }
         Ok(())
     }
+
+    pub(in crate::runtime) fn suspended_execution_frame_count(&self) -> Result<usize> {
+        let PromiseState::Pending { reactions } = &self.state else {
+            return Ok(0);
+        };
+        reactions.iter().try_fold(0_usize, |count, reaction| {
+            count
+                .checked_add(reaction.execution_frame_count()?)
+                .ok_or_else(|| crate::Error::limit("suspended execution frame count overflowed"))
+        })
+    }
+
+    pub(in crate::runtime) fn suspended_cache_entry_count(&self) -> Result<usize> {
+        let PromiseState::Pending { reactions } = &self.state else {
+            return Ok(0);
+        };
+        reactions.iter().try_fold(0_usize, |count, reaction| {
+            count
+                .checked_add(reaction.cache_entry_count()?)
+                .ok_or_else(|| crate::Error::limit("suspended cache entry count overflowed"))
+        })
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(super) enum PromiseState {
     Pending { reactions: Vec<PromiseReaction> },
     Fulfilled(Value),

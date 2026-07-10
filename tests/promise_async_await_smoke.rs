@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use rs_quickjs::{Runtime, Value, Vm, VmStorageKind};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -129,6 +129,258 @@ fn await_reads_already_resolved_promise_value() -> TestResult {
 
     let value = context.eval("value")?;
     ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn pending_await_resumes_after_later_resolution() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    context.eval(
+        r"
+        let resolveLater;
+        let afterAwait = false;
+        let result = 0;
+
+        async function task() {
+            let value = await new Promise(function(resolve) {
+                resolveLater = resolve;
+            });
+            afterAwait = true;
+            return value + 1;
+        }
+
+        task().then(function(value) {
+            result = value;
+        });
+        ",
+    )?;
+
+    ensure_value(&context.eval("afterAwait")?, &Value::Bool(false))?;
+    context.eval("resolveLater(41)")?;
+    ensure_value(&context.eval("afterAwait")?, &Value::Bool(true))?;
+    ensure_value(&context.eval("result")?, &Value::Number(42.0))
+}
+
+#[test]
+fn async_function_can_suspend_more_than_once() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    context.eval(
+        r"
+        let resolveFirst;
+        let resolveSecond;
+        let stage = 0;
+        let result = 0;
+        let first = new Promise(function(resolve) { resolveFirst = resolve; });
+        let second = new Promise(function(resolve) { resolveSecond = resolve; });
+
+        async function task() {
+            let left = await first;
+            stage = 1;
+            let right = await second;
+            stage = 2;
+            return left + right;
+        }
+
+        task().then(function(value) {
+            result = value;
+        }, function(error) {
+            result = error.name + ':' + error.message;
+        });
+        ",
+    )?;
+
+    context.eval("resolveFirst(20)")?;
+    ensure_value(&context.eval("stage")?, &Value::Number(1.0))?;
+    ensure_value(&context.eval("result")?, &Value::Number(0.0))?;
+    context.eval("resolveSecond(22)")?;
+    ensure_value(&context.eval("stage")?, &Value::Number(2.0))?;
+    ensure_value(&context.eval("result")?, &Value::Number(42.0))
+}
+
+#[test]
+fn rejected_await_rejects_the_async_function_promise() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    context.eval(
+        r#"
+        let rejectLater;
+        let reason = "";
+        async function task() {
+            await new Promise(function(resolve, reject) {
+                rejectLater = reject;
+            });
+            reason = "continued";
+        }
+        task().catch(function(error) { reason = error; });
+        "#,
+    )?;
+
+    context.eval("rejectLater('offline')")?;
+    ensure_value(
+        &context.eval("reason")?,
+        &Value::String("offline".to_owned()),
+    )
+}
+
+#[test]
+fn pending_await_resumes_inside_structured_control() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    context.eval(
+        r"
+        let resolveLater;
+        let stage = 0;
+        async function task() {
+            let index = 0;
+            while (index < 2) {
+                index = index + 1;
+                let value = await new Promise(function(resolve) {
+                    resolveLater = resolve;
+                });
+                stage = stage + value;
+            }
+            return stage;
+        }
+        let result = 0;
+        task().then(function(value) {
+            result = value;
+        }, function(error) {
+            result = error.name + ':' + error.message;
+        });
+        ",
+    )?;
+
+    context.eval("resolveLater(20)")?;
+    ensure_value(&context.eval("stage")?, &Value::Number(20.0))?;
+    context.eval("resolveLater(22)")?;
+    ensure_value(&context.eval("stage")?, &Value::Number(42.0))?;
+    ensure_value(&context.eval("result")?, &Value::Number(42.0))
+}
+
+#[test]
+fn await_resumes_across_structured_control_kinds() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    context.eval(
+        r"
+        let result = 0;
+        async function task() {
+            let total = 0;
+            for (let index = 0; index < 2; index = index + 1) {
+                total = total + await Promise.resolve(5);
+            }
+            for (let value of [1, 2]) {
+                total = total + await Promise.resolve(value);
+            }
+            for (let key in { left: 1 }) {
+                total = total + await Promise.resolve(key === 'left' ? 3 : 0);
+            }
+            switch (await Promise.resolve(1)) {
+                case 1:
+                    total = total + await Promise.resolve(4);
+                    break;
+                default:
+                    total = -100;
+            }
+            try {
+                total = total + await Promise.resolve(10);
+            } finally {
+                total = total + await Promise.resolve(12);
+            }
+            return total;
+        }
+        task().then(function(value) { result = value; });
+        ",
+    )?;
+
+    ensure_value(&context.eval("result")?, &Value::Number(42.0))
+}
+
+#[test]
+fn embedder_can_cancel_parked_async_jobs() -> TestResult {
+    let mut vm = Vm::new();
+    vm.eval(
+        r"
+        let resolveLater;
+        let resumed = false;
+        async function task() {
+            await new Promise(function(resolve) { resolveLater = resolve; });
+            resumed = true;
+        }
+        task().then(function() { resumed = 'settled'; });
+        ",
+    )?;
+
+    let before = vm.storage_snapshot()?;
+    if before.count(VmStorageKind::ExecutionFrame) == 0
+        || before.count(VmStorageKind::PromiseReaction) == 0
+    {
+        return Err("expected parked async storage before cancellation".into());
+    }
+    let cancelled = vm.cancel_jobs()?;
+    if cancelled == 0 {
+        return Err("expected at least one cancelled Promise reaction".into());
+    }
+    if vm.pending_job_count() != 0 {
+        return Err("expected an empty ready-job queue after cancellation".into());
+    }
+    let after = vm.storage_snapshot()?;
+    if after.count(VmStorageKind::ExecutionFrame) != 0 {
+        return Err("expected cancellation to release parked execution frames".into());
+    }
+    if after.count(VmStorageKind::PromiseReaction) != 0 {
+        return Err("expected cancellation to release Promise reactions".into());
+    }
+    vm.eval("resolveLater(1)")?;
+    ensure_value(&vm.eval("resumed")?, &Value::Bool(false))
+}
+
+#[test]
+fn unsupported_top_level_await_does_not_leak_execution_frames() -> TestResult {
+    let mut vm = Vm::new();
+    let error = vm
+        .eval("await Promise.resolve(1)")
+        .err()
+        .ok_or("expected top-level await to require an async evaluation API")?;
+    if !error
+        .to_string()
+        .contains("top-level await requires an asynchronous evaluation API")
+    {
+        return Err(format!("unexpected top-level await error: {error}").into());
+    }
+    let snapshot = vm.storage_snapshot()?;
+    if snapshot.count(VmStorageKind::ExecutionFrame) != 0 {
+        return Err("top-level await retained execution frames after rejection".into());
+    }
+    Ok(())
+}
+
+#[test]
+fn await_resumes_in_a_later_promise_job() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let completion = context.eval(
+        r#"
+        let events = "";
+        async function task() {
+            events = events + "a";
+            await Promise.resolve(1);
+            events = events + "c";
+        }
+        task();
+        events = events + "b";
+        events;
+        "#,
+    )?;
+
+    ensure_value(&completion, &Value::String("ab".to_owned()))?;
+    ensure_value(&context.eval("events")?, &Value::String("abc".to_owned()))
 }
 
 #[test]

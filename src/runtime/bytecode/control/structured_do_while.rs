@@ -32,43 +32,53 @@ impl Context {
         ))?;
         let mut control = self.checkout_bytecode_control(handle)?;
         loop {
-            if let Err(error) = self.step() {
-                return self.finish_bytecode_control_result(handle, Err(error));
-            }
-            *control.loop_state_mut(BytecodeLoopKind::DoWhile)?.0 = BytecodeLoopPhase::Body;
-            let body_completion = self.run_bytecode_control_segment(
-                handle,
-                &mut control,
-                BytecodeControlStateSlot::Body,
-                |context, body_state| {
-                    context.eval_bytecode_block_with_linear_plan(
-                        body,
-                        body_plan.as_ref(),
-                        body_state,
-                    )
-                },
-            )?;
-            let (_, last) = control.loop_state_mut(BytecodeLoopKind::DoWhile)?;
-            match body_completion {
-                Completion::Normal(value) => *last = value,
-                Completion::Continue(None) => {}
-                Completion::Continue(Some(target)) if loop_label_matches(labels, &target) => {}
-                Completion::Break { label: None, value } => {
-                    *last = value;
-                    break;
+            let resumes_condition = *control.loop_state_mut(BytecodeLoopKind::DoWhile)?.0
+                == BytecodeLoopPhase::Condition;
+            if !resumes_condition {
+                let resumes_body = *control.loop_state_mut(BytecodeLoopKind::DoWhile)?.0
+                    == BytecodeLoopPhase::Body;
+                if !resumes_body && let Err(error) = self.step() {
+                    return self.finish_bytecode_control_result(handle, Err(error));
                 }
-                Completion::Break {
-                    label: Some(target),
-                    value,
-                } if loop_label_matches(labels, &target) => {
-                    *last = value;
-                    break;
-                }
-                completion @ (Completion::Break { .. }
-                | Completion::Continue(Some(_))
-                | Completion::Throw(_)
-                | Completion::Return(_)) => {
-                    return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
+                *control.loop_state_mut(BytecodeLoopKind::DoWhile)?.0 = BytecodeLoopPhase::Body;
+                let body_completion = self.run_bytecode_control_segment(
+                    handle,
+                    &mut control,
+                    BytecodeControlStateSlot::Body,
+                    |context, body_state| {
+                        context.eval_bytecode_block_with_linear_plan(
+                            body,
+                            body_plan.as_ref(),
+                            body_state,
+                        )
+                    },
+                )?;
+                let (_, last) = control.loop_state_mut(BytecodeLoopKind::DoWhile)?;
+                match body_completion {
+                    Completion::Normal(value) => *last = value,
+                    Completion::Continue(None) => {}
+                    Completion::Continue(Some(target)) if loop_label_matches(labels, &target) => {}
+                    Completion::Break { label: None, value } => {
+                        *last = value;
+                        break;
+                    }
+                    Completion::Break {
+                        label: Some(target),
+                        value,
+                    } if loop_label_matches(labels, &target) => {
+                        *last = value;
+                        break;
+                    }
+                    completion @ (Completion::Break { .. }
+                    | Completion::Continue(Some(_))
+                    | Completion::Throw(_)
+                    | Completion::Return(_)) => {
+                        return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
+                    }
+                    completion @ Completion::Suspended(_) => {
+                        self.park_bytecode_control(handle, control)?;
+                        return Ok(Some(completion));
+                    }
                 }
             }
             *control.loop_state_mut(BytecodeLoopKind::DoWhile)?.0 = BytecodeLoopPhase::Condition;
@@ -87,6 +97,10 @@ impl Context {
             match condition_result {
                 BytecodeCondition::Value(true) => {}
                 BytecodeCondition::Value(false) => break,
+                BytecodeCondition::Completion(completion @ Completion::Suspended(_)) => {
+                    self.park_bytecode_control(handle, control)?;
+                    return Ok(Some(completion));
+                }
                 BytecodeCondition::Completion(completion) => {
                     return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
                 }
