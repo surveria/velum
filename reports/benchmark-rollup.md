@@ -20,12 +20,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260710T222749Z.md`
-- Task: PR #444: docs: embed theme-aware SVG benchmark chart
-- Performance: 7.19x (4/5 >1.00x) (from `rsqjs-test-report-20260710T222749Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T222749Z.md`)
+- `rsqjs-test-report-20260710T224642Z.md`
+- Task: PR #442: AS-06a2b: introduce structured control continuation records
+- Performance: 5.38x (4/5 >1.00x) (from `rsqjs-test-report-20260710T224642Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T224642Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T222749Z.md`)
+- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T224642Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -432,3 +432,4 @@ Latest report:
 | `20260710T215609Z` `544a7d6` PR #440: AS-06a2a1: remove synchronous function continuation overhead | 5.54x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T221916Z` `e484f27` PR #443: runner: add theme-aware SVG benchmark charts | 5.52x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T222749Z` `9f09c97` PR #444: docs: embed theme-aware SVG benchmark chart | 7.19x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
+| `20260710T224642Z` `e67cdb5` PR #442: AS-06a2b: introduce structured control continuation records | 5.38x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
