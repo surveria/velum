@@ -54,7 +54,7 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let (callback, callback_this) = Self::array_callback_and_this_arg(args)?;
+        let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         if let Some(value) =
             self.eval_packed_numeric_array_flat_map(callback, &callback_this, this_value)?
         {

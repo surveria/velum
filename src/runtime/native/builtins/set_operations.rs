@@ -230,11 +230,11 @@ impl Context {
             ));
         }
         let has = self.get_property_value(other, SET_HAS_PROPERTY)?;
-        if !Self::is_callable(&has) {
+        if !self.semantic_is_callable(&has)? {
             return Err(Error::type_error(SET_LIKE_HAS_ERROR));
         }
         let keys = self.get_property_value(other, SET_KEYS_PROPERTY)?;
-        if !Self::is_callable(&keys) {
+        if !self.semantic_is_callable(&keys)? {
             return Err(Error::type_error(SET_LIKE_KEYS_ERROR));
         }
         Ok(SetRecord {
@@ -247,13 +247,13 @@ impl Context {
 
     fn set_record_has(&mut self, record: &SetRecord, value: &Value) -> Result<bool> {
         let args = [value.clone()];
-        let result = self.set_call(record.has.clone(), &args, record.object.clone())?;
+        let result = self.set_call(&record.has, &args, record.object.clone())?;
         Ok(result.is_truthy())
     }
 
     /// Drive the iterator returned by the set-like `keys` method to completion.
     fn set_record_keys(&mut self, record: &SetRecord) -> Result<Vec<Value>> {
-        let iterator = self.set_call(record.keys.clone(), &[], record.object.clone())?;
+        let iterator = self.set_call(&record.keys, &[], record.object.clone())?;
         if !matches!(iterator, Value::Object(_)) {
             return Err(Error::type_error(SET_KEYS_ITERATOR_ERROR));
         }
@@ -261,7 +261,7 @@ impl Context {
         let mut values = Vec::new();
         loop {
             self.step()?;
-            let result = self.set_call(next.clone(), &[], iterator.clone())?;
+            let result = self.set_call(&next, &[], iterator.clone())?;
             if !matches!(result, Value::Object(_)) {
                 return Err(Error::type_error(SET_KEYS_RESULT_ERROR));
             }
@@ -274,7 +274,7 @@ impl Context {
         Ok(values)
     }
 
-    fn set_call(&mut self, callee: Value, args: &[Value], this_value: Value) -> Result<Value> {
+    fn set_call(&mut self, callee: &Value, args: &[Value], this_value: Value) -> Result<Value> {
         match self.eval_call_completion(callee, args, this_value)? {
             Completion::Normal(value) => Ok(value),
             completion => completion.into_result(),

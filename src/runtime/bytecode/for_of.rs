@@ -129,7 +129,7 @@ impl Context {
         if matches!(method, Value::Undefined | Value::Null) {
             return Ok(None);
         }
-        let iterator = match self.eval_call_completion(method, &[], iterable.clone())? {
+        let iterator = match self.eval_call_completion(&method, &[], iterable.clone())? {
             Completion::Normal(value) => value,
             completion => return completion.into_result().map(|_| None),
         };
@@ -188,7 +188,7 @@ impl Context {
                 }
                 let next = next.clone();
                 let iterator = iterator.clone();
-                let result = match self.eval_call_completion(next, &[], iterator)? {
+                let result = match self.eval_call_completion(&next, &[], iterator)? {
                     Completion::Normal(value) => value,
                     Completion::Throw(value) => {
                         // A throw from next() ends iteration without close.
@@ -248,7 +248,7 @@ impl Context {
         if matches!(return_method, Value::Undefined | Value::Null) {
             return;
         }
-        if let Err(error) = self.eval_call_completion(return_method, &[], iterator) {
+        if let Err(error) = self.eval_call_completion(&return_method, &[], iterator) {
             drop(error);
         }
     }

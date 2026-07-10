@@ -166,13 +166,13 @@ src/runtime/object/array/search.rs:same_value_zero'
   invocation="$(
     function_owners 'fn[[:space:]]+[a-z_]*(is_callable|is_constructor)[a-z_]*'
   )"
-  expected_invocation='src/runtime/native/core.rs:is_constructor_value
-src/runtime/promise/mod.rs:is_callable'
+  expected_invocation='src/runtime/semantic_object/invocation.rs:semantic_is_callable
+src/runtime/semantic_object/invocation.rs:semantic_is_constructor'
   compare_set "callable/constructor predicate allowlist" "${invocation}" "${expected_invocation}"
 
   semantic_object="$(
     function_owners \
-      'fn[[:space:]]+[a-z_]*(semantic_object_ref|semantic_property_read|semantic_property_presence|semantic_property_write|semantic_property_delete|semantic_reflect_property_write|semantic_define_own_property|semantic_own_enumerable_string_keys|semantic_own_property|semantic_get_prototype|semantic_try_set_prototype|semantic_is_extensible|semantic_prevent_extensions|semantic_set_integrity_level|semantic_test_integrity_level|finish_semantic_property_read|finish_semantic_property_presence|finish_semantic_property_write|finish_semantic_property_delete|delete_property_value_with_lookup|is_object_like|constructor_return_is_object)[a-z_]*'
+      'fn[[:space:]]+[a-z_]*(semantic_object_ref|semantic_type_name|semantic_call|semantic_construct|semantic_property_read|semantic_property_presence|semantic_property_write|semantic_property_delete|semantic_reflect_property_write|semantic_define_own_property|semantic_own_enumerable_string_keys|semantic_own_property|semantic_get_prototype|semantic_try_set_prototype|semantic_is_extensible|semantic_prevent_extensions|semantic_set_integrity_level|semantic_test_integrity_level|finish_semantic_property_read|finish_semantic_property_presence|finish_semantic_property_write|finish_semantic_property_delete|delete_property_value_with_lookup|is_object_like|constructor_return_is_object)[a-z_]*'
   )"
   expected_semantic_object='src/runtime/semantic_object.rs:finish_semantic_property_presence
 src/runtime/semantic_object.rs:finish_semantic_property_read
@@ -184,6 +184,9 @@ src/runtime/semantic_object/descriptor.rs:semantic_define_own_property_from_valu
 src/runtime/semantic_object/descriptor.rs:semantic_define_own_property_update
 src/runtime/semantic_object/descriptor.rs:semantic_define_own_property_update_with_descriptor
 src/runtime/semantic_object/descriptor.rs:semantic_own_property_descriptor
+src/runtime/semantic_object/invocation.rs:semantic_call
+src/runtime/semantic_object/invocation.rs:semantic_construct
+src/runtime/semantic_object/invocation.rs:semantic_type_name
 src/runtime/semantic_object/keys.rs:semantic_own_enumerable_string_keys
 src/runtime/semantic_object/keys.rs:semantic_own_property_keys
 src/runtime/semantic_object/keys.rs:semantic_own_property_names

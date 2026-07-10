@@ -401,14 +401,14 @@ impl Context {
     ) -> Result<Value> {
         let collection = self.collection_from_this(this_value, kind)?;
         let callback = first_arg(&args);
-        if !Self::is_callable(&callback) {
+        if !self.semantic_is_callable(&callback)? {
             return Err(Error::type_error(FOR_EACH_CALLBACK_ERROR));
         }
         let callback_this = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
         let entries = self.collection_entries(collection)?;
         for (key, value) in entries {
             let call_args = [value, key, this_value.clone()];
-            match self.eval_call_completion(callback.clone(), &call_args, callback_this.clone())? {
+            match self.eval_call_completion(&callback, &call_args, callback_this.clone())? {
                 Completion::Normal(_) => {}
                 completion => return completion.into_result(),
             }

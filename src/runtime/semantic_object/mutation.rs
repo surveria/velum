@@ -211,7 +211,7 @@ impl Context {
                 if !descriptor.has_setter() {
                     return Ok(false);
                 }
-                self.call_accessor_function(descriptor.set(), receiver.clone(), &[value])?;
+                self.call_accessor_function(&descriptor.set(), receiver.clone(), &[value])?;
                 Ok(true)
             }
         }

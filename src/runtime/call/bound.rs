@@ -34,7 +34,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        if !Self::is_callable(this_value) {
+        if !self.semantic_is_callable(this_value)? {
             return Err(Error::type_error(CALL_TARGET_NOT_CALLABLE_ERROR));
         }
         let (call_this, call_args): (Value, &[Value]) =
@@ -43,7 +43,7 @@ impl Context {
             } else {
                 (Value::Undefined, &[])
             };
-        self.eval_call_value(this_value.clone(), call_args, call_this)
+        self.eval_call_value(this_value, call_args, call_this)
     }
 
     pub(in crate::runtime) fn eval_function_prototype_apply(
@@ -51,14 +51,14 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        if !Self::is_callable(this_value) {
+        if !self.semantic_is_callable(this_value)? {
             return Err(Error::type_error(APPLY_TARGET_NOT_CALLABLE_ERROR));
         }
         let slice = args.as_slice();
         let this_arg = slice.first().cloned().unwrap_or(Value::Undefined);
         let args_array = slice.get(1).cloned().unwrap_or(Value::Undefined);
         let call_args = self.create_list_from_array_like(&args_array)?;
-        self.eval_call_value(this_value.clone(), &call_args, this_arg)
+        self.eval_call_value(this_value, &call_args, this_arg)
     }
 
     pub(in crate::runtime) fn eval_function_prototype_has_instance(
@@ -66,7 +66,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        if !Self::is_callable(this_value) {
+        if !self.semantic_is_callable(this_value)? {
             return Ok(Value::Bool(false));
         }
         let value = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
@@ -109,7 +109,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        if !Self::is_callable(this_value) {
+        if !self.semantic_is_callable(this_value)? {
             return Err(Error::type_error(BIND_TARGET_NOT_CALLABLE_ERROR));
         }
         let (bound_this, bound_args) =
@@ -136,7 +136,36 @@ impl Context {
         let mut values = Vec::with_capacity(capacity);
         values.extend_from_slice(&function.args);
         values.extend_from_slice(call_args);
-        self.eval_call_value(function.target, &values, function.this_value)
+        self.eval_call_value(&function.target, &values, function.this_value)
+    }
+
+    pub(in crate::runtime) fn eval_bound_function_construct(
+        &mut self,
+        id: BoundFunctionId,
+        args: &[Value],
+        bound_value: &Value,
+        new_target: Value,
+    ) -> Result<Value> {
+        let function = self.bound_function(id)?.clone();
+        let capacity = function
+            .args
+            .len()
+            .checked_add(args.len())
+            .ok_or_else(|| Error::limit("bound constructor argument count overflowed"))?;
+        let mut values = Vec::with_capacity(capacity);
+        values.extend_from_slice(&function.args);
+        values.extend_from_slice(args);
+        let new_target = if &new_target == bound_value {
+            function.target.clone()
+        } else {
+            new_target
+        };
+        self.semantic_construct(&function.target, &values, new_target)
+    }
+
+    pub(in crate::runtime) fn bound_function_target(&self, id: BoundFunctionId) -> Result<Value> {
+        self.bound_function(id)
+            .map(|function| function.target.clone())
     }
 
     fn create_bound_function(

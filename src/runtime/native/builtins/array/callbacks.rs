@@ -28,7 +28,7 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let (callback, callback_this) = Self::array_callback_and_this_arg(args)?;
+        let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         self.visit_array_like_present(this_value, |context, index, value| {
             context.call_array_callback(
                 callback,
@@ -55,7 +55,7 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let (callback, callback_this) = Self::array_callback_and_this_arg(args)?;
+        let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         if let Some(value) = self.eval_packed_numeric_array_map(callback, this_value)? {
             return Ok(value);
         }
@@ -88,7 +88,7 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let (callback, callback_this) = Self::array_callback_and_this_arg(args)?;
+        let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         if let Some(value) = self.eval_packed_numeric_array_filter(callback, this_value)? {
             return Ok(value);
         }
@@ -122,7 +122,7 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let (callback, callback_this) = Self::array_callback_and_this_arg(args)?;
+        let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         if let Some(value) = self.eval_packed_numeric_array_some(callback, this_value)? {
             return Ok(value);
         }
@@ -157,7 +157,7 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let (callback, callback_this) = Self::array_callback_and_this_arg(args)?;
+        let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         if let Some(value) = self.eval_packed_numeric_array_every(callback, this_value)? {
             return Ok(value);
         }
@@ -192,7 +192,7 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let (callback, callback_this) = Self::array_callback_and_this_arg(args)?;
+        let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         if let Some(value) = self.eval_packed_numeric_array_find(callback, this_value)? {
             return Ok(value);
         }
@@ -231,7 +231,7 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let (callback, callback_this) = Self::array_callback_and_this_arg(args)?;
+        let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         if let Some(value) = self.eval_packed_numeric_array_find_index(callback, this_value)? {
             return Ok(value);
         }
@@ -524,7 +524,7 @@ impl Context {
         this_value: &Value,
         direction: ReduceDirection,
     ) -> Result<Value> {
-        let callback = Self::array_callback_arg(args)?;
+        let callback = self.array_callback_arg(args)?;
         let has_initial = args.get(1).is_some();
         let initial = args.get(1).cloned();
         if let Some(value) =
@@ -642,7 +642,7 @@ impl Context {
     ) -> Result<Value> {
         let index = Self::array_like_index_value(index)?;
         let call_args = [value.clone(), index, object.clone()];
-        match self.eval_call_completion(callback.clone(), &call_args, callback_this)? {
+        match self.eval_call_completion(callback, &call_args, callback_this)? {
             Completion::Normal(value) => Ok(value),
             completion => completion.into_result(),
         }
@@ -658,7 +658,7 @@ impl Context {
     ) -> Result<Value> {
         let index = Self::array_like_index_value(index)?;
         let call_args = [accumulator, value, index, object.clone()];
-        match self.eval_call_completion(callback.clone(), &call_args, Value::Undefined)? {
+        match self.eval_call_completion(callback, &call_args, Value::Undefined)? {
             Completion::Normal(value) => Ok(value),
             completion => completion.into_result(),
         }
@@ -700,17 +700,20 @@ impl Context {
         self.array_like_length(this_value)
     }
 
-    pub(super) fn array_callback_and_this_arg(args: &[Value]) -> Result<(&Value, Value)> {
-        let callback = Self::array_callback_arg(args)?;
+    pub(super) fn array_callback_and_this_arg<'args>(
+        &self,
+        args: &'args [Value],
+    ) -> Result<(&'args Value, Value)> {
+        let callback = self.array_callback_arg(args)?;
         let callback_this = args.get(1).cloned().unwrap_or(Value::Undefined);
         Ok((callback, callback_this))
     }
 
-    fn array_callback_arg(args: &[Value]) -> Result<&Value> {
+    fn array_callback_arg<'args>(&self, args: &'args [Value]) -> Result<&'args Value> {
         let Some(callback) = args.first() else {
             return Err(Error::type_error(ARRAY_CALLBACK_NOT_CALLABLE_ERROR));
         };
-        if Self::is_callable(callback) {
+        if self.semantic_is_callable(callback)? {
             return Ok(callback);
         }
         Err(Error::type_error(ARRAY_CALLBACK_NOT_CALLABLE_ERROR))

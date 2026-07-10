@@ -277,7 +277,8 @@ impl Context {
             }
             BytecodeInstruction::TypeOfValue => {
                 let value = state.stack.pop()?;
-                state.stack.push(self.heap_string_value(value.type_name())?);
+                let type_name = self.semantic_type_name(&value)?;
+                state.stack.push(self.heap_string_value(type_name)?);
                 state.pc = next;
                 Ok(None)
             }

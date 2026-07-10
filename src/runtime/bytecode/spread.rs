@@ -158,7 +158,7 @@ impl Context {
         let packed = state.stack.pop()?;
         let args = self.spread_call_arguments(&packed)?;
         let callee = self.eval_bytecode_identifier(callee)?;
-        let completion = self.eval_call_completion(callee, &args, Value::Undefined)?;
+        let completion = self.eval_call_completion(&callee, &args, Value::Undefined)?;
         Ok(Self::push_spread_completion(state, completion, next))
     }
 
@@ -170,7 +170,7 @@ impl Context {
         let packed = state.stack.pop()?;
         let args = self.spread_call_arguments(&packed)?;
         let callee = state.stack.pop()?;
-        let completion = self.eval_call_completion(callee, &args, Value::Undefined)?;
+        let completion = self.eval_call_completion(&callee, &args, Value::Undefined)?;
         Ok(Self::push_spread_completion(state, completion, next))
     }
 
@@ -185,7 +185,7 @@ impl Context {
         let this_value = state.stack.pop()?;
         let callee =
             self.get_static_property_value(&this_value, property.name(), property.access())?;
-        let completion = self.eval_call_completion(callee, &args, this_value)?;
+        let completion = self.eval_call_completion(&callee, &args, this_value)?;
         Ok(Self::push_spread_completion(state, completion, next))
     }
 
@@ -202,7 +202,7 @@ impl Context {
         let key = self.dynamic_property_key(&key_value)?;
         let callee =
             self.get_cached_dynamic_property_value(&this_value, &key, property.access())?;
-        let completion = self.eval_call_completion(callee, &args, this_value)?;
+        let completion = self.eval_call_completion(&callee, &args, this_value)?;
         Ok(Self::push_spread_completion(state, completion, next))
     }
 
@@ -214,7 +214,7 @@ impl Context {
         let packed = state.stack.pop()?;
         let args = self.spread_call_arguments(&packed)?;
         let constructor = state.stack.pop()?;
-        let value = self.eval_new_value(constructor, &args)?;
+        let value = self.eval_new_value(&constructor, &args)?;
         state.stack.push(value);
         state.pc = next;
         Ok(None)

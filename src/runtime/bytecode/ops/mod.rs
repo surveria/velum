@@ -77,10 +77,13 @@ impl Context {
             return self.heap_string_value(Value::Number(0.0).type_name());
         }
         if let Some(binding) = self.get_binding_bytecode(name)? {
-            return self.heap_string_value(binding.value(name.name())?.type_name());
+            let value = binding.value(name.name())?;
+            let type_name = self.semantic_type_name(&value)?;
+            return self.heap_string_value(type_name);
         }
         if let Some(value) = self.builtin_value(name.name().name())? {
-            return self.heap_string_value(value.type_name());
+            let type_name = self.semantic_type_name(&value)?;
+            return self.heap_string_value(type_name);
         }
         self.heap_string_value(Value::Undefined.type_name())
     }
@@ -244,7 +247,7 @@ impl Context {
     ) -> Result<Value> {
         if let Some(handler) = self.custom_has_instance_handler(right)? {
             let args = [left.clone()];
-            let result = match self.eval_call_completion(handler, &args, right.clone())? {
+            let result = match self.eval_call_completion(&handler, &args, right.clone())? {
                 Completion::Normal(value) => value,
                 completion => return completion.into_result(),
             };
@@ -278,16 +281,19 @@ impl Context {
         };
         let handler = self.get_has_instance_property(right, symbol)?;
         match &handler {
-            Value::Undefined | Value::Null => Ok(None),
+            Value::Undefined | Value::Null => return Ok(None),
             Value::NativeFunction(id)
                 if self.native_function(*id)?.kind()
                     == NativeFunctionKind::FunctionPrototypeHasInstance =>
             {
-                Ok(None)
+                return Ok(None);
             }
-            _ if Self::is_callable(&handler) => Ok(Some(handler)),
-            _ => Err(Error::type_error(HAS_INSTANCE_NOT_CALLABLE_ERROR)),
+            _ => {}
         }
+        if self.semantic_is_callable(&handler)? {
+            return Ok(Some(handler));
+        }
+        Err(Error::type_error(HAS_INSTANCE_NOT_CALLABLE_ERROR))
     }
 
     fn has_instance_symbol(&mut self) -> Result<Option<crate::storage::symbol::SymbolId>> {
@@ -325,29 +331,10 @@ impl Context {
     }
 
     fn instanceof_target_prototype(&mut self, right: &Value) -> Result<crate::value::ObjectId> {
-        if !Self::is_callable(right) {
+        if !self.semantic_is_callable(right)? {
             return Err(Error::type_error(INSTANCEOF_NOT_CALLABLE_ERROR));
         }
-        let prototype = match right {
-            Value::Function(id) => self.get_function_property_lookup(
-                *id,
-                self.property_lookup(INSTANCEOF_PROTOTYPE_PROPERTY),
-            )?,
-            Value::NativeFunction(id) => self.get_native_function_property_lookup(
-                *id,
-                self.property_lookup(INSTANCEOF_PROTOTYPE_PROPERTY),
-            )?,
-            Value::HostFunction(_) => Value::Undefined,
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::Object(_)
-            | Value::Error(_) => return Err(Error::type_error(INSTANCEOF_NOT_CALLABLE_ERROR)),
-        };
+        let prototype = self.get_property_value(right, INSTANCEOF_PROTOTYPE_PROPERTY)?;
         let Value::Object(id) = prototype else {
             return Err(Error::type_error(INSTANCEOF_NON_OBJECT_PROTOTYPE_ERROR));
         };

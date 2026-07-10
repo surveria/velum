@@ -43,7 +43,7 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let comparator = Self::array_sort_comparator(args)?;
+        let comparator = self.array_sort_comparator(args)?;
         Self::ensure_array_like_object(this_value)?;
         if let Some(value) = self.eval_packed_numeric_array_sort(this_value, comparator.as_ref())? {
             return Ok(value);
@@ -76,7 +76,7 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let comparator = Self::array_sort_comparator(args)?;
+        let comparator = self.array_sort_comparator(args)?;
         Self::ensure_array_like_object(this_value)?;
         if let Some(value) =
             self.eval_packed_numeric_array_to_sorted(this_value, comparator.as_ref())?
@@ -105,10 +105,10 @@ impl Context {
         Ok(items)
     }
 
-    fn array_sort_comparator(args: &[Value]) -> Result<Option<Value>> {
+    fn array_sort_comparator(&self, args: &[Value]) -> Result<Option<Value>> {
         match args.first() {
             None | Some(Value::Undefined) => Ok(None),
-            Some(value) if Self::is_callable(value) => Ok(Some(value.clone())),
+            Some(value) if self.semantic_is_callable(value)? => Ok(Some(value.clone())),
             Some(_) => Err(Error::type_error(ARRAY_SORT_COMPARATOR_ERROR)),
         }
     }
@@ -316,7 +316,7 @@ impl Context {
 
     fn array_call_comparator(&mut self, comparator: &Value, x: &Value, y: &Value) -> Result<Value> {
         let call_args = [x.clone(), y.clone()];
-        match self.eval_call_completion(comparator.clone(), &call_args, Value::Undefined)? {
+        match self.eval_call_completion(comparator, &call_args, Value::Undefined)? {
             Completion::Normal(value) => Ok(value),
             completion => completion.into_result(),
         }

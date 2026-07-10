@@ -125,8 +125,15 @@ impl Context {
         if self.semantic_object_ref(&handler)?.is_none() {
             return Err(Error::type_error(PROXY_HANDLER_NOT_OBJECT_ERROR));
         }
-        self.objects
-            .create_proxy_object(target, handler, self.limits.max_objects)
+        let callable = self.semantic_is_callable(&target)?;
+        let constructable = self.semantic_is_constructor(&target)?;
+        self.objects.create_proxy_object(
+            target,
+            handler,
+            callable,
+            constructable,
+            self.limits.max_objects,
+        )
     }
 
     /// Resolve the wrapped target and handler for a proxy object, raising a
@@ -149,7 +156,7 @@ impl Context {
         if matches!(trap, Value::Undefined | Value::Null) {
             return Ok(None);
         }
-        if !Self::is_callable(&trap) {
+        if !self.semantic_is_callable(&trap)? {
             return Err(Error::type_error(PROXY_TRAP_NOT_CALLABLE_ERROR));
         }
         Ok(Some(trap))
@@ -167,7 +174,7 @@ impl Context {
             return self.get_property_value_with_lookup(&target, property);
         };
         let key = self.proxy_property_key_value(property)?;
-        self.eval_call_completion(trap, &[target, key, receiver], handler)?
+        self.eval_call_completion(&trap, &[target, key, receiver], handler)?
             .into_native_value_result()
     }
 
@@ -183,7 +190,7 @@ impl Context {
         };
         let key = self.proxy_property_key_value(property)?;
         let result = self
-            .eval_call_completion(trap, &[target, key], handler)?
+            .eval_call_completion(&trap, &[target, key], handler)?
             .into_native_value_result()?;
         Ok(result.is_truthy())
     }
@@ -214,7 +221,7 @@ impl Context {
         };
         let key = self.proxy_property_key_value(property)?;
         let result = self
-            .eval_call_completion(trap, &[target, key, value, receiver], handler)?
+            .eval_call_completion(&trap, &[target, key, value, receiver], handler)?
             .into_native_value_result()?;
         Ok(result.is_truthy())
     }
@@ -232,7 +239,7 @@ impl Context {
         };
         let key = self.proxy_property_key_value(property)?;
         let result = self
-            .eval_call_completion(trap, &[target, key], handler)?
+            .eval_call_completion(&trap, &[target, key], handler)?
             .into_native_value_result()?;
         Ok(result.is_truthy())
     }
@@ -246,7 +253,7 @@ impl Context {
                 .ok_or_else(|| Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR));
         };
         let result = self
-            .eval_call_completion(trap, std::slice::from_ref(&target), handler)?
+            .eval_call_completion(&trap, std::slice::from_ref(&target), handler)?
             .into_native_value_result()?;
         if !matches!(result, Value::Object(_) | Value::Null) {
             return Err(Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR));
@@ -267,7 +274,7 @@ impl Context {
                 .ok_or_else(|| Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR));
         };
         let result = self
-            .eval_call_completion(trap, &[target, prototype], handler)?
+            .eval_call_completion(&trap, &[target, prototype], handler)?
             .into_native_value_result()?;
         Ok(result.is_truthy())
     }
@@ -281,7 +288,7 @@ impl Context {
                 .ok_or_else(|| Error::type_error("proxy target is not an object"));
         };
         let result = self
-            .eval_call_completion(trap, &[target], handler)?
+            .eval_call_completion(&trap, &[target], handler)?
             .into_native_value_result()?;
         Ok(result.is_truthy())
     }
@@ -295,7 +302,7 @@ impl Context {
                 .ok_or_else(|| Error::type_error("proxy target is not an object"));
         };
         let result = self
-            .eval_call_completion(trap, &[target], handler)?
+            .eval_call_completion(&trap, &[target], handler)?
             .into_native_value_result()?;
         Ok(result.is_truthy())
     }
@@ -322,7 +329,7 @@ impl Context {
             );
         };
         let result = self
-            .eval_call_completion(trap, &[target, key, descriptor], handler)?
+            .eval_call_completion(&trap, &[target, key, descriptor], handler)?
             .into_native_value_result()?;
         Ok(result.is_truthy())
     }
@@ -338,7 +345,7 @@ impl Context {
             return self.semantic_own_property_keys(&target);
         };
         let result = self
-            .eval_call_completion(trap, std::slice::from_ref(&target), handler)?
+            .eval_call_completion(&trap, std::slice::from_ref(&target), handler)?
             .into_native_value_result()?;
         let keys = self.proxy_key_list_from_value(&result)?;
         self.validate_proxy_own_property_keys(&target, &keys)?;
@@ -359,7 +366,7 @@ impl Context {
             return self.semantic_own_property_descriptor(&target, &dynamic);
         };
         let result = self
-            .eval_call_completion(trap, &[target, key_value], handler)?
+            .eval_call_completion(&trap, &[target, key_value], handler)?
             .into_native_value_result()?;
         match result {
             Value::Undefined => Ok(None),
@@ -391,28 +398,28 @@ impl Context {
     ) -> Result<Value> {
         let (target, handler) = self.proxy_target_handler(id)?;
         let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_APPLY)? else {
-            return self.eval_call_value(target, args, this_value);
+            return self.eval_call_value(&target, args, this_value);
         };
         let args_array = self.create_array_from_elements(args.to_vec())?;
-        self.eval_call_completion(trap, &[target, this_value, args_array], handler)?
+        self.eval_call_completion(&trap, &[target, this_value, args_array], handler)?
             .into_native_value_result()
     }
 
     /// Proxy `[[Construct]]`: dispatch the `construct` trap or construct the
-    /// target. The proxy itself is passed as the new target.
+    /// target while preserving the caller's explicit `newTarget`.
     pub(in crate::runtime) fn proxy_construct(
         &mut self,
         id: ObjectId,
         args: &[Value],
+        new_target: Value,
     ) -> Result<Value> {
         let (target, handler) = self.proxy_target_handler(id)?;
         let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_CONSTRUCT)? else {
-            return self.eval_new_value(target, args);
+            return self.semantic_construct(&target, args, new_target);
         };
         let args_array = self.create_array_from_elements(args.to_vec())?;
-        let new_target = Value::Object(id);
         let result = self
-            .eval_call_completion(trap, &[target, args_array, new_target], handler)?
+            .eval_call_completion(&trap, &[target, args_array, new_target], handler)?
             .into_native_value_result()?;
         if self.semantic_object_ref(&result)?.is_none() {
             return Err(Error::type_error(PROXY_CONSTRUCT_INVALID_ERROR));

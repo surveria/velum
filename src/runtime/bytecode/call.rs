@@ -108,7 +108,7 @@ impl Context {
                 let args = state.stack.tail(*arg_count)?;
                 let callee = state.stack.value_before_tail(*arg_count, 0)?.clone();
                 let completion =
-                    self.eval_cached_call_completion(*site, callee, args, Value::Undefined)?;
+                    self.eval_cached_call_completion(*site, &callee, args, Value::Undefined)?;
                 let Completion::Normal(value) = completion else {
                     return Ok(Some(completion));
                 };
@@ -214,13 +214,13 @@ impl Context {
             let value = self.eval_direct_native_property_call(
                 target,
                 operand.access(),
-                callee,
+                &callee,
                 args,
                 this_value,
             )?;
             Completion::Normal(value)
         } else {
-            self.eval_call_completion(callee, args, this_value.clone())?
+            self.eval_call_completion(&callee, args, this_value.clone())?
         };
         let Completion::Normal(value) = completion else {
             return Ok(completion);
@@ -256,7 +256,7 @@ impl Context {
                 .eval_direct_native_property_call(
                     target,
                     property.access(),
-                    callee,
+                    &callee,
                     args,
                     this_value,
                 )
@@ -264,7 +264,7 @@ impl Context {
         }
         let callee =
             self.get_static_property_value(this_value, property.name(), property.access())?;
-        self.eval_call_completion(callee, args, this_value.clone())
+        self.eval_call_completion(&callee, args, this_value.clone())
     }
 
     fn eval_bytecode_creation_instruction(
@@ -289,7 +289,7 @@ impl Context {
             BytecodeInstruction::ConstructValue { arg_count } => {
                 let args = state.stack.tail(*arg_count)?;
                 let constructor = state.stack.value_before_tail(*arg_count, 0)?.clone();
-                let value = self.eval_new_value(constructor, args)?;
+                let value = self.eval_new_value(&constructor, args)?;
                 state.stack.drop_tail(*arg_count)?;
                 state.stack.pop()?;
                 state.stack.push(value);

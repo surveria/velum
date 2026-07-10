@@ -37,7 +37,13 @@ impl Context {
         let tag = match this_value {
             Value::Undefined => return self.heap_string_value(OBJECT_UNDEFINED_TAG),
             Value::Null => return self.heap_string_value(OBJECT_NULL_TAG),
-            Value::Object(id) => self.object_builtin_tag(*id)?,
+            Value::Object(id) => {
+                if self.semantic_is_callable(this_value)? {
+                    TAG_FUNCTION.to_owned()
+                } else {
+                    self.object_builtin_tag(*id)?
+                }
+            }
             Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => {
                 TAG_FUNCTION.to_owned()
             }
@@ -64,7 +70,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let method = self.get_property_value(this_value, TO_LOCALE_STRING_METHOD)?;
-        match self.eval_call_completion(method, &[], this_value.clone())? {
+        match self.eval_call_completion(&method, &[], this_value.clone())? {
             Completion::Normal(value) => Ok(value),
             completion => completion.into_result(),
         }
