@@ -10,7 +10,7 @@ use crate::{
         shift_right_unsigned,
     },
     runtime::property::DynamicPropertyKey,
-    runtime::{Context, abstract_operations::to_boolean},
+    runtime::{Context, abstract_operations::to_boolean, control::reference_error_undefined},
     syntax::{BinaryOp, StaticName, StaticPropertyAccessId, UpdateOp},
     value::Value,
 };
@@ -105,7 +105,7 @@ impl Context {
     ) -> Result<Value> {
         let binding = self
             .get_binding_bytecode(name)?
-            .ok_or_else(|| Error::runtime(format!("ReferenceError: '{name}' is not defined")))?;
+            .ok_or_else(|| reference_error_undefined(name.name()))?;
         let old_value = binding.value(name.name())?;
         let new_value = Self::updated_bytecode_number(&old_value, op)?;
         self.checked_value(new_value.clone())?;
@@ -179,7 +179,7 @@ impl Context {
     ) -> Result<Value> {
         let binding = self
             .get_or_materialize_binding_bytecode(name)?
-            .ok_or_else(|| Error::runtime(format!("ReferenceError: '{name}' is not defined")))?;
+            .ok_or_else(|| reference_error_undefined(name.name()))?;
         let old_value = binding.value(name.name())?;
         let value = self.eval_bytecode_compound_value(op, &old_value, right)?;
         self.assign_bytecode_cell(name, &binding, value.clone())?;
@@ -301,9 +301,7 @@ impl Context {
             BytecodeAssignmentTarget::Binding(name) => {
                 let cell = self
                     .get_or_materialize_binding_bytecode(name)?
-                    .ok_or_else(|| {
-                        Error::runtime(format!("ReferenceError: '{name}' is not defined"))
-                    })?;
+                    .ok_or_else(|| reference_error_undefined(name.name()))?;
                 Ok(BytecodeAssignmentReference::Binding {
                     name: name.clone(),
                     cell,

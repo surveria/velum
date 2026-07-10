@@ -305,7 +305,7 @@ check_completion_error_boundary() {
   legacy_conversions="$(
     cd "${repo_root}"
     grep -R -n -E --include='*.rs' \
-      'uncaught throw:|REFERENCE_ERROR_PREFIX|Error::Exception' \
+      'uncaught throw:|ReferenceError:|REFERENCE_ERROR_PREFIX|Error::Exception' \
       src || true
   )"
   if [[ -n "${legacy_conversions}" ]]; then
