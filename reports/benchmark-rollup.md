@@ -10,6 +10,7 @@ Metric definition:
 - Full Test262 shows passed and failed case counts from the full Test262 corpus.
 - `1.00x` means QuickJS parity; lower performance, memory, and JetStream ratios are better.
 - Parentheses show budget exceptions over measured rows for each benchmark family.
+- Every chart panel uses the same first-parent `main` commit axis; a point is placed at the commit that added its canonical report.
 
 Artifacts:
 
@@ -17,12 +18,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260710T114057Z.md`
-- Task: PR #416: runtime: separate JavaScript throws from engine failures
-- Performance: 5.38x (4/5 >1.00x) (from `rsqjs-test-report-20260710T114057Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T114057Z.md`)
+- `rsqjs-test-report-20260710T115629Z.md`
+- Task: PR #417: runner: align benchmark charts to main commit history
+- Performance: 5.38x (4/5 >1.00x) (from `rsqjs-test-report-20260710T115629Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T115629Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 36553 passed / 66025 failed (35.63%) (from `rsqjs-test-report-20260710T114057Z.md`)
+- Full Test262: 36553 passed / 66025 failed (35.63%) (from `rsqjs-test-report-20260710T115629Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -402,3 +403,4 @@ Latest report:
 | `20260710T103147Z` `be331b2` PR #414: runtime: centralize GetMethod and property call operations | 5.47x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36209 passed / 66369 failed (35.30%) |
 | `20260710T110040Z` `fb9917e` PR #415: runtime: centralize iterator operations and closing | 5.49x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36221 passed / 66357 failed (35.31%) |
 | `20260710T114057Z` `d9ae782` PR #416: runtime: separate JavaScript throws from engine failures | 5.38x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36553 passed / 66025 failed (35.63%) |
+| `20260710T115629Z` `c67a2fa` PR #417: runner: align benchmark charts to main commit history | 5.38x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36553 passed / 66025 failed (35.63%) |
