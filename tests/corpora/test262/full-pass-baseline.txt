@@ -11394,6 +11394,10 @@ test/built-ins/Object/fromEntries/empty-iterable.js#default
 test/built-ins/Object/fromEntries/empty-iterable.js#strict
 test/built-ins/Object/fromEntries/evaluation-order.js#default
 test/built-ins/Object/fromEntries/evaluation-order.js#strict
+test/built-ins/Object/fromEntries/iterator-closed-for-null-entry.js#default
+test/built-ins/Object/fromEntries/iterator-closed-for-null-entry.js#strict
+test/built-ins/Object/fromEntries/iterator-closed-for-string-entry.js#default
+test/built-ins/Object/fromEntries/iterator-closed-for-string-entry.js#strict
 test/built-ins/Object/fromEntries/iterator-not-closed-for-next-returning-non-object.js#default
 test/built-ins/Object/fromEntries/iterator-not-closed-for-next-returning-non-object.js#strict
 test/built-ins/Object/fromEntries/iterator-not-closed-for-uncallable-next.js#default
@@ -11414,6 +11418,8 @@ test/built-ins/Object/fromEntries/simple-properties.js#default
 test/built-ins/Object/fromEntries/simple-properties.js#strict
 test/built-ins/Object/fromEntries/string-entry-object-succeeds.js#default
 test/built-ins/Object/fromEntries/string-entry-object-succeeds.js#strict
+test/built-ins/Object/fromEntries/string-entry-primitive-throws.js#default
+test/built-ins/Object/fromEntries/string-entry-primitive-throws.js#strict
 test/built-ins/Object/fromEntries/string-entry-string-object-succeeds.js#default
 test/built-ins/Object/fromEntries/string-entry-string-object-succeeds.js#strict
 test/built-ins/Object/fromEntries/supports-symbols.js#default
@@ -33456,8 +33462,12 @@ test/language/statements/for-of/head-var-no-expr.js#default
 test/language/statements/for-of/head-var-no-expr.js#strict
 test/language/statements/for-of/iterator-as-proxy.js#default
 test/language/statements/for-of/iterator-as-proxy.js#strict
+test/language/statements/for-of/iterator-close-non-object.js#default
+test/language/statements/for-of/iterator-close-non-object.js#strict
 test/language/statements/for-of/iterator-close-non-throw-get-method-is-null.js#default
 test/language/statements/for-of/iterator-close-non-throw-get-method-is-null.js#strict
+test/language/statements/for-of/iterator-close-non-throw-get-method-non-callable.js#default
+test/language/statements/for-of/iterator-close-non-throw-get-method-non-callable.js#strict
 test/language/statements/for-of/iterator-close-via-break.js#default
 test/language/statements/for-of/iterator-close-via-break.js#strict
 test/language/statements/for-of/iterator-close-via-continue.js#default
@@ -36189,6 +36199,8 @@ test/staging/sm/statements/for-loop-declaration-contains-computed-name.js#defaul
 test/staging/sm/statements/for-loop-declaration-contains-computed-name.js#strict
 test/staging/sm/statements/for-loop-declaration-contains-initializer.js#default
 test/staging/sm/statements/for-loop-declaration-contains-initializer.js#strict
+test/staging/sm/statements/for-of-iterator-close-throw.js#default
+test/staging/sm/statements/for-of-iterator-close-throw.js#strict
 test/staging/sm/statements/for-of-iterator-primitive.js#default
 test/staging/sm/statements/for-of-iterator-primitive.js#strict
 test/staging/sm/statements/for-of-var-with-initializer.js#default

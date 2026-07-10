@@ -186,10 +186,10 @@ proxies; several built-ins repeat the same matches.
 | Operation | Widest current facade | Physical and parallel paths | Required owner |
 | --- | --- | --- | --- |
 | `ToPropertyKey` | `Context::to_property_key` in `runtime/abstract_operations/conversion.rs`; `dynamic_property_key` is the interning/cache facade | AS-03b1a applies string-hint `ToPrimitive`, preserves Symbol identity, routes non-symbol primitives through shared `ToString`, and makes Object/Reflect/Proxy/dynamic bytecode consumers delegate | AS-03b1a complete in PR #412 |
-| `Get` | `Context::get` in `runtime/abstract_operations/property_call.rs`; `get_named` only adapts named keys | delegates object-like dispatch to AS-02b1, owns primitive string/prototype behavior, and leaves static caches as guarded backends rather than semantic owners | AS-03b2 locally complete in draft PR #414 |
-| `GetMethod` | `Context::get_method`; `get_named_method` only adapts named keys | composes shared `Get` with the AS-02c callable predicate; Proxy traps, `@@toPrimitive`, `@@hasInstance`, Object invocation, and Set-record methods delegate | AS-03b2 locally complete in draft PR #414 |
-| `Set` | `Context::set` with `SetFailureBehavior` | composes receiver-aware AS-02b2 `[[Set]]`; Reflect and Proxy use false-return behavior, while strict RegExp `lastIndex` writes throw | AS-03b2 locally complete in draft PR #414; bytecode assignment remains a guarded language-level path |
-| `Call` | `Context::call`; `call_value` only converts at native-value boundaries | composes AS-02c `semantic_call` and preserves `Completion`; generic consumers and cache misses delegate while guarded direct backends remain separate | AS-03b2 locally complete in draft PR #414 |
+| `Get` | `Context::get` in `runtime/abstract_operations/property_call.rs`; `get_named` only adapts named keys | delegates object-like dispatch to AS-02b1, owns primitive string/prototype behavior, and leaves static caches as guarded backends rather than semantic owners | AS-03b2 complete in PR #414 |
+| `GetMethod` | `Context::get_method`; `get_named_method` only adapts named keys | composes shared `Get` with the AS-02c callable predicate; Proxy traps, `@@toPrimitive`, `@@hasInstance`, Object invocation, and Set-record methods delegate | AS-03b2 complete in PR #414 |
+| `Set` | `Context::set` with `SetFailureBehavior` | composes receiver-aware AS-02b2 `[[Set]]`; Reflect and Proxy use false-return behavior, while strict RegExp `lastIndex` writes throw | AS-03b2 complete in PR #414; bytecode assignment remains a guarded language-level path |
+| `Call` | `Context::call`; `call_value` only converts at native-value boundaries | composes AS-02c `semantic_call` and preserves `Completion`; generic consumers and cache misses delegate while guarded direct backends remain separate | AS-03b2 complete in PR #414 |
 | `[[Get]]` | `Context::semantic_property_read[_with_receiver]` plus `finish_semantic_property_read` | AS-02b1 owns object-like dispatch; the AS-03b2 `Get` operation owns specification composition, while static caches optimize only the returned ordinary-object tail | AS-02b1 complete after PR #401 |
 | `[[HasProperty]]` | `Context::semantic_property_presence` plus `finish_semantic_property_presence` | AS-02b1 now owns object-like dispatch; static presence caches optimize only the returned ordinary-object tail, while primitive rejection remains in the property layer | AS-02b1 complete after PR #401; AS-03b later owns the abstract operation |
 | `[[Set]]` | `semantic_property_write` plus `finish_semantic_property_write`; `semantic_reflect_property_write` for explicit receivers | Static/dynamic caches optimize only ordinary tails; physical accessor/object/function stores remain backends; AS-03b2 `Set` chooses false versus throw | AS-02b2 complete in PR #403 |
@@ -305,33 +305,40 @@ for 35,987 of 102,578 full variants with 95 of 95 QuickJS differential cases.
 Merged AS-03b1a adds another 96 property-key variants without losing a prior
 expected pass, for 36,083 full variants and the same QuickJS result. Merged
 AS-03b1b adds 102 integer, length, and index variants with no loss, for 36,185
-full variants. AS-03b2 locally adds 24 strict RegExp `lastIndex` variants with
-no loss, for 36,209 full variants and 95 of 95 QuickJS cases. Iterator
-operations follow as AS-03b3.
+full variants. Merged AS-03b2 adds 24 strict RegExp `lastIndex` variants with
+no loss, for 36,209 full variants and 95 of 95 QuickJS cases. AS-03b3 locally
+adds 12 iterator-closing variants with no loss, for 36,221 full variants and
+the same QuickJS result.
 
 ## Iterator Map
 
-`runtime/bytecode/for_of.rs` is the widest current iterator implementation. It
-owns `ForOfSource`, protocol acquisition, step, and a best-effort close path.
-Destructuring, spread, Math iterable methods, Object.fromEntries, Map/Set, and
-WeakMap/WeakSet reuse portions of this bytecode-owned API.
+`runtime/abstract_operations/iterator.rs` is the semantic iterator owner. It
+defines the iterator record backends and owns `GetIterator`,
+`GetIteratorFromMethod`, `IteratorStep`/`IteratorValue`, and `IteratorClose`.
+`runtime/bytecode/for_of.rs` now owns only for-of loop control. Destructuring,
+spread, Map/Set/WeakMap/WeakSet, Math.sumPrecise, Object.fromEntries, and Set
+algebra delegate to the shared owner.
 
 The current paths are:
 
-- primitive strings use a direct character snapshot;
-- arrays use direct live index iteration when no protocol method is found;
-- other supported values use `Symbol.iterator`, cache `next`, and read
-  `{ done, value }` through property access;
+- primitive strings and arrays use direct guarded implementations only when no
+  installed protocol method is available; callable observable overrides take
+  the generic path;
+- generic values use `Symbol.iterator`, cache `next`, require object iterator
+  and step results, and read `{ done, value }` through shared property access;
 - collection/RegExp iterator objects use `Context.collection_iterators`, which
   stores a snapshot and advances through a native `next` function;
-- set algebra implements another manual iterator loop in
-  `native/builtins/set_operations.rs`;
-- IteratorClose ignores failures in the `return` lookup/call in the current
-  `close_for_of_source` interface because it returns no completion.
+- early completion and consumer processing failures invoke the shared close
+  path; original JavaScript throws retain precedence over ordinary close
+  failures, while resource-limit failures are never suppressed;
+- Set algebra no longer has an independent protocol loop.
 
-AS-03b should move `GetIterator`, `IteratorStep`, `IteratorValue`, and
-`IteratorClose` out of the bytecode module. Direct array/string iteration may
-remain an optimization only with guards and a generic protocol fallback.
+The remaining iterator representation debt is narrow: the direct array/string
+backends stand in for built-in iterator methods that have not yet been
+installed as ordinary observable intrinsics. They may remain only behind the
+generic method check and must not acquire independent closing or property
+semantics. AS-04 owns the remaining conversion of arbitrary thrown values at
+native `Result<Value>` boundaries.
 
 ## Completion, Exception, And Diagnostic Map
 
@@ -484,8 +491,8 @@ decision sequence:
 | AS-03a2b | string/boolean conversion sites | shared `ToString`/`ToBoolean` owners merged in PR #411; direct runtime truthiness and semantic concat formatting are deleted |
 | AS-03b1a | property-key conversion sites | shared `ToPropertyKey` owner merged in PR #412; dynamic bytecode, Object, Reflect, and Proxy paths delegate, and Rust `Display` no longer defines keys |
 | AS-03b1b | integer, length, and index helpers | shared `ToIntegerOrInfinity`, `ToLength`, and `ToIndex` owners merged in PR #413; consumers delegate without silently replacing specification ranges with storage limits |
-| AS-03b2 | property and call tables | shared `Get`, `Set`, `Call`, and `GetMethod` operations implemented and locally validated in draft PR #414; legacy facades are deleted and guarded against return |
-| AS-03b3 | iterator map | move iterator protocol and closing out of bytecode and make all consumers delegate |
+| AS-03b2 | property and call tables | shared `Get`, `Set`, `Call`, and `GetMethod` operations merged in PR #414; legacy facades are deleted and guarded against return |
+| AS-03b3 | iterator map | shared iterator protocol and closing owner implemented and locally validated in draft PR #415; bytecode owns only loop control and all consumers delegate |
 | AS-04a/b | completion/error table and inline Error representation | preserve arbitrary throws across native frames; remove ReferenceError prefix parsing; add real errors/spans |
 | AS-05a/b | id, clone, store, root, handle, and limit maps | remove ambiguous VM cloning; add VM identity/generation and root/accounting contracts |
 | AS-06 | active execution roots and structured nested bytecode | explicit activation/block stacks and suspend/resume results |

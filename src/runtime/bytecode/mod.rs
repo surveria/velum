@@ -4,7 +4,7 @@ mod class;
 mod coercion;
 mod control;
 mod destructure;
-pub(in crate::runtime) mod for_of;
+mod for_of;
 mod in_operator;
 mod linear;
 mod ops;

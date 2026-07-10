@@ -3,14 +3,13 @@ use std::f64::consts::{E, FRAC_1_SQRT_2, LN_2, LN_10, LOG2_E, LOG10_E, PI, SQRT_
 use crate::{
     api::native_call::NativeCallTarget,
     error::{Error, Result},
-    runtime::Context,
-    runtime::bytecode::for_of::ForOfStep,
     runtime::call::RuntimeCallArgs,
     runtime::numeric::number_to_uint32,
     runtime::object::{
         DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyUpdate,
         PropertyWritable,
     },
+    runtime::{Context, abstract_operations::IteratorStep},
     value::{ObjectId, Value},
 };
 
@@ -400,19 +399,18 @@ impl Context {
         let Some(iterable) = args.first() else {
             return Err(Error::type_error("Math.sumPrecise requires an iterable"));
         };
-        let mut source = self.for_of_source(iterable.clone())?;
+        let mut source = self.get_iterator(iterable.clone())?;
         let mut sum = PreciseFiniteSum::new();
         loop {
             self.step()?;
-            match self.for_of_step(&mut source)? {
-                ForOfStep::Value(value) => {
+            match self.iterator_step(&mut source)? {
+                IteratorStep::Value(value) => {
                     if let Err(error) = sum.add_value(&value) {
-                        self.close_for_of_source(&source);
-                        return Err(error);
+                        return Err(self.iterator_close_on_error(&mut source, error));
                     }
                 }
-                ForOfStep::Done => return Self::math_number(sum.finish()?),
-                ForOfStep::Abrupt(completion) => return completion.into_result(),
+                IteratorStep::Done => return Self::math_number(sum.finish()?),
+                IteratorStep::Abrupt(completion) => return completion.into_result(),
             }
         }
     }
