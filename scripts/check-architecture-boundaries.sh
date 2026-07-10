@@ -557,6 +557,7 @@ check_direct_root_boundary() {
     'for frame in self.super_frames.iter().flatten() {' \
     'if let Some(id) = self.global_object {' \
     'if let Some(id) = self.promise_prototype {' \
+    'for id in self.native_function_registry.ids() {' \
     'for job in &self.promise_jobs {'; do
     if ! grep -F -q "${source}" "${repo_root}/src/runtime/roots.rs"; then
       fail "direct root boundary changed; required Context root source '${source}' is missing"
@@ -572,6 +573,85 @@ check_direct_root_boundary() {
     || ! grep -F -q 'pub const fn root_snapshot(self) -> VmRootSnapshot' \
       "${repo_root}/src/api/host.rs"; then
     fail "direct root boundary changed; jobs, Vm, and active host callbacks require one executable root contract"
+  fi
+}
+
+check_callable_edge_boundary() {
+  local edge_kinds
+  local native_id_variants
+  local source
+  edge_kinds="$({
+    awk '
+      /^pub enum VmCallableEdgeKind \{/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/runtime/trace.rs"
+  } | sed '/^[[:space:]]*\/\//d' | tr -d '[:space:]')"
+  if [[ "${edge_kinds}" != 'JavaScriptFunctionUpvalue,JavaScriptFunctionProperty,JavaScriptFunctionInternal,NativeFunctionProperty,NativeFunctionInternal,BoundFunctionInternal,' ]]; then
+    fail "callable edge boundary changed; categories require an assigned AS migration"
+  fi
+
+  for source in \
+    'for function in &self.functions {' \
+    'for function in &self.native_functions {' \
+    'for function in &self.bound_functions {' \
+    'for cell in self.upvalues.iter() {' \
+    '.visit_strong_edges(' \
+    'if let Some(binding) = &self.super_binding {' \
+    'if let Some(parent) = &self.static_parent {' \
+    'if let Some(fields) = &self.class_fields {' \
+    'if let FunctionNewTarget::Lexical(value) = &self.new_target {'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/trace.rs"; then
+      fail "callable edge boundary changed; JavaScript function source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    'StrongEdgeReference::Value(&self.prototype)' \
+    'StrongEdgeReference::Value(self.intrinsic_defaults.length.value_ref())' \
+    'StrongEdgeReference::Value(self.intrinsic_defaults.name.value_ref())' \
+    'if let Some(prototype) = &self.intrinsic_defaults.prototype {' \
+    'if let Some(value) = self.length.stored_value() {' \
+    'if let Some(value) = self.name.stored_value() {' \
+    'for entry in &self.properties {' \
+    'for key in &self.property_order {'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/function/properties.rs"; then
+      fail "callable edge boundary changed; function property source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    'NativeFunctionKind::BoundFunction(id)' \
+    'NativeFunctionKind::CollectionIteratorNext(id)' \
+    'NativeFunctionKind::PromiseResolver { promise, .. }' \
+    'NativeFunctionKind::ProxyRevoke(id)'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/native/function/mod.rs"; then
+      fail "callable edge boundary changed; native payload source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    'StrongEdgeReference::Value(&self.target)' \
+    'StrongEdgeReference::Value(&self.this_value)' \
+    'for arg in &self.args {'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/call/bound.rs"; then
+      fail "callable edge boundary changed; bound function source '${source}' is missing"
+    fi
+  done
+
+  native_id_variants="$({
+    grep -E '^[[:space:]]*[A-Za-z][A-Za-z0-9_]*\([^)]*Id\),|^[[:space:]]*[a-z_][a-z0-9_]*:[^,]*Id,' \
+      "${repo_root}/src/runtime/native/function/kind.rs" || true
+  } | sed 's/[[:space:]]//g')"
+  compare_set "native function id-payload allowlist" "${native_id_variants}" \
+    'BoundFunction(BoundFunctionId),
+CollectionIteratorNext(crate::runtime::collections::CollectionIteratorId),
+promise:crate::runtime::promise::PromiseId,
+ProxyRevoke(ObjectId),'
+
+  if ! grep -F -q 'pub fn callable_edge_snapshot(&self) -> Result<VmCallableEdgeSnapshot>' \
+      "${repo_root}/src/api/embedding.rs"; then
+    fail "callable edge boundary changed; Vm requires a bounded diagnostic snapshot"
   fi
 }
 
@@ -775,6 +855,7 @@ run_checks() {
   require_file src/api/owned_value.rs
   require_file src/runtime/mod.rs
   require_file src/runtime/roots.rs
+  require_file src/runtime/trace.rs
   require_file src/ownership.rs
   require_file src/source.rs
   require_file src/ast/node.rs
@@ -796,6 +877,7 @@ run_checks() {
   check_semantic_duplicate_allowlists
   check_completion_error_boundary
   check_direct_root_boundary
+  check_callable_edge_boundary
   check_state_owner_allowlists
   check_optimization_owner_allowlists
   printf '%s: ok\n' "${script_name}"
@@ -925,6 +1007,18 @@ mutate_direct_root_source() {
   local fixture_root="$1"
   sed -i '/for value in &self.this_values {/d' \
     "${fixture_root}/src/runtime/roots.rs"
+}
+
+mutate_native_registry_root() {
+  local fixture_root="$1"
+  sed -i '/for id in self.native_function_registry.ids() {/d' \
+    "${fixture_root}/src/runtime/roots.rs"
+}
+
+mutate_bound_function_edge() {
+  local fixture_root="$1"
+  sed -i '/for arg in &self.args {/d' \
+    "${fixture_root}/src/runtime/call/bound.rs"
 }
 
 mutate_test262_source_name() {
@@ -1068,6 +1162,10 @@ run_self_tests() {
     'JavaScriptException fields must stay private' mutate_javascript_exception_visibility
   expect_guard_failure "${temp_dir}" direct-root-source \
     'direct root boundary changed' mutate_direct_root_source
+  expect_guard_failure "${temp_dir}" native-registry-root \
+    'direct root boundary changed' mutate_native_registry_root
+  expect_guard_failure "${temp_dir}" bound-function-edge \
+    'callable edge boundary changed' mutate_bound_function_edge
   expect_guard_failure "${temp_dir}" context-store \
     'Context state-owner field allowlist changed' mutate_context_store
   expect_guard_failure "${temp_dir}" object-payload \

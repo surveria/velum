@@ -1,8 +1,10 @@
 use crate::{
+    error::Result,
     runtime::function::{FunctionIntrinsicDefaults, FunctionProperties},
     runtime::object::{
         DataPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyWritable,
     },
+    runtime::trace::{StrongEdgeReference, StrongEdgeVisitor, VmCallableEdgeKind},
     value::Value,
 };
 
@@ -135,5 +137,32 @@ impl NativeFunction {
 
     pub(in crate::runtime) fn has_intrinsic_property(&self, property: &str) -> bool {
         self.intrinsic_property(property).is_some()
+    }
+
+    pub(in crate::runtime) fn visit_strong_edges<V: StrongEdgeVisitor<VmCallableEdgeKind>>(
+        &self,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.properties
+            .visit_strong_edges(VmCallableEdgeKind::NativeFunctionProperty, visitor)?;
+        match self.kind {
+            NativeFunctionKind::BoundFunction(id) => visitor.visit(
+                VmCallableEdgeKind::NativeFunctionInternal,
+                StrongEdgeReference::BoundFunction(id),
+            ),
+            NativeFunctionKind::CollectionIteratorNext(id) => visitor.visit(
+                VmCallableEdgeKind::NativeFunctionInternal,
+                StrongEdgeReference::CollectionIterator(id),
+            ),
+            NativeFunctionKind::PromiseResolver { promise, .. } => visitor.visit(
+                VmCallableEdgeKind::NativeFunctionInternal,
+                StrongEdgeReference::Promise(promise),
+            ),
+            NativeFunctionKind::ProxyRevoke(id) => visitor.visit(
+                VmCallableEdgeKind::NativeFunctionInternal,
+                StrongEdgeReference::Object(id),
+            ),
+            _ => Ok(()),
+        }
     }
 }

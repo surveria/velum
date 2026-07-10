@@ -406,15 +406,16 @@ No runtime owner retains source text, tokens, or AST.
 ## VM Store, Root, And Accounting Map
 
 `Context` is the aggregate owner. AS-05b1a adds one executable direct-root
-visitor and a public counted snapshot, but heap-store trace edges are still
-implicit wherever an arena payload contains a `Value`, id, shared binding
-cell, or callback capture.
+visitor and a public counted snapshot. AS-05b1b1 adds a typed strong-edge
+visitor and an executable callable-store snapshot; object and asynchronous
+arena edges remain implicit wherever a payload contains a `Value`, id, shared
+binding cell, or callback capture.
 
 | Store category | Current fields/owners | Implicit strong edges | Current public accounting |
 | --- | --- | --- | --- |
 | interned names and text | `atoms`, `strings`, `symbols`, well-known caches | strings/symbol registry retain shared text | atom count, string count, string bytes |
 | bindings and closures | globals, builtin globals, locals, upvalue frames, `BindingCell(Rc<Mutex<Binding>>)` | binding values and captured cells | global binding count and upvalue cell count only |
-| executable functions | functions, native functions/registry, bound functions, host functions | bytecode metadata, properties, upvalues, bound args/targets, callback `Rc` captures | native function count only |
+| executable functions | functions, native functions/registry, bound functions, host functions | typed AS-05b1b1 edges cover properties, upvalues, super/static/class/new-target state, native id payloads, and bound args/targets; immutable bytecode contains only VM-independent literals; opaque callback `Rc` captures remain AS-05b1c debt | callable edge slot snapshot plus native function count |
 | objects | `ObjectHeap`, shapes, prototypes, properties, arrays, buffers, typed-array views | property values, prototypes, accessors, shared buffers | shape count and prototype version; no object/property/buffer bytes |
 | collections | collection stores, object slots, iterator snapshots | keys, values, iterator items | none; count limit reuses `max_objects` |
 | promises/jobs | promises, object slots, reaction queue | results, handlers, settled values, queued job state | none; no job-count limit |
@@ -426,10 +427,16 @@ cell, or callback capture.
 The AS-05b1a direct-root registry currently enumerates initialized global,
 builtin-global, local, and captured binding cells; active `this`,
 `new.target`, and `super` values; global-object and Promise-prototype runtime
-anchors; and result Promise ids plus handler/settled values in queued Promise
-jobs. These are roots owned independently of heap traversal. Values inside the function, object,
-Promise, collection, and iterator stores are trace edges, not roots, and are
-assigned to AS-05b1b.
+anchors; registered reusable native-function ids; and result Promise ids plus
+handler/settled values in queued Promise jobs. These are roots owned
+independently of heap traversal.
+
+AS-05b1b1's generic `StrongEdgeVisitor<Kind>` uses a private typed target enum
+rather than raw integers. Its callable traversal covers every physical strong
+slot in JavaScript, native, and bound function stores. Counts intentionally
+include primitive and duplicate slots; a future marker ignores primitives and
+deduplicates identities. Values inside object, Promise, collection, and
+iterator stores remain AS-05b1b2/AS-05b1b3 work.
 
 `RuntimeLimits` currently covers source length, statement count, expression
 depth, runtime steps, string length, bindings, object count, and per-object
@@ -473,11 +480,15 @@ state how many bytes each owner retained.
 - `Vm::root_snapshot` and `Context::root_snapshot` expose checked reference
   counts for the nine direct-root categories. `HostCall::root_snapshot`
   captures the same registry while JavaScript activation roots are live,
-  without exposing raw visitor internals.
+  without exposing raw visitor internals;
+- `Vm::callable_edge_snapshot` and `Context::callable_edge_snapshot` expose
+  checked physical-slot counts for callable stores. Typed edge targets remain
+  private, so the diagnostic API does not leak arena ids.
 
-AS-05b1b must define all strong arena edges and AS-05b1c must close transient
-allocation-point/embedder-root gaps before AS-05a2d adds identity-stamped
-retained object/function handles and explicit release.
+AS-05b1b2/AS-05b1b3 must complete object and asynchronous arena edges, and
+AS-05b1c must close transient allocation-point/embedder-root gaps before
+AS-05a2d adds identity-stamped retained object/function handles and explicit
+release.
 
 ### Provisional Root Set For AS-05b
 
@@ -489,15 +500,20 @@ The root/trace contract must at least enumerate:
    executable in AS-05b1a;
 3. promise queued-job handlers and settled values: direct queue roots are
    executable in AS-05b1a;
-4. global-object and Promise-prototype anchors: executable in AS-05b1a;
-5. function properties/upvalues, native/host/bound function state, object
-   properties/prototypes/accessors/internal slots, Promise state/reactions,
-   collection entries, and iterator state: strong/weak edge work in AS-05b1b;
-6. active operand stacks, native-call arguments, and temporary construction,
+4. global-object, Promise-prototype, and registered-native-function anchors:
+   executable in AS-05b1a/AS-05b1b1;
+5. JavaScript function properties/upvalues/super/static/class/new-target state,
+   native id payloads, and bound target/this/arguments: executable in
+   AS-05b1b1;
+6. object properties/prototypes/accessors/Proxy/typed internal slots:
+   AS-05b1b2;
+7. Promise state/reactions, collection entries, and iterator state with weak
+   keys classified separately: AS-05b1b3;
+8. active operand stacks, native-call arguments, and temporary construction,
    descriptor, iterator, class-field, and Proxy-trap values that survive an
    allocation point: AS-05b1c bridge followed by durable AS-06 frames;
-7. embedder-owned retained handles: AS-05a2d after AS-05b1c;
-8. module state: add a direct-root/edge owner when modules are introduced.
+9. embedder-owned retained handles: AS-05a2d after AS-05b1c;
+10. module state: add a direct-root/edge owner when modules are introduced.
 
 ## Generic And Optimized Execution Map
 
@@ -581,8 +597,9 @@ decision sequence:
 | AS-05a2a | heap string, Symbol, and host success crossing | identity-stamped VM primitives and central foreign-owner rejection merged in PR #423 |
 | AS-05a2b | host callback arguments and JavaScript error crossing | borrowed LocalValue capability plus foreign throw rejection merged in PR #424 |
 | AS-05a2c | portable owned primitive values | VM-independent five-variant OwnedValue plus explicit local/evaluation copying merged in PR #425 |
-| AS-05b1a | direct roots in bindings, active call vectors, runtime anchors, and queued jobs | nine stable categories plus one executable visitor and counted Context/Vm/HostCall snapshot implemented in draft PR #426 |
-| AS-05b1b/AS-05b1c/AS-05a2d/AS-05b2 | heap edges, transient roots, retained object/function ids, handles, and limit maps | define arena edge visitors and allocation-point roots, then identity-stamped retained handles/release and accounting contracts |
+| AS-05b1a | direct roots in bindings, active call vectors, runtime anchors, and queued jobs | nine stable categories plus one executable visitor and counted Context/Vm/HostCall snapshot merged in PR #426 |
+| AS-05b1b1 | callable arena edges and native registry anchors | generic typed strong-edge visitor, six callable categories, complete JS/native/bound traversal, and bounded Context/Vm snapshot implemented in draft PR #427 |
+| AS-05b1b2/AS-05b1b3/AS-05b1c/AS-05a2d/AS-05b2 | object/asynchronous edges, transient roots, retained object/function ids, handles, and limit maps | complete arena visitors and allocation-point roots, then identity-stamped retained handles/release and accounting contracts |
 | AS-06 | active execution roots and structured nested bytecode | explicit activation/block stacks and suspend/resume results |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |
 | AS-08 | caches, direct calls, linear/function/control paths, harness opcodes | one optimizer owner, optimizer-off equivalence, and removal of source-name semantics |
@@ -607,6 +624,7 @@ must fail on growth.
 | host local-value boundary | LocalValue and HostCall carry the active owner; public JavaScript errors retain it and throw conversion validates it | accepting an unowned host throw or a foreign bound JavaScript value |
 | portable owned-value boundary | OwnedValue contains only undefined/null/Boolean/Number/String and copies local heap text | a Symbol/object/function/id/identity variant or removal of explicit conversion entrypoints |
 | direct-root boundary | nine stable categories enumerate current binding, active-call, runtime-anchor, and Promise-job sources through one visitor | removing a current root source, adding an unreviewed category, or bypassing the Context/Vm/HostCall snapshot contract |
+| callable strong-edge boundary | six categories enumerate every current JavaScript/native/bound function reference slot through one typed visitor; native id-bearing variants have an exact allowlist | removing a callable slot, adding an unreviewed id-bearing native kind, or exposing raw edge ids in the diagnostic API |
 
 The script should report the specific changed boundary and point to this
 document. It should run from `scripts/check-fast.sh` and the correctness gate,
@@ -646,8 +664,9 @@ Snapshot observations:
 - the initial snapshot found three `SameValueZero` owners plus numeric array
   helpers and a fourth local `SameValue` owner; AS-03a1 collapses them into
   `runtime/abstract_operations/equality.rs`;
-- the runtime has an AS-05b1a direct-root enumeration contract, while arena
-  trace edges and allocation-point roots remain AS-05b1b/AS-05b1c work;
+- the runtime has an AS-05b1a direct-root contract and an AS-05b1b1 typed
+  callable-edge contract; object/asynchronous edges and allocation-point roots
+  remain AS-05b1b2/AS-05b1b3/AS-05b1c work;
 - the structured-control and linear optimizer areas contain sixteen and seven
   tracked Rust files respectively.
 
