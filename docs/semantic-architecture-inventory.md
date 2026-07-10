@@ -445,11 +445,13 @@ pairs. Counts intentionally include primitive and duplicate strong slots; a
 future marker ignores primitives and deduplicates identities. Physical weak
 entry reclamation remains AS-07 work.
 
-`RuntimeLimits` currently covers source length, statement count, expression
-depth, runtime steps, string length, bindings, object count, and per-object
-property count. It has no complete heap-byte, atom, function, collection-entry,
-buffer-byte, output-byte, promise, job, stack, frame, module, or host-callback
-budget.
+`RuntimeLimits` retains its source, syntax, step, string, binding, object, and
+per-object property limits. AS-05b2c1 adds `VmStorageLimits`, an unlimited-by-
+default immutable policy keyed by all twenty-six `VmStorageKind` categories.
+It currently enforces atom, heap-string, Symbol, object, buffer, host-callback,
+output, and source-record growth. Callable/property/cache and async/root/frame/
+association categories remain explicit AS-05b2c2/c3 work rather than being
+claimed complete.
 
 `VmResourceUsage` retains its existing hot counters. AS-05b2a adds a separate
 on-demand `VmStorageSnapshot` with twenty-six stable logical owner categories
@@ -626,8 +628,10 @@ decision sequence:
 | AS-05b1c | transient operand, call, iterator, descriptor, Proxy, and class-key values | scoped RAII registry plus three direct-root categories and collector safepoint contract merged in PR #430 |
 | AS-05a2d | retained object/function ids and handles | non-cloneable identity/registry/slot-generation capability, source-proven creation, consuming release, Drop safety-net cleanup, and retained-root category merged in PR #431 |
 | AS-05b2a | every current variable-size Context owner and nested logical record | twenty-six-category checked snapshot plus consuming teardown reconciliation merged in PR #432 |
-| AS-05b2b | retained payload bytes by the same owner map | independent checked UTF-8/raw-buffer payload map implemented in draft PR #433 without claiming allocator-resident RSS |
-| AS-05b2c | heap, stack, job, callback, output, and buffer limit maps | enforce count and byte budgets at every growth point |
+| AS-05b2b | retained payload bytes by the same owner map | independent checked UTF-8/raw-buffer payload map merged in PR #433 without claiming allocator-resident RSS |
+| AS-05b2c1 | public owner-limit policy plus payload/top-level arenas | immutable sparse custom policy and pre-commit limits for atoms, strings, Symbols, objects, buffers, callbacks, output, and source in draft PR #434 |
+| AS-05b2c2 | binding, callable, property, and cache growth | enforce remaining synchronous durable owners without hot-path heap scans |
+| AS-05b2c3 | async, root, frame, and association growth | enforce remaining transient/queued owners and prove full snapshot-to-limit coverage |
 | AS-06 | active execution roots and structured nested bytecode | explicit activation/block stacks and suspend/resume results |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |
 | AS-08 | caches, direct calls, linear/function/control paths, harness opcodes | one optimizer owner, optimizer-off equivalence, and removal of source-name semantics |

@@ -26,6 +26,7 @@ const BENCH_RUNTIME_LIMITS: RuntimeLimits = RuntimeLimits {
     max_bindings: 65_536,
     max_objects: 1_000_000,
     max_object_properties: 1_000_000,
+    storage: rs_quickjs::VmStorageLimits::unlimited(),
 };
 
 /// A JavaScript engine that can evaluate a source string in a fresh top-level

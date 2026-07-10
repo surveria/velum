@@ -13,6 +13,7 @@ fn bytecode_runs_direct_active_try_catch_benchmark_body() -> TestResult {
         max_bindings: 65_536,
         max_objects: 1_000_000,
         max_object_properties: 1_000_000,
+        storage: rs_quickjs::VmStorageLimits::unlimited(),
     };
 
     let engine = Engine::with_config(EngineConfig::with_default_vm_config(VmConfig::with_limits(

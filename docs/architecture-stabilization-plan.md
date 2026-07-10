@@ -26,8 +26,9 @@ version policy, and uses the validation lane appropriate to the change.
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
 - Current program state: AS-01 through AS-04, AS-05a1 through AS-05a2d,
-  AS-05b1a through AS-05b1c, and AS-05b2a are complete; AS-05b2b logical
-  retained payload-byte accounting is implemented in draft PR #433
+  AS-05b1a through AS-05b1c, AS-05b2a, and AS-05b2b are complete; AS-05b2c1
+  storage-limit policy and payload/top-level owner enforcement are implemented
+  in draft PR #434
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -485,7 +486,7 @@ dependencies do not overlap.
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
 | AS-04 | Complete | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans merged in PR #421 with exact-tree correctness and canonical report publication. |
-| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05a2d ownership/handle work is merged through PR #431; AS-05b1a through AS-05b1c root/edge work is merged through PR #430; AS-05b2a complete owner counts merged in PR #432; AS-05b2b logical payload bytes are implemented in draft PR #433; hard count/byte limits remain AS-05b2c. |
+| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05a2d ownership/handle work is merged through PR #431; AS-05b1a through AS-05b1c root/edge work is merged through PR #430; AS-05b2a/b accounting is merged through PR #433; AS-05b2c1 policy plus payload/top-level limits are implemented in draft PR #434; callable/property/cache and async/root/frame/association enforcement remain AS-05b2c2/c3. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
 | AS-08 | Backlog | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | Optimizer on/off equivalence, harness opcodes removed, workload-shaped paths replaced or justified by broad evidence. |
@@ -1228,7 +1229,11 @@ AS-05 is split at ownership boundaries:
 11. AS-05b2a adds complete logical per-owner counts and a teardown report that
    reconciles every current VM store;
 12. AS-05b2b adds logical retained payload bytes to the same owner map;
-13. AS-05b2c enforces count and byte limits at every allocation/growth point.
+13. AS-05b2c1 defines the public limit policy and enforces payload-bearing and
+    top-level atom/string/Symbol/object/callback/output/source owners;
+14. AS-05b2c2 enforces callable, binding, property, and cache owners;
+15. AS-05b2c3 enforces asynchronous, root, frame, and association owners and
+    closes the full growth-point reconciliation gate.
 
 AS-05a1 local implementation evidence:
 
@@ -1294,6 +1299,47 @@ AS-05b2b local implementation evidence:
 - `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
+
+AS-05b2b completion evidence:
+
+- PR #433 merged as `1c3dee8` after required CI run `29111664726`
+  certified exact tree `73a737a6189ba5cdb4f80931c4b6ea40724208f4`;
+- the required corpus preserved all 36,659 expected Test262 variants, the
+  exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
+  cases;
+- post-merge run `29116932748` measured all five project sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T190739Z.*` in
+  report-only commit `7ee0441`.
+
+AS-05b2c1 local implementation evidence:
+
+- `VmStorageLimits` maps independent hard record and payload-byte limits onto
+  the same twenty-six stable `VmStorageKind` categories. Its unlimited default
+  preserves existing behavior, while immutable custom tables are shared by
+  cloned engine/VM configuration through `Arc`;
+- `RuntimeLimits`, `EngineConfig`, and `VmConfig` are cloneable rather than
+  `Copy`. This prevents a 416-byte owner table from being copied through every
+  parser/runtime call while keeping unlimited policies allocation-free;
+- atom, heap-string, Symbol, host-callback, object, byte-buffer, output, and
+  Function-constructor source growth checks both projected record counts and
+  logical payload bytes before committing the owning store mutation;
+- `ObjectHeap::push_object` is now the single append boundary for every object
+  constructor. It maintains exact RegExp/buffer totals, charges a buffer only
+  at its owner object rather than through typed views, and combines legacy
+  object limits with the new per-owner policy;
+- output payload bytes are maintained incrementally and reset by
+  `take_output`; atom/string/object payload accounting likewise uses existing
+  or new O(1) counters, so no hard-limit path introduces an O(heap) scan;
+- rejected growth leaves the limited owner category unchanged. Other earlier
+  side effects in the same JavaScript evaluation remain governed by their own
+  categories rather than pretending the entire evaluation is transactional;
+- four direct embedding tests cover count and byte rejection, exact owner
+  stability, output release/reuse, independent VM policies, and all eight
+  enforced owner categories;
+- the architecture boundary guard fixes the public policy seam, the single
+  object insertion boundary, and every AS-05b2c1 owner check. Three new
+  mutations prove that atom payload, byte-buffer insertion, and output-release
+  accounting cannot disappear unnoticed.
 
 AS-05a1 completion evidence:
 
@@ -1848,14 +1894,18 @@ reviewable scope.
     (complete in PR #431).
 29. AS-05b2a: add complete logical owner counts and teardown reconciliation
     (complete in PR #432).
-30. AS-05b2b: add logical retained payload-byte accounting (implemented in
-    draft PR #433).
-31. AS-05b2c: enforce complete count and byte limits at growth points.
-32. AS-06a: migrate synchronous calls and structured control flow to explicit
+30. AS-05b2b: add logical retained payload-byte accounting (complete in PR
+    #433).
+31. AS-05b2c1: define public storage-limit policy and enforce payload/top-level
+    owners (implemented in draft PR #434).
+32. AS-05b2c2: enforce binding, callable, property, and cache owners.
+33. AS-05b2c3: enforce async, root, frame, and association owners and prove
+    complete growth-point reconciliation.
+34. AS-06a: migrate synchronous calls and structured control flow to explicit
     activation frames.
-33. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
-34. AS-07a: add safe collection over explicit roots and correct weak edges.
-35. AS-08a: move reusable optimization state behind one optimizer/quickening
+35. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
+36. AS-07a: add safe collection over explicit roots and correct weak edges.
+37. AS-08a: move reusable optimization state behind one optimizer/quickening
     boundary and remove harness-specific opcodes.
 
 ## Updating This Plan

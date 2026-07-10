@@ -138,6 +138,13 @@ The default answer should remain safe Rust.
 compiler, and bytecode runtime. The goal is to make resource use explicit at
 the embedding boundary instead of relying on global process limits.
 
+`RuntimeLimits::storage` adds an unlimited-by-default `VmStorageLimits` policy
+keyed by `VmStorageKind`. AS-05b2c1 enforces atoms, heap strings, Symbols,
+objects, byte buffers, host callbacks, output, and retained source records;
+AS-05b2c2/c3 complete the remaining owner categories. Custom policies are
+immutable and shared across cloned configuration, while VMs keep independent
+usage and teardown state.
+
 Current limits cover:
 
 - source length

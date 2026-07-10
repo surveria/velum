@@ -105,6 +105,7 @@ pub struct Context {
     new_target_values: Vec<Value>,
     super_frames: Vec<Option<Rc<function::FunctionSuperBinding>>>,
     output: Vec<String>,
+    output_payload_bytes: usize,
     performance_clock: clock::PerformanceClock,
     random_state: u64,
     runtime_steps: usize,
@@ -269,12 +270,23 @@ impl Context {
         performance_clock: clock::PerformanceClock,
     ) -> Self {
         let identity = VmIdentity::new();
+        let storage_limits = limits.storage.clone();
         Self {
             identity: identity.clone(),
             limits,
-            atoms: AtomTable::new(),
-            strings: StringHeap::new(identity.clone()),
-            symbols: SymbolTable::new(identity.clone()),
+            atoms: AtomTable::new(
+                storage_limits.max_count(VmStorageKind::Atom),
+                storage_limits.max_payload_bytes(VmStorageKind::Atom),
+            ),
+            strings: StringHeap::new(
+                identity.clone(),
+                storage_limits.max_count(VmStorageKind::HeapString),
+                storage_limits.max_payload_bytes(VmStorageKind::HeapString),
+            ),
+            symbols: SymbolTable::new(
+                identity.clone(),
+                storage_limits.max_count(VmStorageKind::Symbol),
+            ),
             well_known_properties: WellKnownPropertyKeys::new(),
             iterator_symbol: None,
             descriptor_property_keys: None,
@@ -291,7 +303,7 @@ impl Context {
             native_function_registry: NativeFunctionRegistry::new(),
             bound_functions: Vec::new(),
             host_functions: Vec::new(),
-            objects: ObjectHeap::new(),
+            objects: ObjectHeap::new(storage_limits),
             global_object: None,
             collections: Vec::new(),
             collection_object_slots: Vec::new(),
@@ -306,6 +318,7 @@ impl Context {
             new_target_values: Vec::new(),
             super_frames: Vec::new(),
             output: Vec::new(),
+            output_payload_bytes: 0,
             performance_clock,
             random_state: INITIAL_RANDOM_STATE,
             runtime_steps: 0,
@@ -336,7 +349,7 @@ impl Context {
     /// # Errors
     /// Fails when lexing, parsing, or configured compile-time resource limits fail.
     pub fn compile(&self, source: &str) -> Result<CompiledScript> {
-        CompiledScript::compile(source, self.limits)
+        CompiledScript::compile(source, self.limits.clone())
     }
 
     /// Compiles source with a stable embedder-provided diagnostic name.
@@ -345,7 +358,7 @@ impl Context {
     /// Fails when the source name exceeds configured string limits, or when
     /// lexing, parsing, or configured compile-time resource limits fail.
     pub fn compile_named(&self, source_name: &str, source: &str) -> Result<CompiledScript> {
-        CompiledScript::compile_named(source_name, source, self.limits)
+        CompiledScript::compile_named(source_name, source, self.limits.clone())
     }
 
     /// # Errors
@@ -384,7 +397,7 @@ impl Context {
     }
 
     fn eval_compiled_outcome(&mut self, script: &CompiledScript) -> Result<BytecodeOutcome> {
-        script.ensure_within_limits(self.limits)?;
+        script.ensure_within_limits(&self.limits)?;
         let static_name_cache = StaticNameAtomCacheHandle::new(
             script.usage().static_name_count(),
             script.usage().static_property_access_count(),
@@ -565,7 +578,22 @@ impl Context {
         }
         let line = values.join(" ");
         self.check_string_len(&line)?;
+        let projected_count = self
+            .output
+            .len()
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("output entry count overflowed"))?;
+        let projected_payload_bytes = self
+            .output_payload_bytes
+            .checked_add(line.len())
+            .ok_or_else(|| Error::limit("output payload bytes overflowed"))?;
+        self.ensure_storage_totals(
+            VmStorageKind::OutputEntry,
+            projected_count,
+            projected_payload_bytes,
+        )?;
         self.output.push(line);
+        self.output_payload_bytes = projected_payload_bytes;
         Ok(Value::Undefined)
     }
 

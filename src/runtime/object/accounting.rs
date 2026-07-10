@@ -46,39 +46,46 @@ impl ObjectStorageCounts {
 impl ObjectHeap {
     pub(in crate::runtime) fn storage_counts(&self) -> Result<ObjectStorageCounts> {
         let mut properties = 0_usize;
-        let mut byte_buffers = 0_usize;
-        let mut object_payload_bytes = 0_usize;
-        let mut byte_buffer_payload_bytes = 0_usize;
         for object in &self.objects {
             properties = properties
                 .checked_add(object.named_properties.len())
                 .and_then(|count| count.checked_add(object.array_storage.property_count()))
                 .ok_or_else(|| Error::limit("object property count overflowed"))?;
-            byte_buffers = byte_buffers
-                .checked_add(usize::from(object.byte_buffer.is_some()))
-                .ok_or_else(|| Error::limit("byte buffer count overflowed"))?;
-            if let Some(regexp) = &object.regexp_value {
-                object_payload_bytes = object_payload_bytes
-                    .checked_add(regexp.pattern().len())
-                    .and_then(|bytes| bytes.checked_add(regexp.flags().len()))
-                    .ok_or_else(|| Error::limit("object payload bytes overflowed"))?;
-            }
-            if let Some(buffer) = &object.byte_buffer {
-                byte_buffer_payload_bytes = byte_buffer_payload_bytes
-                    .checked_add(buffer.byte_length())
-                    .ok_or_else(|| Error::limit("byte buffer payload bytes overflowed"))?;
-            }
         }
         Ok(ObjectStorageCounts {
             objects: self.objects.len(),
             properties,
-            byte_buffers,
+            byte_buffers: self.byte_buffer_count,
             cache_entries: self.shapes.storage_entry_count()?,
             associations: usize::from(self.object_prototype.is_some())
                 .checked_add(usize::from(self.array_prototype.is_some()))
                 .ok_or_else(|| Error::limit("object anchor association count overflowed"))?,
-            object_payload_bytes,
-            byte_buffer_payload_bytes,
+            object_payload_bytes: self.object_payload_bytes,
+            byte_buffer_payload_bytes: self.byte_buffer_payload_bytes,
         })
+    }
+}
+
+impl super::Object {
+    pub(super) fn storage_payload_bytes(&self) -> Result<(usize, usize, usize)> {
+        let object_payload_bytes = if let Some(regexp) = &self.regexp_value {
+            regexp
+                .pattern()
+                .len()
+                .checked_add(regexp.flags().len())
+                .ok_or_else(|| Error::limit("object payload bytes overflowed"))?
+        } else {
+            0
+        };
+        let byte_buffer_count = usize::from(self.byte_buffer.is_some());
+        let byte_buffer_payload_bytes = self
+            .byte_buffer
+            .as_ref()
+            .map_or(0, super::ByteBuffer::byte_length);
+        Ok((
+            object_payload_bytes,
+            byte_buffer_count,
+            byte_buffer_payload_bytes,
+        ))
     }
 }

@@ -226,9 +226,11 @@ check_storage_accounting_boundary() {
       "${repo_root}/src/storage/atom.rs" \
     || ! grep -F -q 'self.name.len()' \
       "${repo_root}/src/api/host.rs" \
-    || ! grep -F -q 'regexp.pattern().len()' \
+    || ! grep -F -q '.pattern()' \
       "${repo_root}/src/runtime/object/accounting.rs" \
-    || ! grep -F -q 'buffer.byte_length()' \
+    || ! grep -F -q '.flags().len()' \
+      "${repo_root}/src/runtime/object/accounting.rs" \
+    || ! grep -F -q 'super::ByteBuffer::byte_length' \
       "${repo_root}/src/runtime/object/accounting.rs"; then
     fail "storage accounting boundary changed; payload producers must maintain their logical byte sources"
   fi
@@ -240,7 +242,7 @@ check_storage_accounting_boundary() {
     'self.host_callback_name_bytes()?,' \
     'object_counts.object_payload_bytes())?;' \
     'object_counts.byte_buffer_payload_bytes(),' \
-    'counter.record_payload_bytes(VmStorageKind::OutputEntry, self.output_payload_bytes()?)?;' \
+    'counter.record_payload_bytes(VmStorageKind::OutputEntry, self.output_payload_bytes())?;' \
     'counter.record_payload_bytes(VmStorageKind::SourceRecord, self.source_record_bytes()?)'; do
     if ! grep -F -q "${source}" "${repo_root}/src/runtime/accounting.rs"; then
       fail "storage accounting boundary changed; required payload source '${source}' is missing"
@@ -254,6 +256,70 @@ check_storage_accounting_boundary() {
     || ! grep -F -q 'storage: self.storage_snapshot()?,' \
       "${repo_root}/src/api/embedding.rs"; then
     fail "storage accounting boundary changed; Vm snapshot and consuming teardown reconciliation are required"
+  fi
+}
+
+check_storage_limit_boundary() {
+  local object_push_count
+  local source
+
+  for source in \
+    'pub storage: VmStorageLimits,' \
+    'pub const fn unlimited() -> Self {' \
+    'pub fn with_max_count(self, kind: VmStorageKind, limit: usize) -> Self {' \
+    'pub fn with_max_payload_bytes(self, kind: VmStorageKind, limit: usize) -> Self {' \
+    'VmStorageLimitPolicy::Unlimited => usize::MAX,'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/limits.rs"; then
+      fail "storage limit boundary changed; public immutable per-owner policy is required"
+    fi
+  done
+
+  for source in \
+    'Atom record count exceeded {}' \
+    'Atom payload bytes exceeded {}'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/storage/atom.rs"; then
+      fail "storage limit boundary changed; Atom count and payload checks are required"
+    fi
+  done
+
+  for source in \
+    'HeapString record count exceeded {}' \
+    'HeapString payload bytes exceeded {}'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/storage/string_heap.rs"; then
+      fail "storage limit boundary changed; HeapString count and payload checks are required"
+    fi
+  done
+
+  if ! grep -F -q 'Symbol record count exceeded {}' \
+      "${repo_root}/src/storage/symbol.rs" \
+    || ! grep -F -q 'VmStorageKind::HostCallback' \
+      "${repo_root}/src/api/host.rs"; then
+    fail "storage limit boundary changed; Symbol and HostCallback checks are required"
+  fi
+
+  object_push_count="$(
+    grep -R -F -h 'self.objects.push(object);' \
+      "${repo_root}/src/runtime/object" | wc -l
+  )"
+  if [[ "${object_push_count}" -ne 1 ]] \
+    || ! grep -F -q 'self.storage_limits.max_count(VmStorageKind::Object)' \
+      "${repo_root}/src/runtime/object/heap.rs" \
+    || ! grep -F -q 'self.storage_limits.max_count(VmStorageKind::ByteBuffer)' \
+      "${repo_root}/src/runtime/object/heap.rs" \
+    || ! grep -F -q 'self.object_payload_bytes = projected_object_bytes;' \
+      "${repo_root}/src/runtime/object/heap.rs" \
+    || ! grep -F -q 'self.byte_buffer_payload_bytes = projected_buffer_bytes;' \
+      "${repo_root}/src/runtime/object/heap.rs"; then
+    fail "storage limit boundary changed; Object and ByteBuffer growth require one checked insertion path"
+  fi
+
+  if ! grep -F -q 'VmStorageKind::OutputEntry' \
+      "${repo_root}/src/runtime/mod.rs" \
+    || ! grep -F -q 'self.output_payload_bytes = 0;' \
+      "${repo_root}/src/runtime/globals.rs" \
+    || ! grep -F -q 'crate::runtime::VmStorageKind::SourceRecord' \
+      "${repo_root}/src/runtime/function/mod.rs"; then
+    fail "storage limit boundary changed; OutputEntry and SourceRecord checks and release accounting are required"
   fi
 }
 
@@ -1054,6 +1120,7 @@ this_values
 new_target_values
 super_frames
 output
+output_payload_bytes
 performance_clock
 random_state
 runtime_steps
@@ -1226,6 +1293,7 @@ run_checks() {
   check_owned_value_boundary
   check_retained_value_boundary
   check_storage_accounting_boundary
+  check_storage_limit_boundary
   check_runtime_frontend_boundary
   check_source_metadata_boundary
   check_frontend_span_boundary
@@ -1420,6 +1488,24 @@ mutate_storage_payload_accumulator() {
   local fixture_root="$1"
   sed -i '/self.bytes = updated_bytes;/d' \
     "${fixture_root}/src/storage/atom.rs"
+}
+
+mutate_storage_limit_atom_payload() {
+  local fixture_root="$1"
+  sed -i '/Atom payload bytes exceeded {}/d' \
+    "${fixture_root}/src/storage/atom.rs"
+}
+
+mutate_storage_limit_object_insertion() {
+  local fixture_root="$1"
+  sed -i '/self.storage_limits.max_count(VmStorageKind::ByteBuffer),/d' \
+    "${fixture_root}/src/runtime/object/heap.rs"
+}
+
+mutate_storage_limit_output_release() {
+  local fixture_root="$1"
+  sed -i '/self.output_payload_bytes = 0;/d' \
+    "${fixture_root}/src/runtime/globals.rs"
 }
 
 mutate_teardown_storage_snapshot() {
@@ -1617,6 +1703,12 @@ run_self_tests() {
     'storage accounting boundary changed' mutate_storage_payload_source
   expect_guard_failure "${temp_dir}" storage-payload-accumulator \
     'storage accounting boundary changed' mutate_storage_payload_accumulator
+  expect_guard_failure "${temp_dir}" storage-limit-atom-payload \
+    'storage limit boundary changed' mutate_storage_limit_atom_payload
+  expect_guard_failure "${temp_dir}" storage-limit-object-insertion \
+    'storage limit boundary changed' mutate_storage_limit_object_insertion
+  expect_guard_failure "${temp_dir}" storage-limit-output-release \
+    'storage limit boundary changed' mutate_storage_limit_output_release
   expect_guard_failure "${temp_dir}" teardown-storage-snapshot \
     'storage accounting boundary changed' mutate_teardown_storage_snapshot
   expect_guard_failure "${temp_dir}" bound-function-edge \

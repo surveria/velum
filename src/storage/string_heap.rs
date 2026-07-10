@@ -116,15 +116,19 @@ pub struct StringHeap {
     entries: HashMap<StringDataRef, StringId>,
     strings: Vec<StringDataRef>,
     bytes: usize,
+    max_count: usize,
+    max_bytes: usize,
 }
 
 impl StringHeap {
-    pub fn new(identity: VmIdentity) -> Self {
+    pub fn new(identity: VmIdentity, max_count: usize, max_bytes: usize) -> Self {
         Self {
             identity,
             entries: HashMap::new(),
             strings: Vec::new(),
             bytes: 0,
+            max_count,
+            max_bytes,
         }
     }
 
@@ -171,14 +175,27 @@ impl StringHeap {
     }
 
     fn insert_string(&mut self, text: String) -> Result<JsString> {
+        if self.strings.len() >= self.max_count {
+            return Err(Error::limit(format!(
+                "HeapString record count exceeded {}",
+                self.max_count
+            )));
+        }
         let id = StringId::from_index(self.strings.len())?;
-        self.bytes = self
+        let updated_bytes = self
             .bytes
             .checked_add(text.len())
             .ok_or_else(|| Error::limit("string heap byte count overflowed"))?;
+        if updated_bytes > self.max_bytes {
+            return Err(Error::limit(format!(
+                "HeapString payload bytes exceeded {}",
+                self.max_bytes
+            )));
+        }
         let data = StringDataRef::new(self.identity.clone(), text);
         self.strings.push(data.clone());
         self.entries.insert(data, id);
+        self.bytes = updated_bytes;
         self.js_string(id)
     }
 }
