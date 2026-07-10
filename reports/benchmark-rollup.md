@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260710T100811Z.md`
-- Task: PR #413: runtime: centralize integer length and index conversion
-- Performance: 5.88x (4/5 >1.00x) (from `rsqjs-test-report-20260710T100811Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T100811Z.md`)
+- `rsqjs-test-report-20260710T103147Z.md`
+- Task: PR #414: runtime: centralize GetMethod and property call operations
+- Performance: 5.47x (4/5 >1.00x) (from `rsqjs-test-report-20260710T103147Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T103147Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 36185 passed / 66393 failed (35.28%) (from `rsqjs-test-report-20260710T100811Z.md`)
+- Full Test262: 36209 passed / 66369 failed (35.30%) (from `rsqjs-test-report-20260710T103147Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -399,3 +399,4 @@ Latest report:
 | `20260710T085419Z` `49b1faa` PR #411: runtime: centralize ToString and ToBoolean semantics | 5.47x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 35987 passed / 66591 failed (35.08%) |
 | `20260710T091940Z` `63315e3` PR #412: runtime: centralize ToPropertyKey semantics | 5.59x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36083 passed / 66495 failed (35.18%) |
 | `20260710T100811Z` `435b5f8` PR #413: runtime: centralize integer length and index conversion | 5.88x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36185 passed / 66393 failed (35.28%) |
+| `20260710T103147Z` `be331b2` PR #414: runtime: centralize GetMethod and property call operations | 5.47x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36209 passed / 66369 failed (35.30%) |
