@@ -62,7 +62,7 @@ impl Context {
             Ok(Some(value)) => Ok(Some(Completion::Normal(value))),
             Ok(None) => Ok(None),
             Err(error) => {
-                if let Some(value) = runtime_exception_value(&error) {
+                if let Some(value) = runtime_exception_value(self, &error)? {
                     self.checked_value(value.clone())?;
                     return Ok(Some(Completion::Throw(value)));
                 }

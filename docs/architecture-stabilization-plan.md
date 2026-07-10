@@ -25,9 +25,8 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 through AS-03 are complete; AS-04a's typed
-  JavaScript throw and engine-failure boundary is implemented and locally
-  validated in draft PR #416
+- Current program state: AS-01 through AS-04a are complete; AS-04b1's ordinary
+  Error object identity is implemented and locally validated in draft PR #418
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -483,7 +482,7 @@ dependencies do not overlap.
 | AS-01 | Complete | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards merged in PR #399 with required CI and canonical report publication. |
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
-| AS-04 | In progress | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary is implemented in draft PR #416; real JavaScript error objects and source spans remain AS-04b. |
+| AS-04 | In progress | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity is implemented in draft PR #418; source ids/spans remain AS-04b2. |
 | AS-05 | Backlog | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | Non-cloneable VM state, checked cross-VM boundaries, trace/root contract, heap/stack/job/buffer counters and limits. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
@@ -983,7 +982,8 @@ Required migration steps:
 6. expose structured diagnostic fields without making formatted text an API.
 
 AS-04a owns steps 1 and 2 plus removal of message-based exception
-classification. AS-04b owns ordinary Error object identity and source metadata.
+classification. AS-04b1 owns ordinary Error object identity and structured
+built-in error metadata. AS-04b2 owns source identity and spans.
 
 AS-04a local implementation evidence:
 
@@ -1017,6 +1017,41 @@ AS-04a local implementation evidence:
   and full pass set are now 36,553 of 102,578, with QuickJS differential
   unchanged at 95 of 95. The local evidence is
   `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T113234Z.*`.
+
+AS-04a completion evidence:
+
+- PR #416 was squash-merged as `d9ae782`; required CI run `29089996777`
+  certified exact tree `f2513f994b95f221abad7cbb4b4e0beb884d95c2` at
+  36,553/36,553 expected Test262 variants and 95/95 QuickJS cases;
+- post-merge run `29090177028` measured all five project sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T114057Z.*` in
+  report-only commit `9cf86ef`.
+
+AS-04b1 local implementation evidence:
+
+- `Value::Error(ErrorObject)` and every synthetic Error dispatch branch are
+  deleted. Built-in Error instances use `Value::Object(ObjectId)` and ordinary
+  property, descriptor, key, prototype, integrity, equality, JSON, and host
+  paths;
+- `Object.error_metadata` is the single internal slot for stable built-in class
+  and creation-message diagnostics. The JavaScript-visible `name` and `message`
+  remain ordinary mutable properties, while `Error::JavaScript` preserves the
+  thrown VM-local object and exposes structured metadata;
+- typed exception requests allocate their Error object in the active VM before
+  entering `Completion::Throw`. Runtime, parser, host, and resource-limit
+  failures remain outside JavaScript catch;
+- Error construction honors both intrinsic and explicit `newTarget`
+  prototypes. Five focused tests cover distinct identity, catch round trips,
+  ordinary descriptors/mutation, prototype/integrity operations, new-target
+  construction, and public structured metadata;
+- the architecture guard fixes the twelve-variant `Value` representation,
+  owns the new Object slot, and rejects any return of `Value::Error` or
+  `ErrorObject`;
+- the complete engine and 112-test runner suites, strict Clippy, documentation,
+  and guard self-tests pass. The complete corpus preserves all 36,553 prior
+  variants and adds 106 reviewed passes, bringing the baseline to 36,659 of
+  102,578 with QuickJS unchanged at 95 of 95. Local evidence is
+  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T120828Z.*`.
 
 ### AS-05: Ownership, Handles, Roots, And Accounting
 
@@ -1138,16 +1173,18 @@ reviewable scope.
 13. AS-03b3: centralize iterator operations and iterator closing (complete in
     PR #415).
 14. AS-04a: separate JavaScript throw completion from engine/host/resource
-    failures (implemented in draft PR #416).
-15. AS-04b: migrate Error values into real objects and add source-span metadata.
-16. AS-05a: remove ambiguous VM cloning and define VM-bound handle identity.
-17. AS-05b: add root enumeration plus complete allocation accounting and
+    failures (complete in PR #416).
+15. AS-04b1: migrate Error values into ordinary objects (implemented in draft
+    PR #418).
+16. AS-04b2: add stable source identity and source-span metadata.
+17. AS-05a: remove ambiguous VM cloning and define VM-bound handle identity.
+18. AS-05b: add root enumeration plus complete allocation accounting and
     limits.
-18. AS-06a: migrate synchronous calls and structured control flow to explicit
+19. AS-06a: migrate synchronous calls and structured control flow to explicit
     activation frames.
-19. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
-20. AS-07a: add safe collection over explicit roots and correct weak edges.
-21. AS-08a: move reusable optimization state behind one optimizer/quickening
+20. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
+21. AS-07a: add safe collection over explicit roots and correct weak edges.
+22. AS-08a: move reusable optimization state behind one optimizer/quickening
     boundary and remove harness-specific opcodes.
 
 ## Updating This Plan

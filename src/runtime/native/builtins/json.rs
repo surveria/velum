@@ -336,8 +336,7 @@ impl Context {
             | Value::Symbol(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => Ok(None),
+            | Value::HostFunction(_) => Ok(None),
         }
     }
 
@@ -369,8 +368,7 @@ impl Context {
             | Value::Symbol(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => String::new(),
+            | Value::HostFunction(_) => String::new(),
         };
         self.check_string_len(&gap)?;
         Ok(gap)
@@ -455,7 +453,6 @@ impl Context {
                 }
                 self.stringify_json_object(*id, state).map(Some)
             }
-            Value::Error(_) => Ok(Some(self.stringify_empty_json_object()?)),
         }
     }
 
@@ -643,12 +640,6 @@ impl Context {
             self.push_json_fragment(output, JSON_SPACE)?;
         }
         self.push_json_fragment(output, &member.value)
-    }
-
-    fn stringify_empty_json_object(&self) -> Result<String> {
-        let text = format!("{JSON_OBJECT_OPEN}{JSON_OBJECT_CLOSE}");
-        self.check_string_len(&text)?;
-        Ok(text)
     }
 
     fn stringify_json_string(&self, value: &str) -> Result<String> {

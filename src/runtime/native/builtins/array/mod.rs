@@ -92,8 +92,7 @@ impl Context {
                 | Value::Symbol(_)
                 | Value::Function(_)
                 | Value::NativeFunction(_)
-                | Value::HostFunction(_)
-                | Value::Error(_),
+                | Value::HostFunction(_),
             )
             | None => false,
         };

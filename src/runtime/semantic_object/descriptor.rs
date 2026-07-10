@@ -88,7 +88,7 @@ impl Context {
                 };
                 self.define_native_function_property_key(*id, property.name(), key, update)?;
             }
-            Value::HostFunction(_) | Value::Error(_) => {
+            Value::HostFunction(_) => {
                 return Err(Error::runtime(
                     "property definition target is not supported",
                 ));
@@ -128,8 +128,7 @@ impl Context {
                 | Value::Object(_)
                 | Value::Function(_)
                 | Value::NativeFunction(_)
-                | Value::HostFunction(_)
-                | Value::Error(_) => Ok(None),
+                | Value::HostFunction(_) => Ok(None),
             };
         };
         match object_ref.value {
@@ -156,7 +155,6 @@ impl Context {
             Value::NativeFunction(id) => Ok(self
                 .native_function_own_property_descriptor_lookup(*id, property.lookup())?
                 .map(OwnPropertyDescriptor::Data)),
-            Value::Error(_) => self.primitive_own_property_descriptor(target, property),
             Value::HostFunction(_) => Err(Error::runtime(
                 "property descriptor target cannot be converted to an object",
             )),

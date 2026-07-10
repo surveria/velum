@@ -283,7 +283,6 @@ impl Context {
                 | Value::Function(_)
                 | Value::NativeFunction(_)
                 | Value::HostFunction(_)
-                | Value::Error(_)
         ) {
             return Ok(value);
         }
@@ -301,8 +300,7 @@ impl Context {
             | Value::Symbol(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => Err(Error::type_error(REFLECT_PROTOTYPE_NOT_OBJECT_ERROR)),
+            | Value::HostFunction(_) => Err(Error::type_error(REFLECT_PROTOTYPE_NOT_OBJECT_ERROR)),
         }
     }
 

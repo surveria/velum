@@ -59,7 +59,7 @@ impl Context {
             let completion = match result {
                 Ok(completion) => completion,
                 Err(error) => {
-                    if let Some(value) = runtime_exception_value(&error) {
+                    if let Some(value) = runtime_exception_value(self, &error)? {
                         self.checked_value(value.clone())?;
                         Some(Completion::Throw(value))
                     } else {

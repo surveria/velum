@@ -331,8 +331,7 @@ impl Context {
             | Value::Function(_)
             | Value::NativeFunction(_)
             | Value::HostFunction(_)
-            | Value::Symbol(_)
-            | Value::Error(_) => Ok(()),
+            | Value::Symbol(_) => Ok(()),
         }
     }
 

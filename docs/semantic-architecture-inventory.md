@@ -45,9 +45,9 @@ operations.
 
 ## Value And Object Identity Map
 
-`Value` currently has thirteen variants. Five variants are object-like in
-JavaScript terms and carry four unrelated numeric ids plus one inline error
-record.
+`Value` currently has twelve variants. Four variants are object-like in
+JavaScript terms and carry four unrelated numeric ids. Built-in Error instances
+now use the ordinary `Object(ObjectId)` representation.
 
 | Value variant | Identity and physical owner | Property owner today | Call/construct owner today | Target migration |
 | --- | --- | --- | --- | --- |
@@ -55,7 +55,11 @@ record.
 | `Function(FunctionId)` | `FunctionId(usize)` into `Context.functions` | `FunctionProperties` in `runtime/function/properties.rs` | `semantic_call`/`semantic_construct`, with bytecode functions as the payload backend | AS-02a/AS-02c; retain the function arena as a payload store if useful |
 | `NativeFunction(NativeFunctionId)` | `NativeFunctionId(usize)` into `Context.native_functions`, plus `NativeFunctionRegistry` | a second `FunctionProperties` implementation path | common semantic dispatch with guarded direct-native call/construct backends | AS-02a/AS-02c; native code remains a payload behind common methods |
 | `HostFunction(HostFunctionId)` | `HostFunctionId(usize)` into `Context.host_functions` | no ordinary property, descriptor, prototype, or own-key path | `semantic_call`; never constructable | AS-02a/AS-02c and AS-05a host-handle boundary |
-| `Error(ErrorObject)` | inline `{ ErrorName, String }`, with no object id | synthetic `name`/`message` handling and separately installed error prototypes | not callable or constructable | AS-02a then AS-04b as an ordinary error object |
+
+AS-04b1 stores stable built-in Error class/message metadata in an `Object`
+internal slot. The JavaScript-visible `name`, `message`, descriptor, prototype,
+mutation, key, extensibility, equality, and identity behavior uses the same
+ordinary object paths as other `ObjectId` values.
 
 Primitive variants are `Undefined`, `Null`, `Bool`, `Number`, `String`,
 `HeapString`, and `Symbol`. `HeapString` and `Symbol` contain VM-owned ids or
@@ -76,8 +80,8 @@ giving semantic code one entrypoint with this contract:
 - `FunctionId` and `NativeFunctionId` are checked by their existing owning
   `Context` accessors;
 - `HostFunctionId` is checked by the host-function owner;
-- inline `ErrorObject` values are admitted as the current object-like error
-  representation;
+- Error instances enter through their validated `ObjectId`; the former inline
+  error representation no longer exists;
 - primitive values return `None` rather than producing a semantic object.
 
 The checked reference retains the source `Value` and currently exposes its
@@ -280,11 +284,9 @@ to AS-03b, while complete derived-constructor activation belongs to AS-06.
 | optimized numeric equality | the same owner plus guarded operand-selection paths in bytecode/control/function modules | fast paths call `number_strict_equality`; they may invert the result for `!=` but do not redefine NaN or signed-zero behavior |
 
 AS-03a1 establishes this owner in merged PR #409 and deletes the former local
-implementations in the same change. `Value::Error` still lacks JavaScript object
-identity, so every equality relation inherits its structural inline-error debt;
-AS-04b removes that representation rather than adding an equality exception.
-The complete local corpus confirms a zero pass-set delta at 34,273 expected
-Test262 variants and 95/95 QuickJS differential cases.
+implementations in the same change. AS-04b1 removes the former structural
+inline-error equality case: Error instances now compare by ordinary `ObjectId`
+identity without a special equality exception.
 
 ### Conversion And Numeric Indexing
 
@@ -348,13 +350,13 @@ The engine already has a useful JavaScript `Completion` enum with `Normal`,
 
 | Boundary | Current behavior | Required migration |
 | --- | --- | --- |
-| Public `eval` | `Completion::into_result` returns `Error::JavaScript { value }` for every `Throw(Value)` | AS-04a typed uncaught-JS exception result implemented in draft PR #416; AS-05 later adds VM-bound handle identity |
-| Native built-ins | `Result<Value>` boundaries carry arbitrary throws through the same `Error::JavaScript` variant; specification-created errors use its inline Error value until AS-04b | AS-04a implemented in draft PR #416 |
-| Runtime-to-throw conversion | `runtime_exception_value` unwraps only `Error::JavaScript`; Runtime, host, parser, and resource errors are never classified by message text | AS-04a implemented in draft PR #416 |
-| Reference errors | `reference_error_undefined` and `reference_error_uninitialized` create typed ReferenceError values directly | AS-04a implemented in draft PR #416 |
-| Accessors and native callbacks | Completion conversion preserves primitive, Symbol, object, and Error throws; public host callbacks may use `Error::javascript(value)` intentionally | AS-04a implemented in draft PR #416 |
-| Error instances | `Value::Error(ErrorObject)` with synthetic properties/prototype | AS-02/AS-04 migrate to ordinary object identity and internal error slots |
-| Source diagnostics | lexer/parser errors carry an offset; runtime bytecode and `Value::Error` carry no `SourceId`/span | AS-04b adds stable source metadata without retaining the AST at runtime |
+| Public `eval` | every `Throw(Value)` returns a value-preserving `Error::JavaScript`; built-in Error objects also carry structured diagnostic metadata | AS-04a merged in PR #416; AS-04b1 implemented in draft PR #418; AS-05 later adds VM-bound handle identity |
+| Native built-ins | `Result<Value>` boundaries preserve arbitrary throws; typed built-in exception requests allocate an ordinary Error object in the active VM before becoming `Throw(Value)` | AS-04a merged in PR #416; AS-04b1 implemented in draft PR #418 |
+| Runtime-to-throw conversion | `runtime_exception_value` unwraps only typed JavaScript values or allocates a typed built-in error request; Runtime, host, parser, and resource errors are never classified by message text | AS-04a merged in PR #416; AS-04b1 object allocation implemented in draft PR #418 |
+| Reference errors | `reference_error_undefined` and `reference_error_uninitialized` create typed ReferenceError requests that become ordinary objects in the active VM | AS-04a merged in PR #416; AS-04b1 implemented in draft PR #418 |
+| Accessors and native callbacks | Completion conversion preserves primitive, Symbol, object, and Error throws; public host callbacks may use `Error::javascript(value)` intentionally | AS-04a merged in PR #416 |
+| Error instances | `Value::Object(ObjectId)` with ordinary properties/prototype plus an `error_metadata` internal slot | AS-04b1 implemented in draft PR #418; no synthetic property or equality path remains |
+| Source diagnostics | lexer/parser errors carry an offset; runtime bytecode and Error metadata carry no `SourceId`/span | AS-04b2 adds stable source metadata without retaining the AST at runtime |
 
 Resource limits should continue to bypass JavaScript catch unless the embedding
 contract explicitly changes. Host failures and invariant failures also need
@@ -371,6 +373,14 @@ architecture guard rejects new raw `ReferenceError:` construction in runtime
 source. The complete local AS-04a corpus retains all 36,221 previous expected
 variants and adds 332 reviewed variants, for 36,553 of 102,578 with 95 of 95
 QuickJS differential cases.
+
+AS-04b1 removes `Value::Error` and all synthetic Error property, descriptor,
+key, prototype, integrity, equality, JSON, and host-value branches. Error
+constructors and typed runtime exceptions allocate ordinary objects with the
+correct intrinsic or `newTarget` prototype; stable class/message diagnostics
+live in one Object internal slot. The complete local corpus retains all 36,553
+previous expected variants and adds 106 reviewed Object, Array, Promise, Error,
+and NativeError variants, for 36,659 of 102,578 with 95 of 95 QuickJS cases.
 
 ## VM Store, Root, And Accounting Map
 
@@ -506,8 +516,9 @@ decision sequence:
 | AS-03b1b | integer, length, and index helpers | shared `ToIntegerOrInfinity`, `ToLength`, and `ToIndex` owners merged in PR #413; consumers delegate without silently replacing specification ranges with storage limits |
 | AS-03b2 | property and call tables | shared `Get`, `Set`, `Call`, and `GetMethod` operations merged in PR #414; legacy facades are deleted and guarded against return |
 | AS-03b3 | iterator map | shared iterator protocol and closing owner merged in PR #415; bytecode owns only loop control and all consumers delegate |
-| AS-04a | completion/error table | typed arbitrary-throw round trip and ReferenceError prefix removal implemented in draft PR #416; engine and resource failures stay non-catchable |
-| AS-04b | inline Error representation and source diagnostics | migrate Error values to ordinary object identity and add stable source ids/spans |
+| AS-04a | completion/error table | typed arbitrary-throw round trip and ReferenceError prefix removal merged in PR #416; engine and resource failures stay non-catchable |
+| AS-04b1 | inline Error representation | ordinary Error object identity and one metadata internal slot implemented in draft PR #418; `Value::Error` and synthetic semantic branches are deleted |
+| AS-04b2 | source diagnostics | add stable source ids/spans without retaining parser AST in runtime state |
 | AS-05a/b | id, clone, store, root, handle, and limit maps | remove ambiguous VM cloning; add VM identity/generation and root/accounting contracts |
 | AS-06 | active execution roots and structured nested bytecode | explicit activation/block stacks and suspend/resume results |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |

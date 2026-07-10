@@ -70,8 +70,7 @@ impl Context {
             Value::Object(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => Ok(value.clone()),
+            | Value::HostFunction(_) => Ok(value.clone()),
             Value::Bool(value) => self.create_boolean_object_from_value(*value),
             Value::Number(value) => self.create_number_object_from_value(*value),
             Value::String(_) | Value::HeapString(_) => self.create_string_object_from_value(value),
@@ -586,7 +585,7 @@ impl Context {
             Value::NativeFunction(id) => {
                 self.has_native_function_property_lookup(*id, property.lookup())
             }
-            Value::Error(_) | Value::String(_) | Value::HeapString(_) => {
+            Value::String(_) | Value::HeapString(_) => {
                 has_property(&self.objects, target, property.lookup())
             }
             Value::Bool(_) | Value::Number(_) | Value::Symbol(_) => Ok(false),

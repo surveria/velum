@@ -156,7 +156,7 @@ impl Context {
             Value::Number(_) => 24,
             Value::NativeFunction(_) | Value::HostFunction(_) => "function()".len(),
             Value::Object(_) => "[object Object]".len(),
-            Value::Function(_) | Value::Symbol(_) | Value::Error(_) => 0,
+            Value::Function(_) | Value::Symbol(_) => 0,
         }
     }
 
@@ -202,7 +202,6 @@ impl Context {
                 }
                 self.symbols.get(symbol.id())?;
             }
-            Value::Error(error) => self.check_string_len(error.message())?,
             Value::Undefined
             | Value::Null
             | Value::Bool(_)

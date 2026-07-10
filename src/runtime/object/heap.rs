@@ -1,5 +1,5 @@
 use crate::{
-    error::{Error, Result},
+    error::{Error, JavaScriptErrorMetadata, Result},
     syntax::AccessorKind,
     value::{ObjectId, Value},
 };
@@ -222,6 +222,19 @@ impl ObjectHeap {
         object.prototype = Some(prototype);
         object.regexp_value = Some(value);
         self.push_object(object, max_objects)
+    }
+
+    pub(crate) fn set_error_metadata(
+        &mut self,
+        id: ObjectId,
+        metadata: JavaScriptErrorMetadata,
+    ) -> Result<()> {
+        self.object_mut(id)?.error_metadata = Some(metadata);
+        Ok(())
+    }
+
+    pub(crate) fn error_metadata(&self, id: ObjectId) -> Result<Option<&JavaScriptErrorMetadata>> {
+        Ok(self.object(id)?.error_metadata.as_ref())
     }
 
     pub(crate) fn mark_raw_json(&mut self, id: ObjectId) -> Result<()> {

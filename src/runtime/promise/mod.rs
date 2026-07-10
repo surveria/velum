@@ -1,7 +1,11 @@
 use crate::{
-    error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs, control::Completion},
-    value::{FunctionId, ObjectId, Value},
+    error::{Error, JavaScriptErrorMetadata, Result},
+    runtime::{
+        Context,
+        call::RuntimeCallArgs,
+        control::{Completion, runtime_exception_value},
+    },
+    value::{ErrorName, FunctionId, ObjectId, Value},
 };
 
 mod job;
@@ -56,13 +60,14 @@ impl Context {
     ) -> Result<()> {
         if let Ok(adopted) = self.promise_id_from_value(&value) {
             if adopted == promise {
-                return self.reject_promise(
-                    promise,
-                    Value::Error(crate::value::ErrorObject::new(
-                        crate::value::ErrorName::TypeError,
+                let reason = self.create_error_object(
+                    JavaScriptErrorMetadata::new(
+                        ErrorName::TypeError,
                         "Promise cannot resolve to itself",
-                    )),
-                );
+                    ),
+                    true,
+                )?;
+                return self.reject_promise(promise, reason);
             }
             return self.adopt_promise(promise, adopted);
         }
@@ -132,13 +137,14 @@ impl Context {
             Completion::Return(value) => self.resolve_promise(promise, value)?,
             Completion::Throw(value) => self.reject_promise(promise, value)?,
             Completion::Break { .. } | Completion::Continue(_) => {
-                self.reject_promise(
-                    promise,
-                    Value::Error(crate::value::ErrorObject::new(
-                        crate::value::ErrorName::SyntaxError,
+                let reason = self.create_error_object(
+                    JavaScriptErrorMetadata::new(
+                        ErrorName::SyntaxError,
                         "invalid async function completion",
-                    )),
+                    ),
+                    true,
                 )?;
+                self.reject_promise(promise, reason)?;
             }
         }
         Ok(object)
@@ -299,13 +305,12 @@ impl Context {
         };
         match self.call_value(&handler, &[state.value], Value::Undefined) {
             Ok(value) => self.resolve_promise(reaction.result, value),
-            Err(error) => self.reject_promise(
-                reaction.result,
-                Value::Error(crate::value::ErrorObject::new(
-                    crate::value::ErrorName::Base,
-                    error.to_string(),
-                )),
-            ),
+            Err(error) => {
+                let Some(reason) = runtime_exception_value(self, &error)? else {
+                    return Err(error);
+                };
+                self.reject_promise(reaction.result, reason)
+            }
         }
     }
 

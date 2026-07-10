@@ -49,7 +49,7 @@ impl Context {
                 self.set_native_function_property_key(*id, property.name(), key, value)?;
                 SemanticPropertyWrite::Resolved(true)
             }
-            Value::HostFunction(_) | Value::Error(_) => {
+            Value::HostFunction(_) => {
                 let key = self.semantic_property_key(property)?;
                 set_property(
                     &mut self.objects,
@@ -119,9 +119,11 @@ impl Context {
             Value::NativeFunction(id) => SemanticPropertyDelete::Resolved(
                 self.delete_native_function_property_lookup(*id, property)?,
             ),
-            Value::HostFunction(_) | Value::Error(_) => SemanticPropertyDelete::Resolved(
-                delete_property(&mut self.objects, object, property)?,
-            ),
+            Value::HostFunction(_) => SemanticPropertyDelete::Resolved(delete_property(
+                &mut self.objects,
+                object,
+                property,
+            )?),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -224,7 +226,7 @@ impl Context {
         receiver: &Value,
     ) -> Result<bool> {
         if self.semantic_object_ref(receiver)?.is_none()
-            || matches!(receiver, Value::HostFunction(_) | Value::Error(_))
+            || matches!(receiver, Value::HostFunction(_))
         {
             return Ok(false);
         }

@@ -61,6 +61,7 @@ impl Object {
             array_length_writable: super::PropertyWritable::Yes,
             string_value: Some(value),
             primitive_value: None,
+            error_metadata: None,
             date_value: None,
             regexp_value: None,
             proxy_value: None,

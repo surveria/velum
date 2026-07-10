@@ -92,6 +92,10 @@ fn compiled_static_names_preserve_binding_and_property_paths() -> TestResult {
 fn compiled_missing_static_name_does_not_intern_atom() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
+    let warmup = vm.compile("warmupMissingBinding")?;
+    let Err(_) = vm.eval_compiled(&warmup) else {
+        return Err("expected ReferenceError infrastructure warmup to fail".into());
+    };
     let script = vm.compile("missingCompiledBinding")?;
     let atom_count = vm.resource_usage().atom_count;
 

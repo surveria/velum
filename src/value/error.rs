@@ -60,26 +60,3 @@ impl fmt::Display for ErrorName {
         formatter.write_str(self.as_str())
     }
 }
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ErrorObject {
-    name: ErrorName,
-    message: String,
-}
-
-impl ErrorObject {
-    pub(crate) fn new(name: ErrorName, message: impl Into<String>) -> Self {
-        Self {
-            name,
-            message: message.into(),
-        }
-    }
-
-    pub(crate) const fn name(&self) -> ErrorName {
-        self.name
-    }
-
-    pub(crate) const fn message(&self) -> &str {
-        self.message.as_str()
-    }
-}
