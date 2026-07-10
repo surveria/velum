@@ -18,12 +18,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260710T161351Z.md`
-- Task: PR #429: AS-05b1b3: enumerate asynchronous arena edges
-- Performance: 5.36x (4/5 >1.00x) (from `rsqjs-test-report-20260710T161351Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T161351Z.md`)
+- `rsqjs-test-report-20260710T163712Z.md`
+- Task: PR #430: AS-05b1c: close transient root gaps
+- Performance: 5.29x (4/5 >1.00x) (from `rsqjs-test-report-20260710T163712Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T163712Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T161351Z.md`)
+- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T163712Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -416,3 +416,4 @@ Latest report:
 | `20260710T153859Z` `5c42a71` PR #427: AS-05b1b1: enumerate callable store edges | 5.34x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T155616Z` `778fe2a` PR #428: AS-05b1b2: enumerate object arena edges | 5.52x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T161351Z` `74ef846` PR #429: AS-05b1b3: enumerate asynchronous arena edges | 5.36x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
+| `20260710T163712Z` `ffb2102` PR #430: AS-05b1c: close transient root gaps | 5.29x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
