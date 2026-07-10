@@ -7,7 +7,7 @@ use crate::{
         PropertyUpdate, PropertyWritable,
     },
     runtime::property::{DynamicPropertyKey, has_property},
-    runtime::{Context, abstract_operations::to_boolean},
+    runtime::{Context, abstract_operations::to_boolean, roots::VmRootKind},
     value::{NativeFunctionId, ObjectId, Value},
 };
 
@@ -369,9 +369,13 @@ impl Context {
         if self.semantic_object_ref(value)?.is_none() {
             return Err(Error::runtime("property descriptor must be an object"));
         }
+        let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
         let get = self.optional_descriptor_accessor(value, DESCRIPTOR_GET_PROPERTY)?;
+        roots.add_values(get.iter())?;
         let set = self.optional_descriptor_accessor(value, DESCRIPTOR_SET_PROPERTY)?;
+        roots.add_values(set.iter())?;
         let data_value = self.optional_descriptor_value(value, DESCRIPTOR_VALUE_PROPERTY)?;
+        roots.add_values(data_value.iter())?;
         let writable = self.optional_descriptor_writable(value)?;
         let enumerable = self.optional_descriptor_enumerable(value)?;
         let configurable = self.optional_descriptor_configurable(value)?;

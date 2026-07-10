@@ -38,6 +38,7 @@ pub mod property;
 mod roots;
 mod semantic_object;
 mod trace;
+mod transient_roots;
 pub mod values;
 
 pub use async_trace::{VmAsyncEdgeKind, VmAsyncEdgeSnapshot, VmAsyncEdgeStrength};
@@ -53,6 +54,7 @@ pub use roots::{VmRootKind, VmRootSnapshot};
 pub use trace::{
     VmCallableEdgeKind, VmCallableEdgeSnapshot, VmObjectEdgeKind, VmObjectEdgeSnapshot,
 };
+use transient_roots::TransientRootRegistry;
 
 const INITIAL_RANDOM_STATE: u64 = 0x9e37_79b9_7f4a_7c15;
 const CONSTRUCTOR_PROTOTYPE_PROPERTY: &str = "prototype";
@@ -92,6 +94,7 @@ pub struct Context {
     promise_object_slots: Vec<Option<PromiseId>>,
     promise_jobs: VecDeque<PromiseJob>,
     promise_prototype: Option<crate::value::ObjectId>,
+    transient_roots: TransientRootRegistry,
     this_values: Vec<Value>,
     new_target_values: Vec<Value>,
     super_frames: Vec<Option<Rc<function::FunctionSuperBinding>>>,
@@ -291,6 +294,7 @@ impl Context {
             promise_object_slots: Vec::new(),
             promise_jobs: VecDeque::new(),
             promise_prototype: None,
+            transient_roots: TransientRootRegistry::new(),
             this_values: Vec::new(),
             new_target_values: Vec::new(),
             super_frames: Vec::new(),

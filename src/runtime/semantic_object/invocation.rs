@@ -1,6 +1,9 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs, control::Completion, native::NativeFunctionKind},
+    runtime::{
+        Context, call::RuntimeCallArgs, control::Completion, native::NativeFunctionKind,
+        roots::VmRootKind,
+    },
     value::Value,
 };
 
@@ -37,6 +40,12 @@ impl Context {
         args: &[Value],
         this_value: Value,
     ) -> Result<Completion> {
+        let _root_scope = self.transient_root_scope(
+            VmRootKind::TransientCall,
+            std::iter::once(callee)
+                .chain(std::iter::once(&this_value))
+                .chain(args.iter()),
+        )?;
         let Some(object) = self.semantic_object_ref(callee)? else {
             return Err(Self::not_callable_error(callee));
         };
@@ -103,6 +112,12 @@ impl Context {
         args: &[Value],
         new_target: Value,
     ) -> Result<Value> {
+        let _root_scope = self.transient_root_scope(
+            VmRootKind::TransientCall,
+            std::iter::once(constructor)
+                .chain(std::iter::once(&new_target))
+                .chain(args.iter()),
+        )?;
         if !self.semantic_is_constructor(&new_target)? {
             return Err(Self::not_constructor_error(&new_target));
         }
