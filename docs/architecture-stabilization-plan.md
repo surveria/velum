@@ -1339,7 +1339,10 @@ AS-05b2c1 local implementation evidence:
 - the architecture boundary guard fixes the public policy seam, the single
   object insertion boundary, and every AS-05b2c1 owner check. Three new
   mutations prove that atom payload, byte-buffer insertion, and output-release
-  accounting cannot disappear unnoticed.
+  accounting cannot disappear unnoticed;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
 
 AS-05a1 completion evidence:
 
