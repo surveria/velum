@@ -151,6 +151,9 @@ impl Context {
         integer: f64,
         error: &str,
     ) -> Result<usize> {
+        if integer == 0.0 {
+            return Ok(0);
+        }
         if !integer.is_finite() || integer < 0.0 || integer.fract() != 0.0 {
             return Err(Error::limit(error));
         }

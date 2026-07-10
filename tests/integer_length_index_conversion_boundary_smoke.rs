@@ -14,7 +14,9 @@ fn routes_integer_consumers_through_shared_conversion() -> TestResult {
         };
         let array = [40, 41, 42];
         let text = "abc";
-        array.at(index) === 41 && text.at(index) === "b" && hints === "numbernumber"
+        array.at(index) === 41 && text.at(index) === "b" &&
+            text.charAt(-0.9) === "a" && text.charCodeAt(-0.9) === 97 &&
+            text.slice(-0.01, 0) === "" && hints === "numbernumber"
             ? 42 : 0
         "#,
     )
