@@ -2,7 +2,7 @@ use std::{fs, path::PathBuf};
 
 use super::{
     build_rollup, parse_benchmark_metrics, parse_corpus_counts, parse_rollup_test262_counts,
-    render_markdown,
+    render_markdown, report_rollup_chart::write_chart, report_rollup_timeline::CommitTimeline,
 };
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -199,6 +199,28 @@ fn standalone_jetstream_yaml_with_an_unrelated_timestamp_is_discovered_once() ->
         return Ok(());
     }
     Err("standalone JetStream YAML was missing, duplicated, or misattributed".into())
+}
+
+#[test]
+fn current_history_chart_renders_on_the_shared_main_commit_axis() -> TestResult {
+    let repository_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or("runner manifest directory has no repository parent")?
+        .to_path_buf();
+    let report_dir = repository_root.join("reports/test-runs");
+    let records = super::parse_records(&report_dir)?;
+    let timeline = CommitTimeline::discover(&report_dir, &records)?;
+    let chart_path = std::env::temp_dir().join(format!(
+        "rsqjs-commit-axis-chart-{}.jpg",
+        std::process::id()
+    ));
+    write_chart(&records, &timeline, &chart_path)?;
+    let metadata = fs::metadata(&chart_path)?;
+    fs::remove_file(&chart_path)?;
+    if metadata.len() > 100_000 && timeline.axis_end()? > i32::try_from(records.len())? {
+        return Ok(());
+    }
+    Err("shared main commit chart was empty or used a compressed report domain".into())
 }
 
 fn temporary_report_root() -> PathBuf {
