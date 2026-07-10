@@ -67,9 +67,16 @@ head_tree="fedcba9876543210fedcba9876543210fedcba98"
 validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/repo \
   .github/workflows/ci.yml CI pull_request completed success "${tree_sha}" ||
   fail_test "rejected trusted correctness workflow run"
+validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/repo \
+  .github/workflows/ci.yml CI workflow_dispatch completed success "${tree_sha}" ||
+  fail_test "rejected trusted exact-tree correctness recovery run"
 if validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/repo \
   .github/workflows/ci.yml CI pull_request completed success "${head_tree}"; then
   fail_test "accepted correctness from a different workflow head tree"
+fi
+if validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/repo \
+  .github/workflows/ci.yml CI push completed success "${tree_sha}"; then
+  fail_test "accepted correctness from an unsupported workflow event"
 fi
 if validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 101 owner/repo \
   .github/workflows/ci.yml CI pull_request completed failure "${tree_sha}"; then
