@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260710T055618Z.md`
-- Task: PR #406: workflow: add exact-tree correctness recovery
-- Performance: 5.26x (4/5 >1.00x) (from `rsqjs-test-report-20260710T055618Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T055618Z.md`)
+- `rsqjs-test-report-20260710T060205Z.md`
+- Task: PR #407: workflow: checkout historical correctness sources
+- Performance: 5.38x (4/5 >1.00x) (from `rsqjs-test-report-20260710T060205Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T060205Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 34186 passed / 68392 failed (33.33%) (from `rsqjs-test-report-20260710T055618Z.md`)
+- Full Test262: 34186 passed / 68392 failed (33.33%) (from `rsqjs-test-report-20260710T060205Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -391,3 +391,4 @@ Latest report:
 | `20260710T055242Z` `6760271` PR #404: workflow: authenticate JetStream publisher fetch | 5.25x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34186 passed / 68392 failed (33.33%) |
 | `20260710T055456Z` `8bb3171` JetStream shell benchmark lane | - (0/0 >1.00x) | - (0/0 >1.00x) | 22.44x (4/4 >1.00x) | - |
 | `20260710T055618Z` `5f997e3` PR #406: workflow: add exact-tree correctness recovery | 5.26x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34186 passed / 68392 failed (33.33%) |
+| `20260710T060205Z` `ec6934b` PR #407: workflow: checkout historical correctness sources | 5.38x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34186 passed / 68392 failed (33.33%) |
