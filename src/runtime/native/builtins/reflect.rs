@@ -243,13 +243,13 @@ impl Context {
     ) -> Result<Value> {
         let slice = args.as_slice();
         let target = Self::argument_or_undefined(slice.first());
-        if !Self::is_callable(&target) {
+        if !self.semantic_is_callable(&target)? {
             return Err(Error::type_error(REFLECT_APPLY_NOT_CALLABLE_ERROR));
         }
         let this_arg = Self::argument_or_undefined(slice.get(1));
         let args_list = Self::argument_or_undefined(slice.get(2));
         let call_args = self.reflect_argument_list(&args_list)?;
-        self.eval_call_value(target, &call_args, this_arg)
+        self.eval_call_value(&target, &call_args, this_arg)
     }
 
     pub(in crate::runtime) fn eval_reflect_construct(
@@ -259,16 +259,16 @@ impl Context {
     ) -> Result<Value> {
         let slice = args.as_slice();
         let target = Self::argument_or_undefined(slice.first());
-        if !self.is_constructor_value(&target)? {
+        if !self.semantic_is_constructor(&target)? {
             return Err(Error::type_error(REFLECT_CONSTRUCT_NOT_CONSTRUCTOR_ERROR));
         }
-        let new_target = slice.get(2).map_or(&target, |value| value);
-        if !self.is_constructor_value(new_target)? {
+        let new_target = slice.get(2).cloned().unwrap_or_else(|| target.clone());
+        if !self.semantic_is_constructor(&new_target)? {
             return Err(Error::type_error(REFLECT_CONSTRUCT_NOT_CONSTRUCTOR_ERROR));
         }
         let args_list = Self::argument_or_undefined(slice.get(1));
         let construct_args = self.reflect_argument_list(&args_list)?;
-        self.eval_new_value(target, &construct_args)
+        self.semantic_construct(&target, &construct_args, new_target)
     }
 
     fn require_reflect_object(value: Option<&Value>) -> Result<Value> {
@@ -309,9 +309,9 @@ impl Context {
         let value = Self::argument_or_undefined(value);
         if matches!(value, Value::Object(_)) {
             let to_string = self.get_property_value(&value, "toString")?;
-            if Self::is_callable(&to_string) {
+            if self.semantic_is_callable(&to_string)? {
                 let key = self
-                    .eval_call_completion(to_string, &[], value.clone())?
+                    .eval_call_completion(&to_string, &[], value.clone())?
                     .into_native_value_result()?;
                 return self.dynamic_property_key(&key);
             }

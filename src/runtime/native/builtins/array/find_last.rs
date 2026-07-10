@@ -20,7 +20,7 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let (callback, callback_this) = Self::array_callback_and_this_arg(args)?;
+        let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
         for index in (0..length).rev() {
@@ -53,7 +53,7 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let (callback, callback_this) = Self::array_callback_and_this_arg(args)?;
+        let (callback, callback_this) = self.array_callback_and_this_arg(args)?;
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
         for index in (0..length).rev() {

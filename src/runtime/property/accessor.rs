@@ -10,7 +10,7 @@ impl Context {
     /// Invokes a getter function with the property read receiver as `this`.
     pub(in crate::runtime) fn call_accessor_getter(
         &mut self,
-        getter: Value,
+        getter: &Value,
         receiver: Value,
     ) -> Result<Value> {
         self.call_accessor_function(getter, receiver, &[])
@@ -53,7 +53,7 @@ impl Context {
         let lookup = PropertyLookup::from_key(property_name, key);
         match self.objects.accessor_write_target(object, lookup)? {
             AccessorWriteDisposition::Setter(setter) => {
-                self.call_accessor_function(setter, Value::Object(object), &[value])?;
+                self.call_accessor_function(&setter, Value::Object(object), &[value])?;
                 return Ok(());
             }
             AccessorWriteDisposition::NoSetter => return Ok(()),
@@ -74,7 +74,7 @@ impl Context {
     /// them; other abrupt completions surface as runtime errors.
     pub(in crate::runtime) fn call_accessor_function(
         &mut self,
-        function: Value,
+        function: &Value,
         this_value: Value,
         args: &[Value],
     ) -> Result<Value> {

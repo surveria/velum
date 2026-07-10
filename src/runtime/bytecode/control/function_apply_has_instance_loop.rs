@@ -114,7 +114,7 @@ impl Context {
         }
         let dog_ctor = body.dog_ctor_cell.value(body.dog_ctor.name())?;
         let animal_ctor = body.animal_ctor_cell.value(body.animal_ctor.name())?;
-        let dog = self.eval_new_value(dog_ctor.clone(), &[])?;
+        let dog = self.eval_new_value(&dog_ctor, &[])?;
         if !self.function_apply_has_instance_guards(body, &dog, &dog_ctor, &animal_ctor)? {
             return Ok(false);
         }

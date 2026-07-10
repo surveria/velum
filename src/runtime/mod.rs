@@ -44,6 +44,7 @@ use property::static_names::{CallValueCache, StaticNameAtomCacheHandle};
 use property::well_known::{DescriptorPropertyKeys, WellKnownPropertyKeys};
 
 const INITIAL_RANDOM_STATE: u64 = 0x9e37_79b9_7f4a_7c15;
+const CONSTRUCTOR_PROTOTYPE_PROPERTY: &str = "prototype";
 const TEST262_ERROR_NAME: &str = "Test262Error";
 
 #[derive(Debug, Clone)]
@@ -336,63 +337,33 @@ impl Context {
 
     pub(crate) fn eval_call_value(
         &mut self,
-        callee: Value,
+        callee: &Value,
         args: &[Value],
         this_value: Value,
     ) -> Result<Value> {
-        match callee {
-            Value::Function(id) => {
-                self.eval_function_with_this(id, RuntimeCallArgs::values(args), this_value)
-            }
-            Value::NativeFunction(id) => {
-                let kind = self.native_function(id)?.kind();
-                self.eval_direct_or_generic_native_function_kind(kind, args, &this_value)
-            }
-            Value::HostFunction(id) => self.eval_host_function(id, RuntimeCallArgs::values(args)),
-            Value::Object(id) if self.objects.is_proxy(id) => {
-                self.proxy_apply(id, args, this_value)
-            }
-            value => Err(Error::type_error(format!("'{value}' is not callable"))),
-        }
+        self.semantic_call(callee, args, this_value)?
+            .into_native_value_result()
     }
 
     pub(crate) fn eval_call_completion(
         &mut self,
-        callee: Value,
+        callee: &Value,
         args: &[Value],
         this_value: Value,
     ) -> Result<Completion> {
-        match callee {
-            Value::Function(id) => self.eval_function_call_completion_with_this(
-                id,
-                RuntimeCallArgs::values(args),
-                this_value,
-            ),
-            Value::NativeFunction(id) => {
-                let kind = self.native_function(id)?.kind();
-                self.eval_direct_or_generic_native_function_kind(kind, args, &this_value)
-                    .map(Completion::Normal)
-            }
-            Value::HostFunction(id) => self
-                .eval_host_function(id, RuntimeCallArgs::values(args))
-                .map(Completion::Normal),
-            Value::Object(id) if self.objects.is_proxy(id) => self
-                .proxy_apply(id, args, this_value)
-                .map(Completion::Normal),
-            value => Err(Error::type_error(format!("'{value}' is not callable"))),
-        }
+        self.semantic_call(callee, args, this_value)
     }
 
     pub(crate) fn eval_cached_call_completion(
         &mut self,
         site: BytecodeCallSite,
-        callee: Value,
+        callee: &Value,
         args: &[Value],
         this_value: Value,
     ) -> Result<Completion> {
         let site = site.site();
         if let Some(cache) = self.cached_call_value(site)? {
-            if cache.matches_callee(&callee) {
+            if cache.matches_callee(callee) {
                 self.record_call_value_cache_hit();
                 return self.eval_call_completion_cache(cache, args, this_value);
             }
@@ -401,7 +372,7 @@ impl Context {
             self.record_call_value_cache_miss();
         }
 
-        let Some(cache) = self.cacheable_call_value(&callee)? else {
+        let Some(cache) = self.cacheable_call_value(callee)? else {
             return self.eval_call_completion(callee, args, this_value);
         };
         self.remember_call_value(site, cache)?;
@@ -467,7 +438,7 @@ impl Context {
                 .eval_direct_or_generic_native_function_kind(kind, args, &this_value)
                 .map(Completion::Normal),
             CallReference::Generic { callee, this_value } => {
-                self.eval_call_completion(callee, args, this_value)
+                self.eval_call_completion(&callee, args, this_value)
             }
         }
     }
@@ -564,17 +535,8 @@ impl Context {
         self.eval_error_constructor(ErrorName::Test262Error, RuntimeCallArgs::values(args))
     }
 
-    pub(crate) fn eval_new_value(&mut self, constructor: Value, args: &[Value]) -> Result<Value> {
-        match constructor {
-            Value::Function(id) => {
-                self.eval_function_constructor_value(id, RuntimeCallArgs::values(args))
-            }
-            Value::NativeFunction(id) => {
-                self.construct_native_function(id, RuntimeCallArgs::values(args))
-            }
-            Value::Object(id) if self.objects.is_proxy(id) => self.proxy_construct(id, args),
-            value => Err(Error::type_error(format!("'{value}' is not a constructor"))),
-        }
+    pub(crate) fn eval_new_value(&mut self, constructor: &Value, args: &[Value]) -> Result<Value> {
+        self.semantic_construct(constructor, args, constructor.clone())
     }
 
     fn eval_bytecode_function_constructor(
@@ -586,38 +548,25 @@ impl Context {
         let value = self
             .constructor_binding_bytecode(constructor)?
             .ok_or_else(|| reference_error_undefined(constructor.name()))?;
-        let Value::Function(id) = value else {
-            if let Value::NativeFunction(id) = value {
-                if let Some(target) = native
-                    && let Some(kind) = self.direct_native_call_kind(id, target)
-                {
-                    if kind == NativeFunctionKind::Function {
-                        return self.eval_direct_function_constructor(args);
-                    }
-                    return self
-                        .construct_native_function_kind(kind, RuntimeCallArgs::values(args));
-                }
-                return self.construct_native_function(id, RuntimeCallArgs::values(args));
+        if let Value::NativeFunction(id) = value
+            && let Some(target) = native
+            && let Some(kind) = self.direct_native_call_kind(id, target)
+        {
+            if kind == NativeFunctionKind::Function {
+                return self.eval_direct_function_constructor(args);
             }
-            if let Value::Object(object_id) = value
-                && self.objects.is_proxy(object_id)
-            {
-                return self.proxy_construct(object_id, args);
-            }
-            return Err(Error::type_error(format!(
-                "'{}' is not a constructor",
-                constructor.name()
-            )));
-        };
-        self.eval_function_constructor_value(id, RuntimeCallArgs::values(args))
+            return self.construct_native_function_kind(kind, RuntimeCallArgs::values(args));
+        }
+        self.semantic_construct(&value, args, value.clone())
     }
 
-    fn eval_function_constructor_value(
+    pub(in crate::runtime) fn eval_function_constructor_value(
         &mut self,
         id: crate::value::FunctionId,
         args: RuntimeCallArgs<'_>,
+        new_target: Value,
     ) -> Result<Value> {
-        let prototype = self.function_constructor_prototype(id)?;
+        let prototype = self.constructor_instance_prototype(&new_target)?;
         let constructor_key = self.object_constructor_property_key()?;
         let object = self.objects.create_with_prototype(
             prototype,
@@ -632,7 +581,7 @@ impl Context {
             id,
             args,
             object.clone(),
-            Value::Function(id),
+            new_target,
         )? {
             Completion::Return(value) => {
                 if self.semantic_object_ref(&value)?.is_some() {
@@ -645,6 +594,18 @@ impl Context {
             Completion::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Completion::Continue(_) => Err(Error::runtime("continue statement outside loop")),
         }
+    }
+
+    fn constructor_instance_prototype(
+        &mut self,
+        new_target: &Value,
+    ) -> Result<Option<crate::value::ObjectId>> {
+        let prototype = self.get_property_value(new_target, CONSTRUCTOR_PROTOTYPE_PROPERTY)?;
+        let Value::Object(id) = prototype else {
+            return Ok(None);
+        };
+        self.objects.validate_id(id)?;
+        Ok(Some(id))
     }
 
     pub(crate) fn push_lexical_scope(&mut self) {

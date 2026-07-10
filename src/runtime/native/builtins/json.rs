@@ -119,11 +119,14 @@ impl Context {
         let value = serde_json::from_str(&text)
             .map_err(|error| Error::exception(ErrorName::SyntaxError, error.to_string()))?;
         let value = self.value_from_json(value)?;
-        let Some(reviver) = args.get(1).filter(|value| Self::is_json_callable(value)) else {
+        let Some(reviver) = args.get(1) else {
             return Ok(value);
         };
+        if !self.semantic_is_callable(reviver)? {
+            return Ok(value);
+        }
         let holder = self.create_json_wrapper(value)?;
-        self.internalize_json_property(&holder, JSON_EMPTY_KEY, &reviver.clone())
+        self.internalize_json_property(&holder, JSON_EMPTY_KEY, reviver)
     }
 
     pub(in crate::runtime::native) fn eval_json_stringify(
@@ -236,7 +239,7 @@ impl Context {
         }
         let key_value = self.heap_string_value(key)?;
         let args = [key_value, value];
-        self.call_json_callback(reviver.clone(), holder.clone(), &args)
+        self.call_json_callback(reviver, holder.clone(), &args)
     }
 
     fn internalize_json_children(
@@ -283,7 +286,7 @@ impl Context {
         let Some(value) = value else {
             return Ok(JsonReplacer::None);
         };
-        if Self::is_json_callable(value) {
+        if self.semantic_is_callable(value)? {
             return Ok(JsonReplacer::Function(value.clone()));
         }
         let Value::Object(id) = value else {
@@ -408,11 +411,11 @@ impl Context {
             return Ok(value);
         }
         let to_json = self.get_property_value(&value, JSON_TO_JSON_NAME)?;
-        if !Self::is_json_callable(&to_json) {
+        if !self.semantic_is_callable(&to_json)? {
             return Ok(value);
         }
         let key = self.heap_string_value(key)?;
-        self.call_json_callback(to_json, value, &[key])
+        self.call_json_callback(&to_json, value, &[key])
     }
 
     fn apply_json_replacer(
@@ -427,7 +430,7 @@ impl Context {
         };
         let key = self.heap_string_value(key)?;
         let args = [key, value];
-        self.call_json_callback(function.clone(), holder.clone(), &args)
+        self.call_json_callback(function, holder.clone(), &args)
     }
 
     fn stringify_json_value(
@@ -742,10 +745,10 @@ impl Context {
     fn json_ordinary_to_primitive(&mut self, value: &Value, names: &[&str]) -> Result<Value> {
         for name in names {
             let method = self.get_property_value(value, name)?;
-            if !Self::is_json_callable(&method) {
+            if !self.semantic_is_callable(&method)? {
                 continue;
             }
-            let result = self.call_json_callback(method, value.clone(), &[])?;
+            let result = self.call_json_callback(&method, value.clone(), &[])?;
             if Self::is_json_primitive(&result) {
                 return Ok(result);
             }
@@ -770,7 +773,7 @@ impl Context {
 
     fn call_json_callback(
         &mut self,
-        function: Value,
+        function: &Value,
         this_value: Value,
         args: &[Value],
     ) -> Result<Value> {
@@ -782,12 +785,5 @@ impl Context {
             Completion::Throw(value) => Err(Error::runtime(format!("uncaught throw: {value}"))),
             completion => completion.into_result(),
         }
-    }
-
-    const fn is_json_callable(value: &Value) -> bool {
-        matches!(
-            value,
-            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_)
-        )
     }
 }

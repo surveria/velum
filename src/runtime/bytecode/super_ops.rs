@@ -122,7 +122,7 @@ impl Context {
         let frame = self.super_frame()?;
         let callee = self.get_property_value(&frame.home_prototype, property.name())?;
         let this_value = self.current_this()?;
-        let completion = self.eval_call_completion(callee, args, this_value)?;
+        let completion = self.eval_call_completion(&callee, args, this_value)?;
         let Completion::Normal(value) = completion else {
             return Ok(Some(completion));
         };

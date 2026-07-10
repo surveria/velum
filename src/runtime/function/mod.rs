@@ -188,23 +188,6 @@ impl Context {
         Ok(function)
     }
 
-    pub(crate) fn eval_function_with_this(
-        &mut self,
-        id: FunctionId,
-        args: RuntimeCallArgs<'_>,
-        this_value: Value,
-    ) -> Result<Value> {
-        self.reject_class_constructor_call(id)?;
-        let new_target = self.function_direct_call_new_target(id)?;
-        if self.function(id)?.is_async {
-            return self.eval_async_function_with_this(id, args, this_value, new_target);
-        }
-        let value = self
-            .eval_function_completion_with_this_and_new_target(id, args, this_value, new_target)?
-            .into_function_result()?;
-        self.runtime_value(value)
-    }
-
     pub(crate) fn eval_function_call_completion_with_this(
         &mut self,
         id: FunctionId,

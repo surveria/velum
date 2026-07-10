@@ -11,6 +11,7 @@ mod array_kind;
 mod call_target;
 mod collection;
 mod collection_kind;
+mod constructable;
 mod date_kind;
 mod direct;
 mod kind;

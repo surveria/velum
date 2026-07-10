@@ -203,15 +203,17 @@ impl Context {
         Ok(object)
     }
 
-    pub(in crate::runtime) fn promise_reaction_handler(value: Option<&Value>) -> Option<Value> {
-        value.filter(|value| Self::is_callable(value)).cloned()
-    }
-
-    pub(in crate::runtime) const fn is_callable(value: &Value) -> bool {
-        matches!(
-            value,
-            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_)
-        )
+    pub(in crate::runtime) fn promise_reaction_handler(
+        &self,
+        value: Option<&Value>,
+    ) -> Result<Option<Value>> {
+        let Some(value) = value else {
+            return Ok(None);
+        };
+        if self.semantic_is_callable(value)? {
+            return Ok(Some(value.clone()));
+        }
+        Ok(None)
     }
 
     fn create_promise_object(&mut self, promise: PromiseId) -> Result<Value> {
@@ -295,7 +297,7 @@ impl Context {
                 PromiseStatus::Rejected => self.reject_promise(reaction.result, state.value),
             };
         };
-        match self.eval_call_value(handler, &[state.value], Value::Undefined) {
+        match self.eval_call_value(&handler, &[state.value], Value::Undefined) {
             Ok(value) => self.resolve_promise(reaction.result, value),
             Err(error) => self.reject_promise(
                 reaction.result,

@@ -25,8 +25,8 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 and AS-02a are complete; AS-02b is in progress
-  with its read/presence slice implemented in draft PR #401
+- Current program state: AS-01, AS-02a, and AS-02b are complete; AS-02c is in
+  progress in draft PR #408
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -480,7 +480,7 @@ dependencies do not overlap.
 | --- | --- | --- | --- | --- |
 | AS-00 | Complete | Adopt this plan and route project documentation to it. | None | PR #396 merged as `f79056b`; required CI, post-merge performance, publisher, and canonical report publication passed. |
 | AS-01 | Complete | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards merged in PR #399 with required CI and canonical report publication. |
-| AS-02 | In progress | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 mutation/metadata methods are implemented in draft PR #403. |
+| AS-02 | In progress | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c call/construct methods are implemented in draft PR #408. |
 | AS-03 | Backlog | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | Shared coercion, equality, property, invocation, and iterator operations used by bytecode and built-ins. |
 | AS-04 | Backlog | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | Real JavaScript error objects, typed throw path, no message-prefix classification, spans available to diagnostics. |
 | AS-05 | Backlog | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | Non-cloneable VM state, checked cross-VM boundaries, trace/root contract, heap/stack/job/buffer counters and limits. |
@@ -638,7 +638,7 @@ AS-02b1 evidence:
 
 AS-02b2 evidence:
 
-- PR: #403 (draft)
+- PR: #403, squash-merged as `9697734`
 - Scope: shared object-like `[[Set]]`, `[[Delete]]`,
   `[[DefineOwnProperty]]`, `[[GetOwnProperty]]`, `[[OwnPropertyKeys]]`,
   prototype, extensibility, and integrity dispatch
@@ -662,8 +662,44 @@ AS-02b2 evidence:
 - Test262/QuickJS: the reviewed full-corpus refresh adds 180 variants across 91
   files with zero lost passes; complete local correctness is green at
   34,186/34,186 expected Test262 variants and 95/95 QuickJS differential cases
-- Remaining for AS-02b2: commit the reviewed baseline, repeat exact-tree
-  required CI, merge, and verify canonical report publication
+- Validation/publication: required correctness run `29071727421` passed on
+  tested tree `73df8768`; trusted historical correctness recovery run
+  `29072795054` reproduced that exact tree after `main` moved; rerun attempt 2
+  of post-merge workflow `29071824973` then published the canonical report
+  `reports/test-runs/rsqjs-test-report-20260710T060416Z.*` in report-only
+  commit `66dad44`
+- Workflow hardening: PRs #405 through #407 made performance artifacts trust
+  the current post-merge run and added trusted exact-tree correctness recovery
+  without accepting caller-supplied artifacts or tree claims
+- Remaining for AS-02b2: none
+
+AS-02c current evidence:
+
+- PR: #408 (draft)
+- Scope: one checked `semantic_is_callable`/`semantic_call` and
+  `semantic_is_constructor`/`semantic_construct` owner for JavaScript, native,
+  host, bound-function, and callable/constructable Proxy values
+- Construction semantics: explicit `newTarget` now reaches JavaScript
+  constructors, Proxy traps and fallbacks, and bound-target replacement;
+  callable and constructable Proxy capabilities are captured independently at
+  creation and survive revocation
+- Consolidation: generic bytecode calls/construction, Function helpers,
+  accessors, array/collection callbacks, JSON, Promise, Reflect, Proxy,
+  `typeof`, and coercion hooks share the predicates and dispatch; guarded
+  direct-native and call-cache hits remain backend optimizations
+- Tests: focused regression coverage exercises callable Proxy consumers,
+  JSON callbacks, Proxy/Reflect `newTarget`, nested Proxy construction, bound
+  constructors, non-constructable bound arrows, and host-function Proxy
+  capability; the complete engine/runner fast gate passes
+- Test262/QuickJS: the reviewed pass-set refresh adds exactly 87 variants with
+  zero removals, moving the full corpus from 34,186 to 34,273 of 102,578;
+  the refreshed 34,273/34,273 expected-pass baseline and all 95 QuickJS
+  differential cases pass the complete local correctness gate
+- Recorded residuals: alternate `newTarget.prototype` is not yet applied by
+  native constructor payloads, and derived-class `super()` still initializes a
+  pre-created receiver in place; AS-03b and AS-06 own those migrations
+- Remaining for AS-02c: commit the reviewed baseline, run required exact-head
+  CI, merge, and verify exact-tree report publication
 
 ### AS-03: Abstract Operations
 
@@ -796,9 +832,10 @@ reviewable scope.
 4. AS-02b1: route get/has through common internal methods (complete in PR
    #401).
 5. AS-02b2: route set/define/delete/own-keys/descriptor/prototype through common
-   internal methods (implemented in draft PR #403).
+   internal methods (complete in PR #403).
 6. AS-02c: route JavaScript, native, host, bound, and callable Proxy values
-   through common call/construct internal methods.
+   through common call/construct internal methods (implemented in draft PR
+   #408).
 7. AS-03a: centralize equality and primitive conversion operations.
 8. AS-03b: centralize property-key, property, call, and iterator operations.
 9. AS-04a: separate JavaScript throw completion from engine/host/resource

@@ -27,24 +27,24 @@ impl Context {
         &mut self,
         target: NativeCallTarget,
         access: StaticPropertyAccessId,
-        callee: Value,
+        callee: &Value,
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
         if let Value::NativeFunction(id) = callee {
-            if let Some(kind) = self.cached_static_property_native_call_kind(access, id)? {
+            if let Some(kind) = self.cached_static_property_native_call_kind(access, *id)? {
                 self.record_native_call_cache_hit();
                 return self.eval_direct_or_generic_native_function_kind(kind, args, this_value);
             }
-            if let Some(kind) = self.direct_native_call_kind(id, target) {
+            if let Some(kind) = self.direct_native_call_kind(*id, target) {
                 self.record_native_call_cache_miss();
-                self.remember_static_property_native_call_kind(access, id, kind)?;
+                self.remember_static_property_native_call_kind(access, *id, kind)?;
                 return self.eval_direct_native_call_target(target, args, this_value);
             }
-            let kind = self.native_function(id)?.kind();
+            let kind = self.native_function(*id)?.kind();
             if kind.to_call_target().is_some() {
                 self.record_native_call_cache_miss();
-                self.remember_static_property_native_call_kind(access, id, kind)?;
+                self.remember_static_property_native_call_kind(access, *id, kind)?;
                 return self.eval_direct_or_generic_native_function_kind(kind, args, this_value);
             }
         }
@@ -120,17 +120,17 @@ impl Context {
                         .map(Some);
                 }
                 self.record_native_call_cache_slow_path();
-                self.eval_call_value(Value::NativeFunction(function), args, this_value.clone())
+                self.eval_call_value(&Value::NativeFunction(function), args, this_value.clone())
                     .map(Some)
             }
             CacheableNativePropertyValue::Other(callee) => {
                 self.record_native_call_cache_slow_path();
-                self.eval_call_value(callee, args, this_value.clone())
+                self.eval_call_value(&callee, args, this_value.clone())
                     .map(Some)
             }
             CacheableNativePropertyValue::Missing => {
                 self.record_native_call_cache_slow_path();
-                self.eval_call_value(Value::Undefined, args, this_value.clone())
+                self.eval_call_value(&Value::Undefined, args, this_value.clone())
                     .map(Some)
             }
             CacheableNativePropertyValue::Uncacheable => Ok(None),
@@ -181,12 +181,12 @@ impl Context {
             }
             CacheableNativePropertyValue::Other(callee) => {
                 self.record_native_call_cache_slow_path();
-                self.eval_call_value(callee, args, this_value.clone())
+                self.eval_call_value(&callee, args, this_value.clone())
                     .map(Some)
             }
             CacheableNativePropertyValue::Missing => {
                 self.record_native_call_cache_slow_path();
-                self.eval_call_value(Value::Undefined, args, this_value.clone())
+                self.eval_call_value(&Value::Undefined, args, this_value.clone())
                     .map(Some)
             }
             CacheableNativePropertyValue::Uncacheable => Ok(None),

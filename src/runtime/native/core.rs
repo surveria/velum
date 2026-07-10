@@ -25,30 +25,6 @@ const ERROR_MESSAGE_PROPERTY: &str = "message";
 const ERROR_NAME_PROPERTY: &str = "name";
 const ERROR_PROTOTYPE_TO_STRING_NAME: &str = "toString";
 
-const fn native_kind_is_constructable(kind: NativeFunctionKind) -> bool {
-    matches!(
-        kind,
-        NativeFunctionKind::Array
-            | NativeFunctionKind::ArrayBuffer
-            | NativeFunctionKind::AsyncFunction
-            | NativeFunctionKind::Boolean
-            | NativeFunctionKind::ErrorConstructor(_)
-            | NativeFunctionKind::Function
-            | NativeFunctionKind::Number
-            | NativeFunctionKind::Object
-            | NativeFunctionKind::Promise
-            | NativeFunctionKind::Proxy
-            | NativeFunctionKind::RegExp
-            | NativeFunctionKind::String
-            | NativeFunctionKind::Map
-            | NativeFunctionKind::Set
-            | NativeFunctionKind::WeakMap
-            | NativeFunctionKind::WeakSet
-            | NativeFunctionKind::Uint8Array
-            | NativeFunctionKind::Date(DateFunctionKind::Constructor)
-    )
-}
-
 impl Context {
     pub(crate) fn builtin_value(&mut self, name: &str) -> Result<Option<Value>> {
         match name {
@@ -181,39 +157,12 @@ impl Context {
         Ok(None)
     }
 
-    pub(crate) fn construct_native_function(
-        &mut self,
-        id: NativeFunctionId,
-        args: RuntimeCallArgs<'_>,
-    ) -> Result<Value> {
-        self.construct_native_function_kind(self.native_function(id)?.kind(), args)
-    }
-
-    pub(in crate::runtime) fn is_constructor_value(&self, value: &Value) -> Result<bool> {
-        match value {
-            Value::Function(id) => self.is_function_constructable(*id),
-            Value::NativeFunction(id) => Ok(native_kind_is_constructable(
-                self.native_function(*id)?.kind(),
-            )),
-            Value::Object(_)
-            | Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => Ok(false),
-        }
-    }
-
     pub(in crate::runtime) fn construct_native_function_kind(
         &mut self,
         kind: NativeFunctionKind,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        if !native_kind_is_constructable(kind) {
+        if !kind.is_constructable() {
             return Err(Error::type_error(NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR));
         }
         match kind {

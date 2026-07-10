@@ -585,10 +585,10 @@ impl Context {
         }
         for method_name in method_names {
             let method = self.get_property_value(value, method_name)?;
-            if !Self::is_callable(&method) {
+            if !self.semantic_is_callable(&method)? {
                 continue;
             }
-            let result = self.eval_call_value(method, &[], value.clone())?;
+            let result = self.eval_call_value(&method, &[], value.clone())?;
             if Self::is_primitive_to_primitive_result(&result) {
                 return Ok(result);
             }

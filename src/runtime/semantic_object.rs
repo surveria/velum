@@ -9,6 +9,7 @@ use crate::{
 };
 
 mod descriptor;
+mod invocation;
 mod keys;
 mod mutation;
 mod prototype_integrity;

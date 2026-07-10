@@ -52,7 +52,7 @@ impl Context {
                 "Promise constructor requires an executor",
             ));
         };
-        if !Self::is_callable(&executor) {
+        if !self.semantic_is_callable(&executor)? {
             return Err(Error::type_error("Promise executor must be callable"));
         }
 
@@ -73,7 +73,7 @@ impl Context {
             )?,
             callee => {
                 if let Err(error) =
-                    self.eval_call_value(callee, &[resolve, reject], Value::Undefined)
+                    self.eval_call_value(&callee, &[resolve, reject], Value::Undefined)
                 {
                     self.reject_promise(promise, promise_executor_error_value(&error))?;
                     return Ok(object);
@@ -136,8 +136,8 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let promise = self.promise_id_from_value(this_value)?;
-        let on_fulfilled = Self::promise_reaction_handler(args.first());
-        let on_rejected = Self::promise_reaction_handler(args.get(1));
+        let on_fulfilled = self.promise_reaction_handler(args.first())?;
+        let on_rejected = self.promise_reaction_handler(args.get(1))?;
         self.promise_then(promise, on_fulfilled, on_rejected)
     }
 
@@ -155,7 +155,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let promise = self.promise_id_from_value(this_value)?;
-        let on_rejected = Self::promise_reaction_handler(args.first());
+        let on_rejected = self.promise_reaction_handler(args.first())?;
         self.promise_then(promise, None, on_rejected)
     }
 
