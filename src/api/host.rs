@@ -164,6 +164,10 @@ impl HostFunction {
     fn context_message(&self) -> String {
         format!("host function '{}'", self.name)
     }
+
+    pub(crate) const fn storage_name_bytes(&self) -> usize {
+        self.name.len()
+    }
 }
 
 impl fmt::Debug for HostFunction {

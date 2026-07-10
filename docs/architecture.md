@@ -61,8 +61,8 @@ The public model should evolve around these roles:
 - `OwnedValue`: a VM-independent primitive copy for serialization and transfer.
 - `RetainedValue`: a non-cloneable, VM-bound durable root for values that must
   survive across embedding calls.
-- `VmStorageSnapshot`: an explicit on-demand count map for every current
-  variable-size VM storage owner.
+- `VmStorageSnapshot`: an explicit on-demand count and logical payload-byte
+  map for every current variable-size VM storage owner.
 - `CompiledScript`: a reusable bytecode-owned representation hidden behind the
   embedding API.
 - `HostFunctionRegistry`: synchronous and asynchronous Rust callbacks exposed to JavaScript as functions.
