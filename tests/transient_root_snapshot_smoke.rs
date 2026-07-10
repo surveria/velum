@@ -17,13 +17,13 @@ fn host_callbacks_observe_operand_and_call_roots() -> TestResult {
     })?;
 
     let value = vm.eval(
-        r#"
+        r"
         var waiting = { value: 40 };
         function probe() {
             return waiting === captureTransientRoots({ value: 2 });
         }
         probe();
-        "#,
+        ",
     )?;
     ensure_value(&value, &Value::Bool(false))?;
 
@@ -52,7 +52,7 @@ fn protocol_callbacks_observe_iterator_temporary_roots() -> TestResult {
     })?;
 
     vm.eval(
-        r#"
+        r"
         var iterable = {};
         iterable[Symbol.iterator] = function iteratorFactory() {
             return {
@@ -65,7 +65,7 @@ fn protocol_callbacks_observe_iterator_temporary_roots() -> TestResult {
         for (var value of iterable) {
             value;
         }
-        "#,
+        ",
     )?;
 
     let snapshot = copied_snapshot(&captured, "iterator root snapshot")?;
