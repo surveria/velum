@@ -32,7 +32,7 @@ pub use crate::runtime::Context;
 pub use crate::runtime::engine::Runtime;
 pub use crate::runtime::limits::RuntimeLimits;
 pub use crate::runtime::{
-    VmAsyncEdgeKind, VmAsyncEdgeSnapshot, VmAsyncEdgeStrength, VmCallableEdgeKind,
+    RetainedValue, VmAsyncEdgeKind, VmAsyncEdgeSnapshot, VmAsyncEdgeStrength, VmCallableEdgeKind,
     VmCallableEdgeSnapshot, VmObjectEdgeKind, VmObjectEdgeSnapshot, VmRootKind, VmRootSnapshot,
 };
 pub use crate::source::{SourceId, SourceSpan};

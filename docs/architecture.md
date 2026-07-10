@@ -58,6 +58,9 @@ The public model should evolve around these roles:
 - `Engine`: shared immutable configuration, feature flags, parser caches, atom tables, and other data that can be reused safely across isolated virtual machines.
 - `Vm`: one isolated JavaScript virtual machine with its own heap, globals, job queue, resource counters, and teardown report.
 - `Context`: an execution view into a `Vm`, used to evaluate scripts, inspect values, and register host bindings.
+- `OwnedValue`: a VM-independent primitive copy for serialization and transfer.
+- `RetainedValue`: a non-cloneable, VM-bound durable root for values that must
+  survive across embedding calls.
 - `CompiledScript`: a reusable bytecode-owned representation hidden behind the
   embedding API.
 - `HostFunctionRegistry`: synchronous and asynchronous Rust callbacks exposed to JavaScript as functions.
@@ -87,6 +90,8 @@ Embedding API invariants:
 
 - Creating, running, interrupting, and dropping one `Vm` must not require stopping or mutating another `Vm`.
 - Public handles must not permit values, objects, promises, or callbacks to cross VM boundaries accidentally.
+- Raw `Value` results are call-local compatibility values. Durable values must
+  use `OwnedValue` or an identity- and generation-checked `RetainedValue`.
 - APIs should make resource ownership explicit. Engine-wide caches, VM heaps, queued jobs, host callbacks, and output buffers must have clear owners.
 - The engine must not assume a process-wide async runtime. Async integration belongs at the embedding boundary.
 - The API should keep bytecode internals hidden unless exposing a VM control is
@@ -101,13 +106,13 @@ Host extensions are a first-class design concern:
 - Host callbacks must have per-callback quotas for runtime steps, allocations, output, and wall-clock cancellation hooks.
 - Host callbacks must never bypass VM isolation or leak values across VM boundaries without an explicit serialization or transfer step.
 
-The current synchronous host-function skeleton is registered through
+The current synchronous host-function API is registered through
 `Context::register_host_function`. Callbacks receive a `HostCall` view with
 checked argument accessors such as `number`, `string`, and `boolean`, and they
-return `Result<Value>`. Callback storage is VM-local. The skeleton rejects
-VM-owned handle return values (`Object`, `Function`, `NativeFunction`, and
-`HostFunction`) until the embedding API has VM-bound handles or explicit
-serialization.
+return `Result<Value>`. Callback storage is VM-local. A callback-local value
+can be copied with `LocalValue::to_owned_value` or rooted beyond the callback
+with `LocalValue::retain`. VM-owned object/function callback returns remain
+conservative until host returns accept `RetainedValue` directly.
 
 ## Safety Policy
 

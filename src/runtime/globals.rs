@@ -26,6 +26,10 @@ impl Context {
         std::mem::take(&mut self.output)
     }
 
+    /// Returns the current raw binding value without retaining it.
+    ///
+    /// Use `get_global_retained` when the result must survive across later
+    /// Context calls.
     #[must_use]
     pub fn get_global(&self, name: &str) -> Option<Value> {
         let atom = self.atom(name)?;

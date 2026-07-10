@@ -5,8 +5,10 @@ use crate::{
     error::{Error, Result},
     ownership::VmIdentity,
     runtime::Context,
+    runtime::RetainedValue,
     runtime::VmRootSnapshot,
     runtime::call::RuntimeCallArgs,
+    runtime::retained_values::RetainedValueRegistry,
     syntax::DeclKind,
     value::{HostFunctionId, Value},
 };
@@ -142,10 +144,17 @@ impl HostFunction {
         Self::new(name, move |call| callback(call)?.into_js_value())
     }
 
-    fn call(&self, identity: &VmIdentity, roots: VmRootSnapshot, args: &[Value]) -> Result<Value> {
+    fn call(
+        &self,
+        identity: &VmIdentity,
+        retained_values: &RetainedValueRegistry,
+        roots: VmRootSnapshot,
+        args: &[Value],
+    ) -> Result<Value> {
         let call = HostCall {
             function_name: self.name.as_str(),
             identity,
+            retained_values,
             roots,
             args,
         };
@@ -169,6 +178,7 @@ impl fmt::Debug for HostFunction {
 #[derive(Clone, Copy, Debug)]
 pub struct LocalValue<'value> {
     identity: &'value VmIdentity,
+    retained_values: &'value RetainedValueRegistry,
     value: &'value Value,
 }
 
@@ -194,6 +204,15 @@ impl<'value> LocalValue<'value> {
         OwnedValue::try_from(self.value)
     }
 
+    /// Retains this callback-local value beyond the active host call.
+    ///
+    /// # Errors
+    /// Fails when retained-slot allocation fails.
+    pub fn retain(self) -> Result<RetainedValue> {
+        self.retained_values
+            .retain(self.identity, self.value.clone())
+    }
+
     /// Creates a JavaScript throw that remains bound to the argument's VM.
     #[must_use]
     pub fn javascript_error(self) -> Error {
@@ -205,6 +224,7 @@ impl<'value> LocalValue<'value> {
 pub struct HostCall<'call> {
     function_name: &'call str,
     identity: &'call VmIdentity,
+    retained_values: &'call RetainedValueRegistry,
     roots: VmRootSnapshot,
     args: &'call [Value],
 }
@@ -236,6 +256,7 @@ impl<'call> HostCall<'call> {
     pub fn value(self, index: usize) -> Option<LocalValue<'call>> {
         self.args.get(index).map(|value| LocalValue {
             identity: self.identity,
+            retained_values: self.retained_values,
             value,
         })
     }
@@ -362,7 +383,12 @@ impl Context {
             self.transient_root_scope(crate::runtime::VmRootKind::TransientCall, values.iter())?;
         let function = self.host_function(id)?.clone();
         let roots = self.root_snapshot()?;
-        let value = function.call(self.identity(), roots, &values)?;
+        let value = function.call(
+            self.identity(),
+            self.retained_value_registry(),
+            roots,
+            &values,
+        )?;
         self.checked_host_return_value(value)
             .map_err(|error| error.with_context(function.context_message()))
     }

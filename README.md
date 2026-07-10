@@ -52,11 +52,13 @@ fn main() -> rs_quickjs::Result<()> {
 
     vm.eval(r#"let camera = cameraLabel("front");"#)?;
     let script = vm.compile_named("camera-session.js", "print(camera); camera")?;
-    let value = vm.eval_compiled(&script)?;
+    let value = vm.eval_compiled_retained(&script)?;
+    let owned_value = vm.retained_to_owned(&value)?;
+    value.release()?;
     let output = vm.take_output();
 
     let report = vm.finish();
-    println!("value: {value}");
+    println!("value: {owned_value:?}");
     println!("output: {output:?}");
     println!("runtime steps: {}", report.resources.runtime_steps);
     Ok(())
