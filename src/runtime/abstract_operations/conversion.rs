@@ -16,6 +16,7 @@ const SYMBOL_TO_PRIMITIVE_PROPERTY: &str = "toPrimitive";
 const TO_STRING_PROPERTY: &str = "toString";
 const VALUE_OF_PROPERTY: &str = "valueOf";
 const STRING_NEGATIVE_INFINITY: &str = "-Infinity";
+const STRING_PLUS_INFINITY: &str = "+Infinity";
 const STRING_POSITIVE_INFINITY: &str = "Infinity";
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 const MAX_SAFE_INTEGER_NUMBER: f64 = 9_007_199_254_740_991.0;
@@ -308,7 +309,7 @@ pub(in crate::runtime) fn string_to_number(value: &str) -> f64 {
     if trimmed.is_empty() {
         return 0.0;
     }
-    if trimmed == STRING_POSITIVE_INFINITY {
+    if matches!(trimmed, STRING_POSITIVE_INFINITY | STRING_PLUS_INFINITY) {
         return f64::INFINITY;
     }
     if trimmed == STRING_NEGATIVE_INFINITY {
@@ -317,7 +318,12 @@ pub(in crate::runtime) fn string_to_number(value: &str) -> f64 {
     if let Some(value) = prefixed_integer_to_number(trimmed) {
         return value;
     }
-    trimmed.parse::<f64>().unwrap_or(f64::NAN)
+    trimmed.parse::<f64>().map_or(f64::NAN, |number| {
+        if number.is_infinite() && !trimmed.bytes().any(|byte| byte.is_ascii_digit()) {
+            return f64::NAN;
+        }
+        number
+    })
 }
 
 fn prefixed_integer_to_number(value: &str) -> Option<f64> {

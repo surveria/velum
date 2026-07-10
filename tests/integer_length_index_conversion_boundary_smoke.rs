@@ -143,6 +143,17 @@ fn rejects_out_of_range_to_index_values() -> TestResult {
     )
 }
 
+#[test]
+fn keeps_infinity_string_parsing_case_sensitive() -> TestResult {
+    eval_is_42(
+        r#"
+        Number("+Infinity") === Infinity &&
+            Number("INFINITY") !== Number("INFINITY") &&
+            Number("infinity") !== Number("infinity") ? 42 : 0
+        "#,
+    )
+}
+
 fn eval_is_42(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
