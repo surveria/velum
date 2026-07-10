@@ -1382,7 +1382,10 @@ AS-05b2c2 local implementation evidence:
 - the architecture guard fixes the ledger owner, six-category reconciliation,
   binding/callable activation, property release, and shape/static cache seams.
   Four new mutations prove that reconciliation, scope release, property
-  release, and shape-cache charging cannot disappear unnoticed.
+  release, and shape-cache charging cannot disappear unnoticed;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
 
 AS-05a1 completion evidence:
 
