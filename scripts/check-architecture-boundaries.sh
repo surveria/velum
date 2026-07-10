@@ -72,6 +72,30 @@ check_value_representation() {
   fi
 }
 
+check_owned_value_boundary() {
+  local actual
+  actual="$(
+    awk '
+      /^pub enum OwnedValue \{/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/api/owned_value.rs" \
+      | sed '/^[[:space:]]*\/\//d' \
+      | tr -d '[:space:]'
+  )"
+  if [[ "${actual}" != 'Undefined,Null,Bool(bool),Number(f64),String(String),' ]]; then
+    fail "OwnedValue boundary changed; portable values must not retain VM-local ids or identity"
+  fi
+  if ! grep -F -q 'pub fn to_owned_value(self) -> Result<OwnedValue>' \
+      "${repo_root}/src/api/host.rs" \
+    || ! grep -F -q 'pub fn eval_owned(&mut self, source: &str) -> Result<OwnedValue>' \
+      "${repo_root}/src/api/owned_value.rs" \
+    || ! grep -F -q 'impl IntoJsValue for OwnedValue' \
+      "${repo_root}/src/api/host.rs"; then
+    fail "OwnedValue boundary changed; local copy, evaluation, and host return conversions are required"
+  fi
+}
+
 check_runtime_frontend_boundary() {
   local imports
   imports="$(
@@ -706,6 +730,7 @@ src/runtime/function/fast_path.rs'
 
 run_checks() {
   require_file src/value/kind.rs
+  require_file src/api/owned_value.rs
   require_file src/runtime/mod.rs
   require_file src/ownership.rs
   require_file src/source.rs
@@ -719,6 +744,7 @@ run_checks() {
   require_dir src/runtime/bytecode/linear
 
   check_value_representation
+  check_owned_value_boundary
   check_runtime_frontend_boundary
   check_source_metadata_boundary
   check_frontend_span_boundary
@@ -742,6 +768,12 @@ mutate_value_variant() {
   local fixture_root="$1"
   sed -i '/    Object(ObjectId),/i\    FutureObject(ObjectId),' \
     "${fixture_root}/src/value/kind.rs"
+}
+
+mutate_owned_value_variant() {
+  local fixture_root="$1"
+  sed -i '/    String(String),/a\    Symbol(SymbolId),' \
+    "${fixture_root}/src/api/owned_value.rs"
 }
 
 mutate_runtime_frontend_import() {
@@ -946,6 +978,8 @@ run_self_tests() {
 
   expect_guard_failure "${temp_dir}" value-representation \
     'Value representation changed' mutate_value_variant
+  expect_guard_failure "${temp_dir}" owned-value-representation \
+    'OwnedValue boundary changed' mutate_owned_value_variant
   expect_guard_failure "${temp_dir}" runtime-frontend \
     'runtime/frontend boundary changed' mutate_runtime_frontend_import
   expect_guard_failure "${temp_dir}" frontend-source-span \

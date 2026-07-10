@@ -1,4 +1,5 @@
 use crate::api::host::{HostCall, IntoJsValue};
+use crate::api::owned_value::OwnedValue;
 use crate::compiled_script::CompiledScript;
 use crate::error::Result;
 use crate::ownership::VmIdentity;
@@ -143,6 +144,14 @@ impl Vm {
         self.context.eval(source)
     }
 
+    /// Evaluates source and copies its result into a VM-independent primitive.
+    ///
+    /// # Errors
+    /// Fails when evaluation fails or returns a Symbol, object, or function.
+    pub fn eval_owned(&mut self, source: &str) -> Result<OwnedValue> {
+        self.context.eval_owned(source)
+    }
+
     /// # Errors
     /// Fails when lexing, parsing, or configured compile-time resource limits fail.
     pub fn compile(&self, source: &str) -> Result<CompiledScript> {
@@ -164,6 +173,15 @@ impl Vm {
     /// [`Error::JavaScript`](crate::Error::JavaScript).
     pub fn eval_compiled(&mut self, script: &CompiledScript) -> Result<crate::Value> {
         self.context.eval_compiled(script)
+    }
+
+    /// Evaluates compiled source and copies its result into a VM-independent
+    /// primitive.
+    ///
+    /// # Errors
+    /// Fails when evaluation fails or returns a Symbol, object, or function.
+    pub fn eval_compiled_owned(&mut self, script: &CompiledScript) -> Result<OwnedValue> {
+        self.context.eval_compiled_owned(script)
     }
 
     #[must_use]

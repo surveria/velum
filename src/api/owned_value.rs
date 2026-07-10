@@ -1,0 +1,106 @@
+use crate::{
+    compiled_script::CompiledScript,
+    error::{Error, Result},
+    runtime::Context,
+    value::Value,
+};
+
+const VM_LOCAL_VALUE_ERROR: &str = "VM-local value cannot be converted to OwnedValue";
+
+/// A JavaScript primitive that owns all of its data and can cross VM
+/// boundaries without retaining a VM identity or root.
+#[derive(Clone, Debug, PartialEq)]
+pub enum OwnedValue {
+    Undefined,
+    Null,
+    Bool(bool),
+    Number(f64),
+    String(String),
+}
+
+impl OwnedValue {
+    /// Returns the corresponding ECMAScript type name.
+    #[must_use]
+    pub const fn type_name(&self) -> &'static str {
+        match self {
+            Self::Undefined => "undefined",
+            Self::Null => "object",
+            Self::Bool(_) => "boolean",
+            Self::Number(_) => "number",
+            Self::String(_) => "string",
+        }
+    }
+}
+
+impl TryFrom<&Value> for OwnedValue {
+    type Error = Error;
+
+    fn try_from(value: &Value) -> Result<Self> {
+        match value {
+            Value::Undefined => Ok(Self::Undefined),
+            Value::Null => Ok(Self::Null),
+            Value::Bool(value) => Ok(Self::Bool(*value)),
+            Value::Number(value) => Ok(Self::Number(*value)),
+            Value::String(value) => Ok(Self::String(value.clone())),
+            Value::HeapString(value) => Ok(Self::String(value.as_str().to_owned())),
+            Value::Symbol(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_)
+            | Value::Object(_) => Err(Error::runtime(VM_LOCAL_VALUE_ERROR)),
+        }
+    }
+}
+
+impl TryFrom<Value> for OwnedValue {
+    type Error = Error;
+
+    fn try_from(value: Value) -> Result<Self> {
+        match value {
+            Value::Undefined => Ok(Self::Undefined),
+            Value::Null => Ok(Self::Null),
+            Value::Bool(value) => Ok(Self::Bool(value)),
+            Value::Number(value) => Ok(Self::Number(value)),
+            Value::String(value) => Ok(Self::String(value)),
+            Value::HeapString(value) => Ok(Self::String(value.into_string())),
+            Value::Symbol(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_)
+            | Value::Object(_) => Err(Error::runtime(VM_LOCAL_VALUE_ERROR)),
+        }
+    }
+}
+
+impl From<OwnedValue> for Value {
+    fn from(value: OwnedValue) -> Self {
+        match value {
+            OwnedValue::Undefined => Self::Undefined,
+            OwnedValue::Null => Self::Null,
+            OwnedValue::Bool(value) => Self::Bool(value),
+            OwnedValue::Number(value) => Self::Number(value),
+            OwnedValue::String(value) => Self::String(value),
+        }
+    }
+}
+
+impl Context {
+    /// Evaluates source and copies its result into a VM-independent primitive.
+    ///
+    /// # Errors
+    /// Fails when evaluation fails or the result is a Symbol, object, or
+    /// function that requires a VM-local handle.
+    pub fn eval_owned(&mut self, source: &str) -> Result<OwnedValue> {
+        self.eval(source).and_then(OwnedValue::try_from)
+    }
+
+    /// Evaluates compiled source and copies its result into a VM-independent
+    /// primitive.
+    ///
+    /// # Errors
+    /// Fails when evaluation fails or the result is a Symbol, object, or
+    /// function that requires a VM-local handle.
+    pub fn eval_compiled_owned(&mut self, script: &CompiledScript) -> Result<OwnedValue> {
+        self.eval_compiled(script).and_then(OwnedValue::try_from)
+    }
+}
