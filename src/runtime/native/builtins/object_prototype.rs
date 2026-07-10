@@ -38,11 +38,12 @@ impl Context {
             Value::Undefined => return self.heap_string_value(OBJECT_UNDEFINED_TAG),
             Value::Null => return self.heap_string_value(OBJECT_NULL_TAG),
             Value::Object(id) => {
-                if self.semantic_is_callable(this_value)? {
-                    TAG_FUNCTION.to_owned()
+                let builtin = if self.semantic_is_callable(this_value)? {
+                    TAG_FUNCTION
                 } else {
-                    self.object_builtin_tag(*id)?
-                }
+                    self.object_builtin_class(*id)?
+                };
+                self.object_builtin_tag(*id, builtin)?
             }
             Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => {
                 TAG_FUNCTION.to_owned()
@@ -156,8 +157,7 @@ impl Context {
 
     /// Determine the `Object.prototype.toString` tag for an object, honoring a
     /// string-valued `Symbol.toStringTag` over the builtin class tag.
-    fn object_builtin_tag(&mut self, id: ObjectId) -> Result<String> {
-        let builtin = self.object_builtin_class(id)?;
+    fn object_builtin_tag(&mut self, id: ObjectId, builtin: &str) -> Result<String> {
         if let Some(tag) = self.object_to_string_tag(id)? {
             return Ok(tag);
         }

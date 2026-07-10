@@ -25,6 +25,7 @@ fn recognizes_callable_proxies_across_generic_consumers() -> TestResult {
         let revived = JSON.parse('{"value":40}', reviver);
         let replacer = new Proxy(function (key, value) { return value; }, {});
         let replaced = JSON.stringify({ value: 42 }, replacer);
+        let asyncProxy = new Proxy(async function () {}, {});
         let revocable = Proxy.revocable(function () { return 1; }, {});
         let revoked = revocable.proxy;
         revocable.revoke();
@@ -58,6 +59,7 @@ fn recognizes_callable_proxies_across_generic_consumers() -> TestResult {
             revived.value === 42 &&
             replaced === '{"value":42}' &&
             Object.prototype.toString.call(proxy) === "[object Function]" &&
+            Object.prototype.toString.call(asyncProxy) === "[object AsyncFunction]" &&
             typeof revoked === "function" &&
             revokedRejected === true &&
             rejected === true &&
