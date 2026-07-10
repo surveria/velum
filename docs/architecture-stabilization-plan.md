@@ -648,16 +648,22 @@ AS-02b2 evidence:
 - Proxy correction: set/delete/define/descriptor/ownKeys preserve Symbol keys;
   `Reflect.set` preserves its explicit receiver across Proxy and prototype
   recursion; Proxy seal/freeze uses observable internal methods rather than
-  mutating the wrapper's physical record
+  mutating the wrapper's physical record; `ownKeys` validates duplicate,
+  non-configurable, and non-extensible target invariants across string and
+  Symbol keys
 - Consolidation: Object, Reflect, JSON, regexp state writes, destructuring,
   object spread, and `Object.prototype.isPrototypeOf` delegate to the shared
   boundary while physical stores remain backend-only
 - Tests: four new public regression cases cover Symbol mutation and metadata,
   receiver-aware Reflect writes, function mutation, Proxy integrity, and
-  falsy prototype traps; focused suites and strict clippy pass at checkpoint
-  `fdbe3ea`
-- Remaining for AS-02b2: exact-head fast gate, required CI, merge, and
-  canonical report publication
+  falsy prototype traps; the first required CI exposed 160 new passes plus a
+  two-variant `ownKeys` invariant regression, which was fixed rather than
+  removed from the baseline
+- Test262/QuickJS: the reviewed full-corpus refresh adds 180 variants across 91
+  files with zero lost passes; complete local correctness is green at
+  34,186/34,186 expected Test262 variants and 95/95 QuickJS differential cases
+- Remaining for AS-02b2: commit the reviewed baseline, repeat exact-tree
+  required CI, merge, and verify canonical report publication
 
 ### AS-03: Abstract Operations
 

@@ -106,7 +106,9 @@ variant before reaching physical storage. `Reflect.set` uses a receiver-aware
 semantic recursion across descriptors and prototypes. Proxy set/delete/define,
 descriptor, and own-key traps retain Symbol values, and Proxy integrity
 operations compose the same observable methods instead of freezing or sealing
-the wrapper record directly.
+the wrapper record directly. The shared `ownKeys` path also validates unique
+trap keys, every non-configurable target key, and exact key sets for
+non-extensible targets before Object or Reflect projects string/Symbol keys.
 
 This facade rejects ids whose slots are not defined in the receiving `Context`.
 It does not yet prove VM identity or generation: a foreign id can still alias a
