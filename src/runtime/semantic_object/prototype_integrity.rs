@@ -30,9 +30,6 @@ impl Context {
             Value::Object(id) => self.objects.prototype_value(*id)?,
             Value::Function(id) => self.function_object_prototype_value(*id)?,
             Value::NativeFunction(id) => self.native_function_object_prototype_value(*id)?,
-            Value::Error(error) => self
-                .error_constructor_prototype(error.name())
-                .map(Value::Object)?,
             Value::HostFunction(_) => {
                 return Err(Error::runtime("host function prototype is not available"));
             }
@@ -60,10 +57,7 @@ impl Context {
                 self.proxy_set_prototype_of(*id, prototype)?
             }
             Value::Object(id) => self.objects.try_set_prototype_value(*id, &prototype)?,
-            Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => false,
+            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => false,
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -86,7 +80,6 @@ impl Context {
             Value::Object(id) if self.objects.is_proxy(*id) => self.proxy_is_extensible(*id)?,
             Value::Object(id) => self.objects.is_extensible(*id)?,
             Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => true,
-            Value::Error(_) => false,
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -113,10 +106,7 @@ impl Context {
                 self.objects.prevent_extensions(*id)?;
                 true
             }
-            Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => true,
+            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => true,
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -145,10 +135,9 @@ impl Context {
                 return Ok(Some(true));
             }
             Value::Object(_) => {}
-            Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => return Ok(Some(true)),
+            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => {
+                return Ok(Some(true));
+            }
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -198,7 +187,6 @@ impl Context {
             Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => {
                 return Ok(Some(false));
             }
-            Value::Error(_) => return Ok(Some(true)),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)

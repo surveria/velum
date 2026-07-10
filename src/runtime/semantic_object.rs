@@ -2,7 +2,7 @@ use crate::{
     error::Result,
     runtime::{
         Context,
-        object::{OBJECT_CONSTRUCTOR_PROPERTY, PropertyLookup},
+        object::PropertyLookup,
         property::{get_property, get_property_with_receiver, has_property},
     },
     value::{ObjectId, Value},
@@ -15,9 +15,6 @@ mod mutation;
 mod prototype_integrity;
 
 pub(in crate::runtime) use prototype_integrity::SemanticIntegrityLevel;
-
-const ERROR_MESSAGE_PROPERTY: &str = "message";
-const ERROR_NAME_PROPERTY: &str = "name";
 
 /// Result of object-like `[[Get]]` pre-dispatch. Optimized callers may handle
 /// the ordinary `ObjectHeap` tail, but all exotic dispatch is already resolved.
@@ -75,8 +72,7 @@ impl SemanticObjectRef<'_> {
             | Value::Symbol(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => None,
+            | Value::HostFunction(_) => None,
         }
     }
 }
@@ -97,7 +93,6 @@ impl Context {
                 self.native_function(*id)?;
             }
             Value::HostFunction(id) => self.validate_host_function_id(*id)?,
-            Value::Error(_) => {}
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -158,9 +153,6 @@ impl Context {
                 let value = get_property(&self.objects, object, property)?;
                 SemanticPropertyRead::Resolved(self.runtime_property_value(value)?)
             }
-            Value::Error(error) => SemanticPropertyRead::Resolved(
-                self.get_error_property_value(error, property.name())?,
-            ),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -217,18 +209,6 @@ impl Context {
             ),
             Value::HostFunction(_) => {
                 SemanticPropertyPresence::Resolved(has_property(&self.objects, object, property)?)
-            }
-            Value::Error(error) => {
-                if matches!(
-                    property.name(),
-                    ERROR_NAME_PROPERTY | ERROR_MESSAGE_PROPERTY | OBJECT_CONSTRUCTOR_PROPERTY
-                ) {
-                    SemanticPropertyPresence::Resolved(true)
-                } else {
-                    SemanticPropertyPresence::Resolved(
-                        self.error_prototype_has_property(error.name(), property)?,
-                    )
-                }
             }
             Value::Undefined
             | Value::Null

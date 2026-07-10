@@ -1,40 +1,35 @@
 use crate::{
-    error::Error,
-    value::{ErrorName, ErrorObject, Value},
+    error::{Error, Result},
+    runtime::Context,
+    value::{ErrorName, Value},
 };
 
-const ERROR_NAME_PROPERTY: &str = "name";
-const ERROR_MESSAGE_PROPERTY: &str = "message";
-
-pub fn thrown_value_matches(value: &Value, expected_name: &str) -> bool {
+pub fn thrown_value_matches(context: &Context, value: &Value, expected_name: &str) -> Result<bool> {
     let Some(expected) = ErrorName::from_constructor_name(expected_name) else {
-        return false;
+        return Ok(false);
     };
-    let Value::Error(error) = value else {
-        return false;
+    let Value::Object(id) = value else {
+        return Ok(false);
+    };
+    let Some(metadata) = context.objects.error_metadata(*id)? else {
+        return Ok(false);
     };
     if expected == ErrorName::Base {
-        return error.name().is_standard();
+        return Ok(metadata.error_name().is_standard());
     }
-    error.name() == expected
+    Ok(metadata.error_name() == expected)
 }
 
-pub fn error_property_text<'a>(error: &'a ErrorObject, property: &str) -> Option<&'a str> {
-    match property {
-        ERROR_NAME_PROPERTY => Some(error.name().as_str()),
-        ERROR_MESSAGE_PROPERTY => Some(error.message()),
-        _ => None,
+pub fn runtime_exception_value(context: &mut Context, error: &Error) -> Result<Option<Value>> {
+    if let Some(value) = error.javascript_value() {
+        return Ok(Some(value.clone()));
     }
-}
-
-pub fn runtime_exception_value(error: &Error) -> Option<Value> {
-    match error {
-        Error::JavaScript { value } => Some(value.clone()),
-        Error::Lex { .. }
-        | Error::Parse { .. }
-        | Error::Runtime { .. }
-        | Error::ResourceLimit { .. } => None,
-    }
+    let Some(metadata) = error.javascript_error_request() else {
+        return Ok(None);
+    };
+    context
+        .create_error_object(metadata.clone(), true)
+        .map(Some)
 }
 
 pub fn reference_error_undefined(name: &str) -> Error {

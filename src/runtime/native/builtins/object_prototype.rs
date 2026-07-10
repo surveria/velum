@@ -49,7 +49,6 @@ impl Context {
             Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => {
                 TAG_FUNCTION.to_owned()
             }
-            Value::Error(_) => TAG_ERROR.to_owned(),
             Value::Bool(_) => TAG_BOOLEAN.to_owned(),
             Value::Number(_) => TAG_NUMBER.to_owned(),
             Value::String(_) | Value::HeapString(_) => TAG_STRING.to_owned(),
@@ -154,8 +153,7 @@ impl Context {
             Value::Object(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => Ok(this_value.clone()),
+            | Value::HostFunction(_) => Ok(this_value.clone()),
             Value::Bool(value) => self.create_boolean_object_from_value(*value),
             Value::Number(value) => self.create_number_object_from_value(*value),
             Value::String(_) | Value::HeapString(_) => {
@@ -176,6 +174,9 @@ impl Context {
     }
 
     fn object_builtin_class(&self, id: ObjectId) -> Result<&'static str> {
+        if self.objects.error_metadata(id)?.is_some() {
+            return Ok(TAG_ERROR);
+        }
         if self.objects.array_len_if_array(id)?.is_some() {
             return Ok(TAG_ARRAY);
         }

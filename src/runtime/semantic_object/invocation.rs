@@ -20,8 +20,7 @@ impl Context {
         match object.value {
             Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => Ok(true),
             Value::Object(id) => self.objects.proxy_callability(*id),
-            Value::Error(_)
-            | Value::Undefined
+            Value::Undefined
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
@@ -59,7 +58,6 @@ impl Context {
                 .proxy_apply(*id, args, this_value)
                 .map(Completion::Normal),
             Value::Object(_)
-            | Value::Error(_)
             | Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -88,7 +86,6 @@ impl Context {
             }
             Value::Object(id) => self.objects.proxy_constructability(*id),
             Value::HostFunction(_)
-            | Value::Error(_)
             | Value::Undefined
             | Value::Null
             | Value::Bool(_)
@@ -137,7 +134,6 @@ impl Context {
             Value::Function(_)
             | Value::Object(_)
             | Value::HostFunction(_)
-            | Value::Error(_)
             | Value::Undefined
             | Value::Null
             | Value::Bool(_)

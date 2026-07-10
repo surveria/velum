@@ -132,7 +132,6 @@ fn array_index_from_property_value(property: &Value) -> Option<ArrayIndex> {
         | Value::NativeFunction(_)
         | Value::HostFunction(_)
         | Value::Object(_)
-        | Value::Symbol(_)
-        | Value::Error(_) => None,
+        | Value::Symbol(_) => None,
     }
 }

@@ -252,11 +252,7 @@ impl Context {
             return Ok(Value::Bool(to_boolean(&result)));
         }
         let target = self.instanceof_target_prototype(right)?;
-        let matches = if let Value::Error(error) = left {
-            self.error_matches_instanceof(error.name(), right)?
-        } else {
-            self.value_prototype_chain_has_object(left, target)?
-        };
+        let matches = self.value_prototype_chain_has_object(left, target)?;
         Ok(Value::Bool(matches))
     }
 
@@ -321,8 +317,7 @@ impl Context {
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => Ok(None),
+            | Value::HostFunction(_) => Ok(None),
         }
     }
 
@@ -362,8 +357,7 @@ impl Context {
             | Value::Number(_)
             | Value::String(_)
             | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::Error(_) => Ok(false),
+            | Value::Symbol(_) => Ok(false),
         }
     }
 
@@ -381,20 +375,6 @@ impl Context {
         self.objects.prototype_chain_has_object(*id, target)
     }
 
-    fn error_matches_instanceof(&self, name: ErrorName, right: &Value) -> Result<bool> {
-        let Value::NativeFunction(id) = right else {
-            return Ok(false);
-        };
-        let NativeFunctionKind::ErrorConstructor(expected) = self.native_function(*id)?.kind()
-        else {
-            return Ok(false);
-        };
-        if expected == ErrorName::Base {
-            return Ok(name.is_standard());
-        }
-        Ok(name == expected)
-    }
-
     pub(super) fn eval_bytecode_assert_throws(
         &mut self,
         expected: ErrorName,
@@ -409,12 +389,14 @@ impl Context {
         };
         let expected_name = expected.as_str();
         match self.eval_function_completion(*id, RuntimeCallArgs::values(&[]))? {
-            Completion::Throw(value) if thrown_value_matches(&value, expected_name) => {
-                Ok(Value::Undefined)
+            Completion::Throw(value) => {
+                if thrown_value_matches(self, &value, expected_name)? {
+                    return Ok(Value::Undefined);
+                }
+                Err(Error::runtime(format!(
+                    "assert.throws expected {expected_name}, got {value}"
+                )))
             }
-            Completion::Throw(value) => Err(Error::runtime(format!(
-                "assert.throws expected {expected_name}, got {value}"
-            ))),
             Completion::Normal(_) | Completion::Return(_) => Err(Error::runtime(format!(
                 "assert.throws expected {expected_name}, but no exception was thrown"
             ))),

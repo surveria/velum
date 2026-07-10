@@ -1,12 +1,12 @@
 use crate::{
     bytecode::BytecodeBinding,
-    error::{Error, Result},
+    error::{Error, JavaScriptErrorMetadata, Result},
     runtime::Context,
     runtime::binding::scope::BindingCell,
     runtime::call::RuntimeCallArgs,
-    runtime::object::{ObjectPropertyInit, PropertyEnumerable, PropertyLookup},
+    runtime::object::{ObjectPropertyInit, PropertyEnumerable},
     syntax::DeclKind,
-    value::{ErrorName, ErrorObject, NativeFunctionId, ObjectId, Value},
+    value::{ErrorName, NativeFunctionId, ObjectId, Value},
 };
 
 use super::{
@@ -311,24 +311,6 @@ impl Context {
         }
     }
 
-    pub(in crate::runtime) fn error_prototype_property_value(
-        &mut self,
-        name: ErrorName,
-        property: &str,
-    ) -> Result<Value> {
-        let prototype = self.error_constructor_prototype(name)?;
-        self.get_named(&Value::Object(prototype), property)
-    }
-
-    pub(in crate::runtime) fn error_prototype_has_property(
-        &mut self,
-        name: ErrorName,
-        property: PropertyLookup<'_>,
-    ) -> Result<bool> {
-        let prototype = self.error_constructor_prototype(name)?;
-        self.objects.has(prototype, property)
-    }
-
     fn error_prototype_parent(&mut self, name: ErrorName) -> Result<Option<ObjectId>> {
         if matches!(name, ErrorName::Base) {
             return Ok(None);
@@ -478,11 +460,35 @@ impl Context {
         args: &[Value],
     ) -> Result<Value> {
         let message_value = Self::error_constructor_message_argument(name, args);
-        let message = match message_value {
-            None | Some(Value::Undefined) => String::new(),
-            Some(value) => self.to_string(value)?,
+        let (message, define_message) = match message_value {
+            None | Some(Value::Undefined) => (String::new(), false),
+            Some(value) => (self.to_string(value)?, true),
         };
-        Ok(Value::Error(ErrorObject::new(name, message)))
+        self.create_error_object(JavaScriptErrorMetadata::new(name, message), define_message)
+    }
+
+    pub(in crate::runtime) fn create_error_object(
+        &mut self,
+        metadata: JavaScriptErrorMetadata,
+        define_message: bool,
+    ) -> Result<Value> {
+        let prototype = self.error_constructor_prototype(metadata.error_name())?;
+        let message = if define_message {
+            Some(self.heap_string_value(metadata.message())?)
+        } else {
+            None
+        };
+        let Value::Object(id) = self
+            .objects
+            .create_with_exact_prototype(Some(prototype), self.limits.max_objects)?
+        else {
+            return Err(Error::runtime("Error allocation did not produce an object"));
+        };
+        self.objects.set_error_metadata(id, metadata)?;
+        if let Some(message) = message {
+            self.define_non_enumerable_object_property(id, ERROR_MESSAGE_PROPERTY, message)?;
+        }
+        Ok(Value::Object(id))
     }
 
     pub(in crate::runtime) fn eval_error_prototype_to_string(

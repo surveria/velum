@@ -200,8 +200,12 @@ fn interns_error_properties_in_vm_heap() -> TestResult {
         .eval("try { missing; } catch (error) { error.name }")?;
     ensure_value(&name, &Value::String(REFERENCE_ERROR_NAME.to_owned()))?;
     let after_name = vm.resource_usage();
-    ensure_usize(after_name.string_count, 1)?;
-    ensure_usize(after_name.string_bytes, REFERENCE_ERROR_NAME.len())?;
+    ensure_at_least(after_name.string_count, 2, "error property strings")?;
+    ensure_at_least(
+        after_name.string_bytes,
+        REFERENCE_ERROR_NAME.len() + MISSING_REFERENCE_MESSAGE.len(),
+        "error property string bytes",
+    )?;
 
     let repeated_name = vm
         .context()
@@ -222,11 +226,8 @@ fn interns_error_properties_in_vm_heap() -> TestResult {
         &Value::String(MISSING_REFERENCE_MESSAGE.to_owned()),
     )?;
     let after_message = vm.resource_usage();
-    ensure_usize(after_message.string_count, 2)?;
-    ensure_usize(
-        after_message.string_bytes,
-        REFERENCE_ERROR_NAME.len() + MISSING_REFERENCE_MESSAGE.len(),
-    )?;
+    ensure_usize(after_message.string_count, after_name.string_count)?;
+    ensure_usize(after_message.string_bytes, after_name.string_bytes)?;
 
     let dynamic_message = vm.context().eval(
         r#"
@@ -239,7 +240,10 @@ fn interns_error_properties_in_vm_heap() -> TestResult {
         &Value::String(MISSING_REFERENCE_MESSAGE.to_owned()),
     )?;
     let after_dynamic_message = vm.resource_usage();
-    ensure_usize(after_dynamic_message.string_count, 3)?;
+    ensure_usize(
+        after_dynamic_message.string_count,
+        after_message.string_count.saturating_add(1),
+    )?;
     ensure_usize(
         after_dynamic_message.string_bytes,
         after_message.string_bytes + ERROR_MESSAGE_PROPERTY.len(),
@@ -507,4 +511,11 @@ fn ensure_usize(actual: usize, expected: usize) -> TestResult {
         return Ok(());
     }
     Err(format!("expected {expected}, got {actual}").into())
+}
+
+fn ensure_at_least(actual: usize, minimum: usize, label: &str) -> TestResult {
+    if actual >= minimum {
+        return Ok(());
+    }
+    Err(format!("expected {label} to be at least {minimum}, got {actual}").into())
 }

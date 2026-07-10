@@ -66,7 +66,7 @@ check_value_representation() {
       | sed '/^[[:space:]]*\/\//d' \
       | tr -d '[:space:]'
   )"
-  expected='Undefined,Null,Bool(bool),Number(f64),String(String),HeapString(JsString),Symbol(JsSymbol),Function(FunctionId),NativeFunction(NativeFunctionId),HostFunction(HostFunctionId),Object(ObjectId),Error(ErrorObject),'
+  expected='Undefined,Null,Bool(bool),Number(f64),String(String),HeapString(JsString),Symbol(JsSymbol),Function(FunctionId),NativeFunction(NativeFunctionId),HostFunction(HostFunctionId),Object(ObjectId),'
   if [[ "${actual}" != "${expected}" ]]; then
     fail "Value representation changed; AS-02 owns object-like representation changes"
   fi
@@ -298,14 +298,14 @@ src/runtime/abstract_operations/iterator.rs:iterator_step'
 
 check_completion_error_boundary() {
   local legacy_conversions
-  local typed_variant_count
+  local typed_variant
   local owners
   local expected_owners
 
   legacy_conversions="$(
     cd "${repo_root}"
     grep -R -n -E --include='*.rs' \
-      'uncaught throw:|ReferenceError:|REFERENCE_ERROR_PREFIX|Error::Exception' \
+      'uncaught throw:|ReferenceError:|REFERENCE_ERROR_PREFIX|Error::Exception|Value::Error|ErrorObject' \
       src || true
   )"
   if [[ -n "${legacy_conversions}" ]]; then
@@ -313,13 +313,12 @@ check_completion_error_boundary() {
     fail "legacy completion/error boundary must not format throws or classify exceptions by text"
   fi
 
-  typed_variant_count="$(
-    grep -F -o 'JavaScript { value: Value },' "${repo_root}/src/error.rs" \
-      | wc -l \
+  typed_variant="$(
+    sed -n '/^    JavaScript {$/,/^    },$/p' "${repo_root}/src/error.rs" \
       | tr -d '[:space:]'
   )"
-  if [[ "${typed_variant_count}" != "1" ]]; then
-    fail "typed JavaScript error boundary changed; expected one Value-preserving variant"
+  if [[ "${typed_variant}" != 'JavaScript{value:Value,metadata:Option<JavaScriptErrorMetadata>,display:String,},' ]]; then
+    fail "typed JavaScript error boundary changed; expected one Value-preserving variant with structured metadata"
   fi
 
   owners="$(
@@ -412,6 +411,7 @@ array_length
 array_length_writable
 string_value
 primitive_value
+error_metadata
 date_value
 regexp_value
 proxy_value
@@ -535,7 +535,7 @@ prepare_fixture() {
 
 mutate_value_variant() {
   local fixture_root="$1"
-  sed -i '/    Error(ErrorObject),/i\    FutureObject(ObjectId),' \
+  sed -i '/    Object(ObjectId),/i\    FutureObject(ObjectId),' \
     "${fixture_root}/src/value/kind.rs"
 }
 

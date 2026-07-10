@@ -1,8 +1,7 @@
 use crate::{
     error::Result,
     runtime::Context,
-    runtime::control::error_property_text,
-    runtime::object::{OBJECT_CONSTRUCTOR_PROPERTY, PropertyKey},
+    runtime::object::PropertyKey,
     runtime::property::{
         DynamicPropertyKey, PropertyValue, StringPropertyValue, get_property_with_receiver,
         has_property, string_property_value,
@@ -21,27 +20,12 @@ impl Context {
         self.to_property_key(value)
     }
 
-    pub(in crate::runtime) fn get_error_property_value(
-        &mut self,
-        error: &crate::value::ErrorObject,
-        property: &str,
-    ) -> Result<Value> {
-        if property == OBJECT_CONSTRUCTOR_PROPERTY {
-            return self.error_constructor_value(error.name());
-        }
-        if let Some(value) = error_property_text(error, property) {
-            return self.heap_string_value(value);
-        }
-        self.error_prototype_property_value(error.name(), property)
-    }
-
     pub(in crate::runtime) fn runtime_property_value(
         &mut self,
-        value: PropertyValue<'_>,
+        value: PropertyValue,
     ) -> Result<Value> {
         match value {
             PropertyValue::Value(value) => self.runtime_value(value),
-            PropertyValue::Text(value) => self.heap_string_value(value),
             PropertyValue::Character(ch) => self.heap_string_char_value(ch),
             PropertyValue::Getter { getter, receiver } => {
                 let value = self.call_accessor_getter(&getter, receiver)?;

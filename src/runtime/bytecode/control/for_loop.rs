@@ -579,7 +579,7 @@ impl Context {
         match self.eval_bytecode_for_body_fast_path_inner(fast_path, array_values) {
             Ok(completion) => Ok(completion),
             Err(error) => {
-                if let Some(value) = runtime_exception_value(&error) {
+                if let Some(value) = runtime_exception_value(self, &error)? {
                     self.checked_value(value.clone())?;
                     return Ok(Completion::Throw(value));
                 }

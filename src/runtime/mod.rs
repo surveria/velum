@@ -309,7 +309,16 @@ impl Context {
     /// # Errors
     /// Fails when the compiled script exceeds this context's limits or evaluation fails.
     pub fn eval_compiled(&mut self, script: &CompiledScript) -> Result<Value> {
-        self.eval_compiled_completion(script)?.into_result()
+        let completion = self.eval_compiled_completion(script)?;
+        let Completion::Throw(value) = completion else {
+            return completion.into_result();
+        };
+        let metadata = if let Value::Object(id) = &value {
+            self.objects.error_metadata(*id)?.cloned()
+        } else {
+            None
+        };
+        Err(Error::javascript_with_metadata(value, metadata))
     }
 
     pub(crate) fn eval_compiled_completion(

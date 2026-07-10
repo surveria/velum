@@ -1,5 +1,4 @@
 use crate::error::{Error, Result};
-use crate::runtime::control::error_property_text;
 use crate::runtime::object::{ObjectHeap, ObjectPropertyValue, PropertyKey, PropertyLookup};
 use crate::storage::atom::AtomTable;
 use crate::value::{ObjectId, Value};
@@ -10,8 +9,6 @@ pub mod static_names;
 pub mod well_known;
 
 const NULLISH_PROPERTY_DELETE_ERROR: &str = "Cannot convert undefined or null to object";
-const ERROR_NAME_PROPERTY: &str = "name";
-const ERROR_MESSAGE_PROPERTY: &str = "message";
 const STRING_LENGTH_PROPERTY: &str = "length";
 
 #[derive(Debug, Clone)]
@@ -45,13 +42,12 @@ impl DynamicPropertyKey {
     }
 }
 
-pub fn get_property<'a>(
+pub fn get_property(
     objects: &ObjectHeap,
-    object: &'a Value,
+    object: &Value,
     property: PropertyLookup<'_>,
-) -> Result<PropertyValue<'a>> {
+) -> Result<PropertyValue> {
     match object {
-        Value::Error(error) => Ok(error_property_value(error, property.name())),
         Value::Object(id) => objects
             .get(*id, property)
             .map(|value| PropertyValue::from_object_value(value, object)),
@@ -65,21 +61,20 @@ pub fn get_property<'a>(
     }
 }
 
-pub fn get_property_with_receiver<'a>(
+pub fn get_property_with_receiver(
     objects: &ObjectHeap,
     object: ObjectId,
-    receiver: &'a Value,
+    receiver: &Value,
     property: PropertyLookup<'_>,
-) -> Result<PropertyValue<'a>> {
+) -> Result<PropertyValue> {
     objects
         .get(object, property)
         .map(|value| PropertyValue::from_object_value(value, receiver))
 }
 
 #[derive(Debug, Clone)]
-pub enum PropertyValue<'a> {
+pub enum PropertyValue {
     Value(Value),
-    Text(&'a str),
     Character(char),
     /// The property is an accessor; the caller must invoke `getter` with
     /// `receiver` as `this` to obtain the value.
@@ -89,7 +84,7 @@ pub enum PropertyValue<'a> {
     },
 }
 
-impl PropertyValue<'_> {
+impl PropertyValue {
     fn from_object_value(value: ObjectPropertyValue, receiver: &Value) -> Self {
         match value {
             ObjectPropertyValue::Value(value) => Self::Value(value),
@@ -115,10 +110,6 @@ pub fn has_property(
     property: PropertyLookup<'_>,
 ) -> Result<bool> {
     match object {
-        Value::Error(_) => Ok(matches!(
-            property.name(),
-            ERROR_NAME_PROPERTY | ERROR_MESSAGE_PROPERTY
-        )),
         Value::Object(id) => objects.has(*id, property),
         Value::String(value) => string_has_property(value, property.name()),
         Value::HeapString(value) => string_has_property(value.as_str(), property.name()),
@@ -137,10 +128,6 @@ pub fn enumerable_property_keys(
     match object {
         Value::Undefined | Value::Null => Err(Error::runtime(NULLISH_PROPERTY_DELETE_ERROR)),
         Value::Object(id) => objects.keys(*id, atoms),
-        Value::Error(_) => Ok(vec![
-            ERROR_NAME_PROPERTY.to_owned(),
-            ERROR_MESSAGE_PROPERTY.to_owned(),
-        ]),
         Value::String(value) => string_enumerable_keys(value),
         Value::HeapString(value) => string_enumerable_keys(value.as_str()),
         Value::Bool(_)
@@ -177,8 +164,7 @@ pub fn delete_property(
     match object {
         Value::Object(id) => objects.delete(*id, property),
         Value::Undefined | Value::Null => Err(Error::runtime(NULLISH_PROPERTY_DELETE_ERROR)),
-        Value::Error(_)
-        | Value::Bool(_)
+        Value::Bool(_)
         | Value::Number(_)
         | Value::String(_)
         | Value::HeapString(_)
@@ -189,15 +175,7 @@ pub fn delete_property(
     }
 }
 
-fn error_property_value<'a>(
-    error: &'a crate::value::ErrorObject,
-    property: &str,
-) -> PropertyValue<'a> {
-    error_property_text(error, property)
-        .map_or(PropertyValue::Value(Value::Undefined), PropertyValue::Text)
-}
-
-fn string_property<'a>(value: &str, property: &str) -> Result<PropertyValue<'a>> {
+fn string_property(value: &str, property: &str) -> Result<PropertyValue> {
     match string_property_value(value, property)? {
         StringPropertyValue::Length(value) => Ok(PropertyValue::Value(Value::Number(value))),
         StringPropertyValue::Character(ch) => Ok(PropertyValue::Character(ch)),

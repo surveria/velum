@@ -108,7 +108,7 @@ impl Context {
             let completion = match self.eval_bytecode_instruction(state, instruction) {
                 Ok(completion) => completion,
                 Err(error) => {
-                    if let Some(value) = runtime_exception_value(&error) {
+                    if let Some(value) = runtime_exception_value(self, &error)? {
                         self.checked_value(value.clone())?;
                         Some(Completion::Throw(value))
                     } else {
@@ -132,7 +132,7 @@ impl Context {
         for op in &segment.ops {
             self.step()?;
             if let Err(error) = self.eval_bytecode_linear_op(state, op) {
-                if let Some(value) = runtime_exception_value(&error) {
+                if let Some(value) = runtime_exception_value(self, &error)? {
                     self.checked_value(value.clone())?;
                     return Ok(Some(Completion::Throw(value)));
                 }

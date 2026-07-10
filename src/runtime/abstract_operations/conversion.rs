@@ -260,8 +260,7 @@ pub(in crate::runtime) fn to_number_primitive(value: &Value) -> Result<f64> {
         Value::Function(_)
         | Value::NativeFunction(_)
         | Value::HostFunction(_)
-        | Value::Object(_)
-        | Value::Error(_) => Err(Error::runtime(
+        | Value::Object(_) => Err(Error::runtime(
             "ToNumber received a non-primitive after ToPrimitive",
         )),
     }
@@ -279,8 +278,7 @@ pub(in crate::runtime) fn to_boolean(value: &Value) -> bool {
         | Value::Function(_)
         | Value::NativeFunction(_)
         | Value::HostFunction(_)
-        | Value::Object(_)
-        | Value::Error(_) => true,
+        | Value::Object(_) => true,
     }
 }
 
@@ -296,8 +294,7 @@ pub(in crate::runtime) fn to_string_primitive(value: &Value) -> Result<String> {
         Value::Function(_)
         | Value::NativeFunction(_)
         | Value::HostFunction(_)
-        | Value::Object(_)
-        | Value::Error(_) => Err(Error::runtime(
+        | Value::Object(_) => Err(Error::runtime(
             "ToString received a non-primitive after ToPrimitive",
         )),
     }

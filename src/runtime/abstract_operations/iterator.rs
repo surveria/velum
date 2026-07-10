@@ -78,8 +78,7 @@ impl Context {
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
-            | Value::Symbol(_)
-            | Value::Error(_) => Err(not_iterable_error(&iterable)),
+            | Value::Symbol(_) => Err(not_iterable_error(&iterable)),
         }
     }
 

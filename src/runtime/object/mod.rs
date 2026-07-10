@@ -1,4 +1,4 @@
-use crate::error::{Error, Result};
+use crate::error::{Error, JavaScriptErrorMetadata, Result};
 use crate::storage::symbol::JsSymbol;
 use crate::value::{ObjectId, Value};
 
@@ -97,6 +97,7 @@ struct Object {
     array_length_writable: PropertyWritable,
     string_value: Option<crate::storage::string_heap::JsString>,
     primitive_value: Option<ObjectPrimitiveValue>,
+    error_metadata: Option<JavaScriptErrorMetadata>,
     date_value: Option<DateValue>,
     regexp_value: Option<RegExpValue>,
     proxy_value: Option<ProxyValue>,
@@ -128,6 +129,7 @@ impl Object {
             array_length_writable: PropertyWritable::Yes,
             string_value: None,
             primitive_value: None,
+            error_metadata: None,
             date_value: None,
             regexp_value: None,
             proxy_value: None,
@@ -149,6 +151,7 @@ impl Object {
             array_length_writable: PropertyWritable::Yes,
             string_value: None,
             primitive_value: None,
+            error_metadata: None,
             date_value: None,
             regexp_value: None,
             proxy_value: None,
@@ -170,6 +173,7 @@ impl Object {
             array_length_writable: PropertyWritable::Yes,
             string_value: None,
             primitive_value: None,
+            error_metadata: None,
             date_value: None,
             regexp_value: None,
             proxy_value: None,
@@ -191,6 +195,7 @@ impl Object {
             array_length_writable: PropertyWritable::Yes,
             string_value: None,
             primitive_value: Some(value),
+            error_metadata: None,
             date_value: None,
             regexp_value: None,
             proxy_value: None,
@@ -214,8 +219,7 @@ impl Object {
             | Value::Symbol(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => None,
+            | Value::HostFunction(_) => None,
         }
     }
 

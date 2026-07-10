@@ -23,7 +23,7 @@ pub use crate::api::embedding::{
 pub use crate::api::host::{FromJsValue, HostCall, IntoJsValue};
 pub use crate::build_info::{BuildInfo, engine_build_info};
 pub use crate::compiled_script::{CompiledScript, CompiledScriptUsage};
-pub use crate::error::{Error, Result};
+pub use crate::error::{Error, JavaScriptErrorMetadata, Result};
 pub use crate::runtime::Context;
 pub use crate::runtime::engine::Runtime;
 pub use crate::runtime::limits::RuntimeLimits;

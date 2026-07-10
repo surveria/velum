@@ -73,7 +73,7 @@ impl Context {
             )?,
             callee => {
                 if let Err(error) = self.call_value(&callee, &[resolve, reject], Value::Undefined) {
-                    let Some(reason) = runtime_exception_value(&error) else {
+                    let Some(reason) = runtime_exception_value(self, &error)? else {
                         return Err(error);
                     };
                     self.reject_promise(promise, reason)?;

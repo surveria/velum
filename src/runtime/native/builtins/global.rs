@@ -102,8 +102,7 @@ impl Context {
                 | Value::Function(_)
                 | Value::NativeFunction(_)
                 | Value::HostFunction(_)
-                | Value::Object(_)
-                | Value::Error(_),
+                | Value::Object(_),
             )
             | None => Value::Bool(false),
         }
@@ -128,8 +127,7 @@ impl Context {
                 | Value::Function(_)
                 | Value::NativeFunction(_)
                 | Value::HostFunction(_)
-                | Value::Object(_)
-                | Value::Error(_),
+                | Value::Object(_),
             )
             | None => Value::Bool(false),
         }

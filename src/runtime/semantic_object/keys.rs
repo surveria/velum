@@ -23,8 +23,7 @@ impl Context {
                 | Value::Object(_)
                 | Value::Function(_)
                 | Value::NativeFunction(_)
-                | Value::HostFunction(_)
-                | Value::Error(_) => Ok(Vec::new()),
+                | Value::HostFunction(_) => Ok(Vec::new()),
             };
         };
         match object_ref.value {
@@ -32,7 +31,6 @@ impl Context {
             Value::Object(id) => self.objects.own_keys(*id, &self.atoms),
             Value::Function(id) => self.function_enumerable_keys(*id),
             Value::NativeFunction(id) => self.native_function_enumerable_keys(*id),
-            Value::Error(_) => self.enumerable_keys(target),
             Value::HostFunction(_) => Err(Error::runtime(
                 "Object.keys target cannot be converted to an object",
             )),
@@ -96,8 +94,7 @@ impl Context {
                 | Value::Object(_)
                 | Value::Function(_)
                 | Value::NativeFunction(_)
-                | Value::HostFunction(_)
-                | Value::Error(_) => Ok(Vec::new()),
+                | Value::HostFunction(_) => Ok(Vec::new()),
                 Value::Undefined | Value::Null => Err(Error::runtime(
                     "own property keys target cannot be converted to an object",
                 )),
@@ -112,10 +109,6 @@ impl Context {
             }
             Value::NativeFunction(id) => {
                 let names = self.native_function_enumerable_keys(*id)?;
-                self.property_name_values(names)
-            }
-            Value::Error(_) => {
-                let names = self.enumerable_keys(target)?;
                 self.property_name_values(names)
             }
             Value::HostFunction(_) => Err(Error::runtime(

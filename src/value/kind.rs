@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::storage::{string_heap::JsString, symbol::JsSymbol};
 
-use super::{ErrorObject, FunctionId, HostFunctionId, NativeFunctionId, ObjectId};
+use super::{FunctionId, HostFunctionId, NativeFunctionId, ObjectId};
 
 #[derive(Clone, Debug)]
 pub enum Value {
@@ -17,7 +17,6 @@ pub enum Value {
     NativeFunction(NativeFunctionId),
     HostFunction(HostFunctionId),
     Object(ObjectId),
-    Error(ErrorObject),
 }
 
 impl Value {
@@ -25,7 +24,7 @@ impl Value {
     pub const fn type_name(&self) -> &'static str {
         match self {
             Self::Undefined => "undefined",
-            Self::Null | Self::Object(_) | Self::Error(_) => "object",
+            Self::Null | Self::Object(_) => "object",
             Self::Bool(_) => "boolean",
             Self::Number(_) => "number",
             Self::String(_) | Self::HeapString(_) => "string",
@@ -57,7 +56,6 @@ impl PartialEq for Value {
             (Self::NativeFunction(left), Self::NativeFunction(right)) => left == right,
             (Self::HostFunction(left), Self::HostFunction(right)) => left == right,
             (Self::Object(left), Self::Object(right)) => left == right,
-            (Self::Error(left), Self::Error(right)) => left == right,
             (
                 Self::Undefined
                 | Self::Null
@@ -69,8 +67,7 @@ impl PartialEq for Value {
                 | Self::Function(_)
                 | Self::NativeFunction(_)
                 | Self::HostFunction(_)
-                | Self::Object(_)
-                | Self::Error(_),
+                | Self::Object(_),
                 _,
             ) => false,
         }
@@ -91,13 +88,6 @@ impl fmt::Display for Value {
                 f.write_str("function()")
             }
             Self::Object(_) => f.write_str("[object Object]"),
-            Self::Error(error) => {
-                if error.message().is_empty() {
-                    f.write_str(error.name().as_str())
-                } else {
-                    write!(f, "{}: {}", error.name().as_str(), error.message())
-                }
-            }
         }
     }
 }

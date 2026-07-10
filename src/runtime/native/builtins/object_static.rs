@@ -276,12 +276,11 @@ impl Context {
                 Value::Undefined | Value::Null => Err(Error::runtime(
                     "Object.setPrototypeOf target cannot be converted to an object",
                 )),
-                Value::Function(_)
-                | Value::NativeFunction(_)
-                | Value::HostFunction(_)
-                | Value::Error(_) => Err(Error::runtime(
-                    "Object.setPrototypeOf target does not support prototype mutation",
-                )),
+                Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => {
+                    Err(Error::runtime(
+                        "Object.setPrototypeOf target does not support prototype mutation",
+                    ))
+                }
                 Value::Bool(_)
                 | Value::Number(_)
                 | Value::String(_)
@@ -339,8 +338,7 @@ impl Context {
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => Err(Error::runtime(
+            | Value::HostFunction(_) => Err(Error::runtime(
                 "Object.defineProperties target must be an object",
             )),
         }
@@ -389,7 +387,7 @@ impl Context {
                 let args = [value];
                 self.eval_direct_object_constructor(&args)
             }
-            Value::HostFunction(_) | Value::Error(_) => Err(Error::runtime(
+            Value::HostFunction(_) => Err(Error::runtime(
                 "Object.assign target does not support property assignment",
             )),
         }
@@ -407,8 +405,7 @@ impl Context {
             | Value::Symbol(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => Err(Error::runtime(
+            | Value::HostFunction(_) => Err(Error::runtime(
                 "Object.create prototype must be an object or null",
             )),
         }
@@ -425,8 +422,7 @@ impl Context {
             | Value::Symbol(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => Err(Error::runtime(
+            | Value::HostFunction(_) => Err(Error::runtime(
                 "Object.setPrototypeOf prototype must be an object or null",
             )),
         }
@@ -479,8 +475,7 @@ impl Context {
             | Value::String(_)
             | Value::HeapString(_)
             | Value::Symbol(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => Err(Error::runtime(
+            | Value::HostFunction(_) => Err(Error::runtime(
                 "Object.assign target must support property assignment",
             )),
         }

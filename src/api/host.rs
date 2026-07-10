@@ -321,8 +321,7 @@ impl Context {
             | Value::Bool(_)
             | Value::Number(_)
             | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::Error(_) => self.runtime_value(value),
+            | Value::Symbol(_) => self.runtime_value(value),
         }
     }
 }

@@ -155,6 +155,10 @@ fn tracks_atoms_for_bindings_without_interning_missing_names() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
 
+    let Err(warmup_error) = vm.context().eval("warmupMissingBinding") else {
+        return Err("expected ReferenceError infrastructure warmup to fail".into());
+    };
+    ensure_javascript_error(&warmup_error)?;
     let initial_atoms = vm.resource_usage().atom_count;
     let Err(error) = vm.context().eval("missingBinding") else {
         return Err("expected missing binding lookup to fail".into());
