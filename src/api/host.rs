@@ -1,6 +1,7 @@
 use std::{fmt, rc::Rc};
 
 use crate::{
+    api::owned_value::OwnedValue,
     error::{Error, Result},
     ownership::VmIdentity,
     runtime::Context,
@@ -24,6 +25,12 @@ pub trait IntoJsValue {
 impl IntoJsValue for Value {
     fn into_js_value(self) -> Result<Value> {
         Ok(self)
+    }
+}
+
+impl IntoJsValue for OwnedValue {
+    fn into_js_value(self) -> Result<Value> {
+        Ok(self.into())
     }
 }
 
@@ -174,6 +181,15 @@ impl<'value> LocalValue<'value> {
     #[must_use]
     pub const fn as_value(self) -> &'value Value {
         self.value
+    }
+
+    /// Copies this callback-local value into a VM-independent primitive.
+    ///
+    /// # Errors
+    /// Fails for Symbols, objects, and functions, which require a retained
+    /// VM-local handle instead of an owned primitive.
+    pub fn to_owned_value(self) -> Result<OwnedValue> {
+        OwnedValue::try_from(self.value)
     }
 
     /// Creates a JavaScript throw that remains bound to the argument's VM.
