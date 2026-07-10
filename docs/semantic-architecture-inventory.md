@@ -185,7 +185,7 @@ proxies; several built-ins repeat the same matches.
 
 | Operation | Widest current facade | Physical and parallel paths | Required owner |
 | --- | --- | --- | --- |
-| `ToPropertyKey` | `Context::to_property_key` in `runtime/abstract_operations/conversion.rs`; `dynamic_property_key` is the interning/cache facade | AS-03b1a applies string-hint `ToPrimitive`, preserves Symbol identity, routes non-symbol primitives through shared `ToString`, and makes Object/Reflect/Proxy/dynamic bytecode consumers delegate | AS-03b1a locally validated in draft PR #412 |
+| `ToPropertyKey` | `Context::to_property_key` in `runtime/abstract_operations/conversion.rs`; `dynamic_property_key` is the interning/cache facade | AS-03b1a applies string-hint `ToPrimitive`, preserves Symbol identity, routes non-symbol primitives through shared `ToString`, and makes Object/Reflect/Proxy/dynamic bytecode consumers delegate | AS-03b1a complete in PR #412 |
 | `[[Get]]` | `Context::semantic_property_read[_with_receiver]` plus `finish_semantic_property_read` | AS-02b1 now owns object-like dispatch; `get_property_value` still owns primitive string/prototype behavior, while static caches optimize only the returned ordinary-object tail | AS-02b1 complete after PR #401; AS-03b later owns spec-level `Get`/primitive coercion |
 | `[[HasProperty]]` | `Context::semantic_property_presence` plus `finish_semantic_property_presence` | AS-02b1 now owns object-like dispatch; static presence caches optimize only the returned ordinary-object tail, while primitive rejection remains in the property layer | AS-02b1 complete after PR #401; AS-03b later owns the abstract operation |
 | `[[Set]]` | `semantic_property_write` plus `finish_semantic_property_write`; `semantic_reflect_property_write` for explicit receivers | Static/dynamic caches optimize only ordinary tails; physical accessor/object/function stores remain backends | AS-02b2 complete in PR #403; AS-03b later owns full strict/sloppy assignment semantics |
@@ -287,8 +287,8 @@ Test262 variants and 95/95 QuickJS differential cases.
 | number conversion | `Context::to_number` plus `to_number_primitive` and `string_to_number` in `runtime/abstract_operations/conversion.rs` | AS-03a2a routes generic arithmetic, bitwise/unary/relational operators, Number/Math/global numeric built-ins, numeric String/Array arguments, Date components, JSON boxing, apply/Reflect lengths, Set records, and array sorting through this owner |
 | primitive conversion | `Context::to_primitive` and `ordinary_to_primitive` in `runtime/abstract_operations/conversion.rs` | AS-03a2a owns hints, `@@toPrimitive`, callable validation, method order, primitive-result validation, and abrupt completion; Date delegates its exotic method body to shared `OrdinaryToPrimitive` |
 | property-key conversion | `Context::to_property_key` in `runtime/abstract_operations/conversion.rs`; `dynamic_property_key` adds known-atom reuse | AS-03b1a owns string-hint primitive conversion and Symbol-preserving dynamic keys; Object, Reflect, Proxy, and dynamic bytecode consumers delegate |
-| integer-or-infinity | String and Array built-ins contain separate helpers | semantics and supported numeric ranges differ by caller |
-| length/index conversion | Array generic code, Function.apply, Reflect list creation, and String helpers each convert/cap lengths | several maxima use current storage limits rather than one `ToLength`/`ToIndex` contract |
+| integer-or-infinity | `Context::to_integer_or_infinity` plus the primitive `integer_or_infinity_from_number` in `runtime/abstract_operations/conversion.rs` | AS-03b1b routes observable Array, String, Number, and buffer arguments through the Context owner; Date and Set reuse the primitive normalization only after their specification-required prechecks |
+| length/index conversion | `Context::to_length` and `Context::to_index` in `runtime/abstract_operations/conversion.rs` | AS-03b1b preserves the full safe-integer range for array-like objects and separates specification values from checked `usize`, array-storage, byte-buffer, execution-step, and allocation limits |
 | boolean conversion | `to_boolean` in `runtime/abstract_operations/conversion.rs` | AS-03a2b removes `Value::is_truthy`; bytecode control flow, logical operators, callbacks, Proxy traps, RegExp, Set, and the Boolean constructor delegate to one pure owner |
 | string conversion | `Context::to_string` plus `to_string_primitive` in `runtime/abstract_operations/conversion.rs`; `Function.prototype.toString` is a real intrinsic used by `ToPrimitive` | AS-03a2b routes observable conversion consumers through this owner; Rust `Display for Value` remains diagnostic, including error reporting rather than ECMAScript property-key semantics |
 
@@ -296,10 +296,11 @@ AS-03a2 is split into AS-03a2a (`ToPrimitive`/`ToNumber`) and AS-03a2b
 (`ToString`/`ToBoolean`) because the two groups have independent consumer
 graphs and validation surfaces. The merged pair adds 1,714 reviewed passes,
 for 35,987 of 102,578 full variants with 95 of 95 QuickJS differential cases.
-AS-03b1a locally adds another 96 property-key variants without losing a prior
-expected pass, for 36,083 full variants and the same QuickJS result. Integer
-and index conversion, method/property/call operations, and iterator operations
-follow as AS-03b1b, AS-03b2, and AS-03b3 respectively.
+Merged AS-03b1a adds another 96 property-key variants without losing a prior
+expected pass, for 36,083 full variants and the same QuickJS result. AS-03b1b
+locally adds 102 integer, length, and index variants with no loss, for 36,185
+full variants and 95 of 95 QuickJS cases. Method/property/call operations and
+iterator operations follow as AS-03b2 and AS-03b3 respectively.
 
 ## Iterator Map
 
@@ -474,8 +475,8 @@ decision sequence:
 | AS-03a1 | equality table and numeric fast paths | shared equality owner merged in PR #409; bytecode, Object.is, collections, and arrays delegate to it |
 | AS-03a2a | conversion table | shared `ToPrimitive`/`ToNumber` owner merged in PR #410; local method probing and primitive-only number facades are deleted, with all prior Test262 passes retained |
 | AS-03a2b | string/boolean conversion sites | shared `ToString`/`ToBoolean` owners merged in PR #411; direct runtime truthiness and semantic concat formatting are deleted |
-| AS-03b1a | property-key conversion sites | shared `ToPropertyKey` owner implemented and locally validated in draft PR #412; dynamic bytecode, Object, Reflect, and Proxy paths delegate, and Rust `Display` no longer defines keys |
-| AS-03b1b | integer, length, and index helpers | introduce shared `ToIntegerOrInfinity`, `ToLength`, and `ToIndex` owners, then delete caller-specific semantics |
+| AS-03b1a | property-key conversion sites | shared `ToPropertyKey` owner merged in PR #412; dynamic bytecode, Object, Reflect, and Proxy paths delegate, and Rust `Display` no longer defines keys |
+| AS-03b1b | integer, length, and index helpers | shared `ToIntegerOrInfinity`, `ToLength`, and `ToIndex` owners implemented and locally validated in draft PR #413; consumers delegate without silently replacing specification ranges with storage limits |
 | AS-03b2 | property and call tables | add spec-level `Get`, `Set`, `Call`, and `GetMethod` operations over the AS-02c internal methods |
 | AS-03b3 | iterator map | move iterator protocol and closing out of bytecode and make all consumers delegate |
 | AS-04a/b | completion/error table and inline Error representation | preserve arbitrary throws across native frames; remove ReferenceError prefix parsing; add real errors/spans |
@@ -496,7 +497,7 @@ must fail on growth.
 | runtime/frontend separation | no `crate::ast`, parser, or lexer imports under `src/runtime` or `src/bytecode` | a runtime dependency on parser AST/frontend implementation |
 | harness source names | compiler recognition of only `print` and `assert.throws`, plus the constructor fallback for `Test262Error` | another compiler/runtime source-name special case or harness opcode |
 | harness opcodes | only `Print` and `AssertThrows` | another harness-only bytecode instruction or use site |
-| semantic duplicates | the AS-03a1 equality owner, the AS-03a2 primitive/number/string/boolean owners, the AS-03b1a property-key owner, recorded length/integer helpers, and the AS-02c callable/constructor predicates | a new definition instead of delegation to an existing shared operation |
+| semantic duplicates | the AS-03a1 equality owner, the AS-03a2 primitive/number/string/boolean owners, the AS-03b1a property-key owner, the AS-03b1b integer/length/index owners, and the AS-02c callable/constructor predicates | a new definition instead of delegation to an existing shared operation |
 | object side tables | Promise, collection, and iterator associations recorded above; bound-function payload store | a new object-id-indexed association without an inventory/plan update |
 | optimization owners | current linear/function/control modules | a new workload-shaped control module or compiler source-shape recognizer without plan evidence |
 | clone debt | current `Clone` implementations on `Vm` and `Context` | another public VM-state clone boundary or use of cloning as handle transfer |

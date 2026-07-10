@@ -25,8 +25,9 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01, AS-02, AS-03a1, and AS-03a2 are complete;
-  AS-03b1a `ToPropertyKey` is locally validated in draft PR #412
+- Current program state: AS-01, AS-02, AS-03a1, AS-03a2, and AS-03b1a are
+  complete; AS-03b1b integer/length/index conversion is locally validated in
+  draft PR #413
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -481,7 +482,7 @@ dependencies do not overlap.
 | AS-00 | Complete | Adopt this plan and route project documentation to it. | None | PR #396 merged as `f79056b`; required CI, post-merge performance, publisher, and canonical report publication passed. |
 | AS-01 | Complete | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards merged in PR #399 with required CI and canonical report publication. |
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
-| AS-03 | In progress | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 `ToPrimitive`/`ToNumber`/`ToString`/`ToBoolean` completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` is locally validated in draft PR #412; integer/index, method/property, and iterator operations remain. |
+| AS-03 | In progress | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion is locally validated in draft PR #413; method/property and iterator operations remain. |
 | AS-04 | Backlog | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | Real JavaScript error objects, typed throw path, no message-prefix classification, spans available to diagnostics. |
 | AS-05 | Backlog | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | Non-cloneable VM state, checked cross-VM boundaries, trace/root contract, heap/stack/job/buffer counters and limits. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
@@ -845,6 +846,42 @@ AS-03b1a local validation evidence:
   names (20), SpiderMonkey staging cases (8), Array (6), computed property
   names (4), and Symbol behavior (2).
 
+AS-03b1a completion evidence:
+
+- PR #412 was squash-merged as `63315e3`; required CI run `29082427967`
+  certified exact tree `e96d55d21d45f40638faa5ea486a5550c01ef31d` at
+  36,083/36,083 expected Test262 variants and 95/95 QuickJS differential
+  cases;
+- post-merge run `29082667976` measured all five project sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T091940Z.*` in
+  report-only commit `75499a1`.
+
+AS-03b1b local validation evidence:
+
+- `Context::to_integer_or_infinity`, `Context::to_length`, and
+  `Context::to_index` are the only specification-named owners; the guard
+  rejects another definition;
+- Array and String indices, array-like lengths, Function.apply, Reflect and
+  Proxy argument lists, RegExp `lastIndex`, Number formatting, Set records,
+  Date clipping, ArrayBuffer, and Uint8Array delegate to the shared operations;
+- `ToLength` retains the full `Number.MAX_SAFE_INTEGER` range, while conversion
+  to `usize`, array storage bounds, byte-buffer limits, and execution budgets
+  remain explicit engine-resource checks rather than JavaScript semantics;
+- direct tests cover observable number hints, truncation, negative zero,
+  case-sensitive Infinity parsing, maximum safe array-like indices, missing
+  indices, buffer coercion, and `ToIndex` range/type errors;
+- an exhaustive regression audit found and repaired case-sensitive Infinity
+  parsing and negative-zero representation before the baseline was refreshed;
+- the complete engine/runner fast gate passes, including strict Clippy,
+  documentation, architecture self-tests, and 112 runner tests;
+- the final complete Test262 review preserves all 36,083 prior expected
+  variants and adds 102 reviewed passes, bringing the expected-pass baseline
+  and full pass set to 36,185 of 102,578 with QuickJS differential unchanged at
+  95 of 95;
+- the gains cover Array (58 variants), ArrayBuffer (12), RegExp (10),
+  SpiderMonkey staging cases (8), Number (6), Object (4), String (2), and
+  Uint8Array constructor behavior (2).
+
 ### AS-04: Completion, Errors, And Source Metadata
 
 Required migration steps:
@@ -970,9 +1007,9 @@ reviewable scope.
 8. AS-03a2a: centralize `ToPrimitive`, `OrdinaryToPrimitive`, and `ToNumber`
    (complete in PR #410).
 9. AS-03a2b: centralize `ToString` and `ToBoolean` (complete in PR #411).
-10. AS-03b1a: centralize `ToPropertyKey` (implemented and locally validated in
-    draft PR #412).
-11. AS-03b1b: centralize `ToIntegerOrInfinity`, `ToLength`, and `ToIndex`.
+10. AS-03b1a: centralize `ToPropertyKey` (complete in PR #412).
+11. AS-03b1b: centralize `ToIntegerOrInfinity`, `ToLength`, and `ToIndex`
+    (implemented and locally validated in draft PR #413).
 12. AS-03b2: centralize `GetMethod` plus specification-level property and call
     operations.
 13. AS-03b3: centralize iterator operations and iterator closing.
