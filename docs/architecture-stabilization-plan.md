@@ -739,9 +739,12 @@ AS-03a1 current evidence:
   redefine NaN or signed-zero semantics
 - Tests: focused public coverage exercises primitive, boxed-string, Symbol,
   object identity, NaN, signed zero, arrays, collections, switch, callback, and
-  loop paths
-- Remaining for AS-03a1: complete fast/correctness validation, review any
-  Test262 delta, merge, and verify canonical report publication
+  loop paths; the complete engine/runner fast gate passes
+- Test262/QuickJS: the complete local correctness gate passes with no pass-set
+  change at 34,273/34,273 expected Test262 variants, 34,273 of 102,578 full
+  variants, and 95/95 QuickJS differential cases
+- Remaining for AS-03a1: run required exact-head CI, merge, and verify
+  exact-tree canonical report publication
 
 ### AS-04: Completion, Errors, And Source Metadata
 

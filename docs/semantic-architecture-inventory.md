@@ -277,6 +277,8 @@ AS-03a1 establishes this owner in draft PR #409 and deletes the former local
 implementations in the same change. `Value::Error` still lacks JavaScript object
 identity, so every equality relation inherits its structural inline-error debt;
 AS-04b removes that representation rather than adding an equality exception.
+The complete local corpus confirms a zero pass-set delta at 34,273 expected
+Test262 variants and 95/95 QuickJS differential cases.
 
 ### Conversion And Numeric Indexing
 
