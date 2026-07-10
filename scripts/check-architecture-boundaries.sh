@@ -86,6 +86,47 @@ check_runtime_frontend_boundary() {
   fi
 }
 
+check_source_metadata_boundary() {
+  local source_type_owners
+  local expected_source_type_owners
+  local compiled_fields
+  local expected_compiled_fields
+  local frontend_diagnostics
+
+  source_type_owners="$(
+    cd "${repo_root}"
+    grep -R -H -E -o --include='*.rs' \
+      'pub struct (SourceId|SourceSpan)' src || true
+  )"
+  expected_source_type_owners='src/source.rs:pub struct SourceId
+src/source.rs:pub struct SourceSpan'
+  compare_set "source metadata type owner allowlist" \
+    "${source_type_owners}" "${expected_source_type_owners}"
+
+  compiled_fields="$(
+    awk '
+      /^pub struct CompiledScript \{/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/compiled_script/mod.rs" \
+      | sed '/^[[:space:]]*\/\//d' \
+      | tr -d '[:space:]'
+  )"
+  expected_compiled_fields='bytecode:BytecodeProgram,binding_layout:BindingLayout,usage:CompiledScriptUsage,source_id:SourceId,source_name:Option<String>,'
+  if [[ "${compiled_fields}" != "${expected_compiled_fields}" ]]; then
+    fail "CompiledScript source metadata boundary changed; AS-04b2 owns source retention"
+  fi
+
+  frontend_diagnostics="$(
+    grep -E '^[[:space:]]*(Lex|Parse)[[:space:]]*\{' \
+      "${repo_root}/src/error.rs" \
+      | tr -d '[:space:]'
+  )"
+  if [[ "${frontend_diagnostics}" != 'Lex{message:String,span:SourceSpan},Parse{message:String,span:SourceSpan},' ]]; then
+    fail "frontend source diagnostic boundary changed; lexer and parser errors require SourceSpan"
+  fi
+}
+
 check_harness_boundaries() {
   local compiler_comparisons
   local expected_comparisons
@@ -509,6 +550,7 @@ src/runtime/function/fast_path.rs'
 run_checks() {
   require_file src/value/kind.rs
   require_file src/runtime/mod.rs
+  require_file src/source.rs
   require_file src/runtime/object/mod.rs
   require_file src/api/embedding.rs
   require_dir src/compiler
@@ -518,6 +560,7 @@ run_checks() {
 
   check_value_representation
   check_runtime_frontend_boundary
+  check_source_metadata_boundary
   check_harness_boundaries
   check_semantic_duplicate_allowlists
   check_completion_error_boundary
@@ -542,6 +585,12 @@ mutate_value_variant() {
 mutate_runtime_frontend_import() {
   local fixture_root="$1"
   printf '\nuse crate::ast::Expr;\n' >>"${fixture_root}/src/runtime/mod.rs"
+}
+
+mutate_frontend_source_span() {
+  local fixture_root="$1"
+  sed -i '0,/span: SourceSpan/{s/span: SourceSpan/offset: usize/}' \
+    "${fixture_root}/src/error.rs"
 }
 
 mutate_compiler_source_name() {
@@ -701,6 +750,8 @@ run_self_tests() {
     'Value representation changed' mutate_value_variant
   expect_guard_failure "${temp_dir}" runtime-frontend \
     'runtime/frontend boundary changed' mutate_runtime_frontend_import
+  expect_guard_failure "${temp_dir}" frontend-source-span \
+    'frontend source diagnostic boundary changed' mutate_frontend_source_span
   expect_guard_failure "${temp_dir}" compiler-source-name \
     'compiler source-name allowlist changed' mutate_compiler_source_name
   expect_guard_failure "${temp_dir}" test262-source-name \

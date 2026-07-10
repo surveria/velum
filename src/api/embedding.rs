@@ -142,6 +142,15 @@ impl Vm {
         self.context.compile(source)
     }
 
+    /// Compiles source with a stable embedder-provided diagnostic name.
+    ///
+    /// # Errors
+    /// Fails when the source name exceeds configured string limits, or when
+    /// lexing, parsing, or configured compile-time resource limits fail.
+    pub fn compile_named(&self, source_name: &str, source: &str) -> Result<CompiledScript> {
+        self.context.compile_named(source_name, source)
+    }
+
     /// # Errors
     /// Fails when the compiled script exceeds this VM's limits or evaluation
     /// fails. An uncaught JavaScript value is returned as

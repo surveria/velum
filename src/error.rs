@@ -1,6 +1,7 @@
 use std::fmt;
 
 use crate::value::{ErrorName, Value};
+use crate::{SourceId, SourceSpan};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -51,10 +52,10 @@ impl fmt::Display for JavaScriptErrorMetadata {
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum Error {
-    #[error("lexer error at {offset}: {message}")]
-    Lex { message: String, offset: usize },
-    #[error("parser error at {offset}: {message}")]
-    Parse { message: String, offset: usize },
+    #[error("lexer error at {}: {message}", span.start())]
+    Lex { message: String, span: SourceSpan },
+    #[error("parser error at {}: {message}", span.start())]
+    Parse { message: String, span: SourceSpan },
     #[error("runtime error: {message}")]
     Runtime { message: String },
     /// An arbitrary JavaScript thrown value owned by the VM that produced it.
@@ -78,14 +79,14 @@ impl Error {
     pub(crate) fn lex(message: impl Into<String>, offset: usize) -> Self {
         Self::Lex {
             message: message.into(),
-            offset,
+            span: SourceSpan::point(SourceId::UNKNOWN, offset),
         }
     }
 
     pub(crate) fn parse(message: impl Into<String>, offset: usize) -> Self {
         Self::Parse {
             message: message.into(),
-            offset,
+            span: SourceSpan::point(SourceId::UNKNOWN, offset),
         }
     }
 
@@ -169,6 +170,18 @@ impl Error {
         Some(metadata.message())
     }
 
+    /// Returns the source range for a lexer or parser diagnostic.
+    #[must_use]
+    pub const fn source_span(&self) -> Option<SourceSpan> {
+        match self {
+            Self::Lex { span, .. } | Self::Parse { span, .. } => Some(*span),
+            Self::Runtime { .. }
+            | Self::JavaScript { .. }
+            | Self::JavaScriptError { .. }
+            | Self::ResourceLimit { .. } => None,
+        }
+    }
+
     pub(crate) const fn javascript_error_request(&self) -> Option<&JavaScriptErrorMetadata> {
         let Self::JavaScriptError { metadata } = self else {
             return None;
@@ -192,13 +205,13 @@ impl Error {
     pub fn with_context(self, context: impl AsRef<str>) -> Self {
         let context = context.as_ref();
         match self {
-            Self::Lex { message, offset } => Self::Lex {
+            Self::Lex { message, span } => Self::Lex {
                 message: format!("{context}: {message}"),
-                offset,
+                span,
             },
-            Self::Parse { message, offset } => Self::Parse {
+            Self::Parse { message, span } => Self::Parse {
                 message: format!("{context}: {message}"),
-                offset,
+                span,
             },
             Self::Runtime { message } => Self::Runtime {
                 message: format!("{context}: {message}"),
@@ -216,6 +229,20 @@ impl Error {
             Self::ResourceLimit { message } => Self::ResourceLimit {
                 message: format!("{context}: {message}"),
             },
+        }
+    }
+
+    pub(crate) fn with_source(self, source_id: SourceId, source: &str) -> Self {
+        match self {
+            Self::Lex { message, span } => Self::Lex {
+                message,
+                span: SourceSpan::for_diagnostic(source_id, source, span.start()),
+            },
+            Self::Parse { message, span } => Self::Parse {
+                message,
+                span: SourceSpan::for_diagnostic(source_id, source, span.start()),
+            },
+            error => error,
         }
     }
 }

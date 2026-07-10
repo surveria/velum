@@ -125,7 +125,7 @@ pub fn source_label(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use rs_quickjs::Error;
+    use rs_quickjs::{Error, SourceId, SourceSpan};
 
     use super::{ManifestCase, ensure_negative_parse_failure};
 
@@ -138,14 +138,14 @@ mod tests {
             &case,
             Err(Error::Lex {
                 message: "bad token".to_owned(),
-                offset: 0,
+                span: SourceSpan::point(SourceId::for_source("@"), 0),
             }),
         )?;
         ensure_negative_parse_failure(
             &case,
             Err(Error::Parse {
                 message: "bad syntax".to_owned(),
-                offset: 0,
+                span: SourceSpan::point(SourceId::for_source("let"), 0),
             }),
         )?;
         Ok(())
