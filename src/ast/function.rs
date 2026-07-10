@@ -1,14 +1,14 @@
-use super::{Expr, StaticBinding};
+use super::{Expression, StaticBinding};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionParam {
     pub name: StaticBinding,
-    pub default: Option<Expr>,
+    pub default: Option<Expression>,
     pub rest: bool,
 }
 
 impl FunctionParam {
-    pub const fn new(name: StaticBinding, default: Option<Expr>) -> Self {
+    pub const fn new(name: StaticBinding, default: Option<Expression>) -> Self {
         Self {
             name,
             default,

@@ -127,6 +127,44 @@ src/source.rs:pub struct SourceSpan'
   fi
 }
 
+check_frontend_span_boundary() {
+  local token_fields
+  local expected_token_fields
+
+  token_fields="$(
+    awk '
+      /^pub struct Token \{/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/lexer/token.rs" \
+      | sed '/^[[:space:]]*\/\//d' \
+      | tr -d '[:space:]'
+  )"
+  expected_token_fields='pubkind:TokenKind,pubspan:SourceSpan,publine_terminator_before:bool,'
+  if [[ "${token_fields}" != "${expected_token_fields}" ]]; then
+    fail "frontend token span boundary changed; tokens require one canonical SourceSpan"
+  fi
+
+  if ! grep -F -q 'pub type Expression = AstNode<Expr>;' \
+      "${repo_root}/src/ast/expression.rs" \
+    || ! grep -F -q 'pub type Statement = AstNode<Stmt>;' \
+      "${repo_root}/src/ast/statement.rs"; then
+    fail "frontend AST span boundary changed; expressions and statements require AstNode"
+  fi
+  if ! grep -F -q 'pub(super) fn expression(&mut self) -> Result<Expression>' \
+      "${repo_root}/src/parser/expression.rs" \
+    || ! grep -F -q 'pub(super) fn statement(&mut self) -> Result<Statement>' \
+      "${repo_root}/src/parser/statement.rs"; then
+    fail "parser AST span boundary changed; parser roots must return span-bearing nodes"
+  fi
+  if ! grep -F -q 'pub(super) fn compile_expr(&mut self, expr: &Expression)' \
+      "${repo_root}/src/compiler/expression.rs" \
+    || ! grep -F -q 'fn compile_statement(&mut self, statement: &Statement' \
+      "${repo_root}/src/compiler/mod.rs"; then
+    fail "compiler AST span boundary changed; compiler inputs must retain frontend nodes"
+  fi
+}
+
 check_harness_boundaries() {
   local compiler_comparisons
   local expected_comparisons
@@ -551,6 +589,7 @@ run_checks() {
   require_file src/value/kind.rs
   require_file src/runtime/mod.rs
   require_file src/source.rs
+  require_file src/ast/node.rs
   require_file src/runtime/object/mod.rs
   require_file src/api/embedding.rs
   require_dir src/compiler
@@ -561,6 +600,7 @@ run_checks() {
   check_value_representation
   check_runtime_frontend_boundary
   check_source_metadata_boundary
+  check_frontend_span_boundary
   check_harness_boundaries
   check_semantic_duplicate_allowlists
   check_completion_error_boundary
@@ -591,6 +631,12 @@ mutate_frontend_source_span() {
   local fixture_root="$1"
   sed -i '0,/span: SourceSpan/{s/span: SourceSpan/offset: usize/}' \
     "${fixture_root}/src/error.rs"
+}
+
+mutate_frontend_ast_span() {
+  local fixture_root="$1"
+  sed -i 's/pub type Expression = AstNode<Expr>;/pub type Expression = Expr;/' \
+    "${fixture_root}/src/ast/expression.rs"
 }
 
 mutate_compiler_source_name() {
@@ -752,6 +798,8 @@ run_self_tests() {
     'runtime/frontend boundary changed' mutate_runtime_frontend_import
   expect_guard_failure "${temp_dir}" frontend-source-span \
     'frontend source diagnostic boundary changed' mutate_frontend_source_span
+  expect_guard_failure "${temp_dir}" frontend-ast-span \
+    'frontend AST span boundary changed' mutate_frontend_ast_span
   expect_guard_failure "${temp_dir}" compiler-source-name \
     'compiler source-name allowlist changed' mutate_compiler_source_name
   expect_guard_failure "${temp_dir}" test262-source-name \

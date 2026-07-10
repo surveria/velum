@@ -1,14 +1,16 @@
 mod class;
 mod expression;
 mod function;
+mod node;
 mod pattern;
 mod statement;
 
 pub use class::{ClassConstructor, ClassField, ClassLiteral, ClassMember, ClassMemberKind};
-pub use expression::{Expr, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind};
+pub use expression::{Expr, Expression, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind};
 pub use function::FunctionParam;
+pub use node::AstNode;
 pub use pattern::{ArrayBindingElement, BindingPattern, BindingPropertyKey, ObjectBindingProperty};
-pub use statement::{CatchClause, ForInTarget, Program, Stmt, SwitchCase};
+pub use statement::{CatchClause, ForInTarget, Program, Statement, Stmt, SwitchCase};
 
 pub use crate::syntax::{
     BinaryOp, DeclKind, StaticBinding, StaticBindingId, StaticCallSiteId, StaticFunctionId,

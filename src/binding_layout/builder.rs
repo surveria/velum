@@ -1,8 +1,8 @@
 use crate::{
     ast::{
-        BindingPattern, CatchClause, DeclKind, Expr, ForInTarget, FunctionParam, ObjectProperty,
-        ObjectPropertyKey, Program, StaticBinding, StaticFunctionId, StaticNameId, Stmt,
-        SwitchCase,
+        BindingPattern, CatchClause, DeclKind, Expr, Expression, ForInTarget, FunctionParam,
+        ObjectProperty, ObjectPropertyKey, Program, Statement, StaticBinding, StaticFunctionId,
+        StaticNameId, Stmt, SwitchCase,
     },
     binding_metadata::{
         BindingLayout, BindingLayoutParts, BindingOperand, FunctionScopeId, LocalSlot, ScopeId,
@@ -55,7 +55,7 @@ impl LayoutBuilder {
 
     fn analyze_statements(
         &mut self,
-        statements: &[Stmt],
+        statements: &[Statement],
         scope: ScopeId,
         var_scope: ScopeId,
         function: FunctionScopeId,
@@ -69,7 +69,7 @@ impl LayoutBuilder {
 
     fn collect_scope_declarations(
         &mut self,
-        statements: &[Stmt],
+        statements: &[Statement],
         scope: ScopeId,
         var_scope: ScopeId,
     ) -> Result<()> {
@@ -84,11 +84,11 @@ impl LayoutBuilder {
 
     fn collect_direct_declaration(
         &mut self,
-        statement: &Stmt,
+        statement: &Statement,
         scope: ScopeId,
         var_scope: ScopeId,
     ) -> Result<()> {
-        match statement {
+        match statement.kind() {
             Stmt::DeclList(statements) => {
                 for declaration in statements {
                     self.collect_direct_declaration(declaration, scope, var_scope)?;
@@ -124,8 +124,8 @@ impl LayoutBuilder {
         }
     }
 
-    fn collect_hoisted_vars(&mut self, statement: &Stmt, var_scope: ScopeId) -> Result<()> {
-        match statement {
+    fn collect_hoisted_vars(&mut self, statement: &Statement, var_scope: ScopeId) -> Result<()> {
+        match statement.kind() {
             Stmt::Block(statements) | Stmt::DeclList(statements) => {
                 for statement in statements {
                     self.collect_hoisted_vars(statement, var_scope)?;
@@ -221,12 +221,12 @@ impl LayoutBuilder {
 
     fn analyze_statement(
         &mut self,
-        statement: &Stmt,
+        statement: &Statement,
         scope: ScopeId,
         var_scope: ScopeId,
         function: FunctionScopeId,
     ) -> Result<()> {
-        match statement {
+        match statement.kind() {
             Stmt::Block(statements) => {
                 let block_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
                 self.analyze_statements(statements, block_scope, var_scope, function)
@@ -313,10 +313,10 @@ impl LayoutBuilder {
 
     fn analyze_for(
         &mut self,
-        init: Option<&Stmt>,
-        condition: Option<&Expr>,
-        update: Option<&Expr>,
-        body: &Stmt,
+        init: Option<&Statement>,
+        condition: Option<&Expression>,
+        update: Option<&Expression>,
+        body: &Statement,
         context: ScopeContext,
     ) -> Result<()> {
         let loop_scope = if for_init_needs_layout_scope(init) {
@@ -344,8 +344,8 @@ impl LayoutBuilder {
     fn analyze_for_in(
         &mut self,
         target: &ForInTarget,
-        object: &Expr,
-        body: &Stmt,
+        object: &Expression,
+        body: &Statement,
         scope: ScopeId,
         var_scope: ScopeId,
         function: FunctionScopeId,
@@ -439,7 +439,7 @@ impl LayoutBuilder {
 
     fn analyze_switch(
         &mut self,
-        discriminant: &Expr,
+        discriminant: &Expression,
         cases: &[SwitchCase],
         scope: ScopeId,
         var_scope: ScopeId,
@@ -461,9 +461,9 @@ impl LayoutBuilder {
 
     fn analyze_try(
         &mut self,
-        body: &[Stmt],
+        body: &[Statement],
         catch: Option<&CatchClause>,
-        finally_body: Option<&[Stmt]>,
+        finally_body: Option<&[Statement]>,
         context: ScopeContext,
     ) -> Result<()> {
         let body_scope = self.add_scope(Some(context.scope), context.function, ScopeKind::Local);
@@ -501,11 +501,11 @@ impl LayoutBuilder {
 
     fn analyze_expr(
         &mut self,
-        expr: &Expr,
+        expr: &Expression,
         scope: ScopeId,
         function: FunctionScopeId,
     ) -> Result<()> {
-        match expr {
+        match expr.kind() {
             Expr::Literal(_)
             | Expr::StringLiteral(_)
             | Expr::RegExpLiteral { .. }
@@ -590,7 +590,7 @@ impl LayoutBuilder {
 
     fn analyze_exprs(
         &mut self,
-        exprs: &[Expr],
+        exprs: &[Expression],
         scope: ScopeId,
         function: FunctionScopeId,
     ) -> Result<()> {
@@ -619,7 +619,7 @@ impl LayoutBuilder {
         &mut self,
         id: StaticFunctionId,
         params: &[FunctionParam],
-        body: &[Stmt],
+        body: &[Statement],
         parent_scope: ScopeId,
         parent_function: FunctionScopeId,
     ) -> Result<()> {

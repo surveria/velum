@@ -13,14 +13,18 @@ use crate::{
         digits_to_number, is_exponent_marker, is_identifier_part, is_identifier_start,
         is_line_terminator, numeric_prefix, unicode_char,
     },
+    source::{SourceId, SourceSpan},
 };
 
-pub fn lex(source: &str) -> Result<Vec<Token>> {
-    Lexer::new(source).lex()
+mod operators;
+
+pub fn lex(source: &str, source_id: SourceId) -> Result<Vec<Token>> {
+    Lexer::new(source, source_id).lex()
 }
 
 struct Lexer<'a> {
     source: &'a str,
+    source_id: SourceId,
     chars: Vec<(usize, char)>,
     cursor: usize,
     tokens: Vec<Token>,
@@ -48,9 +52,10 @@ enum TemplatePartPosition {
 }
 
 impl<'a> Lexer<'a> {
-    fn new(source: &'a str) -> Self {
+    fn new(source: &'a str, source_id: SourceId) -> Self {
         Self {
             source,
+            source_id,
             chars: source.char_indices().collect(),
             cursor: 0,
             tokens: Vec::new(),
@@ -121,7 +126,7 @@ impl<'a> Lexer<'a> {
 
         self.tokens.push(Token {
             kind: TokenKind::Eof,
-            offset: self.source.len(),
+            span: SourceSpan::point(self.source_id, self.source.len()),
             line_terminator_before: self.line_terminator_before,
         });
         Ok(self.tokens)
@@ -733,188 +738,11 @@ impl<'a> Lexer<'a> {
         Err(Error::lex("unterminated block comment", offset))
     }
 
-    fn simple(&mut self, kind: TokenKind) {
-        let offset = self.peek().map_or(self.source.len(), |(offset, _)| offset);
-        self.advance();
-        self.push(kind, offset);
-    }
-
-    fn plus_or_increment(&mut self, offset: usize) {
-        self.advance();
-        if self.match_char('+') {
-            self.push(TokenKind::PlusPlus, offset);
-        } else if self.match_char('=') {
-            self.push(TokenKind::PlusEqual, offset);
-        } else {
-            self.push(TokenKind::Plus, offset);
-        }
-    }
-
-    fn minus_or_decrement(&mut self, offset: usize) {
-        self.advance();
-        if self.match_char('-') {
-            self.push(TokenKind::MinusMinus, offset);
-        } else if self.match_char('=') {
-            self.push(TokenKind::MinusEqual, offset);
-        } else {
-            self.push(TokenKind::Minus, offset);
-        }
-    }
-
-    fn star_or_power(&mut self, offset: usize) {
-        self.advance();
-        if !self.match_char('*') {
-            if self.match_char('=') {
-                self.push(TokenKind::StarEqual, offset);
-            } else {
-                self.push(TokenKind::Star, offset);
-            }
-            return;
-        }
-        if self.match_char('=') {
-            self.push(TokenKind::StarStarEqual, offset);
-        } else {
-            self.push(TokenKind::StarStar, offset);
-        }
-    }
-
-    fn dot_token(&mut self, offset: usize) -> Result<()> {
-        self.advance();
-        if !self.match_char('.') {
-            self.push(TokenKind::Dot, offset);
-            return Ok(());
-        }
-        if !self.match_char('.') {
-            return Err(Error::lex("unexpected '..'", offset));
-        }
-        self.push(TokenKind::DotDotDot, offset);
-        Ok(())
-    }
-
-    fn bang_token(&mut self, offset: usize) {
-        self.advance();
-        if self.match_char('=') {
-            if self.match_char('=') {
-                self.push(TokenKind::StrictNotEqual, offset);
-            } else {
-                self.push(TokenKind::BangEqual, offset);
-            }
-        } else {
-            self.push(TokenKind::Bang, offset);
-        }
-    }
-
-    fn equal_token(&mut self, offset: usize) {
-        self.advance();
-        if self.match_char('>') {
-            self.push(TokenKind::Arrow, offset);
-        } else if self.match_char('=') {
-            if self.match_char('=') {
-                self.push(TokenKind::StrictEqual, offset);
-            } else {
-                self.push(TokenKind::EqualEqual, offset);
-            }
-        } else {
-            self.push(TokenKind::Equal, offset);
-        }
-    }
-
-    fn ampersand_token(&mut self, offset: usize) {
-        self.advance();
-        if self.match_char('&') {
-            if self.match_char('=') {
-                self.push(TokenKind::AndAndEqual, offset);
-            } else {
-                self.push(TokenKind::AndAnd, offset);
-            }
-        } else if self.match_char('=') {
-            self.push(TokenKind::AmpersandEqual, offset);
-        } else {
-            self.push(TokenKind::Ampersand, offset);
-        }
-    }
-
-    fn pipe_token(&mut self, offset: usize) {
-        self.advance();
-        if self.match_char('|') {
-            if self.match_char('=') {
-                self.push(TokenKind::OrOrEqual, offset);
-            } else {
-                self.push(TokenKind::OrOr, offset);
-            }
-        } else if self.match_char('=') {
-            self.push(TokenKind::PipeEqual, offset);
-        } else {
-            self.push(TokenKind::Pipe, offset);
-        }
-    }
-
-    fn question_token(&mut self, offset: usize) {
-        self.advance();
-        if self.match_char('?') {
-            if self.match_char('=') {
-                self.push(TokenKind::QuestionQuestionEqual, offset);
-            } else {
-                self.push(TokenKind::QuestionQuestion, offset);
-            }
-        } else {
-            self.push(TokenKind::Question, offset);
-        }
-    }
-
-    fn less_token(&mut self, offset: usize) {
-        self.advance();
-        if self.match_char('<') {
-            if self.match_char('=') {
-                self.push(TokenKind::LessLessEqual, offset);
-            } else {
-                self.push(TokenKind::LessLess, offset);
-            }
-        } else if self.match_char('=') {
-            self.push(TokenKind::LessEqual, offset);
-        } else {
-            self.push(TokenKind::Less, offset);
-        }
-    }
-
-    fn greater_token(&mut self, offset: usize) {
-        self.advance();
-        if self.match_char('>') {
-            self.greater_shift_token(offset);
-        } else if self.match_char('=') {
-            self.push(TokenKind::GreaterEqual, offset);
-        } else {
-            self.push(TokenKind::Greater, offset);
-        }
-    }
-
-    fn greater_shift_token(&mut self, offset: usize) {
-        if self.match_char('>') {
-            if self.match_char('=') {
-                self.push(TokenKind::GreaterGreaterGreaterEqual, offset);
-            } else {
-                self.push(TokenKind::GreaterGreaterGreater, offset);
-            }
-        } else if self.match_char('=') {
-            self.push(TokenKind::GreaterGreaterEqual, offset);
-        } else {
-            self.push(TokenKind::GreaterGreater, offset);
-        }
-    }
-
-    fn simple_or_equal(&mut self, offset: usize, plain: TokenKind, assigned: TokenKind) {
-        self.advance();
-        if self.match_char('=') {
-            self.push(assigned, offset);
-        } else {
-            self.push(plain, offset);
-        }
-    }
-
     fn push(&mut self, kind: TokenKind, offset: usize) {
+        let span = SourceSpan::from_valid_bounds(self.source_id, offset, self.current_offset());
         self.tokens.push(Token {
             kind,
-            offset,
+            span,
             line_terminator_before: self.line_terminator_before,
         });
         self.line_terminator_before = false;

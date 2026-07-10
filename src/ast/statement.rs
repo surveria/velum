@@ -3,87 +3,90 @@ use std::rc::Rc;
 use crate::syntax::DeclKind;
 
 use super::{
-    BindingPattern, ClassLiteral, Expr, FunctionParam, StaticBinding, StaticFunctionId, StaticName,
+    AstNode, BindingPattern, ClassLiteral, Expression, FunctionParam, StaticBinding,
+    StaticFunctionId, StaticName,
 };
+
+pub type Statement = AstNode<Stmt>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
-    pub statements: Vec<Stmt>,
+    pub statements: Vec<Statement>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Empty,
-    Block(Vec<Self>),
-    DeclList(Vec<Self>),
+    Block(Vec<Statement>),
+    DeclList(Vec<Statement>),
     If {
-        condition: Expr,
-        consequent: Box<Self>,
-        alternate: Option<Box<Self>>,
+        condition: Expression,
+        consequent: Box<Statement>,
+        alternate: Option<Box<Statement>>,
     },
     While {
-        condition: Expr,
-        body: Box<Self>,
+        condition: Expression,
+        body: Box<Statement>,
     },
     DoWhile {
-        body: Box<Self>,
-        condition: Expr,
+        body: Box<Statement>,
+        condition: Expression,
     },
     Label {
         label: StaticName,
-        body: Box<Self>,
+        body: Box<Statement>,
     },
     For {
-        init: Option<Box<Self>>,
-        condition: Option<Expr>,
-        update: Option<Expr>,
-        body: Box<Self>,
+        init: Option<Box<Statement>>,
+        condition: Option<Expression>,
+        update: Option<Expression>,
+        body: Box<Statement>,
     },
     ForIn {
         target: ForInTarget,
-        object: Expr,
-        body: Box<Self>,
+        object: Expression,
+        body: Box<Statement>,
     },
     ForOf {
         target: ForInTarget,
-        object: Expr,
-        body: Box<Self>,
+        object: Expression,
+        body: Box<Statement>,
     },
     Switch {
-        discriminant: Expr,
+        discriminant: Expression,
         cases: Vec<SwitchCase>,
     },
     Try {
-        body: Vec<Self>,
+        body: Vec<Statement>,
         catch: Option<CatchClause>,
-        finally_body: Option<Vec<Self>>,
+        finally_body: Option<Vec<Statement>>,
     },
     Break(Option<StaticName>),
     Continue(Option<StaticName>),
-    Throw(Expr),
-    Return(Option<Expr>),
+    Throw(Expression),
+    Return(Option<Expression>),
     FunctionDecl {
         name: StaticBinding,
         id: StaticFunctionId,
         params: Rc<[FunctionParam]>,
-        body: Rc<[Self]>,
+        body: Rc<[Statement]>,
         is_async: bool,
     },
     VarDecl {
         name: StaticBinding,
         kind: DeclKind,
-        init: Option<Expr>,
+        init: Option<Expression>,
     },
     PatternDecl {
         pattern: BindingPattern,
         kind: DeclKind,
-        init: Expr,
+        init: Expression,
     },
     ClassDecl {
         name: StaticBinding,
         class: Box<ClassLiteral>,
     },
-    Expr(Expr),
+    Expr(Expression),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -96,17 +99,17 @@ pub enum ForInTarget {
         pattern: Box<BindingPattern>,
         kind: DeclKind,
     },
-    Assignment(Expr),
+    Assignment(Expression),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SwitchCase {
-    pub test: Option<Expr>,
-    pub statements: Vec<Stmt>,
+    pub test: Option<Expression>,
+    pub statements: Vec<Statement>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CatchClause {
     pub param: Option<StaticBinding>,
-    pub body: Vec<Stmt>,
+    pub body: Vec<Statement>,
 }

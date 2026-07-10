@@ -3,8 +3,9 @@ use std::rc::Rc;
 use crate::{
     api::native_call::NativeCallTarget,
     ast::{
-        BinaryOp, DeclKind, Expr, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, Program,
-        StaticBinding, StaticPropertyAccessId, Stmt, UnaryOp, UpdateOp,
+        BinaryOp, DeclKind, Expr, Expression, ObjectProperty, ObjectPropertyKey,
+        ObjectPropertyKind, Program, Statement, StaticBinding, StaticPropertyAccessId, Stmt,
+        UnaryOp, UpdateOp,
     },
     binding_metadata::BindingLayout,
     bytecode::{
@@ -37,7 +38,7 @@ pub fn compile_program(program: &Program, layout: &BindingLayout) -> Result<Byte
 
 impl BytecodeBlock {
     fn compile_statements(
-        statements: &[Stmt],
+        statements: &[Statement],
         value: StatementValue,
         layout: &BindingLayout,
     ) -> Result<Self> {
@@ -46,7 +47,7 @@ impl BytecodeBlock {
         Ok(Self::from_instructions(compiler.instructions))
     }
 
-    fn compile_expression(expr: &Expr, layout: &BindingLayout) -> Result<Self> {
+    fn compile_expression(expr: &Expression, layout: &BindingLayout) -> Result<Self> {
         let mut compiler = BytecodeCompiler::new(layout);
         compiler.compile_expr(expr)?;
         compiler.emit(BytecodeInstruction::StoreLast);
@@ -90,15 +91,19 @@ impl<'a> BytecodeCompiler<'a> {
         BytecodeDynamicProperty::new(access)
     }
 
-    fn compile_statements(&mut self, statements: &[Stmt], value: StatementValue) -> Result<()> {
+    fn compile_statements(
+        &mut self,
+        statements: &[Statement],
+        value: StatementValue,
+    ) -> Result<()> {
         for statement in statements {
             self.compile_statement(statement, value)?;
         }
         Ok(())
     }
 
-    fn compile_statement(&mut self, statement: &Stmt, value: StatementValue) -> Result<()> {
-        match statement {
+    fn compile_statement(&mut self, statement: &Statement, value: StatementValue) -> Result<()> {
+        match statement.kind() {
             Stmt::Block(statements) => self.compile_block_statement(statements, value),
             Stmt::DeclList(declarations) => self.compile_statements(declarations, value),
             Stmt::If {
@@ -193,7 +198,7 @@ impl<'a> BytecodeCompiler<'a> {
         &mut self,
         name: &StaticBinding,
         kind: DeclKind,
-        init: Option<&Expr>,
+        init: Option<&Expression>,
     ) -> Result<()> {
         if let Some(init) = init {
             self.compile_expr(init)?;
@@ -402,7 +407,7 @@ impl<'a> BytecodeCompiler<'a> {
 
     fn compile_block_statement(
         &mut self,
-        statements: &[Stmt],
+        statements: &[Statement],
         value: StatementValue,
     ) -> Result<()> {
         if statements_need_lexical_scope(statements) {
@@ -431,12 +436,12 @@ impl<'a> BytecodeCompiler<'a> {
     }
 }
 
-fn statements_need_lexical_scope(statements: &[Stmt]) -> bool {
+fn statements_need_lexical_scope(statements: &[Statement]) -> bool {
     statements.iter().any(statement_needs_lexical_scope)
 }
 
-fn statement_needs_lexical_scope(statement: &Stmt) -> bool {
-    match statement {
+fn statement_needs_lexical_scope(statement: &Statement) -> bool {
+    match statement.kind() {
         Stmt::DeclList(statements) => statements_need_lexical_scope(statements),
         Stmt::VarDecl {
             kind: DeclKind::Let | DeclKind::Const,
@@ -469,8 +474,8 @@ fn statement_needs_lexical_scope(statement: &Stmt) -> bool {
     }
 }
 
-fn has_spread_arg(args: &[Expr]) -> bool {
-    args.iter().any(|arg| matches!(arg, Expr::Spread(_)))
+fn has_spread_arg(args: &[Expression]) -> bool {
+    args.iter().any(|arg| matches!(arg.kind(), Expr::Spread(_)))
 }
 
 fn checked_template_part_count(part_count: usize) -> Result<usize> {
@@ -479,8 +484,8 @@ fn checked_template_part_count(part_count: usize) -> Result<usize> {
         .ok_or_else(|| Error::runtime("template literal part count overflowed"))
 }
 
-fn constructor_binding_expr(expr: &Expr) -> Option<&StaticBinding> {
-    match expr {
+fn constructor_binding_expr(expr: &Expression) -> Option<&StaticBinding> {
+    match expr.kind() {
         Expr::Identifier(binding) => Some(binding),
         Expr::Parenthesized(expr) => constructor_binding_expr(expr),
         _ => None,

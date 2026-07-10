@@ -1,10 +1,12 @@
 use crate::ast::{
-    Program, StaticBinding, StaticBindingId, StaticCallSiteId, StaticFunctionId, StaticName,
-    StaticNameId, StaticPropertyAccessId, StaticString, StaticStringId, Stmt,
+    Expr, Expression, Program, Statement, StaticBinding, StaticBindingId, StaticCallSiteId,
+    StaticFunctionId, StaticName, StaticNameId, StaticPropertyAccessId, StaticString,
+    StaticStringId, Stmt,
 };
 use crate::error::{Error, Result};
 use crate::lexer::{Token, TokenKind};
 use crate::runtime::limits::RuntimeLimits;
+use crate::source::{SourceId, SourceSpan};
 
 mod assignment;
 mod binary;
@@ -23,7 +25,7 @@ const SUPER_IDENTIFIER_NAME: &str = "super";
 const USE_STRICT_DIRECTIVE: &str = "use strict";
 
 pub struct ParsedFunctionBody {
-    pub statements: Vec<Stmt>,
+    pub statements: Vec<Statement>,
     pub contains_use_strict: bool,
 }
 
@@ -124,21 +126,21 @@ impl Parser {
     }
 
     pub(super) fn consume_identifier(&mut self, message: &str) -> Result<StaticName> {
-        let token = self
-            .advance()
-            .ok_or_else(|| Error::parse(message, self.offset()))?;
+        let token = self.advance().ok_or_else(|| self.parse_error(message))?;
+        let token_span = token.span;
+        let token_offset = token.offset();
         match token.kind {
-            TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME => Err(Error::parse(
+            TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME => Err(Error::parse_at(
                 "super is not a valid identifier",
-                token.offset,
+                token_span,
             )),
-            TokenKind::Super => Err(Error::parse(
+            TokenKind::Super => Err(Error::parse_at(
                 "super is not a valid identifier",
-                token.offset,
+                token_span,
             )),
-            TokenKind::Identifier(name) => self.static_name_at(name, token.offset),
-            TokenKind::Async => self.static_name_borrowed_at(ASYNC_IDENTIFIER_NAME, token.offset),
-            _ => Err(Error::parse(message, token.offset)),
+            TokenKind::Identifier(name) => self.static_name_at(name, token_offset),
+            TokenKind::Async => self.static_name_borrowed_at(ASYNC_IDENTIFIER_NAME, token_offset),
+            _ => Err(Error::parse_at(message, token_span)),
         }
     }
 
@@ -147,10 +149,7 @@ impl Parser {
             token.kind == TokenKind::Super
                 || matches!(&token.kind, TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME)
         }) {
-            return Err(Error::parse(
-                "super is not a valid binding identifier",
-                self.offset(),
-            ));
+            return Err(self.parse_error("super is not a valid binding identifier"));
         }
         let name = self.consume_identifier(message)?;
         self.static_binding(name)
@@ -287,10 +286,10 @@ impl Parser {
             if self.advance().is_some() {
                 Ok(())
             } else {
-                Err(Error::parse(message, self.offset()))
+                Err(self.parse_error(message))
             }
         } else {
-            Err(Error::parse(message, self.offset()))
+            Err(self.parse_error(message))
         }
     }
 
@@ -307,7 +306,7 @@ impl Parser {
             return Ok(());
         }
 
-        Err(Error::parse(message, self.offset()))
+        Err(self.parse_error(message))
     }
 
     pub(super) fn match_kind(&mut self, expected: &TokenKind) -> bool {
@@ -346,16 +345,43 @@ impl Parser {
     }
 
     pub(super) fn offset(&self) -> usize {
-        self.peek()
-            .or_else(|| self.tokens.last())
-            .map_or(0, |token| token.offset)
+        self.current_span().start()
     }
 
     pub(super) fn previous_offset(&self) -> usize {
+        self.previous_span().start()
+    }
+
+    pub(super) fn current_span(&self) -> SourceSpan {
+        self.peek()
+            .or_else(|| self.tokens.last())
+            .map_or(SourceSpan::point(SourceId::UNKNOWN, 0), |token| token.span)
+    }
+
+    pub(super) fn previous_span(&self) -> SourceSpan {
         self.cursor
             .checked_sub(1)
             .and_then(|cursor| self.tokens.get(cursor))
-            .map_or_else(|| self.offset(), |token| token.offset)
+            .map_or_else(|| self.current_span(), |token| token.span)
+    }
+
+    pub(super) fn parse_error(&self, message: impl Into<String>) -> Error {
+        Error::parse_at(message, self.current_span())
+    }
+
+    pub(super) fn span_since(&self, start: SourceSpan) -> SourceSpan {
+        let Some(span) = start.cover(self.previous_span()) else {
+            return start;
+        };
+        span
+    }
+
+    pub(super) fn expression_node(&self, start: SourceSpan, kind: Expr) -> Expression {
+        Expression::new(kind, self.span_since(start))
+    }
+
+    pub(super) fn statement_node(&self, start: SourceSpan, kind: Stmt) -> Statement {
+        Statement::new(kind, self.span_since(start))
     }
 
     pub(super) fn with_new_target_scope<T>(
@@ -414,31 +440,21 @@ impl Parser {
     pub(super) fn validate_break_statement(&self, label: Option<&StaticName>) -> Result<()> {
         match label {
             Some(label) if self.control_context.has_label(label) => Ok(()),
-            Some(_) => Err(Error::parse(
-                "break target label is not defined",
-                self.offset(),
-            )),
+            Some(_) => Err(self.parse_error("break target label is not defined")),
             None if self.control_context.breakable_depth > 0 => Ok(()),
-            None => Err(Error::parse("break statement outside loop", self.offset())),
+            None => Err(self.parse_error("break statement outside loop")),
         }
     }
 
     pub(super) fn validate_continue_statement(&self, label: Option<&StaticName>) -> Result<()> {
         match label {
             Some(label) if self.control_context.has_iteration_label(label) => Ok(()),
-            Some(label) if self.control_context.has_label(label) => Err(Error::parse(
-                "continue target is not an iteration statement",
-                self.offset(),
-            )),
-            Some(_) => Err(Error::parse(
-                "continue target label is not defined",
-                self.offset(),
-            )),
+            Some(label) if self.control_context.has_label(label) => {
+                Err(self.parse_error("continue target is not an iteration statement"))
+            }
+            Some(_) => Err(self.parse_error("continue target label is not defined")),
             None if self.control_context.iteration_depth > 0 => Ok(()),
-            None => Err(Error::parse(
-                "continue statement outside loop",
-                self.offset(),
-            )),
+            None => Err(self.parse_error("continue statement outside loop")),
         }
     }
 }

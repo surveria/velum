@@ -94,6 +94,14 @@ impl SourceSpan {
         })
     }
 
+    pub(crate) const fn from_valid_bounds(source_id: SourceId, start: usize, end: usize) -> Self {
+        Self {
+            source_id,
+            start,
+            end,
+        }
+    }
+
     /// Returns the source identity owning this range.
     #[must_use]
     pub const fn source_id(self) -> SourceId {
@@ -116,6 +124,27 @@ impl SourceSpan {
     #[must_use]
     pub const fn is_empty(self) -> bool {
         self.start == self.end
+    }
+
+    /// Returns the smallest range covering both spans when they share a source.
+    #[must_use]
+    pub const fn cover(self, other: Self) -> Option<Self> {
+        if self.source_id.as_u128() != other.source_id.as_u128() {
+            return None;
+        }
+        Some(Self {
+            source_id: self.source_id,
+            start: if self.start < other.start {
+                self.start
+            } else {
+                other.start
+            },
+            end: if self.end > other.end {
+                self.end
+            } else {
+                other.end
+            },
+        })
     }
 
     pub(crate) fn for_diagnostic(source_id: SourceId, source: &str, offset: usize) -> Self {

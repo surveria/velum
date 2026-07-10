@@ -2,7 +2,8 @@ use std::rc::Rc;
 
 use crate::{
     ast::{
-        ClassConstructor, ClassLiteral, ClassMember, ClassMemberKind, Expr, ObjectPropertyKey, Stmt,
+        ClassConstructor, ClassLiteral, ClassMember, ClassMemberKind, Expr, Expression,
+        ObjectPropertyKey, Statement, Stmt,
     },
     error::{Error, Result},
     lexer::TokenKind,
@@ -16,7 +17,7 @@ use super::{Parser, literal::ObjectPropertyName};
 struct ParsedClassFunction {
     id: crate::syntax::StaticFunctionId,
     params: Rc<[crate::ast::FunctionParam]>,
-    body: Rc<[Stmt]>,
+    body: Rc<[Statement]>,
 }
 
 const CLASS_STATIC_KEYWORD: &str = "static";
@@ -39,13 +40,15 @@ impl Parser {
     }
 
     /// Parses a class expression after its consumed `class` keyword.
-    pub(super) fn class_expression(&mut self) -> Result<Expr> {
+    pub(super) fn class_expression(&mut self) -> Result<Expression> {
+        let start = self.previous_span();
         let name = if self.next_is_identifier() {
             Some(self.consume_identifier("expected class name")?)
         } else {
             None
         };
-        Ok(Expr::Class(Box::new(self.class_literal_tail(name)?)))
+        let class = self.class_literal_tail(name)?;
+        Ok(self.expression_node(start, Expr::Class(Box::new(class))))
     }
 
     fn class_literal_tail(&mut self, name: Option<StaticName>) -> Result<ClassLiteral> {
@@ -64,7 +67,7 @@ impl Parser {
     fn class_body_literal(
         &mut self,
         name: Option<StaticName>,
-        heritage: Option<crate::ast::Expr>,
+        heritage: Option<Expression>,
     ) -> Result<ClassLiteral> {
         self.consume(&TokenKind::LBrace, "expected '{' before class body")?;
         let derived = heritage.is_some();
@@ -73,7 +76,7 @@ impl Parser {
         let mut fields = Vec::new();
         while !self.check(&TokenKind::RBrace) {
             if self.at_end() {
-                return Err(Error::parse("expected '}' after class body", self.offset()));
+                return Err(self.parse_error("expected '}' after class body"));
             }
             if self.match_kind(&TokenKind::Semicolon) {
                 continue;
@@ -106,14 +109,15 @@ impl Parser {
     /// Synthesizes `constructor(...args) { super(...args); }` for derived
     /// classes without an explicit constructor.
     fn default_derived_class_constructor(&mut self) -> Result<ClassConstructor> {
+        let span = self.previous_span();
         let rest = self.static_binding_name(DERIVED_CONSTRUCTOR_REST_NAME.to_owned())?;
-        let forward = Expr::SuperCall {
-            args: vec![Expr::Spread(Box::new(Expr::Identifier(rest.clone())))],
-        };
+        let rest_value = Expression::new(Expr::Identifier(rest.clone()), span);
+        let spread = Expression::new(Expr::Spread(Box::new(rest_value)), span);
+        let forward = Expression::new(Expr::SuperCall { args: vec![spread] }, span);
         Ok(ClassConstructor {
             id: self.static_function()?,
             params: vec![crate::ast::FunctionParam::rest(rest)].into(),
-            body: vec![Stmt::Expr(forward)].into(),
+            body: vec![Statement::new(Stmt::Expr(forward), span)].into(),
         })
     }
 
@@ -136,10 +140,7 @@ impl Parser {
 
         if !self.check(&TokenKind::LParen) {
             if accessor.is_some() {
-                return Err(Error::parse(
-                    "expected '(' after class accessor name",
-                    self.offset(),
-                ));
+                return Err(self.parse_error("expected '(' after class accessor name"));
             }
             return self.class_field(key, key_name, is_static, member_offset, fields);
         }
@@ -215,10 +216,7 @@ impl Parser {
             None
         };
         if self.check(&TokenKind::Semicolon) && self.advance().is_none() {
-            return Err(Error::parse(
-                "expected ';' after class field",
-                self.offset(),
-            ));
+            return Err(self.parse_error("expected ';' after class field"));
         }
         fields.push(crate::ast::ClassField {
             key: Self::class_property_key(key),
@@ -347,16 +345,10 @@ impl Parser {
 
     fn reject_unsupported_class_member(&self) -> Result<()> {
         if self.check(&TokenKind::Star) {
-            return Err(Error::parse(
-                "class generator methods are not supported yet",
-                self.offset(),
-            ));
+            return Err(self.parse_error("class generator methods are not supported yet"));
         }
         if self.check(&TokenKind::Async) && !self.peek_kind_is(1, &TokenKind::LParen) {
-            return Err(Error::parse(
-                "class async methods are not supported yet",
-                self.offset(),
-            ));
+            return Err(self.parse_error("class async methods are not supported yet"));
         }
         Ok(())
     }

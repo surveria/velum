@@ -71,10 +71,7 @@ impl Parser {
         }
 
         let Some(shorthand_name) = shorthand_name else {
-            return Err(Error::parse(
-                "expected ':' after object binding property name",
-                self.offset(),
-            ));
+            return Err(self.parse_error("expected ':' after object binding property name"));
         };
         let binding = self.static_binding(shorthand_name)?;
         let default = self.optional_binding_default()?;
@@ -114,7 +111,7 @@ impl Parser {
         Ok(BindingPattern::Array { elements, rest })
     }
 
-    fn optional_binding_default(&mut self) -> Result<Option<crate::ast::Expr>> {
+    fn optional_binding_default(&mut self) -> Result<Option<crate::ast::Expression>> {
         if self.match_kind(&TokenKind::Equal) {
             return Ok(Some(self.expression()?));
         }

@@ -4,13 +4,13 @@ use super::{
     ARRAY_LENGTH_PROPERTY, AccessorKind, BinaryOp, BytecodeBlock, BytecodeCompiler,
     BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
     BytecodeNumericEqualityOp, BytecodeNumericUnaryOp, BytecodeObjectProperty, Error, Expr,
-    NativeCallTarget, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, Result, StaticBinding,
-    StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
+    Expression, NativeCallTarget, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, Result,
+    StaticBinding, StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
     checked_template_part_count, constructor_binding_expr, has_spread_arg,
 };
 
 impl BytecodeCompiler<'_> {
-    fn compile_super_call(&mut self, args: &[Expr]) -> Result<()> {
+    fn compile_super_call(&mut self, args: &[Expression]) -> Result<()> {
         if has_spread_arg(args) {
             let spread_flags = self.compile_spread_parts(args)?;
             self.emit(BytecodeInstruction::CollectSpreadArgs { spread_flags });
@@ -24,8 +24,8 @@ impl BytecodeCompiler<'_> {
         Ok(())
     }
 
-    pub(super) fn compile_expr(&mut self, expr: &Expr) -> Result<()> {
-        match expr {
+    pub(super) fn compile_expr(&mut self, expr: &Expression) -> Result<()> {
+        match expr.kind() {
             Expr::Literal(value) => {
                 self.emit(BytecodeInstruction::PushLiteral(value.clone()));
             }
@@ -130,7 +130,7 @@ impl BytecodeCompiler<'_> {
     fn compile_template_literal(
         &mut self,
         quasis: &[StaticString],
-        expressions: &[Expr],
+        expressions: &[Expression],
     ) -> Result<()> {
         let mut part_count = 0usize;
         for (index, quasi) in quasis.iter().enumerate() {
@@ -147,7 +147,11 @@ impl BytecodeCompiler<'_> {
         Ok(())
     }
 
-    fn compile_binding_assignment_expr(&mut self, name: &StaticBinding, expr: &Expr) -> Result<()> {
+    fn compile_binding_assignment_expr(
+        &mut self,
+        name: &StaticBinding,
+        expr: &Expression,
+    ) -> Result<()> {
         self.compile_expr(expr)?;
         self.emit(BytecodeInstruction::StoreBinding(
             self.compile_binding(name)?,
@@ -157,10 +161,10 @@ impl BytecodeCompiler<'_> {
 
     fn compile_static_property_assignment(
         &mut self,
-        object: &Expr,
+        object: &Expression,
         property: &StaticName,
         access: StaticPropertyAccessId,
-        expr: &Expr,
+        expr: &Expression,
     ) -> Result<()> {
         self.compile_expr(object)?;
         self.compile_expr(expr)?;
@@ -175,10 +179,10 @@ impl BytecodeCompiler<'_> {
 
     fn compile_computed_property_assignment(
         &mut self,
-        object: &Expr,
-        property: &Expr,
+        object: &Expression,
+        property: &Expression,
         access: StaticPropertyAccessId,
-        expr: &Expr,
+        expr: &Expression,
     ) -> Result<()> {
         self.compile_expr(object)?;
         self.compile_expr(property)?;
@@ -191,7 +195,7 @@ impl BytecodeCompiler<'_> {
 
     fn compile_static_member_expr(
         &mut self,
-        object: &Expr,
+        object: &Expression,
         property: &StaticName,
         access: StaticPropertyAccessId,
     ) -> Result<()> {
@@ -209,8 +213,8 @@ impl BytecodeCompiler<'_> {
 
     fn compile_computed_member_expr(
         &mut self,
-        object: &Expr,
-        property: &Expr,
+        object: &Expression,
+        property: &Expression,
         access: StaticPropertyAccessId,
     ) -> Result<()> {
         self.compile_expr(object)?;
@@ -221,7 +225,7 @@ impl BytecodeCompiler<'_> {
         Ok(())
     }
 
-    fn compile_new_expr(&mut self, constructor: &Expr, args: &[Expr]) -> Result<()> {
+    fn compile_new_expr(&mut self, constructor: &Expression, args: &[Expression]) -> Result<()> {
         if has_spread_arg(args) {
             self.compile_expr(constructor)?;
             let spread_flags = self.compile_spread_parts(args)?;
@@ -246,7 +250,7 @@ impl BytecodeCompiler<'_> {
         Ok(())
     }
 
-    fn compile_unary_expr(&mut self, op: UnaryOp, expr: &Expr) -> Result<()> {
+    fn compile_unary_expr(&mut self, op: UnaryOp, expr: &Expression) -> Result<()> {
         match op {
             UnaryOp::Not | UnaryOp::Negate | UnaryOp::Plus | UnaryOp::Void => {
                 self.compile_expr(expr)?;
@@ -262,8 +266,8 @@ impl BytecodeCompiler<'_> {
         Ok(())
     }
 
-    fn compile_typeof_expr(&mut self, expr: &Expr) -> Result<()> {
-        match expr {
+    fn compile_typeof_expr(&mut self, expr: &Expression) -> Result<()> {
+        match expr.kind() {
             Expr::Parenthesized(expr) => self.compile_typeof_expr(expr),
             Expr::Identifier(name) => {
                 self.emit(BytecodeInstruction::TypeOfBinding(
@@ -271,7 +275,7 @@ impl BytecodeCompiler<'_> {
                 ));
                 Ok(())
             }
-            expr => {
+            _ => {
                 self.compile_expr(expr)?;
                 self.emit(BytecodeInstruction::TypeOfValue);
                 Ok(())
@@ -279,8 +283,8 @@ impl BytecodeCompiler<'_> {
         }
     }
 
-    fn compile_delete_expr(&mut self, expr: &Expr) -> Result<()> {
-        match expr {
+    fn compile_delete_expr(&mut self, expr: &Expression) -> Result<()> {
+        match expr.kind() {
             Expr::Parenthesized(expr) => self.compile_delete_expr(expr),
             Expr::Identifier(name) => {
                 self.emit(BytecodeInstruction::DeleteBinding(
@@ -311,7 +315,7 @@ impl BytecodeCompiler<'_> {
                 });
                 Ok(())
             }
-            expr => {
+            _ => {
                 self.compile_expr(expr)?;
                 self.emit(BytecodeInstruction::DeleteValue);
                 Ok(())
@@ -322,8 +326,8 @@ impl BytecodeCompiler<'_> {
     fn compile_binary_expr(
         &mut self,
         op: BinaryOp,
-        left: &Expr,
-        right: &Expr,
+        left: &Expression,
+        right: &Expression,
         property_access: Option<StaticPropertyAccessId>,
     ) -> Result<()> {
         match op {
@@ -373,7 +377,11 @@ impl BytecodeCompiler<'_> {
         }
     }
 
-    fn compile_string_concat_chain(&mut self, left: &Expr, right: &Expr) -> Result<bool> {
+    fn compile_string_concat_chain(
+        &mut self,
+        left: &Expression,
+        right: &Expression,
+    ) -> Result<bool> {
         let mut operands = Vec::new();
         Self::collect_left_add_operands(left, &mut operands);
         operands.push(right);
@@ -400,7 +408,11 @@ impl BytecodeCompiler<'_> {
         Ok(true)
     }
 
-    fn emit_string_concat_operand(&mut self, operand: &Expr, final_result: bool) -> Result<()> {
+    fn emit_string_concat_operand(
+        &mut self,
+        operand: &Expression,
+        final_result: bool,
+    ) -> Result<()> {
         if let Some(text) = Self::expr_static_string(operand) {
             self.emit(BytecodeInstruction::StringConcatStatic {
                 text: text.clone(),
@@ -414,8 +426,8 @@ impl BytecodeCompiler<'_> {
         Ok(())
     }
 
-    fn collect_left_add_operands<'a>(expr: &'a Expr, operands: &mut Vec<&'a Expr>) {
-        match expr {
+    fn collect_left_add_operands<'a>(expr: &'a Expression, operands: &mut Vec<&'a Expression>) {
+        match expr.kind() {
             Expr::Parenthesized(expr) => Self::collect_left_add_operands(expr, operands),
             Expr::Binary {
                 op: BinaryOp::Add,
@@ -426,11 +438,11 @@ impl BytecodeCompiler<'_> {
                 Self::collect_left_add_operands(left, operands);
                 operands.push(right);
             }
-            expr => operands.push(expr),
+            _ => operands.push(expr),
         }
     }
 
-    fn first_add_is_static_string_concat(operands: &[&Expr]) -> bool {
+    fn first_add_is_static_string_concat(operands: &[&Expression]) -> bool {
         let mut iter = operands.iter();
         let Some(first) = iter.next() else {
             return false;
@@ -441,15 +453,15 @@ impl BytecodeCompiler<'_> {
         Self::expr_static_string(first).is_some() || Self::expr_static_string(second).is_some()
     }
 
-    fn expr_static_string(expr: &Expr) -> Option<&StaticString> {
-        match expr {
+    fn expr_static_string(expr: &Expression) -> Option<&StaticString> {
+        match expr.kind() {
             Expr::StringLiteral(value) => Some(value),
             Expr::Parenthesized(expr) => Self::expr_static_string(expr),
             _ => None,
         }
     }
 
-    fn compile_logical_and(&mut self, left: &Expr, right: &Expr) -> Result<()> {
+    fn compile_logical_and(&mut self, left: &Expression, right: &Expression) -> Result<()> {
         self.compile_expr(left)?;
         let end_jump = self.emit_jump_if_false_keep();
         self.emit(BytecodeInstruction::Pop);
@@ -458,7 +470,7 @@ impl BytecodeCompiler<'_> {
         self.patch_jump(end_jump, end)
     }
 
-    fn compile_nullish_coalescing(&mut self, left: &Expr, right: &Expr) -> Result<()> {
+    fn compile_nullish_coalescing(&mut self, left: &Expression, right: &Expression) -> Result<()> {
         self.compile_expr(left)?;
         self.emit(BytecodeInstruction::NullishCoalescing {
             right: BytecodeBlock::compile_expression(right, self.layout)?,
@@ -466,7 +478,7 @@ impl BytecodeCompiler<'_> {
         Ok(())
     }
 
-    fn compile_logical_or(&mut self, left: &Expr, right: &Expr) -> Result<()> {
+    fn compile_logical_or(&mut self, left: &Expression, right: &Expression) -> Result<()> {
         self.compile_expr(left)?;
         let end_jump = self.emit_jump_if_true_keep();
         self.emit(BytecodeInstruction::Pop);
@@ -475,8 +487,8 @@ impl BytecodeCompiler<'_> {
         self.patch_jump(end_jump, end)
     }
 
-    fn compile_update_expr(&mut self, op: UpdateOp, prefix: bool, expr: &Expr) -> Result<()> {
-        match expr {
+    fn compile_update_expr(&mut self, op: UpdateOp, prefix: bool, expr: &Expression) -> Result<()> {
+        match expr.kind() {
             Expr::Identifier(name) => {
                 self.emit(BytecodeInstruction::UpdateBinding {
                     name: self.compile_binding(name)?,
@@ -530,8 +542,8 @@ impl BytecodeCompiler<'_> {
     fn compile_compound_assignment(
         &mut self,
         op: BinaryOp,
-        target: &Expr,
-        expr: &Expr,
+        target: &Expression,
+        expr: &Expression,
     ) -> Result<()> {
         if matches!(
             op,
@@ -545,7 +557,7 @@ impl BytecodeCompiler<'_> {
             });
             return Ok(());
         }
-        match target {
+        match target.kind() {
             Expr::Identifier(name) => {
                 self.compile_expr(expr)?;
                 self.emit(BytecodeInstruction::CompoundStoreBinding {
@@ -596,9 +608,9 @@ impl BytecodeCompiler<'_> {
 
     fn compile_conditional_expr(
         &mut self,
-        condition: &Expr,
-        consequent: &Expr,
-        alternate: &Expr,
+        condition: &Expression,
+        consequent: &Expression,
+        alternate: &Expression,
     ) -> Result<()> {
         self.compile_expr(condition)?;
         let false_jump = self.emit_jump_if_false();
@@ -638,7 +650,7 @@ impl BytecodeCompiler<'_> {
                     self.compile_expr(expr)?;
                     let property = match accessor {
                         Some(kind) => BytecodeObjectProperty::ComputedAccessor { kind },
-                        None if matches!(&property.value, Expr::MethodFunction { .. }) => {
+                        None if matches!(property.value.kind(), Expr::MethodFunction { .. }) => {
                             BytecodeObjectProperty::ComputedMethod
                         }
                         None => BytecodeObjectProperty::Computed,
@@ -654,7 +666,7 @@ impl BytecodeCompiler<'_> {
         Ok(())
     }
 
-    fn compile_array_literal(&mut self, elements: &[Expr]) -> Result<()> {
+    fn compile_array_literal(&mut self, elements: &[Expression]) -> Result<()> {
         if has_spread_arg(elements) {
             return self.compile_array_literal_spread(elements);
         }
@@ -666,11 +678,11 @@ impl BytecodeCompiler<'_> {
         Ok(())
     }
 
-    fn compile_array_literal_spread(&mut self, elements: &[Expr]) -> Result<()> {
+    fn compile_array_literal_spread(&mut self, elements: &[Expression]) -> Result<()> {
         let mut spread_flags = Vec::with_capacity(elements.len());
         let mut holes = Vec::with_capacity(elements.len());
         for element in elements {
-            match element {
+            match element.kind() {
                 Expr::ArrayHole => {
                     spread_flags.push(false);
                     holes.push(true);
@@ -694,14 +706,14 @@ impl BytecodeCompiler<'_> {
         Ok(())
     }
 
-    fn compile_array_literal_elements(&mut self, elements: &[Expr]) -> Result<Vec<bool>> {
+    fn compile_array_literal_elements(&mut self, elements: &[Expression]) -> Result<Vec<bool>> {
         let mut holes = Vec::with_capacity(elements.len());
         for element in elements {
-            if matches!(element, Expr::ArrayHole) {
+            if matches!(element.kind(), Expr::ArrayHole) {
                 holes.push(true);
                 continue;
             }
-            if matches!(element, Expr::Spread(_)) {
+            if matches!(element.kind(), Expr::Spread(_)) {
                 return Err(Error::runtime(
                     "array spread was not compiled on spread path",
                 ));
@@ -714,10 +726,10 @@ impl BytecodeCompiler<'_> {
 
     /// Compiles a mixed plain/spread expression list, returning per-slot
     /// spread flags for the matching collection instruction.
-    pub(super) fn compile_spread_parts(&mut self, parts: &[Expr]) -> Result<Rc<[bool]>> {
+    pub(super) fn compile_spread_parts(&mut self, parts: &[Expression]) -> Result<Rc<[bool]>> {
         let mut spread_flags = Vec::with_capacity(parts.len());
         for part in parts {
-            if let Expr::Spread(inner) = part {
+            if let Expr::Spread(inner) = part.kind() {
                 self.compile_expr(inner)?;
                 spread_flags.push(true);
             } else {

@@ -42,7 +42,8 @@ impl CompiledScript {
         check_source_len(source, limits)?;
         check_source_name_len(source_name, limits)?;
         let source_id = SourceId::for_optional_name(source_name, source);
-        let tokens = lexer::lex(source).map_err(|error| error.with_source(source_id, source))?;
+        let tokens =
+            lexer::lex(source, source_id).map_err(|error| error.with_source(source_id, source))?;
         let parsed = parser::parse_with_usage(tokens, limits)
             .map_err(|error| error.with_source(source_id, source))?;
         let program = parsed.program;

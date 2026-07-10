@@ -1,5 +1,5 @@
 use crate::{
-    ast::{BinaryOp, Expr},
+    ast::{BinaryOp, Expr, Expression},
     error::{Error, Result},
     lexer::TokenKind,
 };
@@ -7,7 +7,7 @@ use crate::{
 use super::Parser;
 
 impl Parser {
-    pub(super) fn assignment(&mut self) -> Result<Expr> {
+    pub(super) fn assignment(&mut self) -> Result<Expression> {
         if let Some(function) = self.arrow_function()? {
             return Ok(function);
         }
@@ -16,10 +16,10 @@ impl Parser {
             return Ok(target);
         };
         let value = self.assignment()?;
-        Self::assignment_expr(target, operator, value, offset)
+        self.assignment_expr(target, operator, value, offset)
     }
 
-    fn assignment_operator(&mut self) -> Option<(Option<BinaryOp>, usize)> {
+    fn assignment_operator(&mut self) -> Option<(Option<BinaryOp>, crate::SourceSpan)> {
         let operator = if self.match_kind(&TokenKind::Equal) {
             None
         } else if self.match_kind(&TokenKind::PlusEqual) {
@@ -55,63 +55,100 @@ impl Parser {
         } else {
             return None;
         };
-        Some((operator, self.previous_offset()))
+        Some((operator, self.previous_span()))
     }
 
     fn assignment_expr(
-        target: Expr,
+        &self,
+        target: Expression,
         operator: Option<BinaryOp>,
-        value: Expr,
-        offset: usize,
-    ) -> Result<Expr> {
+        value: Expression,
+        operator_span: crate::SourceSpan,
+    ) -> Result<Expression> {
         if let Some(op) = operator {
-            return Self::compound_assignment_expr(target, op, value, offset);
+            return self.compound_assignment_expr(target, op, value, operator_span);
         }
+        let start = target.span();
         let Some(target) = Self::assignment_target(target) else {
-            return Err(Error::parse("invalid assignment target", offset));
+            return Err(Error::parse_at("invalid assignment target", operator_span));
         };
-        match target {
-            Expr::Identifier(name) => Ok(Expr::Assignment {
+        let kind = match target.into_kind() {
+            Expr::Identifier(name) => Expr::Assignment {
                 name,
                 expr: Box::new(value),
-            }),
+            },
             Expr::Member {
                 object,
                 property,
                 access,
-            } => Ok(Expr::PropertyAssignment {
+            } => Expr::PropertyAssignment {
                 object,
                 property,
                 access,
                 expr: Box::new(value),
-            }),
+            },
             Expr::ComputedMember {
                 object,
                 property,
                 access,
-            } => Ok(Expr::ComputedPropertyAssignment {
+            } => Expr::ComputedPropertyAssignment {
                 object,
                 property,
                 access,
                 expr: Box::new(value),
-            }),
-            _ => Err(Error::parse("invalid assignment target", offset)),
-        }
+            },
+            Expr::Literal(_)
+            | Expr::StringLiteral(_)
+            | Expr::Spread(_)
+            | Expr::Class(_)
+            | Expr::SuperCall { .. }
+            | Expr::SuperMember { .. }
+            | Expr::TemplateLiteral { .. }
+            | Expr::RegExpLiteral { .. }
+            | Expr::This
+            | Expr::NewTarget
+            | Expr::Parenthesized(_)
+            | Expr::Unary { .. }
+            | Expr::Await(_)
+            | Expr::Update { .. }
+            | Expr::Binary { .. }
+            | Expr::Conditional { .. }
+            | Expr::Assignment { .. }
+            | Expr::CompoundAssignment { .. }
+            | Expr::PropertyAssignment { .. }
+            | Expr::ComputedPropertyAssignment { .. }
+            | Expr::Call { .. }
+            | Expr::Function { .. }
+            | Expr::ArrowFunction { .. }
+            | Expr::MethodFunction { .. }
+            | Expr::Object(_)
+            | Expr::ArrayHole
+            | Expr::Array(_)
+            | Expr::New { .. } => {
+                return Err(Error::parse_at("invalid assignment target", operator_span));
+            }
+        };
+        Ok(self.expression_node(start, kind))
     }
 
     fn compound_assignment_expr(
-        target: Expr,
+        &self,
+        target: Expression,
         op: BinaryOp,
-        value: Expr,
-        offset: usize,
-    ) -> Result<Expr> {
+        value: Expression,
+        operator_span: crate::SourceSpan,
+    ) -> Result<Expression> {
+        let start = target.span();
         let Some(target) = Self::assignment_target(target) else {
-            return Err(Error::parse("invalid assignment target", offset));
+            return Err(Error::parse_at("invalid assignment target", operator_span));
         };
-        Ok(Expr::CompoundAssignment {
-            op,
-            target: Box::new(target),
-            expr: Box::new(value),
-        })
+        Ok(self.expression_node(
+            start,
+            Expr::CompoundAssignment {
+                op,
+                target: Box::new(target),
+                expr: Box::new(value),
+            },
+        ))
     }
 }

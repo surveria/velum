@@ -1,5 +1,5 @@
 use crate::{
-    ast::{CatchClause, DeclKind, Expr, ForInTarget, Stmt, SwitchCase},
+    ast::{CatchClause, DeclKind, Expression, ForInTarget, Statement, Stmt, SwitchCase},
     error::{Error, Result},
     lexer::TokenKind,
 };
@@ -16,9 +16,16 @@ enum ForHeadKind {
     Of,
 }
 
+struct ParsedLabel {
+    name: crate::ast::StaticName,
+    start: crate::SourceSpan,
+}
+
 impl Parser {
-    pub(super) fn statement(&mut self) -> Result<Stmt> {
-        self.with_statement_depth(Self::statement_inner)
+    pub(super) fn statement(&mut self) -> Result<Statement> {
+        let start = self.current_span();
+        let kind = self.with_statement_depth(Self::statement_inner)?;
+        Ok(self.statement_node(start, kind))
     }
 
     fn statement_inner(&mut self) -> Result<Stmt> {
@@ -113,11 +120,11 @@ impl Parser {
         result
     }
 
-    pub(super) fn block_statements(&mut self) -> Result<Vec<Stmt>> {
+    pub(super) fn block_statements(&mut self) -> Result<Vec<Statement>> {
         let mut statements = Vec::new();
         while !self.check(&TokenKind::RBrace) {
             if self.at_end() {
-                return Err(Error::parse("expected '}' after block", self.offset()));
+                return Err(self.parse_error("expected '}' after block"));
             }
             statements.push(self.statement()?);
         }
@@ -144,7 +151,7 @@ impl Parser {
 
         while !self.check(&TokenKind::RBrace) {
             if self.at_end() {
-                return Err(Error::parse("expected '}' after block", self.offset()));
+                return Err(self.parse_error("expected '}' after block"));
             }
             let statement = self.statement()?;
             if directive_prologue && Self::is_use_strict_directive(&statement) {
@@ -193,17 +200,11 @@ impl Parser {
             || (self.check(&TokenKind::Async)
                 && self.peek_kind_is_no_line_terminator(1, &TokenKind::Function))
         {
-            return Err(Error::parse(
-                "declaration is not allowed as a do-while body",
-                self.offset(),
-            ));
+            return Err(self.parse_error("declaration is not allowed as a do-while body"));
         }
         let body = Box::new(self.with_iteration_statement(Self::statement)?);
         if Self::invalid_do_while_body(&body) {
-            return Err(Error::parse(
-                "declaration is not allowed as a do-while body",
-                self.offset(),
-            ));
+            return Err(self.parse_error("declaration is not allowed as a do-while body"));
         }
         self.consume(&TokenKind::While, "expected 'while' after do body")?;
         self.consume(&TokenKind::LParen, "expected '(' after 'while'")?;
@@ -213,8 +214,8 @@ impl Parser {
         Ok(Stmt::DoWhile { body, condition })
     }
 
-    fn invalid_do_while_body(statement: &Stmt) -> bool {
-        match statement {
+    fn invalid_do_while_body(statement: &Statement) -> bool {
+        match statement.kind() {
             Stmt::VarDecl {
                 kind: DeclKind::Let | DeclKind::Const,
                 ..
@@ -254,15 +255,19 @@ impl Parser {
         let labels = self.consume_label_chain()?;
         self.reject_invalid_labeled_item()?;
         let is_iteration_target = self.labeled_item_is_iteration_statement();
-        let body = self.with_labeled_statement(&labels, is_iteration_target, Self::statement)?;
+        let label_names: Vec<_> = labels.iter().map(|label| label.name.clone()).collect();
+        let body =
+            self.with_labeled_statement(&label_names, is_iteration_target, Self::statement)?;
         Ok(Self::nest_labeled_statements(labels, body))
     }
 
-    fn consume_label_chain(&mut self) -> Result<Vec<crate::ast::StaticName>> {
+    fn consume_label_chain(&mut self) -> Result<Vec<ParsedLabel>> {
         let mut labels = Vec::new();
         loop {
-            labels.push(self.consume_identifier("expected label name")?);
+            let start = self.current_span();
+            let name = self.consume_identifier("expected label name")?;
             self.consume(&TokenKind::Colon, "expected ':' after label name")?;
+            labels.push(ParsedLabel { name, start });
             if !self.label_statement_start() {
                 break;
             }
@@ -272,18 +277,14 @@ impl Parser {
 
     fn reject_invalid_labeled_item(&self) -> Result<()> {
         if self.check(&TokenKind::Let) || self.check(&TokenKind::Const) {
-            return Err(Error::parse(
-                "lexical declaration is not allowed as a label body",
-                self.offset(),
-            ));
+            return Err(self.parse_error("lexical declaration is not allowed as a label body"));
         }
         if self.check(&TokenKind::Async)
             && self.peek_kind_is_no_line_terminator(1, &TokenKind::Function)
         {
-            return Err(Error::parse(
-                "async function declaration is not allowed as a label body",
-                self.offset(),
-            ));
+            return Err(
+                self.parse_error("async function declaration is not allowed as a label body")
+            );
         }
         Ok(())
     }
@@ -292,15 +293,23 @@ impl Parser {
         self.check(&TokenKind::Do) || self.check(&TokenKind::While) || self.check(&TokenKind::For)
     }
 
-    fn nest_labeled_statements(labels: Vec<crate::ast::StaticName>, body: Stmt) -> Stmt {
+    fn nest_labeled_statements(labels: Vec<ParsedLabel>, body: Statement) -> Stmt {
         let mut statement = body;
         for label in labels.into_iter().rev() {
-            statement = Stmt::Label {
-                label,
-                body: Box::new(statement),
+            let span = if let Some(span) = label.start.cover(statement.span()) {
+                span
+            } else {
+                label.start
             };
+            statement = Statement::new(
+                Stmt::Label {
+                    label: label.name,
+                    body: Box::new(statement),
+                },
+                span,
+            );
         }
-        statement
+        statement.into_kind()
     }
 
     fn break_statement(&mut self) -> Result<Stmt> {
@@ -382,7 +391,7 @@ impl Parser {
         })
     }
 
-    fn for_in_header(&mut self) -> Result<Option<(ForInTarget, Expr, ForHeadKind)>> {
+    fn for_in_header(&mut self) -> Result<Option<(ForInTarget, Expression, ForHeadKind)>> {
         if self.match_kind(&TokenKind::Let) {
             return self.for_in_binding_header(DeclKind::Let);
         }
@@ -401,10 +410,7 @@ impl Parser {
             return Ok(None);
         };
         let Some(target) = Self::assignment_target(target) else {
-            return Err(Error::parse(
-                "invalid for-in assignment target",
-                self.offset(),
-            ));
+            return Err(self.parse_error("invalid for-in assignment target"));
         };
         let object = self.expression()?;
         Ok(Some((ForInTarget::Assignment(target), object, head)))
@@ -413,7 +419,7 @@ impl Parser {
     fn for_in_binding_header(
         &mut self,
         kind: DeclKind,
-    ) -> Result<Option<(ForInTarget, Expr, ForHeadKind)>> {
+    ) -> Result<Option<(ForInTarget, Expression, ForHeadKind)>> {
         if self.next_is_binding_pattern() {
             let pattern = self.binding_pattern()?;
             let Some(head) = self.match_for_head_kind() else {
@@ -459,22 +465,26 @@ impl Parser {
         })
     }
 
-    fn for_init(&mut self) -> Result<Option<Box<Stmt>>> {
+    fn for_init(&mut self) -> Result<Option<Box<Statement>>> {
+        let start = self.current_span();
         if self.match_kind(&TokenKind::Semicolon) {
             return Ok(None);
         }
         if self.match_kind(&TokenKind::Let) {
-            return self.for_var_decl(DeclKind::Let).map(Box::new).map(Some);
+            let kind = self.for_var_decl(DeclKind::Let)?;
+            return Ok(Some(Box::new(self.statement_node(start, kind))));
         }
         if self.match_kind(&TokenKind::Const) {
-            return self.for_var_decl(DeclKind::Const).map(Box::new).map(Some);
+            let kind = self.for_var_decl(DeclKind::Const)?;
+            return Ok(Some(Box::new(self.statement_node(start, kind))));
         }
         if self.match_kind(&TokenKind::Var) {
-            return self.for_var_decl(DeclKind::Var).map(Box::new).map(Some);
+            let kind = self.for_var_decl(DeclKind::Var)?;
+            return Ok(Some(Box::new(self.statement_node(start, kind))));
         }
         let expr = self.expression()?;
         self.consume(&TokenKind::Semicolon, "expected ';' after for initializer")?;
-        Ok(Some(Box::new(Stmt::Expr(expr))))
+        Ok(Some(Box::new(self.statement_node(start, Stmt::Expr(expr)))))
     }
 
     fn switch_statement(&mut self) -> Result<Stmt> {
@@ -501,25 +511,19 @@ impl Parser {
             }
             if self.match_kind(&TokenKind::Default) {
                 if default_seen {
-                    return Err(Error::parse(
-                        "switch contains multiple defaults",
-                        self.offset(),
-                    ));
+                    return Err(self.parse_error("switch contains multiple defaults"));
                 }
                 default_seen = true;
                 cases.push(self.switch_case(None)?);
                 continue;
             }
-            return Err(Error::parse(
-                "expected 'case', 'default', or '}' in switch",
-                self.offset(),
-            ));
+            return Err(self.parse_error("expected 'case', 'default', or '}' in switch"));
         }
         self.consume(&TokenKind::RBrace, "expected '}' after switch body")?;
         Ok(cases)
     }
 
-    fn switch_case(&mut self, test: Option<Expr>) -> Result<SwitchCase> {
+    fn switch_case(&mut self, test: Option<Expression>) -> Result<SwitchCase> {
         self.consume(&TokenKind::Colon, "expected ':' after switch label")?;
         let mut statements = Vec::new();
         while !self.check(&TokenKind::Case)
@@ -527,10 +531,7 @@ impl Parser {
             && !self.check(&TokenKind::RBrace)
         {
             if self.at_end() {
-                return Err(Error::parse(
-                    "expected '}' after switch body",
-                    self.offset(),
-                ));
+                return Err(self.parse_error("expected '}' after switch body"));
             }
             statements.push(self.statement()?);
         }
@@ -552,10 +553,7 @@ impl Parser {
             None
         };
         if catch.is_none() && finally_body.is_none() {
-            return Err(Error::parse(
-                "expected 'catch' or 'finally' after try block",
-                self.offset(),
-            ));
+            return Err(self.parse_error("expected 'catch' or 'finally' after try block"));
         }
         Ok(Stmt::Try {
             body,
@@ -643,7 +641,7 @@ impl Parser {
         self.declarations_stmt(declarations)
     }
 
-    fn var_declarations(&mut self, kind: DeclKind) -> Result<Vec<Stmt>> {
+    fn var_declarations(&mut self, kind: DeclKind) -> Result<Vec<Statement>> {
         let mut declarations = Vec::new();
         loop {
             declarations.push(self.var_declaration(kind)?);
@@ -654,7 +652,8 @@ impl Parser {
         Ok(declarations)
     }
 
-    fn var_declaration(&mut self, kind: DeclKind) -> Result<Stmt> {
+    fn var_declaration(&mut self, kind: DeclKind) -> Result<Statement> {
+        let start = self.current_span();
         if self.next_is_binding_pattern() {
             let pattern = self.binding_pattern()?;
             self.consume(
@@ -662,33 +661,33 @@ impl Parser {
                 "destructuring declaration requires an initializer",
             )?;
             let init = self.expression()?;
-            return Ok(Stmt::PatternDecl {
-                pattern,
-                kind,
-                init,
-            });
+            return Ok(self.statement_node(
+                start,
+                Stmt::PatternDecl {
+                    pattern,
+                    kind,
+                    init,
+                },
+            ));
         }
         let name = self.consume_binding_identifier("expected binding name")?;
         let init = if self.match_kind(&TokenKind::Equal) {
             Some(self.expression()?)
         } else if kind == DeclKind::Const {
-            return Err(Error::parse(
-                "const declaration requires an initializer",
-                self.offset(),
-            ));
+            return Err(self.parse_error("const declaration requires an initializer"));
         } else {
             None
         };
-        Ok(Stmt::VarDecl { name, kind, init })
+        Ok(self.statement_node(start, Stmt::VarDecl { name, kind, init }))
     }
 
-    fn declarations_stmt(&self, declarations: Vec<Stmt>) -> Result<Stmt> {
+    fn declarations_stmt(&self, declarations: Vec<Statement>) -> Result<Stmt> {
         if declarations.len() == 1 {
             let mut declarations = declarations.into_iter();
             let Some(declaration) = declarations.next() else {
-                return Err(Error::parse("expected binding declaration", self.offset()));
+                return Err(self.parse_error("expected binding declaration"));
             };
-            Ok(declaration)
+            Ok(declaration.into_kind())
         } else {
             Ok(Stmt::DeclList(declarations))
         }

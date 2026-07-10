@@ -1,5 +1,5 @@
 use crate::{
-    ast::{BinaryOp, Expr},
+    ast::{BinaryOp, Expr, Expression},
     error::{Error, Result},
     lexer::TokenKind,
 };
@@ -7,7 +7,7 @@ use crate::{
 use super::Parser;
 
 impl Parser {
-    pub(super) fn conditional(&mut self) -> Result<Expr> {
+    pub(super) fn conditional(&mut self) -> Result<Expression> {
         let condition = self.coalesce()?;
         if !self.match_kind(&TokenKind::Question) {
             return Ok(condition);
@@ -16,60 +16,68 @@ impl Parser {
         let consequent = self.assignment()?;
         self.consume(&TokenKind::Colon, "expected ':' in conditional expression")?;
         let alternate = self.assignment()?;
-        Ok(Expr::Conditional {
-            condition: Box::new(condition),
-            consequent: Box::new(consequent),
-            alternate: Box::new(alternate),
-        })
+        let start = condition.span();
+        Ok(self.expression_node(
+            start,
+            Expr::Conditional {
+                condition: Box::new(condition),
+                consequent: Box::new(consequent),
+                alternate: Box::new(alternate),
+            },
+        ))
     }
 
-    fn coalesce(&mut self) -> Result<Expr> {
+    fn coalesce(&mut self) -> Result<Expression> {
         let mut expr = self.logical_or()?;
         while self.match_kind(&TokenKind::QuestionQuestion) {
             if Self::contains_unparenthesized_logical(&expr) {
-                return Err(Error::parse(
+                return Err(Error::parse_at(
                     "'??' cannot be mixed with '&&' or '||' without parentheses",
-                    self.previous_offset(),
+                    self.previous_span(),
                 ));
             }
             let right = self.bitwise_or()?;
-            expr = Expr::Binary {
-                op: BinaryOp::NullishCoalescing,
-                left: Box::new(expr),
-                right: Box::new(right),
-                property_access: None,
-            };
+            let start = expr.span();
+            expr = self.expression_node(
+                start,
+                Expr::Binary {
+                    op: BinaryOp::NullishCoalescing,
+                    left: Box::new(expr),
+                    right: Box::new(right),
+                    property_access: None,
+                },
+            );
         }
         Ok(expr)
     }
 
-    fn logical_or(&mut self) -> Result<Expr> {
+    fn logical_or(&mut self) -> Result<Expression> {
         self.left_assoc(
             Self::logical_and,
             &[(&TokenKind::OrOr, BinaryOp::LogicalOr)],
         )
     }
 
-    fn logical_and(&mut self) -> Result<Expr> {
+    fn logical_and(&mut self) -> Result<Expression> {
         self.left_assoc(
             Self::bitwise_or,
             &[(&TokenKind::AndAnd, BinaryOp::LogicalAnd)],
         )
     }
 
-    fn bitwise_or(&mut self) -> Result<Expr> {
+    fn bitwise_or(&mut self) -> Result<Expression> {
         self.left_assoc(Self::bitwise_xor, &[(&TokenKind::Pipe, BinaryOp::BitOr)])
     }
 
-    fn bitwise_xor(&mut self) -> Result<Expr> {
+    fn bitwise_xor(&mut self) -> Result<Expression> {
         self.left_assoc(Self::bitwise_and, &[(&TokenKind::Caret, BinaryOp::BitXor)])
     }
 
-    fn bitwise_and(&mut self) -> Result<Expr> {
+    fn bitwise_and(&mut self) -> Result<Expression> {
         self.left_assoc(Self::equality, &[(&TokenKind::Ampersand, BinaryOp::BitAnd)])
     }
 
-    fn equality(&mut self) -> Result<Expr> {
+    fn equality(&mut self) -> Result<Expression> {
         self.left_assoc(
             Self::comparison,
             &[
@@ -81,7 +89,7 @@ impl Parser {
         )
     }
 
-    fn comparison(&mut self) -> Result<Expr> {
+    fn comparison(&mut self) -> Result<Expression> {
         self.left_assoc(
             Self::shift,
             &[
@@ -95,7 +103,7 @@ impl Parser {
         )
     }
 
-    fn shift(&mut self) -> Result<Expr> {
+    fn shift(&mut self) -> Result<Expression> {
         self.left_assoc(
             Self::term,
             &[
@@ -109,7 +117,7 @@ impl Parser {
         )
     }
 
-    fn term(&mut self) -> Result<Expr> {
+    fn term(&mut self) -> Result<Expression> {
         self.left_assoc(
             Self::factor,
             &[
@@ -119,7 +127,7 @@ impl Parser {
         )
     }
 
-    fn factor(&mut self) -> Result<Expr> {
+    fn factor(&mut self) -> Result<Expression> {
         self.left_assoc(
             Self::power,
             &[
@@ -130,36 +138,40 @@ impl Parser {
         )
     }
 
-    fn power(&mut self) -> Result<Expr> {
+    fn power(&mut self) -> Result<Expression> {
         let left = self.unary()?;
         if !self.match_kind(&TokenKind::StarStar) {
             return Ok(left);
         }
-        if matches!(left, Expr::Unary { .. }) {
-            return Err(Error::parse(
+        if matches!(left.kind(), Expr::Unary { .. }) {
+            return Err(Error::parse_at(
                 "unary expression cannot be the left operand of '**'",
-                self.previous_offset(),
+                self.previous_span(),
             ));
         }
         let right = self.power()?;
-        Ok(Expr::Binary {
-            op: BinaryOp::Pow,
-            left: Box::new(left),
-            right: Box::new(right),
-            property_access: None,
-        })
+        let start = left.span();
+        Ok(self.expression_node(
+            start,
+            Expr::Binary {
+                op: BinaryOp::Pow,
+                left: Box::new(left),
+                right: Box::new(right),
+                property_access: None,
+            },
+        ))
     }
 
     fn left_assoc(
         &mut self,
-        next: fn(&mut Self) -> Result<Expr>,
+        next: fn(&mut Self) -> Result<Expression>,
         ops: &[(&TokenKind, BinaryOp)],
-    ) -> Result<Expr> {
+    ) -> Result<Expression> {
         let mut expr = next(self)?;
         while let Some((_, op)) = ops.iter().find(|(kind, _)| self.check(kind)) {
             let op = *op;
             if self.advance().is_none() {
-                return Err(Error::parse("expected operator", self.offset()));
+                return Err(self.parse_error("expected operator"));
             }
             let right = next(self)?;
             let property_access = if op == BinaryOp::In {
@@ -167,18 +179,22 @@ impl Parser {
             } else {
                 None
             };
-            expr = Expr::Binary {
-                op,
-                left: Box::new(expr),
-                right: Box::new(right),
-                property_access,
-            };
+            let start = expr.span();
+            expr = self.expression_node(
+                start,
+                Expr::Binary {
+                    op,
+                    left: Box::new(expr),
+                    right: Box::new(right),
+                    property_access,
+                },
+            );
         }
         Ok(expr)
     }
 
-    fn contains_unparenthesized_logical(expr: &Expr) -> bool {
-        match expr {
+    fn contains_unparenthesized_logical(expr: &Expression) -> bool {
+        match expr.kind() {
             Expr::Binary {
                 op: BinaryOp::LogicalAnd | BinaryOp::LogicalOr,
                 ..

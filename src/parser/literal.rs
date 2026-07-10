@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expr, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind},
+    ast::{Expr, Expression, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind},
     error::{Error, Result},
     lexer::TokenKind,
     value::Value,
@@ -17,14 +17,15 @@ pub(super) enum ObjectPropertyName {
         key: crate::ast::StaticName,
         shorthand_name: Option<crate::ast::StaticName>,
     },
-    Computed(Expr),
+    Computed(Expression),
 }
 
 impl Parser {
-    pub(super) fn object_literal(&mut self) -> Result<Expr> {
+    pub(super) fn object_literal(&mut self) -> Result<Expression> {
+        let start = self.previous_span();
         let mut properties = Vec::new();
         if self.match_kind(&TokenKind::RBrace) {
-            return Ok(Expr::Object(properties));
+            return Ok(self.expression_node(start, Expr::Object(properties)));
         }
 
         loop {
@@ -33,15 +34,16 @@ impl Parser {
                 break;
             }
             if self.match_kind(&TokenKind::RBrace) {
-                return Ok(Expr::Object(properties));
+                return Ok(self.expression_node(start, Expr::Object(properties)));
             }
         }
 
         self.consume(&TokenKind::RBrace, "expected '}' after object literal")?;
-        Ok(Expr::Object(properties))
+        Ok(self.expression_node(start, Expr::Object(properties)))
     }
 
     fn object_literal_property(&mut self) -> Result<ObjectProperty> {
+        let start = self.current_span();
         if self.match_kind(&TokenKind::DotDotDot) {
             let value = self.expression()?;
             let key = ObjectPropertyKey::Static(self.static_name(SPREAD_PROPERTY_KEY.to_owned())?);
@@ -57,14 +59,14 @@ impl Parser {
                 "expected 'async' before async object method",
             )?;
             let name = self.object_property_key()?;
-            return self.object_method_property(name, true);
+            return self.object_method_property(name, true, start);
         }
         if let Some(kind) = self.object_accessor_start() {
             let keyword = self
                 .advance()
-                .ok_or_else(|| Error::parse("expected accessor keyword", self.offset()))?;
+                .ok_or_else(|| self.parse_error("expected accessor keyword"))?;
             let name = self.object_property_key()?;
-            return self.object_accessor_property(name, kind, keyword.offset);
+            return self.object_accessor_property(name, kind, keyword.span);
         }
         let name = self.object_property_key()?;
         if self.match_kind(&TokenKind::Colon) {
@@ -76,7 +78,7 @@ impl Parser {
             });
         }
         if self.match_kind(&TokenKind::LParen) {
-            return self.object_method_property_after_lparen(name, false);
+            return self.object_method_property_after_lparen(name, false, start);
         }
         if let ObjectPropertyName::Static {
             key,
@@ -87,13 +89,10 @@ impl Parser {
             return Ok(ObjectProperty {
                 key: ObjectPropertyKey::Static(key),
                 kind: ObjectPropertyKind::Init,
-                value: Expr::Identifier(binding),
+                value: self.expression_node(start, Expr::Identifier(binding)),
             });
         }
-        Err(Error::parse(
-            "expected ':' after object property name",
-            self.offset(),
-        ))
+        Err(self.parse_error("expected ':' after object property name"))
     }
 
     /// Detects a `get name` / `set name` accessor definition. A `get`/`set`
@@ -118,7 +117,7 @@ impl Parser {
         &mut self,
         name: ObjectPropertyName,
         kind: ObjectPropertyKind,
-        keyword_offset: usize,
+        start: crate::SourceSpan,
     ) -> Result<ObjectProperty> {
         self.consume(&TokenKind::LParen, "expected '(' after accessor name")?;
         let inherited_strict = self.is_strict_mode();
@@ -126,23 +125,20 @@ impl Parser {
         self.consume(&TokenKind::RParen, "expected ')' after accessor parameters")?;
         match kind {
             ObjectPropertyKind::Get if !parameters.params.is_empty() => {
-                return Err(Error::parse(
-                    "getter must not declare parameters",
-                    keyword_offset,
-                ));
+                return Err(Error::parse_at("getter must not declare parameters", start));
             }
             ObjectPropertyKind::Set if parameters.params.len() != 1 => {
-                return Err(Error::parse(
+                return Err(Error::parse_at(
                     "setter must declare exactly one parameter",
-                    keyword_offset,
+                    start,
                 ));
             }
             ObjectPropertyKind::Set
                 if parameters.params.first().is_some_and(|param| param.rest) =>
             {
-                return Err(Error::parse(
+                return Err(Error::parse_at(
                     "setter parameter cannot be a rest parameter",
-                    keyword_offset,
+                    start,
                 ));
             }
             ObjectPropertyKind::Init
@@ -168,13 +164,16 @@ impl Parser {
             ObjectPropertyKey::Static(name) => Some(name.clone()),
             ObjectPropertyKey::Computed(_) => None,
         };
-        let value = Expr::MethodFunction {
-            id,
-            name,
-            params: params.into(),
-            body: statements.into(),
-            is_async: false,
-        };
+        let value = self.expression_node(
+            start,
+            Expr::MethodFunction {
+                id,
+                name,
+                params: params.into(),
+                body: statements.into(),
+                is_async: false,
+            },
+        );
         Ok(ObjectProperty { key, kind, value })
     }
 
@@ -188,15 +187,17 @@ impl Parser {
         &mut self,
         name: ObjectPropertyName,
         is_async: bool,
+        start: crate::SourceSpan,
     ) -> Result<ObjectProperty> {
         self.consume(&TokenKind::LParen, "expected '(' after object method name")?;
-        self.object_method_property_after_lparen(name, is_async)
+        self.object_method_property_after_lparen(name, is_async, start)
     }
 
     fn object_method_property_after_lparen(
         &mut self,
         name: ObjectPropertyName,
         is_async: bool,
+        start: crate::SourceSpan,
     ) -> Result<ObjectProperty> {
         let inherited_strict = self.is_strict_mode();
         let parameters = self.function_parameters()?;
@@ -219,13 +220,16 @@ impl Parser {
             ObjectPropertyKey::Static(name) => Some(name.clone()),
             ObjectPropertyKey::Computed(_) => None,
         };
-        let value = Expr::MethodFunction {
-            id,
-            name,
-            params: params.into(),
-            body: statements.into(),
-            is_async,
-        };
+        let value = self.expression_node(
+            start,
+            Expr::MethodFunction {
+                id,
+                name,
+                params: params.into(),
+                body: statements.into(),
+                is_async,
+            },
+        );
         Ok(ObjectProperty {
             key,
             kind: ObjectPropertyKind::Init,
@@ -233,19 +237,23 @@ impl Parser {
         })
     }
 
-    pub(super) fn array_literal(&mut self) -> Result<Expr> {
+    pub(super) fn array_literal(&mut self) -> Result<Expression> {
+        let start = self.previous_span();
         let mut elements = Vec::new();
         if self.match_kind(&TokenKind::RBracket) {
-            return Ok(Expr::Array(elements));
+            return Ok(self.expression_node(start, Expr::Array(elements)));
         }
 
         loop {
             if self.match_kind(&TokenKind::DotDotDot) {
-                elements.push(Expr::Spread(Box::new(self.expression()?)));
+                let spread_start = self.previous_span();
+                let expression = self.expression()?;
+                elements
+                    .push(self.expression_node(spread_start, Expr::Spread(Box::new(expression))));
             } else if self.peek_kind_is(0, &TokenKind::Comma)
                 || self.peek_kind_is(0, &TokenKind::RBracket)
             {
-                elements.push(Expr::ArrayHole);
+                elements.push(Expression::new(Expr::ArrayHole, self.current_span()));
             } else {
                 elements.push(self.expression()?);
             }
@@ -253,12 +261,12 @@ impl Parser {
                 break;
             }
             if self.match_kind(&TokenKind::RBracket) {
-                return Ok(Expr::Array(elements));
+                return Ok(self.expression_node(start, Expr::Array(elements)));
             }
         }
 
         self.consume(&TokenKind::RBracket, "expected ']' after array literal")?;
-        Ok(Expr::Array(elements))
+        Ok(self.expression_node(start, Expr::Array(elements)))
     }
 
     pub(super) fn object_property_key(&mut self) -> Result<ObjectPropertyName> {
@@ -272,7 +280,8 @@ impl Parser {
         }
         let token = self
             .advance()
-            .ok_or_else(|| Error::parse("expected object property name", self.offset()))?;
+            .ok_or_else(|| self.parse_error("expected object property name"))?;
+        let token_span = token.span;
         match token.kind {
             TokenKind::Identifier(name) => {
                 let name = self.static_name(name)?;
@@ -291,7 +300,7 @@ impl Parser {
             }),
             kind => {
                 let Some(name) = keyword_property_name(&kind) else {
-                    return Err(Error::parse("expected object property name", token.offset));
+                    return Err(Error::parse_at("expected object property name", token_span));
                 };
                 self.keyword_property_name(name)
             }
