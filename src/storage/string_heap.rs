@@ -1,6 +1,9 @@
 use std::{collections::HashMap, fmt, rc::Rc};
 
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    ownership::VmIdentity,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct StringId(u32);
@@ -19,13 +22,20 @@ impl StringId {
 
 #[derive(Clone, Debug, Eq)]
 pub struct JsString {
+    identity: VmIdentity,
     id: StringId,
     text: Rc<str>,
 }
 
 impl JsString {
-    const fn new(id: StringId, text: Rc<str>) -> Self {
-        Self { id, text }
+    const fn new(identity: VmIdentity, id: StringId, text: Rc<str>) -> Self {
+        Self { identity, id, text }
+    }
+
+    /// Returns the VM owner and storage generation of this heap string.
+    #[must_use]
+    pub const fn identity(&self) -> &VmIdentity {
+        &self.identity
     }
 
     #[must_use]
@@ -56,16 +66,18 @@ impl fmt::Display for JsString {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct StringHeap {
+    identity: VmIdentity,
     entries: HashMap<Rc<str>, StringId>,
     strings: Vec<Rc<str>>,
     bytes: usize,
 }
 
 impl StringHeap {
-    pub fn new() -> Self {
+    pub fn new(identity: VmIdentity) -> Self {
         Self {
+            identity,
             entries: HashMap::new(),
             strings: Vec::new(),
             bytes: 0,
@@ -107,7 +119,7 @@ impl StringHeap {
             .get(id.index()?)
             .map(Rc::clone)
             .ok_or_else(|| Error::runtime("string id is not defined"))?;
-        Ok(JsString::new(id, text))
+        Ok(JsString::new(self.identity.clone(), id, text))
     }
 
     fn insert_string(&mut self, text: Rc<str>) -> Result<JsString> {

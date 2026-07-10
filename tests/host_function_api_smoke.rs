@@ -8,6 +8,8 @@ const HOST_FAIL_NAME: &str = "hostFail";
 const HOST_FORMAT_NAME: &str = "hostFormat";
 const HOST_LABEL_NAME: &str = "hostLabel";
 const HOST_LEAK_NAME: &str = "hostLeak";
+const HOST_LOCAL_STRING_NAME: &str = "hostLocalString";
+const HOST_LOCAL_SYMBOL_NAME: &str = "hostLocalSymbol";
 const HOST_NOOP_NAME: &str = "hostNoop";
 const HOST_OWNED_NAME: &str = "hostOwned";
 const HOST_SCORE_NAME: &str = "hostScore";
@@ -200,6 +202,96 @@ fn rejects_vm_owned_handles_returned_from_host_functions() -> TestResult {
     ensure_error_contains(
         &error,
         "host functions cannot return VM-owned handles in the skeleton API",
+    )
+}
+
+#[test]
+fn permits_same_vm_heap_string_and_symbol_returns() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let string_value = vm.context().eval(r#""camera""#)?;
+    let symbol_value = vm
+        .context()
+        .eval(r#"let localSymbol = Symbol("camera"); localSymbol"#)?;
+
+    vm.context()
+        .register_host_function(
+            HOST_LOCAL_STRING_NAME,
+            move |_call| Ok(string_value.clone()),
+        )?;
+    vm.context()
+        .register_host_function(
+            HOST_LOCAL_SYMBOL_NAME,
+            move |_call| Ok(symbol_value.clone()),
+        )?;
+
+    let actual = vm
+        .context()
+        .eval(r#"hostLocalString() === "camera" && hostLocalSymbol() === localSymbol"#)?;
+    ensure_value(&actual, &Value::Bool(true))
+}
+
+#[test]
+fn rejects_foreign_heap_strings_even_when_slots_collide() -> TestResult {
+    let engine = Engine::new();
+    let mut first_vm = engine.create_vm();
+    let mut second_vm = engine.create_vm();
+    let Value::HeapString(foreign) = first_vm.context().eval(r#""camera""#)? else {
+        return Err("expected first VM to return a heap string".into());
+    };
+    let Value::HeapString(local) = second_vm.context().eval(r#""camera""#)? else {
+        return Err("expected second VM to return a heap string".into());
+    };
+    if foreign.id() != local.id() {
+        return Err("test setup did not create colliding string slots".into());
+    }
+    if foreign.identity() == local.identity() {
+        return Err("independent string heaps shared an owner identity".into());
+    }
+
+    second_vm
+        .context()
+        .register_host_function(HOST_LOCAL_STRING_NAME, move |_call| {
+            Ok(Value::HeapString(foreign.clone()))
+        })?;
+    let Err(error) = second_vm.context().eval("hostLocalString()") else {
+        return Err("expected a foreign heap string return to fail".into());
+    };
+    ensure_error_contains(
+        &error,
+        "host function 'hostLocalString': value belongs to another VM",
+    )
+}
+
+#[test]
+fn rejects_foreign_symbols_even_when_slots_collide() -> TestResult {
+    let engine = Engine::new();
+    let mut first_vm = engine.create_vm();
+    let mut second_vm = engine.create_vm();
+    let Value::Symbol(foreign) = first_vm.context().eval(r#"Symbol("camera")"#)? else {
+        return Err("expected first VM to return a Symbol".into());
+    };
+    let Value::Symbol(local) = second_vm.context().eval(r#"Symbol("camera")"#)? else {
+        return Err("expected second VM to return a Symbol".into());
+    };
+    if foreign.id() != local.id() {
+        return Err("test setup did not create colliding Symbol slots".into());
+    }
+    if foreign == local || foreign.identity() == local.identity() {
+        return Err("independent Symbols shared VM-local identity".into());
+    }
+
+    second_vm
+        .context()
+        .register_host_function(HOST_LOCAL_SYMBOL_NAME, move |_call| {
+            Ok(Value::Symbol(foreign.clone()))
+        })?;
+    let Err(error) = second_vm.context().eval("hostLocalSymbol()") else {
+        return Err("expected a foreign Symbol return to fail".into());
+    };
+    ensure_error_contains(
+        &error,
+        "host function 'hostLocalSymbol': value belongs to another VM",
     )
 }
 

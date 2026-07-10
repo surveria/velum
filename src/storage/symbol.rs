@@ -1,7 +1,11 @@
 use crate::{
     error::{Error, Result},
+    ownership::VmIdentity,
     storage::string_heap::JsString,
 };
+
+const FOREIGN_SYMBOL_DESCRIPTION_ERROR: &str = "Symbol description belongs to another VM";
+const FOREIGN_SYMBOL_REGISTRY_KEY_ERROR: &str = "Symbol registry key belongs to another VM";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct SymbolId(u32);
@@ -20,13 +24,24 @@ impl SymbolId {
 
 #[derive(Clone, Debug, Eq)]
 pub struct JsSymbol {
+    identity: VmIdentity,
     id: SymbolId,
     description: Option<JsString>,
 }
 
 impl JsSymbol {
-    const fn new(id: SymbolId, description: Option<JsString>) -> Self {
-        Self { id, description }
+    const fn new(identity: VmIdentity, id: SymbolId, description: Option<JsString>) -> Self {
+        Self {
+            identity,
+            id,
+            description,
+        }
+    }
+
+    /// Returns the VM owner and storage generation of this Symbol.
+    #[must_use]
+    pub const fn identity(&self) -> &VmIdentity {
+        &self.identity
     }
 
     #[must_use]
@@ -50,19 +65,21 @@ impl JsSymbol {
 
 impl PartialEq for JsSymbol {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
+        self.identity == other.identity && self.id == other.id
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SymbolTable {
+    identity: VmIdentity,
     entries: Vec<JsSymbol>,
     registry: Vec<(JsString, SymbolId)>,
 }
 
 impl SymbolTable {
-    pub const fn new() -> Self {
+    pub const fn new(identity: VmIdentity) -> Self {
         Self {
+            identity,
             entries: Vec::new(),
             registry: Vec::new(),
         }
@@ -73,13 +90,21 @@ impl SymbolTable {
     }
 
     pub fn create(&mut self, description: Option<JsString>) -> Result<JsSymbol> {
+        if let Some(value) = &description
+            && value.identity() != &self.identity
+        {
+            return Err(Error::runtime(FOREIGN_SYMBOL_DESCRIPTION_ERROR));
+        }
         let id = SymbolId::from_index(self.entries.len())?;
-        let symbol = JsSymbol::new(id, description);
+        let symbol = JsSymbol::new(self.identity.clone(), id, description);
         self.entries.push(symbol.clone());
         Ok(symbol)
     }
 
     pub fn for_key(&mut self, key: JsString) -> Result<JsSymbol> {
+        if key.identity() != &self.identity {
+            return Err(Error::runtime(FOREIGN_SYMBOL_REGISTRY_KEY_ERROR));
+        }
         if let Some((_, id)) = self
             .registry
             .iter()

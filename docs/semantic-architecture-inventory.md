@@ -440,16 +440,20 @@ state how many bytes each owner retained.
 - every Context owns an opaque `VmIdentity`: a private `Rc` capability plus an
   explicit `VmGeneration`. Independent owners cannot alias and no mutable
   process-global JavaScript state or wrapping numeric allocator is required;
+- `StringHeap` and `SymbolTable` clone that owner capability into every
+  `JsString` and `JsSymbol`. `checked_value` rejects a foreign identity before
+  validating the numeric slot, and Symbol equality includes owner identity;
 - `Vm::get_global` returns public `Value`, including raw VM-local ids;
 - `HostCall` exposes borrowed public `Value` arguments;
 - host return validation rejects Function, NativeFunction, HostFunction, and
-  Object, but permits `HeapString` and `Symbol`, which can still carry
-  VM-derived identity/data;
-- raw `Value` ids still have neither an attached VM identity nor generation
-  check. The identity foundation alone does not make public transfer safe.
+  Object. Same-VM `HeapString` and `Symbol` values remain permitted, while
+  foreign owners are rejected with callback context;
+- raw object/function ids still have neither an attached VM identity nor
+  generation check. Primitive validation alone does not make every public
+  transfer safe, especially typed JavaScript errors.
 
-AS-05a2 must define owned cross-VM primitives versus identity-stamped VM-local
-handles before public object/function/promise handles are expanded.
+AS-05a2b must define owned cross-VM primitives versus identity-stamped VM-local
+object/function/error handles before those public handles are expanded.
 
 ### Provisional Root Set For AS-05b
 
@@ -545,8 +549,9 @@ decision sequence:
 | AS-04b2a | frontend source diagnostics | canonical source ids, named compilation, and structured lexer/parser errors merged in PR #419 without retaining source text or parser AST |
 | AS-04b2b1 | frontend AST source ranges | canonical token ranges and span-bearing expression/statement AST merged in PR #420 without runtime AST retention |
 | AS-04b2b2 | bytecode/runtime source diagnostics | instruction-aligned span side tables and structured executing ranges merged in PR #421 across normal and linear execution |
-| AS-05a1 | clone and VM owner map | non-cloneable Vm/Context plus opaque owner capability and explicit generation implemented in draft PR #422 |
-| AS-05a2/b | id, store, root, handle, and limit maps | attach identity/generation at public value boundaries; add root/accounting contracts |
+| AS-05a1 | clone and VM owner map | non-cloneable Vm/Context plus opaque owner capability and explicit generation merged in PR #422 |
+| AS-05a2a | heap string, Symbol, and host success crossing | identity-stamped VM primitives and central foreign-owner rejection implemented in draft PR #423 |
+| AS-05a2b/AS-05b | object/function/error id, root, handle, and limit maps | attach identity/generation at remaining public value boundaries; add root/accounting contracts |
 | AS-06 | active execution roots and structured nested bytecode | explicit activation/block stacks and suspend/resume results |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |
 | AS-08 | caches, direct calls, linear/function/control paths, harness opcodes | one optimizer owner, optimizer-off equivalence, and removal of source-name semantics |
@@ -559,7 +564,7 @@ must fail on growth.
 
 | Guard | Baseline to allow temporarily | Failure condition |
 | --- | --- | --- |
-| `Value` representation | the exact thirteen variants in `value/kind.rs`, with Function, NativeFunction, HostFunction, Object, and Error marked object-like | any unreviewed enum variant or a second public value enum |
+| `Value` representation | the exact eleven variants in `value/kind.rs`, with Function, NativeFunction, HostFunction, and Object marked object-like | any unreviewed enum variant or a second public value enum |
 | runtime/frontend separation | no `crate::ast`, parser, or lexer imports under `src/runtime` or `src/bytecode` | a runtime dependency on parser AST/frontend implementation |
 | harness source names | compiler recognition of only `print` and `assert.throws`, plus the constructor fallback for `Test262Error` | another compiler/runtime source-name special case or harness opcode |
 | harness opcodes | only `Print` and `AssertThrows` | another harness-only bytecode instruction or use site |
@@ -567,6 +572,7 @@ must fail on growth.
 | object side tables | Promise, collection, and iterator associations recorded above; bound-function payload store | a new object-id-indexed association without an inventory/plan update |
 | optimization owners | current linear/function/control modules | a new workload-shaped control module or compiler source-shape recognizer without plan evidence |
 | VM clone boundary | no `Clone` implementation on `Vm` or `Context`; one capability identity/generation owner | reintroducing public VM-state cloning, removing the identity owner, or using cloning as handle transfer |
+| VM primitive owner boundary | one identity on each StringHeap, JsString, SymbolTable, and JsSymbol plus central checked-value validation | removing a primitive owner stamp/check or accepting a foreign colliding slot |
 
 The script should report the specific changed boundary and point to this
 document. It should run from `scripts/check-fast.sh` and the correctness gate,
