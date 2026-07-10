@@ -120,7 +120,8 @@ semantic path. Callable and constructable Proxy capabilities are captured from
 the target at Proxy creation, so revocation removes target/handler access but
 does not change the Proxy's internal-method shape. Bound functions inherit the
 target's constructor capability and preserve explicit `newTarget` replacement
-rules.
+rules. The complete local corpus validates this consolidation with 87 new
+Test262 pass variants, no lost passes, and 95/95 QuickJS differential cases.
 
 This facade rejects ids whose slots are not defined in the receiving `Context`.
 It does not yet prove VM identity or generation: a foreign id can still alias a

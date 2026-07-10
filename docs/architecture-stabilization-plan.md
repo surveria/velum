@@ -690,12 +690,16 @@ AS-02c current evidence:
 - Tests: focused regression coverage exercises callable Proxy consumers,
   JSON callbacks, Proxy/Reflect `newTarget`, nested Proxy construction, bound
   constructors, non-constructable bound arrows, and host-function Proxy
-  capability; strict Clippy and architecture guards pass locally
+  capability; the complete engine/runner fast gate passes
+- Test262/QuickJS: the reviewed pass-set refresh adds exactly 87 variants with
+  zero removals, moving the full corpus from 34,186 to 34,273 of 102,578;
+  the refreshed 34,273/34,273 expected-pass baseline and all 95 QuickJS
+  differential cases pass the complete local correctness gate
 - Recorded residuals: alternate `newTarget.prototype` is not yet applied by
   native constructor payloads, and derived-class `super()` still initializes a
   pre-created receiver in place; AS-03b and AS-06 own those migrations
-- Remaining for AS-02c: finish the fast and complete correctness gates, review
-  any Test262 pass-set delta, merge, and verify exact-tree report publication
+- Remaining for AS-02c: commit the reviewed baseline, run required exact-head
+  CI, merge, and verify exact-tree report publication
 
 ### AS-03: Abstract Operations
 
