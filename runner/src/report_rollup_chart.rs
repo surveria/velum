@@ -16,6 +16,9 @@ const BUDGET_RATIO: f64 = 1.00;
 const CHART_WIDTH: u32 = 1400;
 const CHART_HEIGHT: u32 = 1200;
 const RGB_CHANNELS: usize = 3;
+const RATIO_PANEL_TITLE: &str = "Performance and memory geomean versus QuickJS";
+const JETSTREAM_PANEL_TITLE: &str = "JetStream shell latency geomean versus QuickJS";
+const TEST262_PANEL_TITLE: &str = "Full Test262 outcomes";
 
 pub(super) fn write_chart(
     records: &[ReportRecord],
@@ -60,7 +63,7 @@ fn draw_jetstream_panel(
     if points.is_empty() {
         return draw_empty_panel(
             area,
-            "JetStream shell latency geomean versus QuickJS",
+            JETSTREAM_PANEL_TITLE,
             "No JetStream latency data available",
         );
     }
@@ -69,7 +72,7 @@ fn draw_jetstream_panel(
     let x_end = timeline.axis_end()?;
     let mut chart = ChartBuilder::on(area)
         .caption(
-            "JetStream shell latency geomean versus QuickJS",
+            jetstream_panel_title(&points),
             ("sans-serif", 30).into_font(),
         )
         .margin(18)
@@ -96,13 +99,6 @@ fn draw_jetstream_panel(
         .label("JetStream latency geomean")
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 24, y)], CYAN.stroke_width(3)));
     chart
-        .draw_series(
-            points
-                .iter()
-                .map(|point| Circle::new((point.x, point.latency), 4, CYAN.filled())),
-        )
-        .map_err(|error| anyhow!("failed to draw JetStream chart points: {error:?}"))?;
-    chart
         .configure_series_labels()
         .background_style(WHITE.mix(0.85))
         .border_style(BLACK)
@@ -117,11 +113,7 @@ fn draw_ratio_panel(
 ) -> anyhow::Result<()> {
     let points = ratio_points(records, timeline)?;
     if points.is_empty() {
-        return draw_empty_panel(
-            area,
-            "Performance and memory geomean versus QuickJS",
-            "No QuickJS ratio data available",
-        );
+        return draw_empty_panel(area, RATIO_PANEL_TITLE, "No QuickJS ratio data available");
     }
     let values = points
         .iter()
@@ -130,10 +122,7 @@ fn draw_ratio_panel(
     let bounds = chart_bounds(values, BUDGET_RATIO)?;
     let x_end = timeline.axis_end()?;
     let mut chart = ChartBuilder::on(area)
-        .caption(
-            "Performance and memory geomean versus QuickJS",
-            ("sans-serif", 30).into_font(),
-        )
+        .caption(ratio_panel_title(&points), ("sans-serif", 30).into_font())
         .margin(18)
         .x_label_area_size(34)
         .y_label_area_size(60)
@@ -170,20 +159,6 @@ fn draw_ratio_panel(
         .label("memory geomean")
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 24, y)], MAGENTA.stroke_width(3)));
     chart
-        .draw_series(points.iter().filter_map(|point| {
-            point
-                .performance
-                .map(|value| Circle::new((point.x, value), 4, BLUE.filled()))
-        }))
-        .map_err(|error| anyhow!("failed to draw performance chart points: {error:?}"))?;
-    chart
-        .draw_series(points.iter().filter_map(|point| {
-            point
-                .memory
-                .map(|value| Circle::new((point.x, value), 4, MAGENTA.filled()))
-        }))
-        .map_err(|error| anyhow!("failed to draw memory chart points: {error:?}"))?;
-    chart
         .configure_series_labels()
         .background_style(WHITE.mix(0.85))
         .border_style(BLACK)
@@ -215,18 +190,18 @@ fn draw_test_panel(
     if points.is_empty() {
         return draw_empty_panel(
             area,
-            "Full Test262 outcomes",
+            TEST262_PANEL_TITLE,
             "No Test262 outcome data available",
         );
     }
     let values = points
         .iter()
-        .flat_map(|point| [Some(point.passed), Some(point.failed)])
+        .flat_map(|point| [Some(f64::from(point.passed)), Some(f64::from(point.failed))])
         .flatten();
     let bounds = chart_bounds(values, 0.0)?;
     let x_end = timeline.axis_end()?;
     let mut chart = ChartBuilder::on(area)
-        .caption("Full Test262 outcomes", ("sans-serif", 30).into_font())
+        .caption(test_panel_title(&points), ("sans-serif", 30).into_font())
         .margin(18)
         .x_label_area_size(34)
         .y_label_area_size(60)
@@ -244,7 +219,9 @@ fn draw_test_panel(
         .map_err(|error| anyhow!("failed to draw Test262 chart mesh: {error:?}"))?;
     chart
         .draw_series(LineSeries::new(
-            points.iter().map(|point| (point.x, point.passed)),
+            points
+                .iter()
+                .map(|point| (point.x, f64::from(point.passed))),
             GREEN.stroke_width(3),
         ))
         .map_err(|error| anyhow!("failed to draw Test262 passed series: {error:?}"))?
@@ -252,26 +229,14 @@ fn draw_test_panel(
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 24, y)], GREEN.stroke_width(3)));
     chart
         .draw_series(LineSeries::new(
-            points.iter().map(|point| (point.x, point.failed)),
+            points
+                .iter()
+                .map(|point| (point.x, f64::from(point.failed))),
             RED.stroke_width(3),
         ))
         .map_err(|error| anyhow!("failed to draw Test262 failed series: {error:?}"))?
         .label("failed")
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 24, y)], RED.stroke_width(3)));
-    chart
-        .draw_series(
-            points
-                .iter()
-                .map(|point| Circle::new((point.x, point.passed), 4, GREEN.filled())),
-        )
-        .map_err(|error| anyhow!("failed to draw Test262 passed points: {error:?}"))?;
-    chart
-        .draw_series(
-            points
-                .iter()
-                .map(|point| Circle::new((point.x, point.failed), 4, RED.filled())),
-        )
-        .map_err(|error| anyhow!("failed to draw Test262 failed points: {error:?}"))?;
     chart
         .configure_series_labels()
         .background_style(WHITE.mix(0.85))
@@ -318,8 +283,9 @@ struct JetStreamPoint {
 #[derive(Debug, Clone, Copy)]
 struct TestPoint {
     x: i32,
-    passed: f64,
-    failed: f64,
+    total: u32,
+    passed: u32,
+    failed: u32,
 }
 
 fn ratio_points(
@@ -376,12 +342,62 @@ fn test_points(
             x,
             TestPoint {
                 x,
-                passed: f64::from(value.passed),
-                failed: f64::from(value.failed),
+                total: value.total,
+                passed: value.passed,
+                failed: value.failed,
             },
         );
     }
     Ok(points.into_values().collect())
+}
+
+fn ratio_panel_title(points: &[RatioPoint]) -> String {
+    let performance = points.iter().rev().find_map(|point| point.performance);
+    let memory = points.iter().rev().find_map(|point| point.memory);
+    match (performance, memory) {
+        (Some(performance), Some(memory)) => format!(
+            "{RATIO_PANEL_TITLE} (latest: performance {performance:.2}x, memory {memory:.2}x)"
+        ),
+        (Some(performance), None) => {
+            format!("{RATIO_PANEL_TITLE} (latest: performance {performance:.2}x)")
+        }
+        (None, Some(memory)) => format!("{RATIO_PANEL_TITLE} (latest: memory {memory:.2}x)"),
+        (None, None) => RATIO_PANEL_TITLE.to_owned(),
+    }
+}
+
+fn jetstream_panel_title(points: &[JetStreamPoint]) -> String {
+    let Some(latest) = points.last() else {
+        return JETSTREAM_PANEL_TITLE.to_owned();
+    };
+    format!("{JETSTREAM_PANEL_TITLE} (latest: {:.2}x)", latest.latency)
+}
+
+fn test_panel_title(points: &[TestPoint]) -> String {
+    let Some(latest) = points.last() else {
+        return TEST262_PANEL_TITLE.to_owned();
+    };
+    if latest.total == 0 {
+        return format!("{TEST262_PANEL_TITLE} (0 / 0 passed)");
+    }
+    let pass_rate = f64::from(latest.passed) * 100.0 / f64::from(latest.total);
+    format!(
+        "{TEST262_PANEL_TITLE} ({} / {} passed, {pass_rate:.2}%)",
+        grouped_count(latest.passed),
+        grouped_count(latest.total)
+    )
+}
+
+fn grouped_count(value: u32) -> String {
+    let digits = value.to_string();
+    let mut grouped = String::with_capacity(digits.len().saturating_add(digits.len() / 3));
+    for (position, digit) in digits.chars().enumerate() {
+        if position > 0 && digits.len().saturating_sub(position).is_multiple_of(3) {
+            grouped.push(',');
+        }
+        grouped.push(digit);
+    }
+    grouped
 }
 
 fn chart_bounds(values: impl Iterator<Item = f64>, anchor: f64) -> anyhow::Result<Range<f64>> {
@@ -403,7 +419,10 @@ fn chart_bounds(values: impl Iterator<Item = f64>, anchor: f64) -> anyhow::Resul
 
 #[cfg(test)]
 mod tests {
-    use super::{jetstream_points, ratio_points, test_points};
+    use super::{
+        JetStreamPoint, RatioPoint, TestPoint, grouped_count, jetstream_panel_title,
+        jetstream_points, ratio_panel_title, ratio_points, test_panel_title, test_points,
+    };
     use crate::report_rollup::{
         ReportContext, ReportRecord, TestCounts, report_rollup_timeline::CommitTimeline,
     };
@@ -455,13 +474,50 @@ mod tests {
                 .is_some_and(|point| point.x == 9 && (point.latency - 22.0).abs() < f64::EPSILON)
             && tests
                 .first()
-                .is_some_and(|point| point.x == 5 && (point.passed - 40.0).abs() < f64::EPSILON)
+                .is_some_and(|point| point.x == 5 && point.passed == 40 && point.total == 100)
             && timeline.label(2) == "c2"
             && timeline.description() == "main first-parent commit";
         if valid {
             return Ok(());
         }
         Err("chart series did not preserve the shared sparse commit domain".into())
+    }
+
+    #[test]
+    fn panel_titles_show_latest_values_without_failed_test_count() -> TestResult {
+        let ratios = [
+            RatioPoint {
+                x: 2,
+                performance: Some(1.25),
+                memory: Some(0.98),
+            },
+            RatioPoint {
+                x: 5,
+                performance: Some(1.10),
+                memory: None,
+            },
+        ];
+        let jetstream = [JetStreamPoint {
+            x: 7,
+            latency: 22.125,
+        }];
+        let tests = [TestPoint {
+            x: 9,
+            total: 102_578,
+            passed: 36_553,
+            failed: 66_025,
+        }];
+        let valid = ratio_panel_title(&ratios)
+            .ends_with("(latest: performance 1.10x, memory 0.98x)")
+            && jetstream_panel_title(&jetstream).ends_with("(latest: 22.12x)")
+            && test_panel_title(&tests)
+                == "Full Test262 outcomes (36,553 / 102,578 passed, 35.63%)"
+            && !test_panel_title(&tests).contains("66,025")
+            && grouped_count(1_234_567) == "1,234,567";
+        if valid {
+            return Ok(());
+        }
+        Err("chart panel titles did not expose the intended latest values".into())
     }
 
     fn record(
