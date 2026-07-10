@@ -28,6 +28,7 @@ mod clock;
 pub mod collections;
 pub mod control;
 pub mod engine;
+mod execution_storage;
 pub mod function;
 pub mod globals;
 pub mod limits;
@@ -228,28 +229,16 @@ impl Context {
         self.visible_local_scope_count() > 0
     }
 
-    pub(crate) fn enter_function_local_frame(&mut self) -> usize {
-        let base = self.locals.len();
-        self.local_frame_bases.push(base);
-        base
-    }
-
-    pub(crate) fn leave_function_local_frame(&mut self, base: usize) -> Result<()> {
-        while self.locals.len() > base {
-            let Some(mut scope) = self.locals.pop() else {
-                return Err(Error::runtime("function local scope disappeared"));
-            };
-            scope.deactivate_storage()?;
+    pub(crate) fn set_iterator_symbol(
+        &mut self,
+        symbol: crate::storage::symbol::SymbolId,
+    ) -> Result<()> {
+        if self.iterator_symbol.is_none() {
+            self.storage_ledger
+                .grow_count(VmStorageKind::Association, 1)?;
         }
-        let removed = self.local_frame_bases.pop();
-        if removed != Some(base) {
-            return Err(Error::runtime("function local frame base disappeared"));
-        }
-        Ok(())
-    }
-
-    pub(crate) const fn set_iterator_symbol(&mut self, symbol: crate::storage::symbol::SymbolId) {
         self.iterator_symbol = Some(symbol);
+        Ok(())
     }
 
     pub(crate) const fn iterator_symbol(&self) -> Option<crate::storage::symbol::SymbolId> {
@@ -313,7 +302,7 @@ impl Context {
             native_function_registry: NativeFunctionRegistry::new(),
             bound_functions: Vec::new(),
             host_functions: Vec::new(),
-            objects: ObjectHeap::new(storage_limits, storage_ledger),
+            objects: ObjectHeap::new(storage_limits, storage_ledger.clone()),
             global_object: None,
             collections: Vec::new(),
             collection_object_slots: Vec::new(),
@@ -322,8 +311,8 @@ impl Context {
             promise_object_slots: Vec::new(),
             promise_jobs: VecDeque::new(),
             promise_prototype: None,
-            retained_values: RetainedValueRegistry::new(identity),
-            transient_roots: TransientRootRegistry::new(),
+            retained_values: RetainedValueRegistry::new(identity, storage_ledger.clone()),
+            transient_roots: TransientRootRegistry::new(storage_ledger),
             this_values: Vec::new(),
             new_target_values: Vec::new(),
             super_frames: Vec::new(),
@@ -693,23 +682,5 @@ impl Context {
         };
         self.objects.validate_id(id)?;
         Ok(Some(id))
-    }
-
-    pub(crate) fn push_lexical_scope(&mut self) -> Result<()> {
-        self.push_lexical_scope_with(BindingScope::new())
-    }
-
-    pub(crate) fn push_lexical_scope_with(&mut self, mut scope: BindingScope) -> Result<()> {
-        scope.activate_storage(self.storage_ledger.clone())?;
-        self.locals.push(scope);
-        Ok(())
-    }
-
-    pub(crate) fn pop_lexical_scope(&mut self) -> Result<Option<BindingScope>> {
-        let Some(mut scope) = self.locals.pop() else {
-            return Ok(None);
-        };
-        scope.deactivate_storage()?;
-        Ok(Some(scope))
     }
 }

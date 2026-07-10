@@ -164,16 +164,14 @@ impl Context {
             self.set_function_class_fields(constructor_id, instance_fields.into())?;
         }
         for field in static_fields {
-            self.this_values.push(constructor.clone());
+            self.push_temporary_this(constructor.clone())?;
             let value = field.initializer.as_ref().map_or(
                 Ok(crate::runtime::control::Completion::Normal(
                     Value::Undefined,
                 )),
                 |initializer| self.eval_bytecode_block(initializer),
             );
-            if self.this_values.pop().is_none() {
-                return Err(Error::runtime("class field this binding disappeared"));
-            }
+            self.pop_temporary_this()?;
             let value = value?.into_result()?;
             let update = DataPropertyUpdate::new(
                 Some(value),

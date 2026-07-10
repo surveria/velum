@@ -324,7 +324,7 @@ impl Context {
             None
         };
         let has_parameter_defaults = bytecode.has_parameter_defaults();
-        let local_base = self.enter_function_local_frame();
+        let local_base = self.enter_function_local_frame()?;
         let scope_result = if let Some(template) = scope_template.as_deref() {
             self.function_scope_from_template(template, args)
         } else {
@@ -338,9 +338,10 @@ impl Context {
             }
         };
         self.push_function_binding_storage(local_base, scope, original_args.as_deref(), upvalues)?;
-        self.this_values.push(this_value);
-        self.new_target_values.push(new_target);
-        self.super_frames.push(super_binding);
+        if let Err(error) = self.push_call_execution_state(this_value, new_target, super_binding) {
+            self.pop_function_binding_storage(local_base, binds_arguments)?;
+            return Err(error);
+        }
         let result = self.eval_function_body(
             static_name_atom_cache,
             static_binding_cache,
@@ -349,19 +350,9 @@ impl Context {
             &bytecode,
             remember_params,
         );
-        let removed_super = self.super_frames.pop();
-        let removed_new_target = self.new_target_values.pop();
-        let removed_this = self.this_values.pop();
+        let execution_state_result = self.pop_call_execution_state();
         self.pop_function_binding_storage(local_base, binds_arguments)?;
-        if removed_this.is_none() {
-            return Err(Error::runtime("function this binding disappeared"));
-        }
-        if removed_super.is_none() {
-            return Err(Error::runtime("function super frame disappeared"));
-        }
-        if removed_new_target.is_none() {
-            return Err(Error::runtime("function new.target binding disappeared"));
-        }
+        execution_state_result?;
         result
     }
 

@@ -102,16 +102,14 @@ impl Context {
             return Ok(());
         };
         for field in fields.iter() {
-            self.this_values.push(instance.clone());
+            self.push_temporary_this(instance.clone())?;
             let value = field
                 .initializer
                 .as_ref()
                 .map_or(Ok(Completion::Normal(Value::Undefined)), |initializer| {
                     self.eval_bytecode_block(initializer)
                 });
-            if self.this_values.pop().is_none() {
-                return Err(Error::runtime("class field this binding disappeared"));
-            }
+            self.pop_temporary_this()?;
             let value = value?.into_result()?;
             let update = crate::runtime::object::PropertyUpdate::Data(
                 crate::runtime::object::DataPropertyUpdate::new(

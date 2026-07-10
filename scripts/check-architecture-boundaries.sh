@@ -351,7 +351,7 @@ check_storage_limit_boundary() {
   if ! grep -F -q 'storage_ledger.reserve_count(VmStorageKind::Binding, 1)?;' \
       "${repo_root}/src/runtime/binding/scope.rs" \
     || ! grep -F -q 'scope.deactivate_storage()?;' \
-      "${repo_root}/src/runtime/mod.rs" \
+      "${repo_root}/src/runtime/execution_storage.rs" \
     || ! grep -F -q 'reserve_count(VmStorageKind::JavaScriptFunction, 1)?;' \
       "${repo_root}/src/runtime/function/storage.rs" \
     || ! grep -F -q 'VmStorageKind::NativeFunction, 1' \
@@ -374,6 +374,56 @@ check_storage_limit_boundary() {
     || ! grep -F -q 'DESCRIPTOR_CACHE_ENTRY_COUNT' \
       "${repo_root}/src/runtime/native/builtins/object.rs"; then
     fail "storage limit boundary changed; ObjectProperty and CacheEntry growth/release seams are required"
+  fi
+
+  for source in \
+    'VmStorageKind::Collection,' \
+    'VmStorageKind::CollectionEntry,' \
+    'VmStorageKind::CollectionIterator,' \
+    'VmStorageKind::IteratorItem,' \
+    'VmStorageKind::Promise,' \
+    'VmStorageKind::PromiseReaction,' \
+    'VmStorageKind::PromiseJob,' \
+    'VmStorageKind::RetainedHandle,' \
+    'VmStorageKind::TransientRoot,' \
+    'VmStorageKind::ExecutionFrame,' \
+    'VmStorageKind::Association,' \
+    'VmStorageKind::Module,' \
+    'context.ensure_storage_snapshot_within_limits(&snapshot)?;'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/accounting.rs"; then
+      fail "storage limit boundary changed; AS-05b2c3 owners require ledger and full-limit reconciliation"
+    fi
+  done
+
+  if ! grep -F -q 'grow_count(VmStorageKind::CollectionEntry, 1)?;' \
+      "${repo_root}/src/runtime/collections.rs" \
+    || ! grep -F -q 'release_count(VmStorageKind::CollectionEntry, released)?;' \
+      "${repo_root}/src/runtime/collections.rs" \
+    || ! grep -F -q 'grow_count(VmStorageKind::PromiseJob, reaction_count)?;' \
+      "${repo_root}/src/runtime/promise/mod.rs" \
+    || ! grep -F -q 'release_count(VmStorageKind::PromiseReaction, reaction_count)?;' \
+      "${repo_root}/src/runtime/promise/mod.rs"; then
+    fail "storage limit boundary changed; collection and Promise owner growth/release seams are required"
+  fi
+
+  if ! grep -F -q 'grow_count(VmStorageKind::RetainedHandle, 1)?;' \
+      "${repo_root}/src/runtime/retained_values.rs" \
+    || ! grep -F -q 'release_count_on_drop(VmStorageKind::RetainedHandle, 1);' \
+      "${repo_root}/src/runtime/retained_values.rs" \
+    || ! grep -F -q 'grow_count(VmStorageKind::TransientRoot, 1)?;' \
+      "${repo_root}/src/runtime/transient_roots.rs" \
+    || ! grep -F -q 'release_count_on_drop(VmStorageKind::TransientRoot, released);' \
+      "${repo_root}/src/runtime/transient_roots.rs" \
+    || ! grep -F -q 'grow_count(VmStorageKind::ExecutionFrame, 3)?;' \
+      "${repo_root}/src/runtime/execution_storage.rs"; then
+    fail "storage limit boundary changed; retained, transient, and execution owners require scoped release"
+  fi
+
+  if ! grep -F -q 'VmStorageKind::Association, 1' \
+      "${repo_root}/src/runtime/globals.rs" \
+    || ! grep -F -q 'counter.record(VmStorageKind::Module, 0)' \
+      "${repo_root}/src/runtime/accounting.rs"; then
+    fail "storage limit boundary changed; VM associations require checked anchors and Module must remain explicit zero storage"
   fi
 }
 
@@ -1573,7 +1623,7 @@ mutate_storage_limit_durable_reconciliation() {
 mutate_storage_limit_binding_release() {
   local fixture_root="$1"
   sed -i '/scope.deactivate_storage()?;/d' \
-    "${fixture_root}/src/runtime/mod.rs"
+    "${fixture_root}/src/runtime/execution_storage.rs"
 }
 
 mutate_storage_limit_property_release() {
@@ -1586,6 +1636,42 @@ mutate_storage_limit_shape_cache() {
   local fixture_root="$1"
   sed -i '/reserve_count(VmStorageKind::CacheEntry, cache_entries)?;/d' \
     "${fixture_root}/src/runtime/object/shape.rs"
+}
+
+mutate_storage_limit_full_reconciliation() {
+  local fixture_root="$1"
+  sed -i '/context.ensure_storage_snapshot_within_limits(&snapshot)?;/d' \
+    "${fixture_root}/src/runtime/accounting.rs"
+}
+
+mutate_storage_limit_collection_release() {
+  local fixture_root="$1"
+  sed -i '/release_count(VmStorageKind::CollectionEntry, released)?;/d' \
+    "${fixture_root}/src/runtime/collections.rs"
+}
+
+mutate_storage_limit_promise_job_growth() {
+  local fixture_root="$1"
+  sed -i '/grow_count(VmStorageKind::PromiseJob, reaction_count)?;/d' \
+    "${fixture_root}/src/runtime/promise/mod.rs"
+}
+
+mutate_storage_limit_transient_release() {
+  local fixture_root="$1"
+  sed -i '/release_count_on_drop(VmStorageKind::TransientRoot, released);/d' \
+    "${fixture_root}/src/runtime/transient_roots.rs"
+}
+
+mutate_storage_limit_execution_frame() {
+  local fixture_root="$1"
+  sed -i '/grow_count(VmStorageKind::ExecutionFrame, 3)?;/d' \
+    "${fixture_root}/src/runtime/execution_storage.rs"
+}
+
+mutate_storage_limit_association_anchor() {
+  local fixture_root="$1"
+  sed -i '/VmStorageKind::Association, 1/d' \
+    "${fixture_root}/src/runtime/globals.rs"
 }
 
 mutate_teardown_storage_snapshot() {
@@ -1797,6 +1883,18 @@ run_self_tests() {
     'storage limit boundary changed' mutate_storage_limit_property_release
   expect_guard_failure "${temp_dir}" storage-limit-shape-cache \
     'storage limit boundary changed' mutate_storage_limit_shape_cache
+  expect_guard_failure "${temp_dir}" storage-limit-full-reconciliation \
+    'storage limit boundary changed' mutate_storage_limit_full_reconciliation
+  expect_guard_failure "${temp_dir}" storage-limit-collection-release \
+    'storage limit boundary changed' mutate_storage_limit_collection_release
+  expect_guard_failure "${temp_dir}" storage-limit-promise-job-growth \
+    'storage limit boundary changed' mutate_storage_limit_promise_job_growth
+  expect_guard_failure "${temp_dir}" storage-limit-transient-release \
+    'storage limit boundary changed' mutate_storage_limit_transient_release
+  expect_guard_failure "${temp_dir}" storage-limit-execution-frame \
+    'storage limit boundary changed' mutate_storage_limit_execution_frame
+  expect_guard_failure "${temp_dir}" storage-limit-association-anchor \
+    'storage limit boundary changed' mutate_storage_limit_association_anchor
   expect_guard_failure "${temp_dir}" teardown-storage-snapshot \
     'storage accounting boundary changed' mutate_teardown_storage_snapshot
   expect_guard_failure "${temp_dir}" bound-function-edge \

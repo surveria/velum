@@ -89,7 +89,21 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let key = self.symbol_registry_key(args.as_slice().first())?;
-        self.symbols.for_key(key).map(Value::Symbol)
+        let adds_association = !self.symbols.has_registry_key(&key);
+        if adds_association {
+            self.storage_ledger
+                .grow_count(crate::runtime::VmStorageKind::Association, 1)?;
+        }
+        match self.symbols.for_key(key) {
+            Ok(symbol) => Ok(Value::Symbol(symbol)),
+            Err(error) => {
+                if adds_association {
+                    self.storage_ledger
+                        .release_count(crate::runtime::VmStorageKind::Association, 1)?;
+                }
+                Err(error)
+            }
+        }
     }
 
     pub(in crate::runtime::native) fn eval_symbol_key_for(
@@ -212,7 +226,7 @@ impl Context {
             if *name == SYMBOL_ITERATOR_PROPERTY
                 && let Value::Symbol(symbol) = &value
             {
-                self.set_iterator_symbol(symbol.id());
+                self.set_iterator_symbol(symbol.id())?;
             }
             let key = self.intern_property_key(name)?;
             self.define_native_function_property_key(

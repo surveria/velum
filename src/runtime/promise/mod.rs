@@ -1,7 +1,7 @@
 use crate::{
     error::{Error, JavaScriptErrorMetadata, Result},
     runtime::{
-        Context,
+        Context, VmStorageKind,
         call::RuntimeCallArgs,
         control::{Completion, runtime_exception_value},
     },
@@ -30,8 +30,16 @@ impl Context {
     }
 
     pub(in crate::runtime) fn create_pending_promise(&mut self) -> Result<(PromiseId, Value)> {
+        self.storage_ledger.grow_count(VmStorageKind::Promise, 1)?;
         let id = PromiseId::new(self.promises.len());
-        let object = self.create_promise_object(id)?;
+        let object = match self.create_promise_object(id) {
+            Ok(object) => object,
+            Err(error) => {
+                self.storage_ledger
+                    .release_count(VmStorageKind::Promise, 1)?;
+                return Err(error);
+            }
+        };
         self.promises.push(Promise::pending());
         Ok((id, object))
     }
@@ -110,8 +118,12 @@ impl Context {
         let state = self.promise_state(promise)?.clone();
         match state {
             PromiseState::Pending { .. } => {
+                self.storage_ledger
+                    .grow_count(VmStorageKind::PromiseReaction, 1)?;
                 let PromiseState::Pending { reactions } = &mut self.promise_mut(promise)?.state
                 else {
+                    self.storage_ledger
+                        .release_count(VmStorageKind::PromiseReaction, 1)?;
                     return Err(Error::runtime(
                         "Promise state changed while adding reaction",
                     ));
@@ -122,13 +134,13 @@ impl Context {
                 self.enqueue_promise_job(PromiseJob::Reaction {
                     reaction,
                     state: PromiseSettledState::fulfilled(value),
-                });
+                })?;
             }
             PromiseState::Rejected(reason) => {
                 self.enqueue_promise_job(PromiseJob::Reaction {
                     reaction,
                     state: PromiseSettledState::rejected(reason),
-                });
+                })?;
             }
         }
         Ok(())
@@ -178,6 +190,8 @@ impl Context {
 
     pub(crate) fn drain_promise_jobs(&mut self) -> Result<()> {
         while let Some(job) = self.promise_jobs.pop_front() {
+            self.storage_ledger
+                .release_count(VmStorageKind::PromiseJob, 1)?;
             self.step()?;
             self.run_promise_job(job)?;
         }
@@ -252,13 +266,32 @@ impl Context {
             .index()
             .checked_add(1)
             .ok_or_else(|| Error::limit("Promise object slot index overflowed"))?;
+        let adds_association = self
+            .promise_object_slots
+            .get(object.index())
+            .and_then(Option::as_ref)
+            .is_none();
+        if adds_association {
+            self.storage_ledger
+                .grow_count(VmStorageKind::Association, 1)?;
+        }
         if self.promise_object_slots.len() < required_len {
             self.promise_object_slots.resize(required_len, None);
         }
         let slot = self
             .promise_object_slots
             .get_mut(object.index())
-            .ok_or_else(|| Error::runtime("Promise object slot is not defined"))?;
+            .ok_or_else(|| Error::runtime("Promise object slot is not defined"));
+        let slot = match slot {
+            Ok(slot) => slot,
+            Err(error) => {
+                if adds_association {
+                    self.storage_ledger
+                        .release_count(VmStorageKind::Association, 1)?;
+                }
+                return Err(error);
+            }
+        };
         *slot = Some(promise);
         Ok(())
     }
@@ -269,9 +302,17 @@ impl Context {
     }
 
     fn settle_promise(&mut self, promise: PromiseId, state: &PromiseSettledState) -> Result<()> {
+        let reaction_count = match self.promise_state(promise)? {
+            PromiseState::Pending { reactions } => reactions.len(),
+            PromiseState::Fulfilled(_) | PromiseState::Rejected(_) => return Ok(()),
+        };
+        self.storage_ledger
+            .grow_count(VmStorageKind::PromiseJob, reaction_count)?;
         let reactions = {
             let promise = self.promise_mut(promise)?;
             let PromiseState::Pending { reactions } = &mut promise.state else {
+                self.storage_ledger
+                    .release_count(VmStorageKind::PromiseJob, reaction_count)?;
                 return Ok(());
             };
             let reactions = std::mem::take(reactions);
@@ -281,8 +322,10 @@ impl Context {
             };
             reactions
         };
+        self.storage_ledger
+            .release_count(VmStorageKind::PromiseReaction, reaction_count)?;
         for reaction in reactions {
-            self.enqueue_promise_job(PromiseJob::Reaction {
+            self.promise_jobs.push_back(PromiseJob::Reaction {
                 reaction,
                 state: (*state).clone(),
             });
@@ -290,8 +333,11 @@ impl Context {
         Ok(())
     }
 
-    fn enqueue_promise_job(&mut self, job: PromiseJob) {
+    fn enqueue_promise_job(&mut self, job: PromiseJob) -> Result<()> {
+        self.storage_ledger
+            .grow_count(VmStorageKind::PromiseJob, 1)?;
         self.promise_jobs.push_back(job);
+        Ok(())
     }
 
     fn run_promise_job(&mut self, job: PromiseJob) -> Result<()> {

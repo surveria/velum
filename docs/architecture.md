@@ -143,9 +143,12 @@ keyed by `VmStorageKind`. AS-05b2c1 enforces atoms, heap strings, Symbols,
 objects, byte buffers, host callbacks, output, and retained source records;
 AS-05b2c2 enforces bindings, JavaScript/native/bound functions, object
 properties, and cache entries through an independently reconciled VM-local
-ledger. AS-05b2c3 completes async/root/frame/association categories. Custom
-policies are immutable and shared across cloned configuration, while VMs keep
-independent usage and teardown state.
+ledger. AS-05b2c3 extends that ledger to collections, Promise reactions/jobs,
+retained and transient roots, execution frames, and associations. Module
+storage is explicitly zero until a module owner exists. Every snapshot checks
+all twenty-six categories against policy and reconciles all ledger-backed
+owners. Custom policies are immutable and shared across cloned configuration,
+while VMs keep independent usage and teardown state.
 
 Current limits cover:
 

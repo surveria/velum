@@ -5,8 +5,9 @@ use parking_lot::Mutex;
 use crate::{error::Result, value::Value};
 
 use super::{
-    Context,
+    Context, VmStorageKind,
     roots::{DirectRootVisitor, VmRootKind},
+    storage_ledger::VmStorageLedger,
 };
 
 #[derive(Debug)]
@@ -15,9 +16,9 @@ pub(in crate::runtime) struct TransientRootRegistry {
 }
 
 impl TransientRootRegistry {
-    pub(in crate::runtime) fn new() -> Self {
+    pub(in crate::runtime) fn new(storage_ledger: VmStorageLedger) -> Self {
         Self {
-            state: Rc::new(Mutex::new(TransientRootState::new())),
+            state: Rc::new(Mutex::new(TransientRootState::new(storage_ledger))),
         }
     }
 
@@ -104,13 +105,15 @@ impl Context {
 struct TransientRootState {
     next_scope_id: usize,
     roots: Vec<TransientRoot>,
+    storage_ledger: VmStorageLedger,
 }
 
 impl TransientRootState {
-    const fn new() -> Self {
+    const fn new(storage_ledger: VmStorageLedger) -> Self {
         Self {
             next_scope_id: 0,
             roots: Vec::new(),
+            storage_ledger,
         }
     }
 }
@@ -154,6 +157,9 @@ impl TransientRootScope {
             state.roots.try_reserve(1).map_err(|error| {
                 crate::Error::limit(format!("transient root storage exhausted: {error}"))
             })?;
+            state
+                .storage_ledger
+                .grow_count(VmStorageKind::TransientRoot, 1)?;
             state.roots.push(TransientRoot {
                 scope: self.scope,
                 kind: self.kind,
@@ -168,7 +174,13 @@ impl TransientRootScope {
 impl Drop for TransientRootScope {
     fn drop(&mut self) {
         if let Some(state) = &self.state {
-            state.lock().roots.retain(|root| root.scope != self.scope);
+            let mut state = state.lock();
+            let before = state.roots.len();
+            state.roots.retain(|root| root.scope != self.scope);
+            let released = before.saturating_sub(state.roots.len());
+            state
+                .storage_ledger
+                .release_count_on_drop(VmStorageKind::TransientRoot, released);
         }
     }
 }

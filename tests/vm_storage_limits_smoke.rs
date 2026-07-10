@@ -236,6 +236,186 @@ fn enforces_cache_entry_limits_before_cache_materialization() -> TestResult {
     )
 }
 
+#[test]
+fn enforces_collection_owner_limits_and_reuses_deleted_entries() -> TestResult {
+    for (kind, source) in [
+        (VmStorageKind::Collection, "new Map();"),
+        (
+            VmStorageKind::CollectionEntry,
+            "var camera = new Map(); camera.set('lens', 1);",
+        ),
+        (
+            VmStorageKind::CollectionIterator,
+            "new Map([['camera', 1]]).entries();",
+        ),
+        (
+            VmStorageKind::IteratorItem,
+            "new Map([['camera', 1]]).entries();",
+        ),
+    ] {
+        let limits = VmStorageLimits::unlimited().with_max_count(kind, 0);
+        let mut vm = vm_with_storage_limits(limits);
+        let error = expect_eval_error(&mut vm, source)?;
+        ensure_limit(&error, storage_kind_name(kind))?;
+        ensure_usize(
+            vm.storage_snapshot()?.count(kind),
+            0,
+            "collection owner count after rejection",
+        )?;
+    }
+
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::CollectionEntry, 1);
+    let mut vm = vm_with_storage_limits(limits);
+    vm.eval(
+        "var camera = new Map(); camera.set('lens', 1); camera.delete('lens'); camera.set('body', 2);",
+    )?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::CollectionEntry),
+        1,
+        "collection entries after delete and reuse",
+    )
+}
+
+#[test]
+fn enforces_promise_reaction_and_job_limits() -> TestResult {
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::Promise, 0);
+    let mut vm = vm_with_storage_limits(limits);
+    let error = expect_eval_error(&mut vm, "Promise.resolve(1);")?;
+    ensure_limit(&error, "Promise")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::Promise),
+        0,
+        "Promise count after rejection",
+    )?;
+
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::PromiseReaction, 0);
+    let mut vm = vm_with_storage_limits(limits);
+    vm.eval(
+        "var cameraResolve; var camera = new Promise(function(resolve) { cameraResolve = resolve; });",
+    )?;
+    let error = expect_eval_error(&mut vm, "camera.then(function(value) { return value; });")?;
+    ensure_limit(&error, "PromiseReaction")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::PromiseReaction),
+        0,
+        "Promise reaction count after rejection",
+    )?;
+
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::PromiseJob, 0);
+    let mut vm = vm_with_storage_limits(limits);
+    let error = expect_eval_error(
+        &mut vm,
+        "Promise.resolve(1).then(function(value) { return value; });",
+    )?;
+    ensure_limit(&error, "PromiseJob")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::PromiseJob),
+        0,
+        "Promise job count after rejection",
+    )
+}
+
+#[test]
+fn releases_settled_reactions_and_drained_jobs() -> TestResult {
+    let mut vm = vm_with_storage_limits(VmStorageLimits::unlimited());
+    vm.eval(
+        "var cameraResolve; var camera = new Promise(function(resolve) { cameraResolve = resolve; }); camera.then(function(value) { return value; });",
+    )?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::PromiseReaction),
+        1,
+        "pending Promise reactions",
+    )?;
+    vm.eval("cameraResolve(42);")?;
+    let snapshot = vm.storage_snapshot()?;
+    ensure_usize(
+        snapshot.count(VmStorageKind::PromiseReaction),
+        0,
+        "settled Promise reactions",
+    )?;
+    ensure_usize(
+        snapshot.count(VmStorageKind::PromiseJob),
+        0,
+        "drained Promise jobs",
+    )
+}
+
+#[test]
+fn enforces_and_releases_retained_transient_and_execution_owners() -> TestResult {
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::RetainedHandle, 1);
+    let mut vm = vm_with_storage_limits(limits);
+    let retained = vm.eval_retained("({ camera: 1 });")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::RetainedHandle),
+        1,
+        "active retained handle",
+    )?;
+    let Err(error) = vm.eval_retained("({ lens: 2 });") else {
+        return Err("expected retained handle limit to fail".into());
+    };
+    ensure_limit(&error, "RetainedHandle")?;
+    drop(retained);
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::RetainedHandle),
+        0,
+        "dropped retained handle",
+    )?;
+    let replacement = vm.eval_retained("({ body: 3 });")?;
+    replacement.release()?;
+
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::TransientRoot, 0);
+    let mut vm = vm_with_storage_limits(limits);
+    vm.register_host_function_typed("captureCamera", |_call| Ok(1_f64))?;
+    let error = expect_eval_error(&mut vm, "captureCamera({ lens: 1 });")?;
+    ensure_limit(&error, "TransientRoot")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::TransientRoot),
+        0,
+        "transient roots after rejection",
+    )?;
+
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::ExecutionFrame, 0);
+    let mut vm = vm_with_storage_limits(limits);
+    let error = expect_eval_error(
+        &mut vm,
+        "function camera(value) { let lens = value + 1; return lens; } camera(1);",
+    )?;
+    ensure_limit(&error, "ExecutionFrame")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::ExecutionFrame),
+        0,
+        "execution frames after rejection",
+    )
+}
+
+#[test]
+fn enforces_association_limits_and_keeps_module_storage_empty() -> TestResult {
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::Association, 0);
+    let mut vm = vm_with_storage_limits(limits);
+    let error = expect_eval_error(&mut vm, "({ camera: 1 });")?;
+    ensure_limit(&error, "Association")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::Association),
+        0,
+        "association count after rejection",
+    )?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::Module),
+        0,
+        "unsupported module storage",
+    )
+}
+
+const fn storage_kind_name(kind: VmStorageKind) -> &'static str {
+    match kind {
+        VmStorageKind::Collection => "Collection",
+        VmStorageKind::CollectionEntry => "CollectionEntry",
+        VmStorageKind::CollectionIterator => "CollectionIterator",
+        VmStorageKind::IteratorItem => "IteratorItem",
+        _ => "storage",
+    }
+}
+
 fn vm_with_storage_limits(storage: VmStorageLimits) -> Vm {
     let limits = RuntimeLimits {
         storage,

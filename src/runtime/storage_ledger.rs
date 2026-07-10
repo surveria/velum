@@ -112,6 +112,21 @@ impl VmStorageLedger {
         self.release(kind, released_count, 0)
     }
 
+    /// Releases a count from a destructor that cannot report errors.
+    ///
+    /// Snapshot reconciliation still detects any violated accounting
+    /// invariant after the destructor completes.
+    pub(in crate::runtime) fn release_count_on_drop(
+        &self,
+        kind: VmStorageKind,
+        released_count: usize,
+    ) {
+        let Ok(count) = self.count_cell(kind) else {
+            return;
+        };
+        count.set(count.get().saturating_sub(released_count));
+    }
+
     pub(in crate::runtime) fn release(
         &self,
         kind: VmStorageKind,

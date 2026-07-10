@@ -1,6 +1,5 @@
 use crate::{
     error::Result,
-    runtime::Context,
     runtime::binding::scope::BindingCell,
     runtime::native::{GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME},
     runtime::object::{
@@ -9,6 +8,7 @@ use crate::{
         PropertyLookup, PropertyUpdate, PropertyWritable,
     },
     runtime::property::{get_property, has_property},
+    runtime::{Context, VmStorageKind},
     storage::atom::AtomId,
     storage::string_heap::JsString,
     syntax::DeclKind,
@@ -269,6 +269,8 @@ impl Context {
             self.limits.max_objects,
             self.limits.max_object_properties,
         )?;
+        self.storage_ledger
+            .grow_count(VmStorageKind::Association, 1)?;
         self.global_object = Some(id);
         let value = Value::Object(id);
         self.define_global_object_data_property(

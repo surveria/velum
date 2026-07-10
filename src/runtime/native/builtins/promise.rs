@@ -237,6 +237,8 @@ impl Context {
             self.limits.max_objects,
             self.limits.max_object_properties,
         )?;
+        self.storage_ledger
+            .grow_count(crate::runtime::VmStorageKind::Association, 1)?;
         self.promise_prototype = Some(prototype);
         Ok(Value::Object(prototype))
     }
