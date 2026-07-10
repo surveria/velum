@@ -1084,7 +1084,11 @@ AS-04b2a local implementation evidence:
 - the architecture guard fixes the source metadata owners, prevents source or
   AST retention in `CompiledScript`, and rejects a return to offset-only
   lexer/parser diagnostics. AS-04b2b will extend this same boundary with a
-  parallel bytecode span table rather than retaining the AST at runtime.
+  parallel bytecode span table rather than retaining the AST at runtime;
+- the complete local correctness gate preserves all 36,659 expected Test262
+  variants and the exact 36,659 of 102,578 full pass set, with QuickJS
+  differential unchanged at 95 of 95. Local evidence is
+  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T123222Z.*`.
 
 ### AS-05: Ownership, Handles, Roots, And Accounting
 
