@@ -18,12 +18,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260710T212554Z.md`
-- Task: PR #439: AS-06a2a: attach VM-owned bytecode continuations
-- Performance: 5.42x (4/5 >1.00x) (from `rsqjs-test-report-20260710T212554Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T212554Z.md`)
+- `rsqjs-test-report-20260710T213922Z.md`
+- Task: PR #441: ci: derive report commit titles from merged pull requests
+- Performance: 5.41x (4/5 >1.00x) (from `rsqjs-test-report-20260710T213922Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T213922Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T212554Z.md`)
+- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T213922Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -426,3 +426,4 @@ Latest report:
 | `20260710T205011Z` `c21e594` PR #437: runner: simplify chart lines and show latest values | 5.45x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T210337Z` `63bfb88` PR #438: AS-06a1: unify synchronous JavaScript call activations | 5.51x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T212554Z` `35d7c5c` PR #439: AS-06a2a: attach VM-owned bytecode continuations | 5.42x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
+| `20260710T213922Z` `509254c` PR #441: ci: derive report commit titles from merged pull requests | 5.41x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
