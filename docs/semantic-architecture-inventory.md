@@ -444,16 +444,22 @@ state how many bytes each owner retained.
   `JsString` and `JsSymbol`. `checked_value` rejects a foreign identity before
   validating the numeric slot, and Symbol equality includes owner identity;
 - `Vm::get_global` returns public `Value`, including raw VM-local ids;
-- `HostCall` exposes borrowed public `Value` arguments;
+- `HostCall` exposes callback-borrowed `LocalValue` arguments containing the
+  active owner identity and the raw Value. Arbitrary host JavaScript throws
+  are created from this local capability rather than an unowned Value;
 - host return validation rejects Function, NativeFunction, HostFunction, and
   Object. Same-VM `HeapString` and `Symbol` values remain permitted, while
   foreign owners are rejected with callback context;
-- raw object/function ids still have neither an attached VM identity nor
-  generation check. Primitive validation alone does not make every public
-  transfer safe, especially typed JavaScript errors.
+- every public evaluation `Error::JavaScript` carries its Context identity,
+  and host throws retain the `LocalValue` identity. Throw conversion rejects a
+  foreign owner before JavaScript can catch or inspect a colliding raw id;
+- raw object/function ids returned by eval/get_global still have neither an
+  attached VM identity nor generation check. They cannot currently cross a
+  successful host return, but retained handles and explicit release remain
+  AS-05a2c work.
 
-AS-05a2b must define owned cross-VM primitives versus identity-stamped VM-local
-object/function/error handles before those public handles are expanded.
+AS-05a2c must define owned cross-VM primitives versus identity-stamped retained
+object/function handles before those public handles are expanded.
 
 ### Provisional Root Set For AS-05b
 
@@ -550,8 +556,9 @@ decision sequence:
 | AS-04b2b1 | frontend AST source ranges | canonical token ranges and span-bearing expression/statement AST merged in PR #420 without runtime AST retention |
 | AS-04b2b2 | bytecode/runtime source diagnostics | instruction-aligned span side tables and structured executing ranges merged in PR #421 across normal and linear execution |
 | AS-05a1 | clone and VM owner map | non-cloneable Vm/Context plus opaque owner capability and explicit generation merged in PR #422 |
-| AS-05a2a | heap string, Symbol, and host success crossing | identity-stamped VM primitives and central foreign-owner rejection implemented in draft PR #423 |
-| AS-05a2b/AS-05b | object/function/error id, root, handle, and limit maps | attach identity/generation at remaining public value boundaries; add root/accounting contracts |
+| AS-05a2a | heap string, Symbol, and host success crossing | identity-stamped VM primitives and central foreign-owner rejection merged in PR #423 |
+| AS-05a2b | host callback arguments and JavaScript error crossing | borrowed LocalValue capability plus foreign throw rejection implemented in draft PR #424 |
+| AS-05a2c/AS-05b | retained object/function id, root, handle, and limit maps | define identity-stamped retained handles and release; add root/accounting contracts |
 | AS-06 | active execution roots and structured nested bytecode | explicit activation/block stacks and suspend/resume results |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |
 | AS-08 | caches, direct calls, linear/function/control paths, harness opcodes | one optimizer owner, optimizer-off equivalence, and removal of source-name semantics |
@@ -573,6 +580,7 @@ must fail on growth.
 | optimization owners | current linear/function/control modules | a new workload-shaped control module or compiler source-shape recognizer without plan evidence |
 | VM clone boundary | no `Clone` implementation on `Vm` or `Context`; one capability identity/generation owner | reintroducing public VM-state cloning, removing the identity owner, or using cloning as handle transfer |
 | VM primitive owner boundary | one identity on each StringHeap, JsString, SymbolTable, and JsSymbol plus central checked-value validation | removing a primitive owner stamp/check or accepting a foreign colliding slot |
+| host local-value boundary | LocalValue and HostCall carry the active owner; public JavaScript errors retain it and throw conversion validates it | accepting an unowned host throw or a foreign bound JavaScript value |
 
 The script should report the specific changed boundary and point to this
 document. It should run from `scripts/check-fast.sh` and the correctness gate,

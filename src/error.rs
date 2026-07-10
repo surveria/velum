@@ -1,5 +1,6 @@
 use std::fmt;
 
+use crate::ownership::VmIdentity;
 use crate::value::{ErrorName, Value};
 use crate::{SourceId, SourceSpan};
 
@@ -69,6 +70,26 @@ impl fmt::Display for JavaScriptErrorMetadata {
     }
 }
 
+/// Opaque payload of an arbitrary JavaScript thrown completion.
+///
+/// The fields stay private so embedders cannot forge an unowned VM-local
+/// value by constructing [`Error::JavaScript`] directly.
+#[doc(hidden)]
+#[derive(Clone, Debug, PartialEq)]
+pub struct JavaScriptException {
+    identity: Option<VmIdentity>,
+    value: Value,
+    metadata: Option<Box<JavaScriptErrorMetadata>>,
+    display: Box<str>,
+    span: Option<Box<SourceSpan>>,
+}
+
+impl fmt::Display for JavaScriptException {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.display)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum Error {
     #[error("lexer error at {}: {message}", span.start())]
@@ -81,13 +102,8 @@ pub enum Error {
         span: Option<SourceSpan>,
     },
     /// An arbitrary JavaScript thrown value owned by the VM that produced it.
-    #[error("javascript exception: {display}")]
-    JavaScript {
-        value: Value,
-        metadata: Option<Box<JavaScriptErrorMetadata>>,
-        display: Box<str>,
-        span: Option<Box<SourceSpan>>,
-    },
+    #[error("javascript exception: {exception}")]
+    JavaScript { exception: Box<JavaScriptException> },
     /// A typed built-in exception request awaiting allocation in the active VM.
     /// This internal form must be converted to a real JavaScript object before
     /// an error crosses the public embedding boundary.
@@ -142,17 +158,29 @@ impl Error {
     /// host `Result` boundary. VM-owned values are valid only for the VM whose
     /// active call supplied them.
     #[must_use]
-    pub fn javascript(value: Value) -> Self {
+    pub(crate) fn javascript(value: Value) -> Self {
+        Self::javascript_with_optional_identity(None, value)
+    }
+
+    pub(crate) fn javascript_local(identity: VmIdentity, value: Value) -> Self {
+        Self::javascript_with_optional_identity(Some(identity), value)
+    }
+
+    fn javascript_with_optional_identity(identity: Option<VmIdentity>, value: Value) -> Self {
         let display = value.to_string().into_boxed_str();
         Self::JavaScript {
-            value,
-            metadata: None,
-            display,
-            span: None,
+            exception: Box::new(JavaScriptException {
+                identity,
+                value,
+                metadata: None,
+                display,
+                span: None,
+            }),
         }
     }
 
     pub(crate) fn javascript_with_metadata(
+        identity: VmIdentity,
         value: Value,
         metadata: Option<JavaScriptErrorMetadata>,
         fallback_span: Option<SourceSpan>,
@@ -166,10 +194,13 @@ impl Error {
             .and_then(JavaScriptErrorMetadata::source_span)
             .or(fallback_span);
         Self::JavaScript {
-            value,
-            metadata: metadata.map(Box::new),
-            display,
-            span: span.map(Box::new),
+            exception: Box::new(JavaScriptException {
+                identity: Some(identity),
+                value,
+                metadata: metadata.map(Box::new),
+                display,
+                span: span.map(Box::new),
+            }),
         }
     }
 
@@ -178,19 +209,28 @@ impl Error {
     /// must not be used with another VM.
     #[must_use]
     pub const fn javascript_value(&self) -> Option<&Value> {
-        let Self::JavaScript { value, .. } = self else {
+        let Self::JavaScript { exception } = self else {
             return None;
         };
-        Some(value)
+        Some(&exception.value)
+    }
+
+    /// Returns the VM owner of an arbitrary JavaScript thrown value.
+    #[must_use]
+    pub fn javascript_identity(&self) -> Option<&VmIdentity> {
+        let Self::JavaScript { exception } = self else {
+            return None;
+        };
+        exception.identity.as_ref()
     }
 
     /// Returns structured metadata for a built-in JavaScript Error instance.
     #[must_use]
     pub fn javascript_error_metadata(&self) -> Option<&JavaScriptErrorMetadata> {
-        let Self::JavaScript { metadata, .. } = self else {
+        let Self::JavaScript { exception } = self else {
             return None;
         };
-        metadata.as_deref()
+        exception.metadata.as_deref()
     }
 
     /// Returns the standard error name when the thrown value is a built-in
@@ -214,7 +254,7 @@ impl Error {
         match self {
             Self::Lex { span, .. } | Self::Parse { span, .. } => Some(*span),
             Self::Runtime { span, .. } | Self::ResourceLimit { span, .. } => *span,
-            Self::JavaScript { span, .. } => span.as_deref().copied(),
+            Self::JavaScript { exception } => exception.span.as_deref().copied(),
             Self::JavaScriptError { metadata } => metadata.source_span(),
         }
     }
@@ -255,17 +295,7 @@ impl Error {
                 message: format!("{context}: {message}"),
                 span,
             },
-            Self::JavaScript {
-                value,
-                metadata,
-                display,
-                span,
-            } => Self::JavaScript {
-                value,
-                metadata,
-                display,
-                span,
-            },
+            Self::JavaScript { exception } => Self::JavaScript { exception },
             Self::JavaScriptError { metadata } => Self::JavaScriptError { metadata },
             Self::ResourceLimit { message, span } => Self::ResourceLimit {
                 message: format!("{context}: {message}"),
@@ -297,17 +327,12 @@ impl Error {
                 message,
                 span: existing.or(Some(span)),
             },
-            Self::JavaScript {
-                value,
-                metadata,
-                display,
-                span: existing,
-            } => Self::JavaScript {
-                value,
-                metadata,
-                display,
-                span: existing.or_else(|| Some(Box::new(span))),
-            },
+            Self::JavaScript { mut exception } => {
+                if exception.span.is_none() {
+                    exception.span = Some(Box::new(span));
+                }
+                Self::JavaScript { exception }
+            }
             Self::JavaScriptError { metadata } => Self::JavaScriptError {
                 metadata: metadata.with_source_span(span),
             },

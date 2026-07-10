@@ -436,6 +436,7 @@ src/runtime/abstract_operations/iterator.rs:iterator_step'
 check_completion_error_boundary() {
   local legacy_conversions
   local typed_variant
+  local exception_fields
   local owners
   local expected_owners
 
@@ -451,11 +452,21 @@ check_completion_error_boundary() {
   fi
 
   typed_variant="$(
-    sed -n '/^    JavaScript {$/,/^    },$/p' "${repo_root}/src/error.rs" \
+    grep -E '^    JavaScript ' "${repo_root}/src/error.rs" \
       | tr -d '[:space:]'
   )"
-  if [[ "${typed_variant}" != 'JavaScript{value:Value,metadata:Option<Box<JavaScriptErrorMetadata>>,display:Box<str>,span:Option<Box<SourceSpan>>,},' ]]; then
-    fail "typed JavaScript error boundary changed; expected one Value-preserving variant with structured metadata and source span"
+  if [[ "${typed_variant}" != 'JavaScript{exception:Box<JavaScriptException>},' ]]; then
+    fail "typed JavaScript error boundary changed; expected one identity-bound Value variant with structured metadata and source span"
+  fi
+  exception_fields="$({
+    awk '
+      /^pub struct JavaScriptException/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/error.rs"
+  } | tr -d '[:space:]')"
+  if [[ "${exception_fields}" != 'identity:Option<VmIdentity>,value:Value,metadata:Option<Box<JavaScriptErrorMetadata>>,display:Box<str>,span:Option<Box<SourceSpan>>,' ]]; then
+    fail "typed JavaScript error boundary changed; JavaScriptException fields must stay private and identity-bound"
   fi
 
   owners="$(
@@ -467,6 +478,35 @@ check_completion_error_boundary() {
 src/runtime/control/assertions.rs:reference_error_uninitialized
 src/runtime/control/assertions.rs:runtime_exception_value'
   compare_set "completion/error operation allowlist" "${owners}" "${expected_owners}"
+
+  local local_value_fields
+  local host_call_fields
+  local_value_fields="$({
+    awk '
+      /^pub struct LocalValue/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/api/host.rs"
+  } | tr -d '[:space:]')"
+  if [[ "${local_value_fields}" != "identity:&'valueVmIdentity,value:&'valueValue," ]]; then
+    fail "host local-value boundary changed; LocalValue requires borrowed owner identity and Value"
+  fi
+  host_call_fields="$({
+    awk '
+      /^pub struct HostCall/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/api/host.rs"
+  } | tr -d '[:space:]')"
+  if [[ "${host_call_fields}" != "function_name:&'callstr,identity:&'callVmIdentity,args:&'call[Value]," ]]; then
+    fail "host local-value boundary changed; HostCall requires the active VM identity"
+  fi
+  if ! grep -F -q 'Error::javascript_local(self.identity.clone(), self.value.clone())' \
+      "${repo_root}/src/api/host.rs" \
+    || ! grep -F -q 'identity != context.identity()' \
+      "${repo_root}/src/runtime/control/assertions.rs"; then
+    fail "host local-value boundary changed; JavaScript host errors require owner validation"
+  fi
 }
 
 check_state_owner_allowlists() {
@@ -793,6 +833,18 @@ mutate_legacy_completion_conversion() {
     >>"${fixture_root}/src/runtime/values.rs"
 }
 
+mutate_host_local_value_identity() {
+  local fixture_root="$1"
+  sed -i '/    identity: &.value VmIdentity,/d' \
+    "${fixture_root}/src/api/host.rs"
+}
+
+mutate_javascript_exception_visibility() {
+  local fixture_root="$1"
+  sed -i '0,/    identity: Option<VmIdentity>,/{s/    identity: Option<VmIdentity>,/    pub identity: Option<VmIdentity>,/}' \
+    "${fixture_root}/src/error.rs"
+}
+
 mutate_test262_source_name() {
   local fixture_root="$1"
   printf '\nconst ARCHITECTURE_PROBE: &str = TEST262_ERROR_NAME;\n' \
@@ -926,6 +978,10 @@ run_self_tests() {
     'legacy iterator facade allowlist changed' mutate_legacy_iterator_facade
   expect_guard_failure "${temp_dir}" legacy-completion-conversion \
     'legacy completion/error boundary' mutate_legacy_completion_conversion
+  expect_guard_failure "${temp_dir}" host-local-value-identity \
+    'host local-value boundary changed' mutate_host_local_value_identity
+  expect_guard_failure "${temp_dir}" javascript-exception-visibility \
+    'JavaScriptException fields must stay private' mutate_javascript_exception_visibility
   expect_guard_failure "${temp_dir}" context-store \
     'Context state-owner field allowlist changed' mutate_context_store
   expect_guard_failure "${temp_dir}" object-payload \

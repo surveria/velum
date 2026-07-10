@@ -345,7 +345,12 @@ impl Context {
         } else {
             None
         };
-        Err(Error::javascript_with_metadata(value, metadata, span))
+        Err(Error::javascript_with_metadata(
+            self.identity.clone(),
+            value,
+            metadata,
+            span,
+        ))
     }
 
     pub(crate) fn eval_compiled_completion(

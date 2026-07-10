@@ -1,3 +1,6 @@
+use std::rc::Rc;
+
+use parking_lot::Mutex;
 use rs_quickjs::{Error, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -10,7 +13,9 @@ fn public_eval_exposes_the_original_thrown_value() -> TestResult {
     let Err(error) = context.eval("throw 42") else {
         return Err("expected an uncaught JavaScript value".into());
     };
-    if error.javascript_value() == Some(&Value::Number(42.0)) {
+    if error.javascript_value() == Some(&Value::Number(42.0))
+        && error.javascript_identity() == Some(context.identity())
+    {
         return Ok(());
     }
     Err(format!("expected thrown number 42, got {error:?}").into())
@@ -83,8 +88,7 @@ fn host_functions_can_throw_an_explicit_javascript_value() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     context.register_host_function("hostThrow", |call| -> rs_quickjs::Result<Value> {
-        let value = call.required_value(0, "value")?.clone();
-        Err(Error::javascript(value))
+        Err(call.required_value(0, "value")?.javascript_error())
     })?;
 
     let value = context.eval(
@@ -99,6 +103,60 @@ fn host_functions_can_throw_an_explicit_javascript_value() -> TestResult {
         "#,
     )?;
     ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
+fn rejects_foreign_host_errors_even_when_object_slots_collide() -> TestResult {
+    let runtime = Runtime::new();
+    let mut first_context = runtime.context();
+    let captured = Rc::new(Mutex::new(None));
+    let callback_capture = Rc::clone(&captured);
+    first_context.register_host_function("captureError", move |call| {
+        let error = call.required_value(0, "value")?.javascript_error();
+        let mut slot = callback_capture.lock();
+        if slot.is_some() {
+            return Err(Error::runtime("captured error slot is already initialized"));
+        }
+        *slot = Some(error);
+        drop(slot);
+        Ok(Value::Undefined)
+    })?;
+    first_context.eval("captureError({ source: 'first' })")?;
+
+    let foreign_error = captured
+        .lock()
+        .as_ref()
+        .cloned()
+        .ok_or("host callback did not capture a local JavaScript error")?;
+    let Some(Value::Object(foreign_id)) = foreign_error.javascript_value() else {
+        return Err("captured JavaScript error did not retain its object value".into());
+    };
+
+    let mut second_context = runtime.context();
+    let Value::Object(local_id) =
+        second_context.eval("let localMarker = { source: 'second' }; localMarker")?
+    else {
+        return Err("second VM did not create a local object marker".into());
+    };
+    if foreign_id != &local_id {
+        return Err("test setup did not create colliding object slots".into());
+    }
+    second_context
+        .register_host_function("throwForeign", move |_call| Err(foreign_error.clone()))?;
+
+    let Err(error) = second_context
+        .eval("try { throwForeign(); } catch (value) { value === localMarker ? 42 : 1; }")
+    else {
+        return Err("expected a foreign host JavaScript error to stay non-catchable".into());
+    };
+    if !matches!(error, Error::Runtime { .. })
+        || !error
+            .to_string()
+            .contains("JavaScript thrown value belongs to another VM")
+    {
+        return Err(format!("expected a foreign-owner runtime error, got {error:?}").into());
+    }
+    Ok(())
 }
 
 #[test]

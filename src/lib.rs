@@ -22,10 +22,10 @@ mod value;
 pub use crate::api::embedding::{
     Engine, EngineConfig, Vm, VmConfig, VmResourceUsage, VmTeardownReport,
 };
-pub use crate::api::host::{FromJsValue, HostCall, IntoJsValue};
+pub use crate::api::host::{FromJsValue, HostCall, IntoJsValue, LocalValue};
 pub use crate::build_info::{BuildInfo, engine_build_info};
 pub use crate::compiled_script::{CompiledScript, CompiledScriptUsage};
-pub use crate::error::{Error, JavaScriptErrorMetadata, Result};
+pub use crate::error::{Error, JavaScriptErrorMetadata, JavaScriptException, Result};
 pub use crate::ownership::{VmGeneration, VmIdentity};
 pub use crate::runtime::Context;
 pub use crate::runtime::engine::Runtime;
