@@ -26,7 +26,8 @@ version policy, and uses the validation lane appropriate to the change.
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
 - Current program state: AS-01 through AS-03 are complete; AS-04a's typed
-  JavaScript throw and engine-failure boundary is implemented in draft PR #416
+  JavaScript throw and engine-failure boundary is implemented and locally
+  validated in draft PR #416
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -1002,10 +1003,20 @@ AS-04a local implementation evidence:
   runner diagnostics format the VM-local error at their outer boundary rather
   than requiring it to be `Send + Sync` through `anyhow`;
 - the architecture guard rejects string-formatted throws, message-prefix
-  classification, a moved ReferenceError owner, or another exception bridge;
+  classification, including raw `ReferenceError:` construction, a moved
+  ReferenceError owner, or another exception bridge;
 - six focused public tests cover the embedding result, object/Symbol identity
   through native frames, ReferenceError metadata, an explicit host throw,
-  forged error text, and resource-limit non-catchability.
+  forged error text, and resource-limit non-catchability;
+- the Test262 runner matches negative runtime cases by the typed JavaScript
+  error name instead of accepting formatted `Runtime` text. The migration also
+  found and removed the three remaining assignment/update paths that created
+  textual ReferenceErrors;
+- the complete local correctness gate preserves every prior expected variant
+  and adds 332 reviewed negative/error variants. The expected-pass baseline
+  and full pass set are now 36,553 of 102,578, with QuickJS differential
+  unchanged at 95 of 95. The local evidence is
+  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T113234Z.*`.
 
 ### AS-05: Ownership, Handles, Roots, And Accounting
 

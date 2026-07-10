@@ -306,9 +306,10 @@ Merged AS-03b1a adds another 96 property-key variants without losing a prior
 expected pass, for 36,083 full variants and the same QuickJS result. Merged
 AS-03b1b adds 102 integer, length, and index variants with no loss, for 36,185
 full variants. Merged AS-03b2 adds 24 strict RegExp `lastIndex` variants with
-no loss, for 36,209 full variants and 95 of 95 QuickJS cases. AS-03b3 locally
+no loss, for 36,209 full variants and 95 of 95 QuickJS cases. Merged AS-03b3
 adds 12 iterator-closing variants with no loss, for 36,221 full variants and
-the same QuickJS result.
+the same QuickJS result. AS-04a locally adds 332 typed negative/error variants
+with no loss, for 36,553 full variants and the same QuickJS result.
 
 ## Iterator Map
 
@@ -363,6 +364,13 @@ typed engine channels rather than becoming catchable based on message text.
 cross-VM or cross-thread ownership claim. Callers may inspect or return it only
 within the owning VM contract. AS-05 replaces raw id-bearing transfer with
 checked VM identity/generation and explicit local/owned handle boundaries.
+
+The Test262 negative-case adapter also uses the typed JavaScript error name.
+Formatted `Runtime` text is never accepted as a JavaScript exception, and the
+architecture guard rejects new raw `ReferenceError:` construction in runtime
+source. The complete local AS-04a corpus retains all 36,221 previous expected
+variants and adds 332 reviewed variants, for 36,553 of 102,578 with 95 of 95
+QuickJS differential cases.
 
 ## VM Store, Root, And Accounting Map
 
