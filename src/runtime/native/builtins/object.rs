@@ -155,7 +155,7 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_object_has_own(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let values = args.as_slice();
@@ -208,7 +208,7 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_object_prototype_has_own_property(
-        &self,
+        &mut self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
@@ -357,7 +357,7 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn object_property_key(
-        &self,
+        &mut self,
         value: Option<&Value>,
     ) -> Result<DynamicPropertyKey> {
         let value = value.cloned().unwrap_or(Value::Undefined);

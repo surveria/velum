@@ -3,6 +3,7 @@ use crate::{
     runtime::{
         Context,
         object::{PropertyKey, PropertyLookup},
+        property::DynamicPropertyKey,
     },
     value::{Value, format_ecmascript_number},
 };
@@ -111,6 +112,28 @@ impl Context {
         let text = to_string_primitive(&primitive)?;
         self.check_string_len(&text)?;
         Ok(text)
+    }
+
+    /// ECMAScript `ToPropertyKey`, preserving Symbol identity.
+    // The specification name is intentional; conversion can invoke JavaScript.
+    #[allow(clippy::wrong_self_convention)]
+    pub(in crate::runtime) fn to_property_key(
+        &mut self,
+        value: &Value,
+    ) -> Result<DynamicPropertyKey> {
+        let primitive = self.to_primitive(value, PreferredType::String)?;
+        if let Value::Symbol(symbol) = primitive {
+            let name = symbol.display_name();
+            self.check_string_len(&name)?;
+            return Ok(DynamicPropertyKey::new(
+                name,
+                Some(PropertyKey::symbol(symbol.id())),
+            ));
+        }
+        let name = to_string_primitive(&primitive)?;
+        self.check_string_len(&name)?;
+        let key = self.known_property_key(&name);
+        Ok(DynamicPropertyKey::new(name, key))
     }
 
     fn get_to_primitive_method(&mut self, value: &Value) -> Result<Value> {

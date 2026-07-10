@@ -14,15 +14,6 @@ const ERROR_NAME_PROPERTY: &str = "name";
 const ERROR_MESSAGE_PROPERTY: &str = "message";
 const STRING_LENGTH_PROPERTY: &str = "length";
 
-pub fn property_key(value: &Value) -> String {
-    match value {
-        Value::String(value) => value.clone(),
-        Value::HeapString(value) => value.as_str().to_owned(),
-        Value::Symbol(value) => value.display_name(),
-        _ => value.to_string(),
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct DynamicPropertyKey {
     name: String,
