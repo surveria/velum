@@ -25,8 +25,9 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 through AS-04 and AS-05a1 through AS-05a2c are
-  complete; AS-05b1a direct-root enumeration is implemented in draft PR #426
+- Current program state: AS-01 through AS-04, AS-05a1 through AS-05a2c, and
+  AS-05b1a are complete; AS-05b1b1 callable-store edge enumeration is
+  implemented in draft PR #427
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -484,7 +485,7 @@ dependencies do not overlap.
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
 | AS-04 | Complete | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans merged in PR #421 with exact-tree correctness and canonical report publication. |
-| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 non-cloneable VM identity merged in PR #422; AS-05a2a primitive owner validation merged in PR #423; AS-05a2b host-local JavaScript errors merged in PR #424; AS-05a2c portable owned values merged in PR #425; AS-05b1a direct-root enumeration is implemented in draft PR #426; heap trace edges, transient/embedder roots, retained handles, and heap/stack/job/buffer counters and limits remain. |
+| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 non-cloneable VM identity merged in PR #422; AS-05a2a primitive owner validation merged in PR #423; AS-05a2b host-local JavaScript errors merged in PR #424; AS-05a2c portable owned values merged in PR #425; AS-05b1a direct-root enumeration merged in PR #426; AS-05b1b1 callable-store edges are implemented in draft PR #427; object and asynchronous arena edges, transient/embedder roots, retained handles, and heap/stack/job/buffer counters and limits remain. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
 | AS-08 | Backlog | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | Optimizer on/off equivalence, harness opcodes removed, workload-shaped paths replaced or justified by broad evidence. |
@@ -1213,13 +1214,18 @@ AS-05 is split at ownership boundaries:
    explicit copying from callback-local/evaluation values;
 5. AS-05b1a establishes the executable direct-root categories and enumerates
    stored engine, binding, active-call, and queued-job roots;
-6. AS-05b1b defines strong heap-store edges without adding a collector;
-7. AS-05b1c closes transient allocation-point and embedder-root gaps, with
+6. AS-05b1b1 defines the shared typed strong-edge visitor and enumerates
+   JavaScript, native, and bound function stores;
+7. AS-05b1b2 enumerates object properties, prototypes, accessors, Proxy state,
+   typed views, and other object internal slots;
+8. AS-05b1b3 enumerates Promise, collection, and iterator associations and
+   classifies weak collection keys without adding a collector;
+9. AS-05b1c closes transient allocation-point and embedder-root gaps, with
    AS-06 remaining responsible for replacing Rust-stack execution state with
    durable activation frames;
-8. AS-05a2d adds retained object/function handles and explicit release against
+10. AS-05a2d adds retained object/function handles and explicit release against
    the root registry;
-9. AS-05b2 adds complete per-owner byte/count accounting, hard limits, and a
+11. AS-05b2 adds complete per-owner byte/count accounting, hard limits, and a
    teardown report that can reconcile every VM store.
 
 AS-05a1 local implementation evidence:
@@ -1400,6 +1406,48 @@ AS-05b1a local implementation evidence:
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
+AS-05b1a completion evidence:
+
+- PR #426 merged as `ce44f0b` after required CI run `29103081648`
+  certified exact tree `c4722165242e43342e8bc5c45ae5de14588c1f37`;
+- the required corpus preserved all 36,659 expected Test262 variants, the
+  exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
+  cases;
+- post-merge run `29103302187` measured all five project sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T152044Z.*` in
+  report-only commit `07f4cd1`.
+
+AS-05b1b1 local implementation evidence:
+
+- one generic `StrongEdgeVisitor<Kind>` receives typed `Value`, function,
+  object, Promise, bound-function, collection-iterator, and property-key
+  targets without exposing their forgeable arena ids publicly;
+- `VmCallableEdgeKind` separates JavaScript upvalues, properties, and internal
+  slots from native properties/internal ids and bound-function payloads;
+  `VmCallableEdgeSnapshot` reports checked physical-slot counts and explicitly
+  does not claim reachability or identity deduplication;
+- JavaScript functions enumerate initialized captured cells, intrinsic and
+  custom property keys/values, `super` state, static parents, class-field
+  keys, and lexical `new.target`;
+- native functions enumerate the same property storage plus bound-function,
+  collection-iterator, Promise-resolver, and Proxy-revoke ids. A mechanical
+  payload allowlist catches any future id-bearing native kind that lacks a
+  reviewed edge rule;
+- bound functions enumerate their target, bound `this`, and every bound
+  argument;
+- `native_function_registry` ids are added to direct `RuntimeAnchor` roots.
+  They are Context-owned reuse anchors, not edges owned by a native-function
+  payload;
+- four focused tests cover empty/stable totals, closures, custom properties,
+  class/super/new-target state, all four current native id payload families,
+  bound values, registry roots, and preserved evaluation behavior;
+- architecture mutation tests reject removal of a bound argument edge or the
+  native-registry direct root. AS-05b1b2 and AS-05b1b3 remain responsible for
+  object and asynchronous arena edges;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
+
 ### AS-06: Resumable Execution
 
 Migrate the existing synchronous engine before exposing new async behavior:
@@ -1525,17 +1573,21 @@ reviewable scope.
     (complete in PR #425).
 23. AS-05b1a: establish executable direct-root categories and enumerate
     existing stored binding, active-call, anchor, and queued-job roots
-    (implemented in draft PR #426).
-24. AS-05b1b: enumerate strong edges in every heap-backed runtime store.
-25. AS-05b1c: close transient allocation-point and embedder-root gaps.
-26. AS-05a2d: define retained object/function handles and explicit release.
-27. AS-05b2: add complete allocation accounting, hard limits, and teardown
+    (complete in PR #426).
+24. AS-05b1b1: define the typed strong-edge visitor and enumerate callable
+    stores (implemented in draft PR #427).
+25. AS-05b1b2: enumerate object-arena strong edges.
+26. AS-05b1b3: enumerate Promise/collection/iterator edges and classify weak
+    collection keys.
+27. AS-05b1c: close transient allocation-point and embedder-root gaps.
+28. AS-05a2d: define retained object/function handles and explicit release.
+29. AS-05b2: add complete allocation accounting, hard limits, and teardown
     reconciliation.
-28. AS-06a: migrate synchronous calls and structured control flow to explicit
+30. AS-06a: migrate synchronous calls and structured control flow to explicit
     activation frames.
-29. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
-30. AS-07a: add safe collection over explicit roots and correct weak edges.
-31. AS-08a: move reusable optimization state behind one optimizer/quickening
+31. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
+32. AS-07a: add safe collection over explicit roots and correct weak edges.
+33. AS-08a: move reusable optimization state behind one optimizer/quickening
     boundary and remove harness-specific opcodes.
 
 ## Updating This Plan

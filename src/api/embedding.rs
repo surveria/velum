@@ -4,6 +4,7 @@ use crate::compiled_script::CompiledScript;
 use crate::error::Result;
 use crate::ownership::VmIdentity;
 use crate::runtime::Context;
+use crate::runtime::VmCallableEdgeSnapshot;
 use crate::runtime::VmRootSnapshot;
 use crate::runtime::limits::RuntimeLimits;
 use crate::value::Value;
@@ -255,6 +256,14 @@ impl Vm {
     /// Fails if a root-reference counter exceeds the supported range.
     pub fn root_snapshot(&self) -> Result<VmRootSnapshot> {
         self.context.root_snapshot()
+    }
+
+    /// Counts physical strong-reference slots in callable stores.
+    ///
+    /// # Errors
+    /// Fails if an edge counter exceeds the supported range.
+    pub fn callable_edge_snapshot(&self) -> Result<VmCallableEdgeSnapshot> {
+        self.context.callable_edge_snapshot()
     }
 
     #[must_use]

@@ -24,6 +24,13 @@ impl FunctionIntrinsicProperty {
         !self.deleted
     }
 
+    pub(super) const fn stored_value(&self) -> Option<&Value> {
+        match &self.descriptor {
+            Some(descriptor) => Some(descriptor.value_ref()),
+            None => None,
+        }
+    }
+
     pub(super) fn descriptor(
         &self,
         default: DataPropertyDescriptor,
@@ -115,6 +122,10 @@ impl FunctionProperty {
 
     pub(super) fn value(&self) -> Value {
         self.descriptor.value()
+    }
+
+    pub(super) const fn value_ref(&self) -> &Value {
+        self.descriptor.value_ref()
     }
 
     pub(super) const fn is_configurable(&self) -> bool {

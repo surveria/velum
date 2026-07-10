@@ -228,6 +228,10 @@ impl NativeFunctionRegistry {
         self.slots.get(slot(kind)?.index()).copied().flatten()
     }
 
+    pub(in crate::runtime) fn ids(&self) -> impl Iterator<Item = NativeFunctionId> + '_ {
+        self.slots.iter().copied().flatten()
+    }
+
     pub(in crate::runtime) fn insert(
         &mut self,
         kind: NativeFunctionKind,

@@ -4,6 +4,7 @@ use crate::{
         DataPropertyDescriptor, DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable,
         PropertyKey, PropertyLookup, PropertyWritable,
     },
+    runtime::trace::{StrongEdgeReference, StrongEdgeVisitor},
     storage::atom::AtomTable,
     value::Value,
 };
@@ -152,6 +153,39 @@ impl FunctionProperties {
             properties: Vec::new(),
             property_order: Vec::new(),
         }
+    }
+
+    pub(in crate::runtime) fn visit_strong_edges<Kind: Copy, V: StrongEdgeVisitor<Kind>>(
+        &self,
+        kind: Kind,
+        visitor: &mut V,
+    ) -> Result<()> {
+        visitor.visit(kind, StrongEdgeReference::Value(&self.prototype))?;
+        visitor.visit(
+            kind,
+            StrongEdgeReference::Value(self.intrinsic_defaults.length.value_ref()),
+        )?;
+        visitor.visit(
+            kind,
+            StrongEdgeReference::Value(self.intrinsic_defaults.name.value_ref()),
+        )?;
+        if let Some(prototype) = &self.intrinsic_defaults.prototype {
+            visitor.visit(kind, StrongEdgeReference::Value(prototype.value_ref()))?;
+        }
+        if let Some(value) = self.length.stored_value() {
+            visitor.visit(kind, StrongEdgeReference::Value(value))?;
+        }
+        if let Some(value) = self.name.stored_value() {
+            visitor.visit(kind, StrongEdgeReference::Value(value))?;
+        }
+        for entry in &self.properties {
+            visitor.visit(kind, StrongEdgeReference::PropertyKey(entry.key))?;
+            visitor.visit(kind, StrongEdgeReference::Value(entry.property.value_ref()))?;
+        }
+        for key in &self.property_order {
+            visitor.visit(kind, StrongEdgeReference::PropertyKey(*key))?;
+        }
+        Ok(())
     }
 
     pub(in crate::runtime) fn prototype(&self) -> Value {

@@ -1,7 +1,11 @@
 use crate::{
     error::{Error, Result},
     runtime::{
-        Context, abstract_operations::same_value, call::RuntimeCallArgs, native::NativeFunctionKind,
+        Context,
+        abstract_operations::same_value,
+        call::RuntimeCallArgs,
+        native::NativeFunctionKind,
+        trace::{StrongEdgeReference, StrongEdgeVisitor, VmCallableEdgeKind},
     },
     value::{BoundFunctionId, Value},
 };
@@ -27,6 +31,27 @@ impl BoundFunction {
             this_value,
             args,
         }
+    }
+
+    pub(in crate::runtime) fn visit_strong_edges<V: StrongEdgeVisitor<VmCallableEdgeKind>>(
+        &self,
+        visitor: &mut V,
+    ) -> Result<()> {
+        visitor.visit(
+            VmCallableEdgeKind::BoundFunctionInternal,
+            StrongEdgeReference::Value(&self.target),
+        )?;
+        visitor.visit(
+            VmCallableEdgeKind::BoundFunctionInternal,
+            StrongEdgeReference::Value(&self.this_value),
+        )?;
+        for arg in &self.args {
+            visitor.visit(
+                VmCallableEdgeKind::BoundFunctionInternal,
+                StrongEdgeReference::Value(arg),
+            )?;
+        }
+        Ok(())
     }
 }
 

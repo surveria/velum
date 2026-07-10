@@ -180,6 +180,9 @@ impl Context {
         if let Some(id) = self.promise_prototype {
             visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
         }
+        for id in self.native_function_registry.ids() {
+            visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::NativeFunction(id))?;
+        }
         for job in &self.promise_jobs {
             job.visit_direct_roots(visitor)?;
         }
