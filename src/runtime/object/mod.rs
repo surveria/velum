@@ -108,6 +108,7 @@ struct Object {
     is_raw_json: bool,
     prototype: Option<ObjectId>,
     extensibility: ObjectExtensibility,
+    storage_ledger: Option<crate::runtime::storage_ledger::VmStorageLedger>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -140,7 +141,52 @@ impl Object {
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
+            storage_ledger: None,
         }
+    }
+
+    fn activate_storage(
+        &mut self,
+        storage_ledger: crate::runtime::storage_ledger::VmStorageLedger,
+    ) -> Result<()> {
+        if self.storage_ledger.is_some() {
+            return Err(Error::runtime("object property storage is already active"));
+        }
+        let reservation = storage_ledger.reserve_count(
+            crate::runtime::VmStorageKind::ObjectProperty,
+            self.property_count(),
+        )?;
+        reservation.commit()?;
+        self.storage_ledger = Some(storage_ledger);
+        Ok(())
+    }
+
+    fn reserve_property_growth(
+        &self,
+    ) -> Result<Option<crate::runtime::storage_ledger::VmStorageReservation>> {
+        self.reserve_property_growth_by(1)
+    }
+
+    fn reserve_property_growth_by(
+        &self,
+        additional_count: usize,
+    ) -> Result<Option<crate::runtime::storage_ledger::VmStorageReservation>> {
+        self.storage_ledger
+            .as_ref()
+            .map(|storage_ledger| {
+                storage_ledger.reserve_count(
+                    crate::runtime::VmStorageKind::ObjectProperty,
+                    additional_count,
+                )
+            })
+            .transpose()
+    }
+
+    fn release_property(&self) -> Result<()> {
+        let Some(storage_ledger) = &self.storage_ledger else {
+            return Ok(());
+        };
+        storage_ledger.release_count(crate::runtime::VmStorageKind::ObjectProperty, 1)
     }
 
     fn ordinary_with_property_capacity(capacity: usize) -> Self {
@@ -162,6 +208,7 @@ impl Object {
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
+            storage_ledger: None,
         }
     }
 
@@ -184,6 +231,7 @@ impl Object {
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
+            storage_ledger: None,
         }
     }
 
@@ -206,6 +254,7 @@ impl Object {
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
+            storage_ledger: None,
         }
     }
 
@@ -481,8 +530,19 @@ impl Object {
         let property =
             ObjectProperty::ordinary(value, enumerable.unwrap_or(PropertyEnumerable::Yes));
         let is_enumerable = property.is_enumerable();
-        let previous = self.array_storage.insert_dense_property(index, property)?;
+        let reservation = self.reserve_property_growth()?;
+        if let Some(reservation) = reservation {
+            reservation.commit()?;
+        }
+        let previous = match self.array_storage.insert_dense_property(index, property) {
+            Ok(previous) => previous,
+            Err(error) => {
+                self.release_property()?;
+                return Err(error);
+            }
+        };
         if previous.is_some() {
+            self.release_property()?;
             return Err(Error::runtime("array index storage replaced existing slot"));
         }
         if is_enumerable {
@@ -503,7 +563,7 @@ impl Object {
         }
         if self.array_length.is_some()
             && let Some(index) = ArrayIndex::parse(property.name())
-            && self.delete_array_element(index)
+            && self.delete_array_element(index)?
         {
             return Ok(true);
         }
@@ -605,20 +665,21 @@ impl Object {
         view.write(index.position()?, byte_number(value)?)
     }
 
-    fn delete_array_element(&mut self, index: ArrayIndex) -> bool {
+    fn delete_array_element(&mut self, index: ArrayIndex) -> Result<bool> {
         let Some(property) = self.array_storage.dense_property(index) else {
-            return false;
+            return Ok(false);
         };
         if !property.is_configurable() {
-            return false;
+            return Ok(false);
         }
         if let Ok(Some(property)) = self.array_storage.remove_dense_property(index) {
             if property.is_enumerable() {
                 self.enumerable_property_count = self.enumerable_property_count.saturating_sub(1);
             }
-            return true;
+            self.release_property()?;
+            return Ok(true);
         }
-        false
+        Ok(false)
     }
 
     fn has_enumerable_own_keys(&self) -> bool {

@@ -17,11 +17,11 @@ impl Context {
         &mut self,
         original_args: &[Value],
     ) -> Result<BindingScope> {
-        let atom = self.atoms.intern(ARGUMENTS_BINDING_NAME)?;
+        let atom = self.intern_atom(ARGUMENTS_BINDING_NAME)?;
         let value = self.create_arguments_object(original_args)?;
         self.ensure_extra_binding_capacity(0)?;
         let mut scope = BindingScope::new();
-        scope.insert(atom, BindingCell::new(value, true, DeclKind::Var));
+        scope.insert(atom, BindingCell::new(value, true, DeclKind::Var))?;
         Ok(scope)
     }
 

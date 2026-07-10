@@ -34,6 +34,11 @@ impl Context {
         cache: StaticNameAtomCacheHandle,
         evaluate: impl FnOnce(&mut Self) -> Result<T>,
     ) -> Result<T> {
+        let cache_entries = cache.storage_entry_count()?;
+        let reservation = self
+            .storage_ledger
+            .reserve_count(crate::runtime::VmStorageKind::CacheEntry, cache_entries)?;
+        reservation.commit()?;
         self.static_name_atom_caches.push(cache);
         let result = evaluate(self);
         self.pop_static_name_atom_cache()?;
@@ -47,6 +52,15 @@ impl Context {
         binding_layout: BindingLayout,
         evaluate: impl FnOnce(&mut Self) -> Result<T>,
     ) -> Result<T> {
+        let cache_entries = atom_cache
+            .storage_entry_count()?
+            .checked_add(binding_cache.storage_entry_count()?)
+            .and_then(|count| count.checked_add(binding_layout.storage_entry_count().ok()?))
+            .ok_or_else(|| Error::limit("static cache entry count overflowed"))?;
+        let reservation = self
+            .storage_ledger
+            .reserve_count(crate::runtime::VmStorageKind::CacheEntry, cache_entries)?;
+        reservation.commit()?;
         self.static_name_atom_caches.push(atom_cache);
         self.static_binding_caches.push(binding_cache);
         self.static_binding_layouts.push(binding_layout);
@@ -579,23 +593,32 @@ impl Context {
     }
 
     fn pop_static_name_atom_cache(&mut self) -> Result<()> {
-        if self.static_name_atom_caches.pop().is_some() {
-            return Ok(());
-        }
-        Err(Error::runtime("static name atom cache disappeared"))
+        let Some(cache) = self.static_name_atom_caches.pop() else {
+            return Err(Error::runtime("static name atom cache disappeared"));
+        };
+        self.storage_ledger.release_count(
+            crate::runtime::VmStorageKind::CacheEntry,
+            cache.storage_entry_count()?,
+        )
     }
 
     fn pop_static_binding_cache(&mut self) -> Result<()> {
-        if self.static_binding_caches.pop().is_some() {
-            return Ok(());
-        }
-        Err(Error::runtime("static binding cache disappeared"))
+        let Some(cache) = self.static_binding_caches.pop() else {
+            return Err(Error::runtime("static binding cache disappeared"));
+        };
+        self.storage_ledger.release_count(
+            crate::runtime::VmStorageKind::CacheEntry,
+            cache.storage_entry_count()?,
+        )
     }
 
     fn pop_static_binding_layout(&mut self) -> Result<()> {
-        if self.static_binding_layouts.pop().is_some() {
-            return Ok(());
-        }
-        Err(Error::runtime("static binding layout disappeared"))
+        let Some(layout) = self.static_binding_layouts.pop() else {
+            return Err(Error::runtime("static binding layout disappeared"));
+        };
+        self.storage_ledger.release_count(
+            crate::runtime::VmStorageKind::CacheEntry,
+            layout.storage_entry_count()?,
+        )
     }
 }

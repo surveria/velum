@@ -60,7 +60,20 @@ impl Context {
         id: FunctionId,
         fields: Rc<[ResolvedClassField]>,
     ) -> Result<()> {
+        let previous_count = self
+            .function(id)?
+            .class_fields
+            .as_ref()
+            .map_or(0, |existing| existing.len());
+        let additional_count = fields.len().saturating_sub(previous_count);
+        let removed_count = previous_count.saturating_sub(fields.len());
+        let reservation = self
+            .storage_ledger
+            .reserve_count(crate::runtime::VmStorageKind::CacheEntry, additional_count)?;
+        reservation.commit()?;
         self.function_mut(id)?.class_fields = Some(fields);
+        self.storage_ledger
+            .release_count(crate::runtime::VmStorageKind::CacheEntry, removed_count)?;
         Ok(())
     }
 

@@ -136,6 +136,106 @@ fn enforces_retained_source_limits_and_keeps_vm_policies_isolated() -> TestResul
     Ok(())
 }
 
+#[test]
+fn enforces_binding_limits_and_releases_finished_scopes() -> TestResult {
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::Binding, 0);
+    let mut vm = vm_with_storage_limits(limits);
+    let error = expect_eval_error(&mut vm, "let camera = 1;")?;
+    ensure_limit(&error, "Binding")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::Binding),
+        0,
+        "binding count after rejection",
+    )?;
+
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::Binding, 1);
+    let mut vm = vm_with_storage_limits(limits);
+    vm.eval("{ let camera = 1; } { let lens = 2; }")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::Binding),
+        0,
+        "binding count after lexical scope release",
+    )
+}
+
+#[test]
+fn enforces_javascript_native_and_bound_function_limits() -> TestResult {
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::JavaScriptFunction, 0);
+    let mut vm = vm_with_storage_limits(limits);
+    let error = expect_eval_error(&mut vm, "function camera() {}")?;
+    ensure_limit(&error, "JavaScriptFunction")?;
+    ensure_usize(
+        vm.storage_snapshot()?
+            .count(VmStorageKind::JavaScriptFunction),
+        0,
+        "JavaScript function count after rejection",
+    )?;
+
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::NativeFunction, 0);
+    let mut vm = vm_with_storage_limits(limits);
+    let error = expect_eval_error(&mut vm, "Math.abs(1);")?;
+    ensure_limit(&error, "NativeFunction")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::NativeFunction),
+        0,
+        "native function count after rejection",
+    )?;
+
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::BoundFunction, 0);
+    let mut vm = vm_with_storage_limits(limits);
+    let error = expect_eval_error(&mut vm, "(() => 1).bind(null);")?;
+    ensure_limit(&error, "BoundFunction")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::BoundFunction),
+        0,
+        "bound function count after rejection",
+    )
+}
+
+#[test]
+fn enforces_object_property_limits_and_reuses_released_capacity() -> TestResult {
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::ObjectProperty, 0);
+    let mut vm = vm_with_storage_limits(limits);
+    let error = expect_eval_error(&mut vm, "({ camera: 1 });")?;
+    ensure_limit(&error, "ObjectProperty")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::ObjectProperty),
+        0,
+        "object property count after rejection",
+    )?;
+
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::ObjectProperty, 2);
+    let mut vm = vm_with_storage_limits(limits);
+    vm.eval("{ let camera = { lens: 1 }; delete camera.lens; camera.body = 2; }")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::ObjectProperty),
+        2,
+        "object property count after delete and reuse",
+    )?;
+
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::ObjectProperty, 2);
+    let mut vm = vm_with_storage_limits(limits);
+    vm.eval("{ let camera = () => 1; delete camera.name; camera.lens = 2; }")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::ObjectProperty),
+        2,
+        "function property count after delete and reuse",
+    )
+}
+
+#[test]
+fn enforces_cache_entry_limits_before_cache_materialization() -> TestResult {
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::CacheEntry, 0);
+    let mut vm = vm_with_storage_limits(limits);
+    let error = expect_eval_error(&mut vm, "var camera = 1;")?;
+    ensure_limit(&error, "CacheEntry")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::CacheEntry),
+        0,
+        "cache entry count after rejection",
+    )
+}
+
 fn vm_with_storage_limits(storage: VmStorageLimits) -> Vm {
     let limits = RuntimeLimits {
         storage,

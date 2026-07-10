@@ -81,6 +81,7 @@ impl Object {
         if self.contains_named_property(shapes, key)? {
             return Err(Error::runtime("object property slot replaced existing key"));
         }
+        let reservation = self.reserve_property_growth()?;
         let attributes = property.shape_attributes();
         let shape = shapes.transition_after_add(self.shape, key, attributes)?;
         let Some(slot) = shapes.property_slot(shape, key)? else {
@@ -88,6 +89,9 @@ impl Object {
         };
         if slot.index() != self.named_properties.len() {
             return Err(Error::runtime("shape property slot does not match storage"));
+        }
+        if let Some(reservation) = reservation {
+            reservation.commit()?;
         }
         self.named_properties
             .push(NamedProperty::new(key, property));
@@ -110,6 +114,7 @@ impl Object {
         let shape = shapes.transition_after_remove(self.shape, key)?;
         let removed = self.named_properties.remove(index);
         self.shape = shape;
+        self.release_property()?;
         Ok(Some(removed.property))
     }
 

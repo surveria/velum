@@ -27,6 +27,7 @@ use super::{
 use crate::runtime::property::well_known::DescriptorPropertyKeys;
 
 const DESCRIPTOR_CONFIGURABLE_PROPERTY: &str = "configurable";
+const DESCRIPTOR_CACHE_ENTRY_COUNT: usize = 6;
 const DESCRIPTOR_ENUMERABLE_PROPERTY: &str = "enumerable";
 const DESCRIPTOR_GET_PROPERTY: &str = "get";
 const DESCRIPTOR_SET_PROPERTY: &str = "set";
@@ -346,7 +347,7 @@ impl Context {
         let key = self.intern_property_key(name)?;
         self.native_function_mut(constructor)?
             .properties_mut()
-            .define_builtin(key, function, PropertyEnumerable::No);
+            .define_builtin(key, function, PropertyEnumerable::No)?;
         Ok(())
     }
 
@@ -566,14 +567,31 @@ impl Context {
         if let Some(keys) = self.descriptor_property_keys {
             return Ok(keys);
         }
-        let keys = DescriptorPropertyKeys::new(
-            self.intern_property_key(DESCRIPTOR_VALUE_PROPERTY)?,
-            self.intern_property_key(DESCRIPTOR_WRITABLE_PROPERTY)?,
-            self.intern_property_key(DESCRIPTOR_ENUMERABLE_PROPERTY)?,
-            self.intern_property_key(DESCRIPTOR_CONFIGURABLE_PROPERTY)?,
-            self.intern_property_key(DESCRIPTOR_GET_PROPERTY)?,
-            self.intern_property_key(DESCRIPTOR_SET_PROPERTY)?,
-        );
+        let reservation = self.storage_ledger.reserve_count(
+            crate::runtime::VmStorageKind::CacheEntry,
+            DESCRIPTOR_CACHE_ENTRY_COUNT,
+        )?;
+        reservation.commit()?;
+        let keys_result = (|| {
+            Ok(DescriptorPropertyKeys::new(
+                self.intern_property_key(DESCRIPTOR_VALUE_PROPERTY)?,
+                self.intern_property_key(DESCRIPTOR_WRITABLE_PROPERTY)?,
+                self.intern_property_key(DESCRIPTOR_ENUMERABLE_PROPERTY)?,
+                self.intern_property_key(DESCRIPTOR_CONFIGURABLE_PROPERTY)?,
+                self.intern_property_key(DESCRIPTOR_GET_PROPERTY)?,
+                self.intern_property_key(DESCRIPTOR_SET_PROPERTY)?,
+            ))
+        })();
+        let keys = match keys_result {
+            Ok(keys) => keys,
+            Err(error) => {
+                self.storage_ledger.release_count(
+                    crate::runtime::VmStorageKind::CacheEntry,
+                    DESCRIPTOR_CACHE_ENTRY_COUNT,
+                )?;
+                return Err(error);
+            }
+        };
         self.descriptor_property_keys = Some(keys);
         Ok(keys)
     }

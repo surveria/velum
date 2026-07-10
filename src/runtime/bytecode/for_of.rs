@@ -82,9 +82,9 @@ impl Context {
             {
                 return Err(self.iterator_close_on_error(source, error));
             }
-            self.push_lexical_scope_with(scope);
+            self.push_lexical_scope_with(scope)?;
             if let Err(error) = self.remember_active_static_binding(name.name(), atom) {
-                if self.pop_lexical_scope().is_none() {
+                if self.pop_lexical_scope()?.is_none() {
                     return Err(Error::runtime(
                         "bytecode for-of lexical scope disappeared after binding failure",
                     ));
@@ -92,7 +92,7 @@ impl Context {
                 return Err(self.iterator_close_on_error(source, error));
             }
             let completion = self.eval_bytecode_block(body);
-            let Some(removed_scope) = self.pop_lexical_scope() else {
+            let Some(removed_scope) = self.pop_lexical_scope()? else {
                 let error = Error::runtime("bytecode for-of lexical scope disappeared");
                 return Err(self.iterator_close_on_error(source, error));
             };

@@ -321,6 +321,60 @@ check_storage_limit_boundary() {
       "${repo_root}/src/runtime/function/mod.rs"; then
     fail "storage limit boundary changed; OutputEntry and SourceRecord checks and release accounting are required"
   fi
+
+  if ! grep -F -q 'state: Rc<VmStorageLedgerState>,' \
+      "${repo_root}/src/runtime/storage_ledger.rs" \
+    || ! grep -F -q 'counts: [Cell<usize>; STORAGE_KIND_COUNT],' \
+      "${repo_root}/src/runtime/storage_ledger.rs" \
+    || ! grep -F -q 'pub(in crate::runtime) fn reserve_count(' \
+      "${repo_root}/src/runtime/storage_ledger.rs" \
+    || ! grep -F -q 'pub(in crate::runtime) fn release_count(' \
+      "${repo_root}/src/runtime/storage_ledger.rs" \
+    || ! grep -F -q 'storage reservation became stale' \
+      "${repo_root}/src/runtime/storage_ledger.rs"; then
+    fail "storage limit boundary changed; AS-05b2c2 requires one VM-local checked O(1) ledger"
+  fi
+
+  for source in \
+    'VmStorageKind::Binding,' \
+    'VmStorageKind::JavaScriptFunction,' \
+    'VmStorageKind::NativeFunction,' \
+    'VmStorageKind::BoundFunction,' \
+    'VmStorageKind::ObjectProperty,' \
+    'VmStorageKind::CacheEntry,' \
+    'context.ensure_durable_storage_ledger_matches(&snapshot)?;'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/accounting.rs"; then
+      fail "storage limit boundary changed; AS-05b2c2 ledger categories require independent snapshot reconciliation"
+    fi
+  done
+
+  if ! grep -F -q 'storage_ledger.reserve_count(VmStorageKind::Binding, 1)?;' \
+      "${repo_root}/src/runtime/binding/scope.rs" \
+    || ! grep -F -q 'scope.deactivate_storage()?;' \
+      "${repo_root}/src/runtime/mod.rs" \
+    || ! grep -F -q 'reserve_count(VmStorageKind::JavaScriptFunction, 1)?;' \
+      "${repo_root}/src/runtime/function/storage.rs" \
+    || ! grep -F -q 'VmStorageKind::NativeFunction, 1' \
+      "${repo_root}/src/runtime/native/core.rs" \
+    || ! grep -F -q 'VmStorageKind::BoundFunction, 1' \
+      "${repo_root}/src/runtime/call/bound.rs"; then
+    fail "storage limit boundary changed; Binding and callable growth/release seams are required"
+  fi
+
+  if ! grep -F -q 'crate::runtime::VmStorageKind::ObjectProperty,' \
+      "${repo_root}/src/runtime/object/mod.rs" \
+    || ! grep -F -q 'self.release_property()?;' \
+      "${repo_root}/src/runtime/object/property/slot.rs" \
+    || ! grep -F -q 'VmStorageKind::ObjectProperty, property_count' \
+      "${repo_root}/src/runtime/function/properties.rs" \
+    || ! grep -F -q 'reserve_count(VmStorageKind::CacheEntry, cache_entries)?;' \
+      "${repo_root}/src/runtime/object/shape.rs" \
+    || ! grep -F -q 'cache.storage_entry_count()?,' \
+      "${repo_root}/src/runtime/property/static_names/mod.rs" \
+    || ! grep -F -q 'DESCRIPTOR_CACHE_ENTRY_COUNT' \
+      "${repo_root}/src/runtime/native/builtins/object.rs"; then
+    fail "storage limit boundary changed; ObjectProperty and CacheEntry growth/release seams are required"
+  fi
 }
 
 check_runtime_frontend_boundary() {
@@ -1084,8 +1138,9 @@ check_state_owner_allowlists() {
       | sed -nE \
         's/^[[:space:]]*(pub\(crate\)[[:space:]]+)?([a-z_][a-z0-9_]*):.*/\2/p'
   )"
-  expected_context_fields='identity
+expected_context_fields='identity
 limits
+storage_ledger
 atoms
 strings
 symbols
@@ -1159,7 +1214,8 @@ byte_buffer
 uint8_array
 is_raw_json
 prototype
-extensibility'
+extensibility
+storage_ledger'
   compare_set "Object payload field allowlist" "${object_fields}" "${expected_object_fields}"
 
   context_owners="$(
@@ -1508,6 +1564,30 @@ mutate_storage_limit_output_release() {
     "${fixture_root}/src/runtime/globals.rs"
 }
 
+mutate_storage_limit_durable_reconciliation() {
+  local fixture_root="$1"
+  sed -i '/context.ensure_durable_storage_ledger_matches(&snapshot)?;/d' \
+    "${fixture_root}/src/runtime/accounting.rs"
+}
+
+mutate_storage_limit_binding_release() {
+  local fixture_root="$1"
+  sed -i '/scope.deactivate_storage()?;/d' \
+    "${fixture_root}/src/runtime/mod.rs"
+}
+
+mutate_storage_limit_property_release() {
+  local fixture_root="$1"
+  sed -i '/self.release_property()?;/d' \
+    "${fixture_root}/src/runtime/object/property/slot.rs"
+}
+
+mutate_storage_limit_shape_cache() {
+  local fixture_root="$1"
+  sed -i '/reserve_count(VmStorageKind::CacheEntry, cache_entries)?;/d' \
+    "${fixture_root}/src/runtime/object/shape.rs"
+}
+
 mutate_teardown_storage_snapshot() {
   local fixture_root="$1"
   sed -i '/            storage: self.storage_snapshot()?,/d' \
@@ -1709,6 +1789,14 @@ run_self_tests() {
     'storage limit boundary changed' mutate_storage_limit_object_insertion
   expect_guard_failure "${temp_dir}" storage-limit-output-release \
     'storage limit boundary changed' mutate_storage_limit_output_release
+  expect_guard_failure "${temp_dir}" storage-limit-durable-reconciliation \
+    'storage limit boundary changed' mutate_storage_limit_durable_reconciliation
+  expect_guard_failure "${temp_dir}" storage-limit-binding-release \
+    'storage limit boundary changed' mutate_storage_limit_binding_release
+  expect_guard_failure "${temp_dir}" storage-limit-property-release \
+    'storage limit boundary changed' mutate_storage_limit_property_release
+  expect_guard_failure "${temp_dir}" storage-limit-shape-cache \
+    'storage limit boundary changed' mutate_storage_limit_shape_cache
   expect_guard_failure "${temp_dir}" teardown-storage-snapshot \
     'storage accounting boundary changed' mutate_teardown_storage_snapshot
   expect_guard_failure "${temp_dir}" bound-function-edge \

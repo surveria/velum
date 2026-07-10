@@ -361,10 +361,10 @@ impl Context {
     ) -> Result<PatternIteration> {
         let lexical = matches!(kind, DeclKind::Let | DeclKind::Const);
         if lexical {
-            self.push_lexical_scope_with(BindingScope::new());
+            self.push_lexical_scope_with(BindingScope::new())?;
         }
         let iteration = self.destructured_body_completion(pattern, kind, value, body);
-        if lexical && self.pop_lexical_scope().is_none() {
+        if lexical && self.pop_lexical_scope()?.is_none() {
             return Err(Error::runtime("bytecode pattern loop scope disappeared"));
         }
         iteration

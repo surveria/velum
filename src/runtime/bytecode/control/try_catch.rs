@@ -130,7 +130,7 @@ impl Context {
         let Some(param) = catch.param.as_ref() else {
             return self.eval_bytecode_maybe_scoped_block(&catch.body, catch.body_scoped);
         };
-        self.push_lexical_scope();
+        self.push_lexical_scope()?;
         let result = self.eval_bytecode_catch_scope(
             param,
             value,
@@ -138,7 +138,7 @@ impl Context {
             catch.body_scoped,
             catch.body_fast_path.as_ref(),
         );
-        let removed = self.pop_lexical_scope();
+        let removed = self.pop_lexical_scope()?;
         if removed.is_none() {
             return Err(Error::runtime("bytecode catch lexical scope disappeared"));
         }

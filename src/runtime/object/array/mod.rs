@@ -96,7 +96,7 @@ impl ObjectHeap {
             let before = self.object(id)?.structure_snapshot();
             if let Some(property) = self
                 .object_mut(id)?
-                .pop_packed_for_len_if_configurable(length_usize)
+                .pop_packed_for_len_if_configurable(length_usize)?
             {
                 self.object_mut(id)?.array_length = Some(index.length());
                 self.bump_if_structure_changed(id, before)?;
@@ -748,7 +748,7 @@ impl Object {
     }
 
     fn delete_array_index(&mut self, index: ArrayIndex, shapes: &mut ShapeTable) -> Result<bool> {
-        if self.array_length.is_some() && self.delete_array_element(index) {
+        if self.array_length.is_some() && self.delete_array_element(index)? {
             return Ok(true);
         }
         let Some(key) = self.array_storage.sparse_key(index) else {

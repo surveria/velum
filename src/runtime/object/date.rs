@@ -66,6 +66,7 @@ impl Object {
             is_raw_json: false,
             prototype: None,
             extensibility: super::ObjectExtensibility::Extensible,
+            storage_ledger: None,
         }
     }
 }

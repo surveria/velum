@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    runtime::limits::VmStorageLimits,
+    runtime::{limits::VmStorageLimits, storage_ledger::VmStorageLedger},
     value::ObjectId,
 };
 
@@ -41,13 +41,14 @@ impl PrototypeLookupVersion {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ObjectHeap {
     pub(super) objects: Vec<super::Object>,
     pub(super) shapes: ShapeTable,
     pub(super) object_prototype: Option<ObjectId>,
     pub(super) array_prototype: Option<ObjectId>,
     pub(super) storage_limits: VmStorageLimits,
+    pub(super) storage_ledger: VmStorageLedger,
     pub(super) object_payload_bytes: usize,
     pub(super) byte_buffer_count: usize,
     pub(super) byte_buffer_payload_bytes: usize,
@@ -55,13 +56,17 @@ pub struct ObjectHeap {
 }
 
 impl ObjectHeap {
-    pub const fn new(storage_limits: VmStorageLimits) -> Self {
+    pub(in crate::runtime) fn new(
+        storage_limits: VmStorageLimits,
+        storage_ledger: VmStorageLedger,
+    ) -> Self {
         Self {
             objects: Vec::new(),
-            shapes: ShapeTable::new(),
+            shapes: ShapeTable::new(storage_ledger.clone()),
             object_prototype: None,
             array_prototype: None,
             storage_limits,
+            storage_ledger,
             object_payload_bytes: 0,
             byte_buffer_count: 0,
             byte_buffer_payload_bytes: 0,

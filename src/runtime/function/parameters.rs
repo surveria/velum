@@ -118,7 +118,7 @@ impl Context {
                 let inserted = scope.insert_or_replace_at_slot(atom, cell, frame.slot())?;
                 Self::mark_binding_scope_frame_slot(&mut scope, frame, inserted)?;
             } else {
-                scope.insert(atom, cell);
+                scope.insert(atom, cell)?;
             }
         }
         Ok(scope)

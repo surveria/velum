@@ -448,9 +448,11 @@ entry reclamation remains AS-07 work.
 `RuntimeLimits` retains its source, syntax, step, string, binding, object, and
 per-object property limits. AS-05b2c1 adds `VmStorageLimits`, an unlimited-by-
 default immutable policy keyed by all twenty-six `VmStorageKind` categories.
-It currently enforces atom, heap-string, Symbol, object, buffer, host-callback,
-output, and source-record growth. Callable/property/cache and async/root/frame/
-association categories remain explicit AS-05b2c2/c3 work rather than being
+AS-05b2c1 enforces atom, heap-string, Symbol, object, buffer, host-callback,
+output, and source-record growth. AS-05b2c2 adds Binding,
+JavaScriptFunction, NativeFunction, BoundFunction, ObjectProperty, and
+CacheEntry enforcement through one VM-local O(1) ledger. Async/root/frame/
+association categories remain explicit AS-05b2c3 work rather than being
 claimed complete.
 
 `VmResourceUsage` retains its existing hot counters. AS-05b2a adds a separate
@@ -629,8 +631,8 @@ decision sequence:
 | AS-05a2d | retained object/function ids and handles | non-cloneable identity/registry/slot-generation capability, source-proven creation, consuming release, Drop safety-net cleanup, and retained-root category merged in PR #431 |
 | AS-05b2a | every current variable-size Context owner and nested logical record | twenty-six-category checked snapshot plus consuming teardown reconciliation merged in PR #432 |
 | AS-05b2b | retained payload bytes by the same owner map | independent checked UTF-8/raw-buffer payload map merged in PR #433 without claiming allocator-resident RSS |
-| AS-05b2c1 | public owner-limit policy plus payload/top-level arenas | immutable sparse custom policy and pre-commit limits for atoms, strings, Symbols, objects, buffers, callbacks, output, and source in draft PR #434 |
-| AS-05b2c2 | binding, callable, property, and cache growth | enforce remaining synchronous durable owners without hot-path heap scans |
+| AS-05b2c1 | public owner-limit policy plus payload/top-level arenas | immutable sparse custom policy and pre-commit limits for atoms, strings, Symbols, objects, buffers, callbacks, output, and source merged in PR #434 |
+| AS-05b2c2 | binding, callable, property, and cache growth | VM-local O(1) ledger, pre-commit reservations, release/rollback paths, and independent snapshot reconciliation implemented in draft PR #435 |
 | AS-05b2c3 | async, root, frame, and association growth | enforce remaining transient/queued owners and prove full snapshot-to-limit coverage |
 | AS-06 | active execution roots and structured nested bytecode | explicit activation/block stacks and suspend/resume results |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |

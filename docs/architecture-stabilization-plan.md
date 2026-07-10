@@ -26,9 +26,9 @@ version policy, and uses the validation lane appropriate to the change.
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
 - Current program state: AS-01 through AS-04, AS-05a1 through AS-05a2d,
-  AS-05b1a through AS-05b1c, AS-05b2a, and AS-05b2b are complete; AS-05b2c1
-  storage-limit policy and payload/top-level owner enforcement are implemented
-  in draft PR #434
+  AS-05b1a through AS-05b1c, AS-05b2a, AS-05b2b, and AS-05b2c1 are complete;
+  AS-05b2c2 durable binding/callable/property/cache enforcement is implemented
+  in draft PR #435
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -486,7 +486,7 @@ dependencies do not overlap.
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
 | AS-04 | Complete | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans merged in PR #421 with exact-tree correctness and canonical report publication. |
-| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05a2d ownership/handle work is merged through PR #431; AS-05b1a through AS-05b1c root/edge work is merged through PR #430; AS-05b2a/b accounting is merged through PR #433; AS-05b2c1 policy plus payload/top-level limits are implemented in draft PR #434; callable/property/cache and async/root/frame/association enforcement remain AS-05b2c2/c3. |
+| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05b2c1 are merged through PR #434; AS-05b2c2 binding/callable/property/cache limits are implemented in draft PR #435; async/root/frame/association enforcement and final reconciliation remain AS-05b2c3. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
 | AS-08 | Backlog | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | Optimizer on/off equivalence, harness opcodes removed, workload-shaped paths replaced or justified by broad evidence. |
@@ -1344,6 +1344,46 @@ AS-05b2c1 local implementation evidence:
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
+AS-05b2c1 completion evidence:
+
+- PR #434 merged as `db704bd` after required CI run `29118568725`
+  certified exact tree `61535178e7f5411842938e5cbcb6b1b3579a40bf`;
+- the required corpus preserved all 36,659 expected Test262 variants, the
+  exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
+  cases;
+- post-merge run `29118808176` measured five of five valid sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T194046Z.*` in
+  report-only commit `213f350`.
+
+AS-05b2c2 local implementation evidence:
+
+- one VM-local `VmStorageLedger` provides O(1) projected count checks across
+  stores that share a `VmStorageKind`; it uses `Rc` only within one VM and
+  never introduces process-global mutable state or cross-VM sharing;
+- bindings activate and release their ledger charges with lexical/function
+  scopes, while closure upvalues remain charged with their owning function;
+- JavaScript, native, and bound function creation reserves callable records
+  before arena growth, including native-registry rollback and bound-function
+  rollback when the companion native callable cannot be created;
+- ordinary objects, arrays, JavaScript functions, and native functions share
+  the global `ObjectProperty` budget. Named, dense, packed, descriptor, delete,
+  and pop paths reserve or release exact deltas without scanning the heap;
+- atom/string indices, binding indices, shape layouts, function metadata,
+  property-order indices, well-known/descriptor keys, static evaluation
+  caches, class fields, and the native registry share the global `CacheEntry`
+  budget;
+- every public storage snapshot independently recounts the six AS-05b2c2
+  categories and rejects any ledger drift, so the enforcement mechanism cannot
+  silently diverge from the AS-05b2a owner contract;
+- four additional direct tests cover rejection for all six categories,
+  lexical binding release, object/function property delete-and-reuse, native
+  registry rollback, and zero-budget cache materialization. The complete
+  engine test suite and strict Clippy pass locally;
+- the architecture guard fixes the ledger owner, six-category reconciliation,
+  binding/callable activation, property release, and shape/static cache seams.
+  Four new mutations prove that reconciliation, scope release, property
+  release, and shape-cache charging cannot disappear unnoticed.
+
 AS-05a1 completion evidence:
 
 - PR #422 merged as `4143ec4` after required CI run `29098691127`
@@ -1900,8 +1940,9 @@ reviewable scope.
 30. AS-05b2b: add logical retained payload-byte accounting (complete in PR
     #433).
 31. AS-05b2c1: define public storage-limit policy and enforce payload/top-level
-    owners (implemented in draft PR #434).
-32. AS-05b2c2: enforce binding, callable, property, and cache owners.
+    owners (complete in PR #434).
+32. AS-05b2c2: enforce binding, callable, property, and cache owners
+    (implemented in draft PR #435).
 33. AS-05b2c3: enforce async, root, frame, and association owners and prove
     complete growth-point reconciliation.
 34. AS-06a: migrate synchronous calls and structured control flow to explicit

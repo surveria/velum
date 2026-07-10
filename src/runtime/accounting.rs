@@ -127,12 +127,14 @@ impl VmStorageSnapshot {
         let mut counter = StorageCounter::new();
         context.record_storage_counts(&mut counter)?;
         context.record_storage_payload_bytes(&mut counter)?;
-        Ok(Self {
+        let snapshot = Self {
             counts: counter.counts,
             payload_bytes: counter.payload_bytes,
             total: counter.total,
             total_payload_bytes: counter.total_payload_bytes,
-        })
+        };
+        context.ensure_durable_storage_ledger_matches(&snapshot)?;
+        Ok(snapshot)
     }
 
     /// Returns the logical record count for one owner category.
@@ -223,6 +225,27 @@ impl Context {
     /// supported range.
     pub fn storage_snapshot(&self) -> Result<VmStorageSnapshot> {
         VmStorageSnapshot::capture(self)
+    }
+
+    fn ensure_durable_storage_ledger_matches(&self, snapshot: &VmStorageSnapshot) -> Result<()> {
+        const ENFORCED_KINDS: [VmStorageKind; 6] = [
+            VmStorageKind::Binding,
+            VmStorageKind::JavaScriptFunction,
+            VmStorageKind::NativeFunction,
+            VmStorageKind::BoundFunction,
+            VmStorageKind::ObjectProperty,
+            VmStorageKind::CacheEntry,
+        ];
+        for kind in ENFORCED_KINDS {
+            let observed = snapshot.count(kind);
+            let tracked = self.storage_ledger.count(kind)?;
+            if tracked != observed {
+                return Err(Error::runtime(format!(
+                    "{kind:?} storage ledger mismatch: tracked {tracked}, observed {observed}"
+                )));
+            }
+        }
+        Ok(())
     }
 
     fn record_storage_counts(&self, counter: &mut StorageCounter) -> Result<()> {

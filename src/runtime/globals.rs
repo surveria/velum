@@ -147,17 +147,53 @@ impl Context {
 
     pub(crate) fn intern_atom(&mut self, name: &str) -> Result<AtomId> {
         self.check_string_len(name)?;
-        self.atoms.intern(name)
+        let reservation = if self.atoms.get(name).is_none() {
+            Some(
+                self.storage_ledger
+                    .reserve_count(crate::runtime::VmStorageKind::CacheEntry, 1)?,
+            )
+        } else {
+            None
+        };
+        let atom = self.atoms.intern(name)?;
+        if let Some(reservation) = reservation {
+            reservation.commit()?;
+        }
+        Ok(atom)
     }
 
     pub(crate) fn intern_heap_string(&mut self, text: &str) -> Result<JsString> {
         self.check_string_len(text)?;
-        self.strings.intern(text)
+        let reservation = if self.strings.contains(text) {
+            None
+        } else {
+            Some(
+                self.storage_ledger
+                    .reserve_count(crate::runtime::VmStorageKind::CacheEntry, 1)?,
+            )
+        };
+        let string = self.strings.intern(text)?;
+        if let Some(reservation) = reservation {
+            reservation.commit()?;
+        }
+        Ok(string)
     }
 
     pub(crate) fn intern_owned_heap_string(&mut self, text: String) -> Result<JsString> {
         self.check_string_len(&text)?;
-        self.strings.intern_owned(text)
+        let reservation = if self.strings.contains(&text) {
+            None
+        } else {
+            Some(
+                self.storage_ledger
+                    .reserve_count(crate::runtime::VmStorageKind::CacheEntry, 1)?,
+            )
+        };
+        let string = self.strings.intern_owned(text)?;
+        if let Some(reservation) = reservation {
+            reservation.commit()?;
+        }
+        Ok(string)
     }
 
     pub(crate) fn heap_string_value(&mut self, text: &str) -> Result<Value> {
@@ -185,7 +221,19 @@ impl Context {
         if let Some(key) = self.well_known_properties.lookup(name) {
             return Ok(key);
         }
+        let remember = self.well_known_properties.should_remember(name);
         let key = self.intern_atom(name).map(PropertyKey::new)?;
+        let reservation = if remember {
+            Some(
+                self.storage_ledger
+                    .reserve_count(crate::runtime::VmStorageKind::CacheEntry, 1)?,
+            )
+        } else {
+            None
+        };
+        if let Some(reservation) = reservation {
+            reservation.commit()?;
+        }
         self.well_known_properties.remember(name, key);
         Ok(key)
     }
@@ -359,7 +407,7 @@ impl Context {
         }
         self.ensure_extra_binding_capacity(1)?;
         self.builtin_globals
-            .insert(atom, BindingCell::new(value, true, DeclKind::Var));
+            .insert(atom, BindingCell::new(value, true, DeclKind::Var))?;
         Ok(())
     }
 

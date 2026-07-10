@@ -219,9 +219,9 @@ impl Context {
     }
 
     fn eval_bytecode_scoped_block(&mut self, block: &BytecodeBlock) -> Result<Completion> {
-        self.push_lexical_scope();
+        self.push_lexical_scope()?;
         let result = self.eval_bytecode_block(block);
-        let removed = self.pop_lexical_scope();
+        let removed = self.pop_lexical_scope()?;
         if removed.is_none() {
             return Err(Error::runtime("bytecode lexical scope disappeared"));
         }
@@ -363,11 +363,11 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         if parts.scoped {
-            self.push_lexical_scope();
+            self.push_lexical_scope()?;
         }
         let result = self.eval_bytecode_for_loop(state, parts, next);
         if parts.scoped {
-            let removed = self.pop_lexical_scope();
+            let removed = self.pop_lexical_scope()?;
             if removed.is_none() {
                 return Err(Error::runtime("bytecode for lexical scope disappeared"));
             }
@@ -556,10 +556,10 @@ impl Context {
             if let Some(frame) = frame {
                 Self::mark_binding_scope_frame_slot(&mut scope, frame, inserted)?;
             }
-            self.push_lexical_scope_with(scope);
+            self.push_lexical_scope_with(scope)?;
             self.remember_active_static_binding(name.name(), atom)?;
             let completion = self.eval_bytecode_block(body);
-            let Some(removed_scope) = self.pop_lexical_scope() else {
+            let Some(removed_scope) = self.pop_lexical_scope()? else {
                 return Err(Error::runtime("bytecode for-in lexical scope disappeared"));
             };
             scope = removed_scope;
@@ -604,9 +604,9 @@ impl Context {
             return Ok(None);
         };
         let completion = if scoped {
-            self.push_lexical_scope();
+            self.push_lexical_scope()?;
             let completion = self.eval_bytecode_switch_cases(cases, start);
-            let removed = self.pop_lexical_scope();
+            let removed = self.pop_lexical_scope()?;
             if removed.is_none() {
                 return Err(Error::runtime("bytecode switch lexical scope disappeared"));
             }

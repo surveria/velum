@@ -5,6 +5,7 @@ use crate::{
         PropertyKey, PropertyLookup, PropertyWritable,
     },
     runtime::trace::{StrongEdgeReference, StrongEdgeVisitor},
+    runtime::{VmStorageKind, storage_ledger::VmStorageLedger},
     storage::atom::AtomTable,
     value::Value,
 };
@@ -63,6 +64,7 @@ pub(in crate::runtime) struct FunctionProperties {
     name: FunctionIntrinsicProperty,
     properties: Vec<FunctionPropertyEntry>,
     property_order: Vec<PropertyKey>,
+    storage_ledger: Option<VmStorageLedger>,
 }
 
 #[derive(Debug, Clone)]
@@ -152,7 +154,32 @@ impl FunctionProperties {
             name: FunctionIntrinsicProperty::new(),
             properties: Vec::new(),
             property_order: Vec::new(),
+            storage_ledger: None,
         }
+    }
+
+    pub(in crate::runtime) fn activate_storage(
+        &mut self,
+        storage_ledger: VmStorageLedger,
+    ) -> Result<()> {
+        if self.storage_ledger.is_some() {
+            return Err(Error::runtime(
+                "function property storage is already active",
+            ));
+        }
+        let property_count = self.storage_property_count()?;
+        let cache_count = self.storage_cache_entry_count();
+        let property_reservation =
+            storage_ledger.reserve_count(VmStorageKind::ObjectProperty, property_count)?;
+        let cache_reservation =
+            storage_ledger.reserve_count(VmStorageKind::CacheEntry, cache_count)?;
+        property_reservation.commit()?;
+        if let Err(error) = cache_reservation.commit() {
+            storage_ledger.release_count(VmStorageKind::ObjectProperty, property_count)?;
+            return Err(error);
+        }
+        self.storage_ledger = Some(storage_ledger);
+        Ok(())
     }
 
     pub(in crate::runtime) fn storage_property_count(&self) -> Result<usize> {
@@ -291,37 +318,40 @@ impl FunctionProperties {
         self.push_function_property(
             property,
             FunctionProperty::new(value, PropertyEnumerable::Yes),
-        );
-        Ok(())
+        )
     }
 
     pub(in crate::runtime) fn delete(
         &mut self,
         property: PropertyLookup<'_>,
         property_kind: FunctionPropertyKind,
-    ) -> bool {
+    ) -> Result<bool> {
+        let previous_property_count = self.storage_property_count()?;
+        let previous_cache_count = self.storage_cache_entry_count();
         if let Some(default) = self.intrinsic_defaults.descriptor(property_kind)
             && let Some(deleted) = self.delete_intrinsic(property_kind, default)
         {
-            return deleted;
+            self.release_removed_storage(previous_property_count, previous_cache_count)?;
+            return Ok(deleted);
         }
         if property_kind.is_prototype() {
-            return false;
+            return Ok(false);
         }
         let Some(key) = property.key() else {
-            return true;
+            return Ok(true);
         };
         let Some(existing_property) = self.function_property(key) else {
-            return true;
+            return Ok(true);
         };
         if !existing_property.is_configurable() {
-            return false;
+            return Ok(false);
         }
         let Some(_) = self.remove_function_property(key) else {
-            return true;
+            return Ok(true);
         };
         self.property_order.retain(|stored_key| *stored_key != key);
-        true
+        self.release_removed_storage(previous_property_count, previous_cache_count)?;
+        Ok(true)
     }
 
     pub(in crate::runtime) fn keys(&self, atoms: &AtomTable) -> Result<Vec<String>> {
@@ -347,13 +377,13 @@ impl FunctionProperties {
         property: PropertyKey,
         value: Value,
         enumerable: PropertyEnumerable,
-    ) {
+    ) -> Result<()> {
         if let Some(existing) = self.function_property_mut(property) {
             existing.set_value(value);
             existing.set_enumerable(enumerable);
-            return;
+            return Ok(());
         }
-        self.push_function_property(property, FunctionProperty::new(value, enumerable));
+        self.push_function_property(property, FunctionProperty::new(value, enumerable))
     }
 
     pub(in crate::runtime) fn define_property(
@@ -384,8 +414,7 @@ impl FunctionProperties {
                 "function property count exceeded {max_properties}"
             )));
         }
-        self.push_function_property(property, FunctionProperty::from_update(update));
-        Ok(())
+        self.push_function_property(property, FunctionProperty::from_update(update))
     }
 
     const fn intrinsic(
@@ -473,13 +502,30 @@ impl FunctionProperties {
             .map(FunctionPropertyEntry::property_mut)
     }
 
-    fn push_function_property(&mut self, property: PropertyKey, value: FunctionProperty) {
+    fn push_function_property(
+        &mut self,
+        property: PropertyKey,
+        value: FunctionProperty,
+    ) -> Result<()> {
         let Err(position) = self.property_position(property) else {
-            return;
+            return Ok(());
         };
+        let reservations = if let Some(storage_ledger) = &self.storage_ledger {
+            Some((
+                storage_ledger.reserve_count(VmStorageKind::ObjectProperty, 1)?,
+                storage_ledger.reserve_count(VmStorageKind::CacheEntry, 1)?,
+            ))
+        } else {
+            None
+        };
+        if let Some((property_reservation, cache_reservation)) = reservations {
+            property_reservation.commit()?;
+            cache_reservation.commit()?;
+        }
         self.property_order.push(property);
         self.properties
             .insert(position, FunctionPropertyEntry::new(property, value));
+        Ok(())
     }
 
     fn remove_function_property(&mut self, property: PropertyKey) -> Option<FunctionProperty> {
@@ -494,5 +540,24 @@ impl FunctionProperties {
     fn property_position(&self, property: PropertyKey) -> std::result::Result<usize, usize> {
         self.properties
             .binary_search_by(|entry| entry.key().cmp(&property))
+    }
+
+    fn release_removed_storage(
+        &self,
+        previous_property_count: usize,
+        previous_cache_count: usize,
+    ) -> Result<()> {
+        let Some(storage_ledger) = &self.storage_ledger else {
+            return Ok(());
+        };
+        let property_count = self.storage_property_count()?;
+        let removed_properties = previous_property_count
+            .checked_sub(property_count)
+            .ok_or_else(|| Error::runtime("function property count grew during deletion"))?;
+        let removed_cache_entries = previous_cache_count
+            .checked_sub(self.storage_cache_entry_count())
+            .ok_or_else(|| Error::runtime("function property cache grew during deletion"))?;
+        storage_ledger.release_count(VmStorageKind::ObjectProperty, removed_properties)?;
+        storage_ledger.release_count(VmStorageKind::CacheEntry, removed_cache_entries)
     }
 }

@@ -276,7 +276,7 @@ impl Context {
         }
         self.ensure_extra_binding_capacity(1)?;
         self.builtin_globals
-            .insert(atom, BindingCell::new(value, false, DeclKind::Const));
+            .insert(atom, BindingCell::new(value, false, DeclKind::Const))?;
         Ok(())
     }
 
@@ -405,8 +405,32 @@ impl Context {
                 "native function id insertion order mismatch",
             ));
         }
+        let adds_registry_entry = self
+            .native_function_registry
+            .insertion_adds_entry(kind, id)?;
+        let cache_reservation = if adds_registry_entry {
+            Some(
+                self.storage_ledger
+                    .reserve_count(crate::runtime::VmStorageKind::CacheEntry, 1)?,
+            )
+        } else {
+            None
+        };
         self.native_function_registry.insert(kind, id)?;
-        self.push_native_function_unregistered_with_id(id, kind, prototype, name)
+        if let Some(reservation) = cache_reservation {
+            reservation.commit()?;
+        }
+        if let Err(error) =
+            self.push_native_function_unregistered_with_id(id, kind, prototype, name)
+        {
+            if adds_registry_entry {
+                self.native_function_registry.remove(kind, id)?;
+                self.storage_ledger
+                    .release_count(crate::runtime::VmStorageKind::CacheEntry, 1)?;
+            }
+            return Err(error);
+        }
+        Ok(())
     }
 
     fn push_native_function_unregistered_with_id(
@@ -421,8 +445,15 @@ impl Context {
                 "native function id insertion order mismatch",
             ));
         }
-        self.native_functions
-            .push(NativeFunction::new(kind, prototype, name));
+        let reservation = self
+            .storage_ledger
+            .reserve_count(crate::runtime::VmStorageKind::NativeFunction, 1)?;
+        let mut function = NativeFunction::new(kind, prototype, name);
+        function
+            .properties_mut()
+            .activate_storage(self.storage_ledger.clone())?;
+        reservation.commit()?;
+        self.native_functions.push(function);
         Ok(())
     }
 
