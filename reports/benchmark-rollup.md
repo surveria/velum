@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260710T060416Z.md`
-- Task: PR #403: runtime: centralize property mutation semantics
-- Performance: 5.26x (4/5 >1.00x) (from `rsqjs-test-report-20260710T060416Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T060416Z.md`)
+- `rsqjs-test-report-20260710T064817Z.md`
+- Task: PR #408: runtime: centralize call and construct semantics
+- Performance: 5.23x (4/5 >1.00x) (from `rsqjs-test-report-20260710T064817Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T064817Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 34186 passed / 68392 failed (33.33%) (from `rsqjs-test-report-20260710T060416Z.md`)
+- Full Test262: 34273 passed / 68305 failed (33.41%) (from `rsqjs-test-report-20260710T064817Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -393,3 +393,4 @@ Latest report:
 | `20260710T055618Z` `5f997e3` PR #406: workflow: add exact-tree correctness recovery | 5.26x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34186 passed / 68392 failed (33.33%) |
 | `20260710T060205Z` `ec6934b` PR #407: workflow: checkout historical correctness sources | 5.38x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34186 passed / 68392 failed (33.33%) |
 | `20260710T060416Z` `9697734` PR #403: runtime: centralize property mutation semantics | 5.26x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34186 passed / 68392 failed (33.33%) |
+| `20260710T064817Z` `1b51bed` PR #408: runtime: centralize call and construct semantics | 5.23x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34273 passed / 68305 failed (33.41%) |
