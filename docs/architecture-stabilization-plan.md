@@ -1614,7 +1614,10 @@ AS-05a2d local implementation evidence:
 - the architecture guard fixes the handle fields, generation increment,
   source-proven constructors, owner validation, retained root source, and
   thirteen-category root map. Mutation tests reject removal of the slot
-  generation or retained-root visit.
+  generation or retained-root visit;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
 
 ### AS-06: Resumable Execution
 
