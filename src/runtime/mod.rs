@@ -6,6 +6,7 @@ use crate::binding_metadata::BindingLayout;
 use crate::bytecode::{BytecodeBinding, BytecodeCallSite, BytecodeFunction, BytecodeNewTargetMode};
 use crate::compiled_script::CompiledScript;
 use crate::error::{Error, Result};
+use crate::ownership::VmIdentity;
 use crate::runtime::binding::scope::{BindingCell, BindingScope};
 use crate::runtime::control::{Completion, reference_error_undefined};
 use crate::runtime::limits::RuntimeLimits;
@@ -31,7 +32,6 @@ pub mod limits;
 pub mod native;
 pub mod numeric;
 pub mod object;
-mod ownership;
 pub mod promise;
 pub mod property;
 mod semantic_object;
@@ -42,7 +42,6 @@ use binding::static_bindings::StaticBindingCacheHandle;
 use bytecode::BytecodeOutcome;
 use call::{BoundFunction, RuntimeCallArgs};
 use native::{NativeFunctionKind, NativeFunctionRegistry};
-pub use ownership::{VmGeneration, VmIdentity};
 use promise::{Promise, PromiseId, PromiseJob};
 use property::static_names::{CallValueCache, StaticNameAtomCacheHandle};
 use property::well_known::{DescriptorPropertyKeys, WellKnownPropertyKeys};
@@ -252,12 +251,13 @@ impl Context {
         limits: RuntimeLimits,
         performance_clock: clock::PerformanceClock,
     ) -> Self {
+        let identity = VmIdentity::new();
         Self {
-            identity: VmIdentity::new(),
+            identity: identity.clone(),
             limits,
             atoms: AtomTable::new(),
-            strings: StringHeap::new(),
-            symbols: SymbolTable::new(),
+            strings: StringHeap::new(identity.clone()),
+            symbols: SymbolTable::new(identity),
             well_known_properties: WellKnownPropertyKeys::new(),
             iterator_symbol: None,
             descriptor_property_keys: None,

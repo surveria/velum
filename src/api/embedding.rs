@@ -1,8 +1,8 @@
 use crate::api::host::{HostCall, IntoJsValue};
 use crate::compiled_script::CompiledScript;
 use crate::error::Result;
+use crate::ownership::VmIdentity;
 use crate::runtime::Context;
-use crate::runtime::VmIdentity;
 use crate::runtime::limits::RuntimeLimits;
 use crate::value::Value;
 use std::time::Duration;

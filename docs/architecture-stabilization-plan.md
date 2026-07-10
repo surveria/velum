@@ -25,8 +25,8 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 through AS-04 are complete; AS-05a1
-  non-cloneable VM identity is implemented in draft PR #422
+- Current program state: AS-01 through AS-04 are complete; AS-05a1 is complete
+  and AS-05a2a string/Symbol owner validation is implemented in draft PR #423
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -483,7 +483,7 @@ dependencies do not overlap.
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
 | AS-04 | Complete | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans merged in PR #421 with exact-tree correctness and canonical report publication. |
-| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 non-cloneable VM identity is implemented in draft PR #422; checked public local/owned values, trace/root contract, and heap/stack/job/buffer counters and limits remain. |
+| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 non-cloneable VM identity merged in PR #422; AS-05a2a string/Symbol owner validation is implemented in draft PR #423; object/function/error handles, trace/root contract, and heap/stack/job/buffer counters and limits remain. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
 | AS-08 | Backlog | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | Optimizer on/off equivalence, harness opcodes removed, workload-shaped paths replaced or justified by broad evidence. |
@@ -1202,13 +1202,15 @@ AS-05 is split at ownership boundaries:
 1. AS-05a1 removes ambiguous `Vm`/`Context` cloning and establishes one opaque
    capability identity plus an explicit storage generation for every Context.
    It does not claim that raw public `Value` is safe to transfer yet;
-2. AS-05a2 introduces explicit owned primitives and VM-local values, stamps
-   every public id-bearing value with the owner identity/generation, validates
-   all embedding and host callback crossings, and defines retained-handle
-   behavior;
-3. AS-05b1 defines trace edges and enumerates all engine, activation, job, and
+2. AS-05a2a stamps the VM-derived primitive values already accepted by host
+   returns (`HeapString` and `Symbol`) and rejects a foreign owner before a
+   colliding slot can be used;
+3. AS-05a2b introduces explicit owned primitives and VM-local
+   object/function/error handles, validates all remaining embedding and host
+   callback crossings, and defines retained-handle behavior;
+4. AS-05b1 defines trace edges and enumerates all engine, activation, job, and
    embedder roots without adding a collector;
-4. AS-05b2 adds complete per-owner byte/count accounting, hard limits, and a
+5. AS-05b2 adds complete per-owner byte/count accounting, hard limits, and a
    teardown report that can reconcile every VM store.
 
 AS-05a1 local implementation evidence:
@@ -1229,6 +1231,45 @@ AS-05a1 local implementation evidence:
 - the architecture guard fixes the new Context owner field and capability /
   generation representation, and rejects reintroducing `Clone` on either
   public VM owner;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
+
+AS-05a1 completion evidence:
+
+- PR #422 merged as `4143ec4` after required CI run `29098691127`
+  certified exact tree `a64ce722ad7d50c2f9d2cea1dcc05419dec4ba77`;
+- the required corpus preserved all 36,659 expected Test262 variants, the
+  exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
+  cases;
+- post-merge run `29098932099` measured all five project sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T141238Z.*` in
+  report-only commit `064c12b`.
+
+AS-05a2a local implementation evidence:
+
+- the ownership types move to the crate ownership layer so VM stores can use
+  them without depending back on `runtime`;
+- `StringHeap` and `SymbolTable` own the Context identity. Every emitted
+  `JsString` and `JsSymbol` retains that capability, preventing owner-token
+  reuse while the local value is alive;
+- `VmGeneration` is stored once inside the shared owner token, keeping each
+  local primitive stamp to one `Rc` word rather than enlarging hot `Value` and
+  bytecode representations with duplicated generation data;
+- string text/owner and Symbol description/owner live behind that existing
+  handle word. A layout regression test keeps `JsString`, `JsSymbol`, and
+  `Value` no larger than the owned-String baseline after an initial CI build
+  exposed release Test262 stack exhaustion from a wider inline stamp;
+- `Context::checked_value` verifies owner identity before looking up a string
+  or Symbol slot. Colliding numeric ids from another VM therefore cannot alias
+  a valid local entry;
+- host return validation preserves same-VM strings/Symbols and reports foreign
+  ownership with host-function context;
+- three focused host tests cover same-VM round trips and foreign string/Symbol
+  returns with deliberately colliding slots. The compact-layout test, existing
+  string and Symbol suites, and strict Clippy pass;
+- the architecture guard fixes all four primitive owner fields, both central
+  checks, and a mutation test that removes a primitive identity;
 - `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
@@ -1349,16 +1390,18 @@ reviewable scope.
 18. AS-04b2b2: lower AST ranges into parallel bytecode metadata and expose the
     executing range on structured runtime diagnostics (complete in PR #421).
 19. AS-05a1: remove ambiguous VM cloning and establish VM identity/generation
-    (implemented in draft PR #422).
-20. AS-05a2: define checked owned/local values and host handle boundaries.
-21. AS-05b1: enumerate all strong and weak roots without adding collection.
-22. AS-05b2: add complete allocation accounting, hard limits, and teardown
+    (complete in PR #422).
+20. AS-05a2a: bind heap strings and Symbols to their VM owner and validate host
+    returns (implemented in draft PR #423).
+21. AS-05a2b: define checked owned/local object, function, and error handles.
+22. AS-05b1: enumerate all strong and weak roots without adding collection.
+23. AS-05b2: add complete allocation accounting, hard limits, and teardown
     reconciliation.
-23. AS-06a: migrate synchronous calls and structured control flow to explicit
+24. AS-06a: migrate synchronous calls and structured control flow to explicit
     activation frames.
-24. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
-25. AS-07a: add safe collection over explicit roots and correct weak edges.
-26. AS-08a: move reusable optimization state behind one optimizer/quickening
+25. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
+26. AS-07a: add safe collection over explicit roots and correct weak edges.
+27. AS-08a: move reusable optimization state behind one optimizer/quickening
     boundary and remove harness-specific opcodes.
 
 ## Updating This Plan

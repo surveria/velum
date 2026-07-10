@@ -9,6 +9,7 @@ use crate::{
 };
 
 const STRING_CONCAT_INTERMEDIATE_EXTRA_CAPACITY: usize = 24;
+const FOREIGN_VM_VALUE_ERROR: &str = "value belongs to another VM";
 
 impl Context {
     pub(crate) fn static_string_value(&mut self, value: &StaticString) -> Result<Value> {
@@ -194,11 +195,17 @@ impl Context {
             Value::String(text) => self.check_string_len(text)?,
             Value::HeapString(text) => {
                 self.check_string_len(text.as_str())?;
+                if text.identity() != self.identity() {
+                    return Err(Error::runtime(FOREIGN_VM_VALUE_ERROR));
+                }
                 self.strings.get(text.id())?;
             }
             Value::Symbol(symbol) => {
                 if let Some(description) = symbol.description() {
                     self.check_string_len(description)?;
+                }
+                if symbol.identity() != self.identity() {
+                    return Err(Error::runtime(FOREIGN_VM_VALUE_ERROR));
                 }
                 self.symbols.get(symbol.id())?;
             }

@@ -579,9 +579,24 @@ extensibility'
     fail "Vm clone boundary changed; VM-owned state must remain non-cloneable"
   fi
 
-  if ! grep -F -q 'owner: Rc<VmOwnerToken>,' "${repo_root}/src/runtime/ownership.rs" \
-    || ! grep -F -q 'generation: VmGeneration,' "${repo_root}/src/runtime/ownership.rs"; then
+  if ! grep -F -q 'owner: Rc<VmOwnerToken>,' "${repo_root}/src/ownership.rs" \
+    || ! grep -F -q 'generation: VmGeneration,' "${repo_root}/src/ownership.rs"; then
     fail "VM identity boundary changed; identity requires one owner capability and generation"
+  fi
+
+  local primitive_owner_fields
+  primitive_owner_fields="$({
+    grep -F '    identity: VmIdentity,' "${repo_root}/src/storage/string_heap.rs" || true
+    grep -F '    identity: VmIdentity,' "${repo_root}/src/storage/symbol.rs" || true
+  } | wc -l | tr -d '[:space:]')"
+  if [[ "${primitive_owner_fields}" != "4" ]]; then
+    fail "VM primitive owner boundary changed; JsString, StringHeap, JsSymbol, and SymbolTable require identity"
+  fi
+  if ! grep -F -q 'if text.identity() != self.identity()' \
+      "${repo_root}/src/runtime/values.rs" \
+    || ! grep -F -q 'if symbol.identity() != self.identity()' \
+      "${repo_root}/src/runtime/values.rs"; then
+    fail "VM primitive validation boundary changed; checked values must reject foreign strings and Symbols"
   fi
 }
 
@@ -652,7 +667,7 @@ src/runtime/function/fast_path.rs'
 run_checks() {
   require_file src/value/kind.rs
   require_file src/runtime/mod.rs
-  require_file src/runtime/ownership.rs
+  require_file src/ownership.rs
   require_file src/source.rs
   require_file src/ast/node.rs
   require_file src/bytecode/block.rs
@@ -817,7 +832,13 @@ mutate_vm_clone_marker() {
 mutate_vm_identity_owner() {
   local fixture_root="$1"
   sed -i 's/owner: Rc<VmOwnerToken>,/owner: Rc<ForeignOwnerToken>,/' \
-    "${fixture_root}/src/runtime/ownership.rs"
+    "${fixture_root}/src/ownership.rs"
+}
+
+mutate_vm_primitive_owner() {
+  local fixture_root="$1"
+  sed -i '0,/    identity: VmIdentity,/{/    identity: VmIdentity,/d;}' \
+    "${fixture_root}/src/storage/string_heap.rs"
 }
 
 mutate_control_owner() {
@@ -917,6 +938,8 @@ run_self_tests() {
     'Vm clone boundary changed' mutate_vm_clone_marker
   expect_guard_failure "${temp_dir}" vm-identity-owner \
     'VM identity boundary changed' mutate_vm_identity_owner
+  expect_guard_failure "${temp_dir}" vm-primitive-owner \
+    'VM primitive owner boundary changed' mutate_vm_primitive_owner
   expect_guard_failure "${temp_dir}" control-owner \
     'structured-control optimization owner allowlist changed' mutate_control_owner
   expect_guard_failure "${temp_dir}" linear-owner \

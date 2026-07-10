@@ -296,7 +296,9 @@ impl Context {
     ) -> Result<Value> {
         let values = args.to_owned_values();
         let function = self.host_function(id)?.clone();
-        self.checked_host_return_value(function.call(&values)?)
+        let value = function.call(&values)?;
+        self.checked_host_return_value(value)
+            .map_err(|error| error.with_context(function.context_message()))
     }
 
     fn host_function(&self, id: HostFunctionId) -> Result<&HostFunction> {
