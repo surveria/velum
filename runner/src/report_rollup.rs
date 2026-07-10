@@ -16,13 +16,15 @@ mod report_rollup_timeline;
 #[path = "report_rollup_yaml.rs"]
 mod report_rollup_yaml;
 
-use report_rollup_chart::write_chart;
+use report_rollup_chart::{ChartTheme, write_chart, write_svg_chart};
 use report_rollup_timeline::CommitTimeline;
 
 const REPORT_PREFIX: &str = "rsqjs-test-report-";
 const REPORT_SUFFIX: &str = ".md";
 const ROLLUP_FILE: &str = "benchmark-rollup.md";
 const SUMMARY_CHART_FILE: &str = "benchmark-summary.jpg";
+const SUMMARY_CHART_LIGHT_SVG_FILE: &str = "benchmark-summary-light.svg";
+const SUMMARY_CHART_DARK_SVG_FILE: &str = "benchmark-summary-dark.svg";
 const PLAN_PATH: &str = "docs/project-plan.md";
 const TEST262_FULL_SECTION: &str = "Test262 full corpus";
 const METADATA_TESTED_COMMIT: &str = "Tested commit";
@@ -35,6 +37,8 @@ const BUDGET_RATIO: f64 = 1.00;
 pub struct RollupOutputs {
     pub markdown: PathBuf,
     pub summary_chart: PathBuf,
+    pub summary_chart_light_svg: PathBuf,
+    pub summary_chart_dark_svg: PathBuf,
 }
 
 #[derive(Debug)]
@@ -127,6 +131,8 @@ fn build_rollup(report_dir: &Path) -> anyhow::Result<RollupReport> {
         outputs: RollupOutputs {
             markdown: reports_root.join(ROLLUP_FILE),
             summary_chart: reports_root.join(SUMMARY_CHART_FILE),
+            summary_chart_light_svg: reports_root.join(SUMMARY_CHART_LIGHT_SVG_FILE),
+            summary_chart_dark_svg: reports_root.join(SUMMARY_CHART_DARK_SVG_FILE),
         },
     })
 }
@@ -583,6 +589,18 @@ fn write_rollup(rollup: &RollupReport) -> anyhow::Result<()> {
         &rollup.records,
         &rollup.timeline,
         &rollup.outputs.summary_chart,
+    )?;
+    write_svg_chart(
+        &rollup.records,
+        &rollup.timeline,
+        &rollup.outputs.summary_chart_light_svg,
+        ChartTheme::Light,
+    )?;
+    write_svg_chart(
+        &rollup.records,
+        &rollup.timeline,
+        &rollup.outputs.summary_chart_dark_svg,
+        ChartTheme::Dark,
     )
 }
 
@@ -612,6 +630,8 @@ fn render_markdown(records: &[ReportRecord]) -> String {
         "Artifacts:".to_owned(),
         String::new(),
         format!("- `{SUMMARY_CHART_FILE}`"),
+        format!("- `{SUMMARY_CHART_LIGHT_SVG_FILE}`"),
+        format!("- `{SUMMARY_CHART_DARK_SVG_FILE}`"),
         String::new(),
     ];
     append_latest_section(&mut lines, records);

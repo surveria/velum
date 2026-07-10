@@ -20,6 +20,52 @@ const RATIO_PANEL_TITLE: &str = "Performance and memory geomean versus QuickJS";
 const JETSTREAM_PANEL_TITLE: &str = "JetStream shell latency geomean versus QuickJS";
 const TEST262_PANEL_TITLE: &str = "Full Test262 outcomes";
 
+#[derive(Debug, Clone, Copy)]
+pub(super) enum ChartTheme {
+    Light,
+    Dark,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ChartPalette {
+    background: RGBColor,
+    foreground: RGBColor,
+    bold_grid: RGBColor,
+    light_grid: RGBColor,
+    performance: RGBColor,
+    memory: RGBColor,
+    jetstream: RGBColor,
+    passed: RGBColor,
+    failed: RGBColor,
+    budget: RGBColor,
+}
+
+const LIGHT_PALETTE: ChartPalette = ChartPalette {
+    background: WHITE,
+    foreground: BLACK,
+    bold_grid: RGBColor(170, 170, 170),
+    light_grid: RGBColor(225, 225, 225),
+    performance: BLUE,
+    memory: MAGENTA,
+    jetstream: CYAN,
+    passed: GREEN,
+    failed: RED,
+    budget: RED,
+};
+
+const DARK_PALETTE: ChartPalette = ChartPalette {
+    background: RGBColor(18, 18, 18),
+    foreground: RGBColor(232, 232, 232),
+    bold_grid: RGBColor(86, 86, 86),
+    light_grid: RGBColor(45, 45, 45),
+    performance: RGBColor(92, 166, 255),
+    memory: RGBColor(255, 105, 255),
+    jetstream: RGBColor(74, 222, 232),
+    passed: RGBColor(90, 230, 110),
+    failed: RGBColor(255, 100, 100),
+    budget: RGBColor(255, 100, 100),
+};
+
 pub(super) fn write_chart(
     records: &[ReportRecord],
     timeline: &CommitTimeline,
@@ -35,15 +81,7 @@ pub(super) fn write_chart(
     {
         let root = BitMapBackend::with_buffer(&mut buffer, (CHART_WIDTH, CHART_HEIGHT))
             .into_drawing_area();
-        root.fill(&WHITE)
-            .map_err(|error| anyhow!("failed to fill chart background: {error:?}"))?;
-        let mut areas = root.split_evenly((3, 1)).into_iter();
-        let ratio_area = areas.next().context("missing ratio chart area")?;
-        let jetstream_area = areas.next().context("missing JetStream chart area")?;
-        let test_area = areas.next().context("missing test coverage chart area")?;
-        draw_ratio_panel(&ratio_area, records, timeline)?;
-        draw_jetstream_panel(&jetstream_area, records, timeline)?;
-        draw_test_panel(&test_area, records, timeline)?;
+        render_chart(&root, records, timeline, &LIGHT_PALETTE)?;
         root.present()
             .map_err(|error| anyhow!("failed to render chart: {error:?}"))?;
     }
@@ -54,10 +92,44 @@ pub(super) fn write_chart(
         .with_context(|| format!("failed to write chart '{}'", path.display()))
 }
 
-fn draw_jetstream_panel(
-    area: &DrawingArea<BitMapBackend<'_>, Shift>,
+pub(super) fn write_svg_chart(
     records: &[ReportRecord],
     timeline: &CommitTimeline,
+    path: &Path,
+    theme: ChartTheme,
+) -> anyhow::Result<()> {
+    let palette = match theme {
+        ChartTheme::Light => LIGHT_PALETTE,
+        ChartTheme::Dark => DARK_PALETTE,
+    };
+    let root = SVGBackend::new(path, (CHART_WIDTH, CHART_HEIGHT)).into_drawing_area();
+    render_chart(&root, records, timeline, &palette)?;
+    root.present()
+        .map_err(|error| anyhow!("failed to render SVG chart: {error:?}"))
+}
+
+fn render_chart<DB: DrawingBackend>(
+    root: &DrawingArea<DB, Shift>,
+    records: &[ReportRecord],
+    timeline: &CommitTimeline,
+    palette: &ChartPalette,
+) -> anyhow::Result<()> {
+    root.fill(&palette.background)
+        .map_err(|error| anyhow!("failed to fill chart background: {error:?}"))?;
+    let mut areas = root.split_evenly((3, 1)).into_iter();
+    let ratio_area = areas.next().context("missing ratio chart area")?;
+    let jetstream_area = areas.next().context("missing JetStream chart area")?;
+    let test_area = areas.next().context("missing test coverage chart area")?;
+    draw_ratio_panel(&ratio_area, records, timeline, palette)?;
+    draw_jetstream_panel(&jetstream_area, records, timeline, palette)?;
+    draw_test_panel(&test_area, records, timeline, palette)
+}
+
+fn draw_jetstream_panel<DB: DrawingBackend>(
+    area: &DrawingArea<DB, Shift>,
+    records: &[ReportRecord],
+    timeline: &CommitTimeline,
+    palette: &ChartPalette,
 ) -> anyhow::Result<()> {
     let points = jetstream_points(records, timeline)?;
     if points.is_empty() {
@@ -65,6 +137,7 @@ fn draw_jetstream_panel(
             area,
             JETSTREAM_PANEL_TITLE,
             "No JetStream latency data available",
+            palette,
         );
     }
     let values = points.iter().map(|point| point.latency);
@@ -73,7 +146,7 @@ fn draw_jetstream_panel(
     let mut chart = ChartBuilder::on(area)
         .caption(
             jetstream_panel_title(&points),
-            ("sans-serif", 30).into_font(),
+            ("sans-serif", 30).into_font().color(&palette.foreground),
         )
         .margin(18)
         .x_label_area_size(34)
@@ -87,33 +160,48 @@ fn draw_jetstream_panel(
         .x_label_formatter(&x_label_formatter)
         .x_desc(timeline.description())
         .y_desc("latency ratio")
+        .axis_style(palette.foreground)
+        .bold_line_style(palette.bold_grid)
+        .light_line_style(palette.light_grid)
+        .label_style(("sans-serif", 15).into_font().color(&palette.foreground))
+        .axis_desc_style(("sans-serif", 15).into_font().color(&palette.foreground))
         .draw()
         .map_err(|error| anyhow!("failed to draw JetStream chart mesh: {error:?}"))?;
-    draw_budget_line(&mut chart, x_end)?;
+    draw_budget_line(&mut chart, x_end, palette)?;
+    let series_color = palette.jetstream;
     chart
         .draw_series(LineSeries::new(
             points.iter().map(|point| (point.x, point.latency)),
-            CYAN.stroke_width(3),
+            series_color.stroke_width(3),
         ))
         .map_err(|error| anyhow!("failed to draw JetStream chart series: {error:?}"))?
         .label("JetStream latency geomean")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 24, y)], CYAN.stroke_width(3)));
+        .legend(move |(x, y)| {
+            PathElement::new(vec![(x, y), (x + 24, y)], series_color.stroke_width(3))
+        });
     chart
         .configure_series_labels()
-        .background_style(WHITE.mix(0.85))
-        .border_style(BLACK)
+        .background_style(palette.background.mix(0.85))
+        .border_style(palette.foreground)
+        .label_font(("sans-serif", 15).into_font().color(&palette.foreground))
         .draw()
         .map_err(|error| anyhow!("failed to draw JetStream chart legend: {error:?}"))
 }
 
-fn draw_ratio_panel(
-    area: &DrawingArea<BitMapBackend<'_>, Shift>,
+fn draw_ratio_panel<DB: DrawingBackend>(
+    area: &DrawingArea<DB, Shift>,
     records: &[ReportRecord],
     timeline: &CommitTimeline,
+    palette: &ChartPalette,
 ) -> anyhow::Result<()> {
     let points = ratio_points(records, timeline)?;
     if points.is_empty() {
-        return draw_empty_panel(area, RATIO_PANEL_TITLE, "No QuickJS ratio data available");
+        return draw_empty_panel(
+            area,
+            RATIO_PANEL_TITLE,
+            "No QuickJS ratio data available",
+            palette,
+        );
     }
     let values = points
         .iter()
@@ -122,7 +210,10 @@ fn draw_ratio_panel(
     let bounds = chart_bounds(values, BUDGET_RATIO)?;
     let x_end = timeline.axis_end()?;
     let mut chart = ChartBuilder::on(area)
-        .caption(ratio_panel_title(&points), ("sans-serif", 30).into_font())
+        .caption(
+            ratio_panel_title(&points),
+            ("sans-serif", 30).into_font().color(&palette.foreground),
+        )
         .margin(18)
         .x_label_area_size(34)
         .y_label_area_size(60)
@@ -135,56 +226,73 @@ fn draw_ratio_panel(
         .x_label_formatter(&x_label_formatter)
         .x_desc(timeline.description())
         .y_desc("ratio")
+        .axis_style(palette.foreground)
+        .bold_line_style(palette.bold_grid)
+        .light_line_style(palette.light_grid)
+        .label_style(("sans-serif", 15).into_font().color(&palette.foreground))
+        .axis_desc_style(("sans-serif", 15).into_font().color(&palette.foreground))
         .draw()
         .map_err(|error| anyhow!("failed to draw ratio chart mesh: {error:?}"))?;
-    draw_budget_line(&mut chart, x_end)?;
+    draw_budget_line(&mut chart, x_end, palette)?;
+    let performance_color = palette.performance;
     chart
         .draw_series(LineSeries::new(
             points
                 .iter()
                 .filter_map(|point| point.performance.map(|value| (point.x, value))),
-            BLUE.stroke_width(3),
+            performance_color.stroke_width(3),
         ))
         .map_err(|error| anyhow!("failed to draw performance chart series: {error:?}"))?
         .label("performance geomean")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 24, y)], BLUE.stroke_width(3)));
+        .legend(move |(x, y)| {
+            PathElement::new(vec![(x, y), (x + 24, y)], performance_color.stroke_width(3))
+        });
+    let memory_color = palette.memory;
     chart
         .draw_series(LineSeries::new(
             points
                 .iter()
                 .filter_map(|point| point.memory.map(|value| (point.x, value))),
-            MAGENTA.stroke_width(3),
+            memory_color.stroke_width(3),
         ))
         .map_err(|error| anyhow!("failed to draw memory chart series: {error:?}"))?
         .label("memory geomean")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 24, y)], MAGENTA.stroke_width(3)));
+        .legend(move |(x, y)| {
+            PathElement::new(vec![(x, y), (x + 24, y)], memory_color.stroke_width(3))
+        });
     chart
         .configure_series_labels()
-        .background_style(WHITE.mix(0.85))
-        .border_style(BLACK)
+        .background_style(palette.background.mix(0.85))
+        .border_style(palette.foreground)
+        .label_font(("sans-serif", 15).into_font().color(&palette.foreground))
         .draw()
         .map_err(|error| anyhow!("failed to draw ratio chart legend: {error:?}"))
 }
 
-fn draw_budget_line(
-    chart: &mut ChartContext<'_, BitMapBackend<'_>, Cartesian2d<RangedCoordi32, RangedCoordf64>>,
+fn draw_budget_line<DB: DrawingBackend>(
+    chart: &mut ChartContext<'_, DB, Cartesian2d<RangedCoordi32, RangedCoordf64>>,
     x_end: i32,
+    palette: &ChartPalette,
 ) -> anyhow::Result<()> {
+    let budget_color = palette.budget;
     chart
         .draw_series(LineSeries::new(
             [(0, BUDGET_RATIO), (x_end.saturating_sub(1), BUDGET_RATIO)],
-            RED.stroke_width(2),
+            budget_color.stroke_width(2),
         ))
         .map_err(|error| anyhow!("failed to draw budget line: {error:?}"))?
         .label("1.00x budget")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 24, y)], RED.stroke_width(2)));
+        .legend(move |(x, y)| {
+            PathElement::new(vec![(x, y), (x + 24, y)], budget_color.stroke_width(2))
+        });
     Ok(())
 }
 
-fn draw_test_panel(
-    area: &DrawingArea<BitMapBackend<'_>, Shift>,
+fn draw_test_panel<DB: DrawingBackend>(
+    area: &DrawingArea<DB, Shift>,
     records: &[ReportRecord],
     timeline: &CommitTimeline,
+    palette: &ChartPalette,
 ) -> anyhow::Result<()> {
     let points = test_points(records, timeline)?;
     if points.is_empty() {
@@ -192,6 +300,7 @@ fn draw_test_panel(
             area,
             TEST262_PANEL_TITLE,
             "No Test262 outcome data available",
+            palette,
         );
     }
     let values = points
@@ -201,7 +310,10 @@ fn draw_test_panel(
     let bounds = chart_bounds(values, 0.0)?;
     let x_end = timeline.axis_end()?;
     let mut chart = ChartBuilder::on(area)
-        .caption(test_panel_title(&points), ("sans-serif", 30).into_font())
+        .caption(
+            test_panel_title(&points),
+            ("sans-serif", 30).into_font().color(&palette.foreground),
+        )
         .margin(18)
         .x_label_area_size(34)
         .y_label_area_size(60)
@@ -215,40 +327,53 @@ fn draw_test_panel(
         .x_desc(timeline.description())
         .y_desc("cases")
         .y_label_formatter(&|value| format!("{value:.0}"))
+        .axis_style(palette.foreground)
+        .bold_line_style(palette.bold_grid)
+        .light_line_style(palette.light_grid)
+        .label_style(("sans-serif", 15).into_font().color(&palette.foreground))
+        .axis_desc_style(("sans-serif", 15).into_font().color(&palette.foreground))
         .draw()
         .map_err(|error| anyhow!("failed to draw Test262 chart mesh: {error:?}"))?;
+    let passed_color = palette.passed;
     chart
         .draw_series(LineSeries::new(
             points
                 .iter()
                 .map(|point| (point.x, f64::from(point.passed))),
-            GREEN.stroke_width(3),
+            passed_color.stroke_width(3),
         ))
         .map_err(|error| anyhow!("failed to draw Test262 passed series: {error:?}"))?
         .label("passed")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 24, y)], GREEN.stroke_width(3)));
+        .legend(move |(x, y)| {
+            PathElement::new(vec![(x, y), (x + 24, y)], passed_color.stroke_width(3))
+        });
+    let failed_color = palette.failed;
     chart
         .draw_series(LineSeries::new(
             points
                 .iter()
                 .map(|point| (point.x, f64::from(point.failed))),
-            RED.stroke_width(3),
+            failed_color.stroke_width(3),
         ))
         .map_err(|error| anyhow!("failed to draw Test262 failed series: {error:?}"))?
         .label("failed")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 24, y)], RED.stroke_width(3)));
+        .legend(move |(x, y)| {
+            PathElement::new(vec![(x, y), (x + 24, y)], failed_color.stroke_width(3))
+        });
     chart
         .configure_series_labels()
-        .background_style(WHITE.mix(0.85))
-        .border_style(BLACK)
+        .background_style(palette.background.mix(0.85))
+        .border_style(palette.foreground)
+        .label_font(("sans-serif", 15).into_font().color(&palette.foreground))
         .draw()
         .map_err(|error| anyhow!("failed to draw Test262 chart legend: {error:?}"))
 }
 
-fn draw_empty_panel(
-    area: &DrawingArea<BitMapBackend<'_>, Shift>,
+fn draw_empty_panel<DB: DrawingBackend>(
+    area: &DrawingArea<DB, Shift>,
     title: &str,
     message: &str,
+    palette: &ChartPalette,
 ) -> anyhow::Result<()> {
     let (width, height) = area.dim_in_pixel();
     let x = i32::try_from(width / 2).context("empty chart x coordinate does not fit i32")?;
@@ -256,13 +381,13 @@ fn draw_empty_panel(
     area.draw(&Text::new(
         title.to_owned(),
         (18, 36),
-        ("sans-serif", 30).into_font(),
+        ("sans-serif", 30).into_font().color(&palette.foreground),
     ))
     .map_err(|error| anyhow!("failed to draw empty chart title: {error:?}"))?;
     area.draw(&Text::new(
         message.to_owned(),
         (x.saturating_sub(190), y),
-        ("sans-serif", 24).into_font(),
+        ("sans-serif", 24).into_font().color(&palette.foreground),
     ))
     .map_err(|error| anyhow!("failed to draw empty chart message: {error:?}"))
 }

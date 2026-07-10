@@ -16,6 +16,7 @@
 !/reports/
 !/reports/*.jpg
 !/reports/*.md
+!/reports/*.svg
 !/reports/test-runs/
 !/reports/test-runs/*.md
 !/reports/test-runs/rsqjs-test-report-????????T??????Z.yaml
