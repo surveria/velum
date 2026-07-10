@@ -9,6 +9,7 @@ use crate::{
         CacheablePropertyWrite, PropertyKey, PropertyLookup,
     },
     runtime::property::{DynamicPropertyKey, delete_property},
+    runtime::semantic_object::{SemanticPropertyDelete, SemanticPropertyWrite},
     storage::atom::AtomId,
     syntax::{StaticCallSiteId, StaticName, StaticPropertyAccessId},
     value::{NativeFunctionId, ObjectId, Value},
@@ -241,27 +242,21 @@ impl Context {
     ) -> Result<()> {
         let value = self.runtime_value(value)?;
         let key = self.intern_static_property_key(property)?;
-        if let Value::Function(id) = object {
-            return self.set_function_property_key(*id, property, key, value);
-        }
-        if let Value::NativeFunction(id) = object {
-            return self.set_native_function_property_key(*id, property, key, value);
-        }
-        if let Value::Object(id) = object
+        let lookup = PropertyLookup::from_key(property.as_str(), key);
+        let Some(write) = self.semantic_property_write(object, lookup, value.clone())? else {
+            self.set_property_value_with_accessors(object, key, property, value)?;
+            return Ok(());
+        };
+        if let SemanticPropertyWrite::ObjectTail(id) = write
             && property.as_str() != PROTOTYPE_PROPERTY
-            && self.set_cached_object_property_value(
-                *id,
-                access,
-                PropertyLookup::from_key(property.as_str(), key),
-                value.clone(),
-            )?
+            && self.set_cached_object_property_value(id, access, lookup, value.clone())?
         {
-            if self.is_global_object_id(*id) {
+            if self.is_global_object_id(id) {
                 self.sync_global_object_property_binding(property.as_str(), value)?;
             }
             return Ok(());
         }
-        self.set_property_value_with_accessors(object, key, property, value.clone())?;
+        self.finish_semantic_property_write(write, lookup, value.clone())?;
         if let Value::Object(id) = object
             && self.is_global_object_id(*id)
         {
@@ -314,31 +309,23 @@ impl Context {
         value: Value,
     ) -> Result<()> {
         let value = self.runtime_value(value)?;
-        if let Value::Function(id) = object {
-            let key = self.intern_dynamic_property_key(property)?;
-            return self.set_function_property_key(*id, property.name(), key, value);
-        }
-        if let Value::NativeFunction(id) = object {
-            let key = self.intern_dynamic_property_key(property)?;
-            return self.set_native_function_property_key(*id, property.name(), key, value);
-        }
         let key = self.intern_dynamic_property_key(property)?;
-        if let Value::Object(id) = object
+        let lookup = PropertyLookup::from_key(property.name(), key);
+        let Some(write) = self.semantic_property_write(object, lookup, value.clone())? else {
+            self.set_property_value_with_accessors(object, key, property.name(), value)?;
+            return Ok(());
+        };
+        if let SemanticPropertyWrite::ObjectTail(id) = write
             && property.name() != PROTOTYPE_PROPERTY
-            && self.objects.array_len_if_array(*id)?.is_none()
-            && self.set_cached_object_property_value(
-                *id,
-                access,
-                PropertyLookup::from_key(property.name(), key),
-                value.clone(),
-            )?
+            && self.objects.array_len_if_array(id)?.is_none()
+            && self.set_cached_object_property_value(id, access, lookup, value.clone())?
         {
-            if self.is_global_object_id(*id) {
+            if self.is_global_object_id(id) {
                 self.sync_global_object_property_binding(property.name(), value)?;
             }
             return Ok(());
         }
-        self.set_property_value_with_accessors(object, key, property.name(), value.clone())?;
+        self.finish_semantic_property_write(write, lookup, value.clone())?;
         if let Value::Object(id) = object
             && self.is_global_object_id(*id)
         {
@@ -397,12 +384,6 @@ impl Context {
         lookup: PropertyLookup<'_>,
         value: Value,
     ) -> Result<bool> {
-        // Proxy exotic objects must route writes through the `set` trap, so
-        // report the cached fast-path write as a miss and let the caller fall
-        // back to `set_property_value_with_accessors`, which dispatches the trap.
-        if self.objects.is_proxy(object) {
-            return Ok(false);
-        }
         let Some(cache) = self.current_static_name_atom_cache() else {
             return Ok(false);
         };
@@ -509,25 +490,19 @@ impl Context {
         access: StaticPropertyAccessId,
     ) -> Result<Value> {
         let lookup = self.static_property_lookup(property)?;
-        if let Value::Function(id) = object {
-            return self
-                .delete_function_property_lookup(*id, lookup)
-                .map(Value::Bool);
-        }
-        if let Value::NativeFunction(id) = object {
-            return self
-                .delete_native_function_property_lookup(*id, lookup)
-                .map(Value::Bool);
-        }
-        if let Value::Object(id) = object
+        let Some(deletion) = self.semantic_property_delete(object, lookup)? else {
+            return delete_property(&mut self.objects, object, lookup).map(Value::Bool);
+        };
+        if let SemanticPropertyDelete::ObjectTail(id) = deletion
             && property.as_str() != PROTOTYPE_PROPERTY
-            && self.objects.array_len_if_array(*id)?.is_none()
+            && self.objects.array_len_if_array(id)?.is_none()
         {
             return self
-                .delete_cached_object_property_value(*id, access, lookup)
+                .delete_cached_object_property_value(id, access, lookup)
                 .map(Value::Bool);
         }
-        delete_property(&mut self.objects, object, lookup).map(Value::Bool)
+        self.finish_semantic_property_delete(deletion, lookup)
+            .map(Value::Bool)
     }
 
     pub(crate) fn delete_cached_dynamic_property_value(
@@ -536,25 +511,20 @@ impl Context {
         property: &DynamicPropertyKey,
         access: StaticPropertyAccessId,
     ) -> Result<Value> {
-        if let Value::Function(id) = object {
-            return self
-                .delete_function_property_lookup(*id, property.lookup())
-                .map(Value::Bool);
-        }
-        if let Value::NativeFunction(id) = object {
-            return self
-                .delete_native_function_property_lookup(*id, property.lookup())
-                .map(Value::Bool);
-        }
-        if let Value::Object(id) = object
+        let lookup = property.lookup();
+        let Some(deletion) = self.semantic_property_delete(object, lookup)? else {
+            return delete_property(&mut self.objects, object, lookup).map(Value::Bool);
+        };
+        if let SemanticPropertyDelete::ObjectTail(id) = deletion
             && property.name() != PROTOTYPE_PROPERTY
-            && self.objects.array_len_if_array(*id)?.is_none()
+            && self.objects.array_len_if_array(id)?.is_none()
         {
             return self
-                .delete_cached_object_property_value(*id, access, property.lookup())
+                .delete_cached_object_property_value(id, access, lookup)
                 .map(Value::Bool);
         }
-        delete_property(&mut self.objects, object, property.lookup()).map(Value::Bool)
+        self.finish_semantic_property_delete(deletion, lookup)
+            .map(Value::Bool)
     }
 
     fn delete_cached_object_property_value(
@@ -563,9 +533,6 @@ impl Context {
         access: StaticPropertyAccessId,
         lookup: PropertyLookup<'_>,
     ) -> Result<bool> {
-        if self.objects.is_proxy(object) {
-            return self.proxy_delete(object, lookup.name());
-        }
         let Some(cache) = self.current_static_name_atom_cache() else {
             return delete_property(&mut self.objects, &Value::Object(object), lookup);
         };

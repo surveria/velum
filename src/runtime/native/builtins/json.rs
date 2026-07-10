@@ -6,7 +6,6 @@ use crate::{
     runtime::call::RuntimeCallArgs,
     runtime::control::Completion,
     runtime::object::{ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable},
-    runtime::property::delete_property,
     value::{ErrorName, ObjectId, Value},
 };
 
@@ -252,7 +251,7 @@ impl Context {
             }
             return Ok(());
         }
-        for key in self.objects.own_keys(id, &self.atoms)? {
+        for key in self.semantic_own_enumerable_string_keys(holder)? {
             self.internalize_json_child(holder, &key, reviver)?;
         }
         Ok(())
@@ -268,7 +267,7 @@ impl Context {
 
     fn delete_json_property(&mut self, holder: &Value, key: &str) -> Result<()> {
         let lookup = self.property_lookup(key);
-        let deleted = delete_property(&mut self.objects, holder, lookup)?;
+        let deleted = self.delete_property_value_with_lookup(holder, lookup)?;
         if deleted {
             return Ok(());
         }
@@ -508,7 +507,7 @@ impl Context {
         let keys = match &state.replacer {
             JsonReplacer::PropertyList(keys) => keys.clone(),
             JsonReplacer::None | JsonReplacer::Function(_) => {
-                self.objects.own_keys(id, &self.atoms)?
+                self.semantic_own_enumerable_string_keys(&holder)?
             }
         };
         let mut members = Vec::new();

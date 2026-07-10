@@ -602,14 +602,7 @@ impl Context {
 
     fn set_regexp_last_index_value(&mut self, this_value: &Value, value: Value) -> Result<()> {
         let key = self.intern_property_key(REGEXP_LAST_INDEX_PROPERTY)?;
-        crate::runtime::property::set_property(
-            &mut self.objects,
-            this_value,
-            key,
-            REGEXP_LAST_INDEX_PROPERTY,
-            value,
-            self.limits.max_object_properties,
-        )
+        self.set_property_value_with_accessors(this_value, key, REGEXP_LAST_INDEX_PROPERTY, value)
     }
 
     fn regexp_match_array(&mut self, input: &str, start: usize, end: usize) -> Result<Value> {

@@ -20,6 +20,7 @@ use array::{ArrayIndex, ArrayLength, ArrayStorage};
 use base::LiteralPrototype;
 pub use base::ObjectHeap;
 pub use date::DateValue;
+pub(in crate::runtime) use property::AccessorPropertyDescriptor;
 use property::NamedProperty;
 pub use property::ObjectPropertyInit;
 pub use property::{

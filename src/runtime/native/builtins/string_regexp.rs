@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs, property::set_property},
+    runtime::{Context, call::RuntimeCallArgs},
     value::Value,
 };
 
@@ -286,14 +286,7 @@ impl Context {
 
     fn string_regexp_set_last_index_value(&mut self, pattern: &Value, value: Value) -> Result<()> {
         let key = self.intern_property_key(REGEXP_LAST_INDEX_PROPERTY)?;
-        set_property(
-            &mut self.objects,
-            pattern,
-            key,
-            REGEXP_LAST_INDEX_PROPERTY,
-            value,
-            self.limits.max_object_properties,
-        )
+        self.set_property_value_with_accessors(pattern, key, REGEXP_LAST_INDEX_PROPERTY, value)
     }
 
     fn string_regexp_advance_last_index(

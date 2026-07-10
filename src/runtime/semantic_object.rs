@@ -8,6 +8,13 @@ use crate::{
     value::{ObjectId, Value},
 };
 
+mod descriptor;
+mod keys;
+mod mutation;
+mod prototype_integrity;
+
+pub(in crate::runtime) use prototype_integrity::SemanticIntegrityLevel;
+
 const ERROR_MESSAGE_PROPERTY: &str = "message";
 const ERROR_NAME_PROPERTY: &str = "name";
 
@@ -23,6 +30,22 @@ pub(in crate::runtime) enum SemanticPropertyRead {
 /// handle the ordinary `ObjectHeap` tail without repeating value-kind checks.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::runtime) enum SemanticPropertyPresence {
+    Resolved(bool),
+    ObjectTail(ObjectId),
+}
+
+/// Result of object-like `[[Set]]` pre-dispatch. Optimized callers may write
+/// only the ordinary `ObjectHeap` tail after exotic behavior is resolved.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::runtime) enum SemanticPropertyWrite {
+    Resolved(bool),
+    ObjectTail(ObjectId),
+}
+
+/// Result of object-like `[[Delete]]` pre-dispatch. Optimized callers may
+/// delete only from the returned ordinary `ObjectHeap` tail.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::runtime) enum SemanticPropertyDelete {
     Resolved(bool),
     ObjectTail(ObjectId),
 }
