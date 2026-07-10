@@ -1519,7 +1519,10 @@ AS-05b1b3 local implementation evidence:
   snapshot sums, and preserved runtime behavior;
 - architecture mutation tests reject removal of a Promise reaction result or
   a WeakMap ephemeron source. AS-05b1c remains responsible for transient
-  allocation-point and embedder roots.
+  allocation-point and embedder roots;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
 
 ### AS-06: Resumable Execution
 
