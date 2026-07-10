@@ -18,12 +18,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260710T150132Z.md`
-- Task: PR #425: AS-05a2c: add portable OwnedValue boundary
-- Performance: 5.34x (4/5 >1.00x) (from `rsqjs-test-report-20260710T150132Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T150132Z.md`)
+- `rsqjs-test-report-20260710T152044Z.md`
+- Task: PR #426: AS-05b1a: establish executable direct-root contract
+- Performance: 5.38x (4/5 >1.00x) (from `rsqjs-test-report-20260710T152044Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T152044Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T150132Z.md`)
+- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T152044Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -412,3 +412,4 @@ Latest report:
 | `20260710T143244Z` `923988b` PR #423: AS-05a2a: validate string and Symbol ownership | 5.31x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T144925Z` `da7c7c4` PR #424: AS-05a2b: bind host JavaScript errors to VM identity | 5.39x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T150132Z` `99abdb2` PR #425: AS-05a2c: add portable OwnedValue boundary | 5.34x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
+| `20260710T152044Z` `ce44f0b` PR #426: AS-05b1a: establish executable direct-root contract | 5.38x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
