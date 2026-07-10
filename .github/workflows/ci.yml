@@ -17,6 +17,10 @@ on:
         description: "Run the exact-tree correctness recovery gate"
         required: false
         default: "false"
+      source_commit:
+        description: "Exact source commit for correctness recovery"
+        required: false
+        default: ""
       full:
         description: "Run the full report and benchmark gate"
         required: false
@@ -68,10 +72,34 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: >-
+            ${{
+              github.event_name == 'workflow_dispatch' &&
+              github.event.inputs.correctness == 'true' &&
+              github.event.inputs.source_commit ||
+              github.sha
+            }}
           persist-credentials: false
           # Full history so base-relative gates can find the merge base and
           # report artifacts can be keyed by the tested tree.
           fetch-depth: 0
+
+      - name: Validate correctness recovery source
+        if: >-
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.correctness == 'true'
+        env:
+          RSQJS_RECOVERY_SOURCE_COMMIT: ${{ github.event.inputs.source_commit }}
+        run: |
+          if [[ ! "${RSQJS_RECOVERY_SOURCE_COMMIT}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "source_commit must be a full lowercase commit SHA" >&2
+            exit 1
+          fi
+          actual_commit="$(git rev-parse HEAD)"
+          if [[ "${actual_commit}" != "${RSQJS_RECOVERY_SOURCE_COMMIT}" ]]; then
+            echo "checked out ${actual_commit}, expected ${RSQJS_RECOVERY_SOURCE_COMMIT}" >&2
+            exit 1
+          fi
 
       - name: Check self-hosted runner
         run: |
