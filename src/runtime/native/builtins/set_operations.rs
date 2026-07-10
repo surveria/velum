@@ -2,10 +2,9 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
-        abstract_operations::{integer_or_infinity_from_number, to_boolean},
+        abstract_operations::{IteratorStep, integer_or_infinity_from_number, to_boolean},
         call::RuntimeCallArgs,
         collections::{CollectionId, CollectionKind},
-        control::Completion,
     },
     value::{ErrorName, Value},
 };
@@ -13,14 +12,9 @@ use crate::{
 const SET_SIZE_PROPERTY: &str = "size";
 const SET_HAS_PROPERTY: &str = "has";
 const SET_KEYS_PROPERTY: &str = "keys";
-const ITERATOR_NEXT_PROPERTY: &str = "next";
-const ITERATOR_DONE_PROPERTY: &str = "done";
-const ITERATOR_VALUE_PROPERTY: &str = "value";
 const SET_LIKE_NOT_OBJECT_ERROR: &str = "Set method argument must be a set-like object";
 const SET_LIKE_SIZE_NAN_ERROR: &str = "Set-like argument size must be a number";
 const SET_LIKE_SIZE_NEGATIVE_ERROR: &str = "Set-like argument size must not be negative";
-const SET_KEYS_ITERATOR_ERROR: &str = "Set-like argument keys method must return an iterator";
-const SET_KEYS_RESULT_ERROR: &str = "Set-like iterator must return an object result";
 
 /// Validated `GetSetRecord` describing a set-like argument.
 struct SetRecord {
@@ -240,37 +234,23 @@ impl Context {
 
     fn set_record_has(&mut self, record: &SetRecord, value: &Value) -> Result<bool> {
         let args = [value.clone()];
-        let result = self.set_call(&record.has, &args, record.object.clone())?;
+        let result = self.call_value(&record.has, &args, record.object.clone())?;
         Ok(to_boolean(&result))
     }
 
     /// Drive the iterator returned by the set-like `keys` method to completion.
     fn set_record_keys(&mut self, record: &SetRecord) -> Result<Vec<Value>> {
-        let iterator = self.set_call(&record.keys, &[], record.object.clone())?;
-        if !matches!(iterator, Value::Object(_)) {
-            return Err(Error::type_error(SET_KEYS_ITERATOR_ERROR));
-        }
-        let next = self.get_named(&iterator, ITERATOR_NEXT_PROPERTY)?;
+        let mut source = self.get_iterator_from_method(&record.object, &record.keys)?;
         let mut values = Vec::new();
         loop {
             self.step()?;
-            let result = self.set_call(&next, &[], iterator.clone())?;
-            if !matches!(result, Value::Object(_)) {
-                return Err(Error::type_error(SET_KEYS_RESULT_ERROR));
+            match self.iterator_step(&mut source)? {
+                IteratorStep::Value(value) => values.push(value),
+                IteratorStep::Done => return Ok(values),
+                IteratorStep::Abrupt(completion) => {
+                    return completion.into_result().map(|_| values);
+                }
             }
-            let done = self.get_named(&result, ITERATOR_DONE_PROPERTY)?;
-            if to_boolean(&done) {
-                break;
-            }
-            values.push(self.get_named(&result, ITERATOR_VALUE_PROPERTY)?);
-        }
-        Ok(values)
-    }
-
-    fn set_call(&mut self, callee: &Value, args: &[Value], this_value: Value) -> Result<Value> {
-        match self.call(callee, args, this_value)? {
-            Completion::Normal(value) => Ok(value),
-            completion => completion.into_result(),
         }
     }
 

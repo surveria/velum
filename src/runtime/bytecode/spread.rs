@@ -1,12 +1,10 @@
 use crate::{
     bytecode::{BytecodeAddress, BytecodeBinding, BytecodeDynamicProperty, BytecodeProperty},
     error::{Error, Result},
-    runtime::Context,
-    runtime::control::Completion,
+    runtime::{Context, abstract_operations::IteratorStep, control::Completion},
     value::Value,
 };
 
-use super::for_of::ForOfStep;
 use super::state::BytecodeState;
 
 /// Result of expanding a mixed plain/spread value list: either the flattened
@@ -76,13 +74,13 @@ impl Context {
                 expanded.push(value);
                 continue;
             }
-            let mut source = self.for_of_source(value)?;
+            let mut source = self.get_iterator(value)?;
             loop {
                 self.step()?;
-                match self.for_of_step(&mut source)? {
-                    ForOfStep::Value(value) => expanded.push(value),
-                    ForOfStep::Done => break,
-                    ForOfStep::Abrupt(completion) => {
+                match self.iterator_step(&mut source)? {
+                    IteratorStep::Value(value) => expanded.push(value),
+                    IteratorStep::Done => break,
+                    IteratorStep::Abrupt(completion) => {
                         return Ok(SpreadExpansion::Abrupt(completion));
                     }
                 }
@@ -118,13 +116,13 @@ impl Context {
                 expanded.push(Some(value));
                 continue;
             }
-            let mut source = self.for_of_source(value)?;
+            let mut source = self.get_iterator(value)?;
             loop {
                 self.step()?;
-                match self.for_of_step(&mut source)? {
-                    ForOfStep::Value(value) => expanded.push(Some(value)),
-                    ForOfStep::Done => break,
-                    ForOfStep::Abrupt(completion) => {
+                match self.iterator_step(&mut source)? {
+                    IteratorStep::Value(value) => expanded.push(Some(value)),
+                    IteratorStep::Done => break,
+                    IteratorStep::Abrupt(completion) => {
                         return Ok(SpreadExpansion::Abrupt(completion));
                     }
                 }

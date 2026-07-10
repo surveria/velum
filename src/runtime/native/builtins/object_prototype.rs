@@ -26,6 +26,7 @@ const TO_STRING_TAG_DISPLAY: &str = "Symbol(Symbol.toStringTag)";
 const TO_LOCALE_STRING_METHOD: &str = "toString";
 const ENTRY_KEY_PROPERTY: &str = "0";
 const ENTRY_VALUE_PROPERTY: &str = "1";
+const ENTRY_NOT_OBJECT_ERROR: &str = "Object.fromEntries iterator value must be an object";
 const OBJECT_RECEIVER_ERROR: &str = "Object.prototype method called on null or undefined";
 
 impl Context {
@@ -117,26 +118,34 @@ impl Context {
             ));
         }
         let result = self.create_object_from_constructor()?;
-        let mut source = self.for_of_source(iterable)?;
+        let mut source = self.get_iterator(iterable)?;
         loop {
             self.step()?;
-            match self.for_of_step(&mut source)? {
-                crate::runtime::bytecode::for_of::ForOfStep::Value(entry) => {
-                    let key = self.get_named(&entry, ENTRY_KEY_PROPERTY)?;
-                    let value = self.get_named(&entry, ENTRY_VALUE_PROPERTY)?;
-                    let mut dynamic = self.object_property_key(Some(&key))?;
-                    let name = dynamic.name().to_owned();
-                    let property_key = self.intern_dynamic_property_key(&mut dynamic)?;
-                    self.set_property_value_with_accessors(&result, property_key, &name, value)?;
+            match self.iterator_step(&mut source)? {
+                crate::runtime::abstract_operations::IteratorStep::Value(entry) => {
+                    if let Err(error) = self.add_object_from_entry(&result, &entry) {
+                        return Err(self.iterator_close_on_error(&mut source, error));
+                    }
                 }
-                crate::runtime::bytecode::for_of::ForOfStep::Done => break,
-                crate::runtime::bytecode::for_of::ForOfStep::Abrupt(completion) => {
-                    self.close_for_of_source(&source);
+                crate::runtime::abstract_operations::IteratorStep::Done => break,
+                crate::runtime::abstract_operations::IteratorStep::Abrupt(completion) => {
                     return completion.into_result();
                 }
             }
         }
         Ok(result)
+    }
+
+    fn add_object_from_entry(&mut self, result: &Value, entry: &Value) -> Result<()> {
+        if self.semantic_object_ref(entry)?.is_none() {
+            return Err(Error::type_error(ENTRY_NOT_OBJECT_ERROR));
+        }
+        let key = self.get_named(entry, ENTRY_KEY_PROPERTY)?;
+        let value = self.get_named(entry, ENTRY_VALUE_PROPERTY)?;
+        let mut dynamic = self.object_property_key(Some(&key))?;
+        let name = dynamic.name().to_owned();
+        let property_key = self.intern_dynamic_property_key(&mut dynamic)?;
+        self.set_property_value_with_accessors(result, property_key, &name, value)
     }
 
     /// Coerce a receiver to an object (`ToObject`), boxing primitives.

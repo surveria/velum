@@ -26,9 +26,15 @@ impl Context {
             return self.finish_semantic_property_read(read, object, property);
         }
         if let Value::String(value) = object {
+            if property.key().is_some_and(|key| key.symbol_id().is_some()) {
+                return self.get_string_prototype_symbol_property(object, property);
+            }
             return self.get_string_property_value(object, value, property.name());
         }
         if let Value::HeapString(value) = object {
+            if property.key().is_some_and(|key| key.symbol_id().is_some()) {
+                return self.get_string_prototype_symbol_property(object, property);
+            }
             return self.get_string_property_value(object, value.as_str(), property.name());
         }
         if let Some(value) = self.primitive_prototype_property_value(object, property.name())? {
@@ -36,6 +42,20 @@ impl Context {
         }
         let value = get_property(&self.objects, object, property)?;
         self.runtime_property_value(value)
+    }
+
+    fn get_string_prototype_symbol_property(
+        &mut self,
+        receiver: &Value,
+        property: PropertyLookup<'_>,
+    ) -> Result<Value> {
+        let prototype = Value::Object(self.string_constructor_prototype()?);
+        let Some(read) =
+            self.semantic_property_read_with_receiver(&prototype, receiver, property)?
+        else {
+            return Err(Error::runtime("String prototype is not an object"));
+        };
+        self.finish_semantic_property_read(read, receiver, property)
     }
 
     /// Named-key convenience entrypoint for the shared `Get` operation.

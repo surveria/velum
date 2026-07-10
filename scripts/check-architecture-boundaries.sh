@@ -153,6 +153,9 @@ check_semantic_duplicate_allowlists() {
   local property_call
   local expected_property_call
   local legacy_property_call
+  local iterator_operations
+  local expected_iterator_operations
+  local legacy_iterator_operations
 
   equality="$(
     function_owners \
@@ -269,6 +272,28 @@ src/runtime/abstract_operations/property_call.rs:set'
       'fn[[:space:]]+(eval_call_completion|eval_call_value|get_property_value|get_property_value_with_lookup|proxy_trap)[[:space:]]*\('
   )"
   compare_set "legacy property/method/call facade allowlist" "${legacy_property_call}" ''
+
+  iterator_operations="$(
+    function_owners \
+      'fn[[:space:]]+(get_iterator|get_iterator_from_method|iterator_method|iterator_step|iterator_close|iterator_close_on_error)[[:space:]]*\(' \
+      | sed -E 's/[[:space:]]*\($//'
+  )"
+  expected_iterator_operations='src/runtime/abstract_operations/iterator.rs:get_iterator
+src/runtime/abstract_operations/iterator.rs:get_iterator_from_method
+src/runtime/abstract_operations/iterator.rs:iterator_close
+src/runtime/abstract_operations/iterator.rs:iterator_close_on_error
+src/runtime/abstract_operations/iterator.rs:iterator_method
+src/runtime/abstract_operations/iterator.rs:iterator_step'
+  compare_set \
+    "iterator abstract-operation allowlist" \
+    "${iterator_operations}" \
+    "${expected_iterator_operations}"
+
+  legacy_iterator_operations="$(
+    function_owners \
+      'fn[[:space:]]+(close_for_of_source|for_of_source|for_of_step|protocol_source|set_call)[[:space:]]*\('
+  )"
+  compare_set "legacy iterator facade allowlist" "${legacy_iterator_operations}" ''
 }
 
 check_state_owner_allowlists() {
@@ -529,6 +554,18 @@ mutate_legacy_property_call_facade() {
     >>"${fixture_root}/src/runtime/values.rs"
 }
 
+mutate_iterator_owner() {
+  local fixture_root="$1"
+  printf '\nfn iterator_step() {}\n' \
+    >>"${fixture_root}/src/runtime/abstract_operations/conversion.rs"
+}
+
+mutate_legacy_iterator_facade() {
+  local fixture_root="$1"
+  printf '\nfn for_of_step() {}\n' \
+    >>"${fixture_root}/src/runtime/values.rs"
+}
+
 mutate_test262_source_name() {
   local fixture_root="$1"
   printf '\nconst ARCHITECTURE_PROBE: &str = TEST262_ERROR_NAME;\n' \
@@ -638,6 +675,10 @@ run_self_tests() {
     'property/method/call abstract-operation allowlist changed' mutate_property_call_owner
   expect_guard_failure "${temp_dir}" legacy-property-call-facade \
     'legacy property/method/call facade allowlist changed' mutate_legacy_property_call_facade
+  expect_guard_failure "${temp_dir}" iterator-owner \
+    'iterator abstract-operation allowlist changed' mutate_iterator_owner
+  expect_guard_failure "${temp_dir}" legacy-iterator-facade \
+    'legacy iterator facade allowlist changed' mutate_legacy_iterator_facade
   expect_guard_failure "${temp_dir}" context-store \
     'Context state-owner field allowlist changed' mutate_context_store
   expect_guard_failure "${temp_dir}" object-payload \

@@ -4,15 +4,17 @@ use crate::{
         BytecodePatternProperty, BytecodePatternTarget,
     },
     error::{Error, Result},
-    runtime::Context,
     runtime::binding::scope::BindingScope,
     runtime::control::Completion,
     runtime::object::{OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyEnumerable},
+    runtime::{
+        Context,
+        abstract_operations::{IteratorSource, IteratorStep},
+    },
     syntax::{DeclKind, StaticName},
     value::Value,
 };
 
-use super::for_of::{ForOfSource, ForOfStep};
 use super::state::{BytecodeState, bytecode_loop_completion};
 
 /// Result of walking one destructuring pattern against a source value.
@@ -196,21 +198,21 @@ impl Context {
         kind: DeclKind,
         value: Value,
     ) -> Result<DestructureOutcome> {
-        let mut source = self.for_of_source(value)?;
+        let mut source = self.get_iterator(value)?;
         let mut exhausted = false;
         for element in elements {
             self.step()?;
             let step_value = if exhausted {
                 Value::Undefined
             } else {
-                match self.for_of_step(&mut source)? {
-                    ForOfStep::Value(value) => value,
-                    ForOfStep::Done => {
+                match self.iterator_step(&mut source)? {
+                    IteratorStep::Value(value) => value,
+                    IteratorStep::Done => {
                         exhausted = true;
                         Value::Undefined
                     }
                     // A throw from next() propagates without IteratorClose.
-                    ForOfStep::Abrupt(completion) => {
+                    IteratorStep::Abrupt(completion) => {
                         return Ok(DestructureOutcome::Abrupt(completion));
                     }
                 }
@@ -222,14 +224,14 @@ impl Context {
                 match self.apply_pattern_default(step_value, target.default.as_ref())? {
                     PatternStep::Value(value) => value,
                     PatternStep::Abrupt(completion) => {
-                        self.close_for_of_source(&source);
+                        let completion = self.iterator_close(&mut source, completion)?;
                         return Ok(DestructureOutcome::Abrupt(completion));
                     }
                 };
             match self.destructure_pattern(&target.pattern, kind, step_value)? {
                 DestructureOutcome::Completed => {}
                 DestructureOutcome::Abrupt(completion) => {
-                    self.close_for_of_source(&source);
+                    let completion = self.iterator_close(&mut source, completion)?;
                     return Ok(DestructureOutcome::Abrupt(completion));
                 }
             }
@@ -238,10 +240,10 @@ impl Context {
             let mut items = Vec::new();
             while !exhausted {
                 self.step()?;
-                match self.for_of_step(&mut source)? {
-                    ForOfStep::Value(value) => items.push(value),
-                    ForOfStep::Done => exhausted = true,
-                    ForOfStep::Abrupt(completion) => {
+                match self.iterator_step(&mut source)? {
+                    IteratorStep::Value(value) => items.push(value),
+                    IteratorStep::Done => exhausted = true,
+                    IteratorStep::Abrupt(completion) => {
                         return Ok(DestructureOutcome::Abrupt(completion));
                     }
                 }
@@ -253,7 +255,11 @@ impl Context {
             }
         } else if !exhausted {
             // The pattern finished before the iterator: IteratorClose.
-            self.close_for_of_source(&source);
+            let completion =
+                self.iterator_close(&mut source, Completion::Normal(Value::Undefined))?;
+            if !matches!(completion, Completion::Normal(_)) {
+                return Ok(DestructureOutcome::Abrupt(completion));
+            }
         }
         Ok(DestructureOutcome::Completed)
     }
@@ -284,7 +290,7 @@ impl Context {
 
     pub(super) fn eval_for_of_pattern_loop(
         &mut self,
-        source: &mut ForOfSource,
+        source: &mut IteratorSource,
         pattern: &BytecodePattern,
         kind: DeclKind,
         body: &BytecodeBlock,
@@ -293,23 +299,25 @@ impl Context {
         let mut last = Value::Undefined;
         loop {
             self.step()?;
-            let value = match self.for_of_step(source)? {
-                ForOfStep::Value(value) => value,
-                ForOfStep::Done => break,
-                ForOfStep::Abrupt(completion) => return Ok(completion),
+            let value = match self.iterator_step(source)? {
+                IteratorStep::Value(value) => value,
+                IteratorStep::Done => break,
+                IteratorStep::Abrupt(completion) => return Ok(completion),
             };
-            match self.eval_pattern_iteration(pattern, kind, value, body)? {
+            let iteration = match self.eval_pattern_iteration(pattern, kind, value, body) {
+                Ok(iteration) => iteration,
+                Err(error) => return Err(self.iterator_close_on_error(source, error)),
+            };
+            match iteration {
                 PatternIteration::Body(completion) => {
                     if let Some(completion) =
                         bytecode_loop_completion(&mut last, completion, labels)
                     {
-                        self.close_for_of_source(source);
-                        return Ok(completion);
+                        return self.iterator_close(source, completion);
                     }
                 }
                 PatternIteration::DestructureAbrupt(completion) => {
-                    self.close_for_of_source(source);
-                    return Ok(completion);
+                    return self.iterator_close(source, completion);
                 }
             }
         }

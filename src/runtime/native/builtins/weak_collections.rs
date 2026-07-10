@@ -159,18 +159,17 @@ impl Context {
         collection: CollectionId,
         iterable: &Value,
     ) -> Result<()> {
-        let mut source = self.for_of_source(iterable.clone())?;
+        let mut source = self.get_iterator(iterable.clone())?;
         loop {
-            match self.for_of_step(&mut source)? {
-                crate::runtime::bytecode::for_of::ForOfStep::Value(item) => {
+            match self.iterator_step(&mut source)? {
+                crate::runtime::abstract_operations::IteratorStep::Value(item) => {
                     let outcome = self.seed_weak_collection_entry(kind, collection, item);
                     if let Err(error) = outcome {
-                        self.close_for_of_source(&source);
-                        return Err(error);
+                        return Err(self.iterator_close_on_error(&mut source, error));
                     }
                 }
-                crate::runtime::bytecode::for_of::ForOfStep::Done => return Ok(()),
-                crate::runtime::bytecode::for_of::ForOfStep::Abrupt(completion) => {
+                crate::runtime::abstract_operations::IteratorStep::Done => return Ok(()),
+                crate::runtime::abstract_operations::IteratorStep::Abrupt(completion) => {
                     return completion.into_result().map(|_| ());
                 }
             }
