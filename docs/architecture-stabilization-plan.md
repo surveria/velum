@@ -1290,7 +1290,10 @@ AS-05b2b local implementation evidence:
   preview/finish reconciliation;
 - the architecture guard fixes both compact arrays, both checked totals, and
   every current payload source. Its mutation suite rejects removal of buffer
-  byte accounting.
+  byte accounting or the checked atom-byte accumulator;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
 
 AS-05a1 completion evidence:
 
