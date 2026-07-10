@@ -48,6 +48,15 @@ impl Runtime {
     pub fn compile(&self, source: &str) -> Result<CompiledScript> {
         CompiledScript::compile(source, self.limits)
     }
+
+    /// Compiles source with a stable embedder-provided diagnostic name.
+    ///
+    /// # Errors
+    /// Fails when the source name exceeds configured string limits, or when
+    /// lexing, parsing, or configured compile-time resource limits fail.
+    pub fn compile_named(&self, source_name: &str, source: &str) -> Result<CompiledScript> {
+        CompiledScript::compile_named(source_name, source, self.limits)
+    }
 }
 
 impl Default for Runtime {

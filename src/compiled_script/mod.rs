@@ -9,6 +9,7 @@ use crate::{
     error::{Error, Result},
     lexer, parser,
     runtime::limits::RuntimeLimits,
+    source::SourceId,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -16,13 +17,34 @@ pub struct CompiledScript {
     bytecode: BytecodeProgram,
     binding_layout: BindingLayout,
     usage: CompiledScriptUsage,
+    source_id: SourceId,
+    source_name: Option<String>,
 }
 
 impl CompiledScript {
     pub(crate) fn compile(source: &str, limits: RuntimeLimits) -> Result<Self> {
+        Self::compile_with_name(None, source, limits)
+    }
+
+    pub(crate) fn compile_named(
+        source_name: &str,
+        source: &str,
+        limits: RuntimeLimits,
+    ) -> Result<Self> {
+        Self::compile_with_name(Some(source_name), source, limits)
+    }
+
+    fn compile_with_name(
+        source_name: Option<&str>,
+        source: &str,
+        limits: RuntimeLimits,
+    ) -> Result<Self> {
         check_source_len(source, limits)?;
-        let tokens = lexer::lex(source)?;
-        let parsed = parser::parse_with_usage(tokens, limits)?;
+        check_source_name_len(source_name, limits)?;
+        let source_id = SourceId::for_optional_name(source_name, source);
+        let tokens = lexer::lex(source).map_err(|error| error.with_source(source_id, source))?;
+        let parsed = parser::parse_with_usage(tokens, limits)
+            .map_err(|error| error.with_source(source_id, source))?;
         let program = parsed.program;
         let binding_layout = BindingLayout::build(
             &program,
@@ -64,6 +86,8 @@ impl CompiledScript {
                 bytecode_hoisted_function_count,
             },
             binding_layout,
+            source_id,
+            source_name: source_name.map(str::to_owned),
         })
     }
 
@@ -80,8 +104,21 @@ impl CompiledScript {
         self.usage
     }
 
+    /// Returns the stable diagnostic identity of the compiled source.
+    #[must_use]
+    pub const fn source_id(&self) -> SourceId {
+        self.source_id
+    }
+
+    /// Returns the embedder-provided source name, when compilation was named.
+    #[must_use]
+    pub fn source_name(&self) -> Option<&str> {
+        self.source_name.as_deref()
+    }
+
     pub(crate) fn ensure_within_limits(&self, limits: RuntimeLimits) -> Result<()> {
         check_source_len_value(self.usage.source_len, limits)?;
+        check_source_name_len(self.source_name(), limits)?;
         if self.usage.top_level_statement_count > limits.max_statements {
             return Err(Error::limit(format!(
                 "compiled script statement count {} exceeded {}",
@@ -107,6 +144,20 @@ fn check_source_len_value(source_len: usize, limits: RuntimeLimits) -> Result<()
         return Err(Error::limit(format!(
             "source length {source_len} exceeded {}",
             limits.max_source_len
+        )));
+    }
+    Ok(())
+}
+
+fn check_source_name_len(source_name: Option<&str>, limits: RuntimeLimits) -> Result<()> {
+    let Some(source_name) = source_name else {
+        return Ok(());
+    };
+    if source_name.len() > limits.max_string_len {
+        return Err(Error::limit(format!(
+            "source name length {} exceeded {}",
+            source_name.len(),
+            limits.max_string_len
         )));
     }
     Ok(())

@@ -306,6 +306,15 @@ impl Context {
         CompiledScript::compile(source, self.limits)
     }
 
+    /// Compiles source with a stable embedder-provided diagnostic name.
+    ///
+    /// # Errors
+    /// Fails when the source name exceeds configured string limits, or when
+    /// lexing, parsing, or configured compile-time resource limits fail.
+    pub fn compile_named(&self, source_name: &str, source: &str) -> Result<CompiledScript> {
+        CompiledScript::compile_named(source_name, source, self.limits)
+    }
+
     /// # Errors
     /// Fails when the compiled script exceeds this context's limits or evaluation fails.
     pub fn eval_compiled(&mut self, script: &CompiledScript) -> Result<Value> {
