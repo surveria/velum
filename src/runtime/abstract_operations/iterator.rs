@@ -17,6 +17,7 @@ const ITERATOR_RESULT_VALUE_PROPERTY: &str = "value";
 
 /// One iterator source. Direct array and string variants are guarded
 /// implementations of the built-in iterators that are not installed yet.
+#[derive(Debug)]
 pub(in crate::runtime) enum IteratorSource {
     /// Live array index iteration, matching the built-in Array iterator's
     /// observable length reads and element access.
@@ -29,6 +30,20 @@ pub(in crate::runtime) enum IteratorSource {
         next: Value,
         done: bool,
     },
+}
+
+impl IteratorSource {
+    pub(in crate::runtime) const fn root_value_slots(&self) -> [Option<&Value>; 2] {
+        match self {
+            Self::ArrayIndex { array, .. } => [Some(array), None],
+            Self::Protocol { iterator, next, .. } => [Some(iterator), Some(next)],
+            Self::Chars { .. } => [None, None],
+        }
+    }
+
+    pub(in crate::runtime) fn root_values(&self) -> impl Iterator<Item = &Value> {
+        self.root_value_slots().into_iter().flatten()
+    }
 }
 
 /// Outcome of the shared `IteratorStep` and `IteratorValue` sequence.

@@ -15,7 +15,10 @@ use crate::{
     value::Value,
 };
 
-use super::state::{BytecodeState, bytecode_loop_completion};
+use super::{
+    control_continuation::{BytecodeControlRecord, BytecodeLoopPhase},
+    state::{BytecodeState, bytecode_loop_completion},
+};
 
 /// Result of walking one destructuring pattern against a source value.
 pub(super) enum DestructureOutcome {
@@ -290,38 +293,51 @@ impl Context {
 
     pub(super) fn eval_for_of_pattern_loop(
         &mut self,
-        source: &mut IteratorSource,
+        source: IteratorSource,
         pattern: &BytecodePattern,
         kind: DeclKind,
         body: &BytecodeBlock,
         labels: Option<&[StaticName]>,
     ) -> Result<Completion> {
-        let mut last = Value::Undefined;
+        let handle = self.push_bytecode_control(BytecodeControlRecord::for_of(source))?;
+        let mut control = self.checkout_bytecode_control(handle)?;
         loop {
-            self.step()?;
-            let value = match self.iterator_step(source)? {
+            *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Initialize;
+            let step =
+                self.run_bytecode_iterator_action(handle, &mut control, |context, source| {
+                    context.step()?;
+                    context.iterator_step(source)
+                })?;
+            let value = match step {
                 IteratorStep::Value(value) => value,
                 IteratorStep::Done => break,
-                IteratorStep::Abrupt(completion) => return Ok(completion),
+                IteratorStep::Abrupt(completion) => {
+                    return Self::finish_for_of_control(self, handle, completion);
+                }
             };
-            let iteration = match self.eval_pattern_iteration(pattern, kind, value, body) {
+            *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Body;
+            let iteration = self.run_bytecode_control_action_result(&control, |context| {
+                context.eval_pattern_iteration(pattern, kind, value, body)
+            });
+            let iteration = match iteration {
                 Ok(iteration) => iteration,
-                Err(error) => return Err(self.iterator_close_on_error(source, error)),
+                Err(error) => return self.close_for_of_error(handle, control, error),
             };
             match iteration {
                 PatternIteration::Body(completion) => {
-                    if let Some(completion) =
-                        bytecode_loop_completion(&mut last, completion, labels)
-                    {
-                        return self.iterator_close(source, completion);
+                    let (_, last) = control.for_of_state_mut()?;
+                    if let Some(completion) = bytecode_loop_completion(last, completion, labels) {
+                        return self.close_for_of_completion(handle, control, completion);
                     }
                 }
                 PatternIteration::DestructureAbrupt(completion) => {
-                    return self.iterator_close(source, completion);
+                    return self.close_for_of_completion(handle, control, completion);
                 }
             }
         }
-        Ok(Completion::Normal(last))
+        let (_, last) = control.for_of_state_mut()?;
+        let completion = Completion::Normal(std::mem::replace(last, Value::Undefined));
+        Self::finish_for_of_control(self, handle, completion)
     }
 
     pub(super) fn eval_for_in_pattern_loop(
@@ -332,22 +348,35 @@ impl Context {
         body: &BytecodeBlock,
         labels: Option<&[StaticName]>,
     ) -> Result<Completion> {
-        let mut last = Value::Undefined;
-        for key in keys {
-            self.step()?;
-            let value = self.heap_string_value(&key)?;
-            match self.eval_pattern_iteration(pattern, kind, value, body)? {
+        let handle = self.push_bytecode_control(BytecodeControlRecord::for_in(keys))?;
+        let mut control = self.checkout_bytecode_control(handle)?;
+        loop {
+            let (phase, keys, _) = control.for_in_state_mut()?;
+            *phase = BytecodeLoopPhase::Initialize;
+            let Some(key) = keys.next() else {
+                break;
+            };
+            *control.for_in_state_mut()?.0 = BytecodeLoopPhase::Body;
+            let iteration = self.run_bytecode_control_action(handle, &control, |context| {
+                context.step()?;
+                let value = context.heap_string_value(&key)?;
+                context.eval_pattern_iteration(pattern, kind, value, body)
+            })?;
+            match iteration {
                 PatternIteration::Body(completion) => {
-                    if let Some(completion) =
-                        bytecode_loop_completion(&mut last, completion, labels)
-                    {
-                        return Ok(completion);
+                    let (_, _, last) = control.for_in_state_mut()?;
+                    if let Some(completion) = bytecode_loop_completion(last, completion, labels) {
+                        return self.finish_bytecode_control_result(handle, Ok(completion));
                     }
                 }
-                PatternIteration::DestructureAbrupt(completion) => return Ok(completion),
+                PatternIteration::DestructureAbrupt(completion) => {
+                    return self.finish_bytecode_control_result(handle, Ok(completion));
+                }
             }
         }
-        Ok(Completion::Normal(last))
+        let (_, _, last) = control.for_in_state_mut()?;
+        let completion = Completion::Normal(std::mem::replace(last, Value::Undefined));
+        self.finish_bytecode_control_result(handle, Ok(completion))
     }
 
     /// Destructures one loop value and runs the loop body, giving lexical

@@ -113,6 +113,42 @@ fn snapshots_direct_roots_during_function_and_super_calls() -> TestResult {
     ensure_snapshot_sum(settled)
 }
 
+#[test]
+fn snapshots_pending_structured_control_values() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    let control_snapshot = Rc::new(Mutex::new(None));
+    let control_capture = Rc::clone(&control_snapshot);
+    vm.register_host_function_typed("captureControlRoots", move |call| {
+        *control_capture.lock() = Some(call.root_snapshot());
+        Ok(0.0)
+    })?;
+
+    vm.eval(
+        r"
+        let marker = { durable: true };
+        try {
+            throw marker;
+        } catch (error) {
+            captureControlRoots();
+        }
+        ",
+    )?;
+
+    let active = copied_snapshot(&control_snapshot, "structured control root snapshot")?;
+    ensure_positive(
+        active.count(VmRootKind::TransientTemporary),
+        "running structured control roots",
+    )?;
+    let settled = vm.root_snapshot()?;
+    ensure_usize(
+        settled.count(VmRootKind::BytecodeFrame),
+        0,
+        "settled structured control roots",
+    )?;
+    ensure_snapshot_sum(settled)
+}
+
 fn ensure_settled_activation_roots(settled: &VmRootSnapshot) -> TestResult {
     ensure_usize(
         settled.count(VmRootKind::LocalBinding),

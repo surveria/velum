@@ -8,7 +8,12 @@ use crate::{
         Context,
         abstract_operations::{number_strict_equality, strict_equality},
         binding::scope::BindingCell,
-        bytecode::state::BytecodeState,
+        bytecode::{
+            control_continuation::{
+                BytecodeControlRecord, BytecodeControlStateSlot, BytecodeTryPhase,
+            },
+            state::BytecodeState,
+        },
         control::Completion,
         numeric::number_to_i32,
     },
@@ -61,22 +66,69 @@ impl Context {
         {
             return Ok(Self::store_or_return_completion(state, completion, next));
         }
-        let mut completion = if let Some(direct_throw) = parts.body_direct_throw {
-            self.eval_bytecode_direct_throw(direct_throw)?
+        let handle = self.push_bytecode_control(BytecodeControlRecord::try_record())?;
+        let mut control = self.checkout_bytecode_control(handle)?;
+        let completion = if let Some(direct_throw) = parts.body_direct_throw {
+            match self.eval_bytecode_direct_throw(direct_throw) {
+                Ok(completion) => completion,
+                Err(error) => {
+                    return self.finish_bytecode_control_result(handle, Err(error));
+                }
+            }
         } else {
-            self.eval_bytecode_maybe_scoped_block(parts.body, parts.body_scoped)?
+            self.run_bytecode_control_segment(
+                handle,
+                &mut control,
+                BytecodeControlStateSlot::Body,
+                |context, body_state| {
+                    context.eval_bytecode_try_block_with_state(
+                        parts.body,
+                        parts.body_scoped,
+                        body_state,
+                    )
+                },
+            )?
         };
-        if let (Completion::Throw(value), Some(catch)) = (&completion, parts.catch) {
-            completion = self.eval_bytecode_catch(catch, value.clone())?;
+        *control.try_state_mut()?.1 = Some(completion);
+        if let (Some(Completion::Throw(value)), Some(catch)) =
+            (control.try_state_mut()?.1.as_ref(), parts.catch)
+        {
+            let value = value.clone();
+            *control.try_state_mut()?.0 = BytecodeTryPhase::Catch;
+            let completion = self.run_bytecode_control_segment(
+                handle,
+                &mut control,
+                BytecodeControlStateSlot::Catch,
+                |context, catch_state| context.eval_bytecode_catch(catch, value, catch_state),
+            )?;
+            *control.try_state_mut()?.1 = Some(completion);
         }
         if let Some(finally_body) = parts.finally_body {
-            let finally_completion =
-                self.eval_bytecode_maybe_scoped_block(finally_body, parts.finally_scoped)?;
+            *control.try_state_mut()?.0 = BytecodeTryPhase::Finally;
+            let finally_completion = self.run_bytecode_control_segment(
+                handle,
+                &mut control,
+                BytecodeControlStateSlot::Finally,
+                |context, finally_state| {
+                    context.eval_bytecode_try_block_with_state(
+                        finally_body,
+                        parts.finally_scoped,
+                        finally_state,
+                    )
+                },
+            )?;
             if !matches!(finally_completion, Completion::Normal(_)) {
-                completion = finally_completion;
+                *control.try_state_mut()?.1 = Some(finally_completion);
             }
         }
-        Ok(Self::store_or_return_completion(state, completion, next))
+        let completion = control
+            .try_state_mut()?
+            .1
+            .take()
+            .ok_or_else(|| Error::runtime("structured try completion disappeared"));
+        let result =
+            completion.map(|completion| Self::store_or_return_completion(state, completion, next));
+        self.finish_bytecode_control_result(handle, result)
     }
 
     fn eval_bytecode_try_finally_fast_path(
@@ -126,9 +178,14 @@ impl Context {
         Ok(Completion::Throw(value))
     }
 
-    fn eval_bytecode_catch(&mut self, catch: &BytecodeCatch, value: Value) -> Result<Completion> {
+    fn eval_bytecode_catch(
+        &mut self,
+        catch: &BytecodeCatch,
+        value: Value,
+        state: &mut BytecodeState,
+    ) -> Result<Completion> {
         let Some(param) = catch.param.as_ref() else {
-            return self.eval_bytecode_maybe_scoped_block(&catch.body, catch.body_scoped);
+            return self.eval_bytecode_try_block_with_state(&catch.body, catch.body_scoped, state);
         };
         self.push_lexical_scope()?;
         let result = self.eval_bytecode_catch_scope(
@@ -137,6 +194,7 @@ impl Context {
             &catch.body,
             catch.body_scoped,
             catch.body_fast_path.as_ref(),
+            state,
         );
         let removed = self.pop_lexical_scope()?;
         if removed.is_none() {
@@ -152,6 +210,7 @@ impl Context {
         body: &BytecodeBlock,
         body_scoped: bool,
         fast_path: Option<&BytecodeCatchFastPath>,
+        state: &mut BytecodeState,
     ) -> Result<Completion> {
         let atom = self.ensure_binding_capacity_static(param.name())?;
         let frame = self.compiled_local_binding_frame(param.name())?;
@@ -168,7 +227,25 @@ impl Context {
         if let Some(fast_path) = fast_path {
             return self.eval_bytecode_catch_fast_path(fast_path);
         }
-        self.eval_bytecode_maybe_scoped_block(body, body_scoped)
+        self.eval_bytecode_try_block_with_state(body, body_scoped, state)
+    }
+
+    fn eval_bytecode_try_block_with_state(
+        &mut self,
+        block: &BytecodeBlock,
+        scoped: bool,
+        state: &mut BytecodeState,
+    ) -> Result<Completion> {
+        if !scoped {
+            return self.eval_bytecode_block_with_state(block, state);
+        }
+        self.push_lexical_scope()?;
+        let result = self.eval_bytecode_block_with_state(block, state);
+        let removed = self.pop_lexical_scope()?;
+        if removed.is_none() {
+            return Err(Error::runtime("bytecode try lexical scope disappeared"));
+        }
+        result
     }
 
     fn eval_bytecode_catch_fast_path(

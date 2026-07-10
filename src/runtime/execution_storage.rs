@@ -49,6 +49,14 @@ impl Context {
         if self.locals.len() != base {
             return Err(Error::runtime("function local scope stack mismatch"));
         }
+        if frame
+            .continuation()
+            .is_some_and(|continuation| !continuation.is_settled())
+        {
+            return Err(Error::runtime(
+                "function structured control stack did not unwind",
+            ));
+        }
         let Some(frame) = self.activation_frames.pop() else {
             return Err(Error::runtime("function activation frame disappeared"));
         };
@@ -110,6 +118,14 @@ impl Context {
         if !frame.is_temporary_this() {
             return Err(Error::runtime("class field this activation mismatch"));
         }
+        if frame
+            .continuation()
+            .is_some_and(|continuation| !continuation.is_settled())
+        {
+            return Err(Error::runtime(
+                "temporary-this structured control stack did not unwind",
+            ));
+        }
         let Some(_frame) = self.activation_frames.pop() else {
             return Err(Error::runtime("class field this binding disappeared"));
         };
@@ -136,6 +152,14 @@ impl Context {
         if self.locals.len() != base {
             return Err(Error::runtime(
                 "evaluation local scope escaped its boundary",
+            ));
+        }
+        if frame
+            .continuation()
+            .is_some_and(|continuation| !continuation.is_settled())
+        {
+            return Err(Error::runtime(
+                "evaluation structured control stack did not unwind",
             ));
         }
         let Some(_frame) = self.activation_frames.pop() else {

@@ -66,10 +66,18 @@ transient root registry. A future suspended outcome moves that state into the
 frame's `parked_state`; the `BytecodeFrame` direct-root category traces both
 active function ids and parked operands.
 
-This is not yet a suspended interpreter. AS-06a2b must move loop/try/finally
-continuations out of recursive Rust calls and reusable local segment states
-into VM-owned control records. AS-06b may add suspended outcomes only after
-that state is complete and rooted.
+AS-06a2b adds one typed structured-control stack to each continuation. Loop,
+switch, iterator, and try/catch/finally records own their phase, reusable
+segment states, cursors or iterator source, accumulated value, and pending
+abrupt completion. The synchronous driver checks a record out once for the
+whole construct and mutates it in place; traceable running values use transient
+roots, while parked records participate in the `BytecodeFrame` direct-root
+category. Each record is charged as an `ExecutionFrame` and must be empty at
+activation unwind.
+
+This is not yet a suspended interpreter. AS-06b may add suspended outcomes by
+parking the already complete bytecode and structured-control state in their
+continuation slots; it must not introduce a second async execution model.
 
 ## Embedding Model
 

@@ -4,6 +4,7 @@ mod class;
 mod coercion;
 mod continuation;
 mod control;
+mod control_continuation;
 mod destructure;
 mod execution;
 mod for_of;
