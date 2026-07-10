@@ -217,6 +217,16 @@ impl ShapeTable {
             .map(Shape::properties)
             .ok_or_else(|| Error::runtime("shape id is not defined"))
     }
+
+    pub(in crate::runtime::object) fn property_keys(
+        &self,
+    ) -> impl Iterator<Item = PropertyKey> + '_ {
+        self.shapes.iter().flat_map(|shape| {
+            let properties = shape.properties.iter().map(|property| property.key);
+            let offsets = shape.offsets.iter().map(|offset| offset.key);
+            properties.chain(offsets)
+        })
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -14,6 +14,7 @@ mod proxy;
 mod regexp;
 mod shape;
 mod string;
+mod trace;
 mod typed_array;
 
 use array::{ArrayIndex, ArrayLength, ArrayStorage};

@@ -1,5 +1,6 @@
 use crate::{
     error::Result,
+    runtime::trace::{StrongEdgeReference, StrongEdgeVisitor, VmObjectEdgeKind},
     value::{ObjectId, Value},
 };
 
@@ -48,6 +49,20 @@ impl ProxyValue {
             return None;
         }
         Some(&self.handler)
+    }
+
+    pub(in crate::runtime::object) fn visit_strong_edges<V: StrongEdgeVisitor<VmObjectEdgeKind>>(
+        &self,
+        visitor: &mut V,
+    ) -> Result<()> {
+        visitor.visit(
+            VmObjectEdgeKind::InternalSlot,
+            StrongEdgeReference::Value(&self.target),
+        )?;
+        visitor.visit(
+            VmObjectEdgeKind::InternalSlot,
+            StrongEdgeReference::Value(&self.handler),
+        )
     }
 }
 

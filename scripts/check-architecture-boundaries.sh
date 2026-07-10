@@ -557,7 +557,11 @@ check_direct_root_boundary() {
     'for frame in self.super_frames.iter().flatten() {' \
     'if let Some(id) = self.global_object {' \
     'if let Some(id) = self.promise_prototype {' \
+    'if let Some(symbol) = self.iterator_symbol {' \
+    'for key in self.well_known_properties.keys() {' \
+    'if let Some(keys) = self.descriptor_property_keys {' \
     'for id in self.native_function_registry.ids() {' \
+    'self.objects.visit_direct_roots(visitor)?;' \
     'for job in &self.promise_jobs {'; do
     if ! grep -F -q "${source}" "${repo_root}/src/runtime/roots.rs"; then
       fail "direct root boundary changed; required Context root source '${source}' is missing"
@@ -652,6 +656,79 @@ ProxyRevoke(ObjectId),'
   if ! grep -F -q 'pub fn callable_edge_snapshot(&self) -> Result<VmCallableEdgeSnapshot>' \
       "${repo_root}/src/api/embedding.rs"; then
     fail "callable edge boundary changed; Vm requires a bounded diagnostic snapshot"
+  fi
+}
+
+check_object_edge_boundary() {
+  local edge_kinds
+  local source
+  edge_kinds="$({
+    awk '
+      /^pub enum VmObjectEdgeKind \{/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/runtime/trace.rs"
+  } | sed '/^[[:space:]]*\/\//d' | tr -d '[:space:]')"
+  if [[ "${edge_kinds}" != 'Property,Prototype,InternalSlot,' ]]; then
+    fail "object edge boundary changed; categories require an assigned AS migration"
+  fi
+
+  for source in \
+    'for object in &self.objects {' \
+    'for entry in &self.named_properties {' \
+    'self.array_storage.visit_strong_edges(visitor)?;' \
+    'if let Some(prototype) = self.prototype {' \
+    'if let Some(string) = &self.string_value {' \
+    'if let Some(ObjectPrimitiveValue::Symbol(symbol)) = &self.primitive_value {' \
+    'if let Some(proxy) = &self.proxy_value {' \
+    'if let Some(view) = &self.uint8_array {'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/object/trace.rs"; then
+      fail "object edge boundary changed; object source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    'ObjectPropertyPayload::Data(descriptor)' \
+    'StrongEdgeReference::Value(descriptor.value_ref())' \
+    'ObjectPropertyPayload::Accessor(descriptor)' \
+    'StrongEdgeReference::Value(descriptor.get_ref())' \
+    'StrongEdgeReference::Value(descriptor.set_ref())'; do
+    if ! grep -F -q "${source}" \
+      "${repo_root}/src/runtime/object/property/descriptor.rs"; then
+      fail "object edge boundary changed; descriptor source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    'ArrayElements::Packed(elements)' \
+    'ArrayElements::Holey(elements)' \
+    'for key in self.sparse_keys.values() {'; do
+    if ! grep -F -q "${source}" \
+      "${repo_root}/src/runtime/object/array/storage.rs"; then
+      fail "object edge boundary changed; array source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    'StrongEdgeReference::Value(&self.target)' \
+    'StrongEdgeReference::Value(&self.handler)'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/object/proxy.rs"; then
+      fail "object edge boundary changed; Proxy source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    'if let Some(id) = self.object_prototype {' \
+    'if let Some(id) = self.array_prototype {' \
+    'for key in self.shapes.property_keys() {'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/object/trace.rs"; then
+      fail "object edge boundary changed; ObjectHeap anchor '${source}' is missing"
+    fi
+  done
+
+  if ! grep -F -q 'pub fn object_edge_snapshot(&self) -> Result<VmObjectEdgeSnapshot>' \
+      "${repo_root}/src/api/embedding.rs"; then
+    fail "object edge boundary changed; Vm requires a bounded diagnostic snapshot"
   fi
 }
 
@@ -856,6 +933,7 @@ run_checks() {
   require_file src/runtime/mod.rs
   require_file src/runtime/roots.rs
   require_file src/runtime/trace.rs
+  require_file src/runtime/object/trace.rs
   require_file src/ownership.rs
   require_file src/source.rs
   require_file src/ast/node.rs
@@ -878,6 +956,7 @@ run_checks() {
   check_completion_error_boundary
   check_direct_root_boundary
   check_callable_edge_boundary
+  check_object_edge_boundary
   check_state_owner_allowlists
   check_optimization_owner_allowlists
   printf '%s: ok\n' "${script_name}"
@@ -1019,6 +1098,18 @@ mutate_bound_function_edge() {
   local fixture_root="$1"
   sed -i '/for arg in &self.args {/d' \
     "${fixture_root}/src/runtime/call/bound.rs"
+}
+
+mutate_object_internal_edge() {
+  local fixture_root="$1"
+  sed -i '/if let Some(view) = &self.uint8_array {/d' \
+    "${fixture_root}/src/runtime/object/trace.rs"
+}
+
+mutate_object_shape_root() {
+  local fixture_root="$1"
+  sed -i '/for key in self.shapes.property_keys() {/d' \
+    "${fixture_root}/src/runtime/object/trace.rs"
 }
 
 mutate_test262_source_name() {
@@ -1166,6 +1257,10 @@ run_self_tests() {
     'direct root boundary changed' mutate_native_registry_root
   expect_guard_failure "${temp_dir}" bound-function-edge \
     'callable edge boundary changed' mutate_bound_function_edge
+  expect_guard_failure "${temp_dir}" object-internal-edge \
+    'object edge boundary changed' mutate_object_internal_edge
+  expect_guard_failure "${temp_dir}" object-shape-root \
+    'object edge boundary changed' mutate_object_shape_root
   expect_guard_failure "${temp_dir}" context-store \
     'Context state-owner field allowlist changed' mutate_context_store
   expect_guard_failure "${temp_dir}" object-payload \

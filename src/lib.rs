@@ -31,7 +31,10 @@ pub use crate::ownership::{VmGeneration, VmIdentity};
 pub use crate::runtime::Context;
 pub use crate::runtime::engine::Runtime;
 pub use crate::runtime::limits::RuntimeLimits;
-pub use crate::runtime::{VmCallableEdgeKind, VmCallableEdgeSnapshot, VmRootKind, VmRootSnapshot};
+pub use crate::runtime::{
+    VmCallableEdgeKind, VmCallableEdgeSnapshot, VmObjectEdgeKind, VmObjectEdgeSnapshot, VmRootKind,
+    VmRootSnapshot,
+};
 pub use crate::source::{SourceId, SourceSpan};
 pub use crate::storage::string_heap::{JsString, StringId};
 pub use crate::storage::symbol::{JsSymbol, SymbolId};
