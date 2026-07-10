@@ -3,11 +3,13 @@ mod array_fill_loop;
 mod block_lexical_loop;
 mod compound_assignment_loop;
 mod constructor_prototype_loop;
+mod for_in;
 mod for_loop;
 mod function_apply_has_instance_loop;
 mod loop_helpers;
 mod object_literal_loop;
 mod string_concat_loop;
+mod structured_do_while;
 mod switch_for_loop;
 mod try_catch;
 mod try_catch_loop;
@@ -19,26 +21,29 @@ use std::rc::Rc;
 
 use crate::{
     bytecode::{
-        BytecodeAddress, BytecodeBinding, BytecodeBlock, BytecodeForInTarget, BytecodeInstruction,
-        BytecodeNumericBinaryOp, BytecodeSwitchCase,
+        BytecodeAddress, BytecodeBlock, BytecodeInstruction, BytecodeNumericBinaryOp,
+        BytecodeSwitchCase,
     },
     error::{Error, Result},
-    runtime::binding::scope::{BindingCell, BindingScope},
     runtime::control::Completion,
     runtime::{
         Context,
         abstract_operations::{number_strict_equality, to_boolean},
     },
-    syntax::{DeclKind, StaticName},
+    syntax::StaticName,
     value::Value,
 };
 
 use super::{
+    control_continuation::{
+        BytecodeControlRecord, BytecodeControlStateSlot, BytecodeLoopKind, BytecodeLoopPhase,
+    },
     linear::BytecodeLinearPlan,
     state::{
         BytecodeState, bytecode_loop_completion, init_completion_to_result, loop_label_matches,
     },
 };
+use for_loop::BytecodeForBodyFastPath;
 use try_catch::BytecodeTryParts;
 
 #[derive(Debug, Clone, Copy)]
@@ -49,6 +54,13 @@ struct BytecodeForParts<'a> {
     body: &'a BytecodeBlock,
     labels: Option<&'a [StaticName]>,
     scoped: bool,
+}
+
+struct BytecodeForPlans<'a> {
+    condition: Option<BytecodeLinearPlan<'a>>,
+    body_fast_path: Option<BytecodeForBodyFastPath<'a>>,
+    body: Option<BytecodeLinearPlan<'a>>,
+    update: Option<BytecodeLinearPlan<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -228,17 +240,6 @@ impl Context {
         result
     }
 
-    pub(super) fn eval_bytecode_maybe_scoped_block(
-        &mut self,
-        block: &BytecodeBlock,
-        scoped: bool,
-    ) -> Result<Completion> {
-        if scoped {
-            return self.eval_bytecode_scoped_block(block);
-        }
-        self.eval_bytecode_block(block)
-    }
-
     fn eval_bytecode_while(
         &mut self,
         state: &mut BytecodeState,
@@ -252,108 +253,76 @@ impl Context {
         {
             return self.eval_bytecode_while_loop_fast_path(state, next, &fast_path);
         }
-        let mut last = Value::Undefined;
         let condition_plan = self.compile_bytecode_linear_plan(condition)?;
         let body_plan = self.compile_bytecode_linear_plan(body)?;
-        let mut condition_state = BytecodeState::new();
-        let mut body_state = BytecodeState::new();
+        let handle = self
+            .push_bytecode_control(BytecodeControlRecord::loop_record(BytecodeLoopKind::While))?;
+        let mut control = self.checkout_bytecode_control(handle)?;
         loop {
-            match self.eval_bytecode_condition_with_state(
-                condition,
-                condition_plan.as_ref(),
-                &mut condition_state,
-            )? {
+            *control.loop_state_mut(BytecodeLoopKind::While)?.0 = BytecodeLoopPhase::Condition;
+            let condition_result = self.run_bytecode_control_segment(
+                handle,
+                &mut control,
+                BytecodeControlStateSlot::Condition,
+                |context, condition_state| {
+                    context.eval_bytecode_condition_with_state(
+                        condition,
+                        condition_plan.as_ref(),
+                        condition_state,
+                    )
+                },
+            )?;
+            match condition_result {
                 BytecodeCondition::Value(true) => {}
                 BytecodeCondition::Value(false) => break,
-                BytecodeCondition::Completion(completion) => return Ok(Some(completion)),
+                BytecodeCondition::Completion(completion) => {
+                    return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
+                }
             }
-            self.step()?;
-            match self.eval_bytecode_block_with_linear_plan(
-                body,
-                body_plan.as_ref(),
-                &mut body_state,
-            )? {
-                Completion::Normal(value) => last = value,
+            if let Err(error) = self.step() {
+                return self.finish_bytecode_control_result(handle, Err(error));
+            }
+            *control.loop_state_mut(BytecodeLoopKind::While)?.0 = BytecodeLoopPhase::Body;
+            let body_completion = self.run_bytecode_control_segment(
+                handle,
+                &mut control,
+                BytecodeControlStateSlot::Body,
+                |context, body_state| {
+                    context.eval_bytecode_block_with_linear_plan(
+                        body,
+                        body_plan.as_ref(),
+                        body_state,
+                    )
+                },
+            )?;
+            let (_, last) = control.loop_state_mut(BytecodeLoopKind::While)?;
+            match body_completion {
+                Completion::Normal(value) => *last = value,
                 Completion::Continue(None) => {}
                 Completion::Continue(Some(target)) if loop_label_matches(labels, &target) => {}
                 Completion::Break { label: None, value } => {
-                    last = value;
+                    *last = value;
                     break;
                 }
                 Completion::Break {
                     label: Some(target),
                     value,
                 } if loop_label_matches(labels, &target) => {
-                    last = value;
+                    *last = value;
                     break;
                 }
                 completion @ (Completion::Break { .. }
                 | Completion::Continue(Some(_))
                 | Completion::Throw(_)
                 | Completion::Return(_)) => {
-                    return Ok(Some(completion));
+                    return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
                 }
             }
         }
-        state.last = last;
+        let (_, last) = control.loop_state_mut(BytecodeLoopKind::While)?;
+        state.last = std::mem::replace(last, Value::Undefined);
         state.pc = next;
-        Ok(None)
-    }
-
-    fn eval_bytecode_do_while(
-        &mut self,
-        state: &mut BytecodeState,
-        labels: Option<&[StaticName]>,
-        body: &BytecodeBlock,
-        condition: &BytecodeBlock,
-        next: BytecodeAddress,
-    ) -> Result<Option<Completion>> {
-        let mut last = Value::Undefined;
-        let body_plan = self.compile_bytecode_linear_plan(body)?;
-        let condition_plan = self.compile_bytecode_linear_plan(condition)?;
-        let mut body_state = BytecodeState::new();
-        let mut condition_state = BytecodeState::new();
-        loop {
-            self.step()?;
-            match self.eval_bytecode_block_with_linear_plan(
-                body,
-                body_plan.as_ref(),
-                &mut body_state,
-            )? {
-                Completion::Normal(value) => last = value,
-                Completion::Continue(None) => {}
-                Completion::Continue(Some(target)) if loop_label_matches(labels, &target) => {}
-                Completion::Break { label: None, value } => {
-                    last = value;
-                    break;
-                }
-                Completion::Break {
-                    label: Some(target),
-                    value,
-                } if loop_label_matches(labels, &target) => {
-                    last = value;
-                    break;
-                }
-                completion @ (Completion::Break { .. }
-                | Completion::Continue(Some(_))
-                | Completion::Throw(_)
-                | Completion::Return(_)) => {
-                    return Ok(Some(completion));
-                }
-            }
-            match self.eval_bytecode_condition_with_state(
-                condition,
-                condition_plan.as_ref(),
-                &mut condition_state,
-            )? {
-                BytecodeCondition::Value(true) => {}
-                BytecodeCondition::Value(false) => break,
-                BytecodeCondition::Completion(completion) => return Ok(Some(completion)),
-            }
-        }
-        state.last = last;
-        state.pc = next;
-        Ok(None)
+        self.finish_bytecode_control_result(handle, Ok(None))
     }
 
     fn eval_bytecode_for(
@@ -381,92 +350,165 @@ impl Context {
         parts: BytecodeForParts<'_>,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
-        if let Some(init) = parts.init {
-            let mut init_state = BytecodeState::new();
-            init_completion_to_result(self.eval_bytecode_block_with_state(init, &mut init_state)?)?;
+        let handle =
+            self.push_bytecode_control(BytecodeControlRecord::loop_record(BytecodeLoopKind::For))?;
+        let mut control = self.checkout_bytecode_control(handle)?;
+        self.eval_structured_for_init(handle, &mut control, parts.init)?;
+        let fast_path = self.run_bytecode_control_action(handle, &control, |context| {
+            let fast_path = context.compile_bytecode_for_loop_fast_path(
+                parts.condition,
+                parts.update,
+                parts.body,
+            )?;
+            match fast_path {
+                Some(fast_path) if context.bytecode_for_loop_fast_path_ready(&fast_path)? => {
+                    Ok(Some(fast_path))
+                }
+                Some(_) | None => Ok(None),
+            }
+        })?;
+        if let Some(fast_path) = fast_path {
+            let result = self.eval_bytecode_for_loop_fast_path(state, next, &fast_path);
+            return self.finish_bytecode_control_result(handle, result);
         }
-        if let Some(fast_path) =
-            self.compile_bytecode_for_loop_fast_path(parts.condition, parts.update, parts.body)?
-            && self.bytecode_for_loop_fast_path_ready(&fast_path)?
-        {
-            return self.eval_bytecode_for_loop_fast_path(state, next, &fast_path);
+        let plans = self.run_bytecode_control_action(handle, &control, |context| {
+            context.compile_structured_for_plans(parts)
+        })?;
+        loop {
+            if let Some(condition) = parts.condition {
+                *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Condition;
+                let condition_result = self.run_bytecode_control_segment(
+                    handle,
+                    &mut control,
+                    BytecodeControlStateSlot::Condition,
+                    |context, condition_state| {
+                        context.eval_bytecode_condition_with_state(
+                            condition,
+                            plans.condition.as_ref(),
+                            condition_state,
+                        )
+                    },
+                )?;
+                match condition_result {
+                    BytecodeCondition::Value(true) => {}
+                    BytecodeCondition::Value(false) => break,
+                    BytecodeCondition::Completion(completion) => {
+                        return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
+                    }
+                }
+            }
+            if let Err(error) = self.step() {
+                return self.finish_bytecode_control_result(handle, Err(error));
+            }
+            *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Body;
+            let body_completion = self.eval_structured_for_body(
+                handle,
+                &mut control,
+                parts.body,
+                plans.body_fast_path.as_ref(),
+                plans.body.as_ref(),
+            )?;
+            let (_, last) = control.loop_state_mut(BytecodeLoopKind::For)?;
+            if let Some(completion) = bytecode_loop_completion(last, body_completion, parts.labels)
+            {
+                if let Completion::Normal(value) = completion {
+                    *last = value;
+                    break;
+                }
+                return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
+            }
+            if let Some(update) = parts.update {
+                *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Update;
+                let _value = self.run_bytecode_control_segment(
+                    handle,
+                    &mut control,
+                    BytecodeControlStateSlot::Update,
+                    |context, update_state| {
+                        context.eval_bytecode_expression_with_plan(
+                            update,
+                            plans.update.as_ref(),
+                            update_state,
+                        )
+                    },
+                )?;
+            }
         }
-        let mut last = Value::Undefined;
-        let condition_plan = if let Some(condition) = parts.condition {
+        let (_, last) = control.loop_state_mut(BytecodeLoopKind::For)?;
+        state.last = std::mem::replace(last, Value::Undefined);
+        state.pc = next;
+        self.finish_bytecode_control_result(handle, Ok(None))
+    }
+
+    fn eval_structured_for_init(
+        &mut self,
+        handle: super::control_continuation::BytecodeControlHandle,
+        control: &mut BytecodeControlRecord,
+        init: Option<&BytecodeBlock>,
+    ) -> Result<()> {
+        let Some(init) = init else {
+            return Ok(());
+        };
+        let completion = self.run_bytecode_control_segment(
+            handle,
+            control,
+            BytecodeControlStateSlot::Condition,
+            |context, init_state| context.eval_bytecode_block_with_state(init, init_state),
+        )?;
+        if let Err(error) = init_completion_to_result(completion) {
+            return self.finish_bytecode_control_result(handle, Err(error));
+        }
+        Ok(())
+    }
+
+    fn compile_structured_for_plans<'a>(
+        &mut self,
+        parts: BytecodeForParts<'a>,
+    ) -> Result<BytecodeForPlans<'a>> {
+        let condition = if let Some(condition) = parts.condition {
             self.compile_bytecode_linear_plan(condition)?
         } else {
             None
         };
         let body_fast_path = self.compile_bytecode_for_body_fast_path(parts.body)?;
-        let body_plan = if body_fast_path.is_none() {
+        let body = if body_fast_path.is_none() {
             self.compile_bytecode_linear_plan(parts.body)?
         } else {
             None
         };
-        let update_plan = if let Some(update) = parts.update {
+        let update = if let Some(update) = parts.update {
             self.compile_bytecode_linear_plan(update)?
         } else {
             None
         };
-        let mut condition_state = BytecodeState::new();
-        let mut body_state = BytecodeState::new();
-        let mut update_state = BytecodeState::new();
-        loop {
-            if let Some(condition) = parts.condition {
-                match self.eval_bytecode_condition_with_state(
-                    condition,
-                    condition_plan.as_ref(),
-                    &mut condition_state,
-                )? {
-                    BytecodeCondition::Value(true) => {}
-                    BytecodeCondition::Value(false) => break,
-                    BytecodeCondition::Completion(completion) => return Ok(Some(completion)),
-                }
-            }
-            self.step()?;
-            let body_completion = if let Some(fast_path) = body_fast_path.as_ref() {
-                self.eval_bytecode_for_body_fast_path(fast_path)?
-            } else {
-                self.eval_bytecode_block_with_linear_plan(
-                    parts.body,
-                    body_plan.as_ref(),
-                    &mut body_state,
-                )?
-            };
-            match body_completion {
-                Completion::Normal(value) => last = value,
-                Completion::Continue(None) => {}
-                Completion::Continue(Some(target)) if loop_label_matches(parts.labels, &target) => {
-                }
-                Completion::Break { label: None, value } => {
-                    last = value;
-                    break;
-                }
-                Completion::Break {
-                    label: Some(target),
-                    value,
-                } if loop_label_matches(parts.labels, &target) => {
-                    last = value;
-                    break;
-                }
-                completion @ (Completion::Break { .. }
-                | Completion::Continue(Some(_))
-                | Completion::Throw(_)
-                | Completion::Return(_)) => {
-                    return Ok(Some(completion));
-                }
-            }
-            if let Some(update) = parts.update {
-                self.eval_bytecode_expression_with_plan(
-                    update,
-                    update_plan.as_ref(),
-                    &mut update_state,
-                )?;
-            }
+        Ok(BytecodeForPlans {
+            condition,
+            body_fast_path,
+            body,
+            update,
+        })
+    }
+
+    fn eval_structured_for_body(
+        &mut self,
+        handle: super::control_continuation::BytecodeControlHandle,
+        control: &mut BytecodeControlRecord,
+        body: &BytecodeBlock,
+        fast_path: Option<&BytecodeForBodyFastPath<'_>>,
+        body_plan: Option<&BytecodeLinearPlan<'_>>,
+    ) -> Result<Completion> {
+        if let Some(fast_path) = fast_path {
+            return self.run_bytecode_control_action(handle, control, |context| {
+                context.eval_bytecode_for_body_fast_path(fast_path)
+            });
         }
-        state.last = last;
-        state.pc = next;
-        Ok(None)
+        self.run_bytecode_control_segment(
+            handle,
+            control,
+            BytecodeControlStateSlot::Body,
+            |context, body_state| {
+                context.eval_bytecode_block_with_linear_plan(body, body_plan, body_state)
+            },
+        )
     }
 
     fn eval_bytecode_condition_with_state(
@@ -493,103 +535,6 @@ impl Context {
         }
     }
 
-    fn eval_bytecode_for_in(
-        &mut self,
-        state: &mut BytecodeState,
-        labels: Option<&[StaticName]>,
-        target: &BytecodeForInTarget,
-        object: &BytecodeBlock,
-        body: &BytecodeBlock,
-        next: BytecodeAddress,
-    ) -> Result<Option<Completion>> {
-        let object = self.eval_bytecode_expression(object)?;
-        let keys = self.enumerable_keys(&object)?;
-        let completion = match target {
-            BytecodeForInTarget::Binding {
-                name,
-                kind: kind @ (DeclKind::Let | DeclKind::Const),
-            } => self.eval_bytecode_for_in_lexical_binding(name, *kind, keys, body, labels)?,
-            BytecodeForInTarget::Binding {
-                name,
-                kind: DeclKind::Var,
-            } => {
-                self.eval_bytecode_for_in_assignment_loop(keys, body, labels, |context, key| {
-                    let value = context.heap_string_value(&key)?;
-                    context.assign_bytecode(name, value)
-                })?
-            }
-            BytecodeForInTarget::PatternBinding { pattern, kind } => {
-                self.eval_for_in_pattern_loop(keys, pattern, *kind, body, labels)?
-            }
-            BytecodeForInTarget::Assignment(target) => {
-                self.eval_bytecode_for_in_assignment_loop(keys, body, labels, |context, key| {
-                    let value = context.heap_string_value(&key)?;
-                    context.assign_bytecode_target(target, value)
-                })?
-            }
-        };
-        Ok(Self::store_or_return_completion(state, completion, next))
-    }
-
-    fn eval_bytecode_for_in_lexical_binding(
-        &mut self,
-        name: &BytecodeBinding,
-        kind: DeclKind,
-        keys: Vec<String>,
-        body: &BytecodeBlock,
-        labels: Option<&[StaticName]>,
-    ) -> Result<Completion> {
-        let mut last = Value::Undefined;
-        self.ensure_extra_binding_capacity(0)?;
-        let atom = self.intern_static_name_atom(name.name().name())?;
-        let frame = self.compiled_local_binding_frame(name.name())?;
-        let mutable = kind != DeclKind::Const;
-        let mut scope = BindingScope::new();
-        for key in keys {
-            self.step()?;
-            let value = self.heap_string_value(&key)?;
-            let inserted = scope.insert_or_replace_at_optional_slot(
-                atom,
-                BindingCell::new(value, mutable, kind),
-                frame.map(crate::runtime::CompiledBindingFrame::slot),
-            )?;
-            if let Some(frame) = frame {
-                Self::mark_binding_scope_frame_slot(&mut scope, frame, inserted)?;
-            }
-            self.push_lexical_scope_with(scope)?;
-            self.remember_active_static_binding(name.name(), atom)?;
-            let completion = self.eval_bytecode_block(body);
-            let Some(removed_scope) = self.pop_lexical_scope()? else {
-                return Err(Error::runtime("bytecode for-in lexical scope disappeared"));
-            };
-            scope = removed_scope;
-            if let Some(completion) = bytecode_loop_completion(&mut last, completion?, labels) {
-                return Ok(completion);
-            }
-        }
-        Ok(Completion::Normal(last))
-    }
-
-    fn eval_bytecode_for_in_assignment_loop(
-        &mut self,
-        keys: Vec<String>,
-        body: &BytecodeBlock,
-        labels: Option<&[StaticName]>,
-        mut assign: impl FnMut(&mut Self, String) -> Result<()>,
-    ) -> Result<Completion> {
-        let mut last = Value::Undefined;
-        for key in keys {
-            self.step()?;
-            assign(self, key)?;
-            if let Some(completion) =
-                bytecode_loop_completion(&mut last, self.eval_bytecode_block(body)?, labels)
-            {
-                return Ok(completion);
-            }
-        }
-        Ok(Completion::Normal(last))
-    }
-
     fn eval_bytecode_switch(
         &mut self,
         state: &mut BytecodeState,
@@ -603,18 +548,40 @@ impl Context {
             state.pc = next;
             return Ok(None);
         };
-        let completion = if scoped {
-            self.push_lexical_scope()?;
-            let completion = self.eval_bytecode_switch_cases(cases, start);
-            let removed = self.pop_lexical_scope()?;
-            if removed.is_none() {
-                return Err(Error::runtime("bytecode switch lexical scope disappeared"));
+        let handle = self.push_bytecode_control(BytecodeControlRecord::switch(start))?;
+        let control = self.checkout_bytecode_control(handle)?;
+        let result = if scoped {
+            if let Err(error) = self.push_lexical_scope() {
+                return self.finish_bytecode_control_result(handle, Err(error));
             }
-            completion?
+            let completion = self.eval_bytecode_switch_cases(handle, control, cases);
+            let removed = self.pop_lexical_scope();
+            match completion {
+                Err(error) => {
+                    removed?;
+                    return Err(error);
+                }
+                Ok(completion) => match removed {
+                    Ok(Some(_scope)) => Ok(completion),
+                    Ok(None) => {
+                        return self.finish_bytecode_control_result(
+                            handle,
+                            Err(Error::runtime("bytecode switch lexical scope disappeared")),
+                        );
+                    }
+                    Err(error) => {
+                        return self.finish_bytecode_control_result(handle, Err(error));
+                    }
+                },
+            }
         } else {
-            self.eval_bytecode_switch_cases(cases, start)?
+            self.eval_bytecode_switch_cases(handle, control, cases)
         };
-        Ok(Self::store_or_return_completion(state, completion, next))
+        let (_, completion) = result?;
+        self.finish_bytecode_control_result(
+            handle,
+            Ok(Self::store_or_return_completion(state, completion, next)),
+        )
     }
 
     fn bytecode_switch_start_index(
@@ -713,23 +680,41 @@ impl Context {
 
     fn eval_bytecode_switch_cases(
         &mut self,
+        handle: super::control_continuation::BytecodeControlHandle,
+        mut control: BytecodeControlRecord,
         cases: &[BytecodeSwitchCase],
-        start: usize,
-    ) -> Result<Completion> {
-        let mut last = Value::Undefined;
-        for case in cases.iter().skip(start) {
-            match self.eval_bytecode_block(&case.body)? {
-                Completion::Normal(value) => last = value,
+    ) -> Result<(BytecodeControlRecord, Completion)> {
+        loop {
+            let (next_case, _) = control.switch_state_mut()?;
+            let Some(case) = cases.get(*next_case) else {
+                break;
+            };
+            *next_case = next_case
+                .checked_add(1)
+                .ok_or_else(|| Error::runtime("bytecode switch case index overflowed"))?;
+            let completion = self.run_bytecode_control_segment(
+                handle,
+                &mut control,
+                BytecodeControlStateSlot::Body,
+                |context, body_state| {
+                    context.eval_bytecode_block_with_state(&case.body, body_state)
+                },
+            )?;
+            let (_, last) = control.switch_state_mut()?;
+            match completion {
+                Completion::Normal(value) => *last = value,
                 Completion::Break { label: None, value } => {
-                    return Ok(Completion::Normal(value));
+                    return Ok((control, Completion::Normal(value)));
                 }
                 completion @ (Completion::Throw(_)
                 | Completion::Return(_)
                 | Completion::Break { .. }
-                | Completion::Continue(_)) => return Ok(completion),
+                | Completion::Continue(_)) => return Ok((control, completion)),
             }
         }
-        Ok(Completion::Normal(last))
+        let (_, last) = control.switch_state_mut()?;
+        let completion = Completion::Normal(std::mem::replace(last, Value::Undefined));
+        Ok((control, completion))
     }
 
     fn eval_bytecode_label(

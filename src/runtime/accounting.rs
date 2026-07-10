@@ -463,6 +463,11 @@ impl Context {
     fn record_active_storage(&self, counter: &mut StorageCounter) -> Result<()> {
         counter.record(VmStorageKind::ExecutionFrame, self.locals.len())?;
         counter.record(VmStorageKind::ExecutionFrame, self.activation_frames.len())?;
+        for frame in &self.activation_frames {
+            if let Some(continuation) = frame.continuation() {
+                counter.record(VmStorageKind::ExecutionFrame, continuation.control_count())?;
+            }
+        }
         counter.record(VmStorageKind::OutputEntry, self.output.len())
     }
 

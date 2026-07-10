@@ -5,6 +5,7 @@ use crate::{
     value::{FunctionId, Value},
 };
 
+use super::control_continuation::BytecodeControlRecord;
 use super::state::BytecodeState;
 
 /// VM-owned continuation state for one active bytecode block.
@@ -17,6 +18,7 @@ use super::state::BytecodeState;
 pub(in crate::runtime) struct BytecodeContinuationFrame {
     program: BytecodeContinuationProgram,
     parked_state: Option<BytecodeState>,
+    control_stack: Vec<Option<BytecodeControlRecord>>,
 }
 
 #[derive(Debug)]
@@ -36,6 +38,7 @@ impl BytecodeContinuationFrame {
         Self {
             program: BytecodeContinuationProgram::Function(function),
             parked_state: None,
+            control_stack: Vec::new(),
         }
     }
 
@@ -43,6 +46,7 @@ impl BytecodeContinuationFrame {
         Self {
             program: BytecodeContinuationProgram::Block { _block: block },
             parked_state: None,
+            control_stack: Vec::new(),
         }
     }
 
@@ -50,6 +54,12 @@ impl BytecodeContinuationFrame {
         self.parked_state
             .iter()
             .flat_map(BytecodeState::root_values)
+            .chain(
+                self.control_stack
+                    .iter()
+                    .flatten()
+                    .flat_map(BytecodeControlRecord::root_values),
+            )
     }
 
     pub(in crate::runtime) const fn function_id(&self) -> Option<FunctionId> {
@@ -59,8 +69,58 @@ impl BytecodeContinuationFrame {
         }
     }
 
+    pub(in crate::runtime) const fn is_settled(&self) -> bool {
+        self.parked_state.is_none() && self.control_stack.is_empty()
+    }
+
     const fn is_running(&self) -> bool {
         self.parked_state.is_none()
+    }
+
+    pub(in crate::runtime) const fn control_count(&self) -> usize {
+        self.control_stack.len()
+    }
+
+    pub(super) fn push_control(&mut self, record: BytecodeControlRecord) -> usize {
+        let index = self.control_stack.len();
+        self.control_stack.push(Some(record));
+        index
+    }
+
+    pub(super) fn checkout_control(&mut self, index: usize) -> Result<BytecodeControlRecord> {
+        let expected = self
+            .control_stack
+            .len()
+            .checked_sub(1)
+            .ok_or_else(|| Error::runtime("structured control stack is empty"))?;
+        if index != expected {
+            return Err(Error::runtime("structured control checkout mismatch"));
+        }
+        self.control_stack
+            .get_mut(index)
+            .and_then(Option::take)
+            .ok_or_else(|| Error::runtime("structured control record is already running"))
+    }
+
+    pub(super) fn finish_control(&mut self, index: usize) -> Result<()> {
+        let expected = self
+            .control_stack
+            .len()
+            .checked_sub(1)
+            .ok_or_else(|| Error::runtime("structured control stack is empty"))?;
+        if index != expected {
+            return Err(Error::runtime("structured control unwind mismatch"));
+        }
+        if self.control_stack.last().is_some_and(Option::is_some) {
+            return Err(Error::runtime(
+                "parked structured control cannot finish synchronously",
+            ));
+        }
+        let _slot = self
+            .control_stack
+            .pop()
+            .ok_or_else(|| Error::runtime("structured control slot disappeared"))?;
+        Ok(())
     }
 }
 
@@ -122,7 +182,7 @@ impl Context {
         let continuation = activation
             .continuation()
             .ok_or_else(|| Error::runtime("bytecode continuation state disappeared"))?;
-        if !continuation.is_running() {
+        if !continuation.is_settled() {
             return Err(Error::runtime(
                 "parked bytecode continuation cannot be synchronously removed",
             ));

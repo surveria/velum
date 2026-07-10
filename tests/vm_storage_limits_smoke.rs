@@ -440,6 +440,59 @@ fn charges_activation_scope_and_bytecode_frames_per_nested_call() -> TestResult 
     )
 }
 
+#[test]
+fn charges_and_unwinds_structured_control_frames() -> TestResult {
+    const LOOP_SOURCE: &str = r"
+        var index = 0;
+        while (keepRunning(index)) {
+            index = index + 1;
+        }
+        index;
+    ";
+    const NESTED_SOURCE: &str = r"
+        var index = 0;
+        while (keepRunning(index)) {
+            try {
+                index = index + 1;
+            } finally {
+                index = index;
+            }
+        }
+    ";
+
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::ExecutionFrame, 2);
+    let mut vm = vm_with_storage_limits(limits);
+    vm.register_host_function_typed("keepRunning", |call| Ok(call.number(0, "index")? < 1.0))?;
+    vm.eval(LOOP_SOURCE)?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::ExecutionFrame),
+        0,
+        "released structured loop frames",
+    )?;
+
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::ExecutionFrame, 1);
+    let mut vm = vm_with_storage_limits(limits);
+    vm.register_host_function_typed("keepRunning", |call| Ok(call.number(0, "index")? < 1.0))?;
+    let error = expect_eval_error(&mut vm, LOOP_SOURCE)?;
+    ensure_limit(&error, "ExecutionFrame")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::ExecutionFrame),
+        0,
+        "structured loop frames after rejection",
+    )?;
+
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::ExecutionFrame, 2);
+    let mut vm = vm_with_storage_limits(limits);
+    vm.register_host_function_typed("keepRunning", |call| Ok(call.number(0, "index")? < 1.0))?;
+    let error = expect_eval_error(&mut vm, NESTED_SOURCE)?;
+    ensure_limit(&error, "ExecutionFrame")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::ExecutionFrame),
+        0,
+        "nested structured frames after rejection",
+    )
+}
+
 const fn storage_kind_name(kind: VmStorageKind) -> &'static str {
     match kind {
         VmStorageKind::Collection => "Collection",
