@@ -4,6 +4,7 @@ use crate::compiled_script::CompiledScript;
 use crate::error::Result;
 use crate::ownership::VmIdentity;
 use crate::runtime::Context;
+use crate::runtime::VmRootSnapshot;
 use crate::runtime::limits::RuntimeLimits;
 use crate::value::Value;
 use std::time::Duration;
@@ -246,6 +247,14 @@ impl Vm {
             call_value_cache_misses: self.context.call_value_cache_misses(),
             call_value_cache_slow_paths: self.context.call_value_cache_slow_paths(),
         }
+    }
+
+    /// Counts the VM's currently stored direct root references.
+    ///
+    /// # Errors
+    /// Fails if a root-reference counter exceeds the supported range.
+    pub fn root_snapshot(&self) -> Result<VmRootSnapshot> {
+        self.context.root_snapshot()
     }
 
     #[must_use]

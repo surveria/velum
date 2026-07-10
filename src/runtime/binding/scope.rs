@@ -119,6 +119,10 @@ impl BindingScope {
         self.slots.len()
     }
 
+    pub(crate) fn cells(&self) -> impl Iterator<Item = &BindingCell> {
+        self.slots.iter()
+    }
+
     pub(crate) fn from_compiled_slots(
         compiled_scope: ScopeId,
         slots: Vec<(AtomId, BindingCell)>,
@@ -418,6 +422,14 @@ impl BindingCell {
         match &self.0.lock().state {
             BindingState::Initialized(value) => Ok(value.clone()),
             BindingState::Uninitialized => Err(reference_error_uninitialized(name)),
+        }
+    }
+
+    pub(crate) fn with_initialized_value<R>(&self, visit: impl FnOnce(&Value) -> R) -> Option<R> {
+        let binding = self.0.lock();
+        match &binding.state {
+            BindingState::Initialized(value) => Some(visit(value)),
+            BindingState::Uninitialized => None,
         }
     }
 

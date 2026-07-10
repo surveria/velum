@@ -5,6 +5,7 @@ use crate::{
     error::{Error, Result},
     ownership::VmIdentity,
     runtime::Context,
+    runtime::VmRootSnapshot,
     runtime::call::RuntimeCallArgs,
     syntax::DeclKind,
     value::{HostFunctionId, Value},
@@ -141,10 +142,11 @@ impl HostFunction {
         Self::new(name, move |call| callback(call)?.into_js_value())
     }
 
-    fn call(&self, identity: &VmIdentity, args: &[Value]) -> Result<Value> {
+    fn call(&self, identity: &VmIdentity, roots: VmRootSnapshot, args: &[Value]) -> Result<Value> {
         let call = HostCall {
             function_name: self.name.as_str(),
             identity,
+            roots,
             args,
         };
         (self.callback)(call).map_err(|error| error.with_context(self.context_message()))
@@ -203,6 +205,7 @@ impl<'value> LocalValue<'value> {
 pub struct HostCall<'call> {
     function_name: &'call str,
     identity: &'call VmIdentity,
+    roots: VmRootSnapshot,
     args: &'call [Value],
 }
 
@@ -210,6 +213,13 @@ impl<'call> HostCall<'call> {
     #[must_use]
     pub const fn function_name(self) -> &'call str {
         self.function_name
+    }
+
+    /// Returns the direct-root snapshot captured immediately before this host
+    /// callback began.
+    #[must_use]
+    pub const fn root_snapshot(self) -> VmRootSnapshot {
+        self.roots
     }
 
     #[must_use]
@@ -349,7 +359,8 @@ impl Context {
     ) -> Result<Value> {
         let values = args.to_owned_values();
         let function = self.host_function(id)?.clone();
-        let value = function.call(self.identity(), &values)?;
+        let roots = self.root_snapshot()?;
+        let value = function.call(self.identity(), roots, &values)?;
         self.checked_host_return_value(value)
             .map_err(|error| error.with_context(function.context_message()))
     }
