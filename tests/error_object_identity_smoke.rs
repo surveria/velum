@@ -63,6 +63,20 @@ fn error_objects_share_the_object_prototype_and_integrity_paths() -> TestResult 
 }
 
 #[test]
+fn error_construction_honors_new_target_prototype() -> TestResult {
+    eval_is_true(
+        r#"
+        function CustomErrorTarget() {}
+        CustomErrorTarget.prototype = { marker: 42 };
+        let error = Reflect.construct(TypeError, ["typed"], CustomErrorTarget);
+        Object.getPrototypeOf(error) === CustomErrorTarget.prototype &&
+            error.marker === 42 && error.message === "typed" &&
+            Object.prototype.toString.call(error) === "[object Error]"
+        "#,
+    )
+}
+
+#[test]
 fn public_errors_keep_typed_metadata_for_object_backed_instances() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

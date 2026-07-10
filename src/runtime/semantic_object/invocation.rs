@@ -123,8 +123,10 @@ impl Context {
                         new_target,
                     );
                 }
-                if matches!(kind, NativeFunctionKind::ErrorConstructor(_)) {
-                    self.constructor_instance_prototype(&new_target)?;
+                if let NativeFunctionKind::ErrorConstructor(name) = kind {
+                    let prototype = self.constructor_instance_prototype(&new_target)?;
+                    return self
+                        .eval_direct_error_constructor_with_prototype(name, args, prototype);
                 }
                 self.construct_native_function_kind(kind, RuntimeCallArgs::values(args))
             }

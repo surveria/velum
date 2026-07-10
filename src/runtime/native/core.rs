@@ -459,12 +459,25 @@ impl Context {
         name: ErrorName,
         args: &[Value],
     ) -> Result<Value> {
+        self.eval_direct_error_constructor_with_prototype(name, args, None)
+    }
+
+    pub(in crate::runtime) fn eval_direct_error_constructor_with_prototype(
+        &mut self,
+        name: ErrorName,
+        args: &[Value],
+        prototype: Option<ObjectId>,
+    ) -> Result<Value> {
         let message_value = Self::error_constructor_message_argument(name, args);
         let (message, define_message) = match message_value {
             None | Some(Value::Undefined) => (String::new(), false),
             Some(value) => (self.to_string(value)?, true),
         };
-        self.create_error_object(JavaScriptErrorMetadata::new(name, message), define_message)
+        self.create_error_object_with_prototype(
+            JavaScriptErrorMetadata::new(name, message),
+            define_message,
+            prototype,
+        )
     }
 
     pub(in crate::runtime) fn create_error_object(
@@ -472,7 +485,20 @@ impl Context {
         metadata: JavaScriptErrorMetadata,
         define_message: bool,
     ) -> Result<Value> {
-        let prototype = self.error_constructor_prototype(metadata.error_name())?;
+        self.create_error_object_with_prototype(metadata, define_message, None)
+    }
+
+    fn create_error_object_with_prototype(
+        &mut self,
+        metadata: JavaScriptErrorMetadata,
+        define_message: bool,
+        prototype: Option<ObjectId>,
+    ) -> Result<Value> {
+        let prototype = if let Some(prototype) = prototype {
+            prototype
+        } else {
+            self.error_constructor_prototype(metadata.error_name())?
+        };
         let message = if define_message {
             Some(self.heap_string_value(metadata.message())?)
         } else {
