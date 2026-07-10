@@ -94,7 +94,7 @@ fn rejects_invalid_primitive_conversions() -> TestResult {
 #[test]
 fn preserves_array_search_conversion_order() -> TestResult {
     eval_is_42(
-        r#"
+        r"
         let calls = 0;
         let fromEmpty = {};
         fromEmpty.valueOf = function () {
@@ -111,7 +111,7 @@ fn preserves_array_search_conversion_order() -> TestResult {
         };
         let result = values.indexOf(9, fromMutable);
         skipped && result === -1 && values.length === 0 ? 42 : 0
-        "#,
+        ",
     )
 }
 
