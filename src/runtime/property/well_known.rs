@@ -156,6 +156,10 @@ impl WellKnownPropertyKeys {
         .into_iter()
         .flatten()
     }
+
+    pub(in crate::runtime) fn entry_count(self) -> usize {
+        self.keys().count()
+    }
 }
 
 impl Default for WellKnownPropertyKeys {

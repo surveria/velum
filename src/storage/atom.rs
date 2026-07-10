@@ -33,6 +33,10 @@ impl AtomTable {
         self.names.len()
     }
 
+    pub(crate) const fn index_entry_count(&self) -> usize {
+        self.entries.len()
+    }
+
     pub fn intern(&mut self, name: &str) -> Result<AtomId> {
         let position = self.atom_position(name);
         let position = match position {

@@ -74,6 +74,10 @@ impl TransientRootRegistry {
         drop(state);
         Ok(())
     }
+
+    pub(in crate::runtime) fn active_count(&self) -> usize {
+        self.state.lock().roots.len()
+    }
 }
 
 impl Context {

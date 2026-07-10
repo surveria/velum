@@ -34,6 +34,7 @@ pub use crate::runtime::limits::RuntimeLimits;
 pub use crate::runtime::{
     RetainedValue, VmAsyncEdgeKind, VmAsyncEdgeSnapshot, VmAsyncEdgeStrength, VmCallableEdgeKind,
     VmCallableEdgeSnapshot, VmObjectEdgeKind, VmObjectEdgeSnapshot, VmRootKind, VmRootSnapshot,
+    VmStorageKind, VmStorageSnapshot,
 };
 pub use crate::source::{SourceId, SourceSpan};
 pub use crate::storage::string_heap::{JsString, StringId};

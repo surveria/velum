@@ -97,6 +97,10 @@ impl SymbolTable {
         self.entries.len()
     }
 
+    pub(crate) const fn registry_entry_count(&self) -> usize {
+        self.registry.len()
+    }
+
     pub fn create(&mut self, description: Option<JsString>) -> Result<JsSymbol> {
         if let Some(value) = &description
             && value.identity() != &self.identity

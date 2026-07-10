@@ -2,6 +2,7 @@ use crate::error::{Error, JavaScriptErrorMetadata, Result};
 use crate::storage::symbol::JsSymbol;
 use crate::value::{ObjectId, Value};
 
+mod accounting;
 mod array;
 mod base;
 mod data;

@@ -50,6 +50,15 @@ impl StaticNameAtomCacheHandle {
         }
     }
 
+    pub(in crate::runtime) fn storage_entry_count(&self) -> Result<usize> {
+        self.atoms
+            .len()
+            .checked_add(self.property_lookups.len())
+            .and_then(|count| count.checked_add(self.native_calls.len()))
+            .and_then(|count| count.checked_add(self.call_values.len()))
+            .ok_or_else(|| Error::limit("static name cache entry count overflowed"))
+    }
+
     pub(super) fn atom(&self, name: &StaticName) -> Result<Option<AtomId>> {
         self.atoms
             .get(name.id().index()?)

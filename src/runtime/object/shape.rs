@@ -101,6 +101,18 @@ impl ShapeTable {
         self.shapes.len().saturating_add(1)
     }
 
+    pub(in crate::runtime::object) fn storage_entry_count(&self) -> Result<usize> {
+        let mut entries = 0_usize;
+        for shape in &self.shapes {
+            entries = entries
+                .checked_add(1)
+                .and_then(|count| count.checked_add(shape.properties.len()))
+                .and_then(|count| count.checked_add(shape.offsets.len()))
+                .ok_or_else(|| Error::limit("shape cache entry count overflowed"))?;
+        }
+        Ok(entries)
+    }
+
     pub(super) fn transition_after_add(
         &mut self,
         current: ShapeId,

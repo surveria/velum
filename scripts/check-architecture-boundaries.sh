@@ -147,6 +147,91 @@ check_retained_value_boundary() {
   fi
 }
 
+check_storage_accounting_boundary() {
+  local storage_kinds
+  local snapshot_fields
+  local source
+  storage_kinds="$({
+    awk '
+      /^pub enum VmStorageKind \{/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/runtime/accounting.rs"
+  } | sed '/^[[:space:]]*\/\//d' | tr -d '[:space:]')"
+  if [[ "${storage_kinds}" != 'Atom,HeapString,Symbol,Binding,JavaScriptFunction,NativeFunction,BoundFunction,HostCallback,Object,ObjectProperty,ByteBuffer,Collection,CollectionEntry,CollectionIterator,IteratorItem,Promise,PromiseReaction,PromiseJob,RetainedHandle,TransientRoot,ExecutionFrame,OutputEntry,CacheEntry,Association,Module,SourceRecord,' ]]; then
+    fail "storage accounting boundary changed; VmStorageKind categories require an assigned AS migration"
+  fi
+
+  snapshot_fields="$({
+    awk '
+      /^pub struct VmStorageSnapshot \{/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/runtime/accounting.rs"
+  } | tr -d '[:space:]')"
+  if [[ "${snapshot_fields}" != 'counts:[usize;STORAGE_KIND_COUNT],total:usize,' ]]; then
+    fail "storage accounting boundary changed; snapshot requires checked category and total counts"
+  fi
+
+  for source in \
+    'counter.record(VmStorageKind::Atom, self.atoms.len())?;' \
+    'counter.record(VmStorageKind::HeapString, self.strings.len())?;' \
+    'counter.record(VmStorageKind::Symbol, self.symbols.len())?;' \
+    'counter.record(VmStorageKind::Binding, self.globals.len())?;' \
+    'counter.record(VmStorageKind::Binding, self.builtin_globals.len())?;' \
+    'for scope in &self.locals {' \
+    'for frame in &self.upvalue_frames {' \
+    'for function in &self.functions {' \
+    'for function in &self.native_functions {' \
+    'counter.record(VmStorageKind::BoundFunction, self.bound_functions.len())?;' \
+    'counter.record(VmStorageKind::HostCallback, self.host_functions.len())' \
+    'let object_counts = self.objects.storage_counts()?;' \
+    'counter.record(VmStorageKind::Collection, self.collections.len())?;' \
+    'self.collection_storage_entry_count()?,' \
+    'self.collection_iterators.len(),' \
+    'self.collection_iterator_item_count()?,' \
+    'counter.record(VmStorageKind::Promise, self.promises.len())?;' \
+    'self.promise_reaction_count()?,' \
+    'counter.record(VmStorageKind::PromiseJob, self.promise_jobs.len())?;' \
+    'self.retained_values.active_count(),' \
+    'self.transient_roots.active_count(),' \
+    'counter.record(VmStorageKind::ExecutionFrame, self.local_frame_bases.len())?;' \
+    'counter.record(VmStorageKind::ExecutionFrame, self.this_values.len())?;' \
+    'counter.record(VmStorageKind::ExecutionFrame, self.new_target_values.len())?;' \
+    'counter.record(VmStorageKind::ExecutionFrame, self.super_frames.len())?;' \
+    'counter.record(VmStorageKind::OutputEntry, self.output.len())' \
+    'self.well_known_properties.entry_count(),' \
+    'self.atoms.index_entry_count()' \
+    'self.strings.index_entry_count()' \
+    'self.globals.index_entry_count()?' \
+    'self.builtin_globals.index_entry_count()?' \
+    'if let Some(keys) = self.descriptor_property_keys {' \
+    'for cache in &self.static_name_atom_caches {' \
+    'for cache in &self.static_binding_caches {' \
+    'for layout in &self.static_binding_layouts {' \
+    'self.native_function_registry.ids().count(),' \
+    'self.collection_object_slots.iter().flatten().count(),' \
+    'self.symbols.registry_entry_count(),' \
+    'self.promise_object_slots.iter().flatten().count(),' \
+    'usize::from(self.global_object.is_some()),' \
+    'usize::from(self.promise_prototype.is_some()),' \
+    'usize::from(self.iterator_symbol.is_some()),' \
+    'counter.record(VmStorageKind::Module, 0)'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/accounting.rs"; then
+      fail "storage accounting boundary changed; required owner source '${source}' is missing"
+    fi
+  done
+
+  if ! grep -F -q 'pub fn storage_snapshot(&self) -> Result<VmStorageSnapshot>' \
+      "${repo_root}/src/api/embedding.rs" \
+    || ! grep -F -q 'pub fn finish(self) -> Result<VmTeardownReport>' \
+      "${repo_root}/src/api/embedding.rs" \
+    || ! grep -F -q 'storage: self.storage_snapshot()?,' \
+      "${repo_root}/src/api/embedding.rs"; then
+    fail "storage accounting boundary changed; Vm snapshot and consuming teardown reconciliation are required"
+  fi
+}
+
 check_runtime_frontend_boundary() {
   local imports
   imports="$(
@@ -1093,6 +1178,8 @@ run_checks() {
   require_file src/value/kind.rs
   require_file src/api/owned_value.rs
   require_file src/runtime/retained_values.rs
+  require_file src/runtime/accounting.rs
+  require_file src/runtime/object/accounting.rs
   require_file src/runtime/mod.rs
   require_file src/runtime/roots.rs
   require_file src/runtime/trace.rs
@@ -1113,6 +1200,7 @@ run_checks() {
   check_value_representation
   check_owned_value_boundary
   check_retained_value_boundary
+  check_storage_accounting_boundary
   check_runtime_frontend_boundary
   check_source_metadata_boundary
   check_frontend_span_boundary
@@ -1289,6 +1377,18 @@ mutate_retained_slot_generation() {
   local fixture_root="$1"
   sed -i '/    slot_generation: RetainedSlotGeneration,/d' \
     "${fixture_root}/src/runtime/retained_values.rs"
+}
+
+mutate_storage_owner_source() {
+  local fixture_root="$1"
+  sed -i '/self.collection_iterator_item_count()?,/d' \
+    "${fixture_root}/src/runtime/accounting.rs"
+}
+
+mutate_teardown_storage_snapshot() {
+  local fixture_root="$1"
+  sed -i '/            storage: self.storage_snapshot()?,/d' \
+    "${fixture_root}/src/api/embedding.rs"
 }
 
 mutate_bound_function_edge() {
@@ -1474,6 +1574,10 @@ run_self_tests() {
     'direct root boundary changed' mutate_retained_handle_root
   expect_guard_failure "${temp_dir}" retained-slot-generation \
     'retained value boundary changed' mutate_retained_slot_generation
+  expect_guard_failure "${temp_dir}" storage-owner-source \
+    'storage accounting boundary changed' mutate_storage_owner_source
+  expect_guard_failure "${temp_dir}" teardown-storage-snapshot \
+    'storage accounting boundary changed' mutate_teardown_storage_snapshot
   expect_guard_failure "${temp_dir}" bound-function-edge \
     'callable edge boundary changed' mutate_bound_function_edge
   expect_guard_failure "${temp_dir}" object-internal-edge \

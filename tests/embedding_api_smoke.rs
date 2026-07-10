@@ -98,7 +98,7 @@ fn keeps_many_vms_isolated_after_one_vm_fails() -> TestResult {
     }
 
     for case in cases {
-        let report = case.vm.finish();
+        let report = case.vm.finish()?;
         ensure_positive(report.resources.runtime_steps, "runtime steps")?;
         ensure_usage(
             &report.resources,

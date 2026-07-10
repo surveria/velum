@@ -19,6 +19,7 @@ use crate::syntax::StaticBindingId;
 use crate::value::{ErrorName, FunctionId, Value};
 
 mod abstract_operations;
+mod accounting;
 mod async_trace;
 pub mod binding;
 pub mod bytecode;
@@ -42,6 +43,7 @@ mod trace;
 mod transient_roots;
 pub mod values;
 
+pub use accounting::{VmStorageKind, VmStorageSnapshot};
 pub use async_trace::{VmAsyncEdgeKind, VmAsyncEdgeSnapshot, VmAsyncEdgeStrength};
 pub use binding::static_bindings::CompiledBindingFrame;
 use binding::static_bindings::StaticBindingCacheHandle;

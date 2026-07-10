@@ -78,6 +78,24 @@ impl CollectionData {
 }
 
 impl Context {
+    pub(in crate::runtime) fn collection_storage_entry_count(&self) -> Result<usize> {
+        self.collections.iter().try_fold(0_usize, |count, data| {
+            count
+                .checked_add(data.entries.len())
+                .ok_or_else(|| Error::limit("collection entry count overflowed"))
+        })
+    }
+
+    pub(in crate::runtime) fn collection_iterator_item_count(&self) -> Result<usize> {
+        self.collection_iterators
+            .iter()
+            .try_fold(0_usize, |count, iterator| {
+                count
+                    .checked_add(iterator.items.len())
+                    .ok_or_else(|| Error::limit("collection iterator item count overflowed"))
+            })
+    }
+
     pub(in crate::runtime) fn create_collection(
         &mut self,
         kind: CollectionKind,

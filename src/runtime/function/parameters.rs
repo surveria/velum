@@ -377,6 +377,12 @@ pub(in crate::runtime) struct FunctionScopeTemplate {
     pub(super) param_count: usize,
 }
 
+impl FunctionScopeTemplate {
+    pub(in crate::runtime) fn storage_entry_count(&self) -> Result<usize> {
+        self.index.storage_entry_count()
+    }
+}
+
 /// Builds the shared per-function scope template when the parameter layout
 /// is contiguous and unique; general layouts fall back to per-call
 /// construction.

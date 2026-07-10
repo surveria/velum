@@ -25,9 +25,9 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 through AS-04, AS-05a1 through AS-05a2c, and
-  AS-05b1a through AS-05b1c are complete; AS-05a2d retained handle coverage
-  is implemented in draft PR #431
+- Current program state: AS-01 through AS-04, AS-05a1 through AS-05a2d, and
+  AS-05b1a through AS-05b1c are complete; AS-05b2a storage owner count
+  accounting is implemented in draft PR #432
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -485,7 +485,7 @@ dependencies do not overlap.
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
 | AS-04 | Complete | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans merged in PR #421 with exact-tree correctness and canonical report publication. |
-| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 non-cloneable VM identity merged in PR #422; AS-05a2a primitive owner validation merged in PR #423; AS-05a2b host-local JavaScript errors merged in PR #424; AS-05a2c portable owned values merged in PR #425; AS-05b1a direct roots merged in PR #426; AS-05b1b1 callable edges merged in PR #427; AS-05b1b2 object-arena edges merged in PR #428; AS-05b1b3 asynchronous edges merged in PR #429; AS-05b1c transient roots merged in PR #430; AS-05a2d retained handles are implemented in draft PR #431; heap/stack/job/buffer counters and limits remain. |
+| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05a2d ownership/handle work is merged through PR #431; AS-05b1a through AS-05b1c root/edge work is merged through PR #430; AS-05b2a complete owner counts are implemented in draft PR #432; logical payload bytes and hard count/byte limits remain AS-05b2b/c. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
 | AS-08 | Backlog | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | Optimizer on/off equivalence, harness opcodes removed, workload-shaped paths replaced or justified by broad evidence. |
@@ -1225,8 +1225,10 @@ AS-05 is split at ownership boundaries:
    durable activation frames;
 10. AS-05a2d adds retained object/function handles and explicit release against
    the root registry;
-11. AS-05b2 adds complete per-owner byte/count accounting, hard limits, and a
-   teardown report that can reconcile every VM store.
+11. AS-05b2a adds complete logical per-owner counts and a teardown report that
+   reconciles every current VM store;
+12. AS-05b2b adds logical retained payload bytes to the same owner map;
+13. AS-05b2c enforces count and byte limits at every allocation/growth point.
 
 AS-05a1 local implementation evidence:
 
@@ -1619,6 +1621,53 @@ AS-05a2d local implementation evidence:
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
+AS-05a2d completion evidence:
+
+- PR #431 merged as `30dfc0a` after required CI run `29109122937`
+  certified exact tree `0f94732ed87357042eb028fd47c6f9e39daa35cf`;
+- the required corpus preserved all 36,659 expected Test262 variants, the
+  exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
+  cases;
+- post-merge run `29109349272` measured all five project sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T165910Z.*` in
+  report-only commit `c7f3ba8`.
+
+AS-05b2a local implementation evidence:
+
+- `VmStorageKind` defines twenty-six stable logical owner categories spanning
+  atoms, heap strings, Symbols, bindings, callable stores, objects and
+  properties, buffers, collections and iterator items, Promises and jobs,
+  retained/transient roots, execution frames, output, caches, associations,
+  modules, and retained function-constructor source records;
+- `VmStorageSnapshot` uses a fixed private count array plus a checked total.
+  Counts are logical records, not allocator blocks, unique reachable values,
+  or bytes; AS-05b2b adds a distinct retained-byte dimension without changing
+  these semantics;
+- one Context-owned traversal records top-level stores and nested variable
+  records: binding cells and indexes, function/native properties and metadata,
+  object properties/buffers/shapes, collection entries/iterator items,
+  Promise reactions/jobs, active retained/transient roots, caches, side-table
+  associations, execution frames, output, and source records. Module storage
+  remains an explicit zero category until modules are introduced;
+- `Context::storage_snapshot` and `Vm::storage_snapshot` are explicit
+  diagnostic operations. Ordinary evaluation and host-call paths do not scan
+  storage, so accounting observability does not become hidden hot-path work;
+- `Vm::teardown_report` previews the complete owner snapshot and
+  `Vm::finish` consumes the VM, returning that same checked snapshot before
+  deterministic Rust ownership releases it. Both now return `Result` rather
+  than hiding a possible counter overflow;
+- focused tests prove a fresh empty map, materialize every currently
+  externally reachable owner category, verify exact category summation,
+  release retained handles, and prove preview/finish snapshot reconciliation
+  plus handle invalidation after teardown;
+- the architecture guard fixes all twenty-six categories, the compact
+  snapshot representation, every Context owner source, and the consuming
+  teardown boundary. Mutation tests reject removal of a nested iterator owner
+  or teardown snapshot;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
+
 ### AS-06: Resumable Execution
 
 Migrate the existing synchronous engine before exposing new async behavior:
@@ -1753,14 +1802,16 @@ reviewable scope.
 27. AS-05b1c: close transient allocation-point roots and define the remaining
     embedder-handle boundary (complete in PR #430).
 28. AS-05a2d: define retained object/function handles and explicit release
-    (implemented in draft PR #431).
-29. AS-05b2: add complete allocation accounting, hard limits, and teardown
-    reconciliation.
-30. AS-06a: migrate synchronous calls and structured control flow to explicit
+    (complete in PR #431).
+29. AS-05b2a: add complete logical owner counts and teardown reconciliation
+    (implemented in draft PR #432).
+30. AS-05b2b: add logical retained payload-byte accounting.
+31. AS-05b2c: enforce complete count and byte limits at growth points.
+32. AS-06a: migrate synchronous calls and structured control flow to explicit
     activation frames.
-31. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
-32. AS-07a: add safe collection over explicit roots and correct weak edges.
-33. AS-08a: move reusable optimization state behind one optimizer/quickening
+33. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
+34. AS-07a: add safe collection over explicit roots and correct weak edges.
+35. AS-08a: move reusable optimization state behind one optimizer/quickening
     boundary and remove harness-specific opcodes.
 
 ## Updating This Plan

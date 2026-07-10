@@ -17,6 +17,18 @@ use state::PromiseState;
 pub(in crate::runtime) use state::{Promise, PromiseId, PromiseResolverKind};
 
 impl Context {
+    pub(in crate::runtime) fn promise_reaction_count(&self) -> Result<usize> {
+        self.promises.iter().try_fold(0_usize, |count, promise| {
+            let reaction_count = match &promise.state {
+                PromiseState::Pending { reactions } => reactions.len(),
+                PromiseState::Fulfilled(_) | PromiseState::Rejected(_) => 0,
+            };
+            count
+                .checked_add(reaction_count)
+                .ok_or_else(|| Error::limit("Promise reaction count overflowed"))
+        })
+    }
+
     pub(in crate::runtime) fn create_pending_promise(&mut self) -> Result<(PromiseId, Value)> {
         let id = PromiseId::new(self.promises.len());
         let object = self.create_promise_object(id)?;

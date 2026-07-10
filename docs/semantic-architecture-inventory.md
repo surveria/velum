@@ -416,15 +416,15 @@ and values retained after an embedding call.
 
 | Store category | Current fields/owners | Implicit strong edges | Current public accounting |
 | --- | --- | --- | --- |
-| interned names and text | `atoms`, `strings`, `symbols`, well-known caches | strings/symbol registry retain shared text | atom count, string count, string bytes |
-| bindings and closures | globals, builtin globals, locals, upvalue frames, `BindingCell(Rc<Mutex<Binding>>)` | binding values and captured cells | global binding count and upvalue cell count only |
-| executable functions | functions, native functions/registry, bound functions, host functions | typed AS-05b1b1 edges cover properties, upvalues, super/static/class/new-target state, native id payloads, and bound args/targets; immutable bytecode contains only VM-independent literals; opaque callback captures use AS-05a2d retained handles | callable edge slot snapshot plus native function count |
-| objects | `ObjectHeap`, shapes, prototypes, properties, arrays, buffers, typed-array views | typed AS-05b1b2 edges cover named/dense/sparse properties, accessors, prototypes, boxed strings/Symbols, Proxy state, and typed-array buffer-object links; cached prototypes and shape/property-key metadata are direct anchors | object edge slot snapshot, shape count, and prototype version; no object/property/buffer bytes |
-| collections | collection stores with retained kind, object slots, iterator snapshots | typed object associations, strong Map/Set entries and iterator items, weak WeakSet keys, and WeakMap ephemerons | asynchronous edge snapshot; count limit reuses `max_objects` |
-| promises/jobs | promises, object slots, reaction queue | typed object associations, strong results/handlers/settled values, and direct queued-job roots | asynchronous edge snapshot; no job-count limit |
-| active execution | local frame bases, `this`, `new.target`, super frames, bytecode operand stacks held by Rust calls, scoped transient registry | durable active vectors plus scoped traceable operand/call/iterator/descriptor/Proxy values | thirteen-category root snapshot including retained handles; call depth is enforced internally, but no public frame/stack bytes |
-| caches | static name/binding caches, call caches, function fast paths | ids, shapes, native kinds, metadata | hit/miss counters for selected call caches |
-| embedder-visible state | output, host callbacks, `Vm`, public `Value`, retained registry | callback arguments are scoped roots; opaque captures and durable results use retained handles; raw Values remain compatibility-only and non-durable | retained handles participate in root snapshots; output entry count, not bytes |
+| interned names and text | `atoms`, `strings`, `symbols`, well-known caches | strings/symbol registry retain shared text | logical Atom/HeapString/Symbol, cache, and association counts plus existing string bytes |
+| bindings and closures | globals, builtin globals, locals, upvalue frames, `BindingCell(Rc<Mutex<Binding>>)` | binding values and captured cells | logical Binding, ExecutionFrame, and binding-index CacheEntry counts |
+| executable functions | functions, native functions/registry, bound functions, host functions | typed AS-05b1b1 edges cover properties, upvalues, super/static/class/new-target state, native id payloads, and bound args/targets; immutable bytecode contains only VM-independent literals; opaque callback captures use AS-05a2d retained handles | logical JavaScriptFunction/NativeFunction/BoundFunction/HostCallback counts plus callable property, metadata-cache, binding, and source-record counts |
+| objects | `ObjectHeap`, shapes, prototypes, properties, arrays, buffers, typed-array views | typed AS-05b1b2 edges cover named/dense/sparse properties, accessors, prototypes, boxed strings/Symbols, Proxy state, and typed-array buffer-object links; cached prototypes and shape/property-key metadata are direct anchors | logical Object/ObjectProperty/ByteBuffer counts plus shape CacheEntry and anchor Association counts; payload bytes remain AS-05b2b |
+| collections | collection stores with retained kind, object slots, iterator snapshots | typed object associations, strong Map/Set entries and iterator items, weak WeakSet keys, and WeakMap ephemerons | logical Collection/CollectionEntry/CollectionIterator/IteratorItem and Association counts plus asynchronous edge snapshot |
+| promises/jobs | promises, object slots, reaction queue | typed object associations, strong results/handlers/settled values, and direct queued-job roots | logical Promise/PromiseReaction/PromiseJob and Association counts plus asynchronous edge snapshot |
+| active execution | local frame bases, `this`, `new.target`, super frames, bytecode operand stacks held by Rust calls, scoped transient registry | durable active vectors plus scoped traceable operand/call/iterator/descriptor/Proxy values | logical ExecutionFrame/TransientRoot counts and thirteen-category root snapshot; stack bytes remain AS-05b2b |
+| caches | static name/binding caches, call caches, function fast paths | ids, shapes, native kinds, metadata | logical CacheEntry counts plus hit/miss counters for selected call caches |
+| embedder-visible state | output, host callbacks, `Vm`, public `Value`, retained registry | callback arguments are scoped roots; opaque captures and durable results use retained handles; raw Values remain compatibility-only and non-durable | logical HostCallback/RetainedHandle/OutputEntry counts; retained handles also participate in root snapshots |
 | nondeterministic/runtime state | clock, random state, step counters | no JS edges | runtime steps and selected execution counters |
 
 The AS-05b1a direct-root registry currently enumerates initialized global,
@@ -451,9 +451,11 @@ property count. It has no complete heap-byte, atom, function, collection-entry,
 buffer-byte, output-byte, promise, job, stack, frame, module, or host-callback
 budget.
 
-`VmResourceUsage` exposes a useful subset, but `VmTeardownReport` simply wraps
-that subset. It cannot yet prove that every VM-owned category was released or
-state how many bytes each owner retained.
+`VmResourceUsage` retains its existing hot counters. AS-05b2a adds a separate
+on-demand `VmStorageSnapshot` with twenty-six stable logical owner categories
+and checked category/total sums. `VmTeardownReport` now includes the complete
+snapshot released by consuming `Vm::finish`. Logical retained bytes and hard
+limits remain AS-05b2b/c rather than being approximated by these record counts.
 
 ### Public Handle Boundary
 
@@ -619,8 +621,10 @@ decision sequence:
 | AS-05b1b2 | object arena edges and object/property-key cache anchors | three object categories cover properties, prototypes, boxed strings/Symbols, Proxy state, typed views, and bounded Context/Vm diagnostics; merged in PR #428 |
 | AS-05b1b3 | Promise, collection, iterator, weak-key, and ephemeron edges | typed side-store associations, eight strength-classified categories, and bounded Context/Vm diagnostics merged in PR #429 |
 | AS-05b1c | transient operand, call, iterator, descriptor, Proxy, and class-key values | scoped RAII registry plus three direct-root categories and collector safepoint contract merged in PR #430 |
-| AS-05a2d | retained object/function ids and handles | non-cloneable identity/registry/slot-generation capability, source-proven creation, consuming release, Drop safety-net cleanup, and retained-root category in draft PR #431 |
-| AS-05b2 | heap, stack, job, callback, output, and buffer limit maps | add complete accounting contracts and teardown reconciliation |
+| AS-05a2d | retained object/function ids and handles | non-cloneable identity/registry/slot-generation capability, source-proven creation, consuming release, Drop safety-net cleanup, and retained-root category merged in PR #431 |
+| AS-05b2a | every current variable-size Context owner and nested logical record | twenty-six-category checked snapshot plus consuming teardown reconciliation in draft PR #432 |
+| AS-05b2b | retained payload bytes by the same owner map | add deterministic logical bytes without claiming allocator-resident RSS |
+| AS-05b2c | heap, stack, job, callback, output, and buffer limit maps | enforce count and byte budgets at every growth point |
 | AS-06 | active execution roots and structured nested bytecode | explicit activation/block stacks and suspend/resume results |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |
 | AS-08 | caches, direct calls, linear/function/control paths, harness opcodes | one optimizer owner, optimizer-off equivalence, and removal of source-name semantics |
@@ -646,6 +650,7 @@ must fail on growth.
 | portable owned-value boundary | OwnedValue contains only undefined/null/Boolean/Number/String and copies local heap text | a Symbol/object/function/id/identity variant or removal of explicit conversion entrypoints |
 | retained-value boundary | RetainedValue is non-cloneable and privately carries identity, registry capability, slot generation, and release state; creation is source-proven | exposing raw ids, relabeling arbitrary Value, removing generation/owner checks, or retaining without root participation |
 | direct-root boundary | thirteen categories enumerate binding, active-call, runtime-anchor, Promise-job, retained-handle, transient operand/call, and temporary sources through one visitor | removing a current root/safepoint source, adding an unreviewed category, or bypassing scoped cleanup and Context/Vm/HostCall snapshots |
+| storage accounting boundary | twenty-six logical owner categories map every current variable-size Context store and nested record into checked counts and consuming teardown reconciliation | removing an owner source, adding unreviewed Context storage, changing count semantics into byte estimates, or dropping the teardown snapshot |
 | callable strong-edge boundary | six categories enumerate every current JavaScript/native/bound function reference slot through one typed visitor; native id-bearing variants have an exact allowlist | removing a callable slot, adding an unreviewed id-bearing native kind, or exposing raw edge ids in the diagnostic API |
 | object strong-edge boundary | three categories enumerate named/dense/sparse properties, accessors, prototypes, boxed strings/Symbols, Proxy slots, and typed-view links; cached prototypes and key metadata are direct anchors | removing an object slot/cache root, adding an unreviewed object payload, or folding side-table associations into ordinary object traversal |
 | asynchronous edge boundary | eight categories enumerate Promise state/reactions, typed object associations, Map/Set entries, iterator items, WeakSet keys, and WeakMap ephemerons through explicit strength visitors | removing a side-store source, treating weak keys/ephemerons as ordinary strong entries, or exposing raw association ids publicly |
