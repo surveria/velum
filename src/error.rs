@@ -65,6 +65,26 @@ impl Error {
         Some(value)
     }
 
+    /// Returns the standard error name when the thrown value uses the current
+    /// built-in Error representation.
+    #[must_use]
+    pub const fn javascript_error_name(&self) -> Option<&'static str> {
+        let Some(Value::Error(error)) = self.javascript_value() else {
+            return None;
+        };
+        Some(error.name().as_str())
+    }
+
+    /// Returns the standard error message when the thrown value uses the
+    /// current built-in Error representation.
+    #[must_use]
+    pub const fn javascript_error_message(&self) -> Option<&str> {
+        let Some(Value::Error(error)) = self.javascript_value() else {
+            return None;
+        };
+        Some(error.message())
+    }
+
     #[must_use]
     pub(crate) fn type_error(message: impl Into<String>) -> Self {
         Self::exception(ErrorName::TypeError, message)
