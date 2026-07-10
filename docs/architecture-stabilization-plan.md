@@ -1119,10 +1119,13 @@ AS-04b2b1 local implementation evidence:
 - touching the legacy lexer also completed its mechanical split: operator
   scanning now lives in `src/lexer/scanner/operators.rs`, and every touched
   Rust source remains below the 800-line limit;
-- the complete engine test suite, strict all-target/all-feature Clippy, focused
-  source-diagnostic and labeled-statement tests, architecture self-tests, and
-  touched-file size gate pass. The complete correctness corpus is the remaining
-  ready-PR validation step.
+- the complete engine test suite, 118-test runner suite, strict Clippy,
+  documentation, architecture self-tests, and touched-file size gate pass;
+- the complete local correctness gate preserves all 36,659 expected Test262
+  variants and the exact 36,659 of 102,578 full pass set, with QuickJS
+  differential unchanged at 95 of 95. Local evidence is
+  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T131658Z.*` for
+  tested tree `564c29b62f27f1feefd07b2474c74cd709ba9f28`.
 
 ### AS-05: Ownership, Handles, Roots, And Accounting
 
