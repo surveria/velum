@@ -98,6 +98,18 @@ remain equivalent to the generic semantic finish path. Proxy get/has receives
 the original Symbol value when the lookup key is a Symbol, and `Reflect.get`
 propagates its explicit receiver through Proxy and accessor paths.
 
+AS-02b2 extends the facade through focused modules under
+`runtime/semantic_object/`. Mutation pre-dispatch returns ordinary-object
+tails for cacheable set/delete operations, while descriptor, own-key,
+prototype, extensibility, and integrity methods dispatch every object-like
+variant before reaching physical storage. `Reflect.set` uses a receiver-aware
+semantic recursion across descriptors and prototypes. Proxy set/delete/define,
+descriptor, and own-key traps retain Symbol values, and Proxy integrity
+operations compose the same observable methods instead of freezing or sealing
+the wrapper record directly. The shared `ownKeys` path also validates unique
+trap keys, every non-configurable target key, and exact key sets for
+non-extensible targets before Object or Reflect projects string/Symbol keys.
+
 This facade rejects ids whose slots are not defined in the receiving `Context`.
 It does not yet prove VM identity or generation: a foreign id can still alias a
 live local slot with the same numeric index. AS-05a remains responsible for
@@ -162,14 +174,14 @@ proxies; several built-ins repeat the same matches.
 | `ToPropertyKey`-like conversion | `property::property_key` plus `Context::dynamic_property_key` | conversion uses `Value` display text for non-string/non-symbol values; `Object` and `Reflect` wrappers add their own argument handling | AS-03b `ToPropertyKey` |
 | `[[Get]]` | `Context::semantic_property_read[_with_receiver]` plus `finish_semantic_property_read` | AS-02b1 now owns object-like dispatch; `get_property_value` still owns primitive string/prototype behavior, while static caches optimize only the returned ordinary-object tail | AS-02b1 complete after PR #401; AS-03b later owns spec-level `Get`/primitive coercion |
 | `[[HasProperty]]` | `Context::semantic_property_presence` plus `finish_semantic_property_presence` | AS-02b1 now owns object-like dispatch; static presence caches optimize only the returned ordinary-object tail, while primitive rejection remains in the property layer | AS-02b1 complete after PR #401; AS-03b later owns the abstract operation |
-| `[[Set]]` | `Context::set_property_value_with_accessors`, reached from static/dynamic setters | Function and NativeFunction writes are intercepted in `property/static_names/mod.rs`; Proxy and accessors are intercepted in `property/accessor.rs`; base `property::set_property` accepts only `Value::Object`; `Object.assign` repeats target dispatch | AS-02b internal `set` |
-| `[[DefineOwnProperty]]` | no value-wide facade | `ObjectHeap::define_property`; Function/NativeFunction helpers; `Object.defineProperty`, `Object.defineProperties`, Proxy, class, and literal code select paths explicitly; function paths reject accessors | AS-02b internal `define_own_property` |
-| `[[Delete]]` | static/dynamic delete helpers in `property/static_names/mod.rs` | Function/NativeFunction helpers, Proxy trap, cache path, and base `property::delete_property` are selected separately; base behavior treats several variants as trivially deletable | AS-02b internal `delete` |
-| `[[OwnPropertyKeys]]` | no complete value-wide facade | `Context::enumerable_keys`, `Object` built-ins, Function/NativeFunction key lists, Proxy `ownKeys`, Error/String synthetic keys, and `ObjectHeap::{keys,own_keys,own_property_names}` differ | AS-02b internal `own_property_keys` |
-| `[[GetOwnProperty]]` | `Context::own_property_descriptor_value` inside Object built-ins | Proxy, Object/string/global, Function, NativeFunction, Error, and String branches build descriptors differently; HostFunction is rejected | AS-02b internal `get_own_property` |
-| `[[GetPrototypeOf]]` | `Object.getPrototypeOf` dispatch in `native/builtins/object.rs` | ObjectHeap, Proxy, Function, NativeFunction, and Error each have a path; HostFunction is rejected | AS-02b internal `get_prototype_of` |
-| `[[SetPrototypeOf]]` | Object/Reflect built-in dispatch | `ObjectHeap::set_prototype_value` and `try_set_prototype_value`, Proxy traps, and object-like validation are separate | AS-02b internal `set_prototype_of` |
-| extensibility/integrity | Object built-ins | ordinary `ObjectHeap` only, with Proxy handling in built-ins | AS-02b internal extensibility methods |
+| `[[Set]]` | `semantic_property_write` plus `finish_semantic_property_write`; `semantic_reflect_property_write` for explicit receivers | Static/dynamic caches optimize only ordinary tails; physical accessor/object/function stores remain backends | AS-02b2 implemented in PR #403; AS-03b later owns full strict/sloppy assignment semantics |
+| `[[DefineOwnProperty]]` | `semantic_define_own_property_*` | ObjectHeap and function stores remain physical backends; function paths still reject accessors | AS-02b2 implemented in PR #403 |
+| `[[Delete]]` | `semantic_property_delete` plus `finish_semantic_property_delete` | Static/dynamic caches optimize only ordinary tails; primitive fallback remains in `property::delete_property` | AS-02b2 implemented in PR #403; AS-03b owns primitive coercion |
+| `[[OwnPropertyKeys]]` | `semantic_own_property_keys` plus string/Symbol projections | ObjectHeap and function key stores remain physical backends; Proxy order and Symbol identity are preserved | AS-02b2 implemented in PR #403 |
+| `[[GetOwnProperty]]` | `semantic_own_property_descriptor` | Object/string/global/function physical descriptor stores remain backends; HostFunction is rejected | AS-02b2 implemented in PR #403 |
+| `[[GetPrototypeOf]]` | `semantic_get_prototype` | ObjectHeap/function/error prototype owners remain physical backends; HostFunction is rejected | AS-02b2 implemented in PR #403 |
+| `[[SetPrototypeOf]]` | `semantic_try_set_prototype` | ObjectHeap stores only `ObjectId` prototypes, so function-valued prototypes remain unsupported storage debt | AS-02b2 boundary implemented in PR #403; AS-05 owns handle/storage redesign |
+| extensibility/integrity | `semantic_{is,prevent}_extensions` and semantic integrity-level methods | Ordinary objects use ObjectHeap directly; Proxy integrity composes traps and descriptors; function stores still lack extensibility state | AS-02b2 boundary implemented in PR #403; AS-05 owns complete accounting/state |
 
 ### Known Property Divergences
 
@@ -178,7 +190,9 @@ proxies; several built-ins repeat the same matches.
 - Error properties are synthesized as writable/enumerable/configurable data
   descriptors in some paths rather than stored as real own properties.
 - Function and native-function properties share a data structure but still
-  require separate id lookup and dispatch functions.
+  require separate physical id lookup and dispatch functions; their current
+  own-key backend also exposes only enumerable custom names rather than a full
+  string/Symbol key list.
 - Array indexed properties, string virtual properties, and global bindings
   still span physical and semantic layers, but object-like read/presence callers
   now receive an explicit generic `ObjectHeap` tail instead of repeating that
@@ -186,11 +200,12 @@ proxies; several built-ins repeat the same matches.
 - `property::get_property` and `property::has_property` cover fewer value kinds
   than the similarly named `Context` facades. Their generic names make the
   distinction easy to miss.
-- Static-name caches have guarded ordinary-object fallbacks, but their outer
-  entrypoints still reproduce Function/NativeFunction dispatch.
+- Static-name caches now receive only explicit ordinary-object tails from the
+  semantic facade; the remaining cache code owns shape/version mechanics, not
+  value-kind dispatch.
 
-For new compatibility code before AS-02b, use the widest `Context` facade when
-one exists. Direct `ObjectHeap` access is acceptable only for storage creation
+For new compatibility code after AS-02b, use the semantic `Context` facade.
+Direct `ObjectHeap` access is acceptable only for storage creation
 or a proven ordinary-object-only operation; it must not silently become the
 only semantic implementation of a language feature.
 
@@ -430,7 +445,7 @@ decision sequence:
 | AS-01b | exact `Value` allowlist, harness-name sites, runtime/frontend boundary, side-table and duplicate-operation allowlists | add mechanical no-growth guards without pretending baseline debt is fixed |
 | AS-02a | five object-like variants, object payloads, function/error stores, Promise/collection associations | checked semantic object reference implemented in PR #400; local slot existence is validated without claiming VM identity |
 | AS-02b1 | property/internal-method table | object-like get/has boundary implemented in PR #401, including receiver-aware and Symbol-preserving Proxy dispatch |
-| AS-02b2 | property/internal-method table | route set/define/delete/keys/prototype/descriptor through the facade |
+| AS-02b2 | property/internal-method table | set/define/delete/keys/prototype/descriptor/integrity boundary implemented in PR #403 with ordinary cache tails and Symbol-preserving Proxy dispatch |
 | AS-02c | call/construct tables and repeated object-like lists | one optional call/construct internal-method dispatch, including callable/constructable Proxy and bound functions |
 | AS-03a | equality/conversion table | one equality and primitive-conversion owner; delete three `SameValueZero` copies |
 | AS-03b | key/property/call/iterator tables | move iterator protocol out of bytecode and unify `IsCallable`/`IsConstructor` |

@@ -3,12 +3,8 @@ use crate::{
     runtime::{
         Context,
         call::RuntimeCallArgs,
-        object::{
-            DataPropertyUpdate, OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable,
-            PropertyLookup, PropertyWritable,
-        },
+        object::{DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable, PropertyWritable},
         object::{PropertyKey, PropertyUpdate},
-        property::delete_property,
     },
     value::{ObjectId, Value},
 };
@@ -120,16 +116,12 @@ impl Context {
     ) -> Result<Value> {
         let slice = args.as_slice();
         let target = Self::require_reflect_object(slice.first())?;
-        let Value::Object(id) = target else {
-            return Err(Error::type_error(REFLECT_TARGET_NOT_OBJECT_ERROR));
-        };
         let mut dynamic = self.reflect_property_key(slice.get(1))?;
-        let name = dynamic.name().to_owned();
-        let property_key = self.intern_dynamic_property_key(&mut dynamic)?;
         let value = Self::argument_or_undefined(slice.get(2));
-        let target_value = Value::Object(id);
-        let receiver = slice.get(3).unwrap_or(&target_value).clone();
-        let updated = self.reflect_set_ordinary(id, property_key, &name, value, &receiver)?;
+        let receiver = slice.get(3).unwrap_or(&target).clone();
+        let updated = self
+            .semantic_reflect_property_write(&target, &mut dynamic, value, &receiver)?
+            .ok_or_else(|| Error::type_error(REFLECT_TARGET_NOT_OBJECT_ERROR))?;
         Ok(Value::Bool(updated))
     }
 
@@ -156,7 +148,7 @@ impl Context {
             return Err(Error::type_error(REFLECT_TARGET_NOT_OBJECT_ERROR));
         };
         let key = self.reflect_property_key(slice.get(1))?;
-        let deleted = delete_property(&mut self.objects, &target, key.lookup())?;
+        let deleted = self.delete_property_value_with_lookup(&target, key.lookup())?;
         Ok(Value::Bool(deleted))
     }
 
@@ -165,8 +157,9 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         _this: &Value,
     ) -> Result<Value> {
-        Self::require_reflect_object(args.as_slice().first())?;
-        self.eval_object_get_prototype_of(args)
+        let target = Self::require_reflect_object(args.as_slice().first())?;
+        self.semantic_get_prototype(&target)?
+            .ok_or_else(|| Error::type_error(REFLECT_TARGET_NOT_OBJECT_ERROR))
     }
 
     pub(in crate::runtime) fn eval_reflect_set_prototype_of(
@@ -178,23 +171,9 @@ impl Context {
         let target = Self::require_reflect_object(slice.first())?;
         let prototype = Self::argument_or_undefined(slice.get(1));
         Self::validate_reflect_prototype_value(&prototype)?;
-        let updated = match target {
-            Value::Object(id) if self.objects.is_proxy(id) => {
-                self.proxy_set_prototype_of(id, prototype)?
-            }
-            Value::Object(id) => self.objects.try_set_prototype_value(id, &prototype)?,
-            Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => false,
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_) => return Err(Error::type_error(REFLECT_TARGET_NOT_OBJECT_ERROR)),
-        };
+        let updated = self
+            .semantic_try_set_prototype(&target, prototype)?
+            .ok_or_else(|| Error::type_error(REFLECT_TARGET_NOT_OBJECT_ERROR))?;
         Ok(Value::Bool(updated))
     }
 
@@ -203,8 +182,10 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         _this: &Value,
     ) -> Result<Value> {
-        Self::require_reflect_object(args.as_slice().first())?;
-        self.eval_object_is_extensible(args)
+        let target = Self::require_reflect_object(args.as_slice().first())?;
+        self.semantic_is_extensible(&target)?
+            .map(Value::Bool)
+            .ok_or_else(|| Error::type_error(REFLECT_TARGET_NOT_OBJECT_ERROR))
     }
 
     pub(in crate::runtime) fn eval_reflect_prevent_extensions(
@@ -213,14 +194,9 @@ impl Context {
         _this: &Value,
     ) -> Result<Value> {
         let target = Self::require_reflect_object(args.as_slice().first())?;
-        let Value::Object(id) = target else {
-            return Ok(Value::Bool(true));
-        };
-        if self.objects.is_proxy(id) {
-            return self.proxy_prevent_extensions(id).map(Value::Bool);
-        }
-        self.objects.prevent_extensions(id)?;
-        Ok(Value::Bool(true))
+        self.semantic_prevent_extensions(&target)?
+            .map(Value::Bool)
+            .ok_or_else(|| Error::type_error(REFLECT_TARGET_NOT_OBJECT_ERROR))
     }
 
     pub(in crate::runtime) fn eval_reflect_get_own_property_descriptor(
@@ -242,9 +218,12 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         _this: &Value,
     ) -> Result<Value> {
-        Self::require_reflect_object(args.as_slice().first())?;
-        self.eval_object_define_property(args)?;
-        Ok(Value::Bool(true))
+        let values = args.as_slice();
+        let target = Self::require_reflect_object(values.first())?;
+        let mut property = self.reflect_property_key(values.get(1))?;
+        let descriptor = Self::argument_or_undefined(values.get(2));
+        self.semantic_define_own_property_from_value(&target, &mut property, &descriptor)
+            .map(Value::Bool)
     }
 
     pub(in crate::runtime) fn eval_reflect_own_keys(
@@ -253,37 +232,7 @@ impl Context {
         _this: &Value,
     ) -> Result<Value> {
         let target = Self::require_reflect_object(args.as_slice().first())?;
-        let mut elements = Vec::new();
-        match target {
-            Value::Object(id) if self.objects.is_proxy(id) => {
-                for key in self.proxy_own_keys(id)? {
-                    elements.push(self.heap_string_value(&key)?);
-                }
-            }
-            Value::Object(id) => {
-                let names = self.objects.own_property_names(id, &self.atoms)?;
-                elements.reserve(names.len());
-                for key in names {
-                    elements.push(self.heap_string_value(&key)?);
-                }
-                for symbol in self.objects.own_property_symbols(id, &self.symbols)? {
-                    elements.push(Value::Symbol(symbol));
-                }
-            }
-            Value::Function(_) | Value::NativeFunction(_) | Value::Error(_) => {
-                for key in self.own_property_names(&target)? {
-                    elements.push(self.heap_string_value(&key)?);
-                }
-            }
-            Value::HostFunction(_)
-            | Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_) => return Err(Error::type_error(REFLECT_TARGET_NOT_OBJECT_ERROR)),
-        }
+        let elements = self.semantic_own_property_keys(&target)?;
         self.create_array_from_elements(elements)
     }
 
@@ -368,94 +317,6 @@ impl Context {
             }
         }
         self.dynamic_property_key(&value)
-    }
-
-    fn reflect_set_ordinary(
-        &mut self,
-        target: ObjectId,
-        property: PropertyKey,
-        property_name: &str,
-        value: Value,
-        receiver: &Value,
-    ) -> Result<bool> {
-        let lookup = PropertyLookup::from_key(property_name, property);
-        let descriptor = self.objects.own_property_descriptor(target, lookup)?;
-        if let Some(descriptor) = descriptor {
-            return self.reflect_set_with_descriptor(
-                property,
-                property_name,
-                value,
-                receiver,
-                descriptor,
-            );
-        }
-        let prototype = self.objects.prototype_value(target)?;
-        if let Value::Object(prototype) = prototype {
-            return self.reflect_set_ordinary(prototype, property, property_name, value, receiver);
-        }
-        self.reflect_set_data_property(property, property_name, value, receiver)
-    }
-
-    fn reflect_set_with_descriptor(
-        &mut self,
-        property: PropertyKey,
-        property_name: &str,
-        value: Value,
-        receiver: &Value,
-        descriptor: OwnPropertyDescriptor,
-    ) -> Result<bool> {
-        match descriptor {
-            OwnPropertyDescriptor::Data(descriptor) => {
-                if !descriptor.writable().is_yes() {
-                    return Ok(false);
-                }
-                self.reflect_set_data_property(property, property_name, value, receiver)
-            }
-            OwnPropertyDescriptor::Accessor(descriptor) => {
-                if !descriptor.has_setter() {
-                    return Ok(false);
-                }
-                self.call_accessor_function(descriptor.set(), receiver.clone(), &[value])?;
-                Ok(true)
-            }
-        }
-    }
-
-    fn reflect_set_data_property(
-        &mut self,
-        property: PropertyKey,
-        property_name: &str,
-        value: Value,
-        receiver: &Value,
-    ) -> Result<bool> {
-        let Value::Object(receiver) = receiver else {
-            return Ok(false);
-        };
-        let lookup = PropertyLookup::from_key(property_name, property);
-        let mut new_property = true;
-        if let Some(descriptor) = self.objects.own_property_descriptor(*receiver, lookup)? {
-            new_property = false;
-            match descriptor {
-                OwnPropertyDescriptor::Accessor(_) => return Ok(false),
-                OwnPropertyDescriptor::Data(descriptor) if !descriptor.writable().is_yes() => {
-                    return Ok(false);
-                }
-                OwnPropertyDescriptor::Data(_) => {}
-            }
-        }
-        self.objects.define_property(
-            *receiver,
-            property,
-            property_name,
-            PropertyUpdate::Data(DataPropertyUpdate::new(
-                Some(value),
-                new_property.then_some(PropertyWritable::Yes),
-                new_property.then_some(PropertyEnumerable::Yes),
-                new_property.then_some(PropertyConfigurable::Yes),
-            )),
-            self.limits.max_object_properties,
-        )?;
-        Ok(true)
     }
 
     /// Spec `CreateListFromArrayLike` for the default element types.

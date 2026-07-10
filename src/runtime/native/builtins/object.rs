@@ -88,57 +88,14 @@ impl Context {
         let target = Self::argument_or_undefined(values.first());
         let mut property = self.object_property_key(values.get(1))?;
         let descriptor_value = Self::argument_or_undefined(values.get(2));
-        if let Value::Object(id) = &target
-            && self.objects.is_proxy(*id)
-        {
-            if !self.proxy_define_property(*id, property.name(), descriptor_value)? {
-                return Err(Error::type_error(
-                    "proxy defineProperty trap returned falsy",
-                ));
-            }
-            return Ok(target);
-        }
-        let key = self.intern_dynamic_property_key(&mut property)?;
-        let descriptor = self.property_update_from_value(&descriptor_value)?;
-        match &target {
-            Value::Object(id) => {
-                self.objects.define_property(
-                    *id,
-                    key,
-                    property.name(),
-                    descriptor,
-                    self.limits.max_object_properties,
-                )?;
-            }
-            Value::Function(id) => {
-                let PropertyUpdate::Data(descriptor) = descriptor else {
-                    return Err(Error::runtime(
-                        "accessor properties are not supported on function objects",
-                    ));
-                };
-                self.define_function_property_key(*id, property.name(), key, descriptor)?;
-            }
-            Value::NativeFunction(id) => {
-                let PropertyUpdate::Data(descriptor) = descriptor else {
-                    return Err(Error::runtime(
-                        "accessor properties are not supported on function objects",
-                    ));
-                };
-                self.define_native_function_property_key(*id, property.name(), key, descriptor)?;
-            }
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => {
-                return Err(Error::runtime(
-                    "Object.defineProperty target must be an object",
-                ));
-            }
+        if !self.semantic_define_own_property_from_value(
+            &target,
+            &mut property,
+            &descriptor_value,
+        )? {
+            return Err(Error::type_error(
+                "proxy defineProperty trap returned falsy",
+            ));
         }
         Ok(target)
     }
@@ -162,26 +119,9 @@ impl Context {
     ) -> Result<Value> {
         let values = args.as_slice();
         let target = Self::argument_or_undefined(values.first());
-        match target {
-            Value::Object(id) if self.objects.is_proxy(id) => self.proxy_get_prototype_of(id),
-            Value::Object(id) => self.objects.prototype_value(id),
-            Value::Function(id) => self.function_object_prototype_value(id),
-            Value::NativeFunction(id) => self.native_function_object_prototype_value(id),
-            Value::Error(error) => self
-                .error_constructor_prototype(error.name())
-                .map(Value::Object),
-            Value::Undefined | Value::Null => Err(Error::runtime(
-                "Object.getPrototypeOf target cannot be converted to an object",
-            )),
-            Value::Bool(_)
-            | Value::Number(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::HostFunction(_) => Err(Error::runtime(
-                "Object.getPrototypeOf target must be an object",
-            )),
-        }
+        self.semantic_get_prototype(&target)?.ok_or_else(|| {
+            Error::runtime("Object.getPrototypeOf target cannot be converted to an object")
+        })
     }
 
     pub(in crate::runtime::native) fn eval_object_get_own_property_symbols(
@@ -189,22 +129,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let target = Self::argument_or_undefined(args.as_slice().first());
-        let symbols = match target {
-            Value::Object(id) => self.objects.own_property_symbols(id, &self.symbols)?,
-            Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::Error(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::Symbol(_) => Vec::new(),
-            Value::Undefined | Value::Null | Value::HostFunction(_) => {
-                return Err(Error::runtime(
-                    "Object.getOwnPropertySymbols target cannot be converted to an object",
-                ));
-            }
-        };
+        let symbols = self.semantic_own_property_symbols(&target)?;
         let mut values = Vec::with_capacity(symbols.len());
         for symbol in symbols {
             values.push(Value::Symbol(symbol));
@@ -212,7 +137,7 @@ impl Context {
         self.create_array_from_elements(values)
     }
 
-    fn string_object_own_property_descriptor(
+    pub(in crate::runtime) fn string_object_own_property_descriptor(
         &mut self,
         id: ObjectId,
         property: &DynamicPropertyKey,
@@ -246,10 +171,7 @@ impl Context {
     ) -> Result<Value> {
         let values = args.as_slice();
         let target = Self::argument_or_undefined(values.first());
-        let keys = match &target {
-            Value::Object(id) if self.objects.is_proxy(*id) => self.proxy_enumerable_keys(*id)?,
-            _ => self.own_enumerable_keys(&target)?,
-        };
+        let keys = self.semantic_own_enumerable_string_keys(&target)?;
         self.array_constructor_value()?;
         let prototype = self.objects.existing_array_prototype_id()?;
         let mut elements = Vec::with_capacity(keys.len());
@@ -270,10 +192,7 @@ impl Context {
     ) -> Result<Value> {
         let values = args.as_slice();
         let target = Self::argument_or_undefined(values.first());
-        let keys = match &target {
-            Value::Object(id) if self.objects.is_proxy(*id) => self.proxy_own_keys(*id)?,
-            _ => self.own_property_names(&target)?,
-        };
+        let keys = self.semantic_own_property_names(&target)?;
         self.array_constructor_value()?;
         let prototype = self.objects.existing_array_prototype_id()?;
         let mut elements = Vec::with_capacity(keys.len());
@@ -445,11 +364,11 @@ impl Context {
         self.dynamic_property_key(&value)
     }
 
-    pub(in crate::runtime::native) fn property_update_from_value(
+    pub(in crate::runtime) fn property_update_from_value(
         &mut self,
         value: &Value,
     ) -> Result<PropertyUpdate> {
-        if !matches!(value, Value::Object(_)) {
+        if self.semantic_object_ref(value)?.is_none() {
             return Err(Error::runtime("property descriptor must be an object"));
         }
         let get = self.optional_descriptor_accessor(value, DESCRIPTOR_GET_PROPERTY)?;
@@ -572,7 +491,7 @@ impl Context {
         }
     }
 
-    pub(in crate::runtime::native) fn create_property_descriptor_object(
+    pub(in crate::runtime) fn create_property_descriptor_object(
         &mut self,
         descriptor: &OwnPropertyDescriptor,
     ) -> Result<Value> {
@@ -659,7 +578,7 @@ impl Context {
         Ok(keys)
     }
 
-    fn has_own_property_value(
+    pub(in crate::runtime) fn has_own_property_value(
         &self,
         target: &Value,
         property: &DynamicPropertyKey,
@@ -700,82 +619,21 @@ impl Context {
         target: &Value,
         property: &DynamicPropertyKey,
     ) -> Result<Option<OwnPropertyDescriptor>> {
-        match target {
-            Value::Object(id) if self.objects.is_proxy(*id) => {
-                self.proxy_get_own_property_descriptor(*id, property.name())
-            }
-            Value::Object(id) => {
-                if let Some(descriptor) =
-                    self.string_object_own_property_descriptor(*id, property)?
-                {
-                    return Ok(Some(OwnPropertyDescriptor::Data(descriptor)));
-                }
-                if let Some(descriptor) = self
-                    .objects
-                    .own_property_descriptor(*id, property.lookup())?
-                {
-                    return Ok(Some(descriptor));
-                }
-                self.global_object_property_descriptor(*id, property.lookup())
-            }
-            Value::Function(id) => Ok(self
-                .function_own_property_descriptor_lookup(*id, property.lookup())?
-                .map(OwnPropertyDescriptor::Data)),
-            Value::NativeFunction(id) => Ok(self
-                .native_function_own_property_descriptor_lookup(*id, property.lookup())?
-                .map(OwnPropertyDescriptor::Data)),
-            Value::Error(_) | Value::String(_) | Value::HeapString(_) => {
-                if self.has_own_property_value(target, property)? {
-                    Ok(Some(OwnPropertyDescriptor::Data(
-                        DataPropertyDescriptor::new(
-                            self.get_property_value(target, property.name())?,
-                            PropertyWritable::Yes,
-                            PropertyEnumerable::Yes,
-                            PropertyConfigurable::Yes,
-                        ),
-                    )))
-                } else {
-                    Ok(None)
-                }
-            }
-            Value::Bool(_) | Value::Number(_) | Value::Symbol(_) => Ok(None),
-            Value::Undefined | Value::Null | Value::HostFunction(_) => Err(Error::runtime(
-                "Object.prototype.propertyIsEnumerable target cannot be converted to an object",
-            )),
-        }
+        self.semantic_own_property_descriptor(target, property)
     }
 
-    pub(in crate::runtime) fn own_enumerable_keys(&self, target: &Value) -> Result<Vec<String>> {
-        match target {
-            Value::Object(id) => self.objects.own_keys(*id, &self.atoms),
-            Value::Function(id) => self.function_enumerable_keys(*id),
-            Value::NativeFunction(id) => self.native_function_enumerable_keys(*id),
-            Value::Error(_) | Value::String(_) | Value::HeapString(_) => {
-                self.enumerable_keys(target)
-            }
-            Value::Bool(_) | Value::Number(_) | Value::Symbol(_) => Ok(Vec::new()),
-            Value::Undefined | Value::Null | Value::HostFunction(_) => Err(Error::runtime(
-                "Object.keys target cannot be converted to an object",
-            )),
-        }
+    pub(in crate::runtime) fn own_enumerable_keys(
+        &mut self,
+        target: &Value,
+    ) -> Result<Vec<String>> {
+        self.semantic_own_enumerable_string_keys(target)
     }
 
     pub(in crate::runtime::native) fn own_property_names(
-        &self,
+        &mut self,
         target: &Value,
     ) -> Result<Vec<String>> {
-        match target {
-            Value::Object(id) => self.objects.own_property_names(*id, &self.atoms),
-            Value::Function(id) => self.function_enumerable_keys(*id),
-            Value::NativeFunction(id) => self.native_function_enumerable_keys(*id),
-            Value::Error(_) | Value::String(_) | Value::HeapString(_) => {
-                self.enumerable_keys(target)
-            }
-            Value::Bool(_) | Value::Number(_) | Value::Symbol(_) => Ok(Vec::new()),
-            Value::Undefined | Value::Null | Value::HostFunction(_) => Err(Error::runtime(
-                "Object.getOwnPropertyNames target cannot be converted to an object",
-            )),
-        }
+        self.semantic_own_property_names(target)
     }
 
     pub(in crate::runtime::native) fn create_object_from_constructor(&mut self) -> Result<Value> {
