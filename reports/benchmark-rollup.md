@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260710T110040Z.md`
-- Task: PR #415: runtime: centralize iterator operations and closing
-- Performance: 5.49x (4/5 >1.00x) (from `rsqjs-test-report-20260710T110040Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T110040Z.md`)
+- `rsqjs-test-report-20260710T114057Z.md`
+- Task: PR #416: runtime: separate JavaScript throws from engine failures
+- Performance: 5.38x (4/5 >1.00x) (from `rsqjs-test-report-20260710T114057Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T114057Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 36221 passed / 66357 failed (35.31%) (from `rsqjs-test-report-20260710T110040Z.md`)
+- Full Test262: 36553 passed / 66025 failed (35.63%) (from `rsqjs-test-report-20260710T114057Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -401,3 +401,4 @@ Latest report:
 | `20260710T100811Z` `435b5f8` PR #413: runtime: centralize integer length and index conversion | 5.88x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36185 passed / 66393 failed (35.28%) |
 | `20260710T103147Z` `be331b2` PR #414: runtime: centralize GetMethod and property call operations | 5.47x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36209 passed / 66369 failed (35.30%) |
 | `20260710T110040Z` `fb9917e` PR #415: runtime: centralize iterator operations and closing | 5.49x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36221 passed / 66357 failed (35.31%) |
+| `20260710T114057Z` `d9ae782` PR #416: runtime: separate JavaScript throws from engine failures | 5.38x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36553 passed / 66025 failed (35.63%) |
