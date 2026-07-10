@@ -2,7 +2,7 @@ use crate::{error::Result, value::Value};
 
 use super::{Context, binding::scope::BindingScope, object::PropertyKey, promise::PromiseId};
 
-const ROOT_KIND_COUNT: usize = 13;
+const ROOT_KIND_COUNT: usize = 14;
 
 /// Direct VM root categories that exist independently of heap trace edges.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -14,6 +14,7 @@ pub enum VmRootKind {
     ActiveThis,
     ActiveNewTarget,
     ActiveSuper,
+    BytecodeFrame,
     QueuedJob,
     RuntimeAnchor,
     RetainedHandle,
@@ -31,6 +32,7 @@ impl VmRootKind {
         Self::ActiveThis,
         Self::ActiveNewTarget,
         Self::ActiveSuper,
+        Self::BytecodeFrame,
         Self::QueuedJob,
         Self::RuntimeAnchor,
         Self::RetainedHandle,
@@ -54,12 +56,13 @@ impl VmRootKind {
             Self::ActiveThis => 4,
             Self::ActiveNewTarget => 5,
             Self::ActiveSuper => 6,
-            Self::QueuedJob => 7,
-            Self::RuntimeAnchor => 8,
-            Self::RetainedHandle => 9,
-            Self::TransientOperand => 10,
-            Self::TransientCall => 11,
-            Self::TransientTemporary => 12,
+            Self::BytecodeFrame => 7,
+            Self::QueuedJob => 8,
+            Self::RuntimeAnchor => 9,
+            Self::RetainedHandle => 10,
+            Self::TransientOperand => 11,
+            Self::TransientCall => 12,
+            Self::TransientTemporary => 13,
         }
     }
 
@@ -199,6 +202,11 @@ impl Context {
                     visitor.visit_value(VmRootKind::ActiveSuper, constructor)?;
                 }
                 visitor.visit_value(VmRootKind::ActiveSuper, &super_binding.home_prototype)?;
+            }
+            if let Some(continuation) = frame.continuation() {
+                for value in continuation.root_values() {
+                    visitor.visit_value(VmRootKind::BytecodeFrame, value)?;
+                }
             }
         }
         if let Some(id) = self.global_object {

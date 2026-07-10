@@ -16,7 +16,7 @@ fn snapshots_start_empty_and_use_stable_categories() -> TestResult {
         "expected a fresh VM to have no direct roots",
     )?;
     ensure_usize(snapshot.total(), 0, "fresh root total")?;
-    ensure_usize(VmRootKind::all().len(), 13, "root kind count")?;
+    ensure_usize(VmRootKind::all().len(), 14, "root kind count")?;
 
     let summed = VmRootKind::all().iter().try_fold(0_usize, |total, kind| {
         checked_root_sum(total, snapshot.count(*kind))
@@ -101,6 +101,15 @@ fn snapshots_direct_roots_during_function_and_super_calls() -> TestResult {
     )?;
 
     let settled = vm.root_snapshot()?;
+    ensure_settled_activation_roots(&settled)?;
+    ensure_positive(
+        settled.count(VmRootKind::GlobalBinding),
+        "settled global roots",
+    )?;
+    ensure_snapshot_sum(settled)
+}
+
+fn ensure_settled_activation_roots(settled: &VmRootSnapshot) -> TestResult {
     ensure_usize(
         settled.count(VmRootKind::LocalBinding),
         0,
@@ -126,11 +135,11 @@ fn snapshots_direct_roots_during_function_and_super_calls() -> TestResult {
         0,
         "settled super roots",
     )?;
-    ensure_positive(
-        settled.count(VmRootKind::GlobalBinding),
-        "settled global roots",
-    )?;
-    ensure_snapshot_sum(settled)
+    ensure_usize(
+        settled.count(VmRootKind::BytecodeFrame),
+        0,
+        "settled bytecode frame roots",
+    )
 }
 
 #[test]

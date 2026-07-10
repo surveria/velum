@@ -407,7 +407,7 @@ fn enforces_association_limits_and_keeps_module_storage_empty() -> TestResult {
 }
 
 #[test]
-fn charges_one_activation_and_one_function_scope_per_nested_call() -> TestResult {
+fn charges_activation_scope_and_bytecode_frames_per_nested_call() -> TestResult {
     const SOURCE: &str = r"
         function inner(value) {
             let lens = value + 1;
@@ -420,7 +420,7 @@ fn charges_one_activation_and_one_function_scope_per_nested_call() -> TestResult
         outer(40);
     ";
 
-    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::ExecutionFrame, 4);
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::ExecutionFrame, 5);
     let mut vm = vm_with_storage_limits(limits);
     vm.eval(SOURCE)?;
     ensure_usize(
@@ -429,7 +429,7 @@ fn charges_one_activation_and_one_function_scope_per_nested_call() -> TestResult
         "released nested activation frames",
     )?;
 
-    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::ExecutionFrame, 3);
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::ExecutionFrame, 4);
     let mut vm = vm_with_storage_limits(limits);
     let error = expect_eval_error(&mut vm, SOURCE)?;
     ensure_limit(&error, "ExecutionFrame")?;

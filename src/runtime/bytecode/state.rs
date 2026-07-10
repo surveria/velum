@@ -37,7 +37,7 @@ impl BytecodeState {
         Ok(BytecodeAddress::new(next))
     }
 
-    pub(super) fn transient_root_values(&self) -> impl Iterator<Item = &Value> {
+    pub(in crate::runtime) fn root_values(&self) -> impl Iterator<Item = &Value> {
         self.stack
             .values()
             .iter()

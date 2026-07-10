@@ -6,7 +6,7 @@ use crate::{
     value::Value,
 };
 
-use super::BytecodeState;
+use super::{BytecodeState, continuation::BytecodeContinuationHandle};
 
 pub(in crate::runtime) struct BytecodeOutcome {
     completion: Completion,
@@ -50,7 +50,8 @@ impl Context {
         block: &BytecodeBlock,
         state: &mut BytecodeState,
     ) -> Result<Completion> {
-        self.eval_bytecode_block_outcome_with_state(block, state)
+        state.reset();
+        self.run_bytecode_state(block, state)
             .map(BytecodeOutcome::completion)
     }
 
@@ -59,13 +60,32 @@ impl Context {
         block: &BytecodeBlock,
         state: &mut BytecodeState,
     ) -> Result<BytecodeOutcome> {
-        state.reset();
+        let frame = self.push_bytecode_continuation(block, state)?;
+        let outcome = self.run_bytecode_continuation(frame);
+        let restored_state = self.pop_bytecode_continuation(frame)?;
+        *state = restored_state;
+        outcome
+    }
+
+    fn run_bytecode_continuation(
+        &mut self,
+        frame: BytecodeContinuationHandle,
+    ) -> Result<BytecodeOutcome> {
+        let (block, mut state) = self.take_bytecode_continuation(frame)?;
+        let outcome = self.run_bytecode_state(&block, &mut state);
+        self.restore_bytecode_continuation(frame, state)?;
+        outcome
+    }
+
+    fn run_bytecode_state(
+        &mut self,
+        block: &BytecodeBlock,
+        state: &mut BytecodeState,
+    ) -> Result<BytecodeOutcome> {
         while let Some(step) = block.step(state.pc)? {
             let span = step.span();
-            let _root_scope = self.transient_root_scope(
-                VmRootKind::TransientOperand,
-                state.transient_root_values(),
-            )?;
+            let _root_scope =
+                self.transient_root_scope(VmRootKind::TransientOperand, state.root_values())?;
             self.step().map_err(|error| error.with_runtime_span(span))?;
             let completion = match self.eval_bytecode_instruction(state, step.instruction()) {
                 Ok(completion) => completion,

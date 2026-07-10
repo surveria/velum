@@ -2,7 +2,9 @@ use std::rc::Rc;
 
 use crate::value::Value;
 
-use super::{FunctionUpvalues, function::FunctionSuperBinding};
+use super::{
+    FunctionUpvalues, bytecode::BytecodeContinuationFrame, function::FunctionSuperBinding,
+};
 
 /// One VM-owned synchronous execution activation.
 ///
@@ -18,12 +20,18 @@ pub(in crate::runtime) enum ActivationFrame {
         this_value: Value,
         new_target: Value,
         super_binding: Option<Rc<FunctionSuperBinding>>,
+        continuation: Option<BytecodeContinuationFrame>,
     },
     TemporaryThis {
         this_value: Value,
+        continuation: Option<BytecodeContinuationFrame>,
     },
     EvalBoundary {
         local_base: usize,
+        continuation: Option<BytecodeContinuationFrame>,
+    },
+    Bytecode {
+        continuation: Option<BytecodeContinuationFrame>,
     },
 }
 
@@ -41,49 +49,66 @@ impl ActivationFrame {
             this_value,
             new_target,
             super_binding,
+            continuation: None,
         }
     }
 
     pub(in crate::runtime) const fn temporary_this(this_value: Value) -> Self {
-        Self::TemporaryThis { this_value }
+        Self::TemporaryThis {
+            this_value,
+            continuation: None,
+        }
     }
 
     pub(in crate::runtime) const fn eval_boundary(local_base: usize) -> Self {
-        Self::EvalBoundary { local_base }
+        Self::EvalBoundary {
+            local_base,
+            continuation: None,
+        }
+    }
+
+    pub(in crate::runtime) const fn bytecode(continuation: BytecodeContinuationFrame) -> Self {
+        Self::Bytecode {
+            continuation: Some(continuation),
+        }
     }
 
     pub(in crate::runtime) const fn local_base(&self) -> Option<usize> {
         match self {
-            Self::Call { local_base, .. } | Self::EvalBoundary { local_base } => Some(*local_base),
-            Self::TemporaryThis { .. } => None,
+            Self::Call { local_base, .. } | Self::EvalBoundary { local_base, .. } => {
+                Some(*local_base)
+            }
+            Self::TemporaryThis { .. } | Self::Bytecode { .. } => None,
         }
     }
 
     pub(in crate::runtime) const fn upvalues(&self) -> Option<&FunctionUpvalues> {
         match self {
             Self::Call { upvalues, .. } => Some(upvalues),
-            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } => None,
+            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
         }
     }
 
     pub(in crate::runtime) const fn this_value(&self) -> Option<&Value> {
         match self {
-            Self::Call { this_value, .. } | Self::TemporaryThis { this_value } => Some(this_value),
-            Self::EvalBoundary { .. } => None,
+            Self::Call { this_value, .. } | Self::TemporaryThis { this_value, .. } => {
+                Some(this_value)
+            }
+            Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
         }
     }
 
     pub(in crate::runtime) const fn new_target(&self) -> Option<&Value> {
         match self {
             Self::Call { new_target, .. } => Some(new_target),
-            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } => None,
+            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
         }
     }
 
     pub(in crate::runtime) const fn super_binding(&self) -> Option<&Rc<FunctionSuperBinding>> {
         match self {
             Self::Call { super_binding, .. } => super_binding.as_ref(),
-            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } => None,
+            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
         }
     }
 
@@ -97,5 +122,29 @@ impl ActivationFrame {
 
     pub(in crate::runtime) const fn is_eval_boundary(&self) -> bool {
         matches!(self, Self::EvalBoundary { .. })
+    }
+
+    pub(in crate::runtime) const fn is_bytecode(&self) -> bool {
+        matches!(self, Self::Bytecode { .. })
+    }
+
+    pub(in crate::runtime) const fn continuation(&self) -> Option<&BytecodeContinuationFrame> {
+        match self {
+            Self::Call { continuation, .. }
+            | Self::TemporaryThis { continuation, .. }
+            | Self::EvalBoundary { continuation, .. }
+            | Self::Bytecode { continuation } => continuation.as_ref(),
+        }
+    }
+
+    pub(in crate::runtime) const fn continuation_mut(
+        &mut self,
+    ) -> &mut Option<BytecodeContinuationFrame> {
+        match self {
+            Self::Call { continuation, .. }
+            | Self::TemporaryThis { continuation, .. }
+            | Self::EvalBoundary { continuation, .. }
+            | Self::Bytecode { continuation } => continuation,
+        }
     }
 }

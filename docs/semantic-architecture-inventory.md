@@ -422,7 +422,7 @@ and values retained after an embedding call.
 | objects | `ObjectHeap`, shapes, prototypes, properties, arrays, buffers, typed-array views | typed AS-05b1b2 edges cover named/dense/sparse properties, accessors, prototypes, boxed strings/Symbols, Proxy state, and typed-array buffer-object links; cached prototypes and shape/property-key metadata are direct anchors | logical Object/ObjectProperty/ByteBuffer counts plus shape CacheEntry and anchor Association counts; payload bytes remain AS-05b2b |
 | collections | collection stores with retained kind, object slots, iterator snapshots | typed object associations, strong Map/Set entries and iterator items, weak WeakSet keys, and WeakMap ephemerons | logical Collection/CollectionEntry/CollectionIterator/IteratorItem and Association counts plus asynchronous edge snapshot |
 | promises/jobs | promises, object slots, reaction queue | typed object associations, strong results/handlers/settled values, and direct queued-job roots | logical Promise/PromiseReaction/PromiseJob and Association counts plus asynchronous edge snapshot |
-| active execution | one `activation_frames` stack owns call local bases, upvalues, `this`, `new.target`, and super plus temporary-this/eval-boundary variants; bytecode operand stacks remain held by Rust calls; scoped transient registry | explicit call activations plus scoped traceable operand/call/iterator/descriptor/Proxy values | one logical ExecutionFrame per activation and lexical scope plus TransientRoot counts and thirteen-category root snapshot; bytecode continuation state remains AS-06a2 |
+| active execution | one `activation_frames` stack owns call local bases, upvalues, `this`, `new.target`, super, and an optional block/program-counter/operand continuation plus temporary-this/eval-boundary/standalone-bytecode variants; scoped transient registry | explicit call/block activations, parked bytecode operands, and scoped traceable operand/call/iterator/descriptor/Proxy values | one logical ExecutionFrame per activation and lexical scope plus TransientRoot counts and a fourteen-category root snapshot; loop/try/finally control records remain AS-06a2b |
 | caches | static name/binding caches, call caches, function fast paths | ids, shapes, native kinds, metadata | logical CacheEntry counts plus hit/miss counters for selected call caches |
 | embedder-visible state | output, host callbacks, `Vm`, public `Value`, retained registry | callback arguments are scoped roots; opaque captures and durable results use retained handles; raw Values remain compatibility-only and non-durable | logical HostCallback/RetainedHandle/OutputEntry counts; retained handles also participate in root snapshots |
 | nondeterministic/runtime state | clock, random state, step counters | no JS edges | runtime steps and selected execution counters |
@@ -496,9 +496,9 @@ compiled artifacts, and opaque host captures are deliberately excluded.
   VM-local variant, and can be used as a typed host return after the source VM
   is gone;
 - `Vm::root_snapshot` and `Context::root_snapshot` expose checked reference
-  counts for thirteen direct-root categories: the original nine durable
-  classes plus retained handles and transient operand, call, and temporary
-  values. `HostCall::root_snapshot`
+  counts for fourteen direct-root categories: bindings, active calls, parked
+  bytecode frames, queued jobs, runtime anchors, retained handles, and
+  transient operand, call, and temporary values. `HostCall::root_snapshot`
   captures the same registry while JavaScript activation roots are live,
   without exposing raw visitor internals;
 - `Vm::callable_edge_snapshot` and `Context::callable_edge_snapshot` expose
@@ -636,8 +636,9 @@ decision sequence:
 | AS-05b2c1 | public owner-limit policy plus payload/top-level arenas | immutable sparse custom policy and pre-commit limits for atoms, strings, Symbols, objects, buffers, callbacks, output, and source merged in PR #434 |
 | AS-05b2c2 | binding, callable, property, and cache growth | VM-local O(1) ledger, pre-commit reservations, release/rollback paths, and independent snapshot reconciliation merged in PR #435 |
 | AS-05b2c3 | async, root, frame, and association growth | exact collection/Promise/root/frame/anchor transitions plus full snapshot-to-limit reconciliation merged in PR #436 |
-| AS-06a1 | parallel call-state vectors | one VM-owned call/temporary/evaluation activation stack implemented in draft PR #438 |
-| AS-06a2 | recursive nested bytecode state | explicit program-counter, operand, and structured-control continuation frames |
+| AS-06a1 | parallel call-state vectors | one VM-owned call/temporary/evaluation activation stack merged in PR #438 |
+| AS-06a2a | outer block state and program position | activation-owned block/program-counter/operand continuation implemented in draft PR #439 |
+| AS-06a2b | recursive loop/try/finally state | explicit durable structured-control continuation records |
 | AS-06b | pending async execution | suspend/resume outcomes and embedder-controlled job/frame APIs |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |
 | AS-08 | caches, direct calls, linear/function/control paths, harness opcodes | one optimizer owner, optimizer-off equivalence, and removal of source-name semantics |
@@ -662,7 +663,7 @@ must fail on growth.
 | host local-value boundary | LocalValue and HostCall carry the active owner and retained registry; public JavaScript errors retain the owner and throw conversion validates it | accepting an unowned host throw, a foreign bound JavaScript value, or callback retention without the active registry |
 | portable owned-value boundary | OwnedValue contains only undefined/null/Boolean/Number/String and copies local heap text | a Symbol/object/function/id/identity variant or removal of explicit conversion entrypoints |
 | retained-value boundary | RetainedValue is non-cloneable and privately carries identity, registry capability, slot generation, and release state; creation is source-proven | exposing raw ids, relabeling arbitrary Value, removing generation/owner checks, or retaining without root participation |
-| direct-root boundary | thirteen categories enumerate binding, active-call, runtime-anchor, Promise-job, retained-handle, transient operand/call, and temporary sources through one visitor | removing a current root/safepoint source, adding an unreviewed category, or bypassing scoped cleanup and Context/Vm/HostCall snapshots |
+| direct-root boundary | fourteen categories enumerate binding, active-call, parked-bytecode, runtime-anchor, Promise-job, retained-handle, transient operand/call, and temporary sources through one visitor | removing a current root/safepoint source, adding an unreviewed category, or bypassing scoped cleanup and Context/Vm/HostCall snapshots |
 | storage accounting boundary | twenty-six logical owner categories map every current variable-size Context store and nested record into checked counts and consuming teardown reconciliation | removing an owner source, adding unreviewed Context storage, changing count semantics into byte estimates, or dropping the teardown snapshot |
 | callable strong-edge boundary | six categories enumerate every current JavaScript/native/bound function reference slot through one typed visitor; native id-bearing variants have an exact allowlist | removing a callable slot, adding an unreviewed id-bearing native kind, or exposing raw edge ids in the diagnostic API |
 | object strong-edge boundary | three categories enumerate named/dense/sparse properties, accessors, prototypes, boxed strings/Symbols, Proxy slots, and typed-view links; cached prototypes and key metadata are direct anchors | removing an object slot/cache root, adding an unreviewed object payload, or folding side-table associations into ordinary object traversal |
