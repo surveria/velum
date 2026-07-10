@@ -113,13 +113,12 @@ validate_workflow_run_fields() {
   local event_name="$9"
   local status="${10}"
   local conclusion="${11}"
-  local head_tree="${12}"
+  local workflow_head_tree="${12}"
 
   [[ "${actual_run_id}" =~ ^[0-9]+$ ]] || return 1
   [[ "${actual_repository}" == "${expected_repository}" ]] || return 1
   [[ "${workflow_path}" == ".github/workflows/ci.yml" ]] || return 1
   [[ "${workflow_name}" == "CI" ]] || return 1
-  [[ "${head_tree}" == "${expected_tree}" ]] || return 1
   if [[ "${expected_mode}" == performance ]]; then
     [[ -n "${expected_run_id}" && "${actual_run_id}" == "${expected_run_id}" ]] || return 1
     [[ "${event_name}" == pull_request ]] || return 1
@@ -131,6 +130,7 @@ validate_workflow_run_fields() {
     return 0
   fi
   [[ "${expected_mode}" == correctness ]] || return 1
+  [[ "${workflow_head_tree}" == "${expected_tree}" ]] || return 1
   [[ "${event_name}" == pull_request || "${event_name}" == merge_group ]] || return 1
   [[ "${status}" == completed && "${conclusion}" == success ]]
 }
