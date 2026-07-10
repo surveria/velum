@@ -17,12 +17,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260710T053745Z.md`
-- Task: PR #395: ci: isolate JetStream with cached QuickJS baseline
-- Performance: 5.35x (4/5 >1.00x) (from `rsqjs-test-report-20260710T053745Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T053745Z.md`)
+- `rsqjs-test-report-20260710T054812Z.md`
+- Task: PR #405: workflow: bind performance artifacts to merge commits
+- Performance: 5.21x (4/5 >1.00x) (from `rsqjs-test-report-20260710T054812Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T054812Z.md`)
 - JetStream: 24.76x (4/4 >1.00x) (from `rsqjs-test-report-20260709T190938Z.md`)
-- Full Test262: 34006 passed / 68572 failed (33.15%) (from `rsqjs-test-report-20260710T053745Z.md`)
+- Full Test262: 34186 passed / 68392 failed (33.33%) (from `rsqjs-test-report-20260710T054812Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -387,3 +387,4 @@ Latest report:
 | `20260709T230501Z` `cf277e3` PR #402: workflow: preserve empty run conclusions in publisher trust checks | 5.32x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34002 passed / 68576 failed (33.15%) |
 | `20260709T232030Z` `92eac23` PR #401: runtime: route property reads through semantic objects | 5.28x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34006 passed / 68572 failed (33.15%) |
 | `20260710T053745Z` `4191083` PR #395: ci: isolate JetStream with cached QuickJS baseline | 5.35x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34006 passed / 68572 failed (33.15%) |
+| `20260710T054812Z` `7f0b9b5` PR #405: workflow: bind performance artifacts to merge commits | 5.21x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 34186 passed / 68392 failed (33.33%) |
