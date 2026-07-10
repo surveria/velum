@@ -1566,7 +1566,10 @@ AS-05b1c local implementation evidence:
 - opaque Rust callback captures and raw Values retained after an embedding
   call cannot be inspected safely. Collection remains gated until AS-05a2d
   replaces that ambiguity with identity-stamped retained handles and explicit
-  release.
+  release;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
 
 ### AS-06: Resumable Execution
 
