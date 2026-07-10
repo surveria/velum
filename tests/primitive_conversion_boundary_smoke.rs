@@ -91,6 +91,30 @@ fn rejects_invalid_primitive_conversions() -> TestResult {
     )
 }
 
+#[test]
+fn preserves_array_search_conversion_order() -> TestResult {
+    eval_is_42(
+        r#"
+        let calls = 0;
+        let fromEmpty = {};
+        fromEmpty.valueOf = function () {
+            calls = calls + 1;
+            return 0;
+        };
+        let skipped = [].includes(0, fromEmpty) === false && calls === 0;
+
+        let values = [1, 2, 3];
+        let fromMutable = {};
+        fromMutable.valueOf = function () {
+            values.length = 0;
+            return 0;
+        };
+        let result = values.indexOf(9, fromMutable);
+        skipped && result === -1 && values.length === 0 ? 42 : 0
+        "#,
+    )
+}
+
 fn eval_is_42(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

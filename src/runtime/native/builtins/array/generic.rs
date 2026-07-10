@@ -168,6 +168,9 @@ impl Context {
     ) -> Result<Value> {
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
+        if length == 0 {
+            return Ok(Value::Number(INDEX_NOT_FOUND));
+        }
         let start = self.array_slice_bound(from_index, length, 0)?;
         if start >= length {
             return Ok(Value::Number(INDEX_NOT_FOUND));
@@ -192,6 +195,9 @@ impl Context {
     ) -> Result<Value> {
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
+        if length == 0 {
+            return Ok(Value::Bool(false));
+        }
         let start = self.array_slice_bound(from_index, length, 0)?;
         if start >= length {
             return Ok(Value::Bool(false));
@@ -214,6 +220,9 @@ impl Context {
     ) -> Result<Value> {
         Self::ensure_array_like_object(this_value)?;
         let length = self.array_like_length(this_value)?;
+        if length == 0 {
+            return Ok(Value::Number(INDEX_NOT_FOUND));
+        }
         let Some(start) = self.array_last_index_of_start(from_index, length)? else {
             return Ok(Value::Number(INDEX_NOT_FOUND));
         };

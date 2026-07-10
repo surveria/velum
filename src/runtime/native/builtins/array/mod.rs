@@ -19,6 +19,7 @@ mod sort;
 
 const ARRAY_JOIN_DEFAULT_SEPARATOR: &str = ",";
 const ARRAY_IS_ARRAY_PROPERTY: &str = "isArray";
+const ARRAY_INDEX_NOT_FOUND: f64 = -1.0;
 
 impl Context {
     pub(in crate::runtime::native) fn array_constructor_value(&mut self) -> Result<Value> {
@@ -218,6 +219,9 @@ impl Context {
             && self.objects.array_len_if_array(*id)?.is_some()
         {
             let length = self.objects.array_len_for_includes(*id)?;
+            if length == 0 {
+                return Ok(Value::Bool(false));
+            }
             let from_index = self.array_slice_bound(from_index, length, 0)?;
             return self.objects.array_includes(*id, length, search, from_index);
         }
@@ -244,6 +248,9 @@ impl Context {
             && self.objects.array_len_if_array(*id)?.is_some()
         {
             let length = self.objects.array_len_for_index_of(*id)?;
+            if length == 0 {
+                return Ok(Value::Number(ARRAY_INDEX_NOT_FOUND));
+            }
             let from_index = self.array_slice_bound(from_index, length, 0)?;
             return self.objects.array_index_of(*id, length, search, from_index);
         }
@@ -270,6 +277,9 @@ impl Context {
             && self.objects.array_len_if_array(*id)?.is_some()
         {
             let length = self.objects.array_len_for_last_index_of(*id)?;
+            if length == 0 {
+                return Ok(Value::Number(ARRAY_INDEX_NOT_FOUND));
+            }
             let from_index = self.array_last_index_of_start(from_index, length)?;
             return self
                 .objects
