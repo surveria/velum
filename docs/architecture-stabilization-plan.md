@@ -1428,7 +1428,10 @@ AS-05b2c3 local implementation evidence:
 - the complete engine integration suite passes. The architecture guard and
   all mutation self-tests cover full-policy reconciliation, collection
   release, Promise job growth, transient Drop release, execution frames, and
-  association anchors. The full fast gate remains the draft-PR exit gate.
+  association anchors;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
 
 AS-05a1 completion evidence:
 
