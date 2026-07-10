@@ -4,7 +4,7 @@ use super::{
     build_rollup, parse_benchmark_metrics, parse_corpus_counts, parse_rollup_test262_counts,
     render_markdown,
     report_rollup_chart::write_chart,
-    report_rollup_timeline::{CommitTimeline, repository_root},
+    report_rollup_timeline::{CommitTimeline, repository_root_for_test},
 };
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -205,7 +205,7 @@ fn standalone_jetstream_yaml_with_an_unrelated_timestamp_is_discovered_once() ->
 
 #[test]
 fn current_history_chart_renders_on_the_shared_main_commit_axis() -> TestResult {
-    let repository_root = repository_root()?.ok_or("test is outside a git repository")?;
+    let repository_root = repository_root_for_test()?;
     let report_dir = repository_root.join("reports/test-runs");
     let records = super::parse_records(&report_dir)?;
     let timeline = CommitTimeline::discover(&report_dir, &records)?;

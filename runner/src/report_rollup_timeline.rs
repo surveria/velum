@@ -26,7 +26,7 @@ pub(super) struct CommitTimeline {
 
 impl CommitTimeline {
     pub(super) fn discover(report_dir: &Path, records: &[ReportRecord]) -> anyhow::Result<Self> {
-        let Some(repository_root) = repository_root()? else {
+        let Some(repository_root) = repository_root(report_dir)? else {
             return Self::synthetic(records);
         };
         let reports_root = report_dir
@@ -173,8 +173,10 @@ impl CommitTimeline {
     }
 }
 
-pub(super) fn repository_root() -> anyhow::Result<Option<PathBuf>> {
+fn repository_root(report_dir: &Path) -> anyhow::Result<Option<PathBuf>> {
     let output = Command::new("git")
+        .arg("-C")
+        .arg(report_dir)
         .args(["rev-parse", "--show-toplevel"])
         .output()
         .context("failed to inspect the git repository root")?;
@@ -183,6 +185,25 @@ pub(super) fn repository_root() -> anyhow::Result<Option<PathBuf>> {
     }
     let root = String::from_utf8(output.stdout).context("git repository root is not UTF-8")?;
     Ok(Some(PathBuf::from(root.trim())))
+}
+
+#[cfg(test)]
+pub(super) fn repository_root_for_test() -> anyhow::Result<PathBuf> {
+    let current = std::env::current_dir().context("failed to read the test working directory")?;
+    for candidate in [Some(current.as_path()), current.parent()]
+        .into_iter()
+        .flatten()
+    {
+        if candidate.join("reports/test-runs").is_dir()
+            && candidate.join("runner/Cargo.toml").is_file()
+        {
+            return Ok(candidate.to_path_buf());
+        }
+    }
+    bail!(
+        "test working directory '{}' is outside the project layout",
+        current.display()
+    );
 }
 
 fn repository_shallow_commits(repository_root: &Path) -> anyhow::Result<BTreeSet<String>> {
@@ -365,7 +386,7 @@ mod tests {
 
     use super::{
         CommitTimeline, MAIN_AXIS_DESCRIPTION, history_has_shallow_boundary,
-        parse_report_additions, repository_root,
+        parse_report_additions, repository_root_for_test,
     };
     use crate::report_rollup::{ReportContext, ReportRecord, parse_records};
 
@@ -410,7 +431,7 @@ mod tests {
 
     #[test]
     fn every_tracked_report_maps_to_the_current_main_commit_domain() -> TestResult {
-        let repository_root = repository_root()?.ok_or("test is outside a git repository")?;
+        let repository_root = repository_root_for_test()?;
         let report_dir = repository_root.join("reports/test-runs");
         let records = parse_records(&report_dir)?;
         let timeline = CommitTimeline::discover(&report_dir, &records)?;
@@ -434,7 +455,7 @@ mod tests {
 
     #[test]
     fn untracked_publisher_report_uses_one_pending_commit_slot() -> TestResult {
-        let repository_root = repository_root()?.ok_or("test is outside a git repository")?;
+        let repository_root = repository_root_for_test()?;
         let reports_root = repository_root.join("target/rollup-pending");
         let report_dir = reports_root.join("test-runs");
         let records = vec![empty_record("rsqjs-test-report-20260710T020000Z.md")];
