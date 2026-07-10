@@ -28,6 +28,7 @@ pub use crate::error::{Error, JavaScriptErrorMetadata, Result};
 pub use crate::runtime::Context;
 pub use crate::runtime::engine::Runtime;
 pub use crate::runtime::limits::RuntimeLimits;
+pub use crate::runtime::{VmGeneration, VmIdentity};
 pub use crate::source::{SourceId, SourceSpan};
 pub use crate::storage::string_heap::{JsString, StringId};
 pub use crate::storage::symbol::{JsSymbol, SymbolId};

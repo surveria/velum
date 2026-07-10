@@ -31,6 +31,7 @@ pub mod limits;
 pub mod native;
 pub mod numeric;
 pub mod object;
+mod ownership;
 pub mod promise;
 pub mod property;
 mod semantic_object;
@@ -41,6 +42,7 @@ use binding::static_bindings::StaticBindingCacheHandle;
 use bytecode::BytecodeOutcome;
 use call::{BoundFunction, RuntimeCallArgs};
 use native::{NativeFunctionKind, NativeFunctionRegistry};
+pub use ownership::{VmGeneration, VmIdentity};
 use promise::{Promise, PromiseId, PromiseJob};
 use property::static_names::{CallValueCache, StaticNameAtomCacheHandle};
 use property::well_known::{DescriptorPropertyKeys, WellKnownPropertyKeys};
@@ -49,8 +51,9 @@ const INITIAL_RANDOM_STATE: u64 = 0x9e37_79b9_7f4a_7c15;
 const CONSTRUCTOR_PROTOTYPE_PROPERTY: &str = "prototype";
 const TEST262_ERROR_NAME: &str = "Test262Error";
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Context {
+    identity: VmIdentity,
     limits: RuntimeLimits,
     atoms: AtomTable,
     strings: StringHeap,
@@ -185,6 +188,12 @@ impl FunctionArity {
 }
 
 impl Context {
+    /// Returns the opaque identity of this VM-owned storage generation.
+    #[must_use]
+    pub const fn identity(&self) -> &VmIdentity {
+        &self.identity
+    }
+
     pub(crate) fn current_local_frame_start(&self) -> usize {
         self.local_frame_bases.last().copied().unwrap_or(0)
     }
@@ -244,6 +253,7 @@ impl Context {
         performance_clock: clock::PerformanceClock,
     ) -> Self {
         Self {
+            identity: VmIdentity::new(),
             limits,
             atoms: AtomTable::new(),
             strings: StringHeap::new(),

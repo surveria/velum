@@ -485,7 +485,8 @@ check_state_owner_allowlists() {
       | sed -nE \
         's/^[[:space:]]*(pub\(crate\)[[:space:]]+)?([a-z_][a-z0-9_]*):.*/\2/p'
   )"
-  expected_context_fields='limits
+  expected_context_fields='identity
+limits
 atoms
 strings
 symbols
@@ -571,11 +572,16 @@ extensibility'
   compare_set "public Context owner allowlist" "${context_owners}" \
     'src/api/embedding.rs:context:Context,'
 
-  if [[ "$(clone_derive_count "${repo_root}/src/runtime/mod.rs" 'pub struct Context {')" != "1" ]]; then
-    fail "Context clone-debt marker changed; AS-05a owns removal or redesign"
+  if [[ "$(clone_derive_count "${repo_root}/src/runtime/mod.rs" 'pub struct Context {')" != "0" ]]; then
+    fail "Context clone boundary changed; VM-owned state must remain non-cloneable"
   fi
-  if [[ "$(clone_derive_count "${repo_root}/src/api/embedding.rs" 'pub struct Vm {')" != "1" ]]; then
-    fail "Vm clone-debt marker changed; AS-05a owns removal or redesign"
+  if [[ "$(clone_derive_count "${repo_root}/src/api/embedding.rs" 'pub struct Vm {')" != "0" ]]; then
+    fail "Vm clone boundary changed; VM-owned state must remain non-cloneable"
+  fi
+
+  if ! grep -F -q 'owner: Rc<VmOwnerToken>,' "${repo_root}/src/runtime/ownership.rs" \
+    || ! grep -F -q 'generation: VmGeneration,' "${repo_root}/src/runtime/ownership.rs"; then
+    fail "VM identity boundary changed; identity requires one owner capability and generation"
   fi
 }
 
@@ -646,6 +652,7 @@ src/runtime/function/fast_path.rs'
 run_checks() {
   require_file src/value/kind.rs
   require_file src/runtime/mod.rs
+  require_file src/runtime/ownership.rs
   require_file src/source.rs
   require_file src/ast/node.rs
   require_file src/bytecode/block.rs
@@ -797,14 +804,20 @@ mutate_context_owner() {
 
 mutate_context_clone_marker() {
   local fixture_root="$1"
-  sed -i '0,/^#\[derive(Debug, Clone)\]$/{s/^#\[derive(Debug, Clone)\]$/#[derive(Debug)]/}' \
+  sed -i '0,/^#\[derive(Debug)\]$/{s/^#\[derive(Debug)\]$/#[derive(Debug, Clone)]/}' \
     "${fixture_root}/src/runtime/mod.rs"
 }
 
 mutate_vm_clone_marker() {
   local fixture_root="$1"
-  sed -i '0,/^#\[derive(Debug, Clone)\]$/{s/^#\[derive(Debug, Clone)\]$/#[derive(Debug)]/}' \
+  sed -i '0,/^#\[derive(Debug)\]$/{s/^#\[derive(Debug)\]$/#[derive(Debug, Clone)]/}' \
     "${fixture_root}/src/api/embedding.rs"
+}
+
+mutate_vm_identity_owner() {
+  local fixture_root="$1"
+  sed -i 's/owner: Rc<VmOwnerToken>,/owner: Rc<ForeignOwnerToken>,/' \
+    "${fixture_root}/src/runtime/ownership.rs"
 }
 
 mutate_control_owner() {
@@ -899,9 +912,11 @@ run_self_tests() {
   expect_guard_failure "${temp_dir}" context-owner \
     'public Context owner allowlist changed' mutate_context_owner
   expect_guard_failure "${temp_dir}" context-clone-marker \
-    'Context clone-debt marker changed' mutate_context_clone_marker
+    'Context clone boundary changed' mutate_context_clone_marker
   expect_guard_failure "${temp_dir}" vm-clone-marker \
-    'Vm clone-debt marker changed' mutate_vm_clone_marker
+    'Vm clone boundary changed' mutate_vm_clone_marker
+  expect_guard_failure "${temp_dir}" vm-identity-owner \
+    'VM identity boundary changed' mutate_vm_identity_owner
   expect_guard_failure "${temp_dir}" control-owner \
     'structured-control optimization owner allowlist changed' mutate_control_owner
   expect_guard_failure "${temp_dir}" linear-owner \
