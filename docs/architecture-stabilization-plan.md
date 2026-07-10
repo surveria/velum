@@ -25,8 +25,8 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 through AS-04b1 are complete; AS-04b2a stable
-  source identity and frontend diagnostics are implemented in draft PR #419
+- Current program state: AS-01 through AS-04b2a are complete; AS-04b2b1
+  token ranges and span-bearing frontend AST are implemented in draft PR #420
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -482,7 +482,7 @@ dependencies do not overlap.
 | AS-01 | Complete | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards merged in PR #399 with required CI and canonical report publication. |
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
-| AS-04 | In progress | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics are implemented in draft PR #419; bytecode/runtime spans remain AS-04b2b. |
+| AS-04 | In progress | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST are implemented in draft PR #420; bytecode/runtime spans remain AS-04b2b2. |
 | AS-05 | Backlog | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | Non-cloneable VM state, checked cross-VM boundaries, trace/root contract, heap/stack/job/buffer counters and limits. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
@@ -983,9 +983,9 @@ Required migration steps:
 
 AS-04a owns steps 1 and 2 plus removal of message-based exception
 classification. AS-04b1 owns ordinary Error object identity and structured
-built-in error metadata. AS-04b2a owns canonical source identity and frontend
-diagnostics; AS-04b2b carries ranges through the AST into bytecode/runtime
-metadata.
+built-in error metadata. AS-04b2a owns canonical source identity and structured
+frontend errors. AS-04b2b1 gives tokens and every recursive frontend AST node a
+canonical range. AS-04b2b2 lowers those ranges into bytecode/runtime metadata.
 
 AS-04a local implementation evidence:
 
@@ -1083,12 +1083,46 @@ AS-04b2a local implementation evidence:
   contextual errors, source-name limits, and public span validation;
 - the architecture guard fixes the source metadata owners, prevents source or
   AST retention in `CompiledScript`, and rejects a return to offset-only
-  lexer/parser diagnostics. AS-04b2b will extend this same boundary with a
+  lexer/parser diagnostics. AS-04b2b2 will extend this same boundary with a
   parallel bytecode span table rather than retaining the AST at runtime;
 - the complete local correctness gate preserves all 36,659 expected Test262
   variants and the exact 36,659 of 102,578 full pass set, with QuickJS
   differential unchanged at 95 of 95. Local evidence is
   `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T123222Z.*`.
+
+AS-04b2a completion evidence:
+
+- PR #419 was squash-merged as `a3d9af6`; required CI run `29093164392`
+  certified exact tree `39fbddffa9891f567a1ea0f97d74fbd048816a55` at
+  36,659/36,659 expected Test262 variants, the exact 36,659 of 102,578 full
+  pass set, and 95/95 QuickJS cases;
+- post-merge run `29093382601` measured all five project sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T124126Z.*` in
+  report-only commit `9ba7953`.
+
+AS-04b2b1 local implementation evidence:
+
+- every lexer token carries one canonical `SourceSpan`, including the EOF
+  point, and parser errors preserve the complete offending-token range rather
+  than reconstructing a one-byte location;
+- `Expression` and `Statement` are span-bearing `AstNode<Expr>` and
+  `AstNode<Stmt>` values. Recursive expression and statement fields retain
+  those nodes, so compound expressions, member/call chains, functions,
+  classes, object/array literals, and structured control flow cover their
+  complete parsed source ranges;
+- binding analysis and bytecode compilation consume the node kind while
+  retaining its range at the frontend boundary. `CompiledScript` still retains
+  neither source text nor AST, and no duplicate source map is introduced;
+- the architecture guard fixes the token-span owner, the two AST aliases,
+  parser root return types, and compiler inputs. Its mutation self-test proves
+  that removing the span-bearing AST boundary is rejected;
+- touching the legacy lexer also completed its mechanical split: operator
+  scanning now lives in `src/lexer/scanner/operators.rs`, and every touched
+  Rust source remains below the 800-line limit;
+- the complete engine test suite, strict all-target/all-feature Clippy, focused
+  source-diagnostic and labeled-statement tests, architecture self-tests, and
+  touched-file size gate pass. The complete correctness corpus is the remaining
+  ready-PR validation step.
 
 ### AS-05: Ownership, Handles, Roots, And Accounting
 
@@ -1213,17 +1247,19 @@ reviewable scope.
     failures (complete in PR #416).
 15. AS-04b1: migrate Error values into ordinary objects (complete in PR #418).
 16. AS-04b2a: add stable source identity and structured frontend diagnostics
-    (implemented in draft PR #419).
-17. AS-04b2b: propagate source spans through AST and bytecode metadata into
-    structured runtime diagnostics.
-18. AS-05a: remove ambiguous VM cloning and define VM-bound handle identity.
-19. AS-05b: add root enumeration plus complete allocation accounting and
+    (complete in PR #419).
+17. AS-04b2b1: carry canonical token ranges through a span-bearing frontend AST
+    (implemented in draft PR #420).
+18. AS-04b2b2: lower AST ranges into parallel bytecode metadata and expose the
+    executing range on structured runtime diagnostics.
+19. AS-05a: remove ambiguous VM cloning and define VM-bound handle identity.
+20. AS-05b: add root enumeration plus complete allocation accounting and
     limits.
-20. AS-06a: migrate synchronous calls and structured control flow to explicit
+21. AS-06a: migrate synchronous calls and structured control flow to explicit
     activation frames.
-21. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
-22. AS-07a: add safe collection over explicit roots and correct weak edges.
-23. AS-08a: move reusable optimization state behind one optimizer/quickening
+22. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
+23. AS-07a: add safe collection over explicit roots and correct weak edges.
+24. AS-08a: move reusable optimization state behind one optimizer/quickening
     boundary and remove harness-specific opcodes.
 
 ## Updating This Plan
