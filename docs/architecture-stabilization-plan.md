@@ -25,8 +25,8 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01, AS-02, and AS-03a1 are complete; AS-03a2a
-  `ToPrimitive`/`ToNumber` consolidation is locally validated in draft PR #410
+- Current program state: AS-01, AS-02, AS-03a1, and AS-03a2a are complete;
+  AS-03a2b `ToString`/`ToBoolean` is locally validated in draft PR #411
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -481,7 +481,7 @@ dependencies do not overlap.
 | AS-00 | Complete | Adopt this plan and route project documentation to it. | None | PR #396 merged as `f79056b`; required CI, post-merge performance, publisher, and canonical report publication passed. |
 | AS-01 | Complete | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards merged in PR #399 with required CI and canonical report publication. |
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
-| AS-03 | In progress | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality consolidation merged in PR #409; AS-03a2a `ToPrimitive`/`ToNumber` is locally validated in draft PR #410, followed by AS-03a2b `ToString`/`ToBoolean`; property, invocation, and iterator operations remain. |
+| AS-03 | In progress | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2a `ToPrimitive`/`ToNumber` merged in PR #410; AS-03a2b `ToString`/`ToBoolean` is locally validated in draft PR #411; property-key, integer/index, method/property, and iterator operations remain. |
 | AS-04 | Backlog | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | Real JavaScript error objects, typed throw path, no message-prefix classification, spans available to diagnostics. |
 | AS-05 | Backlog | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | Non-cloneable VM state, checked cross-VM boundaries, trace/root contract, heap/stack/job/buffer counters and limits. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
@@ -750,15 +750,17 @@ AS-03a1 completion evidence:
 
 The primitive-conversion group is split by dependency and review boundary:
 
-- AS-03a2a (draft PR #410) owns `ToPrimitive`, `OrdinaryToPrimitive`, and
+- AS-03a2a (merged PR #410) owns `ToPrimitive`, `OrdinaryToPrimitive`, and
   `ToNumber`. It replaces the Date, Math, JSON, boxed-string equality, numeric
   operator, numeric built-in, and numeric argument conversion paths with one
   abrupt-completion-aware owner under `runtime/abstract_operations`. It also
   installs the missing `Function.prototype.toString` intrinsic so function
   source coercion reaches the ordinary property/call path instead of a concat
   formatter exception.
-- AS-03a2b will own `ToString` and `ToBoolean`, and will separate observable
-  JavaScript string conversion from Rust `Display` used for diagnostics.
+- AS-03a2b (draft PR #411) owns `ToString` and `ToBoolean`. It removes direct
+  truthiness from `Value`, routes observable string consumers through the
+  shared conversion boundary, and reserves Rust `Display` for diagnostics and
+  the explicitly recorded `ToPropertyKey` debt owned by AS-03b.
 
 AS-03a2a keeps numeric fast paths only when operands are already numbers. Every
 generic fallback must call the shared conversion owner; no built-in may probe
@@ -780,6 +782,34 @@ AS-03a2a local validation evidence:
 - array length writes were added through the shared number conversion boundary
   because conversion callbacks can mutate `length` before Array search methods
   continue; empty search receivers now return before converting `fromIndex`.
+
+AS-03a2a completion evidence:
+
+- PR #410 was squash-merged as `4ec0e115`; required CI run `29078751092`
+  certified exact tree `3c8ea146` at 35,603/35,603 expected Test262 variants
+  and 95/95 QuickJS differential cases;
+- post-merge run `29078940370` measured all five project sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T081035Z.*` in
+  report-only commit `28e293d`.
+
+AS-03a2b local validation evidence:
+
+- one `Context::to_string` owner performs hint-aware object conversion and one
+  `to_boolean` owner covers the complete value domain; primitive-only number
+  formatting remains reusable without invoking JavaScript;
+- bytecode branches, logical operators, callbacks, Proxy traps, Set iterators,
+  concatenation, templates, and String, Array, RegExp, JSON, Date, Function,
+  Error, Symbol, and global string consumers delegate to these owners;
+- focused public tests cover hints, ordinary fallback order, symbol handling,
+  left-to-right Function argument conversion, truthiness without user code,
+  Error property conversion, and Error `newTarget.prototype` ordering;
+- the complete engine/runner fast gate passes, including strict Clippy,
+  documentation, architecture self-tests, and 112 runner tests;
+- the complete Test262 review preserves all 35,603 prior expected variants and
+  adds 384 reviewed passes, bringing the expected-pass baseline and full pass
+  set to 35,987 of 102,578 with QuickJS differential unchanged at 95 of 95;
+- the largest gains are String (262 variants), RegExp (38), Function (26),
+  addition (18), Array (10), and Error-family behavior (14).
 
 ### AS-04: Completion, Errors, And Source Metadata
 
@@ -904,8 +934,9 @@ reviewable scope.
 7. AS-03a1: centralize Abstract/Strict Equality, `SameValue`, and
    `SameValueZero` (complete in PR #409).
 8. AS-03a2a: centralize `ToPrimitive`, `OrdinaryToPrimitive`, and `ToNumber`
-   (implemented in draft PR #410).
-9. AS-03a2b: centralize `ToString` and `ToBoolean`.
+   (complete in PR #410).
+9. AS-03a2b: centralize `ToString` and `ToBoolean` (implemented and locally
+   validated in draft PR #411).
 10. AS-03b: centralize property-key, property, call, and iterator operations.
 11. AS-04a: separate JavaScript throw completion from engine/host/resource
    failures.
