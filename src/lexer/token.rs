@@ -1,8 +1,16 @@
+use crate::SourceSpan;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
-    pub offset: usize,
+    pub span: SourceSpan,
     pub line_terminator_before: bool,
+}
+
+impl Token {
+    pub const fn offset(&self) -> usize {
+        self.span.start()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

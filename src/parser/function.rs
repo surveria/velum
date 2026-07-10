@@ -1,6 +1,6 @@
 use crate::{
     ast::{Expr, FunctionParam, Stmt},
-    error::{Error, Result},
+    error::Result,
     lexer::TokenKind,
     syntax::DeclKind,
 };
@@ -100,16 +100,10 @@ impl Parser {
             params.push(FunctionParam::rest(name));
         }
         if self.check(&TokenKind::Equal) {
-            return Err(Error::parse(
-                "rest parameter cannot have a default value",
-                self.offset(),
-            ));
+            return Err(self.parse_error("rest parameter cannot have a default value"));
         }
         if self.check(&TokenKind::Comma) {
-            return Err(Error::parse(
-                "rest parameter must be the last parameter",
-                self.offset(),
-            ));
+            return Err(self.parse_error("rest parameter must be the last parameter"));
         }
         Ok(())
     }

@@ -93,6 +93,30 @@ fn exposes_named_parser_diagnostic_at_end_of_source() -> TestResult {
 }
 
 #[test]
+fn exposes_the_complete_unexpected_parser_token_range() -> TestResult {
+    let runtime = Runtime::new();
+    let source = "let camera = if";
+    let Err(error) = runtime.compile_named("unexpected-keyword.js", source) else {
+        return Err("expected unexpected keyword compilation to fail".into());
+    };
+    let Error::Parse { message, span } = &error else {
+        return Err(format!("expected parser error, got {error}").into());
+    };
+
+    ensure_text_contains(message, "expected expression")?;
+    ensure_source_id(
+        span.source_id(),
+        SourceId::for_named_source("unexpected-keyword.js", source),
+    )?;
+    ensure_usize(span.start(), source.len().saturating_sub(2))?;
+    ensure_usize(span.end(), source.len())?;
+    if span.is_empty() {
+        return Err("expected the complete keyword token range".into());
+    }
+    Ok(())
+}
+
+#[test]
 fn preserves_source_span_when_adding_error_context() -> TestResult {
     let runtime = Runtime::new();
     let source = "@";

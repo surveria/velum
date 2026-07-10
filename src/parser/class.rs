@@ -73,7 +73,7 @@ impl Parser {
         let mut fields = Vec::new();
         while !self.check(&TokenKind::RBrace) {
             if self.at_end() {
-                return Err(Error::parse("expected '}' after class body", self.offset()));
+                return Err(self.parse_error("expected '}' after class body"));
             }
             if self.match_kind(&TokenKind::Semicolon) {
                 continue;
@@ -136,10 +136,7 @@ impl Parser {
 
         if !self.check(&TokenKind::LParen) {
             if accessor.is_some() {
-                return Err(Error::parse(
-                    "expected '(' after class accessor name",
-                    self.offset(),
-                ));
+                return Err(self.parse_error("expected '(' after class accessor name"));
             }
             return self.class_field(key, key_name, is_static, member_offset, fields);
         }
@@ -215,10 +212,7 @@ impl Parser {
             None
         };
         if self.check(&TokenKind::Semicolon) && self.advance().is_none() {
-            return Err(Error::parse(
-                "expected ';' after class field",
-                self.offset(),
-            ));
+            return Err(self.parse_error("expected ';' after class field"));
         }
         fields.push(crate::ast::ClassField {
             key: Self::class_property_key(key),
@@ -347,16 +341,10 @@ impl Parser {
 
     fn reject_unsupported_class_member(&self) -> Result<()> {
         if self.check(&TokenKind::Star) {
-            return Err(Error::parse(
-                "class generator methods are not supported yet",
-                self.offset(),
-            ));
+            return Err(self.parse_error("class generator methods are not supported yet"));
         }
         if self.check(&TokenKind::Async) && !self.peek_kind_is(1, &TokenKind::LParen) {
-            return Err(Error::parse(
-                "class async methods are not supported yet",
-                self.offset(),
-            ));
+            return Err(self.parse_error("class async methods are not supported yet"));
         }
         Ok(())
     }

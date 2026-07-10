@@ -90,6 +90,13 @@ impl Error {
         }
     }
 
+    pub(crate) fn parse_at(message: impl Into<String>, span: SourceSpan) -> Self {
+        Self::Parse {
+            message: message.into(),
+            span,
+        }
+    }
+
     #[must_use]
     pub fn runtime(message: impl Into<String>) -> Self {
         Self::Runtime {
@@ -236,13 +243,20 @@ impl Error {
         match self {
             Self::Lex { message, span } => Self::Lex {
                 message,
-                span: SourceSpan::for_diagnostic(source_id, source, span.start()),
+                span: rebind_source_span(span, source_id, source),
             },
             Self::Parse { message, span } => Self::Parse {
                 message,
-                span: SourceSpan::for_diagnostic(source_id, source, span.start()),
+                span: rebind_source_span(span, source_id, source),
             },
             error => error,
         }
     }
+}
+
+fn rebind_source_span(span: SourceSpan, source_id: SourceId, source: &str) -> SourceSpan {
+    if span.source_id() != SourceId::UNKNOWN {
+        return span;
+    }
+    SourceSpan::for_diagnostic(source_id, source, span.start())
 }

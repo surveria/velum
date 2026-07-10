@@ -117,7 +117,7 @@ impl Parser {
         let mut statements = Vec::new();
         while !self.check(&TokenKind::RBrace) {
             if self.at_end() {
-                return Err(Error::parse("expected '}' after block", self.offset()));
+                return Err(self.parse_error("expected '}' after block"));
             }
             statements.push(self.statement()?);
         }
@@ -144,7 +144,7 @@ impl Parser {
 
         while !self.check(&TokenKind::RBrace) {
             if self.at_end() {
-                return Err(Error::parse("expected '}' after block", self.offset()));
+                return Err(self.parse_error("expected '}' after block"));
             }
             let statement = self.statement()?;
             if directive_prologue && Self::is_use_strict_directive(&statement) {
@@ -193,17 +193,11 @@ impl Parser {
             || (self.check(&TokenKind::Async)
                 && self.peek_kind_is_no_line_terminator(1, &TokenKind::Function))
         {
-            return Err(Error::parse(
-                "declaration is not allowed as a do-while body",
-                self.offset(),
-            ));
+            return Err(self.parse_error("declaration is not allowed as a do-while body"));
         }
         let body = Box::new(self.with_iteration_statement(Self::statement)?);
         if Self::invalid_do_while_body(&body) {
-            return Err(Error::parse(
-                "declaration is not allowed as a do-while body",
-                self.offset(),
-            ));
+            return Err(self.parse_error("declaration is not allowed as a do-while body"));
         }
         self.consume(&TokenKind::While, "expected 'while' after do body")?;
         self.consume(&TokenKind::LParen, "expected '(' after 'while'")?;
@@ -272,18 +266,14 @@ impl Parser {
 
     fn reject_invalid_labeled_item(&self) -> Result<()> {
         if self.check(&TokenKind::Let) || self.check(&TokenKind::Const) {
-            return Err(Error::parse(
-                "lexical declaration is not allowed as a label body",
-                self.offset(),
-            ));
+            return Err(self.parse_error("lexical declaration is not allowed as a label body"));
         }
         if self.check(&TokenKind::Async)
             && self.peek_kind_is_no_line_terminator(1, &TokenKind::Function)
         {
-            return Err(Error::parse(
-                "async function declaration is not allowed as a label body",
-                self.offset(),
-            ));
+            return Err(
+                self.parse_error("async function declaration is not allowed as a label body")
+            );
         }
         Ok(())
     }
@@ -401,10 +391,7 @@ impl Parser {
             return Ok(None);
         };
         let Some(target) = Self::assignment_target(target) else {
-            return Err(Error::parse(
-                "invalid for-in assignment target",
-                self.offset(),
-            ));
+            return Err(self.parse_error("invalid for-in assignment target"));
         };
         let object = self.expression()?;
         Ok(Some((ForInTarget::Assignment(target), object, head)))
@@ -501,19 +488,13 @@ impl Parser {
             }
             if self.match_kind(&TokenKind::Default) {
                 if default_seen {
-                    return Err(Error::parse(
-                        "switch contains multiple defaults",
-                        self.offset(),
-                    ));
+                    return Err(self.parse_error("switch contains multiple defaults"));
                 }
                 default_seen = true;
                 cases.push(self.switch_case(None)?);
                 continue;
             }
-            return Err(Error::parse(
-                "expected 'case', 'default', or '}' in switch",
-                self.offset(),
-            ));
+            return Err(self.parse_error("expected 'case', 'default', or '}' in switch"));
         }
         self.consume(&TokenKind::RBrace, "expected '}' after switch body")?;
         Ok(cases)
@@ -527,10 +508,7 @@ impl Parser {
             && !self.check(&TokenKind::RBrace)
         {
             if self.at_end() {
-                return Err(Error::parse(
-                    "expected '}' after switch body",
-                    self.offset(),
-                ));
+                return Err(self.parse_error("expected '}' after switch body"));
             }
             statements.push(self.statement()?);
         }
@@ -552,10 +530,7 @@ impl Parser {
             None
         };
         if catch.is_none() && finally_body.is_none() {
-            return Err(Error::parse(
-                "expected 'catch' or 'finally' after try block",
-                self.offset(),
-            ));
+            return Err(self.parse_error("expected 'catch' or 'finally' after try block"));
         }
         Ok(Stmt::Try {
             body,
@@ -672,10 +647,7 @@ impl Parser {
         let init = if self.match_kind(&TokenKind::Equal) {
             Some(self.expression()?)
         } else if kind == DeclKind::Const {
-            return Err(Error::parse(
-                "const declaration requires an initializer",
-                self.offset(),
-            ));
+            return Err(self.parse_error("const declaration requires an initializer"));
         } else {
             None
         };
@@ -686,7 +658,7 @@ impl Parser {
         if declarations.len() == 1 {
             let mut declarations = declarations.into_iter();
             let Some(declaration) = declarations.next() else {
-                return Err(Error::parse("expected binding declaration", self.offset()));
+                return Err(self.parse_error("expected binding declaration"));
             };
             Ok(declaration)
         } else {

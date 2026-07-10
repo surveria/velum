@@ -62,9 +62,9 @@ impl Parser {
         if let Some(kind) = self.object_accessor_start() {
             let keyword = self
                 .advance()
-                .ok_or_else(|| Error::parse("expected accessor keyword", self.offset()))?;
+                .ok_or_else(|| self.parse_error("expected accessor keyword"))?;
             let name = self.object_property_key()?;
-            return self.object_accessor_property(name, kind, keyword.offset);
+            return self.object_accessor_property(name, kind, keyword.offset());
         }
         let name = self.object_property_key()?;
         if self.match_kind(&TokenKind::Colon) {
@@ -90,10 +90,7 @@ impl Parser {
                 value: Expr::Identifier(binding),
             });
         }
-        Err(Error::parse(
-            "expected ':' after object property name",
-            self.offset(),
-        ))
+        Err(self.parse_error("expected ':' after object property name"))
     }
 
     /// Detects a `get name` / `set name` accessor definition. A `get`/`set`
@@ -272,7 +269,8 @@ impl Parser {
         }
         let token = self
             .advance()
-            .ok_or_else(|| Error::parse("expected object property name", self.offset()))?;
+            .ok_or_else(|| self.parse_error("expected object property name"))?;
+        let token_span = token.span;
         match token.kind {
             TokenKind::Identifier(name) => {
                 let name = self.static_name(name)?;
@@ -291,7 +289,7 @@ impl Parser {
             }),
             kind => {
                 let Some(name) = keyword_property_name(&kind) else {
-                    return Err(Error::parse("expected object property name", token.offset));
+                    return Err(Error::parse_at("expected object property name", token_span));
                 };
                 self.keyword_property_name(name)
             }

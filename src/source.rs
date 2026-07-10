@@ -94,6 +94,14 @@ impl SourceSpan {
         })
     }
 
+    pub(crate) const fn from_valid_bounds(source_id: SourceId, start: usize, end: usize) -> Self {
+        Self {
+            source_id,
+            start,
+            end,
+        }
+    }
+
     /// Returns the source identity owning this range.
     #[must_use]
     pub const fn source_id(self) -> SourceId {

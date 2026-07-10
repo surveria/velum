@@ -1,5 +1,5 @@
 use crate::ast::{Expr, FunctionParam, StaticBinding, StaticName, Stmt};
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 use super::{ARGUMENTS_IDENTIFIER_NAME, EVAL_IDENTIFIER_NAME, Parser, USE_STRICT_DIRECTIVE};
 
@@ -38,10 +38,9 @@ impl Parser {
         body_contains_use_strict: bool,
     ) -> Result<()> {
         if body_contains_use_strict && Self::parameter_list_is_non_simple(params) {
-            return Err(Error::parse(
-                "use strict directive is not allowed with non-simple parameters",
-                self.offset(),
-            ));
+            return Err(
+                self.parse_error("use strict directive is not allowed with non-simple parameters")
+            );
         }
 
         if inherited_strict || body_contains_use_strict {
@@ -69,7 +68,7 @@ impl Parser {
         for param in params {
             let name = param.name.as_str();
             if seen.contains(&name) {
-                return Err(Error::parse("duplicate parameter name", self.offset()));
+                return Err(self.parse_error("duplicate parameter name"));
             }
             seen.push(name);
         }
@@ -78,10 +77,7 @@ impl Parser {
 
     fn reject_restricted_strict_name(&self, name: &str) -> Result<()> {
         if Self::is_restricted_strict_name(name) {
-            return Err(Error::parse(
-                "eval and arguments are not valid strict binding names",
-                self.offset(),
-            ));
+            return Err(self.parse_error("eval and arguments are not valid strict binding names"));
         }
         Ok(())
     }

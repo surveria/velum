@@ -13,14 +13,16 @@ use crate::{
         digits_to_number, is_exponent_marker, is_identifier_part, is_identifier_start,
         is_line_terminator, numeric_prefix, unicode_char,
     },
+    source::{SourceId, SourceSpan},
 };
 
-pub fn lex(source: &str) -> Result<Vec<Token>> {
-    Lexer::new(source).lex()
+pub fn lex(source: &str, source_id: SourceId) -> Result<Vec<Token>> {
+    Lexer::new(source, source_id).lex()
 }
 
 struct Lexer<'a> {
     source: &'a str,
+    source_id: SourceId,
     chars: Vec<(usize, char)>,
     cursor: usize,
     tokens: Vec<Token>,
@@ -48,9 +50,10 @@ enum TemplatePartPosition {
 }
 
 impl<'a> Lexer<'a> {
-    fn new(source: &'a str) -> Self {
+    fn new(source: &'a str, source_id: SourceId) -> Self {
         Self {
             source,
+            source_id,
             chars: source.char_indices().collect(),
             cursor: 0,
             tokens: Vec::new(),
@@ -121,7 +124,7 @@ impl<'a> Lexer<'a> {
 
         self.tokens.push(Token {
             kind: TokenKind::Eof,
-            offset: self.source.len(),
+            span: SourceSpan::point(self.source_id, self.source.len()),
             line_terminator_before: self.line_terminator_before,
         });
         Ok(self.tokens)
@@ -912,9 +915,10 @@ impl<'a> Lexer<'a> {
     }
 
     fn push(&mut self, kind: TokenKind, offset: usize) {
+        let span = SourceSpan::from_valid_bounds(self.source_id, offset, self.current_offset());
         self.tokens.push(Token {
             kind,
-            offset,
+            span,
             line_terminator_before: self.line_terminator_before,
         });
         self.line_terminator_before = false;

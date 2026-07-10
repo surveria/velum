@@ -71,10 +71,7 @@ impl Parser {
         }
 
         let Some(shorthand_name) = shorthand_name else {
-            return Err(Error::parse(
-                "expected ':' after object binding property name",
-                self.offset(),
-            ));
+            return Err(self.parse_error("expected ':' after object binding property name"));
         };
         let binding = self.static_binding(shorthand_name)?;
         let default = self.optional_binding_default()?;

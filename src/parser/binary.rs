@@ -159,7 +159,7 @@ impl Parser {
         while let Some((_, op)) = ops.iter().find(|(kind, _)| self.check(kind)) {
             let op = *op;
             if self.advance().is_none() {
-                return Err(Error::parse("expected operator", self.offset()));
+                return Err(self.parse_error("expected operator"));
             }
             let right = next(self)?;
             let property_access = if op == BinaryOp::In {

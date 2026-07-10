@@ -259,12 +259,19 @@ impl Parser {
     fn new_target_expr(&mut self, new_offset: usize) -> Result<Expr> {
         let token = self
             .advance()
-            .ok_or_else(|| Error::parse("expected 'target' after 'new.'", self.offset()))?;
+            .ok_or_else(|| self.parse_error("expected 'target' after 'new.'"))?;
+        let token_span = token.span;
         let TokenKind::Identifier(name) = token.kind else {
-            return Err(Error::parse("expected 'target' after 'new.'", token.offset));
+            return Err(Error::parse_at(
+                "expected 'target' after 'new.'",
+                token_span,
+            ));
         };
         if name != NEW_TARGET_PROPERTY_NAME {
-            return Err(Error::parse("expected 'target' after 'new.'", token.offset));
+            return Err(Error::parse_at(
+                "expected 'target' after 'new.'",
+                token_span,
+            ));
         }
         if !self.allows_new_target() {
             return Err(Error::parse(
@@ -290,9 +297,10 @@ impl Parser {
         let mut expressions = Vec::new();
         loop {
             expressions.push(self.expression()?);
-            let token = self.advance().ok_or_else(|| {
-                Error::parse("expected template literal continuation", self.offset())
-            })?;
+            let token = self
+                .advance()
+                .ok_or_else(|| self.parse_error("expected template literal continuation"))?;
+            let token_span = token.span;
             match token.kind {
                 TokenKind::TemplateMiddle(cooked) => quasis.push(self.static_string(cooked)?),
                 TokenKind::TemplateTail(cooked) => {
@@ -300,9 +308,9 @@ impl Parser {
                     break;
                 }
                 _ => {
-                    return Err(Error::parse(
+                    return Err(Error::parse_at(
                         "expected '}' to continue template literal",
-                        token.offset,
+                        token_span,
                     ));
                 }
             }
@@ -365,7 +373,9 @@ impl Parser {
     fn primary(&mut self) -> Result<Expr> {
         let token = self
             .advance()
-            .ok_or_else(|| Error::parse("expected expression", self.offset()))?;
+            .ok_or_else(|| self.parse_error("expected expression"))?;
+        let token_span = token.span;
+        let token_offset = token.offset();
         let expr = match token.kind {
             TokenKind::Number(value) => Expr::Literal(Value::Number(value)),
             TokenKind::String(value) => Expr::StringLiteral(self.static_string(value)?),
@@ -380,12 +390,12 @@ impl Parser {
             TokenKind::Undefined => Expr::Literal(Value::Undefined),
             TokenKind::This => Expr::This,
             TokenKind::Identifier(name) if name == SUPER_IDENTIFIER_NAME => {
-                return Err(Error::parse(
+                return Err(Error::parse_at(
                     "super is only valid inside class methods",
-                    token.offset,
+                    token_span,
                 ));
             }
-            TokenKind::Super => self.super_expression(token.offset)?,
+            TokenKind::Super => self.super_expression(token_offset)?,
             TokenKind::Identifier(name) => Expr::Identifier(self.static_binding_name(name)?),
             TokenKind::Function => self.function_expression(false)?,
             TokenKind::Class => self.class_expression()?,
@@ -394,7 +404,7 @@ impl Parser {
                     self.consume(&TokenKind::Function, "expected 'function' after 'async'")?;
                     self.function_expression(true)?
                 } else {
-                    Expr::Identifier(self.contextual_async_binding(token.offset)?)
+                    Expr::Identifier(self.contextual_async_binding(token_offset)?)
                 }
             }
             TokenKind::LBrace => self.object_literal()?,
@@ -404,7 +414,7 @@ impl Parser {
                 self.consume(&TokenKind::RParen, "expected ')' after expression")?;
                 Expr::Parenthesized(Box::new(expr))
             }
-            _ => return Err(Error::parse("expected expression", token.offset)),
+            _ => return Err(Error::parse_at("expected expression", token_span)),
         };
         Ok(expr)
     }
@@ -596,14 +606,13 @@ impl Parser {
     }
 
     fn consume_property_name(&mut self, message: &str) -> Result<StaticName> {
-        let token = self
-            .advance()
-            .ok_or_else(|| Error::parse(message, self.offset()))?;
+        let token = self.advance().ok_or_else(|| self.parse_error(message))?;
+        let token_span = token.span;
         match token.kind {
             TokenKind::Identifier(name) => self.static_name(name),
             kind => {
                 let Some(name) = keyword_property_name(&kind) else {
-                    return Err(Error::parse(message, token.offset));
+                    return Err(Error::parse_at(message, token_span));
                 };
                 self.borrowed_static_name(name)
             }
