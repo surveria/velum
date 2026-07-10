@@ -115,6 +115,14 @@ pub fn print_rollup_outputs(outputs: &report_rollup::RollupOutputs) {
         "benchmark summary chart: {}",
         outputs.summary_chart.display()
     );
+    println!(
+        "benchmark summary light SVG: {}",
+        outputs.summary_chart_light_svg.display()
+    );
+    println!(
+        "benchmark summary dark SVG: {}",
+        outputs.summary_chart_dark_svg.display()
+    );
 }
 
 fn ensure_no_extra_arg(mut args: impl Iterator<Item = String>) -> anyhow::Result<()> {

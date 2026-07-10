@@ -205,7 +205,18 @@ reset_outputs() {
   else
     rm -f "${yaml_path}"
   fi
-  git restore --worktree -- reports/benchmark-rollup.md reports/benchmark-summary.jpg
+  local chart_path
+  for chart_path in \
+    reports/benchmark-rollup.md \
+    reports/benchmark-summary.jpg \
+    reports/benchmark-summary-light.svg \
+    reports/benchmark-summary-dark.svg; do
+    if git ls-files --error-unmatch "${chart_path}" >/dev/null 2>&1; then
+      git restore --worktree -- "${chart_path}"
+    else
+      rm -f "${chart_path}"
+    fi
+  done
 }
 
 if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
@@ -301,7 +312,14 @@ timestamp="${timestamp%.md}"
 headline="Add JetStream report ${timestamp} [skip ci]"
 body="$(printf 'Source commit: %s\n\nSource tree: %s\n\nSource workflow run: %s\n' \
   "${expected_commit}" "${expected_tree}" "${source_run}")"
-commit_paths=("${target_report}" "${target_yaml}" reports/benchmark-rollup.md reports/benchmark-summary.jpg)
+commit_paths=(
+  "${target_report}"
+  "${target_yaml}"
+  reports/benchmark-rollup.md
+  reports/benchmark-summary.jpg
+  reports/benchmark-summary-light.svg
+  reports/benchmark-summary-dark.svg
+)
 
 if create_signed_commit "${repository}" "${headline}" "${body}" "${commit_paths[@]}"; then
   exit 0

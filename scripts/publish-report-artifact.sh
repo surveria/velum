@@ -576,7 +576,18 @@ reset_report_outputs() {
       rm -f "${target_jetstream_report}"
     fi
   fi
-  git restore --worktree -- reports/benchmark-rollup.md reports/benchmark-summary.jpg
+  local chart_path
+  for chart_path in \
+    reports/benchmark-rollup.md \
+    reports/benchmark-summary.jpg \
+    reports/benchmark-summary-light.svg \
+    reports/benchmark-summary-dark.svg; do
+    if git ls-files --error-unmatch "${chart_path}" >/dev/null 2>&1; then
+      git restore --worktree -- "${chart_path}"
+    else
+      rm -f "${chart_path}"
+    fi
+  done
 }
 
 report_commit_headline() {
@@ -609,10 +620,25 @@ commit_and_push() {
   local target_report="reports/test-runs/${report_file}"
   local target_report_yaml="reports/test-runs/${report_yaml_file}"
   local target_jetstream_report=""
-  local commit_paths=("${target_report}" "${target_report_yaml}" reports/benchmark-rollup.md reports/benchmark-summary.jpg)
+  local commit_paths=(
+    "${target_report}"
+    "${target_report_yaml}"
+    reports/benchmark-rollup.md
+    reports/benchmark-summary.jpg
+    reports/benchmark-summary-light.svg
+    reports/benchmark-summary-dark.svg
+  )
   if [[ -n "${jetstream_report_file:-}" ]]; then
     target_jetstream_report="reports/jetstream-runs/${jetstream_report_file}"
-    commit_paths=("${target_report}" "${target_report_yaml}" "${target_jetstream_report}" reports/benchmark-rollup.md reports/benchmark-summary.jpg)
+    commit_paths=(
+      "${target_report}"
+      "${target_report_yaml}"
+      "${target_jetstream_report}"
+      reports/benchmark-rollup.md
+      reports/benchmark-summary.jpg
+      reports/benchmark-summary-light.svg
+      reports/benchmark-summary-dark.svg
+    )
   fi
 
   if [[ -z "$(git status --porcelain -- "${commit_paths[@]}")" ]]; then
