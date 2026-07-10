@@ -71,9 +71,10 @@ impl Context {
         &mut self,
         frame: BytecodeContinuationHandle,
     ) -> Result<BytecodeOutcome> {
-        let (block, mut state) = self.take_bytecode_continuation(frame)?;
-        let outcome = self.run_bytecode_state(&block, &mut state);
-        self.restore_bytecode_continuation(frame, state)?;
+        let mut lease = self.take_bytecode_continuation(frame)?;
+        let (block, state) = lease.parts_mut();
+        let outcome = self.run_bytecode_state(block, state);
+        self.restore_bytecode_continuation(frame, lease)?;
         outcome
     }
 

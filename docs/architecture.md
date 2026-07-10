@@ -58,12 +58,12 @@ and generated-function evaluation boundaries use explicit variants on the
 same stack, so root enumeration, binding visibility, and resource accounting
 observe one coherent owner instead of parallel vectors.
 
-AS-06a2a attaches a `BytecodeContinuationFrame` to the current activation. It
-owns the block, program counter, operand stack, and last value between driver
-entries. The synchronous driver checks state out while running, keeps operands
-in the transient root registry across allocation points, and restores state on
-every outcome. A future suspension can leave the state parked, where the
-`BytecodeFrame` direct-root category traces its operands.
+AS-06a2a attaches a `BytecodeContinuationFrame` to the current activation. A
+single `BytecodeContinuationLease` owns the block, program counter, operand
+stack, and last value. The synchronous driver moves that coherent record out
+while running, keeps operands in the transient root registry across allocation
+points, and restores the lease on every outcome. A future suspension can leave
+it parked, where the `BytecodeFrame` direct-root category traces its operands.
 
 This is not yet a suspended interpreter. AS-06a2b must move loop/try/finally
 continuations out of recursive Rust calls and reusable local segment states

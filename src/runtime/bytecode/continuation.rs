@@ -15,8 +15,14 @@ use super::state::BytecodeState;
 /// changing the root or storage ownership model.
 #[derive(Debug)]
 pub(in crate::runtime) struct BytecodeContinuationFrame {
+    lease: Option<BytecodeContinuationLease>,
+}
+
+/// Block and interpreter state checked out together by the synchronous driver.
+#[derive(Debug)]
+pub(super) struct BytecodeContinuationLease {
     block: BytecodeBlock,
-    state: Option<BytecodeState>,
+    state: BytecodeState,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -28,36 +34,40 @@ pub(super) struct BytecodeContinuationHandle {
 impl BytecodeContinuationFrame {
     pub(in crate::runtime) const fn new(block: BytecodeBlock, state: BytecodeState) -> Self {
         Self {
-            block,
-            state: Some(state),
+            lease: Some(BytecodeContinuationLease { block, state }),
         }
     }
 
     pub(in crate::runtime) fn root_values(&self) -> impl Iterator<Item = &Value> {
-        self.state.iter().flat_map(BytecodeState::root_values)
+        self.lease
+            .iter()
+            .flat_map(|lease| lease.state.root_values())
     }
 
-    fn take(&mut self) -> Result<(BytecodeBlock, BytecodeState)> {
-        let state = self
-            .state
+    fn take(&mut self) -> Result<BytecodeContinuationLease> {
+        self.lease
             .take()
-            .ok_or_else(|| Error::runtime("bytecode continuation state is already running"))?;
-        Ok((self.block.clone(), state))
+            .ok_or_else(|| Error::runtime("bytecode continuation is already running"))
     }
 
-    fn restore(&mut self, state: BytecodeState) -> Result<()> {
-        if self.state.is_some() {
-            return Err(Error::runtime(
-                "bytecode continuation state was restored twice",
-            ));
+    fn restore(&mut self, lease: BytecodeContinuationLease) -> Result<()> {
+        if self.lease.is_some() {
+            return Err(Error::runtime("bytecode continuation was restored twice"));
         }
-        self.state = Some(state);
+        self.lease = Some(lease);
         Ok(())
     }
 
     fn into_state(self) -> Result<BytecodeState> {
-        self.state
+        self.lease
+            .map(|lease| lease.state)
             .ok_or_else(|| Error::runtime("running bytecode continuation cannot be removed"))
+    }
+}
+
+impl BytecodeContinuationLease {
+    pub(super) const fn parts_mut(&mut self) -> (&BytecodeBlock, &mut BytecodeState) {
+        (&self.block, &mut self.state)
     }
 }
 
@@ -106,7 +116,7 @@ impl Context {
     pub(super) fn take_bytecode_continuation(
         &mut self,
         handle: BytecodeContinuationHandle,
-    ) -> Result<(BytecodeBlock, BytecodeState)> {
+    ) -> Result<BytecodeContinuationLease> {
         self.activation_frames
             .get_mut(handle.activation_index)
             .and_then(|activation| activation.continuation_mut().as_mut())
@@ -117,13 +127,13 @@ impl Context {
     pub(super) fn restore_bytecode_continuation(
         &mut self,
         handle: BytecodeContinuationHandle,
-        state: BytecodeState,
+        lease: BytecodeContinuationLease,
     ) -> Result<()> {
         self.activation_frames
             .get_mut(handle.activation_index)
             .and_then(|activation| activation.continuation_mut().as_mut())
             .ok_or_else(|| Error::runtime("bytecode continuation frame disappeared"))?
-            .restore(state)
+            .restore(lease)
     }
 
     pub(super) fn pop_bytecode_continuation(

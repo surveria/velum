@@ -999,8 +999,10 @@ check_activation_frame_boundary() {
 check_bytecode_continuation_boundary() {
   for source in \
     'pub(in crate::runtime) struct BytecodeContinuationFrame {' \
+    'lease: Option<BytecodeContinuationLease>,' \
+    'pub(super) struct BytecodeContinuationLease {' \
     'block: BytecodeBlock,' \
-    'state: Option<BytecodeState>,' \
+    'state: BytecodeState,' \
     'state.reset();' \
     'self.activation_frames' \
     '.push(ActivationFrame::bytecode(continuation));' \
@@ -1013,11 +1015,19 @@ check_bytecode_continuation_boundary() {
     fi
   done
 
+  local block_clone_count
+  block_clone_count="$(grep -F -c 'block.clone()' \
+    "${repo_root}/src/runtime/bytecode/continuation.rs" || true)"
+  if [[ "${block_clone_count}" != '1' ]]; then
+    fail "bytecode continuation boundary changed; checkout must move one coherently owned block/state lease without another block clone"
+  fi
+
   for source in \
     'let frame = self.push_bytecode_continuation(block, state)?;' \
     'let outcome = self.run_bytecode_continuation(frame);' \
     'let restored_state = self.pop_bytecode_continuation(frame)?;' \
-    'self.restore_bytecode_continuation(frame, state)?;'; do
+    'let (block, state) = lease.parts_mut();' \
+    'self.restore_bytecode_continuation(frame, lease)?;'; do
     if ! grep -F -q "${source}" \
         "${repo_root}/src/runtime/bytecode/execution.rs"; then
       fail "bytecode continuation boundary changed; execution must restore frame state on every synchronous outcome"
@@ -1628,14 +1638,20 @@ mutate_activation_frame_upvalues() {
 
 mutate_bytecode_continuation_state() {
   local fixture_root="$1"
-  sed -i '/    state: Option<BytecodeState>,/d' \
+  sed -i '/    state: BytecodeState,/d' \
     "${fixture_root}/src/runtime/bytecode/continuation.rs"
 }
 
 mutate_bytecode_continuation_restore() {
   local fixture_root="$1"
-  sed -i '/self.restore_bytecode_continuation(frame, state)?;/d' \
+  sed -i '/self.restore_bytecode_continuation(frame, lease)?;/d' \
     "${fixture_root}/src/runtime/bytecode/execution.rs"
+}
+
+mutate_bytecode_continuation_clone_count() {
+  local fixture_root="$1"
+  sed -i '/let continuation = BytecodeContinuationFrame::new(block.clone(), owned_state);/a\        let _duplicate_block = block.clone();' \
+    "${fixture_root}/src/runtime/bytecode/continuation.rs"
 }
 
 mutate_bytecode_frame_root() {
@@ -1959,6 +1975,8 @@ run_self_tests() {
     'bytecode continuation boundary changed' mutate_bytecode_continuation_state
   expect_guard_failure "${temp_dir}" bytecode-continuation-restore \
     'bytecode continuation boundary changed' mutate_bytecode_continuation_restore
+  expect_guard_failure "${temp_dir}" bytecode-continuation-clone-count \
+    'bytecode continuation boundary changed' mutate_bytecode_continuation_clone_count
   expect_guard_failure "${temp_dir}" bytecode-frame-root \
     'direct root boundary changed' mutate_bytecode_frame_root
   expect_guard_failure "${temp_dir}" native-registry-root \
