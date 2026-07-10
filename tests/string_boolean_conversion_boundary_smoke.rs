@@ -126,6 +126,32 @@ fn converts_error_messages_and_properties_observably() -> TestResult {
     )
 }
 
+#[test]
+fn reads_error_new_target_prototype_before_message_conversion() -> TestResult {
+    eval_is_42(
+        r#"
+        let order = 0;
+        function assertOrdering(expected) {
+            if (order !== expected) {
+                throw "expected " + expected + " got " + order;
+            }
+            order = order + 1;
+        }
+        let handler = { get() {
+            assertOrdering(0);
+            return Error.prototype;
+        } };
+        let constructor = new Proxy(Error, handler);
+        let message = { toString() {
+            assertOrdering(1);
+            return "detail";
+        } };
+        new constructor(message);
+        order === 2 ? 42 : 0
+        "#,
+    )
+}
+
 fn eval_is_42(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
