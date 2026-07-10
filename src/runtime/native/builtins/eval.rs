@@ -1,5 +1,5 @@
 use crate::{
-    error::{Error, Result},
+    error::Result,
     runtime::{Context, call::RuntimeCallArgs, control::Completion},
     value::Value,
 };
@@ -40,8 +40,5 @@ impl Context {
 }
 
 fn eval_completion_result(completion: Completion) -> Result<Value> {
-    let Completion::Throw(Value::Error(error)) = &completion else {
-        return completion.into_result();
-    };
-    Err(Error::exception(error.name(), error.message().to_owned()))
+    completion.into_result()
 }

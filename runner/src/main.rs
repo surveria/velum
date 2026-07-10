@@ -438,14 +438,16 @@ fn execute_engine_case(case: &EngineCase) -> anyhow::Result<()> {
 
     match &case.expectation {
         Expectation::Value(expected) => {
-            let value = result
-                .with_context(|| format!("case '{}' failed while evaluating source", case.id))?;
+            let value = result.map_err(|error| {
+                anyhow::anyhow!("case '{}' failed while evaluating source: {error}", case.id)
+            })?;
             ensure_value(case.id, &value, expected)?;
             ensure_output(case.id, context.output(), &[])?;
         }
         Expectation::OutputAndValue { output, value } => {
-            let actual = result
-                .with_context(|| format!("case '{}' failed while evaluating source", case.id))?;
+            let actual = result.map_err(|error| {
+                anyhow::anyhow!("case '{}' failed while evaluating source: {error}", case.id)
+            })?;
             ensure_value(case.id, &actual, value)?;
             ensure_output(case.id, context.output(), output)?;
         }
@@ -529,7 +531,7 @@ fn run_source_with_output(source: &str) -> anyhow::Result<String> {
     let mut context = runtime.context();
     let value = context
         .eval(source)
-        .context("rs-quickjs evaluation failed")?;
+        .map_err(|error| anyhow::anyhow!("rs-quickjs evaluation failed: {error}"))?;
     let mut output = context.take_output().join("\n");
     if !output.is_empty() {
         output.push('\n');

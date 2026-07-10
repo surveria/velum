@@ -117,7 +117,7 @@ fn rejects_non_callable_right_operand() -> TestResult {
     let Err(error) = eval("({}) instanceof ({})") else {
         return Err("expected non-callable right operand to fail".into());
     };
-    ensure_error_kind(&error, "runtime")
+    ensure_error_kind(&error, "javascript")
 }
 
 fn eval(source: &str) -> rs_quickjs::Result<Value> {
@@ -136,7 +136,9 @@ fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
 fn ensure_error_kind(error: &Error, expected: &str) -> TestResult {
     let matches = matches!(
         (error, expected),
-        (Error::Runtime { .. }, "runtime") | (Error::ResourceLimit { .. }, "resource limit")
+        (Error::Runtime { .. }, "runtime")
+            | (Error::JavaScript { .. }, "javascript")
+            | (Error::ResourceLimit { .. }, "resource limit")
     );
     if matches {
         return Ok(());

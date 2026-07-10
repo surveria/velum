@@ -128,7 +128,7 @@ impl Context {
             Error::Lex { .. } | Error::Parse { .. } => {
                 Error::exception(ErrorName::SyntaxError, error.to_string())
             }
-            Error::Runtime { .. } | Error::Exception { .. } | Error::ResourceLimit { .. } => error,
+            Error::Runtime { .. } | Error::JavaScript { .. } | Error::ResourceLimit { .. } => error,
         }
     }
 

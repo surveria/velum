@@ -4,7 +4,6 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime::call::RuntimeCallArgs,
-    runtime::control::Completion,
     runtime::object::{ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable},
     value::{ErrorName, ObjectId, Value, format_ecmascript_number},
 };
@@ -746,13 +745,9 @@ impl Context {
         this_value: Value,
         args: &[Value],
     ) -> Result<Value> {
-        match self.call(function, args, this_value)? {
-            Completion::Normal(value) => self.runtime_value(value),
-            Completion::Throw(Value::Error(error)) => {
-                Err(Error::exception(error.name(), error.message().to_owned()))
-            }
-            Completion::Throw(value) => Err(Error::runtime(format!("uncaught throw: {value}"))),
-            completion => completion.into_result(),
-        }
+        let value = self
+            .call(function, args, this_value)?
+            .into_native_value_result()?;
+        self.runtime_value(value)
     }
 }

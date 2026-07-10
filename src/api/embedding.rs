@@ -129,7 +129,9 @@ impl Vm {
     }
 
     /// # Errors
-    /// Fails when lexing, parsing, evaluation, or configured resource limits fail.
+    /// Fails when lexing, parsing, evaluation, or configured resource limits
+    /// fail. An uncaught JavaScript value is returned as
+    /// [`Error::JavaScript`](crate::Error::JavaScript).
     pub fn eval(&mut self, source: &str) -> Result<Value> {
         self.context.eval(source)
     }
@@ -141,7 +143,9 @@ impl Vm {
     }
 
     /// # Errors
-    /// Fails when the compiled script exceeds this VM's limits or evaluation fails.
+    /// Fails when the compiled script exceeds this VM's limits or evaluation
+    /// fails. An uncaught JavaScript value is returned as
+    /// [`Error::JavaScript`](crate::Error::JavaScript).
     pub fn eval_compiled(&mut self, script: &CompiledScript) -> Result<crate::Value> {
         self.context.eval_compiled(script)
     }

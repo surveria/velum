@@ -1,8 +1,8 @@
-use crate::value::ErrorName;
+use crate::value::{ErrorName, ErrorObject, Value};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug, Clone, Eq, PartialEq, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum Error {
     #[error("lexer error at {offset}: {message}")]
     Lex { message: String, offset: usize },
@@ -10,8 +10,9 @@ pub enum Error {
     Parse { message: String, offset: usize },
     #[error("runtime error: {message}")]
     Runtime { message: String },
-    #[error("javascript exception: {name}: {message}")]
-    Exception { name: ErrorName, message: String },
+    /// An arbitrary JavaScript thrown value owned by the VM that produced it.
+    #[error("javascript exception: {value}")]
+    JavaScript { value: Value },
     #[error("resource limit exceeded: {message}")]
     ResourceLimit { message: String },
 }
@@ -40,10 +41,48 @@ impl Error {
 
     #[must_use]
     pub(crate) fn exception(name: ErrorName, message: impl Into<String>) -> Self {
-        Self::Exception {
-            name,
-            message: message.into(),
+        Self::JavaScript {
+            value: Value::Error(ErrorObject::new(name, message.into())),
         }
+    }
+
+    /// Preserves an arbitrary value thrown by JavaScript across an engine or
+    /// host `Result` boundary. VM-owned values are valid only for the VM whose
+    /// active call supplied them.
+    #[must_use]
+    pub const fn javascript(value: Value) -> Self {
+        Self::JavaScript { value }
+    }
+
+    /// Returns the original JavaScript value when this error represents a
+    /// thrown completion. The returned value may contain VM-owned handles and
+    /// must not be used with another VM.
+    #[must_use]
+    pub const fn javascript_value(&self) -> Option<&Value> {
+        let Self::JavaScript { value } = self else {
+            return None;
+        };
+        Some(value)
+    }
+
+    /// Returns the standard error name when the thrown value uses the current
+    /// built-in Error representation.
+    #[must_use]
+    pub const fn javascript_error_name(&self) -> Option<&'static str> {
+        let Some(Value::Error(error)) = self.javascript_value() else {
+            return None;
+        };
+        Some(error.name().as_str())
+    }
+
+    /// Returns the standard error message when the thrown value uses the
+    /// current built-in Error representation.
+    #[must_use]
+    pub const fn javascript_error_message(&self) -> Option<&str> {
+        let Some(Value::Error(error)) = self.javascript_value() else {
+            return None;
+        };
+        Some(error.message())
     }
 
     #[must_use]
@@ -73,10 +112,7 @@ impl Error {
             Self::Runtime { message } => Self::Runtime {
                 message: format!("{context}: {message}"),
             },
-            Self::Exception { name, message } => Self::Exception {
-                name,
-                message: format!("{context}: {message}"),
-            },
+            Self::JavaScript { value } => Self::JavaScript { value },
             Self::ResourceLimit { message } => Self::ResourceLimit {
                 message: format!("{context}: {message}"),
             },

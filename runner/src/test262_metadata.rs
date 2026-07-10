@@ -281,9 +281,9 @@ fn execute_variant_result(
     let mut context = runtime.context();
     if !metadata.has_flag(FLAG_RAW) {
         for harness in harness_sources(test262_dir, metadata)? {
-            context
-                .eval(&harness.source)
-                .with_context(|| format!("Test262 harness include '{}' failed", harness.name))?;
+            context.eval(&harness.source).map_err(|error| {
+                anyhow::anyhow!("Test262 harness include '{}' failed: {error}", harness.name)
+            })?;
         }
     }
 
@@ -293,7 +293,9 @@ fn execute_variant_result(
         return ensure_negative_result(relative_path, negative, result);
     }
 
-    result.with_context(|| format!("upstream Test262 case '{relative_path}' failed"))?;
+    result.map_err(|error| {
+        anyhow::anyhow!("upstream Test262 case '{relative_path}' failed: {error}")
+    })?;
     if metadata.has_flag(FLAG_ASYNC) {
         return ensure_async_completion(relative_path, context.output());
     }
@@ -442,11 +444,7 @@ fn ensure_negative_runtime_result(
         Ok(_) => bail!(
             "upstream negative runtime case '{relative_path}' unexpectedly evaluated successfully"
         ),
-        Err(Error::Runtime { message })
-            if runtime_error_matches(&message, &negative.error_type) =>
-        {
-            Ok(())
-        }
+        Err(error) if execution_error_matches(&error, &negative.error_type) => Ok(()),
         Err(error) => bail!(
             "upstream negative runtime case '{}' expected {}, got {}",
             relative_path,
@@ -456,11 +454,11 @@ fn ensure_negative_runtime_result(
     }
 }
 
-fn runtime_error_matches(message: &str, expected_type: &str) -> bool {
-    if message.contains(expected_type) {
-        return true;
-    }
-    expected_type == "Error" && message.starts_with("uncaught throw:")
+fn execution_error_matches(error: &Error, expected_type: &str) -> bool {
+    let Some(actual_type) = error.javascript_error_name() else {
+        return false;
+    };
+    actual_type == expected_type || (expected_type == "Error" && actual_type.ends_with("Error"))
 }
 
 fn variant_id(relative_path: &str, variant: &str) -> String {
@@ -487,12 +485,14 @@ struct HarnessSource {
 
 #[cfg(test)]
 mod tests {
+    use rs_quickjs::{Error, Runtime};
+
     use super::{
         ASYNC_COMPLETE_OUTPUT, ASYNC_FAILURE_PREFIX, DEFAULT_VARIANT, FLAG_ASYNC, FLAG_MODULE,
         FLAG_NO_STRICT, FLAG_ONLY_STRICT, FLAG_RAW, HARNESS_ASSERT, HARNESS_DONEPRINT_HANDLE,
         HARNESS_STA, MODULE_VARIANT, RAW_VARIANT, STRICT_VARIANT, Test262Metadata, VariantPlan,
-        ensure_async_completion, harness_names, parse_metadata, runtime_error_matches, variant_id,
-        variant_plans,
+        ensure_async_completion, execution_error_matches, harness_names, parse_metadata,
+        variant_id, variant_plans,
     };
 
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -638,18 +638,18 @@ bad source
     }
 
     #[test]
-    fn matches_runtime_error_type_text() -> TestResult {
-        ensure_bool(runtime_error_matches(
-            "uncaught throw: Test262Error: expected",
-            "Test262Error",
-        ))?;
-        ensure_bool(runtime_error_matches(
-            "ReferenceError: 'x' is not defined",
+    fn matches_typed_javascript_error() -> TestResult {
+        let runtime = Runtime::new();
+        let mut context = runtime.context();
+        let Err(error) = context.eval("missingBinding") else {
+            return Err("expected missing binding to throw".into());
+        };
+        ensure_bool(execution_error_matches(&error, "ReferenceError"))?;
+        ensure_bool(execution_error_matches(&error, "Error"))?;
+        ensure_bool(!execution_error_matches(&error, "TypeError"))?;
+        ensure_bool(!execution_error_matches(
+            &Error::runtime("ReferenceError: forged"),
             "ReferenceError",
-        ))?;
-        ensure_bool(!runtime_error_matches(
-            "ReferenceError: 'x' is not defined",
-            "TypeError",
         ))
     }
 

@@ -292,7 +292,9 @@ impl Context {
     }
 
     /// # Errors
-    /// Fails when lexing, parsing, evaluation, or configured resource limits fail.
+    /// Fails when lexing, parsing, evaluation, or configured resource limits
+    /// fail. An uncaught JavaScript value is returned as
+    /// [`Error::JavaScript`](crate::Error::JavaScript).
     pub fn eval(&mut self, source: &str) -> Result<Value> {
         let script = self.compile(source)?;
         self.eval_compiled(&script)
@@ -569,7 +571,7 @@ impl Context {
                 Ok(object)
             }
             Completion::Normal(_) => Ok(object),
-            Completion::Throw(value) => Err(Error::runtime(format!("uncaught throw: {value}"))),
+            Completion::Throw(value) => Err(Error::javascript(value)),
             Completion::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Completion::Continue(_) => Err(Error::runtime("continue statement outside loop")),
         }

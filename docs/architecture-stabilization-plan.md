@@ -25,9 +25,9 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01, AS-02, AS-03a1, AS-03a2, AS-03b1, and
-  AS-03b2 are complete; AS-03b3 iterator operations are locally validated in
-  draft PR #415
+- Current program state: AS-01 through AS-03 are complete; AS-04a's typed
+  JavaScript throw and engine-failure boundary is implemented and locally
+  validated in draft PR #416
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -482,8 +482,8 @@ dependencies do not overlap.
 | AS-00 | Complete | Adopt this plan and route project documentation to it. | None | PR #396 merged as `f79056b`; required CI, post-merge performance, publisher, and canonical report publication passed. |
 | AS-01 | Complete | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards merged in PR #399 with required CI and canonical report publication. |
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
-| AS-03 | In progress | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations are locally validated in draft PR #415. |
-| AS-04 | Backlog | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | Real JavaScript error objects, typed throw path, no message-prefix classification, spans available to diagnostics. |
+| AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
+| AS-04 | In progress | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary is implemented in draft PR #416; real JavaScript error objects and source spans remain AS-04b. |
 | AS-05 | Backlog | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | Non-cloneable VM state, checked cross-VM boundaries, trace/root contract, heap/stack/job/buffer counters and limits. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
@@ -958,6 +958,17 @@ AS-03b3 local validation evidence:
   differential unchanged at 95 of 95. The local evidence is
   `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T105146Z.*`.
 
+AS-03b3 completion evidence:
+
+- PR #415 was squash-merged as `fb9917e`; required CI run `29087917661`
+  certified exact tree `5b27931a9e3bacd03ef880e2942fcd7c6810e86c` at
+  36,221/36,221 expected Test262 variants and 95/95 QuickJS differential
+  cases;
+- post-merge run `29088089959` measured all five project sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T110040Z.*` in
+  report-only commit `d58e48f`;
+- Remaining for AS-03: none.
+
 ### AS-04: Completion, Errors, And Source Metadata
 
 Required migration steps:
@@ -970,6 +981,42 @@ Required migration steps:
 4. remove exception classification by string prefix;
 5. add `SourceId` and stable spans to frontend/bytecode metadata;
 6. expose structured diagnostic fields without making formatted text an API.
+
+AS-04a owns steps 1 and 2 plus removal of message-based exception
+classification. AS-04b owns ordinary Error object identity and source metadata.
+
+AS-04a local implementation evidence:
+
+- `Error::JavaScript { value }` is the single reversible `Result` carrier for
+  an arbitrary JavaScript thrown value. `Completion::into_result`, function
+  result conversion, and native value conversion preserve that value instead
+  of formatting it as `Error::Runtime`;
+- `runtime_exception_value` unwraps only the typed JavaScript variant.
+  `ReferenceError` helpers create typed JavaScript errors directly; the
+  `ReferenceError:` prefix parser and every `uncaught throw:` conversion are
+  deleted;
+- accessor, JSON callback, eval, iterator, collection, Proxy, and other native
+  boundaries share the Completion conversion contract. Host callbacks can use
+  public `Error::javascript(value)` to throw intentionally, while Runtime and
+  ResourceLimit errors still bypass JavaScript catch;
+- `Error::with_context` never rewrites a thrown JavaScript value. CLI and
+  runner diagnostics format the VM-local error at their outer boundary rather
+  than requiring it to be `Send + Sync` through `anyhow`;
+- the architecture guard rejects string-formatted throws, message-prefix
+  classification, including raw `ReferenceError:` construction, a moved
+  ReferenceError owner, or another exception bridge;
+- six focused public tests cover the embedding result, object/Symbol identity
+  through native frames, ReferenceError metadata, an explicit host throw,
+  forged error text, and resource-limit non-catchability;
+- the Test262 runner matches negative runtime cases by the typed JavaScript
+  error name instead of accepting formatted `Runtime` text. The migration also
+  found and removed the three remaining assignment/update paths that created
+  textual ReferenceErrors;
+- the complete local correctness gate preserves every prior expected variant
+  and adds 332 reviewed negative/error variants. The expected-pass baseline
+  and full pass set are now 36,553 of 102,578, with QuickJS differential
+  unchanged at 95 of 95. The local evidence is
+  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T113234Z.*`.
 
 ### AS-05: Ownership, Handles, Roots, And Accounting
 
@@ -1088,10 +1135,10 @@ reviewable scope.
     (complete in PR #413).
 12. AS-03b2: centralize `GetMethod` plus specification-level property and call
     operations (complete in PR #414).
-13. AS-03b3: centralize iterator operations and iterator closing (implemented
-    and locally validated in draft PR #415).
+13. AS-03b3: centralize iterator operations and iterator closing (complete in
+    PR #415).
 14. AS-04a: separate JavaScript throw completion from engine/host/resource
-   failures.
+    failures (implemented in draft PR #416).
 15. AS-04b: migrate Error values into real objects and add source-span metadata.
 16. AS-05a: remove ambiguous VM cloning and define VM-bound handle identity.
 17. AS-05b: add root enumeration plus complete allocation accounting and
