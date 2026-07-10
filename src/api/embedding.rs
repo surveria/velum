@@ -6,7 +6,7 @@ use crate::ownership::VmIdentity;
 use crate::runtime::Context;
 use crate::runtime::VmRootSnapshot;
 use crate::runtime::limits::RuntimeLimits;
-use crate::runtime::{VmCallableEdgeSnapshot, VmObjectEdgeSnapshot};
+use crate::runtime::{VmAsyncEdgeSnapshot, VmCallableEdgeSnapshot, VmObjectEdgeSnapshot};
 use crate::value::Value;
 use std::time::Duration;
 
@@ -272,6 +272,16 @@ impl Vm {
     /// Fails if an edge counter exceeds the supported range.
     pub fn object_edge_snapshot(&self) -> Result<VmObjectEdgeSnapshot> {
         self.context.object_edge_snapshot()
+    }
+
+    /// Counts Promise, collection, iterator, weak-key, and ephemeron trace
+    /// records stored in asynchronous arenas.
+    ///
+    /// # Errors
+    /// Fails if an edge counter exceeds the supported range or a category uses
+    /// an incompatible trace strength.
+    pub fn async_edge_snapshot(&self) -> Result<VmAsyncEdgeSnapshot> {
+        self.context.async_edge_snapshot()
     }
 
     #[must_use]

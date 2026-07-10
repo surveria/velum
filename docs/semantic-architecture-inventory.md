@@ -156,7 +156,7 @@ slots in `Context` side tables instead of `Object`:
 | Object behavior | Side store | Object-to-slot association | Important property |
 | --- | --- | --- | --- |
 | Promise | `promises: Vec<Promise>` | `promise_object_slots: Vec<Option<PromiseId>>` indexed by `ObjectId` | reactions and settled values hold strong `Value` edges; jobs are separate |
-| Map/Set/WeakMap/WeakSet | `collections: Vec<CollectionData>` | `collection_object_slots: Vec<Option<(CollectionKind, CollectionId)>>` | all four kinds share strong `Vec<(Value, Value)>` storage |
+| Map/Set/WeakMap/WeakSet | `collections: Vec<CollectionData>` whose backing store retains `CollectionKind` | `collection_object_slots: Vec<Option<(CollectionKind, CollectionId)>>` | Map/Set slots trace strongly; WeakSet keys trace weakly; WeakMap key/value pairs trace as ephemerons, although physical reclamation waits for AS-07 |
 | Collection and RegExp iterators | `collection_iterators: Vec<CollectionIteratorState>` | iterator id captured by a native `next` function | iterator contents are snapshots of strong `Value` edges |
 
 Bound functions use another split representation: the visible value is an
@@ -176,8 +176,8 @@ rules:
    object association, strong/weak edges, limit, teardown behavior, and AS-02
    migration path.
 3. Do not expose another raw id-bearing `Value` through the embedding API.
-4. Treat `Vm::clone` and `Context::clone` as known debt, not a model for a new
-   public owner.
+4. Preserve the non-cloneable `Vm` and `Context` owner boundary established by
+   AS-05a1.
 5. Weak behavior may not be claimed while keys remain strong `Value` entries.
 
 ## Property And Internal-Method Map
@@ -408,9 +408,10 @@ No runtime owner retains source text, tokens, or AST.
 `Context` is the aggregate owner. AS-05b1a adds one executable direct-root
 visitor and a public counted snapshot. AS-05b1b1 adds a typed strong-edge
 visitor and an executable callable-store snapshot. AS-05b1b2 extends that
-contract across the ordinary object arena; asynchronous side-table edges
-remain implicit wherever a payload contains a `Value`, id, shared binding
-cell, or callback capture.
+contract across the ordinary object arena. AS-05b1b3 adds explicit strong,
+weak, and ephemeron traversal for Promise, collection, and iterator side
+stores. Transient allocation-point values, shared binding cells, and opaque
+callback captures remain AS-05b1c work.
 
 | Store category | Current fields/owners | Implicit strong edges | Current public accounting |
 | --- | --- | --- | --- |
@@ -418,8 +419,8 @@ cell, or callback capture.
 | bindings and closures | globals, builtin globals, locals, upvalue frames, `BindingCell(Rc<Mutex<Binding>>)` | binding values and captured cells | global binding count and upvalue cell count only |
 | executable functions | functions, native functions/registry, bound functions, host functions | typed AS-05b1b1 edges cover properties, upvalues, super/static/class/new-target state, native id payloads, and bound args/targets; immutable bytecode contains only VM-independent literals; opaque callback `Rc` captures remain AS-05b1c debt | callable edge slot snapshot plus native function count |
 | objects | `ObjectHeap`, shapes, prototypes, properties, arrays, buffers, typed-array views | typed AS-05b1b2 edges cover named/dense/sparse properties, accessors, prototypes, boxed strings/Symbols, Proxy state, and typed-array buffer-object links; cached prototypes and shape/property-key metadata are direct anchors | object edge slot snapshot, shape count, and prototype version; no object/property/buffer bytes |
-| collections | collection stores, object slots, iterator snapshots | keys, values, iterator items | none; count limit reuses `max_objects` |
-| promises/jobs | promises, object slots, reaction queue | results, handlers, settled values, queued job state | none; no job-count limit |
+| collections | collection stores with retained kind, object slots, iterator snapshots | typed object associations, strong Map/Set entries and iterator items, weak WeakSet keys, and WeakMap ephemerons | asynchronous edge snapshot; count limit reuses `max_objects` |
+| promises/jobs | promises, object slots, reaction queue | typed object associations, strong results/handlers/settled values, and direct queued-job roots | asynchronous edge snapshot; no job-count limit |
 | active execution | local frame bases, `this`, `new.target`, super frames, bytecode operand stacks held by Rust calls | live values and activation metadata | call depth is enforced internally, but no public frame/stack bytes |
 | caches | static name/binding caches, call caches, function fast paths | ids, shapes, native kinds, metadata | hit/miss counters for selected call caches |
 | embedder-visible state | output, host callbacks, `Vm`, public `Value` | output strings and callback captures | output entry count, not bytes |
@@ -436,9 +437,12 @@ AS-05b1b1's generic `StrongEdgeVisitor<Kind>` uses a private typed target enum
 rather than raw integers. Its callable traversal covers every physical strong
 slot in JavaScript, native, and bound function stores. AS-05b1b2 reuses the
 same visitor for object properties, prototypes, boxed primitives, Proxy
-state, and typed-array links. Counts intentionally include primitive and
-duplicate slots; a future marker ignores primitives and deduplicates
-identities. Promise, collection, and iterator stores remain AS-05b1b3 work.
+state, and typed-array links. AS-05b1b3 adds typed object-to-side-store
+associations plus a separate `WeakEdgeVisitor` contract. Map/Set and iterator
+slots remain strong, WeakSet emits weak keys, and WeakMap emits ephemeron
+pairs. Counts intentionally include primitive and duplicate strong slots; a
+future marker ignores primitives and deduplicates identities. Physical weak
+entry reclamation remains AS-07 work.
 
 `RuntimeLimits` currently covers source length, statement count, expression
 depth, runtime steps, string length, bindings, object count, and per-object
@@ -488,10 +492,12 @@ state how many bytes each owner retained.
   private, so the diagnostic API does not leak arena ids;
 - `Vm::object_edge_snapshot` and `Context::object_edge_snapshot` expose the
   same checked contract for the ordinary object arena without claiming
-  Context side-table associations.
+  Context side-table associations;
+- `Vm::async_edge_snapshot` and `Context::async_edge_snapshot` expose checked
+  Promise/collection/iterator category counts together with strong, weak, and
+  ephemeron totals. Typed associations and forgeable ids remain private.
 
-AS-05b1b3 must complete asynchronous arena edges, and AS-05b1c must close
-transient allocation-point/embedder-root gaps before
+AS-05b1c must close transient allocation-point/embedder-root gaps before
 AS-05a2d adds identity-stamped retained object/function handles and explicit
 release.
 
@@ -514,7 +520,7 @@ The root/trace contract must at least enumerate:
 6. object properties/prototypes/accessors/Proxy/boxed primitive/typed internal
    slots: executable in AS-05b1b2;
 7. Promise state/reactions, collection entries, and iterator state with weak
-   keys classified separately: AS-05b1b3;
+   keys classified separately: executable in AS-05b1b3;
 8. active operand stacks, native-call arguments, and temporary construction,
    descriptor, iterator, class-field, and Proxy-trap values that survive an
    allocation point: AS-05b1c bridge followed by durable AS-06 frames;
@@ -605,8 +611,9 @@ decision sequence:
 | AS-05a2c | portable owned primitive values | VM-independent five-variant OwnedValue plus explicit local/evaluation copying merged in PR #425 |
 | AS-05b1a | direct roots in bindings, active call vectors, runtime anchors, and queued jobs | nine stable categories plus one executable visitor and counted Context/Vm/HostCall snapshot merged in PR #426 |
 | AS-05b1b1 | callable arena edges and native registry anchors | generic typed strong-edge visitor, six callable categories, complete JS/native/bound traversal, and bounded Context/Vm snapshot merged in PR #427 |
-| AS-05b1b2 | object arena edges and object/property-key cache anchors | three object categories cover properties, prototypes, boxed strings/Symbols, Proxy state, typed views, and bounded Context/Vm diagnostics in draft PR #428 |
-| AS-05b1b3/AS-05b1c/AS-05a2d/AS-05b2 | asynchronous edges, transient roots, retained object/function ids, handles, and limit maps | complete side-table visitors and allocation-point roots, then identity-stamped retained handles/release and accounting contracts |
+| AS-05b1b2 | object arena edges and object/property-key cache anchors | three object categories cover properties, prototypes, boxed strings/Symbols, Proxy state, typed views, and bounded Context/Vm diagnostics; merged in PR #428 |
+| AS-05b1b3 | Promise, collection, iterator, weak-key, and ephemeron edges | typed side-store associations, eight strength-classified categories, and bounded Context/Vm diagnostics in draft PR #429 |
+| AS-05b1c/AS-05a2d/AS-05b2 | transient roots, retained object/function ids, handles, and limit maps | complete allocation-point roots, then identity-stamped retained handles/release and accounting contracts |
 | AS-06 | active execution roots and structured nested bytecode | explicit activation/block stacks and suspend/resume results |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |
 | AS-08 | caches, direct calls, linear/function/control paths, harness opcodes | one optimizer owner, optimizer-off equivalence, and removal of source-name semantics |
@@ -633,6 +640,7 @@ must fail on growth.
 | direct-root boundary | nine stable categories enumerate current binding, active-call, runtime-anchor, and Promise-job sources through one visitor | removing a current root source, adding an unreviewed category, or bypassing the Context/Vm/HostCall snapshot contract |
 | callable strong-edge boundary | six categories enumerate every current JavaScript/native/bound function reference slot through one typed visitor; native id-bearing variants have an exact allowlist | removing a callable slot, adding an unreviewed id-bearing native kind, or exposing raw edge ids in the diagnostic API |
 | object strong-edge boundary | three categories enumerate named/dense/sparse properties, accessors, prototypes, boxed strings/Symbols, Proxy slots, and typed-view links; cached prototypes and key metadata are direct anchors | removing an object slot/cache root, adding an unreviewed object payload, or folding side-table associations into ordinary object traversal |
+| asynchronous edge boundary | eight categories enumerate Promise state/reactions, typed object associations, Map/Set entries, iterator items, WeakSet keys, and WeakMap ephemerons through explicit strength visitors | removing a side-store source, treating weak keys/ephemerons as ordinary strong entries, or exposing raw association ids publicly |
 
 The script should report the specific changed boundary and point to this
 document. It should run from `scripts/check-fast.sh` and the correctness gate,
@@ -672,9 +680,9 @@ Snapshot observations:
 - the initial snapshot found three `SameValueZero` owners plus numeric array
   helpers and a fourth local `SameValue` owner; AS-03a1 collapses them into
   `runtime/abstract_operations/equality.rs`;
-- the runtime has an AS-05b1a direct-root contract plus AS-05b1b1 callable and
-  AS-05b1b2 object typed-edge contracts; asynchronous side-table edges and
-  allocation-point roots remain AS-05b1b3/AS-05b1c work;
+- the runtime has an AS-05b1a direct-root contract plus AS-05b1b1 callable,
+  AS-05b1b2 object, and AS-05b1b3 asynchronous typed-edge contracts;
+  allocation-point roots remain AS-05b1c work;
 - the structured-control and linear optimizer areas contain sixteen and seven
   tracked Rust files respectively.
 

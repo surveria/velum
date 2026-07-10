@@ -1,6 +1,10 @@
 use crate::{
     error::Result,
-    runtime::roots::{DirectRootVisitor, VmRootKind},
+    runtime::{
+        async_trace::VmAsyncEdgeKind,
+        roots::{DirectRootVisitor, VmRootKind},
+        trace::{StrongEdgeReference, StrongEdgeVisitor},
+    },
     value::Value,
 };
 
@@ -24,6 +28,29 @@ impl PromiseReaction {
             on_fulfilled,
             on_rejected,
         }
+    }
+
+    pub(super) fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
+    where
+        V: StrongEdgeVisitor<VmAsyncEdgeKind>,
+    {
+        visitor.visit(
+            VmAsyncEdgeKind::PromiseReaction,
+            StrongEdgeReference::Promise(self.result),
+        )?;
+        if let Some(handler) = &self.on_fulfilled {
+            visitor.visit(
+                VmAsyncEdgeKind::PromiseReaction,
+                StrongEdgeReference::Value(handler),
+            )?;
+        }
+        if let Some(handler) = &self.on_rejected {
+            visitor.visit(
+                VmAsyncEdgeKind::PromiseReaction,
+                StrongEdgeReference::Value(handler),
+            )?;
+        }
+        Ok(())
     }
 }
 

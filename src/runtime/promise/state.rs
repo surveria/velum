@@ -1,4 +1,11 @@
-use crate::value::Value;
+use crate::{
+    error::Result,
+    runtime::{
+        async_trace::VmAsyncEdgeKind,
+        trace::{StrongEdgeReference, StrongEdgeVisitor},
+    },
+    value::Value,
+};
 
 use super::job::PromiseReaction;
 
@@ -33,6 +40,24 @@ impl Promise {
                 reactions: Vec::new(),
             },
         }
+    }
+
+    pub(in crate::runtime) fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
+    where
+        V: StrongEdgeVisitor<VmAsyncEdgeKind>,
+    {
+        match &self.state {
+            PromiseState::Pending { reactions } => {
+                for reaction in reactions {
+                    reaction.visit_strong_edges(visitor)?;
+                }
+            }
+            PromiseState::Fulfilled(value) | PromiseState::Rejected(value) => visitor.visit(
+                VmAsyncEdgeKind::PromiseState,
+                StrongEdgeReference::Value(value),
+            )?,
+        }
+        Ok(())
     }
 }
 

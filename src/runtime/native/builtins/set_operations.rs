@@ -277,7 +277,7 @@ impl Context {
         let Value::Object(object_id) = &object else {
             return Err(Error::runtime("Set object creation failed"));
         };
-        let collection = self.create_collection()?;
+        let collection = self.create_collection(CollectionKind::Set)?;
         self.bind_collection_object(*object_id, CollectionKind::Set, collection)?;
         Ok((object, collection))
     }

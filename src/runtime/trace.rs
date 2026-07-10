@@ -1,6 +1,10 @@
 use crate::{
     error::Result,
-    runtime::{collections::CollectionIteratorId, object::PropertyKey, promise::PromiseId},
+    runtime::{
+        collections::{CollectionId, CollectionIteratorId},
+        object::PropertyKey,
+        promise::PromiseId,
+    },
     storage::{string_heap::JsString, symbol::JsSymbol},
     value::{BoundFunctionId, FunctionId, ObjectId, Value},
 };
@@ -176,10 +180,35 @@ pub(in crate::runtime) enum StrongEdgeReference<'value> {
     PropertyKey(PropertyKey),
     String(&'value JsString),
     Symbol(&'value JsSymbol),
+    PromiseAssociation {
+        object: ObjectId,
+        promise: PromiseId,
+    },
+    CollectionAssociation {
+        object: ObjectId,
+        collection: CollectionId,
+    },
 }
 
 pub(in crate::runtime) trait StrongEdgeVisitor<Kind> {
     fn visit(&mut self, kind: Kind, reference: StrongEdgeReference<'_>) -> Result<()>;
+}
+
+/// Typed target used only by weak-key and ephemeron traversal.
+#[derive(Clone, Copy, Debug)]
+pub(in crate::runtime) enum WeakEdgeReference<'value> {
+    Value(&'value Value),
+}
+
+pub(in crate::runtime) trait WeakEdgeVisitor<Kind> {
+    fn visit_weak(&mut self, kind: Kind, reference: WeakEdgeReference<'_>) -> Result<()>;
+
+    fn visit_ephemeron(
+        &mut self,
+        kind: Kind,
+        key: WeakEdgeReference<'_>,
+        value: WeakEdgeReference<'_>,
+    ) -> Result<()>;
 }
 
 struct CallableEdgeCounter {
@@ -352,7 +381,7 @@ impl Function {
     }
 }
 
-const fn consume_reference(reference: &StrongEdgeReference<'_>) {
+pub(in crate::runtime) const fn consume_reference(reference: &StrongEdgeReference<'_>) {
     match reference {
         StrongEdgeReference::Value(_value) => {}
         StrongEdgeReference::Function(_id) => {}
@@ -363,5 +392,19 @@ const fn consume_reference(reference: &StrongEdgeReference<'_>) {
         StrongEdgeReference::PropertyKey(_key) => {}
         StrongEdgeReference::String(_string) => {}
         StrongEdgeReference::Symbol(_symbol) => {}
+        StrongEdgeReference::PromiseAssociation {
+            object: _object,
+            promise: _promise,
+        } => {}
+        StrongEdgeReference::CollectionAssociation {
+            object: _object,
+            collection: _collection,
+        } => {}
+    }
+}
+
+pub(in crate::runtime) const fn consume_weak_reference(reference: WeakEdgeReference<'_>) {
+    match reference {
+        WeakEdgeReference::Value(_value) => {}
     }
 }
