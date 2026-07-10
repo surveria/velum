@@ -386,9 +386,7 @@ impl Context {
             }
             NativeCallTarget::GlobalIsFinite => Some(self.eval_direct_global_is_finite(args)),
             NativeCallTarget::GlobalIsNan => Some(self.eval_direct_global_is_nan(args)),
-            NativeCallTarget::GlobalParseFloat => {
-                Some(Ok(Self::eval_direct_global_parse_float(args)))
-            }
+            NativeCallTarget::GlobalParseFloat => Some(self.eval_direct_global_parse_float(args)),
             NativeCallTarget::GlobalParseInt => Some(self.eval_direct_global_parse_int(args)),
             NativeCallTarget::NumberIsFinite => Some(Ok(Self::eval_direct_number_is_finite(args))),
             NativeCallTarget::NumberIsInteger => {
@@ -653,7 +651,7 @@ impl Context {
             }
             NativeFunctionKind::GlobalIsFinite => Some(self.eval_global_is_finite(args)),
             NativeFunctionKind::GlobalIsNan => Some(self.eval_global_is_nan(args)),
-            NativeFunctionKind::GlobalParseFloat => Some(Ok(Self::eval_global_parse_float(args))),
+            NativeFunctionKind::GlobalParseFloat => Some(self.eval_global_parse_float(args)),
             NativeFunctionKind::GlobalParseInt => Some(self.eval_global_parse_int(args)),
             NativeFunctionKind::NumberIsFinite => Some(Ok(Self::eval_number_is_finite(args))),
             NativeFunctionKind::NumberIsInteger => Some(Ok(Self::eval_number_is_integer(args))),

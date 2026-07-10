@@ -2,6 +2,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
+        abstract_operations::to_boolean,
         call::RuntimeCallArgs,
         collections::{CollectionId, CollectionKind},
         control::Completion,
@@ -248,7 +249,7 @@ impl Context {
     fn set_record_has(&mut self, record: &SetRecord, value: &Value) -> Result<bool> {
         let args = [value.clone()];
         let result = self.set_call(&record.has, &args, record.object.clone())?;
-        Ok(result.is_truthy())
+        Ok(to_boolean(&result))
     }
 
     /// Drive the iterator returned by the set-like `keys` method to completion.
@@ -266,7 +267,7 @@ impl Context {
                 return Err(Error::type_error(SET_KEYS_RESULT_ERROR));
             }
             let done = self.get_property_value(&result, ITERATOR_DONE_PROPERTY)?;
-            if done.is_truthy() {
+            if to_boolean(&done) {
                 break;
             }
             values.push(self.get_property_value(&result, ITERATOR_VALUE_PROPERTY)?);

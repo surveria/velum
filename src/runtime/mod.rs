@@ -510,12 +510,11 @@ impl Context {
     }
 
     pub(crate) fn eval_print_call(&mut self, args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let line = args
-            .as_slice()
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(" ");
+        let mut values = Vec::with_capacity(args.as_slice().len());
+        for value in args.as_slice() {
+            values.push(self.to_string(value)?);
+        }
+        let line = values.join(" ");
         self.check_string_len(&line)?;
         self.output.push(line);
         Ok(Value::Undefined)

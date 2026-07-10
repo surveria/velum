@@ -29,21 +29,24 @@ impl Context {
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        let input = Self::global_string_argument(args.first());
+        let input = self.global_string_argument(args.first())?;
         let radix = self.parse_int_radix(args.get(1))?;
         Ok(Value::Number(Self::parse_int_string(&input, radix)))
     }
 
-    pub(in crate::runtime::native) fn eval_global_parse_float(args: RuntimeCallArgs<'_>) -> Value {
-        Value::Number(Self::parse_float_string(&Self::global_string_argument(
-            args.as_slice().first(),
-        )))
+    pub(in crate::runtime::native) fn eval_global_parse_float(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_direct_global_parse_float(args.as_slice())
     }
 
-    pub(in crate::runtime::native) fn eval_direct_global_parse_float(args: &[Value]) -> Value {
-        Value::Number(Self::parse_float_string(&Self::global_string_argument(
-            args.first(),
-        )))
+    pub(in crate::runtime::native) fn eval_direct_global_parse_float(
+        &mut self,
+        args: &[Value],
+    ) -> Result<Value> {
+        let input = self.global_string_argument(args.first())?;
+        Ok(Value::Number(Self::parse_float_string(&input)))
     }
 
     pub(in crate::runtime::native) fn eval_global_is_nan(
@@ -143,7 +146,7 @@ impl Context {
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        let text = Self::global_string_argument(args.first());
+        let text = self.global_string_argument(args.first())?;
         self.encode_uri_value(&text, UriEncodeSet::Uri)
     }
 
@@ -158,7 +161,7 @@ impl Context {
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        let text = Self::global_string_argument(args.first());
+        let text = self.global_string_argument(args.first())?;
         self.encode_uri_value(&text, UriEncodeSet::Component)
     }
 
@@ -173,7 +176,7 @@ impl Context {
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        let text = Self::global_string_argument(args.first());
+        let text = self.global_string_argument(args.first())?;
         self.decode_uri_value(&text, UriDecodeMode::PreserveReserved)
     }
 
@@ -188,12 +191,15 @@ impl Context {
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        let text = Self::global_string_argument(args.first());
+        let text = self.global_string_argument(args.first())?;
         self.decode_uri_value(&text, UriDecodeMode::DecodeReserved)
     }
 
-    fn global_string_argument(value: Option<&Value>) -> String {
-        value.map_or_else(|| Value::Undefined.to_string(), ToString::to_string)
+    fn global_string_argument(&mut self, value: Option<&Value>) -> Result<String> {
+        match value {
+            Some(value) => self.to_string(value),
+            None => self.to_string(&Value::Undefined),
+        }
     }
 
     fn parse_int_radix(&mut self, value: Option<&Value>) -> Result<ParseIntRadix> {

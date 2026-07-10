@@ -198,6 +198,13 @@ impl ObjectHeap {
         else {
             return Ok(None);
         };
+        if properties.iter().flatten().any(|property| {
+            property
+                .data_value_ref()
+                .is_some_and(|value| !crate::runtime::abstract_operations::is_primitive(value))
+        }) {
+            return Ok(None);
+        }
 
         let mut joined =
             Self::join_string_with_separator_capacity(length, separator.len(), max_string_len)?;

@@ -465,7 +465,7 @@ impl Context {
     }
 
     pub(in crate::runtime) fn eval_error_constructor(
-        &self,
+        &mut self,
         name: ErrorName,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
@@ -473,13 +473,15 @@ impl Context {
     }
 
     pub(in crate::runtime) fn eval_direct_error_constructor(
-        &self,
+        &mut self,
         name: ErrorName,
         args: &[Value],
     ) -> Result<Value> {
         let message_value = Self::error_constructor_message_argument(name, args);
-        let message = message_value.map_or_else(String::new, Value::display_for_concat);
-        self.check_string_len(&message)?;
+        let message = match message_value {
+            None | Some(Value::Undefined) => String::new(),
+            Some(value) => self.to_string(value)?,
+        };
         Ok(Value::Error(ErrorObject::new(name, message)))
     }
 
@@ -535,13 +537,9 @@ impl Context {
         default: &str,
     ) -> Result<String> {
         let value = self.get_property_value(this_value, property)?;
-        let text = match value {
-            Value::Undefined => default.to_owned(),
-            Value::String(value) => value,
-            Value::HeapString(value) => value.as_str().to_owned(),
-            _ => value.display_for_concat(),
-        };
-        self.check_string_len(&text)?;
-        Ok(text)
+        if matches!(value, Value::Undefined) {
+            return Ok(default.to_owned());
+        }
+        self.to_string(&value)
     }
 }

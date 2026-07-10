@@ -1,6 +1,6 @@
 use crate::{
     error::Result,
-    runtime::{Context, call::RuntimeCallArgs},
+    runtime::{Context, abstract_operations::to_boolean, call::RuntimeCallArgs},
     value::Value,
 };
 
@@ -33,7 +33,7 @@ impl Context {
                 index,
                 this_value,
             )?;
-            if result.is_truthy() {
+            if to_boolean(&result) {
                 return Ok(value);
             }
         }
@@ -66,7 +66,7 @@ impl Context {
                 index,
                 this_value,
             )?;
-            if result.is_truthy() {
+            if to_boolean(&result) {
                 return Self::array_like_index_value(index);
             }
         }

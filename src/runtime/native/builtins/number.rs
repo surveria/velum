@@ -3,7 +3,7 @@ use crate::{
     runtime::Context,
     runtime::call::RuntimeCallArgs,
     runtime::object::{ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable},
-    value::{ErrorName, NativeFunctionId, ObjectId, Value},
+    value::{ErrorName, NativeFunctionId, ObjectId, Value, format_ecmascript_number},
 };
 
 use super::{
@@ -345,7 +345,7 @@ impl Context {
 
     fn number_to_radix_string(number: f64, radix: u32) -> Result<String> {
         if radix == 10 || !number.is_finite() || number.fract() != 0.0 {
-            return Ok(Value::Number(number).to_string());
+            return Ok(format_ecmascript_number(number));
         }
         if number == 0.0 {
             return Ok("0".to_owned());

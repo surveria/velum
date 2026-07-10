@@ -22,23 +22,6 @@ pub enum Value {
 
 impl Value {
     #[must_use]
-    pub fn is_truthy(&self) -> bool {
-        match self {
-            Self::Undefined | Self::Null => false,
-            Self::Bool(value) => *value,
-            Self::Number(value) => *value != 0.0 && !value.is_nan(),
-            Self::String(value) => !value.is_empty(),
-            Self::HeapString(value) => !value.as_str().is_empty(),
-            Self::Symbol(_)
-            | Self::Function(_)
-            | Self::NativeFunction(_)
-            | Self::HostFunction(_)
-            | Self::Object(_)
-            | Self::Error(_) => true,
-        }
-    }
-
-    #[must_use]
     pub const fn type_name(&self) -> &'static str {
         match self {
             Self::Undefined => "undefined",
@@ -55,15 +38,6 @@ impl Value {
         match self {
             Self::Number(value) => Some(*value),
             _ => None,
-        }
-    }
-
-    pub(crate) fn display_for_concat(&self) -> String {
-        match self {
-            Self::String(value) => value.clone(),
-            Self::HeapString(value) => value.as_str().to_owned(),
-            Self::Symbol(value) => value.display_name(),
-            _ => self.to_string(),
         }
     }
 }
@@ -133,7 +107,7 @@ const ECMASCRIPT_SMALL_EXPONENT_LIMIT: i32 = -6;
 
 /// ECMAScript `Number::toString` in base ten: shortest round-trip significant
 /// digits rendered with the specification's fixed vs. exponential selection.
-fn format_ecmascript_number(value: f64) -> String {
+pub fn format_ecmascript_number(value: f64) -> String {
     if value.is_nan() {
         return "NaN".to_owned();
     }

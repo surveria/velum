@@ -166,16 +166,20 @@ src/runtime/abstract_operations/equality.rs:strict_equality'
 
   conversion="$(
     function_owners \
-      'fn[[:space:]]+(get_to_primitive_method|is_primitive|ordinary_to_primitive|prefixed_integer_to_number|string_to_number|to_number_primitive|to_number|to_primitive)'
+      'fn[[:space:]]+(display_for_concat|get_to_primitive_method|is_primitive|is_truthy|ordinary_to_primitive|prefixed_integer_to_number|string_to_number|to_boolean|to_number_primitive|to_number|to_primitive|to_string_primitive|to_string[[:space:]]*\()' \
+      | sed -E 's/[[:space:]]*\($//'
   )"
   expected_conversion='src/runtime/abstract_operations/conversion.rs:get_to_primitive_method
 src/runtime/abstract_operations/conversion.rs:is_primitive
 src/runtime/abstract_operations/conversion.rs:ordinary_to_primitive
 src/runtime/abstract_operations/conversion.rs:prefixed_integer_to_number
 src/runtime/abstract_operations/conversion.rs:string_to_number
+src/runtime/abstract_operations/conversion.rs:to_boolean
 src/runtime/abstract_operations/conversion.rs:to_number
 src/runtime/abstract_operations/conversion.rs:to_number_primitive
-src/runtime/abstract_operations/conversion.rs:to_primitive'
+src/runtime/abstract_operations/conversion.rs:to_primitive
+src/runtime/abstract_operations/conversion.rs:to_string
+src/runtime/abstract_operations/conversion.rs:to_string_primitive'
   compare_set "primitive conversion operation allowlist" "${conversion}" "${expected_conversion}"
 
   invocation="$(
@@ -461,6 +465,12 @@ mutate_equality_duplicate() {
     >>"${fixture_root}/src/runtime/values.rs"
 }
 
+mutate_conversion_duplicate() {
+  local fixture_root="$1"
+  printf '\nfn is_truthy(value: &Value) -> bool { matches!(value, Value::Bool(true)) }\n' \
+    >>"${fixture_root}/src/runtime/values.rs"
+}
+
 mutate_invocation_predicate() {
   local fixture_root="$1"
   printf '\nfn is_callable_architecture_probe() {}\n' \
@@ -576,6 +586,8 @@ run_self_tests() {
     'Test262 source-name allowlist changed' mutate_test262_source_name
   expect_guard_failure "${temp_dir}" equality-duplicate \
     'equality operation allowlist changed' mutate_equality_duplicate
+  expect_guard_failure "${temp_dir}" conversion-duplicate \
+    'primitive conversion operation allowlist changed' mutate_conversion_duplicate
   expect_guard_failure "${temp_dir}" invocation-predicate \
     'callable/constructor predicate allowlist changed' mutate_invocation_predicate
   expect_guard_failure "${temp_dir}" semantic-object-facade \

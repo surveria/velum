@@ -2,11 +2,11 @@ use serde_json::{Map as JsonMap, Value as JsonValue};
 
 use crate::{
     error::{Error, Result},
+    runtime::Context,
     runtime::call::RuntimeCallArgs,
     runtime::control::Completion,
     runtime::object::{ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable},
-    runtime::{Context, abstract_operations::PreferredType},
-    value::{ErrorName, ObjectId, Value},
+    value::{ErrorName, ObjectId, Value, format_ecmascript_number},
 };
 
 use super::{
@@ -698,14 +698,14 @@ impl Context {
         if value == 0.0 {
             return "0".to_owned();
         }
-        Value::Number(value).to_string()
+        format_ecmascript_number(value)
     }
 
     fn json_number_property_name(value: f64) -> String {
         if value == 0.0 {
             return "0".to_owned();
         }
-        Value::Number(value).to_string()
+        format_ecmascript_number(value)
     }
 
     fn json_boxed_stringify_value(&mut self, value: &Value) -> Result<Value> {
@@ -737,8 +737,7 @@ impl Context {
         &mut self,
         value: &Value,
     ) -> Result<String> {
-        let primitive = self.to_primitive(value, PreferredType::String)?;
-        self.string_argument_text(&primitive)
+        self.to_string(value)
     }
 
     fn call_json_callback(

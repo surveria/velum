@@ -1,8 +1,9 @@
-use std::fmt::Write as _;
-
 use crate::{
     error::{Error, Result},
-    runtime::Context,
+    runtime::{
+        Context,
+        abstract_operations::{PreferredType, to_string_primitive},
+    },
     syntax::StaticString,
     value::Value,
 };
@@ -36,11 +37,6 @@ impl Context {
         if matches!(left, Value::String(_) | Value::HeapString(_))
             || matches!(right, Value::String(_) | Value::HeapString(_))
         {
-            if matches!(left, Value::Symbol(_)) || matches!(right, Value::Symbol(_)) {
-                return Err(Error::type_error(
-                    "cannot convert a Symbol value to a string",
-                ));
-            }
             let value = self.concat_values(&left, &right)?;
             return self.heap_string_owned_value(value);
         }
@@ -65,7 +61,7 @@ impl Context {
 
         let mut text = match left {
             Value::String(mut text) => {
-                self.push_display_for_concat(&mut text, right)?;
+                self.push_primitive_string(&mut text, right)?;
                 text
             }
             left => self.concat_values(&left, right)?,
@@ -78,11 +74,16 @@ impl Context {
     }
 
     pub(crate) fn string_concat_static_step(
-        &self,
+        &mut self,
         left: Value,
         right: &str,
         final_result: bool,
     ) -> Result<Value> {
+        let left = if requires_generic_add(&left) {
+            self.to_primitive(&left, PreferredType::Default)?
+        } else {
+            left
+        };
         let mut text = match left {
             Value::String(mut text) => {
                 self.push_concat_text(&mut text, right)?;
@@ -114,8 +115,8 @@ impl Context {
     fn concat_values(&self, left: &Value, right: &Value) -> Result<String> {
         let capacity = self.concat_capacity(left, right)?;
         let mut text = String::with_capacity(capacity);
-        self.push_display_for_concat(&mut text, left)?;
-        self.push_display_for_concat(&mut text, right)?;
+        self.push_primitive_string(&mut text, left)?;
+        self.push_primitive_string(&mut text, right)?;
         Ok(text)
     }
 
@@ -125,7 +126,7 @@ impl Context {
             .ok_or_else(|| Error::limit("string length exceeded supported range"))?
             .min(self.limits.max_string_len);
         let mut text = String::with_capacity(capacity);
-        self.push_display_for_concat(&mut text, left)?;
+        self.push_primitive_string(&mut text, left)?;
         self.push_concat_text(&mut text, right)?;
         Ok(text)
     }
@@ -159,24 +160,9 @@ impl Context {
         }
     }
 
-    fn push_display_for_concat(&self, text: &mut String, value: &Value) -> Result<()> {
-        match value {
-            Value::Function(id) => {
-                let source = self.function_source_text(*id)?;
-                self.push_concat_text(text, &source)
-            }
-            Value::String(value) => self.push_concat_text(text, value),
-            Value::HeapString(value) => self.push_concat_text(text, value.as_str()),
-            Value::Symbol(value) => self.push_concat_text(text, &value.display_name()),
-            Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::Object(_)
-            | Value::Error(_) => self.write_concat_display(text, value),
-        }
+    fn push_primitive_string(&self, text: &mut String, value: &Value) -> Result<()> {
+        let value = to_string_primitive(value)?;
+        self.push_concat_text(text, &value)
     }
 
     fn push_concat_text(&self, text: &mut String, value: &str) -> Result<()> {
@@ -194,31 +180,11 @@ impl Context {
         Ok(())
     }
 
-    fn write_concat_display(&self, text: &mut String, value: &Value) -> Result<()> {
-        text.write_fmt(format_args!("{value}")).map_err(|error| {
-            Error::runtime(format!("failed to format concatenated value: {error}"))
-        })?;
-        if text.len() > self.limits.max_string_len {
-            return Err(Error::limit(format!(
-                "string length {} exceeded {}",
-                text.len(),
-                self.limits.max_string_len
-            )));
-        }
-        Ok(())
-    }
-
-    pub(crate) fn template_concat_text(&self, parts: &[Value]) -> Result<String> {
+    pub(crate) fn template_concat_text(&mut self, parts: &[Value]) -> Result<String> {
         let mut text = String::new();
         for value in parts {
-            // Template substitutions use ToString semantics, which reject
-            // symbol values instead of stringifying their description.
-            if matches!(value, Value::Symbol(_)) {
-                return Err(Error::type_error(
-                    "cannot convert a Symbol value to a string",
-                ));
-            }
-            self.push_display_for_concat(&mut text, value)?;
+            let value = self.to_string(value)?;
+            self.push_concat_text(&mut text, &value)?;
         }
         Ok(text)
     }

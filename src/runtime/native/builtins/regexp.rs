@@ -2,6 +2,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
+        abstract_operations::to_boolean,
         call::RuntimeCallArgs,
         object::{
             AccessorPropertyUpdate, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
@@ -88,8 +89,14 @@ impl Context {
             }
             return self.create_regexp_object_from_text(&pattern, &flags);
         }
-        let pattern = args.first().map_or_else(String::new, Value::to_string);
-        let flags = flags_value.map_or_else(String::new, Value::to_string);
+        let pattern = match args.first() {
+            None | Some(Value::Undefined) => String::new(),
+            Some(value) => self.to_string(value)?,
+        };
+        let flags = match flags_value {
+            None | Some(Value::Undefined) => String::new(),
+            Some(value) => self.to_string(value)?,
+        };
         self.create_regexp_object_from_text(&pattern, &flags)
     }
 
@@ -105,11 +112,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let input = args
-            .as_slice()
-            .first()
-            .map_or_else(String::new, Value::display_for_concat);
-        self.check_string_len(&input)?;
+        let input = self.regexp_argument_or_undefined(args.as_slice().first())?;
         self.regexp_exec(this_value, &input)
     }
 
@@ -118,11 +121,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let input = args
-            .as_slice()
-            .first()
-            .map_or_else(String::new, Value::display_for_concat);
-        self.check_string_len(&input)?;
+        let input = self.regexp_argument_or_undefined(args.as_slice().first())?;
         Ok(Value::Bool(!matches!(
             self.regexp_exec(this_value, &input)?,
             Value::Null
@@ -138,12 +137,10 @@ impl Context {
         let Value::Object(_) = this_value else {
             return Err(Error::type_error(REGEXP_RECEIVER_ERROR));
         };
-        let source = self
-            .get_property_value(this_value, REGEXP_SOURCE_PROPERTY)?
-            .to_string();
-        let flags = self
-            .get_property_value(this_value, REGEXP_FLAGS_PROPERTY)?
-            .to_string();
+        let source_value = self.get_property_value(this_value, REGEXP_SOURCE_PROPERTY)?;
+        let source = self.to_string(&source_value)?;
+        let flags_value = self.get_property_value(this_value, REGEXP_FLAGS_PROPERTY)?;
+        let flags = self.to_string(&flags_value)?;
         let capacity = source
             .len()
             .checked_add(flags.len())
@@ -163,14 +160,8 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let input = args
-            .as_slice()
-            .first()
-            .map_or_else(String::new, Value::display_for_concat);
-        self.check_string_len(&input)?;
-        let global = self
-            .get_property_value(this_value, REGEXP_GLOBAL_PROPERTY)?
-            .is_truthy();
+        let input = self.regexp_argument_or_undefined(args.as_slice().first())?;
+        let global = to_boolean(&self.get_property_value(this_value, REGEXP_GLOBAL_PROPERTY)?);
         if !global {
             return self.regexp_exec(this_value, &input);
         }
@@ -198,11 +189,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let input = args
-            .as_slice()
-            .first()
-            .map_or_else(String::new, Value::display_for_concat);
-        self.check_string_len(&input)?;
+        let input = self.regexp_argument_or_undefined(args.as_slice().first())?;
         let matches = self.regexp_match_all_results(this_value, &input)?;
         self.create_tagged_collection_iterator_object(matches, REGEXP_STRING_ITERATOR_TAG)
     }
@@ -212,11 +199,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let input = args
-            .as_slice()
-            .first()
-            .map_or_else(String::new, Value::display_for_concat);
-        self.check_string_len(&input)?;
+        let input = self.regexp_argument_or_undefined(args.as_slice().first())?;
         let previous = self.get_property_value(this_value, REGEXP_LAST_INDEX_PROPERTY)?;
         self.set_regexp_last_index(this_value, 0)?;
         let result = self.regexp_exec(this_value, &input)?;
@@ -236,20 +219,9 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let input = args
-            .as_slice()
-            .first()
-            .map_or_else(String::new, Value::display_for_concat);
-        let replacement = args
-            .as_slice()
-            .get(1)
-            .map_or_else(String::new, Value::display_for_concat);
-        self.check_string_len(&input)?;
-        self.check_string_len(&replacement)?;
-        if self
-            .get_property_value(this_value, REGEXP_GLOBAL_PROPERTY)?
-            .is_truthy()
-        {
+        let input = self.regexp_argument_or_undefined(args.as_slice().first())?;
+        let replacement = self.regexp_argument_or_undefined(args.as_slice().get(1))?;
+        if to_boolean(&self.get_property_value(this_value, REGEXP_GLOBAL_PROPERTY)?) {
             return self.string_regexp_replace_global(&input, this_value, &replacement);
         }
         self.string_regexp_replace_first(&input, this_value, &replacement)
@@ -260,11 +232,7 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let input = args
-            .as_slice()
-            .first()
-            .map_or_else(String::new, Value::display_for_concat);
-        self.check_string_len(&input)?;
+        let input = self.regexp_argument_or_undefined(args.as_slice().first())?;
         let input_value = self.heap_string_value(&input)?;
         let mut split_args = vec![this_value.clone()];
         if let Some(limit) = args.as_slice().get(1) {
@@ -294,7 +262,7 @@ impl Context {
     }
 
     fn regexp_pattern_and_flags(
-        &self,
+        &mut self,
         pattern_value: Option<&Value>,
         flags_value: Option<&Value>,
     ) -> Result<Option<(String, String)>> {
@@ -308,9 +276,19 @@ impl Context {
         let flags = if flags_value.is_none_or(value_is_undefined) {
             regexp.flags().to_owned()
         } else {
-            flags_value.map_or_else(String::new, Value::to_string)
+            let Some(value) = flags_value else {
+                return Err(Error::runtime("RegExp flags value is unavailable"));
+            };
+            self.to_string(value)?
         };
         Ok(Some((pattern, flags)))
+    }
+
+    fn regexp_argument_or_undefined(&mut self, value: Option<&Value>) -> Result<String> {
+        match value {
+            Some(value) => self.to_string(value),
+            None => self.to_string(&Value::Undefined),
+        }
     }
 
     fn define_regexp_data_property(
@@ -644,10 +622,8 @@ impl Context {
         let Value::Object(id) = result else {
             return Ok(None);
         };
-        Ok(Some(
-            self.get_property_value(&Value::Object(id), "0")?
-                .to_string(),
-        ))
+        let value = self.get_property_value(&Value::Object(id), "0")?;
+        self.to_string(&value).map(Some)
     }
 
     fn regexp_match_all_results(&mut self, pattern: &Value, input: &str) -> Result<Vec<Value>> {
@@ -669,9 +645,8 @@ impl Context {
             let Value::Object(id) = result else {
                 return Ok(results);
             };
-            let match_text = self
-                .get_property_value(&Value::Object(id), "0")?
-                .to_string();
+            let match_value = self.get_property_value(&Value::Object(id), "0")?;
+            let match_text = self.to_string(&match_value)?;
             let is_empty = match_text.is_empty();
             results.push(Value::Object(id));
             if results.len() > self.limits.max_object_properties {

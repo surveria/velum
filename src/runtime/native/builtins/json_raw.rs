@@ -76,27 +76,26 @@ impl Context {
             return Ok(None);
         }
         let value = self.get_property_value(&Value::Object(id), JSON_RAW_JSON_PROPERTY)?;
-        Ok(Some(Self::raw_json_stored_text(&value)))
+        Self::raw_json_stored_text(&value).map(Some)
     }
 
     fn raw_json_to_string(&mut self, value: Option<&Value>) -> Result<String> {
         let Some(value) = value else {
-            return Ok(Value::Undefined.to_string());
+            return self.to_string(&Value::Undefined);
         };
-        match value {
-            Value::Symbol(_) => Err(Error::type_error(RAW_JSON_SYMBOL_ERROR)),
-            Value::String(value) => Ok(value.clone()),
-            Value::HeapString(value) => Ok(value.as_str().to_owned()),
-            Value::Object(_) => self.json_object_to_string(value),
-            _ => Ok(value.to_string()),
-        }
+        self.to_string(value).map_err(|error| {
+            if matches!(value, Value::Symbol(_)) {
+                return Error::type_error(RAW_JSON_SYMBOL_ERROR);
+            }
+            error
+        })
     }
 
-    fn raw_json_stored_text(value: &Value) -> String {
+    fn raw_json_stored_text(value: &Value) -> Result<String> {
         match value {
-            Value::String(value) => value.clone(),
-            Value::HeapString(value) => value.as_str().to_owned(),
-            _ => value.to_string(),
+            Value::String(value) => Ok(value.clone()),
+            Value::HeapString(value) => Ok(value.as_str().to_owned()),
+            _ => Err(Error::runtime("RawJSON text property is not a string")),
         }
     }
 

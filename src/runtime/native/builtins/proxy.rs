@@ -1,8 +1,9 @@
 use crate::{
     error::{Error, Result},
     runtime::{
-        Context, call::RuntimeCallArgs, object::OwnPropertyDescriptor, object::PropertyEnumerable,
-        object::PropertyKey, object::PropertyLookup, object::PropertyUpdate,
+        Context, abstract_operations::to_boolean, call::RuntimeCallArgs,
+        object::OwnPropertyDescriptor, object::PropertyEnumerable, object::PropertyKey,
+        object::PropertyLookup, object::PropertyUpdate,
     },
     value::{NativeFunctionId, ObjectId, Value},
 };
@@ -192,7 +193,7 @@ impl Context {
         let result = self
             .eval_call_completion(&trap, &[target, key], handler)?
             .into_native_value_result()?;
-        Ok(result.is_truthy())
+        Ok(to_boolean(&result))
     }
 
     fn proxy_property_key_value(&mut self, property: PropertyLookup<'_>) -> Result<Value> {
@@ -223,7 +224,7 @@ impl Context {
         let result = self
             .eval_call_completion(&trap, &[target, key, value, receiver], handler)?
             .into_native_value_result()?;
-        Ok(result.is_truthy())
+        Ok(to_boolean(&result))
     }
 
     /// Proxy `[[Delete]]`: dispatch to the `deleteProperty` trap or fall back to
@@ -241,7 +242,7 @@ impl Context {
         let result = self
             .eval_call_completion(&trap, &[target, key], handler)?
             .into_native_value_result()?;
-        Ok(result.is_truthy())
+        Ok(to_boolean(&result))
     }
 
     /// Proxy `[[GetPrototypeOf]]`.
@@ -276,7 +277,7 @@ impl Context {
         let result = self
             .eval_call_completion(&trap, &[target, prototype], handler)?
             .into_native_value_result()?;
-        Ok(result.is_truthy())
+        Ok(to_boolean(&result))
     }
 
     /// Proxy `[[IsExtensible]]`.
@@ -290,7 +291,7 @@ impl Context {
         let result = self
             .eval_call_completion(&trap, &[target], handler)?
             .into_native_value_result()?;
-        Ok(result.is_truthy())
+        Ok(to_boolean(&result))
     }
 
     /// Proxy `[[PreventExtensions]]`.
@@ -304,7 +305,7 @@ impl Context {
         let result = self
             .eval_call_completion(&trap, &[target], handler)?
             .into_native_value_result()?;
-        Ok(result.is_truthy())
+        Ok(to_boolean(&result))
     }
 
     /// Proxy `[[DefineOwnProperty]]`: dispatch the `defineProperty` trap or
@@ -331,7 +332,7 @@ impl Context {
         let result = self
             .eval_call_completion(&trap, &[target, key, descriptor], handler)?
             .into_native_value_result()?;
-        Ok(result.is_truthy())
+        Ok(to_boolean(&result))
     }
 
     /// Proxy `[[OwnPropertyKeys]]`: dispatch the `ownKeys` trap or read the

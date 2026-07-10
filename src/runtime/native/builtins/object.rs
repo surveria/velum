@@ -1,6 +1,5 @@
 use crate::{
     error::{Error, Result},
-    runtime::Context,
     runtime::call::RuntimeCallArgs,
     runtime::object::{
         AccessorPropertyUpdate, DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit,
@@ -8,6 +7,7 @@ use crate::{
         PropertyUpdate, PropertyWritable,
     },
     runtime::property::{DynamicPropertyKey, has_property},
+    runtime::{Context, abstract_operations::to_boolean},
     value::{NativeFunctionId, ObjectId, Value},
 };
 
@@ -462,9 +462,9 @@ impl Context {
         if !self.has_property_value_with_lookup(descriptor, self.property_lookup(property))? {
             return Ok(None);
         }
-        Ok(Some(
-            self.get_property_value(descriptor, property)?.is_truthy(),
-        ))
+        Ok(Some(to_boolean(
+            &self.get_property_value(descriptor, property)?,
+        )))
     }
 
     const fn property_writable(value: bool) -> PropertyWritable {

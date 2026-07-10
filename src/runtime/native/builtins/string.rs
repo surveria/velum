@@ -1,8 +1,11 @@
 use crate::{
     error::{Error, Result},
-    runtime::Context,
     runtime::call::RuntimeCallArgs,
     runtime::object::{ObjectPropertyInit, PropertyEnumerable},
+    runtime::{
+        Context,
+        abstract_operations::{PreferredType, to_string_primitive},
+    },
     value::{ErrorName, ObjectId, Value},
 };
 
@@ -59,7 +62,10 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let value = self.eval_string_argument(args.as_slice())?;
+        let value = match args.as_slice().first() {
+            Some(value) => self.to_string(value)?,
+            None => String::new(),
+        };
         self.create_string_object_from_text(&value)
     }
 
@@ -419,14 +425,17 @@ impl Context {
         }
     }
 
-    fn eval_string_argument(&self, args: &[Value]) -> Result<String> {
-        let value = Self::string_argument_value(args.first());
-        self.check_string_len(&value)?;
-        Ok(value)
-    }
-
-    fn string_argument_value(value: Option<&Value>) -> String {
-        value.map_or_else(String::new, ToString::to_string)
+    fn eval_string_argument(&mut self, args: &[Value]) -> Result<String> {
+        let Some(value) = args.first() else {
+            return Ok(String::new());
+        };
+        let primitive = self.to_primitive(value, PreferredType::String)?;
+        let text = match primitive {
+            Value::Symbol(symbol) => symbol.display_name(),
+            primitive => to_string_primitive(&primitive)?,
+        };
+        self.check_string_len(&text)?;
+        Ok(text)
     }
 
     fn install_string_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
@@ -438,57 +447,32 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn string_receiver_value(
-        &self,
+        &mut self,
         value: &Value,
     ) -> Result<String> {
-        let text = match value {
-            Value::Undefined | Value::Null => {
-                return Err(Error::type_error(STRING_METHOD_NULLISH_RECEIVER_ERROR));
-            }
-            Value::String(value) => value.clone(),
-            Value::HeapString(value) => value.as_str().to_owned(),
-            Value::Object(id) => self
-                .objects
-                .string_object_value(*id)?
-                .map_or_else(|| value.to_string(), ToOwned::to_owned),
-            Value::Symbol(_) => {
-                return Err(Error::type_error(STRING_METHOD_SYMBOL_RECEIVER_ERROR));
-            }
-            Value::Bool(_)
-            | Value::Number(_)
-            | Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_)
-            | Value::Error(_) => value.to_string(),
-        };
-        self.check_string_len(&text)?;
-        Ok(text)
-    }
-
-    pub(in crate::runtime::native) fn string_argument_text(&self, value: &Value) -> Result<String> {
-        if matches!(value, Value::Symbol(_)) {
-            return Err(Error::type_error(
-                "String.prototype argument cannot be converted from symbol",
-            ));
+        if matches!(value, Value::Undefined | Value::Null) {
+            return Err(Error::type_error(STRING_METHOD_NULLISH_RECEIVER_ERROR));
         }
-        let text = match value {
-            Value::Object(id) => self
-                .objects
-                .string_object_value(*id)?
-                .map_or_else(|| value.to_string(), ToOwned::to_owned),
-            _ => value.to_string(),
-        };
-        self.check_string_len(&text)?;
-        Ok(text)
+        self.to_string(value).map_err(|error| {
+            if matches!(value, Value::Symbol(_)) {
+                return Error::type_error(STRING_METHOD_SYMBOL_RECEIVER_ERROR);
+            }
+            error
+        })
     }
 
-    fn string_argument_or_undefined(&self, value: Option<&Value>) -> Result<String> {
+    pub(in crate::runtime::native) fn string_argument_text(
+        &mut self,
+        value: &Value,
+    ) -> Result<String> {
+        self.to_string(value)
+    }
+
+    fn string_argument_or_undefined(&mut self, value: Option<&Value>) -> Result<String> {
         if let Some(value) = value {
             self.string_argument_text(value)
         } else {
-            let text = Value::Undefined.to_string();
-            self.check_string_len(&text)?;
-            Ok(text)
+            self.to_string(&Value::Undefined)
         }
     }
 

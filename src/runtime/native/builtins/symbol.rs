@@ -314,26 +314,14 @@ impl Context {
         )
     }
 
-    fn symbol_description(&self, args: RuntimeCallArgs<'_>) -> Result<Option<String>> {
+    fn symbol_description(&mut self, args: RuntimeCallArgs<'_>) -> Result<Option<String>> {
         let Some(value) = args.as_slice().first() else {
             return Ok(None);
         };
         match value {
             Value::Undefined => Ok(None),
             Value::Symbol(_) => Err(Error::runtime("Cannot convert a Symbol value to a string")),
-            Value::String(value) => {
-                self.check_string_len(value)?;
-                Ok(Some(value.clone()))
-            }
-            Value::HeapString(value) => {
-                self.check_string_len(value.as_str())?;
-                Ok(Some(value.as_str().to_owned()))
-            }
-            value => {
-                let description = value.to_string();
-                self.check_string_len(&description)?;
-                Ok(Some(description))
-            }
+            value => self.to_string(value).map(Some),
         }
     }
 
@@ -342,18 +330,8 @@ impl Context {
         value: Option<&Value>,
     ) -> Result<crate::storage::string_heap::JsString> {
         let text = match value {
-            Some(Value::Undefined) | None => "undefined".to_owned(),
-            Some(Value::Null) => "null".to_owned(),
-            Some(Value::Bool(value)) => value.to_string(),
-            Some(Value::Number(value)) => Value::Number(*value).to_string(),
-            Some(Value::String(value)) => value.clone(),
-            Some(Value::HeapString(value)) => value.as_str().to_owned(),
-            Some(Value::Symbol(_)) => {
-                return Err(Error::type_error(
-                    "Cannot convert a Symbol value to a string",
-                ));
-            }
-            Some(value) => value.to_string(),
+            Some(value) => self.to_string(value)?,
+            None => self.to_string(&Value::Undefined)?,
         };
         self.intern_owned_heap_string(text)
     }
