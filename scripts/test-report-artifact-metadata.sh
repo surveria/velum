@@ -63,9 +63,14 @@ valid_artifact_relative_path "test-runs/report.md" test-runs report.md ||
 
 tree_sha="0123456789abcdef0123456789abcdef01234567"
 head_sha="89abcdef0123456789abcdef0123456789abcdef"
+head_tree="fedcba9876543210fedcba9876543210fedcba98"
 validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/repo \
   .github/workflows/ci.yml CI pull_request completed success "${tree_sha}" ||
   fail_test "rejected trusted correctness workflow run"
+if validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/repo \
+  .github/workflows/ci.yml CI pull_request completed success "${head_tree}"; then
+  fail_test "accepted correctness from a different workflow head tree"
+fi
 if validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 101 owner/repo \
   .github/workflows/ci.yml CI pull_request completed failure "${tree_sha}"; then
   fail_test "accepted failed newest correctness workflow run"
@@ -75,14 +80,14 @@ if validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 102 owne
   fail_test "accepted unrelated newest correctness workflow run"
 fi
 validate_workflow_run_fields performance owner/repo "${tree_sha}" 200 200 owner/repo \
-  .github/workflows/ci.yml CI pull_request in_progress "${null_workflow_conclusion}" "${tree_sha}" ||
-  fail_test "rejected current performance workflow run"
+  .github/workflows/ci.yml CI pull_request in_progress "${null_workflow_conclusion}" "${head_tree}" ||
+  fail_test "rejected current performance workflow run with a distinct PR head tree"
 if validate_workflow_run_fields performance owner/repo "${tree_sha}" 200 200 owner/repo \
-  .github/workflows/ci.yml CI pull_request in_progress "" "${tree_sha}"; then
+  .github/workflows/ci.yml CI pull_request in_progress "" "${head_tree}"; then
   fail_test "accepted an empty parsed performance conclusion"
 fi
 if validate_workflow_run_fields performance owner/repo "${tree_sha}" 200 201 owner/repo \
-  .github/workflows/ci.yml CI pull_request completed success "${tree_sha}"; then
+  .github/workflows/ci.yml CI pull_request completed success "${head_tree}"; then
   fail_test "accepted performance artifact from another run"
 fi
 
@@ -97,7 +102,7 @@ gh() {
         "${null_workflow_conclusion}" "${head_sha}"
       ;;
     /repos/owner/repo/git/commits/"${head_sha}")
-      printf '%s\n' "${tree_sha}"
+      printf '%s\n' "${head_tree}"
       ;;
     *)
       fail_test "unexpected mocked gh request: ${endpoint}"
@@ -106,7 +111,7 @@ gh() {
 }
 
 load_trusted_workflow_run owner/repo 200 "${tree_sha}" performance 200 ||
-  fail_test "shifted fields after a null workflow conclusion"
+  fail_test "rejected a merge-tree-bound artifact after a null workflow conclusion"
 [[ "${RUN_CONCLUSION}" == "${null_workflow_conclusion}" ]] ||
   fail_test "changed the parsed null conclusion sentinel"
 [[ "${RUN_HEAD_SHA}" == "${head_sha}" ]] || fail_test "shifted the parsed head SHA"
