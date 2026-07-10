@@ -1,4 +1,8 @@
-use crate::value::Value;
+use crate::{
+    error::Result,
+    runtime::roots::{DirectRootVisitor, VmRootKind},
+    value::Value,
+};
 
 use super::state::PromiseId;
 
@@ -29,6 +33,26 @@ pub(in crate::runtime) enum PromiseJob {
         reaction: PromiseReaction,
         state: PromiseSettledState,
     },
+}
+
+impl PromiseJob {
+    pub(in crate::runtime) fn visit_direct_roots<V: DirectRootVisitor>(
+        &self,
+        visitor: &mut V,
+    ) -> Result<()> {
+        match self {
+            Self::Reaction { reaction, state } => {
+                visitor.visit_promise(VmRootKind::QueuedJob, reaction.result)?;
+                if let Some(value) = &reaction.on_fulfilled {
+                    visitor.visit_value(VmRootKind::QueuedJob, value)?;
+                }
+                if let Some(value) = &reaction.on_rejected {
+                    visitor.visit_value(VmRootKind::QueuedJob, value)?;
+                }
+                visitor.visit_value(VmRootKind::QueuedJob, &state.value)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

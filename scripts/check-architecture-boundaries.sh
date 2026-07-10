@@ -522,7 +522,7 @@ src/runtime/control/assertions.rs:runtime_exception_value'
       inside { print }
     ' "${repo_root}/src/api/host.rs"
   } | tr -d '[:space:]')"
-  if [[ "${host_call_fields}" != "function_name:&'callstr,identity:&'callVmIdentity,args:&'call[Value]," ]]; then
+  if [[ "${host_call_fields}" != "function_name:&'callstr,identity:&'callVmIdentity,roots:VmRootSnapshot,args:&'call[Value]," ]]; then
     fail "host local-value boundary changed; HostCall requires the active VM identity"
   fi
   if ! grep -F -q 'Error::javascript_local(self.identity.clone(), self.value.clone())' \
@@ -530,6 +530,48 @@ src/runtime/control/assertions.rs:runtime_exception_value'
     || ! grep -F -q 'identity != context.identity()' \
       "${repo_root}/src/runtime/control/assertions.rs"; then
     fail "host local-value boundary changed; JavaScript host errors require owner validation"
+  fi
+}
+
+check_direct_root_boundary() {
+  local root_kinds
+  local source
+  root_kinds="$({
+    awk '
+      /^pub enum VmRootKind \{/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/runtime/roots.rs"
+  } | sed '/^[[:space:]]*\/\//d' | tr -d '[:space:]')"
+  if [[ "${root_kinds}" != 'GlobalBinding,BuiltinBinding,LocalBinding,CapturedBinding,ActiveThis,ActiveNewTarget,ActiveSuper,QueuedJob,RuntimeAnchor,' ]]; then
+    fail "direct root boundary changed; VmRootKind categories require an assigned AS migration"
+  fi
+
+  for source in \
+    'visit_scope(&self.globals, VmRootKind::GlobalBinding, visitor)?;' \
+    'visit_scope(&self.builtin_globals, VmRootKind::BuiltinBinding, visitor)?;' \
+    'for scope in &self.locals {' \
+    'for frame in &self.upvalue_frames {' \
+    'for value in &self.this_values {' \
+    'for value in &self.new_target_values {' \
+    'for frame in self.super_frames.iter().flatten() {' \
+    'if let Some(id) = self.global_object {' \
+    'if let Some(id) = self.promise_prototype {' \
+    'for job in &self.promise_jobs {'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/roots.rs"; then
+      fail "direct root boundary changed; required Context root source '${source}' is missing"
+    fi
+  done
+
+  if ! grep -F -q 'pub(in crate::runtime) fn visit_direct_roots<V: DirectRootVisitor>' \
+      "${repo_root}/src/runtime/promise/job.rs" \
+    || ! grep -F -q 'visitor.visit_promise(VmRootKind::QueuedJob, reaction.result)?;' \
+      "${repo_root}/src/runtime/promise/job.rs" \
+    || ! grep -F -q 'pub fn root_snapshot(&self) -> Result<VmRootSnapshot>' \
+      "${repo_root}/src/api/embedding.rs" \
+    || ! grep -F -q 'pub const fn root_snapshot(self) -> VmRootSnapshot' \
+      "${repo_root}/src/api/host.rs"; then
+    fail "direct root boundary changed; jobs, Vm, and active host callbacks require one executable root contract"
   fi
 }
 
@@ -732,6 +774,7 @@ run_checks() {
   require_file src/value/kind.rs
   require_file src/api/owned_value.rs
   require_file src/runtime/mod.rs
+  require_file src/runtime/roots.rs
   require_file src/ownership.rs
   require_file src/source.rs
   require_file src/ast/node.rs
@@ -752,6 +795,7 @@ run_checks() {
   check_harness_boundaries
   check_semantic_duplicate_allowlists
   check_completion_error_boundary
+  check_direct_root_boundary
   check_state_owner_allowlists
   check_optimization_owner_allowlists
   printf '%s: ok\n' "${script_name}"
@@ -875,6 +919,12 @@ mutate_javascript_exception_visibility() {
   local fixture_root="$1"
   sed -i '0,/    identity: Option<VmIdentity>,/{s/    identity: Option<VmIdentity>,/    pub identity: Option<VmIdentity>,/}' \
     "${fixture_root}/src/error.rs"
+}
+
+mutate_direct_root_source() {
+  local fixture_root="$1"
+  sed -i '/for value in &self.this_values {/d' \
+    "${fixture_root}/src/runtime/roots.rs"
 }
 
 mutate_test262_source_name() {
@@ -1016,6 +1066,8 @@ run_self_tests() {
     'host local-value boundary changed' mutate_host_local_value_identity
   expect_guard_failure "${temp_dir}" javascript-exception-visibility \
     'JavaScriptException fields must stay private' mutate_javascript_exception_visibility
+  expect_guard_failure "${temp_dir}" direct-root-source \
+    'direct root boundary changed' mutate_direct_root_source
   expect_guard_failure "${temp_dir}" context-store \
     'Context state-owner field allowlist changed' mutate_context_store
   expect_guard_failure "${temp_dir}" object-payload \

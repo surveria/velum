@@ -34,6 +34,7 @@ pub mod numeric;
 pub mod object;
 pub mod promise;
 pub mod property;
+mod roots;
 mod semantic_object;
 pub mod values;
 
@@ -45,6 +46,7 @@ use native::{NativeFunctionKind, NativeFunctionRegistry};
 use promise::{Promise, PromiseId, PromiseJob};
 use property::static_names::{CallValueCache, StaticNameAtomCacheHandle};
 use property::well_known::{DescriptorPropertyKeys, WellKnownPropertyKeys};
+pub use roots::{VmRootKind, VmRootSnapshot};
 
 const INITIAL_RANDOM_STATE: u64 = 0x9e37_79b9_7f4a_7c15;
 const CONSTRUCTOR_PROTOTYPE_PROPERTY: &str = "prototype";
