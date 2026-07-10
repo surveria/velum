@@ -1,11 +1,11 @@
 use crate::{
     bytecode::{BytecodeAddress, BytecodeBinding, BytecodeBlock, BytecodeForInTarget},
     error::{Error, Result},
-    runtime::Context,
     runtime::binding::scope::{BindingCell, BindingScope},
     runtime::control::Completion,
     runtime::object::PropertyKey,
     runtime::property::DynamicPropertyKey,
+    runtime::{Context, abstract_operations::to_boolean},
     syntax::{DeclKind, StaticName},
     value::Value,
 };
@@ -210,10 +210,7 @@ impl Context {
                         "iterator result '{result}' is not an object"
                     )));
                 }
-                if self
-                    .get_property_value(&result, ITERATOR_RESULT_DONE_PROPERTY)?
-                    .is_truthy()
-                {
+                if to_boolean(&self.get_property_value(&result, ITERATOR_RESULT_DONE_PROPERTY)?) {
                     set_protocol_done(source);
                     return Ok(ForOfStep::Done);
                 }

@@ -40,15 +40,9 @@ impl Context {
         value: Option<&Value>,
     ) -> Result<String> {
         let Some(value) = value else {
-            return Ok(Value::Undefined.to_string());
+            return self.to_string(&Value::Undefined);
         };
-        match value {
-            Value::Symbol(_) => Err(Error::type_error(
-                "Cannot convert a Symbol value to a string",
-            )),
-            Value::Object(_) => self.json_object_to_string(value),
-            _ => Ok(value.to_string()),
-        }
+        self.to_string(value)
     }
 
     fn json_well_known_symbol_property_key(&mut self, property: &str) -> Result<PropertyKey> {

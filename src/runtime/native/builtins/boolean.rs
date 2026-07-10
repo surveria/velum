@@ -1,8 +1,8 @@
 use crate::{
     error::{Error, Result},
-    runtime::Context,
     runtime::call::RuntimeCallArgs,
     runtime::object::{ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable},
+    runtime::{Context, abstract_operations::to_boolean},
     value::{ObjectId, Value},
 };
 
@@ -164,7 +164,7 @@ impl Context {
 
     fn eval_boolean_argument(args: &[Value]) -> bool {
         let value = args.first();
-        value.is_some_and(Value::is_truthy)
+        value.is_some_and(to_boolean)
     }
 
     fn boolean_receiver_value(&self, value: &Value) -> Result<bool> {

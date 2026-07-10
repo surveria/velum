@@ -101,7 +101,7 @@ impl Context {
         args: &[Value],
         is_async: bool,
     ) -> Result<Value> {
-        let source = Self::function_constructor_source(args, is_async);
+        let source = self.function_constructor_source(args, is_async)?;
         self.check_string_len(&source.compile)?;
         let script = self
             .compile(&source.compile)
@@ -132,20 +132,21 @@ impl Context {
         }
     }
 
-    fn function_constructor_source(args: &[Value], is_async: bool) -> GeneratedFunctionSource {
+    fn function_constructor_source(
+        &mut self,
+        args: &[Value],
+        is_async: bool,
+    ) -> Result<GeneratedFunctionSource> {
         let Some((body, params)) = args.split_last() else {
-            return generated_function_source("", "", is_async);
+            return Ok(generated_function_source("", "", is_async));
         };
-        let body = function_constructor_argument_text(body);
-        if params.is_empty() {
-            return generated_function_source("", &body, is_async);
+        let mut converted_params = Vec::with_capacity(params.len());
+        for param in params {
+            converted_params.push(self.to_string(param)?);
         }
-        let params = params
-            .iter()
-            .map(function_constructor_argument_text)
-            .collect::<Vec<_>>()
-            .join(",");
-        generated_function_source(&params, &body, is_async)
+        let body = self.to_string(body)?;
+        let params = converted_params.join(",");
+        Ok(generated_function_source(&params, &body, is_async))
     }
 
     fn function_constructor_prototype_id(&mut self) -> Result<ObjectId> {
@@ -318,8 +319,4 @@ fn function_display_source(params: &str, body: &str, is_async: bool) -> String {
     format!(
         "{async_prefix}function {GENERATED_FUNCTION_NAME}({params}{parameter_line_terminator}) {{\n{body}\n}}"
     )
-}
-
-fn function_constructor_argument_text(value: &Value) -> String {
-    value.display_for_concat()
 }

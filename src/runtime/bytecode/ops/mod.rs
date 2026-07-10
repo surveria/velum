@@ -20,7 +20,9 @@ use crate::{
     runtime::property::DynamicPropertyKey,
     runtime::{
         Context,
-        abstract_operations::{abstract_equality, number_strict_equality, strict_equality},
+        abstract_operations::{
+            abstract_equality, number_strict_equality, strict_equality, to_boolean,
+        },
     },
     syntax::{BinaryOp, DeclKind, UnaryOp},
     value::{ErrorName, Value},
@@ -93,7 +95,7 @@ impl Context {
 
     pub(super) fn eval_bytecode_unary(&mut self, op: UnaryOp, value: &Value) -> Result<Value> {
         match op {
-            UnaryOp::Not => Ok(Value::Bool(!value.is_truthy())),
+            UnaryOp::Not => Ok(Value::Bool(!to_boolean(value))),
             UnaryOp::Negate => self.to_number(value).map(|value| Value::Number(-value)),
             UnaryOp::Plus => self.to_number(value).map(Value::Number),
             UnaryOp::Void => Ok(Value::Undefined),
@@ -248,7 +250,7 @@ impl Context {
                 Completion::Normal(value) => value,
                 completion => return completion.into_result(),
             };
-            return Ok(Value::Bool(result.is_truthy()));
+            return Ok(Value::Bool(to_boolean(&result)));
         }
         let target = self.instanceof_target_prototype(right)?;
         let matches = if let Value::Error(error) = left {

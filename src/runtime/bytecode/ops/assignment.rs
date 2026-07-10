@@ -4,13 +4,13 @@ use crate::{
         BytecodeNumericBinaryOp, BytecodeProperty,
     },
     error::{Error, Result},
-    runtime::Context,
     runtime::binding::scope::BindingCell,
     runtime::numeric::{
         bitwise_and, bitwise_or, bitwise_xor, numeric_binary, shift_left, shift_right,
         shift_right_unsigned,
     },
     runtime::property::DynamicPropertyKey,
+    runtime::{Context, abstract_operations::to_boolean},
     syntax::{BinaryOp, StaticName, StaticPropertyAccessId, UpdateOp},
     value::Value,
 };
@@ -382,8 +382,8 @@ impl Context {
 
 fn logical_assignment_should_store(op: BinaryOp, value: &Value) -> Result<bool> {
     match op {
-        BinaryOp::LogicalAnd => Ok(value.is_truthy()),
-        BinaryOp::LogicalOr => Ok(!value.is_truthy()),
+        BinaryOp::LogicalAnd => Ok(to_boolean(value)),
+        BinaryOp::LogicalOr => Ok(!to_boolean(value)),
         BinaryOp::NullishCoalescing => Ok(matches!(value, Value::Undefined | Value::Null)),
         BinaryOp::Add
         | BinaryOp::Sub

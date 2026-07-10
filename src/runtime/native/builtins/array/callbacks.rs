@@ -1,6 +1,8 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs, control::Completion},
+    runtime::{
+        Context, abstract_operations::to_boolean, call::RuntimeCallArgs, control::Completion,
+    },
     value::Value,
 };
 
@@ -101,7 +103,7 @@ impl Context {
                 index,
                 this_value,
             )?;
-            if keep.is_truthy() {
+            if to_boolean(&keep) {
                 context.push_array_callback_result(&result, value.clone())?;
             }
             Ok(ArrayCallbackAction::Continue)
@@ -135,7 +137,7 @@ impl Context {
                 index,
                 this_value,
             )?;
-            if result.is_truthy() {
+            if to_boolean(&result) {
                 matched = true;
                 return Ok(ArrayCallbackAction::Stop);
             }
@@ -170,7 +172,7 @@ impl Context {
                 index,
                 this_value,
             )?;
-            if !result.is_truthy() {
+            if !to_boolean(&result) {
                 matched = false;
                 return Ok(ArrayCallbackAction::Stop);
             }
@@ -208,7 +210,7 @@ impl Context {
                     index,
                     this_value,
                 )?;
-                if result.is_truthy() {
+                if to_boolean(&result) {
                     found = value.clone();
                     return Ok(ArrayCallbackAction::Stop);
                 }
@@ -247,7 +249,7 @@ impl Context {
                     index,
                     this_value,
                 )?;
-                if result.is_truthy() {
+                if to_boolean(&result) {
                     found = Self::array_like_index_value(index)?;
                     return Ok(ArrayCallbackAction::Stop);
                 }
@@ -325,7 +327,7 @@ impl Context {
             let Some(keep) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
                 return Ok(None);
             };
-            if keep.is_truthy() {
+            if to_boolean(&keep) {
                 filtered.push(value.clone());
             }
         }
@@ -347,7 +349,7 @@ impl Context {
             let Some(result) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
                 return Ok(None);
             };
-            if result.is_truthy() {
+            if to_boolean(&result) {
                 return Ok(Some(Value::Bool(true)));
             }
         }
@@ -368,7 +370,7 @@ impl Context {
             let Some(result) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
                 return Ok(None);
             };
-            if !result.is_truthy() {
+            if !to_boolean(&result) {
                 return Ok(Some(Value::Bool(false)));
             }
         }
@@ -389,7 +391,7 @@ impl Context {
             let Some(result) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
                 return Ok(None);
             };
-            if result.is_truthy() {
+            if to_boolean(&result) {
                 return Ok(Some(value.clone()));
             }
         }
@@ -410,7 +412,7 @@ impl Context {
             let Some(result) = self.eval_pure_function_callback_fast_path(callback, &args)? else {
                 return Ok(None);
             };
-            if result.is_truthy() {
+            if to_boolean(&result) {
                 return Self::array_like_index_value(index).map(Some);
             }
         }

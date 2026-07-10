@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs},
+    runtime::{Context, call::RuntimeCallArgs, numeric::number_to_uint32},
     value::Value,
 };
 
@@ -27,7 +27,8 @@ impl Context {
             return self.string_match_plain(&text, "");
         };
         if !self.string_regexp_is_object(pattern)? {
-            return self.string_match_plain(&text, &self.string_argument_text(pattern)?);
+            let pattern = self.string_argument_text(pattern)?;
+            return self.string_match_plain(&text, &pattern);
         }
         if !self.string_regexp_is_global(pattern)? {
             return self.regexp_exec(pattern, &text);
@@ -111,7 +112,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let text = self.string_receiver_value(this_value)?;
-        let limit = split_limit(args.as_slice().get(1))?;
+        let limit = self.string_split_limit(args.as_slice().get(1))?;
         if limit == 0 {
             return self.string_values_array(Vec::new());
         }
@@ -158,9 +159,8 @@ impl Context {
             .as_number()
             .ok_or_else(|| Error::runtime("RegExp match index is not numeric"))?;
         let start = number_to_usize(index)?;
-        let matched = self
-            .get_property_value(&Value::Object(id), FIRST_MATCH_PROPERTY)?
-            .to_string();
+        let matched_value = self.get_property_value(&Value::Object(id), FIRST_MATCH_PROPERTY)?;
+        let matched = self.to_string(&matched_value)?;
         let end = start
             .checked_add(matched.len())
             .ok_or_else(|| Error::limit("RegExp match end overflowed"))?;
@@ -267,9 +267,8 @@ impl Context {
             .as_number()
             .ok_or_else(|| Error::runtime("RegExp match index is not numeric"))?;
         let start = number_to_usize(index)?;
-        let matched = self
-            .get_property_value(&Value::Object(*id), FIRST_MATCH_PROPERTY)?
-            .to_string();
+        let matched_value = self.get_property_value(&Value::Object(*id), FIRST_MATCH_PROPERTY)?;
+        let matched = self.to_string(&matched_value)?;
         let end = start
             .checked_add(matched.len())
             .ok_or_else(|| Error::limit("RegExp match end overflowed"))?;
@@ -312,6 +311,17 @@ impl Context {
             self.limits.max_objects,
             self.limits.max_object_properties,
         )
+    }
+
+    fn string_split_limit(&mut self, value: Option<&Value>) -> Result<usize> {
+        let limit = match value {
+            None | Some(Value::Undefined) => u32::MAX,
+            Some(value) => {
+                number_to_uint32(self.to_number(value)?, "String.prototype.split limit")?
+            }
+        };
+        usize::try_from(limit)
+            .map_err(|_| Error::limit("String.prototype.split limit exceeded supported range"))
     }
 }
 
@@ -361,21 +371,6 @@ fn split_plain(text: &str, separator: &str, limit: usize) -> Result<Vec<String>>
     }
     values.push(slice_to_string(text, cursor, text.len())?);
     Ok(values)
-}
-
-fn split_limit(value: Option<&Value>) -> Result<usize> {
-    let Some(value) = value else {
-        return Ok(usize::MAX);
-    };
-    match value {
-        Value::Undefined => Ok(usize::MAX),
-        Value::Number(number) if !number.is_finite() || *number <= 0.0 => Ok(0),
-        Value::Number(number) => number_to_usize(*number),
-        _ => value
-            .to_string()
-            .parse::<usize>()
-            .map_err(|_| Error::runtime("String.prototype.split limit is not numeric")),
-    }
 }
 
 fn push_checked_slice(output: &mut String, text: &str, start: usize, end: usize) -> Result<()> {

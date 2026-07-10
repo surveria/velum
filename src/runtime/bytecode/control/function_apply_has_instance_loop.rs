@@ -6,7 +6,8 @@ use crate::{
     },
     error::{Error, Result},
     runtime::{
-        Context, binding::scope::BindingCell, native::NativeFunctionKind, numeric::number_to_i32,
+        Context, abstract_operations::to_boolean, binding::scope::BindingCell,
+        native::NativeFunctionKind, numeric::number_to_i32,
     },
     syntax::{BinaryOp, DeclKind, UnaryOp},
     value::Value,
@@ -150,11 +151,9 @@ impl Context {
         )? {
             return Ok(false);
         }
-        Ok(self.eval_bytecode_instanceof(dog, dog_ctor)?.is_truthy()
-            && self.eval_bytecode_instanceof(dog, animal_ctor)?.is_truthy()
-            && !self
-                .eval_bytecode_instanceof(&Value::Number(0.0), dog_ctor)?
-                .is_truthy())
+        Ok(to_boolean(&self.eval_bytecode_instanceof(dog, dog_ctor)?)
+            && to_boolean(&self.eval_bytecode_instanceof(dog, animal_ctor)?)
+            && !to_boolean(&self.eval_bytecode_instanceof(&Value::Number(0.0), dog_ctor)?))
     }
 
     fn value_static_property_is_native_kind(

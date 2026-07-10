@@ -1,9 +1,8 @@
-use std::fmt::Write as _;
-
 use crate::{
     error::{Error, Result},
     runtime::abstract_operations::{
         number_same_value_zero, number_strict_equality, same_value_zero, strict_equality,
+        to_string_primitive,
     },
     value::Value,
 };
@@ -41,26 +40,11 @@ impl ObjectHeap {
     ) -> Result<()> {
         match value {
             Value::Undefined | Value::Null => Ok(()),
-            Value::String(value) => Self::push_join_text(joined, value, max_string_len),
-            Value::HeapString(value) => {
-                Self::push_join_text(joined, value.as_str(), max_string_len)
+            _ => {
+                let text = to_string_primitive(value)?;
+                Self::push_join_text(joined, &text, max_string_len)
             }
-            _ => Self::write_join_display(joined, value, max_string_len),
         }
-    }
-
-    fn write_join_display(joined: &mut String, value: &Value, max_string_len: usize) -> Result<()> {
-        joined.write_fmt(format_args!("{value}")).map_err(|error| {
-            Error::runtime(format!("failed to format array join value: {error}"))
-        })?;
-        if joined.len() > max_string_len {
-            return Err(Error::limit(format!(
-                "string length {} exceeded {}",
-                joined.len(),
-                max_string_len
-            )));
-        }
-        Ok(())
     }
 
     pub(super) fn join_string_with_separator_capacity(

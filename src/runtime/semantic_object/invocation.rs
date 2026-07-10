@@ -126,6 +126,9 @@ impl Context {
                         new_target,
                     );
                 }
+                if matches!(kind, NativeFunctionKind::ErrorConstructor(_)) {
+                    self.constructor_instance_prototype(&new_target)?;
+                }
                 self.construct_native_function_kind(kind, RuntimeCallArgs::values(args))
             }
             Value::Object(id) if self.objects.proxy_constructability(*id)? => {

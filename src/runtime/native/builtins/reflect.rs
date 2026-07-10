@@ -2,6 +2,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
+        abstract_operations::PreferredType,
         call::RuntimeCallArgs,
         object::{DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable, PropertyWritable},
         object::{PropertyKey, PropertyUpdate},
@@ -307,16 +308,8 @@ impl Context {
         value: Option<&Value>,
     ) -> Result<crate::runtime::property::DynamicPropertyKey> {
         let value = Self::argument_or_undefined(value);
-        if matches!(value, Value::Object(_)) {
-            let to_string = self.get_property_value(&value, "toString")?;
-            if self.semantic_is_callable(&to_string)? {
-                let key = self
-                    .eval_call_completion(&to_string, &[], value.clone())?
-                    .into_native_value_result()?;
-                return self.dynamic_property_key(&key);
-            }
-        }
-        self.dynamic_property_key(&value)
+        let primitive = self.to_primitive(&value, PreferredType::String)?;
+        self.dynamic_property_key(&primitive)
     }
 
     /// Spec `CreateListFromArrayLike` for the default element types.

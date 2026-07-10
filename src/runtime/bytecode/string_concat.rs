@@ -39,7 +39,7 @@ impl Context {
     }
 
     pub(super) fn eval_bytecode_string_concat_static(
-        &self,
+        &mut self,
         state: &mut BytecodeState,
         text: &str,
         final_result: bool,

@@ -1,7 +1,7 @@
 use crate::{
     error::{Error, Result},
     runtime::{Context, call::RuntimeCallArgs},
-    value::{ErrorName, Value},
+    value::{ErrorName, Value, format_ecmascript_number},
 };
 
 const DIGIT_LIMIT: u32 = 100;
@@ -34,7 +34,7 @@ impl Context {
             return self.heap_string_value(NAN_TEXT);
         }
         if !value.is_finite() || value.abs() >= FIXED_THRESHOLD {
-            return self.heap_string_value(&Value::Number(value).to_string());
+            return self.heap_string_value(&format_ecmascript_number(value));
         }
         let text = Self::format_to_fixed(value, fraction);
         self.heap_string_value(&text)
@@ -51,7 +51,7 @@ impl Context {
             return self.heap_string_value(NAN_TEXT);
         }
         if !value.is_finite() {
-            return self.heap_string_value(&Value::Number(value).to_string());
+            return self.heap_string_value(&format_ecmascript_number(value));
         }
         let fraction = match argument {
             None | Some(Value::Undefined) => None,
@@ -78,13 +78,13 @@ impl Context {
         let argument = args.as_slice().first().cloned();
         let value = self.number_receiver_value(this_value)?;
         if matches!(argument, None | Some(Value::Undefined)) {
-            return self.heap_string_value(&Value::Number(value).to_string());
+            return self.heap_string_value(&format_ecmascript_number(value));
         }
         if value.is_nan() {
             return self.heap_string_value(NAN_TEXT);
         }
         if !value.is_finite() {
-            return self.heap_string_value(&Value::Number(value).to_string());
+            return self.heap_string_value(&format_ecmascript_number(value));
         }
         let precision = self.number_digit_value(&argument.unwrap_or(Value::Undefined))?;
         if !(1.0..=f64::from(DIGIT_LIMIT)).contains(&precision) {

@@ -289,15 +289,16 @@ Test262 variants and 95/95 QuickJS differential cases.
 | property-key conversion | `property::property_key`, `dynamic_property_key`, Object wrapper, Reflect wrapper | no single spec-named operation; nonprimitive conversion relies on display text |
 | integer-or-infinity | String and Array built-ins contain separate helpers | semantics and supported numeric ranges differ by caller |
 | length/index conversion | Array generic code, Function.apply, Reflect list creation, and String helpers each convert/cap lengths | several maxima use current storage limits rather than one `ToLength`/`ToIndex` contract |
-| boolean conversion | `Value::is_truthy` | broadly reused and a good candidate to move behind AS-03a without changing representation |
-| string conversion | `Display for Value`, string constructors, concatenation helpers, JSON, Date, and property-key code; `Function.prototype.toString` is now a real intrinsic used by `ToPrimitive` | formatting and semantic conversion are not cleanly separated; AS-03a2b owns the remaining split |
+| boolean conversion | `to_boolean` in `runtime/abstract_operations/conversion.rs` | AS-03a2b removes `Value::is_truthy`; bytecode control flow, logical operators, callbacks, Proxy traps, RegExp, Set, and the Boolean constructor delegate to one pure owner |
+| string conversion | `Context::to_string` plus `to_string_primitive` in `runtime/abstract_operations/conversion.rs`; `Function.prototype.toString` is a real intrinsic used by `ToPrimitive` | AS-03a2b routes observable conversion consumers through this owner; Rust `Display for Value` remains diagnostic, while the current property-key path is an explicit AS-03b debt |
 
 AS-03a2 is split into AS-03a2a (`ToPrimitive`/`ToNumber`) and AS-03a2b
 (`ToString`/`ToBoolean`) because the two groups have independent consumer
-graphs and validation surfaces. AS-03a2a locally preserves all 34,273 prior
-expected Test262 variants and adds 1,330 reviewed passes, for 35,603 of 102,578
-full variants with 95 of 95 QuickJS differential cases. Property-key,
-numeric-index, property, call, and iterator operations follow in AS-03b.
+graphs and validation surfaces. Merged AS-03a2a adds 1,330 reviewed passes;
+AS-03a2b locally adds another 384 without losing any of the 35,603 prior
+expected variants, for 35,987 of 102,578 full variants with 95 of 95 QuickJS
+differential cases. Property-key, numeric-index, property, call, and iterator
+operations follow in AS-03b.
 
 ## Iterator Map
 
@@ -470,8 +471,8 @@ decision sequence:
 | AS-02b2 | property/internal-method table | set/define/delete/keys/prototype/descriptor/integrity boundary implemented in PR #403 with ordinary cache tails and Symbol-preserving Proxy dispatch |
 | AS-02c | call/construct tables and repeated object-like lists | shared call/construct predicates and dispatch completed in PR #408, including callable/constructable Proxy and bound functions |
 | AS-03a1 | equality table and numeric fast paths | shared equality owner merged in PR #409; bytecode, Object.is, collections, and arrays delegate to it |
-| AS-03a2a | conversion table | shared `ToPrimitive`/`ToNumber` owner implemented and locally validated in draft PR #410; local method probing and primitive-only number facades are deleted, with all prior Test262 passes retained |
-| AS-03a2b | string/boolean conversion sites | separate semantic `ToString` from diagnostic `Display`, then route truthiness through one `ToBoolean` owner |
+| AS-03a2a | conversion table | shared `ToPrimitive`/`ToNumber` owner merged in PR #410; local method probing and primitive-only number facades are deleted, with all prior Test262 passes retained |
+| AS-03a2b | string/boolean conversion sites | shared `ToString`/`ToBoolean` owners implemented and locally validated in draft PR #411; direct runtime truthiness and semantic concat formatting are deleted |
 | AS-03b | key/property/call/iterator tables | move iterator protocol out of bytecode and add spec-level method lookup and invocation operations over the AS-02c internal methods |
 | AS-04a/b | completion/error table and inline Error representation | preserve arbitrary throws across native frames; remove ReferenceError prefix parsing; add real errors/spans |
 | AS-05a/b | id, clone, store, root, handle, and limit maps | remove ambiguous VM cloning; add VM identity/generation and root/accounting contracts |

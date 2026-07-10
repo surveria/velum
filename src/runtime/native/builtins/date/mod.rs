@@ -105,7 +105,7 @@ impl Context {
         match kind {
             DateFunctionKind::Constructor => Some(self.eval_date_constructor(args)),
             DateFunctionKind::Now => Some(Self::eval_date_now(args)),
-            DateFunctionKind::Parse => Some(Self::eval_date_parse(args)),
+            DateFunctionKind::Parse => Some(self.eval_date_parse(args)),
             DateFunctionKind::Utc => Some(self.eval_date_utc(args)),
             _ => None,
         }
@@ -261,11 +261,14 @@ impl Context {
         date_value_to_number(current_time_value()?).map(Value::Number)
     }
 
-    pub(in crate::runtime::native) fn eval_date_parse(args: RuntimeCallArgs<'_>) -> Result<Value> {
-        let text = args
-            .as_slice()
-            .first()
-            .map_or_else(|| Value::Undefined.to_string(), ToString::to_string);
+    pub(in crate::runtime::native) fn eval_date_parse(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        let text = match args.as_slice().first() {
+            Some(value) => self.to_string(value)?,
+            None => self.to_string(&Value::Undefined)?,
+        };
         let value = parse_date_string(&text)?;
         date_value_to_number(value).map(Value::Number)
     }

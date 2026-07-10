@@ -25,7 +25,10 @@ use crate::{
     error::{Error, Result},
     runtime::binding::scope::{BindingCell, BindingScope},
     runtime::control::Completion,
-    runtime::{Context, abstract_operations::number_strict_equality},
+    runtime::{
+        Context,
+        abstract_operations::{number_strict_equality, to_boolean},
+    },
     syntax::{DeclKind, StaticName},
     value::Value,
 };
@@ -180,17 +183,17 @@ impl Context {
             }
             BytecodeInstruction::JumpIfFalse(target) => {
                 let value = state.stack.pop()?;
-                state.pc = if value.is_truthy() { next } else { *target };
+                state.pc = if to_boolean(&value) { next } else { *target };
                 Ok(None)
             }
             BytecodeInstruction::JumpIfFalseKeep(target) => {
                 let value = state.stack.peek()?;
-                state.pc = if value.is_truthy() { next } else { *target };
+                state.pc = if to_boolean(value) { next } else { *target };
                 Ok(None)
             }
             BytecodeInstruction::JumpIfTrueKeep(target) => {
                 let value = state.stack.peek()?;
-                state.pc = if value.is_truthy() { *target } else { next };
+                state.pc = if to_boolean(value) { *target } else { next };
                 Ok(None)
             }
             BytecodeInstruction::Complete(completion) => {
@@ -474,7 +477,7 @@ impl Context {
     ) -> Result<BytecodeCondition> {
         if let Some(completion) = self.eval_bytecode_linear_direct_condition(condition, plan)? {
             return Ok(match completion {
-                Completion::Normal(value) => BytecodeCondition::Value(value.is_truthy()),
+                Completion::Normal(value) => BytecodeCondition::Value(to_boolean(&value)),
                 completion @ (Completion::Throw(_)
                 | Completion::Return(_)
                 | Completion::Break { .. }
@@ -482,7 +485,7 @@ impl Context {
             });
         }
         match self.eval_bytecode_block_with_linear_plan(condition, plan, state)? {
-            Completion::Normal(value) => Ok(BytecodeCondition::Value(value.is_truthy())),
+            Completion::Normal(value) => Ok(BytecodeCondition::Value(to_boolean(&value))),
             completion @ (Completion::Throw(_)
             | Completion::Return(_)
             | Completion::Break { .. }

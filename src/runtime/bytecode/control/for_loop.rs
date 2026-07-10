@@ -7,7 +7,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
-        abstract_operations::number_strict_equality,
+        abstract_operations::{number_strict_equality, to_boolean},
         binding::scope::BindingCell,
         control::{Completion, runtime_exception_value},
         numeric::number_to_i32,
@@ -612,7 +612,7 @@ impl Context {
             &test_value,
             &Value::Number(fast_path.test_right),
         )?;
-        if test.is_truthy() {
+        if to_boolean(&test) {
             return Ok(Completion::Continue(None));
         }
         self.eval_bytecode_for_body_fast_path_add(fast_path, array_values)

@@ -1,5 +1,3 @@
-use std::fmt::Write as _;
-
 use crate::{
     error::{Error, Result},
     runtime::{Context, call::RuntimeCallArgs, object::PropertyEnumerable},
@@ -302,7 +300,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let separator = Self::eval_array_unary_value(args);
-        let separator = Self::array_join_separator(separator);
+        let separator = self.array_join_separator(separator)?;
         if let Value::Object(id) = this_value
             && self.objects.array_len_if_array(*id)?.is_some()
         {
@@ -558,10 +556,10 @@ impl Context {
             .map_err(|_| Error::limit("array length exceeded supported range"))
     }
 
-    fn array_join_separator(value: Option<&Value>) -> String {
+    fn array_join_separator(&mut self, value: Option<&Value>) -> Result<String> {
         match value {
-            None | Some(Value::Undefined) => ARRAY_JOIN_DEFAULT_SEPARATOR.to_owned(),
-            Some(value) => value.display_for_concat(),
+            None | Some(Value::Undefined) => Ok(ARRAY_JOIN_DEFAULT_SEPARATOR.to_owned()),
+            Some(value) => self.to_string(value),
         }
     }
 
@@ -575,12 +573,13 @@ impl Context {
 
     const fn eval_array_discard_args(_args: &[Value]) {}
 
-    fn push_join_value_text(&self, joined: &mut String, value: &Value) -> Result<()> {
+    fn push_join_value_text(&mut self, joined: &mut String, value: &Value) -> Result<()> {
         match value {
             Value::Undefined | Value::Null => Ok(()),
-            Value::String(value) => self.push_join_text(joined, value),
-            Value::HeapString(value) => self.push_join_text(joined, value.as_str()),
-            _ => self.write_join_display(joined, value),
+            _ => {
+                let text = self.to_string(value)?;
+                self.push_join_text(joined, &text)
+            }
         }
     }
 
@@ -596,20 +595,6 @@ impl Context {
             )));
         }
         joined.push_str(text);
-        Ok(())
-    }
-
-    fn write_join_display(&self, joined: &mut String, value: &Value) -> Result<()> {
-        joined.write_fmt(format_args!("{value}")).map_err(|error| {
-            Error::runtime(format!("failed to format array join value: {error}"))
-        })?;
-        if joined.len() > self.limits.max_string_len {
-            return Err(Error::limit(format!(
-                "string length {} exceeded {}",
-                joined.len(),
-                self.limits.max_string_len
-            )));
-        }
         Ok(())
     }
 

@@ -4,11 +4,12 @@ use crate::{
         Context,
         object::{PropertyKey, PropertyLookup},
     },
-    value::Value,
+    value::{Value, format_ecmascript_number},
 };
 
 const CANNOT_CONVERT_OBJECT_ERROR: &str = "Cannot convert object to primitive value";
 const CANNOT_CONVERT_SYMBOL_ERROR: &str = "Cannot convert a Symbol value to a number";
+const CANNOT_CONVERT_SYMBOL_TO_STRING_ERROR: &str = "Cannot convert a Symbol value to a string";
 const SYMBOL_TO_PRIMITIVE_NAME: &str = "[Symbol.toPrimitive]";
 const SYMBOL_TO_PRIMITIVE_PROPERTY: &str = "toPrimitive";
 const TO_STRING_PROPERTY: &str = "toString";
@@ -102,6 +103,16 @@ impl Context {
         to_number_primitive(&primitive)
     }
 
+    /// ECMAScript `ToString`, including observable object conversion.
+    // The specification name is intentional; conversion can invoke JavaScript.
+    #[allow(clippy::wrong_self_convention)]
+    pub(in crate::runtime) fn to_string(&mut self, value: &Value) -> Result<String> {
+        let primitive = self.to_primitive(value, PreferredType::String)?;
+        let text = to_string_primitive(&primitive)?;
+        self.check_string_len(&text)?;
+        Ok(text)
+    }
+
     fn get_to_primitive_method(&mut self, value: &Value) -> Result<Value> {
         let constructor = self.symbol_constructor_value()?;
         let symbol = self.get_property_value(&constructor, SYMBOL_TO_PRIMITIVE_PROPERTY)?;
@@ -142,6 +153,42 @@ pub(in crate::runtime) fn to_number_primitive(value: &Value) -> Result<f64> {
         | Value::Object(_)
         | Value::Error(_) => Err(Error::runtime(
             "ToNumber received a non-primitive after ToPrimitive",
+        )),
+    }
+}
+
+/// ECMAScript `ToBoolean` for the runtime's complete value domain.
+pub(in crate::runtime) fn to_boolean(value: &Value) -> bool {
+    match value {
+        Value::Undefined | Value::Null => false,
+        Value::Bool(value) => *value,
+        Value::Number(value) => *value != 0.0 && !value.is_nan(),
+        Value::String(value) => !value.is_empty(),
+        Value::HeapString(value) => !value.as_str().is_empty(),
+        Value::Symbol(_)
+        | Value::Function(_)
+        | Value::NativeFunction(_)
+        | Value::HostFunction(_)
+        | Value::Object(_)
+        | Value::Error(_) => true,
+    }
+}
+
+pub(in crate::runtime) fn to_string_primitive(value: &Value) -> Result<String> {
+    match value {
+        Value::Undefined => Ok("undefined".to_owned()),
+        Value::Null => Ok("null".to_owned()),
+        Value::Bool(value) => Ok(if *value { "true" } else { "false" }.to_owned()),
+        Value::Number(value) => Ok(format_ecmascript_number(*value)),
+        Value::String(value) => Ok(value.clone()),
+        Value::HeapString(value) => Ok(value.as_str().to_owned()),
+        Value::Symbol(_) => Err(Error::type_error(CANNOT_CONVERT_SYMBOL_TO_STRING_ERROR)),
+        Value::Function(_)
+        | Value::NativeFunction(_)
+        | Value::HostFunction(_)
+        | Value::Object(_)
+        | Value::Error(_) => Err(Error::runtime(
+            "ToString received a non-primitive after ToPrimitive",
         )),
     }
 }
