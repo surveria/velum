@@ -5,7 +5,7 @@ use crate::{
     runtime::object::{OBJECT_CONSTRUCTOR_PROPERTY, PropertyKey},
     runtime::property::{
         DynamicPropertyKey, PropertyValue, StringPropertyValue, get_property,
-        get_property_with_receiver, has_property, property_key, string_property_value,
+        get_property_with_receiver, has_property, string_property_value,
     },
     value::{ObjectId, Value},
 };
@@ -15,16 +15,10 @@ const STRING_CONSTRUCTOR_PROPERTY: &str = "constructor";
 
 impl Context {
     pub(in crate::runtime) fn dynamic_property_key(
-        &self,
+        &mut self,
         value: &Value,
     ) -> Result<DynamicPropertyKey> {
-        let name = property_key(value);
-        self.check_string_len(&name)?;
-        let key = match value {
-            Value::Symbol(symbol) => Some(PropertyKey::symbol(symbol.id())),
-            _ => self.known_property_key(&name),
-        };
-        Ok(DynamicPropertyKey::new(name, key))
+        self.to_property_key(value)
     }
 
     pub(crate) fn get_property_value(&mut self, object: &Value, property: &str) -> Result<Value> {

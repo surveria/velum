@@ -166,7 +166,7 @@ src/runtime/abstract_operations/equality.rs:strict_equality'
 
   conversion="$(
     function_owners \
-      'fn[[:space:]]+(display_for_concat|get_to_primitive_method|is_primitive|is_truthy|ordinary_to_primitive|prefixed_integer_to_number|string_to_number|to_boolean|to_number_primitive|to_number|to_primitive|to_string_primitive|to_string[[:space:]]*\()' \
+      'fn[[:space:]]+(display_for_concat|get_to_primitive_method|is_primitive|is_truthy|ordinary_to_primitive|prefixed_integer_to_number|property_key[[:space:]]*\(|string_to_number|to_boolean|to_number_primitive|to_number|to_primitive|to_property_key[[:space:]]*\(|to_string_primitive|to_string[[:space:]]*\()' \
       | sed -E 's/[[:space:]]*\($//'
   )"
   expected_conversion='src/runtime/abstract_operations/conversion.rs:get_to_primitive_method
@@ -178,6 +178,7 @@ src/runtime/abstract_operations/conversion.rs:to_boolean
 src/runtime/abstract_operations/conversion.rs:to_number
 src/runtime/abstract_operations/conversion.rs:to_number_primitive
 src/runtime/abstract_operations/conversion.rs:to_primitive
+src/runtime/abstract_operations/conversion.rs:to_property_key
 src/runtime/abstract_operations/conversion.rs:to_string
 src/runtime/abstract_operations/conversion.rs:to_string_primitive'
   compare_set "primitive conversion operation allowlist" "${conversion}" "${expected_conversion}"
