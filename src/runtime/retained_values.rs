@@ -207,6 +207,15 @@ impl RetainedValueRegistry {
         })
     }
 
+    pub(in crate::runtime) fn active_count(&self) -> usize {
+        self.state
+            .lock()
+            .slots
+            .iter()
+            .filter(|entry| entry.value.is_some())
+            .count()
+    }
+
     fn value(&self, identity: &VmIdentity, handle: &RetainedValue) -> Result<Value> {
         if identity != &self.identity
             || &handle.identity != identity

@@ -136,6 +136,10 @@ impl StringHeap {
         self.bytes
     }
 
+    pub(crate) fn index_entry_count(&self) -> usize {
+        self.entries.len()
+    }
+
     pub fn intern(&mut self, text: &str) -> Result<JsString> {
         if let Some(id) = self.entries.get(text).copied() {
             return self.js_string(id);

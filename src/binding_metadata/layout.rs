@@ -57,6 +57,15 @@ impl BindingLayout {
         self.operands.len().saturating_sub(self.unresolved_count)
     }
 
+    pub(crate) fn storage_entry_count(&self) -> Result<usize> {
+        self.operands
+            .len()
+            .checked_add(self.static_functions.len())
+            .and_then(|count| count.checked_add(self.scopes.len()))
+            .and_then(|count| count.checked_add(self.functions.len()))
+            .ok_or_else(|| Error::limit("binding layout entry count overflowed"))
+    }
+
     pub fn for_each_matching_operand_id(
         &self,
         binding: StaticBindingId,

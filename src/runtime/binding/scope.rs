@@ -19,6 +19,15 @@ pub struct ScopeIndexData {
     bindings: Box<[BindingEntry]>,
 }
 
+impl ScopeIndexData {
+    pub(in crate::runtime) fn storage_entry_count(&self) -> Result<usize> {
+        self.slot_atoms
+            .len()
+            .checked_add(self.bindings.len())
+            .ok_or_else(|| Error::limit("shared scope index entry count overflowed"))
+    }
+}
+
 #[derive(Debug, Clone)]
 enum ScopeIndex {
     Owned {
@@ -48,6 +57,13 @@ impl ScopeIndex {
             Self::Owned { bindings, .. } => bindings,
             Self::Shared(data) => &data.bindings,
         }
+    }
+
+    fn storage_entry_count(&self) -> Result<usize> {
+        self.slot_atoms()
+            .len()
+            .checked_add(self.bindings().len())
+            .ok_or_else(|| Error::limit("binding scope index entry count overflowed"))
     }
 
     /// Escalates a shared index to an owned copy before mutation.
@@ -117,6 +133,10 @@ impl BindingScope {
 
     pub const fn len(&self) -> usize {
         self.slots.len()
+    }
+
+    pub(crate) fn index_entry_count(&self) -> Result<usize> {
+        self.index.storage_entry_count()
     }
 
     pub(crate) fn cells(&self) -> impl Iterator<Item = &BindingCell> {

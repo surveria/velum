@@ -40,6 +40,13 @@ impl StaticBindingCacheHandle {
         }
     }
 
+    pub(in crate::runtime) fn storage_entry_count(&self) -> Result<usize> {
+        self.locations
+            .len()
+            .checked_add(self.native_calls.len())
+            .ok_or_else(|| Error::limit("static binding cache entry count overflowed"))
+    }
+
     pub(in crate::runtime::binding) fn location(
         &self,
         binding: &StaticBinding,

@@ -16,7 +16,7 @@ fn reports_vm_resource_usage_at_teardown() -> TestResult {
     )?;
     ensure_value(&value, &Value::String("ready".to_owned()))?;
 
-    let report = vm.teardown_report();
+    let report = vm.teardown_report()?;
     ensure_positive(report.resources.runtime_steps, "runtime steps")?;
     ensure_usage(
         &report.resources,
@@ -42,8 +42,16 @@ fn reports_vm_resource_usage_at_teardown() -> TestResult {
         },
     )?;
 
-    let finished = vm.finish();
-    ensure_usage(&finished.resources, &report.resources)
+    let finished = vm.finish()?;
+    ensure_usage(&finished.resources, &report.resources)?;
+    if finished.storage == report.storage {
+        return Ok(());
+    }
+    Err(format!(
+        "expected storage snapshot {:?}, got {:?}",
+        report.storage, finished.storage
+    )
+    .into())
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

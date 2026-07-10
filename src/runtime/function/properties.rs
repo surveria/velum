@@ -155,6 +155,20 @@ impl FunctionProperties {
         }
     }
 
+    pub(in crate::runtime) fn storage_property_count(&self) -> Result<usize> {
+        usize::from(self.length.has())
+            .checked_add(usize::from(self.name.has()))
+            .and_then(|count| {
+                count.checked_add(usize::from(self.intrinsic_defaults.prototype.is_some()))
+            })
+            .and_then(|count| count.checked_add(self.properties.len()))
+            .ok_or_else(|| Error::limit("function property count overflowed"))
+    }
+
+    pub(in crate::runtime) const fn storage_cache_entry_count(&self) -> usize {
+        self.property_order.len()
+    }
+
     pub(in crate::runtime) fn visit_strong_edges<Kind: Copy, V: StrongEdgeVisitor<Kind>>(
         &self,
         kind: Kind,

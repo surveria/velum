@@ -61,6 +61,8 @@ The public model should evolve around these roles:
 - `OwnedValue`: a VM-independent primitive copy for serialization and transfer.
 - `RetainedValue`: a non-cloneable, VM-bound durable root for values that must
   survive across embedding calls.
+- `VmStorageSnapshot`: an explicit on-demand count map for every current
+  variable-size VM storage owner.
 - `CompiledScript`: a reusable bytecode-owned representation hidden behind the
   embedding API.
 - `HostFunctionRegistry`: synchronous and asynchronous Rust callbacks exposed to JavaScript as functions.
@@ -93,6 +95,8 @@ Embedding API invariants:
 - Raw `Value` results are call-local compatibility values. Durable values must
   use `OwnedValue` or an identity- and generation-checked `RetainedValue`.
 - APIs should make resource ownership explicit. Engine-wide caches, VM heaps, queued jobs, host callbacks, and output buffers must have clear owners.
+- Storage snapshots must remain explicit diagnostic work; ordinary evaluation
+  and host callback dispatch must not scan every VM owner implicitly.
 - The engine must not assume a process-wide async runtime. Async integration belongs at the embedding boundary.
 - The API should keep bytecode internals hidden unless exposing a VM control is
   clearly useful for embedders.

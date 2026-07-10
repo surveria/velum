@@ -8,6 +8,7 @@ use crate::runtime::VmRootSnapshot;
 use crate::runtime::limits::RuntimeLimits;
 use crate::runtime::{
     RetainedValue, VmAsyncEdgeSnapshot, VmCallableEdgeSnapshot, VmObjectEdgeSnapshot,
+    VmStorageSnapshot,
 };
 use crate::value::Value;
 use std::time::Duration;
@@ -339,15 +340,32 @@ impl Vm {
         self.context.async_edge_snapshot()
     }
 
-    #[must_use]
-    pub fn teardown_report(&self) -> VmTeardownReport {
-        VmTeardownReport {
-            resources: self.resource_usage(),
-        }
+    /// Counts logical records retained by every current VM storage owner.
+    ///
+    /// # Errors
+    /// Fails if a category or total count exceeds the supported range.
+    pub fn storage_snapshot(&self) -> Result<VmStorageSnapshot> {
+        self.context.storage_snapshot()
     }
 
-    #[must_use]
-    pub fn finish(self) -> VmTeardownReport {
+    /// Previews the resources and complete storage owner set that consuming
+    /// this VM would release.
+    ///
+    /// # Errors
+    /// Fails if a storage category or total count exceeds the supported range.
+    pub fn teardown_report(&self) -> Result<VmTeardownReport> {
+        Ok(VmTeardownReport {
+            resources: self.resource_usage(),
+            storage: self.storage_snapshot()?,
+        })
+    }
+
+    /// Consumes the VM and reports the complete storage owner set released by
+    /// deterministic Rust teardown.
+    ///
+    /// # Errors
+    /// Fails if a storage category or total count exceeds the supported range.
+    pub fn finish(self) -> Result<VmTeardownReport> {
         self.teardown_report()
     }
 }
@@ -383,4 +401,5 @@ pub struct VmResourceUsage {
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct VmTeardownReport {
     pub resources: VmResourceUsage,
+    pub storage: VmStorageSnapshot,
 }

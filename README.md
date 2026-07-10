@@ -57,7 +57,7 @@ fn main() -> rs_quickjs::Result<()> {
     value.release()?;
     let output = vm.take_output();
 
-    let report = vm.finish();
+    let report = vm.finish()?;
     println!("value: {owned_value:?}");
     println!("output: {output:?}");
     println!("runtime steps: {}", report.resources.runtime_steps);
