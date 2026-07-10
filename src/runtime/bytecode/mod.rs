@@ -4,6 +4,7 @@ mod class;
 mod coercion;
 mod control;
 mod destructure;
+mod execution;
 mod for_of;
 mod in_operator;
 mod linear;
@@ -13,12 +14,12 @@ pub(in crate::runtime) mod state;
 mod string_concat;
 mod super_ops;
 
+pub(in crate::runtime) use execution::BytecodeOutcome;
+
 use crate::{
-    bytecode::{
-        BytecodeAddress, BytecodeBlock, BytecodeInstruction, BytecodeProgram, BytecodeProperty,
-    },
+    bytecode::{BytecodeAddress, BytecodeInstruction, BytecodeProperty},
     error::{Error, Result},
-    runtime::{Context, control::Completion, control::runtime_exception_value},
+    runtime::{Context, control::Completion},
     syntax::{StaticString, UpdateOp},
     value::Value,
 };
@@ -35,49 +36,6 @@ fn eval_bytecode_push_undefined(
 }
 
 impl Context {
-    pub(crate) fn eval_bytecode_program(
-        &mut self,
-        bytecode: &BytecodeProgram,
-    ) -> Result<Completion> {
-        self.eval_bytecode_block(bytecode.block())
-    }
-
-    pub(super) fn eval_bytecode_block(&mut self, block: &BytecodeBlock) -> Result<Completion> {
-        let mut state = BytecodeState::new();
-        self.eval_bytecode_block_with_state(block, &mut state)
-    }
-
-    fn eval_bytecode_block_with_state(
-        &mut self,
-        block: &BytecodeBlock,
-        state: &mut BytecodeState,
-    ) -> Result<Completion> {
-        state.reset();
-        while let Some(instruction) = block.instruction(state.pc)? {
-            self.step()?;
-            let result = self.eval_bytecode_instruction(state, instruction);
-            let completion = match result {
-                Ok(completion) => completion,
-                Err(error) => {
-                    if let Some(value) = runtime_exception_value(self, &error)? {
-                        self.checked_value(value.clone())?;
-                        Some(Completion::Throw(value))
-                    } else {
-                        return Err(error);
-                    }
-                }
-            };
-            if let Some(completion) = completion {
-                return Ok(completion);
-            }
-        }
-        Ok(Completion::Normal(state.last.clone()))
-    }
-
-    pub(super) fn eval_bytecode_expression(&mut self, block: &BytecodeBlock) -> Result<Value> {
-        self.eval_bytecode_block(block)?.into_result()
-    }
-
     fn eval_bytecode_instruction(
         &mut self,
         state: &mut BytecodeState,

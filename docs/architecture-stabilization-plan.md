@@ -25,8 +25,8 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 through AS-04b2a are complete; AS-04b2b1
-  token ranges and span-bearing frontend AST are implemented in draft PR #420
+- Current program state: AS-01 through AS-04b2b1 are complete; AS-04b2b2
+  bytecode/runtime source spans are implemented in draft PR #421
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -482,7 +482,7 @@ dependencies do not overlap.
 | AS-01 | Complete | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards merged in PR #399 with required CI and canonical report publication. |
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
-| AS-04 | In progress | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST are implemented in draft PR #420; bytecode/runtime spans remain AS-04b2b2. |
+| AS-04 | In progress | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans are implemented in draft PR #421. |
 | AS-05 | Backlog | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | Non-cloneable VM state, checked cross-VM boundaries, trace/root contract, heap/stack/job/buffer counters and limits. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
@@ -1127,6 +1127,52 @@ AS-04b2b1 local implementation evidence:
   `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T131658Z.*` for
   tested tree `564c29b62f27f1feefd07b2474c74cd709ba9f28`.
 
+AS-04b2b1 completion evidence:
+
+- PR #420 was squash-merged as `6f887c2`; required CI run `29095778077`
+  certified exact tree `72e3f0562974e828593aa52db93b42761fc78a2a` at
+  36,659/36,659 expected Test262 variants, the exact 36,659 of 102,578 full
+  pass set, and 95/95 QuickJS cases;
+- post-merge run `29096015664` measured all five project sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T132547Z.*` in
+  report-only commit `e380c19`.
+
+AS-04b2b2 local implementation evidence:
+
+- `BytecodeBlock` owns one `Rc` instruction array and one equally sized `Rc`
+  `SourceSpan` array. Construction rejects count mismatches, unknown source
+  identities, and ranges from multiple sources;
+- `BytecodeCompiler` carries the current AST node range and `emit` appends an
+  instruction and range together. Nested control-flow blocks, functions,
+  default parameters, class fields, patterns, and expression blocks use the
+  same construction path without retaining source text, tokens, or AST;
+- normal execution consumes a paired instruction/span step. Linear plans carry
+  one range per lowered operation, including fused peepholes and direct paths,
+  so optimization does not create a second diagnostic map;
+- Runtime, JavaScript, and resource-limit channels preserve their existing
+  catchability and value identity while exposing an optional structured span.
+  Built-in Error metadata keeps the first origin across function frames, and
+  formatted error text remains unchanged;
+- cold JavaScript diagnostic payloads and their optional ranges are boxed, so
+  adding source locations does not enlarge every engine `Result` beyond the
+  strict `result_large_err` limit;
+- five focused embedding tests cover an executing ReferenceError identifier,
+  host Runtime and resource-limit call sites, a primitive throw statement, and
+  a nested Error origin. Bytecode, quickening, completion, and source-focused
+  tests pass together with strict Clippy;
+- the architecture guard fixes the two `BytecodeBlock` fields, the compiler
+  span owner, atomic emit, the two runtime execution owners, and structured
+  Error span fields. Its mutation self-test rejects removal of the bytecode
+  side table;
+- the complete engine suite, 118-test runner suite, strict Clippy,
+  documentation, architecture mutation self-tests, and touched-file size gate
+  pass;
+- the complete local correctness gate preserves all 36,659 expected Test262
+  variants and the exact 36,659 of 102,578 full pass set, with QuickJS
+  differential unchanged at 95 of 95. Local evidence is
+  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T134839Z.*` for
+  tested tree `cbf27db19721ea28dfaf073c11819792ab389647`.
+
 ### AS-05: Ownership, Handles, Roots, And Accounting
 
 Required outcomes:
@@ -1252,9 +1298,10 @@ reviewable scope.
 16. AS-04b2a: add stable source identity and structured frontend diagnostics
     (complete in PR #419).
 17. AS-04b2b1: carry canonical token ranges through a span-bearing frontend AST
-    (implemented in draft PR #420).
+    (complete in PR #420).
 18. AS-04b2b2: lower AST ranges into parallel bytecode metadata and expose the
-    executing range on structured runtime diagnostics.
+    executing range on structured runtime diagnostics (implemented in draft
+    PR #421).
 19. AS-05a: remove ambiguous VM cloning and define VM-bound handle identity.
 20. AS-05b: add root enumeration plus complete allocation accounting and
     limits.

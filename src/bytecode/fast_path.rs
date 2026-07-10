@@ -1,8 +1,9 @@
 use crate::{syntax::StaticString, value::Value};
 
 use super::{
+    BytecodeBlock,
     numeric::{BytecodeNumericBinaryOp, BytecodeNumericEqualityOp},
-    types::{BytecodeBinding, BytecodeBlock, BytecodeCompletion, BytecodeInstruction},
+    types::{BytecodeBinding, BytecodeCompletion, BytecodeInstruction},
 };
 
 #[derive(Debug, Clone, PartialEq)]

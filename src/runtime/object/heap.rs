@@ -237,6 +237,18 @@ impl ObjectHeap {
         Ok(self.object(id)?.error_metadata.as_ref())
     }
 
+    pub(crate) fn set_error_source_span_if_missing(
+        &mut self,
+        id: ObjectId,
+        span: crate::SourceSpan,
+    ) -> Result<()> {
+        let Some(metadata) = self.object_mut(id)?.error_metadata.as_mut() else {
+            return Ok(());
+        };
+        metadata.set_source_span_if_missing(span);
+        Ok(())
+    }
+
     pub(crate) fn mark_raw_json(&mut self, id: ObjectId) -> Result<()> {
         self.object_mut(id)?.is_raw_json = true;
         Ok(())

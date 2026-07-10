@@ -12,6 +12,7 @@ use crate::{
     value::{ErrorName, Value},
 };
 
+use super::block::BytecodeBlock;
 use super::numeric::{
     BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
     BytecodeNumericUnaryOp,
@@ -198,36 +199,6 @@ impl BytecodeFunctionDeclaration {
 
     pub const fn is_async(&self) -> bool {
         self.is_async
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct BytecodeBlock {
-    instructions: Rc<[BytecodeInstruction]>,
-}
-
-impl BytecodeBlock {
-    pub(crate) fn from_instructions(instructions: Vec<BytecodeInstruction>) -> Self {
-        Self {
-            instructions: Rc::from(instructions.into_boxed_slice()),
-        }
-    }
-
-    pub fn instruction(&self, address: BytecodeAddress) -> Result<Option<&BytecodeInstruction>> {
-        let index = address.index();
-        if index == self.instructions.len() {
-            return Ok(None);
-        }
-        if index > self.instructions.len() {
-            return Err(Error::runtime(
-                "bytecode instruction pointer escaped program",
-            ));
-        }
-        Ok(self.instructions.get(index))
-    }
-
-    pub(crate) fn instructions(&self) -> &[BytecodeInstruction] {
-        &self.instructions
     }
 }
 

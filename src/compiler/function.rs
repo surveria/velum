@@ -26,7 +26,7 @@ struct FunctionCompileSpec<'a> {
 }
 
 impl BytecodeCompiler<'_> {
-    pub(super) fn compile_function_literal(&mut self, expr: &Expression) -> Result<()> {
+    pub(super) fn compile_function_literal(&mut self, expr: &Expr) -> Result<()> {
         let spec = function_compile_spec(expr)?;
         self.compile_function_expr(spec)
     }
@@ -89,8 +89,8 @@ fn compile_param_defaults(
         .map(Into::into)
 }
 
-fn function_compile_spec(expr: &Expression) -> Result<FunctionCompileSpec<'_>> {
-    match expr.kind() {
+fn function_compile_spec(expr: &Expr) -> Result<FunctionCompileSpec<'_>> {
+    match expr {
         Expr::Function {
             id,
             name,

@@ -172,7 +172,7 @@ fn ensure_usize(actual: usize, expected: usize) -> TestResult {
 
 fn ensure_limit_error(error: &Error, expected: &str) -> TestResult {
     match error {
-        Error::ResourceLimit { message } if message.contains(expected) => Ok(()),
+        Error::ResourceLimit { message, .. } if message.contains(expected) => Ok(()),
         actual => Err(format!("expected limit error containing {expected:?}, got {actual}").into()),
     }
 }

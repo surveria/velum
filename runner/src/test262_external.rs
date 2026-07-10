@@ -167,6 +167,7 @@ mod tests {
             &case,
             Err(Error::Runtime {
                 message: "runtime failure".to_owned(),
+                span: None,
             }),
         ) else {
             return Err("expected runtime error to fail negative parse case".into());

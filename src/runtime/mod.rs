@@ -38,6 +38,7 @@ pub mod values;
 
 pub use binding::static_bindings::CompiledBindingFrame;
 use binding::static_bindings::StaticBindingCacheHandle;
+use bytecode::BytecodeOutcome;
 use call::{BoundFunction, RuntimeCallArgs};
 use native::{NativeFunctionKind, NativeFunctionRegistry};
 use promise::{Promise, PromiseId, PromiseJob};
@@ -318,22 +319,34 @@ impl Context {
     /// # Errors
     /// Fails when the compiled script exceeds this context's limits or evaluation fails.
     pub fn eval_compiled(&mut self, script: &CompiledScript) -> Result<Value> {
-        let completion = self.eval_compiled_completion(script)?;
+        let outcome = self.eval_compiled_outcome(script)?;
+        let span = outcome.span();
+        let completion = outcome.completion();
         let Completion::Throw(value) = completion else {
-            return completion.into_result();
+            let result = completion.into_result();
+            return if let Some(span) = span {
+                result.map_err(|error| error.with_runtime_span(span))
+            } else {
+                result
+            };
         };
         let metadata = if let Value::Object(id) = &value {
             self.objects.error_metadata(*id)?.cloned()
         } else {
             None
         };
-        Err(Error::javascript_with_metadata(value, metadata))
+        Err(Error::javascript_with_metadata(value, metadata, span))
     }
 
     pub(crate) fn eval_compiled_completion(
         &mut self,
         script: &CompiledScript,
     ) -> Result<Completion> {
+        self.eval_compiled_outcome(script)
+            .map(BytecodeOutcome::completion)
+    }
+
+    fn eval_compiled_outcome(&mut self, script: &CompiledScript) -> Result<BytecodeOutcome> {
         script.ensure_within_limits(self.limits)?;
         let static_name_cache = StaticNameAtomCacheHandle::new(
             script.usage().static_name_count(),
@@ -347,11 +360,11 @@ impl Context {
             script.binding_layout().clone(),
             |context| {
                 context.hoist_bytecode_declarations(script.bytecode().hoist_plan())?;
-                let completion = context.eval_bytecode_program(script.bytecode())?;
-                if matches!(completion, Completion::Normal(_)) {
+                let outcome = context.eval_bytecode_program(script.bytecode())?;
+                if outcome.is_normal() {
                     context.drain_promise_jobs()?;
                 }
-                Ok(completion)
+                Ok(outcome)
             },
         )
     }

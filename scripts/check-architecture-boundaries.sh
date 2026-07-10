@@ -165,6 +165,64 @@ check_frontend_span_boundary() {
   fi
 }
 
+check_bytecode_span_boundary() {
+  local block_fields
+  local compiler_fields
+  local execution_owners
+  local expected_execution_owners
+  local runtime_span_fields
+
+  block_fields="$(
+    awk '
+      /^pub struct BytecodeBlock \{/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/bytecode/block.rs" \
+      | sed '/^[[:space:]]*\/\//d' \
+      | tr -d '[:space:]'
+  )"
+  if [[ "${block_fields}" != 'instructions:Rc<[BytecodeInstruction]>,spans:Rc<[SourceSpan]>,' ]]; then
+    fail "bytecode source span boundary changed; BytecodeBlock requires one aligned span table"
+  fi
+
+  compiler_fields="$(
+    awk '
+      /^struct BytecodeCompiler/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/compiler/mod.rs" \
+      | sed '/^[[:space:]]*\/\//d' \
+      | tr -d '[:space:]'
+  )"
+  if [[ "${compiler_fields}" != "layout:&'aBindingLayout,instructions:Vec<BytecodeInstruction>,spans:Vec<SourceSpan>,current_span:SourceSpan," ]]; then
+    fail "bytecode source span compiler boundary changed; emit requires one current AST span"
+  fi
+  if ! grep -F -q 'self.instructions.push(instruction);' \
+      "${repo_root}/src/compiler/mod.rs" \
+    || ! grep -F -q 'self.spans.push(self.current_span);' \
+      "${repo_root}/src/compiler/mod.rs"; then
+    fail "bytecode source span compiler boundary changed; emit must append instruction and span together"
+  fi
+
+  execution_owners="$(
+    cd "${repo_root}"
+    grep -R -l -F --include='*.rs' 'block.step(state.pc)?' src/runtime || true
+  )"
+  expected_execution_owners='src/runtime/bytecode/execution.rs
+src/runtime/bytecode/linear/segment.rs'
+  compare_set "bytecode source span execution owner allowlist" \
+    "${execution_owners}" "${expected_execution_owners}"
+
+  runtime_span_fields="$(
+    grep -E '^[[:space:]]+span: Option<(Box<)?SourceSpan' "${repo_root}/src/error.rs" \
+      | wc -l \
+      | tr -d '[:space:]'
+  )"
+  if [[ "${runtime_span_fields}" != "4" ]]; then
+    fail "runtime source diagnostic boundary changed; Runtime, JavaScript, and resource errors require optional spans"
+  fi
+}
+
 check_harness_boundaries() {
   local compiler_comparisons
   local expected_comparisons
@@ -396,8 +454,8 @@ check_completion_error_boundary() {
     sed -n '/^    JavaScript {$/,/^    },$/p' "${repo_root}/src/error.rs" \
       | tr -d '[:space:]'
   )"
-  if [[ "${typed_variant}" != 'JavaScript{value:Value,metadata:Option<JavaScriptErrorMetadata>,display:String,},' ]]; then
-    fail "typed JavaScript error boundary changed; expected one Value-preserving variant with structured metadata"
+  if [[ "${typed_variant}" != 'JavaScript{value:Value,metadata:Option<Box<JavaScriptErrorMetadata>>,display:Box<str>,span:Option<Box<SourceSpan>>,},' ]]; then
+    fail "typed JavaScript error boundary changed; expected one Value-preserving variant with structured metadata and source span"
   fi
 
   owners="$(
@@ -590,6 +648,7 @@ run_checks() {
   require_file src/runtime/mod.rs
   require_file src/source.rs
   require_file src/ast/node.rs
+  require_file src/bytecode/block.rs
   require_file src/runtime/object/mod.rs
   require_file src/api/embedding.rs
   require_dir src/compiler
@@ -601,6 +660,7 @@ run_checks() {
   check_runtime_frontend_boundary
   check_source_metadata_boundary
   check_frontend_span_boundary
+  check_bytecode_span_boundary
   check_harness_boundaries
   check_semantic_duplicate_allowlists
   check_completion_error_boundary
@@ -629,7 +689,7 @@ mutate_runtime_frontend_import() {
 
 mutate_frontend_source_span() {
   local fixture_root="$1"
-  sed -i '0,/span: SourceSpan/{s/span: SourceSpan/offset: usize/}' \
+  sed -i 's/Lex { message: String, span: SourceSpan }/Lex { message: String, offset: usize }/' \
     "${fixture_root}/src/error.rs"
 }
 
@@ -637,6 +697,12 @@ mutate_frontend_ast_span() {
   local fixture_root="$1"
   sed -i 's/pub type Expression = AstNode<Expr>;/pub type Expression = Expr;/' \
     "${fixture_root}/src/ast/expression.rs"
+}
+
+mutate_bytecode_source_span() {
+  local fixture_root="$1"
+  sed -i '/    spans: Rc<\[SourceSpan\]>,/d' \
+    "${fixture_root}/src/bytecode/block.rs"
 }
 
 mutate_compiler_source_name() {
@@ -800,6 +866,8 @@ run_self_tests() {
     'frontend source diagnostic boundary changed' mutate_frontend_source_span
   expect_guard_failure "${temp_dir}" frontend-ast-span \
     'frontend AST span boundary changed' mutate_frontend_ast_span
+  expect_guard_failure "${temp_dir}" bytecode-source-span \
+    'bytecode source span boundary changed' mutate_bytecode_source_span
   expect_guard_failure "${temp_dir}" compiler-source-name \
     'compiler source-name allowlist changed' mutate_compiler_source_name
   expect_guard_failure "${temp_dir}" test262-source-name \

@@ -1,7 +1,7 @@
 use crate::{
     bytecode::{BytecodeAddress, BytecodeBlock},
     error::{Error, Result},
-    runtime::{Context, control::Completion, control::runtime_exception_value},
+    runtime::{Context, control::Completion},
     value::Value,
 };
 
@@ -18,6 +18,7 @@ struct BytecodeLinearSegment<'a> {
     start: usize,
     end: usize,
     ops: Vec<BytecodeLinearOp<'a>>,
+    spans: Vec<crate::SourceSpan>,
 }
 
 impl Context {
@@ -28,6 +29,7 @@ impl Context {
         let instructions = block.instructions();
         let mut builder = BytecodeLinearPlanBuilder::new(instructions.len());
         let mut ops = Vec::new();
+        let mut spans = Vec::new();
         let mut segment_start = None;
         let mut index = 0;
 
@@ -40,6 +42,7 @@ impl Context {
                     segment_start = Some(index);
                 }
                 ops.push(op);
+                spans.push(linear_op_span(block, index, consumed)?);
                 index = checked_segment_end(index, consumed)?;
                 continue;
             }
@@ -52,15 +55,16 @@ impl Context {
                     segment_start = Some(index);
                 }
                 ops.push(op);
+                spans.push(linear_op_span(block, index, 1)?);
                 index = checked_segment_end(index, 1)?;
                 continue;
             }
 
-            builder.flush(segment_start.take(), index, &mut ops)?;
+            builder.flush(segment_start.take(), index, &mut ops, &mut spans)?;
             index = checked_segment_end(index, 1)?;
         }
 
-        builder.flush(segment_start, instructions.len(), &mut ops)?;
+        builder.flush(segment_start, instructions.len(), &mut ops, &mut spans)?;
         builder.finish()
     }
 
@@ -96,7 +100,9 @@ impl Context {
         state: &mut BytecodeState,
     ) -> Result<Completion> {
         state.reset();
-        while let Some(instruction) = block.instruction(state.pc)? {
+        while let Some(step) = block.step(state.pc)? {
+            let instruction = step.instruction();
+            let span = step.span();
             if let Some(segment) = plan.segment_at(state.pc.index()) {
                 if let Some(completion) = self.eval_bytecode_linear_segment(segment, state)? {
                     return Ok(completion);
@@ -104,19 +110,15 @@ impl Context {
                 continue;
             }
 
-            self.step()?;
+            self.step().map_err(|error| error.with_runtime_span(span))?;
             let completion = match self.eval_bytecode_instruction(state, instruction) {
                 Ok(completion) => completion,
-                Err(error) => {
-                    if let Some(value) = runtime_exception_value(self, &error)? {
-                        self.checked_value(value.clone())?;
-                        Some(Completion::Throw(value))
-                    } else {
-                        return Err(error);
-                    }
-                }
+                Err(error) => self.bytecode_error_completion(error, span)?,
             };
             if let Some(completion) = completion {
+                if let Completion::Throw(value) = &completion {
+                    self.annotate_error_value_span(value, span)?;
+                }
                 return Ok(completion);
             }
         }
@@ -128,15 +130,17 @@ impl Context {
         segment: &BytecodeLinearSegment<'_>,
         state: &mut BytecodeState,
     ) -> Result<Option<Completion>> {
-        self.record_bytecode_linear_segment_run()?;
-        for op in &segment.ops {
-            self.step()?;
+        let span = segment
+            .spans
+            .first()
+            .copied()
+            .ok_or_else(|| Error::runtime("bytecode linear segment has no source span"))?;
+        self.record_bytecode_linear_segment_run()
+            .map_err(|error| error.with_runtime_span(span))?;
+        for (op, span) in segment.ops.iter().zip(segment.spans.iter().copied()) {
+            self.step().map_err(|error| error.with_runtime_span(span))?;
             if let Err(error) = self.eval_bytecode_linear_op(state, op) {
-                if let Some(value) = runtime_exception_value(self, &error)? {
-                    self.checked_value(value.clone())?;
-                    return Ok(Some(Completion::Throw(value)));
-                }
-                return Err(error);
+                return self.bytecode_error_completion(error, span);
             }
         }
         state.pc = BytecodeAddress::new(segment.end);
@@ -177,14 +181,14 @@ impl<'a> BytecodeLinearPlan<'a> {
     pub(super) fn single_full_block_op(
         &self,
         block: &BytecodeBlock,
-    ) -> Option<&BytecodeLinearOp<'a>> {
+    ) -> Option<(&BytecodeLinearOp<'a>, crate::SourceSpan)> {
         let segment = self.segments.first()?;
         if self.segments.len() == 1
             && segment.start == 0
             && segment.end == block.instructions().len()
             && segment.ops.len() == 1
         {
-            return segment.ops.first();
+            return segment.ops.first().zip(segment.spans.first().copied());
         }
         None
     }
@@ -208,24 +212,29 @@ impl<'a> BytecodeLinearPlanBuilder<'a> {
         start: Option<usize>,
         end: usize,
         ops: &mut Vec<BytecodeLinearOp<'a>>,
+        spans: &mut Vec<crate::SourceSpan>,
     ) -> Result<()> {
         let Some(start) = start else {
-            ensure_empty_ops(ops)?;
+            ensure_empty_segment(ops, spans)?;
             return Ok(());
         };
+        ensure_aligned_segment(ops, spans)?;
         let instruction_count = end
             .checked_sub(start)
             .ok_or_else(|| Error::runtime("bytecode linear segment end escaped start"))?;
         if keep_segment(start, end, self.block_len, instruction_count, ops.len()) {
             let segment_ops = std::mem::take(ops);
+            let segment_spans = std::mem::take(spans);
             self.segments.push(BytecodeLinearSegment {
                 start,
                 end,
                 ops: segment_ops,
+                spans: segment_spans,
             });
             return Ok(());
         }
         ops.clear();
+        spans.clear();
         Ok(())
     }
 
@@ -247,13 +256,36 @@ const fn keep_segment(
     instruction_count >= 2 || instruction_count > op_count
 }
 
-fn ensure_empty_ops(ops: &[BytecodeLinearOp<'_>]) -> Result<()> {
-    if ops.is_empty() {
+fn ensure_empty_segment(ops: &[BytecodeLinearOp<'_>], spans: &[crate::SourceSpan]) -> Result<()> {
+    if ops.is_empty() && spans.is_empty() {
         return Ok(());
     }
     Err(Error::runtime(
         "bytecode linear segment has ops without a start",
     ))
+}
+
+fn ensure_aligned_segment(ops: &[BytecodeLinearOp<'_>], spans: &[crate::SourceSpan]) -> Result<()> {
+    if ops.len() == spans.len() {
+        return Ok(());
+    }
+    Err(Error::runtime(
+        "bytecode linear op and source span counts differ",
+    ))
+}
+
+fn linear_op_span(
+    block: &BytecodeBlock,
+    start: usize,
+    consumed: usize,
+) -> Result<crate::SourceSpan> {
+    let end = checked_segment_end(start, consumed)?;
+    let index = end
+        .checked_sub(1)
+        .ok_or_else(|| Error::runtime("bytecode linear op has no instruction"))?;
+    block
+        .source_span(BytecodeAddress::new(index))?
+        .ok_or_else(|| Error::runtime("bytecode linear op has no source span"))
 }
 
 fn ensure_positive_consumed(consumed: usize) -> Result<()> {
