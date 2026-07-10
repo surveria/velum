@@ -96,6 +96,57 @@ check_owned_value_boundary() {
   fi
 }
 
+check_retained_value_boundary() {
+  local handle_fields
+  local registry_fields
+  handle_fields="$({
+    awk '
+      /^pub struct RetainedValue \{/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/runtime/retained_values.rs"
+  } | sed '/^[[:space:]]*\/\//d' | tr -d '[:space:]')"
+  if [[ "${handle_fields}" != 'identity:VmIdentity,registry:Weak<Mutex<RetainedValueState>>,slot:RetainedSlot,slot_generation:RetainedSlotGeneration,active:bool,' ]]; then
+    fail "retained value boundary changed; handle identity, private slot generation, and release state are required"
+  fi
+  registry_fields="$({
+    awk '
+      /^pub struct RetainedValueRegistry \{/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/runtime/retained_values.rs"
+  } | tr -d '[:space:]')"
+  if [[ "${registry_fields}" != 'identity:VmIdentity,state:Rc<Mutex<RetainedValueState>>,' ]]; then
+    fail "retained value boundary changed; the registry requires one authoritative VM identity"
+  fi
+
+  if grep -F -q 'impl Clone for RetainedValue' \
+      "${repo_root}/src/runtime/retained_values.rs" \
+    || ! grep -F -q 'match self.0.checked_add(1)' \
+      "${repo_root}/src/runtime/retained_values.rs" \
+    || ! grep -F -q 'pub fn release(mut self) -> Result<()>' \
+      "${repo_root}/src/runtime/retained_values.rs" \
+    || ! grep -F -q 'impl Drop for RetainedValue' \
+      "${repo_root}/src/runtime/retained_values.rs"; then
+    fail "retained value boundary changed; handles must be non-cloneable, generation-checked, and releasable"
+  fi
+
+  if ! grep -F -q 'pub fn eval_retained(&mut self, source: &str) -> Result<RetainedValue>' \
+      "${repo_root}/src/api/embedding.rs" \
+    || ! grep -F -q 'pub fn get_global_retained(&self, name: &str) -> Result<Option<RetainedValue>>' \
+      "${repo_root}/src/api/embedding.rs" \
+    || ! grep -F -q 'pub fn retain(self) -> Result<RetainedValue>' \
+      "${repo_root}/src/api/host.rs" \
+    || ! grep -F -q 'if identity != &self.identity' \
+      "${repo_root}/src/runtime/retained_values.rs" \
+    || ! grep -F -q '|| &handle.identity != identity' \
+      "${repo_root}/src/runtime/retained_values.rs" \
+    || ! grep -F -q '|| !handle.registry.ptr_eq' \
+      "${repo_root}/src/runtime/retained_values.rs"; then
+    fail "retained value boundary changed; source-proven evaluation, global, callback, and owner validation paths are required"
+  fi
+}
+
 check_runtime_frontend_boundary() {
   local imports
   imports="$(
@@ -512,8 +563,8 @@ src/runtime/control/assertions.rs:runtime_exception_value'
       inside { print }
     ' "${repo_root}/src/api/host.rs"
   } | tr -d '[:space:]')"
-  if [[ "${local_value_fields}" != "identity:&'valueVmIdentity,value:&'valueValue," ]]; then
-    fail "host local-value boundary changed; LocalValue requires borrowed owner identity and Value"
+  if [[ "${local_value_fields}" != "identity:&'valueVmIdentity,retained_values:&'valueRetainedValueRegistry,value:&'valueValue," ]]; then
+    fail "host local-value boundary changed; LocalValue requires borrowed owner, retained registry, and Value"
   fi
   host_call_fields="$({
     awk '
@@ -522,8 +573,8 @@ src/runtime/control/assertions.rs:runtime_exception_value'
       inside { print }
     ' "${repo_root}/src/api/host.rs"
   } | tr -d '[:space:]')"
-  if [[ "${host_call_fields}" != "function_name:&'callstr,identity:&'callVmIdentity,roots:VmRootSnapshot,args:&'call[Value]," ]]; then
-    fail "host local-value boundary changed; HostCall requires the active VM identity"
+  if [[ "${host_call_fields}" != "function_name:&'callstr,identity:&'callVmIdentity,retained_values:&'callRetainedValueRegistry,roots:VmRootSnapshot,args:&'call[Value]," ]]; then
+    fail "host local-value boundary changed; HostCall requires the active VM identity and retained registry"
   fi
   if ! grep -F -q 'Error::javascript_local(self.identity.clone(), self.value.clone())' \
       "${repo_root}/src/api/host.rs" \
@@ -543,7 +594,7 @@ check_direct_root_boundary() {
       inside { print }
     ' "${repo_root}/src/runtime/roots.rs"
   } | sed '/^[[:space:]]*\/\//d' | tr -d '[:space:]')"
-  if [[ "${root_kinds}" != 'GlobalBinding,BuiltinBinding,LocalBinding,CapturedBinding,ActiveThis,ActiveNewTarget,ActiveSuper,QueuedJob,RuntimeAnchor,TransientOperand,TransientCall,TransientTemporary,' ]]; then
+  if [[ "${root_kinds}" != 'GlobalBinding,BuiltinBinding,LocalBinding,CapturedBinding,ActiveThis,ActiveNewTarget,ActiveSuper,QueuedJob,RuntimeAnchor,RetainedHandle,TransientOperand,TransientCall,TransientTemporary,' ]]; then
     fail "direct root boundary changed; VmRootKind categories require an assigned AS migration"
   fi
 
@@ -563,6 +614,7 @@ check_direct_root_boundary() {
     'for id in self.native_function_registry.ids() {' \
     'self.objects.visit_direct_roots(visitor)?;' \
     'for job in &self.promise_jobs {' \
+    'self.retained_values.visit(visitor)?;' \
     'self.transient_roots.visit(visitor)?;'; do
     if ! grep -F -q "${source}" "${repo_root}/src/runtime/roots.rs"; then
       fail "direct root boundary changed; required Context root source '${source}' is missing"
@@ -886,6 +938,7 @@ promises
 promise_object_slots
 promise_jobs
 promise_prototype
+retained_values
 transient_roots
 this_values
 new_target_values
@@ -1039,6 +1092,7 @@ src/runtime/function/fast_path.rs'
 run_checks() {
   require_file src/value/kind.rs
   require_file src/api/owned_value.rs
+  require_file src/runtime/retained_values.rs
   require_file src/runtime/mod.rs
   require_file src/runtime/roots.rs
   require_file src/runtime/trace.rs
@@ -1058,6 +1112,7 @@ run_checks() {
 
   check_value_representation
   check_owned_value_boundary
+  check_retained_value_boundary
   check_runtime_frontend_boundary
   check_source_metadata_boundary
   check_frontend_span_boundary
@@ -1222,6 +1277,18 @@ mutate_descriptor_temporary_root() {
   local fixture_root="$1"
   sed -i '/roots.add_values(get.iter())?;/d' \
     "${fixture_root}/src/runtime/native/builtins/object.rs"
+}
+
+mutate_retained_handle_root() {
+  local fixture_root="$1"
+  sed -i '/self.retained_values.visit(visitor)?;/d' \
+    "${fixture_root}/src/runtime/roots.rs"
+}
+
+mutate_retained_slot_generation() {
+  local fixture_root="$1"
+  sed -i '/    slot_generation: RetainedSlotGeneration,/d' \
+    "${fixture_root}/src/runtime/retained_values.rs"
 }
 
 mutate_bound_function_edge() {
@@ -1403,6 +1470,10 @@ run_self_tests() {
     'direct root boundary changed' mutate_iterator_temporary_root
   expect_guard_failure "${temp_dir}" descriptor-temporary-root \
     'direct root boundary changed' mutate_descriptor_temporary_root
+  expect_guard_failure "${temp_dir}" retained-handle-root \
+    'direct root boundary changed' mutate_retained_handle_root
+  expect_guard_failure "${temp_dir}" retained-slot-generation \
+    'retained value boundary changed' mutate_retained_slot_generation
   expect_guard_failure "${temp_dir}" bound-function-edge \
     'callable edge boundary changed' mutate_bound_function_edge
   expect_guard_failure "${temp_dir}" object-internal-edge \

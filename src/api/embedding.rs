@@ -6,7 +6,9 @@ use crate::ownership::VmIdentity;
 use crate::runtime::Context;
 use crate::runtime::VmRootSnapshot;
 use crate::runtime::limits::RuntimeLimits;
-use crate::runtime::{VmAsyncEdgeSnapshot, VmCallableEdgeSnapshot, VmObjectEdgeSnapshot};
+use crate::runtime::{
+    RetainedValue, VmAsyncEdgeSnapshot, VmCallableEdgeSnapshot, VmObjectEdgeSnapshot,
+};
 use crate::value::Value;
 use std::time::Duration;
 
@@ -142,6 +144,10 @@ impl Vm {
     /// Fails when lexing, parsing, evaluation, or configured resource limits
     /// fail. An uncaught JavaScript value is returned as
     /// [`Error::JavaScript`](crate::Error::JavaScript).
+    ///
+    /// The returned raw value is not a durable root. Use [`Self::eval_owned`]
+    /// for portable primitives or [`Self::eval_retained`] when a value must
+    /// survive across later VM calls.
     pub fn eval(&mut self, source: &str) -> Result<Value> {
         self.context.eval(source)
     }
@@ -152,6 +158,14 @@ impl Vm {
     /// Fails when evaluation fails or returns a Symbol, object, or function.
     pub fn eval_owned(&mut self, source: &str) -> Result<OwnedValue> {
         self.context.eval_owned(source)
+    }
+
+    /// Evaluates source and retains its result as a VM-bound root.
+    ///
+    /// # Errors
+    /// Fails when evaluation or retained-slot allocation fails.
+    pub fn eval_retained(&mut self, source: &str) -> Result<RetainedValue> {
+        self.context.eval_retained(source)
     }
 
     /// # Errors
@@ -173,6 +187,10 @@ impl Vm {
     /// Fails when the compiled script exceeds this VM's limits or evaluation
     /// fails. An uncaught JavaScript value is returned as
     /// [`Error::JavaScript`](crate::Error::JavaScript).
+    ///
+    /// The returned raw value is not a durable root. Use
+    /// [`Self::eval_compiled_owned`] or [`Self::eval_compiled_retained`] when
+    /// the result must survive across later VM calls.
     pub fn eval_compiled(&mut self, script: &CompiledScript) -> Result<crate::Value> {
         self.context.eval_compiled(script)
     }
@@ -186,6 +204,14 @@ impl Vm {
         self.context.eval_compiled_owned(script)
     }
 
+    /// Evaluates compiled source and retains its result as a VM-bound root.
+    ///
+    /// # Errors
+    /// Fails when evaluation or retained-slot allocation fails.
+    pub fn eval_compiled_retained(&mut self, script: &CompiledScript) -> Result<RetainedValue> {
+        self.context.eval_compiled_retained(script)
+    }
+
     #[must_use]
     pub fn output(&self) -> &[String] {
         self.context.output()
@@ -196,9 +222,38 @@ impl Vm {
         self.context.take_output()
     }
 
+    /// Returns the current raw binding value without retaining it.
+    ///
+    /// Use [`Self::get_global_retained`] when the result must survive across
+    /// later VM calls.
     #[must_use]
     pub fn get_global(&self, name: &str) -> Option<Value> {
         self.context.get_global(name)
+    }
+
+    /// Retains the current value of a global binding when it exists.
+    ///
+    /// # Errors
+    /// Fails when retained-slot allocation fails.
+    pub fn get_global_retained(&self, name: &str) -> Result<Option<RetainedValue>> {
+        self.context.get_global_retained(name)
+    }
+
+    /// Returns the ECMAScript type name of a retained value.
+    ///
+    /// # Errors
+    /// Fails for a foreign or stale handle.
+    pub fn retained_type_name(&self, handle: &RetainedValue) -> Result<&'static str> {
+        self.context.retained_type_name(handle)
+    }
+
+    /// Copies a retained primitive into a VM-independent value.
+    ///
+    /// # Errors
+    /// Fails for a foreign or stale handle, or when the retained value is a
+    /// Symbol, object, or function.
+    pub fn retained_to_owned(&self, handle: &RetainedValue) -> Result<OwnedValue> {
+        self.context.retained_to_owned(handle)
     }
 
     /// # Errors

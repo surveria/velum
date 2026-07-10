@@ -35,6 +35,7 @@ pub mod numeric;
 pub mod object;
 pub mod promise;
 pub mod property;
+pub mod retained_values;
 mod roots;
 mod semantic_object;
 mod trace;
@@ -50,6 +51,8 @@ use native::{NativeFunctionKind, NativeFunctionRegistry};
 use promise::{Promise, PromiseId, PromiseJob};
 use property::static_names::{CallValueCache, StaticNameAtomCacheHandle};
 use property::well_known::{DescriptorPropertyKeys, WellKnownPropertyKeys};
+pub use retained_values::RetainedValue;
+use retained_values::RetainedValueRegistry;
 pub use roots::{VmRootKind, VmRootSnapshot};
 pub use trace::{
     VmCallableEdgeKind, VmCallableEdgeSnapshot, VmObjectEdgeKind, VmObjectEdgeSnapshot,
@@ -94,6 +97,7 @@ pub struct Context {
     promise_object_slots: Vec<Option<PromiseId>>,
     promise_jobs: VecDeque<PromiseJob>,
     promise_prototype: Option<crate::value::ObjectId>,
+    retained_values: RetainedValueRegistry,
     transient_roots: TransientRootRegistry,
     this_values: Vec<Value>,
     new_target_values: Vec<Value>,
@@ -268,7 +272,7 @@ impl Context {
             limits,
             atoms: AtomTable::new(),
             strings: StringHeap::new(identity.clone()),
-            symbols: SymbolTable::new(identity),
+            symbols: SymbolTable::new(identity.clone()),
             well_known_properties: WellKnownPropertyKeys::new(),
             iterator_symbol: None,
             descriptor_property_keys: None,
@@ -294,6 +298,7 @@ impl Context {
             promise_object_slots: Vec::new(),
             promise_jobs: VecDeque::new(),
             promise_prototype: None,
+            retained_values: RetainedValueRegistry::new(identity),
             transient_roots: TransientRootRegistry::new(),
             this_values: Vec::new(),
             new_target_values: Vec::new(),
@@ -318,6 +323,9 @@ impl Context {
     /// Fails when lexing, parsing, evaluation, or configured resource limits
     /// fail. An uncaught JavaScript value is returned as
     /// [`Error::JavaScript`](crate::Error::JavaScript).
+    ///
+    /// The returned raw value is not a durable root. Use `eval_owned` for a
+    /// portable primitive or `eval_retained` across later Context calls.
     pub fn eval(&mut self, source: &str) -> Result<Value> {
         let script = self.compile(source)?;
         self.eval_compiled(&script)

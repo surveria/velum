@@ -26,8 +26,8 @@ version policy, and uses the validation lane appropriate to the change.
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
 - Current program state: AS-01 through AS-04, AS-05a1 through AS-05a2c, and
-  AS-05b1a through AS-05b1b3 are complete; AS-05b1c transient root coverage
-  is implemented in draft PR #430
+  AS-05b1a through AS-05b1c are complete; AS-05a2d retained handle coverage
+  is implemented in draft PR #431
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -485,7 +485,7 @@ dependencies do not overlap.
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
 | AS-04 | Complete | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans merged in PR #421 with exact-tree correctness and canonical report publication. |
-| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 non-cloneable VM identity merged in PR #422; AS-05a2a primitive owner validation merged in PR #423; AS-05a2b host-local JavaScript errors merged in PR #424; AS-05a2c portable owned values merged in PR #425; AS-05b1a direct roots merged in PR #426; AS-05b1b1 callable edges merged in PR #427; AS-05b1b2 object-arena edges merged in PR #428; AS-05b1b3 asynchronous edges merged in PR #429; AS-05b1c transient roots are implemented in draft PR #430; retained handles and heap/stack/job/buffer counters and limits remain. |
+| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 non-cloneable VM identity merged in PR #422; AS-05a2a primitive owner validation merged in PR #423; AS-05a2b host-local JavaScript errors merged in PR #424; AS-05a2c portable owned values merged in PR #425; AS-05b1a direct roots merged in PR #426; AS-05b1b1 callable edges merged in PR #427; AS-05b1b2 object-arena edges merged in PR #428; AS-05b1b3 asynchronous edges merged in PR #429; AS-05b1c transient roots merged in PR #430; AS-05a2d retained handles are implemented in draft PR #431; heap/stack/job/buffer counters and limits remain. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
 | AS-08 | Backlog | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | Optimizer on/off equivalence, harness opcodes removed, workload-shaped paths replaced or justified by broad evidence. |
@@ -1563,13 +1563,58 @@ AS-05b1c local implementation evidence:
 - the future collector may start only after the relevant instruction/call
   scope is installed. Raw allocation helpers are not collector safepoints.
   AS-06 replaces this bridge with durable activation frames;
-- opaque Rust callback captures and raw Values retained after an embedding
-  call cannot be inspected safely. Collection remains gated until AS-05a2d
-  replaces that ambiguity with identity-stamped retained handles and explicit
-  release;
+- at the AS-05b1c boundary, opaque Rust callback captures and raw Values
+  retained after an embedding call could not be inspected safely. AS-05a2d
+  follows with identity-stamped retained handles and explicit release;
 - `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
+
+AS-05b1c completion evidence:
+
+- PR #430 merged as `ffb2102` after required CI run `29107804152`
+  certified exact tree `d3494ad5433f46abc39bb66d826ecb009cc71a1a`;
+- the required corpus preserved all 36,659 expected Test262 variants, the
+  exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
+  cases;
+- post-merge run `29108015179` measured all five project sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T163712Z.*` in
+  report-only commit `602e65e`.
+
+AS-05a2d local implementation evidence:
+
+- `RetainedValue` is a non-cloneable VM-bound capability. It contains the
+  opaque `VmIdentity`, a private weak registry capability, a private slot and
+  checked slot generation, and release state; no arena or registry index is
+  exposed to embedders;
+- the VM registry reuses a vacant slot only after a checked generation
+  increment. Handle resolution validates VM identity, the exact registry
+  capability, slot generation, and active value before returning metadata or
+  copying a portable primitive;
+- `eval_retained`, `eval_compiled_retained`, `get_global_retained`, and
+  `LocalValue::retain` create handles only at boundaries where the source VM
+  is already known. There is deliberately no public `retain(Value)` operation
+  that could relabel a foreign raw object/function id after the fact;
+- `RetainedValue::release` consumes the handle and reports teardown or stale
+  state. `Drop` performs a non-failing fallback release, while the weak
+  registry link avoids a VM/host-callback ownership cycle and makes Context
+  teardown authoritative;
+- `VmRootKind::RetainedHandle` extends the direct-root registry from twelve to
+  thirteen categories. Every active retained value is visited by the same
+  root snapshot used for bindings, jobs, runtime anchors, and transient
+  execution values;
+- raw `Value` results remain compatibility-only, non-durable values. Public
+  documentation routes portable primitives through `OwnedValue` and every
+  value retained across later VM calls through `RetainedValue`. A collector
+  lane must keep legacy raw-result calls collector-disabled or remove them
+  before reclaiming arena slots;
+- six focused tests cover object/function roots, compiled/global/portable
+  values, foreign VMs with colliding slots, callback-local retention,
+  automatic release plus slot reuse, and release after VM teardown;
+- the architecture guard fixes the handle fields, generation increment,
+  source-proven constructors, owner validation, retained root source, and
+  thirteen-category root map. Mutation tests reject removal of the slot
+  generation or retained-root visit.
 
 ### AS-06: Resumable Execution
 
@@ -1703,8 +1748,9 @@ reviewable scope.
 26. AS-05b1b3: enumerate Promise/collection/iterator edges and classify weak
     collection keys (complete in PR #429).
 27. AS-05b1c: close transient allocation-point roots and define the remaining
-    embedder-handle boundary (implemented in draft PR #430).
-28. AS-05a2d: define retained object/function handles and explicit release.
+    embedder-handle boundary (complete in PR #430).
+28. AS-05a2d: define retained object/function handles and explicit release
+    (implemented in draft PR #431).
 29. AS-05b2: add complete allocation accounting, hard limits, and teardown
     reconciliation.
 30. AS-06a: migrate synchronous calls and structured control flow to explicit

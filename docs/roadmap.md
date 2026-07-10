@@ -71,6 +71,8 @@ not define the whole roadmap.
   mutable JavaScript state.
 - Add direct API tests for VM creation, isolation, resource-limit failures,
   teardown reporting, and output separation.
+- Use `OwnedValue` for portable primitives and generation-checked
+  `RetainedValue` roots for data that survives across VM calls.
 - Keep `CompiledScript` bytecode-owned and hidden behind the public API so
   bytecode operands and quickening can evolve without exposing VM internals.
 
@@ -161,6 +163,8 @@ not define the whole roadmap.
 
 - Grow indexed VM ownership into deterministic heap accounting.
 - Evaluate a safe collector design over explicit VM roots.
+- Keep legacy raw-result calls collector-disabled until they are replaced by
+  owned, borrowed, or retained handle boundaries.
 - Keep collection compatible with host callbacks, promises, queued jobs, hard
   limits, and many isolated VMs.
 

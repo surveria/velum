@@ -50,9 +50,9 @@ pub(in crate::runtime) enum SemanticPropertyDelete {
 
 /// A value that has been checked against its current physical runtime owner.
 ///
-/// This is an incremental semantic boundary over the existing split stores.
-/// It deliberately does not prove VM identity yet; AS-05 will add VM-bound,
-/// generation-aware handles.
+/// This is an internal, call-local semantic boundary over the existing split
+/// stores. Durable embedding values use the identity- and generation-checked
+/// `RetainedValue` boundary instead of exposing this reference.
 #[derive(Clone, Copy, Debug)]
 pub(in crate::runtime) struct SemanticObjectRef<'value> {
     value: &'value Value,
