@@ -1,0 +1,522 @@
+schema_version: 1
+detail_level: summary
+metadata:
+  timestamp: 20260710T055456Z
+  commit: 8bb31715b7eaaab99d5dedfd65be879f5692fd8c
+  tree: ba684d1fecf631bea9ebb9d39014b5b6d6516289
+  event: workflow_dispatch
+  run_id: '29072484887'
+  run_attempt: '1'
+  repository: surveria/rs-quickjs
+  workflow: JetStream
+  pull_request: ''
+  task: JetStream shell benchmark lane
+  engine_version: 0.2.130
+  engine_commit: 8bb31715b7eaaab99d5dedfd65be879f5692fd8c
+  runner_version: 0.2.30
+  runner_commit: 8bb31715b7eaaab99d5dedfd65be879f5692fd8c
+environment:
+  operating_system: linux
+  architecture: x86_64
+  available_parallelism: 32
+  build_profile: release
+  kernel_release: 6.17.0-40-generic
+  cpu_model: AMD Ryzen 9 9950X3D 16-Core Processor
+  cpu_affinity: 0-31
+  scaling_governor: powersave
+configuration:
+  report_mode: jetstream
+  jetstream: enabled
+  quickjs_differential: not_configured
+  test262: not_configured
+  test262_mode: manifest
+  test262_path_filters: []
+  test262_flag_filters: []
+  benchmark_set: full
+  quickjs_baseline: read
+  benchmark:
+    reference_quickjs_compiled: false
+    warmup_duration_ns: 0
+    minimum_sample_duration_ns: 1500000000
+    samples: 3
+    minimum_operation_duration_ns: 1000000
+    maximum_cv_permille: 150
+    attempts: 1
+    maximum_operation_duration_ns: 90000000000
+    maximum_total_duration_ns: 240000000000
+  suite_max_duration_ns: 120000000000
+components:
+- mode: jetstream
+  timestamp: 20260710T055456Z
+  commit: 8bb31715b7eaaab99d5dedfd65be879f5692fd8c
+  tree: ba684d1fecf631bea9ebb9d39014b5b6d6516289
+  run_id: '29072484887'
+  duration_ns: 51790834553
+duration_ns: 51790834553
+suites: []
+benchmarks:
+  name: ''
+  duration_ns: 0
+  counts:
+    measured: 0
+    in_process_measured: 0
+    failed: 0
+    invalid: 0
+    skipped_reference: 0
+    over_latency_budget: 0
+    over_memory_budget: 0
+jetstream:
+  name: JetStream Shell Benchmarks
+  duration_ns: 51790834553
+  counts:
+    total: 86
+    measured: 4
+    failed: 52
+    skipped: 30
+    unavailable_reference: 30
+    over_latency_budget: 4
+  row_details:
+    completeness: complete
+    recorded_rows: 86
+    omitted_rows: 0
+  rows:
+  - id: Air
+    status: failed
+    source: tests/external/jetstream/ARES-6/Air/symbols.js (+20 more)
+    reference_median_duration_ns: 50870000
+    reference_cv_permille: 4
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: resource limit exceeded: source length 498798 exceeded 262144; QuickJS reference completed'
+  - id: Basic
+    status: failed
+    source: tests/external/jetstream/ARES-6/Basic/ast.js (+8 more)
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: parser error at 3898: expected ''('' after ''function''; cached reference unavailable: quickjs: Error: cannot read property ''length'' of undefined at lex (eval_script:474:9) at next (native) at nextToken (eval_script:685:32) a...'
+  - id: ML
+    status: failed
+    source: tests/external/jetstream/ARES-6/ml/index.js (+1 more)
+    reference_median_duration_ns: 879360000
+    reference_cv_permille: 0
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: parser error at 30252: expected '';'' after for initializer; QuickJS reference completed'
+  - id: Babylon
+    status: skipped
+    detail: requires async preload blobs and browser-oriented blob loading
+  - id: cdjs
+    status: failed
+    source: tests/external/jetstream/cdjs/constants.js (+11 more)
+    reference_median_duration_ns: 290780000
+    reference_cv_permille: 0
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: runtime error: uncaught throw: TypeError: ''undefined'' is not callable; QuickJS reference completed'
+  - id: first-inspector-code-load
+    status: failed
+    source: tests/external/jetstream/code-load/code-first-load.js (+1 more)
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: resource limit exceeded: source length 2122272 exceeded 262144; cached reference unavailable: quickjs: Error: InspectorFrontendHost is not defined at <eval> (eval_script:117:21)'
+  - id: multi-inspector-code-load
+    status: failed
+    source: tests/external/jetstream/code-load/code-multi-load.js (+1 more)
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: resource limit exceeded: source length 2122293 exceeded 262144; cached reference unavailable: quickjs: Error: InspectorFrontendHost is not defined at <eval> (eval_script:116:21)'
+  - id: Box2D
+    status: failed
+    source: tests/external/jetstream/Octane/box2d.js
+    reference_median_duration_ns: 113600000
+    reference_cv_permille: 13
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: lexer error at 91709: unexpected character ''~''; QuickJS reference completed'
+  - id: octane-code-load
+    status: failed
+    source: tests/external/jetstream/Octane/code-first-load.js
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: runtime error: uncaught throw: ReferenceError: ''salt'' is not defined; cached reference unavailable: quickjs: Error: salt is not defined at setupCodeLoad (eval_script:94:3) at <eval> (eval_script:1563:1)'
+  - id: crypto
+    status: failed
+    source: tests/external/jetstream/Octane/crypto.js
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: lexer error at 23937: unexpected character ''~''; cached reference unavailable: quickjs: Error: setupEngine is not defined at <eval> (eval_script:168:1)'
+  - id: delta-blue
+    status: tracked_exception
+    source: tests/external/jetstream/Octane/deltablue.js
+    engine_median_duration_ns: 1228810000
+    engine_cv_permille: 5
+    reference_median_duration_ns: 101540000
+    reference_cv_permille: 4
+    latency_ratio_centi_units: 1210
+    reference_source: quickjs_baseline
+    detail: JetStream shell workload completed; latency budget exception tracked
+  - id: earley-boyer
+    status: failed
+    source: tests/external/jetstream/Octane/earley-boyer.js
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: lexer error at 25081: legacy octal escape sequences are not supported; cached reference unavailable: quickjs: Error: Octal escape sequences are not allowed in strict mode at eval_script:1101:25'
+  - id: gbemu
+    status: failed
+    source: tests/external/jetstream/Octane/gbemu-part1.js (+1 more)
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: resource limit exceeded: source length 516816 exceeded 262144; cached reference unavailable: quickjs: Exception generated by quickjs: String(Ok("TypedArrayUnsupported"))'
+  - id: mandreel
+    status: failed
+    source: tests/external/jetstream/Octane/mandreel.js
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: resource limit exceeded: source length 4543878 exceeded 262144; cached reference unavailable: quickjs: Error: unexpected token in expression: '''' at eval_script:240028:10'
+  - id: navier-stokes
+    status: failed
+    source: tests/external/jetstream/Octane/navier-stokes.js
+    reference_median_duration_ns: 85420000
+    reference_cv_permille: 9
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: lexer error at 2102: unexpected character ''~''; QuickJS reference completed'
+  - id: pdfjs
+    status: failed
+    source: tests/external/jetstream/Octane/pdfjs.js
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: resource limit exceeded: source length 1466978 exceeded 262144; cached reference unavailable: quickjs: Error: not a function at calculateMD5Closure (eval_script:12621:15) at pdfjsWrapper (eval_script:12702:1) at call (nat...'
+  - id: raytrace
+    status: failed
+    source: tests/external/jetstream/Octane/raytrace.js
+    reference_median_duration_ns: 247160000
+    reference_cv_permille: 10
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: parser error at 1771: expected expression; QuickJS reference completed'
+  - id: regexp-octane
+    status: failed
+    source: tests/external/jetstream/Octane/regexp.js
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: lexer error at 4149: unterminated regular expression literal; cached reference unavailable: quickjs: Error: Wrong checksum. Found 1665806 but expected 1666156 at run (eval_script:1822:99) at RegExpRun (eval_script:74:19) ...'
+  - id: richards
+    status: failed
+    source: tests/external/jetstream/Octane/richards.js
+    reference_median_duration_ns: 138790000
+    reference_cv_permille: 1
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: lexer error at 9979: unexpected character ''~''; QuickJS reference completed'
+  - id: splay
+    status: failed
+    source: tests/external/jetstream/Octane/splay.js
+    reference_median_duration_ns: 691380000
+    reference_cv_permille: 62
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: resource limit exceeded: object count exceeded 1000000; QuickJS reference completed'
+  - id: typescript-octane
+    status: failed
+    source: tests/external/jetstream/Octane/typescript-compiler.js (+2 more)
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: resource limit exceeded: source length 2512260 exceeded 262144; cached reference unavailable: quickjs: Error: invalid argument name in strict code at eval_script:1367:18'
+  - id: FlightPlanner
+    status: skipped
+    detail: requires compressed waypoints preload resource not vendored in the shell snapshot
+  - id: OfflineAssembler
+    status: failed
+    source: tests/external/jetstream/RexBench/OfflineAssembler/registers.js (+10 more)
+    reference_median_duration_ns: 52622090000
+    reference_cv_permille: 11
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: resource limit exceeded: source length 512528 exceeded 262144; QuickJS reference completed'
+  - id: UniPoker
+    status: failed
+    source: tests/external/jetstream/RexBench/UniPoker/poker.js (+2 more)
+    reference_median_duration_ns: 69960000
+    reference_cv_permille: 7
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: runtime error: unsupported regular expression syntax; QuickJS reference completed'
+  - id: validatorjs
+    status: failed
+    source: tests/external/jetstream/validatorjs/dist/bundle.es6.min.js (+1 more)
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: resource limit exceeded: source length 347057 exceeded 262144; cached reference unavailable: quickjs: Error: ValidatorJSBenchmark is not defined at <anonymous> (eval_script:27:344362) at <eval> (eval_script:27:344390)'
+  - id: hash-map
+    status: tracked_exception
+    source: tests/external/jetstream/simple/hash-map.js
+    engine_median_duration_ns: 4935350000
+    engine_cv_permille: 4
+    reference_median_duration_ns: 231760000
+    reference_cv_permille: 7
+    latency_ratio_centi_units: 2129
+    reference_source: quickjs_baseline
+    detail: JetStream shell workload completed; latency budget exception tracked
+  - id: doxbee-promise
+    status: failed
+    source: tests/external/jetstream/simple/doxbee-promise.js
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: parser error at 2504: expected expression; cached reference unavailable: quickjs: Error: async JetStream workloads are not supported by the synchronous harness at <eval> (eval_script:233:15)'
+  - id: doxbee-async
+    status: failed
+    source: tests/external/jetstream/simple/doxbee-async.js
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: parser error at 2502: expected expression; cached reference unavailable: quickjs: Error: async JetStream workloads are not supported by the synchronous harness at <eval> (eval_script:213:15)'
+  - id: ai-astar
+    status: failed
+    source: tests/external/jetstream/SeaMonster/ai-astar.js
+    reference_median_duration_ns: 399250000
+    reference_cv_permille: 89
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: resource limit exceeded: source length 517197 exceeded 262144; QuickJS reference completed'
+  - id: gaussian-blur
+    status: failed
+    source: tests/external/jetstream/SeaMonster/gaussian-blur.js
+    reference_median_duration_ns: 593830000
+    reference_cv_permille: 1
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: runtime error: uncaught throw: ReferenceError: ''Uint32Array'' is not defined; QuickJS reference completed'
+  - id: stanford-crypto-aes
+    status: failed
+    source: tests/external/jetstream/SeaMonster/sjlc.js (+1 more)
+    reference_median_duration_ns: 219890000
+    reference_cv_permille: 1
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: resource limit exceeded: source length 486922 exceeded 262144; QuickJS reference completed'
+  - id: stanford-crypto-pbkdf2
+    status: failed
+    source: tests/external/jetstream/SeaMonster/sjlc.js (+1 more)
+    reference_median_duration_ns: 155640000
+    reference_cv_permille: 1
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: parser error at 4176: expected statement terminator; QuickJS reference completed'
+  - id: stanford-crypto-sha256
+    status: failed
+    source: tests/external/jetstream/SeaMonster/sjlc.js (+1 more)
+    reference_median_duration_ns: 169360000
+    reference_cv_permille: 1
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: parser error at 4176: expected statement terminator; QuickJS reference completed'
+  - id: json-stringify-inspector
+    status: skipped
+    detail: requires compressed inspector JSON preload resource not vendored in the shell snapshot
+  - id: json-parse-inspector
+    status: skipped
+    detail: requires compressed inspector JSON preload resource not vendored in the shell snapshot
+  - id: bigint-noble-bls12-381
+    status: failed
+    source: tests/external/jetstream/bigint/web-crypto-sham.js (+2 more)
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: resource limit exceeded: source length 329464 exceeded 262144; cached reference unavailable: quickjs: Error: cannot read property ''prototype'' of undefined at <anonymous> (eval_script:451:1) at call (native) at <anonymous>...'
+  - id: bigint-noble-secp256k1
+    status: failed
+    source: tests/external/jetstream/bigint/web-crypto-sham.js (+2 more)
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: resource limit exceeded: source length 390029 exceeded 262144; cached reference unavailable: quickjs: Error: cannot read property ''prototype'' of undefined at <anonymous> (eval_script:451:1) at call (native) at <anonymous>...'
+  - id: bigint-noble-ed25519
+    status: failed
+    source: tests/external/jetstream/bigint/web-crypto-sham.js (+2 more)
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: resource limit exceeded: source length 302750 exceeded 262144; cached reference unavailable: quickjs: Error: cannot read property ''prototype'' of undefined at <anonymous> (eval_script:451:1) at call (native) at <anonymous>...'
+  - id: bigint-paillier
+    status: failed
+    source: tests/external/jetstream/bigint/web-crypto-sham.js (+2 more)
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: lexer error at 37426: unexpected character ''~''; cached reference unavailable: quickjs: Error: cannot read property ''prototype'' of undefined at <anonymous> (eval_script:451:1) at call (native) at <anonymous> (eval_script:2...'
+  - id: bigint-bigdenary
+    status: failed
+    source: tests/external/jetstream/bigint/bigdenary-bundle.js (+1 more)
+    reference_median_duration_ns: 197740000
+    reference_cv_permille: 36
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: lexer error at 1787: decimal numeric literal cannot use BigInt suffix without BigInt support; QuickJS reference completed'
+  - id: proxy-mobx
+    status: failed
+    source: tests/external/jetstream/proxy/common.js (+2 more)
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: parser error at 11454: expected expression; cached reference unavailable: quickjs: Error: async JetStream workloads are not supported by the synchronous harness at <eval> (eval_script:384:15)'
+  - id: proxy-vue
+    status: failed
+    source: tests/external/jetstream/proxy/common.js (+2 more)
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: lexer error at 16595: unexpected character ''~''; cached reference unavailable: quickjs: Error: async JetStream workloads are not supported by the synchronous harness at <eval> (eval_script:395:15)'
+  - id: mobx-startup
+    status: skipped
+    detail: requires browser startup preload bundle
+  - id: jsdom-d3-startup
+    status: skipped
+    detail: requires browser startup preload data
+  - id: web-ssr
+    status: skipped
+    detail: requires browser startup preload bundle
+  - id: raytrace-public-class-fields
+    status: failed
+    source: tests/external/jetstream/class-fields/raytrace-public-class-fields.js
+    reference_median_duration_ns: 280970000
+    reference_cv_permille: 8
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: parser error at 1858: expected expression; QuickJS reference completed'
+  - id: raytrace-private-class-fields
+    status: failed
+    source: tests/external/jetstream/class-fields/raytrace-private-class-fields.js
+    reference_median_duration_ns: 362430000
+    reference_cv_permille: 10
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: lexer error at 1098: unexpected character ''#''; QuickJS reference completed'
+  - id: typescript-lib
+    status: skipped
+    detail: requires TypeScript preload project files
+  - id: async-fs
+    status: failed
+    source: tests/external/jetstream/generators/async-file-system.js
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: parser error at 2201: expected function declaration name; cached reference unavailable: quickjs: Error: not a function at computeIsLittleEndian (eval_script:55:19) at <eval> (eval_script:62:24)'
+  - id: sync-fs
+    status: failed
+    source: tests/external/jetstream/generators/sync-file-system.js
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: parser error at 2189: expected function declaration name; cached reference unavailable: quickjs: Error: not a function at computeIsLittleEndian (eval_script:55:19) at <eval> (eval_script:62:24)'
+  - id: lazy-collections
+    status: failed
+    source: tests/external/jetstream/generators/lazy-collections.js
+    reference_median_duration_ns: 53940000
+    reference_cv_permille: 1
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: lexer error at 15490: decimal numeric literal cannot use BigInt suffix without BigInt support; QuickJS reference completed'
+  - id: js-tokens
+    status: failed
+    source: tests/external/jetstream/generators/js-tokens.js
+    reference_median_duration_ns: 130600000
+    reference_cv_permille: 3
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: parser error at 3848: expected ''('' after ''function''; QuickJS reference completed'
+  - id: threejs
+    status: skipped
+    detail: requires browser-adjacent Three.js bundle coverage
+  - id: HashSet-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: quicksort-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: gcc-loops-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: tsf-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: richards-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: sqlite3-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: Dart-flute-complex-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: Dart-flute-todomvc-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: Kotlin-compose-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: transformersjs-bert-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: transformersjs-whisper-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: tfjs-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: tfjs-wasm-simd
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: argon2-wasm
+    status: skipped
+    detail: WebAssembly workload is outside the shell JS engine surface
+  - id: babylonjs-startup-es5
+    status: skipped
+    detail: requires browser startup preload bundle
+  - id: babylonjs-startup-es6
+    status: skipped
+    detail: requires browser startup preload bundle
+  - id: babylonjs-scene-es5
+    status: skipped
+    detail: requires browser scene assets and preload data
+  - id: babylonjs-scene-es6
+    status: skipped
+    detail: requires browser scene assets and preload data
+  - id: bomb-workers
+    status: skipped
+    detail: requires Worker APIs outside the current shell harness
+  - id: segmentation
+    status: skipped
+    detail: requires Worker APIs outside the current shell harness
+  - id: WSL
+    status: skipped
+    detail: requires the full WSL multi-file compiler corpus, not yet vendored
+  - id: sunspider-3d-cube
+    status: failed
+    source: tests/external/jetstream/SunSpider/3d-cube.js
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: runtime error: compiled function upvalue layout did not resolve every captured cell; cached reference unavailable: quickjs: Error: LoopTime is not defined at run (eval_script:381:5) at runIteration (eval_script:389:13) at...'
+  - id: sunspider-3d-raytrace
+    status: failed
+    source: tests/external/jetstream/SunSpider/3d-raytrace.js
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: runtime error: unary ''-'' expects a number; cached reference unavailable: quickjs: Error: h is not defined at invertMatrix (eval_script:134:20) at Camera (eval_script:295:18) at raytraceScene (eval_script:425:80) at run (e...'
+  - id: sunspider-base64
+    status: tracked_exception
+    source: tests/external/jetstream/SunSpider/base64.js
+    engine_median_duration_ns: 3678480000
+    engine_cv_permille: 2
+    reference_median_duration_ns: 109230000
+    reference_cv_permille: 4
+    latency_ratio_centi_units: 3367
+    reference_source: quickjs_baseline
+    detail: JetStream shell workload completed; latency budget exception tracked
+  - id: sunspider-crypto-aes
+    status: failed
+    source: tests/external/jetstream/SunSpider/crypto-aes.js
+    reference_median_duration_ns: 161390000
+    reference_cv_permille: 3
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: runtime error: uncaught throw: ERROR: bad result: expected ROMEO: But, soft! what light through yonder window breaks? It is the east, and Juliet is the sun. Arise, fair sun, and kill the envious moon, Who is already sick ...'
+  - id: sunspider-crypto-md5
+    status: failed
+    source: tests/external/jetstream/SunSpider/crypto-md5.js
+    reference_median_duration_ns: 135720000
+    reference_cv_permille: 3
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: lexer error at 6281: unexpected character ''~''; QuickJS reference completed'
+  - id: sunspider-crypto-sha1
+    status: failed
+    source: tests/external/jetstream/SunSpider/crypto-sha1.js
+    reference_median_duration_ns: 191250000
+    reference_cv_permille: 2
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: lexer error at 3189: unexpected character ''~''; QuickJS reference completed'
+  - id: sunspider-date-format-tofte
+    status: failed
+    source: tests/external/jetstream/SunSpider/date-format-tofte.js
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: runtime error: uncaught throw: ReferenceError: ''i'' is not defined; cached reference unavailable: quickjs: Error: i is not defined at run (eval_script:333:20) at runIteration (eval_script:357:32) at <eval> (eval_script:368...'
+  - id: sunspider-date-format-xparb
+    status: failed
+    source: tests/external/jetstream/SunSpider/date-format-xparb.js
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: runtime error: uncaught throw: ReferenceError: ''i'' is not defined; cached reference unavailable: quickjs: Error: i is not defined at run (eval_script:438:20) at runIteration (eval_script:462:32) at <eval> (eval_script:473...'
+  - id: sunspider-n-body
+    status: tracked_exception
+    source: tests/external/jetstream/SunSpider/n-body.js
+    engine_median_duration_ns: 2565370000
+    engine_cv_permille: 2
+    reference_median_duration_ns: 87700000
+    reference_cv_permille: 10
+    latency_ratio_centi_units: 2924
+    reference_source: quickjs_baseline
+    detail: JetStream shell workload completed; latency budget exception tracked
+  - id: sunspider-regex-dna
+    status: failed
+    source: tests/external/jetstream/SunSpider/regex-dna.js
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: resource limit exceeded: source length 409659 exceeded 262144; cached reference unavailable: quickjs: Error: i is not defined at run (eval_script:1729:21) at runIteration (eval_script:1755:13) at <eval> (eval_script:1761:...'
+  - id: sunspider-string-unpack-code
+    status: failed
+    source: tests/external/jetstream/SunSpider/string-unpack-code.js
+    reference_median_duration_ns: 67430000
+    reference_cv_permille: 7
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: runtime error: compiled function upvalue layout did not resolve every captured cell; QuickJS reference completed'
+  - id: sunspider-tagcloud
+    status: failed
+    source: tests/external/jetstream/SunSpider/tagcloud.js
+    reference_median_duration_ns: 120730000
+    reference_cv_permille: 0
+    reference_source: quickjs_baseline
+    detail: 'rsqjs eval failed: runtime error: unsupported regular expression syntax; QuickJS reference completed'
