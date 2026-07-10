@@ -362,8 +362,10 @@ impl Context {
         for scope in &self.locals {
             counter.record(VmStorageKind::Binding, scope.len())?;
         }
-        for frame in &self.upvalue_frames {
-            counter.record(VmStorageKind::Binding, frame.len())?;
+        for frame in &self.activation_frames {
+            if let Some(upvalues) = frame.upvalues() {
+                counter.record(VmStorageKind::Binding, upvalues.len())?;
+            }
         }
         Ok(())
     }
@@ -460,11 +462,7 @@ impl Context {
 
     fn record_active_storage(&self, counter: &mut StorageCounter) -> Result<()> {
         counter.record(VmStorageKind::ExecutionFrame, self.locals.len())?;
-        counter.record(VmStorageKind::ExecutionFrame, self.local_frame_bases.len())?;
-        counter.record(VmStorageKind::ExecutionFrame, self.upvalue_frames.len())?;
-        counter.record(VmStorageKind::ExecutionFrame, self.this_values.len())?;
-        counter.record(VmStorageKind::ExecutionFrame, self.new_target_values.len())?;
-        counter.record(VmStorageKind::ExecutionFrame, self.super_frames.len())?;
+        counter.record(VmStorageKind::ExecutionFrame, self.activation_frames.len())?;
         counter.record(VmStorageKind::OutputEntry, self.output.len())
     }
 

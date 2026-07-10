@@ -187,7 +187,7 @@ impl Context {
             is_async: init.is_async,
             class_constructor: init.class_constructor,
             super_binding: if init.new_target_mode == BytecodeNewTargetMode::Lexical {
-                self.super_frames.last().cloned().flatten()
+                self.current_activation_super()
             } else {
                 None
             },
@@ -324,7 +324,8 @@ impl Context {
             None
         };
         let has_parameter_defaults = bytecode.has_parameter_defaults();
-        let local_base = self.enter_function_local_frame()?;
+        let local_base =
+            self.push_call_activation(upvalues, this_value, new_target, super_binding)?;
         let scope_result = if let Some(template) = scope_template.as_deref() {
             self.function_scope_from_template(template, args)
         } else {
@@ -334,12 +335,14 @@ impl Context {
             Ok(scope) => scope,
             Err(error) => {
                 self.leave_function_local_frame(local_base)?;
+                self.pop_call_activation(local_base)?;
                 return Err(error);
             }
         };
-        self.push_function_binding_storage(local_base, scope, original_args.as_deref(), upvalues)?;
-        if let Err(error) = self.push_call_execution_state(this_value, new_target, super_binding) {
-            self.pop_function_binding_storage(local_base, binds_arguments)?;
+        if let Err(error) =
+            self.push_function_binding_storage(local_base, scope, original_args.as_deref())
+        {
+            self.pop_call_activation(local_base)?;
             return Err(error);
         }
         let result = self.eval_function_body(
@@ -350,9 +353,10 @@ impl Context {
             &bytecode,
             remember_params,
         );
-        let execution_state_result = self.pop_call_execution_state();
-        self.pop_function_binding_storage(local_base, binds_arguments)?;
-        execution_state_result?;
+        let binding_result = self.pop_function_binding_storage(local_base, binds_arguments);
+        let activation_result = self.pop_call_activation(local_base);
+        binding_result?;
+        activation_result?;
         result
     }
 
@@ -509,7 +513,7 @@ impl Context {
     }
 
     pub(in crate::runtime) fn current_super_frame(&self) -> Option<Rc<FunctionSuperBinding>> {
-        self.super_frames.last().cloned().flatten()
+        self.current_activation_super()
     }
 
     /// Class constructors are constructor-only callables.

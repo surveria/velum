@@ -406,6 +406,40 @@ fn enforces_association_limits_and_keeps_module_storage_empty() -> TestResult {
     )
 }
 
+#[test]
+fn charges_one_activation_and_one_function_scope_per_nested_call() -> TestResult {
+    const SOURCE: &str = r"
+        function inner(value) {
+            let lens = value + 1;
+            return lens;
+        }
+        function outer(value) {
+            let body = value + 1;
+            return inner(body);
+        }
+        outer(40);
+    ";
+
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::ExecutionFrame, 4);
+    let mut vm = vm_with_storage_limits(limits);
+    vm.eval(SOURCE)?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::ExecutionFrame),
+        0,
+        "released nested activation frames",
+    )?;
+
+    let limits = VmStorageLimits::unlimited().with_max_count(VmStorageKind::ExecutionFrame, 3);
+    let mut vm = vm_with_storage_limits(limits);
+    let error = expect_eval_error(&mut vm, SOURCE)?;
+    ensure_limit(&error, "ExecutionFrame")?;
+    ensure_usize(
+        vm.storage_snapshot()?.count(VmStorageKind::ExecutionFrame),
+        0,
+        "nested activation frames after rejection",
+    )
+}
+
 const fn storage_kind_name(kind: VmStorageKind) -> &'static str {
     match kind {
         VmStorageKind::Collection => "Collection",

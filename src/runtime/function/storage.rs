@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, FunctionUpvalues, VmStorageKind, binding::scope::BindingScope},
+    runtime::{Context, VmStorageKind, binding::scope::BindingScope},
     value::Value,
 };
 
@@ -54,7 +54,6 @@ impl Context {
         local_base: usize,
         scope: BindingScope,
         original_args: Option<&[Value]>,
-        upvalues: FunctionUpvalues,
     ) -> Result<()> {
         if let Some(original_args) = original_args {
             let wrapper = match self.arguments_wrapper_scope(original_args) {
@@ -73,23 +72,6 @@ impl Context {
             self.leave_function_local_frame(local_base)?;
             return Err(error);
         }
-        if let Err(error) = self
-            .storage_ledger
-            .grow_count(VmStorageKind::Binding, upvalues.len())
-        {
-            self.leave_function_local_frame(local_base)?;
-            return Err(error);
-        }
-        if let Err(error) = self
-            .storage_ledger
-            .grow_count(VmStorageKind::ExecutionFrame, 1)
-        {
-            self.storage_ledger
-                .release_count(VmStorageKind::Binding, upvalues.len())?;
-            self.leave_function_local_frame(local_base)?;
-            return Err(error);
-        }
-        self.upvalue_frames.push(upvalues);
         Ok(())
     }
 
@@ -98,27 +80,9 @@ impl Context {
         local_base: usize,
         binds_arguments: bool,
     ) -> Result<()> {
-        let removed_upvalues = self.upvalue_frames.pop();
-        let frame_release = if removed_upvalues.is_some() {
-            self.storage_ledger
-                .release_count(VmStorageKind::ExecutionFrame, 1)
-        } else {
-            Ok(())
-        };
-        let upvalue_release = if let Some(upvalues) = &removed_upvalues {
-            self.storage_ledger
-                .release_count(VmStorageKind::Binding, upvalues.len())
-        } else {
-            Ok(())
-        };
         let expected_local_count = expected_function_local_count(local_base, binds_arguments)?;
         let local_scope_stack_ok = self.locals.len() == expected_local_count;
         self.leave_function_local_frame(local_base)?;
-        frame_release?;
-        upvalue_release?;
-        if removed_upvalues.is_none() {
-            return Err(Error::runtime("function upvalue frame disappeared"));
-        }
         if !local_scope_stack_ok {
             return Err(Error::runtime("function local scope stack mismatch"));
         }

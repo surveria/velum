@@ -20,6 +20,7 @@ use crate::value::{ErrorName, FunctionId, Value};
 
 mod abstract_operations;
 mod accounting;
+mod activation;
 mod async_trace;
 pub mod binding;
 pub mod bytecode;
@@ -87,8 +88,7 @@ pub struct Context {
     globals: BindingScope,
     builtin_globals: BindingScope,
     locals: Vec<BindingScope>,
-    local_frame_bases: Vec<usize>,
-    upvalue_frames: Vec<FunctionUpvalues>,
+    activation_frames: Vec<activation::ActivationFrame>,
     functions: Vec<Function>,
     native_functions: Vec<native::NativeFunction>,
     native_function_registry: NativeFunctionRegistry,
@@ -105,9 +105,6 @@ pub struct Context {
     promise_prototype: Option<crate::value::ObjectId>,
     retained_values: RetainedValueRegistry,
     transient_roots: TransientRootRegistry,
-    this_values: Vec<Value>,
-    new_target_values: Vec<Value>,
-    super_frames: Vec<Option<Rc<function::FunctionSuperBinding>>>,
     output: Vec<String>,
     output_payload_bytes: usize,
     performance_clock: clock::PerformanceClock,
@@ -216,7 +213,11 @@ impl Context {
     }
 
     pub(crate) fn current_local_frame_start(&self) -> usize {
-        self.local_frame_bases.last().copied().unwrap_or(0)
+        self.activation_frames
+            .iter()
+            .rev()
+            .find_map(activation::ActivationFrame::local_base)
+            .unwrap_or(0)
     }
 
     pub(crate) fn visible_local_scope_count(&self) -> usize {
@@ -295,8 +296,7 @@ impl Context {
             globals: BindingScope::new_active(storage_ledger.clone()),
             builtin_globals: BindingScope::new_active(storage_ledger.clone()),
             locals: Vec::new(),
-            local_frame_bases: Vec::new(),
-            upvalue_frames: Vec::new(),
+            activation_frames: Vec::new(),
             functions: Vec::new(),
             native_functions: Vec::new(),
             native_function_registry: NativeFunctionRegistry::new(),
@@ -313,9 +313,6 @@ impl Context {
             promise_prototype: None,
             retained_values: RetainedValueRegistry::new(identity, storage_ledger.clone()),
             transient_roots: TransientRootRegistry::new(storage_ledger),
-            this_values: Vec::new(),
-            new_target_values: Vec::new(),
-            super_frames: Vec::new(),
             output: Vec::new(),
             output_payload_bytes: 0,
             performance_clock,

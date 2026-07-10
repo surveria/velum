@@ -25,10 +25,8 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 through AS-04, AS-05a1 through AS-05a2d,
-  AS-05b1a through AS-05b1c and AS-05b2a through AS-05b2c2 are complete;
-  AS-05b2c3 async/root/frame/association enforcement is implemented in draft
-  PR #436
+- Current program state: AS-01 through AS-05 are complete; AS-06a1 explicit
+  synchronous call activations are implemented in draft PR #438
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -486,8 +484,8 @@ dependencies do not overlap.
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
 | AS-04 | Complete | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans merged in PR #421 with exact-tree correctness and canonical report publication. |
-| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05b2c2 are merged through PR #435; AS-05b2c3 async/root/frame/association limits and final reconciliation are implemented in draft PR #436. |
-| AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
+| AS-05 | Complete | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05b2c3 are merged through PR #436 with exact-tree correctness, complete owner-limit reconciliation, and canonical report publication. |
+| AS-06 | In progress | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 replaces parallel call-state vectors with one VM-owned activation stack in draft PR #438; explicit bytecode continuation/control frames remain AS-06a2 before suspend/resume outcomes. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
 | AS-08 | Backlog | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | Optimizer on/off equivalence, harness opcodes removed, workload-shaped paths replaced or justified by broad evidence. |
 | AS-09 | Backlog | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | Multiple feature clusters land through shared semantics without new architecture exceptions. |
@@ -1433,6 +1431,46 @@ AS-05b2c3 local implementation evidence:
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
+AS-05b2c3 completion evidence:
+
+- PR #436 merged as `4a3afaf` after required CI run `29122001416`
+  certified exact tree `e6ef603b330346dbbe27923570801d3b3bfa2e2b`;
+- the required corpus preserved all 36,659 expected Test262 variants, the
+  exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
+  cases;
+- post-merge run `29122207039` measured five of five valid sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T204151Z.*` in
+  report-only commit `e8f11fe`. Function-call latency improved from the prior
+  155.18 ms to 151.76 ms; all other sentinel changes stayed within 1.7%.
+
+AS-06a1 local implementation evidence:
+
+- one `ActivationFrame::Call` owns the local-scope base, captured upvalue
+  frame, `this`, `new.target`, and optional super binding for a synchronous
+  JavaScript invocation. `Context` no longer maintains five parallel vectors
+  whose lengths and unwind order could diverge;
+- temporary class-field `this` state uses an explicit activation variant, and
+  generated Function-constructor evaluation uses a boundary variant that
+  hides caller lexical/new-target/super state without temporarily removing its
+  direct roots from the VM;
+- binding lookup, lexical function creation, current `this`/`new.target`/super
+  access, root enumeration, and storage accounting read through the activation
+  owner rather than reconstructing a call from parallel stacks;
+- `ExecutionFrame` accounting now charges one logical call activation plus
+  each active lexical scope. Nested-call limit coverage proves a two-call
+  stack fits exactly four records, rejects a three-record budget, and releases
+  every record on unwind;
+- nested root snapshot coverage observes both active call records, and the
+  complete engine integration suite preserves Function-constructor isolation,
+  binding layouts, class fields/inheritance, transient roots, and storage
+  reconciliation;
+- AS-06a2 still owns bytecode program counters, operand stacks, and structured
+  loop/try/finally continuation records. AS-06a1 deliberately does not claim
+  that the current recursive bytecode executor can suspend yet;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
+
 AS-05a1 completion evidence:
 
 - PR #422 merged as `4143ec4` after required CI run `29098691127`
@@ -1993,12 +2031,14 @@ reviewable scope.
 32. AS-05b2c2: enforce binding, callable, property, and cache owners
     (complete in PR #435).
 33. AS-05b2c3: enforce async, root, frame, and association owners and prove
-    complete growth-point reconciliation (implemented in draft PR #436).
-34. AS-06a: migrate synchronous calls and structured control flow to explicit
-    activation frames.
-35. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
-36. AS-07a: add safe collection over explicit roots and correct weak edges.
-37. AS-08a: move reusable optimization state behind one optimizer/quickening
+    complete growth-point reconciliation (complete in PR #436).
+34. AS-06a1: replace parallel synchronous call-state vectors with one explicit
+    activation owner (implemented in draft PR #438).
+35. AS-06a2: move bytecode program counters, operand stacks, and structured
+    control continuations into explicit VM-owned frames.
+36. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
+37. AS-07a: add safe collection over explicit roots and correct weak edges.
+38. AS-08a: move reusable optimization state behind one optimizer/quickening
     boundary and remove harness-specific opcodes.
 
 ## Updating This Plan

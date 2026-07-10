@@ -51,7 +51,11 @@ fn snapshots_direct_roots_during_function_and_super_calls() -> TestResult {
             };
         }
         var probe = makeProbe();
-        probe(0);
+        function outerProbe() {
+            let outerLocal = 1;
+            return probe(outerLocal - 1);
+        }
+        outerProbe();
 
         class Base {
             probe() {
@@ -75,9 +79,19 @@ fn snapshots_direct_roots_during_function_and_super_calls() -> TestResult {
         "active captured roots",
     )?;
     ensure_positive(active.count(VmRootKind::ActiveThis), "active this roots")?;
+    ensure_at_least(
+        active.count(VmRootKind::ActiveThis),
+        2,
+        "nested activation this roots",
+    )?;
     ensure_positive(
         active.count(VmRootKind::ActiveNewTarget),
         "active new.target roots",
+    )?;
+    ensure_at_least(
+        active.count(VmRootKind::ActiveNewTarget),
+        2,
+        "nested activation new.target roots",
     )?;
 
     let with_super = copied_snapshot(&super_snapshot, "super root snapshot")?;
@@ -176,6 +190,13 @@ fn copied_snapshot(
 ) -> Result<VmRootSnapshot, Box<dyn std::error::Error>> {
     let snapshot = *source.lock();
     snapshot.ok_or_else(|| format!("expected {label} to be captured").into())
+}
+
+fn ensure_at_least(actual: usize, minimum: usize, label: &str) -> TestResult {
+    if actual >= minimum {
+        return Ok(());
+    }
+    Err(format!("expected {label} to be at least {minimum}, got {actual}").into())
 }
 
 fn ensure_snapshot_sum(snapshot: VmRootSnapshot) -> TestResult {

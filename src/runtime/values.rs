@@ -222,7 +222,7 @@ impl Context {
     }
 
     pub(crate) fn current_this(&mut self) -> Result<Value> {
-        if let Some(value) = self.this_values.last() {
+        if let Some(value) = self.current_activation_this() {
             return self.checked_value(value.clone());
         }
         self.global_this_value()
@@ -230,8 +230,7 @@ impl Context {
 
     pub(crate) fn current_new_target(&self) -> Result<Value> {
         self.checked_value(
-            self.new_target_values
-                .last()
+            self.current_activation_new_target()
                 .cloned()
                 .unwrap_or(Value::Undefined),
         )
