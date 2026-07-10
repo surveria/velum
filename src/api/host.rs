@@ -2,6 +2,7 @@ use std::{fmt, rc::Rc};
 
 use crate::{
     error::{Error, Result},
+    ownership::VmIdentity,
     runtime::Context,
     runtime::call::RuntimeCallArgs,
     syntax::DeclKind,
@@ -133,9 +134,10 @@ impl HostFunction {
         Self::new(name, move |call| callback(call)?.into_js_value())
     }
 
-    fn call(&self, args: &[Value]) -> Result<Value> {
+    fn call(&self, identity: &VmIdentity, args: &[Value]) -> Result<Value> {
         let call = HostCall {
             function_name: self.name.as_str(),
+            identity,
             args,
         };
         (self.callback)(call).map_err(|error| error.with_context(self.context_message()))
@@ -156,8 +158,35 @@ impl fmt::Debug for HostFunction {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub struct LocalValue<'value> {
+    identity: &'value VmIdentity,
+    value: &'value Value,
+}
+
+impl<'value> LocalValue<'value> {
+    /// Returns the VM owner of this callback-local value.
+    #[must_use]
+    pub const fn identity(self) -> &'value VmIdentity {
+        self.identity
+    }
+
+    /// Borrows the underlying JavaScript value for synchronous inspection.
+    #[must_use]
+    pub const fn as_value(self) -> &'value Value {
+        self.value
+    }
+
+    /// Creates a JavaScript throw that remains bound to the argument's VM.
+    #[must_use]
+    pub fn javascript_error(self) -> Error {
+        Error::javascript_local(self.identity.clone(), self.value.clone())
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct HostCall<'call> {
     function_name: &'call str,
+    identity: &'call VmIdentity,
     args: &'call [Value],
 }
 
@@ -178,13 +207,16 @@ impl<'call> HostCall<'call> {
     }
 
     #[must_use]
-    pub fn value(self, index: usize) -> Option<&'call Value> {
-        self.args.get(index)
+    pub fn value(self, index: usize) -> Option<LocalValue<'call>> {
+        self.args.get(index).map(|value| LocalValue {
+            identity: self.identity,
+            value,
+        })
     }
 
     /// # Errors
     /// Fails when the argument is missing.
-    pub fn required_value(self, index: usize, label: &str) -> Result<&'call Value> {
+    pub fn required_value(self, index: usize, label: &str) -> Result<LocalValue<'call>> {
         let Some(value) = self.value(index) else {
             return Err(Self::missing_argument(index, label));
         };
@@ -216,8 +248,13 @@ impl<'call> HostCall<'call> {
         T: FromJsValue<'call>,
     {
         let value = self.required_value(index, label)?;
-        let Some(converted) = T::from_js_value(value) else {
-            return Err(Self::type_error(index, label, T::EXPECTED_TYPE, value));
+        let Some(converted) = T::from_js_value(value.as_value()) else {
+            return Err(Self::type_error(
+                index,
+                label,
+                T::EXPECTED_TYPE,
+                value.as_value(),
+            ));
         };
         Ok(converted)
     }
@@ -296,7 +333,7 @@ impl Context {
     ) -> Result<Value> {
         let values = args.to_owned_values();
         let function = self.host_function(id)?.clone();
-        let value = function.call(&values)?;
+        let value = function.call(self.identity(), &values)?;
         self.checked_host_return_value(value)
             .map_err(|error| error.with_context(function.context_message()))
     }

@@ -4,6 +4,8 @@ use crate::{
     value::{ErrorName, Value},
 };
 
+const FOREIGN_JAVASCRIPT_VALUE_ERROR: &str = "JavaScript thrown value belongs to another VM";
+
 pub fn thrown_value_matches(context: &Context, value: &Value, expected_name: &str) -> Result<bool> {
     let Some(expected) = ErrorName::from_constructor_name(expected_name) else {
         return Ok(false);
@@ -22,6 +24,11 @@ pub fn thrown_value_matches(context: &Context, value: &Value, expected_name: &st
 
 pub fn runtime_exception_value(context: &mut Context, error: &Error) -> Result<Option<Value>> {
     if let Some(value) = error.javascript_value() {
+        if let Some(identity) = error.javascript_identity()
+            && identity != context.identity()
+        {
+            return Err(Error::runtime(FOREIGN_JAVASCRIPT_VALUE_ERROR));
+        }
         return Ok(Some(value.clone()));
     }
     let Some(metadata) = error.javascript_error_request() else {
