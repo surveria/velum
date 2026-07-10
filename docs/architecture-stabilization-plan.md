@@ -1512,7 +1512,10 @@ AS-06a2a local implementation evidence:
   budget rejects and fully unwinds;
 - focused generic, quickened, structured-control, root, transient-root, and
   storage tests pass. Three new guard mutations protect continuation state,
-  restore-on-outcome, and parked operand roots.
+  restore-on-outcome, and parked operand roots;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 119 runner tests.
 
 AS-05a1 completion evidence:
 
