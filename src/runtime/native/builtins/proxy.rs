@@ -246,7 +246,7 @@ impl Context {
                 .ok_or_else(|| Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR));
         };
         let result = self
-            .eval_call_completion(trap, &[target], handler)?
+            .eval_call_completion(trap, std::slice::from_ref(&target), handler)?
             .into_native_value_result()?;
         if !matches!(result, Value::Object(_) | Value::Null) {
             return Err(Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR));
@@ -338,9 +338,11 @@ impl Context {
             return self.semantic_own_property_keys(&target);
         };
         let result = self
-            .eval_call_completion(trap, &[target], handler)?
+            .eval_call_completion(trap, std::slice::from_ref(&target), handler)?
             .into_native_value_result()?;
-        self.proxy_key_list_from_value(&result)
+        let keys = self.proxy_key_list_from_value(&result)?;
+        self.validate_proxy_own_property_keys(&target, &keys)?;
+        Ok(keys)
     }
 
     /// Proxy `[[GetOwnProperty]]`: dispatch the `getOwnPropertyDescriptor` trap
@@ -451,6 +453,47 @@ impl Context {
             descriptor,
             OwnPropertyDescriptor::Accessor(accessor) if accessor.enumerable().is_yes()
         )
+    }
+
+    fn validate_proxy_own_property_keys(
+        &mut self,
+        target: &Value,
+        trap_keys: &[Value],
+    ) -> Result<()> {
+        let target_keys = self.semantic_own_property_keys(target)?;
+        let extensible = self
+            .semantic_is_extensible(target)?
+            .ok_or_else(|| Error::type_error("proxy ownKeys target is not an object"))?;
+        for target_key in &target_keys {
+            self.step()?;
+            let property = self.dynamic_property_key(target_key)?;
+            let Some(descriptor) = self.semantic_own_property_descriptor(target, &property)? else {
+                continue;
+            };
+            if !Self::descriptor_is_configurable(&descriptor) && !trap_keys.contains(target_key) {
+                return Err(Error::type_error(
+                    "proxy ownKeys trap omitted a non-configurable target key",
+                ));
+            }
+        }
+        if extensible {
+            return Ok(());
+        }
+        if target_keys.len() != trap_keys.len()
+            || target_keys.iter().any(|key| !trap_keys.contains(key))
+        {
+            return Err(Error::type_error(
+                "proxy ownKeys trap keys differ from a non-extensible target",
+            ));
+        }
+        Ok(())
+    }
+
+    const fn descriptor_is_configurable(descriptor: &OwnPropertyDescriptor) -> bool {
+        match descriptor {
+            OwnPropertyDescriptor::Data(descriptor) => descriptor.configurable().is_yes(),
+            OwnPropertyDescriptor::Accessor(descriptor) => descriptor.configurable().is_yes(),
+        }
     }
 
     /// Convert the array-like result of an `ownKeys` trap into string keys.

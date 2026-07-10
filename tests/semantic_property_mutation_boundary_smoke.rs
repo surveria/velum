@@ -90,6 +90,17 @@ fn preserves_symbol_keys_across_define_descriptor_and_own_keys() -> TestResult {
         }
         let reflectDefineRejected =
             Reflect.defineProperty(refused, "blocked", { value: 1 }) === false;
+        let invariantTarget = {};
+        Object.preventExtensions(invariantTarget);
+        let extraSymbolProxy = new Proxy(invariantTarget, {
+            ownKeys: function () { return [symbol]; }
+        });
+        let extraSymbolRejected = false;
+        try {
+            Object.getOwnPropertyNames(extraSymbolProxy);
+        } catch (error) {
+            extraSymbolRejected = error instanceof TypeError;
+        }
 
         defineKey === symbol &&
             descriptorKey === symbol &&
@@ -100,7 +111,8 @@ fn preserves_symbol_keys_across_define_descriptor_and_own_keys() -> TestResult {
             symbols[0] === symbol &&
             names.length === 0 &&
             definePropertiesRejected === true &&
-            reflectDefineRejected === true ? 42 : 0
+            reflectDefineRejected === true &&
+            extraSymbolRejected === true ? 42 : 0
         "#,
     )
 }
