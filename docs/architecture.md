@@ -58,11 +58,17 @@ and generated-function evaluation boundaries use explicit variants on the
 same stack, so root enumeration, binding visibility, and resource accounting
 observe one coherent owner instead of parallel vectors.
 
-This is the AS-06a1 foundation, not yet a suspended interpreter. AS-06a2 must
-move bytecode program counters, operand stacks, and loop/try/finally
-continuations out of recursive Rust calls and into VM-owned continuation
-frames. AS-06b may add suspended outcomes only after that state is complete and
-rooted.
+AS-06a2a attaches a `BytecodeContinuationFrame` to the current activation. It
+owns the block, program counter, operand stack, and last value between driver
+entries. The synchronous driver checks state out while running, keeps operands
+in the transient root registry across allocation points, and restores state on
+every outcome. A future suspension can leave the state parked, where the
+`BytecodeFrame` direct-root category traces its operands.
+
+This is not yet a suspended interpreter. AS-06a2b must move loop/try/finally
+continuations out of recursive Rust calls and reusable local segment states
+into VM-owned control records. AS-06b may add suspended outcomes only after
+that state is complete and rooted.
 
 ## Embedding Model
 

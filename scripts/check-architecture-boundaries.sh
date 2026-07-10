@@ -412,7 +412,11 @@ check_storage_limit_boundary() {
     || ! grep -F -q 'release_count_on_drop(VmStorageKind::TransientRoot, released);' \
       "${repo_root}/src/runtime/transient_roots.rs" \
     || ! grep -F -q 'self.activation_frames.push(ActivationFrame::call(' \
-      "${repo_root}/src/runtime/execution_storage.rs"; then
+      "${repo_root}/src/runtime/execution_storage.rs" \
+    || ! grep -F -q '.push(ActivationFrame::bytecode(continuation));' \
+      "${repo_root}/src/runtime/bytecode/continuation.rs" \
+    || ! grep -F -q 'release_count(VmStorageKind::ExecutionFrame, 1)?;' \
+      "${repo_root}/src/runtime/bytecode/continuation.rs"; then
     fail "storage limit boundary changed; retained, transient, and execution owners require scoped release"
   fi
 
@@ -871,7 +875,7 @@ check_direct_root_boundary() {
       inside { print }
     ' "${repo_root}/src/runtime/roots.rs"
   } | sed '/^[[:space:]]*\/\//d' | tr -d '[:space:]')"
-  if [[ "${root_kinds}" != 'GlobalBinding,BuiltinBinding,LocalBinding,CapturedBinding,ActiveThis,ActiveNewTarget,ActiveSuper,QueuedJob,RuntimeAnchor,RetainedHandle,TransientOperand,TransientCall,TransientTemporary,' ]]; then
+  if [[ "${root_kinds}" != 'GlobalBinding,BuiltinBinding,LocalBinding,CapturedBinding,ActiveThis,ActiveNewTarget,ActiveSuper,BytecodeFrame,QueuedJob,RuntimeAnchor,RetainedHandle,TransientOperand,TransientCall,TransientTemporary,' ]]; then
     fail "direct root boundary changed; VmRootKind categories require an assigned AS migration"
   fi
 
@@ -884,6 +888,8 @@ check_direct_root_boundary() {
     'if let Some(value) = frame.this_value() {' \
     'if let Some(value) = frame.new_target() {' \
     'if let Some(super_binding) = frame.super_binding() {' \
+    'if let Some(continuation) = frame.continuation() {' \
+    'visitor.visit_value(VmRootKind::BytecodeFrame, value)?;' \
     'if let Some(id) = self.global_object {' \
     'if let Some(id) = self.promise_prototype {' \
     'if let Some(symbol) = self.iterator_symbol {' \
@@ -986,6 +992,35 @@ check_activation_frame_boundary() {
     if ! grep -F -q "${source}" \
         "${repo_root}/src/runtime/native/builtins/function_constructor.rs"; then
       fail "activation frame boundary changed; generated functions require a rooted evaluation boundary"
+    fi
+  done
+}
+
+check_bytecode_continuation_boundary() {
+  for source in \
+    'pub(in crate::runtime) struct BytecodeContinuationFrame {' \
+    'block: BytecodeBlock,' \
+    'state: Option<BytecodeState>,' \
+    'state.reset();' \
+    'self.activation_frames' \
+    '.push(ActivationFrame::bytecode(continuation));' \
+    'pub(super) fn take_bytecode_continuation(' \
+    'pub(super) fn restore_bytecode_continuation(' \
+    'pub(super) fn pop_bytecode_continuation('; do
+    if ! grep -F -q "${source}" \
+        "${repo_root}/src/runtime/bytecode/continuation.rs"; then
+      fail "bytecode continuation boundary changed; AS-06a2a requires one VM-owned block and state lifecycle"
+    fi
+  done
+
+  for source in \
+    'let frame = self.push_bytecode_continuation(block, state)?;' \
+    'let outcome = self.run_bytecode_continuation(frame);' \
+    'let restored_state = self.pop_bytecode_continuation(frame)?;' \
+    'self.restore_bytecode_continuation(frame, state)?;'; do
+    if ! grep -F -q "${source}" \
+        "${repo_root}/src/runtime/bytecode/execution.rs"; then
+      fail "bytecode continuation boundary changed; execution must restore frame state on every synchronous outcome"
     fi
   done
 }
@@ -1417,6 +1452,7 @@ run_checks() {
   require_file src/runtime/retained_values.rs
   require_file src/runtime/accounting.rs
   require_file src/runtime/activation.rs
+  require_file src/runtime/bytecode/continuation.rs
   require_file src/runtime/object/accounting.rs
   require_file src/runtime/mod.rs
   require_file src/runtime/roots.rs
@@ -1449,6 +1485,7 @@ run_checks() {
   check_completion_error_boundary
   check_direct_root_boundary
   check_activation_frame_boundary
+  check_bytecode_continuation_boundary
   check_callable_edge_boundary
   check_object_edge_boundary
   check_async_edge_boundary
@@ -1587,6 +1624,24 @@ mutate_activation_frame_upvalues() {
   local fixture_root="$1"
   sed -i '/        upvalues: FunctionUpvalues,/d' \
     "${fixture_root}/src/runtime/activation.rs"
+}
+
+mutate_bytecode_continuation_state() {
+  local fixture_root="$1"
+  sed -i '/    state: Option<BytecodeState>,/d' \
+    "${fixture_root}/src/runtime/bytecode/continuation.rs"
+}
+
+mutate_bytecode_continuation_restore() {
+  local fixture_root="$1"
+  sed -i '/self.restore_bytecode_continuation(frame, state)?;/d' \
+    "${fixture_root}/src/runtime/bytecode/execution.rs"
+}
+
+mutate_bytecode_frame_root() {
+  local fixture_root="$1"
+  sed -i '/visitor.visit_value(VmRootKind::BytecodeFrame, value)?;/d' \
+    "${fixture_root}/src/runtime/roots.rs"
 }
 
 mutate_native_registry_root() {
@@ -1900,6 +1955,12 @@ run_self_tests() {
     'direct root boundary changed' mutate_direct_root_source
   expect_guard_failure "${temp_dir}" activation-frame-upvalues \
     'activation frame boundary changed' mutate_activation_frame_upvalues
+  expect_guard_failure "${temp_dir}" bytecode-continuation-state \
+    'bytecode continuation boundary changed' mutate_bytecode_continuation_state
+  expect_guard_failure "${temp_dir}" bytecode-continuation-restore \
+    'bytecode continuation boundary changed' mutate_bytecode_continuation_restore
+  expect_guard_failure "${temp_dir}" bytecode-frame-root \
+    'direct root boundary changed' mutate_bytecode_frame_root
   expect_guard_failure "${temp_dir}" native-registry-root \
     'direct root boundary changed' mutate_native_registry_root
   expect_guard_failure "${temp_dir}" transient-operand-root \

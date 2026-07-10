@@ -2,6 +2,7 @@ mod array;
 mod call;
 mod class;
 mod coercion;
+mod continuation;
 mod control;
 mod destructure;
 mod execution;
@@ -14,6 +15,7 @@ pub(in crate::runtime) mod state;
 mod string_concat;
 mod super_ops;
 
+pub(in crate::runtime) use continuation::BytecodeContinuationFrame;
 pub(in crate::runtime) use execution::BytecodeOutcome;
 
 use crate::{
