@@ -204,6 +204,9 @@ impl Context {
                 visitor.visit_value(VmRootKind::ActiveSuper, &super_binding.home_prototype)?;
             }
             if let Some(continuation) = frame.continuation() {
+                if let Some(function) = continuation.function_id() {
+                    visitor.visit_value(VmRootKind::BytecodeFrame, &Value::Function(function))?;
+                }
                 for value in continuation.root_values() {
                     visitor.visit_value(VmRootKind::BytecodeFrame, value)?;
                 }

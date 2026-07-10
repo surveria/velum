@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::value::Value;
+use crate::value::{FunctionId, Value};
 
 use super::{
     FunctionUpvalues, bytecode::BytecodeContinuationFrame, function::FunctionSuperBinding,
@@ -37,6 +37,7 @@ pub(in crate::runtime) enum ActivationFrame {
 
 impl ActivationFrame {
     pub(in crate::runtime) const fn call(
+        function: FunctionId,
         local_base: usize,
         upvalues: FunctionUpvalues,
         this_value: Value,
@@ -49,7 +50,7 @@ impl ActivationFrame {
             this_value,
             new_target,
             super_binding,
-            continuation: None,
+            continuation: Some(BytecodeContinuationFrame::function(function)),
         }
     }
 

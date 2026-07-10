@@ -88,6 +88,10 @@ fn snapshots_direct_roots_during_function_and_super_calls() -> TestResult {
         active.count(VmRootKind::ActiveNewTarget),
         "active new.target roots",
     )?;
+    ensure_positive(
+        active.count(VmRootKind::BytecodeFrame),
+        "active bytecode function roots",
+    )?;
     ensure_at_least(
         active.count(VmRootKind::ActiveNewTarget),
         2,

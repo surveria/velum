@@ -3,10 +3,10 @@ use crate::{
     bytecode::{BytecodeBlock, BytecodeProgram},
     error::{Error, Result},
     runtime::{Context, control::Completion, control::runtime_exception_value, roots::VmRootKind},
-    value::Value,
+    value::{FunctionId, Value},
 };
 
-use super::{BytecodeState, continuation::BytecodeContinuationHandle};
+use super::BytecodeState;
 
 pub(in crate::runtime) struct BytecodeOutcome {
     completion: Completion,
@@ -55,26 +55,27 @@ impl Context {
             .map(BytecodeOutcome::completion)
     }
 
+    pub(in crate::runtime) fn eval_bytecode_function_body(
+        &mut self,
+        function: FunctionId,
+        block: &BytecodeBlock,
+    ) -> Result<Completion> {
+        self.ensure_running_function_continuation(function)?;
+        let mut state = BytecodeState::new();
+        state.reset();
+        self.run_bytecode_state(block, &mut state)
+            .map(BytecodeOutcome::completion)
+    }
+
     fn eval_bytecode_block_outcome_with_state(
         &mut self,
         block: &BytecodeBlock,
         state: &mut BytecodeState,
     ) -> Result<BytecodeOutcome> {
-        let frame = self.push_bytecode_continuation(block, state)?;
-        let outcome = self.run_bytecode_continuation(frame);
-        let restored_state = self.pop_bytecode_continuation(frame)?;
-        *state = restored_state;
-        outcome
-    }
-
-    fn run_bytecode_continuation(
-        &mut self,
-        frame: BytecodeContinuationHandle,
-    ) -> Result<BytecodeOutcome> {
-        let mut lease = self.take_bytecode_continuation(frame)?;
-        let (block, state) = lease.parts_mut();
+        state.reset();
+        let frame = self.push_bytecode_continuation(block)?;
         let outcome = self.run_bytecode_state(block, state);
-        self.restore_bytecode_continuation(frame, lease)?;
+        self.pop_bytecode_continuation(frame)?;
         outcome
     }
 

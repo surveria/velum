@@ -325,7 +325,7 @@ impl Context {
         };
         let has_parameter_defaults = bytecode.has_parameter_defaults();
         let local_base =
-            self.push_call_activation(upvalues, this_value, new_target, super_binding)?;
+            self.push_call_activation(id, upvalues, this_value, new_target, super_binding)?;
         let scope_result = if let Some(template) = scope_template.as_deref() {
             self.function_scope_from_template(template, args)
         } else {
@@ -349,7 +349,7 @@ impl Context {
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
-            FunctionParameterState::new(&param_binding_ids, &param_atoms, args),
+            FunctionParameterState::new(id, &param_binding_ids, &param_atoms, args),
             &bytecode,
             remember_params,
         );
