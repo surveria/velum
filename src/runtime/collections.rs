@@ -1,7 +1,7 @@
 use crate::{
     error::{Error, Result},
     runtime::{
-        Context,
+        Context, VmStorageKind,
         abstract_operations::same_value_zero,
         async_trace::VmAsyncEdgeKind,
         trace::{StrongEdgeReference, StrongEdgeVisitor, WeakEdgeReference, WeakEdgeVisitor},
@@ -100,12 +100,8 @@ impl Context {
         &mut self,
         kind: CollectionKind,
     ) -> Result<CollectionId> {
-        if self.collections.len() >= self.limits.max_objects {
-            return Err(Error::limit(format!(
-                "collection count exceeded {}",
-                self.limits.max_objects
-            )));
-        }
+        self.storage_ledger
+            .grow_count(VmStorageKind::Collection, 1)?;
         let id = CollectionId(self.collections.len());
         self.collections.push(CollectionData::new(kind));
         Ok(id)
@@ -126,10 +122,23 @@ impl Context {
         let required = index
             .checked_add(1)
             .ok_or_else(|| Error::limit("collection slot index overflowed"))?;
+        let adds_association = self
+            .collection_object_slots
+            .get(index)
+            .and_then(Option::as_ref)
+            .is_none();
+        if adds_association {
+            self.storage_ledger
+                .grow_count(VmStorageKind::Association, 1)?;
+        }
         if self.collection_object_slots.len() < required {
             self.collection_object_slots.resize(required, None);
         }
         let Some(slot) = self.collection_object_slots.get_mut(index) else {
+            if adds_association {
+                self.storage_ledger
+                    .release_count(VmStorageKind::Association, 1)?;
+            }
             return Err(Error::runtime("collection slot disappeared"));
         };
         *slot = Some((kind, collection));
@@ -202,9 +211,8 @@ impl Context {
         value: Value,
     ) -> Result<()> {
         let key = normalize_zero_key(key);
-        let max_entries = self.limits.max_object_properties;
-        let data = self.collection_mut(id)?;
-        if let Some(entry) = data
+        if let Some(entry) = self
+            .collection_mut(id)?
             .entries
             .iter_mut()
             .find(|(entry_key, _)| same_value_zero(entry_key, &key))
@@ -212,12 +220,9 @@ impl Context {
             entry.1 = value;
             return Ok(());
         }
-        if data.entries.len() >= max_entries {
-            return Err(Error::limit(format!(
-                "collection entry count exceeded {max_entries}"
-            )));
-        }
-        data.entries.push((key, value));
+        self.storage_ledger
+            .grow_count(VmStorageKind::CollectionEntry, 1)?;
+        self.collection_mut(id)?.entries.push((key, value));
         Ok(())
     }
 
@@ -226,14 +231,24 @@ impl Context {
         id: CollectionId,
         key: &Value,
     ) -> Result<bool> {
-        let data = self.collection_mut(id)?;
-        let before = data.entries.len();
-        data.entries
-            .retain(|(entry_key, _)| !same_value_zero(entry_key, key));
-        Ok(data.entries.len() != before)
+        let position = self
+            .collection(id)?
+            .entries
+            .iter()
+            .position(|(entry_key, _)| same_value_zero(entry_key, key));
+        let Some(position) = position else {
+            return Ok(false);
+        };
+        self.storage_ledger
+            .release_count(VmStorageKind::CollectionEntry, 1)?;
+        self.collection_mut(id)?.entries.remove(position);
+        Ok(true)
     }
 
     pub(in crate::runtime) fn collection_clear(&mut self, id: CollectionId) -> Result<()> {
+        let released = self.collection(id)?.entries.len();
+        self.storage_ledger
+            .release_count(VmStorageKind::CollectionEntry, released)?;
         self.collection_mut(id)?.entries.clear();
         Ok(())
     }
@@ -288,11 +303,18 @@ impl Context {
         &mut self,
         items: Vec<Value>,
     ) -> Result<CollectionIteratorId> {
-        if self.collection_iterators.len() >= self.limits.max_objects {
-            return Err(Error::limit(format!(
-                "collection iterator count exceeded {}",
-                self.limits.max_objects
-            )));
+        self.collection_iterators.try_reserve(1).map_err(|error| {
+            Error::limit(format!("collection iterator storage exhausted: {error}"))
+        })?;
+        self.storage_ledger
+            .grow_count(VmStorageKind::CollectionIterator, 1)?;
+        if let Err(error) = self
+            .storage_ledger
+            .grow_count(VmStorageKind::IteratorItem, items.len())
+        {
+            self.storage_ledger
+                .release_count(VmStorageKind::CollectionIterator, 1)?;
+            return Err(error);
         }
         let id = CollectionIteratorId(self.collection_iterators.len());
         self.collection_iterators

@@ -26,9 +26,9 @@ version policy, and uses the validation lane appropriate to the change.
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
 - Current program state: AS-01 through AS-04, AS-05a1 through AS-05a2d,
-  AS-05b1a through AS-05b1c, AS-05b2a, AS-05b2b, and AS-05b2c1 are complete;
-  AS-05b2c2 durable binding/callable/property/cache enforcement is implemented
-  in draft PR #435
+  AS-05b1a through AS-05b1c and AS-05b2a through AS-05b2c2 are complete;
+  AS-05b2c3 async/root/frame/association enforcement is implemented in draft
+  PR #436
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -486,7 +486,7 @@ dependencies do not overlap.
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
 | AS-04 | Complete | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans merged in PR #421 with exact-tree correctness and canonical report publication. |
-| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05b2c1 are merged through PR #434; AS-05b2c2 binding/callable/property/cache limits are implemented in draft PR #435; async/root/frame/association enforcement and final reconciliation remain AS-05b2c3. |
+| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05b2c2 are merged through PR #435; AS-05b2c3 async/root/frame/association limits and final reconciliation are implemented in draft PR #436. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
 | AS-08 | Backlog | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | Optimizer on/off equivalence, harness opcodes removed, workload-shaped paths replaced or justified by broad evidence. |
@@ -1387,6 +1387,52 @@ AS-05b2c2 local implementation evidence:
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 118 runner tests.
 
+AS-05b2c2 completion evidence:
+
+- PR #435 merged as `5729920` after required CI run `29120888639`
+  certified exact tree `f4388da04b798621e346ae300c0efe02661dcf80`;
+- the required corpus preserved all 36,659 expected Test262 variants, the
+  exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
+  cases;
+- post-merge run `29121083477` measured five of five valid sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T202058Z.*` in
+  report-only commit `e3f47ef`. The function-call median moved from 145.41 ms
+  to 155.18 ms and remains an explicit trend check for the next canonical run.
+
+AS-05b2c3 local implementation evidence:
+
+- collection stores charge `Collection` and `CollectionEntry` at creation and
+  insertion, release deleted or cleared entries, and charge iterator records
+  plus their materialized item snapshots before publication;
+- Promise stores charge records, pending reactions, and queued jobs at their
+  exact ownership transitions. Settling transfers the reaction charge to the
+  queue, while draining releases each queued owner before execution;
+- retained and transient roots share the same VM-local ledger as their RAII
+  registries. Explicit release remains checked, and destructor cleanup uses a
+  non-panicking decrement whose invariant is independently verified by every
+  storage snapshot;
+- one execution-storage boundary charges lexical scopes, function frame bases,
+  upvalue frames, `this`, `new.target`, super state, and temporary class-field
+  receivers, with rollback and release on every existing exit path;
+- object/array prototype anchors, global and Promise anchors, Symbol registry
+  entries, collection/Promise object slots, and the iterator Symbol now share
+  the global `Association` budget. `Module` remains an explicit zero-growth
+  category until a module store exists;
+- every storage snapshot reconciles all eighteen ledger-backed categories and
+  independently verifies all twenty-six count and payload categories against
+  the configured policy;
+- five additional integration tests cover every remaining owner category,
+  collection delete-and-reuse, Promise reaction-to-job transfer and drain,
+  retained-handle Drop/reuse, transient cleanup, execution-frame rollback,
+  association rejection, and zero module storage;
+- the complete engine integration suite passes. The architecture guard and
+  all mutation self-tests cover full-policy reconciliation, collection
+  release, Promise job growth, transient Drop release, execution frames, and
+  association anchors;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
+
 AS-05a1 completion evidence:
 
 - PR #422 merged as `4143ec4` after required CI run `29098691127`
@@ -1945,9 +1991,9 @@ reviewable scope.
 31. AS-05b2c1: define public storage-limit policy and enforce payload/top-level
     owners (complete in PR #434).
 32. AS-05b2c2: enforce binding, callable, property, and cache owners
-    (implemented in draft PR #435).
+    (complete in PR #435).
 33. AS-05b2c3: enforce async, root, frame, and association owners and prove
-    complete growth-point reconciliation.
+    complete growth-point reconciliation (implemented in draft PR #436).
 34. AS-06a: migrate synchronous calls and structured control flow to explicit
     activation frames.
 35. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.

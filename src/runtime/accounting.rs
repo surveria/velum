@@ -134,6 +134,7 @@ impl VmStorageSnapshot {
             total_payload_bytes: counter.total_payload_bytes,
         };
         context.ensure_durable_storage_ledger_matches(&snapshot)?;
+        context.ensure_storage_snapshot_within_limits(&snapshot)?;
         Ok(snapshot)
     }
 
@@ -228,13 +229,25 @@ impl Context {
     }
 
     fn ensure_durable_storage_ledger_matches(&self, snapshot: &VmStorageSnapshot) -> Result<()> {
-        const ENFORCED_KINDS: [VmStorageKind; 6] = [
+        const ENFORCED_KINDS: [VmStorageKind; 18] = [
             VmStorageKind::Binding,
             VmStorageKind::JavaScriptFunction,
             VmStorageKind::NativeFunction,
             VmStorageKind::BoundFunction,
             VmStorageKind::ObjectProperty,
             VmStorageKind::CacheEntry,
+            VmStorageKind::Collection,
+            VmStorageKind::CollectionEntry,
+            VmStorageKind::CollectionIterator,
+            VmStorageKind::IteratorItem,
+            VmStorageKind::Promise,
+            VmStorageKind::PromiseReaction,
+            VmStorageKind::PromiseJob,
+            VmStorageKind::RetainedHandle,
+            VmStorageKind::TransientRoot,
+            VmStorageKind::ExecutionFrame,
+            VmStorageKind::Association,
+            VmStorageKind::Module,
         ];
         for kind in ENFORCED_KINDS {
             let observed = snapshot.count(kind);
@@ -244,6 +257,17 @@ impl Context {
                     "{kind:?} storage ledger mismatch: tracked {tracked}, observed {observed}"
                 )));
             }
+        }
+        Ok(())
+    }
+
+    fn ensure_storage_snapshot_within_limits(&self, snapshot: &VmStorageSnapshot) -> Result<()> {
+        for kind in VmStorageKind::all() {
+            self.ensure_storage_totals(
+                *kind,
+                snapshot.count(*kind),
+                snapshot.payload_bytes(*kind),
+            )?;
         }
         Ok(())
     }

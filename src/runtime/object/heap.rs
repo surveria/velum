@@ -301,6 +301,8 @@ impl ObjectHeap {
         )?;
 
         let id = self.push_object(object, max_objects)?;
+        self.storage_ledger
+            .grow_count(VmStorageKind::Association, 1)?;
         self.object_prototype = Some(id);
         Ok(id)
     }
@@ -320,6 +322,8 @@ impl ObjectHeap {
             let mut object = Object::ordinary();
             object.prototype = Some(object_prototype);
             let id = self.push_object(object, max_objects)?;
+            self.storage_ledger
+                .grow_count(VmStorageKind::Association, 1)?;
             self.array_prototype = Some(id);
             id
         };

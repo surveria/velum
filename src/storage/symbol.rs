@@ -103,6 +103,12 @@ impl SymbolTable {
         self.registry.len()
     }
 
+    pub(crate) fn has_registry_key(&self, key: &JsString) -> bool {
+        self.registry
+            .iter()
+            .any(|(registered, _)| registered == key)
+    }
+
     pub fn create(&mut self, description: Option<JsString>) -> Result<JsSymbol> {
         if let Some(value) = &description
             && value.identity() != &self.identity

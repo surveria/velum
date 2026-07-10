@@ -13,7 +13,7 @@ use crate::{
     value::Value,
 };
 
-use super::{Context, roots::DirectRootVisitor};
+use super::{Context, VmStorageKind, roots::DirectRootVisitor, storage_ledger::VmStorageLedger};
 
 const INITIAL_RETAINED_SLOT_GENERATION: u64 = 1;
 const FOREIGN_RETAINED_VALUE_ERROR: &str = "retained value belongs to another VM";
@@ -55,9 +55,10 @@ struct RetainedSlotEntry {
     value: Option<Value>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct RetainedValueState {
     slots: Vec<RetainedSlotEntry>,
+    storage_ledger: VmStorageLedger,
 }
 
 impl RetainedValueState {
@@ -69,6 +70,8 @@ impl RetainedValueState {
             let Some(generation) = entry.generation.next() else {
                 continue;
             };
+            self.storage_ledger
+                .grow_count(VmStorageKind::RetainedHandle, 1)?;
             entry.generation = generation;
             entry.value = Some(value);
             return Ok((RetainedSlot::new(index), generation));
@@ -77,6 +80,8 @@ impl RetainedValueState {
         self.slots
             .try_reserve(1)
             .map_err(|_| Error::limit("retained value registry capacity exceeded"))?;
+        self.storage_ledger
+            .grow_count(VmStorageKind::RetainedHandle, 1)?;
         let slot = RetainedSlot::new(self.slots.len());
         let generation = RetainedSlotGeneration::initial();
         self.slots.push(RetainedSlotEntry {
@@ -100,12 +105,17 @@ impl RetainedValueState {
     }
 
     fn release(&mut self, slot: RetainedSlot, generation: RetainedSlotGeneration) -> Result<()> {
-        let Some(entry) = self.slots.get_mut(slot.index()) else {
+        let Some(entry) = self.slots.get(slot.index()) else {
             return Err(Error::runtime(STALE_RETAINED_VALUE_ERROR));
         };
         if entry.generation != generation || entry.value.is_none() {
             return Err(Error::runtime(STALE_RETAINED_VALUE_ERROR));
         }
+        self.storage_ledger
+            .release_count(VmStorageKind::RetainedHandle, 1)?;
+        let Some(entry) = self.slots.get_mut(slot.index()) else {
+            return Err(Error::runtime(STALE_RETAINED_VALUE_ERROR));
+        };
         entry.value = None;
         Ok(())
     }
@@ -114,7 +124,9 @@ impl RetainedValueState {
         let Some(entry) = self.slots.get_mut(slot.index()) else {
             return;
         };
-        if entry.generation == generation {
+        if entry.generation == generation && entry.value.is_some() {
+            self.storage_ledger
+                .release_count_on_drop(VmStorageKind::RetainedHandle, 1);
             entry.value = None;
         }
     }
@@ -186,10 +198,13 @@ pub struct RetainedValueRegistry {
 }
 
 impl RetainedValueRegistry {
-    pub fn new(identity: VmIdentity) -> Self {
+    pub(in crate::runtime) fn new(identity: VmIdentity, storage_ledger: VmStorageLedger) -> Self {
         Self {
             identity,
-            state: Rc::new(Mutex::new(RetainedValueState::default())),
+            state: Rc::new(Mutex::new(RetainedValueState {
+                slots: Vec::new(),
+                storage_ledger,
+            })),
         }
     }
 

@@ -451,9 +451,11 @@ default immutable policy keyed by all twenty-six `VmStorageKind` categories.
 AS-05b2c1 enforces atom, heap-string, Symbol, object, buffer, host-callback,
 output, and source-record growth. AS-05b2c2 adds Binding,
 JavaScriptFunction, NativeFunction, BoundFunction, ObjectProperty, and
-CacheEntry enforcement through one VM-local O(1) ledger. Async/root/frame/
-association categories remain explicit AS-05b2c3 work rather than being
-claimed complete.
+CacheEntry enforcement through one VM-local O(1) ledger. AS-05b2c3 extends
+that ledger to collection, Promise/job, retained/transient root,
+execution-frame, and association owners; Module remains an explicit zero-store
+policy. Every snapshot reconciles the ledger and checks all twenty-six owner
+totals against the configured policy.
 
 `VmResourceUsage` retains its existing hot counters. AS-05b2a adds a separate
 on-demand `VmStorageSnapshot` with twenty-six stable logical owner categories
@@ -632,8 +634,8 @@ decision sequence:
 | AS-05b2a | every current variable-size Context owner and nested logical record | twenty-six-category checked snapshot plus consuming teardown reconciliation merged in PR #432 |
 | AS-05b2b | retained payload bytes by the same owner map | independent checked UTF-8/raw-buffer payload map merged in PR #433 without claiming allocator-resident RSS |
 | AS-05b2c1 | public owner-limit policy plus payload/top-level arenas | immutable sparse custom policy and pre-commit limits for atoms, strings, Symbols, objects, buffers, callbacks, output, and source merged in PR #434 |
-| AS-05b2c2 | binding, callable, property, and cache growth | VM-local O(1) ledger, pre-commit reservations, release/rollback paths, and independent snapshot reconciliation implemented in draft PR #435 |
-| AS-05b2c3 | async, root, frame, and association growth | enforce remaining transient/queued owners and prove full snapshot-to-limit coverage |
+| AS-05b2c2 | binding, callable, property, and cache growth | VM-local O(1) ledger, pre-commit reservations, release/rollback paths, and independent snapshot reconciliation merged in PR #435 |
+| AS-05b2c3 | async, root, frame, and association growth | exact collection/Promise/root/frame/anchor transitions plus full snapshot-to-limit reconciliation implemented in draft PR #436 |
 | AS-06 | active execution roots and structured nested bytecode | explicit activation/block stacks and suspend/resume results |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |
 | AS-08 | caches, direct calls, linear/function/control paths, harness opcodes | one optimizer owner, optimizer-off equivalence, and removal of source-name semantics |
