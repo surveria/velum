@@ -25,7 +25,9 @@ fn run() -> anyhow::Result<()> {
 
     let runtime = Runtime::new();
     let mut context = runtime.context();
-    let value = context.eval(&source).context("script evaluation failed")?;
+    let value = context
+        .eval(&source)
+        .map_err(|error| anyhow::anyhow!("script evaluation failed: {error}"))?;
 
     for line in context.take_output() {
         println!("{line}");

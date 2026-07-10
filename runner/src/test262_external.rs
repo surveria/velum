@@ -82,7 +82,7 @@ pub fn execute_manifest_case(test262_dir: &Path, case: &ManifestCase) -> anyhow:
     let mut context = runtime.context();
     context
         .eval(&source)
-        .with_context(|| format!("upstream Test262 case '{}' failed", case.id))?;
+        .map_err(|error| anyhow::anyhow!("upstream Test262 case '{}' failed: {error}", case.id))?;
     if !context.output().is_empty() {
         bail!("upstream Test262 case '{}' produced host output", case.id);
     }
@@ -112,12 +112,10 @@ fn ensure_negative_parse_failure(
             case.id
         ),
         Err(Error::Lex { .. } | Error::Parse { .. }) => Ok(()),
-        Err(error) => Err(error).with_context(|| {
-            format!(
-                "upstream negative parse case '{}' failed at runtime",
-                case.id
-            )
-        }),
+        Err(error) => Err(anyhow::anyhow!(
+            "upstream negative parse case '{}' failed at runtime: {error}",
+            case.id
+        )),
     }
 }
 

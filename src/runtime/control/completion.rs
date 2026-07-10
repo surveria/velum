@@ -20,7 +20,7 @@ impl Completion {
     pub fn into_result(self) -> Result<Value> {
         match self {
             Self::Normal(value) => Ok(value),
-            Self::Throw(value) => Err(Error::runtime(format!("uncaught throw: {value}"))),
+            Self::Throw(value) => Err(Error::javascript(value)),
             Self::Return(value) => Err(Error::runtime(format!(
                 "return statement outside function returned {value}"
             ))),
@@ -32,7 +32,7 @@ impl Completion {
     pub fn into_function_result(self) -> Result<Value> {
         match self {
             Self::Normal(_) => Ok(Value::Undefined),
-            Self::Throw(value) => Err(Error::runtime(format!("uncaught throw: {value}"))),
+            Self::Throw(value) => Err(Error::javascript(value)),
             Self::Return(value) => Ok(value),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),
@@ -52,10 +52,7 @@ impl Completion {
     pub fn into_native_value_result(self) -> Result<Value> {
         match self {
             Self::Normal(value) | Self::Return(value) => Ok(value),
-            Self::Throw(Value::Error(error)) => {
-                Err(Error::exception(error.name(), error.message().to_owned()))
-            }
-            Self::Throw(value) => Err(Error::runtime(format!("uncaught throw: {value}"))),
+            Self::Throw(value) => Err(Error::javascript(value)),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),
         }

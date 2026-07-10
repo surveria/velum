@@ -281,9 +281,9 @@ fn execute_variant_result(
     let mut context = runtime.context();
     if !metadata.has_flag(FLAG_RAW) {
         for harness in harness_sources(test262_dir, metadata)? {
-            context
-                .eval(&harness.source)
-                .with_context(|| format!("Test262 harness include '{}' failed", harness.name))?;
+            context.eval(&harness.source).map_err(|error| {
+                anyhow::anyhow!("Test262 harness include '{}' failed: {error}", harness.name)
+            })?;
         }
     }
 
@@ -293,7 +293,9 @@ fn execute_variant_result(
         return ensure_negative_result(relative_path, negative, result);
     }
 
-    result.with_context(|| format!("upstream Test262 case '{relative_path}' failed"))?;
+    result.map_err(|error| {
+        anyhow::anyhow!("upstream Test262 case '{relative_path}' failed: {error}")
+    })?;
     if metadata.has_flag(FLAG_ASYNC) {
         return ensure_async_completion(relative_path, context.output());
     }

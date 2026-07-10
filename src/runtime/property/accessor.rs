@@ -1,7 +1,6 @@
 use crate::{
     error::{Error, Result},
     runtime::Context,
-    runtime::control::Completion,
     runtime::object::{AccessorWriteDisposition, PropertyKey, PropertyLookup},
     value::{ErrorName, ObjectId, Value},
 };
@@ -97,21 +96,14 @@ impl Context {
             .map_err(|_| Error::exception(ErrorName::RangeError, ARRAY_LENGTH_RANGE_ERROR))
     }
 
-    /// Calls an accessor function and rethrows JS `Error` throw completions
-    /// as engine exceptions so surrounding `try`/`catch` blocks can observe
-    /// them; other abrupt completions surface as runtime errors.
+    /// Calls an accessor function while preserving any JavaScript thrown value
+    /// across the native property boundary.
     pub(in crate::runtime) fn call_accessor_function(
         &mut self,
         function: &Value,
         this_value: Value,
         args: &[Value],
     ) -> Result<Value> {
-        let completion = self.call(function, args, this_value)?;
-        match completion {
-            Completion::Throw(Value::Error(error)) => {
-                Err(Error::exception(error.name(), error.message().to_owned()))
-            }
-            completion => completion.into_result(),
-        }
+        self.call(function, args, this_value)?.into_result()
     }
 }

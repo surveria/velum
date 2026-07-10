@@ -73,7 +73,10 @@ impl Context {
             )?,
             callee => {
                 if let Err(error) = self.call_value(&callee, &[resolve, reject], Value::Undefined) {
-                    self.reject_promise(promise, promise_executor_error_value(&error))?;
+                    let Some(reason) = runtime_exception_value(&error) else {
+                        return Err(error);
+                    };
+                    self.reject_promise(promise, reason)?;
                     return Ok(object);
                 }
                 Completion::Normal(Value::Undefined)
@@ -237,13 +240,4 @@ impl Context {
         self.promise_prototype = Some(prototype);
         Ok(Value::Object(prototype))
     }
-}
-
-pub(in crate::runtime::native) fn promise_executor_error_value(error: &Error) -> Value {
-    runtime_exception_value(error).unwrap_or_else(|| {
-        Value::Error(crate::value::ErrorObject::new(
-            crate::value::ErrorName::Base,
-            error.to_string(),
-        ))
-    })
 }

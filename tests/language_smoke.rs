@@ -639,7 +639,7 @@ fn evaluates_if_blocks_and_throw_statements() -> TestResult {
     let Err(error) = eval(r#"throw new Test262Error("expected failure")"#) else {
         return Err("expected throw statement to fail".into());
     };
-    ensure_error_kind(&error, "runtime")
+    ensure_error_kind(&error, "javascript")
 }
 
 #[test]
@@ -683,7 +683,7 @@ fn catches_thrown_values() -> TestResult {
     ) else {
         return Err("expected rethrow from catch block to fail".into());
     };
-    ensure_error_kind(&error, "runtime")
+    ensure_error_kind(&error, "javascript")
 }
 
 #[test]
@@ -780,7 +780,9 @@ fn ensure_output(actual: &[String], expected: &[String]) -> TestResult {
 fn ensure_error_kind(error: &Error, expected: &str) -> TestResult {
     let matches = matches!(
         (error, expected),
-        (Error::Runtime { .. }, "runtime") | (Error::ResourceLimit { .. }, "resource limit")
+        (Error::Runtime { .. }, "runtime")
+            | (Error::JavaScript { .. }, "javascript")
+            | (Error::ResourceLimit { .. }, "resource limit")
     );
 
     if matches {

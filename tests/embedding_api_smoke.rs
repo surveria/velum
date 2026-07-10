@@ -159,7 +159,7 @@ fn tracks_atoms_for_bindings_without_interning_missing_names() -> TestResult {
     let Err(error) = vm.context().eval("missingBinding") else {
         return Err("expected missing binding lookup to fail".into());
     };
-    ensure_runtime_error(&error)?;
+    ensure_javascript_error(&error)?;
     ensure_usize(vm.resource_usage().atom_count, initial_atoms)?;
 
     let value = vm
@@ -716,11 +716,11 @@ fn ensure_parse_error(error: &Error) -> TestResult {
     Err(format!("expected parse error, got {error}").into())
 }
 
-fn ensure_runtime_error(error: &Error) -> TestResult {
-    if matches!(error, Error::Runtime { .. }) {
+fn ensure_javascript_error(error: &Error) -> TestResult {
+    if matches!(error, Error::JavaScript { .. }) {
         return Ok(());
     }
-    Err(format!("expected runtime error, got {error}").into())
+    Err(format!("expected JavaScript error, got {error}").into())
 }
 
 fn ensure_positive(actual: usize, label: &str) -> TestResult {
