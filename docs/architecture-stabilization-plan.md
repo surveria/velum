@@ -1313,7 +1313,10 @@ AS-05a2b local implementation evidence:
   Clippy pass;
 - the architecture guard fixes the LocalValue and HostCall identity fields,
   the boxed error payload, the conversion/validation calls, and a mutation
-  test that removes the local owner.
+  test that removes the local owner or makes the exception identity forgeable;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
 
 ### AS-06: Resumable Execution
 
