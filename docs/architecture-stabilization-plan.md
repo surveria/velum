@@ -1265,7 +1265,10 @@ AS-05a2a local implementation evidence:
   returns with deliberately colliding slots. Existing string and Symbol suites
   plus strict Clippy pass;
 - the architecture guard fixes all four primitive owner fields, both central
-  checks, and a mutation test that removes a primitive identity.
+  checks, and a mutation test that removes a primitive identity;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
 
 ### AS-06: Resumable Execution
 
