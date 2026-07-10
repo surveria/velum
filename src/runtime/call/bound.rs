@@ -45,7 +45,7 @@ impl Context {
             } else {
                 (Value::Undefined, &[])
             };
-        self.eval_call_value(this_value, call_args, call_this)
+        self.call_value(this_value, call_args, call_this)
     }
 
     pub(in crate::runtime) fn eval_function_prototype_apply(
@@ -60,7 +60,7 @@ impl Context {
         let this_arg = slice.first().cloned().unwrap_or(Value::Undefined);
         let args_array = slice.get(1).cloned().unwrap_or(Value::Undefined);
         let call_args = self.create_list_from_array_like(&args_array)?;
-        self.eval_call_value(this_value, &call_args, this_arg)
+        self.call_value(this_value, &call_args, this_arg)
     }
 
     pub(in crate::runtime) fn eval_function_prototype_has_instance(
@@ -84,12 +84,12 @@ impl Context {
         if !matches!(value, Value::Object(_)) {
             return Err(Error::type_error(APPLY_ARGUMENTS_NOT_ARRAY_LIKE_ERROR));
         }
-        let length_value = self.get_property_value(value, ARRAY_LIKE_LENGTH_PROPERTY)?;
+        let length_value = self.get_named(value, ARRAY_LIKE_LENGTH_PROPERTY)?;
         let length = self.array_like_length_from_value(&length_value)?;
         let mut list = Vec::new();
         for index in 0..length {
             self.step()?;
-            let element = self.get_property_value(value, &index.to_string())?;
+            let element = self.get_named(value, &index.to_string())?;
             list.push(element);
         }
         Ok(list)
@@ -135,7 +135,7 @@ impl Context {
         let mut values = Vec::with_capacity(capacity);
         values.extend_from_slice(&function.args);
         values.extend_from_slice(call_args);
-        self.eval_call_value(&function.target, &values, function.this_value)
+        self.call_value(&function.target, &values, function.this_value)
     }
 
     pub(in crate::runtime) fn eval_bound_function_construct(

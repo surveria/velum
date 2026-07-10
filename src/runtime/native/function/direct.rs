@@ -49,7 +49,7 @@ impl Context {
             }
         }
         self.record_native_call_cache_slow_path();
-        self.eval_call_value(callee, args, this_value.clone())
+        self.call_value(callee, args, this_value.clone())
     }
 
     pub(crate) fn eval_cached_direct_native_static_member_call(
@@ -120,17 +120,16 @@ impl Context {
                         .map(Some);
                 }
                 self.record_native_call_cache_slow_path();
-                self.eval_call_value(&Value::NativeFunction(function), args, this_value.clone())
+                self.call_value(&Value::NativeFunction(function), args, this_value.clone())
                     .map(Some)
             }
             CacheableNativePropertyValue::Other(callee) => {
                 self.record_native_call_cache_slow_path();
-                self.eval_call_value(&callee, args, this_value.clone())
-                    .map(Some)
+                self.call_value(&callee, args, this_value.clone()).map(Some)
             }
             CacheableNativePropertyValue::Missing => {
                 self.record_native_call_cache_slow_path();
-                self.eval_call_value(&Value::Undefined, args, this_value.clone())
+                self.call_value(&Value::Undefined, args, this_value.clone())
                     .map(Some)
             }
             CacheableNativePropertyValue::Uncacheable => Ok(None),
@@ -181,12 +180,11 @@ impl Context {
             }
             CacheableNativePropertyValue::Other(callee) => {
                 self.record_native_call_cache_slow_path();
-                self.eval_call_value(&callee, args, this_value.clone())
-                    .map(Some)
+                self.call_value(&callee, args, this_value.clone()).map(Some)
             }
             CacheableNativePropertyValue::Missing => {
                 self.record_native_call_cache_slow_path();
-                self.eval_call_value(&Value::Undefined, args, this_value.clone())
+                self.call_value(&Value::Undefined, args, this_value.clone())
                     .map(Some)
             }
             CacheableNativePropertyValue::Uncacheable => Ok(None),

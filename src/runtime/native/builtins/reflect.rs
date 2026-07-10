@@ -85,7 +85,7 @@ impl Context {
 
     fn reflect_well_known_symbol_key(&mut self, property: &str) -> Result<PropertyKey> {
         let constructor = self.symbol_constructor_value()?;
-        let value = self.get_property_value(&constructor, property)?;
+        let value = self.get_named(&constructor, property)?;
         let Value::Symbol(symbol) = value else {
             return Err(Error::runtime("well-known Symbol property is not a symbol"));
         };
@@ -116,12 +116,16 @@ impl Context {
     ) -> Result<Value> {
         let slice = args.as_slice();
         let target = Self::require_reflect_object(slice.first())?;
-        let mut dynamic = self.reflect_property_key(slice.get(1))?;
+        let dynamic = self.reflect_property_key(slice.get(1))?;
         let value = Self::argument_or_undefined(slice.get(2));
         let receiver = slice.get(3).unwrap_or(&target).clone();
-        let updated = self
-            .semantic_reflect_property_write(&target, &mut dynamic, value, &receiver)?
-            .ok_or_else(|| Error::type_error(REFLECT_TARGET_NOT_OBJECT_ERROR))?;
+        let updated = self.set(
+            &target,
+            dynamic.lookup(),
+            value,
+            &receiver,
+            crate::runtime::abstract_operations::SetFailureBehavior::ReturnFalse,
+        )?;
         Ok(Value::Bool(updated))
     }
 
@@ -249,7 +253,7 @@ impl Context {
         let this_arg = Self::argument_or_undefined(slice.get(1));
         let args_list = Self::argument_or_undefined(slice.get(2));
         let call_args = self.reflect_argument_list(&args_list)?;
-        self.eval_call_value(&target, &call_args, this_arg)
+        self.call_value(&target, &call_args, this_arg)
     }
 
     pub(in crate::runtime) fn eval_reflect_construct(
@@ -315,12 +319,12 @@ impl Context {
         if !matches!(value, Value::Object(_)) {
             return Err(Error::type_error(REFLECT_ARGUMENTS_NOT_LIST_ERROR));
         }
-        let length_value = self.get_property_value(value, ARRAY_LIKE_LENGTH_PROPERTY)?;
+        let length_value = self.get_named(value, ARRAY_LIKE_LENGTH_PROPERTY)?;
         let length = self.reflect_length_from_value(&length_value)?;
         let mut list = Vec::new();
         for index in 0..length {
             self.step()?;
-            list.push(self.get_property_value(value, &index.to_string())?);
+            list.push(self.get_named(value, &index.to_string())?);
         }
         Ok(list)
     }

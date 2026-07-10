@@ -75,7 +75,7 @@ impl Context {
         if !self.objects.is_raw_json(id)? {
             return Ok(None);
         }
-        let value = self.get_property_value(&Value::Object(id), JSON_RAW_JSON_PROPERTY)?;
+        let value = self.get_named(&Value::Object(id), JSON_RAW_JSON_PROPERTY)?;
         Self::raw_json_stored_text(&value).map(Some)
     }
 

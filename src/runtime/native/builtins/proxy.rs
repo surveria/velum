@@ -17,7 +17,6 @@ const PROXY_TARGET_NOT_OBJECT_ERROR: &str = "Proxy target must be an object";
 const PROXY_HANDLER_NOT_OBJECT_ERROR: &str = "Proxy handler must be an object";
 const PROXY_REQUIRES_NEW_ERROR: &str = "Constructor Proxy requires 'new'";
 const PROXY_REVOKED_ERROR: &str = "Cannot perform operation on a revoked Proxy";
-const PROXY_TRAP_NOT_CALLABLE_ERROR: &str = "Proxy handler trap is not callable";
 const PROXY_TRAP_GET: &str = "get";
 const PROXY_TRAP_SET: &str = "set";
 const PROXY_TRAP_HAS: &str = "has";
@@ -150,19 +149,6 @@ impl Context {
         Ok((target.clone(), handler.clone()))
     }
 
-    /// Spec `GetMethod(handler, name)`: return the trap if present and callable,
-    /// `None` when it is `undefined`/`null`, and a `TypeError` otherwise.
-    fn proxy_trap(&mut self, handler: &Value, name: &str) -> Result<Option<Value>> {
-        let trap = self.get_property_value(handler, name)?;
-        if matches!(trap, Value::Undefined | Value::Null) {
-            return Ok(None);
-        }
-        if !self.semantic_is_callable(&trap)? {
-            return Err(Error::type_error(PROXY_TRAP_NOT_CALLABLE_ERROR));
-        }
-        Ok(Some(trap))
-    }
-
     /// Proxy `[[Get]]`: dispatch to the `get` trap or fall back to the target.
     pub(in crate::runtime) fn proxy_get(
         &mut self,
@@ -171,11 +157,11 @@ impl Context {
         receiver: Value,
     ) -> Result<Value> {
         let (target, handler) = self.proxy_target_handler(id)?;
-        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_GET)? else {
-            return self.get_property_value_with_lookup(&target, property);
+        let Some(trap) = self.get_named_method(&handler, PROXY_TRAP_GET)? else {
+            return self.get(&target, property);
         };
         let key = self.proxy_property_key_value(property)?;
-        self.eval_call_completion(&trap, &[target, key, receiver], handler)?
+        self.call(&trap, &[target, key, receiver], handler)?
             .into_native_value_result()
     }
 
@@ -186,12 +172,12 @@ impl Context {
         property: PropertyLookup<'_>,
     ) -> Result<bool> {
         let (target, handler) = self.proxy_target_handler(id)?;
-        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_HAS)? else {
+        let Some(trap) = self.get_named_method(&handler, PROXY_TRAP_HAS)? else {
             return self.has_property_value_with_lookup(&target, property);
         };
         let key = self.proxy_property_key_value(property)?;
         let result = self
-            .eval_call_completion(&trap, &[target, key], handler)?
+            .call(&trap, &[target, key], handler)?
             .into_native_value_result()?;
         Ok(to_boolean(&result))
     }
@@ -213,16 +199,18 @@ impl Context {
         receiver: Value,
     ) -> Result<bool> {
         let (target, handler) = self.proxy_target_handler(id)?;
-        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_SET)? else {
-            let key = self.proxy_property_key_value(property)?;
-            let mut dynamic = self.dynamic_property_key(&key)?;
-            return self
-                .semantic_reflect_property_write(&target, &mut dynamic, value, &receiver)?
-                .ok_or_else(|| Error::type_error("proxy target is not an object"));
+        let Some(trap) = self.get_named_method(&handler, PROXY_TRAP_SET)? else {
+            return self.set(
+                &target,
+                property,
+                value,
+                &receiver,
+                crate::runtime::abstract_operations::SetFailureBehavior::ReturnFalse,
+            );
         };
         let key = self.proxy_property_key_value(property)?;
         let result = self
-            .eval_call_completion(&trap, &[target, key, value, receiver], handler)?
+            .call(&trap, &[target, key, value, receiver], handler)?
             .into_native_value_result()?;
         Ok(to_boolean(&result))
     }
@@ -235,12 +223,12 @@ impl Context {
         property: PropertyLookup<'_>,
     ) -> Result<bool> {
         let (target, handler) = self.proxy_target_handler(id)?;
-        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_DELETE)? else {
+        let Some(trap) = self.get_named_method(&handler, PROXY_TRAP_DELETE)? else {
             return self.delete_property_value_with_lookup(&target, property);
         };
         let key = self.proxy_property_key_value(property)?;
         let result = self
-            .eval_call_completion(&trap, &[target, key], handler)?
+            .call(&trap, &[target, key], handler)?
             .into_native_value_result()?;
         Ok(to_boolean(&result))
     }
@@ -248,13 +236,13 @@ impl Context {
     /// Proxy `[[GetPrototypeOf]]`.
     pub(in crate::runtime) fn proxy_get_prototype_of(&mut self, id: ObjectId) -> Result<Value> {
         let (target, handler) = self.proxy_target_handler(id)?;
-        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_GET_PROTOTYPE_OF)? else {
+        let Some(trap) = self.get_named_method(&handler, PROXY_TRAP_GET_PROTOTYPE_OF)? else {
             return self
                 .semantic_get_prototype(&target)?
                 .ok_or_else(|| Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR));
         };
         let result = self
-            .eval_call_completion(&trap, std::slice::from_ref(&target), handler)?
+            .call(&trap, std::slice::from_ref(&target), handler)?
             .into_native_value_result()?;
         if !matches!(result, Value::Object(_) | Value::Null) {
             return Err(Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR));
@@ -269,13 +257,13 @@ impl Context {
         prototype: Value,
     ) -> Result<bool> {
         let (target, handler) = self.proxy_target_handler(id)?;
-        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_SET_PROTOTYPE_OF)? else {
+        let Some(trap) = self.get_named_method(&handler, PROXY_TRAP_SET_PROTOTYPE_OF)? else {
             return self
                 .semantic_try_set_prototype(&target, prototype)?
                 .ok_or_else(|| Error::type_error(PROXY_GET_PROTOTYPE_INVALID_ERROR));
         };
         let result = self
-            .eval_call_completion(&trap, &[target, prototype], handler)?
+            .call(&trap, &[target, prototype], handler)?
             .into_native_value_result()?;
         Ok(to_boolean(&result))
     }
@@ -283,13 +271,13 @@ impl Context {
     /// Proxy `[[IsExtensible]]`.
     pub(in crate::runtime) fn proxy_is_extensible(&mut self, id: ObjectId) -> Result<bool> {
         let (target, handler) = self.proxy_target_handler(id)?;
-        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_IS_EXTENSIBLE)? else {
+        let Some(trap) = self.get_named_method(&handler, PROXY_TRAP_IS_EXTENSIBLE)? else {
             return self
                 .semantic_is_extensible(&target)?
                 .ok_or_else(|| Error::type_error("proxy target is not an object"));
         };
         let result = self
-            .eval_call_completion(&trap, &[target], handler)?
+            .call(&trap, &[target], handler)?
             .into_native_value_result()?;
         Ok(to_boolean(&result))
     }
@@ -297,13 +285,13 @@ impl Context {
     /// Proxy `[[PreventExtensions]]`.
     pub(in crate::runtime) fn proxy_prevent_extensions(&mut self, id: ObjectId) -> Result<bool> {
         let (target, handler) = self.proxy_target_handler(id)?;
-        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_PREVENT_EXTENSIONS)? else {
+        let Some(trap) = self.get_named_method(&handler, PROXY_TRAP_PREVENT_EXTENSIONS)? else {
             return self
                 .semantic_prevent_extensions(&target)?
                 .ok_or_else(|| Error::type_error("proxy target is not an object"));
         };
         let result = self
-            .eval_call_completion(&trap, &[target], handler)?
+            .call(&trap, &[target], handler)?
             .into_native_value_result()?;
         Ok(to_boolean(&result))
     }
@@ -320,7 +308,7 @@ impl Context {
     ) -> Result<bool> {
         let (target, handler) = self.proxy_target_handler(id)?;
         let key = self.proxy_property_key_value(property)?;
-        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_DEFINE_PROPERTY)? else {
+        let Some(trap) = self.get_named_method(&handler, PROXY_TRAP_DEFINE_PROPERTY)? else {
             let mut dynamic = self.dynamic_property_key(&key)?;
             return self.semantic_define_own_property_update_with_descriptor(
                 &target,
@@ -330,7 +318,7 @@ impl Context {
             );
         };
         let result = self
-            .eval_call_completion(&trap, &[target, key, descriptor], handler)?
+            .call(&trap, &[target, key, descriptor], handler)?
             .into_native_value_result()?;
         Ok(to_boolean(&result))
     }
@@ -342,11 +330,11 @@ impl Context {
         id: ObjectId,
     ) -> Result<Vec<Value>> {
         let (target, handler) = self.proxy_target_handler(id)?;
-        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_OWN_KEYS)? else {
+        let Some(trap) = self.get_named_method(&handler, PROXY_TRAP_OWN_KEYS)? else {
             return self.semantic_own_property_keys(&target);
         };
         let result = self
-            .eval_call_completion(&trap, std::slice::from_ref(&target), handler)?
+            .call(&trap, std::slice::from_ref(&target), handler)?
             .into_native_value_result()?;
         let keys = self.proxy_key_list_from_value(&result)?;
         self.validate_proxy_own_property_keys(&target, &keys)?;
@@ -362,12 +350,12 @@ impl Context {
     ) -> Result<Option<OwnPropertyDescriptor>> {
         let (target, handler) = self.proxy_target_handler(id)?;
         let key_value = self.proxy_property_key_value(property)?;
-        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_GET_OWN_DESCRIPTOR)? else {
+        let Some(trap) = self.get_named_method(&handler, PROXY_TRAP_GET_OWN_DESCRIPTOR)? else {
             let dynamic = self.dynamic_property_key(&key_value)?;
             return self.semantic_own_property_descriptor(&target, &dynamic);
         };
         let result = self
-            .eval_call_completion(&trap, &[target, key_value], handler)?
+            .call(&trap, &[target, key_value], handler)?
             .into_native_value_result()?;
         match result {
             Value::Undefined => Ok(None),
@@ -398,11 +386,11 @@ impl Context {
         this_value: Value,
     ) -> Result<Value> {
         let (target, handler) = self.proxy_target_handler(id)?;
-        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_APPLY)? else {
-            return self.eval_call_value(&target, args, this_value);
+        let Some(trap) = self.get_named_method(&handler, PROXY_TRAP_APPLY)? else {
+            return self.call_value(&target, args, this_value);
         };
         let args_array = self.create_array_from_elements(args.to_vec())?;
-        self.eval_call_completion(&trap, &[target, this_value, args_array], handler)?
+        self.call(&trap, &[target, this_value, args_array], handler)?
             .into_native_value_result()
     }
 
@@ -415,12 +403,12 @@ impl Context {
         new_target: Value,
     ) -> Result<Value> {
         let (target, handler) = self.proxy_target_handler(id)?;
-        let Some(trap) = self.proxy_trap(&handler, PROXY_TRAP_CONSTRUCT)? else {
+        let Some(trap) = self.get_named_method(&handler, PROXY_TRAP_CONSTRUCT)? else {
             return self.semantic_construct(&target, args, new_target);
         };
         let args_array = self.create_array_from_elements(args.to_vec())?;
         let result = self
-            .eval_call_completion(&trap, &[target, args_array, new_target], handler)?
+            .call(&trap, &[target, args_array, new_target], handler)?
             .into_native_value_result()?;
         if self.semantic_object_ref(&result)?.is_none() {
             return Err(Error::type_error(PROXY_CONSTRUCT_INVALID_ERROR));
@@ -511,12 +499,12 @@ impl Context {
                 "proxy ownKeys trap must return an array-like object",
             ));
         }
-        let length_value = self.get_property_value(value, "length")?;
+        let length_value = self.get_named(value, "length")?;
         let length = self.reflect_length_from_value(&length_value)?;
         let mut keys = Vec::new();
         for index in 0..length {
             self.step()?;
-            let element = self.get_property_value(value, &index.to_string())?;
+            let element = self.get_named(value, &index.to_string())?;
             let key = match element {
                 Value::String(_) | Value::HeapString(_) | Value::Symbol(_) => element,
                 _ => {

@@ -124,7 +124,7 @@ impl Context {
     ) -> Result<Value> {
         let template = Self::argument_or_undefined(args.first());
         Self::ensure_object_like(&template, "String.raw template must be object coercible")?;
-        let raw = self.get_property_value(&template, RAW_PROPERTY)?;
+        let raw = self.get_named(&template, RAW_PROPERTY)?;
         Self::ensure_object_like(&raw, "String.raw raw property must be object coercible")?;
         let raw_length = self.raw_length(&raw)?;
         if raw_length == 0 {
@@ -281,13 +281,13 @@ impl Context {
     }
 
     fn raw_length(&mut self, raw: &Value) -> Result<usize> {
-        let value = self.get_property_value(raw, "length")?;
+        let value = self.get_named(raw, "length")?;
         self.string_length_value(&value)
     }
 
     fn raw_part(&mut self, raw: &Value, index: usize) -> Result<String> {
         let key = index.to_string();
-        let value = self.get_property_value(raw, &key)?;
+        let value = self.get_named(raw, &key)?;
         self.string_argument_text(&value)
     }
 

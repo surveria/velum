@@ -19,8 +19,6 @@ const ITERATOR_VALUE_PROPERTY: &str = "value";
 const SET_LIKE_NOT_OBJECT_ERROR: &str = "Set method argument must be a set-like object";
 const SET_LIKE_SIZE_NAN_ERROR: &str = "Set-like argument size must be a number";
 const SET_LIKE_SIZE_NEGATIVE_ERROR: &str = "Set-like argument size must not be negative";
-const SET_LIKE_HAS_ERROR: &str = "Set-like argument has method must be callable";
-const SET_LIKE_KEYS_ERROR: &str = "Set-like argument keys method must be callable";
 const SET_KEYS_ITERATOR_ERROR: &str = "Set-like argument keys method must return an iterator";
 const SET_KEYS_RESULT_ERROR: &str = "Set-like iterator must return an object result";
 
@@ -214,7 +212,7 @@ impl Context {
         if !matches!(other, Value::Object(_)) {
             return Err(Error::type_error(SET_LIKE_NOT_OBJECT_ERROR));
         }
-        let raw_size = self.get_property_value(other, SET_SIZE_PROPERTY)?;
+        let raw_size = self.get_named(other, SET_SIZE_PROPERTY)?;
         let size = self.to_number(&raw_size)?;
         if size.is_nan() {
             return Err(Error::type_error(SET_LIKE_SIZE_NAN_ERROR));
@@ -226,14 +224,12 @@ impl Context {
                 SET_LIKE_SIZE_NEGATIVE_ERROR,
             ));
         }
-        let has = self.get_property_value(other, SET_HAS_PROPERTY)?;
-        if !self.semantic_is_callable(&has)? {
-            return Err(Error::type_error(SET_LIKE_HAS_ERROR));
-        }
-        let keys = self.get_property_value(other, SET_KEYS_PROPERTY)?;
-        if !self.semantic_is_callable(&keys)? {
-            return Err(Error::type_error(SET_LIKE_KEYS_ERROR));
-        }
+        let has = self
+            .get_named_method(other, SET_HAS_PROPERTY)?
+            .ok_or_else(|| Error::type_error("Set-like argument has method is missing"))?;
+        let keys = self
+            .get_named_method(other, SET_KEYS_PROPERTY)?
+            .ok_or_else(|| Error::type_error("Set-like argument keys method is missing"))?;
         Ok(SetRecord {
             object: other.clone(),
             size,
@@ -254,7 +250,7 @@ impl Context {
         if !matches!(iterator, Value::Object(_)) {
             return Err(Error::type_error(SET_KEYS_ITERATOR_ERROR));
         }
-        let next = self.get_property_value(&iterator, ITERATOR_NEXT_PROPERTY)?;
+        let next = self.get_named(&iterator, ITERATOR_NEXT_PROPERTY)?;
         let mut values = Vec::new();
         loop {
             self.step()?;
@@ -262,17 +258,17 @@ impl Context {
             if !matches!(result, Value::Object(_)) {
                 return Err(Error::type_error(SET_KEYS_RESULT_ERROR));
             }
-            let done = self.get_property_value(&result, ITERATOR_DONE_PROPERTY)?;
+            let done = self.get_named(&result, ITERATOR_DONE_PROPERTY)?;
             if to_boolean(&done) {
                 break;
             }
-            values.push(self.get_property_value(&result, ITERATOR_VALUE_PROPERTY)?);
+            values.push(self.get_named(&result, ITERATOR_VALUE_PROPERTY)?);
         }
         Ok(values)
     }
 
     fn set_call(&mut self, callee: &Value, args: &[Value], this_value: Value) -> Result<Value> {
-        match self.eval_call_completion(callee, args, this_value)? {
+        match self.call(callee, args, this_value)? {
             Completion::Normal(value) => Ok(value),
             completion => completion.into_result(),
         }

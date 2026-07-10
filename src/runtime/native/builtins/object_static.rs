@@ -84,7 +84,7 @@ impl Context {
         let mut entries = Vec::with_capacity(keys.len());
         for key in keys {
             let key_value = self.heap_string_value(&key)?;
-            let value = self.get_property_value(&target, &key)?;
+            let value = self.get_named(&target, &key)?;
             let entry = self.create_array_with_prototype(vec![key_value, value], prototype)?;
             entries.push(entry);
         }
@@ -301,7 +301,7 @@ impl Context {
         let prototype = self.objects.existing_array_prototype_id()?;
         let mut values = Vec::with_capacity(keys.len());
         for key in keys {
-            values.push(self.get_property_value(&target, &key)?);
+            values.push(self.get_named(&target, &key)?);
         }
         self.create_array_with_prototype(values, prototype)
     }
@@ -353,7 +353,7 @@ impl Context {
         let keys = self.own_enumerable_keys(properties)?;
         let mut updates = Vec::with_capacity(keys.len());
         for name in keys {
-            let descriptor_value = self.get_property_value(properties, &name)?;
+            let descriptor_value = self.get_named(properties, &name)?;
             updates.push(PendingPropertyUpdate {
                 property: self.named_dynamic_property(name),
                 update: self.property_update_from_value(&descriptor_value)?,
@@ -369,7 +369,7 @@ impl Context {
         }
         let keys = self.own_enumerable_keys(source)?;
         for key in keys {
-            let value = self.get_property_value(source, &key)?;
+            let value = self.get_named(source, &key)?;
             self.set_named_property_on_target(target, &key, value)?;
         }
         Ok(())

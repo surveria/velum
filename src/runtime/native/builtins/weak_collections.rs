@@ -188,8 +188,8 @@ impl Context {
                 if !matches!(item, Value::Object(_)) {
                     return Err(Error::type_error(WEAK_MAP_ENTRY_NOT_OBJECT_ERROR));
                 }
-                let key = self.get_property_value(&item, "0")?;
-                let value = self.get_property_value(&item, "1")?;
+                let key = self.get_named(&item, "0")?;
+                let value = self.get_named(&item, "1")?;
                 self.weak_map_set_entry(collection, key, value)
             }
             CollectionKind::WeakSet => self.weak_set_add_entry(collection, item),

@@ -125,11 +125,11 @@ impl Context {
             ITERATOR_SYMBOL_DISPLAY_NAME.to_owned(),
             Some(PropertyKey::symbol(symbol)),
         );
-        let method = self.get_property_value_with_lookup(iterable, key.lookup())?;
+        let method = self.get(iterable, key.lookup())?;
         if matches!(method, Value::Undefined | Value::Null) {
             return Ok(None);
         }
-        let iterator = match self.eval_call_completion(&method, &[], iterable.clone())? {
+        let iterator = match self.call(&method, &[], iterable.clone())? {
             Completion::Normal(value) => value,
             completion => return completion.into_result().map(|_| None),
         };
@@ -144,7 +144,7 @@ impl Context {
                 "iterator '{iterator}' is not an object"
             )));
         }
-        let next = self.get_property_value(&iterator, ITERATOR_NEXT_PROPERTY)?;
+        let next = self.get_named(&iterator, ITERATOR_NEXT_PROPERTY)?;
         Ok(Some(ForOfSource::Protocol {
             iterator,
             next,
@@ -172,7 +172,7 @@ impl Context {
                     .checked_add(1)
                     .ok_or_else(|| Error::runtime("for-of array index overflowed"))?;
                 let array = array.clone();
-                Ok(ForOfStep::Value(self.get_property_value(&array, &key)?))
+                Ok(ForOfStep::Value(self.get_named(&array, &key)?))
             }
             ForOfSource::Chars { chars } => match chars.next() {
                 Some(ch) => Ok(ForOfStep::Value(self.heap_string_char_value(ch)?)),
@@ -188,7 +188,7 @@ impl Context {
                 }
                 let next = next.clone();
                 let iterator = iterator.clone();
-                let result = match self.eval_call_completion(&next, &[], iterator)? {
+                let result = match self.call(&next, &[], iterator)? {
                     Completion::Normal(value) => value,
                     Completion::Throw(value) => {
                         // A throw from next() ends iteration without close.
@@ -210,14 +210,13 @@ impl Context {
                         "iterator result '{result}' is not an object"
                     )));
                 }
-                if to_boolean(&self.get_property_value(&result, ITERATOR_RESULT_DONE_PROPERTY)?) {
+                if to_boolean(&self.get_named(&result, ITERATOR_RESULT_DONE_PROPERTY)?) {
                     set_protocol_done(source);
                     return Ok(ForOfStep::Done);
                 }
-                Ok(ForOfStep::Value(self.get_property_value(
-                    &result,
-                    ITERATOR_RESULT_VALUE_PROPERTY,
-                )?))
+                Ok(ForOfStep::Value(
+                    self.get_named(&result, ITERATOR_RESULT_VALUE_PROPERTY)?,
+                ))
             }
         }
     }
@@ -235,7 +234,7 @@ impl Context {
             return;
         };
         let iterator = iterator.clone();
-        let return_method = match self.get_property_value(&iterator, ITERATOR_RETURN_PROPERTY) {
+        let return_method = match self.get_named(&iterator, ITERATOR_RETURN_PROPERTY) {
             Ok(method) => method,
             Err(error) => {
                 drop(error);
@@ -245,7 +244,7 @@ impl Context {
         if matches!(return_method, Value::Undefined | Value::Null) {
             return;
         }
-        if let Err(error) = self.eval_call_completion(&return_method, &[], iterator) {
+        if let Err(error) = self.call(&return_method, &[], iterator) {
             drop(error);
         }
     }

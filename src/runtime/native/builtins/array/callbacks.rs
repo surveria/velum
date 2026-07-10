@@ -644,7 +644,7 @@ impl Context {
     ) -> Result<Value> {
         let index = Self::array_like_index_value(index)?;
         let call_args = [value.clone(), index, object.clone()];
-        match self.eval_call_completion(callback, &call_args, callback_this)? {
+        match self.call(callback, &call_args, callback_this)? {
             Completion::Normal(value) => Ok(value),
             completion => completion.into_result(),
         }
@@ -660,7 +660,7 @@ impl Context {
     ) -> Result<Value> {
         let index = Self::array_like_index_value(index)?;
         let call_args = [accumulator, value, index, object.clone()];
-        match self.eval_call_completion(callback, &call_args, Value::Undefined)? {
+        match self.call(callback, &call_args, Value::Undefined)? {
             Completion::Normal(value) => Ok(value),
             completion => completion.into_result(),
         }

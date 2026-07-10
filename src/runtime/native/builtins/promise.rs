@@ -72,9 +72,7 @@ impl Context {
                 Value::Undefined,
             )?,
             callee => {
-                if let Err(error) =
-                    self.eval_call_value(&callee, &[resolve, reject], Value::Undefined)
-                {
+                if let Err(error) = self.call_value(&callee, &[resolve, reject], Value::Undefined) {
                     self.reject_promise(promise, promise_executor_error_value(&error))?;
                     return Ok(object);
                 }

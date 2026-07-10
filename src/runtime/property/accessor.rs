@@ -106,7 +106,7 @@ impl Context {
         this_value: Value,
         args: &[Value],
     ) -> Result<Value> {
-        let completion = self.eval_call_completion(function, args, this_value)?;
+        let completion = self.call(function, args, this_value)?;
         match completion {
             Completion::Throw(Value::Error(error)) => {
                 Err(Error::exception(error.name(), error.message().to_owned()))

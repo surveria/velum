@@ -4,8 +4,8 @@ use crate::{
     runtime::control::error_property_text,
     runtime::object::{OBJECT_CONSTRUCTOR_PROPERTY, PropertyKey},
     runtime::property::{
-        DynamicPropertyKey, PropertyValue, StringPropertyValue, get_property,
-        get_property_with_receiver, has_property, string_property_value,
+        DynamicPropertyKey, PropertyValue, StringPropertyValue, get_property_with_receiver,
+        has_property, string_property_value,
     },
     value::{ObjectId, Value},
 };
@@ -19,36 +19,6 @@ impl Context {
         value: &Value,
     ) -> Result<DynamicPropertyKey> {
         self.to_property_key(value)
-    }
-
-    pub(crate) fn get_property_value(&mut self, object: &Value, property: &str) -> Result<Value> {
-        let lookup = self.property_lookup(property);
-        if let Some(read) = self.semantic_property_read(object, lookup)? {
-            return self.finish_semantic_property_read(read, object, lookup);
-        }
-        if let Value::String(value) = object {
-            return self.get_string_property_value(object, value, property);
-        }
-        if let Value::HeapString(value) = object {
-            return self.get_string_property_value(object, value.as_str(), property);
-        }
-        if let Some(value) = self.primitive_prototype_property_value(object, property)? {
-            return Ok(value);
-        }
-        let value = get_property(&self.objects, object, lookup)?;
-        self.runtime_property_value(value)
-    }
-
-    pub(in crate::runtime) fn get_property_value_with_lookup(
-        &mut self,
-        object: &Value,
-        property: crate::runtime::object::PropertyLookup<'_>,
-    ) -> Result<Value> {
-        if let Some(read) = self.semantic_property_read(object, property)? {
-            return self.finish_semantic_property_read(read, object, property);
-        }
-        let value = get_property(&self.objects, object, property)?;
-        self.runtime_property_value(value)
     }
 
     pub(in crate::runtime) fn get_error_property_value(

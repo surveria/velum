@@ -336,25 +336,6 @@ impl Context {
         )
     }
 
-    pub(crate) fn eval_call_value(
-        &mut self,
-        callee: &Value,
-        args: &[Value],
-        this_value: Value,
-    ) -> Result<Value> {
-        self.semantic_call(callee, args, this_value)?
-            .into_native_value_result()
-    }
-
-    pub(crate) fn eval_call_completion(
-        &mut self,
-        callee: &Value,
-        args: &[Value],
-        this_value: Value,
-    ) -> Result<Completion> {
-        self.semantic_call(callee, args, this_value)
-    }
-
     pub(crate) fn eval_cached_call_completion(
         &mut self,
         site: BytecodeCallSite,
@@ -366,7 +347,7 @@ impl Context {
         if let Some(cache) = self.cached_call_value(site)? {
             if cache.matches_callee(callee) {
                 self.record_call_value_cache_hit();
-                return self.eval_call_completion_cache(cache, args, this_value);
+                return self.call_cache(cache, args, this_value);
             }
             self.record_call_value_cache_slow_path();
         } else {
@@ -374,10 +355,10 @@ impl Context {
         }
 
         let Some(cache) = self.cacheable_call_value(callee)? else {
-            return self.eval_call_completion(callee, args, this_value);
+            return self.call(callee, args, this_value);
         };
         self.remember_call_value(site, cache)?;
-        self.eval_call_completion_cache(cache, args, this_value)
+        self.call_cache(cache, args, this_value)
     }
 
     fn cacheable_call_value(&self, callee: &Value) -> Result<Option<CallValueCache>> {
@@ -389,7 +370,7 @@ impl Context {
         Ok(CallValueCache::from_callee(callee, native_kind))
     }
 
-    fn eval_call_completion_cache(
+    fn call_cache(
         &mut self,
         cache: CallValueCache,
         args: &[Value],
@@ -438,9 +419,7 @@ impl Context {
             CallReference::Native { kind, this_value } => self
                 .eval_direct_or_generic_native_function_kind(kind, args, &this_value)
                 .map(Completion::Normal),
-            CallReference::Generic { callee, this_value } => {
-                self.eval_call_completion(&callee, args, this_value)
-            }
+            CallReference::Generic { callee, this_value } => self.call(&callee, args, this_value),
         }
     }
 
@@ -600,7 +579,7 @@ impl Context {
         &mut self,
         new_target: &Value,
     ) -> Result<Option<crate::value::ObjectId>> {
-        let prototype = self.get_property_value(new_target, CONSTRUCTOR_PROTOTYPE_PROPERTY)?;
+        let prototype = self.get_named(new_target, CONSTRUCTOR_PROTOTYPE_PROPERTY)?;
         let Value::Object(id) = prototype else {
             return Ok(None);
         };

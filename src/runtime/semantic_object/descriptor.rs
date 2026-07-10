@@ -180,7 +180,7 @@ impl Context {
         }
         Ok(Some(OwnPropertyDescriptor::Data(
             DataPropertyDescriptor::new(
-                self.get_property_value(target, property.name())?,
+                self.get_named(target, property.name())?,
                 PropertyWritable::Yes,
                 PropertyEnumerable::Yes,
                 PropertyConfigurable::Yes,

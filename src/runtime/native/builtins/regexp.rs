@@ -134,9 +134,9 @@ impl Context {
         let Value::Object(_) = this_value else {
             return Err(Error::type_error(REGEXP_RECEIVER_ERROR));
         };
-        let source_value = self.get_property_value(this_value, REGEXP_SOURCE_PROPERTY)?;
+        let source_value = self.get_named(this_value, REGEXP_SOURCE_PROPERTY)?;
         let source = self.to_string(&source_value)?;
-        let flags_value = self.get_property_value(this_value, REGEXP_FLAGS_PROPERTY)?;
+        let flags_value = self.get_named(this_value, REGEXP_FLAGS_PROPERTY)?;
         let flags = self.to_string(&flags_value)?;
         let capacity = source
             .len()
@@ -158,7 +158,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let input = self.regexp_argument_or_undefined(args.as_slice().first())?;
-        let global = to_boolean(&self.get_property_value(this_value, REGEXP_GLOBAL_PROPERTY)?);
+        let global = to_boolean(&self.get_named(this_value, REGEXP_GLOBAL_PROPERTY)?);
         if !global {
             return self.regexp_exec(this_value, &input);
         }
@@ -197,7 +197,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let input = self.regexp_argument_or_undefined(args.as_slice().first())?;
-        let previous = self.get_property_value(this_value, REGEXP_LAST_INDEX_PROPERTY)?;
+        let previous = self.get_named(this_value, REGEXP_LAST_INDEX_PROPERTY)?;
         self.set_regexp_last_index(this_value, 0)?;
         let result = self.regexp_exec(this_value, &input)?;
         self.set_regexp_last_index_value(this_value, previous)?;
@@ -205,7 +205,7 @@ impl Context {
             return Ok(Value::Number(-1.0));
         };
         let index = self
-            .get_property_value(&Value::Object(id), "index")?
+            .get_named(&Value::Object(id), "index")?
             .as_number()
             .ok_or_else(|| Error::runtime("RegExp search result index is not numeric"))?;
         Ok(Value::Number(index))
@@ -218,7 +218,7 @@ impl Context {
     ) -> Result<Value> {
         let input = self.regexp_argument_or_undefined(args.as_slice().first())?;
         let replacement = self.regexp_argument_or_undefined(args.as_slice().get(1))?;
-        if to_boolean(&self.get_property_value(this_value, REGEXP_GLOBAL_PROPERTY)?) {
+        if to_boolean(&self.get_named(this_value, REGEXP_GLOBAL_PROPERTY)?) {
             return self.string_regexp_replace_global(&input, this_value, &replacement);
         }
         self.string_regexp_replace_first(&input, this_value, &replacement)
@@ -554,7 +554,7 @@ impl Context {
     const fn discard_regexp_extra_args(_args: &[Value]) {}
 
     fn regexp_last_index(&mut self, this_value: &Value, input: &str) -> Result<usize> {
-        let value = self.get_property_value(this_value, REGEXP_LAST_INDEX_PROPERTY)?;
+        let value = self.get_named(this_value, REGEXP_LAST_INDEX_PROPERTY)?;
         let index = self.to_length(&value)?;
         let input_length = u64::try_from(input.len())
             .map_err(|_| Error::limit("RegExp input length exceeded supported range"))?;
@@ -572,8 +572,15 @@ impl Context {
     }
 
     fn set_regexp_last_index_value(&mut self, this_value: &Value, value: Value) -> Result<()> {
-        let key = self.intern_property_key(REGEXP_LAST_INDEX_PROPERTY)?;
-        self.set_property_value_with_accessors(this_value, key, REGEXP_LAST_INDEX_PROPERTY, value)
+        let lookup = self.property_lookup(REGEXP_LAST_INDEX_PROPERTY);
+        self.set(
+            this_value,
+            lookup,
+            value,
+            this_value,
+            crate::runtime::abstract_operations::SetFailureBehavior::Throw,
+        )
+        .map(|_| ())
     }
 
     fn regexp_match_array(&mut self, input: &str, start: usize, end: usize) -> Result<Value> {
@@ -615,7 +622,7 @@ impl Context {
         let Value::Object(id) = result else {
             return Ok(None);
         };
-        let value = self.get_property_value(&Value::Object(id), "0")?;
+        let value = self.get_named(&Value::Object(id), "0")?;
         self.to_string(&value).map(Some)
     }
 
@@ -638,7 +645,7 @@ impl Context {
             let Value::Object(id) = result else {
                 return Ok(results);
             };
-            let match_value = self.get_property_value(&Value::Object(id), "0")?;
+            let match_value = self.get_named(&Value::Object(id), "0")?;
             let match_text = self.to_string(&match_value)?;
             let is_empty = match_text.is_empty();
             results.push(Value::Object(id));
@@ -669,7 +676,7 @@ impl Context {
 
     fn regexp_well_known_symbol_property_key(&mut self, property: &str) -> Result<PropertyKey> {
         let constructor = self.symbol_constructor_value()?;
-        let value = self.get_property_value(&constructor, property)?;
+        let value = self.get_named(&constructor, property)?;
         let Value::Symbol(symbol) = value else {
             return Err(Error::runtime("well-known Symbol property is not a symbol"));
         };
