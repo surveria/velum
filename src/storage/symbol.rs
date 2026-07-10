@@ -3,6 +3,7 @@ use crate::{
     ownership::VmIdentity,
     storage::string_heap::JsString,
 };
+use std::rc::Rc;
 
 const FOREIGN_SYMBOL_DESCRIPTION_ERROR: &str = "Symbol description belongs to another VM";
 const FOREIGN_SYMBOL_REGISTRY_KEY_ERROR: &str = "Symbol registry key belongs to another VM";
@@ -24,24 +25,25 @@ impl SymbolId {
 
 #[derive(Clone, Debug, Eq)]
 pub struct JsSymbol {
-    identity: VmIdentity,
     id: SymbolId,
-    description: Option<JsString>,
+    data: Rc<SymbolData>,
 }
 
 impl JsSymbol {
-    const fn new(identity: VmIdentity, id: SymbolId, description: Option<JsString>) -> Self {
+    fn new(identity: VmIdentity, id: SymbolId, description: Option<JsString>) -> Self {
         Self {
-            identity,
             id,
-            description,
+            data: Rc::new(SymbolData {
+                identity,
+                description,
+            }),
         }
     }
 
     /// Returns the VM owner and storage generation of this Symbol.
     #[must_use]
-    pub const fn identity(&self) -> &VmIdentity {
-        &self.identity
+    pub fn identity(&self) -> &VmIdentity {
+        &self.data.identity
     }
 
     #[must_use]
@@ -51,7 +53,7 @@ impl JsSymbol {
 
     #[must_use]
     pub fn description(&self) -> Option<&str> {
-        self.description.as_ref().map(JsString::as_str)
+        self.data.description.as_ref().map(JsString::as_str)
     }
 
     #[must_use]
@@ -65,8 +67,14 @@ impl JsSymbol {
 
 impl PartialEq for JsSymbol {
     fn eq(&self, other: &Self) -> bool {
-        self.identity == other.identity && self.id == other.id
+        self.identity() == other.identity() && self.id == other.id
     }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct SymbolData {
+    identity: VmIdentity,
+    description: Option<JsString>,
 }
 
 #[derive(Debug, Clone)]

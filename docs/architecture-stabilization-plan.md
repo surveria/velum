@@ -1256,14 +1256,18 @@ AS-05a2a local implementation evidence:
 - `VmGeneration` is stored once inside the shared owner token, keeping each
   local primitive stamp to one `Rc` word rather than enlarging hot `Value` and
   bytecode representations with duplicated generation data;
+- string text/owner and Symbol description/owner live behind that existing
+  handle word. A layout regression test keeps `JsString`, `JsSymbol`, and
+  `Value` no larger than the owned-String baseline after an initial CI build
+  exposed release Test262 stack exhaustion from a wider inline stamp;
 - `Context::checked_value` verifies owner identity before looking up a string
   or Symbol slot. Colliding numeric ids from another VM therefore cannot alias
   a valid local entry;
 - host return validation preserves same-VM strings/Symbols and reports foreign
   ownership with host-function context;
 - three focused host tests cover same-VM round trips and foreign string/Symbol
-  returns with deliberately colliding slots. Existing string and Symbol suites
-  plus strict Clippy pass;
+  returns with deliberately colliding slots. The compact-layout test, existing
+  string and Symbol suites, and strict Clippy pass;
 - the architecture guard fixes all four primitive owner fields, both central
   checks, and a mutation test that removes a primitive identity;
 - `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
