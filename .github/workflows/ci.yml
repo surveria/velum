@@ -13,6 +13,10 @@ on:
       - checks_requested
   workflow_dispatch:
     inputs:
+      correctness:
+        description: "Run the exact-tree correctness recovery gate"
+        required: false
+        default: "false"
       full:
         description: "Run the full report and benchmark gate"
         required: false
@@ -129,7 +133,8 @@ jobs:
             git fetch --no-tags --quiet origin "${ci_base_ref}:refs/remotes/origin/${ci_base_ref}"
             export RSQJS_BASE_REF="origin/${ci_base_ref}"
           fi
-          if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]]; then
+          if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" \
+            || "${{ github.event.inputs.correctness }}" == "true" ]]; then
             ./scripts/check-correctness.sh
           elif [[ "${{ github.event.inputs.full }}" == "true" ]]; then
             ./scripts/test-all.sh
