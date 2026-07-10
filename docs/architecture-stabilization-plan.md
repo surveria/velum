@@ -1395,7 +1395,10 @@ AS-05b1a local implementation evidence:
 - AS-05b1a deliberately does not classify values stored behind object,
   function, Promise, collection, or iterator arenas as direct roots. AS-05b1b
   owns those strong trace edges; AS-05b1c and AS-06 own transient operand,
-  native-call-argument, retained-handle, and durable activation roots.
+  native-call-argument, retained-handle, and durable activation roots;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
 
 ### AS-06: Resumable Execution
 
