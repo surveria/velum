@@ -294,8 +294,10 @@ Test262 variants and 95/95 QuickJS differential cases.
 
 AS-03a2 is split into AS-03a2a (`ToPrimitive`/`ToNumber`) and AS-03a2b
 (`ToString`/`ToBoolean`) because the two groups have independent consumer
-graphs and validation surfaces. Property-key, numeric-index, property, call,
-and iterator operations follow in AS-03b.
+graphs and validation surfaces. AS-03a2a locally preserves all 34,273 prior
+expected Test262 variants and adds 1,330 reviewed passes, for 35,603 of 102,578
+full variants with 95 of 95 QuickJS differential cases. Property-key,
+numeric-index, property, call, and iterator operations follow in AS-03b.
 
 ## Iterator Map
 
@@ -468,7 +470,7 @@ decision sequence:
 | AS-02b2 | property/internal-method table | set/define/delete/keys/prototype/descriptor/integrity boundary implemented in PR #403 with ordinary cache tails and Symbol-preserving Proxy dispatch |
 | AS-02c | call/construct tables and repeated object-like lists | shared call/construct predicates and dispatch completed in PR #408, including callable/constructable Proxy and bound functions |
 | AS-03a1 | equality table and numeric fast paths | shared equality owner merged in PR #409; bytecode, Object.is, collections, and arrays delegate to it |
-| AS-03a2a | conversion table | shared `ToPrimitive`/`ToNumber` owner implemented in draft PR #410; delete local method probing and primitive-only number facades |
+| AS-03a2a | conversion table | shared `ToPrimitive`/`ToNumber` owner implemented and locally validated in draft PR #410; local method probing and primitive-only number facades are deleted, with all prior Test262 passes retained |
 | AS-03a2b | string/boolean conversion sites | separate semantic `ToString` from diagnostic `Display`, then route truthiness through one `ToBoolean` owner |
 | AS-03b | key/property/call/iterator tables | move iterator protocol out of bytecode and add spec-level method lookup and invocation operations over the AS-02c internal methods |
 | AS-04a/b | completion/error table and inline Error representation | preserve arbitrary throws across native frames; remove ReferenceError prefix parsing; add real errors/spans |

@@ -26,7 +26,7 @@ version policy, and uses the validation lane appropriate to the change.
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
 - Current program state: AS-01, AS-02, and AS-03a1 are complete; AS-03a2a
-  `ToPrimitive`/`ToNumber` consolidation is in progress in draft PR #410
+  `ToPrimitive`/`ToNumber` consolidation is locally validated in draft PR #410
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -481,7 +481,7 @@ dependencies do not overlap.
 | AS-00 | Complete | Adopt this plan and route project documentation to it. | None | PR #396 merged as `f79056b`; required CI, post-merge performance, publisher, and canonical report publication passed. |
 | AS-01 | Complete | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards merged in PR #399 with required CI and canonical report publication. |
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
-| AS-03 | In progress | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality consolidation merged in PR #409; AS-03a2a `ToPrimitive`/`ToNumber` is in draft PR #410, followed by AS-03a2b `ToString`/`ToBoolean`; property, invocation, and iterator operations remain. |
+| AS-03 | In progress | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality consolidation merged in PR #409; AS-03a2a `ToPrimitive`/`ToNumber` is locally validated in draft PR #410, followed by AS-03a2b `ToString`/`ToBoolean`; property, invocation, and iterator operations remain. |
 | AS-04 | Backlog | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | Real JavaScript error objects, typed throw path, no message-prefix classification, spans available to diagnostics. |
 | AS-05 | Backlog | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | Non-cloneable VM state, checked cross-VM boundaries, trace/root contract, heap/stack/job/buffer counters and limits. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
@@ -764,6 +764,22 @@ AS-03a2a keeps numeric fast paths only when operands are already numbers. Every
 generic fallback must call the shared conversion owner; no built-in may probe
 `valueOf`/`toString` itself. The architecture guard records the complete owner
 function set and rejects a second conversion definition.
+
+AS-03a2a local validation evidence:
+
+- the engine and runner fast gate passes, including strict Clippy, unit and
+  integration tests, documentation, architecture guards, and 112 runner tests;
+- focused public tests cover conversion hints, ordinary method order, abrupt
+  conversion, numeric consumers, and array-search conversion ordering;
+- the complete Test262 review preserves every one of the prior 34,273 expected
+  variants and adds 1,330 newly passing variants, bringing the reviewed
+  expected-pass baseline and full-corpus pass set to 35,603 of 102,578;
+- the largest gains are addition (702 variants), Array (288), Date (94),
+  Number (62), String (52), and Object (48), while QuickJS differential remains
+  95 of 95;
+- array length writes were added through the shared number conversion boundary
+  because conversion callbacks can mutate `length` before Array search methods
+  continue; empty search receivers now return before converting `fromIndex`.
 
 ### AS-04: Completion, Errors, And Source Metadata
 
