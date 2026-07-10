@@ -39,8 +39,8 @@ impl CompiledScript {
         source: &str,
         limits: RuntimeLimits,
     ) -> Result<Self> {
-        check_source_len(source, limits)?;
-        check_source_name_len(source_name, limits)?;
+        check_source_len(source, &limits)?;
+        check_source_name_len(source_name, &limits)?;
         let source_id = SourceId::for_optional_name(source_name, source);
         let tokens =
             lexer::lex(source, source_id).map_err(|error| error.with_source(source_id, source))?;
@@ -117,7 +117,7 @@ impl CompiledScript {
         self.source_name.as_deref()
     }
 
-    pub(crate) fn ensure_within_limits(&self, limits: RuntimeLimits) -> Result<()> {
+    pub(crate) fn ensure_within_limits(&self, limits: &RuntimeLimits) -> Result<()> {
         check_source_len_value(self.usage.source_len, limits)?;
         check_source_name_len(self.source_name(), limits)?;
         if self.usage.top_level_statement_count > limits.max_statements {
@@ -136,11 +136,11 @@ impl CompiledScript {
     }
 }
 
-fn check_source_len(source: &str, limits: RuntimeLimits) -> Result<()> {
+fn check_source_len(source: &str, limits: &RuntimeLimits) -> Result<()> {
     check_source_len_value(source.len(), limits)
 }
 
-fn check_source_len_value(source_len: usize, limits: RuntimeLimits) -> Result<()> {
+fn check_source_len_value(source_len: usize, limits: &RuntimeLimits) -> Result<()> {
     if source_len > limits.max_source_len {
         return Err(Error::limit(format!(
             "source length {source_len} exceeded {}",
@@ -150,7 +150,7 @@ fn check_source_len_value(source_len: usize, limits: RuntimeLimits) -> Result<()
     Ok(())
 }
 
-fn check_source_name_len(source_name: Option<&str>, limits: RuntimeLimits) -> Result<()> {
+fn check_source_name_len(source_name: Option<&str>, limits: &RuntimeLimits) -> Result<()> {
     let Some(source_name) = source_name else {
         return Ok(());
     };

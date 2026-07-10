@@ -82,14 +82,16 @@ pub struct SymbolTable {
     identity: VmIdentity,
     entries: Vec<JsSymbol>,
     registry: Vec<(JsString, SymbolId)>,
+    max_count: usize,
 }
 
 impl SymbolTable {
-    pub const fn new(identity: VmIdentity) -> Self {
+    pub const fn new(identity: VmIdentity, max_count: usize) -> Self {
         Self {
             identity,
             entries: Vec::new(),
             registry: Vec::new(),
+            max_count,
         }
     }
 
@@ -106,6 +108,12 @@ impl SymbolTable {
             && value.identity() != &self.identity
         {
             return Err(Error::runtime(FOREIGN_SYMBOL_DESCRIPTION_ERROR));
+        }
+        if self.entries.len() >= self.max_count {
+            return Err(Error::limit(format!(
+                "Symbol record count exceeded {}",
+                self.max_count
+            )));
         }
         let id = SymbolId::from_index(self.entries.len())?;
         let symbol = JsSymbol::new(self.identity.clone(), id, description);

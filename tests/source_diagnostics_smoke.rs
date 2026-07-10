@@ -246,7 +246,7 @@ fn enforces_source_name_limits_for_compile_and_execution() -> TestResult {
         max_string_len: 4,
         ..RuntimeLimits::default()
     };
-    let constrained_runtime = Runtime::with_limits(limits);
+    let constrained_runtime = Runtime::with_limits(limits.clone());
     let Err(compile_error) = constrained_runtime.compile_named("large", "42") else {
         return Err("expected source name compile limit to fail".into());
     };

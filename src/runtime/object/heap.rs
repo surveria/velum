@@ -1,5 +1,6 @@
 use crate::{
     error::{Error, JavaScriptErrorMetadata, Result},
+    runtime::VmStorageKind,
     syntax::AccessorKind,
     value::{ObjectId, Value},
 };
@@ -94,13 +95,7 @@ impl ObjectHeap {
             None => Some(self.object_prototype_id(constructor_key, max_objects, max_properties)?),
         };
 
-        if self.objects.len() >= max_objects {
-            return Err(Error::limit(format!("object count exceeded {max_objects}")));
-        }
-
-        let id = ObjectId::new(self.objects.len());
-        self.objects.push(object);
-        Ok(Value::Object(id))
+        self.push_object(object, max_objects).map(Value::Object)
     }
 
     pub fn create_array(
@@ -183,16 +178,9 @@ impl ObjectHeap {
             max_objects,
             max_properties,
         )?;
-        if self.objects.len() >= max_objects {
-            return Err(Error::limit(format!("object count exceeded {max_objects}")));
-        }
-
         let mut object = Object::ordinary();
         object.prototype = prototype;
-
-        let id = ObjectId::new(self.objects.len());
-        self.objects.push(object);
-        Ok(id)
+        self.push_object(object, max_objects)
     }
 
     pub(crate) fn create_with_exact_prototype(
@@ -200,16 +188,9 @@ impl ObjectHeap {
         prototype: Option<ObjectId>,
         max_objects: usize,
     ) -> Result<Value> {
-        if self.objects.len() >= max_objects {
-            return Err(Error::limit(format!("object count exceeded {max_objects}")));
-        }
-
         let mut object = Object::ordinary();
         object.prototype = prototype;
-
-        let id = ObjectId::new(self.objects.len());
-        self.objects.push(object);
-        Ok(Value::Object(id))
+        self.push_object(object, max_objects).map(Value::Object)
     }
 
     pub(crate) fn create_regexp(
@@ -272,10 +253,6 @@ impl ObjectHeap {
             max_objects,
             max_properties,
         )?;
-        if self.objects.len() >= max_objects {
-            return Err(Error::limit(format!("object count exceeded {max_objects}")));
-        }
-
         let mut object = Object::ordinary();
         object.prototype = prototype;
         object.define(
@@ -287,9 +264,7 @@ impl ObjectHeap {
             max_properties,
         )?;
 
-        let id = ObjectId::new(self.objects.len());
-        self.objects.push(object);
-        Ok(id)
+        self.push_object(object, max_objects)
     }
 
     fn resolve_default_prototype(
@@ -315,10 +290,6 @@ impl ObjectHeap {
         if let Some(id) = self.object_prototype {
             return Ok(id);
         }
-        if self.objects.len() >= max_objects {
-            return Err(Error::limit(format!("object count exceeded {max_objects}")));
-        }
-
         let mut object = Object::ordinary();
         object.define(
             constructor_key,
@@ -329,8 +300,7 @@ impl ObjectHeap {
             max_properties,
         )?;
 
-        let id = ObjectId::new(self.objects.len());
-        self.objects.push(object);
+        let id = self.push_object(object, max_objects)?;
         self.object_prototype = Some(id);
         Ok(id)
     }
@@ -347,14 +317,9 @@ impl ObjectHeap {
         } else {
             let object_prototype =
                 self.object_prototype_id(constructor_key, max_objects, max_properties)?;
-            if self.objects.len() >= max_objects {
-                return Err(Error::limit(format!("object count exceeded {max_objects}")));
-            }
-
             let mut object = Object::ordinary();
             object.prototype = Some(object_prototype);
-            let id = ObjectId::new(self.objects.len());
-            self.objects.push(object);
+            let id = self.push_object(object, max_objects)?;
             self.array_prototype = Some(id);
             id
         };
@@ -509,12 +474,58 @@ impl ObjectHeap {
     }
 
     pub(super) fn push_object(&mut self, object: Object, max_objects: usize) -> Result<ObjectId> {
-        if self.objects.len() >= max_objects {
-            return Err(Error::limit(format!("object count exceeded {max_objects}")));
+        let owner_limit = self.storage_limits.max_count(VmStorageKind::Object);
+        let effective_limit = max_objects.min(owner_limit);
+        if self.objects.len() >= effective_limit {
+            return Err(Error::limit(format!(
+                "Object record count exceeded {effective_limit}"
+            )));
         }
+
+        let (object_bytes, buffer_count, buffer_bytes) = object.storage_payload_bytes()?;
+        let projected_object_bytes = self
+            .object_payload_bytes
+            .checked_add(object_bytes)
+            .ok_or_else(|| Error::limit("object payload bytes overflowed"))?;
+        let projected_buffer_count = self
+            .byte_buffer_count
+            .checked_add(buffer_count)
+            .ok_or_else(|| Error::limit("byte buffer count overflowed"))?;
+        let projected_buffer_bytes = self
+            .byte_buffer_payload_bytes
+            .checked_add(buffer_bytes)
+            .ok_or_else(|| Error::limit("byte buffer payload bytes overflowed"))?;
+        ensure_object_storage_limit(
+            VmStorageKind::Object,
+            projected_object_bytes,
+            self.storage_limits.max_payload_bytes(VmStorageKind::Object),
+        )?;
+        ensure_object_storage_limit(
+            VmStorageKind::ByteBuffer,
+            projected_buffer_count,
+            self.storage_limits.max_count(VmStorageKind::ByteBuffer),
+        )?;
+        ensure_object_storage_limit(
+            VmStorageKind::ByteBuffer,
+            projected_buffer_bytes,
+            self.storage_limits
+                .max_payload_bytes(VmStorageKind::ByteBuffer),
+        )?;
 
         let id = ObjectId::new(self.objects.len());
         self.objects.push(object);
+        self.object_payload_bytes = projected_object_bytes;
+        self.byte_buffer_count = projected_buffer_count;
+        self.byte_buffer_payload_bytes = projected_buffer_bytes;
         Ok(id)
     }
+}
+
+fn ensure_object_storage_limit(kind: VmStorageKind, projected: usize, limit: usize) -> Result<()> {
+    if projected <= limit {
+        return Ok(());
+    }
+    Err(Error::limit(format!(
+        "{kind:?} storage limit exceeded {limit}"
+    )))
 }

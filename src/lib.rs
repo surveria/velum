@@ -30,7 +30,7 @@ pub use crate::error::{Error, JavaScriptErrorMetadata, JavaScriptException, Resu
 pub use crate::ownership::{VmGeneration, VmIdentity};
 pub use crate::runtime::Context;
 pub use crate::runtime::engine::Runtime;
-pub use crate::runtime::limits::RuntimeLimits;
+pub use crate::runtime::limits::{RuntimeLimits, VmStorageLimits};
 pub use crate::runtime::{
     RetainedValue, VmAsyncEdgeKind, VmAsyncEdgeSnapshot, VmAsyncEdgeStrength, VmCallableEdgeKind,
     VmCallableEdgeSnapshot, VmObjectEdgeKind, VmObjectEdgeSnapshot, VmRootKind, VmRootSnapshot,

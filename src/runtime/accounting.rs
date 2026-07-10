@@ -2,7 +2,7 @@ use crate::error::{Error, Result};
 
 use super::Context;
 
-const STORAGE_KIND_COUNT: usize = 26;
+pub(super) const STORAGE_KIND_COUNT: usize = 26;
 
 /// Stable logical owner categories for VM-local retained storage.
 ///
@@ -75,7 +75,7 @@ impl VmStorageKind {
         &Self::ALL
     }
 
-    const fn index(self) -> usize {
+    pub(super) const fn index(self) -> usize {
         match self {
             Self::Atom => 0,
             Self::HeapString => 1,
@@ -255,11 +255,11 @@ impl Context {
             VmStorageKind::ByteBuffer,
             object_counts.byte_buffer_payload_bytes(),
         )?;
-        counter.record_payload_bytes(VmStorageKind::OutputEntry, self.output_payload_bytes()?)?;
+        counter.record_payload_bytes(VmStorageKind::OutputEntry, self.output_payload_bytes())?;
         counter.record_payload_bytes(VmStorageKind::SourceRecord, self.source_record_bytes()?)
     }
 
-    fn host_callback_name_bytes(&self) -> Result<usize> {
+    pub(crate) fn host_callback_name_bytes(&self) -> Result<usize> {
         self.host_functions
             .iter()
             .try_fold(0_usize, |total, function| {
@@ -269,20 +269,44 @@ impl Context {
             })
     }
 
-    fn output_payload_bytes(&self) -> Result<usize> {
-        self.output.iter().try_fold(0_usize, |total, entry| {
-            total
-                .checked_add(entry.len())
-                .ok_or_else(|| Error::limit("output payload bytes overflowed"))
-        })
+    const fn output_payload_bytes(&self) -> usize {
+        self.output_payload_bytes
     }
 
-    fn source_record_bytes(&self) -> Result<usize> {
+    pub(crate) fn source_record_bytes(&self) -> Result<usize> {
         self.functions.iter().try_fold(0_usize, |total, function| {
             total
                 .checked_add(function.source.as_deref().map_or(0, str::len))
                 .ok_or_else(|| Error::limit("source record bytes overflowed"))
         })
+    }
+
+    pub(crate) fn source_record_count(&self) -> usize {
+        self.functions
+            .iter()
+            .filter(|function| function.source.is_some())
+            .count()
+    }
+
+    pub(crate) fn ensure_storage_totals(
+        &self,
+        kind: VmStorageKind,
+        projected_count: usize,
+        projected_payload_bytes: usize,
+    ) -> Result<()> {
+        let max_count = self.limits.storage.max_count(kind);
+        if projected_count > max_count {
+            return Err(Error::limit(format!(
+                "{kind:?} record count exceeded {max_count}"
+            )));
+        }
+        let max_payload_bytes = self.limits.storage.max_payload_bytes(kind);
+        if projected_payload_bytes > max_payload_bytes {
+            return Err(Error::limit(format!(
+                "{kind:?} payload bytes exceeded {max_payload_bytes}"
+            )));
+        }
+        Ok(())
     }
 
     fn record_binding_storage(&self, counter: &mut StorageCounter) -> Result<()> {

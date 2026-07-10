@@ -20,14 +20,18 @@ pub struct AtomTable {
     entries: Vec<AtomEntry>,
     names: Vec<String>,
     bytes: usize,
+    max_count: usize,
+    max_bytes: usize,
 }
 
 impl AtomTable {
-    pub const fn new() -> Self {
+    pub const fn new(max_count: usize, max_bytes: usize) -> Self {
         Self {
             entries: Vec::new(),
             names: Vec::new(),
             bytes: 0,
+            max_count,
+            max_bytes,
         }
     }
 
@@ -57,6 +61,12 @@ impl AtomTable {
         };
 
         let id = AtomId::from_index(self.names.len())?;
+        if self.names.len() >= self.max_count {
+            return Err(Error::limit(format!(
+                "Atom record count exceeded {}",
+                self.max_count
+            )));
+        }
         if position > self.entries.len() {
             return Err(Error::runtime("atom index insert position is out of range"));
         }
@@ -64,6 +74,12 @@ impl AtomTable {
             .bytes
             .checked_add(name.len())
             .ok_or_else(|| Error::limit("atom table byte count overflowed"))?;
+        if updated_bytes > self.max_bytes {
+            return Err(Error::limit(format!(
+                "Atom payload bytes exceeded {}",
+                self.max_bytes
+            )));
+        }
         let name = name.to_owned();
         self.names.push(name.clone());
         self.entries.insert(position, AtomEntry::new(name, id));

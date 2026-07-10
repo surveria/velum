@@ -13,7 +13,7 @@ use crate::runtime::{
 use crate::value::Value;
 use std::time::Duration;
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct EngineConfig {
     default_vm_config: VmConfig,
 }
@@ -25,12 +25,12 @@ impl EngineConfig {
     }
 
     #[must_use]
-    pub const fn default_vm_config(self) -> VmConfig {
-        self.default_vm_config
+    pub fn default_vm_config(&self) -> VmConfig {
+        self.default_vm_config.clone()
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Engine {
     config: EngineConfig,
 }
@@ -47,8 +47,8 @@ impl Engine {
     }
 
     #[must_use]
-    pub const fn config(&self) -> EngineConfig {
-        self.config
+    pub fn config(&self) -> EngineConfig {
+        self.config.clone()
     }
 
     #[must_use]
@@ -74,7 +74,7 @@ impl Default for Engine {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct VmConfig {
     limits: RuntimeLimits,
 }
@@ -86,8 +86,8 @@ impl VmConfig {
     }
 
     #[must_use]
-    pub const fn limits(self) -> RuntimeLimits {
-        self.limits
+    pub fn limits(&self) -> RuntimeLimits {
+        self.limits.clone()
     }
 }
 
@@ -105,9 +105,10 @@ impl Vm {
 
     #[must_use]
     pub fn with_config(config: VmConfig) -> Self {
+        let limits = config.limits();
         Self {
             config,
-            context: Context::new(config.limits()),
+            context: Context::new(limits),
         }
     }
 
@@ -119,15 +120,16 @@ impl Vm {
     where
         F: Fn() -> Duration + 'static,
     {
+        let limits = config.limits();
         Self {
             config,
-            context: Context::with_monotonic_clock(config.limits(), read),
+            context: Context::with_monotonic_clock(limits, read),
         }
     }
 
     #[must_use]
-    pub const fn config(&self) -> VmConfig {
-        self.config
+    pub fn config(&self) -> VmConfig {
+        self.config.clone()
     }
 
     /// Returns the opaque identity of this VM-owned storage generation.

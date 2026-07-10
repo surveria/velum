@@ -362,6 +362,21 @@ impl Context {
         }
         self.check_string_len(&name)?;
 
+        let projected_count = self
+            .host_functions
+            .len()
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("host callback count overflowed"))?;
+        let projected_payload_bytes = self
+            .host_callback_name_bytes()?
+            .checked_add(name.len())
+            .ok_or_else(|| Error::limit("host callback name bytes overflowed"))?;
+        self.ensure_storage_totals(
+            crate::runtime::VmStorageKind::HostCallback,
+            projected_count,
+            projected_payload_bytes,
+        )?;
+
         let id = HostFunctionId::new(self.host_functions.len());
         let binding_name = name.clone();
         self.host_functions

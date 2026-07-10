@@ -23,13 +23,13 @@ impl Runtime {
     }
 
     #[must_use]
-    pub const fn limits(&self) -> RuntimeLimits {
-        self.limits
+    pub fn limits(&self) -> RuntimeLimits {
+        self.limits.clone()
     }
 
     #[must_use]
     pub fn context(&self) -> Context {
-        Context::new(self.limits)
+        Context::new(self.limits.clone())
     }
 
     /// Creates a context with an embedder-provided monotonic clock source.
@@ -40,13 +40,13 @@ impl Runtime {
     where
         F: Fn() -> Duration + 'static,
     {
-        Context::with_monotonic_clock(self.limits, read)
+        Context::with_monotonic_clock(self.limits.clone(), read)
     }
 
     /// # Errors
     /// Fails when lexing, parsing, or configured compile-time resource limits fail.
     pub fn compile(&self, source: &str) -> Result<CompiledScript> {
-        CompiledScript::compile(source, self.limits)
+        CompiledScript::compile(source, self.limits.clone())
     }
 
     /// Compiles source with a stable embedder-provided diagnostic name.
@@ -55,7 +55,7 @@ impl Runtime {
     /// Fails when the source name exceeds configured string limits, or when
     /// lexing, parsing, or configured compile-time resource limits fail.
     pub fn compile_named(&self, source_name: &str, source: &str) -> Result<CompiledScript> {
-        CompiledScript::compile_named(source_name, source, self.limits)
+        CompiledScript::compile_named(source_name, source, self.limits.clone())
     }
 }
 

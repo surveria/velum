@@ -1,5 +1,6 @@
 use crate::{
     error::{Error, Result},
+    runtime::limits::VmStorageLimits,
     value::ObjectId,
 };
 
@@ -46,16 +47,24 @@ pub struct ObjectHeap {
     pub(super) shapes: ShapeTable,
     pub(super) object_prototype: Option<ObjectId>,
     pub(super) array_prototype: Option<ObjectId>,
+    pub(super) storage_limits: VmStorageLimits,
+    pub(super) object_payload_bytes: usize,
+    pub(super) byte_buffer_count: usize,
+    pub(super) byte_buffer_payload_bytes: usize,
     prototype_lookup_version: PrototypeLookupVersion,
 }
 
 impl ObjectHeap {
-    pub const fn new() -> Self {
+    pub const fn new(storage_limits: VmStorageLimits) -> Self {
         Self {
             objects: Vec::new(),
             shapes: ShapeTable::new(),
             object_prototype: None,
             array_prototype: None,
+            storage_limits,
+            object_payload_bytes: 0,
+            byte_buffer_count: 0,
+            byte_buffer_payload_bytes: 0,
             prototype_lookup_version: PrototypeLookupVersion::initial(),
         }
     }

@@ -585,6 +585,22 @@ impl Context {
         id: FunctionId,
         source: Rc<str>,
     ) -> Result<()> {
+        let previous_bytes = self.function(id)?.source.as_deref().map_or(0, str::len);
+        let additional_count = usize::from(self.function(id)?.source.is_none());
+        let projected_count = self
+            .source_record_count()
+            .checked_add(additional_count)
+            .ok_or_else(|| Error::limit("source record count overflowed"))?;
+        let projected_payload_bytes = self
+            .source_record_bytes()?
+            .checked_sub(previous_bytes)
+            .and_then(|bytes| bytes.checked_add(source.len()))
+            .ok_or_else(|| Error::limit("source record payload bytes overflowed"))?;
+        self.ensure_storage_totals(
+            crate::runtime::VmStorageKind::SourceRecord,
+            projected_count,
+            projected_payload_bytes,
+        )?;
         self.function_mut(id)?.source = Some(source);
         Ok(())
     }
