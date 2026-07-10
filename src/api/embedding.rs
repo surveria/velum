@@ -2,6 +2,7 @@ use crate::api::host::{HostCall, IntoJsValue};
 use crate::compiled_script::CompiledScript;
 use crate::error::Result;
 use crate::runtime::Context;
+use crate::runtime::VmIdentity;
 use crate::runtime::limits::RuntimeLimits;
 use crate::value::Value;
 use std::time::Duration;
@@ -84,7 +85,7 @@ impl VmConfig {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Vm {
     config: VmConfig,
     context: Context,
@@ -121,6 +122,12 @@ impl Vm {
     #[must_use]
     pub const fn config(&self) -> VmConfig {
         self.config
+    }
+
+    /// Returns the opaque identity of this VM-owned storage generation.
+    #[must_use]
+    pub const fn identity(&self) -> &VmIdentity {
+        self.context.identity()
     }
 
     #[must_use]

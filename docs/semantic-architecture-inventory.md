@@ -356,7 +356,7 @@ The engine already has a useful JavaScript `Completion` enum with `Normal`,
 | Reference errors | `reference_error_undefined` and `reference_error_uninitialized` create typed ReferenceError requests that become ordinary objects in the active VM | AS-04a merged in PR #416; AS-04b1 merged in PR #418 |
 | Accessors and native callbacks | Completion conversion preserves primitive, Symbol, object, and Error throws; public host callbacks may use `Error::javascript(value)` intentionally | AS-04a merged in PR #416 |
 | Error instances | `Value::Object(ObjectId)` with ordinary properties/prototype plus an `error_metadata` internal slot | AS-04b1 merged in PR #418; no synthetic property or equality path remains |
-| Source diagnostics | `CompiledScript` owns deterministic `SourceId` plus an optional bounded source name; tokens, lexer/parser errors, every recursive frontend AST node, and instruction-aligned bytecode metadata carry canonical `SourceSpan` ranges; structured runtime diagnostics expose the executing range | AS-04b2a merged in PR #419; AS-04b2b1 merged in PR #420; AS-04b2b2 implemented in draft PR #421 without retaining source text or AST |
+| Source diagnostics | `CompiledScript` owns deterministic `SourceId` plus an optional bounded source name; tokens, lexer/parser errors, every recursive frontend AST node, and instruction-aligned bytecode metadata carry canonical `SourceSpan` ranges; structured runtime diagnostics expose the executing range | AS-04b2a merged in PR #419; AS-04b2b1 merged in PR #420; AS-04b2b2 merged in PR #421 without retaining source text or AST |
 
 Resource limits should continue to bypass JavaScript catch unless the embedding
 contract explicitly changes. Host failures and invariant failures also need
@@ -434,19 +434,22 @@ state how many bytes each owner retained.
 
 ### Public Handle Boundary
 
-- `Vm` and `Context` derive `Clone`.
-- cloning copies indexed stores but shares selected mutable state through
-  `Rc<Mutex<...>>` binding cells and `Rc<RefCell<Vec<u8>>>` buffers; host
-  callbacks and metadata are also shared through `Rc`;
+- `Vm` and `Context` are non-cloneable as of AS-05a1. The previous clone path
+  copied indexed stores while sharing selected binding cells, buffers,
+  callbacks, and metadata;
+- every Context owns an opaque `VmIdentity`: a private `Rc` capability plus an
+  explicit `VmGeneration`. Independent owners cannot alias and no mutable
+  process-global JavaScript state or wrapping numeric allocator is required;
 - `Vm::get_global` returns public `Value`, including raw VM-local ids;
 - `HostCall` exposes borrowed public `Value` arguments;
 - host return validation rejects Function, NativeFunction, HostFunction, and
-  Object, but permits `HeapString`, `Symbol`, and `Error`, which can still carry
+  Object, but permits `HeapString` and `Symbol`, which can still carry
   VM-derived identity/data;
-- ids have neither VM identity nor generation checks.
+- raw `Value` ids still have neither an attached VM identity nor generation
+  check. The identity foundation alone does not make public transfer safe.
 
-AS-05a must define owned cross-VM primitives versus VM-bound local handles
-before public object/function/promise handles are expanded.
+AS-05a2 must define owned cross-VM primitives versus identity-stamped VM-local
+handles before public object/function/promise handles are expanded.
 
 ### Provisional Root Set For AS-05b
 
@@ -541,8 +544,9 @@ decision sequence:
 | AS-04b1 | inline Error representation | ordinary Error object identity and one metadata internal slot merged in PR #418; `Value::Error` and synthetic semantic branches are deleted |
 | AS-04b2a | frontend source diagnostics | canonical source ids, named compilation, and structured lexer/parser errors merged in PR #419 without retaining source text or parser AST |
 | AS-04b2b1 | frontend AST source ranges | canonical token ranges and span-bearing expression/statement AST merged in PR #420 without runtime AST retention |
-| AS-04b2b2 | bytecode/runtime source diagnostics | instruction-aligned span side tables and structured executing ranges implemented in draft PR #421 across normal and linear execution |
-| AS-05a/b | id, clone, store, root, handle, and limit maps | remove ambiguous VM cloning; add VM identity/generation and root/accounting contracts |
+| AS-04b2b2 | bytecode/runtime source diagnostics | instruction-aligned span side tables and structured executing ranges merged in PR #421 across normal and linear execution |
+| AS-05a1 | clone and VM owner map | non-cloneable Vm/Context plus opaque owner capability and explicit generation implemented in draft PR #422 |
+| AS-05a2/b | id, store, root, handle, and limit maps | attach identity/generation at public value boundaries; add root/accounting contracts |
 | AS-06 | active execution roots and structured nested bytecode | explicit activation/block stacks and suspend/resume results |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |
 | AS-08 | caches, direct calls, linear/function/control paths, harness opcodes | one optimizer owner, optimizer-off equivalence, and removal of source-name semantics |
@@ -562,7 +566,7 @@ must fail on growth.
 | semantic duplicates | the AS-03a1 equality owner, the AS-03a2 primitive/number/string/boolean owners, the AS-03b1a property-key owner, the AS-03b1b integer/length/index owners, and the AS-02c callable/constructor predicates | a new definition instead of delegation to an existing shared operation |
 | object side tables | Promise, collection, and iterator associations recorded above; bound-function payload store | a new object-id-indexed association without an inventory/plan update |
 | optimization owners | current linear/function/control modules | a new workload-shaped control module or compiler source-shape recognizer without plan evidence |
-| clone debt | current `Clone` implementations on `Vm` and `Context` | another public VM-state clone boundary or use of cloning as handle transfer |
+| VM clone boundary | no `Clone` implementation on `Vm` or `Context`; one capability identity/generation owner | reintroducing public VM-state cloning, removing the identity owner, or using cloning as handle transfer |
 
 The script should report the specific changed boundary and point to this
 document. It should run from `scripts/check-fast.sh` and the correctness gate,

@@ -25,8 +25,8 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 through AS-04b2b1 are complete; AS-04b2b2
-  bytecode/runtime source spans are implemented in draft PR #421
+- Current program state: AS-01 through AS-04 are complete; AS-05a1
+  non-cloneable VM identity is implemented in draft PR #422
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -482,8 +482,8 @@ dependencies do not overlap.
 | AS-01 | Complete | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards merged in PR #399 with required CI and canonical report publication. |
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
-| AS-04 | In progress | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans are implemented in draft PR #421. |
-| AS-05 | Backlog | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | Non-cloneable VM state, checked cross-VM boundaries, trace/root contract, heap/stack/job/buffer counters and limits. |
+| AS-04 | Complete | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans merged in PR #421 with exact-tree correctness and canonical report publication. |
+| AS-05 | In progress | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 non-cloneable VM identity is implemented in draft PR #422; checked public local/owned values, trace/root contract, and heap/stack/job/buffer counters and limits remain. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
 | AS-08 | Backlog | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | Optimizer on/off equivalence, harness opcodes removed, workload-shaped paths replaced or justified by broad evidence. |
@@ -1173,6 +1173,17 @@ AS-04b2b2 local implementation evidence:
   `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T134839Z.*` for
   tested tree `cbf27db19721ea28dfaf073c11819792ab389647`.
 
+AS-04b2b2 completion evidence:
+
+- PR #421 merged as `13b0bbe` after required CI run `29097737538`
+  certified exact tree `461b2229cf8379255261841630f065707725cd81`;
+- the required corpus preserved all 36,659 expected Test262 variants, the
+  exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
+  cases;
+- post-merge run `29097960654` measured all five project sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T135712Z.*` in
+  report-only commit `88a2f52`.
+
 ### AS-05: Ownership, Handles, Roots, And Accounting
 
 Required outcomes:
@@ -1185,6 +1196,39 @@ Required outcomes:
 - stack, atom, string, object, property, buffer, job, module, callback, and
   output budgets are visible in the embedding API;
 - teardown reports account for every owner.
+
+AS-05 is split at ownership boundaries:
+
+1. AS-05a1 removes ambiguous `Vm`/`Context` cloning and establishes one opaque
+   capability identity plus an explicit storage generation for every Context.
+   It does not claim that raw public `Value` is safe to transfer yet;
+2. AS-05a2 introduces explicit owned primitives and VM-local values, stamps
+   every public id-bearing value with the owner identity/generation, validates
+   all embedding and host callback crossings, and defines retained-handle
+   behavior;
+3. AS-05b1 defines trace edges and enumerates all engine, activation, job, and
+   embedder roots without adding a collector;
+4. AS-05b2 adds complete per-owner byte/count accounting, hard limits, and a
+   teardown report that can reconcile every VM store.
+
+AS-05a1 local implementation evidence:
+
+- `Vm` and `Context` no longer implement `Clone`; independent VM construction
+  cannot copy indexed stores while sharing binding cells, buffers, callbacks,
+  or metadata;
+- `VmIdentity` uses a private `Rc` owner capability rather than mutable global
+  numbering. Independently created identities cannot alias, while a clone
+  keeps the owner token alive and prevents accidental reuse;
+- `VmGeneration` is an explicit part of the identity contract. The current
+  append-only stores create one non-reused generation per VM; future reset or
+  slot reuse must advance or replace it before a stale handle can validate;
+- `Vm::identity` and `Context::identity` expose the same opaque identity for
+  embedding diagnostics without exposing a forgeable numeric id;
+- focused tests cover independent VM and Runtime context identities, shared
+  Vm/Context ownership, identity cloning, and initial generation behavior;
+- the architecture guard fixes the new Context owner field and capability /
+  generation representation, and rejects reintroducing `Clone` on either
+  public VM owner.
 
 ### AS-06: Resumable Execution
 
@@ -1300,16 +1344,18 @@ reviewable scope.
 17. AS-04b2b1: carry canonical token ranges through a span-bearing frontend AST
     (complete in PR #420).
 18. AS-04b2b2: lower AST ranges into parallel bytecode metadata and expose the
-    executing range on structured runtime diagnostics (implemented in draft
-    PR #421).
-19. AS-05a: remove ambiguous VM cloning and define VM-bound handle identity.
-20. AS-05b: add root enumeration plus complete allocation accounting and
-    limits.
-21. AS-06a: migrate synchronous calls and structured control flow to explicit
+    executing range on structured runtime diagnostics (complete in PR #421).
+19. AS-05a1: remove ambiguous VM cloning and establish VM identity/generation
+    (implemented in draft PR #422).
+20. AS-05a2: define checked owned/local values and host handle boundaries.
+21. AS-05b1: enumerate all strong and weak roots without adding collection.
+22. AS-05b2: add complete allocation accounting, hard limits, and teardown
+    reconciliation.
+23. AS-06a: migrate synchronous calls and structured control flow to explicit
     activation frames.
-22. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
-23. AS-07a: add safe collection over explicit roots and correct weak edges.
-24. AS-08a: move reusable optimization state behind one optimizer/quickening
+24. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
+25. AS-07a: add safe collection over explicit roots and correct weak edges.
+26. AS-08a: move reusable optimization state behind one optimizer/quickening
     boundary and remove harness-specific opcodes.
 
 ## Updating This Plan
