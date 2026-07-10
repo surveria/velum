@@ -1164,8 +1164,14 @@ AS-04b2b2 local implementation evidence:
   span owner, atomic emit, the two runtime execution owners, and structured
   Error span fields. Its mutation self-test rejects removal of the bytecode
   side table;
-- full engine/runner and complete correctness gates remain the ready-PR
-  validation steps.
+- the complete engine suite, 118-test runner suite, strict Clippy,
+  documentation, architecture mutation self-tests, and touched-file size gate
+  pass;
+- the complete local correctness gate preserves all 36,659 expected Test262
+  variants and the exact 36,659 of 102,578 full pass set, with QuickJS
+  differential unchanged at 95 of 95. Local evidence is
+  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260710T134839Z.*` for
+  tested tree `cbf27db19721ea28dfaf073c11819792ab389647`.
 
 ### AS-05: Ownership, Handles, Roots, And Accounting
 
