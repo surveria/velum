@@ -18,12 +18,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260710T204151Z.md`
-- Task: PR #436: AS-05b2c3: enforce transient and asynchronous VM storage limits
-- Performance: 5.48x (4/5 >1.00x) (from `rsqjs-test-report-20260710T204151Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T204151Z.md`)
+- `rsqjs-test-report-20260710T205011Z.md`
+- Task: PR #437: runner: simplify chart lines and show latest values
+- Performance: 5.45x (4/5 >1.00x) (from `rsqjs-test-report-20260710T205011Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T205011Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T204151Z.md`)
+- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T205011Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -423,3 +423,4 @@ Latest report:
 | `20260710T194046Z` `db704bd` PR #434: AS-05b2c1: establish storage limit policy and payload owner enforcement | 5.53x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T202058Z` `5729920` PR #435: AS-05b2c2: enforce durable binding, callable, property, and cache limits | 5.50x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T204151Z` `4a3afaf` PR #436: AS-05b2c3: enforce transient and asynchronous VM storage limits | 5.48x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
+| `20260710T205011Z` `c21e594` PR #437: runner: simplify chart lines and show latest values | 5.45x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
