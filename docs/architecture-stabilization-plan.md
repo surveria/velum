@@ -1228,7 +1228,10 @@ AS-05a1 local implementation evidence:
   Vm/Context ownership, identity cloning, and initial generation behavior;
 - the architecture guard fixes the new Context owner field and capability /
   generation representation, and rejects reintroducing `Clone` on either
-  public VM owner.
+  public VM owner;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
 
 ### AS-06: Resumable Execution
 
