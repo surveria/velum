@@ -706,11 +706,15 @@ impl Object {
         } else {
             let property = ObjectProperty::from_descriptor(update.complete_for_new());
             let is_enumerable = property.is_enumerable();
+            let reservation = self.reserve_property_growth()?;
             let previous = self.array_storage.insert_dense_property(index, property)?;
             if previous.is_some() {
                 return Err(crate::error::Error::runtime(
                     "array index storage replaced existing slot",
                 ));
+            }
+            if let Some(reservation) = reservation {
+                reservation.commit()?;
             }
             if is_enumerable {
                 self.enumerable_property_count = self.enumerable_property_count.saturating_add(1);

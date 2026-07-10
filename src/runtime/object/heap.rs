@@ -473,7 +473,11 @@ impl ObjectHeap {
         self.bump_prototype_lookup_version()
     }
 
-    pub(super) fn push_object(&mut self, object: Object, max_objects: usize) -> Result<ObjectId> {
+    pub(super) fn push_object(
+        &mut self,
+        mut object: Object,
+        max_objects: usize,
+    ) -> Result<ObjectId> {
         let owner_limit = self.storage_limits.max_count(VmStorageKind::Object);
         let effective_limit = max_objects.min(owner_limit);
         if self.objects.len() >= effective_limit {
@@ -511,6 +515,8 @@ impl ObjectHeap {
             self.storage_limits
                 .max_payload_bytes(VmStorageKind::ByteBuffer),
         )?;
+
+        object.activate_storage(self.storage_ledger.clone())?;
 
         let id = ObjectId::new(self.objects.len());
         self.objects.push(object);

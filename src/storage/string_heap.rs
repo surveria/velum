@@ -144,6 +144,10 @@ impl StringHeap {
         self.entries.len()
     }
 
+    pub(crate) fn contains(&self, text: &str) -> bool {
+        self.entries.contains_key(text)
+    }
+
     pub fn intern(&mut self, text: &str) -> Result<JsString> {
         if let Some(id) = self.entries.get(text).copied() {
             return self.js_string(id);

@@ -1,4 +1,7 @@
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    runtime::{VmStorageKind, storage_ledger::VmStorageLedger},
+};
 
 use super::PropertyKey;
 
@@ -87,14 +90,18 @@ impl Default for ShapeId {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub(super) struct ShapeTable {
     shapes: Vec<Shape>,
+    storage_ledger: VmStorageLedger,
 }
 
 impl ShapeTable {
-    pub(super) const fn new() -> Self {
-        Self { shapes: Vec::new() }
+    pub(super) const fn new(storage_ledger: VmStorageLedger) -> Self {
+        Self {
+            shapes: Vec::new(),
+            storage_ledger,
+        }
     }
 
     pub(super) const fn len(&self) -> usize {
@@ -215,6 +222,15 @@ impl ShapeTable {
         }
 
         let id = ShapeId::from_storage_index(self.shapes.len())?;
+        let cache_entries = properties
+            .len()
+            .checked_mul(2)
+            .and_then(|count| count.checked_add(1))
+            .ok_or_else(|| Error::limit("shape cache entry count overflowed"))?;
+        let reservation = self
+            .storage_ledger
+            .reserve_count(VmStorageKind::CacheEntry, cache_entries)?;
+        reservation.commit()?;
         self.shapes.push(Shape::from_properties(properties));
         Ok(id)
     }

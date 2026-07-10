@@ -22,6 +22,7 @@ mod fast_path;
 mod intrinsic;
 mod parameters;
 mod properties;
+mod storage;
 mod upvalues;
 
 use crate::runtime::native::{
@@ -157,8 +158,21 @@ impl Context {
             &param_frames,
             init.bytecode.has_parameter_defaults(),
         )?;
+        let param_binding_ids = parameters::function_param_binding_ids(params);
+        let metadata_cache_count = Self::function_metadata_cache_count(
+            param_binding_ids.len(),
+            param_atoms.len(),
+            param_frames.len(),
+            fast_path.is_some(),
+            scope_template.as_deref(),
+        )?;
+        let properties = self.activate_function_storage(
+            upvalues.cells.len(),
+            metadata_cache_count,
+            FunctionProperties::new(prototype, intrinsic_defaults),
+        )?;
         self.functions.push(super::Function {
-            param_binding_ids: parameters::function_param_binding_ids(params),
+            param_binding_ids,
             param_atoms,
             param_frames,
             bytecode: init.bytecode.clone(),
@@ -168,7 +182,7 @@ impl Context {
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
-            properties: FunctionProperties::new(prototype, intrinsic_defaults),
+            properties,
             constructable: init.constructable,
             is_async: init.is_async,
             class_constructor: init.class_constructor,
@@ -323,21 +337,7 @@ impl Context {
                 return Err(error);
             }
         };
-        if binds_arguments {
-            let Some(original_args) = original_args.as_deref() else {
-                self.leave_function_local_frame(local_base)?;
-                return Err(Error::runtime("function arguments source disappeared"));
-            };
-            match self.arguments_wrapper_scope(original_args) {
-                Ok(wrapper) => self.locals.push(wrapper),
-                Err(error) => {
-                    self.leave_function_local_frame(local_base)?;
-                    return Err(error);
-                }
-            }
-        }
-        self.locals.push(scope);
-        self.upvalue_frames.push(upvalues);
+        self.push_function_binding_storage(local_base, scope, original_args.as_deref(), upvalues)?;
         self.this_values.push(this_value);
         self.new_target_values.push(new_target);
         self.super_frames.push(super_binding);
@@ -352,10 +352,7 @@ impl Context {
         let removed_super = self.super_frames.pop();
         let removed_new_target = self.new_target_values.pop();
         let removed_this = self.this_values.pop();
-        let removed_upvalues = self.upvalue_frames.pop();
-        let expected_local_count = expected_function_local_count(local_base, binds_arguments)?;
-        let local_scope_stack_ok = self.locals.len() == expected_local_count;
-        self.leave_function_local_frame(local_base)?;
+        self.pop_function_binding_storage(local_base, binds_arguments)?;
         if removed_this.is_none() {
             return Err(Error::runtime("function this binding disappeared"));
         }
@@ -364,12 +361,6 @@ impl Context {
         }
         if removed_new_target.is_none() {
             return Err(Error::runtime("function new.target binding disappeared"));
-        }
-        if removed_upvalues.is_none() {
-            return Err(Error::runtime("function upvalue frame disappeared"));
-        }
-        if !local_scope_stack_ok {
-            return Err(Error::runtime("function local scope stack mismatch"));
         }
         result
     }
@@ -509,7 +500,7 @@ impl Context {
     ) -> Result<bool> {
         let property_kind = FunctionPropertyKind::from_name(property.name());
         let function = self.function_mut(id)?;
-        Ok(function.properties.delete(property, property_kind))
+        function.properties.delete(property, property_kind)
     }
 
     pub(crate) fn function_enumerable_keys(&self, id: FunctionId) -> Result<Vec<String>> {
@@ -778,7 +769,7 @@ impl Context {
             return Ok(false);
         }
         let function = self.native_function_mut(id)?;
-        Ok(function.properties_mut().delete(property, property_kind))
+        function.properties_mut().delete(property, property_kind)
     }
 
     pub(crate) fn native_function_enumerable_keys(

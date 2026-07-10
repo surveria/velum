@@ -253,6 +253,46 @@ impl NativeFunctionRegistry {
         *entry = Some(id);
         Ok(())
     }
+
+    pub(in crate::runtime) fn insertion_adds_entry(
+        &self,
+        kind: NativeFunctionKind,
+        id: NativeFunctionId,
+    ) -> Result<bool> {
+        let Some(slot) = slot(kind) else {
+            return Ok(false);
+        };
+        let entry = self
+            .slots
+            .get(slot.index())
+            .ok_or_else(|| Error::runtime("native function registry slot is not defined"))?;
+        if let Some(existing) = *entry {
+            if existing == id {
+                return Ok(false);
+            }
+            return Err(Error::runtime("native function kind is already registered"));
+        }
+        Ok(true)
+    }
+
+    pub(in crate::runtime) fn remove(
+        &mut self,
+        kind: NativeFunctionKind,
+        id: NativeFunctionId,
+    ) -> Result<bool> {
+        let Some(slot) = slot(kind) else {
+            return Ok(false);
+        };
+        let entry = self
+            .slots
+            .get_mut(slot.index())
+            .ok_or_else(|| Error::runtime("native function registry slot is not defined"))?;
+        if *entry != Some(id) {
+            return Err(Error::runtime("native function registry rollback mismatch"));
+        }
+        *entry = None;
+        Ok(true)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

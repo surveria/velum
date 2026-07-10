@@ -46,7 +46,7 @@ impl Context {
         let key = self.intern_property_key(name)?;
         self.native_function_mut(constructor)?
             .properties_mut()
-            .define_builtin(key, function, PropertyEnumerable::No);
+            .define_builtin(key, function, PropertyEnumerable::No)?;
         Ok(())
     }
 

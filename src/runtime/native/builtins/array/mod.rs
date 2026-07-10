@@ -515,7 +515,7 @@ impl Context {
         let key = self.intern_property_key(ARRAY_IS_ARRAY_PROPERTY)?;
         self.native_function_mut(constructor)?
             .properties_mut()
-            .define_builtin(key, is_array, PropertyEnumerable::No);
+            .define_builtin(key, is_array, PropertyEnumerable::No)?;
         Ok(())
     }
 

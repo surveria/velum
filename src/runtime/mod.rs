@@ -39,6 +39,7 @@ pub mod property;
 pub mod retained_values;
 mod roots;
 mod semantic_object;
+mod storage_ledger;
 mod trace;
 mod transient_roots;
 pub mod values;
@@ -56,6 +57,7 @@ use property::well_known::{DescriptorPropertyKeys, WellKnownPropertyKeys};
 pub use retained_values::RetainedValue;
 use retained_values::RetainedValueRegistry;
 pub use roots::{VmRootKind, VmRootSnapshot};
+use storage_ledger::VmStorageLedger;
 pub use trace::{
     VmCallableEdgeKind, VmCallableEdgeSnapshot, VmObjectEdgeKind, VmObjectEdgeSnapshot,
 };
@@ -69,6 +71,7 @@ const TEST262_ERROR_NAME: &str = "Test262Error";
 pub struct Context {
     identity: VmIdentity,
     limits: RuntimeLimits,
+    storage_ledger: VmStorageLedger,
     atoms: AtomTable,
     strings: StringHeap,
     symbols: SymbolTable,
@@ -232,7 +235,12 @@ impl Context {
     }
 
     pub(crate) fn leave_function_local_frame(&mut self, base: usize) -> Result<()> {
-        self.locals.truncate(base);
+        while self.locals.len() > base {
+            let Some(mut scope) = self.locals.pop() else {
+                return Err(Error::runtime("function local scope disappeared"));
+            };
+            scope.deactivate_storage()?;
+        }
         let removed = self.local_frame_bases.pop();
         if removed != Some(base) {
             return Err(Error::runtime("function local frame base disappeared"));
@@ -271,9 +279,11 @@ impl Context {
     ) -> Self {
         let identity = VmIdentity::new();
         let storage_limits = limits.storage.clone();
+        let storage_ledger = VmStorageLedger::new(storage_limits.clone());
         Self {
             identity: identity.clone(),
             limits,
+            storage_ledger: storage_ledger.clone(),
             atoms: AtomTable::new(
                 storage_limits.max_count(VmStorageKind::Atom),
                 storage_limits.max_payload_bytes(VmStorageKind::Atom),
@@ -293,8 +303,8 @@ impl Context {
             static_name_atom_caches: Vec::new(),
             static_binding_caches: Vec::new(),
             static_binding_layouts: Vec::new(),
-            globals: BindingScope::new(),
-            builtin_globals: BindingScope::new(),
+            globals: BindingScope::new_active(storage_ledger.clone()),
+            builtin_globals: BindingScope::new_active(storage_ledger.clone()),
             locals: Vec::new(),
             local_frame_bases: Vec::new(),
             upvalue_frames: Vec::new(),
@@ -303,7 +313,7 @@ impl Context {
             native_function_registry: NativeFunctionRegistry::new(),
             bound_functions: Vec::new(),
             host_functions: Vec::new(),
-            objects: ObjectHeap::new(storage_limits),
+            objects: ObjectHeap::new(storage_limits, storage_ledger),
             global_object: None,
             collections: Vec::new(),
             collection_object_slots: Vec::new(),
@@ -685,15 +695,21 @@ impl Context {
         Ok(Some(id))
     }
 
-    pub(crate) fn push_lexical_scope(&mut self) {
-        self.locals.push(BindingScope::new());
+    pub(crate) fn push_lexical_scope(&mut self) -> Result<()> {
+        self.push_lexical_scope_with(BindingScope::new())
     }
 
-    pub(crate) fn push_lexical_scope_with(&mut self, scope: BindingScope) {
+    pub(crate) fn push_lexical_scope_with(&mut self, mut scope: BindingScope) -> Result<()> {
+        scope.activate_storage(self.storage_ledger.clone())?;
         self.locals.push(scope);
+        Ok(())
     }
 
-    pub(crate) fn pop_lexical_scope(&mut self) -> Option<BindingScope> {
-        self.locals.pop()
+    pub(crate) fn pop_lexical_scope(&mut self) -> Result<Option<BindingScope>> {
+        let Some(mut scope) = self.locals.pop() else {
+            return Ok(None);
+        };
+        scope.deactivate_storage()?;
+        Ok(Some(scope))
     }
 }

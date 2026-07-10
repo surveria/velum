@@ -124,6 +124,23 @@ impl WellKnownPropertyKeys {
         }
     }
 
+    pub(in crate::runtime) fn should_remember(&self, name: &str) -> bool {
+        self.lookup(name).is_none()
+            && matches!(
+                name,
+                CONFIGURABLE_PROPERTY
+                    | CONSTRUCTOR_PROPERTY
+                    | ENUMERABLE_PROPERTY
+                    | GET_PROPERTY
+                    | LENGTH_PROPERTY
+                    | NAME_PROPERTY
+                    | PROTOTYPE_PROPERTY
+                    | SET_PROPERTY
+                    | VALUE_PROPERTY
+                    | WRITABLE_PROPERTY
+            )
+    }
+
     pub(in crate::runtime) fn remember(&mut self, name: &str, key: PropertyKey) {
         match name {
             CONFIGURABLE_PROPERTY => self.configurable = Some(key),

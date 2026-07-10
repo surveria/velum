@@ -198,10 +198,14 @@ impl Context {
         this_value: Value,
         args: Vec<Value>,
     ) -> Result<Value> {
+        let prototype = self.function_constructor_prototype_value()?;
+        let reservation = self
+            .storage_ledger
+            .reserve_count(crate::runtime::VmStorageKind::BoundFunction, 1)?;
         let id = BoundFunctionId::new(self.bound_functions.len());
+        reservation.commit()?;
         self.bound_functions
             .push(BoundFunction::new(target, this_value, args));
-        let prototype = self.function_constructor_prototype_value()?;
         let result =
             self.create_ephemeral_native_function(NativeFunctionKind::BoundFunction(id), prototype);
         match result {
@@ -211,6 +215,8 @@ impl Context {
                 if removed.is_none() {
                     return Err(Error::runtime("bound function rollback failed"));
                 }
+                self.storage_ledger
+                    .release_count(crate::runtime::VmStorageKind::BoundFunction, 1)?;
                 Err(error)
             }
         }

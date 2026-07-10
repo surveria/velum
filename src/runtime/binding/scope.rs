@@ -5,7 +5,11 @@ use parking_lot::Mutex;
 use crate::{
     binding_metadata::ScopeId,
     error::{Error, Result},
-    runtime::control::reference_error_uninitialized,
+    runtime::{
+        VmStorageKind,
+        control::reference_error_uninitialized,
+        storage_ledger::{VmStorageLedger, VmStorageReservation},
+    },
     storage::atom::AtomId,
     syntax::DeclKind,
     value::Value,
@@ -95,11 +99,12 @@ fn unreachable_owned() -> (&'static mut Vec<AtomId>, &'static mut Vec<BindingEnt
     )
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct BindingScope {
     slots: Vec<BindingCell>,
     index: ScopeIndex,
     compiled_scope: Option<ScopeId>,
+    storage_ledger: Option<VmStorageLedger>,
 }
 
 impl Default for ScopeIndex {
@@ -114,6 +119,16 @@ impl BindingScope {
             slots: Vec::new(),
             index: ScopeIndex::new(),
             compiled_scope: None,
+            storage_ledger: None,
+        }
+    }
+
+    pub(in crate::runtime) const fn new_active(storage_ledger: VmStorageLedger) -> Self {
+        Self {
+            slots: Vec::new(),
+            index: ScopeIndex::new(),
+            compiled_scope: None,
+            storage_ledger: Some(storage_ledger),
         }
     }
 
@@ -128,6 +143,7 @@ impl BindingScope {
             slots,
             index: ScopeIndex::Shared(template),
             compiled_scope: Some(compiled_scope),
+            storage_ledger: None,
         }
     }
 
@@ -161,6 +177,7 @@ impl BindingScope {
                 bindings: template.bindings.into_vec(),
             },
             compiled_scope: Some(compiled_scope),
+            storage_ledger: None,
         })
     }
 
@@ -208,29 +225,35 @@ impl BindingScope {
         self.cell(slot).cloned()
     }
 
-    pub(crate) fn insert(&mut self, atom: AtomId, binding: BindingCell) -> BindingSlot {
+    pub(crate) fn insert(&mut self, atom: AtomId, binding: BindingCell) -> Result<BindingSlot> {
         self.insert_or_replace(atom, binding)
     }
 
-    pub(crate) fn insert_or_replace(&mut self, atom: AtomId, binding: BindingCell) -> BindingSlot {
+    pub(crate) fn insert_or_replace(
+        &mut self,
+        atom: AtomId,
+        binding: BindingCell,
+    ) -> Result<BindingSlot> {
         match self.binding_position(atom) {
             Ok(position) => {
                 let Some(entry) = self.index.bindings().get(position) else {
-                    return BindingSlot::from_index(self.slots.len());
+                    return Err(Error::runtime("binding index entry disappeared"));
                 };
                 let slot = entry.slot();
                 if let Some(existing) = self.cell_mut(slot) {
                     *existing = binding;
                 }
-                slot
+                Ok(slot)
             }
             Err(position) => {
+                let reservations = self.reserve_new_binding()?;
                 let slot = BindingSlot::from_index(self.slots.len());
+                Self::commit_new_binding(reservations)?;
                 self.slots.push(binding);
                 let (slot_atoms, bindings) = self.index.make_owned();
                 slot_atoms.push(atom);
                 bindings.insert(position, BindingEntry::new(atom, slot));
-                slot
+                Ok(slot)
             }
         }
     }
@@ -271,7 +294,7 @@ impl BindingScope {
         {
             return Ok(inserted);
         }
-        Ok(self.insert_or_replace(atom, binding))
+        self.insert_or_replace(atom, binding)
     }
 
     fn cell(&self, slot: BindingSlot) -> Option<&BindingCell> {
@@ -296,6 +319,8 @@ impl BindingScope {
         if slot_index > self.slots.len() {
             return Err(Error::runtime("binding frame slot gap is not supported"));
         }
+        let reservations = self.reserve_new_binding()?;
+        Self::commit_new_binding(reservations)?;
         self.slots.push(binding);
         let (slot_atoms, bindings) = self.index.make_owned();
         slot_atoms.push(atom);
@@ -323,7 +348,7 @@ impl BindingScope {
                 *existing = binding;
                 Ok(Some(slot))
             }
-            Err(position) => Ok(self.try_insert_new_at_slot(position, atom, binding, slot)),
+            Err(position) => self.try_insert_new_at_slot(position, atom, binding, slot),
         }
     }
 
@@ -333,15 +358,65 @@ impl BindingScope {
         atom: AtomId,
         binding: BindingCell,
         slot: BindingSlot,
-    ) -> Option<BindingSlot> {
+    ) -> Result<Option<BindingSlot>> {
         if slot.index() != self.slots.len() {
-            return None;
+            return Ok(None);
         }
+        let reservations = self.reserve_new_binding()?;
+        Self::commit_new_binding(reservations)?;
         self.slots.push(binding);
         let (slot_atoms, bindings) = self.index.make_owned();
         slot_atoms.push(atom);
         bindings.insert(position, BindingEntry::new(atom, slot));
-        Some(slot)
+        Ok(Some(slot))
+    }
+
+    pub(in crate::runtime) fn activate_storage(
+        &mut self,
+        storage_ledger: VmStorageLedger,
+    ) -> Result<()> {
+        if self.storage_ledger.is_some() {
+            return Err(Error::runtime("binding scope storage is already active"));
+        }
+        storage_ledger.grow_count(VmStorageKind::Binding, self.len())?;
+        let cache_entries = self.index_entry_count()?;
+        if let Err(error) = storage_ledger.grow_count(VmStorageKind::CacheEntry, cache_entries) {
+            storage_ledger.release_count(VmStorageKind::Binding, self.len())?;
+            return Err(error);
+        }
+        self.storage_ledger = Some(storage_ledger);
+        Ok(())
+    }
+
+    pub(in crate::runtime) fn deactivate_storage(&mut self) -> Result<()> {
+        let Some(storage_ledger) = self.storage_ledger.take() else {
+            return Ok(());
+        };
+        storage_ledger.release_count(VmStorageKind::Binding, self.len())?;
+        storage_ledger.release_count(VmStorageKind::CacheEntry, self.index_entry_count()?)
+    }
+
+    fn reserve_new_binding(
+        &self,
+    ) -> Result<(Option<VmStorageReservation>, Option<VmStorageReservation>)> {
+        let Some(storage_ledger) = &self.storage_ledger else {
+            return Ok((None, None));
+        };
+        let binding = storage_ledger.reserve_count(VmStorageKind::Binding, 1)?;
+        let cache = storage_ledger.reserve_count(VmStorageKind::CacheEntry, 2)?;
+        Ok((Some(binding), Some(cache)))
+    }
+
+    fn commit_new_binding(
+        reservations: (Option<VmStorageReservation>, Option<VmStorageReservation>),
+    ) -> Result<()> {
+        if let Some(binding) = reservations.0 {
+            binding.commit()?;
+        }
+        if let Some(cache) = reservations.1 {
+            cache.commit()?;
+        }
+        Ok(())
     }
 
     fn binding_position(&self, atom: AtomId) -> std::result::Result<usize, usize> {
