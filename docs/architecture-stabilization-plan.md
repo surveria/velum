@@ -25,9 +25,9 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01, AS-02, AS-03a1, AS-03a2, and AS-03b1a are
-  complete; AS-03b1b integer/length/index conversion is locally validated in
-  draft PR #413
+- Current program state: AS-01, AS-02, AS-03a1, AS-03a2, and AS-03b1 are
+  complete; AS-03b2 property/method/call operations are locally validated in
+  draft PR #414
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -482,7 +482,7 @@ dependencies do not overlap.
 | AS-00 | Complete | Adopt this plan and route project documentation to it. | None | PR #396 merged as `f79056b`; required CI, post-merge performance, publisher, and canonical report publication passed. |
 | AS-01 | Complete | Inventory semantic entrypoints and add architecture guards. | AS-00 | AS-01a merged in PR #398; AS-01b guards merged in PR #399 with required CI and canonical report publication. |
 | AS-02 | Complete | Introduce the unified semantic object and internal-method boundary. | AS-01 | AS-02a merged in PR #400; AS-02b1 merged in PR #401; AS-02b2 merged in PR #403; AS-02c merged in PR #408 with required CI and canonical report publication. |
-| AS-03 | In progress | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion is locally validated in draft PR #413; method/property and iterator operations remain. |
+| AS-03 | In progress | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations are locally validated in draft PR #414; iterator operations remain. |
 | AS-04 | Backlog | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | Real JavaScript error objects, typed throw path, no message-prefix classification, spans available to diagnostics. |
 | AS-05 | Backlog | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | Non-cloneable VM state, checked cross-VM boundaries, trace/root contract, heap/stack/job/buffer counters and limits. |
 | AS-06 | Backlog | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | Synchronous execution migrated without regressions; suspended/yielded outcomes preserve complete activation state. |
@@ -882,6 +882,42 @@ AS-03b1b local validation evidence:
   SpiderMonkey staging cases (8), Number (6), Object (4), String (2), and
   Uint8Array constructor behavior (2).
 
+AS-03b1b completion evidence:
+
+- PR #413 was squash-merged as `435b5f8`; required CI run `29085127624`
+  certified exact tree `c9f9e7f61810dec52925f1d40ec2dad962198120` at
+  36,185/36,185 expected Test262 variants and 95/95 QuickJS differential
+  cases;
+- post-merge run `29085347387` measured all five project sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T100811Z.*` in
+  report-only commit `86f8f4b`.
+
+AS-03b2 local validation evidence:
+
+- `Context::get`, `Context::set`, `Context::call`, and
+  `Context::get_method` in `runtime/abstract_operations/property_call.rs`
+  compose the AS-02 internal methods; named-key and native-value helpers only
+  adapt keys or completion results and do not repeat semantic dispatch;
+- `SetFailureBehavior` makes the specification's false-versus-throw choice
+  explicit. Reflect and Proxy fallback preserve an explicit receiver, while
+  RegExp `lastIndex` writes use the strict throw behavior;
+- generic runtime reads and calls, Proxy traps, `@@toPrimitive`,
+  `@@hasInstance`, Object invocation, and Set-record methods delegate to the
+  shared operations. The old `get_property_value`,
+  `get_property_value_with_lookup`, `eval_call_value`,
+  `eval_call_completion`, and local Proxy `GetMethod` facade are deleted;
+- focused public tests cover getter and call receivers, nullish methods,
+  non-callable rejection, abrupt getter completion, Symbol hooks, explicit Set
+  receivers, false writes, and strict non-writable RegExp writes;
+- the architecture guard fixes the abstract-operation owner set, rejects the
+  removed legacy facades, and exercises both failures in self-tests;
+- the complete engine/runner fast gate passes, including strict Clippy,
+  documentation, architecture self-tests, and 112 runner tests;
+- the complete Test262 review preserves all 36,185 prior expected variants and
+  adds 24 reviewed RegExp/staging passes for strict non-writable `lastIndex`
+  behavior, bringing the expected-pass baseline and full pass set to 36,209 of
+  102,578 with QuickJS differential unchanged at 95 of 95.
+
 ### AS-04: Completion, Errors, And Source Metadata
 
 Required migration steps:
@@ -1009,9 +1045,9 @@ reviewable scope.
 9. AS-03a2b: centralize `ToString` and `ToBoolean` (complete in PR #411).
 10. AS-03b1a: centralize `ToPropertyKey` (complete in PR #412).
 11. AS-03b1b: centralize `ToIntegerOrInfinity`, `ToLength`, and `ToIndex`
-    (implemented and locally validated in draft PR #413).
+    (complete in PR #413).
 12. AS-03b2: centralize `GetMethod` plus specification-level property and call
-    operations.
+    operations (implemented and locally validated in draft PR #414).
 13. AS-03b3: centralize iterator operations and iterator closing.
 14. AS-04a: separate JavaScript throw completion from engine/host/resource
    failures.

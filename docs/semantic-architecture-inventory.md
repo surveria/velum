@@ -186,9 +186,13 @@ proxies; several built-ins repeat the same matches.
 | Operation | Widest current facade | Physical and parallel paths | Required owner |
 | --- | --- | --- | --- |
 | `ToPropertyKey` | `Context::to_property_key` in `runtime/abstract_operations/conversion.rs`; `dynamic_property_key` is the interning/cache facade | AS-03b1a applies string-hint `ToPrimitive`, preserves Symbol identity, routes non-symbol primitives through shared `ToString`, and makes Object/Reflect/Proxy/dynamic bytecode consumers delegate | AS-03b1a complete in PR #412 |
-| `[[Get]]` | `Context::semantic_property_read[_with_receiver]` plus `finish_semantic_property_read` | AS-02b1 now owns object-like dispatch; `get_property_value` still owns primitive string/prototype behavior, while static caches optimize only the returned ordinary-object tail | AS-02b1 complete after PR #401; AS-03b later owns spec-level `Get`/primitive coercion |
+| `Get` | `Context::get` in `runtime/abstract_operations/property_call.rs`; `get_named` only adapts named keys | delegates object-like dispatch to AS-02b1, owns primitive string/prototype behavior, and leaves static caches as guarded backends rather than semantic owners | AS-03b2 locally complete in draft PR #414 |
+| `GetMethod` | `Context::get_method`; `get_named_method` only adapts named keys | composes shared `Get` with the AS-02c callable predicate; Proxy traps, `@@toPrimitive`, `@@hasInstance`, Object invocation, and Set-record methods delegate | AS-03b2 locally complete in draft PR #414 |
+| `Set` | `Context::set` with `SetFailureBehavior` | composes receiver-aware AS-02b2 `[[Set]]`; Reflect and Proxy use false-return behavior, while strict RegExp `lastIndex` writes throw | AS-03b2 locally complete in draft PR #414; bytecode assignment remains a guarded language-level path |
+| `Call` | `Context::call`; `call_value` only converts at native-value boundaries | composes AS-02c `semantic_call` and preserves `Completion`; generic consumers and cache misses delegate while guarded direct backends remain separate | AS-03b2 locally complete in draft PR #414 |
+| `[[Get]]` | `Context::semantic_property_read[_with_receiver]` plus `finish_semantic_property_read` | AS-02b1 owns object-like dispatch; the AS-03b2 `Get` operation owns specification composition, while static caches optimize only the returned ordinary-object tail | AS-02b1 complete after PR #401 |
 | `[[HasProperty]]` | `Context::semantic_property_presence` plus `finish_semantic_property_presence` | AS-02b1 now owns object-like dispatch; static presence caches optimize only the returned ordinary-object tail, while primitive rejection remains in the property layer | AS-02b1 complete after PR #401; AS-03b later owns the abstract operation |
-| `[[Set]]` | `semantic_property_write` plus `finish_semantic_property_write`; `semantic_reflect_property_write` for explicit receivers | Static/dynamic caches optimize only ordinary tails; physical accessor/object/function stores remain backends | AS-02b2 complete in PR #403; AS-03b later owns full strict/sloppy assignment semantics |
+| `[[Set]]` | `semantic_property_write` plus `finish_semantic_property_write`; `semantic_reflect_property_write` for explicit receivers | Static/dynamic caches optimize only ordinary tails; physical accessor/object/function stores remain backends; AS-03b2 `Set` chooses false versus throw | AS-02b2 complete in PR #403 |
 | `[[DefineOwnProperty]]` | `semantic_define_own_property_*` | ObjectHeap and function stores remain physical backends; function paths still reject accessors | AS-02b2 complete in PR #403 |
 | `[[Delete]]` | `semantic_property_delete` plus `finish_semantic_property_delete` | Static/dynamic caches optimize only ordinary tails; primitive fallback remains in `property::delete_property` | AS-02b2 complete in PR #403; AS-03b owns primitive coercion |
 | `[[OwnPropertyKeys]]` | `semantic_own_property_keys` plus string/Symbol projections | ObjectHeap and function key stores remain physical backends; Proxy order and Symbol identity are preserved | AS-02b2 complete in PR #403 |
@@ -212,16 +216,17 @@ proxies; several built-ins repeat the same matches.
   now receive an explicit generic `ObjectHeap` tail instead of repeating that
   dispatch.
 - `property::get_property` and `property::has_property` cover fewer value kinds
-  than the similarly named `Context` facades. Their generic names make the
-  distinction easy to miss.
+  than `Context::get` and the semantic presence facade. They are physical
+  backends, despite their generic names.
 - Static-name caches now receive only explicit ordinary-object tails from the
   semantic facade; the remaining cache code owns shape/version mechanics, not
   value-kind dispatch.
 
-For new compatibility code after AS-02b, use the semantic `Context` facade.
-Direct `ObjectHeap` access is acceptable only for storage creation
-or a proven ordinary-object-only operation; it must not silently become the
-only semantic implementation of a language feature.
+For new compatibility code after AS-03b2, use the abstract `Context` operation
+when one exists and extend it once when it does not. Direct `ObjectHeap` access
+is acceptable only for storage creation or a proven ordinary-object-only
+operation; it must not silently become the only semantic implementation of a
+language feature.
 
 ## Call And Construct Map
 
@@ -231,16 +236,17 @@ only semantic implementation of a language feature.
 | --- | --- | --- |
 | Semantic internal method | `Context::semantic_call` | checked Function, NativeFunction, HostFunction, bound-function, and callable Proxy dispatch with one completion-preserving contract |
 | Capability predicate | `Context::semantic_is_callable` | the single `IsCallable`-style decision used by Function helpers, callbacks, Promise, JSON, Reflect, Proxy traps, coercion hooks, `typeof`, and object tagging |
-| Compatibility wrappers | `Context::eval_call_completion` and `Context::eval_call_value` | borrow the callee and delegate to `semantic_call`; the value wrapper converts the resulting completion at the existing native boundary |
-| Cached calls | `Context::eval_cached_call_completion` and `CallValueCache` | caches Function, NativeFunction, and HostFunction; every guard miss returns to `semantic_call` through the compatibility wrapper |
-| Identifier direct path | `CallReference` and `eval_bytecode_identifier_call_*` | can bypass value dispatch for bytecode functions, cached native kinds, and `NativeCallTarget`; generic case returns to `eval_call_completion` |
+| Abstract operation | `Context::call` and native-value adapter `call_value` | `call` preserves `Completion` over `semantic_call`; `call_value` converts only where the surrounding native API still returns `Result<Value>` |
+| Cached calls | `Context::eval_cached_call_completion` and `CallValueCache` | caches Function, NativeFunction, and HostFunction; every guard miss returns to the shared `Call` operation |
+| Identifier direct path | `CallReference` and `eval_bytecode_identifier_call_*` | can bypass value dispatch for bytecode functions, cached native kinds, and `NativeCallTarget`; generic case returns to `Context::call` |
 | Static member direct path | `runtime/native/function/direct.rs` plus property caches | recognizes native targets and falls back to native-kind or value call paths |
 | Accessors/callbacks | accessor, array, collection, JSON, Promise, Proxy, Reflect, and iterator code | callability and dispatch are shared, but several callers still translate arbitrary thrown values into engine errors; AS-04 owns that completion debt |
 
 The direct paths are guarded optimization backends, not alternative semantic
 predicates. Architecture checks allow the callable and constructor predicates
 only in `runtime/semantic_object/invocation.rs` and reject growth in the former
-split entrypoint set.
+split entrypoint set. They also fix the AS-03b2 abstract-operation owner set and
+reject restoration of the deleted property/call facades.
 
 ### Construct
 
@@ -297,10 +303,11 @@ AS-03a2 is split into AS-03a2a (`ToPrimitive`/`ToNumber`) and AS-03a2b
 graphs and validation surfaces. The merged pair adds 1,714 reviewed passes,
 for 35,987 of 102,578 full variants with 95 of 95 QuickJS differential cases.
 Merged AS-03b1a adds another 96 property-key variants without losing a prior
-expected pass, for 36,083 full variants and the same QuickJS result. AS-03b1b
-locally adds 102 integer, length, and index variants with no loss, for 36,185
-full variants and 95 of 95 QuickJS cases. Method/property/call operations and
-iterator operations follow as AS-03b2 and AS-03b3 respectively.
+expected pass, for 36,083 full variants and the same QuickJS result. Merged
+AS-03b1b adds 102 integer, length, and index variants with no loss, for 36,185
+full variants. AS-03b2 locally adds 24 strict RegExp `lastIndex` variants with
+no loss, for 36,209 full variants and 95 of 95 QuickJS cases. Iterator
+operations follow as AS-03b3.
 
 ## Iterator Map
 
@@ -476,8 +483,8 @@ decision sequence:
 | AS-03a2a | conversion table | shared `ToPrimitive`/`ToNumber` owner merged in PR #410; local method probing and primitive-only number facades are deleted, with all prior Test262 passes retained |
 | AS-03a2b | string/boolean conversion sites | shared `ToString`/`ToBoolean` owners merged in PR #411; direct runtime truthiness and semantic concat formatting are deleted |
 | AS-03b1a | property-key conversion sites | shared `ToPropertyKey` owner merged in PR #412; dynamic bytecode, Object, Reflect, and Proxy paths delegate, and Rust `Display` no longer defines keys |
-| AS-03b1b | integer, length, and index helpers | shared `ToIntegerOrInfinity`, `ToLength`, and `ToIndex` owners implemented and locally validated in draft PR #413; consumers delegate without silently replacing specification ranges with storage limits |
-| AS-03b2 | property and call tables | add spec-level `Get`, `Set`, `Call`, and `GetMethod` operations over the AS-02c internal methods |
+| AS-03b1b | integer, length, and index helpers | shared `ToIntegerOrInfinity`, `ToLength`, and `ToIndex` owners merged in PR #413; consumers delegate without silently replacing specification ranges with storage limits |
+| AS-03b2 | property and call tables | shared `Get`, `Set`, `Call`, and `GetMethod` operations implemented and locally validated in draft PR #414; legacy facades are deleted and guarded against return |
 | AS-03b3 | iterator map | move iterator protocol and closing out of bytecode and make all consumers delegate |
 | AS-04a/b | completion/error table and inline Error representation | preserve arbitrary throws across native frames; remove ReferenceError prefix parsing; add real errors/spans |
 | AS-05a/b | id, clone, store, root, handle, and limit maps | remove ambiguous VM cloning; add VM identity/generation and root/accounting contracts |
