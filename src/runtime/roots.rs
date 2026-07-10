@@ -182,22 +182,24 @@ impl Context {
         for scope in &self.locals {
             visit_scope(scope, VmRootKind::LocalBinding, visitor)?;
         }
-        for frame in &self.upvalue_frames {
-            for cell in frame.iter() {
-                visit_cell(cell, VmRootKind::CapturedBinding, visitor)?;
+        for frame in &self.activation_frames {
+            if let Some(upvalues) = frame.upvalues() {
+                for cell in upvalues.iter() {
+                    visit_cell(cell, VmRootKind::CapturedBinding, visitor)?;
+                }
             }
-        }
-        for value in &self.this_values {
-            visitor.visit_value(VmRootKind::ActiveThis, value)?;
-        }
-        for value in &self.new_target_values {
-            visitor.visit_value(VmRootKind::ActiveNewTarget, value)?;
-        }
-        for frame in self.super_frames.iter().flatten() {
-            if let Some(constructor) = &frame.constructor {
-                visitor.visit_value(VmRootKind::ActiveSuper, constructor)?;
+            if let Some(value) = frame.this_value() {
+                visitor.visit_value(VmRootKind::ActiveThis, value)?;
             }
-            visitor.visit_value(VmRootKind::ActiveSuper, &frame.home_prototype)?;
+            if let Some(value) = frame.new_target() {
+                visitor.visit_value(VmRootKind::ActiveNewTarget, value)?;
+            }
+            if let Some(super_binding) = frame.super_binding() {
+                if let Some(constructor) = &super_binding.constructor {
+                    visitor.visit_value(VmRootKind::ActiveSuper, constructor)?;
+                }
+                visitor.visit_value(VmRootKind::ActiveSuper, &super_binding.home_prototype)?;
+            }
         }
         if let Some(id) = self.global_object {
             visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;

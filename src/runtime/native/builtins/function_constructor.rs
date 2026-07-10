@@ -106,13 +106,10 @@ impl Context {
         let script = self
             .compile(&source.compile)
             .map_err(Self::generated_function_syntax_error)?;
-        let caller_locals = std::mem::take(&mut self.locals);
-        let caller_upvalue_frames = std::mem::take(&mut self.upvalue_frames);
-        let caller_this_values = std::mem::take(&mut self.this_values);
+        let boundary = self.push_eval_activation_boundary()?;
         let result = self.eval_compiled(&script);
-        self.locals = caller_locals;
-        self.upvalue_frames = caller_upvalue_frames;
-        self.this_values = caller_this_values;
+        let boundary_result = self.pop_eval_activation_boundary(boundary);
+        boundary_result?;
         let value = result?;
         let Value::Function(id) = value.clone() else {
             return Err(Error::runtime(

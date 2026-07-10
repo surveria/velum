@@ -436,8 +436,7 @@ impl Context {
     }
 
     fn upvalue_binding_at_location(&self, slot: BindingSlot) -> Option<BindingCell> {
-        self.upvalue_frames
-            .last()
+        self.current_activation_upvalues()
             .and_then(|frame| frame.get(slot.index()))
             .cloned()
     }

@@ -49,6 +49,21 @@ pipeline that still preserves binding analysis, diagnostics, resource
 accounting, and Test262 compatibility. Until that redesign is scheduled, the
 AST remains a compile-time IR only.
 
+## Execution Model
+
+`Context::activation_frames` is the single owner for synchronous JavaScript
+call state. One call activation holds its local-scope base, captured upvalues,
+`this`, `new.target`, and optional super binding. Temporary class-field `this`
+and generated-function evaluation boundaries use explicit variants on the
+same stack, so root enumeration, binding visibility, and resource accounting
+observe one coherent owner instead of parallel vectors.
+
+This is the AS-06a1 foundation, not yet a suspended interpreter. AS-06a2 must
+move bytecode program counters, operand stacks, and loop/try/finally
+continuations out of recursive Rust calls and into VM-owned continuation
+frames. AS-06b may add suspended outcomes only after that state is complete and
+rooted.
+
 ## Embedding Model
 
 The library API is the product surface. The CLI exists for smoke tests, differential checks, and benchmark orchestration, but engine architecture must optimize for embedding inside a larger Rust application. A feature is not complete just because it works through the CLI; VM-facing behavior must also make sense through the Rust API.

@@ -180,7 +180,7 @@ check_storage_accounting_boundary() {
     'counter.record(VmStorageKind::Binding, self.globals.len())?;' \
     'counter.record(VmStorageKind::Binding, self.builtin_globals.len())?;' \
     'for scope in &self.locals {' \
-    'for frame in &self.upvalue_frames {' \
+    'for frame in &self.activation_frames {' \
     'for function in &self.functions {' \
     'for function in &self.native_functions {' \
     'counter.record(VmStorageKind::BoundFunction, self.bound_functions.len())?;' \
@@ -195,10 +195,7 @@ check_storage_accounting_boundary() {
     'counter.record(VmStorageKind::PromiseJob, self.promise_jobs.len())?;' \
     'self.retained_values.active_count(),' \
     'self.transient_roots.active_count(),' \
-    'counter.record(VmStorageKind::ExecutionFrame, self.local_frame_bases.len())?;' \
-    'counter.record(VmStorageKind::ExecutionFrame, self.this_values.len())?;' \
-    'counter.record(VmStorageKind::ExecutionFrame, self.new_target_values.len())?;' \
-    'counter.record(VmStorageKind::ExecutionFrame, self.super_frames.len())?;' \
+    'self.activation_frames' \
     'counter.record(VmStorageKind::OutputEntry, self.output.len())' \
     'self.well_known_properties.entry_count(),' \
     'self.atoms.index_entry_count()' \
@@ -414,7 +411,7 @@ check_storage_limit_boundary() {
       "${repo_root}/src/runtime/transient_roots.rs" \
     || ! grep -F -q 'release_count_on_drop(VmStorageKind::TransientRoot, released);' \
       "${repo_root}/src/runtime/transient_roots.rs" \
-    || ! grep -F -q 'grow_count(VmStorageKind::ExecutionFrame, 3)?;' \
+    || ! grep -F -q 'self.activation_frames.push(ActivationFrame::call(' \
       "${repo_root}/src/runtime/execution_storage.rs"; then
     fail "storage limit boundary changed; retained, transient, and execution owners require scoped release"
   fi
@@ -882,10 +879,11 @@ check_direct_root_boundary() {
     'visit_scope(&self.globals, VmRootKind::GlobalBinding, visitor)?;' \
     'visit_scope(&self.builtin_globals, VmRootKind::BuiltinBinding, visitor)?;' \
     'for scope in &self.locals {' \
-    'for frame in &self.upvalue_frames {' \
-    'for value in &self.this_values {' \
-    'for value in &self.new_target_values {' \
-    'for frame in self.super_frames.iter().flatten() {' \
+    'for frame in &self.activation_frames {' \
+    'if let Some(upvalues) = frame.upvalues() {' \
+    'if let Some(value) = frame.this_value() {' \
+    'if let Some(value) = frame.new_target() {' \
+    'if let Some(super_binding) = frame.super_binding() {' \
     'if let Some(id) = self.global_object {' \
     'if let Some(id) = self.promise_prototype {' \
     'if let Some(symbol) = self.iterator_symbol {' \
@@ -945,6 +943,51 @@ check_direct_root_boundary() {
       "${repo_root}/src/runtime/object/property/descriptor.rs"; then
     fail "direct root boundary changed; descriptor and Proxy temporary safepoints require scoped values"
   fi
+}
+
+check_activation_frame_boundary() {
+  local legacy_fields
+  for source in \
+    'pub(in crate::runtime) enum ActivationFrame {' \
+    'Call {' \
+    'local_base: usize,' \
+    'upvalues: FunctionUpvalues,' \
+    'this_value: Value,' \
+    'new_target: Value,' \
+    'super_binding: Option<Rc<FunctionSuperBinding>>,' \
+    'TemporaryThis {' \
+    'EvalBoundary {'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/activation.rs"; then
+      fail "activation frame boundary changed; AS-06a1 call, temporary-this, and evaluation state must stay explicit"
+    fi
+  done
+
+  legacy_fields="$({
+    grep -E '^[[:space:]]+(local_frame_bases|upvalue_frames|this_values|new_target_values|super_frames):' \
+      "${repo_root}/src/runtime/mod.rs" || true
+  })"
+  if [[ -n "${legacy_fields}" ]] \
+    || ! grep -F -q 'activation_frames: Vec<activation::ActivationFrame>,' \
+      "${repo_root}/src/runtime/mod.rs"; then
+    fail "activation frame boundary changed; Context must own one activation stack instead of parallel call-state vectors"
+  fi
+
+  for source in \
+    'self.push_call_activation(' \
+    'self.pop_call_activation(local_base)'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/function/mod.rs"; then
+      fail "activation frame boundary changed; JavaScript calls must enter and leave one explicit activation"
+    fi
+  done
+
+  for source in \
+    'let boundary = self.push_eval_activation_boundary()?;' \
+    'let boundary_result = self.pop_eval_activation_boundary(boundary);'; do
+    if ! grep -F -q "${source}" \
+        "${repo_root}/src/runtime/native/builtins/function_constructor.rs"; then
+      fail "activation frame boundary changed; generated functions require a rooted evaluation boundary"
+    fi
+  done
 }
 
 check_callable_edge_boundary() {
@@ -1203,8 +1246,7 @@ static_binding_layouts
 globals
 builtin_globals
 locals
-local_frame_bases
-upvalue_frames
+activation_frames
 functions
 native_functions
 native_function_registry
@@ -1221,9 +1263,6 @@ promise_jobs
 promise_prototype
 retained_values
 transient_roots
-this_values
-new_target_values
-super_frames
 output
 output_payload_bytes
 performance_clock
@@ -1377,6 +1416,7 @@ run_checks() {
   require_file src/api/owned_value.rs
   require_file src/runtime/retained_values.rs
   require_file src/runtime/accounting.rs
+  require_file src/runtime/activation.rs
   require_file src/runtime/object/accounting.rs
   require_file src/runtime/mod.rs
   require_file src/runtime/roots.rs
@@ -1408,6 +1448,7 @@ run_checks() {
   check_semantic_duplicate_allowlists
   check_completion_error_boundary
   check_direct_root_boundary
+  check_activation_frame_boundary
   check_callable_edge_boundary
   check_object_edge_boundary
   check_async_edge_boundary
@@ -1538,8 +1579,14 @@ mutate_javascript_exception_visibility() {
 
 mutate_direct_root_source() {
   local fixture_root="$1"
-  sed -i '/for value in &self.this_values {/d' \
+  sed -i '/if let Some(value) = frame.this_value() {/d' \
     "${fixture_root}/src/runtime/roots.rs"
+}
+
+mutate_activation_frame_upvalues() {
+  local fixture_root="$1"
+  sed -i '/        upvalues: FunctionUpvalues,/d' \
+    "${fixture_root}/src/runtime/activation.rs"
 }
 
 mutate_native_registry_root() {
@@ -1664,7 +1711,7 @@ mutate_storage_limit_transient_release() {
 
 mutate_storage_limit_execution_frame() {
   local fixture_root="$1"
-  sed -i '/grow_count(VmStorageKind::ExecutionFrame, 3)?;/d' \
+  sed -i '/self.activation_frames.push(ActivationFrame::call(/d' \
     "${fixture_root}/src/runtime/execution_storage.rs"
 }
 
@@ -1851,6 +1898,8 @@ run_self_tests() {
     'JavaScriptException fields must stay private' mutate_javascript_exception_visibility
   expect_guard_failure "${temp_dir}" direct-root-source \
     'direct root boundary changed' mutate_direct_root_source
+  expect_guard_failure "${temp_dir}" activation-frame-upvalues \
+    'activation frame boundary changed' mutate_activation_frame_upvalues
   expect_guard_failure "${temp_dir}" native-registry-root \
     'direct root boundary changed' mutate_native_registry_root
   expect_guard_failure "${temp_dir}" transient-operand-root \

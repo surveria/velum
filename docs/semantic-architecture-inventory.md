@@ -417,12 +417,12 @@ and values retained after an embedding call.
 | Store category | Current fields/owners | Implicit strong edges | Current public accounting |
 | --- | --- | --- | --- |
 | interned names and text | `atoms`, `strings`, `symbols`, well-known caches | strings/symbol registry retain shared text | logical Atom/HeapString/Symbol, cache, and association counts plus existing string bytes |
-| bindings and closures | globals, builtin globals, locals, upvalue frames, `BindingCell(Rc<Mutex<Binding>>)` | binding values and captured cells | logical Binding, ExecutionFrame, and binding-index CacheEntry counts |
+| bindings and closures | globals, builtin globals, activation-owned upvalue frames, `BindingCell(Rc<Mutex<Binding>>)` | binding values and captured cells | logical Binding, ExecutionFrame, and binding-index CacheEntry counts |
 | executable functions | functions, native functions/registry, bound functions, host functions | typed AS-05b1b1 edges cover properties, upvalues, super/static/class/new-target state, native id payloads, and bound args/targets; immutable bytecode contains only VM-independent literals; opaque callback captures use AS-05a2d retained handles | logical JavaScriptFunction/NativeFunction/BoundFunction/HostCallback counts plus callable property, metadata-cache, binding, and source-record counts |
 | objects | `ObjectHeap`, shapes, prototypes, properties, arrays, buffers, typed-array views | typed AS-05b1b2 edges cover named/dense/sparse properties, accessors, prototypes, boxed strings/Symbols, Proxy state, and typed-array buffer-object links; cached prototypes and shape/property-key metadata are direct anchors | logical Object/ObjectProperty/ByteBuffer counts plus shape CacheEntry and anchor Association counts; payload bytes remain AS-05b2b |
 | collections | collection stores with retained kind, object slots, iterator snapshots | typed object associations, strong Map/Set entries and iterator items, weak WeakSet keys, and WeakMap ephemerons | logical Collection/CollectionEntry/CollectionIterator/IteratorItem and Association counts plus asynchronous edge snapshot |
 | promises/jobs | promises, object slots, reaction queue | typed object associations, strong results/handlers/settled values, and direct queued-job roots | logical Promise/PromiseReaction/PromiseJob and Association counts plus asynchronous edge snapshot |
-| active execution | local frame bases, `this`, `new.target`, super frames, bytecode operand stacks held by Rust calls, scoped transient registry | durable active vectors plus scoped traceable operand/call/iterator/descriptor/Proxy values | logical ExecutionFrame/TransientRoot counts and thirteen-category root snapshot; stack bytes remain AS-05b2b |
+| active execution | one `activation_frames` stack owns call local bases, upvalues, `this`, `new.target`, and super plus temporary-this/eval-boundary variants; bytecode operand stacks remain held by Rust calls; scoped transient registry | explicit call activations plus scoped traceable operand/call/iterator/descriptor/Proxy values | one logical ExecutionFrame per activation and lexical scope plus TransientRoot counts and thirteen-category root snapshot; bytecode continuation state remains AS-06a2 |
 | caches | static name/binding caches, call caches, function fast paths | ids, shapes, native kinds, metadata | logical CacheEntry counts plus hit/miss counters for selected call caches |
 | embedder-visible state | output, host callbacks, `Vm`, public `Value`, retained registry | callback arguments are scoped roots; opaque captures and durable results use retained handles; raw Values remain compatibility-only and non-durable | logical HostCallback/RetainedHandle/OutputEntry counts; retained handles also participate in root snapshots |
 | nondeterministic/runtime state | clock, random state, step counters | no JS edges | runtime steps and selected execution counters |
@@ -522,8 +522,8 @@ The root/trace contract must at least enumerate:
 
 1. global, builtin-global, local, and captured binding cells: direct roots are
    executable in AS-05b1a;
-2. active `this`, `new.target`, and super values: current stored vectors are
-   executable in AS-05b1a;
+2. active `this`, `new.target`, and super values: AS-06a1 consolidates the
+   AS-05b1a vectors into one explicit activation owner;
 3. promise queued-job handlers and settled values: direct queue roots are
    executable in AS-05b1a;
 4. global-object, Promise-prototype, registered-native-function, cached object
@@ -635,8 +635,10 @@ decision sequence:
 | AS-05b2b | retained payload bytes by the same owner map | independent checked UTF-8/raw-buffer payload map merged in PR #433 without claiming allocator-resident RSS |
 | AS-05b2c1 | public owner-limit policy plus payload/top-level arenas | immutable sparse custom policy and pre-commit limits for atoms, strings, Symbols, objects, buffers, callbacks, output, and source merged in PR #434 |
 | AS-05b2c2 | binding, callable, property, and cache growth | VM-local O(1) ledger, pre-commit reservations, release/rollback paths, and independent snapshot reconciliation merged in PR #435 |
-| AS-05b2c3 | async, root, frame, and association growth | exact collection/Promise/root/frame/anchor transitions plus full snapshot-to-limit reconciliation implemented in draft PR #436 |
-| AS-06 | active execution roots and structured nested bytecode | explicit activation/block stacks and suspend/resume results |
+| AS-05b2c3 | async, root, frame, and association growth | exact collection/Promise/root/frame/anchor transitions plus full snapshot-to-limit reconciliation merged in PR #436 |
+| AS-06a1 | parallel call-state vectors | one VM-owned call/temporary/evaluation activation stack implemented in draft PR #438 |
+| AS-06a2 | recursive nested bytecode state | explicit program-counter, operand, and structured-control continuation frames |
+| AS-06b | pending async execution | suspend/resume outcomes and embedder-controlled job/frame APIs |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |
 | AS-08 | caches, direct calls, linear/function/control paths, harness opcodes | one optimizer owner, optimizer-off equivalence, and removal of source-name semantics |
 
