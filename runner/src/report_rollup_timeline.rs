@@ -1,5 +1,6 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
+    fs,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -34,14 +35,15 @@ impl CommitTimeline {
         let Ok(reports_pathspec) = reports_root.strip_prefix(&repository_root) else {
             return Self::synthetic(records);
         };
-        if repository_is_shallow(&repository_root)? {
-            return Self::synthetic(records);
-        }
         let Some(main_ref) = main_history_ref(&repository_root) else {
             return Self::synthetic(records);
         };
         let commits = main_commits(&repository_root, &main_ref)?;
         if commits.is_empty() {
+            return Self::synthetic(records);
+        }
+        let shallow_commits = repository_shallow_commits(&repository_root)?;
+        if history_has_shallow_boundary(&commits, &shallow_commits) {
             return Self::synthetic(records);
         }
         let additions = report_additions(&repository_root, &main_ref, reports_pathspec)?;
@@ -183,13 +185,39 @@ fn repository_root() -> anyhow::Result<Option<PathBuf>> {
     Ok(Some(PathBuf::from(root.trim())))
 }
 
-fn repository_is_shallow(repository_root: &Path) -> anyhow::Result<bool> {
+fn repository_shallow_commits(repository_root: &Path) -> anyhow::Result<BTreeSet<String>> {
     let output = git_output(
         repository_root,
         &["rev-parse", "--is-shallow-repository"],
         "inspect repository history depth",
     )?;
-    Ok(output.trim() == "true")
+    if output.trim() != "true" {
+        return Ok(BTreeSet::new());
+    }
+    let path = git_output(
+        repository_root,
+        &["rev-parse", "--git-path", "shallow"],
+        "locate shallow repository boundaries",
+    )?;
+    let path = PathBuf::from(path.trim());
+    let path = if path.is_absolute() {
+        path
+    } else {
+        repository_root.join(path)
+    };
+    let contents = fs::read_to_string(&path).with_context(|| {
+        format!(
+            "failed to read shallow repository boundaries from '{}'",
+            path.display()
+        )
+    })?;
+    Ok(contents.lines().map(str::to_owned).collect())
+}
+
+fn history_has_shallow_boundary(commits: &[String], shallow_commits: &BTreeSet<String>) -> bool {
+    commits
+        .iter()
+        .any(|commit| shallow_commits.contains(commit))
 }
 
 fn main_history_ref(repository_root: &Path) -> Option<String> {
@@ -333,9 +361,14 @@ fn short_commit(commit: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, path::Path};
+    use std::{
+        collections::{BTreeMap, BTreeSet},
+        path::Path,
+    };
 
-    use super::{CommitTimeline, MAIN_AXIS_DESCRIPTION, parse_report_additions};
+    use super::{
+        CommitTimeline, MAIN_AXIS_DESCRIPTION, history_has_shallow_boundary, parse_report_additions,
+    };
     use crate::report_rollup::{ReportContext, ReportRecord, parse_records};
 
     type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -360,6 +393,21 @@ mod tests {
             return Ok(());
         }
         Err("report addition parser accepted a derived artifact variant".into())
+    }
+
+    #[test]
+    fn shallow_boundary_only_truncates_the_history_that_contains_it() -> TestResult {
+        let main_commit = "1111111111111111111111111111111111111111".to_owned();
+        let unrelated_commit = "2222222222222222222222222222222222222222".to_owned();
+        let commits = vec![main_commit.clone()];
+        let unrelated = BTreeSet::from([unrelated_commit]);
+        let matching = BTreeSet::from([main_commit]);
+        if !history_has_shallow_boundary(&commits, &unrelated)
+            && history_has_shallow_boundary(&commits, &matching)
+        {
+            return Ok(());
+        }
+        Err("an unrelated shallow boundary compressed the main timeline".into())
     }
 
     #[test]
