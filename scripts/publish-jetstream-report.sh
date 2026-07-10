@@ -83,8 +83,16 @@ read_metadata() {
   done < "${metadata_file}"
 }
 
+fetch_origin_main() {
+  [[ -n "${GH_TOKEN:-}" ]] || fail "GH_TOKEN is required for the publisher fetch"
+  git \
+    -c credential.https://github.com.helper= \
+    -c 'credential.https://github.com.helper=!gh auth git-credential' \
+    fetch --no-tags origin main
+}
+
 checkout_latest_main() {
-  git fetch --no-tags origin main
+  fetch_origin_main
   if git show-ref --verify --quiet refs/heads/main; then
     git checkout main
     git merge --ff-only origin/main
@@ -194,6 +202,10 @@ reset_outputs() {
   fi
   git restore --worktree -- reports/benchmark-rollup.md reports/benchmark-summary.jpg
 }
+
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  return 0
+fi
 
 need_cmd cargo
 need_cmd gh

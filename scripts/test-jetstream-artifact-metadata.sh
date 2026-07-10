@@ -84,4 +84,61 @@ expect_rejected \
   "${stale_commit_path}" \
   'artifact commit does not match the workflow commit'
 
+auth_bin="${tmp_dir}/auth-bin"
+auth_log="${tmp_dir}/git-args.log"
+mkdir -p "${auth_bin}"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'printf '\''%s\n'\'' "$@" > "${RSQJS_GIT_ARGS_LOG}"' \
+  > "${auth_bin}/git"
+chmod +x "${auth_bin}/git"
+PATH="${auth_bin}:${PATH}" \
+  GH_TOKEN='must-not-appear-in-git-arguments' \
+  RSQJS_GIT_ARGS_LOG="${auth_log}" \
+  bash -c 'source "$1"; fetch_origin_main' bash \
+  "${script_dir}/publish-jetstream-report.sh"
+expected_auth_args="${tmp_dir}/expected-git-args.log"
+printf '%s\n' \
+  -c \
+  credential.https://github.com.helper= \
+  -c \
+  'credential.https://github.com.helper=!gh auth git-credential' \
+  fetch \
+  --no-tags \
+  origin \
+  main \
+  > "${expected_auth_args}"
+cmp -s "${expected_auth_args}" "${auth_log}" || {
+  printf 'publisher fetch did not use the scoped GitHub CLI credential helper\n' >&2
+  exit 1
+}
+if grep -q 'must-not-appear' "${auth_log}"; then
+  printf 'publisher fetch exposed GH_TOKEN in git arguments\n' >&2
+  exit 1
+fi
+missing_token_output="$(
+  PATH="${auth_bin}:${PATH}" \
+    RSQJS_GIT_ARGS_LOG="${auth_log}" \
+    bash -c 'source "$1"; unset GH_TOKEN; fetch_origin_main' bash \
+    "${script_dir}/publish-jetstream-report.sh" 2>&1 || true
+)"
+if [[ "${missing_token_output}" != *'GH_TOKEN is required for the publisher fetch'* ]]; then
+  printf 'publisher fetch did not reject a missing GH_TOKEN\n' >&2
+  exit 1
+fi
+
+workflow_path="${script_dir}/../.github/workflows/jetstream.yml"
+if grep -q '^      GH_TOKEN:' "${workflow_path}"; then
+  printf 'JetStream job scope must not expose GH_TOKEN\n' >&2
+  exit 1
+fi
+if [[ "$(grep -c '^          GH_TOKEN: \${{ github.token }}$' "${workflow_path}")" != 1 ]]; then
+  printf 'JetStream publish step must receive exactly one GH_TOKEN\n' >&2
+  exit 1
+fi
+if [[ "$(grep -c '^          persist-credentials: false$' "${workflow_path}")" != 1 ]]; then
+  printf 'JetStream checkout must keep persisted credentials disabled\n' >&2
+  exit 1
+fi
+
 printf 'JetStream artifact metadata rejection tests passed\n'
