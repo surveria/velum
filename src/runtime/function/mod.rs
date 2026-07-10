@@ -411,7 +411,7 @@ impl Context {
         }
         let static_parent = self.function(id)?.static_parent.clone();
         if let Some(parent) = static_parent {
-            let value = self.get_property_value(&parent, property.name())?;
+            let value = self.get_named(&parent, property.name())?;
             if !matches!(value, Value::Undefined) {
                 return Ok(value);
             }

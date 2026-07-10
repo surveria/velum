@@ -220,7 +220,7 @@ impl Context {
             )?;
             Completion::Normal(value)
         } else {
-            self.eval_call_completion(&callee, args, this_value.clone())?
+            self.call(&callee, args, this_value.clone())?
         };
         let Completion::Normal(value) = completion else {
             return Ok(completion);
@@ -264,7 +264,7 @@ impl Context {
         }
         let callee =
             self.get_static_property_value(this_value, property.name(), property.access())?;
-        self.eval_call_completion(&callee, args, this_value.clone())
+        self.call(&callee, args, this_value.clone())
     }
 
     fn eval_bytecode_creation_instruction(

@@ -300,7 +300,7 @@ impl Context {
                 })
             }
             Value::NativeFunction(_) => {
-                let prototype = self.get_property_value(&value, CLASS_PROTOTYPE_PROPERTY)?;
+                let prototype = self.get_named(&value, CLASS_PROTOTYPE_PROPERTY)?;
                 let prototype_id = match &prototype {
                     Value::Object(id) => Some(*id),
                     _ => None,

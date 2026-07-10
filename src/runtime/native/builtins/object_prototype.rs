@@ -70,8 +70,10 @@ impl Context {
         _args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let method = self.get_property_value(this_value, TO_LOCALE_STRING_METHOD)?;
-        match self.eval_call_completion(&method, &[], this_value.clone())? {
+        let method = self
+            .get_named_method(this_value, TO_LOCALE_STRING_METHOD)?
+            .ok_or_else(|| Error::type_error("Object toString method is missing"))?;
+        match self.call(&method, &[], this_value.clone())? {
             Completion::Normal(value) => Ok(value),
             completion => completion.into_result(),
         }
@@ -120,8 +122,8 @@ impl Context {
             self.step()?;
             match self.for_of_step(&mut source)? {
                 crate::runtime::bytecode::for_of::ForOfStep::Value(entry) => {
-                    let key = self.get_property_value(&entry, ENTRY_KEY_PROPERTY)?;
-                    let value = self.get_property_value(&entry, ENTRY_VALUE_PROPERTY)?;
+                    let key = self.get_named(&entry, ENTRY_KEY_PROPERTY)?;
+                    let value = self.get_named(&entry, ENTRY_VALUE_PROPERTY)?;
                     let mut dynamic = self.object_property_key(Some(&key))?;
                     let name = dynamic.name().to_owned();
                     let property_key = self.intern_dynamic_property_key(&mut dynamic)?;
@@ -193,7 +195,7 @@ impl Context {
             Some(PropertyKey::symbol(symbol)),
         );
         let receiver = Value::Object(id);
-        let value = self.get_property_value_with_lookup(&receiver, key.lookup())?;
+        let value = self.get(&receiver, key.lookup())?;
         Ok(match value {
             Value::String(text) => Some(text),
             Value::HeapString(text) => Some(text.as_str().to_owned()),
@@ -203,7 +205,7 @@ impl Context {
 
     fn resolve_to_string_tag_symbol(&mut self) -> Result<Option<crate::storage::symbol::SymbolId>> {
         let constructor = self.symbol_constructor_value()?;
-        let value = self.get_property_value(&constructor, TO_STRING_TAG_PROPERTY)?;
+        let value = self.get_named(&constructor, TO_STRING_TAG_PROPERTY)?;
         Ok(match value {
             Value::Symbol(symbol) => Some(symbol.id()),
             _ => None,

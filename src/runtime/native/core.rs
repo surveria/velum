@@ -317,7 +317,7 @@ impl Context {
         property: &str,
     ) -> Result<Value> {
         let prototype = self.error_constructor_prototype(name)?;
-        self.get_property_value(&Value::Object(prototype), property)
+        self.get_named(&Value::Object(prototype), property)
     }
 
     pub(in crate::runtime) fn error_prototype_has_property(
@@ -536,7 +536,7 @@ impl Context {
         property: &str,
         default: &str,
     ) -> Result<String> {
-        let value = self.get_property_value(this_value, property)?;
+        let value = self.get_named(this_value, property)?;
         if matches!(value, Value::Undefined) {
             return Ok(default.to_owned());
         }

@@ -127,7 +127,7 @@ impl Context {
             return Ok(());
         }
         for key in self.own_enumerable_keys(source)? {
-            let value = self.get_property_value(source, &key)?;
+            let value = self.get_named(source, &key)?;
             let property_key = self.intern_property_key(&key)?;
             let name_index = dynamic_names.len();
             dynamic_names.push(key);

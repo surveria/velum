@@ -294,7 +294,7 @@ impl Context {
     }
 
     pub(super) fn array_like_length(&mut self, object: &Value) -> Result<usize> {
-        let length = self.get_property_value(object, ARRAY_LENGTH_PROPERTY)?;
+        let length = self.get_named(object, ARRAY_LENGTH_PROPERTY)?;
         self.length_value_to_usize(&length)
     }
 
@@ -310,7 +310,7 @@ impl Context {
 
     pub(super) fn get_array_like_index(&mut self, object: &Value, index: usize) -> Result<Value> {
         let property = Self::array_like_index_name(index)?;
-        self.get_property_value(object, &property)
+        self.get_named(object, &property)
     }
 
     pub(super) fn has_array_like_index(&mut self, object: &Value, index: usize) -> Result<bool> {

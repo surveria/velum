@@ -150,6 +150,9 @@ check_semantic_duplicate_allowlists() {
   local expected_semantic_object
   local indexing
   local expected_indexing
+  local property_call
+  local expected_property_call
+  local legacy_property_call
 
   equality="$(
     function_owners \
@@ -240,6 +243,32 @@ src/runtime/native/builtins/array/generic.rs:checked_array_like_length
 src/runtime/native/builtins/array/generic.rs:max_array_like_length
 src/runtime/native/builtins/array/generic.rs:set_array_like_length'
   compare_set "length/integer operation allowlist" "${indexing}" "${expected_indexing}"
+
+  property_call="$(
+    (
+      cd "${repo_root}"
+      grep -R -H -E -o --include='*.rs' \
+        'fn[[:space:]]+(get|get_named|set|call|call_value|get_method|get_named_method)[[:space:]]*\(' \
+        src/runtime/abstract_operations || true
+    ) | sed -E 's/:fn[[:space:]]+/:/; s/[[:space:]]*\($//'
+  )"
+  expected_property_call='src/runtime/abstract_operations/property_call.rs:call
+src/runtime/abstract_operations/property_call.rs:call_value
+src/runtime/abstract_operations/property_call.rs:get
+src/runtime/abstract_operations/property_call.rs:get_method
+src/runtime/abstract_operations/property_call.rs:get_named
+src/runtime/abstract_operations/property_call.rs:get_named_method
+src/runtime/abstract_operations/property_call.rs:set'
+  compare_set \
+    "property/method/call abstract-operation allowlist" \
+    "${property_call}" \
+    "${expected_property_call}"
+
+  legacy_property_call="$(
+    function_owners \
+      'fn[[:space:]]+(eval_call_completion|eval_call_value|get_property_value|get_property_value_with_lookup|proxy_trap)[[:space:]]*\('
+  )"
+  compare_set "legacy property/method/call facade allowlist" "${legacy_property_call}" ''
 }
 
 check_state_owner_allowlists() {
@@ -488,6 +517,18 @@ mutate_index_helper() {
     >>"${fixture_root}/src/runtime/values.rs"
 }
 
+mutate_property_call_owner() {
+  local fixture_root="$1"
+  printf '\nfn get_method() {}\n' \
+    >>"${fixture_root}/src/runtime/abstract_operations/conversion.rs"
+}
+
+mutate_legacy_property_call_facade() {
+  local fixture_root="$1"
+  printf '\nfn eval_call_value() {}\n' \
+    >>"${fixture_root}/src/runtime/values.rs"
+}
+
 mutate_test262_source_name() {
   local fixture_root="$1"
   printf '\nconst ARCHITECTURE_PROBE: &str = TEST262_ERROR_NAME;\n' \
@@ -593,6 +634,10 @@ run_self_tests() {
     'semantic object facade allowlist changed' mutate_semantic_object_facade
   expect_guard_failure "${temp_dir}" index-helper \
     'length/integer operation allowlist changed' mutate_index_helper
+  expect_guard_failure "${temp_dir}" property-call-owner \
+    'property/method/call abstract-operation allowlist changed' mutate_property_call_owner
+  expect_guard_failure "${temp_dir}" legacy-property-call-facade \
+    'legacy property/method/call facade allowlist changed' mutate_legacy_property_call_facade
   expect_guard_failure "${temp_dir}" context-store \
     'Context state-owner field allowlist changed' mutate_context_store
   expect_guard_failure "${temp_dir}" object-payload \

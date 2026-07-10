@@ -233,7 +233,7 @@ impl Context {
         key: &str,
         reviver: &Value,
     ) -> Result<Value> {
-        let value = self.get_property_value(holder, key)?;
+        let value = self.get_named(holder, key)?;
         if let Value::Object(id) = value.clone() {
             self.internalize_json_children(&value, id, reviver)?;
         }
@@ -400,7 +400,7 @@ impl Context {
         key: &str,
         state: &mut JsonStringifyState,
     ) -> Result<Option<String>> {
-        let mut value = self.get_property_value(holder, key)?;
+        let mut value = self.get_named(holder, key)?;
         value = self.apply_json_to_json(value, key)?;
         value = self.apply_json_replacer(holder, key, value, &state.replacer)?;
         self.stringify_json_value(&value, state)
@@ -410,7 +410,7 @@ impl Context {
         if !matches!(value, Value::Object(_)) {
             return Ok(value);
         }
-        let to_json = self.get_property_value(&value, JSON_TO_JSON_NAME)?;
+        let to_json = self.get_named(&value, JSON_TO_JSON_NAME)?;
         if !self.semantic_is_callable(&to_json)? {
             return Ok(value);
         }
@@ -746,7 +746,7 @@ impl Context {
         this_value: Value,
         args: &[Value],
     ) -> Result<Value> {
-        match self.eval_call_completion(function, args, this_value)? {
+        match self.call(function, args, this_value)? {
             Completion::Normal(value) => self.runtime_value(value),
             Completion::Throw(Value::Error(error)) => {
                 Err(Error::exception(error.name(), error.message().to_owned()))

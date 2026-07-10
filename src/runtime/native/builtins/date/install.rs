@@ -69,7 +69,7 @@ impl Context {
     }
 
     fn define_date_prototype_to_gmt_string_alias(&mut self, prototype: ObjectId) -> Result<()> {
-        let function = self.get_property_value(
+        let function = self.get_named(
             &Value::Object(prototype),
             DateFunctionKind::PrototypeToUtcString.name(),
         )?;
@@ -95,7 +95,7 @@ impl Context {
 
     fn date_well_known_symbol_property_key(&mut self, property: &str) -> Result<PropertyKey> {
         let constructor = self.symbol_constructor_value()?;
-        let value = self.get_property_value(&constructor, property)?;
+        let value = self.get_named(&constructor, property)?;
         let Value::Symbol(symbol) = value else {
             return Err(Error::runtime("well-known Symbol property is not a symbol"));
         };

@@ -297,7 +297,7 @@ impl Context {
                 PromiseStatus::Rejected => self.reject_promise(reaction.result, state.value),
             };
         };
-        match self.eval_call_value(&handler, &[state.value], Value::Undefined) {
+        match self.call_value(&handler, &[state.value], Value::Undefined) {
             Ok(value) => self.resolve_promise(reaction.result, value),
             Err(error) => self.reject_promise(
                 reaction.result,

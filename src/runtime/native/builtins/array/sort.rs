@@ -316,7 +316,7 @@ impl Context {
 
     fn array_call_comparator(&mut self, comparator: &Value, x: &Value, y: &Value) -> Result<Value> {
         let call_args = [x.clone(), y.clone()];
-        match self.eval_call_completion(comparator, &call_args, Value::Undefined)? {
+        match self.call(comparator, &call_args, Value::Undefined)? {
             Completion::Normal(value) => Ok(value),
             completion => completion.into_result(),
         }

@@ -68,7 +68,7 @@ impl Context {
                 text.find(&self.string_argument_text(pattern)?),
             )?));
         }
-        let previous = self.get_property_value(pattern, REGEXP_LAST_INDEX_PROPERTY)?;
+        let previous = self.get_named(pattern, REGEXP_LAST_INDEX_PROPERTY)?;
         self.string_regexp_set_last_index(pattern, 0)?;
         let matched = self.string_regexp_exec_match(pattern, &text)?;
         self.string_regexp_set_last_index_value(pattern, previous)?;
@@ -155,11 +155,11 @@ impl Context {
             return Ok(None);
         };
         let index = self
-            .get_property_value(&Value::Object(id), REGEXP_MATCH_INDEX_PROPERTY)?
+            .get_named(&Value::Object(id), REGEXP_MATCH_INDEX_PROPERTY)?
             .as_number()
             .ok_or_else(|| Error::runtime("RegExp match index is not numeric"))?;
         let start = number_to_usize(index)?;
-        let matched_value = self.get_property_value(&Value::Object(id), FIRST_MATCH_PROPERTY)?;
+        let matched_value = self.get_named(&Value::Object(id), FIRST_MATCH_PROPERTY)?;
         let matched = self.to_string(&matched_value)?;
         let end = start
             .checked_add(matched.len())
@@ -263,11 +263,11 @@ impl Context {
             return Ok(None);
         };
         let index = self
-            .get_property_value(&Value::Object(*id), REGEXP_MATCH_INDEX_PROPERTY)?
+            .get_named(&Value::Object(*id), REGEXP_MATCH_INDEX_PROPERTY)?
             .as_number()
             .ok_or_else(|| Error::runtime("RegExp match index is not numeric"))?;
         let start = number_to_usize(index)?;
-        let matched_value = self.get_property_value(&Value::Object(*id), FIRST_MATCH_PROPERTY)?;
+        let matched_value = self.get_named(&Value::Object(*id), FIRST_MATCH_PROPERTY)?;
         let matched = self.to_string(&matched_value)?;
         let end = start
             .checked_add(matched.len())
@@ -284,8 +284,15 @@ impl Context {
     }
 
     fn string_regexp_set_last_index_value(&mut self, pattern: &Value, value: Value) -> Result<()> {
-        let key = self.intern_property_key(REGEXP_LAST_INDEX_PROPERTY)?;
-        self.set_property_value_with_accessors(pattern, key, REGEXP_LAST_INDEX_PROPERTY, value)
+        let lookup = self.property_lookup(REGEXP_LAST_INDEX_PROPERTY);
+        self.set(
+            pattern,
+            lookup,
+            value,
+            pattern,
+            crate::runtime::abstract_operations::SetFailureBehavior::Throw,
+        )
+        .map(|_| ())
     }
 
     fn string_regexp_advance_last_index(

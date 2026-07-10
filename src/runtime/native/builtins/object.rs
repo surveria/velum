@@ -291,8 +291,7 @@ impl Context {
     }
 
     fn install_object_prototype_methods(&mut self, constructor: &Value) -> Result<()> {
-        let Value::Object(prototype) =
-            self.get_property_value(constructor, OBJECT_PROTOTYPE_PROPERTY)?
+        let Value::Object(prototype) = self.get_named(constructor, OBJECT_PROTOTYPE_PROPERTY)?
         else {
             return Err(Error::runtime("Object prototype is not an object"));
         };
@@ -427,7 +426,7 @@ impl Context {
         if !self.has_property_value_with_lookup(descriptor, self.property_lookup(property))? {
             return Ok(None);
         }
-        self.get_property_value(descriptor, property).map(Some)
+        self.get_named(descriptor, property).map(Some)
     }
 
     fn optional_descriptor_writable(
@@ -462,9 +461,7 @@ impl Context {
         if !self.has_property_value_with_lookup(descriptor, self.property_lookup(property))? {
             return Ok(None);
         }
-        Ok(Some(to_boolean(
-            &self.get_property_value(descriptor, property)?,
-        )))
+        Ok(Some(to_boolean(&self.get_named(descriptor, property)?)))
     }
 
     const fn property_writable(value: bool) -> PropertyWritable {

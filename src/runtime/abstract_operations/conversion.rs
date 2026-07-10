@@ -60,13 +60,9 @@ impl Context {
             return Ok(value.clone());
         }
 
-        let exotic = self.get_to_primitive_method(value)?;
-        if !matches!(exotic, Value::Undefined | Value::Null) {
-            if !self.semantic_is_callable(&exotic)? {
-                return Err(Error::type_error("Symbol.toPrimitive is not callable"));
-            }
+        if let Some(exotic) = self.get_to_primitive_method(value)? {
             let hint = self.heap_string_value(preferred_type.hint())?;
-            let result = self.eval_call_value(&exotic, &[hint], value.clone())?;
+            let result = self.call_value(&exotic, &[hint], value.clone())?;
             if is_primitive(&result) {
                 return Ok(result);
             }
@@ -88,11 +84,11 @@ impl Context {
             ));
         }
         for method_name in preferred_type.ordinary_method_names() {
-            let method = self.get_property_value(value, method_name)?;
+            let method = self.get_named(value, method_name)?;
             if !self.semantic_is_callable(&method)? {
                 continue;
             }
-            let result = self.eval_call_value(&method, &[], value.clone())?;
+            let result = self.call_value(&method, &[], value.clone())?;
             if is_primitive(&result) {
                 return Ok(result);
             }
@@ -205,15 +201,15 @@ impl Context {
         Ok(DynamicPropertyKey::new(name, key))
     }
 
-    fn get_to_primitive_method(&mut self, value: &Value) -> Result<Value> {
+    fn get_to_primitive_method(&mut self, value: &Value) -> Result<Option<Value>> {
         let constructor = self.symbol_constructor_value()?;
-        let symbol = self.get_property_value(&constructor, SYMBOL_TO_PRIMITIVE_PROPERTY)?;
+        let symbol = self.get_named(&constructor, SYMBOL_TO_PRIMITIVE_PROPERTY)?;
         let Value::Symbol(symbol) = symbol else {
             return Err(Error::runtime("Symbol.toPrimitive is not a symbol"));
         };
         let lookup =
             PropertyLookup::from_key(SYMBOL_TO_PRIMITIVE_NAME, PropertyKey::symbol(symbol.id()));
-        self.get_property_value_with_lookup(value, lookup)
+        self.get_method(value, lookup)
     }
 }
 

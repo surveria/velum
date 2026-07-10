@@ -127,7 +127,7 @@ impl Context {
     ) -> Result<PatternStep<PatternPropertyRead>> {
         match key {
             BytecodePatternKey::Static(name) => {
-                let value = self.get_property_value(source, name.as_str())?;
+                let value = self.get_named(source, name.as_str())?;
                 Ok(PatternStep::Value(PatternPropertyRead {
                     name: name.as_str().to_owned(),
                     value,
@@ -142,14 +142,14 @@ impl Context {
                 };
                 if matches!(key_value, Value::Symbol(_)) {
                     let key = self.dynamic_property_key(&key_value)?;
-                    let value = self.get_property_value_with_lookup(source, key.lookup())?;
+                    let value = self.get(source, key.lookup())?;
                     return Ok(PatternStep::Value(PatternPropertyRead {
                         name: key.name().to_owned(),
                         value,
                     }));
                 }
                 let name = self.dynamic_property_key(&key_value)?.name().to_owned();
-                let value = self.get_property_value(source, &name)?;
+                let value = self.get_named(source, &name)?;
                 Ok(PatternStep::Value(PatternPropertyRead { name, value }))
             }
         }
@@ -165,7 +165,7 @@ impl Context {
             if consumed.iter().any(|used| used == &key) {
                 continue;
             }
-            let value = self.get_property_value(source, &key)?;
+            let value = self.get_named(source, &key)?;
             let property_key = self.intern_property_key(&key)?;
             entries.push((property_key, key, value));
         }

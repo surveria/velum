@@ -299,8 +299,8 @@ impl Context {
                 if !matches!(item, Value::Object(_)) {
                     return Err(Error::type_error(MAP_ENTRY_NOT_OBJECT_ERROR));
                 }
-                let key = self.get_property_value(&item, "0")?;
-                let value = self.get_property_value(&item, "1")?;
+                let key = self.get_named(&item, "0")?;
+                let value = self.get_named(&item, "1")?;
                 self.collection_set(collection, key, value)
             }
             CollectionKind::Set => self.collection_set(collection, item.clone(), item),
@@ -408,7 +408,7 @@ impl Context {
         let entries = self.collection_entries(collection)?;
         for (key, value) in entries {
             let call_args = [value, key, this_value.clone()];
-            match self.eval_call_completion(&callback, &call_args, callback_this.clone())? {
+            match self.call(&callback, &call_args, callback_this.clone())? {
                 Completion::Normal(_) => {}
                 completion => return completion.into_result(),
             }
@@ -556,7 +556,7 @@ impl Context {
                 self.limits.max_object_properties,
             )?;
         }
-        let tag_symbol = self.get_property_value(&symbol_constructor, TO_STRING_TAG_PROPERTY)?;
+        let tag_symbol = self.get_named(&symbol_constructor, TO_STRING_TAG_PROPERTY)?;
         let Value::Symbol(symbol) = tag_symbol else {
             return Err(Error::runtime("Symbol.toStringTag is not initialized"));
         };
