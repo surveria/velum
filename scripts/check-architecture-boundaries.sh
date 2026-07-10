@@ -151,16 +151,15 @@ check_semantic_duplicate_allowlists() {
 
   equality="$(
     function_owners \
-      'fn[[:space:]]+[a-z_]*(same_value|strict_equality|abstract_equality)[a-z_]*'
+      'fn[[:space:]]+[a-z_]*(same_value|same_number_value|strict_equal|abstract_equality|numbers_equal|switch_number_equal)[a-z_]*'
   )"
-  expected_equality='src/runtime/bytecode/coercion.rs:abstract_equality
-src/runtime/bytecode/coercion.rs:strict_equality
-src/runtime/bytecode/coercion.rs:string_abstract_equality
-src/runtime/collections.rs:same_value_zero
-src/runtime/native/builtins/array/generic.rs:same_value_zero
-src/runtime/native/builtins/object_static.rs:same_value
-src/runtime/object/array/search.rs:number_same_value_zero
-src/runtime/object/array/search.rs:same_value_zero'
+  expected_equality='src/runtime/abstract_operations/equality.rs:abstract_equality
+src/runtime/abstract_operations/equality.rs:number_same_value
+src/runtime/abstract_operations/equality.rs:number_same_value_zero
+src/runtime/abstract_operations/equality.rs:number_strict_equality
+src/runtime/abstract_operations/equality.rs:same_value
+src/runtime/abstract_operations/equality.rs:same_value_zero
+src/runtime/abstract_operations/equality.rs:strict_equality'
   compare_set "equality operation allowlist" "${equality}" "${expected_equality}"
 
   invocation="$(

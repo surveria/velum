@@ -23,9 +23,9 @@ use crate::{
         BytecodeNumericBinaryOp, BytecodeSwitchCase,
     },
     error::{Error, Result},
-    runtime::Context,
     runtime::binding::scope::{BindingCell, BindingScope},
     runtime::control::Completion,
+    runtime::{Context, abstract_operations::number_strict_equality},
     syntax::{DeclKind, StaticName},
     value::Value,
 };
@@ -655,7 +655,7 @@ impl Context {
             let Some(test) = bytecode_numeric_switch_case_test(test) else {
                 return Ok(BytecodeSwitchStartIndex::Unsupported);
             };
-            if bytecode_switch_number_equal(test, discriminant) {
+            if number_strict_equality(test, discriminant) {
                 return Ok(BytecodeSwitchStartIndex::Resolved(Some(index)));
             }
         }
@@ -749,19 +749,3 @@ impl Context {
         }
     }
 }
-
-const fn bytecode_switch_number_equal(left: f64, right: f64) -> bool {
-    if left.is_nan() || right.is_nan() {
-        return false;
-    }
-    let left_bits = left.to_bits();
-    let right_bits = right.to_bits();
-    let left_magnitude = left_bits & !F64_SIGN_BIT;
-    let right_magnitude = right_bits & !F64_SIGN_BIT;
-    if left_magnitude == 0 && right_magnitude == 0 {
-        return true;
-    }
-    left_bits == right_bits
-}
-
-const F64_SIGN_BIT: u64 = 1_u64 << 63;

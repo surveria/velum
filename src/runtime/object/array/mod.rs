@@ -2,6 +2,7 @@ use std::ops::Range;
 
 use crate::{
     error::{Error, Result},
+    runtime::abstract_operations::{same_value_zero, strict_equality},
     value::{ObjectId, Value},
 };
 
@@ -321,7 +322,7 @@ impl ObjectHeap {
         for position in start..length {
             let index = ArrayIndex::from_usize(position)?;
             if let Some(value) = self.array_property_value_by_index(id, index)?
-                && &value == search
+                && strict_equality(&value, search)
             {
                 return Self::array_index_value(position);
             }
@@ -356,7 +357,7 @@ impl ObjectHeap {
         for index in start..length {
             let index = ArrayIndex::from_usize(index)?;
             let value = self.get_array_index(id, index)?;
-            if Self::same_value_zero(&value, search) {
+            if same_value_zero(&value, search) {
                 return Ok(Value::Bool(true));
             }
         }
@@ -388,7 +389,7 @@ impl ObjectHeap {
         for position in (0..=start).rev() {
             let index = ArrayIndex::from_usize(position)?;
             if let Some(value) = self.array_property_value_by_index(id, index)?
-                && &value == search
+                && strict_equality(&value, search)
             {
                 return Self::array_index_value(position);
             }

@@ -1,5 +1,8 @@
 use crate::{
     error::{Error, Result},
+    runtime::abstract_operations::{
+        number_same_value_zero, number_strict_equality, same_value_zero, strict_equality,
+    },
     value::{ObjectId, Value},
 };
 
@@ -40,11 +43,11 @@ impl ObjectHeap {
 
         for property in properties.iter().skip(start) {
             if property.as_ref().map_or_else(
-                || Self::same_value_zero(&Value::Undefined, search),
+                || same_value_zero(&Value::Undefined, search),
                 |property| {
                     property
                         .data_value_ref()
-                        .is_some_and(|value| Self::same_value_zero(value, search))
+                        .is_some_and(|value| same_value_zero(value, search))
                 },
             ) {
                 return Ok(Some(Value::Bool(true)));
@@ -78,7 +81,9 @@ impl ObjectHeap {
 
         for (position, property) in properties.iter().enumerate().skip(start) {
             if let Some(property) = property
-                && property.data_value_ref() == Some(search)
+                && property
+                    .data_value_ref()
+                    .is_some_and(|value| strict_equality(value, search))
             {
                 return Self::array_index_value(position).map(Some);
             }
@@ -108,7 +113,9 @@ impl ObjectHeap {
 
         for (position, property) in properties.iter().enumerate().take(count).rev() {
             if let Some(property) = property
-                && property.data_value_ref() == Some(search)
+                && property
+                    .data_value_ref()
+                    .is_some_and(|value| strict_equality(value, search))
             {
                 return Self::array_index_value(position).map(Some);
             }
@@ -123,7 +130,7 @@ impl ObjectHeap {
     ) -> Value {
         for property in properties.iter().skip(start).flatten() {
             if let Some(Value::Number(value)) = property.data_value_ref()
-                && Self::number_same_value_zero(*value, search)
+                && number_same_value_zero(*value, search)
             {
                 return Value::Bool(true);
             }
@@ -155,7 +162,7 @@ impl ObjectHeap {
         for (position, property) in properties.iter().enumerate().skip(start) {
             if let Some(property) = property
                 && let Some(Value::Number(value)) = property.data_value_ref()
-                && Self::number_strict_equal(*value, search)
+                && number_strict_equality(*value, search)
             {
                 return Self::array_index_value(position);
             }
@@ -171,7 +178,7 @@ impl ObjectHeap {
         for (position, property) in properties.iter().enumerate().take(count).rev() {
             if let Some(property) = property
                 && let Some(Value::Number(value)) = property.data_value_ref()
-                && Self::number_strict_equal(*value, search)
+                && number_strict_equality(*value, search)
             {
                 return Self::array_index_value(position);
             }

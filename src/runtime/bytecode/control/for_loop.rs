@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-
 use crate::{
     bytecode::{
         BytecodeAddress, BytecodeBinding, BytecodeBlock, BytecodeCompletion,
@@ -9,6 +7,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
+        abstract_operations::number_strict_equality,
         binding::scope::BindingCell,
         control::{Completion, runtime_exception_value},
         numeric::number_to_i32,
@@ -718,16 +717,7 @@ impl Context {
             return Ok(None);
         };
         let masked = f64::from(number_to_i32(number, "&")? & fast_path.test_mask_i32);
-        if masked.is_nan() || fast_path.test_right.is_nan() {
-            return Ok(Some(matches!(
-                fast_path.test_op,
-                BytecodeNumericEqualityOp::NotEqual | BytecodeNumericEqualityOp::StrictNotEqual
-            )));
-        }
-        let equal = matches!(
-            masked.partial_cmp(&fast_path.test_right),
-            Some(Ordering::Equal)
-        );
+        let equal = number_strict_equality(masked, fast_path.test_right);
         Ok(Some(match fast_path.test_op {
             BytecodeNumericEqualityOp::Equal | BytecodeNumericEqualityOp::StrictEqual => equal,
             BytecodeNumericEqualityOp::NotEqual | BytecodeNumericEqualityOp::StrictNotEqual => {

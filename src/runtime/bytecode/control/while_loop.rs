@@ -1,12 +1,13 @@
-use std::cmp::Ordering;
-
 use crate::{
     bytecode::{
         BytecodeAddress, BytecodeBinding, BytecodeBlock, BytecodeCompletion, BytecodeInstruction,
         BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
     },
     error::{Error, Result},
-    runtime::{Context, binding::scope::BindingCell, control::Completion, numeric::number_to_i32},
+    runtime::{
+        Context, abstract_operations::number_strict_equality, binding::scope::BindingCell,
+        control::Completion, numeric::number_to_i32,
+    },
     syntax::DeclKind,
     value::Value,
 };
@@ -625,8 +626,8 @@ fn simple_array_sum_slot_write(
     None
 }
 
-fn compare_equality(op: BytecodeNumericEqualityOp, left: f64, right: f64) -> bool {
-    let equal = matches!(left.partial_cmp(&right), Some(Ordering::Equal));
+const fn compare_equality(op: BytecodeNumericEqualityOp, left: f64, right: f64) -> bool {
+    let equal = number_strict_equality(left, right);
     match op {
         BytecodeNumericEqualityOp::Equal | BytecodeNumericEqualityOp::StrictEqual => equal,
         BytecodeNumericEqualityOp::NotEqual | BytecodeNumericEqualityOp::StrictNotEqual => !equal,

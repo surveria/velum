@@ -1,6 +1,8 @@
 use crate::{
     error::{Error, Result},
-    runtime::{Context, call::RuntimeCallArgs, native::NativeFunctionKind},
+    runtime::{
+        Context, abstract_operations::same_value, call::RuntimeCallArgs, native::NativeFunctionKind,
+    },
     value::{BoundFunctionId, Value},
 };
 
@@ -155,7 +157,7 @@ impl Context {
         let mut values = Vec::with_capacity(capacity);
         values.extend_from_slice(&function.args);
         values.extend_from_slice(args);
-        let new_target = if &new_target == bound_value {
+        let new_target = if same_value(&new_target, bound_value) {
             function.target.clone()
         } else {
             new_target
