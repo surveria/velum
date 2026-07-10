@@ -18,12 +18,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260710T190739Z.md`
-- Task: PR #433: AS-05b2b: account logical VM retained payload bytes
-- Performance: 5.23x (4/5 >1.00x) (from `rsqjs-test-report-20260710T190739Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T190739Z.md`)
+- `rsqjs-test-report-20260710T194046Z.md`
+- Task: PR #434: AS-05b2c1: establish storage limit policy and payload owner enforcement
+- Performance: 5.53x (4/5 >1.00x) (from `rsqjs-test-report-20260710T194046Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260710T194046Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T190739Z.md`)
+- Full Test262: 36659 passed / 65919 failed (35.74%) (from `rsqjs-test-report-20260710T194046Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -420,3 +420,4 @@ Latest report:
 | `20260710T165910Z` `30dfc0a` PR #431: AS-05a2d: add retained VM handles | 5.49x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T172423Z` `afcbe6b` PR #432: AS-05b2a: add VM storage owner accounting | 5.26x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T190739Z` `1c3dee8` PR #433: AS-05b2b: account logical VM retained payload bytes | 5.23x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
+| `20260710T194046Z` `db704bd` PR #434: AS-05b2c1: establish storage limit policy and payload owner enforcement | 5.53x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
