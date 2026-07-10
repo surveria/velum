@@ -68,8 +68,12 @@ validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/r
   .github/workflows/ci.yml CI pull_request completed success "${tree_sha}" ||
   fail_test "rejected trusted correctness workflow run"
 validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/repo \
-  .github/workflows/ci.yml CI workflow_dispatch completed success "${tree_sha}" ||
-  fail_test "rejected trusted exact-tree correctness recovery run"
+  .github/workflows/ci.yml CI workflow_dispatch completed success "${head_tree}" ||
+  fail_test "rejected trusted historical-source correctness recovery run"
+if validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/repo \
+  .github/workflows/ci.yml CI workflow_dispatch completed failure "${head_tree}"; then
+  fail_test "accepted failed historical-source correctness recovery run"
+fi
 if validate_workflow_run_fields correctness owner/repo "${tree_sha}" "" 100 owner/repo \
   .github/workflows/ci.yml CI pull_request completed success "${head_tree}"; then
   fail_test "accepted correctness from a different workflow head tree"

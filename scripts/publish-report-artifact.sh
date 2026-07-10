@@ -130,10 +130,12 @@ validate_workflow_run_fields() {
     return 0
   fi
   [[ "${expected_mode}" == correctness ]] || return 1
+  if [[ "${event_name}" == workflow_dispatch ]]; then
+    [[ "${status}" == completed && "${conclusion}" == success ]] || return 1
+    return 0
+  fi
   [[ "${workflow_head_tree}" == "${expected_tree}" ]] || return 1
-  [[ "${event_name}" == pull_request \
-    || "${event_name}" == merge_group \
-    || "${event_name}" == workflow_dispatch ]] || return 1
+  [[ "${event_name}" == pull_request || "${event_name}" == merge_group ]] || return 1
   [[ "${status}" == completed && "${conclusion}" == success ]]
 }
 
