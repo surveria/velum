@@ -25,9 +25,10 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 through AS-05 and AS-06a1 are complete;
-  AS-06a2a VM-owned bytecode block continuations are implemented in draft PR
-  #439
+- Current program state: AS-01 through AS-05, AS-06a1, and AS-06a2a are
+  complete. Draft PR #440 moves function continuations onto stable function
+  ids and removes synchronous checkout/restore overhead before AS-06a2b adds
+  structured control records
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -486,7 +487,7 @@ dependencies do not overlap.
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
 | AS-04 | Complete | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans merged in PR #421 with exact-tree correctness and canonical report publication. |
 | AS-05 | Complete | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05b2c3 are merged through PR #436 with exact-tree correctness, complete owner-limit reconciliation, and canonical report publication. |
-| AS-06 | In progress | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 call activations merged in PR #438; AS-06a2a parks outer block state on those activations in draft PR #439. Explicit loop/try/finally control records remain AS-06a2b before suspend/resume outcomes. |
+| AS-06 | In progress | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 call activations and AS-06a2a outer block continuations merged in PRs #438 and #439. PR #440 removes measured synchronous function-continuation overhead; explicit loop/try/finally control records remain AS-06a2b before suspend/resume outcomes. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
 | AS-08 | Backlog | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | Optimizer on/off equivalence, harness opcodes removed, workload-shaped paths replaced or justified by broad evidence. |
 | AS-09 | Backlog | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | Multiple feature clusters land through shared semantics without new architecture exceptions. |
@@ -1490,11 +1491,12 @@ AS-06a1 completion evidence:
 
 AS-06a2a local implementation evidence:
 
-- `BytecodeContinuationFrame` owns an immutable `BytecodeBlock` handle plus
-  optional `BytecodeState` containing the program counter, operand stack, and
-  last value. Starting a block resets the state once; synchronous execution
-  checks it out and restores it on every outcome, leaving a direct place for a
-  future suspended outcome to park the unchanged state;
+- `BytecodeContinuationFrame` owns a stable function id or immutable
+  `BytecodeBlock` program key plus optional parked `BytecodeState` containing
+  the program counter, operand stack, and last value. Synchronous execution
+  keeps running state in the driver and unwinds the frame on every outcome; a
+  future suspended outcome can instead park that state without changing the
+  owner model;
 - a call, temporary-this, or evaluation-boundary activation owns its current
   continuation directly. Top-level or genuinely nested blocks use an explicit
   bytecode activation, so the function-call hot path does not add a second
@@ -1503,16 +1505,56 @@ AS-06a2a local implementation evidence:
   `BytecodeState` continue to run on that control-owned state without cloning
   and pushing a continuation per iteration. AS-06a2b must move those loop and
   try/finally owners into explicit durable control records;
-- parked continuation operands have a dedicated `VmRootKind::BytecodeFrame`;
-  running operands remain covered by the existing transient operand scope.
+- active function program ids and parked continuation operands have a
+  dedicated `VmRootKind::BytecodeFrame`; running operands remain covered by
+  the existing transient operand scope.
   `ExecutionFrame` accounting charges standalone nested bytecode activations
   and reconciles them through the AS-05 ledger;
 - nested calls now prove an exact five-record budget: one top-level bytecode
   activation, two call activations, and two function scopes. A four-record
   budget rejects and fully unwinds;
 - focused generic, quickened, structured-control, root, transient-root, and
-  storage tests pass. Three new guard mutations protect continuation state,
-  restore-on-outcome, and parked operand roots;
+  storage tests pass. Guard mutations protect continuation state,
+  unwind-on-outcome, program ownership, and parked operand roots;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 119 runner tests.
+
+AS-06a2a completion evidence:
+
+- PR #439 merged as verified `35d7c5c` after required CI run `29124448272`
+  certified exact tree `7d2e69abc702f99ae93ee19e49ac55855d946c4f`;
+- the required corpus preserved all 36,659 expected Test262 variants, the
+  exact 36,659 of 102,578 full pass set, and 95 of 95 QuickJS differential
+  cases;
+- post-merge run `29124671670` measured five of five valid sentinels and
+  published `reports/test-runs/rsqjs-test-report-20260710T212554Z.*` in
+  verified report-only commit `90b06a4`;
+- arithmetic, array-index, and property-read improved by 2.5% to 5.2%, while
+  string-scan changed by +0.6%. Function-call moved from 155.01 ms to
+  162.01 ms (+4.5%), so draft PR #440 owns an immediate measured follow-up
+  rather than carrying possible continuation overhead into AS-06a2b.
+
+AS-06a2a1 local implementation evidence:
+
+- a clone-only experiment measured 163.21 ms against a paired 163.05 ms base
+  and was rejected as ineffective. A detached pre-AS-06a2a control measured
+  152.77 ms, confirming that the broader synchronous frame lifecycle was the
+  material difference;
+- call activations now use their stable `FunctionId` as the continuation
+  program key. The function body executes against that already-owned record,
+  so it neither clones a `BytecodeBlock` nor attaches, checks out, restores,
+  and immediately removes another frame. General and top-level continuations
+  still own an immutable block handle;
+- running interpreter state remains with the synchronous driver under the
+  transient-root contract. `parked_state` is reserved for a future suspended
+  outcome, avoiding work that cannot currently survive the call. Active
+  function ids are visited through the `BytecodeFrame` direct-root category;
+- the final focused measurement is 155.29 ms with 0.5% CV: 4.8% faster than
+  the paired 163.05 ms base, 4.1% faster than the canonical 162.01 ms report,
+  and within 1.7% of the 152.77 ms pre-AS-06a2a control;
+- focused function/default-parameter, bytecode, quickening, root, and
+  execution-limit tests plus the full architecture mutation suite pass;
 - `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
   passes the complete engine suite, strict Clippy, documentation, architecture
   mutation self-tests, touched-file size checks, and all 119 runner tests.
@@ -2081,7 +2123,8 @@ reviewable scope.
 34. AS-06a1: replace parallel synchronous call-state vectors with one explicit
     activation owner (merged in PR #438).
 35. AS-06a2a: move outer bytecode block/program-counter/operand state onto the
-    activation owner (implemented in draft PR #439).
+    activation owner (merged in PR #439; function-entry follow-up in draft PR
+    #440).
 36. AS-06a2b: replace recursive loop/try/finally durability with explicit
     control continuation records.
 37. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.

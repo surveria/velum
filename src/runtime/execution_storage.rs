@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    value::Value,
+    value::{FunctionId, Value},
 };
 
 use super::{
@@ -11,6 +11,7 @@ use super::{
 impl Context {
     pub(super) fn push_call_activation(
         &mut self,
+        function: FunctionId,
         upvalues: FunctionUpvalues,
         this_value: Value,
         new_target: Value,
@@ -28,6 +29,7 @@ impl Context {
         }
         let base = self.locals.len();
         self.activation_frames.push(ActivationFrame::call(
+            function,
             base,
             upvalues,
             this_value,

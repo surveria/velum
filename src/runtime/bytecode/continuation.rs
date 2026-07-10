@@ -2,7 +2,7 @@ use crate::{
     bytecode::BytecodeBlock,
     error::{Error, Result},
     runtime::{Context, VmStorageKind, activation::ActivationFrame},
-    value::Value,
+    value::{FunctionId, Value},
 };
 
 use super::state::BytecodeState;
@@ -15,8 +15,14 @@ use super::state::BytecodeState;
 /// changing the root or storage ownership model.
 #[derive(Debug)]
 pub(in crate::runtime) struct BytecodeContinuationFrame {
-    block: BytecodeBlock,
-    state: Option<BytecodeState>,
+    program: BytecodeContinuationProgram,
+    parked_state: Option<BytecodeState>,
+}
+
+#[derive(Debug)]
+enum BytecodeContinuationProgram {
+    Function(FunctionId),
+    Block { _block: BytecodeBlock },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -26,38 +32,35 @@ pub(super) struct BytecodeContinuationHandle {
 }
 
 impl BytecodeContinuationFrame {
-    pub(in crate::runtime) const fn new(block: BytecodeBlock, state: BytecodeState) -> Self {
+    pub(in crate::runtime) const fn function(function: FunctionId) -> Self {
         Self {
-            block,
-            state: Some(state),
+            program: BytecodeContinuationProgram::Function(function),
+            parked_state: None,
+        }
+    }
+
+    pub(in crate::runtime) const fn block(block: BytecodeBlock) -> Self {
+        Self {
+            program: BytecodeContinuationProgram::Block { _block: block },
+            parked_state: None,
         }
     }
 
     pub(in crate::runtime) fn root_values(&self) -> impl Iterator<Item = &Value> {
-        self.state.iter().flat_map(BytecodeState::root_values)
+        self.parked_state
+            .iter()
+            .flat_map(BytecodeState::root_values)
     }
 
-    fn take(&mut self) -> Result<(BytecodeBlock, BytecodeState)> {
-        let state = self
-            .state
-            .take()
-            .ok_or_else(|| Error::runtime("bytecode continuation state is already running"))?;
-        Ok((self.block.clone(), state))
-    }
-
-    fn restore(&mut self, state: BytecodeState) -> Result<()> {
-        if self.state.is_some() {
-            return Err(Error::runtime(
-                "bytecode continuation state was restored twice",
-            ));
+    pub(in crate::runtime) const fn function_id(&self) -> Option<FunctionId> {
+        match self.program {
+            BytecodeContinuationProgram::Function(function) => Some(function),
+            BytecodeContinuationProgram::Block { .. } => None,
         }
-        self.state = Some(state);
-        Ok(())
     }
 
-    fn into_state(self) -> Result<BytecodeState> {
-        self.state
-            .ok_or_else(|| Error::runtime("running bytecode continuation cannot be removed"))
+    const fn is_running(&self) -> bool {
+        self.parked_state.is_none()
     }
 }
 
@@ -65,7 +68,6 @@ impl Context {
     pub(super) fn push_bytecode_continuation(
         &mut self,
         block: &BytecodeBlock,
-        state: &mut BytecodeState,
     ) -> Result<BytecodeContinuationHandle> {
         let attaches_to_current = self
             .activation_frames
@@ -75,9 +77,7 @@ impl Context {
             self.storage_ledger
                 .grow_count(VmStorageKind::ExecutionFrame, 1)?;
         }
-        state.reset();
-        let owned_state = std::mem::replace(state, BytecodeState::new());
-        let continuation = BytecodeContinuationFrame::new(block.clone(), owned_state);
+        let continuation = BytecodeContinuationFrame::block(block.clone());
         if attaches_to_current {
             let index = self
                 .activation_frames
@@ -103,33 +103,10 @@ impl Context {
         })
     }
 
-    pub(super) fn take_bytecode_continuation(
-        &mut self,
-        handle: BytecodeContinuationHandle,
-    ) -> Result<(BytecodeBlock, BytecodeState)> {
-        self.activation_frames
-            .get_mut(handle.activation_index)
-            .and_then(|activation| activation.continuation_mut().as_mut())
-            .ok_or_else(|| Error::runtime("bytecode continuation frame disappeared"))?
-            .take()
-    }
-
-    pub(super) fn restore_bytecode_continuation(
-        &mut self,
-        handle: BytecodeContinuationHandle,
-        state: BytecodeState,
-    ) -> Result<()> {
-        self.activation_frames
-            .get_mut(handle.activation_index)
-            .and_then(|activation| activation.continuation_mut().as_mut())
-            .ok_or_else(|| Error::runtime("bytecode continuation frame disappeared"))?
-            .restore(state)
-    }
-
     pub(super) fn pop_bytecode_continuation(
         &mut self,
         handle: BytecodeContinuationHandle,
-    ) -> Result<BytecodeState> {
+    ) -> Result<()> {
         let expected = self
             .activation_frames
             .len()
@@ -138,7 +115,19 @@ impl Context {
         if handle.activation_index != expected {
             return Err(Error::runtime("bytecode continuation unwind mismatch"));
         }
-        let continuation = if handle.owns_activation {
+        let activation = self
+            .activation_frames
+            .get(handle.activation_index)
+            .ok_or_else(|| Error::runtime("bytecode continuation frame disappeared"))?;
+        let continuation = activation
+            .continuation()
+            .ok_or_else(|| Error::runtime("bytecode continuation state disappeared"))?;
+        if !continuation.is_running() {
+            return Err(Error::runtime(
+                "parked bytecode continuation cannot be synchronously removed",
+            ));
+        }
+        if handle.owns_activation {
             if !self
                 .activation_frames
                 .last()
@@ -152,16 +141,29 @@ impl Context {
                 .ok_or_else(|| Error::runtime("bytecode continuation frame disappeared"))?;
             self.storage_ledger
                 .release_count(VmStorageKind::ExecutionFrame, 1)?;
-            activation
+            let _continuation = activation
                 .continuation_mut()
                 .take()
-                .ok_or_else(|| Error::runtime("bytecode continuation state disappeared"))?
+                .ok_or_else(|| Error::runtime("bytecode continuation state disappeared"))?;
         } else {
-            self.activation_frames
+            let _continuation = self
+                .activation_frames
                 .get_mut(handle.activation_index)
                 .and_then(|activation| activation.continuation_mut().take())
-                .ok_or_else(|| Error::runtime("bytecode continuation state disappeared"))?
-        };
-        continuation.into_state()
+                .ok_or_else(|| Error::runtime("bytecode continuation state disappeared"))?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn ensure_running_function_continuation(&self, function: FunctionId) -> Result<()> {
+        let continuation = self
+            .activation_frames
+            .last()
+            .and_then(ActivationFrame::continuation)
+            .ok_or_else(|| Error::runtime("function bytecode continuation disappeared"))?;
+        if continuation.function_id() != Some(function) || !continuation.is_running() {
+            return Err(Error::runtime("function bytecode continuation mismatch"));
+        }
+        Ok(())
     }
 }

@@ -13,11 +13,12 @@ use crate::{
     },
     storage::atom::AtomId,
     syntax::{DeclKind, StaticBindingId},
-    value::Value,
+    value::{FunctionId, Value},
 };
 
 #[derive(Clone, Copy)]
 pub(super) struct FunctionParameterState<'a> {
+    function: FunctionId,
     binding_ids: &'a [StaticBindingId],
     atoms: &'a [AtomId],
     args: &'a [Value],
@@ -25,11 +26,13 @@ pub(super) struct FunctionParameterState<'a> {
 
 impl<'a> FunctionParameterState<'a> {
     pub(super) const fn new(
+        function: FunctionId,
         binding_ids: &'a [StaticBindingId],
         atoms: &'a [AtomId],
         args: &'a [Value],
     ) -> Self {
         Self {
+            function,
             binding_ids,
             atoms,
             args,
@@ -169,7 +172,10 @@ impl Context {
                         }
                         context
                             .hoist_bytecode_declarations(bytecode.hoist_plan())
-                            .and_then(|()| context.eval_function_body_after_setup(bytecode))
+                            .and_then(|()| {
+                                context
+                                    .eval_function_body_after_setup(parameters.function, bytecode)
+                            })
                     },
                 )
             }
@@ -186,7 +192,9 @@ impl Context {
                     }
                     context
                         .hoist_bytecode_declarations(bytecode.hoist_plan())
-                        .and_then(|()| context.eval_function_body_after_setup(bytecode))
+                        .and_then(|()| {
+                            context.eval_function_body_after_setup(parameters.function, bytecode)
+                        })
                 })
             }
             (None, _, _) | (Some(_), Some(_), None) => {
@@ -200,19 +208,22 @@ impl Context {
                     return Ok(completion);
                 }
                 self.hoist_bytecode_declarations(bytecode.hoist_plan())
-                    .and_then(|()| self.eval_function_body_after_setup(bytecode))
+                    .and_then(|()| {
+                        self.eval_function_body_after_setup(parameters.function, bytecode)
+                    })
             }
         }
     }
 
     fn eval_function_body_after_setup(
         &mut self,
+        function: FunctionId,
         bytecode: &BytecodeFunction,
     ) -> Result<Completion> {
         if let Some(completion) = self.eval_bytecode_function_fast_path(bytecode)? {
             return Ok(completion);
         }
-        self.eval_bytecode_block(bytecode.body())
+        self.eval_bytecode_function_body(function, bytecode.body())
     }
 
     fn remember_function_params(
