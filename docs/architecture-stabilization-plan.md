@@ -1663,7 +1663,10 @@ AS-05b2a local implementation evidence:
 - the architecture guard fixes all twenty-six categories, the compact
   snapshot representation, every Context owner source, and the consuming
   teardown boundary. Mutation tests reject removal of a nested iterator owner
-  or teardown snapshot.
+  or teardown snapshot;
+- `RSQJS_BASE_REF=origin/main RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh`
+  passes the complete engine suite, strict Clippy, documentation, architecture
+  mutation self-tests, touched-file size checks, and all 118 runner tests.
 
 ### AS-06: Resumable Execution
 
