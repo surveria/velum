@@ -347,17 +347,22 @@ The engine already has a useful JavaScript `Completion` enum with `Normal`,
 
 | Boundary | Current behavior | Required migration |
 | --- | --- | --- |
-| Public `eval` | `Completion::into_result` formats `Throw(Value)` as `Error::Runtime("uncaught throw: ...")` | AS-04 typed uncaught-JS exception result |
-| Native built-ins | mostly return `Result<Value>`; specification errors use `Error::Exception`, `Error::Runtime`, or `Error::ResourceLimit` | AS-04 separates JavaScript abrupt completion from engine failure |
-| Runtime-to-throw conversion | `runtime_exception_value` converts `Error::Exception`; it also parses a `Runtime` message beginning with `ReferenceError:` | AS-04 removes message-prefix classification |
-| Reference errors | `reference_error_undefined` and `reference_error_uninitialized` manufacture `Error::Runtime` text | AS-04 creates real JS errors and `Throw` directly |
-| Accessors and native callbacks | local matches translate `Completion::Throw(Value::Error)` back into `Error::Exception`; non-Error throws often become formatted runtime errors | AS-04 preserves arbitrary thrown values across native frames |
+| Public `eval` | `Completion::into_result` returns `Error::JavaScript { value }` for every `Throw(Value)` | AS-04a typed uncaught-JS exception result implemented in draft PR #416; AS-05 later adds VM-bound handle identity |
+| Native built-ins | `Result<Value>` boundaries carry arbitrary throws through the same `Error::JavaScript` variant; specification-created errors use its inline Error value until AS-04b | AS-04a implemented in draft PR #416 |
+| Runtime-to-throw conversion | `runtime_exception_value` unwraps only `Error::JavaScript`; Runtime, host, parser, and resource errors are never classified by message text | AS-04a implemented in draft PR #416 |
+| Reference errors | `reference_error_undefined` and `reference_error_uninitialized` create typed ReferenceError values directly | AS-04a implemented in draft PR #416 |
+| Accessors and native callbacks | Completion conversion preserves primitive, Symbol, object, and Error throws; public host callbacks may use `Error::javascript(value)` intentionally | AS-04a implemented in draft PR #416 |
 | Error instances | `Value::Error(ErrorObject)` with synthetic properties/prototype | AS-02/AS-04 migrate to ordinary object identity and internal error slots |
 | Source diagnostics | lexer/parser errors carry an offset; runtime bytecode and `Value::Error` carry no `SourceId`/span | AS-04b adds stable source metadata without retaining the AST at runtime |
 
 Resource limits should continue to bypass JavaScript catch unless the embedding
 contract explicitly changes. Host failures and invariant failures also need
 typed engine channels rather than becoming catchable based on message text.
+
+`Error::JavaScript` carries a VM-local `Value`, so it is deliberately not a
+cross-VM or cross-thread ownership claim. Callers may inspect or return it only
+within the owning VM contract. AS-05 replaces raw id-bearing transfer with
+checked VM identity/generation and explicit local/owned handle boundaries.
 
 ## VM Store, Root, And Accounting Map
 
@@ -492,8 +497,9 @@ decision sequence:
 | AS-03b1a | property-key conversion sites | shared `ToPropertyKey` owner merged in PR #412; dynamic bytecode, Object, Reflect, and Proxy paths delegate, and Rust `Display` no longer defines keys |
 | AS-03b1b | integer, length, and index helpers | shared `ToIntegerOrInfinity`, `ToLength`, and `ToIndex` owners merged in PR #413; consumers delegate without silently replacing specification ranges with storage limits |
 | AS-03b2 | property and call tables | shared `Get`, `Set`, `Call`, and `GetMethod` operations merged in PR #414; legacy facades are deleted and guarded against return |
-| AS-03b3 | iterator map | shared iterator protocol and closing owner implemented and locally validated in draft PR #415; bytecode owns only loop control and all consumers delegate |
-| AS-04a/b | completion/error table and inline Error representation | preserve arbitrary throws across native frames; remove ReferenceError prefix parsing; add real errors/spans |
+| AS-03b3 | iterator map | shared iterator protocol and closing owner merged in PR #415; bytecode owns only loop control and all consumers delegate |
+| AS-04a | completion/error table | typed arbitrary-throw round trip and ReferenceError prefix removal implemented in draft PR #416; engine and resource failures stay non-catchable |
+| AS-04b | inline Error representation and source diagnostics | migrate Error values to ordinary object identity and add stable source ids/spans |
 | AS-05a/b | id, clone, store, root, handle, and limit maps | remove ambiguous VM cloning; add VM identity/generation and root/accounting contracts |
 | AS-06 | active execution roots and structured nested bytecode | explicit activation/block stacks and suspend/resume results |
 | AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |

@@ -296,6 +296,43 @@ src/runtime/abstract_operations/iterator.rs:iterator_step'
   compare_set "legacy iterator facade allowlist" "${legacy_iterator_operations}" ''
 }
 
+check_completion_error_boundary() {
+  local legacy_conversions
+  local typed_variant_count
+  local owners
+  local expected_owners
+
+  legacy_conversions="$(
+    cd "${repo_root}"
+    grep -R -n -E --include='*.rs' \
+      'uncaught throw:|REFERENCE_ERROR_PREFIX|Error::Exception' \
+      src || true
+  )"
+  if [[ -n "${legacy_conversions}" ]]; then
+    printf '%s\n' "${legacy_conversions}" >&2
+    fail "legacy completion/error boundary must not format throws or classify exceptions by text"
+  fi
+
+  typed_variant_count="$(
+    grep -F -o 'JavaScript { value: Value },' "${repo_root}/src/error.rs" \
+      | wc -l \
+      | tr -d '[:space:]'
+  )"
+  if [[ "${typed_variant_count}" != "1" ]]; then
+    fail "typed JavaScript error boundary changed; expected one Value-preserving variant"
+  fi
+
+  owners="$(
+    function_owners \
+      'fn[[:space:]]+(runtime_exception_value|reference_error_undefined|reference_error_uninitialized)[[:space:]]*\(' \
+      | sed -E 's/[[:space:]]*\($//'
+  )"
+  expected_owners='src/runtime/control/assertions.rs:reference_error_undefined
+src/runtime/control/assertions.rs:reference_error_uninitialized
+src/runtime/control/assertions.rs:runtime_exception_value'
+  compare_set "completion/error operation allowlist" "${owners}" "${expected_owners}"
+}
+
 check_state_owner_allowlists() {
   local context_fields
   local expected_context_fields
@@ -483,6 +520,7 @@ run_checks() {
   check_runtime_frontend_boundary
   check_harness_boundaries
   check_semantic_duplicate_allowlists
+  check_completion_error_boundary
   check_state_owner_allowlists
   check_optimization_owner_allowlists
   printf '%s: ok\n' "${script_name}"
@@ -563,6 +601,12 @@ mutate_iterator_owner() {
 mutate_legacy_iterator_facade() {
   local fixture_root="$1"
   printf '\nfn for_of_step() {}\n' \
+    >>"${fixture_root}/src/runtime/values.rs"
+}
+
+mutate_legacy_completion_conversion() {
+  local fixture_root="$1"
+  printf '\nconst LEGACY_COMPLETION_PROBE: &str = "uncaught throw: probe";\n' \
     >>"${fixture_root}/src/runtime/values.rs"
 }
 
@@ -679,6 +723,8 @@ run_self_tests() {
     'iterator abstract-operation allowlist changed' mutate_iterator_owner
   expect_guard_failure "${temp_dir}" legacy-iterator-facade \
     'legacy iterator facade allowlist changed' mutate_legacy_iterator_facade
+  expect_guard_failure "${temp_dir}" legacy-completion-conversion \
+    'legacy completion/error boundary' mutate_legacy_completion_conversion
   expect_guard_failure "${temp_dir}" context-store \
     'Context state-owner field allowlist changed' mutate_context_store
   expect_guard_failure "${temp_dir}" object-payload \
