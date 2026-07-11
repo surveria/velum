@@ -20,12 +20,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260711T005008Z.md`
-- Task: PR #445: AS-06b: add suspended bytecode outcomes and pending await
-- Performance: 5.60x (4/5 >1.00x) (from `rsqjs-test-report-20260711T005008Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T005008Z.md`)
+- `rsqjs-test-report-20260711T013950Z.md`
+- Task: PR #446: AS-07a: add safe collection and correct weak edges
+- Performance: 5.65x (4/5 >1.00x) (from `rsqjs-test-report-20260711T013950Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T013950Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 36514 passed / 66064 failed (35.60%) (from `rsqjs-test-report-20260711T005008Z.md`)
+- Full Test262: 36514 passed / 66064 failed (35.60%) (from `rsqjs-test-report-20260711T013950Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -434,3 +434,4 @@ Latest report:
 | `20260710T222749Z` `9f09c97` PR #444: docs: embed theme-aware SVG benchmark chart | 7.19x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260710T224642Z` `e67cdb5` PR #442: AS-06a2b: introduce structured control continuation records | 5.38x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36659 passed / 65919 failed (35.74%) |
 | `20260711T005008Z` `9e25e77` PR #445: AS-06b: add suspended bytecode outcomes and pending await | 5.60x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36514 passed / 66064 failed (35.60%) |
+| `20260711T013950Z` `62e2725` PR #446: AS-07a: add safe collection and correct weak edges | 5.65x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36514 passed / 66064 failed (35.60%) |
