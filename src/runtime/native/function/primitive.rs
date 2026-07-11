@@ -73,6 +73,9 @@ impl Context {
             NativeFunctionKind::SymbolPrototypeDescriptionGetter => {
                 Some(self.eval_symbol_prototype_description(args, this_value))
             }
+            NativeFunctionKind::SymbolPrototypeToPrimitive => {
+                Some(self.eval_symbol_prototype_to_primitive(args, this_value))
+            }
             NativeFunctionKind::SymbolPrototypeToString => {
                 Some(self.eval_symbol_prototype_to_string(args, this_value))
             }

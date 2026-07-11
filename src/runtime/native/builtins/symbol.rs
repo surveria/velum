@@ -1,3 +1,4 @@
+use crate::runtime::native::function::SYMBOL_PROTOTYPE_TO_PRIMITIVE_NAME;
 use crate::{
     error::{Error, Result},
     runtime::Context,
@@ -71,7 +72,7 @@ impl Context {
         self.push_native_function_with_id(id, NativeFunctionKind::Symbol, prototype, name)?;
         self.install_symbol_static_methods(id)?;
         self.install_well_known_symbols(id)?;
-        self.install_symbol_prototype_methods(prototype_id)?;
+        self.install_symbol_prototype_methods(prototype_id, id)?;
         self.insert_global_builtin(SYMBOL_NAME, constructor.clone())?;
         Ok(constructor)
     }
@@ -149,6 +150,15 @@ impl Context {
     }
 
     pub(in crate::runtime::native) fn eval_symbol_prototype_value_of(
+        &self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        Self::discard_symbol_extra_args(args.as_slice());
+        self.eval_direct_symbol_prototype_value_of(this_value)
+    }
+
+    pub(in crate::runtime::native) fn eval_symbol_prototype_to_primitive(
         &self,
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
@@ -287,7 +297,11 @@ impl Context {
         )
     }
 
-    fn install_symbol_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
+    fn install_symbol_prototype_methods(
+        &mut self,
+        prototype: ObjectId,
+        constructor: NativeFunctionId,
+    ) -> Result<()> {
         self.define_symbol_prototype_accessor(
             prototype,
             SYMBOL_PROTOTYPE_DESCRIPTION_PROPERTY,
@@ -298,10 +312,41 @@ impl Context {
             SYMBOL_PROTOTYPE_TO_STRING_NAME,
             NativeFunctionKind::SymbolPrototypeToString,
         )?;
+        self.define_symbol_prototype_to_primitive(prototype, constructor)?;
         self.define_symbol_prototype_method(
             prototype,
             SYMBOL_PROTOTYPE_VALUE_OF_NAME,
             NativeFunctionKind::SymbolPrototypeValueOf,
+        )
+    }
+
+    fn define_symbol_prototype_to_primitive(
+        &mut self,
+        prototype: ObjectId,
+        constructor: NativeFunctionId,
+    ) -> Result<()> {
+        let symbol = self.get_named(
+            &Value::NativeFunction(constructor),
+            SYMBOL_TO_PRIMITIVE_PROPERTY,
+        )?;
+        let Value::Symbol(symbol) = symbol else {
+            return Err(Error::runtime("Symbol.toPrimitive is not a symbol"));
+        };
+        let function = self.create_native_function(
+            NativeFunctionKind::SymbolPrototypeToPrimitive,
+            Value::Undefined,
+        )?;
+        self.objects.define_property(
+            prototype,
+            crate::runtime::object::PropertyKey::symbol(symbol.id()),
+            SYMBOL_PROTOTYPE_TO_PRIMITIVE_NAME,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(function),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
         )
     }
 

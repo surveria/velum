@@ -290,6 +290,22 @@ fn parse_reviver_transforms_and_deletes() -> TestResult {
 }
 
 #[test]
+fn parse_reviver_preserves_non_configurable_array_elements() -> TestResult {
+    ensure_string(
+        r#"
+        const parsed = JSON.parse('[1,2]', function (key, value) {
+            if (key === "0") {
+                Object.defineProperty(this, "1", { configurable: false });
+            }
+            return key === "1" ? undefined : value;
+        });
+        String(parsed.length) + ":" + String(parsed[1]) + ":" + String(1 in parsed)
+        "#,
+        "2:2:true",
+    )
+}
+
+#[test]
 fn stringify_replacer_array_filters_keys() -> TestResult {
     ensure_string(
         r#"

@@ -13,7 +13,10 @@ pub(in crate::runtime::native) const NUMBER_PROTOTYPE_TO_FIXED_NAME: &str = "toF
 pub(in crate::runtime::native) const NUMBER_PROTOTYPE_TO_EXPONENTIAL_NAME: &str = "toExponential";
 pub(in crate::runtime::native) const NUMBER_PROTOTYPE_TO_PRECISION_NAME: &str = "toPrecision";
 const SYMBOL_PROTOTYPE_FUNCTION_LENGTH_ZERO: f64 = 0.0;
+const SYMBOL_PROTOTYPE_TO_PRIMITIVE_LENGTH: f64 = 1.0;
 const SYMBOL_PROTOTYPE_DESCRIPTION_GETTER_NAME: &str = "get description";
+pub(in crate::runtime::native) const SYMBOL_PROTOTYPE_TO_PRIMITIVE_NAME: &str =
+    "[Symbol.toPrimitive]";
 pub(in crate::runtime::native) const SYMBOL_PROTOTYPE_TO_STRING_NAME: &str = "toString";
 pub(in crate::runtime::native) const SYMBOL_PROTOTYPE_VALUE_OF_NAME: &str = "valueOf";
 
@@ -35,6 +38,7 @@ impl NativeFunctionKind {
             Self::SymbolPrototypeDescriptionGetter
             | Self::SymbolPrototypeToString
             | Self::SymbolPrototypeValueOf => Some(SYMBOL_PROTOTYPE_FUNCTION_LENGTH_ZERO),
+            Self::SymbolPrototypeToPrimitive => Some(SYMBOL_PROTOTYPE_TO_PRIMITIVE_LENGTH),
             _ => None,
         }
     }
@@ -54,6 +58,7 @@ impl NativeFunctionKind {
             Self::SymbolPrototypeDescriptionGetter => {
                 Some(SYMBOL_PROTOTYPE_DESCRIPTION_GETTER_NAME)
             }
+            Self::SymbolPrototypeToPrimitive => Some(SYMBOL_PROTOTYPE_TO_PRIMITIVE_NAME),
             Self::SymbolPrototypeToString => Some(SYMBOL_PROTOTYPE_TO_STRING_NAME),
             Self::SymbolPrototypeValueOf => Some(SYMBOL_PROTOTYPE_VALUE_OF_NAME),
             _ => None,
