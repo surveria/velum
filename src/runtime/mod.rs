@@ -55,7 +55,7 @@ pub use binding::static_bindings::CompiledBindingFrame;
 use binding::static_bindings::StaticBindingCacheHandle;
 use bytecode::BytecodeOutcome;
 use call::{BoundFunction, RuntimeCallArgs};
-pub use gc::{VmGcKind, VmHeapReachabilitySnapshot};
+pub use gc::{VmGarbageCollectionReport, VmGcKind, VmHeapReachabilitySnapshot};
 use native::{NativeFunctionKind, NativeFunctionRegistry};
 use promise::{Promise, PromiseId, PromiseJob};
 use property::static_names::{CallValueCache, StaticNameAtomCacheHandle};

@@ -486,8 +486,8 @@ dependencies do not overlap.
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
 | AS-04 | Complete | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans merged in PR #421 with exact-tree correctness and canonical report publication. |
 | AS-05 | Complete | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05b2c3 are merged through PR #436 with exact-tree correctness, complete owner-limit reconciliation, and canonical report publication. |
-| AS-06 | In progress | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. PR #445 implements AS-06b suspended outcomes, detached async owners, resumable nested/control/pattern state, and embedder job lifecycle APIs. |
-| AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
+| AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
+| AS-07 | In progress | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Draft PR #446 implements an explicit-root collector, non-moving sparse arenas, fixed-point WeakMap ephemerons, WeakSet/WeakMap reclamation, hard-limit reuse, and ledger reconciliation; full validation and performance evidence remain in progress. |
 | AS-08 | Backlog | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | Optimizer on/off equivalence, harness opcodes removed, workload-shaped paths replaced or justified by broad evidence. |
 | AS-09 | Backlog | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | Multiple feature clusters land through shared semantics without new architecture exceptions. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
@@ -2089,6 +2089,34 @@ WeakMap and WeakSet must stop retaining keys strongly. WeakRef and
 FinalizationRegistry remain gated until collection order and callback/job
 semantics are specified and tested.
 
+AS-07a local implementation evidence (draft PR #446):
+
+- `SlotArena<T>` provides safe non-moving storage with vacant slots for
+  objects, callable payloads, Promises, collections, and iterators; heap
+  strings and Symbols use equivalent sparse tables;
+- `Vm::heap_reachability_snapshot` and `Vm::collect_garbage` expose an explicit
+  embedder safepoint over the existing direct-root and typed-edge contracts;
+- registered Symbols, native registry entries, runtime anchors, retained
+  handles, queued jobs, transient values, and active or suspended execution
+  state participate in marking;
+- Map, Set, and iterator edges remain strong, WeakSet keys remain weak, and
+  WeakMap values are admitted by an ephemeron fixed point before dead weak
+  entries are physically removed;
+- identity-bearing property, binding, and call caches are invalidated before
+  an arena id can be reused, while object prototype versions and payload
+  counters are reconciled after sweep;
+- independent owner snapshots release exact ledger deltas, allowing repeated
+  allocation, explicit collection, and slot reuse under configured hard
+  storage limits;
+- raw VM-local `Value` ids are explicitly non-durable across collection;
+  retained handles are the supported embedder root boundary;
+- focused library tests cover retained roots, ephemerons, registered Symbols,
+  hard-limit reuse, suspended async owners, heap strings, cache-id reuse, and
+  isolation between VMs;
+- atoms and shape metadata remain explicit cache roots for AS-08; WeakRef and
+  FinalizationRegistry remain gated. Full correctness, Test262, and paired
+  sentinel performance evidence remain to be attached before merge.
+
 ### AS-08: Optimization Isolation
 
 Create an explicit optimization owner for:
@@ -2219,8 +2247,9 @@ reviewable scope.
 36. AS-06a2b: replace recursive loop/try/finally durability with explicit
     control continuation records.
 37. AS-06b: add suspend/resume outcomes and correct pending `await` behavior
-    (implemented in PR #445; exact-tree CI validation in progress).
-38. AS-07a: add safe collection over explicit roots and correct weak edges.
+    (complete in PR #445 with exact-tree CI and canonical publication).
+38. AS-07a: add safe collection over explicit roots and correct weak edges
+    (in progress in draft PR #446).
 39. AS-08a: move reusable optimization state behind one optimizer/quickening
     boundary and remove harness-specific opcodes.
 

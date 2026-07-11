@@ -59,6 +59,15 @@ impl StaticNameAtomCacheHandle {
             .ok_or_else(|| Error::limit("static name cache entry count overflowed"))
     }
 
+    pub(in crate::runtime) fn invalidate_identity_caches(&self) {
+        for slot in self.native_calls.iter() {
+            slot.set(None);
+        }
+        for slot in self.call_values.iter() {
+            slot.set(None);
+        }
+    }
+
     pub(super) fn atom(&self, name: &StaticName) -> Result<Option<AtomId>> {
         self.atoms
             .get(name.id().index()?)

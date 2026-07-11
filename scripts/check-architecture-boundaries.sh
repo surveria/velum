@@ -295,7 +295,7 @@ check_storage_limit_boundary() {
   fi
 
   object_push_count="$(
-    grep -R -F -h 'self.objects.push(object);' \
+    grep -R -F -h 'self.objects.insert_at_next(id.index(), object)?;' \
       "${repo_root}/src/runtime/object" | wc -l
   )"
   if [[ "${object_push_count}" -ne 1 ]] \
@@ -1383,6 +1383,55 @@ check_async_edge_boundary() {
   fi
 }
 
+check_gc_boundary() {
+  for source in \
+    'pub struct SlotArena<T> {' \
+    'pub(crate) fn sweep_unmarked(&mut self, marks: &[bool]) -> Result<usize> {' \
+    'self.free.push(index);'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/arena.rs"; then
+      fail "garbage collection boundary changed; non-moving arena source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    'context.visit_direct_roots(&mut marker)?;' \
+    'for (key, value) in marker.ephemerons.clone() {' \
+    'pub fn collect_garbage(&mut self) -> Result<VmGarbageCollectionReport> {' \
+    'self.invalidate_identity_caches();' \
+    'self.release_collected_storage(&before, &after)?;' \
+    '.sweep_dead_weak_entries(|key| reachability.weak_key_is_reachable(key))'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/gc.rs"; then
+      fail "garbage collection boundary changed; root, ephemeron, sweep, cache, or accounting source '${source}' is missing"
+    fi
+  done
+
+  for source in \
+    'functions: SlotArena<Function>,' \
+    'native_functions: SlotArena<native::NativeFunction>,' \
+    'collections: SlotArena<collections::CollectionData>,' \
+    'promises: SlotArena<Promise>,'; do
+    if ! grep -F -q "${source}" "${repo_root}/src/runtime/mod.rs"; then
+      fail "garbage collection boundary changed; Context store '${source}' is not reclaimable"
+    fi
+  done
+
+  if ! grep -F -q 'pub(in crate::runtime) fn release_collected_storage(' \
+      "${repo_root}/src/runtime/accounting.rs"; then
+    fail "garbage collection boundary changed; collection must reconcile the independent owner snapshot"
+  fi
+
+  for file in src/storage/string_heap.rs src/storage/symbol.rs; do
+    if ! grep -F -q 'pub(crate) fn sweep_unmarked' "${repo_root}/${file}"; then
+      fail "garbage collection boundary changed; ${file} must retain explicit non-moving sweep"
+    fi
+  done
+
+  if ! grep -F -q 'pub fn collect_garbage(&mut self) -> Result<VmGarbageCollectionReport>' \
+      "${repo_root}/src/api/embedding.rs"; then
+    fail "garbage collection boundary changed; Vm requires an explicit collection surface"
+  fi
+}
+
 check_state_owner_allowlists() {
   local context_fields
   local expected_context_fields
@@ -1588,11 +1637,13 @@ run_checks() {
   require_file src/runtime/retained_values.rs
   require_file src/runtime/accounting.rs
   require_file src/runtime/activation.rs
+  require_file src/runtime/arena.rs
   require_file src/runtime/bytecode/continuation.rs
   require_file src/runtime/bytecode/control_continuation.rs
   require_file src/runtime/bytecode/control/structured_switch.rs
   require_file src/runtime/bytecode/destructure_continuation.rs
   require_file src/runtime/function/suspended.rs
+  require_file src/runtime/gc.rs
   require_file src/runtime/object/accounting.rs
   require_file src/runtime/mod.rs
   require_file src/runtime/roots.rs
@@ -1631,6 +1682,7 @@ run_checks() {
   check_callable_edge_boundary
   check_object_edge_boundary
   check_async_edge_boundary
+  check_gc_boundary
   check_state_owner_allowlists
   check_optimization_owner_allowlists
   printf '%s: ok\n' "${script_name}"
@@ -1996,6 +2048,24 @@ mutate_weak_collection_edge() {
     "${fixture_root}/src/runtime/collections.rs"
 }
 
+mutate_gc_root_source() {
+  local fixture_root="$1"
+  sed -i '/context.visit_direct_roots(&mut marker)?;/d' \
+    "${fixture_root}/src/runtime/gc.rs"
+}
+
+mutate_gc_cache_invalidation() {
+  local fixture_root="$1"
+  sed -i '/self.invalidate_identity_caches();/d' \
+    "${fixture_root}/src/runtime/gc.rs"
+}
+
+mutate_gc_ledger_reconciliation() {
+  local fixture_root="$1"
+  sed -i '/self.release_collected_storage(&before, &after)?;/d' \
+    "${fixture_root}/src/runtime/gc.rs"
+}
+
 mutate_test262_source_name() {
   local fixture_root="$1"
   printf '\nconst ARCHITECTURE_PROBE: &str = TEST262_ERROR_NAME;\n' \
@@ -2215,6 +2285,12 @@ run_self_tests() {
     'asynchronous edge boundary changed' mutate_promise_reaction_edge
   expect_guard_failure "${temp_dir}" weak-collection-edge \
     'asynchronous edge boundary changed' mutate_weak_collection_edge
+  expect_guard_failure "${temp_dir}" gc-root-source \
+    'garbage collection boundary changed' mutate_gc_root_source
+  expect_guard_failure "${temp_dir}" gc-cache-invalidation \
+    'garbage collection boundary changed' mutate_gc_cache_invalidation
+  expect_guard_failure "${temp_dir}" gc-ledger-reconciliation \
+    'garbage collection boundary changed' mutate_gc_ledger_reconciliation
   expect_guard_failure "${temp_dir}" context-store \
     'Context state-owner field allowlist changed' mutate_context_store
   expect_guard_failure "${temp_dir}" object-payload \

@@ -13,13 +13,13 @@ use crate::{
             WeakEdgeReference, WeakEdgeVisitor,
         },
     },
-    storage::symbol::SymbolId,
+    storage::{string_heap::StringId, symbol::SymbolId},
     value::{BoundFunctionId, FunctionId, HostFunctionId, NativeFunctionId, ObjectId, Value},
 };
 
 use super::Context;
 
-const GC_KIND_COUNT: usize = 9;
+const GC_KIND_COUNT: usize = 10;
 
 /// Stable categories included in VM reachability and collection reports.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -33,6 +33,7 @@ pub enum VmGcKind {
     Collection,
     CollectionIterator,
     Symbol,
+    HeapString,
 }
 
 impl VmGcKind {
@@ -46,6 +47,7 @@ impl VmGcKind {
         Self::Collection,
         Self::CollectionIterator,
         Self::Symbol,
+        Self::HeapString,
     ];
 
     /// Returns all reachability categories in stable reporting order.
@@ -65,6 +67,7 @@ impl VmGcKind {
             Self::Collection => 6,
             Self::CollectionIterator => 7,
             Self::Symbol => 8,
+            Self::HeapString => 9,
         }
     }
 }
@@ -74,6 +77,34 @@ impl VmGcKind {
 pub struct VmHeapReachabilitySnapshot {
     reachable: [usize; GC_KIND_COUNT],
     unreachable: [usize; GC_KIND_COUNT],
+}
+
+/// Records reclaimed by one stop-the-world VM collection.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VmGarbageCollectionReport {
+    reclaimed: [usize; GC_KIND_COUNT],
+    total_reclaimed: usize,
+    weak_entries_removed: usize,
+}
+
+impl VmGarbageCollectionReport {
+    /// Returns reclaimed records in one stable heap category.
+    #[must_use]
+    pub fn reclaimed(&self, kind: VmGcKind) -> usize {
+        self.reclaimed.get(kind.index()).copied().unwrap_or(0)
+    }
+
+    /// Returns the total number of reclaimed indexed-arena records.
+    #[must_use]
+    pub const fn total_reclaimed(&self) -> usize {
+        self.total_reclaimed
+    }
+
+    /// Returns weak collection entries removed because their keys were dead.
+    #[must_use]
+    pub const fn weak_entries_removed(&self) -> usize {
+        self.weak_entries_removed
+    }
 }
 
 impl VmHeapReachabilitySnapshot {
@@ -104,6 +135,8 @@ enum MarkTarget {
     Promise(PromiseId),
     Collection(CollectionId),
     CollectionIterator(CollectionIteratorId),
+    Symbol(SymbolId),
+    HeapString(StringId),
 }
 
 pub(in crate::runtime) struct Reachability {
@@ -116,6 +149,7 @@ pub(in crate::runtime) struct Reachability {
     collections: Vec<bool>,
     collection_iterators: Vec<bool>,
     symbols: BTreeSet<SymbolId>,
+    strings: BTreeSet<StringId>,
     queue: VecDeque<MarkTarget>,
     ephemerons: Vec<(Value, Value)>,
 }
@@ -132,6 +166,7 @@ impl Reachability {
             collections: vec![false; context.collections.slot_len()],
             collection_iterators: vec![false; context.collection_iterators.slot_len()],
             symbols: BTreeSet::new(),
+            strings: BTreeSet::new(),
             queue: VecDeque::new(),
             ephemerons: Vec::new(),
         };
@@ -209,6 +244,14 @@ impl Reachability {
                     .get(id.index())
                     .ok_or_else(|| Error::runtime("reachable collection iterator disappeared"))?
                     .visit_strong_edges(self)?,
+                MarkTarget::Symbol(id) => {
+                    if let Some(description) = context.symbols.get(id)?.description_string() {
+                        self.mark_string(description);
+                    }
+                }
+                MarkTarget::HeapString(id) => {
+                    context.strings.get(id)?;
+                }
             }
         }
         Ok(())
@@ -225,6 +268,7 @@ impl Reachability {
             true_count(&self.collections),
             true_count(&self.collection_iterators),
             self.symbols.len(),
+            self.strings.len(),
         ];
         let totals = [
             context.objects.object_count(),
@@ -236,6 +280,7 @@ impl Reachability {
             context.collections.len(),
             context.collection_iterators.len(),
             context.symbols.len(),
+            context.strings.len(),
         ];
         let mut unreachable = [0_usize; GC_KIND_COUNT];
         for (index, (total, live)) in totals.into_iter().zip(reachable).enumerate() {
@@ -278,13 +323,13 @@ impl Reachability {
                 MarkTarget::Object(*id),
                 &mut self.queue,
             ),
-            Value::Symbol(symbol) => Ok(self.symbols.insert(symbol.id())),
+            Value::Symbol(symbol) => Ok(self.mark_symbol(symbol.id())),
+            Value::HeapString(string) => Ok(self.mark_string(string)),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
-            | Value::String(_)
-            | Value::HeapString(_) => Ok(false),
+            | Value::String(_) => Ok(false),
         }
     }
 
@@ -324,9 +369,28 @@ impl Reachability {
         )
     }
 
+    fn mark_symbol(&mut self, id: SymbolId) -> bool {
+        if !self.symbols.insert(id) {
+            return false;
+        }
+        self.queue.push_back(MarkTarget::Symbol(id));
+        true
+    }
+
+    fn mark_string(&mut self, string: &crate::storage::string_heap::JsString) -> bool {
+        let id = string.id();
+        if !self.strings.insert(id) {
+            return false;
+        }
+        self.queue.push_back(MarkTarget::HeapString(id));
+        true
+    }
+
     fn mark_property_key(&mut self, key: PropertyKey) -> bool {
-        key.symbol_id()
-            .is_some_and(|symbol| self.symbols.insert(symbol))
+        let Some(symbol) = key.symbol_id() else {
+            return false;
+        };
+        self.mark_symbol(symbol)
     }
 
     fn visit_reference(&mut self, reference: StrongEdgeReference<'_>) -> Result<()> {
@@ -358,9 +422,11 @@ impl Reachability {
                 self.mark_property_key(key);
             }
             StrongEdgeReference::Symbol(symbol) => {
-                self.symbols.insert(symbol.id());
+                self.mark_symbol(symbol.id());
             }
-            StrongEdgeReference::String(_string) => {}
+            StrongEdgeReference::String(string) => {
+                self.mark_string(string);
+            }
             StrongEdgeReference::PromiseAssociation { object, promise } => {
                 self.mark_value(&Value::Object(object))?;
                 self.mark_promise(promise)?;
@@ -387,6 +453,18 @@ impl Reachability {
             | Value::NativeFunction(_)
             | Value::HostFunction(_) => false,
         }
+    }
+
+    fn object_is_reachable(&self, index: usize) -> bool {
+        self.objects.get(index).copied().unwrap_or(false)
+    }
+
+    fn promise_is_reachable(&self, id: PromiseId) -> bool {
+        self.promises.get(id.index()).copied().unwrap_or(false)
+    }
+
+    fn collection_is_reachable(&self, id: CollectionId) -> bool {
+        self.collections.get(id.index()).copied().unwrap_or(false)
     }
 }
 
@@ -450,6 +528,112 @@ impl Context {
     /// exceeds the supported range.
     pub fn heap_reachability_snapshot(&self) -> Result<VmHeapReachabilitySnapshot> {
         VmHeapReachabilitySnapshot::capture(self)
+    }
+
+    /// Reclaims records not reachable from the VM's explicit root contract.
+    /// Promise jobs, suspended async activations, retained handles, runtime
+    /// anchors, and registered Symbols participate in the mark phase.
+    ///
+    /// Raw VM-local [`Value`] ids are not durable across this call. Embedders
+    /// must use retained handles for values that survive Context operations.
+    ///
+    /// # Errors
+    /// Fails if a root or edge is invalid, arena reclamation cannot reserve its
+    /// free-list storage, or post-collection accounting does not reconcile.
+    pub fn collect_garbage(&mut self) -> Result<VmGarbageCollectionReport> {
+        let reachability = Reachability::capture(self)?;
+        let before = self.owner_storage_snapshot()?;
+        self.invalidate_identity_caches();
+        let weak_entries_removed = self.sweep_dead_weak_entries(&reachability)?;
+        self.sweep_dead_associations(&reachability);
+
+        let reclaimed = [
+            self.objects.sweep_unmarked_objects(&reachability.objects)?,
+            self.functions.sweep_unmarked(&reachability.functions)?,
+            self.native_functions
+                .sweep_unmarked(&reachability.native_functions)?,
+            self.host_functions
+                .sweep_unmarked(&reachability.host_functions)?,
+            self.bound_functions
+                .sweep_unmarked(&reachability.bound_functions)?,
+            self.promises.sweep_unmarked(&reachability.promises)?,
+            self.collections.sweep_unmarked(&reachability.collections)?,
+            self.collection_iterators
+                .sweep_unmarked(&reachability.collection_iterators)?,
+            self.symbols.sweep_unmarked(&reachability.symbols)?,
+            self.strings.sweep_unmarked(&reachability.strings)?,
+        ];
+        let after = self.owner_storage_snapshot()?;
+        self.release_collected_storage(&before, &after)?;
+        let total_reclaimed = reclaimed.iter().try_fold(0_usize, |total, count| {
+            total
+                .checked_add(*count)
+                .ok_or_else(|| Error::limit("reclaimed record count overflowed"))
+        })?;
+        Ok(VmGarbageCollectionReport {
+            reclaimed,
+            total_reclaimed,
+            weak_entries_removed,
+        })
+    }
+
+    fn invalidate_identity_caches(&mut self) {
+        for cache in &self.static_name_atom_caches {
+            cache.invalidate_identity_caches();
+        }
+        for cache in &self.static_binding_caches {
+            cache.invalidate_identity_caches();
+        }
+        for function in self.functions.iter_mut() {
+            if let Some(cache) = &function.static_name_atom_cache {
+                cache.invalidate_identity_caches();
+            }
+            if let Some(cache) = &function.static_binding_cache {
+                cache.invalidate_identity_caches();
+            }
+        }
+    }
+
+    fn sweep_dead_weak_entries(&mut self, reachability: &Reachability) -> Result<usize> {
+        let mut removed = 0_usize;
+        for (index, collection) in self.collections.indexed_mut() {
+            if !reachability
+                .collections
+                .get(index)
+                .copied()
+                .unwrap_or(false)
+            {
+                continue;
+            }
+            removed = removed
+                .checked_add(
+                    collection
+                        .sweep_dead_weak_entries(|key| reachability.weak_key_is_reachable(key)),
+                )
+                .ok_or_else(|| Error::limit("weak entry removal count overflowed"))?;
+        }
+        Ok(removed)
+    }
+
+    fn sweep_dead_associations(&mut self, reachability: &Reachability) {
+        for (index, slot) in self.promise_object_slots.iter_mut().enumerate() {
+            let keep = slot.is_some_and(|promise| {
+                reachability.object_is_reachable(index)
+                    && reachability.promise_is_reachable(promise)
+            });
+            if !keep {
+                *slot = None;
+            }
+        }
+        for (index, slot) in self.collection_object_slots.iter_mut().enumerate() {
+            let keep = slot.is_some_and(|(_kind, collection)| {
+                reachability.object_is_reachable(index)
+                    && reachability.collection_is_reachable(collection)
+            });
+            if !keep {
+                *slot = None;
+            }
+        }
     }
 }
 

@@ -175,6 +175,7 @@ impl Context {
             metadata_cache_count,
             FunctionProperties::new(prototype, intrinsic_defaults),
         )?;
+        let super_binding = self.bytecode_function_super_binding(init.new_target_mode);
         self.functions.insert_at_next(
             id.index(),
             super::Function {
@@ -192,11 +193,7 @@ impl Context {
                 constructable: init.constructable,
                 is_async: init.is_async,
                 class_constructor: init.class_constructor,
-                super_binding: if init.new_target_mode == BytecodeNewTargetMode::Lexical {
-                    self.current_activation_super()
-                } else {
-                    None
-                },
+                super_binding,
                 static_parent: None,
                 class_fields: None,
                 params_remembered: std::cell::Cell::new(false),
@@ -208,6 +205,16 @@ impl Context {
             },
         )?;
         Ok(function)
+    }
+
+    fn bytecode_function_super_binding(
+        &self,
+        mode: BytecodeNewTargetMode,
+    ) -> Option<Rc<FunctionSuperBinding>> {
+        if mode == BytecodeNewTargetMode::Lexical {
+            return self.current_activation_super();
+        }
+        None
     }
 
     pub(crate) fn eval_function_call_completion_with_this(

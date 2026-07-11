@@ -86,6 +86,33 @@ impl ObjectHeap {
         self.objects.slot_len()
     }
 
+    pub(in crate::runtime) fn sweep_unmarked_objects(&mut self, marks: &[bool]) -> Result<usize> {
+        let removed = self.objects.sweep_unmarked(marks)?;
+        if removed == 0 {
+            return Ok(0);
+        }
+        let mut object_payload_bytes = 0_usize;
+        let mut byte_buffer_count = 0_usize;
+        let mut byte_buffer_payload_bytes = 0_usize;
+        for object in &self.objects {
+            let (object_bytes, buffer_count, buffer_bytes) = object.storage_payload_bytes()?;
+            object_payload_bytes = object_payload_bytes
+                .checked_add(object_bytes)
+                .ok_or_else(|| Error::limit("object payload bytes overflowed"))?;
+            byte_buffer_count = byte_buffer_count
+                .checked_add(buffer_count)
+                .ok_or_else(|| Error::limit("byte buffer count overflowed"))?;
+            byte_buffer_payload_bytes = byte_buffer_payload_bytes
+                .checked_add(buffer_bytes)
+                .ok_or_else(|| Error::limit("byte buffer payload bytes overflowed"))?;
+        }
+        self.object_payload_bytes = object_payload_bytes;
+        self.byte_buffer_count = byte_buffer_count;
+        self.byte_buffer_payload_bytes = byte_buffer_payload_bytes;
+        self.bump_prototype_lookup_version()?;
+        Ok(removed)
+    }
+
     pub(super) fn bump_prototype_lookup_version(&mut self) -> Result<()> {
         self.prototype_lookup_version = self.prototype_lookup_version.next()?;
         Ok(())

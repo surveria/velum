@@ -1,4 +1,6 @@
-use rs_quickjs::{Engine, VmGcKind};
+use rs_quickjs::{
+    Engine, EngineConfig, RuntimeLimits, VmConfig, VmGcKind, VmStorageKind, VmStorageLimits,
+};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -8,7 +10,7 @@ fn marks_strong_roots_and_reports_unreachable_records() -> TestResult {
     let mut vm = engine.create_vm();
     let retained = vm.eval_retained("({ retained: { value: 42 } })")?;
     vm.eval(
-        r#"
+        r"
         var rooted = { child: { value: 7 } };
         function capture() {
             return rooted.child;
@@ -18,7 +20,7 @@ fn marks_strong_roots_and_reports_unreachable_records() -> TestResult {
             return discarded.value;
         })();
         42
-        "#,
+        ",
     )?;
 
     let snapshot = vm.heap_reachability_snapshot()?;
@@ -41,7 +43,22 @@ fn marks_strong_roots_and_reports_unreachable_records() -> TestResult {
     ensure(
         released.unreachable(VmGcKind::Object) > snapshot.unreachable(VmGcKind::Object),
         "releasing a retained handle did not expose its object graph",
-    )
+    )?;
+    let report = vm.collect_garbage()?;
+    ensure_at_least(
+        report.reclaimed(VmGcKind::Object),
+        released.unreachable(VmGcKind::Object),
+        "reclaimed object records",
+    )?;
+    ensure_positive(report.total_reclaimed(), "total reclaimed records")?;
+    ensure_usize(
+        vm.heap_reachability_snapshot()?
+            .unreachable(VmGcKind::Object),
+        0,
+        "unreachable objects after collection",
+    )?;
+    vm.storage_snapshot()?;
+    Ok(())
 }
 
 #[test]
@@ -76,7 +93,17 @@ fn resolves_weak_map_ephemerons_without_marking_dead_keys() -> TestResult {
     ensure(
         snapshot.reachable(VmGcKind::Object) >= 3,
         "live WeakMap key did not retain its ephemeron value",
-    )
+    )?;
+
+    let report = vm.collect_garbage()?;
+    ensure_usize(report.weak_entries_removed(), 1, "removed weak entries")?;
+    let result = vm.eval("weak.has(liveKey) && weak.get(liveKey) === liveValue ? 42 : 0")?;
+    ensure(
+        result.to_string() == "42",
+        "live WeakMap ephemeron did not survive collection",
+    )?;
+    vm.storage_snapshot()?;
+    Ok(())
 }
 
 #[test]
@@ -102,6 +129,183 @@ fn distinguishes_registered_and_unreachable_symbols() -> TestResult {
     ensure_positive(
         snapshot.unreachable(VmGcKind::Symbol),
         "unreachable weak symbol",
+    )?;
+    let report = vm.collect_garbage()?;
+    ensure_at_least(
+        report.reclaimed(VmGcKind::Symbol),
+        snapshot.unreachable(VmGcKind::Symbol),
+        "reclaimed Symbol records",
+    )?;
+    ensure_usize(
+        vm.heap_reachability_snapshot()?
+            .unreachable(VmGcKind::Symbol),
+        0,
+        "unreachable Symbols after collection",
+    )?;
+    let registered =
+        vm.eval(r#"Symbol.keyFor(Symbol.for("registered")) === "registered" ? 42 : 0"#)?;
+    ensure(
+        registered.to_string() == "42",
+        "registered Symbol did not survive collection",
+    )
+}
+
+#[test]
+fn reuses_collected_object_slots_under_a_hard_limit() -> TestResult {
+    let storage = VmStorageLimits::unlimited().with_max_count(VmStorageKind::Object, 32);
+    let limits = RuntimeLimits {
+        storage,
+        ..RuntimeLimits::default()
+    };
+    let config = EngineConfig::with_default_vm_config(VmConfig::with_limits(limits));
+    let engine = Engine::with_config(config);
+    let mut vm = engine.create_vm();
+
+    for _ in 0..100 {
+        vm.eval("({ payload: { answer: 42 } });")?;
+        vm.collect_garbage()?;
+    }
+    let snapshot = vm.storage_snapshot()?;
+    ensure(
+        snapshot.count(VmStorageKind::Object) < 32,
+        "object records were not reclaimed below the hard limit",
+    )
+}
+
+#[test]
+fn preserves_pending_jobs_and_suspended_async_owners() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.eval(
+        r"
+        var resolveLater;
+        var observed = 0;
+        var pending = new Promise(function(resolve) {
+            resolveLater = resolve;
+        });
+        async function waitForValue() {
+            observed = await pending;
+        }
+        waitForValue();
+        42
+        ",
+    )?;
+
+    let before = vm.heap_reachability_snapshot()?;
+    ensure_positive(
+        before.reachable(VmGcKind::Promise),
+        "reachable pending Promise",
+    )?;
+    vm.collect_garbage()?;
+    vm.eval("resolveLater(42); 0")?;
+    let observed = vm.eval("observed")?;
+    ensure(
+        observed.to_string() == "42",
+        "suspended async activation did not resume after collection",
+    )?;
+    vm.storage_snapshot()?;
+    Ok(())
+}
+
+#[test]
+fn reclaims_heap_strings_and_preserves_rooted_text() -> TestResult {
+    let storage = VmStorageLimits::unlimited().with_max_count(VmStorageKind::HeapString, 64);
+    let limits = RuntimeLimits {
+        storage,
+        ..RuntimeLimits::default()
+    };
+    let config = EngineConfig::with_default_vm_config(VmConfig::with_limits(limits));
+    let engine = Engine::with_config(config);
+    let mut vm = engine.create_vm();
+    vm.eval("var keptText = 'kept-text'; 'dead-' + 'text';")?;
+    let before = vm.heap_reachability_snapshot()?;
+    ensure_positive(
+        before.reachable(VmGcKind::HeapString),
+        "reachable heap string",
+    )?;
+    ensure_positive(
+        before.unreachable(VmGcKind::HeapString),
+        "unreachable heap string",
+    )?;
+    let report = vm.collect_garbage()?;
+    ensure_positive(
+        report.reclaimed(VmGcKind::HeapString),
+        "reclaimed heap strings",
+    )?;
+
+    for index in 0..100 {
+        vm.eval(&format!("'temporary-{index}' + '-value';"))?;
+        vm.collect_garbage()?;
+    }
+    let kept = vm.eval("keptText")?;
+    ensure(
+        kept.to_string() == "kept-text",
+        "rooted heap string did not survive collection",
+    )?;
+    vm.storage_snapshot()?;
+    Ok(())
+}
+
+#[test]
+fn invalidates_callable_caches_before_reusing_native_ids() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.eval(
+        r"
+        var target = (function() { return 1; }).bind(null);
+        function invokeTarget() {
+            return target();
+        }
+        invokeTarget();
+        ",
+    )?;
+    vm.eval("target = null; 0")?;
+    let report = vm.collect_garbage()?;
+    ensure_positive(
+        report.reclaimed(VmGcKind::NativeFunction),
+        "reclaimed ephemeral native function",
+    )?;
+    ensure_positive(
+        report.reclaimed(VmGcKind::BoundFunction),
+        "reclaimed bound function payload",
+    )?;
+
+    vm.eval(
+        r"
+        var iterator = new Map([[1, 42]]).values();
+        target = iterator.next;
+        0
+        ",
+    )?;
+    let result = vm.eval("invokeTarget().value")?;
+    ensure(
+        result.to_string() == "42",
+        "call cache dispatched a reused native id through its old kind",
+    )
+}
+
+#[test]
+fn collection_remains_isolated_between_vms() -> TestResult {
+    let engine = Engine::new();
+    let mut first = engine.create_vm();
+    let mut second = engine.create_vm();
+    first.eval("var owned = { vm: 'first' }; ({ garbage: true });")?;
+    second.eval("var owned = { vm: 'second' }; ({ garbage: true });")?;
+
+    let second_before = second.storage_snapshot()?;
+    first.collect_garbage()?;
+    let second_after = second.storage_snapshot()?;
+    ensure(
+        second_after == second_before,
+        "collecting one VM changed another VM's storage",
+    )?;
+    ensure(
+        second.eval("owned.vm")?.to_string() == "second",
+        "collecting one VM changed another VM's rooted value",
+    )?;
+    ensure(
+        first.eval("owned.vm")?.to_string() == "first",
+        "collection removed the first VM's rooted value",
     )
 }
 
@@ -123,5 +327,12 @@ fn ensure_at_least(value: usize, minimum: usize, label: &str) -> TestResult {
     ensure(
         value >= minimum,
         &format!("expected {label} >= {minimum}, got {value}"),
+    )
+}
+
+fn ensure_usize(actual: usize, expected: usize, label: &str) -> TestResult {
+    ensure(
+        actual == expected,
+        &format!("expected {label} {expected}, got {actual}"),
     )
 }

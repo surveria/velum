@@ -6,7 +6,7 @@ use crate::{Error, Result};
 /// collector may remove unreachable records and later reuse their indices
 /// after identity-bearing optimization caches have been invalidated.
 #[derive(Debug, Clone)]
-pub(crate) struct SlotArena<T> {
+pub struct SlotArena<T> {
     slots: Vec<Option<T>>,
     free: Vec<usize>,
     live: usize,
@@ -79,11 +79,6 @@ impl<T> SlotArena<T> {
             .map_err(|error| Error::limit(format!("arena free-list storage exhausted: {error}")))
     }
 
-    pub(crate) fn remove(&mut self, index: usize) -> Result<Option<T>> {
-        self.reserve_removals(1)?;
-        self.remove_reserved(index)
-    }
-
     pub(crate) fn remove_reserved(&mut self, index: usize) -> Result<Option<T>> {
         let Some(slot) = self.slots.get_mut(index) else {
             return Ok(None);
@@ -138,16 +133,42 @@ impl<T> SlotArena<T> {
             .filter_map(|(index, slot)| slot.as_ref().map(|value| (index, value)))
     }
 
+    pub(crate) fn indexed_mut(&mut self) -> impl Iterator<Item = (usize, &mut T)> {
+        self.slots
+            .iter_mut()
+            .enumerate()
+            .filter_map(|(index, slot)| slot.as_mut().map(|value| (index, value)))
+    }
+
+    pub(crate) fn sweep_unmarked(&mut self, marks: &[bool]) -> Result<usize> {
+        if marks.len() != self.slots.len() {
+            return Err(Error::runtime("arena mark bitmap length mismatch"));
+        }
+        let removed = self
+            .indexed()
+            .filter(|(index, _value)| !marks.get(*index).copied().unwrap_or(false))
+            .count();
+        self.reserve_removals(removed)?;
+        for index in 0..self.slots.len() {
+            if marks.get(index).copied().unwrap_or(false) || self.get(index).is_none() {
+                continue;
+            }
+            let removed_value = self.remove_reserved(index)?;
+            if removed_value.is_none() {
+                return Err(Error::runtime(
+                    "marked arena record disappeared during sweep",
+                ));
+            }
+        }
+        Ok(removed)
+    }
+
     pub(crate) const fn len(&self) -> usize {
         self.live
     }
 
     pub(crate) const fn slot_len(&self) -> usize {
         self.slots.len()
-    }
-
-    pub(crate) const fn is_empty(&self) -> bool {
-        self.live == 0
     }
 }
 

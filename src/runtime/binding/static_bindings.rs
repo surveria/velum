@@ -47,6 +47,12 @@ impl StaticBindingCacheHandle {
             .ok_or_else(|| Error::limit("static binding cache entry count overflowed"))
     }
 
+    pub(in crate::runtime) fn invalidate_identity_caches(&self) {
+        for slot in self.native_calls.iter() {
+            slot.set(None);
+        }
+    }
+
     pub(in crate::runtime::binding) fn location(
         &self,
         binding: &StaticBinding,

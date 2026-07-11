@@ -75,6 +75,18 @@ impl CollectionData {
         }
         Ok(())
     }
+
+    pub(in crate::runtime) fn sweep_dead_weak_entries(
+        &mut self,
+        mut key_is_reachable: impl FnMut(&Value) -> bool,
+    ) -> usize {
+        if matches!(self.kind, CollectionKind::Map | CollectionKind::Set) {
+            return 0;
+        }
+        let before = self.entries.len();
+        self.entries.retain(|(key, _value)| key_is_reachable(key));
+        before.saturating_sub(self.entries.len())
+    }
 }
 
 impl Context {
