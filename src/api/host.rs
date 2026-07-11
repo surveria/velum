@@ -377,13 +377,15 @@ impl Context {
             projected_payload_bytes,
         )?;
 
-        let id = HostFunctionId::new(self.host_functions.len());
+        self.host_functions.reserve_insert()?;
+        self.host_functions.reserve_removals(1)?;
+        let id = HostFunctionId::new(self.host_functions.next_index());
         let binding_name = name.clone();
         self.host_functions
-            .push(create_host_function(name, callback));
+            .insert_at_next(id.index(), create_host_function(name, callback))?;
         let result = self.define(&binding_name, Value::HostFunction(id), DeclKind::Const);
         if let Err(error) = result {
-            let removed = self.host_functions.pop();
+            let removed = self.host_functions.remove_reserved(id.index())?;
             if removed.is_none() {
                 return Err(Error::runtime("host function rollback failed"));
             }

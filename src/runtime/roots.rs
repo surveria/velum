@@ -229,6 +229,12 @@ impl Context {
                 visitor.visit_property_key(VmRootKind::RuntimeAnchor, key)?;
             }
         }
+        for id in self.symbols.registered_ids() {
+            visitor.visit_value(
+                VmRootKind::RuntimeAnchor,
+                &Value::Symbol(self.symbols.get(id)?.clone()),
+            )?;
+        }
         for id in self.native_function_registry.ids() {
             visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::NativeFunction(id))?;
         }

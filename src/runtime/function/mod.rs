@@ -105,7 +105,8 @@ impl Context {
         &mut self,
         init: &BytecodeFunctionInit<'_>,
     ) -> Result<Value> {
-        let id = FunctionId::new(self.functions.len());
+        self.functions.reserve_insert()?;
+        let id = FunctionId::new(self.functions.next_index());
         let function = Value::Function(id);
         let prototype = if init.constructable {
             let constructor_key = self.intern_property_key(PROTOTYPE_CONSTRUCTOR_PROPERTY)?;
@@ -174,35 +175,38 @@ impl Context {
             metadata_cache_count,
             FunctionProperties::new(prototype, intrinsic_defaults),
         )?;
-        self.functions.push(super::Function {
-            param_binding_ids,
-            param_atoms,
-            param_frames,
-            bytecode: init.bytecode.clone(),
-            fast_path: fast_path.map(Rc::new),
-            source: None,
-            upvalues: upvalues.cells,
-            static_name_atom_cache,
-            static_binding_cache,
-            static_binding_layout,
-            properties,
-            constructable: init.constructable,
-            is_async: init.is_async,
-            class_constructor: init.class_constructor,
-            super_binding: if init.new_target_mode == BytecodeNewTargetMode::Lexical {
-                self.current_activation_super()
-            } else {
-                None
+        self.functions.insert_at_next(
+            id.index(),
+            super::Function {
+                param_binding_ids,
+                param_atoms,
+                param_frames,
+                bytecode: init.bytecode.clone(),
+                fast_path: fast_path.map(Rc::new),
+                source: None,
+                upvalues: upvalues.cells,
+                static_name_atom_cache,
+                static_binding_cache,
+                static_binding_layout,
+                properties,
+                constructable: init.constructable,
+                is_async: init.is_async,
+                class_constructor: init.class_constructor,
+                super_binding: if init.new_target_mode == BytecodeNewTargetMode::Lexical {
+                    self.current_activation_super()
+                } else {
+                    None
+                },
+                static_parent: None,
+                class_fields: None,
+                params_remembered: std::cell::Cell::new(false),
+                scope_template,
+                new_target: FunctionNewTarget::from_mode(
+                    init.new_target_mode,
+                    self.current_new_target()?,
+                ),
             },
-            static_parent: None,
-            class_fields: None,
-            params_remembered: std::cell::Cell::new(false),
-            scope_template,
-            new_target: FunctionNewTarget::from_mode(
-                init.new_target_mode,
-                self.current_new_target()?,
-            ),
-        });
+        )?;
         Ok(function)
     }
 

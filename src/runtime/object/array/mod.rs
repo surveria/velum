@@ -615,7 +615,7 @@ impl ObjectHeap {
 
         let shapes = &self.shapes;
         let (source, result) =
-            Self::object_pair_for_concat(self.objects.as_mut_slice(), source_id, result_id)?;
+            Self::object_pair_for_concat(&mut self.objects, source_id, result_id)?;
         if result.array_length.is_none() {
             return Err(Error::runtime("array concat result is not an array"));
         }
@@ -651,35 +651,15 @@ impl ObjectHeap {
     }
 
     fn object_pair_for_concat(
-        objects: &mut [Object],
+        objects: &mut crate::runtime::arena::SlotArena<Object>,
         source_id: ObjectId,
         result_id: ObjectId,
     ) -> Result<(&Object, &mut Object)> {
         if source_id == result_id {
             return Err(Error::runtime("array concat source and result alias"));
         }
-        let source_index = source_id.index();
-        let result_index = result_id.index();
-        if source_index >= objects.len() || result_index >= objects.len() {
-            return Err(Error::runtime("object id is not defined"));
-        }
-        if source_index < result_index {
-            let (left, right) = objects.split_at_mut(result_index);
-            let source = left
-                .get(source_index)
-                .ok_or_else(|| Error::runtime("object id is not defined"))?;
-            let result = right
-                .first_mut()
-                .ok_or_else(|| Error::runtime("object id is not defined"))?;
-            return Ok((source, result));
-        }
-
-        let (left, right) = objects.split_at_mut(source_index);
-        let result = left
-            .get_mut(result_index)
-            .ok_or_else(|| Error::runtime("object id is not defined"))?;
-        let source = right
-            .first()
+        let (source, result) = objects
+            .get_pair_mut(source_id.index(), result_id.index())
             .ok_or_else(|| Error::runtime("object id is not defined"))?;
         Ok((source, result))
     }

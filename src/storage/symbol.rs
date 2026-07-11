@@ -103,6 +103,10 @@ impl SymbolTable {
         self.registry.len()
     }
 
+    pub(crate) fn registered_ids(&self) -> impl Iterator<Item = SymbolId> + '_ {
+        self.registry.iter().map(|(_, id)| *id)
+    }
+
     pub(crate) fn has_registry_key(&self, key: &JsString) -> bool {
         self.registry
             .iter()

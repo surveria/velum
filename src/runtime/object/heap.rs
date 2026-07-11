@@ -520,10 +520,11 @@ impl ObjectHeap {
                 .max_payload_bytes(VmStorageKind::ByteBuffer),
         )?;
 
+        self.objects.reserve_insert()?;
         object.activate_storage(self.storage_ledger.clone())?;
 
-        let id = ObjectId::new(self.objects.len());
-        self.objects.push(object);
+        let id = ObjectId::new(self.objects.next_index());
+        self.objects.insert_at_next(id.index(), object)?;
         self.object_payload_bytes = projected_object_bytes;
         self.byte_buffer_count = projected_buffer_count;
         self.byte_buffer_payload_bytes = projected_buffer_bytes;

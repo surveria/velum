@@ -60,8 +60,9 @@ impl Context {
     }
 
     pub(in crate::runtime) fn create_pending_promise(&mut self) -> Result<(PromiseId, Value)> {
+        self.promises.reserve_insert()?;
         self.storage_ledger.grow_count(VmStorageKind::Promise, 1)?;
-        let id = PromiseId::new(self.promises.len());
+        let id = PromiseId::new(self.promises.next_index());
         let object = match self.create_promise_object(id) {
             Ok(object) => object,
             Err(error) => {
@@ -70,7 +71,11 @@ impl Context {
                 return Err(error);
             }
         };
-        self.promises.push(Promise::pending());
+        if let Err(error) = self.promises.insert_at_next(id.index(), Promise::pending()) {
+            self.storage_ledger
+                .release_count(VmStorageKind::Promise, 1)?;
+            return Err(error);
+        }
         Ok((id, object))
     }
 

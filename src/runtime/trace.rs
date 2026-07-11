@@ -323,7 +323,7 @@ impl Context {
 }
 
 impl Function {
-    fn visit_strong_edges<V: StrongEdgeVisitor<VmCallableEdgeKind>>(
+    pub(in crate::runtime) fn visit_strong_edges<V: StrongEdgeVisitor<VmCallableEdgeKind>>(
         &self,
         visitor: &mut V,
     ) -> Result<()> {

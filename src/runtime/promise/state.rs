@@ -13,11 +13,11 @@ use super::job::PromiseReaction;
 pub struct PromiseId(usize);
 
 impl PromiseId {
-    pub(super) const fn new(index: usize) -> Self {
+    pub(in crate::runtime) const fn new(index: usize) -> Self {
         Self(index)
     }
 
-    pub(super) const fn index(self) -> usize {
+    pub(in crate::runtime) const fn index(self) -> usize {
         self.0
     }
 }

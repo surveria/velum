@@ -127,7 +127,7 @@ impl ObjectHeap {
         max_properties: usize,
     ) -> Result<()> {
         let (source, result) =
-            Self::object_pair_for_concat(self.objects.as_mut_slice(), source_id, result_id)?;
+            Self::object_pair_for_concat(&mut self.objects, source_id, result_id)?;
         let Some(properties) = source.packed_array_properties(length) else {
             return Err(Error::runtime("packed array source is no longer packed"));
         };

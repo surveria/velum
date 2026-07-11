@@ -1,6 +1,6 @@
 use crate::{
     error::{Error, Result},
-    runtime::{limits::VmStorageLimits, storage_ledger::VmStorageLedger},
+    runtime::{arena::SlotArena, limits::VmStorageLimits, storage_ledger::VmStorageLedger},
     value::ObjectId,
 };
 
@@ -43,7 +43,7 @@ impl PrototypeLookupVersion {
 
 #[derive(Debug, Clone)]
 pub struct ObjectHeap {
-    pub(super) objects: Vec<super::Object>,
+    pub(super) objects: SlotArena<super::Object>,
     pub(super) shapes: ShapeTable,
     pub(super) object_prototype: Option<ObjectId>,
     pub(super) array_prototype: Option<ObjectId>,
@@ -61,7 +61,7 @@ impl ObjectHeap {
         storage_ledger: VmStorageLedger,
     ) -> Self {
         Self {
-            objects: Vec::new(),
+            objects: SlotArena::new(),
             shapes: ShapeTable::new(storage_ledger.clone()),
             object_prototype: None,
             array_prototype: None,
@@ -76,6 +76,14 @@ impl ObjectHeap {
 
     pub(crate) const fn prototype_lookup_version(&self) -> u64 {
         self.prototype_lookup_version.value()
+    }
+
+    pub(in crate::runtime) const fn object_count(&self) -> usize {
+        self.objects.len()
+    }
+
+    pub(in crate::runtime) const fn object_slot_count(&self) -> usize {
+        self.objects.slot_len()
     }
 
     pub(super) fn bump_prototype_lookup_version(&mut self) -> Result<()> {

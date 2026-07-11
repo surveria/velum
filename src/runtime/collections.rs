@@ -16,7 +16,7 @@ const COLLECTION_TARGET_ERROR: &str = "method requires a compatible collection r
 pub(in crate::runtime) struct CollectionId(usize);
 
 impl CollectionId {
-    const fn index(self) -> usize {
+    pub(in crate::runtime) const fn index(self) -> usize {
         self.0
     }
 }
@@ -100,10 +100,18 @@ impl Context {
         &mut self,
         kind: CollectionKind,
     ) -> Result<CollectionId> {
+        self.collections.reserve_insert()?;
         self.storage_ledger
             .grow_count(VmStorageKind::Collection, 1)?;
-        let id = CollectionId(self.collections.len());
-        self.collections.push(CollectionData::new(kind));
+        let id = CollectionId(self.collections.next_index());
+        if let Err(error) = self
+            .collections
+            .insert_at_next(id.index(), CollectionData::new(kind))
+        {
+            self.storage_ledger
+                .release_count(VmStorageKind::Collection, 1)?;
+            return Err(error);
+        }
         Ok(id)
     }
 
@@ -271,7 +279,7 @@ impl Context {
 pub(in crate::runtime) struct CollectionIteratorId(usize);
 
 impl CollectionIteratorId {
-    const fn index(self) -> usize {
+    pub(in crate::runtime) const fn index(self) -> usize {
         self.0
     }
 }
@@ -303,9 +311,7 @@ impl Context {
         &mut self,
         items: Vec<Value>,
     ) -> Result<CollectionIteratorId> {
-        self.collection_iterators.try_reserve(1).map_err(|error| {
-            Error::limit(format!("collection iterator storage exhausted: {error}"))
-        })?;
+        self.collection_iterators.reserve_insert()?;
         self.storage_ledger
             .grow_count(VmStorageKind::CollectionIterator, 1)?;
         if let Err(error) = self
@@ -316,9 +322,9 @@ impl Context {
                 .release_count(VmStorageKind::CollectionIterator, 1)?;
             return Err(error);
         }
-        let id = CollectionIteratorId(self.collection_iterators.len());
+        let id = CollectionIteratorId(self.collection_iterators.next_index());
         self.collection_iterators
-            .push(CollectionIteratorState { items, cursor: 0 });
+            .insert_at_next(id.index(), CollectionIteratorState { items, cursor: 0 })?;
         Ok(id)
     }
 

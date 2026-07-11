@@ -21,6 +21,7 @@ use crate::value::{ErrorName, FunctionId, Value};
 mod abstract_operations;
 mod accounting;
 mod activation;
+mod arena;
 mod async_trace;
 pub mod binding;
 pub mod bytecode;
@@ -31,6 +32,7 @@ pub mod control;
 pub mod engine;
 mod execution_storage;
 pub mod function;
+mod gc;
 pub mod globals;
 pub mod limits;
 pub mod native;
@@ -47,11 +49,13 @@ mod transient_roots;
 pub mod values;
 
 pub use accounting::{VmStorageKind, VmStorageSnapshot};
+use arena::SlotArena;
 pub use async_trace::{VmAsyncEdgeKind, VmAsyncEdgeSnapshot, VmAsyncEdgeStrength};
 pub use binding::static_bindings::CompiledBindingFrame;
 use binding::static_bindings::StaticBindingCacheHandle;
 use bytecode::BytecodeOutcome;
 use call::{BoundFunction, RuntimeCallArgs};
+pub use gc::{VmGcKind, VmHeapReachabilitySnapshot};
 use native::{NativeFunctionKind, NativeFunctionRegistry};
 use promise::{Promise, PromiseId, PromiseJob};
 use property::static_names::{CallValueCache, StaticNameAtomCacheHandle};
@@ -89,17 +93,17 @@ pub struct Context {
     builtin_globals: BindingScope,
     locals: Vec<BindingScope>,
     activation_frames: Vec<activation::ActivationFrame>,
-    functions: Vec<Function>,
-    native_functions: Vec<native::NativeFunction>,
+    functions: SlotArena<Function>,
+    native_functions: SlotArena<native::NativeFunction>,
     native_function_registry: NativeFunctionRegistry,
-    bound_functions: Vec<BoundFunction>,
-    pub(crate) host_functions: Vec<HostFunction>,
+    bound_functions: SlotArena<BoundFunction>,
+    pub(crate) host_functions: SlotArena<HostFunction>,
     objects: ObjectHeap,
     global_object: Option<crate::value::ObjectId>,
-    collections: Vec<collections::CollectionData>,
+    collections: SlotArena<collections::CollectionData>,
     collection_object_slots: Vec<Option<(collections::CollectionKind, collections::CollectionId)>>,
-    collection_iterators: Vec<collections::CollectionIteratorState>,
-    promises: Vec<Promise>,
+    collection_iterators: SlotArena<collections::CollectionIteratorState>,
+    promises: SlotArena<Promise>,
     promise_object_slots: Vec<Option<PromiseId>>,
     promise_jobs: VecDeque<PromiseJob>,
     promise_prototype: Option<crate::value::ObjectId>,
@@ -297,17 +301,17 @@ impl Context {
             builtin_globals: BindingScope::new_active(storage_ledger.clone()),
             locals: Vec::new(),
             activation_frames: Vec::new(),
-            functions: Vec::new(),
-            native_functions: Vec::new(),
+            functions: SlotArena::new(),
+            native_functions: SlotArena::new(),
             native_function_registry: NativeFunctionRegistry::new(),
-            bound_functions: Vec::new(),
-            host_functions: Vec::new(),
+            bound_functions: SlotArena::new(),
+            host_functions: SlotArena::new(),
             objects: ObjectHeap::new(storage_limits, storage_ledger.clone()),
             global_object: None,
-            collections: Vec::new(),
+            collections: SlotArena::new(),
             collection_object_slots: Vec::new(),
-            collection_iterators: Vec::new(),
-            promises: Vec::new(),
+            collection_iterators: SlotArena::new(),
+            promises: SlotArena::new(),
             promise_object_slots: Vec::new(),
             promise_jobs: VecDeque::new(),
             promise_prototype: None,
