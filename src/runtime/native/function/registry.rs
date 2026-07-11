@@ -213,7 +213,12 @@ const FUNCTION_PROTOTYPE_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot
 const GENERATOR_NEXT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(205);
 const GENERATOR_RETURN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(206);
 const GENERATOR_THROW_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(207);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 208;
+const ASYNC_GENERATOR_NEXT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(208);
+const ASYNC_GENERATOR_RETURN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(209);
+const ASYNC_GENERATOR_THROW_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(210);
+const ASYNC_GENERATOR_FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(211);
+const PROMISE_ALL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(212);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 213;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -336,6 +341,10 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
 
     match kind {
         NativeFunctionKind::AsyncFunction => Some(ASYNC_FUNCTION_SLOT),
+        NativeFunctionKind::AsyncGeneratorFunction => Some(ASYNC_GENERATOR_FUNCTION_SLOT),
+        NativeFunctionKind::AsyncGeneratorNext => Some(ASYNC_GENERATOR_NEXT_SLOT),
+        NativeFunctionKind::AsyncGeneratorReturn => Some(ASYNC_GENERATOR_RETURN_SLOT),
+        NativeFunctionKind::AsyncGeneratorThrow => Some(ASYNC_GENERATOR_THROW_SLOT),
         NativeFunctionKind::Boolean => Some(BOOLEAN_SLOT),
         NativeFunctionKind::Eval => Some(EVAL_SLOT),
         NativeFunctionKind::ErrorConstructor(name) => Some(error_constructor_slot(name)),
@@ -374,6 +383,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::ObjectSeal => Some(OBJECT_SEAL_SLOT),
         NativeFunctionKind::ObjectValues => Some(OBJECT_VALUES_SLOT),
         NativeFunctionKind::Promise => Some(PROMISE_SLOT),
+        NativeFunctionKind::PromiseAll => Some(PROMISE_ALL_SLOT),
         NativeFunctionKind::PromiseResolve => Some(PROMISE_RESOLVE_SLOT),
         NativeFunctionKind::PromiseReject => Some(PROMISE_REJECT_SLOT),
         NativeFunctionKind::PromiseThen => Some(PROMISE_THEN_SLOT),

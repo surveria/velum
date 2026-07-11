@@ -596,6 +596,22 @@ impl Context {
         )?;
         counter.record(
             VmStorageKind::Association,
+            usize::from(self.async_iterator_prototype.is_some()),
+        )?;
+        counter.record(
+            VmStorageKind::Association,
+            usize::from(self.async_generator_prototype.is_some()),
+        )?;
+        counter.record(
+            VmStorageKind::Association,
+            usize::from(self.async_generator_function_prototype.is_some()),
+        )?;
+        counter.record(
+            VmStorageKind::Association,
+            self.async_generator_request_count()?,
+        )?;
+        counter.record(
+            VmStorageKind::Association,
             usize::from(self.iterator_symbol.is_some()),
         )
     }

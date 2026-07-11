@@ -146,15 +146,19 @@ impl BytecodeState {
                 "bytecode state is not awaiting a resume completion",
             ));
         }
-        let delegates = self.is_yielding() && self.has_yield_delegate();
-        let permits_abrupt = self.is_yielding() || self.is_generator_starting();
+        let delegates = self.has_yield_delegate();
+        let permits_abrupt = self.is_yielding() || delegates || self.is_generator_starting();
         let discards_normal = self.is_generator_starting();
         let (value, resume_completion) = match completion {
             completion if delegates => (None, Some(completion)),
             Completion::Normal(_) if discards_normal => (None, None),
             Completion::Normal(value) => (Some(value), None),
             completion @ Completion::Throw(_) => (None, Some(completion)),
-            completion @ Completion::Return(_) if permits_abrupt => (None, Some(completion)),
+            completion @ (Completion::Return(_) | Completion::ReturnDirect(_))
+                if permits_abrupt =>
+            {
+                (None, Some(completion))
+            }
             completion => return completion.into_result().map(|_| ()),
         };
         let suspend = self.suspend_state_mut();
@@ -331,6 +335,9 @@ impl BytecodeState {
             }),
             BytecodeCompletion::Continue(label) => Ok(Completion::Continue(label)),
             BytecodeCompletion::Return => Ok(Completion::Return(self.stack.pop_single()?)),
+            BytecodeCompletion::ReturnDirect => {
+                Ok(Completion::ReturnDirect(self.stack.pop_single()?))
+            }
             BytecodeCompletion::Throw => Ok(Completion::Throw(self.stack.pop_single()?)),
         }
     }
@@ -356,6 +363,7 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         Completion::Normal(value)
         | Completion::Throw(value)
         | Completion::Return(value)
+        | Completion::ReturnDirect(value)
         | Completion::Break { value, .. }
         | Completion::Yielded(value)
         | Completion::YieldedIteratorResult(value) => Some(value),
@@ -479,6 +487,7 @@ pub(super) fn bytecode_loop_completion(
         | Completion::Continue(Some(_))
         | Completion::Throw(_)
         | Completion::Return(_)
+        | Completion::ReturnDirect(_)
         | Completion::Suspended(_)
         | Completion::GeneratorStart
         | Completion::Yielded(_)

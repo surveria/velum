@@ -59,6 +59,7 @@ impl Context {
         &mut self,
         declaration: &crate::bytecode::BytecodeFunctionDeclaration,
     ) -> Result<()> {
+        let global = self.locals.is_empty();
         self.hoist_var(declaration.name().name())?;
         let function = self.create_bytecode_function(&BytecodeFunctionInit {
             static_function_id: declaration.id(),
@@ -70,7 +71,19 @@ impl Context {
             prototype_parent: None,
             new_target_mode: BytecodeNewTargetMode::Own,
         })?;
-        self.assign_bytecode(declaration.name(), function)
+        self.assign_bytecode(declaration.name(), function.clone())?;
+        if global {
+            let global_object = self.global_object_id()?;
+            self.define_global_object_data_property(
+                global_object,
+                declaration.name().name().name(),
+                function,
+                PropertyWritable::Yes,
+                PropertyEnumerable::Yes,
+                PropertyConfigurable::No,
+            )?;
+        }
+        Ok(())
     }
 
     fn hoist_var(&mut self, name: &StaticBinding) -> Result<()> {

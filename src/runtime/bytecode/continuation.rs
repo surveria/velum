@@ -30,6 +30,7 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         Completion::Normal(value)
         | Completion::Throw(value)
         | Completion::Return(value)
+        | Completion::ReturnDirect(value)
         | Completion::Break { value, .. }
         | Completion::Yielded(value)
         | Completion::YieldedIteratorResult(value) => Some(value),
@@ -99,6 +100,12 @@ impl BytecodeContinuationFrame {
             && self.control_stack.is_empty()
             && self.control_cursor == 0
             && self.resumed_child.is_none()
+    }
+
+    pub(in crate::runtime) fn has_yield_delegate(&self) -> bool {
+        self.parked_state
+            .as_ref()
+            .is_some_and(|state| state.has_yield_delegate())
     }
 
     const fn is_running(&self) -> bool {

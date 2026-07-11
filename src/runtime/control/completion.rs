@@ -10,6 +10,7 @@ pub enum Completion {
     Normal(Value),
     Throw(Value),
     Return(Value),
+    ReturnDirect(Value),
     Break {
         label: Option<StaticName>,
         value: Value,
@@ -36,7 +37,7 @@ impl Completion {
         match self {
             Self::Normal(value) => Ok(value),
             Self::Throw(value) => Err(Error::javascript(value)),
-            Self::Return(value) => Err(Error::runtime(format!(
+            Self::Return(value) | Self::ReturnDirect(value) => Err(Error::runtime(format!(
                 "return statement outside function returned {value}"
             ))),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
@@ -57,7 +58,7 @@ impl Completion {
         match self {
             Self::Normal(_) => Ok(Value::Undefined),
             Self::Throw(value) => Err(Error::javascript(value)),
-            Self::Return(value) => Ok(value),
+            Self::Return(value) | Self::ReturnDirect(value) => Ok(value),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),
             Self::Suspended(_) => Err(Error::runtime(
@@ -76,7 +77,7 @@ impl Completion {
         match self {
             Self::Normal(_) => Ok(Self::Normal(Value::Undefined)),
             Self::Throw(value) => Ok(Self::Throw(value)),
-            Self::Return(value) => Ok(Self::Normal(value)),
+            Self::Return(value) | Self::ReturnDirect(value) => Ok(Self::Normal(value)),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),
             Self::Suspended(_) => Err(Error::runtime("suspended bytecode escaped its call owner")),
@@ -89,7 +90,7 @@ impl Completion {
 
     pub fn into_native_value_result(self) -> Result<Value> {
         match self {
-            Self::Normal(value) | Self::Return(value) => Ok(value),
+            Self::Normal(value) | Self::Return(value) | Self::ReturnDirect(value) => Ok(value),
             Self::Throw(value) => Err(Error::javascript(value)),
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),

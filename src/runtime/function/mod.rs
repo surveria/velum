@@ -10,7 +10,6 @@ use crate::{
         PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate,
         PropertyWritable,
     },
-    runtime::property::get_property,
     runtime::{CompiledBindingFrame, Context},
     syntax::{StaticFunctionId, StaticName},
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
@@ -130,6 +129,16 @@ impl Context {
                 self.limits.max_object_properties,
             )?;
             return Ok(Value::Object(prototype_id));
+        }
+        if init.kind.is_async_generator() {
+            let constructor_key = self.object_constructor_property_key()?;
+            let generator_prototype = self.async_generator_prototype_id()?;
+            return self.objects.create_with_prototype(
+                Some(generator_prototype),
+                constructor_key,
+                self.limits.max_objects,
+                self.limits.max_object_properties,
+            );
         }
         if init.kind.is_generator() {
             let constructor_key = self.object_constructor_property_key()?;
@@ -284,6 +293,22 @@ impl Context {
     ) -> Result<Completion> {
         self.reject_class_constructor_call(id)?;
         let new_target = self.function_direct_call_new_target(id)?;
+        if self.function(id)?.kind.is_async_generator() {
+            let completion = self.eval_generator_function_completion_with_this_and_new_target(
+                id, args, this_value, new_target,
+            )?;
+            return match completion {
+                Completion::GeneratorStart => {
+                    let execution = self.detach_function_execution(id)?;
+                    self.create_generator_object(id, execution)
+                        .map(Completion::Normal)
+                }
+                completion @ Completion::Throw(_) => Ok(completion),
+                completion => Err(Error::runtime(format!(
+                    "async generator initialization produced invalid completion {completion:?}"
+                ))),
+            };
+        }
         if self.function(id)?.kind.is_async() {
             let value = self.eval_async_function_with_this(id, args, this_value, new_target)?;
             return Ok(Completion::Normal(value));
@@ -552,63 +577,6 @@ impl Context {
             .ok_or_else(|| Error::runtime("function id is not defined"))
     }
 
-    pub(crate) fn get_native_function_property_lookup(
-        &mut self,
-        id: NativeFunctionId,
-        property: PropertyLookup<'_>,
-    ) -> Result<Value> {
-        let property_name = property.name();
-        let property_kind = FunctionPropertyKind::from_name(property_name);
-        let own_value = {
-            let function = self.native_function(id)?;
-            function
-                .properties()
-                .intrinsic_value(property_kind)
-                .or_else(|| function.intrinsic_property(property_name))
-                .or_else(|| {
-                    function
-                        .properties()
-                        .own_property_descriptor(property)
-                        .and_then(|descriptor| match descriptor {
-                            OwnPropertyDescriptor::Data(descriptor) => Some(descriptor.value()),
-                            OwnPropertyDescriptor::Accessor(_) => None,
-                        })
-                })
-        };
-        if let Some(value) = own_value {
-            return self.checked_value(value);
-        }
-        self.get_native_function_object_prototype_property(id, property)
-    }
-
-    fn get_native_function_object_prototype_property(
-        &mut self,
-        id: NativeFunctionId,
-        property: PropertyLookup<'_>,
-    ) -> Result<Value> {
-        if !self.should_materialize_function_prototype_for(property) {
-            return Ok(Value::Undefined);
-        }
-        let prototype = self.native_function_object_prototype_value(id)?;
-        let Some(property) = self.known_function_prototype_lookup(property) else {
-            return Ok(Value::Undefined);
-        };
-        let value = get_property(&self.objects, &prototype, property)?;
-        self.runtime_property_value(value)
-    }
-
-    fn known_function_prototype_lookup<'a>(
-        &self,
-        property: PropertyLookup<'a>,
-    ) -> Option<PropertyLookup<'a>> {
-        let Some(key) = property.key() else {
-            return self
-                .known_property_key(property.name())
-                .map(|key| PropertyLookup::from_key(property.name(), key));
-        };
-        Some(PropertyLookup::from_key(property.name(), key))
-    }
-
     pub(in crate::runtime) fn should_materialize_function_prototype_for(
         &self,
         property: PropertyLookup<'_>,
@@ -660,7 +628,10 @@ impl Context {
         id: NativeFunctionId,
     ) -> Result<Value> {
         let kind = self.native_function(id)?.kind();
-        if kind == NativeFunctionKind::AsyncFunction {
+        if matches!(
+            kind,
+            NativeFunctionKind::AsyncFunction | NativeFunctionKind::AsyncGeneratorFunction
+        ) {
             return self.function_constructor_value();
         }
         self.function_constructor_prototype_value()

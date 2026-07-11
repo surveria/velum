@@ -9,6 +9,8 @@ fn exposes_promise_constructor_and_methods() -> TestResult {
         typeof Promise === 'function' &&
         Promise.name === 'Promise' &&
         Promise.length === 1 &&
+        typeof Promise.all === 'function' &&
+        Promise.all.length === 1 &&
         typeof Promise.resolve === 'function' &&
         Promise.resolve.length === 1 &&
         typeof Promise.reject === 'function' &&
@@ -22,6 +24,37 @@ fn exposes_promise_constructor_and_methods() -> TestResult {
     )?;
 
     ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn promise_all_preserves_order_and_rejects_on_input_failure() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    context.eval(
+        r#"
+        let observed = "pending";
+        let rejected = "pending";
+        let empty = "pending";
+        Promise.all([
+            Promise.resolve(1),
+            2,
+            { then(resolve) { resolve(3); } }
+        ]).then(function(values) {
+            observed = values.join(",");
+        });
+        Promise.all([1, Promise.reject("bad")]).then(
+            function() { rejected = "fulfilled"; },
+            function(reason) { rejected = reason; }
+        );
+        Promise.all([]).then(function(values) {
+            empty = values.length === 0 ? "empty" : "not-empty";
+        });
+        "#,
+    )?;
+
+    let value = context.eval("observed + '|' + rejected + '|' + empty")?;
+    ensure_value(&value, &Value::String("1,2,3|bad|empty".to_owned()))
 }
 
 #[test]

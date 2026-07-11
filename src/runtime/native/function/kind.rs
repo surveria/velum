@@ -13,8 +13,10 @@ pub(in crate::runtime::native) use regexp::{
 
 const ARRAY_BUFFER_FUNCTION_LENGTH: f64 = 1.0;
 const ASYNC_FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
+const ASYNC_GENERATOR_FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const ARRAY_BUFFER_NAME: &str = "ArrayBuffer";
 pub(in crate::runtime::native) const ASYNC_FUNCTION_NAME: &str = "AsyncFunction";
+pub(in crate::runtime::native) const ASYNC_GENERATOR_FUNCTION_NAME: &str = "AsyncGeneratorFunction";
 const BOOLEAN_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const BOOLEAN_NAME: &str = "Boolean";
 const EVAL_FUNCTION_LENGTH: f64 = 1.0;
@@ -151,6 +153,10 @@ pub(in crate::runtime::native) const OBJECT_SEAL_NAME: &str = "seal";
 pub(in crate::runtime::native) const OBJECT_VALUES_NAME: &str = "values";
 const PROMISE_CATCH_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const PROMISE_CATCH_NAME: &str = "catch";
+const PROMISE_ALL_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const PROMISE_ALL_NAME: &str = "all";
+const PROMISE_ALL_RESOLVE_ELEMENT_FUNCTION_LENGTH: f64 = 1.0;
+const PROMISE_ALL_RESOLVE_ELEMENT_NAME: &str = "";
 const PROMISE_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const PROMISE_NAME: &str = "Promise";
 pub(in crate::runtime::native) const PROXY_NAME: &str = "Proxy";
@@ -166,8 +172,8 @@ pub(in crate::runtime::native) const PROMISE_RESOLVE_NAME: &str = "resolve";
 const PROMISE_RESOLVER_FUNCTION_LENGTH: f64 = 1.0;
 const PROMISE_THEN_FUNCTION_LENGTH: f64 = 2.0;
 pub(in crate::runtime::native) const PROMISE_THEN_NAME: &str = "then";
-const REJECT_NAME: &str = "reject";
-const RESOLVE_NAME: &str = "resolve";
+const REJECT_NAME: &str = "";
+const RESOLVE_NAME: &str = "";
 const STRING_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const STRING_FROM_CHAR_CODE_NAME: &str = "fromCharCode";
 pub(in crate::runtime::native) const STRING_FROM_CODE_POINT_NAME: &str = "fromCodePoint";
@@ -255,6 +261,10 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ArrayValues,
     ArrayBuffer,
     AsyncFunction,
+    AsyncGeneratorFunction,
+    AsyncGeneratorNext,
+    AsyncGeneratorReturn,
+    AsyncGeneratorThrow,
     Boolean,
     BooleanPrototypeToString,
     BooleanPrototypeValueOf,
@@ -377,6 +387,11 @@ pub(in crate::runtime) enum NativeFunctionKind {
     PerformanceNow,
     Print,
     Promise,
+    PromiseAll,
+    PromiseAllResolveElement {
+        state: ObjectId,
+        index: usize,
+    },
     PromiseResolve,
     PromiseReject,
     PromiseThen,
@@ -493,6 +508,7 @@ impl NativeFunctionKind {
             self,
             Self::Array
                 | Self::AsyncFunction
+                | Self::AsyncGeneratorFunction
                 | Self::Boolean
                 | Self::ErrorConstructor(_)
                 | Self::Function
@@ -558,6 +574,7 @@ impl NativeFunctionKind {
             Self::ArrayBuffer => Some(ARRAY_BUFFER_FUNCTION_LENGTH),
             Self::Uint8Array => Some(UINT8_ARRAY_FUNCTION_LENGTH),
             Self::AsyncFunction => Some(ASYNC_FUNCTION_FUNCTION_LENGTH),
+            Self::AsyncGeneratorFunction => Some(ASYNC_GENERATOR_FUNCTION_FUNCTION_LENGTH),
             Self::Boolean => Some(BOOLEAN_FUNCTION_LENGTH),
             Self::BoundFunction(_) => Some(BOUND_FUNCTION_LENGTH),
             Self::Eval => Some(EVAL_FUNCTION_LENGTH),
@@ -569,7 +586,12 @@ impl NativeFunctionKind {
             Self::FunctionPrototypeApply => Some(FUNCTION_PROTOTYPE_APPLY_LENGTH),
             Self::FunctionPrototypeHasInstance => Some(FUNCTION_PROTOTYPE_HAS_INSTANCE_LENGTH),
             Self::FunctionPrototypeToString => Some(FUNCTION_PROTOTYPE_TO_STRING_LENGTH),
-            Self::GeneratorNext | Self::GeneratorReturn | Self::GeneratorThrow => Some(1.0),
+            Self::AsyncGeneratorNext
+            | Self::AsyncGeneratorReturn
+            | Self::AsyncGeneratorThrow
+            | Self::GeneratorNext
+            | Self::GeneratorReturn
+            | Self::GeneratorThrow => Some(1.0),
             Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_FUNCTION_LENGTH),
             Self::JsonParse => Some(JSON_PARSE_FUNCTION_LENGTH),
             Self::JsonRawJson => Some(JSON_RAW_JSON_FUNCTION_LENGTH),
@@ -577,6 +599,10 @@ impl NativeFunctionKind {
             Self::Number => Some(NUMBER_FUNCTION_LENGTH),
             Self::Print | Self::ThrowTypeError => Some(0.0),
             Self::Promise => Some(PROMISE_FUNCTION_LENGTH),
+            Self::PromiseAll => Some(PROMISE_ALL_FUNCTION_LENGTH),
+            Self::PromiseAllResolveElement { .. } => {
+                Some(PROMISE_ALL_RESOLVE_ELEMENT_FUNCTION_LENGTH)
+            }
             Self::PromiseResolve => Some(PROMISE_RESOLVE_FUNCTION_LENGTH),
             Self::PromiseReject => Some(PROMISE_REJECT_FUNCTION_LENGTH),
             Self::PromiseThen => Some(PROMISE_THEN_FUNCTION_LENGTH),
@@ -676,6 +702,10 @@ impl NativeFunctionKind {
     const fn core_name(self) -> Option<&'static str> {
         match self {
             Self::AsyncFunction => Some(ASYNC_FUNCTION_NAME),
+            Self::AsyncGeneratorFunction => Some(ASYNC_GENERATOR_FUNCTION_NAME),
+            Self::AsyncGeneratorNext | Self::GeneratorNext => Some("next"),
+            Self::AsyncGeneratorReturn | Self::GeneratorReturn => Some("return"),
+            Self::AsyncGeneratorThrow | Self::GeneratorThrow => Some("throw"),
             Self::ArrayBuffer => Some(ARRAY_BUFFER_NAME),
             Self::Boolean => Some(BOOLEAN_NAME),
             Self::BoundFunction(_) => Some(BOUND_FUNCTION_NAME),
@@ -688,9 +718,6 @@ impl NativeFunctionKind {
             Self::FunctionPrototypeApply => Some(FUNCTION_PROTOTYPE_APPLY_NAME),
             Self::FunctionPrototypeHasInstance => Some(FUNCTION_PROTOTYPE_HAS_INSTANCE_NAME),
             Self::FunctionPrototypeToString => Some(FUNCTION_PROTOTYPE_TO_STRING_NAME),
-            Self::GeneratorNext => Some("next"),
-            Self::GeneratorReturn => Some("return"),
-            Self::GeneratorThrow => Some("throw"),
             Self::ThrowTypeError => Some(""),
             Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_NAME),
             Self::JsonParse => Some(JSON_PARSE_NAME),
@@ -699,6 +726,8 @@ impl NativeFunctionKind {
             Self::Number => Some(NUMBER_NAME),
             Self::Print => Some("print"),
             Self::Promise => Some(PROMISE_NAME),
+            Self::PromiseAll => Some(PROMISE_ALL_NAME),
+            Self::PromiseAllResolveElement { .. } => Some(PROMISE_ALL_RESOLVE_ELEMENT_NAME),
             Self::PromiseResolve => Some(PROMISE_RESOLVE_NAME),
             Self::PromiseReject => Some(PROMISE_REJECT_NAME),
             Self::PromiseThen => Some(PROMISE_THEN_NAME),

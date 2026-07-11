@@ -12,7 +12,9 @@ mod job;
 mod state;
 
 use job::PromiseStatus;
-pub(in crate::runtime) use job::{PromiseJob, PromiseReaction, PromiseSettledState};
+pub(in crate::runtime) use job::{
+    PromiseContinuationCancellation, PromiseJob, PromiseReaction, PromiseSettledState,
+};
 use state::PromiseState;
 pub(in crate::runtime) use state::{Promise, PromiseId, PromiseResolverKind};
 
@@ -126,6 +128,24 @@ impl Context {
             }
             return self.adopt_promise(promise, adopted);
         }
+        if self.semantic_object_ref(&value)?.is_some() {
+            let then = match self.get_named(&value, "then") {
+                Ok(then) => then,
+                Err(error) => {
+                    let Some(reason) = runtime_exception_value(self, &error)? else {
+                        return Err(error);
+                    };
+                    return self.reject_promise(promise, reason);
+                }
+            };
+            if self.semantic_is_callable(&then)? {
+                return self.enqueue_promise_job(PromiseJob::ResolveThenable {
+                    promise,
+                    thenable: value,
+                    then,
+                });
+            }
+        }
         self.fulfill_promise(promise, value)
     }
 
@@ -183,7 +203,9 @@ impl Context {
             id, args, this_value, new_target,
         )? {
             Completion::Normal(_) => self.resolve_promise(promise, Value::Undefined)?,
-            Completion::Return(value) => self.resolve_promise(promise, value)?,
+            Completion::Return(value) | Completion::ReturnDirect(value) => {
+                self.resolve_promise(promise, value)?;
+            }
             Completion::Throw(value) => self.reject_promise(promise, value)?,
             Completion::Break { .. } | Completion::Continue(_) => {
                 let reason = self.create_error_object(
@@ -217,14 +239,24 @@ impl Context {
     }
 
     pub(in crate::runtime) fn eval_bytecode_await(&mut self, value: Value) -> Result<Completion> {
-        let promise = if let Ok(promise) = self.promise_id_from_value(&value) {
-            promise
-        } else {
-            let (promise, _object) = self.create_pending_promise()?;
-            self.fulfill_promise(promise, value)?;
-            promise
-        };
+        let promise = self.promise_resolve_for_await(value)?;
         Ok(Completion::Suspended(promise))
+    }
+
+    pub(in crate::runtime) fn promise_resolve_for_await(
+        &mut self,
+        value: Value,
+    ) -> Result<PromiseId> {
+        if let Ok(promise) = self.promise_id_from_value(&value) {
+            let constructor = self.get_named(&value, "constructor")?;
+            let intrinsic = self.promise_constructor_value()?;
+            if constructor == intrinsic {
+                return Ok(promise);
+            }
+        }
+        let (promise, _object) = self.create_pending_promise()?;
+        self.resolve_promise(promise, value)?;
+        Ok(promise)
     }
 
     fn add_async_await_reaction(
@@ -306,7 +338,7 @@ impl Context {
     /// Fails if VM storage-accounting invariants cannot be reconciled.
     pub fn cancel_jobs(&mut self) -> Result<usize> {
         let mut reaction_count = 0_usize;
-        let mut suspended = Vec::new();
+        let mut cancellations = Vec::new();
         for promise in &mut self.promises {
             let PromiseState::Pending { reactions } = &mut promise.state else {
                 continue;
@@ -315,23 +347,30 @@ impl Context {
             reaction_count = reaction_count
                 .checked_add(removed.len())
                 .ok_or_else(|| Error::limit("Promise cancellation count overflowed"))?;
-            suspended.extend(
+            cancellations.extend(
                 removed
                     .into_iter()
-                    .filter_map(PromiseReaction::into_suspended),
+                    .filter_map(PromiseReaction::into_cancellation),
             );
         }
         let jobs = std::mem::take(&mut self.promise_jobs);
         let job_count = jobs.len();
-        suspended.extend(jobs.into_iter().filter_map(PromiseJob::into_suspended));
+        cancellations.extend(jobs.into_iter().filter_map(PromiseJob::into_cancellation));
 
         self.storage_ledger
             .release_count(VmStorageKind::PromiseReaction, reaction_count)?;
         self.storage_ledger
             .release_count(VmStorageKind::PromiseJob, job_count)?;
         let storage_ledger = self.storage_ledger.clone();
-        for continuation in suspended {
-            continuation.cancel_storage(&storage_ledger)?;
+        for cancellation in cancellations {
+            match cancellation {
+                PromiseContinuationCancellation::AsyncFunction(continuation) => {
+                    continuation.cancel_storage(&storage_ledger)?;
+                }
+                PromiseContinuationCancellation::AsyncGenerator(generator) => {
+                    self.cancel_async_generator_await(generator)?;
+                }
+            }
         }
         reaction_count
             .checked_add(job_count)
@@ -487,6 +526,32 @@ impl Context {
     fn run_promise_job(&mut self, job: PromiseJob) -> Result<()> {
         match job {
             PromiseJob::Reaction { reaction, state } => self.run_promise_reaction(reaction, state),
+            PromiseJob::ResolveThenable {
+                promise,
+                thenable,
+                then,
+            } => self.run_promise_resolve_thenable(promise, thenable, &then),
+        }
+    }
+
+    fn run_promise_resolve_thenable(
+        &mut self,
+        promise: PromiseId,
+        thenable: Value,
+        then: &Value,
+    ) -> Result<()> {
+        let resolve =
+            self.create_promise_resolving_function(promise, PromiseResolverKind::Resolve)?;
+        let reject =
+            self.create_promise_resolving_function(promise, PromiseResolverKind::Reject)?;
+        match self.call_value(then, &[resolve, reject], thenable) {
+            Ok(_) => Ok(()),
+            Err(error) => {
+                let Some(reason) = runtime_exception_value(self, &error)? else {
+                    return Err(error);
+                };
+                self.reject_promise(promise, reason)
+            }
         }
     }
 
@@ -501,10 +566,21 @@ impl Context {
             on_rejected,
         } = reaction
         else {
-            if let PromiseReaction::Await { continuation } = reaction {
-                return self.resume_async_function(*continuation, state);
-            }
-            return Err(Error::runtime("Promise reaction kind disappeared"));
+            return match reaction {
+                PromiseReaction::Await { continuation } => {
+                    self.resume_async_function(*continuation, state)
+                }
+                PromiseReaction::AsyncGeneratorAwait { generator } => {
+                    let resume = match state.status {
+                        PromiseStatus::Fulfilled => Completion::Normal(state.value),
+                        PromiseStatus::Rejected => Completion::Throw(state.value),
+                    };
+                    self.resume_async_generator_await(generator, resume)
+                }
+                PromiseReaction::Then { .. } => {
+                    Err(Error::runtime("Promise reaction kind disappeared"))
+                }
+            };
         };
         let handler = match state.status {
             PromiseStatus::Fulfilled => on_fulfilled,
@@ -549,7 +625,9 @@ impl Context {
         };
         match completion {
             Completion::Normal(_) => self.resolve_promise(result_promise, Value::Undefined),
-            Completion::Return(value) => self.resolve_promise(result_promise, value),
+            Completion::Return(value) | Completion::ReturnDirect(value) => {
+                self.resolve_promise(result_promise, value)
+            }
             Completion::Throw(value) => self.reject_promise(result_promise, value),
             Completion::Suspended(awaited) => {
                 let continuation =

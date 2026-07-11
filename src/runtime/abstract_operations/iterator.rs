@@ -9,6 +9,8 @@ use crate::{
 
 use super::to_boolean;
 
+mod async_delegate;
+
 const ITERATOR_SYMBOL_DISPLAY_NAME: &str = "Symbol(Symbol.iterator)";
 const ITERATOR_NEXT_PROPERTY: &str = "next";
 const ITERATOR_RETURN_PROPERTY: &str = "return";
@@ -58,11 +60,23 @@ pub(in crate::runtime) enum IteratorStep {
 #[derive(Debug)]
 pub(in crate::runtime) struct YieldDelegateContinuation {
     source: IteratorSource,
+    asynchronous: bool,
+    await_yielded_values: bool,
+    pending: Option<YieldDelegateDone>,
 }
 
 impl YieldDelegateContinuation {
-    pub(in crate::runtime) const fn new(source: IteratorSource) -> Self {
-        Self { source }
+    pub(in crate::runtime) const fn new(
+        source: IteratorSource,
+        asynchronous: bool,
+        await_yielded_values: bool,
+    ) -> Self {
+        Self {
+            source,
+            asynchronous,
+            await_yielded_values,
+            pending: None,
+        }
     }
 
     pub(in crate::runtime) fn root_values(&self) -> impl Iterator<Item = &Value> {
@@ -72,6 +86,7 @@ impl YieldDelegateContinuation {
 
 /// One externally observable step of the `yield*` delegation loop.
 pub(in crate::runtime) enum YieldDelegateStep {
+    Await(crate::runtime::promise::PromiseId),
     Yielded(Value),
     YieldedIteratorResult(Value),
     Complete(Value),
@@ -79,10 +94,12 @@ pub(in crate::runtime) enum YieldDelegateStep {
     Abrupt(Completion),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum YieldDelegateDone {
     Normal,
     Return,
+    ResumeReturn,
+    CloseThrow,
 }
 
 impl Context {
@@ -135,6 +152,23 @@ impl Context {
             }
             Value::Undefined | Value::Null => Err(not_iterable_error(&iterable)),
         }
+    }
+
+    pub(in crate::runtime) fn get_async_iterator(
+        &mut self,
+        iterable: Value,
+    ) -> Result<(IteratorSource, bool)> {
+        if let Some(method) = self.async_iterator_method(&iterable)? {
+            return self
+                .get_iterator_from_method(&iterable, &method)
+                .map(|source| (source, false));
+        }
+        if let Some(method) = self.iterator_method(&iterable)? {
+            return self
+                .get_iterator_from_method(&iterable, &method)
+                .map(|source| (source, true));
+        }
+        self.get_iterator(iterable).map(|source| (source, true))
     }
 
     /// ECMAScript `GetIteratorFromMethod`, shared by ordinary iterable
@@ -240,12 +274,15 @@ impl Context {
             VmRootKind::TransientTemporary,
             resume.as_ref().and_then(completion_value),
         )?;
+        if continuation.asynchronous {
+            return self.async_yield_delegate_step(continuation, resume);
+        }
         match resume {
             None => self.yield_delegate_next(&mut continuation.source, &Value::Undefined),
             Some(Completion::Normal(value)) => {
                 self.yield_delegate_next(&mut continuation.source, &value)
             }
-            Some(Completion::Return(value)) => {
+            Some(Completion::Return(value) | Completion::ReturnDirect(value)) => {
                 self.yield_delegate_return(&mut continuation.source, &value)
             }
             Some(Completion::Throw(value)) => {
@@ -380,6 +417,16 @@ impl Context {
         Ok(match done_kind {
             YieldDelegateDone::Normal => YieldDelegateStep::Complete(value),
             YieldDelegateDone::Return => YieldDelegateStep::Return(value),
+            YieldDelegateDone::ResumeReturn => {
+                return Err(Error::runtime(
+                    "async return resumption reached synchronous iterator result handling",
+                ));
+            }
+            YieldDelegateDone::CloseThrow => {
+                return Err(Error::runtime(
+                    "async iterator close reached ordinary delegation result handling",
+                ));
+            }
         })
     }
 
@@ -428,6 +475,7 @@ impl Context {
             )),
             abrupt @ Completion::Throw(_) => Ok(abrupt),
             completion @ (Completion::Return(_)
+            | Completion::ReturnDirect(_)
             | Completion::Break { .. }
             | Completion::Continue(_)) => completion.into_result().map(Completion::Normal),
             completion @ (Completion::Suspended(_)
@@ -483,6 +531,19 @@ impl Context {
         self.get_method(iterable, key.lookup())
     }
 
+    fn async_iterator_method(&mut self, iterable: &Value) -> Result<Option<Value>> {
+        let constructor = self.symbol_constructor_value()?;
+        let symbol = self.get_named(&constructor, "asyncIterator")?;
+        let Value::Symbol(symbol) = symbol else {
+            return Err(Error::runtime("Symbol.asyncIterator is not initialized"));
+        };
+        let key = DynamicPropertyKey::new(
+            "[Symbol.asyncIterator]".to_owned(),
+            Some(PropertyKey::symbol(symbol.id())),
+        );
+        self.get_method(iterable, key.lookup())
+    }
+
     fn is_default_array_iterator_method(&self, method: &Value) -> Result<bool> {
         let Value::NativeFunction(id) = method else {
             return Ok(false);
@@ -533,6 +594,13 @@ fn protocol_iterator_to_close(source: &mut IteratorSource) -> Option<Value> {
     Some(iterator.clone())
 }
 
+fn protocol_iterator(source: &IteratorSource) -> Result<Value> {
+    let IteratorSource::Protocol { iterator, .. } = source else {
+        return Err(Error::runtime("iterator source is not protocol-based"));
+    };
+    Ok(iterator.clone())
+}
+
 const fn is_resource_limit(error: &Error) -> bool {
     matches!(error, Error::ResourceLimit { .. })
 }
@@ -542,6 +610,7 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         Completion::Normal(value)
         | Completion::Throw(value)
         | Completion::Return(value)
+        | Completion::ReturnDirect(value)
         | Completion::Break { value, .. }
         | Completion::Yielded(value)
         | Completion::YieldedIteratorResult(value) => Some(value),

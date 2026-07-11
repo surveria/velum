@@ -1,3 +1,7 @@
+use std::collections::VecDeque;
+
+mod async_generator;
+
 use crate::{
     error::{Error, Result},
     runtime::{
@@ -11,6 +15,8 @@ use crate::{
             DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
             PropertyKey, PropertyUpdate, PropertyWritable,
         },
+        promise::PromiseId,
+        trace::StrongEdgeReference,
         trace::StrongEdgeVisitor,
     },
     value::{FunctionId, ObjectId, Value},
@@ -24,9 +30,12 @@ const ITERATOR_THROW_NAME: &str = "throw";
 const ITERATOR_RESULT_VALUE_NAME: &str = "value";
 const ITERATOR_RESULT_DONE_NAME: &str = "done";
 const ITERATOR_SYMBOL_DISPLAY: &str = "[Symbol.iterator]";
+const ASYNC_ITERATOR_SYMBOL_DISPLAY: &str = "[Symbol.asyncIterator]";
 const TO_STRING_TAG_SYMBOL_DISPLAY: &str = "[Symbol.toStringTag]";
 const TO_STRING_TAG_PROPERTY: &str = "toStringTag";
 const GENERATOR_TAG: &str = "Generator";
+const ASYNC_GENERATOR_TAG: &str = "AsyncGenerator";
+const ASYNC_ITERATOR_SYMBOL_PROPERTY: &str = "asyncIterator";
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(in crate::runtime) struct GeneratorId(usize);
@@ -40,11 +49,22 @@ impl GeneratorId {
 #[derive(Debug)]
 pub(in crate::runtime) struct GeneratorData {
     state: GeneratorState,
+    asynchronous: bool,
+    current_request: Option<AsyncGeneratorRequest>,
+    requests: VecDeque<AsyncGeneratorRequest>,
+}
+
+#[derive(Debug)]
+struct AsyncGeneratorRequest {
+    promise: PromiseId,
+    kind: GeneratorResumeKind,
+    value: Value,
 }
 
 impl GeneratorData {
     pub(in crate::runtime) fn execution_frame_count(&self) -> Result<usize> {
         match &self.state {
+            GeneratorState::Awaiting(awaiting) => awaiting.execution_frame_count(),
             GeneratorState::Suspended(execution) => execution.execution_frame_count(),
             GeneratorState::Executing | GeneratorState::Completed => Ok(0),
         }
@@ -52,6 +72,7 @@ impl GeneratorData {
 
     pub(in crate::runtime) fn binding_count(&self) -> Result<usize> {
         match &self.state {
+            GeneratorState::Awaiting(awaiting) => awaiting.binding_count(),
             GeneratorState::Suspended(execution) => execution.binding_count(),
             GeneratorState::Executing | GeneratorState::Completed => Ok(0),
         }
@@ -59,6 +80,7 @@ impl GeneratorData {
 
     pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
         match &self.state {
+            GeneratorState::Awaiting(awaiting) => awaiting.cache_entry_count(),
             GeneratorState::Suspended(execution) => execution.cache_entry_count(),
             GeneratorState::Executing | GeneratorState::Completed => Ok(0),
         }
@@ -69,19 +91,99 @@ impl GeneratorData {
         V: StrongEdgeVisitor<VmAsyncEdgeKind>,
     {
         match &self.state {
+            GeneratorState::Awaiting(awaiting) => awaiting.visit_strong_edges(visitor),
             GeneratorState::Suspended(execution) => {
                 execution.visit_strong_edges(visitor, VmAsyncEdgeKind::GeneratorState)
             }
             GeneratorState::Executing | GeneratorState::Completed => Ok(()),
+        }?;
+        if let Some(request) = &self.current_request {
+            request.visit_strong_edges(visitor)?;
         }
+        for request in &self.requests {
+            request.visit_strong_edges(visitor)?;
+        }
+        Ok(())
+    }
+
+    fn request_count(&self) -> usize {
+        self.requests.len() + usize::from(self.current_request.is_some())
+    }
+}
+
+impl AsyncGeneratorRequest {
+    fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
+    where
+        V: StrongEdgeVisitor<VmAsyncEdgeKind>,
+    {
+        visitor.visit(
+            VmAsyncEdgeKind::GeneratorState,
+            StrongEdgeReference::Promise(self.promise),
+        )?;
+        visitor.visit(
+            VmAsyncEdgeKind::GeneratorState,
+            StrongEdgeReference::Value(&self.value),
+        )
     }
 }
 
 #[derive(Debug)]
 enum GeneratorState {
     Suspended(DetachedFunctionExecution),
+    Awaiting(AsyncGeneratorAwaitState),
     Executing,
     Completed,
+}
+
+#[derive(Debug)]
+enum AsyncGeneratorAwaitState {
+    Body(DetachedFunctionExecution),
+    DelegatedYield(DetachedFunctionExecution),
+    ResumeReturn(DetachedFunctionExecution),
+    Yield(DetachedFunctionExecution),
+    Return,
+}
+
+impl AsyncGeneratorAwaitState {
+    const fn execution(&self) -> Option<&DetachedFunctionExecution> {
+        match self {
+            Self::Body(execution)
+            | Self::DelegatedYield(execution)
+            | Self::ResumeReturn(execution)
+            | Self::Yield(execution) => Some(execution),
+            Self::Return => None,
+        }
+    }
+
+    fn execution_frame_count(&self) -> Result<usize> {
+        self.execution()
+            .map_or(Ok(0), DetachedFunctionExecution::execution_frame_count)
+    }
+
+    fn binding_count(&self) -> Result<usize> {
+        self.execution()
+            .map_or(Ok(0), DetachedFunctionExecution::binding_count)
+    }
+
+    fn cache_entry_count(&self) -> Result<usize> {
+        self.execution()
+            .map_or(Ok(0), DetachedFunctionExecution::cache_entry_count)
+    }
+
+    fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
+    where
+        V: StrongEdgeVisitor<VmAsyncEdgeKind>,
+    {
+        let Some(execution) = self.execution() else {
+            return Ok(());
+        };
+        execution.visit_strong_edges(visitor, VmAsyncEdgeKind::GeneratorState)
+    }
+}
+
+enum AsyncGeneratorStep {
+    Settled(GeneratorState, Value),
+    Awaiting(AsyncGeneratorAwaitState, PromiseId),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -122,11 +224,22 @@ impl Context {
             })
     }
 
+    pub(in crate::runtime) fn async_generator_request_count(&self) -> Result<usize> {
+        self.generators
+            .iter()
+            .try_fold(0_usize, |count, generator| {
+                count
+                    .checked_add(generator.request_count())
+                    .ok_or_else(|| Error::limit("async generator request count overflowed"))
+            })
+    }
+
     pub(in crate::runtime) fn create_generator_object(
         &mut self,
         function: FunctionId,
         execution: DetachedFunctionExecution,
     ) -> Result<Value> {
+        let asynchronous = self.function(function)?.kind.is_async_generator();
         let prototype = self.generator_instance_prototype(function)?;
         let constructor_key = self.object_constructor_property_key()?;
         let object = self.objects.create_with_prototype(
@@ -144,6 +257,9 @@ impl Context {
         let id = GeneratorId(self.generators.next_index());
         let data = GeneratorData {
             state: GeneratorState::Suspended(execution),
+            asynchronous,
+            current_request: None,
+            requests: VecDeque::new(),
         };
         if let Err(error) = self.generators.insert_at_next(id.index(), data) {
             self.storage_ledger
@@ -178,7 +294,11 @@ impl Context {
         if let Value::Object(id) = prototype {
             return Ok(id);
         }
-        self.generator_prototype_id()
+        if self.function(function)?.kind.is_async_generator() {
+            self.async_generator_prototype_id()
+        } else {
+            self.generator_prototype_id()
+        }
     }
 
     pub(in crate::runtime) fn generator_prototype_id(&mut self) -> Result<ObjectId> {
@@ -297,8 +417,15 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
         kind: GeneratorResumeKind,
+        asynchronous: bool,
     ) -> Result<Value> {
+        if asynchronous {
+            return self.enqueue_async_generator_request(args, this_value, kind);
+        }
         let id = self.generator_id_from_this(this_value)?;
+        if self.generator_mut(id)?.asynchronous {
+            return Err(Error::type_error(GENERATOR_RECEIVER_ERROR));
+        }
         let state = {
             let generator = self.generator_mut(id)?;
             std::mem::replace(&mut generator.state, GeneratorState::Executing)
@@ -320,7 +447,9 @@ impl Context {
         value: Value,
     ) -> Result<(GeneratorState, Value)> {
         match state {
-            GeneratorState::Executing => Err(Error::type_error(GENERATOR_EXECUTING_ERROR)),
+            GeneratorState::Awaiting(_) | GeneratorState::Executing => {
+                Err(Error::type_error(GENERATOR_EXECUTING_ERROR))
+            }
             GeneratorState::Completed => self.resume_completed_generator(kind, value),
             GeneratorState::Suspended(execution) => {
                 let function = execution.function();
@@ -377,7 +506,7 @@ impl Context {
                 GeneratorState::Completed,
                 self.create_generator_result(Value::Undefined, true)?,
             )),
-            Completion::Return(value) => Ok((
+            Completion::Return(value) | Completion::ReturnDirect(value) => Ok((
                 GeneratorState::Completed,
                 self.create_generator_result(value, true)?,
             )),

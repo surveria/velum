@@ -72,7 +72,8 @@ impl Context {
                     completion @ (Completion::Break { .. }
                     | Completion::Continue(Some(_))
                     | Completion::Throw(_)
-                    | Completion::Return(_)) => {
+                    | Completion::Return(_)
+                    | Completion::ReturnDirect(_)) => {
                         return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
                     }
                     completion @ (Completion::Suspended(_)

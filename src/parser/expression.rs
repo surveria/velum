@@ -8,9 +8,8 @@ use crate::{
     value::Value,
 };
 
-use super::{Parser, SUPER_IDENTIFIER_NAME};
+use super::{Parser, SUPER_IDENTIFIER_NAME, property_name::keyword_property_name};
 
-const THIS_PROPERTY_NAME: &str = "this";
 const NEW_TARGET_PROPERTY_NAME: &str = "target";
 const IMPORT_BINDING_NAME: &str = "import";
 
@@ -436,7 +435,8 @@ impl Parser {
     fn arguments(&mut self) -> Result<Vec<Expression>> {
         let mut args = Vec::new();
         loop {
-            if self.match_kind(&TokenKind::DotDotDot) {
+            let spread = self.match_kind(&TokenKind::DotDotDot);
+            if spread {
                 let start = self.previous_span();
                 let expression = self.assignment_expression()?;
                 args.push(self.expression_node(start, Expr::Spread(Box::new(expression))));
@@ -444,6 +444,12 @@ impl Parser {
                 args.push(self.assignment_expression()?);
             }
             if !self.match_kind(&TokenKind::Comma) {
+                break;
+            }
+            if self.check(&TokenKind::RParen) {
+                if spread {
+                    return Err(self.parse_error("rest argument must not have a trailing comma"));
+                }
                 break;
             }
         }
@@ -517,12 +523,12 @@ impl Parser {
             TokenKind::Async => {
                 if self.peek_kind_is_no_line_terminator(0, &TokenKind::Function) {
                     self.consume(&TokenKind::Function, "expected 'function' after 'async'")?;
-                    if self.match_kind(&TokenKind::Star) {
-                        return Err(
-                            self.parse_error("async generator functions are not supported yet")
-                        );
-                    }
-                    self.function_expression(FunctionKind::Async)?
+                    let kind = if self.match_kind(&TokenKind::Star) {
+                        FunctionKind::AsyncGenerator
+                    } else {
+                        FunctionKind::Async
+                    };
+                    self.function_expression(kind)?
                 } else {
                     Expression::new(
                         Expr::Identifier(self.contextual_async_binding(token_span.start())?),
@@ -746,51 +752,5 @@ impl Parser {
             ) => self.static_name(value.to_string()).map(Some),
             _ => Ok(None),
         }
-    }
-}
-
-pub(super) const fn keyword_property_name(kind: &TokenKind) -> Option<&'static str> {
-    match kind {
-        TokenKind::This => Some(THIS_PROPERTY_NAME),
-        TokenKind::Let => Some("let"),
-        TokenKind::Const => Some("const"),
-        TokenKind::Var => Some("var"),
-        TokenKind::If => Some("if"),
-        TokenKind::Else => Some("else"),
-        TokenKind::Do => Some("do"),
-        TokenKind::While => Some("while"),
-        TokenKind::For => Some("for"),
-        TokenKind::Switch => Some("switch"),
-        TokenKind::Case => Some("case"),
-        TokenKind::Default => Some("default"),
-        TokenKind::Class => Some("class"),
-        TokenKind::Extends => Some("extends"),
-        TokenKind::Break => Some("break"),
-        TokenKind::Continue => Some("continue"),
-        TokenKind::Debugger => Some("debugger"),
-        TokenKind::Try => Some("try"),
-        TokenKind::Catch => Some("catch"),
-        TokenKind::Finally => Some("finally"),
-        TokenKind::Throw => Some("throw"),
-        TokenKind::Return => Some("return"),
-        TokenKind::Function => Some("function"),
-        TokenKind::Async => Some("async"),
-        TokenKind::Await => Some("await"),
-        TokenKind::Super => Some("super"),
-        TokenKind::Import => Some("import"),
-        TokenKind::Export => Some("export"),
-        TokenKind::Enum => Some("enum"),
-        TokenKind::With => Some("with"),
-        TokenKind::New => Some("new"),
-        TokenKind::In => Some("in"),
-        TokenKind::InstanceOf => Some("instanceof"),
-        TokenKind::Typeof => Some("typeof"),
-        TokenKind::Void => Some("void"),
-        TokenKind::Delete => Some("delete"),
-        TokenKind::True => Some("true"),
-        TokenKind::False => Some("false"),
-        TokenKind::Null => Some("null"),
-        TokenKind::Undefined => Some("undefined"),
-        _ => None,
     }
 }

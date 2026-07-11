@@ -3,6 +3,7 @@ use crate::{
     runtime::{
         async_trace::VmAsyncEdgeKind,
         function::SuspendedAsyncFunction,
+        generator::GeneratorId,
         roots::{DirectRootVisitor, VmRootKind},
         trace::{StrongEdgeReference, StrongEdgeVisitor},
     },
@@ -20,6 +21,9 @@ pub(in crate::runtime) enum PromiseReaction {
     },
     Await {
         continuation: Box<SuspendedAsyncFunction>,
+    },
+    AsyncGeneratorAwait {
+        generator: GeneratorId,
     },
 }
 
@@ -40,6 +44,10 @@ impl PromiseReaction {
         Self::Await {
             continuation: Box::new(continuation),
         }
+    }
+
+    pub(in crate::runtime) const fn awaiting_async_generator(generator: GeneratorId) -> Self {
+        Self::AsyncGeneratorAwait { generator }
     }
 
     pub(super) fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
@@ -70,21 +78,22 @@ impl PromiseReaction {
                 }
             }
             Self::Await { continuation } => continuation.visit_strong_edges(visitor)?,
+            Self::AsyncGeneratorAwait { .. } => {}
         }
         Ok(())
     }
 
     pub(in crate::runtime) fn execution_frame_count(&self) -> Result<usize> {
         match self {
-            Self::Then { .. } => Ok(0),
             Self::Await { continuation } => continuation.execution_frame_count(),
+            Self::Then { .. } | Self::AsyncGeneratorAwait { .. } => Ok(0),
         }
     }
 
     pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
         match self {
-            Self::Then { .. } => Ok(0),
             Self::Await { continuation } => continuation.cache_entry_count(),
+            Self::Then { .. } | Self::AsyncGeneratorAwait { .. } => Ok(0),
         }
     }
 
@@ -105,15 +114,34 @@ impl PromiseReaction {
                 Ok(())
             }
             Self::Await { continuation } => continuation.visit_direct_roots(visitor),
+            Self::AsyncGeneratorAwait { .. } => Ok(()),
+        }
+    }
+
+    pub(in crate::runtime) fn into_cancellation(self) -> Option<PromiseContinuationCancellation> {
+        match self {
+            Self::Then { .. } => None,
+            Self::Await { continuation } => Some(PromiseContinuationCancellation::AsyncFunction(
+                *continuation,
+            )),
+            Self::AsyncGeneratorAwait { generator } => {
+                Some(PromiseContinuationCancellation::AsyncGenerator(generator))
+            }
         }
     }
 
     pub(in crate::runtime) fn into_suspended(self) -> Option<SuspendedAsyncFunction> {
         match self {
-            Self::Then { .. } => None,
             Self::Await { continuation } => Some(*continuation),
+            Self::Then { .. } | Self::AsyncGeneratorAwait { .. } => None,
         }
     }
+}
+
+#[derive(Debug)]
+pub(in crate::runtime) enum PromiseContinuationCancellation {
+    AsyncFunction(SuspendedAsyncFunction),
+    AsyncGenerator(GeneratorId),
 }
 
 #[derive(Debug)]
@@ -121,6 +149,11 @@ pub(in crate::runtime) enum PromiseJob {
     Reaction {
         reaction: PromiseReaction,
         state: PromiseSettledState,
+    },
+    ResolveThenable {
+        promise: PromiseId,
+        thenable: Value,
+        then: Value,
     },
 }
 
@@ -134,24 +167,36 @@ impl PromiseJob {
                 reaction.visit_direct_roots(visitor)?;
                 visitor.visit_value(VmRootKind::QueuedJob, &state.value)
             }
+            Self::ResolveThenable {
+                promise,
+                thenable,
+                then,
+            } => {
+                visitor.visit_promise(VmRootKind::QueuedJob, *promise)?;
+                visitor.visit_value(VmRootKind::QueuedJob, thenable)?;
+                visitor.visit_value(VmRootKind::QueuedJob, then)
+            }
         }
     }
 
     pub(in crate::runtime) fn execution_frame_count(&self) -> Result<usize> {
         match self {
             Self::Reaction { reaction, .. } => reaction.execution_frame_count(),
+            Self::ResolveThenable { .. } => Ok(0),
         }
     }
 
     pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
         match self {
             Self::Reaction { reaction, .. } => reaction.cache_entry_count(),
+            Self::ResolveThenable { .. } => Ok(0),
         }
     }
 
-    pub(in crate::runtime) fn into_suspended(self) -> Option<SuspendedAsyncFunction> {
+    pub(in crate::runtime) fn into_cancellation(self) -> Option<PromiseContinuationCancellation> {
         match self {
-            Self::Reaction { reaction, .. } => reaction.into_suspended(),
+            Self::Reaction { reaction, .. } => reaction.into_cancellation(),
+            Self::ResolveThenable { .. } => None,
         }
     }
 }

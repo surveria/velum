@@ -132,3 +132,87 @@ fn named_async_functions_keep_their_private_self_binding() -> TestResult {
     }
     Err(format!("expected async self binding to resolve itself, got {actual:?}").into())
 }
+
+#[test]
+fn named_async_generators_keep_captured_private_self_binding() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.eval(
+        r#"
+        let observed = "missing";
+        let callCount = 0;
+        let reference = async function * BindingIdentifier() {
+            callCount++;
+            (() => {
+                BindingIdentifier = 1;
+            })();
+            return BindingIdentifier;
+        };
+        async function observe() {
+            let generator = await reference();
+            let result = await generator.next();
+            observed = result.value === reference
+                ? "same|" + callCount
+                : "changed|" + callCount;
+        }
+        observe();
+        "#,
+    )?;
+    let actual = context.eval("observed")?;
+    if actual == Value::String("same|1".to_owned()) {
+        return Ok(());
+    }
+    Err(format!("expected async generator self binding to resolve itself, got {actual:?}").into())
+}
+
+#[test]
+fn named_async_generator_completes_test262_async_wrapper() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.eval(
+        r#"
+        let Test262Error = function Test262Error(message) {
+            this.message = message || "";
+        };
+        let assert = function assert(condition) {
+            if (condition !== true) {
+                throw new Test262Error("Expected true");
+            }
+        };
+        assert.sameValue = function (actual, expected, message) {
+            if (actual === expected) {
+                return;
+            }
+            throw new Test262Error(message || "Expected SameValue");
+        };
+        function $DONE(error) {
+            print(error ? "failed:" + error.message : "complete");
+        }
+        function asyncTest(callback) {
+            if (!Object.prototype.hasOwnProperty.call(globalThis, "$DONE")) {
+                throw new Test262Error("asyncTest called without async flag");
+            }
+            callback().then(() => $DONE(), (error) => $DONE(error));
+        }
+        "#,
+    )?;
+    context.eval(
+        r#"
+        let callCount = 0;
+        let ref = async function * BindingIdentifier() {
+            callCount++;
+            BindingIdentifier = 1;
+            return BindingIdentifier;
+        };
+        asyncTest(async () => {
+            assert.sameValue((await (await ref()).next()).value, ref);
+            assert.sameValue(callCount, 1, "function invoked exactly once");
+        });
+        "#,
+    )?;
+    let output = context.take_output();
+    if output == ["complete"] {
+        return Ok(());
+    }
+    Err(format!("expected async wrapper completion, got {output:?}").into())
+}

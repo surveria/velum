@@ -8,6 +8,7 @@ use crate::{
         AccessorPropertyUpdate, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
         PropertyEnumerable, PropertyKey, PropertyUpdate, PropertyWritable,
     },
+    syntax::FunctionKind,
     value::{ObjectId, Value},
 };
 
@@ -59,25 +60,54 @@ impl Context {
         Ok(constructor)
     }
 
+    pub(in crate::runtime) fn async_generator_function_constructor_value(
+        &mut self,
+    ) -> Result<Value> {
+        if let Some(id) = self.native_function_id(NativeFunctionKind::AsyncGeneratorFunction) {
+            return Ok(Value::NativeFunction(id));
+        }
+
+        self.async_function_constructor_value()?;
+        let id = self.next_native_function_id();
+        let constructor = Value::NativeFunction(id);
+        let prototype_id = self.create_async_generator_function_prototype(constructor.clone())?;
+        let prototype = Value::Object(prototype_id);
+        let name = self.native_function_name_value(NativeFunctionKind::AsyncGeneratorFunction)?;
+        self.push_native_function_with_id(
+            id,
+            NativeFunctionKind::AsyncGeneratorFunction,
+            prototype,
+            name,
+        )?;
+        Ok(constructor)
+    }
+
     pub(in crate::runtime::native) fn eval_function_constructor(
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        self.eval_generated_function_constructor(args.as_slice(), false)
+        self.eval_generated_function_constructor(args.as_slice(), FunctionKind::Ordinary)
     }
 
     pub(in crate::runtime) fn eval_direct_function_constructor(
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        self.eval_generated_function_constructor(args, false)
+        self.eval_generated_function_constructor(args, FunctionKind::Ordinary)
     }
 
     pub(in crate::runtime::native) fn eval_async_function_constructor(
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        self.eval_generated_function_constructor(args.as_slice(), true)
+        self.eval_generated_function_constructor(args.as_slice(), FunctionKind::Async)
+    }
+
+    pub(in crate::runtime::native) fn eval_async_generator_function_constructor(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        self.eval_generated_function_constructor(args.as_slice(), FunctionKind::AsyncGenerator)
     }
 
     pub(in crate::runtime) fn function_constructor_prototype_value(&mut self) -> Result<Value> {
@@ -101,9 +131,9 @@ impl Context {
     fn eval_generated_function_constructor(
         &mut self,
         args: &[Value],
-        is_async: bool,
+        kind: FunctionKind,
     ) -> Result<Value> {
-        let source = self.function_constructor_source(args, is_async)?;
+        let source = self.function_constructor_source(args, kind)?;
         self.check_string_len(&source.compile)?;
         let script = self
             .compile(&source.compile)
@@ -126,10 +156,10 @@ impl Context {
     fn function_constructor_source(
         &mut self,
         args: &[Value],
-        is_async: bool,
+        kind: FunctionKind,
     ) -> Result<GeneratedFunctionSource> {
         let Some((body, params)) = args.split_last() else {
-            return Ok(generated_function_source("", "", is_async));
+            return Ok(generated_function_source("", "", kind));
         };
         let mut converted_params = Vec::with_capacity(params.len());
         for param in params {
@@ -137,7 +167,7 @@ impl Context {
         }
         let body = self.to_string(body)?;
         let params = converted_params.join(",");
-        Ok(generated_function_source(&params, &body, is_async))
+        Ok(generated_function_source(&params, &body, kind))
     }
 
     fn function_constructor_prototype_id(&mut self) -> Result<ObjectId> {
@@ -329,18 +359,23 @@ struct GeneratedFunctionSource {
     display: String,
 }
 
-fn generated_function_source(params: &str, body: &str, is_async: bool) -> GeneratedFunctionSource {
-    let display = function_source(params, body, is_async, Some(GENERATED_FUNCTION_NAME));
-    let compile = format!("({})", function_source(params, body, is_async, None));
+fn generated_function_source(
+    params: &str,
+    body: &str,
+    kind: FunctionKind,
+) -> GeneratedFunctionSource {
+    let display = function_source(params, body, kind, Some(GENERATED_FUNCTION_NAME));
+    let compile = format!("({})", function_source(params, body, kind, None));
     GeneratedFunctionSource { compile, display }
 }
 
-fn function_source(params: &str, body: &str, is_async: bool, name: Option<&str>) -> String {
-    let async_prefix = if is_async { "async " } else { "" };
+fn function_source(params: &str, body: &str, kind: FunctionKind, name: Option<&str>) -> String {
+    let async_prefix = if kind.is_async() { "async " } else { "" };
+    let generator_marker = if kind.is_generator() { "*" } else { "" };
     let name = name.map_or("", |name| name);
     let name_separator = if name.is_empty() { "" } else { " " };
     let parameter_line_terminator = if params.contains("//") { "\n" } else { "" };
     format!(
-        "{async_prefix}function{name_separator}{name}({params}{parameter_line_terminator}) {{\n{body}\n}}"
+        "{async_prefix}function{generator_marker}{name_separator}{name}({params}{parameter_line_terminator}) {{\n{body}\n}}"
     )
 }

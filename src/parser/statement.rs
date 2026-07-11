@@ -79,10 +79,12 @@ impl Parser {
         {
             self.consume(&TokenKind::Async, "expected 'async' before async function")?;
             self.consume(&TokenKind::Function, "expected 'function' after 'async'")?;
-            if self.match_kind(&TokenKind::Star) {
-                return Err(self.parse_error("async generator functions are not supported yet"));
-            }
-            return self.function_declaration(FunctionKind::Async);
+            let kind = if self.match_kind(&TokenKind::Star) {
+                FunctionKind::AsyncGenerator
+            } else {
+                FunctionKind::Async
+            };
+            return self.function_declaration(kind);
         }
         if self.match_kind(&TokenKind::Function) {
             let kind = if self.match_kind(&TokenKind::Star) {

@@ -735,6 +735,7 @@ pub enum BytecodeCompletion {
     Break(Option<StaticName>),
     Continue(Option<StaticName>),
     Return,
+    ReturnDirect,
     Throw,
 }
 
