@@ -2,7 +2,7 @@ use std::{
     env, fs,
     fs::{File, OpenOptions},
     io::Write as _,
-    os::unix::fs::PermissionsExt as _,
+    os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _},
     path::{Path, PathBuf},
     process,
     time::{SystemTime, UNIX_EPOCH},
@@ -64,14 +64,15 @@ impl BenchmarkLock {
         let file = OpenOptions::new()
             .create(true)
             .append(true)
+            .mode(0o666)
             .open(lock_path)
             .with_context(|| format!("failed to open benchmark lock {}", lock_path.display()))?;
-        fs::set_permissions(lock_path, fs::Permissions::from_mode(0o666)).with_context(|| {
-            format!(
-                "failed to make benchmark lock writable at {}",
+        if let Err(error) = fs::set_permissions(lock_path, fs::Permissions::from_mode(0o666)) {
+            eprintln!(
+                "benchmark lock: could not widen permissions for existing writable lock {}: {error}",
                 lock_path.display()
-            )
-        })?;
+            );
+        }
         println!(
             "benchmark lock: waiting for exclusive measured execution slot on {}",
             lock_path.display()
