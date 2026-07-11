@@ -74,12 +74,17 @@ const FUNCTION_PROTOTYPE_CALLER_PROPERTY: &str = "caller";
 use super::FunctionNewTarget;
 use properties::{FunctionPropertyKind, PROTOTYPE_CONSTRUCTOR_PROPERTY};
 
-fn expected_function_local_count(base: usize, has_self_binding: bool) -> Result<usize> {
+fn expected_function_local_count(
+    base: usize,
+    has_arguments_binding: bool,
+    has_self_binding: bool,
+) -> Result<usize> {
     let with_function_scope = base
         .checked_add(1)
         .ok_or_else(|| Error::limit("function local scope count overflowed"))?;
     with_function_scope
-        .checked_add(usize::from(has_self_binding))
+        .checked_add(usize::from(has_arguments_binding))
+        .and_then(|count| count.checked_add(usize::from(has_self_binding)))
         .ok_or_else(|| Error::limit("function local scope count overflowed"))
 }
 
@@ -192,7 +197,6 @@ impl Context {
             &param_atoms,
             &param_frames,
             init.bytecode.has_parameter_defaults(),
-            arguments_binding,
         )?;
         let param_binding_ids = parameters::function_param_binding_ids(params);
         let metadata_cache_count = Self::function_metadata_cache_count(
@@ -411,20 +415,21 @@ impl Context {
                 return Err(error);
             }
         }
+        let arguments_scope = match arguments_binding
+            .map(|binding| self.arguments_binding_scope(binding, raw_args))
+            .transpose()
+        {
+            Ok(scope) => scope,
+            Err(error) => {
+                self.leave_function_local_frame(local_base)?;
+                self.pop_call_activation(local_base)?;
+                return Err(error);
+            }
+        };
         let scope_result = if let Some(template) = scope_template.as_deref() {
-            self.function_scope_from_template(
-                template,
-                args,
-                arguments_binding.map(|binding| (binding, raw_args)),
-            )
+            self.function_scope_from_template(template, args)
         } else {
-            self.function_scope(
-                &param_atoms,
-                &param_frames,
-                args,
-                has_parameter_defaults,
-                arguments_binding.map(|binding| (binding, raw_args)),
-            )
+            self.function_scope(&param_atoms, &param_frames, args, has_parameter_defaults)
         };
         let scope = match scope_result {
             Ok(scope) => scope,
@@ -434,7 +439,7 @@ impl Context {
                 return Err(error);
             }
         };
-        if let Err(error) = self.push_function_binding_storage(local_base, scope) {
+        if let Err(error) = self.push_function_binding_storage(local_base, arguments_scope, scope) {
             self.pop_call_activation(local_base)?;
             return Err(error);
         }
@@ -449,7 +454,11 @@ impl Context {
         if CAN_SUSPEND && result.as_ref().is_ok_and(Completion::suspends_execution) {
             return result;
         }
-        let binding_result = self.pop_function_binding_storage(local_base, self_binding.is_some());
+        let binding_result = self.pop_function_binding_storage(
+            local_base,
+            arguments_binding.is_some(),
+            self_binding.is_some(),
+        );
         let activation_result = self.pop_call_activation(local_base);
         binding_result?;
         activation_result?;
@@ -461,8 +470,12 @@ impl Context {
         id: FunctionId,
         raw_args: &[Value],
     ) -> Result<Option<Completion>> {
+        let current_layout = self.current_static_binding_layout();
         let Some((fast_path, fast_upvalues)) = ({
             let function = self.function(id)?;
+            if function.static_binding_layout != current_layout {
+                return Ok(None);
+            }
             function.fast_path.as_ref().map(|fast_path| {
                 let upvalues = if fast_path.needs_upvalues() {
                     Some(Rc::clone(&function.upvalues))

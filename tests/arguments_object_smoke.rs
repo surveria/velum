@@ -122,6 +122,34 @@ fn escaped_arrows_capture_the_parent_arguments_binding() -> TestResult {
 }
 
 #[test]
+fn arguments_helpers_preserve_cross_script_closure_bindings() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.eval(
+        r#"
+        function probe(object, name) {
+            if (arguments.length < 2) {
+                return false;
+            }
+            object[name] = "ignored";
+            return object[name];
+        }
+        "#,
+    )?;
+    let value = context.eval(
+        r#"
+        var captured = "data";
+        var object = {};
+        Object.defineProperty(object, "value", {
+            get: function() { return captured; }
+        });
+        captured + ":" + probe(object, "value");
+        "#,
+    )?;
+    ensure_value(&value, &Value::String("data:data".to_owned()))
+}
+
+#[test]
 fn strict_functions_and_methods_bind_arguments() -> TestResult {
     ensure_string(
         r#"

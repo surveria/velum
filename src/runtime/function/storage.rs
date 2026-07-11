@@ -58,8 +58,15 @@ impl Context {
     pub(super) fn push_function_binding_storage(
         &mut self,
         local_base: usize,
+        arguments_scope: Option<BindingScope>,
         scope: BindingScope,
     ) -> Result<()> {
+        if let Some(arguments_scope) = arguments_scope
+            && let Err(error) = self.push_lexical_scope_with(arguments_scope)
+        {
+            self.leave_function_local_frame(local_base)?;
+            return Err(error);
+        }
         if let Err(error) = self.push_lexical_scope_with(scope) {
             self.leave_function_local_frame(local_base)?;
             return Err(error);
@@ -70,9 +77,11 @@ impl Context {
     pub(super) fn pop_function_binding_storage(
         &mut self,
         local_base: usize,
+        has_arguments_binding: bool,
         has_self_binding: bool,
     ) -> Result<()> {
-        let expected_local_count = expected_function_local_count(local_base, has_self_binding)?;
+        let expected_local_count =
+            expected_function_local_count(local_base, has_arguments_binding, has_self_binding)?;
         let actual_local_count = self.locals.len();
         let local_scope_stack_ok = actual_local_count == expected_local_count;
         self.leave_function_local_frame(local_base)?;

@@ -57,13 +57,18 @@ impl LayoutBuilder {
         } else {
             parent_scope
         };
+        let function_parent_scope = if let Some(arguments_binding) = bindings.arguments_binding {
+            let arguments_scope =
+                self.add_scope(Some(function_parent_scope), function, ScopeKind::Local);
+            self.declare(arguments_scope, arguments_binding)?;
+            arguments_scope
+        } else {
+            function_parent_scope
+        };
         let function_scope =
             self.add_scope(Some(function_parent_scope), function, ScopeKind::Local);
         for param in params {
             self.declare(function_scope, &param.name)?;
-        }
-        if let Some(arguments_binding) = bindings.arguments_binding {
-            self.declare(function_scope, arguments_binding)?;
         }
         for param in params {
             if let Some(default) = &param.default {
