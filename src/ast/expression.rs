@@ -127,6 +127,22 @@ pub enum Expr {
         property: Box<Expression>,
         access: StaticPropertyAccessId,
     },
+    /// A private member read such as `obj.#name`; the name keeps its `#`.
+    PrivateMember {
+        object: Box<Expression>,
+        name: StaticName,
+    },
+    /// A private member write such as `obj.#name = value`.
+    PrivateAssignment {
+        object: Box<Expression>,
+        name: StaticName,
+        expr: Box<Expression>,
+    },
+    /// An ergonomic brand check such as `#name in object`.
+    PrivateIn {
+        name: StaticName,
+        object: Box<Expression>,
+    },
     Call {
         callee: Box<Expression>,
         site: StaticCallSiteId,

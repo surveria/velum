@@ -343,13 +343,19 @@ impl CaptureBindingCollector {
         }
         self.collect_function_body(&class.constructor.params, &class.constructor.body);
         for member in &class.members {
-            if let crate::ast::ObjectPropertyKey::Computed(key) = &member.key {
+            if let crate::ast::ClassElementName::Property(
+                crate::ast::ObjectPropertyKey::Computed(key),
+            ) = &member.key
+            {
                 self.collect_expr(key);
             }
             self.collect_function_body(&member.params, &member.body);
         }
         for field in &class.fields {
-            if let crate::ast::ObjectPropertyKey::Computed(key) = &field.key {
+            if let crate::ast::ClassElementName::Property(
+                crate::ast::ObjectPropertyKey::Computed(key),
+            ) = &field.key
+            {
                 self.collect_expr(key);
             }
             if let Some(initializer) = &field.initializer {
@@ -443,7 +449,8 @@ impl CaptureBindingCollector {
                 self.collect_expr(target);
                 self.collect_expr(expr);
             }
-            Expr::PropertyAssignment { object, expr, .. } => {
+            Expr::PropertyAssignment { object, expr, .. }
+            | Expr::PrivateAssignment { object, expr, .. } => {
                 self.collect_expr(object);
                 self.collect_expr(expr);
             }
@@ -457,7 +464,9 @@ impl CaptureBindingCollector {
                 self.collect_expr(property);
                 self.collect_expr(expr);
             }
-            Expr::Member { object, .. } => self.collect_expr(object),
+            Expr::Member { object, .. }
+            | Expr::PrivateMember { object, .. }
+            | Expr::PrivateIn { object, .. } => self.collect_expr(object),
             Expr::ComputedMember {
                 object, property, ..
             } => {

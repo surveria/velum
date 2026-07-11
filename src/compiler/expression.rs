@@ -107,6 +107,13 @@ impl BytecodeCompiler<'_> {
                 property,
                 access,
             } => return self.compile_computed_member_expr(object, property, *access),
+            Expr::PrivateMember { .. }
+            | Expr::PrivateAssignment { .. }
+            | Expr::PrivateIn { .. } => {
+                return Err(Error::runtime(
+                    "private class elements are not supported yet",
+                ));
+            }
             Expr::Object(properties) => return self.compile_object_literal(properties),
             Expr::ArrayHole => return Err(Error::runtime("array elision outside array literal")),
             Expr::Array(elements) => return self.compile_array_literal(elements),

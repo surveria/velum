@@ -90,17 +90,43 @@ impl Parser {
     }
 
     fn comparison(&mut self) -> Result<Expression> {
-        self.left_assoc(
-            Self::shift,
-            &[
-                (&TokenKind::Less, BinaryOp::Less),
-                (&TokenKind::LessEqual, BinaryOp::LessEqual),
-                (&TokenKind::Greater, BinaryOp::Greater),
-                (&TokenKind::GreaterEqual, BinaryOp::GreaterEqual),
-                (&TokenKind::In, BinaryOp::In),
-                (&TokenKind::InstanceOf, BinaryOp::InstanceOf),
-            ],
-        )
+        const COMPARISON_OPS: &[(&TokenKind, BinaryOp)] = &[
+            (&TokenKind::Less, BinaryOp::Less),
+            (&TokenKind::LessEqual, BinaryOp::LessEqual),
+            (&TokenKind::Greater, BinaryOp::Greater),
+            (&TokenKind::GreaterEqual, BinaryOp::GreaterEqual),
+            (&TokenKind::In, BinaryOp::In),
+            (&TokenKind::InstanceOf, BinaryOp::InstanceOf),
+        ];
+        let seed = if let Some(private_in) = self.private_in_seed()? {
+            private_in
+        } else {
+            self.shift()?
+        };
+        self.left_assoc_from(seed, Self::shift, COMPARISON_OPS)
+    }
+
+    /// Parses the `#name in object` ergonomic brand check that may seed a
+    /// relational chain when a private name directly precedes `in`.
+    fn private_in_seed(&mut self) -> Result<Option<Expression>> {
+        let is_private_in = matches!(self.peek_kind(0), Some(TokenKind::PrivateName(_)))
+            && self.peek_kind_is(1, &TokenKind::In);
+        if !is_private_in {
+            return Ok(None);
+        }
+        let start = self.current_span();
+        let Some(name) = self.match_private_name()? else {
+            return Err(self.parse_error("expected private name before 'in'"));
+        };
+        self.consume(&TokenKind::In, "expected 'in' after private name")?;
+        let object = self.shift()?;
+        Ok(Some(self.expression_node(
+            start,
+            Expr::PrivateIn {
+                name,
+                object: Box::new(object),
+            },
+        )))
     }
 
     fn shift(&mut self) -> Result<Expression> {
@@ -167,7 +193,17 @@ impl Parser {
         next: fn(&mut Self) -> Result<Expression>,
         ops: &[(&TokenKind, BinaryOp)],
     ) -> Result<Expression> {
-        let mut expr = next(self)?;
+        let expr = next(self)?;
+        self.left_assoc_from(expr, next, ops)
+    }
+
+    fn left_assoc_from(
+        &mut self,
+        seed: Expression,
+        next: fn(&mut Self) -> Result<Expression>,
+        ops: &[(&TokenKind, BinaryOp)],
+    ) -> Result<Expression> {
+        let mut expr = seed;
         while let Some((_, op)) = ops.iter().find(|(kind, _)| self.check(kind)) {
             let op = *op;
             if self.advance().is_none() {

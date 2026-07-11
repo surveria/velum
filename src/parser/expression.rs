@@ -1,8 +1,5 @@
 use crate::{
-    ast::{
-        Expr, Expression, FunctionKind, FunctionParam, Statement, StaticName, Stmt, UnaryOp,
-        UpdateOp,
-    },
+    ast::{Expr, Expression, FunctionKind, FunctionParam, Statement, Stmt, UnaryOp, UpdateOp},
     error::{Error, Result},
     lexer::TokenKind,
     value::Value,
@@ -67,6 +64,7 @@ impl Parser {
         }
         if self.match_kind(&TokenKind::Delete) {
             let expr = self.unary()?;
+            Self::reject_private_delete_target(&expr)?;
             return Ok(self.expression_node(
                 start,
                 Expr::Unary {
@@ -126,48 +124,11 @@ impl Parser {
     fn call_suffix(&mut self, mut expr: Expression) -> Result<Expression> {
         loop {
             if self.match_kind(&TokenKind::Dot) {
-                let property = self.consume_property_name("expected property name after '.'")?;
-                let access = self.static_property_access()?;
-                let start = expr.span();
-                expr = self.expression_node(
-                    start,
-                    Expr::Member {
-                        object: Box::new(expr),
-                        property,
-                        access,
-                    },
-                );
+                expr = self.member_dot_suffix(expr)?;
                 continue;
             }
             if self.match_kind(&TokenKind::LBracket) {
-                let property = self.expression()?;
-                self.consume(
-                    &TokenKind::RBracket,
-                    "expected ']' after property expression",
-                )?;
-                if let Some(property) = self.static_computed_property_key(&property)? {
-                    let access = self.static_property_access()?;
-                    let start = expr.span();
-                    expr = self.expression_node(
-                        start,
-                        Expr::Member {
-                            object: Box::new(expr),
-                            property,
-                            access,
-                        },
-                    );
-                    continue;
-                }
-                let access = self.static_property_access()?;
-                let start = expr.span();
-                expr = self.expression_node(
-                    start,
-                    Expr::ComputedMember {
-                        object: Box::new(expr),
-                        property: Box::new(property),
-                        access,
-                    },
-                );
+                expr = self.member_bracket_suffix(expr)?;
                 continue;
             }
             if !self.match_kind(&TokenKind::LParen) {
@@ -203,9 +164,10 @@ impl Parser {
     pub(super) fn assignment_target(expr: Expression) -> Option<Expression> {
         let span = expr.span();
         match expr.into_kind() {
-            kind @ (Expr::Identifier(_) | Expr::Member { .. } | Expr::ComputedMember { .. }) => {
-                Some(Expression::new(kind, span))
-            }
+            kind @ (Expr::Identifier(_)
+            | Expr::Member { .. }
+            | Expr::ComputedMember { .. }
+            | Expr::PrivateMember { .. }) => Some(Expression::new(kind, span)),
             Expr::Parenthesized(inner) => Self::assignment_target(*inner),
             _ => None,
         }
@@ -271,50 +233,13 @@ impl Parser {
     fn member_suffix(&mut self, mut expr: Expression) -> Result<Expression> {
         loop {
             if self.match_kind(&TokenKind::Dot) {
-                let property = self.consume_property_name("expected property name after '.'")?;
-                let access = self.static_property_access()?;
-                let start = expr.span();
-                expr = self.expression_node(
-                    start,
-                    Expr::Member {
-                        object: Box::new(expr),
-                        property,
-                        access,
-                    },
-                );
+                expr = self.member_dot_suffix(expr)?;
                 continue;
             }
             if !self.match_kind(&TokenKind::LBracket) {
                 break;
             }
-            let property = self.expression()?;
-            self.consume(
-                &TokenKind::RBracket,
-                "expected ']' after property expression",
-            )?;
-            if let Some(property) = self.static_computed_property_key(&property)? {
-                let access = self.static_property_access()?;
-                let start = expr.span();
-                expr = self.expression_node(
-                    start,
-                    Expr::Member {
-                        object: Box::new(expr),
-                        property,
-                        access,
-                    },
-                );
-                continue;
-            }
-            let access = self.static_property_access()?;
-            let start = expr.span();
-            expr = self.expression_node(
-                start,
-                Expr::ComputedMember {
-                    object: Box::new(expr),
-                    property: Box::new(property),
-                    access,
-                },
-            );
+            expr = self.member_bracket_suffix(expr)?;
         }
         Ok(expr)
     }
@@ -543,6 +468,12 @@ impl Parser {
                 self.consume(&TokenKind::RParen, "expected ')' after expression")?;
                 self.expression_node(token_span, Expr::Parenthesized(Box::new(expr)))
             }
+            TokenKind::PrivateName(name) => {
+                return Err(Error::parse_at(
+                    format!("private name '{name}' is only valid in member access or 'in' checks"),
+                    token_span,
+                ));
+            }
             _ => return Err(Error::parse_at("expected expression", token_span)),
         };
         Ok(expr)
@@ -725,32 +656,6 @@ impl Parser {
                 _ => {}
             }
             offset = offset.checked_add(1)?;
-        }
-    }
-    fn consume_property_name(&mut self, message: &str) -> Result<StaticName> {
-        let token = self.advance().ok_or_else(|| self.parse_error(message))?;
-        let token_span = token.span;
-        match token.kind {
-            TokenKind::Identifier(name) => self.static_name(name),
-            kind => {
-                let Some(name) = keyword_property_name(&kind) else {
-                    return Err(Error::parse_at(message, token_span));
-                };
-                self.borrowed_static_name(name)
-            }
-        }
-    }
-
-    fn static_computed_property_key(
-        &mut self,
-        property: &Expression,
-    ) -> Result<Option<StaticName>> {
-        match property.kind() {
-            Expr::StringLiteral(value) => self.borrowed_static_name(value.as_str()).map(Some),
-            Expr::Literal(
-                value @ (Value::Undefined | Value::Null | Value::Bool(_) | Value::Number(_)),
-            ) => self.static_name(value.to_string()).map(Some),
-            _ => Ok(None),
         }
     }
 }

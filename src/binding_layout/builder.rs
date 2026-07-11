@@ -429,7 +429,10 @@ impl LayoutBuilder {
             function,
         )?;
         for member in &class.members {
-            if let crate::ast::ObjectPropertyKey::Computed(key) = &member.key {
+            if let crate::ast::ClassElementName::Property(
+                crate::ast::ObjectPropertyKey::Computed(key),
+            ) = &member.key
+            {
                 self.analyze_expr(key, scope, function)?;
             }
             self.analyze_function(
@@ -442,7 +445,10 @@ impl LayoutBuilder {
             )?;
         }
         for field in &class.fields {
-            if let crate::ast::ObjectPropertyKey::Computed(key) = &field.key {
+            if let crate::ast::ClassElementName::Property(
+                crate::ast::ObjectPropertyKey::Computed(key),
+            ) = &field.key
+            {
                 self.analyze_expr(key, scope, function)?;
             }
             if let Some(initializer) = &field.initializer {
@@ -575,7 +581,8 @@ impl LayoutBuilder {
                 self.analyze_expr(target, scope, function)?;
                 self.analyze_expr(expr, scope, function)
             }
-            Expr::PropertyAssignment { object, expr, .. } => {
+            Expr::PropertyAssignment { object, expr, .. }
+            | Expr::PrivateAssignment { object, expr, .. } => {
                 self.analyze_expr(object, scope, function)?;
                 self.analyze_expr(expr, scope, function)
             }
@@ -589,7 +596,9 @@ impl LayoutBuilder {
                 self.analyze_expr(property, scope, function)?;
                 self.analyze_expr(expr, scope, function)
             }
-            Expr::Member { object, .. } => self.analyze_expr(object, scope, function),
+            Expr::Member { object, .. }
+            | Expr::PrivateMember { object, .. }
+            | Expr::PrivateIn { object, .. } => self.analyze_expr(object, scope, function),
             Expr::ComputedMember {
                 object, property, ..
             } => {

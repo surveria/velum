@@ -11,11 +11,13 @@ mod assignment;
 mod await_context;
 mod binary;
 mod class;
+mod class_private;
 mod early_errors;
 mod expression;
 mod function;
 mod function_expression;
 mod literal;
+mod member;
 mod pattern;
 mod property_name;
 mod sequence;
@@ -25,6 +27,7 @@ mod strict;
 mod yield_context;
 
 use await_context::{AwaitExpressionContext, AwaitIdentifierContext};
+use class_private::ClassPrivateScope;
 use static_tables::{StaticBindingTable, StaticFunctionTable, StaticNameTable, StaticStringTable};
 use yield_context::{YieldExpressionContext, YieldIdentifierContext};
 
@@ -92,6 +95,10 @@ struct Parser {
     yield_expression_context: YieldExpressionContext,
     yield_identifier_context: YieldIdentifierContext,
     class_static_block_identifiers: ClassStaticBlockIdentifierContext,
+    /// Private-name scopes for the class bodies currently being parsed.
+    /// Unlike other contexts this stack must stay visible across nested
+    /// function boundaries, so function entry never resets it.
+    class_private_scopes: Vec<ClassPrivateScope>,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -125,6 +132,7 @@ impl Parser {
             yield_expression_context: YieldExpressionContext::Forbidden,
             yield_identifier_context: YieldIdentifierContext::Allowed,
             class_static_block_identifiers: ClassStaticBlockIdentifierContext::Allowed,
+            class_private_scopes: Vec::new(),
         }
     }
 

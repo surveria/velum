@@ -22,10 +22,8 @@ impl Lexer<'_> {
     /// intentionally not classified: `#in` or `#static` are valid names.
     pub(super) fn private_name(&mut self, offset: usize) -> Result<()> {
         self.advance();
-        let starts_name = self
-            .peek_char()
-            .is_some_and(is_identifier_start)
-            || self.identifier_escape_start();
+        let starts_name =
+            self.peek_char().is_some_and(is_identifier_start) || self.identifier_escape_start();
         if !starts_name {
             return Err(Error::lex(
                 "expected identifier after private name marker '#'",
@@ -52,7 +50,8 @@ impl Lexer<'_> {
         while let Some((current_offset, ch)) = self.peek() {
             if self.identifier_escape_start() {
                 escaped = true;
-                let escaped_char = self.identifier_char(current_offset, IdentifierPosition::Part)?;
+                let escaped_char =
+                    self.identifier_char(current_offset, IdentifierPosition::Part)?;
                 text.push(escaped_char);
             } else if is_identifier_part(ch) {
                 self.advance();
