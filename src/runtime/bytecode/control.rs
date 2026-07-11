@@ -119,8 +119,8 @@ impl Context {
                 object,
                 body,
             } => self.eval_bytecode_for_of(state, labels.as_deref(), target, object, body, next),
-            BytecodeInstruction::DestructurePattern { pattern, kind } => {
-                self.eval_bytecode_destructure_instruction(state, pattern, *kind, next)
+            BytecodeInstruction::DestructurePattern { pattern, mode } => {
+                self.eval_bytecode_destructure_instruction(state, pattern, *mode, next)
             }
             BytecodeInstruction::Switch {
                 discriminant,

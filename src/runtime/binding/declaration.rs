@@ -1,9 +1,10 @@
 use crate::{
-    bytecode::{BytecodeHoistPlan, BytecodeNewTargetMode},
+    bytecode::{BytecodeBinding, BytecodeHoistPlan, BytecodeNewTargetMode},
     error::{Error, Result},
     runtime::Context,
     runtime::binding::scope::{BindingCell, BindingScope},
     runtime::function::BytecodeFunctionInit,
+    runtime::object::{PropertyConfigurable, PropertyEnumerable, PropertyWritable},
     storage::atom::AtomId,
     syntax::{DeclKind, StaticBinding},
     value::Value,
@@ -12,6 +13,39 @@ use crate::{
 use super::static_bindings::CompiledBindingFrame;
 
 impl Context {
+    pub(crate) fn assign_bytecode_or_create_sloppy_global(
+        &mut self,
+        binding: &BytecodeBinding,
+        value: Value,
+    ) -> Result<()> {
+        if let Some(cell) = self.get_or_materialize_binding_bytecode(binding)? {
+            return self.assign_bytecode_cell(binding, &cell, value);
+        }
+        if binding.strict_write() {
+            return Err(crate::runtime::control::reference_error_undefined(
+                binding.name(),
+            ));
+        }
+
+        let value = self.checked_value(value)?;
+        let atom = self.intern_static_name_atom(binding.name().name())?;
+        self.ensure_binding_capacity_for_atom(atom)?;
+        self.globals
+            .insert(atom, BindingCell::new(value.clone(), true, DeclKind::Var))?;
+        self.remember_active_static_binding(binding.name(), atom)?;
+        if let Some(global_object) = self.global_object {
+            self.define_global_object_data_property(
+                global_object,
+                binding.name().name(),
+                value,
+                PropertyWritable::Yes,
+                PropertyEnumerable::Yes,
+                PropertyConfigurable::Yes,
+            )?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn hoist_bytecode_declarations(&mut self, plan: &BytecodeHoistPlan) -> Result<()> {
         for binding in plan.var_declarations() {
             self.hoist_var(binding)?;

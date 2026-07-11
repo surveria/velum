@@ -397,15 +397,22 @@ pub enum BytecodeClassMemberKind {
 #[derive(Debug, Clone, PartialEq)]
 pub enum BytecodePattern {
     Binding(BytecodeBinding),
+    Assignment(BytecodeAssignmentTarget),
     Object {
         properties: Rc<[BytecodePatternProperty]>,
-        rest: Option<BytecodeBinding>,
+        rest: Option<Rc<Self>>,
     },
     Array {
         /// `None` entries are elisions that consume one iterator step.
         elements: Rc<[Option<BytecodePatternTarget>]>,
         rest: Option<Rc<Self>>,
     },
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BytecodeDestructureMode {
+    Declaration(DeclKind),
+    Assignment,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -674,7 +681,7 @@ pub enum BytecodeInstruction {
     },
     DestructurePattern {
         pattern: Rc<BytecodePattern>,
-        kind: DeclKind,
+        mode: BytecodeDestructureMode,
     },
     CreateClass {
         class: Rc<BytecodeClass>,

@@ -2,8 +2,9 @@ use std::rc::Rc;
 
 use crate::{
     ast::{
-        BindingPattern, CatchClause, Expr, Expression, ForInTarget, FunctionParam, ObjectProperty,
-        ObjectPropertyKey, Statement, StaticBinding, Stmt, SwitchCase,
+        AssignmentPattern, BindingPattern, CatchClause, Expr, Expression, ForInTarget,
+        FunctionParam, ObjectProperty, ObjectPropertyKey, PatternPropertyKey, Statement,
+        StaticBinding, Stmt, SwitchCase,
     },
     binding_metadata::BindingLayout,
     error::{Error, Result},
@@ -406,6 +407,10 @@ impl CaptureBindingCollector {
                 self.collect_binding(name);
                 self.collect_expr(expr);
             }
+            Expr::DestructuringAssignment { pattern, expr, .. } => {
+                self.collect_assignment_pattern(pattern);
+                self.collect_expr(expr);
+            }
             Expr::CompoundAssignment { target, expr, .. } => {
                 self.collect_expr(target);
                 self.collect_expr(expr);
@@ -452,6 +457,37 @@ impl CaptureBindingCollector {
     fn collect_exprs(&mut self, exprs: &[Expression]) {
         for expr in exprs {
             self.collect_expr(expr);
+        }
+    }
+
+    fn collect_assignment_pattern(&mut self, pattern: &AssignmentPattern) {
+        match pattern {
+            AssignmentPattern::Target(target) => self.collect_expr(target),
+            AssignmentPattern::Object { properties, rest } => {
+                for property in properties {
+                    if let PatternPropertyKey::Computed(key) = &property.key {
+                        self.collect_expr(key);
+                    }
+                    if let Some(default) = &property.default {
+                        self.collect_expr(default);
+                    }
+                    self.collect_assignment_pattern(&property.target);
+                }
+                if let Some(rest) = rest {
+                    self.collect_expr(rest);
+                }
+            }
+            AssignmentPattern::Array { elements, rest } => {
+                for element in elements.iter().flatten() {
+                    if let Some(default) = &element.default {
+                        self.collect_expr(default);
+                    }
+                    self.collect_assignment_pattern(&element.target);
+                }
+                if let Some(rest) = rest {
+                    self.collect_assignment_pattern(rest);
+                }
+            }
         }
     }
 

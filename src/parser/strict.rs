@@ -94,6 +94,16 @@ impl Parser {
         Ok(())
     }
 
+    pub(super) fn validate_assignment_identifier(&self, name: &str) -> Result<()> {
+        if !self.is_strict_mode() {
+            return Ok(());
+        }
+        if Self::is_restricted_strict_name(name) || is_strict_future_reserved_word(name) {
+            return Err(self.parse_error("invalid strict assignment target"));
+        }
+        Ok(())
+    }
+
     fn string_directive_value(statement: &Statement) -> Option<&str> {
         let Stmt::Expr(expression) = statement.kind() else {
             return None;
@@ -118,4 +128,11 @@ impl Parser {
             EVAL_IDENTIFIER_NAME | ARGUMENTS_IDENTIFIER_NAME | YIELD_IDENTIFIER_NAME
         )
     }
+}
+
+fn is_strict_future_reserved_word(name: &str) -> bool {
+    matches!(
+        name,
+        "implements" | "interface" | "package" | "private" | "protected" | "public" | "static"
+    )
 }

@@ -185,7 +185,7 @@ impl Context {
             }
             BytecodeInstruction::StoreBinding(binding) => {
                 let value = state.stack.pop()?;
-                self.assign_bytecode_or_builtin(binding, value.clone())?;
+                self.assign_bytecode_or_create_sloppy_global(binding, value.clone())?;
                 state.stack.push(value);
                 state.pc = next;
                 Ok(None)

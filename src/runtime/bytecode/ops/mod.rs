@@ -1,6 +1,8 @@
 mod assignment;
 mod object_literal;
 
+pub(super) use assignment::BytecodeAssignmentReference;
+
 use crate::{
     bytecode::{
         BytecodeBinding, BytecodeDynamicProperty, BytecodeNumericBinaryOp,

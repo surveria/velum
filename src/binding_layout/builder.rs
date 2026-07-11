@@ -552,6 +552,10 @@ impl LayoutBuilder {
                 self.resolve(name, scope, function)?;
                 self.analyze_expr(expr, scope, function)
             }
+            Expr::DestructuringAssignment { pattern, expr, .. } => {
+                pattern.for_each_expr(&mut |target| self.analyze_expr(target, scope, function))?;
+                self.analyze_expr(expr, scope, function)
+            }
             Expr::CompoundAssignment { target, expr, .. } => {
                 self.analyze_expr(target, scope, function)?;
                 self.analyze_expr(expr, scope, function)

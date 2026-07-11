@@ -6,8 +6,8 @@ use crate::{
 };
 
 use super::{
-    AstNode, FunctionParam, Statement, StaticBinding, StaticCallSiteId, StaticFunctionId,
-    StaticName, StaticPropertyAccessId, StaticString,
+    AssignmentPattern, AstNode, FunctionParam, Statement, StaticBinding, StaticCallSiteId,
+    StaticFunctionId, StaticName, StaticPropertyAccessId, StaticString,
 };
 
 pub type Expression = AstNode<Expr>;
@@ -88,6 +88,11 @@ pub enum Expr {
         name: StaticBinding,
         strict: bool,
         infer_name: bool,
+        expr: Box<Expression>,
+    },
+    DestructuringAssignment {
+        pattern: Box<AssignmentPattern>,
+        strict: bool,
         expr: Box<Expression>,
     },
     CompoundAssignment {
