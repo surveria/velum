@@ -1,7 +1,6 @@
 use std::{collections::BTreeMap, ops::Range, path::Path};
 
 use anyhow::{Context as _, anyhow, bail};
-use image::{ImageFormat, RgbImage};
 use plotters::{
     coord::{
         Shift,
@@ -15,7 +14,6 @@ use super::{ReportRecord, report_rollup_timeline::CommitTimeline};
 const BUDGET_RATIO: f64 = 1.00;
 const CHART_WIDTH: u32 = 1400;
 const CHART_HEIGHT: u32 = 1200;
-const RGB_CHANNELS: usize = 3;
 const RATIO_PANEL_TITLE: &str = "Performance and memory geomean versus QuickJS";
 const JETSTREAM_PANEL_TITLE: &str = "JetStream shell latency geomean versus QuickJS";
 const TEST262_PANEL_TITLE: &str = "Full Test262 outcomes";
@@ -65,32 +63,6 @@ const DARK_PALETTE: ChartPalette = ChartPalette {
     failed: RGBColor(255, 100, 100),
     budget: RGBColor(255, 100, 100),
 };
-
-pub(super) fn write_chart(
-    records: &[ReportRecord],
-    timeline: &CommitTimeline,
-    path: &Path,
-) -> anyhow::Result<()> {
-    let width = usize::try_from(CHART_WIDTH).context("chart width does not fit usize")?;
-    let height = usize::try_from(CHART_HEIGHT).context("chart height does not fit usize")?;
-    let pixel_count = width
-        .checked_mul(height)
-        .and_then(|count| count.checked_mul(RGB_CHANNELS))
-        .context("chart buffer size overflow")?;
-    let mut buffer = vec![255u8; pixel_count];
-    {
-        let root = BitMapBackend::with_buffer(&mut buffer, (CHART_WIDTH, CHART_HEIGHT))
-            .into_drawing_area();
-        render_chart(&root, records, timeline, &LIGHT_PALETTE)?;
-        root.present()
-            .map_err(|error| anyhow!("failed to render chart: {error:?}"))?;
-    }
-    let image = RgbImage::from_raw(CHART_WIDTH, CHART_HEIGHT, buffer)
-        .context("failed to create chart image buffer")?;
-    image
-        .save_with_format(path, ImageFormat::Jpeg)
-        .with_context(|| format!("failed to write chart '{}'", path.display()))
-}
 
 pub(super) fn write_svg_chart(
     records: &[ReportRecord],
