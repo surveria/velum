@@ -17,6 +17,8 @@ mod constructable;
 mod data_view_kind;
 mod date_kind;
 mod direct;
+mod iterator;
+mod iterator_kind;
 mod kind;
 mod object_kind;
 mod performance_kind;
@@ -34,6 +36,13 @@ pub(in crate::runtime) use data_view_kind::DataViewFunctionKind;
 pub(in crate::runtime) use date_kind::{
     DATE_NAME, DATE_NOW_NAME, DATE_PARSE_NAME, DATE_UTC_NAME, DateFunctionKind,
 };
+pub(in crate::runtime::native) use iterator_kind::{
+    ITERATOR_FROM_NAME, ITERATOR_PROTOTYPE_DROP_NAME, ITERATOR_PROTOTYPE_EVERY_NAME,
+    ITERATOR_PROTOTYPE_FILTER_NAME, ITERATOR_PROTOTYPE_FIND_NAME, ITERATOR_PROTOTYPE_FLAT_MAP_NAME,
+    ITERATOR_PROTOTYPE_FOR_EACH_NAME, ITERATOR_PROTOTYPE_MAP_NAME, ITERATOR_PROTOTYPE_REDUCE_NAME,
+    ITERATOR_PROTOTYPE_SOME_NAME, ITERATOR_PROTOTYPE_TAKE_NAME, ITERATOR_PROTOTYPE_TO_ARRAY_NAME,
+};
+pub(in crate::runtime) use iterator_kind::{ITERATOR_NAME, IteratorFunctionKind};
 pub(in crate::runtime) use kind::NativeFunctionKind;
 pub(in crate::runtime::native) use kind::{
     ARRAY_BUFFER_NAME, BOOLEAN_NAME, EVAL_NAME, FUNCTION_NAME, FUNCTION_PROTOTYPE_APPLY_NAME,
@@ -162,6 +171,15 @@ impl NativeFunction {
                 VmCallableEdgeKind::NativeFunctionInternal,
                 StrongEdgeReference::CollectionIterator(id),
             ),
+            NativeFunctionKind::Iterator(kind) => {
+                if let Some(id) = kind.state_id() {
+                    return visitor.visit(
+                        VmCallableEdgeKind::NativeFunctionInternal,
+                        StrongEdgeReference::CollectionIterator(id),
+                    );
+                }
+                Ok(())
+            }
             NativeFunctionKind::PromiseResolver { promise, .. } => visitor.visit(
                 VmCallableEdgeKind::NativeFunctionInternal,
                 StrongEdgeReference::Promise(promise),

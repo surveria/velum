@@ -1,4 +1,7 @@
-use super::{data_view_kind::DataViewFunctionKind, date_kind::DateFunctionKind};
+use super::{
+    data_view_kind::DataViewFunctionKind, date_kind::DateFunctionKind,
+    iterator_kind::IteratorFunctionKind,
+};
 use crate::runtime::object::TypedArrayElementKind;
 use crate::value::{BoundFunctionId, ErrorName, ObjectId};
 
@@ -270,6 +273,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     DataView(DataViewFunctionKind),
     Date(DateFunctionKind),
     CollectionIteratorNext(crate::runtime::collections::CollectionIteratorId),
+    Iterator(IteratorFunctionKind),
     IteratorSelf,
     Eval,
     ErrorConstructor(ErrorName),
@@ -512,6 +516,7 @@ impl NativeFunctionKind {
                 | Self::DataView(DataViewFunctionKind::Constructor)
                 | Self::ErrorConstructor(_)
                 | Self::Function
+                | Self::Iterator(IteratorFunctionKind::Constructor)
                 | Self::Number
                 | Self::Object
                 | Self::Promise
@@ -533,6 +538,9 @@ impl NativeFunctionKind {
             return kind.length();
         }
         if let Self::DataView(kind) = self {
+            return kind.length();
+        }
+        if let Self::Iterator(kind) = self {
             return kind.length();
         }
         if let Some(length) = self.collection_length() {
@@ -629,6 +637,9 @@ impl NativeFunctionKind {
             return kind.name();
         }
         if let Self::DataView(kind) = self {
+            return kind.name();
+        }
+        if let Self::Iterator(kind) = self {
             return kind.name();
         }
         if let Some(name) = self.collection_name() {

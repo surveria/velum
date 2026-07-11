@@ -14,10 +14,10 @@ use super::{
     DateFunctionKind, EVAL_NAME, FUNCTION_NAME, GLOBAL_DECODE_URI_COMPONENT_NAME,
     GLOBAL_DECODE_URI_NAME, GLOBAL_ENCODE_URI_COMPONENT_NAME, GLOBAL_ENCODE_URI_NAME,
     GLOBAL_IS_FINITE_NAME, GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME,
-    GLOBAL_THIS_NAME, INFINITY_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME,
-    NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PERFORMANCE_NAME,
-    PROMISE_NAME, PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME,
-    WEAK_MAP_NAME, WEAK_SET_NAME,
+    GLOBAL_THIS_NAME, INFINITY_NAME, ITERATOR_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME,
+    NUMBER_NAME, NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME,
+    PERFORMANCE_NAME, PROMISE_NAME, PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, STRING_NAME,
+    SYMBOL_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -66,6 +66,7 @@ impl Context {
             INFINITY_NAME => self
                 .global_constant_value(INFINITY_NAME, Value::Number(f64::INFINITY))
                 .map(Some),
+            ITERATOR_NAME => self.iterator_constructor_value().map(Some),
             JSON_NAME => self.json_object_value().map(Some),
             DATE_NAME => self.date_constructor_value().map(Some),
             MAP_NAME => self.map_constructor_value().map(Some),
@@ -135,6 +136,7 @@ impl Context {
                 .global_function_value(NativeFunctionKind::GlobalParseInt)
                 .map(Some),
             DATE_NAME => self.date_constructor_value().map(Some),
+            ITERATOR_NAME => self.iterator_constructor_value().map(Some),
             MAP_NAME => self.map_constructor_value().map(Some),
             NUMBER_NAME => self.number_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
@@ -184,6 +186,11 @@ impl Context {
             NativeFunctionKind::DataView(DataViewFunctionKind::Constructor) => {
                 self.construct_data_view(args)
             }
+            // Direct `new Iterator()` reaches this newTarget-less path only
+            // when the constructor itself is the target, which the abstract
+            // class rejects. Subclass construction flows through
+            // `semantic_construct`.
+            NativeFunctionKind::Iterator(_) => Self::eval_iterator_abstract_call(),
             NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
             NativeFunctionKind::AsyncGeneratorFunction => {
                 self.eval_async_generator_function_constructor(args)

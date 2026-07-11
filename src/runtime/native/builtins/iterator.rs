@@ -1,0 +1,531 @@
+use crate::{
+    error::{Error, Result},
+    runtime::{
+        Context, VmStorageKind,
+        call::RuntimeCallArgs,
+        collections::{IteratorHelperMode, IteratorHelperState},
+        native::IteratorFunctionKind,
+        object::{
+            DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
+            PropertyKey, PropertyUpdate, PropertyWritable,
+        },
+        property::DynamicPropertyKey,
+    },
+    value::{ObjectId, Value},
+};
+
+use super::{
+    ITERATOR_FROM_NAME, ITERATOR_PROTOTYPE_DROP_NAME, ITERATOR_PROTOTYPE_EVERY_NAME,
+    ITERATOR_PROTOTYPE_FILTER_NAME, ITERATOR_PROTOTYPE_FIND_NAME, ITERATOR_PROTOTYPE_FLAT_MAP_NAME,
+    ITERATOR_PROTOTYPE_FOR_EACH_NAME, ITERATOR_PROTOTYPE_MAP_NAME, ITERATOR_PROTOTYPE_REDUCE_NAME,
+    ITERATOR_PROTOTYPE_SOME_NAME, ITERATOR_PROTOTYPE_TAKE_NAME, ITERATOR_PROTOTYPE_TO_ARRAY_NAME,
+    NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY,
+};
+
+pub(in crate::runtime) const ITERATOR_GLOBAL_NAME: &str = "Iterator";
+const ITERATOR_TAG: &str = "Iterator";
+const ITERATOR_HELPER_TAG: &str = "Iterator Helper";
+const ITERATOR_NEXT_NAME: &str = "next";
+const ITERATOR_RETURN_NAME: &str = "return";
+const PROTOTYPE_PROPERTY_NAME: &str = "prototype";
+const ITERATOR_SYMBOL_DISPLAY: &str = "[Symbol.iterator]";
+const ITERATOR_SYMBOL_DISPLAY_NAME: &str = "Symbol(Symbol.iterator)";
+const TO_STRING_TAG_SYMBOL_DISPLAY: &str = "[Symbol.toStringTag]";
+const TO_STRING_TAG_PROPERTY: &str = "toStringTag";
+
+const ITERATOR_ABSTRACT_ERROR: &str =
+    "Iterator is an abstract constructor and cannot be invoked directly";
+const ITERATOR_RECEIVER_ERROR: &str = "Iterator helper method requires an object receiver";
+const ITERATOR_CALLBACK_ERROR: &str = "Iterator helper callback must be callable";
+const ITERATOR_LIMIT_NAN_ERROR: &str = "Iterator helper limit must not be NaN";
+const ITERATOR_LIMIT_NEGATIVE_ERROR: &str = "Iterator helper limit must be non-negative";
+const ITERATOR_FROM_PRIMITIVE_ERROR: &str = "Iterator.from source must be an object or a string";
+const ITERATOR_FROM_RESULT_ERROR: &str = "Iterator.from source did not produce an object iterator";
+
+impl Context {
+    pub(in crate::runtime::native) fn iterator_constructor_value(&mut self) -> Result<Value> {
+        let constructor_kind = NativeFunctionKind::Iterator(IteratorFunctionKind::Constructor);
+        if let Some(id) = self.native_function_id(constructor_kind) {
+            return Ok(Value::NativeFunction(id));
+        }
+        self.object_constructor_value()?;
+        let id = self.next_native_function_id();
+        let constructor = Value::NativeFunction(id);
+        let constructor_key = self.object_constructor_property_key()?;
+        let prototype = self.objects.create_with_prototype_property(
+            None,
+            ObjectPropertyInit::new(
+                constructor_key,
+                OBJECT_CONSTRUCTOR_PROPERTY,
+                constructor.clone(),
+                PropertyEnumerable::No,
+            ),
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
+        let name = self.native_function_name_value(constructor_kind)?;
+        self.push_native_function_with_id(id, constructor_kind, Value::Object(prototype), name)?;
+        self.install_iterator_prototype_methods(prototype)?;
+        let from =
+            self.iterator_method_value(NativeFunctionKind::Iterator(IteratorFunctionKind::From))?;
+        let from_key = self.intern_property_key(ITERATOR_FROM_NAME)?;
+        self.define_native_function_property_key(
+            id,
+            ITERATOR_FROM_NAME,
+            from_key,
+            DataPropertyUpdate::new(
+                Some(from),
+                Some(PropertyWritable::Yes),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            ),
+        )?;
+        self.insert_global_builtin(ITERATOR_GLOBAL_NAME, constructor.clone())?;
+        Ok(constructor)
+    }
+
+    /// Returns the singleton native function for a slot-registered iterator
+    /// kind, creating it on first use.
+    fn iterator_method_value(&mut self, kind: NativeFunctionKind) -> Result<Value> {
+        if let Some(id) = self.native_function_id(kind) {
+            return Ok(Value::NativeFunction(id));
+        }
+        self.create_native_function(kind, Value::Undefined)
+    }
+
+    fn install_iterator_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
+        let methods: &[(&str, IteratorFunctionKind)] = &[
+            (
+                ITERATOR_PROTOTYPE_MAP_NAME,
+                IteratorFunctionKind::PrototypeMap,
+            ),
+            (
+                ITERATOR_PROTOTYPE_FILTER_NAME,
+                IteratorFunctionKind::PrototypeFilter,
+            ),
+            (
+                ITERATOR_PROTOTYPE_TAKE_NAME,
+                IteratorFunctionKind::PrototypeTake,
+            ),
+            (
+                ITERATOR_PROTOTYPE_DROP_NAME,
+                IteratorFunctionKind::PrototypeDrop,
+            ),
+            (
+                ITERATOR_PROTOTYPE_FLAT_MAP_NAME,
+                IteratorFunctionKind::PrototypeFlatMap,
+            ),
+            (
+                ITERATOR_PROTOTYPE_REDUCE_NAME,
+                IteratorFunctionKind::PrototypeReduce,
+            ),
+            (
+                ITERATOR_PROTOTYPE_TO_ARRAY_NAME,
+                IteratorFunctionKind::PrototypeToArray,
+            ),
+            (
+                ITERATOR_PROTOTYPE_FOR_EACH_NAME,
+                IteratorFunctionKind::PrototypeForEach,
+            ),
+            (
+                ITERATOR_PROTOTYPE_SOME_NAME,
+                IteratorFunctionKind::PrototypeSome,
+            ),
+            (
+                ITERATOR_PROTOTYPE_EVERY_NAME,
+                IteratorFunctionKind::PrototypeEvery,
+            ),
+            (
+                ITERATOR_PROTOTYPE_FIND_NAME,
+                IteratorFunctionKind::PrototypeFind,
+            ),
+        ];
+        for (name, kind) in methods {
+            let method = self.iterator_method_value(NativeFunctionKind::Iterator(*kind))?;
+            self.define_non_enumerable_object_property(prototype, name, method)?;
+        }
+        self.install_iterator_symbol_self(prototype)?;
+        self.install_iterator_to_string_tag(prototype, ITERATOR_TAG)
+    }
+
+    fn install_iterator_symbol_self(&mut self, prototype: ObjectId) -> Result<()> {
+        self.symbol_constructor_value()?;
+        let Some(symbol) = self.iterator_symbol() else {
+            return Err(Error::runtime("Symbol.iterator is not initialized"));
+        };
+        let self_fn =
+            self.create_native_function(NativeFunctionKind::IteratorSelf, Value::Undefined)?;
+        self.objects.define_property(
+            prototype,
+            PropertyKey::symbol(symbol),
+            ITERATOR_SYMBOL_DISPLAY,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(self_fn),
+                Some(PropertyWritable::Yes),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )?;
+        Ok(())
+    }
+
+    fn install_iterator_to_string_tag(&mut self, prototype: ObjectId, tag: &str) -> Result<()> {
+        let symbol_constructor = self.symbol_constructor_value()?;
+        let tag_symbol = self.get_named(&symbol_constructor, TO_STRING_TAG_PROPERTY)?;
+        let Value::Symbol(symbol) = tag_symbol else {
+            return Err(Error::runtime("Symbol.toStringTag is not initialized"));
+        };
+        let tag_value = self.heap_string_value(tag)?;
+        self.objects.define_property(
+            prototype,
+            PropertyKey::symbol(symbol.id()),
+            TO_STRING_TAG_SYMBOL_DISPLAY,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(tag_value),
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )?;
+        Ok(())
+    }
+
+    /// %Iterator.prototype%, materializing the constructor on first use.
+    pub(in crate::runtime) fn iterator_prototype_object_id(&mut self) -> Result<ObjectId> {
+        let constructor = self.iterator_constructor_value()?;
+        let prototype = self.get_named(&constructor, PROTOTYPE_PROPERTY_NAME)?;
+        let Value::Object(id) = prototype else {
+            return Err(Error::runtime("Iterator prototype is not an object"));
+        };
+        Ok(id)
+    }
+
+    /// %IteratorHelperPrototype%: shared parent of every lazy helper object.
+    fn iterator_helper_prototype_id(&mut self) -> Result<ObjectId> {
+        if let Some(id) = self.iterator_helper_prototype {
+            return Ok(id);
+        }
+        let parent = self.iterator_prototype_object_id()?;
+        let constructor_key = self.object_constructor_property_key()?;
+        let value = self.objects.create_with_prototype(
+            Some(parent),
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
+        let Value::Object(id) = value else {
+            return Err(Error::runtime("iterator helper prototype creation failed"));
+        };
+        self.install_iterator_to_string_tag(id, ITERATOR_HELPER_TAG)?;
+        self.storage_ledger
+            .grow_count(VmStorageKind::Association, 1)?;
+        self.iterator_helper_prototype = Some(id);
+        Ok(id)
+    }
+
+    /// %WrapForValidIteratorPrototype%: parent of `Iterator.from` wrappers.
+    fn wrapped_iterator_prototype_id(&mut self) -> Result<ObjectId> {
+        if let Some(id) = self.wrapped_iterator_prototype {
+            return Ok(id);
+        }
+        let parent = self.iterator_prototype_object_id()?;
+        let constructor_key = self.object_constructor_property_key()?;
+        let value = self.objects.create_with_prototype(
+            Some(parent),
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
+        let Value::Object(id) = value else {
+            return Err(Error::runtime("wrapped iterator prototype creation failed"));
+        };
+        self.storage_ledger
+            .grow_count(VmStorageKind::Association, 1)?;
+        self.wrapped_iterator_prototype = Some(id);
+        Ok(id)
+    }
+
+    pub(in crate::runtime::native) fn eval_iterator_abstract_call() -> Result<Value> {
+        Err(Error::type_error(ITERATOR_ABSTRACT_ERROR))
+    }
+
+    /// `new.target`-aware construct used by `super()` in subclasses. Direct
+    /// construction of the abstract class itself is rejected.
+    pub(in crate::runtime) fn construct_iterator_object(
+        &mut self,
+        constructor: &Value,
+        new_target: &Value,
+    ) -> Result<Value> {
+        if constructor == new_target {
+            return Err(Error::type_error(ITERATOR_ABSTRACT_ERROR));
+        }
+        let prototype = match self.constructor_instance_prototype(new_target)? {
+            Some(id) => Some(id),
+            None => Some(self.iterator_prototype_object_id()?),
+        };
+        let constructor_key = self.object_constructor_property_key()?;
+        self.objects.create_with_prototype(
+            prototype,
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn require_iterator_receiver(&self, this_value: &Value) -> Result<()> {
+        if self.semantic_object_ref(this_value)?.is_none() {
+            return Err(Error::type_error(ITERATOR_RECEIVER_ERROR));
+        }
+        Ok(())
+    }
+
+    fn require_callable_argument(&self, args: &RuntimeCallArgs<'_>) -> Result<Value> {
+        let callback = first_arg(args);
+        if !self.semantic_is_callable(&callback)? {
+            return Err(Error::type_error(ITERATOR_CALLBACK_ERROR));
+        }
+        Ok(callback)
+    }
+
+    /// ECMAScript `GetIteratorDirect`: capture the receiver and its `next`.
+    pub(in crate::runtime::native) fn iterator_direct_next(
+        &mut self,
+        iterator: &Value,
+    ) -> Result<Value> {
+        self.get_named(iterator, ITERATOR_NEXT_NAME)
+    }
+
+    fn create_iterator_helper_object(&mut self, state: IteratorHelperState) -> Result<Value> {
+        let prototype = self.iterator_helper_prototype_id()?;
+        let id = self.create_iterator_helper(state)?;
+        let next = self.create_native_function(
+            NativeFunctionKind::Iterator(IteratorFunctionKind::HelperNext(id)),
+            Value::Undefined,
+        )?;
+        let return_fn = self.create_native_function(
+            NativeFunctionKind::Iterator(IteratorFunctionKind::HelperReturn(id)),
+            Value::Undefined,
+        )?;
+        let constructor_key = self.object_constructor_property_key()?;
+        let object = self.objects.create_with_prototype(
+            Some(prototype),
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
+        let Value::Object(object_id) = &object else {
+            return Err(Error::runtime("iterator helper object creation failed"));
+        };
+        self.define_non_enumerable_object_property(*object_id, ITERATOR_NEXT_NAME, next)?;
+        self.define_non_enumerable_object_property(*object_id, ITERATOR_RETURN_NAME, return_fn)?;
+        Ok(object)
+    }
+
+    fn create_callback_helper(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+        mode: fn(Value) -> IteratorHelperMode,
+    ) -> Result<Value> {
+        self.require_iterator_receiver(this_value)?;
+        let callback = self.require_callable_argument(&args)?;
+        let next = self.iterator_direct_next(this_value)?;
+        self.create_iterator_helper_object(IteratorHelperState {
+            iterator: this_value.clone(),
+            next,
+            counter: 0.0,
+            done: false,
+            mode: mode(callback),
+        })
+    }
+
+    pub(in crate::runtime::native) fn eval_iterator_prototype_map(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.create_callback_helper(args, this_value, |mapper| IteratorHelperMode::Map {
+            mapper,
+        })
+    }
+
+    pub(in crate::runtime::native) fn eval_iterator_prototype_filter(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.create_callback_helper(args, this_value, |predicate| IteratorHelperMode::Filter {
+            predicate,
+        })
+    }
+
+    pub(in crate::runtime::native) fn eval_iterator_prototype_flat_map(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.create_callback_helper(args, this_value, |mapper| IteratorHelperMode::FlatMap {
+            mapper,
+            inner: None,
+        })
+    }
+
+    fn create_limit_helper(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+        mode: fn(f64) -> IteratorHelperMode,
+    ) -> Result<Value> {
+        self.require_iterator_receiver(this_value)?;
+        let limit = first_arg(&args);
+        let number = self.to_number(&limit)?;
+        if number.is_nan() {
+            return Err(Error::exception(
+                crate::value::ErrorName::RangeError,
+                ITERATOR_LIMIT_NAN_ERROR,
+            ));
+        }
+        let integer = self.to_integer_or_infinity(&Value::Number(number))?;
+        if integer < 0.0 {
+            return Err(Error::exception(
+                crate::value::ErrorName::RangeError,
+                ITERATOR_LIMIT_NEGATIVE_ERROR,
+            ));
+        }
+        let next = self.iterator_direct_next(this_value)?;
+        self.create_iterator_helper_object(IteratorHelperState {
+            iterator: this_value.clone(),
+            next,
+            counter: 0.0,
+            done: false,
+            mode: mode(integer),
+        })
+    }
+
+    pub(in crate::runtime::native) fn eval_iterator_prototype_take(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.create_limit_helper(args, this_value, |remaining| IteratorHelperMode::Take {
+            remaining,
+        })
+    }
+
+    pub(in crate::runtime::native) fn eval_iterator_prototype_drop(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        self.create_limit_helper(args, this_value, |remaining| IteratorHelperMode::Drop {
+            remaining,
+        })
+    }
+
+    /// ECMAScript `Iterator.from` with `iterate-string-primitives` handling.
+    pub(in crate::runtime::native) fn eval_iterator_from(
+        &mut self,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        let input = first_arg(&args);
+        let iterator = self.iterator_flattenable_source(&input)?;
+        let prototype = self.iterator_prototype_object_id()?;
+        if let Value::Object(id) = &iterator
+            && self.objects.prototype_chain_has_object(*id, prototype)?
+        {
+            return Ok(iterator);
+        }
+        let next = self.iterator_direct_next(&iterator)?;
+        let wrap_prototype = self.wrapped_iterator_prototype_id()?;
+        let id = self.create_wrapped_iterator(iterator, next)?;
+        let next_fn = self.create_native_function(
+            NativeFunctionKind::Iterator(IteratorFunctionKind::WrapNext(id)),
+            Value::Undefined,
+        )?;
+        let return_fn = self.create_native_function(
+            NativeFunctionKind::Iterator(IteratorFunctionKind::WrapReturn(id)),
+            Value::Undefined,
+        )?;
+        let constructor_key = self.object_constructor_property_key()?;
+        let object = self.objects.create_with_prototype(
+            Some(wrap_prototype),
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
+        let Value::Object(object_id) = &object else {
+            return Err(Error::runtime("wrapped iterator object creation failed"));
+        };
+        self.define_non_enumerable_object_property(*object_id, ITERATOR_NEXT_NAME, next_fn)?;
+        self.define_non_enumerable_object_property(*object_id, ITERATOR_RETURN_NAME, return_fn)?;
+        Ok(object)
+    }
+
+    /// ECMAScript `GetIteratorFlattenable` producing the iterator object.
+    /// Strings are materialized through the snapshot iterator so a plain
+    /// JavaScript iterator object always backs the result.
+    fn iterator_flattenable_source(&mut self, input: &Value) -> Result<Value> {
+        match input {
+            Value::Object(_) => {
+                let method = self.flattenable_iterator_method(input)?;
+                let iterator = if let Some(method) = method {
+                    self.call_value(&method, &[], input.clone())?
+                } else {
+                    input.clone()
+                };
+                if self.semantic_object_ref(&iterator)?.is_none() {
+                    return Err(Error::type_error(ITERATOR_FROM_RESULT_ERROR));
+                }
+                Ok(iterator)
+            }
+            Value::String(text) => {
+                let chars: Vec<char> = text.chars().collect();
+                self.string_snapshot_iterator(&chars)
+            }
+            Value::HeapString(text) => {
+                let chars: Vec<char> = text.as_str().chars().collect();
+                self.string_snapshot_iterator(&chars)
+            }
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::Symbol(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_) => Err(Error::type_error(ITERATOR_FROM_PRIMITIVE_ERROR)),
+        }
+    }
+
+    fn string_snapshot_iterator(&mut self, chars: &[char]) -> Result<Value> {
+        let mut items = Vec::with_capacity(chars.len());
+        for ch in chars {
+            items.push(self.heap_string_char_value(*ch)?);
+        }
+        self.create_collection_iterator_object(items)
+    }
+
+    /// `GetMethod(input, @@iterator)` without touching the frozen abstract
+    /// operation facade.
+    pub(in crate::runtime::native) fn flattenable_iterator_method(
+        &mut self,
+        input: &Value,
+    ) -> Result<Option<Value>> {
+        self.symbol_constructor_value()?;
+        let Some(symbol) = self.iterator_symbol() else {
+            return Ok(None);
+        };
+        let key = DynamicPropertyKey::new(
+            ITERATOR_SYMBOL_DISPLAY_NAME.to_owned(),
+            Some(PropertyKey::symbol(symbol)),
+        );
+        self.get_method(input, key.lookup())
+    }
+}
+
+fn first_arg(args: &RuntimeCallArgs<'_>) -> Value {
+    args.as_slice().first().cloned().unwrap_or(Value::Undefined)
+}

@@ -442,6 +442,8 @@ impl Context {
         &mut self,
         items: Vec<Value>,
     ) -> Result<Value> {
+        // Built-in iterator objects inherit the ES2025 iterator helpers.
+        let iterator_prototype = self.iterator_prototype_object_id()?;
         let iterator_id = self.create_collection_iterator(items)?;
         let next = self.create_native_function(
             NativeFunctionKind::CollectionIteratorNext(iterator_id),
@@ -450,7 +452,7 @@ impl Context {
         let next_key = self.intern_property_key(ITERATOR_NEXT_NAME)?;
         let constructor_key = self.object_constructor_property_key()?;
         let object = self.objects.create_with_prototype(
-            None,
+            Some(iterator_prototype),
             constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
@@ -496,6 +498,8 @@ impl Context {
         items: Vec<Value>,
         tag: &str,
     ) -> Result<Value> {
+        // Tagged per-kind prototypes chain to the shared iterator helpers.
+        let iterator_prototype = self.iterator_prototype_object_id()?;
         let iterator_id = self.create_collection_iterator(items)?;
         let next = self.create_native_function(
             NativeFunctionKind::CollectionIteratorNext(iterator_id),
@@ -504,7 +508,7 @@ impl Context {
         let next_key = self.intern_property_key(ITERATOR_NEXT_NAME)?;
         let constructor_key = self.object_constructor_property_key()?;
         let prototype = self.objects.create_with_prototype(
-            None,
+            Some(iterator_prototype),
             constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,

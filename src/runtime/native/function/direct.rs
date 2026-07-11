@@ -463,6 +463,9 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
+        if let Some(result) = self.eval_iterator_native_function_kind(kind, args, this_value) {
+            return result;
+        }
         if let Some(result) = self.eval_collection_native_function_kind(kind, args, this_value) {
             return result;
         }

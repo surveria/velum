@@ -305,14 +305,12 @@ impl Context {
         if let Some(prototype) = self.generator_prototype {
             return Ok(prototype);
         }
+        // %GeneratorPrototype% inherits the iterator helpers through
+        // %Iterator.prototype% per the specification prototype chain.
+        let iterator_prototype = self.iterator_prototype_object_id()?;
         let constructor_key = self.object_constructor_property_key()?;
-        let object_prototype = self.objects.object_prototype_id(
-            constructor_key,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )?;
         let value = self.objects.create_with_prototype(
-            Some(object_prototype),
+            Some(iterator_prototype),
             constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
