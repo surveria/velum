@@ -208,6 +208,48 @@ fn preserves_pending_jobs_and_suspended_async_owners() -> TestResult {
 }
 
 #[test]
+fn reclaims_suspended_owners_after_embedder_cancellation() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.eval(
+        r"
+        var resolveLater;
+        var resumed = false;
+        async function task() {
+            await new Promise(function(resolve) { resolveLater = resolve; });
+            resumed = true;
+        }
+        task();
+        42
+        ",
+    )?;
+
+    let before = vm.heap_reachability_snapshot()?;
+    ensure_positive(
+        before.reachable(VmGcKind::Promise),
+        "reachable suspended Promise owner",
+    )?;
+    ensure_positive(vm.cancel_jobs()?, "cancelled suspended reactions")?;
+    let cancelled = vm.heap_reachability_snapshot()?;
+    ensure(
+        cancelled.unreachable(VmGcKind::Promise) > before.unreachable(VmGcKind::Promise),
+        "cancellation did not expose the suspended result Promise",
+    )?;
+    let report = vm.collect_garbage()?;
+    ensure_positive(
+        report.reclaimed(VmGcKind::Promise),
+        "reclaimed cancelled Promise owners",
+    )?;
+    vm.eval("resolveLater(42); 0")?;
+    ensure(
+        vm.eval("resumed")?.to_string() == "false",
+        "cancelled async continuation resumed after collection",
+    )?;
+    vm.storage_snapshot()?;
+    Ok(())
+}
+
+#[test]
 fn reclaims_heap_strings_and_preserves_rooted_text() -> TestResult {
     let storage = VmStorageLimits::unlimited().with_max_count(VmStorageKind::HeapString, 64);
     let limits = RuntimeLimits {
