@@ -85,8 +85,8 @@ impl BytecodeCompiler<'_> {
                 consequent,
                 alternate,
             } => return self.compile_conditional_expr(condition, consequent, alternate),
-            Expr::Assignment { name, strict, expr } => {
-                return self.compile_binding_assignment_expr(name, *strict, expr);
+            Expr::Assignment { .. } | Expr::Update { .. } | Expr::CompoundAssignment { .. } => {
+                return self.compile_mutation_expr(expr);
             }
             Expr::PropertyAssignment {
                 object,
@@ -113,22 +113,6 @@ impl BytecodeCompiler<'_> {
             Expr::Object(properties) => return self.compile_object_literal(properties),
             Expr::ArrayHole => return Err(Error::runtime("array elision outside array literal")),
             Expr::Array(elements) => return self.compile_array_literal(elements),
-            Expr::Update {
-                op,
-                prefix,
-                strict,
-                expr,
-            } => {
-                return self.compile_update_expr(*op, *prefix, *strict, expr);
-            }
-            Expr::CompoundAssignment {
-                op,
-                strict,
-                target,
-                expr,
-            } => {
-                return self.compile_compound_assignment(*op, *strict, target, expr);
-            }
             Expr::Call {
                 callee,
                 site,
@@ -143,6 +127,27 @@ impl BytecodeCompiler<'_> {
             Expr::New { constructor, args } => self.compile_new_expr(constructor, args)?,
         }
         Ok(())
+    }
+
+    fn compile_mutation_expr(&mut self, expr: &Expr) -> Result<()> {
+        match expr {
+            Expr::Assignment { name, strict, expr } => {
+                self.compile_binding_assignment_expr(name, *strict, expr)
+            }
+            Expr::Update {
+                op,
+                prefix,
+                strict,
+                expr,
+            } => self.compile_update_expr(*op, *prefix, *strict, expr),
+            Expr::CompoundAssignment {
+                op,
+                strict,
+                target,
+                expr,
+            } => self.compile_compound_assignment(*op, *strict, target, expr),
+            _ => Err(Error::runtime("expected mutation expression")),
+        }
     }
 
     fn compile_sequence_expr(&mut self, expressions: &[Expression]) -> Result<()> {

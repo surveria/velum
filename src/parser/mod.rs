@@ -38,7 +38,7 @@ pub fn parse_with_usage(tokens: Vec<Token>, limits: RuntimeLimits) -> Result<Par
     parse_with_usage_in_mode(tokens, limits, false)
 }
 
-pub(crate) fn parse_with_usage_in_mode(
+pub fn parse_with_usage_in_mode(
     tokens: Vec<Token>,
     limits: RuntimeLimits,
     strict_mode: bool,

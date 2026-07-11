@@ -32,7 +32,7 @@ fn named_function_expression_recurses_without_leaking_its_name() -> TestResult {
 #[test]
 fn parameters_and_defaults_shadow_or_observe_the_private_name() -> TestResult {
     expect_number(
-        r#"
+        r"
         let parameterShadow = function self(self) {
             return self;
         };
@@ -41,7 +41,7 @@ fn parameters_and_defaults_shadow_or_observe_the_private_name() -> TestResult {
         };
         let score = parameterShadow(40);
         defaultObserver()() ? score + 2 : 0
-        "#,
+        ",
         42.0,
     )
 }

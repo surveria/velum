@@ -150,18 +150,8 @@ impl Context {
         let static_binding_layout = self.current_static_binding_layout();
         let param_frames =
             parameters::function_param_frames(params, static_binding_layout.as_ref())?;
-        let self_binding = init
-            .bytecode
-            .self_binding()
-            .map(|binding| {
-                let atom = self.intern_static_name_atom(binding.name())?;
-                let frame = parameters::function_self_binding_frame(
-                    binding.id(),
-                    static_binding_layout.as_ref(),
-                )?;
-                Ok(FunctionSelfBinding::new(atom, frame))
-            })
-            .transpose()?;
+        let self_binding =
+            self.compile_function_self_binding(init.bytecode, static_binding_layout.as_ref())?;
         let fast_path = self.compile_optional_function_fast_path(init, &param_frames)?;
         let upvalues = self.capture_function_upvalues(
             init.static_function_id,
@@ -218,6 +208,21 @@ impl Context {
             },
         )?;
         Ok(function)
+    }
+
+    fn compile_function_self_binding(
+        &mut self,
+        bytecode: &BytecodeFunction,
+        layout: Option<&crate::binding_metadata::BindingLayout>,
+    ) -> Result<Option<FunctionSelfBinding>> {
+        bytecode
+            .self_binding()
+            .map(|binding| {
+                let atom = self.intern_static_name_atom(binding.name())?;
+                let frame = parameters::function_self_binding_frame(binding.id(), layout)?;
+                Ok(FunctionSelfBinding::new(atom, frame))
+            })
+            .transpose()
     }
 
     fn compile_optional_function_fast_path(
