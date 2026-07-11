@@ -34,7 +34,7 @@ fn keeps_const_bindings_immutable() -> TestResult {
     let Err(error) = context.eval("const x = 1; x = 2") else {
         return Err("expected const assignment to fail".into());
     };
-    ensure_error_kind(&error, "runtime")?;
+    ensure_error_kind(&error, "javascript")?;
     Ok(())
 }
 
