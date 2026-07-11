@@ -1,8 +1,6 @@
 use super::date_kind::DateFunctionKind;
-use crate::{
-    runtime::object::TypedArrayElementKind,
-    value::{BoundFunctionId, ErrorName, ObjectId},
-};
+use crate::runtime::object::TypedArrayElementKind;
+use crate::value::{BoundFunctionId, ErrorName, ObjectId};
 
 mod math;
 mod regexp;

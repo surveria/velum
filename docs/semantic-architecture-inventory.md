@@ -147,7 +147,7 @@ in one `Object` record.
 | RegExp | `regexp_value` on `Object` | RegExp built-ins plus ordinary properties |
 | Proxy | `proxy_value` on `Object` | repeated pre-dispatch in get/has/set/delete/prototype/descriptor/call/construct paths |
 | ArrayBuffer | `byte_buffer` on `Object`; bytes are `Rc<RefCell<Vec<u8>>>` | typed-array built-ins plus ordinary properties |
-| Uint8Array | `uint8_array` on `Object`, referencing a buffer object and shared buffer | typed-array indexed branches plus ordinary properties |
+| Numeric TypedArray | `typed_array` on `Object`, carrying an element kind and referencing a buffer object plus shared byte buffer | typed-array indexed branches plus ordinary properties; AS-09j generalizes the previous Uint8-only payload without adding an edge category |
 | Raw JSON marker | `is_raw_json` boolean on `Object` | JSON built-ins |
 
 The following object kinds use `Value::Object` identity but keep their internal
@@ -689,6 +689,7 @@ decision sequence:
 | AS-09g | destructuring assignment | draft PR #456 adds typed assignment-pattern leaves to the existing resumable `BytecodePattern` walker, preserves reference/default/iterator ordering and assignment expression results, raises the focused `assignment/dstr` profile from 131/640 to 580/640 variants, and adds 850 full-corpus variants / 512 files with no removed pass |
 | AS-09h | synchronous generators | draft PR #457 extends the single continuation owner with generator-start, yielded-value, raw delegated-result, and generic resume completions; suspended generator associations trace the same activation/binding/iterator roots, the focused generator profile reaches 1,042/1,056 variants, and the reviewed full baseline reaches 42,709 variants after 2,885 additions and eleven explicit module-only false-positive removals; shared dynamic-eval, `with`, realm harness, and a real module parse goal remain separately owned gaps |
 | AS-09i | asynchronous generators | draft PR #459 reuses the AS-09h detached activation owner with Promise-valued request queues, mode-aware async/sync iterator delegation, generic thenable jobs, distinct intrinsic prototypes, typed await/resumption reactions, and native `Promise.all` aggregation; the focused async-generator profile advances from 228/1,944 to 1,920/1,944 variants and from 119/995 to 980/995 files, while the reviewed full baseline reaches 45,258 variants after 2,550 additions and one explicit module-parse false-positive removal |
+| AS-09j | numeric typed-array payload and constructor compatibility | PR #462 replaces the Uint8-only object payload with one element-kind-tagged view over shared ArrayBuffer bytes, preserves the existing internal-slot strong edge, and adds the nine non-BigInt numeric typed array constructors; relative to AS-09i, the reviewed full baseline reaches 45,684 variants after 436 additions and ten explicit prototype-accessor false-positive removals, while the focused TypedArray and TypedArrayConstructors profile passes 356 variants |
 
 ## AS-01b Guard Specification
 
