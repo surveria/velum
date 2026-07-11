@@ -488,7 +488,7 @@ dependencies do not overlap.
 | AS-05 | Complete | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05b2c3 are merged through PR #436 with exact-tree correctness, complete owner-limit reconciliation, and canonical report publication. |
 | AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
 | AS-07 | Complete | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | PR #446 merged as `62e2725`; exact-tree correctness, paired sentinels, post-merge performance, and canonical report publication passed. |
-| AS-08 | In progress | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a is active in draft PR #447 with one optimizer owner, disabled-mode equivalence, and harness opcodes removed; AS-08b retains the workload-shape audit. |
+| AS-08 | In progress | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a merged in PR #447 with one optimizer owner and disabled-mode equivalence; AS-08b draft PR #449 removes workload-shaped execution and retains one broad guarded reduction. |
 | AS-09 | Backlog | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | Multiple feature clusters land through shared semantics without new architecture exceptions. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
 
@@ -2145,7 +2145,7 @@ operation, has complete guards, and demonstrates value across unrelated
 workloads. Remove or replace harness-specific bytecode and source-name
 recognition.
 
-AS-08a local evidence in draft PR #447:
+AS-08a completion evidence from PR #447:
 
 - `runtime/optimizer.rs` owns the VM-local mode and stable linear/call-cache
   counters; the previous scattered `Context` fields are removed;
@@ -2176,14 +2176,56 @@ AS-08a local evidence in draft PR #447:
   (-0.9%), array-index 2.57/2.50 ms (+2.8%), property-read 227.07/232.10 ms
   (-2.2%), function-call 158.83/159.06 ms (-0.1%), and string-scan
   72.67/71.04 ms (+2.3%). All rows are valid, checksums match, and branch
-  variation is at most 0.9%. Required exact-tree correctness remains to be
-  attached before merge.
+  variation is at most 0.9%;
+- PR #447 squash-merged as `bc52a723`; recovery correctness run `29137393392`
+  certified exact tree `7ee066e2`, post-merge run `29137348540` attempt 3
+  passed performance and publication, and report-only commit `5e68fa5`
+  published `reports/test-runs/rsqjs-test-report-20260711T030752Z.*`.
 
-AS-08b remains responsible for classifying every named control recognizer and
-for removing or replacing any path that lacks broad unrelated-workload
-evidence. Physical dense-array storage remains a semantic backend; AS-08b
-separately audits specialized built-in algorithms rather than conflating them
-with bytecode quickening.
+AS-08b evidence in draft PR #449:
+
+- fifteen named control recognizer/executor modules are deleted together with
+  compiler-generated catch and try/finally source-shape plans. More than 5,400
+  lines of duplicate whole-loop semantics are removed;
+- structured `for` and `while` always use continuation-owned condition/body/
+  update execution and reusable linear plans. `for-in`, `do-while`, `switch`,
+  and `try` retain one focused reusable owner each;
+- the guard fixes the control directory to four files and rejects
+  `LoopFastPath`, loop fast-path functions, and catch/try source-shape plans in
+  compiler/runtime control code; its mutation suite proves both owner and
+  recognizer failures;
+- benchmark-sized unit tests are replaced by small semantic cases. The complete
+  engine all-target/all-feature test suite, strict Clippy, focused reduction
+  tests, and every architecture mutation pass locally;
+- the audit deliberately exposed false performance: old recognizers collapsed
+  exact `function_apply_has_instance`, constructor/prototype, object-literal,
+  update/compound, string, switch, try, and while benchmark bodies. With those
+  paths removed, three allocation-heavy cases correctly hit the one-million
+  object limit and the 99.5-million-iteration while case exceeds the operation
+  duration cap instead of skipping observable allocation/iteration semantics;
+- one reusable operation earned replacement: a packed default numeric-array
+  reduction. The linear plan accepts arbitrary binding names and both unit
+  increment spellings, validates numeric/default packed storage, charges steps,
+  preserves partial limit state, and declines for holes, indexed prototypes,
+  strings, and every other guard miss;
+- adjacent canonical-base/branch sentinel medians are arithmetic 85.09/81.25
+  ms (-4.5%), array-index 2.49/2.28 ms (-8.4%), property-read 230.11/223.55 ms
+  (-2.9%), function-call 158.65/153.66 ms (-3.1%), and string-scan
+  72.29/69.91 ms (-3.3%). All rows are valid, checksums match, and branch
+  variation is at most 0.5%;
+- dense array/native built-ins remain because their guards are based on
+  operation semantics: storage kind, descriptors, prototype sensitivity,
+  callable registry identity, or general pure callback expression plans. Guard
+  misses execute ordinary property/call/callback algorithms; no benchmark or
+  harness source name is involved;
+- the runner-enabled fast gate passes with strict Clippy, all engine targets,
+  documentation, 119/119 runner tests, and every architecture mutation. Full
+  local correctness preserves 68/68 engine fixtures, 117/117 active Test262,
+  19,414/53,404 files, 37,721/37,721 expected variants,
+  37,721/102,578 full variants, and 95/95 QuickJS differential cases.
+
+AS-08b still requires exact-tree CI and canonical post-merge publication before
+the top-level AS-08 item can close.
 
 ### AS-09: Profile-Based Compatibility Expansion
 

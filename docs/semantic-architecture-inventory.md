@@ -558,10 +558,10 @@ that several optimization owners can perform semantic work directly.
 | optimizer policy and counters | `runtime/optimizer.rs` | one VM-local mode and stable snapshot own linear and call-cache counters | AS-08a boundary installed; guard rejects another direct state owner |
 | static property/name caches | `runtime/property/static_names` and object cacheable lookups | disabled mode leaves caches cold; guarded misses return to semantic value/object helpers | AS-08a mode gate installed; AS-08b audits invalidation evidence |
 | call caches/direct native calls | `CallValueCache`, `CallReference`, `NativeCallTarget`, `runtime/native/function/direct.rs` | disabled mode delegates to common `Call`; enabled guard misses use the same path | AS-08a mode gate installed |
-| linear plans/superinstructions | seven files under `runtime/bytecode/linear` | optional compilation/execution declines in disabled mode | AS-08a equivalence coverage installed; AS-08b audits breadth |
+| linear plans/superinstructions | eight files under `runtime/bytecode/linear`, including one guarded numeric-array reduction | optional compilation/execution declines in disabled mode; reduction guard misses execute the structured loop | AS-08b retained only reusable bytecode operations |
 | function fast paths | `bytecode/fast_path.rs` and `runtime/function/fast_path.rs` | disabled mode omits the optional plan and callback shortcut | AS-08a mode gate installed |
-| structured control and specializations | nineteen files under `runtime/bytecode/control`; reusable control owners coexist with named recognizers | disabled mode declines loop fast paths and uses continuation-owned generic execution | AS-08a equivalence coverage installed; AS-08b classifies each recognizer |
-| dense array/native built-in paths | bytecode array helpers and `runtime/native/function` | bytecode dense-array and direct-native shortcuts decline in disabled mode; physical dense storage remains a semantic backend | AS-08a mode gate installed; AS-08b audits built-in algorithm breadth |
+| structured control | four files under `runtime/bytecode/control` plus the central dispatcher | `for`, `while`, `do-while`, `for-in`, `switch`, and `try` use continuation-owned execution and reusable linear plans | AS-08b removed all named whole-loop recognizers and guards zero regrowth |
+| dense array/native built-in paths | bytecode array helpers, `runtime/object/array`, `runtime/native/function`, and array built-ins | bytecode/direct-native shortcuts decline in disabled mode; packed algorithms require storage/descriptor guards and otherwise use the same generic abstract operations | AS-08b classified these as operation-shaped rather than source-shaped |
 | test harness | ordinary lazy `print` native binding plus JavaScript `assert.throws` harness | normal binding/property/call semantics; no harness bytecode or compiler name recognition | AS-08a removed the legacy opcodes |
 
 The compiler no longer recognizes `print` or `assert.throws` by source spelling.
@@ -572,21 +572,33 @@ Architecture guards require zero harness-only bytecode variants and zero
 compiler source-name comparisons, and reject growth in the remaining
 `Test262Error` allowlist.
 
-The control specialization directory currently contains:
+The control directory now contains only `for_in.rs`,
+`structured_do_while.rs`, `structured_switch.rs`, and `try_catch.rs`. The
+central dispatcher owns structured `for` and `while` execution directly. AS-08b
+removed fifteen named recognizer/executor modules plus compiler-generated catch
+and try/finally source shapes. The architecture guard fixes the four-file set,
+rejects loop/catch/try recognizer markers in compiler and runtime control code,
+and mutation-tests that rejection.
 
-- reusable control machinery: `for_in.rs`, `structured_do_while.rs`,
-  `try_catch.rs`, and `loop_helpers.rs`;
-- named recognizers/executors: `array_add_loop`, `array_fill_loop`,
-  `block_lexical_loop`, `compound_assignment_loop`,
-  `constructor_prototype_loop`, `for_loop`,
-  `function_apply_has_instance_loop`, `object_literal_loop`,
-  `string_concat_loop`, `switch_for_loop`, `try_catch_loop`,
-  `try_finally_loop`, `update_expression_loop`, and `while_loop`.
+The retained dense/native specializations are operation-shaped:
 
-AS-08 must classify each accepted path as a reusable guarded operation or
-remove/replace it. AS-01a does not judge performance from file names alone; it
-records these files because they are separate semantic implementations that
-need optimizer-on/off equivalence.
+- packed/holey array storage helpers prove array kind, length, descriptor, and
+  prototype-sensitive conditions before a bulk operation and return to generic
+  property operations on a miss;
+- direct native calls are keyed by compiler operands and the VM-local native
+  registry, not by source names, and validate the current callable before use;
+- callback acceleration accepts general pure bytecode expression trees and
+  declines for observable setup, mutation, or unsupported operands;
+- flat-map array construction compiles a general parameter/literal numeric
+  expression tree, while numeric sort recognizes only the reusable `a - b` or
+  `b - a` comparator operation; both retain ordinary callback fallbacks.
+
+The one retained whole-iteration optimization is a linear numeric-array
+reduction plan, not a control executor. It accepts arbitrary binding names and
+both common unit-increment spellings, charges runtime steps, handles partial
+limit failure, and declines for holes, indexed prototype behavior, non-numeric
+values, or non-default storage. Optimizer-on/off and focused fallback tests
+prove the common semantic path.
 
 ## Canonical-Path Decision For New Work
 
@@ -647,9 +659,9 @@ decision sequence:
 | AS-06a2a | outer block state and program position | activation-owned block/program-counter/operand continuation merged in PR #439; synchronous function overhead removed in PR #440 |
 | AS-06a2b | recursive loop/try/finally state | typed continuation-owned loop/switch/iterator/try records merged in PR #442 with one in-place record per construct |
 | AS-06b | pending async execution | explicit suspended outcomes, detached await reactions, same-owner nested/control/pattern resume without side-effect replay, and Context/Vm run/cancel job APIs merged in PR #445 |
-| AS-07 | strong weak-collection entries and implicit roots | PR #446 adds an explicit-root marker, fixed-point WeakMap ephemerons, physical weak sweep, sparse non-moving arenas, cache invalidation, and ledger reconciliation; exact-tree validation is in progress |
-| AS-08a | caches, direct calls, linear/function/control paths, harness opcodes | `runtime/optimizer.rs` owns policy/counters; disabled mode exercises generic fallbacks; source-name semantics and harness opcodes are removed in draft PR #447 |
-| AS-08b | named control recognizers and built-in specialization evidence | classify, replace, or remove workload-shaped paths using unrelated-workload and paired performance evidence |
+| AS-07 | strong weak-collection entries and implicit roots | PR #446 merged with exact-tree validation and canonical report publication |
+| AS-08a | caches, direct calls, linear/function/control paths, harness opcodes | PR #447 merged as `bc52a723`; one optimizer owner, disabled-mode fallbacks, and zero harness source semantics are canonical |
+| AS-08b | named control recognizers and built-in specialization evidence | draft PR #449 removes source-shaped control execution, retains one broad guarded reduction, fixes the no-regrowth guard, and records paired performance evidence |
 
 ## AS-01b Guard Specification
 
@@ -665,7 +677,7 @@ must fail on growth.
 | harness opcodes | none | any harness-only bytecode instruction or use site |
 | semantic duplicates | the AS-03a1 equality owner, the AS-03a2 primitive/number/string/boolean owners, the AS-03b1a property-key owner, the AS-03b1b integer/length/index owners, and the AS-02c callable/constructor predicates | a new definition instead of delegation to an existing shared operation |
 | object side tables | Promise, collection, and iterator associations recorded above; bound-function payload store | a new object-id-indexed association without an inventory/plan update |
-| optimization owners | one direct optimizer-state owner plus the recorded linear/function/control modules | direct optimizer state access elsewhere, a new workload-shaped module, or a compiler source-shape recognizer without plan evidence |
+| optimization owners | one direct optimizer-state owner, eight recorded linear modules, three function fast-path files, and four reusable control modules; zero loop/catch/try source-shape recognizers | direct optimizer state access elsewhere, a new workload-shaped module, or a compiler/runtime source-shape recognizer without reusable plan evidence |
 | VM clone boundary | no `Clone` implementation on `Vm` or `Context`; one capability identity/generation owner | reintroducing public VM-state cloning, removing the identity owner, or using cloning as handle transfer |
 | VM primitive owner boundary | one identity on each StringHeap, JsString, SymbolTable, and JsSymbol plus central checked-value validation | removing a primitive owner stamp/check or accepting a foreign colliding slot |
 | host local-value boundary | LocalValue and HostCall carry the active owner and retained registry; public JavaScript errors retain the owner and throw conversion validates it | accepting an unowned host throw, a foreign bound JavaScript value, or callback retention without the active registry |

@@ -1606,6 +1606,7 @@ src/runtime/bytecode/control/try_catch.rs'
 src/runtime/bytecode/linear/in_operator.rs
 src/runtime/bytecode/linear/mod.rs
 src/runtime/bytecode/linear/numeric_chain.rs
+src/runtime/bytecode/linear/numeric_array_reduction.rs
 src/runtime/bytecode/linear/property_chain.rs
 src/runtime/bytecode/linear/property_numeric.rs
 src/runtime/bytecode/linear/segment.rs'

@@ -363,6 +363,22 @@ impl Context {
                 }
             }
             *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Condition;
+            let reduction = self.run_bytecode_control_action(handle, &control, |context| {
+                context.compile_numeric_array_reduction_plan(
+                    parts.condition,
+                    parts.update,
+                    parts.body,
+                )
+            })?;
+            if let Some(reduction) = reduction {
+                match self.eval_numeric_array_reduction_plan(state, next, &reduction) {
+                    Ok(true) => return self.finish_bytecode_control_result(handle, Ok(None)),
+                    Ok(false) => {}
+                    Err(error) => {
+                        return self.finish_bytecode_control_result(handle, Err(error));
+                    }
+                }
+            }
         }
         let plans = self.run_bytecode_control_action(handle, &control, |context| {
             context.compile_structured_for_plans(parts)
