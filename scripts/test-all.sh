@@ -5,14 +5,6 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 cd "${repo_root}"
 
-if [[ -z "${RSQJS_HOST_LOCK_HELD:-}" ]]; then
-  lock_mode=exclusive
-  if [[ "${RSQJS_CORRECTNESS_ONLY:-0}" == "1" ]]; then
-    lock_mode=shared
-  fi
-  exec "${script_dir}/with-host-lock.sh" "${lock_mode}" -- "$0" "$@"
-fi
-
 # The runner lives in `runner/` as a nested workspace and depends on this local
 # engine crate through `rs-quickjs = { path = ".." }`.
 export RSQJS_BUILD_REPO_ROOT="${RSQJS_BUILD_REPO_ROOT:-${repo_root}}"
@@ -37,8 +29,8 @@ if [[ "${GITHUB_ACTIONS:-false}" == "true" && "${RSQJS_REPORT_EXHAUSTIVE:-0}" ==
 fi
 
 # Post-merge performance collection reuses the exact tree that already passed
-# the required correctness gate. It runs only the report phase under the host's
-# exclusive benchmark lock.
+# the required correctness gate. The runner locks only measured benchmark
+# execution; preparation and compilation remain outside the exclusive slot.
 if [[ "${RSQJS_PERFORMANCE_ONLY:-0}" != "1" ]]; then
   # --- Fast gates: run the cheap checks first so the pipeline stops before it
   # compiles anything or downloads corpora. On pull requests and merge groups CI
@@ -81,6 +73,7 @@ report_exhaustive_yaml_file="${report_stem}-exhaustive.yaml"
 report_yaml_path="${report_dir}/${report_yaml_file}"
 report_component_yaml_path="${report_dir}/${report_component_yaml_file}"
 report_exhaustive_yaml_path="${report_dir}/${report_exhaustive_yaml_file}"
+export RSQJS_TEST262_PASS_CANDIDATE_PATH="${RSQJS_TEST262_PASS_CANDIDATE_PATH:-${reports_root}/test262-pass-baseline.txt}"
 jetstream_report_file="rsqjs-jetstream-report-${timestamp}.md"
 if [[ "${report_path}" == reports/test-runs/* ]]; then
   jetstream_report_path="reports/jetstream-runs/${jetstream_report_file}"

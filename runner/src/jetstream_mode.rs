@@ -3,12 +3,12 @@ use std::path::Path;
 use anyhow::bail;
 
 use crate::{
-    jetstream, report_metadata,
+    host_benchmark_lock, jetstream, report_metadata,
     report_schema::{EnvironmentInfo, ReportDocument, RunConfiguration},
 };
 
 pub fn run(report_path: &Path) -> anyhow::Result<()> {
-    let report = jetstream::run()?;
+    let report = host_benchmark_lock::with_exclusive("JetStream benchmark suite", jetstream::run)?;
     let reference_missing = report.reference_missing;
     let metadata = report_metadata::RunMetadata::from_env();
     let report = ReportDocument::from_jetstream_run(

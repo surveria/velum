@@ -89,6 +89,16 @@ valid_report_component_yaml_file() {
   [[ "${file_name}" =~ ^rsqjs-test-report-[0-9]{8}T[0-9]{6}Z-component\.yaml$ ]]
 }
 
+valid_test262_baseline_candidate() {
+  local path="$1"
+  [[ -f "${path}" && ! -L "${path}" ]] || return 1
+  [[ "$(stat -c '%s' "${path}")" -le 33554432 ]] || return 1
+  [[ "$(sed -n '1p' "${path}")" == '# rsqjs-test262-pass-baseline-v1' ]] || return 1
+  [[ "$(sed -n '2p' "${path}")" == '# test262_commit=64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1' ]] || return 1
+  [[ -n "$(sed -n '3p' "${path}")" ]] || return 1
+  tail -n +3 "${path}" | LC_ALL=C sort -c -u >/dev/null 2>&1
+}
+
 valid_jetstream_report_file() {
   local file_name="$1"
   [[ "${file_name}" =~ ^rsqjs-jetstream-report-[0-9]{8}T[0-9]{6}Z\.md$ ]]
@@ -453,6 +463,7 @@ stage_report_outputs() {
   local report_yaml_file="$4"
   local source_jetstream_report="${5:-}"
   local jetstream_report_file="${6:-}"
+  local source_test262_baseline="${7:-}"
 
   mkdir -p reports/test-runs
   local target_report="reports/test-runs/${report_file}"
@@ -466,6 +477,10 @@ stage_report_outputs() {
     fail "tracked YAML report already exists with different content: ${target_report_yaml}"
   fi
   cp "${source_report_yaml}" "${target_report_yaml}"
+
+  if [[ -n "${source_test262_baseline}" ]]; then
+    cp "${source_test262_baseline}" tests/corpora/test262/full-pass-baseline.txt
+  fi
 
   if [[ -n "${source_jetstream_report}" && -n "${jetstream_report_file}" ]]; then
     mkdir -p reports/jetstream-runs
@@ -559,6 +574,8 @@ reset_report_outputs() {
   local target_report_yaml="$2"
   local target_jetstream_report="${3:-}"
 
+  git restore --worktree -- tests/corpora/test262/full-pass-baseline.txt
+
   if git ls-files --error-unmatch "${target_report}" >/dev/null 2>&1; then
     git restore --worktree -- "${target_report}"
   else
@@ -625,6 +642,7 @@ commit_and_push() {
     reports/benchmark-rollup.md
     reports/benchmark-summary-light.svg
     reports/benchmark-summary-dark.svg
+    tests/corpora/test262/full-pass-baseline.txt
   )
   if [[ -n "${jetstream_report_file:-}" ]]; then
     target_jetstream_report="reports/jetstream-runs/${jetstream_report_file}"
@@ -635,6 +653,7 @@ commit_and_push() {
       reports/benchmark-rollup.md
       reports/benchmark-summary-light.svg
       reports/benchmark-summary-dark.svg
+      tests/corpora/test262/full-pass-baseline.txt
     )
   fi
 
@@ -659,7 +678,7 @@ commit_and_push() {
   printf 'initial signed report commit failed; retrying once on latest origin/main\n' >&2
   reset_report_outputs "${target_report}" "${target_report_yaml}" "${target_jetstream_report}"
   checkout_latest_main
-  stage_report_outputs "${source_report}" "${report_file}" "${source_report_yaml}" "${report_yaml_file}" "${source_jetstream_report:-}" "${jetstream_report_file:-}"
+  stage_report_outputs "${source_report}" "${report_file}" "${source_report_yaml}" "${report_yaml_file}" "${source_jetstream_report:-}" "${jetstream_report_file:-}" "${source_test262_baseline:-}"
   create_signed_main_commit "${repository}" "${headline}" "${body}" \
     "${commit_paths[@]}"
 }
@@ -707,6 +726,9 @@ correctness_metadata_file="${correctness_artifact_dir}/rsqjs-report-metadata.env
 read_metadata "${correctness_metadata_file}" || fail "failed to read correctness artifact metadata"
 correctness_component="${correctness_artifact_dir}/${RSQJS_ARTIFACT_REPORT_COMPONENT_YAML_RELATIVE_PATH}"
 correctness_run="${RSQJS_ARTIFACT_RUN_ID:-unknown}"
+source_test262_baseline="${correctness_artifact_dir}/test262-pass-baseline.txt"
+valid_test262_baseline_candidate "${source_test262_baseline}" ||
+  fail "correctness artifact has no valid Test262 pass baseline candidate"
 
 [[ "${performance_timestamp}" =~ ^[0-9]{8}T[0-9]{6}Z$ ]] ||
   fail "invalid performance artifact timestamp: ${performance_timestamp}"
@@ -727,6 +749,6 @@ legacy_archive_ref="$(resolve_legacy_archive_ref)"
 
 archive_tested_source_commit "${archive_ref}" "${legacy_archive_ref}" "${source_commit}" "${expected_tree}" "${source_run}"
 checkout_latest_main
-stage_report_outputs "${source_report}" "${report_file}" "${source_report_yaml}" "${report_yaml_file}" "${source_jetstream_report}" "${jetstream_report_file}"
+stage_report_outputs "${source_report}" "${report_file}" "${source_report_yaml}" "${report_yaml_file}" "${source_jetstream_report}" "${jetstream_report_file}" "${source_test262_baseline}"
 commit_and_push "${report_file}" "${report_yaml_file}" "${expected_tree}" "${source_commit}" "${source_run}" \
   "${source_task}" "${source_pull_request}"

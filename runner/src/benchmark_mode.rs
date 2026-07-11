@@ -3,10 +3,11 @@ use std::{fs, path::Path};
 use anyhow::{Context as _, bail};
 use tabled::Table;
 
-use crate::{REPORT_TITLE, RUNNER_NAME, benchmarks, fenced_table, timing};
+use crate::{REPORT_TITLE, RUNNER_NAME, benchmarks, fenced_table, host_benchmark_lock, timing};
 
 pub fn run(report_path: &Path) -> anyhow::Result<()> {
-    let report = benchmarks::run();
+    let report =
+        host_benchmark_lock::with_exclusive("project benchmark suite", || Ok(benchmarks::run()))?;
     let body = render(&report);
     if let Some(parent) = report_path.parent() {
         fs::create_dir_all(parent).with_context(|| {
