@@ -17,6 +17,7 @@ mod function;
 mod function_expression;
 mod literal;
 mod pattern;
+mod property_name;
 mod sequence;
 mod statement;
 mod static_tables;

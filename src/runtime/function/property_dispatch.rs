@@ -4,12 +4,74 @@ use crate::{
         Context,
         object::{OwnPropertyDescriptor, PropertyKey, PropertyLookup, PropertyUpdate},
     },
-    value::{FunctionId, Value},
+    value::{FunctionId, NativeFunctionId, Value},
 };
 
 use super::properties::FunctionPropertyKind;
 
 impl Context {
+    pub(crate) fn get_native_function_property_lookup(
+        &mut self,
+        id: NativeFunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<Value> {
+        let property_name = property.name();
+        let property_kind = FunctionPropertyKind::from_name(property_name);
+        let own_value = {
+            let function = self.native_function(id)?;
+            function
+                .properties()
+                .intrinsic_value(property_kind)
+                .or_else(|| function.intrinsic_property(property_name))
+                .or_else(|| {
+                    function
+                        .properties()
+                        .own_property_descriptor(property)
+                        .and_then(|descriptor| match descriptor {
+                            OwnPropertyDescriptor::Data(descriptor) => Some(descriptor.value()),
+                            OwnPropertyDescriptor::Accessor(_) => None,
+                        })
+                })
+        };
+        if let Some(value) = own_value {
+            return self.checked_value(value);
+        }
+        self.get_native_function_object_prototype_property(id, property)
+    }
+
+    fn get_native_function_object_prototype_property(
+        &mut self,
+        id: NativeFunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<Value> {
+        if !self.should_materialize_function_prototype_for(property) {
+            return Ok(Value::Undefined);
+        }
+        let prototype = self.native_function_object_prototype_value(id)?;
+        let Some(property) = self.known_function_prototype_lookup(property) else {
+            return Ok(Value::Undefined);
+        };
+        let receiver = Value::NativeFunction(id);
+        let Some(read) =
+            self.semantic_property_read_with_receiver(&prototype, &receiver, property)?
+        else {
+            return Ok(Value::Undefined);
+        };
+        self.finish_semantic_property_read(read, &receiver, property)
+    }
+
+    fn known_function_prototype_lookup<'a>(
+        &self,
+        property: PropertyLookup<'a>,
+    ) -> Option<PropertyLookup<'a>> {
+        let Some(key) = property.key() else {
+            return self
+                .known_property_key(property.name())
+                .map(|key| PropertyLookup::from_key(property.name(), key));
+        };
+        Some(PropertyLookup::from_key(property.name(), key))
+    }
+
     pub(crate) fn get_function_property_lookup(
         &mut self,
         id: FunctionId,

@@ -5,7 +5,7 @@ use crate::{
     value::Value,
 };
 
-use super::{Parser, expression::keyword_property_name};
+use super::{Parser, property_name::keyword_property_name};
 
 /// Placeholder key for spread object-literal entries; the runtime ignores it.
 const SPREAD_PROPERTY_KEY: &str = "...";
