@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260711T224535Z.md`
-- Task: PR #475: ci: tolerate host-owned writable benchmark lock files
-- Performance: 9.02x (4/5 >1.00x) (from `rsqjs-test-report-20260711T224535Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T224535Z.md`)
+- `rsqjs-test-report-20260711T232050Z.md`
+- Task: PR #476: AS-09q: complete Symbol.species constructor accessors
+- Performance: 9.03x (4/5 >1.00x) (from `rsqjs-test-report-20260711T232050Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T232050Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 58620 passed / 43958 failed (57.15%) (from `rsqjs-test-report-20260711T224535Z.md`)
+- Full Test262: 58682 passed / 43896 failed (57.21%) (from `rsqjs-test-report-20260711T232050Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -461,3 +461,4 @@ Latest report:
 | `20260711T191640Z` `b093ea4` PR #473: AS-09p: complete Object.defineProperties semantics | 9.08x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 58616 passed / 43962 failed (57.14%) |
 | `20260711T192700Z` `1d9263d` PR #471: runtime: implement ECMAScript UTF-16 strings | 8.99x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 57238 passed / 45340 failed (55.80%) |
 | `20260711T224535Z` `8f8fc2d` PR #475: ci: tolerate host-owned writable benchmark lock files | 9.02x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 58620 passed / 43958 failed (57.15%) |
+| `20260711T232050Z` `e1f246b` PR #476: AS-09q: complete Symbol.species constructor accessors | 9.03x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 58682 passed / 43896 failed (57.21%) |
