@@ -579,7 +579,6 @@ reset_report_outputs() {
   local chart_path
   for chart_path in \
     reports/benchmark-rollup.md \
-    reports/benchmark-summary.jpg \
     reports/benchmark-summary-light.svg \
     reports/benchmark-summary-dark.svg; do
     if git ls-files --error-unmatch "${chart_path}" >/dev/null 2>&1; then
@@ -624,7 +623,6 @@ commit_and_push() {
     "${target_report}"
     "${target_report_yaml}"
     reports/benchmark-rollup.md
-    reports/benchmark-summary.jpg
     reports/benchmark-summary-light.svg
     reports/benchmark-summary-dark.svg
   )
@@ -635,7 +633,6 @@ commit_and_push() {
       "${target_report_yaml}"
       "${target_jetstream_report}"
       reports/benchmark-rollup.md
-      reports/benchmark-summary.jpg
       reports/benchmark-summary-light.svg
       reports/benchmark-summary-dark.svg
     )

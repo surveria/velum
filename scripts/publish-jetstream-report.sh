@@ -208,7 +208,6 @@ reset_outputs() {
   local chart_path
   for chart_path in \
     reports/benchmark-rollup.md \
-    reports/benchmark-summary.jpg \
     reports/benchmark-summary-light.svg \
     reports/benchmark-summary-dark.svg; do
     if git ls-files --error-unmatch "${chart_path}" >/dev/null 2>&1; then
@@ -316,7 +315,6 @@ commit_paths=(
   "${target_report}"
   "${target_yaml}"
   reports/benchmark-rollup.md
-  reports/benchmark-summary.jpg
   reports/benchmark-summary-light.svg
   reports/benchmark-summary-dark.svg
 )

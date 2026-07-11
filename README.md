@@ -9,7 +9,7 @@ This repository is intentionally starting small. It is not a drop-in replacement
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="reports/benchmark-summary-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="reports/benchmark-summary-light.svg">
-  <img alt="Benchmark and Test262 history" src="reports/benchmark-summary.jpg">
+  <img alt="Benchmark and Test262 history" src="reports/benchmark-summary-light.svg">
 </picture>
 
 ## Goals

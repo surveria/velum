@@ -112,10 +112,6 @@ impl Config {
 pub fn print_rollup_outputs(outputs: &report_rollup::RollupOutputs) {
     println!("benchmark rollup: {}", outputs.markdown.display());
     println!(
-        "benchmark summary chart: {}",
-        outputs.summary_chart.display()
-    );
-    println!(
         "benchmark summary light SVG: {}",
         outputs.summary_chart_light_svg.display()
     );

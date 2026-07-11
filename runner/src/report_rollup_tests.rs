@@ -3,7 +3,7 @@ use std::{fs, path::PathBuf};
 use super::{
     build_rollup, parse_benchmark_metrics, parse_corpus_counts, parse_rollup_test262_counts,
     render_markdown,
-    report_rollup_chart::{ChartTheme, write_chart, write_svg_chart},
+    report_rollup_chart::{ChartTheme, write_svg_chart},
     report_rollup_timeline::{CommitTimeline, repository_root_for_test},
 };
 
@@ -204,27 +204,22 @@ fn standalone_jetstream_yaml_with_an_unrelated_timestamp_is_discovered_once() ->
 }
 
 #[test]
-fn current_history_charts_render_on_the_shared_main_commit_axis() -> TestResult {
+fn current_history_svg_charts_render_on_the_shared_main_commit_axis() -> TestResult {
     let repository_root = repository_root_for_test()?;
     let report_dir = repository_root.join("reports/test-runs");
     let records = super::parse_records(&report_dir)?;
     let timeline = CommitTimeline::discover(&report_dir, &records)?;
-    let chart_id = format!("rsqjs-commit-axis-chart-{}.jpg", std::process::id());
-    let chart_path = std::env::temp_dir().join(&chart_id);
-    let light_svg_path = std::env::temp_dir().join(chart_id.replace(".jpg", "-light.svg"));
-    let dark_svg_path = std::env::temp_dir().join(chart_id.replace(".jpg", "-dark.svg"));
-    write_chart(&records, &timeline, &chart_path)?;
+    let chart_id = format!("rsqjs-commit-axis-chart-{}", std::process::id());
+    let light_svg_path = std::env::temp_dir().join(format!("{chart_id}-light.svg"));
+    let dark_svg_path = std::env::temp_dir().join(format!("{chart_id}-dark.svg"));
     write_svg_chart(&records, &timeline, &light_svg_path, ChartTheme::Light)?;
     write_svg_chart(&records, &timeline, &dark_svg_path, ChartTheme::Dark)?;
-    let jpeg_size = fs::metadata(&chart_path)?.len();
     let light_svg = fs::read_to_string(&light_svg_path)?;
     let dark_svg = fs::read_to_string(&dark_svg_path)?;
-    fs::remove_file(&chart_path)?;
     fs::remove_file(&light_svg_path)?;
     fs::remove_file(&dark_svg_path)?;
     let svg_header = "viewBox=\"0 0 1400 1200\"";
-    if jpeg_size > 100_000
-        && light_svg.len() > 50_000
+    if light_svg.len() > 50_000
         && dark_svg.len() > 50_000
         && light_svg.contains(svg_header)
         && dark_svg.contains(svg_header)
@@ -236,7 +231,7 @@ fn current_history_charts_render_on_the_shared_main_commit_axis() -> TestResult 
         return Ok(());
     }
     Err(
-        "shared main commit charts were empty, identical, or used a compressed report domain"
+        "shared main commit SVG charts were empty, identical, or used a compressed report domain"
             .into(),
     )
 }
