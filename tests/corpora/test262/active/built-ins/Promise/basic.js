@@ -20,18 +20,25 @@ if (Promise.prototype.constructor !== Promise) {
   throw new Test262Error("Promise.prototype.constructor mismatch");
 }
 
-let fulfilled = await Promise.resolve(40).then(function(value) {
-  return value + 2;
-});
-if (fulfilled !== 42) {
-  throw new Test262Error("Promise.resolve reaction did not run");
-}
+(async function() {
+  let fulfilled = await Promise.resolve(40).then(function(value) {
+    return value + 2;
+  });
+  if (fulfilled !== 42) {
+    throw new Test262Error("Promise.resolve reaction did not run");
+  }
 
-let rejected = await Promise.reject("offline").catch(function(reason) {
-  return reason;
+  let rejected = await Promise.reject("offline").catch(function(reason) {
+    return reason;
+  });
+  if (rejected !== "offline") {
+    throw new Test262Error("Promise.reject reaction did not run");
+  }
+  return fulfilled;
+})().then(function(value) {
+  print("promise-basic:" + value);
+}, function(error) {
+  print("promise-basic-error:" + error);
 });
-if (rejected !== "offline") {
-  throw new Test262Error("Promise.reject reaction did not run");
-}
 
 42
