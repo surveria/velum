@@ -6,9 +6,9 @@ use crate::{
     runtime::call::RuntimeCallArgs,
     runtime::control::Completion,
     runtime::object::{
-        AccessorPropertyUpdate, DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit,
-        OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyKey,
-        PropertyLookup, PropertyUpdate, PropertyWritable,
+        DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, OwnPropertyDescriptor,
+        PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate,
+        PropertyWritable,
     },
     runtime::{CompiledBindingFrame, Context},
     syntax::{StaticFunctionId, StaticName},
@@ -747,24 +747,6 @@ impl Context {
             key,
             property_kind,
             PropertyUpdate::Data(update),
-            max_properties,
-        )
-    }
-
-    pub(crate) fn define_native_function_accessor_property_key(
-        &mut self,
-        id: NativeFunctionId,
-        property: &str,
-        key: PropertyKey,
-        update: AccessorPropertyUpdate,
-    ) -> Result<()> {
-        let property_kind = FunctionPropertyKind::from_name(property);
-        let max_properties = self.limits.max_object_properties;
-        let function = self.native_function_mut(id)?;
-        function.properties_mut().define_property(
-            key,
-            property_kind,
-            PropertyUpdate::Accessor(update),
             max_properties,
         )
     }

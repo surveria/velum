@@ -2,7 +2,10 @@ use crate::{
     error::Result,
     runtime::{
         Context,
-        object::{OwnPropertyDescriptor, PropertyKey, PropertyLookup, PropertyUpdate},
+        object::{
+            AccessorPropertyUpdate, OwnPropertyDescriptor, PropertyKey, PropertyLookup,
+            PropertyUpdate,
+        },
     },
     value::{FunctionId, NativeFunctionId, Value},
 };
@@ -11,6 +14,24 @@ use super::properties::FunctionPropertyKind;
 use crate::runtime::native::NativeFunctionKind;
 
 impl Context {
+    pub(crate) fn define_native_function_accessor_property_key(
+        &mut self,
+        id: NativeFunctionId,
+        property: &str,
+        key: PropertyKey,
+        update: AccessorPropertyUpdate,
+    ) -> Result<()> {
+        let property_kind = FunctionPropertyKind::from_name(property);
+        let max_properties = self.limits.max_object_properties;
+        let function = self.native_function_mut(id)?;
+        function.properties_mut().define_property(
+            key,
+            property_kind,
+            PropertyUpdate::Accessor(update),
+            max_properties,
+        )
+    }
+
     pub(crate) fn get_native_function_property_lookup(
         &mut self,
         id: NativeFunctionId,
