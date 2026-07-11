@@ -199,7 +199,7 @@ fn compiled_layout_counts_global_local_and_upvalue_slots() -> TestResult {
     let usage = script.usage();
 
     ensure_usize(usage.global_binding_slot_count(), 2)?;
-    ensure_usize(usage.local_binding_slot_count(), 3)?;
+    ensure_usize(usage.local_binding_slot_count(), 4)?;
     ensure_usize(usage.upvalue_binding_slot_count(), 1)?;
     ensure_usize(usage.unresolved_static_binding_count(), 0)?;
     ensure_usize(
@@ -264,7 +264,7 @@ fn compiled_layout_drives_function_parameter_frame_slots() -> TestResult {
     let usage = script.usage();
 
     ensure_usize(usage.global_binding_slot_count(), 1)?;
-    ensure_usize(usage.local_binding_slot_count(), 5)?;
+    ensure_usize(usage.local_binding_slot_count(), 6)?;
     ensure_usize(usage.upvalue_binding_slot_count(), 0)?;
     ensure_usize(usage.unresolved_static_binding_count(), 0)?;
 
@@ -306,7 +306,7 @@ fn compiled_layout_drives_hoisted_var_frame_slots() -> TestResult {
     let usage = script.usage();
 
     ensure_usize(usage.global_binding_slot_count(), 1)?;
-    ensure_usize(usage.local_binding_slot_count(), 4)?;
+    ensure_usize(usage.local_binding_slot_count(), 5)?;
     ensure_usize(usage.upvalue_binding_slot_count(), 0)?;
     ensure_usize(usage.unresolved_static_binding_count(), 0)?;
 
@@ -354,7 +354,7 @@ fn compiled_global_slot_operands_drive_binding_operations() -> TestResult {
     let usage = script.usage();
 
     ensure_usize(usage.global_binding_slot_count(), 3)?;
-    ensure_usize(usage.local_binding_slot_count(), 1)?;
+    ensure_usize(usage.local_binding_slot_count(), 2)?;
     ensure_usize(usage.upvalue_binding_slot_count(), 0)?;
     ensure_usize(usage.unresolved_static_binding_count(), 0)?;
 
@@ -397,7 +397,7 @@ fn compiled_top_level_global_slots_preserve_function_shadowing() -> TestResult {
     let usage = script.usage();
 
     ensure_usize(usage.global_binding_slot_count(), 4)?;
-    ensure_usize(usage.local_binding_slot_count(), 1)?;
+    ensure_usize(usage.local_binding_slot_count(), 2)?;
     ensure_usize(usage.upvalue_binding_slot_count(), 0)?;
     ensure_usize(usage.unresolved_static_binding_count(), 0)?;
 
@@ -420,7 +420,7 @@ fn compiled_local_frame_metadata_separates_same_slot_blocks() -> TestResult {
     let usage = script.usage();
 
     ensure_usize(usage.global_binding_slot_count(), 1)?;
-    ensure_usize(usage.local_binding_slot_count(), 4)?;
+    ensure_usize(usage.local_binding_slot_count(), 5)?;
     ensure_usize(usage.upvalue_binding_slot_count(), 0)?;
     ensure_usize(usage.unresolved_static_binding_count(), 0)?;
 
@@ -441,7 +441,7 @@ fn compiled_upvalue_frame_cells_preserve_closure_instances() -> TestResult {
     let usage = script.usage();
 
     ensure_usize(usage.global_binding_slot_count(), 3)?;
-    ensure_usize(usage.local_binding_slot_count(), 3)?;
+    ensure_usize(usage.local_binding_slot_count(), 5)?;
     ensure_usize(usage.upvalue_binding_slot_count(), 1)?;
     ensure_usize(usage.unresolved_static_binding_count(), 0)?;
 
@@ -475,7 +475,7 @@ fn compiled_upvalue_frames_lift_transitive_captures() -> TestResult {
     let usage = script.usage();
 
     ensure_usize(usage.global_binding_slot_count(), 3)?;
-    ensure_usize(usage.local_binding_slot_count(), 3)?;
+    ensure_usize(usage.local_binding_slot_count(), 6)?;
     ensure_usize(usage.upvalue_binding_slot_count(), 3)?;
     ensure_usize(usage.unresolved_static_binding_count(), 0)?;
 
@@ -494,7 +494,7 @@ fn compiled_binding_operations_materialize_builtins_only_after_binding_lookup() 
     let usage = script.usage();
 
     ensure_usize(usage.global_binding_slot_count(), 4)?;
-    ensure_usize(usage.local_binding_slot_count(), 3)?;
+    ensure_usize(usage.local_binding_slot_count(), 5)?;
     ensure_usize(usage.upvalue_binding_slot_count(), 1)?;
     ensure_usize(usage.unresolved_static_binding_count(), 0)?;
 

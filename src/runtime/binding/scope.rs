@@ -501,7 +501,17 @@ impl BindingCell {
         Self(Rc::new(Mutex::new(Binding {
             state: BindingState::Initialized(value),
             mutable,
+            immutable_assignment: ImmutableAssignment::AlwaysThrow,
             kind,
+        })))
+    }
+
+    pub(in crate::runtime) fn named_function(value: Value) -> Self {
+        Self(Rc::new(Mutex::new(Binding {
+            state: BindingState::Initialized(value),
+            mutable: false,
+            immutable_assignment: ImmutableAssignment::ThrowIfStrict,
+            kind: DeclKind::Const,
         })))
     }
 
@@ -509,6 +519,7 @@ impl BindingCell {
         Self(Rc::new(Mutex::new(Binding {
             state: BindingState::Uninitialized,
             mutable,
+            immutable_assignment: ImmutableAssignment::AlwaysThrow,
             kind,
         })))
     }
@@ -557,6 +568,29 @@ impl BindingCell {
         Ok(())
     }
 
+    pub(in crate::runtime) fn assign_bytecode(
+        &self,
+        name: &str,
+        value: Value,
+        strict: bool,
+    ) -> Result<()> {
+        let mut binding = self.0.lock();
+        if !binding.mutable {
+            if binding.immutable_assignment == ImmutableAssignment::ThrowIfStrict && !strict {
+                return Ok(());
+            }
+            return Err(Error::type_error(format!(
+                "assignment to constant '{name}'"
+            )));
+        }
+        if matches!(binding.state, BindingState::Uninitialized) {
+            return Err(reference_error_uninitialized(name));
+        }
+        binding.state = BindingState::Initialized(value);
+        drop(binding);
+        Ok(())
+    }
+
     pub(crate) fn same_cell(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.0, &other.0)
     }
@@ -572,5 +606,12 @@ enum BindingState {
 struct Binding {
     state: BindingState,
     mutable: bool,
+    immutable_assignment: ImmutableAssignment,
     kind: DeclKind,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum ImmutableAssignment {
+    AlwaysThrow,
+    ThrowIfStrict,
 }

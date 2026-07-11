@@ -187,6 +187,7 @@ impl Parser {
                 Expr::Call {
                     callee: Box::new(expr),
                     site,
+                    strict: self.is_strict_mode(),
                     args,
                 },
             );
@@ -360,6 +361,7 @@ impl Parser {
             Expr::Update {
                 op,
                 prefix,
+                strict: self.is_strict_mode(),
                 expr: Box::new(expr),
             },
         ))
@@ -663,7 +665,7 @@ impl Parser {
             if inherited_strict {
                 self.validate_function_name_in_strict_code(&name)?;
             }
-            Some(name)
+            Some(self.static_binding(name)?)
         } else {
             None
         };

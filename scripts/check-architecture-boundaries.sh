@@ -978,6 +978,39 @@ check_sequence_expression_boundary() {
   fi
 }
 
+check_named_function_binding_boundary() {
+  local runtime_owners
+  runtime_owners="$(
+    function_owners 'fn[[:space:]]+named_function_self_scope[[:space:]]*\(' \
+      | sed -E 's/[[:space:]]*\($//'
+  )"
+  compare_set "named function self-binding owner allowlist" \
+    "${runtime_owners}" \
+    'src/runtime/function/storage.rs:named_function_self_scope'
+
+  for source in \
+    'name: Option<StaticBinding>,' \
+    'self.declare(self_scope, self_binding)?;' \
+    'self_binding: Option<StaticBinding>,' \
+    'BindingCell::named_function' \
+    'if init.bytecode.self_binding().is_some() {' \
+    'usize::from(function.self_binding.is_some()).saturating_mul(2)' \
+    'self.set_generated_function_name(id, GENERATED_FUNCTION_NAME)?;' \
+    'function_source(params, body, is_async, None)' \
+    'pub(crate) fn compile_eval(' \
+    'strict_write: bool,'; do
+    if ! grep -R -q -F --include='*.rs' "${source}" "${repo_root}/src"; then
+      fail "named function binding boundary changed; required typed source '${source}' is missing"
+    fi
+  done
+
+  if grep -R -q -E --include='*.rs' \
+      'self_binding[^;]*(as_str|==[[:space:]]*"|matches!.*")|named_function[^;]*as_str' \
+      "${repo_root}/src/runtime"; then
+    fail "named function binding boundary changed; runtime self bindings must use compiled slots rather than source-name comparisons"
+  fi
+}
+
 check_direct_root_boundary() {
   local root_kinds
   local source
@@ -1825,6 +1858,7 @@ run_checks() {
   check_completion_error_boundary
   check_function_accessor_boundary
   check_sequence_expression_boundary
+  check_named_function_binding_boundary
   check_direct_root_boundary
   check_activation_frame_boundary
   check_bytecode_continuation_boundary
@@ -1970,6 +2004,12 @@ mutate_sequence_for_of_rhs() {
   local fixture_root="$1"
   sed -i 's/ForHeadKind::Of => self.assignment_expression(),/ForHeadKind::Of => self.expression(),/' \
     "${fixture_root}/src/parser/statement.rs"
+}
+
+mutate_named_function_self_binding_owner() {
+  local fixture_root="$1"
+  sed -i 's/BindingCell::named_function/BindingCell::renamed_function/' \
+    "${fixture_root}/src/runtime/function/storage.rs"
 }
 
 mutate_host_local_value_identity() {
@@ -2397,6 +2437,8 @@ run_self_tests() {
     'sequence expression boundary changed' mutate_sequence_expression_pop
   expect_guard_failure "${temp_dir}" sequence-for-of-rhs \
     'sequence expression boundary changed' mutate_sequence_for_of_rhs
+  expect_guard_failure "${temp_dir}" named-function-self-binding-owner \
+    'named function binding boundary changed' mutate_named_function_self_binding_owner
   expect_guard_failure "${temp_dir}" host-local-value-identity \
     'host local-value boundary changed' mutate_host_local_value_identity
   expect_guard_failure "${temp_dir}" javascript-exception-visibility \

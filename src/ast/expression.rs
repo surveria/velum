@@ -70,6 +70,7 @@ pub enum Expr {
     Update {
         op: UpdateOp,
         prefix: bool,
+        strict: bool,
         expr: Box<Expression>,
     },
     Binary {
@@ -85,10 +86,12 @@ pub enum Expr {
     },
     Assignment {
         name: StaticBinding,
+        strict: bool,
         expr: Box<Expression>,
     },
     CompoundAssignment {
         op: BinaryOp,
+        strict: bool,
         target: Box<Expression>,
         expr: Box<Expression>,
     },
@@ -117,11 +120,12 @@ pub enum Expr {
     Call {
         callee: Box<Expression>,
         site: StaticCallSiteId,
+        strict: bool,
         args: Vec<Expression>,
     },
     Function {
         id: StaticFunctionId,
-        name: Option<StaticName>,
+        name: Option<StaticBinding>,
         params: Rc<[FunctionParam]>,
         body: Rc<[Statement]>,
         is_async: bool,

@@ -41,6 +41,7 @@ impl BytecodeProgram {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeFunction {
+    self_binding: Option<StaticBinding>,
     params: Rc<[BytecodeFunctionParam]>,
     param_defaults: Rc<[Option<BytecodeBlock>]>,
     body: BytecodeBlock,
@@ -51,6 +52,7 @@ pub struct BytecodeFunction {
 
 impl BytecodeFunction {
     pub(crate) const fn new(
+        self_binding: Option<StaticBinding>,
         params: Rc<[BytecodeFunctionParam]>,
         param_defaults: Rc<[Option<BytecodeBlock>]>,
         body: BytecodeBlock,
@@ -59,6 +61,7 @@ impl BytecodeFunction {
         uses_arguments: bool,
     ) -> Self {
         Self {
+            self_binding,
             params,
             param_defaults,
             body,
@@ -66,6 +69,10 @@ impl BytecodeFunction {
             capture_bindings,
             uses_arguments,
         }
+    }
+
+    pub const fn self_binding(&self) -> Option<&StaticBinding> {
+        self.self_binding.as_ref()
     }
 
     pub const fn uses_arguments(&self) -> bool {
@@ -206,6 +213,7 @@ impl BytecodeFunctionDeclaration {
 pub struct BytecodeBinding {
     name: StaticBinding,
     operand: BindingOperand,
+    strict_write: bool,
 }
 
 impl BytecodeBinding {
@@ -216,7 +224,18 @@ impl BytecodeBinding {
         Ok(Self {
             name: name.clone(),
             operand,
+            strict_write: false,
         })
+    }
+
+    pub(crate) fn compile_write(
+        name: &StaticBinding,
+        layout: &BindingLayout,
+        strict_write: bool,
+    ) -> Result<Self> {
+        let mut binding = Self::compile(name, layout)?;
+        binding.strict_write = strict_write;
+        Ok(binding)
     }
 
     pub const fn name(&self) -> &StaticBinding {
@@ -225,6 +244,10 @@ impl BytecodeBinding {
 
     pub const fn operand(&self) -> BindingOperand {
         self.operand
+    }
+
+    pub const fn strict_write(&self) -> bool {
+        self.strict_write
     }
 }
 
@@ -576,6 +599,7 @@ pub enum BytecodeInstruction {
     CallBinding {
         callee: BytecodeBinding,
         native: Option<NativeCallTarget>,
+        strict: bool,
         arg_count: usize,
     },
     CallValue {

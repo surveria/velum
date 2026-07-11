@@ -116,6 +116,16 @@ impl FunctionIntrinsicDefaults {
             ));
         }
     }
+
+    fn set_name_value(&mut self, value: Value) {
+        let descriptor = &self.name;
+        self.name = DataPropertyDescriptor::new(
+            value,
+            descriptor.writable(),
+            descriptor.enumerable(),
+            descriptor.configurable(),
+        );
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -180,6 +190,10 @@ impl FunctionProperties {
         }
         self.storage_ledger = Some(storage_ledger);
         Ok(())
+    }
+
+    pub(in crate::runtime) fn set_generated_name(&mut self, value: Value) {
+        self.intrinsic_defaults.set_name_value(value);
     }
 
     pub(in crate::runtime) fn storage_property_count(&self) -> Result<usize> {

@@ -116,6 +116,7 @@ impl Context {
                 "Function constructor did not produce a function",
             ));
         };
+        self.set_generated_function_name(id, GENERATED_FUNCTION_NAME)?;
         self.set_function_source(id, Rc::from(source.display.into_boxed_str()))?;
         Ok(value)
     }
@@ -296,15 +297,17 @@ struct GeneratedFunctionSource {
 }
 
 fn generated_function_source(params: &str, body: &str, is_async: bool) -> GeneratedFunctionSource {
-    let display = function_display_source(params, body, is_async);
-    let compile = format!("({display})");
+    let display = function_source(params, body, is_async, Some(GENERATED_FUNCTION_NAME));
+    let compile = format!("({})", function_source(params, body, is_async, None));
     GeneratedFunctionSource { compile, display }
 }
 
-fn function_display_source(params: &str, body: &str, is_async: bool) -> String {
+fn function_source(params: &str, body: &str, is_async: bool, name: Option<&str>) -> String {
     let async_prefix = if is_async { "async " } else { "" };
+    let name = name.map_or("", |name| name);
+    let name_separator = if name.is_empty() { "" } else { " " };
     let parameter_line_terminator = if params.contains("//") { "\n" } else { "" };
     format!(
-        "{async_prefix}function {GENERATED_FUNCTION_NAME}({params}{parameter_line_terminator}) {{\n{body}\n}}"
+        "{async_prefix}function{name_separator}{name}({params}{parameter_line_terminator}) {{\n{body}\n}}"
     )
 }

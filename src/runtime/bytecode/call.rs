@@ -87,11 +87,12 @@ impl Context {
             BytecodeInstruction::CallBinding {
                 callee,
                 native,
+                strict,
                 arg_count,
             } => {
                 let args = state.stack.tail(*arg_count)?;
                 let completion =
-                    self.eval_bytecode_identifier_call_completion(callee, *native, args)?;
+                    self.eval_bytecode_identifier_call_completion(callee, *native, *strict, args)?;
                 let Completion::Normal(value) = completion else {
                     return Ok(Some(completion));
                 };
