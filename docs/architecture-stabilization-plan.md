@@ -488,8 +488,8 @@ dependencies do not overlap.
 | AS-05 | Complete | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05b2c3 are merged through PR #436 with exact-tree correctness, complete owner-limit reconciliation, and canonical report publication. |
 | AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
 | AS-07 | Complete | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | PR #446 merged as `62e2725`; exact-tree correctness, paired sentinels, post-merge performance, and canonical report publication passed. |
-| AS-08 | In progress | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a merged in PR #447 with one optimizer owner and disabled-mode equivalence; AS-08b draft PR #449 removes workload-shaped execution and retains one broad guarded reduction. |
-| AS-09 | Backlog | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | Multiple feature clusters land through shared semantics without new architecture exceptions. |
+| AS-08 | Complete | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a and AS-08b merged through PR #449; exact-tree correctness, disabled-mode equivalence, specialization audit, paired sentinels, and canonical publication passed. |
+| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09a starts the profile-driven expansion with unary bitwise NOT through the shared numeric semantics and no architecture exception. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
 
 ## Program Item Details
@@ -2182,7 +2182,7 @@ AS-08a completion evidence from PR #447:
   passed performance and publication, and report-only commit `5e68fa5`
   published `reports/test-runs/rsqjs-test-report-20260711T030752Z.*`.
 
-AS-08b evidence in draft PR #449:
+AS-08b completion evidence from PR #449:
 
 - fifteen named control recognizer/executor modules are deleted together with
   compiler-generated catch and try/finally source-shape plans. More than 5,400
@@ -2223,9 +2223,11 @@ AS-08b evidence in draft PR #449:
   local correctness preserves 68/68 engine fixtures, 117/117 active Test262,
   19,414/53,404 files, 37,721/37,721 expected variants,
   37,721/102,578 full variants, and 95/95 QuickJS differential cases.
-
-AS-08b still requires exact-tree CI and canonical post-merge publication before
-the top-level AS-08 item can close.
+- PR #449 squash-merged as `7802932e`; required run `29138371964` certified
+  exact tree `96eff3d1`, post-merge run `29138475834` passed performance and
+  publication, and report-only commit `c0bdf07` published
+  `reports/test-runs/rsqjs-test-report-20260711T034409Z.*` with 37,721 expected
+  Test262 variants and all five valid sentinels.
 
 ### AS-09: Profile-Based Compatibility Expansion
 
@@ -2241,6 +2243,32 @@ Suggested order after the semantic object gate:
 4. resumable generators, jobs, promises, async, and modules;
 5. complete ArrayBuffer/DataView/TypedArray families;
 6. product-selected extended libraries.
+
+AS-09a profile evidence in draft PR #450:
+
+- the canonical failure profile selected unary bitwise NOT as a foundational
+  syntax gap in the largest `language/expressions` lexer-failure cluster;
+- one normal path adds `~` across lexer tokenization, recursive unary parsing,
+  `UnaryOp`, numeric bytecode quickening, and the existing Number `ToInt32`
+  conversion; it does not add a recognizer or duplicate coercion semantics;
+- the focused upstream `language/expressions/bitwise-not` profile passes 28 of
+  32 variants. The four remaining variants are the two BigInt cases in default
+  and strict modes, which belong to the separate unsupported BigInt model;
+- the pre-change `unary_operators` benchmark is valid at 66.86 ms for rs-quickjs
+  versus 7.78 ms for QuickJS, an 8.59x tracked ratio with 0.2% local variation;
+- focused Number boundary, coercion, Symbol-error, bytecode fallback, active
+  Test262, and QuickJS differential coverage is part of the tranche;
+- the reviewed full baseline gains 32 variants and 16 files: 28 variants come
+  from `language/expressions/bitwise-not`, two from a `delete` expression that
+  contains `~`, and two from punctuator coverage. Local correctness passes at
+  37,753/37,753 expected variants, 19,430/53,404 files,
+  37,753/102,578 full variants, 68/68 engine fixtures, 117/117 active Test262,
+  and 95/95 QuickJS differential cases;
+- the adjacent main/branch `unary_operators` pair is valid at 69.13/68.64 ms
+  for rs-quickjs (-0.7%) and 8.01/7.98 ms for QuickJS. The normalized ratio is
+  8.62x/8.59x, branch variation is 0.1%, and no performance regression is
+  indicated. Exact-tree CI and canonical publication remain required before
+  AS-09a can close.
 
 ### AS-10: Performance And Memory Checkpoints
 
