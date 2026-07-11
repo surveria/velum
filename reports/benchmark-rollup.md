@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260711T062919Z.md`
-- Task: PR #453: AS-09d: add comma sequence expressions
-- Performance: 5.37x (4/5 >1.00x) (from `rsqjs-test-report-20260711T062919Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T062919Z.md`)
+- `rsqjs-test-report-20260711T072934Z.md`
+- Task: PR #454: AS-09e: add named function expression bindings
+- Performance: 5.48x (4/5 >1.00x) (from `rsqjs-test-report-20260711T072934Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T072934Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 38522 passed / 64056 failed (37.55%) (from `rsqjs-test-report-20260711T062919Z.md`)
+- Full Test262: 38551 passed / 64027 failed (37.58%) (from `rsqjs-test-report-20260711T072934Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -441,3 +441,4 @@ Latest report:
 | `20260711T043324Z` `b11ce20` PR #451: AS-09b: make eval syntax errors catchable | 5.57x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 37951 passed / 64627 failed (37.00%) |
 | `20260711T054406Z` `6f185e7` PR #452: AS-09c: support static class accessors | 5.41x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 38187 passed / 64391 failed (37.23%) |
 | `20260711T062919Z` `1fc9867` PR #453: AS-09d: add comma sequence expressions | 5.37x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 38522 passed / 64056 failed (37.55%) |
+| `20260711T072934Z` `6e71c38` PR #454: AS-09e: add named function expression bindings | 5.48x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 38551 passed / 64027 failed (37.58%) |
