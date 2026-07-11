@@ -29,10 +29,24 @@ mod symbol;
 mod typed_array;
 mod weak_collections;
 
+use crate::{error::Error, value::ErrorName};
+
 pub(in crate::runtime::native) use map_set::{CollectionIterationTarget, MAP_NAME, SET_NAME};
 pub(in crate::runtime::native) use number::number_intrinsic_property;
 pub(in crate::runtime::native) use regexp::RegExpCallMode;
 pub(in crate::runtime::native) use weak_collections::{WEAK_MAP_NAME, WEAK_SET_NAME};
+
+fn dynamic_compilation_error(error: Error) -> Error {
+    match error {
+        error @ (Error::Lex { span, .. } | Error::Parse { span, .. }) => {
+            Error::exception(ErrorName::SyntaxError, error.to_string()).with_runtime_span(span)
+        }
+        error @ (Error::Runtime { .. }
+        | Error::JavaScript { .. }
+        | Error::JavaScriptError { .. }
+        | Error::ResourceLimit { .. }) => error,
+    }
+}
 
 use super::{
     ARRAY_NAME, BOOLEAN_NAME, BOOLEAN_PROTOTYPE_TO_STRING_NAME, BOOLEAN_PROTOTYPE_VALUE_OF_NAME,

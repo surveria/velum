@@ -4,7 +4,7 @@ use crate::{
     value::Value,
 };
 
-use super::{EVAL_NAME, NativeFunctionKind};
+use super::{EVAL_NAME, NativeFunctionKind, dynamic_compilation_error};
 
 impl Context {
     pub(in crate::runtime::native) fn eval_function_value(&mut self) -> Result<Value> {
@@ -27,11 +27,13 @@ impl Context {
 
         match argument {
             Value::String(source) => {
-                let script = self.compile(source)?;
+                let script = self.compile(source).map_err(dynamic_compilation_error)?;
                 eval_completion_result(self.eval_compiled_completion(&script)?)
             }
             Value::HeapString(source) => {
-                let script = self.compile(source.as_str())?;
+                let script = self
+                    .compile(source.as_str())
+                    .map_err(dynamic_compilation_error)?;
                 eval_completion_result(self.eval_compiled_completion(&script)?)
             }
             value => Ok(value.clone()),

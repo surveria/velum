@@ -1,0 +1,28 @@
+let direct = false;
+let indirect = false;
+let generated = false;
+let alias = eval;
+
+try {
+    eval("@");
+} catch (error) {
+    direct = error instanceof SyntaxError && error.name === "SyntaxError";
+}
+
+try {
+    alias("break missingLabel");
+} catch (error) {
+    indirect = error instanceof SyntaxError && error.name === "SyntaxError";
+}
+
+try {
+    Function("}");
+} catch (error) {
+    generated = error instanceof SyntaxError && error.name === "SyntaxError";
+}
+
+if (!direct || !indirect || !generated) {
+    throw new Test262Error("dynamic compilation failures were not SyntaxError objects");
+}
+
+42

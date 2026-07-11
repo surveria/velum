@@ -136,6 +136,8 @@ const PATH_TEST262_VAR_HOISTING: &str =
     "tests/corpora/test262/active/language/bindings/var_hoisting.js";
 const PATH_TEST262_TRY_CATCH: &str =
     "tests/corpora/test262/active/language/statements/try_catch.js";
+const PATH_TEST262_DYNAMIC_COMPILATION_ERRORS: &str =
+    "tests/corpora/test262/active/language/eval-code/dynamic_compilation_errors.js";
 const PATH_TEST262_OMITTED_CATCH_BINDING: &str =
     "tests/corpora/test262/active/language/statements/omitted_catch_binding.js";
 const PATH_TEST262_TRY_FINALLY: &str =
@@ -703,6 +705,11 @@ fn test262_statement_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/statements/try_catch",
             path: PATH_TEST262_TRY_CATCH,
+            expectation: Expectation::Value("42"),
+        },
+        EngineCase {
+            id: "language/eval-code/dynamic_compilation_errors",
+            path: PATH_TEST262_DYNAMIC_COMPILATION_ERRORS,
             expectation: Expectation::Value("42"),
         },
         EngineCase {

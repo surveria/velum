@@ -48,6 +48,7 @@ const PATH_CONST_ASSIGNMENT: &str = "tests/engine_cases/const_assignment_error.j
 const PATH_SHORT_CIRCUIT: &str = "tests/engine_cases/short_circuit.js";
 const PATH_VAR_HOISTING: &str = "tests/engine_cases/var_hoisting.js";
 const PATH_TRY_CATCH: &str = "tests/engine_cases/try_catch.js";
+const PATH_DYNAMIC_COMPILATION_ERRORS: &str = "tests/engine_cases/dynamic_compilation_errors.js";
 const PATH_TRY_FINALLY: &str = "tests/engine_cases/try_finally.js";
 const PATH_CONDITIONAL_BITAND: &str = "tests/engine_cases/conditional_bitand.js";
 const PATH_UPDATE_EXPRESSIONS: &str = "tests/engine_cases/update_expressions.js";
@@ -164,6 +165,14 @@ fn engine_language_cases() -> Vec<EngineCase> {
             path: PATH_TRY_CATCH,
             expectation: Expectation::OutputAndValue {
                 output: &["boom"],
+                value: "42",
+            },
+        },
+        EngineCase {
+            id: "dynamic_compilation_errors",
+            path: PATH_DYNAMIC_COMPILATION_ERRORS,
+            expectation: Expectation::OutputAndValue {
+                output: &["true true true"],
                 value: "42",
             },
         },

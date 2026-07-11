@@ -792,6 +792,8 @@ check_completion_error_boundary() {
   local exception_fields
   local owners
   local expected_owners
+  local dynamic_compilation_owners
+  local dynamic_compilation_users
 
   legacy_conversions="$(
     cd "${repo_root}"
@@ -831,6 +833,27 @@ check_completion_error_boundary() {
 src/runtime/control/assertions.rs:reference_error_uninitialized
 src/runtime/control/assertions.rs:runtime_exception_value'
   compare_set "completion/error operation allowlist" "${owners}" "${expected_owners}"
+
+  dynamic_compilation_owners="$(
+    function_owners 'fn[[:space:]]+dynamic_compilation_error[[:space:]]*\(' \
+      | sed -E 's/[[:space:]]*\($//'
+  )"
+  compare_set "dynamic compilation error owner allowlist" \
+    "${dynamic_compilation_owners}" \
+    'src/runtime/native/builtins/mod.rs:dynamic_compilation_error'
+  dynamic_compilation_users="$(
+    cd "${repo_root}"
+    grep -R -l -F --include='*.rs' '.map_err(dynamic_compilation_error)' \
+      src/runtime/native/builtins | sort
+  )"
+  compare_set "dynamic compilation error user allowlist" \
+    "${dynamic_compilation_users}" \
+    'src/runtime/native/builtins/eval.rs
+src/runtime/native/builtins/function_constructor.rs'
+  if grep -R -q -F --include='*.rs' 'generated_function_syntax_error' \
+      "${repo_root}/src/runtime/native/builtins"; then
+    fail "dynamic compilation error boundary changed; constructors must use the shared owner"
+  fi
 
   local local_value_fields
   local host_call_fields
@@ -1830,6 +1853,12 @@ mutate_legacy_completion_conversion() {
     >>"${fixture_root}/src/runtime/values.rs"
 }
 
+mutate_dynamic_compilation_owner() {
+  local fixture_root="$1"
+  printf '\nfn dynamic_compilation_error(error: Error) -> Error { error }\n' \
+    >>"${fixture_root}/src/runtime/native/builtins/eval.rs"
+}
+
 mutate_host_local_value_identity() {
   local fixture_root="$1"
   sed -i '/    identity: &.value VmIdentity,/d' \
@@ -2247,6 +2276,8 @@ run_self_tests() {
     'legacy iterator facade allowlist changed' mutate_legacy_iterator_facade
   expect_guard_failure "${temp_dir}" legacy-completion-conversion \
     'legacy completion/error boundary' mutate_legacy_completion_conversion
+  expect_guard_failure "${temp_dir}" dynamic-compilation-owner \
+    'dynamic compilation error owner allowlist changed' mutate_dynamic_compilation_owner
   expect_guard_failure "${temp_dir}" host-local-value-identity \
     'host local-value boundary changed' mutate_host_local_value_identity
   expect_guard_failure "${temp_dir}" javascript-exception-visibility \

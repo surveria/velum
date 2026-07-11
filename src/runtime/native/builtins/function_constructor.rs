@@ -8,13 +8,13 @@ use crate::{
         DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
         PropertyKey, PropertyUpdate, PropertyWritable,
     },
-    value::{ErrorName, ObjectId, Value},
+    value::{ObjectId, Value},
 };
 
 use super::{
     FUNCTION_NAME, FUNCTION_PROTOTYPE_APPLY_NAME, FUNCTION_PROTOTYPE_BIND_NAME,
     FUNCTION_PROTOTYPE_CALL_NAME, FUNCTION_PROTOTYPE_TO_STRING_NAME, NativeFunctionKind,
-    OBJECT_CONSTRUCTOR_PROPERTY,
+    OBJECT_CONSTRUCTOR_PROPERTY, dynamic_compilation_error,
 };
 
 const GENERATED_FUNCTION_NAME: &str = "anonymous";
@@ -105,7 +105,7 @@ impl Context {
         self.check_string_len(&source.compile)?;
         let script = self
             .compile(&source.compile)
-            .map_err(Self::generated_function_syntax_error)?;
+            .map_err(dynamic_compilation_error)?;
         let boundary = self.push_eval_activation_boundary()?;
         let result = self.eval_compiled(&script);
         let boundary_result = self.pop_eval_activation_boundary(boundary);
@@ -118,18 +118,6 @@ impl Context {
         };
         self.set_function_source(id, Rc::from(source.display.into_boxed_str()))?;
         Ok(value)
-    }
-
-    fn generated_function_syntax_error(error: Error) -> Error {
-        match error {
-            Error::Lex { .. } | Error::Parse { .. } => {
-                Error::exception(ErrorName::SyntaxError, error.to_string())
-            }
-            Error::Runtime { .. }
-            | Error::JavaScript { .. }
-            | Error::JavaScriptError { .. }
-            | Error::ResourceLimit { .. } => error,
-        }
     }
 
     fn function_constructor_source(

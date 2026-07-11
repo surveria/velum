@@ -14,6 +14,8 @@ const PATH_QUICKJS_BOOLEAN_CONVERSION: &str =
     "tests/corpora/quickjs_differential/active/boolean_conversion.js";
 const PATH_QUICKJS_VAR_HOISTING: &str = "tests/corpora/quickjs_differential/active/var_hoisting.js";
 const PATH_QUICKJS_TRY_CATCH: &str = "tests/corpora/quickjs_differential/active/try_catch.js";
+const PATH_QUICKJS_DYNAMIC_COMPILATION_ERRORS: &str =
+    "tests/corpora/quickjs_differential/active/dynamic_compilation_errors.js";
 const PATH_QUICKJS_OMITTED_CATCH_BINDING: &str =
     "tests/corpora/quickjs_differential/active/omitted_catch_binding.js";
 const PATH_QUICKJS_TRY_FINALLY: &str = "tests/corpora/quickjs_differential/active/try_finally.js";
@@ -219,6 +221,10 @@ fn quickjs_language_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "try_catch",
             path: PATH_QUICKJS_TRY_CATCH,
+        },
+        DifferentialCase {
+            id: "dynamic_compilation_errors",
+            path: PATH_QUICKJS_DYNAMIC_COMPILATION_ERRORS,
         },
         DifferentialCase {
             id: "omitted_catch_binding",
