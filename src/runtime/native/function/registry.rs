@@ -1,5 +1,6 @@
 use crate::{
     error::{Error, Result},
+    runtime::object::TypedArrayElementKind,
     value::{ErrorName, NativeFunctionId},
 };
 
@@ -218,7 +219,17 @@ const ASYNC_GENERATOR_RETURN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(
 const ASYNC_GENERATOR_THROW_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(210);
 const ASYNC_GENERATOR_FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(211);
 const PROMISE_ALL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(212);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 213;
+const ARRAY_BUFFER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(213);
+const INT8_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(214);
+const UINT8_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(215);
+const UINT8_CLAMPED_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(216);
+const INT16_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(217);
+const UINT16_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(218);
+const INT32_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(219);
+const UINT32_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(220);
+const FLOAT32_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(221);
+const FLOAT64_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(222);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 223;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -338,8 +349,12 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     if let Some(slot) = math_slot(kind) {
         return Some(slot);
     }
+    if let Some(slot) = typed_array_slot(kind) {
+        return Some(slot);
+    }
 
     match kind {
+        NativeFunctionKind::ArrayBuffer => Some(ARRAY_BUFFER_SLOT),
         NativeFunctionKind::AsyncFunction => Some(ASYNC_FUNCTION_SLOT),
         NativeFunctionKind::AsyncGeneratorFunction => Some(ASYNC_GENERATOR_FUNCTION_SLOT),
         NativeFunctionKind::AsyncGeneratorNext => Some(ASYNC_GENERATOR_NEXT_SLOT),
@@ -391,6 +406,23 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::String => Some(STRING_SLOT),
         NativeFunctionKind::Symbol => Some(SYMBOL_SLOT),
         _ => collection_slot(kind),
+    }
+}
+
+const fn typed_array_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
+    match kind {
+        NativeFunctionKind::TypedArray(TypedArrayElementKind::Int8) => Some(INT8_ARRAY_SLOT),
+        NativeFunctionKind::TypedArray(TypedArrayElementKind::Uint8) => Some(UINT8_ARRAY_SLOT),
+        NativeFunctionKind::TypedArray(TypedArrayElementKind::Uint8Clamped) => {
+            Some(UINT8_CLAMPED_ARRAY_SLOT)
+        }
+        NativeFunctionKind::TypedArray(TypedArrayElementKind::Int16) => Some(INT16_ARRAY_SLOT),
+        NativeFunctionKind::TypedArray(TypedArrayElementKind::Uint16) => Some(UINT16_ARRAY_SLOT),
+        NativeFunctionKind::TypedArray(TypedArrayElementKind::Int32) => Some(INT32_ARRAY_SLOT),
+        NativeFunctionKind::TypedArray(TypedArrayElementKind::Uint32) => Some(UINT32_ARRAY_SLOT),
+        NativeFunctionKind::TypedArray(TypedArrayElementKind::Float32) => Some(FLOAT32_ARRAY_SLOT),
+        NativeFunctionKind::TypedArray(TypedArrayElementKind::Float64) => Some(FLOAT64_ARRAY_SLOT),
+        _ => None,
     }
 }
 

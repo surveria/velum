@@ -519,6 +519,7 @@ fn test262_builtin_cases() -> Vec<EngineCase> {
     cases.extend(super::cases_test262_proxy::test262_proxy_builtin_cases());
     cases.extend(test262_string_builtin_cases());
     cases.extend(super::cases_test262_collections::test262_collection_builtin_cases());
+    cases.extend(super::cases_test262_typed_array::test262_typed_array_cases());
     cases
 }
 

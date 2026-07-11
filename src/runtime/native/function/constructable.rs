@@ -21,7 +21,7 @@ impl NativeFunctionKind {
                 | Self::Set
                 | Self::WeakMap
                 | Self::WeakSet
-                | Self::Uint8Array
+                | Self::TypedArray(_)
                 | Self::Date(DateFunctionKind::Constructor)
         )
     }

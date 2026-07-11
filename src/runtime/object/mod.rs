@@ -35,7 +35,10 @@ pub use property::{
 pub use proxy::ProxyValue;
 pub use regexp::RegExpValue;
 use shape::{ShapeId, ShapeTable};
-pub use typed_array::{ByteBuffer, ByteBufferOrigin, Uint8ArrayView, byte_number};
+pub use typed_array::{ByteBuffer, ByteBufferOrigin};
+pub(in crate::runtime) use typed_array::{
+    TypedArrayElementKind, TypedArrayView, typed_array_number,
+};
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
 const ARRAY_INDEX_LIMIT_ERROR: &str = "array index exceeded supported range";
@@ -104,7 +107,7 @@ struct Object {
     regexp_value: Option<RegExpValue>,
     proxy_value: Option<ProxyValue>,
     byte_buffer: Option<ByteBuffer>,
-    uint8_array: Option<Uint8ArrayView>,
+    typed_array: Option<TypedArrayView>,
     is_raw_json: bool,
     prototype: Option<ObjectId>,
     extensibility: ObjectExtensibility,
@@ -137,7 +140,7 @@ impl Object {
             regexp_value: None,
             proxy_value: None,
             byte_buffer: None,
-            uint8_array: None,
+            typed_array: None,
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
@@ -204,7 +207,7 @@ impl Object {
             regexp_value: None,
             proxy_value: None,
             byte_buffer: None,
-            uint8_array: None,
+            typed_array: None,
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
@@ -227,7 +230,7 @@ impl Object {
             regexp_value: None,
             proxy_value: None,
             byte_buffer: None,
-            uint8_array: None,
+            typed_array: None,
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
@@ -250,7 +253,7 @@ impl Object {
             regexp_value: None,
             proxy_value: None,
             byte_buffer: None,
-            uint8_array: None,
+            typed_array: None,
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
@@ -618,13 +621,13 @@ impl Object {
                 buffer.byte_length(),
             )?)));
         }
-        let Some(view) = self.uint8_array.as_ref() else {
+        let Some(view) = self.typed_array.as_ref() else {
             return Ok(None);
         };
         match property {
             "length" => Ok(Some(Value::Number(usize_property_number(view.length())?))),
             "byteLength" => Ok(Some(Value::Number(usize_property_number(
-                view.byte_length(),
+                view.byte_length()?,
             )?))),
             "byteOffset" => Ok(Some(Value::Number(usize_property_number(
                 view.byte_offset(),
@@ -634,10 +637,10 @@ impl Object {
                 let Some(index) = ArrayIndex::parse(property) else {
                     return Ok(None);
                 };
-                let Some(byte) = view.read(index.position()?)? else {
+                let Some(number) = view.read(index.position()?)? else {
                     return Ok(None);
                 };
-                Ok(Some(Value::Number(f64::from(byte))))
+                Ok(Some(Value::Number(number)))
             }
         }
     }
@@ -646,7 +649,7 @@ impl Object {
         if self.byte_buffer.is_some() && property == "byteLength" {
             return Ok(true);
         }
-        let Some(view) = self.uint8_array.as_ref() else {
+        let Some(view) = self.typed_array.as_ref() else {
             return Ok(false);
         };
         if matches!(property, "length" | "byteLength" | "byteOffset" | "buffer") {
@@ -659,10 +662,10 @@ impl Object {
     }
 
     fn set_typed_array_index(&self, index: ArrayIndex, value: &Value) -> Result<bool> {
-        let Some(view) = self.uint8_array.as_ref() else {
+        let Some(view) = self.typed_array.as_ref() else {
             return Ok(false);
         };
-        view.write(index.position()?, byte_number(value)?)
+        view.write(index.position()?, typed_array_number(value)?)
     }
 
     fn delete_array_element(&mut self, index: ArrayIndex) -> Result<bool> {
