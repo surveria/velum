@@ -7,7 +7,7 @@ use crate::{
         OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyKey,
         PropertyLookup, PropertyUpdate, PropertyWritable,
     },
-    runtime::property::{get_property, has_property},
+    runtime::property::{delete_property, get_property, has_property},
     runtime::{Context, VmStorageKind},
     storage::atom::AtomId,
     storage::string_heap::JsString,
@@ -16,6 +16,23 @@ use crate::{
 };
 
 impl Context {
+    pub(crate) fn unresolved_global_property_value(&mut self, name: &str) -> Result<Option<Value>> {
+        let Some(global_object) = self.global_object else {
+            return Ok(None);
+        };
+        let lookup = self.property_lookup(name);
+        self.global_object_property_value(global_object, lookup)
+    }
+
+    pub(crate) fn delete_unresolved_global_property(&mut self, name: &str) -> Result<bool> {
+        let Some(global_object) = self.global_object else {
+            return Ok(true);
+        };
+        let object = Value::Object(global_object);
+        let lookup = self.property_lookup(name);
+        delete_property(&mut self.objects, &object, lookup)
+    }
+
     #[must_use]
     pub fn output(&self) -> &[String] {
         &self.output

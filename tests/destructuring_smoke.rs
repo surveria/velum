@@ -356,9 +356,21 @@ fn creates_sloppy_globals_and_rejects_strict_targets() -> TestResult {
     ensure_string(
         r#"
         [createdByPattern] = [11];
-        "" + createdByPattern + ":" + globalThis.createdByPattern
+        let observed = "" + createdByPattern + ":" + globalThis.createdByPattern;
+        let deleted = delete createdByPattern;
+        function tdzProbe() {
+            try {
+                [futureLexical] = [];
+            } catch (error) {
+                return error instanceof ReferenceError;
+            }
+            let futureLexical;
+            return false;
+        }
+        observed + ":" + deleted + ":" + (typeof createdByPattern) + ":"
+            + tdzProbe()
         "#,
-        "11:11",
+        "11:11:true:undefined:true",
     )?;
     ensure_error_contains(
         r#""use strict"; [arguments] = [];"#,

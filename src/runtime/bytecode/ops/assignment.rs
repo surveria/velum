@@ -43,7 +43,9 @@ impl BytecodeAssignmentReference {
         match self {
             Self::Binding { name, cell } => {
                 let Some(cell) = cell else {
-                    return Err(reference_error_undefined(name.name()));
+                    return context
+                        .unresolved_global_property_value(name.name().name())?
+                        .ok_or_else(|| reference_error_undefined(name.name()));
                 };
                 cell.value(name.name())
             }

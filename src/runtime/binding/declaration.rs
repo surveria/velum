@@ -1,4 +1,5 @@
 use crate::{
+    binding_metadata::BindingOperand,
     bytecode::{BytecodeBinding, BytecodeHoistPlan, BytecodeNewTargetMode},
     error::{Error, Result},
     runtime::Context,
@@ -26,24 +27,22 @@ impl Context {
                 binding.name(),
             ));
         }
+        if binding.operand() != BindingOperand::Unresolved {
+            return Err(crate::runtime::control::reference_error_uninitialized(
+                binding.name(),
+            ));
+        }
 
         let value = self.checked_value(value)?;
-        let atom = self.intern_static_name_atom(binding.name().name())?;
-        self.ensure_binding_capacity_for_atom(atom)?;
-        self.globals
-            .insert(atom, BindingCell::new(value.clone(), true, DeclKind::Var))?;
-        self.remember_active_static_binding(binding.name(), atom)?;
-        if let Some(global_object) = self.global_object {
-            self.define_global_object_data_property(
-                global_object,
-                binding.name().name(),
-                value,
-                PropertyWritable::Yes,
-                PropertyEnumerable::Yes,
-                PropertyConfigurable::Yes,
-            )?;
-        }
-        Ok(())
+        let global_object = self.global_object_id()?;
+        self.define_global_object_data_property(
+            global_object,
+            binding.name().name(),
+            value,
+            PropertyWritable::Yes,
+            PropertyEnumerable::Yes,
+            PropertyConfigurable::Yes,
+        )
     }
 
     pub(crate) fn hoist_bytecode_declarations(&mut self, plan: &BytecodeHoistPlan) -> Result<()> {
