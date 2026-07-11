@@ -517,12 +517,12 @@ impl Parser {
             TokenKind::Async => {
                 if self.peek_kind_is_no_line_terminator(0, &TokenKind::Function) {
                     self.consume(&TokenKind::Function, "expected 'function' after 'async'")?;
-                    if self.match_kind(&TokenKind::Star) {
-                        return Err(
-                            self.parse_error("async generator functions are not supported yet")
-                        );
-                    }
-                    self.function_expression(FunctionKind::Async)?
+                    let kind = if self.match_kind(&TokenKind::Star) {
+                        FunctionKind::AsyncGenerator
+                    } else {
+                        FunctionKind::Async
+                    };
+                    self.function_expression(kind)?
                 } else {
                     Expression::new(
                         Expr::Identifier(self.contextual_async_binding(token_span.start())?),

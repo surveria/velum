@@ -66,15 +66,16 @@ pub enum FunctionKind {
     Ordinary,
     Async,
     Generator,
+    AsyncGenerator,
 }
 
 impl FunctionKind {
     pub const fn is_async(self) -> bool {
-        matches!(self, Self::Async)
+        matches!(self, Self::Async | Self::AsyncGenerator)
     }
 
     pub const fn is_generator(self) -> bool {
-        matches!(self, Self::Generator)
+        matches!(self, Self::Generator | Self::AsyncGenerator)
     }
 
     pub const fn is_constructable(self) -> bool {

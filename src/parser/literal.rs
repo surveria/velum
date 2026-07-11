@@ -58,11 +58,13 @@ impl Parser {
                 &TokenKind::Async,
                 "expected 'async' before async object method",
             )?;
-            if self.match_kind(&TokenKind::Star) {
-                return Err(self.parse_error("async generator methods are not supported yet"));
-            }
+            let kind = if self.match_kind(&TokenKind::Star) {
+                FunctionKind::AsyncGenerator
+            } else {
+                FunctionKind::Async
+            };
             let name = self.object_property_key()?;
-            return self.object_method_property(name, FunctionKind::Async, start);
+            return self.object_method_property(name, kind, start);
         }
         if self.match_kind(&TokenKind::Star) {
             let name = self.object_property_key()?;
@@ -192,7 +194,9 @@ impl Parser {
     fn async_object_method_start(&self) -> bool {
         self.peek_kind_is(0, &TokenKind::Async)
             && !self.peek_has_line_terminator_before(1)
-            && self.peek_kind(1).is_some_and(is_object_property_name_start)
+            && (self.peek_kind(1).is_some_and(is_object_property_name_start)
+                || (self.peek_kind_is(1, &TokenKind::Star)
+                    && self.peek_kind(2).is_some_and(is_object_property_name_start)))
     }
 
     fn object_method_property(
