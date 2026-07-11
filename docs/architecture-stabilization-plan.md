@@ -2244,7 +2244,7 @@ Suggested order after the semantic object gate:
 5. complete ArrayBuffer/DataView/TypedArray families;
 6. product-selected extended libraries.
 
-AS-09a profile evidence in draft PR #450:
+AS-09a completion evidence from PR #450:
 
 - the canonical failure profile selected unary bitwise NOT as a foundational
   syntax gap in the largest `language/expressions` lexer-failure cluster;
@@ -2267,8 +2267,40 @@ AS-09a profile evidence in draft PR #450:
 - the adjacent main/branch `unary_operators` pair is valid at 69.13/68.64 ms
   for rs-quickjs (-0.7%) and 8.01/7.98 ms for QuickJS. The normalized ratio is
   8.62x/8.59x, branch variation is 0.1%, and no performance regression is
-  indicated. Exact-tree CI and canonical publication remain required before
-  AS-09a can close.
+  indicated;
+- PR #450 squash-merged as `672d57a2`; required run `29139000366` certified
+  exact tree `2468a696`, post-merge run `29139109325` passed performance and
+  publication, and report-only commit `884cc41` published
+  `reports/test-runs/rsqjs-test-report-20260711T040754Z.*` with all five
+  sentinels valid.
+
+AS-09b profile evidence in draft PR #451:
+
+- dynamic `eval` previously propagated lexer/parser failures as engine
+  `Result` errors, while Function constructors independently converted the
+  same failures to typed JavaScript `SyntaxError` requests;
+- one `dynamic_compilation_error` owner now maps only `Lex` and `Parse` to
+  catchable `SyntaxError` objects for eval, Function, and AsyncFunction.
+  Runtime, resource-limit, and existing JavaScript errors keep their original
+  channels;
+- the typed request preserves the dynamic source span, so an uncaught eval
+  error identifies the evaluated source rather than the outer call site;
+- the focused `language/eval-code` plus `statements/break` profile rises from
+  186/964 to 218/964 variants and from 146/836 to 163/836 files. The 32 new
+  variants comprise 30 direct-eval early-error cases and two break cases;
+- the reviewed full baseline gains 198 variants and 109 files with no removed
+  pass: 58 staging, 51 `language/statements`, 34 `language/literals`, 30
+  `language/eval-code`, 21 `language/expressions`, two whitespace, and two
+  built-in eval variants. Local correctness passes at 37,951/37,951 expected
+  variants, 19,539/53,404 files, and 37,951/102,578 full variants;
+- direct, aliased, Function/AsyncFunction, source-span, and resource-limit
+  tests pass. The permanent registries pass at 69/69 engine fixtures,
+  118/118 active Test262, and 96/96 QuickJS differential cases;
+- adjacent main/branch sentinel medians are arithmetic 81.85/82.05 ms (+0.2%),
+  array-index 2.30/2.24 ms (-2.6%), property-read 218.22/225.12 ms (+3.2%),
+  function-call 152.90/154.78 ms (+1.2%), and string-scan 70.16/70.37 ms
+  (+0.3%). Every row is valid and branch variation is at most 0.6%; exact-tree
+  CI and canonical publication remain required before AS-09b can close.
 
 ### AS-10: Performance And Memory Checkpoints
 

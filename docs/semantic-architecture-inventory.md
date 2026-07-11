@@ -352,6 +352,7 @@ The engine already has a useful JavaScript `Completion` enum with `Normal`,
 | --- | --- | --- |
 | Public `eval` | every `Throw(Value)` returns a value-preserving `Error::JavaScript`; built-in Error objects also carry structured diagnostic metadata | AS-04a merged in PR #416; AS-04b1 merged in PR #418; AS-05 later adds VM-bound handle identity |
 | Native built-ins | `Result<Value>` boundaries preserve arbitrary throws; typed built-in exception requests allocate an ordinary Error object in the active VM before becoming `Throw(Value)` | AS-04a merged in PR #416; AS-04b1 merged in PR #418 |
+| Dynamic compilation | one `dynamic_compilation_error` owner converts only eval and Function/AsyncFunction lexer/parser failures to typed `SyntaxError` requests while retaining the dynamic source span; runtime, resource, and existing JavaScript errors remain unchanged | AS-09b draft PR #451 removes the split eval/constructor mapping |
 | Runtime-to-throw conversion | `runtime_exception_value` unwraps only typed JavaScript values or allocates a typed built-in error request; Runtime, host, parser, and resource errors are never classified by message text | AS-04a merged in PR #416; AS-04b1 object allocation merged in PR #418 |
 | Reference errors | `reference_error_undefined` and `reference_error_uninitialized` create typed ReferenceError requests that become ordinary objects in the active VM | AS-04a merged in PR #416; AS-04b1 merged in PR #418 |
 | Accessors and native callbacks | Completion conversion preserves primitive, Symbol, object, and Error throws; public host callbacks may use `Error::javascript(value)` intentionally | AS-04a merged in PR #416 |
@@ -662,7 +663,8 @@ decision sequence:
 | AS-07 | strong weak-collection entries and implicit roots | PR #446 merged with exact-tree validation and canonical report publication |
 | AS-08a | caches, direct calls, linear/function/control paths, harness opcodes | PR #447 merged as `bc52a723`; one optimizer owner, disabled-mode fallbacks, and zero harness source semantics are canonical |
 | AS-08b | named control recognizers and built-in specialization evidence | PR #449 merged as `7802932e`; source-shaped control execution is removed, one broad guarded reduction remains, and exact-tree/canonical evidence is green |
-| AS-09a | unary bitwise NOT compatibility | draft PR #450 routes `~` through the normal lexer, unary AST, numeric bytecode, and shared Number `ToInt32` semantics; focused Test262 passes 28/32 with only BigInt variants remaining |
+| AS-09a | unary bitwise NOT compatibility | PR #450 merged as `672d57a2`; 32 new Test262 variants, exact-tree correctness, paired performance, and canonical publication are green |
+| AS-09b | dynamic compilation error boundary | draft PR #451 gives eval and Function/AsyncFunction one typed SyntaxError mapper, preserves dynamic source spans, and records 198 new full-corpus variants with no removed pass |
 
 ## AS-01b Guard Specification
 
