@@ -2436,8 +2436,20 @@ AS-09e profile evidence in draft PR #454:
   worker stack before the VM could return its checked depth limit. Test262
   workers now use an explicit 16 MiB stack; the full four-worker corpus
   completes normally without changing engine call-depth policy;
-- a clean full gate, paired sentinels, exact-tree CI, and canonical publication
-  remain required before AS-09e can close.
+- the clean local correctness gate published
+  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260711T071640Z.*` and
+  passed strict clippy/docs, all engine tests, 119/119 runner tests, the complete
+  reviewed baseline, and all permanent registries;
+- the first adjacent main/branch sentinel medians are arithmetic
+  81.37/84.43 ms (+3.8%), array-index 2.24/2.25 ms (+0.4%), property-read
+  221.18/232.81 ms (+5.3%), function-call 156.18/157.17 ms (+0.6%), and
+  string-scan 72.23/71.69 ms (-0.7%). Every row is valid and branch variation
+  is at most 0.7%. A reverse-order control pair made property-read 1.4% faster
+  on the branch, so the isolated first-pair property delta is environmental;
+  arithmetic's repeat delta remains about +4.7% and is explicitly tracked for
+  the canonical post-merge measurement;
+- exact-tree CI and canonical publication remain required before AS-09e can
+  close.
 
 ### AS-10: Performance And Memory Checkpoints
 
