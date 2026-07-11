@@ -302,6 +302,37 @@ fn honors_species_and_rejects_invalid_receivers() -> TestResult {
     )
 }
 
+#[test]
+fn rejects_short_typed_array_static_results() -> TestResult {
+    ensure_eval(
+        r"
+        let failures = 0;
+        let constructors = [
+            function() { return new Uint8Array(1); },
+            function() { return new Uint8Array([0]); },
+            function() { return new Uint8Array({ 0: 0, length: 1 }); },
+            function() {
+                return new Uint8Array({
+                    [Symbol.iterator]: () => [0][Symbol.iterator]()
+                });
+            },
+            function() { return new Uint8Array(new ArrayBuffer(1)); }
+        ];
+        for (let ShortResult of constructors) {
+            try { Uint8Array.from.call(ShortResult, [1, 2]); }
+            catch (error) { if (error.constructor === TypeError) failures = failures + 1; }
+            try { Uint8Array.from.call(ShortResult, { 0: 1, 1: 2, length: 2 }); }
+            catch (error) { if (error.constructor === TypeError) failures = failures + 1; }
+            try { Uint8Array.of.call(ShortResult, 1, 2); }
+            catch (error) { if (error.constructor === TypeError) failures = failures + 1; }
+        }
+
+        failures
+        ",
+        &Value::Number(15.0),
+    )
+}
+
 fn ensure_eval(source: &str, expected: &Value) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
