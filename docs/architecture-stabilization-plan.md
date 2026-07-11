@@ -2640,8 +2640,41 @@ AS-09n profile evidence in draft PR #470:
   variants. The reviewed baseline adds 28 variants with no removals; local
   artifact:
   `target/rsqjs-reports/test-runs/rsqjs-test-report-20260711T172227Z.*`.
+  Required run `29161654819` certified the source tree, PR #470 merged as
+  `125658bb`, and post-merge run `29161765533` published canonical report
+  `20260711T173134Z` in report-only commit `d424bc0`; AS-09n is complete.
+
+AS-09o profile evidence in draft PR #472:
+
+- `ObjectCreate` still allocates through the existing exact-prototype object
+  owner, but the new object and its properties input remain transient roots
+  until every deferred descriptor has been validated and applied;
+- `ObjectDefineProperties` now discovers String and Symbol keys through shared
+  `[[OwnPropertyKeys]]`, filters their current `[[GetOwnProperty]]` descriptors,
+  reads values with `Get`, and converts the complete list with the shared
+  `ToPropertyDescriptor` owner before mutating the target. Proxy key order,
+  getters, abrupt completion, and atomic validation remain observable;
+- invalid primitive prototypes, nullish property maps, and primitive
+  descriptors now raise catchable `TypeError` completions instead of leaking
+  internal runtime failures. The shared correction also closes cases in
+  `Object.defineProperty`, `Object.defineProperties`, keys/values/entries, and
+  descriptor-query APIs;
+- arguments objects retain dense array storage for indices, length, iteration,
+  and spread, while one fixed-size `arguments_brand` field supplies the
+  standard `[object Arguments]` builtin class. The brand is neither a
+  JavaScript-visible property nor a variable-size payload/strong edge, and the
+  object-payload architecture guard records its AS-09o owner;
+- the focused `built-ins/Object/create` profile advances from 608/640 to
+  638/640 variants and from 304/320 to 319/320 files. The sole residual file
+  requires unsupported BigInt syntax and values;
+- on the current Iterator base, the complete correctness gate passes with
+  69/69 engine fixtures, 120/120 active Test262 cases, 98/98 QuickJS
+  differential cases, 27,071/53,404 conforming files, and 52,511/102,578 full
+  variants. The reviewed baseline adds 134 variants / 67 files with no
+  removals; local artifact:
+  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260711T174959Z.*`.
   Exact-tree CI and canonical publication evidence remain required before
-  AS-09n can close.
+  AS-09o can close.
 
 ### AS-10: Performance And Memory Checkpoints
 
