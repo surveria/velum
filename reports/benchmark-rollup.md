@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260711T135657Z.md`
-- Task: PR #459: AS-09i: add asynchronous generator support
-- Performance: 5.52x (4/5 >1.00x) (from `rsqjs-test-report-20260711T135657Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T135657Z.md`)
+- `rsqjs-test-report-20260711T142805Z.md`
+- Task: PR #465: AS-09k: add DataView builtins
+- Performance: 5.43x (4/5 >1.00x) (from `rsqjs-test-report-20260711T142805Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T142805Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 45258 passed / 57320 failed (44.12%) (from `rsqjs-test-report-20260711T135657Z.md`)
+- Full Test262: 46404 passed / 56174 failed (45.24%) (from `rsqjs-test-report-20260711T142805Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -449,3 +449,4 @@ Latest report:
 | `20260711T125926Z` `61562aa` PR #460: runner: move benchmark chart legends to the left | 5.59x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 42709 passed / 59869 failed (41.64%) |
 | `20260711T135451Z` `707ddc6` PR #462: AS-09j: add numeric typed array family | 5.58x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 45684 passed / 56894 failed (44.54%) |
 | `20260711T135657Z` `603e407` PR #459: AS-09i: add asynchronous generator support | 5.52x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 45258 passed / 57320 failed (44.12%) |
+| `20260711T142805Z` `961948d` PR #465: AS-09k: add DataView builtins | 5.43x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 46404 passed / 56174 failed (45.24%) |
