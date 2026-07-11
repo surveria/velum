@@ -2162,8 +2162,13 @@ AS-08a local evidence in draft PR #447:
   `assert.throws` is supplied by JavaScript test support;
 - the architecture guard fixes the single optimizer-state owner and requires
   zero harness opcodes/source-name comparisons, with mutation self-tests;
-- focused engine fixtures pass at 68/68 and the active Test262 subset passes at
-  117/117; required exact-tree correctness and paired performance remain to be
+- focused engine fixtures pass at 68/68, the active Test262 subset passes at
+  117/117, and the runner-enabled fast gate is green;
+- adjacent branch/base sentinel medians are arithmetic 84.54/85.27 ms
+  (-0.9%), array-index 2.57/2.50 ms (+2.8%), property-read 227.07/232.10 ms
+  (-2.2%), function-call 158.83/159.06 ms (-0.1%), and string-scan
+  72.67/71.04 ms (+2.3%). All rows are valid, checksums match, and branch
+  variation is at most 0.9%. Required exact-tree correctness remains to be
   attached before merge.
 
 AS-08b remains responsible for classifying every named control recognizer and
