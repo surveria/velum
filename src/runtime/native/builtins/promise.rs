@@ -37,7 +37,7 @@ struct PromiseCapability {
 }
 
 impl PromiseCapability {
-    fn root_values(&self) -> [&Value; 3] {
+    const fn root_values(&self) -> [&Value; 3] {
         [&self.promise, &self.resolve, &self.reject]
     }
 }
