@@ -14,6 +14,7 @@ mod call_target;
 mod collection;
 mod collection_kind;
 mod constructable;
+mod data_view_kind;
 mod date_kind;
 mod direct;
 mod kind;
@@ -28,6 +29,8 @@ mod string_kind;
 use super::number_intrinsic_property;
 
 pub(in crate::runtime::native) use array_kind::ARRAY_NAME;
+pub(in crate::runtime) use data_view_kind::DATA_VIEW_NAME;
+pub(in crate::runtime) use data_view_kind::DataViewFunctionKind;
 pub(in crate::runtime) use date_kind::{
     DATE_NAME, DATE_NOW_NAME, DATE_PARSE_NAME, DATE_UTC_NAME, DateFunctionKind,
 };

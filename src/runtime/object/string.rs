@@ -66,6 +66,7 @@ impl Object {
             regexp_value: None,
             proxy_value: None,
             byte_buffer: None,
+            data_view: None,
             typed_array: None,
             is_raw_json: false,
             prototype: None,

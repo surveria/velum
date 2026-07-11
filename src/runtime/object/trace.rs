@@ -87,6 +87,12 @@ impl Object {
                 StrongEdgeReference::Object(view.buffer_object()),
             )?;
         }
+        if let Some(view) = &self.data_view {
+            visitor.visit(
+                VmObjectEdgeKind::InternalSlot,
+                StrongEdgeReference::Object(view.buffer_object()),
+            )?;
+        }
         Ok(())
     }
 }

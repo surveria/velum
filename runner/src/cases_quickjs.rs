@@ -43,6 +43,8 @@ const PATH_QUICKJS_CLASS_FIELDS: &str = "tests/corpora/quickjs_differential/acti
 const PATH_QUICKJS_MAP_SET: &str = "tests/corpora/quickjs_differential/active/map_set_baseline.js";
 const PATH_QUICKJS_NUMERIC_TYPED_ARRAYS: &str =
     "tests/corpora/quickjs_differential/active/numeric_typed_arrays.js";
+const PATH_QUICKJS_DATA_VIEW_NUMERIC: &str =
+    "tests/corpora/quickjs_differential/active/data_view_numeric.js";
 const PATH_QUICKJS_SET_OPERATIONS: &str =
     "tests/corpora/quickjs_differential/active/set_operations.js";
 const PATH_QUICKJS_WEAK_COLLECTIONS: &str =
@@ -268,6 +270,10 @@ fn quickjs_class_and_collection_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "numeric_typed_arrays",
             path: PATH_QUICKJS_NUMERIC_TYPED_ARRAYS,
+        },
+        DifferentialCase {
+            id: "data_view_numeric",
+            path: PATH_QUICKJS_DATA_VIEW_NUMERIC,
         },
         DifferentialCase {
             id: "set_operations",

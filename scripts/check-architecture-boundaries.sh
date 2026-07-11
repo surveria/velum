@@ -1510,7 +1510,8 @@ check_object_edge_boundary() {
     'if let Some(string) = &self.string_value {' \
     'if let Some(ObjectPrimitiveValue::Symbol(symbol)) = &self.primitive_value {' \
     'if let Some(proxy) = &self.proxy_value {' \
-    'if let Some(view) = &self.typed_array {'; do
+    'if let Some(view) = &self.typed_array {' \
+    'if let Some(view) = &self.data_view {'; do
     if ! grep -F -q "${source}" "${repo_root}/src/runtime/object/trace.rs"; then
       fail "object edge boundary changed; object source '${source}' is missing"
     fi
@@ -1771,6 +1772,7 @@ date_value
 regexp_value
 proxy_value
 byte_buffer
+data_view
 typed_array
 is_raw_json
 prototype

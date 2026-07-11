@@ -42,7 +42,7 @@ impl ByteBuffer {
         self.bytes.borrow().len()
     }
 
-    fn read<const N: usize>(&self, offset: usize) -> Result<[u8; N]> {
+    pub(in crate::runtime) fn read<const N: usize>(&self, offset: usize) -> Result<[u8; N]> {
         let end = offset
             .checked_add(N)
             .ok_or_else(|| Error::limit(TYPED_ARRAY_RANGE_ERROR))?;
@@ -55,7 +55,7 @@ impl ByteBuffer {
         Ok(result)
     }
 
-    fn write(&self, offset: usize, value: &[u8]) -> Result<()> {
+    pub(in crate::runtime) fn write(&self, offset: usize, value: &[u8]) -> Result<()> {
         let end = offset
             .checked_add(value.len())
             .ok_or_else(|| Error::limit(TYPED_ARRAY_RANGE_ERROR))?;
@@ -300,27 +300,27 @@ pub fn typed_array_number(value: &Value) -> Result<f64> {
     to_number_primitive(value)
 }
 
-fn to_int8(value: f64) -> Result<i8> {
+pub(super) fn to_int8(value: f64) -> Result<i8> {
     let unsigned = to_uint8(value)?;
     Ok(i8::from_ne_bytes(unsigned.to_ne_bytes()))
 }
 
-fn to_uint8(value: f64) -> Result<u8> {
+pub(super) fn to_uint8(value: f64) -> Result<u8> {
     let unsigned = number_to_uint32(value, "typed array Uint8 conversion")? % 256;
     u8::try_from(unsigned).map_err(|_| Error::runtime("typed array Uint8 conversion overflowed"))
 }
 
-fn to_int16(value: f64) -> Result<i16> {
+pub(super) fn to_int16(value: f64) -> Result<i16> {
     let unsigned = to_uint16(value)?;
     Ok(i16::from_ne_bytes(unsigned.to_ne_bytes()))
 }
 
-fn to_uint16(value: f64) -> Result<u16> {
+pub(super) fn to_uint16(value: f64) -> Result<u16> {
     let unsigned = number_to_uint32(value, "typed array Uint16 conversion")? % 65_536;
     u16::try_from(unsigned).map_err(|_| Error::runtime("typed array Uint16 conversion overflowed"))
 }
 
-fn to_int32(value: f64) -> Result<i32> {
+pub(super) fn to_int32(value: f64) -> Result<i32> {
     let unsigned = number_to_uint32(value, "typed array Int32 conversion")?;
     Ok(i32::from_ne_bytes(unsigned.to_ne_bytes()))
 }
@@ -346,6 +346,6 @@ fn to_uint8_clamp(value: f64) -> u8 {
 
 // Rust's IEEE-754 narrowing cast implements the Float32Array conversion directly.
 #[allow(clippy::cast_possible_truncation)]
-const fn to_float32(value: f64) -> f32 {
+pub(super) const fn to_float32(value: f64) -> f32 {
     value as f32
 }

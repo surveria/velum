@@ -1,5 +1,6 @@
 mod array;
 mod boolean;
+mod data_view;
 mod date;
 mod eval;
 mod function_constructor;

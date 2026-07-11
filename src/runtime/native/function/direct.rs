@@ -512,6 +512,9 @@ impl Context {
             NativeFunctionKind::Date(kind) => {
                 self.eval_date_native_function_kind(kind, args, this_value)
             }
+            NativeFunctionKind::DataView(kind) => {
+                self.eval_data_view_native_function_kind(kind, args, this_value)
+            }
             NativeFunctionKind::JsonIsRawJson => self.eval_json_is_raw_json(args),
             NativeFunctionKind::JsonParse => self.eval_json_parse(args),
             NativeFunctionKind::JsonRawJson => self.eval_json_raw_json(args),

@@ -4,7 +4,7 @@ use crate::{
     value::{ErrorName, NativeFunctionId},
 };
 
-use super::{DateFunctionKind, NativeFunctionKind};
+use super::{DataViewFunctionKind, DateFunctionKind, NativeFunctionKind};
 
 const ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(0);
 const ARRAY_CONCAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(1);
@@ -229,7 +229,13 @@ const INT32_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(219);
 const UINT32_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(220);
 const FLOAT32_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(221);
 const FLOAT64_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(222);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 223;
+const DATA_VIEW_CONSTRUCTOR_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(223);
+const DATA_VIEW_BUFFER_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(224);
+const DATA_VIEW_BYTE_LENGTH_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(225);
+const DATA_VIEW_BYTE_OFFSET_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(226);
+const DATA_VIEW_GET_SLOT_BASE: usize = 227;
+const DATA_VIEW_SET_SLOT_BASE: usize = 236;
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 245;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -352,6 +358,9 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     if let Some(slot) = typed_array_slot(kind) {
         return Some(slot);
     }
+    if let Some(slot) = data_view_slot(kind) {
+        return Some(slot);
+    }
 
     match kind {
         NativeFunctionKind::ArrayBuffer => Some(ARRAY_BUFFER_SLOT),
@@ -406,6 +415,36 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::String => Some(STRING_SLOT),
         NativeFunctionKind::Symbol => Some(SYMBOL_SLOT),
         _ => collection_slot(kind),
+    }
+}
+
+const fn data_view_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
+    match kind {
+        NativeFunctionKind::DataView(DataViewFunctionKind::Constructor) => {
+            Some(DATA_VIEW_CONSTRUCTOR_SLOT)
+        }
+        NativeFunctionKind::DataView(DataViewFunctionKind::BufferGetter) => {
+            Some(DATA_VIEW_BUFFER_GETTER_SLOT)
+        }
+        NativeFunctionKind::DataView(DataViewFunctionKind::ByteLengthGetter) => {
+            Some(DATA_VIEW_BYTE_LENGTH_GETTER_SLOT)
+        }
+        NativeFunctionKind::DataView(DataViewFunctionKind::ByteOffsetGetter) => {
+            Some(DATA_VIEW_BYTE_OFFSET_GETTER_SLOT)
+        }
+        NativeFunctionKind::DataView(DataViewFunctionKind::Get(element_kind)) => {
+            let Some(index) = DATA_VIEW_GET_SLOT_BASE.checked_add(element_kind.index()) else {
+                return None;
+            };
+            Some(NativeFunctionSlot::new(index))
+        }
+        NativeFunctionKind::DataView(DataViewFunctionKind::Set(element_kind)) => {
+            let Some(index) = DATA_VIEW_SET_SLOT_BASE.checked_add(element_kind.index()) else {
+                return None;
+            };
+            Some(NativeFunctionSlot::new(index))
+        }
+        _ => None,
     }
 }
 
