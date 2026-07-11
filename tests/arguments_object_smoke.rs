@@ -92,6 +92,36 @@ fn arrow_functions_do_not_bind_their_own_arguments() -> TestResult {
 }
 
 #[test]
+fn escaped_arrows_capture_the_parent_arguments_binding() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.eval(
+        r#"
+        function ordinary(value) {
+            return () => arguments[0];
+        }
+        const holder = {
+            async method(value) {
+                return async () => arguments[0];
+            }
+        };
+        class Cls {
+            static async method(value) {
+                return async () => arguments[0];
+            }
+        }
+        let trace = ordinary(40)();
+        Promise.all([holder.method(1), Cls.method(2)]).then(function(functions) {
+            return Promise.all([functions[0](), functions[1]()]);
+        }).then(function(values) {
+            trace = trace + ":" + values[0] + ":" + values[1];
+        });
+        "#,
+    )?;
+    ensure_value(&context.eval("trace")?, &Value::String("40:1:2".to_owned()))
+}
+
+#[test]
 fn strict_functions_and_methods_bind_arguments() -> TestResult {
     ensure_string(
         r#"

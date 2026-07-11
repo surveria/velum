@@ -18,8 +18,8 @@ pub use types::{
     BytecodeAddress, BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding,
     BytecodeCallSite, BytecodeCatch, BytecodeClass, BytecodeClassField, BytecodeClassMember,
     BytecodeClassMemberKind, BytecodeCompletion, BytecodeDestructureMode, BytecodeDynamicProperty,
-    BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeFunctionParam,
-    BytecodeInstruction, BytecodeNewTargetMode, BytecodeObjectProperty, BytecodePattern,
-    BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget, BytecodeProgram,
-    BytecodeProperty, BytecodeSwitchCase,
+    BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeFunctionInit,
+    BytecodeFunctionParam, BytecodeInstruction, BytecodeNewTargetMode, BytecodeObjectProperty,
+    BytecodePattern, BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget,
+    BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
 };

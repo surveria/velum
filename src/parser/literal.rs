@@ -94,6 +94,7 @@ impl Parser {
             shorthand_name: Some(binding),
         } = name
         {
+            self.note_arguments_reference(binding.as_str())?;
             let binding = self.static_binding(binding)?;
             return Ok(ObjectProperty {
                 key: ObjectPropertyKey::Static(key),
@@ -129,6 +130,7 @@ impl Parser {
         start: crate::SourceSpan,
     ) -> Result<ObjectProperty> {
         self.consume(&TokenKind::LParen, "expected '(' after accessor name")?;
+        let arguments_snapshot = self.arguments_reference_snapshot();
         let inherited_strict = self.is_strict_mode();
         let parameters = self.with_await_context(false, false, Self::function_parameters)?;
         self.consume(&TokenKind::RParen, "expected ')' after accessor parameters")?;
@@ -170,6 +172,12 @@ impl Parser {
             body.contains_use_strict,
         )?;
         let id = self.static_function()?;
+        let uses_arguments = self.arguments_referenced_since(arguments_snapshot);
+        let arguments_binding = if uses_arguments {
+            Some(self.implicit_arguments_binding()?)
+        } else {
+            None
+        };
         let (params, statements, parameter_prologue_count) =
             parameters.apply_prologue(body.statements);
         let key = name.into_key();
@@ -182,6 +190,7 @@ impl Parser {
             Expr::MethodFunction {
                 id,
                 name,
+                arguments_binding,
                 params: params.into(),
                 body: statements.into(),
                 parameter_prologue_count,
@@ -216,6 +225,7 @@ impl Parser {
         start: crate::SourceSpan,
     ) -> Result<ObjectProperty> {
         let inherited_strict = self.is_strict_mode();
+        let arguments_snapshot = self.arguments_reference_snapshot();
         let parameters = self.with_await_context(false, kind.is_async(), |parser| {
             parser.with_yield_expression(false, |parser| {
                 parser
@@ -244,6 +254,12 @@ impl Parser {
             self.validate_generator_parameter_lexicals(&parameters.params, &body.statements)?;
         }
         let id = self.static_function()?;
+        let uses_arguments = self.arguments_referenced_since(arguments_snapshot);
+        let arguments_binding = if uses_arguments {
+            Some(self.implicit_arguments_binding()?)
+        } else {
+            None
+        };
         let (params, statements, parameter_prologue_count) =
             parameters.apply_prologue(body.statements);
         let key = name.into_key();
@@ -256,6 +272,7 @@ impl Parser {
             Expr::MethodFunction {
                 id,
                 name,
+                arguments_binding,
                 params: params.into(),
                 body: statements.into(),
                 parameter_prologue_count,

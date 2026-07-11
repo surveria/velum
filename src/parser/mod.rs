@@ -89,6 +89,7 @@ struct Parser {
     allow_super_property: bool,
     allow_super_call: bool,
     static_call_site_count: usize,
+    arguments_reference_count: usize,
     strict_mode: bool,
     await_expression_context: AwaitExpressionContext,
     await_identifier_context: AwaitIdentifierContext,
@@ -126,6 +127,7 @@ impl Parser {
             allow_super_property: false,
             allow_super_call: false,
             static_call_site_count: 0,
+            arguments_reference_count: 0,
             strict_mode,
             await_expression_context: AwaitExpressionContext::Allowed,
             await_identifier_context: AwaitIdentifierContext::Allowed,
@@ -226,6 +228,29 @@ impl Parser {
     pub(super) fn static_binding_name(&mut self, name: String) -> Result<StaticBinding> {
         let name = self.static_name(name)?;
         self.static_binding(name)
+    }
+
+    pub(super) fn implicit_arguments_binding(&mut self) -> Result<StaticBinding> {
+        self.static_binding_name(ARGUMENTS_IDENTIFIER_NAME.to_owned())
+    }
+
+    pub(super) const fn arguments_reference_snapshot(&self) -> usize {
+        self.arguments_reference_count
+    }
+
+    pub(super) const fn arguments_referenced_since(&self, snapshot: usize) -> bool {
+        self.arguments_reference_count > snapshot
+    }
+
+    pub(super) fn note_arguments_reference(&mut self, name: &str) -> Result<()> {
+        if name != ARGUMENTS_IDENTIFIER_NAME {
+            return Ok(());
+        }
+        self.arguments_reference_count = self
+            .arguments_reference_count
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("arguments reference count overflowed"))?;
+        Ok(())
     }
 
     pub(super) fn static_string(&mut self, value: Vec<u16>) -> Result<StaticString> {

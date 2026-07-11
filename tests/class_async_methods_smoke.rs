@@ -140,14 +140,14 @@ fn line_terminator_prevents_async_class_method_prefix() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     let value = context.eval(
-        r#"
+        r"
         class Separated {
             async
             value() { return 42; }
         }
         const instance = new Separated();
         instance.async === undefined && instance.value() === 42
-        "#,
+        ",
     )?;
     ensure_value(&value, &Value::Bool(true))
 }

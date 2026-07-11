@@ -1,10 +1,31 @@
 use crate::{
-    ast::{Expression, FunctionParam, Statement, StaticBinding, StaticFunctionId},
+    ast::{
+        Expr, Expression, FunctionParam, ObjectProperty, ObjectPropertyKey, Statement,
+        StaticBinding, StaticFunctionId,
+    },
     binding_metadata::{FunctionScopeId, ScopeId, types::ScopeKind},
     error::Result,
 };
 
 use super::LayoutBuilder;
+
+#[derive(Clone, Copy)]
+pub(super) struct FunctionBindings<'a> {
+    pub(super) self_binding: Option<&'a StaticBinding>,
+    pub(super) arguments_binding: Option<&'a StaticBinding>,
+}
+
+impl<'a> FunctionBindings<'a> {
+    pub(super) const fn new(
+        self_binding: Option<&'a StaticBinding>,
+        arguments_binding: Option<&'a StaticBinding>,
+    ) -> Self {
+        Self {
+            self_binding,
+            arguments_binding,
+        }
+    }
+}
 
 impl LayoutBuilder {
     pub(super) fn analyze_exprs(
@@ -21,7 +42,7 @@ impl LayoutBuilder {
     pub(super) fn analyze_function(
         &mut self,
         id: StaticFunctionId,
-        self_binding: Option<&StaticBinding>,
+        bindings: FunctionBindings<'_>,
         params: &[FunctionParam],
         body: &[Statement],
         parent_scope: ScopeId,
@@ -29,7 +50,7 @@ impl LayoutBuilder {
     ) -> Result<()> {
         let function = self.add_function(Some(parent_function));
         self.record_static_function(id, function)?;
-        let function_parent_scope = if let Some(self_binding) = self_binding {
+        let function_parent_scope = if let Some(self_binding) = bindings.self_binding {
             let self_scope = self.add_scope(Some(parent_scope), function, ScopeKind::Local);
             self.declare(self_scope, self_binding)?;
             self_scope
@@ -41,11 +62,81 @@ impl LayoutBuilder {
         for param in params {
             self.declare(function_scope, &param.name)?;
         }
+        if let Some(arguments_binding) = bindings.arguments_binding {
+            self.declare(function_scope, arguments_binding)?;
+        }
         for param in params {
             if let Some(default) = &param.default {
                 self.analyze_expr(default, function_scope, function)?;
             }
         }
         self.analyze_statements(body, function_scope, function_scope, function)
+    }
+
+    pub(super) fn analyze_nested_function(
+        &mut self,
+        expression: &Expr,
+        scope: ScopeId,
+        function: FunctionScopeId,
+    ) -> Result<()> {
+        match expression {
+            Expr::Function {
+                id,
+                name,
+                arguments_binding,
+                params,
+                body,
+                ..
+            } => self.analyze_function(
+                *id,
+                FunctionBindings::new(name.as_ref(), arguments_binding.as_ref()),
+                params,
+                body,
+                scope,
+                function,
+            ),
+            Expr::ArrowFunction {
+                id, params, body, ..
+            } => self.analyze_function(
+                *id,
+                FunctionBindings::new(None, None),
+                params,
+                body,
+                scope,
+                function,
+            ),
+            Expr::MethodFunction {
+                id,
+                arguments_binding,
+                params,
+                body,
+                ..
+            } => self.analyze_function(
+                *id,
+                FunctionBindings::new(None, arguments_binding.as_ref()),
+                params,
+                body,
+                scope,
+                function,
+            ),
+            _ => Err(crate::error::Error::runtime(
+                "expected nested function expression",
+            )),
+        }
+    }
+
+    pub(super) fn analyze_object_properties(
+        &mut self,
+        properties: &[ObjectProperty],
+        scope: ScopeId,
+        function: FunctionScopeId,
+    ) -> Result<()> {
+        for property in properties {
+            if let ObjectPropertyKey::Computed(expr) = &property.key {
+                self.analyze_expr(expr, scope, function)?;
+            }
+            self.analyze_expr(&property.value, scope, function)?;
+        }
+        Ok(())
     }
 }

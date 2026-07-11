@@ -58,9 +58,10 @@ impl Context {
         &mut self,
         template: &FunctionScopeTemplate,
         args: &[Value],
+        arguments: Option<(FunctionArgumentsBinding, &[Value])>,
     ) -> Result<BindingScope> {
-        self.ensure_extra_binding_capacity(template.param_count)?;
-        let mut slots = Vec::with_capacity(template.param_count);
+        self.ensure_extra_binding_capacity(template.slot_count)?;
+        let mut slots = Vec::with_capacity(template.slot_count);
         for index in 0..template.param_count {
             let value = args.get(index).cloned().unwrap_or(Value::Undefined);
             slots.push(BindingCell::new(
@@ -68,6 +69,12 @@ impl Context {
                 true,
                 DeclKind::Var,
             ));
+        }
+        if template.slot_count > template.param_count {
+            let (_, original_args) = arguments.ok_or_else(|| {
+                Error::runtime("function scope template is missing its arguments binding")
+            })?;
+            slots.push(self.function_arguments_cell(original_args)?);
         }
         Ok(BindingScope::from_shared_template(
             template.scope,
@@ -82,11 +89,13 @@ impl Context {
         frames: &[Option<CompiledBindingFrame>],
         args: &[Value],
         has_parameter_defaults: bool,
+        arguments: Option<(FunctionArgumentsBinding, &[Value])>,
     ) -> Result<BindingScope> {
         if params.len() != frames.len() {
             return Err(Error::runtime("function parameter layout length mismatch"));
         }
-        if !has_parameter_defaults
+        if arguments.is_none()
+            && !has_parameter_defaults
             && params_have_unique_atoms(params)
             && let Some(scope) = contiguous_parameter_scope(frames)
         {
@@ -124,7 +133,21 @@ impl Context {
                 scope.insert(atom, cell)?;
             }
         }
+        if let Some((binding, original_args)) = arguments
+            && !scope.contains(binding.atom())
+        {
+            self.ensure_extra_binding_capacity(scope.len())?;
+            let cell = self.function_arguments_cell(original_args)?;
+            let frame = binding.frame();
+            let inserted = scope.insert_or_replace_at_slot(binding.atom(), cell, frame.slot())?;
+            Self::mark_binding_scope_frame_slot(&mut scope, frame, inserted)?;
+        }
         Ok(scope)
+    }
+
+    fn function_arguments_cell(&mut self, original_args: &[Value]) -> Result<BindingCell> {
+        let value = self.create_arguments_object(original_args)?;
+        Ok(BindingCell::new(value, true, DeclKind::Var))
     }
 
     pub(super) fn eval_function_body<const CAN_SUSPEND: bool>(
@@ -394,6 +417,28 @@ pub(in crate::runtime) struct FunctionScopeTemplate {
     pub(super) scope: ScopeId,
     pub(super) index: std::rc::Rc<crate::runtime::binding::scope::ScopeIndexData>,
     pub(super) param_count: usize,
+    pub(super) slot_count: usize,
+}
+
+/// Precomputed local slot for a function's implicit `arguments` binding.
+#[derive(Debug, Clone, Copy)]
+pub(in crate::runtime) struct FunctionArgumentsBinding {
+    atom: AtomId,
+    frame: CompiledBindingFrame,
+}
+
+impl FunctionArgumentsBinding {
+    pub(super) const fn new(atom: AtomId, frame: CompiledBindingFrame) -> Self {
+        Self { atom, frame }
+    }
+
+    pub(super) const fn atom(self) -> AtomId {
+        self.atom
+    }
+
+    pub(super) const fn frame(self) -> CompiledBindingFrame {
+        self.frame
+    }
 }
 
 /// Precomputed local slot for a named function expression's private
@@ -441,6 +486,28 @@ pub(super) fn function_self_binding_frame(
     }
 }
 
+pub(super) fn function_arguments_binding_frame(
+    binding: StaticBindingId,
+    layout: Option<&BindingLayout>,
+) -> Result<CompiledBindingFrame> {
+    let layout = layout
+        .ok_or_else(|| Error::runtime("arguments binding requires a compiled binding layout"))?;
+    let operand = layout
+        .operand_for_binding_id(binding)?
+        .ok_or_else(|| Error::runtime("arguments binding layout is not defined"))?;
+    match operand {
+        BindingOperand::Local { scope, slot } => Ok(CompiledBindingFrame::local(
+            scope,
+            BindingSlot::from_index(slot.index()?),
+        )),
+        BindingOperand::Global { .. }
+        | BindingOperand::Upvalue { .. }
+        | BindingOperand::Unresolved => Err(Error::runtime(
+            "arguments binding layout is not a local slot",
+        )),
+    }
+}
+
 impl FunctionScopeTemplate {
     pub(in crate::runtime) fn storage_entry_count(&self) -> Result<usize> {
         self.index.storage_entry_count()
@@ -454,6 +521,7 @@ pub(super) fn function_scope_template(
     params: &[AtomId],
     frames: &[Option<CompiledBindingFrame>],
     has_parameter_defaults: bool,
+    arguments_binding: Option<FunctionArgumentsBinding>,
 ) -> Result<Option<std::rc::Rc<super::FunctionScopeTemplate>>> {
     if has_parameter_defaults || params.len() != frames.len() || !params_have_unique_atoms(params) {
         return Ok(None);
@@ -461,11 +529,23 @@ pub(super) fn function_scope_template(
     let Some(scope) = contiguous_parameter_scope(frames) else {
         return Ok(None);
     };
-    let index = crate::runtime::binding::scope::ScopeIndexData::from_slot_atoms(params)?;
+    let mut slot_atoms = params.to_vec();
+    if let Some(binding) = arguments_binding {
+        let slot = binding.frame().slot().index();
+        if slot == slot_atoms.len() {
+            slot_atoms.push(binding.atom());
+        } else if slot_atoms.get(slot).copied() != Some(binding.atom()) {
+            return Err(Error::runtime(
+                "arguments binding does not match the function scope template",
+            ));
+        }
+    }
+    let index = crate::runtime::binding::scope::ScopeIndexData::from_slot_atoms(&slot_atoms)?;
     Ok(Some(std::rc::Rc::new(FunctionScopeTemplate {
         scope,
         index: std::rc::Rc::new(index),
         param_count: params.len(),
+        slot_count: slot_atoms.len(),
     })))
 }
 

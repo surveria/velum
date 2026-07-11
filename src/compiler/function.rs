@@ -7,6 +7,7 @@ use crate::{
         StaticBinding, Stmt, SwitchCase,
     },
     binding_metadata::BindingLayout,
+    bytecode::BytecodeFunctionInit,
     error::{Error, Result},
     syntax::{FunctionKind, StaticFunctionId, StaticName},
 };
@@ -20,6 +21,7 @@ struct FunctionCompileSpec<'a> {
     id: StaticFunctionId,
     name: Option<StaticName>,
     self_binding: Option<StaticBinding>,
+    arguments_binding: Option<StaticBinding>,
     params: &'a Rc<[FunctionParam]>,
     body: &'a [Statement],
     parameter_prologue_count: usize,
@@ -49,6 +51,7 @@ impl BytecodeCompiler<'_> {
             name: spec.name,
             bytecode: BytecodeFunction::compile(
                 spec.self_binding,
+                spec.arguments_binding,
                 spec.params,
                 spec.body,
                 spec.kind,
@@ -66,6 +69,7 @@ impl BytecodeCompiler<'_> {
 impl BytecodeFunction {
     pub fn compile(
         self_binding: Option<StaticBinding>,
+        arguments_binding: Option<StaticBinding>,
         params: &[FunctionParam],
         statements: &[Statement],
         kind: FunctionKind,
@@ -73,20 +77,21 @@ impl BytecodeFunction {
         layout: &BindingLayout,
     ) -> Result<Self> {
         let collected = CaptureBindingCollector::collect_function(params, statements);
-        Ok(Self::new(
+        Ok(Self::new(BytecodeFunctionInit {
             self_binding,
-            compile_params(params),
-            compile_param_defaults(params, layout)?,
-            BytecodeBlock::compile_function_statements(
+            arguments_binding,
+            params: compile_params(params),
+            param_defaults: compile_param_defaults(params, layout)?,
+            body: BytecodeBlock::compile_function_statements(
                 statements,
                 kind,
                 parameter_prologue_count,
                 layout,
             )?,
-            BytecodeHoistPlan::compile(statements, layout)?,
-            collected.bindings,
-            collected.uses_arguments,
-        ))
+            hoist_plan: BytecodeHoistPlan::compile(statements, layout)?,
+            capture_bindings: collected.bindings,
+            uses_arguments: collected.uses_arguments,
+        }))
     }
 }
 
@@ -128,10 +133,12 @@ fn function_compile_spec<'a>(
         Expr::Function {
             id,
             name,
+            arguments_binding,
             params,
             body,
             parameter_prologue_count,
             kind,
+            ..
         } => Ok(FunctionCompileSpec {
             id: *id,
             name: name
@@ -139,6 +146,7 @@ fn function_compile_spec<'a>(
                 .map(|binding| binding.name().clone())
                 .or_else(|| inferred_name.cloned()),
             self_binding: name.clone(),
+            arguments_binding: arguments_binding.clone(),
             params,
             body,
             parameter_prologue_count: *parameter_prologue_count,
@@ -152,10 +160,12 @@ fn function_compile_spec<'a>(
             body,
             parameter_prologue_count,
             kind,
+            ..
         } => Ok(FunctionCompileSpec {
             id: *id,
             name: inferred_name.cloned(),
             self_binding: None,
+            arguments_binding: None,
             params,
             body,
             parameter_prologue_count: *parameter_prologue_count,
@@ -166,14 +176,17 @@ fn function_compile_spec<'a>(
         Expr::MethodFunction {
             id,
             name,
+            arguments_binding,
             params,
             body,
             parameter_prologue_count,
             kind,
+            ..
         } => Ok(FunctionCompileSpec {
             id: *id,
             name: name.clone(),
             self_binding: None,
+            arguments_binding: arguments_binding.clone(),
             params,
             body,
             parameter_prologue_count: *parameter_prologue_count,

@@ -68,6 +68,7 @@ pub enum Stmt {
     Return(Option<Expression>),
     FunctionDecl {
         name: StaticBinding,
+        arguments_binding: Option<StaticBinding>,
         id: StaticFunctionId,
         params: Rc<[FunctionParam]>,
         body: Rc<[Statement]>,

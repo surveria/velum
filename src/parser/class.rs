@@ -30,6 +30,7 @@ struct ParsedClassFunction {
     params: Rc<[crate::ast::FunctionParam]>,
     body: Rc<[Statement]>,
     parameter_prologue_count: usize,
+    arguments_binding: Option<crate::syntax::StaticBinding>,
 }
 
 const CLASS_STATIC_KEYWORD: &str = "static";
@@ -125,6 +126,7 @@ impl Parser {
     fn default_class_constructor(&mut self) -> Result<ClassConstructor> {
         Ok(ClassConstructor {
             id: self.static_function()?,
+            arguments_binding: None,
             params: Vec::new().into(),
             body: Vec::new().into(),
         })
@@ -140,6 +142,7 @@ impl Parser {
         let forward = Expression::new(Expr::SuperCall { args: vec![spread] }, span);
         Ok(ClassConstructor {
             id: self.static_function()?,
+            arguments_binding: None,
             params: vec![crate::ast::FunctionParam::rest(rest)].into(),
             body: vec![Statement::new(Stmt::Expr(forward), span)].into(),
         })
@@ -221,6 +224,7 @@ impl Parser {
             function_kind,
             is_static,
             id: function.id,
+            arguments_binding: function.arguments_binding,
             name: key_name,
             params: function.params,
             body: function.body,
@@ -361,6 +365,7 @@ impl Parser {
         )?;
         *constructor = Some(ClassConstructor {
             id: function.id,
+            arguments_binding: function.arguments_binding,
             params: function.params,
             body: function.body,
         });
@@ -377,6 +382,7 @@ impl Parser {
         member_offset: usize,
         allow_super_call: bool,
     ) -> Result<ParsedClassFunction> {
+        let arguments_snapshot = self.arguments_reference_snapshot();
         self.consume(&TokenKind::LParen, "expected '(' after class member name")?;
         let parameters = self.with_await_context(false, function_kind.is_async(), |parser| {
             parser.with_yield_expression(false, |parser| {
@@ -438,6 +444,11 @@ impl Parser {
             self.validate_generator_parameter_lexicals(&parameters.params, &body.statements)?;
         }
         let id = self.static_function()?;
+        let arguments_binding = if self.arguments_referenced_since(arguments_snapshot) {
+            Some(self.implicit_arguments_binding()?)
+        } else {
+            None
+        };
         let (params, statements, parameter_prologue_count) =
             parameters.apply_prologue(body.statements);
         Ok(ParsedClassFunction {
@@ -445,6 +456,7 @@ impl Parser {
             params: params.into(),
             body: statements.into(),
             parameter_prologue_count,
+            arguments_binding,
         })
     }
 

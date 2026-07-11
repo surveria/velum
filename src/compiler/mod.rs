@@ -356,6 +356,7 @@ impl<'a> BytecodeCompiler<'a> {
                 constructor_id: class.constructor.id,
                 constructor: BytecodeFunction::compile(
                     None,
+                    class.constructor.arguments_binding.clone(),
                     &class.constructor.params,
                     &class.constructor.body,
                     crate::syntax::FunctionKind::Ordinary,
@@ -394,6 +395,7 @@ impl<'a> BytecodeCompiler<'a> {
                 id: member.id,
                 bytecode: BytecodeFunction::compile(
                     None,
+                    member.arguments_binding.clone(),
                     &member.params,
                     &member.body,
                     member.function_kind,

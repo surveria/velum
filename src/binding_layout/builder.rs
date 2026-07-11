@@ -1,8 +1,7 @@
 use crate::{
     ast::{
-        BindingPattern, CatchClause, DeclKind, Expr, Expression, ForInTarget, ObjectProperty,
-        ObjectPropertyKey, Program, Statement, StaticBinding, StaticFunctionId, StaticNameId, Stmt,
-        SwitchCase,
+        BindingPattern, CatchClause, DeclKind, Expr, Expression, ForInTarget, Program, Statement,
+        StaticBinding, StaticFunctionId, StaticNameId, Stmt, SwitchCase,
     },
     binding_metadata::{
         BindingLayout, BindingLayoutParts, BindingOperand, FunctionScopeId, LocalSlot, ScopeId,
@@ -14,6 +13,7 @@ use crate::{
 use super::scope_rules::for_init_needs_layout_scope;
 
 mod function;
+use function::FunctionBindings;
 pub(super) struct LayoutBuilder {
     operands: Vec<BindingOperand>,
     static_functions: Vec<Option<FunctionScopeId>>,
@@ -297,8 +297,19 @@ impl LayoutBuilder {
                 self.analyze_expr(expr, scope, function)
             }
             Stmt::FunctionDecl {
-                id, params, body, ..
-            } => self.analyze_function(*id, None, params, body, scope, function),
+                id,
+                arguments_binding,
+                params,
+                body,
+                ..
+            } => self.analyze_function(
+                *id,
+                FunctionBindings::new(None, arguments_binding.as_ref()),
+                params,
+                body,
+                scope,
+                function,
+            ),
             Stmt::Empty | Stmt::Return(None) | Stmt::Break(_) | Stmt::Continue(_) => Ok(()),
             Stmt::VarDecl { init, .. } => {
                 if let Some(init) = init {
@@ -422,7 +433,7 @@ impl LayoutBuilder {
         }
         self.analyze_function(
             class.constructor.id,
-            None,
+            FunctionBindings::new(None, class.constructor.arguments_binding.as_ref()),
             &class.constructor.params,
             &class.constructor.body,
             scope,
@@ -437,7 +448,7 @@ impl LayoutBuilder {
             }
             self.analyze_function(
                 member.id,
-                None,
+                FunctionBindings::new(None, member.arguments_binding.as_ref()),
                 &member.params,
                 &member.body,
                 scope,
@@ -609,19 +620,9 @@ impl LayoutBuilder {
                 self.analyze_expr(callee, scope, function)?;
                 self.analyze_exprs(args, scope, function)
             }
-            Expr::Function {
-                id,
-                name,
-                params,
-                body,
-                ..
-            } => self.analyze_function(*id, name.as_ref(), params, body, scope, function),
-            Expr::ArrowFunction {
-                id, params, body, ..
+            Expr::Function { .. } | Expr::ArrowFunction { .. } | Expr::MethodFunction { .. } => {
+                self.analyze_nested_function(expr.kind(), scope, function)
             }
-            | Expr::MethodFunction {
-                id, params, body, ..
-            } => self.analyze_function(*id, None, params, body, scope, function),
             Expr::Object(properties) => self.analyze_object_properties(properties, scope, function),
             Expr::Array(elements) => self.analyze_exprs(elements, scope, function),
             Expr::New { constructor, args } => {
@@ -629,21 +630,6 @@ impl LayoutBuilder {
                 self.analyze_exprs(args, scope, function)
             }
         }
-    }
-
-    fn analyze_object_properties(
-        &mut self,
-        properties: &[ObjectProperty],
-        scope: ScopeId,
-        function: FunctionScopeId,
-    ) -> Result<()> {
-        for property in properties {
-            if let ObjectPropertyKey::Computed(expr) = &property.key {
-                self.analyze_expr(expr, scope, function)?;
-            }
-            self.analyze_expr(&property.value, scope, function)?;
-        }
-        Ok(())
     }
 
     fn declare(&mut self, scope: ScopeId, binding: &StaticBinding) -> Result<()> {

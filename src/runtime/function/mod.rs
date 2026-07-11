@@ -49,7 +49,7 @@ struct FunctionCallSetup {
     static_binding_cache:
         Option<crate::runtime::binding::static_bindings::StaticBindingCacheHandle>,
     static_binding_layout: Option<crate::binding_metadata::BindingLayout>,
-    binds_arguments: bool,
+    arguments_binding: Option<FunctionArgumentsBinding>,
     self_binding: Option<FunctionSelfBinding>,
     super_binding: Option<Rc<FunctionSuperBinding>>,
     private_environment: Option<Rc<super::private::PrivateEnvironment>>,
@@ -58,7 +58,9 @@ struct FunctionCallSetup {
 }
 pub(super) use fast_path::FunctionFastPath;
 use parameters::FunctionParameterState;
-pub(in crate::runtime) use parameters::{FunctionScopeTemplate, FunctionSelfBinding};
+pub(in crate::runtime) use parameters::{
+    FunctionArgumentsBinding, FunctionScopeTemplate, FunctionSelfBinding,
+};
 pub(super) use properties::{FunctionIntrinsicDefaults, FunctionProperties};
 pub(in crate::runtime) use suspended::{DetachedFunctionExecution, SuspendedAsyncFunction};
 
@@ -72,17 +74,12 @@ const FUNCTION_PROTOTYPE_CALLER_PROPERTY: &str = "caller";
 use super::FunctionNewTarget;
 use properties::{FunctionPropertyKind, PROTOTYPE_CONSTRUCTOR_PROPERTY};
 
-fn expected_function_local_count(
-    base: usize,
-    binds_arguments: bool,
-    has_self_binding: bool,
-) -> Result<usize> {
+fn expected_function_local_count(base: usize, has_self_binding: bool) -> Result<usize> {
     let with_function_scope = base
         .checked_add(1)
         .ok_or_else(|| Error::limit("function local scope count overflowed"))?;
     with_function_scope
-        .checked_add(usize::from(binds_arguments))
-        .and_then(|count| count.checked_add(usize::from(has_self_binding)))
+        .checked_add(usize::from(has_self_binding))
         .ok_or_else(|| Error::limit("function local scope count overflowed"))
 }
 
@@ -183,6 +180,8 @@ impl Context {
             parameters::function_param_frames(params, static_binding_layout.as_ref())?;
         let self_binding =
             self.compile_function_self_binding(init.bytecode, static_binding_layout.as_ref())?;
+        let arguments_binding =
+            self.compile_function_arguments_binding(init.bytecode, static_binding_layout.as_ref())?;
         let fast_path = self.compile_optional_function_fast_path(init, &param_frames)?;
         let upvalues = self.capture_function_upvalues(
             init.static_function_id,
@@ -193,6 +192,7 @@ impl Context {
             &param_atoms,
             &param_frames,
             init.bytecode.has_parameter_defaults(),
+            arguments_binding,
         )?;
         let param_binding_ids = parameters::function_param_binding_ids(params);
         let metadata_cache_count = Self::function_metadata_cache_count(
@@ -202,6 +202,7 @@ impl Context {
             fast_path.is_some(),
             scope_template.as_deref(),
             self_binding.is_some(),
+            arguments_binding.is_some(),
         )?;
         let properties = self.activate_function_storage(
             upvalues.cells.len(),
@@ -213,6 +214,7 @@ impl Context {
             id.index(),
             super::Function {
                 self_binding,
+                arguments_binding,
                 param_binding_ids,
                 param_atoms,
                 param_frames,
@@ -255,6 +257,24 @@ impl Context {
                 let atom = self.intern_static_name_atom(binding.name())?;
                 let frame = parameters::function_self_binding_frame(binding.id(), layout)?;
                 Ok(FunctionSelfBinding::new(atom, frame))
+            })
+            .transpose()
+    }
+
+    fn compile_function_arguments_binding(
+        &mut self,
+        bytecode: &BytecodeFunction,
+        layout: Option<&crate::binding_metadata::BindingLayout>,
+    ) -> Result<Option<FunctionArgumentsBinding>> {
+        if !bytecode.uses_arguments() {
+            return Ok(None);
+        }
+        bytecode
+            .arguments_binding()
+            .map(|binding| {
+                let atom = self.intern_static_name_atom(binding.name())?;
+                let frame = parameters::function_arguments_binding_frame(binding.id(), layout)?;
+                Ok(FunctionArgumentsBinding::new(atom, frame))
             })
             .transpose()
     }
@@ -365,8 +385,7 @@ impl Context {
             static_name_atom_cache: function.static_name_atom_cache.clone(),
             static_binding_cache: function.static_binding_cache.clone(),
             static_binding_layout: function.static_binding_layout.clone(),
-            binds_arguments: function.bytecode.uses_arguments()
-                && !matches!(function.new_target, FunctionNewTarget::Lexical(_)),
+            arguments_binding: function.arguments_binding,
             self_binding: function.self_binding,
             super_binding: function.super_binding.clone(),
             private_environment: function.private_environment.clone(),
@@ -395,7 +414,7 @@ impl Context {
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
-            binds_arguments,
+            arguments_binding,
             self_binding,
             super_binding,
             private_environment,
@@ -408,11 +427,6 @@ impl Context {
             None
         };
         let args = packed_args.as_deref().unwrap_or(raw_args);
-        let original_args = if binds_arguments {
-            Some(raw_args.to_vec())
-        } else {
-            None
-        };
         let has_parameter_defaults = bytecode.has_parameter_defaults();
         let local_base = self.push_call_activation(
             id,
@@ -431,9 +445,19 @@ impl Context {
             }
         }
         let scope_result = if let Some(template) = scope_template.as_deref() {
-            self.function_scope_from_template(template, args)
+            self.function_scope_from_template(
+                template,
+                args,
+                arguments_binding.map(|binding| (binding, raw_args)),
+            )
         } else {
-            self.function_scope(&param_atoms, &param_frames, args, has_parameter_defaults)
+            self.function_scope(
+                &param_atoms,
+                &param_frames,
+                args,
+                has_parameter_defaults,
+                arguments_binding.map(|binding| (binding, raw_args)),
+            )
         };
         let scope = match scope_result {
             Ok(scope) => scope,
@@ -443,9 +467,7 @@ impl Context {
                 return Err(error);
             }
         };
-        if let Err(error) =
-            self.push_function_binding_storage(local_base, scope, original_args.as_deref())
-        {
+        if let Err(error) = self.push_function_binding_storage(local_base, scope) {
             self.pop_call_activation(local_base)?;
             return Err(error);
         }
@@ -460,8 +482,7 @@ impl Context {
         if CAN_SUSPEND && result.as_ref().is_ok_and(Completion::suspends_execution) {
             return result;
         }
-        let binding_result =
-            self.pop_function_binding_storage(local_base, binds_arguments, self_binding.is_some());
+        let binding_result = self.pop_function_binding_storage(local_base, self_binding.is_some());
         let activation_result = self.pop_call_activation(local_base);
         binding_result?;
         activation_result?;
