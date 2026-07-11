@@ -16,6 +16,11 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         match instruction {
+            BytecodeInstruction::BeginPrivateEnvironment { names } => {
+                self.begin_private_environment(state, names.clone())?;
+                state.pc = next;
+                Ok(None)
+            }
             BytecodeInstruction::PushLiteral(value) => {
                 state.stack.push(self.runtime_value(value.clone())?);
                 state.pc = next;

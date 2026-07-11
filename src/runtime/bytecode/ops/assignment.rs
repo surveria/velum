@@ -9,6 +9,7 @@ use crate::{
         bitwise_and, bitwise_or, bitwise_xor, numeric_binary, shift_left, shift_right,
         shift_right_unsigned,
     },
+    runtime::private::PrivateNameId,
     runtime::property::DynamicPropertyKey,
     runtime::{Context, abstract_operations::to_boolean, control::reference_error_undefined},
     syntax::{BinaryOp, StaticName, StaticPropertyAccessId, UpdateOp},
@@ -35,6 +36,10 @@ pub(in crate::runtime::bytecode) enum BytecodeAssignmentReference {
         property_value: Value,
         property: DynamicPropertyKey,
         access: StaticPropertyAccessId,
+    },
+    PrivateProperty {
+        object: Value,
+        name: PrivateNameId,
     },
 }
 
@@ -70,6 +75,7 @@ impl BytecodeAssignmentReference {
                 }
                 context.get_cached_dynamic_property_value(object, property, *access)
             }
+            Self::PrivateProperty { object, name } => context.read_private_slot(object, name),
         }
     }
 
@@ -109,13 +115,18 @@ impl BytecodeAssignmentReference {
                 let mut property = property.clone();
                 context.set_cached_dynamic_property_value(object, &mut property, *access, value)
             }
+            Self::PrivateProperty { object, name } => {
+                context.write_private_slot(object, name, value)
+            }
         }
     }
 
     pub(in crate::runtime::bytecode) fn root_values(&self) -> Vec<&Value> {
         match self {
             Self::Binding { .. } => Vec::new(),
-            Self::StaticProperty { object, .. } | Self::ArrayIndexProperty { object, .. } => {
+            Self::StaticProperty { object, .. }
+            | Self::ArrayIndexProperty { object, .. }
+            | Self::PrivateProperty { object, .. } => {
                 vec![object]
             }
             Self::ComputedProperty {
@@ -366,6 +377,11 @@ impl Context {
                     access: operand.access(),
                 })
             }
+            BytecodeAssignmentTarget::PrivateProperty { object, property } => {
+                let object = self.eval_bytecode_expression(object)?;
+                let name = self.resolve_private_name(property)?;
+                Ok(BytecodeAssignmentReference::PrivateProperty { object, name })
+            }
         }
     }
 
@@ -404,6 +420,11 @@ impl Context {
                     operand.access(),
                     value,
                 )
+            }
+            BytecodeAssignmentTarget::PrivateProperty { object, property } => {
+                let object = self.eval_bytecode_expression(object)?;
+                let name = self.resolve_private_name(property)?;
+                self.write_private_slot(&object, &name, value)
             }
         }
     }

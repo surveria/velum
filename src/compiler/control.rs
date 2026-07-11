@@ -397,6 +397,10 @@ impl BytecodeCompiler<'_> {
                 property: BytecodeBlock::compile_expression(property, self.layout)?,
                 operand: Self::compile_dynamic_property(*access),
             }),
+            Expr::PrivateMember { object, name } => Ok(BytecodeAssignmentTarget::PrivateProperty {
+                object: BytecodeBlock::compile_expression(object, self.layout)?,
+                property: crate::bytecode::BytecodePrivateName::new(name.clone()),
+            }),
             Expr::Parenthesized(expr) => self.compile_assignment_target_with_strict(expr, strict),
             _ => Err(Error::runtime("invalid bytecode assignment target")),
         }

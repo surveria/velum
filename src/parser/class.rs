@@ -2,15 +2,22 @@ use std::rc::Rc;
 
 use crate::{
     ast::{
-        ClassConstructor, ClassLiteral, ClassMember, ClassMemberKind, ClassStaticBlock, Expr,
-        Expression, ObjectPropertyKey, Statement, Stmt,
+        ClassConstructor, ClassElementName, ClassLiteral, ClassMember, ClassMemberKind,
+        ClassStaticBlock, Expr, Expression, ObjectPropertyKey, Statement, Stmt,
     },
     error::{Error, Result},
     lexer::TokenKind,
     syntax::StaticName,
 };
 
-use super::{Parser, literal::ObjectPropertyName};
+use super::{Parser, class_private::PrivateElementKind, literal::ObjectPropertyName};
+
+/// One parsed class element key: an ordinary property name or a `#name`
+/// private identifier declared by this class body.
+enum ClassKeySeed {
+    Property(ObjectPropertyName),
+    Private(StaticName),
+}
 
 /// One parsed class member function: its allocated static function id plus
 /// parameters and body statements with pattern prologues applied.
@@ -23,6 +30,7 @@ struct ParsedClassFunction {
 const CLASS_STATIC_KEYWORD: &str = "static";
 const CLASS_GETTER_KEYWORD: &str = "get";
 const CLASS_SETTER_KEYWORD: &str = "set";
+const CLASS_AUTO_ACCESSOR_KEYWORD: &str = "accessor";
 const CLASS_CONSTRUCTOR_NAME: &str = "constructor";
 const CLASS_PROTOTYPE_NAME: &str = "prototype";
 /// Synthesized rest parameter for default derived constructors.
@@ -59,7 +67,10 @@ impl Parser {
         } else {
             None
         };
-        let result = self.class_body_literal(name, heritage);
+        self.push_class_private_scope();
+        let result = self
+            .class_body_literal(name, heritage)
+            .and_then(|class| self.pop_class_private_scope().map(|()| class));
         self.set_strict_mode(previous_strict);
         result
     }
@@ -146,8 +157,9 @@ impl Parser {
         if is_static {
             self.reject_unsupported_class_member()?;
         }
+        let is_auto_accessor = self.match_class_auto_accessor_prefix();
         let accessor = self.match_class_accessor_prefix();
-        let key = self.object_property_key()?;
+        let key = self.class_element_key()?;
         let key_name = Self::class_member_key_name(&key);
 
         if !self.check(&TokenKind::LParen) {
@@ -156,8 +168,13 @@ impl Parser {
             }
             return self.class_field(key, key_name, is_static, member_offset, fields);
         }
+        if is_auto_accessor {
+            return Err(self.parse_error("auto-accessor class elements cannot be methods"));
+        }
 
-        if let Some(name) = &key_name {
+        if matches!(&key, ClassKeySeed::Property(_))
+            && let Some(name) = &key_name
+        {
             if !is_static && name.as_str() == CLASS_CONSTRUCTOR_NAME {
                 return self.class_constructor_member(
                     accessor,
@@ -179,9 +196,18 @@ impl Parser {
             Some(ClassMemberKind::Setter) => ClassMemberKind::Setter,
             Some(ClassMemberKind::Method) | None => ClassMemberKind::Method,
         };
+        if let ClassKeySeed::Private(name) = &key {
+            let private_kind = match kind {
+                ClassMemberKind::Getter => PrivateElementKind::Getter,
+                ClassMemberKind::Setter => PrivateElementKind::Setter,
+                ClassMemberKind::Method => PrivateElementKind::Method,
+            };
+            let name = name.clone();
+            self.declare_private_name(&name, private_kind, is_static, member_offset)?;
+        }
         let function = self.class_member_function(kind, member_offset, false)?;
         members.push(ClassMember {
-            key: Self::class_property_key(key),
+            key: Self::class_element_name(key),
             kind,
             is_static,
             id: function.id,
@@ -190,6 +216,22 @@ impl Parser {
             body: function.body,
         });
         Ok(())
+    }
+
+    /// Parses one class element key: a `#name` private identifier or an
+    /// ordinary object property name.
+    fn class_element_key(&mut self) -> Result<ClassKeySeed> {
+        if !matches!(self.peek_kind(0), Some(TokenKind::PrivateName(_))) {
+            return Ok(ClassKeySeed::Property(self.object_property_key()?));
+        }
+        let token = self
+            .advance()
+            .ok_or_else(|| self.parse_error("expected class element name"))?;
+        let token_span = token.span;
+        let TokenKind::PrivateName(text) = token.kind else {
+            return Err(Error::parse_at("expected class element name", token_span));
+        };
+        Ok(ClassKeySeed::Private(self.static_name(text)?))
     }
 
     fn class_static_block_start(&self) -> bool {
@@ -202,7 +244,7 @@ impl Parser {
             .advance()
             .ok_or_else(|| self.parse_error("expected 'static' before class static block"))?;
         self.consume(&TokenKind::LBrace, "expected '{' after 'static'")?;
-        let mut body = self.with_class_static_block_identifiers(|parser| {
+        let mut body = self.with_restricted_class_arguments(|parser| {
             parser.with_isolated_control_context(|parser| {
                 parser.with_super_context(true, false, |parser| {
                     parser.with_await_context(false, true, |parser| {
@@ -231,17 +273,21 @@ impl Parser {
         Ok(())
     }
 
-    /// Parses a public field after its key: an optional initializer followed
-    /// by an optional semicolon.
+    /// Parses a field after its key: an optional initializer followed by an
+    /// optional semicolon. Private field names are declared into the class
+    /// private scope.
     fn class_field(
         &mut self,
-        key: ObjectPropertyName,
+        key: ClassKeySeed,
         key_name: Option<StaticName>,
         is_static: bool,
         member_offset: usize,
         fields: &mut Vec<crate::ast::ClassField>,
     ) -> Result<()> {
-        if let Some(name) = &key_name {
+        if let ClassKeySeed::Private(name) = &key {
+            let name = name.clone();
+            self.declare_private_name(&name, PrivateElementKind::Field, is_static, member_offset)?;
+        } else if let Some(name) = &key_name {
             if name.as_str() == CLASS_CONSTRUCTOR_NAME {
                 return Err(Error::parse(
                     "class field cannot be named 'constructor'",
@@ -256,15 +302,13 @@ impl Parser {
             }
         }
         let initializer = if self.match_kind(&TokenKind::Equal) {
-            Some(self.assignment_expression()?)
+            Some(self.with_restricted_class_arguments(Self::assignment_expression)?)
         } else {
             None
         };
-        if self.check(&TokenKind::Semicolon) && self.advance().is_none() {
-            return Err(self.parse_error("expected ';' after class field"));
-        }
+        self.consume_statement_terminator("expected statement terminator after class field")?;
         fields.push(crate::ast::ClassField {
-            key: Self::class_property_key(key),
+            key: Self::class_element_name(key),
             is_static,
             name: key_name,
             initializer,
@@ -396,6 +440,19 @@ impl Parser {
         None
     }
 
+    /// Consumes the decorators auto-accessor prefix while lowering the
+    /// element through the existing field representation.
+    fn match_class_auto_accessor_prefix(&mut self) -> bool {
+        let is_prefix = self.peek().is_some_and(|token| {
+            matches!(&token.kind, TokenKind::Identifier(name) if name == CLASS_AUTO_ACCESSOR_KEYWORD)
+        }) && !self.peek_has_line_terminator_before(1)
+            && !self.peek_kind_is(1, &TokenKind::LParen)
+            && !self.peek_kind_is(1, &TokenKind::Equal)
+            && !self.peek_kind_is(1, &TokenKind::Semicolon)
+            && !self.peek_kind_is(1, &TokenKind::RBrace);
+        is_prefix && self.advance().is_some()
+    }
+
     fn reject_unsupported_class_member(&self) -> Result<()> {
         if self.check(&TokenKind::Star) {
             return Err(self.parse_error("class generator methods are not supported yet"));
@@ -406,10 +463,20 @@ impl Parser {
         Ok(())
     }
 
-    fn class_member_key_name(key: &ObjectPropertyName) -> Option<StaticName> {
+    fn class_member_key_name(key: &ClassKeySeed) -> Option<StaticName> {
         match key {
-            ObjectPropertyName::Static { key, .. } => Some(key.clone()),
-            ObjectPropertyName::Computed(_) => None,
+            ClassKeySeed::Property(ObjectPropertyName::Static { key, .. })
+            | ClassKeySeed::Private(key) => Some(key.clone()),
+            ClassKeySeed::Property(ObjectPropertyName::Computed(_)) => None,
+        }
+    }
+
+    fn class_element_name(key: ClassKeySeed) -> ClassElementName {
+        match key {
+            ClassKeySeed::Property(property) => {
+                ClassElementName::Property(Self::class_property_key(property))
+            }
+            ClassKeySeed::Private(name) => ClassElementName::Private(name),
         }
     }
 

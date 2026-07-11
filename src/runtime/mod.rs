@@ -40,6 +40,7 @@ pub mod native;
 pub mod numeric;
 pub mod object;
 mod optimizer;
+mod private;
 pub mod promise;
 pub mod property;
 pub mod retained_values;
@@ -149,6 +150,9 @@ struct Function {
     super_binding: Option<Rc<function::FunctionSuperBinding>>,
     static_parent: Option<Value>,
     class_fields: Option<Rc<[function::ResolvedClassField]>>,
+    class_private_slots: Option<Rc<[private::PrivateSlot]>>,
+    private_environment: Option<Rc<private::PrivateEnvironment>>,
+    private_slots: Vec<private::PrivateSlot>,
     params_remembered: std::cell::Cell<bool>,
     scope_template: Option<Rc<function::FunctionScopeTemplate>>,
     new_target: FunctionNewTarget,

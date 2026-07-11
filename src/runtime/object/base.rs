@@ -44,6 +44,7 @@ impl PrototypeLookupVersion {
 #[derive(Debug, Clone)]
 pub struct ObjectHeap {
     pub(super) objects: SlotArena<super::Object>,
+    pub(super) private_slots: Vec<Vec<crate::runtime::private::PrivateSlot>>,
     pub(super) shapes: ShapeTable,
     pub(super) object_prototype: Option<ObjectId>,
     pub(super) array_prototype: Option<ObjectId>,
@@ -62,6 +63,7 @@ impl ObjectHeap {
     ) -> Self {
         Self {
             objects: SlotArena::new(),
+            private_slots: Vec::new(),
             shapes: ShapeTable::new(storage_ledger.clone()),
             object_prototype: None,
             array_prototype: None,
@@ -87,6 +89,11 @@ impl ObjectHeap {
     }
 
     pub(in crate::runtime) fn sweep_unmarked_objects(&mut self, marks: &[bool]) -> Result<usize> {
+        for (index, slots) in self.private_slots.iter_mut().enumerate() {
+            if !marks.get(index).copied().unwrap_or(false) {
+                slots.clear();
+            }
+        }
         let removed = self.objects.sweep_unmarked(marks)?;
         if removed == 0 {
             return Ok(0);

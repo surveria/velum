@@ -4,6 +4,7 @@ use crate::value::{FunctionId, Value};
 
 use super::{
     FunctionUpvalues, bytecode::BytecodeContinuationFrame, function::FunctionSuperBinding,
+    private::PrivateEnvironment,
 };
 
 /// One VM-owned synchronous execution activation.
@@ -20,17 +21,21 @@ pub(in crate::runtime) enum ActivationFrame {
         this_value: Value,
         new_target: Value,
         super_binding: Option<Rc<FunctionSuperBinding>>,
+        private_environment: Option<Rc<PrivateEnvironment>>,
         continuation: Option<BytecodeContinuationFrame>,
     },
     TemporaryThis {
         this_value: Value,
+        private_environment: Option<Rc<PrivateEnvironment>>,
         continuation: Option<BytecodeContinuationFrame>,
     },
     EvalBoundary {
         local_base: usize,
+        private_environment: Option<Rc<PrivateEnvironment>>,
         continuation: Option<BytecodeContinuationFrame>,
     },
     Bytecode {
+        private_environment: Option<Rc<PrivateEnvironment>>,
         continuation: Option<BytecodeContinuationFrame>,
     },
 }
@@ -43,6 +48,7 @@ impl ActivationFrame {
         this_value: Value,
         new_target: Value,
         super_binding: Option<Rc<FunctionSuperBinding>>,
+        private_environment: Option<Rc<PrivateEnvironment>>,
     ) -> Self {
         Self::Call {
             local_base,
@@ -50,13 +56,18 @@ impl ActivationFrame {
             this_value,
             new_target,
             super_binding,
+            private_environment,
             continuation: Some(BytecodeContinuationFrame::function(function)),
         }
     }
 
-    pub(in crate::runtime) const fn temporary_this(this_value: Value) -> Self {
+    pub(in crate::runtime) const fn temporary_this(
+        this_value: Value,
+        private_environment: Option<Rc<PrivateEnvironment>>,
+    ) -> Self {
         Self::TemporaryThis {
             this_value,
+            private_environment,
             continuation: None,
         }
     }
@@ -64,13 +75,59 @@ impl ActivationFrame {
     pub(in crate::runtime) const fn eval_boundary(local_base: usize) -> Self {
         Self::EvalBoundary {
             local_base,
+            private_environment: None,
             continuation: None,
         }
     }
 
     pub(in crate::runtime) const fn bytecode(continuation: BytecodeContinuationFrame) -> Self {
         Self::Bytecode {
+            private_environment: None,
             continuation: Some(continuation),
+        }
+    }
+
+    pub(in crate::runtime) const fn private_environment(&self) -> Option<&Rc<PrivateEnvironment>> {
+        match self {
+            Self::Call {
+                private_environment,
+                ..
+            }
+            | Self::TemporaryThis {
+                private_environment,
+                ..
+            }
+            | Self::EvalBoundary {
+                private_environment,
+                ..
+            }
+            | Self::Bytecode {
+                private_environment,
+                ..
+            } => private_environment.as_ref(),
+        }
+    }
+
+    pub(in crate::runtime) const fn private_environment_mut(
+        &mut self,
+    ) -> &mut Option<Rc<PrivateEnvironment>> {
+        match self {
+            Self::Call {
+                private_environment,
+                ..
+            }
+            | Self::TemporaryThis {
+                private_environment,
+                ..
+            }
+            | Self::EvalBoundary {
+                private_environment,
+                ..
+            }
+            | Self::Bytecode {
+                private_environment,
+                ..
+            } => private_environment,
         }
     }
 
@@ -162,7 +219,7 @@ impl ActivationFrame {
             Self::Call { continuation, .. }
             | Self::TemporaryThis { continuation, .. }
             | Self::EvalBoundary { continuation, .. }
-            | Self::Bytecode { continuation } => continuation.as_ref(),
+            | Self::Bytecode { continuation, .. } => continuation.as_ref(),
         }
     }
 
@@ -173,7 +230,7 @@ impl ActivationFrame {
             Self::Call { continuation, .. }
             | Self::TemporaryThis { continuation, .. }
             | Self::EvalBoundary { continuation, .. }
-            | Self::Bytecode { continuation } => continuation,
+            | Self::Bytecode { continuation, .. } => continuation,
         }
     }
 }

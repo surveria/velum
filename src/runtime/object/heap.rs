@@ -492,6 +492,15 @@ impl ObjectHeap {
 
         let id = ObjectId::new(self.objects.next_index());
         self.objects.insert_at_next(id.index(), object)?;
+        if id.index() == self.private_slots.len() {
+            self.private_slots.push(Vec::new());
+        } else {
+            let slots = self
+                .private_slots
+                .get_mut(id.index())
+                .ok_or_else(|| Error::runtime("object private slot table is not defined"))?;
+            slots.clear();
+        }
         self.object_payload_bytes = projected_object_bytes;
         self.byte_buffer_count = projected_buffer_count;
         self.byte_buffer_payload_bytes = projected_buffer_bytes;

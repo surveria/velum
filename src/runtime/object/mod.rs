@@ -10,6 +10,7 @@ mod data_view;
 mod date;
 mod heap;
 mod integrity;
+mod private_slot;
 mod property;
 mod prototype;
 mod proxy;

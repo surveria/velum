@@ -18,7 +18,7 @@ fn hashbang_comment_runs_only_at_source_start() -> TestResult {
     let Err(error) = context.eval(";\n#!\n1") else {
         return Err("expected hashbang after the source start to fail".into());
     };
-    ensure_error_contains(&error, "unexpected character '#'")
+    ensure_error_contains(&error, "expected identifier after private name marker '#'")
 }
 
 #[test]

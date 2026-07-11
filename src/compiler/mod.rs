@@ -27,6 +27,7 @@ mod expression;
 mod function;
 mod hoist;
 mod inferred_name;
+mod member;
 mod object_literal;
 mod pattern;
 
@@ -298,97 +299,17 @@ impl<'a> BytecodeCompiler<'a> {
             .instructions
             .get_mut(index.index())
             .ok_or_else(|| Error::runtime("bytecode jump patch target disappeared"))?;
-        match instruction {
-            BytecodeInstruction::Jump(address)
-            | BytecodeInstruction::JumpIfFalse(address)
-            | BytecodeInstruction::JumpIfFalseKeep(address)
-            | BytecodeInstruction::JumpIfTrueKeep(address) => {
-                *address = target;
-                Ok(())
-            }
-            BytecodeInstruction::PushLiteral(_)
-            | BytecodeInstruction::PushString(_)
-            | BytecodeInstruction::TemplateConcat { .. }
-            | BytecodeInstruction::StringConcat { .. }
-            | BytecodeInstruction::StringConcatStatic { .. }
-            | BytecodeInstruction::CollectSpreadArgs { .. }
-            | BytecodeInstruction::CallBindingSpread { .. }
-            | BytecodeInstruction::CallValueSpread
-            | BytecodeInstruction::CallStaticMemberSpread { .. }
-            | BytecodeInstruction::CallComputedMemberSpread { .. }
-            | BytecodeInstruction::ConstructValueSpread
-            | BytecodeInstruction::ArrayLiteralSpread { .. }
-            | BytecodeInstruction::CreateRegExp { .. }
-            | BytecodeInstruction::PushUndefined
-            | BytecodeInstruction::LoadThis
-            | BytecodeInstruction::LoadNewTarget
-            | BytecodeInstruction::LoadBinding(_)
-            | BytecodeInstruction::StoreBinding(_)
-            | BytecodeInstruction::DeclareBinding { .. }
-            | BytecodeInstruction::StoreLast
-            | BytecodeInstruction::Pop
-            | BytecodeInstruction::Unary(_)
-            | BytecodeInstruction::NumberUnary(_)
-            | BytecodeInstruction::Await
-            | BytecodeInstruction::GeneratorStart
-            | BytecodeInstruction::Yield { .. }
-            | BytecodeInstruction::NullishCoalescing { .. }
-            | BytecodeInstruction::TypeOfBinding(_)
-            | BytecodeInstruction::TypeOfValue
-            | BytecodeInstruction::DeleteBinding(_)
-            | BytecodeInstruction::DeleteStaticProperty { .. }
-            | BytecodeInstruction::DeleteComputedProperty { .. }
-            | BytecodeInstruction::DeleteValue
-            | BytecodeInstruction::UpdateBinding { .. }
-            | BytecodeInstruction::UpdateStaticProperty { .. }
-            | BytecodeInstruction::UpdateArrayIndexProperty { .. }
-            | BytecodeInstruction::UpdateComputedProperty { .. }
-            | BytecodeInstruction::Binary { .. }
-            | BytecodeInstruction::InStaticProperty { .. }
-            | BytecodeInstruction::NumberBinary(_)
-            | BytecodeInstruction::NumberCompare(_)
-            | BytecodeInstruction::NumberEquality(_)
-            | BytecodeInstruction::CompoundStoreBinding { .. }
-            | BytecodeInstruction::CompoundStaticProperty { .. }
-            | BytecodeInstruction::CompoundArrayIndexProperty { .. }
-            | BytecodeInstruction::CompoundComputedProperty { .. }
-            | BytecodeInstruction::LogicalAssignment { .. }
-            | BytecodeInstruction::StaticMember { .. }
-            | BytecodeInstruction::ArrayLength { .. }
-            | BytecodeInstruction::ArrayIndexMember { .. }
-            | BytecodeInstruction::ComputedMember { .. }
-            | BytecodeInstruction::StaticPropertyAssign { .. }
-            | BytecodeInstruction::ArrayIndexAssign { .. }
-            | BytecodeInstruction::ComputedPropertyAssign { .. }
-            | BytecodeInstruction::CallBinding { .. }
-            | BytecodeInstruction::CallValue { .. }
-            | BytecodeInstruction::CallStaticMember { .. }
-            | BytecodeInstruction::CallComputedMember { .. }
-            | BytecodeInstruction::Construct { .. }
-            | BytecodeInstruction::ConstructValue { .. }
-            | BytecodeInstruction::CreateFunction { .. }
-            | BytecodeInstruction::ArrayLiteral { .. }
-            | BytecodeInstruction::ObjectLiteral { .. }
-            | BytecodeInstruction::While { .. }
-            | BytecodeInstruction::DoWhile { .. }
-            | BytecodeInstruction::For { .. }
-            | BytecodeInstruction::ForIn { .. }
-            | BytecodeInstruction::ForOf { .. }
-            | BytecodeInstruction::DestructurePattern { .. }
-            | BytecodeInstruction::CreateClass { .. }
-            | BytecodeInstruction::CallSuper { .. }
-            | BytecodeInstruction::CallSuperSpread
-            | BytecodeInstruction::SuperMember { .. }
-            | BytecodeInstruction::CallSuperMember { .. }
-            | BytecodeInstruction::CallSuperMemberSpread { .. }
-            | BytecodeInstruction::Switch { .. }
-            | BytecodeInstruction::Try { .. }
-            | BytecodeInstruction::Label { .. }
-            | BytecodeInstruction::ScopedBlock(_)
-            | BytecodeInstruction::Complete(_) => Err(Error::runtime(
-                "bytecode jump patch target is not a jump instruction",
-            )),
+        if let BytecodeInstruction::Jump(address)
+        | BytecodeInstruction::JumpIfFalse(address)
+        | BytecodeInstruction::JumpIfFalseKeep(address)
+        | BytecodeInstruction::JumpIfTrueKeep(address) = instruction
+        {
+            *address = target;
+            return Ok(());
         }
+        Err(Error::runtime(
+            "bytecode jump patch target is not a jump instruction",
+        ))
     }
 
     fn compile_class_declaration(
@@ -414,18 +335,52 @@ impl<'a> BytecodeCompiler<'a> {
         class: &crate::ast::ClassLiteral,
         inferred_name: Option<&StaticName>,
     ) -> Result<()> {
+        let private_names = Self::class_private_names(class);
         if let Some(heritage) = &class.heritage {
             self.compile_expr(heritage)?;
         }
+        self.emit(BytecodeInstruction::BeginPrivateEnvironment {
+            names: private_names.clone(),
+        });
+        let members = self.compile_class_members(class, &private_names)?;
+        let fields = self.compile_class_fields(class, &private_names)?;
+        let static_blocks = class
+            .static_blocks
+            .iter()
+            .map(|block| BytecodeBlock::compile_scoped_statements(&block.body, self.layout))
+            .collect::<Result<Vec<_>>>()?;
+        self.emit(BytecodeInstruction::CreateClass {
+            class: Rc::new(BytecodeClass {
+                name: class.name.clone().or_else(|| inferred_name.cloned()),
+                heritage: class.heritage.is_some(),
+                constructor_id: class.constructor.id,
+                constructor: BytecodeFunction::compile(
+                    None,
+                    &class.constructor.params,
+                    &class.constructor.body,
+                    crate::syntax::FunctionKind::Ordinary,
+                    0,
+                    self.layout,
+                )?,
+                members: members.into(),
+                fields: fields.into(),
+                static_blocks: static_blocks.into(),
+                private_names,
+            }),
+        });
+        Ok(())
+    }
+
+    /// Lowers class methods and accessors, pushing computed keys onto the
+    /// stack in member order.
+    fn compile_class_members(
+        &mut self,
+        class: &crate::ast::ClassLiteral,
+        private_names: &[StaticName],
+    ) -> Result<Vec<BytecodeClassMember>> {
         let mut members = Vec::with_capacity(class.members.len());
         for member in &class.members {
-            let key = match &member.key {
-                ObjectPropertyKey::Static(name) => BytecodeClassMemberKey::Static(name.clone()),
-                ObjectPropertyKey::Computed(expr) => {
-                    self.compile_expr(expr)?;
-                    BytecodeClassMemberKey::Computed
-                }
-            };
+            let key = self.compile_class_element_key(&member.key, private_names)?;
             let kind = match member.kind {
                 crate::ast::ClassMemberKind::Method => BytecodeClassMemberKind::Method,
                 crate::ast::ClassMemberKind::Getter => BytecodeClassMemberKind::Getter,
@@ -446,15 +401,19 @@ impl<'a> BytecodeCompiler<'a> {
                 )?,
             });
         }
+        Ok(members)
+    }
+
+    /// Lowers class fields, pushing computed keys onto the stack in field
+    /// order and compiling initializers into deferred blocks.
+    fn compile_class_fields(
+        &mut self,
+        class: &crate::ast::ClassLiteral,
+        private_names: &[StaticName],
+    ) -> Result<Vec<BytecodeClassField>> {
         let mut fields = Vec::with_capacity(class.fields.len());
         for field in &class.fields {
-            let key = match &field.key {
-                ObjectPropertyKey::Static(name) => BytecodeClassMemberKey::Static(name.clone()),
-                ObjectPropertyKey::Computed(expr) => {
-                    self.compile_expr(expr)?;
-                    BytecodeClassMemberKey::Computed
-                }
-            };
+            let key = self.compile_class_element_key(&field.key, private_names)?;
             fields.push(BytecodeClassField {
                 key,
                 is_static: field.is_static,
@@ -477,30 +436,54 @@ impl<'a> BytecodeCompiler<'a> {
                     .transpose()?,
             });
         }
-        let static_blocks = class
-            .static_blocks
+        Ok(fields)
+    }
+
+    fn compile_class_element_key(
+        &mut self,
+        key: &crate::ast::ClassElementName,
+        private_names: &[StaticName],
+    ) -> Result<BytecodeClassMemberKey> {
+        match key {
+            crate::ast::ClassElementName::Property(ObjectPropertyKey::Static(name)) => {
+                Ok(BytecodeClassMemberKey::Static(name.clone()))
+            }
+            crate::ast::ClassElementName::Property(ObjectPropertyKey::Computed(expr)) => {
+                self.compile_expr(expr)?;
+                Ok(BytecodeClassMemberKey::Computed)
+            }
+            crate::ast::ClassElementName::Private(name) => {
+                let index = private_names
+                    .iter()
+                    .position(|candidate| candidate.as_str() == name.as_str())
+                    .ok_or_else(|| Error::runtime("private class name disappeared"))?;
+                let index = u32::try_from(index)
+                    .map_err(|_| Error::limit("private class name index overflowed"))?;
+                Ok(BytecodeClassMemberKey::Private { index })
+            }
+        }
+    }
+
+    fn class_private_names(class: &crate::ast::ClassLiteral) -> Rc<[StaticName]> {
+        let mut names = Vec::new();
+        for key in class
+            .members
             .iter()
-            .map(|block| BytecodeBlock::compile_scoped_statements(&block.body, self.layout))
-            .collect::<Result<Vec<_>>>()?;
-        self.emit(BytecodeInstruction::CreateClass {
-            class: Rc::new(BytecodeClass {
-                name: class.name.clone().or_else(|| inferred_name.cloned()),
-                heritage: class.heritage.is_some(),
-                constructor_id: class.constructor.id,
-                constructor: BytecodeFunction::compile(
-                    None,
-                    &class.constructor.params,
-                    &class.constructor.body,
-                    crate::syntax::FunctionKind::Ordinary,
-                    0,
-                    self.layout,
-                )?,
-                members: members.into(),
-                fields: fields.into(),
-                static_blocks: static_blocks.into(),
-            }),
-        });
-        Ok(())
+            .map(|member| &member.key)
+            .chain(class.fields.iter().map(|field| &field.key))
+        {
+            let crate::ast::ClassElementName::Private(name) = key else {
+                continue;
+            };
+            if names
+                .iter()
+                .any(|candidate: &StaticName| candidate.as_str() == name.as_str())
+            {
+                continue;
+            }
+            names.push(name.clone());
+        }
+        names.into()
     }
 
     fn compile_block_statement(

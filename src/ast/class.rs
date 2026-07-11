@@ -22,12 +22,21 @@ pub struct ClassStaticBlock {
     pub body: Rc<[Statement]>,
 }
 
-/// A public class field: instance fields initialize against the new object
-/// during construction, static fields initialize once against the
-/// constructor at class creation.
+/// A class element name: an ordinary property key or a lexically scoped
+/// `#name` private identifier. Private names keep their leading `#`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ClassElementName {
+    Property(ObjectPropertyKey),
+    Private(StaticName),
+}
+
+/// A class field: instance fields initialize against the new object during
+/// construction, static fields initialize once against the constructor at
+/// class creation. Private fields install lexically scoped slots instead of
+/// ordinary properties.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassField {
-    pub key: ObjectPropertyKey,
+    pub key: ClassElementName,
     pub is_static: bool,
     pub name: Option<StaticName>,
     pub initializer: Option<Expression>,
@@ -43,7 +52,7 @@ pub struct ClassConstructor {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassMember {
-    pub key: ObjectPropertyKey,
+    pub key: ClassElementName,
     pub kind: ClassMemberKind,
     pub is_static: bool,
     pub id: StaticFunctionId,

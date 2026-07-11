@@ -77,6 +77,7 @@ pub(super) const fn token_kind_can_precede_regexp(kind: &TokenKind) -> bool {
             | TokenKind::TemplateTail(_)
             | TokenKind::RegExp { .. }
             | TokenKind::Identifier(_)
+            | TokenKind::PrivateName(_)
             | TokenKind::This
             | TokenKind::True
             | TokenKind::False

@@ -40,6 +40,8 @@ const PATH_QUICKJS_CLASS_INHERITANCE: &str =
 const PATH_QUICKJS_ARGUMENTS_OBJECT: &str =
     "tests/corpora/quickjs_differential/active/arguments_object.js";
 const PATH_QUICKJS_CLASS_FIELDS: &str = "tests/corpora/quickjs_differential/active/class_fields.js";
+const PATH_QUICKJS_PRIVATE_CLASS_ELEMENTS: &str =
+    "tests/corpora/quickjs_differential/active/private_class_elements.js";
 const PATH_QUICKJS_MAP_SET: &str = "tests/corpora/quickjs_differential/active/map_set_baseline.js";
 const PATH_QUICKJS_NUMERIC_TYPED_ARRAYS: &str =
     "tests/corpora/quickjs_differential/active/numeric_typed_arrays.js";
@@ -262,6 +264,10 @@ fn quickjs_class_and_collection_cases() -> Vec<DifferentialCase> {
         DifferentialCase {
             id: "class_fields",
             path: PATH_QUICKJS_CLASS_FIELDS,
+        },
+        DifferentialCase {
+            id: "private_class_elements",
+            path: PATH_QUICKJS_PRIVATE_CLASS_ELEMENTS,
         },
         DifferentialCase {
             id: "map_set_baseline",

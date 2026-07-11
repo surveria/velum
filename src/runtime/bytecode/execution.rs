@@ -79,7 +79,7 @@ impl Context {
     ) -> Result<BytecodeOutcome> {
         let local_base = self.locals.len();
         let activation_base = self.activation_frames.len();
-        let mut state = BytecodeState::new();
+        let mut state = BytecodeState::with_private_environment(self.current_private_environment());
         let outcome = self.eval_bytecode_block_outcome_with_state(bytecode.block(), &mut state)?;
         if outcome.is_suspended() {
             self.discard_execution_suffix(local_base, activation_base)?;
@@ -97,7 +97,7 @@ impl Context {
         if let Some(completion) = self.take_resumed_bytecode_child(block)? {
             return Ok(completion);
         }
-        let mut state = BytecodeState::new();
+        let mut state = BytecodeState::with_private_environment(self.current_private_environment());
         self.eval_bytecode_block_outcome_with_state(block, &mut state)
             .map(BytecodeOutcome::completion)
     }
@@ -119,7 +119,8 @@ impl Context {
     ) -> Result<Completion> {
         self.ensure_running_function_continuation(function)?;
         if !CAN_SUSPEND {
-            let mut state = BytecodeState::new();
+            let private_environment = self.function(function)?.private_environment.clone();
+            let mut state = BytecodeState::with_private_environment(private_environment);
             return self.run_synchronous_bytecode_state(block, &mut state);
         }
         let activation_index = self
@@ -127,7 +128,8 @@ impl Context {
             .len()
             .checked_sub(1)
             .ok_or_else(|| Error::runtime("function bytecode activation disappeared"))?;
-        let mut state = BytecodeState::new();
+        let private_environment = self.function(function)?.private_environment.clone();
+        let mut state = BytecodeState::with_private_environment(private_environment);
         state.reset();
         let outcome = self.run_bytecode_state(block, &mut state)?;
         if outcome.is_suspended() {

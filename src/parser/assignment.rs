@@ -217,6 +217,11 @@ impl Parser {
                 access,
                 expr: Box::new(value),
             },
+            Expr::PrivateMember { object, name } => Expr::PrivateAssignment {
+                object,
+                name,
+                expr: Box::new(value),
+            },
             Expr::Literal(_)
             | Expr::StringLiteral(_)
             | Expr::Spread(_)
@@ -240,6 +245,8 @@ impl Parser {
             | Expr::CompoundAssignment { .. }
             | Expr::PropertyAssignment { .. }
             | Expr::ComputedPropertyAssignment { .. }
+            | Expr::PrivateAssignment { .. }
+            | Expr::PrivateIn { .. }
             | Expr::Call { .. }
             | Expr::Function { .. }
             | Expr::ArrowFunction { .. }

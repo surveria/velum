@@ -52,6 +52,7 @@ struct FunctionCallSetup {
     binds_arguments: bool,
     self_binding: Option<FunctionSelfBinding>,
     super_binding: Option<Rc<FunctionSuperBinding>>,
+    private_environment: Option<Rc<super::private::PrivateEnvironment>>,
     remember_params: bool,
     scope_template: Option<Rc<FunctionScopeTemplate>>,
 }
@@ -229,6 +230,9 @@ impl Context {
                 super_binding,
                 static_parent: None,
                 class_fields: None,
+                class_private_slots: None,
+                private_environment: self.current_private_environment(),
+                private_slots: Vec::new(),
                 params_remembered: std::cell::Cell::new(false),
                 scope_template,
                 new_target: FunctionNewTarget::from_mode(
@@ -365,6 +369,7 @@ impl Context {
                 && !matches!(function.new_target, FunctionNewTarget::Lexical(_)),
             self_binding: function.self_binding,
             super_binding: function.super_binding.clone(),
+            private_environment: function.private_environment.clone(),
             remember_params: !function.params_remembered.replace(true),
             scope_template: function.scope_template.clone(),
         })
@@ -393,6 +398,7 @@ impl Context {
             binds_arguments,
             self_binding,
             super_binding,
+            private_environment,
             remember_params,
             scope_template,
         } = self.function_call_setup(id)?;
@@ -408,8 +414,14 @@ impl Context {
             None
         };
         let has_parameter_defaults = bytecode.has_parameter_defaults();
-        let local_base =
-            self.push_call_activation(id, upvalues, this_value, new_target, super_binding)?;
+        let local_base = self.push_call_activation(
+            id,
+            upvalues,
+            this_value,
+            new_target,
+            super_binding,
+            private_environment,
+        )?;
         if let Some(self_binding) = self_binding {
             let self_scope = self.named_function_self_scope(id, self_binding)?;
             if let Err(error) = self.push_lexical_scope_with(self_scope) {

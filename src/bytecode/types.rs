@@ -18,6 +18,7 @@ use super::numeric::{
     BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
     BytecodeNumericUnaryOp,
 };
+use super::private::{BytecodeClassMemberKey, BytecodePrivateName};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeProgram {
@@ -360,9 +361,12 @@ pub struct BytecodeClass {
     pub members: Rc<[BytecodeClassMember]>,
     pub fields: Rc<[BytecodeClassField]>,
     pub static_blocks: Rc<[BytecodeBlock]>,
+    /// Declared `#name` identifiers in declaration order; class evaluation
+    /// allocates one fresh runtime private name per entry.
+    pub private_names: Rc<[StaticName]>,
 }
 
-/// A compiled public class field with a lazily evaluated initializer block.
+/// A compiled class field with a lazily evaluated initializer block.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeClassField {
     pub key: BytecodeClassMemberKey,
@@ -378,12 +382,6 @@ pub struct BytecodeClassMember {
     pub is_static: bool,
     pub id: StaticFunctionId,
     pub bytecode: BytecodeFunction,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BytecodeClassMemberKey {
-    Static(StaticName),
-    Computed,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -452,6 +450,10 @@ pub enum BytecodeAssignmentTarget {
         property: BytecodeBlock,
         operand: BytecodeDynamicProperty,
     },
+    PrivateProperty {
+        object: BytecodeBlock,
+        property: BytecodePrivateName,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -469,6 +471,9 @@ pub struct BytecodeCatch {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BytecodeInstruction {
+    BeginPrivateEnvironment {
+        names: Rc<[StaticName]>,
+    },
     PushLiteral(Value),
     PushString(StaticString),
     TemplateConcat {
@@ -591,6 +596,38 @@ pub enum BytecodeInstruction {
     },
     StaticMember {
         property: BytecodeProperty,
+    },
+    /// Reads a private slot with brand and accessor semantics.
+    PrivateMember {
+        property: BytecodePrivateName,
+    },
+    /// Writes a private slot with brand and accessor semantics.
+    PrivateAssign {
+        property: BytecodePrivateName,
+    },
+    /// Reads, combines, and writes one private slot for `obj.#x op= value`.
+    CompoundPrivateProperty {
+        property: BytecodePrivateName,
+        op: BinaryOp,
+    },
+    /// Applies `++`/`--` to one private slot, pushing the pre- or post-value.
+    UpdatePrivateProperty {
+        property: BytecodePrivateName,
+        op: UpdateOp,
+        prefix: bool,
+    },
+    /// Calls one private method or accessor result with the object receiver.
+    CallPrivateMember {
+        property: BytecodePrivateName,
+        arg_count: usize,
+    },
+    /// Spread-argument variant of `CallPrivateMember`.
+    CallPrivateMemberSpread {
+        property: BytecodePrivateName,
+    },
+    /// Pushes whether the popped object owns the resolved private slot.
+    PrivateIn {
+        property: BytecodePrivateName,
     },
     ArrayLength {
         property: BytecodeProperty,
