@@ -389,14 +389,15 @@ impl<'a> BytecodeCompiler<'a> {
             members.push(BytecodeClassMember {
                 key,
                 kind,
+                function_kind: member.function_kind,
                 is_static: member.is_static,
                 id: member.id,
                 bytecode: BytecodeFunction::compile(
                     None,
                     &member.params,
                     &member.body,
-                    crate::syntax::FunctionKind::Ordinary,
-                    0,
+                    member.function_kind,
+                    member.parameter_prologue_count,
                     self.layout,
                 )?,
             });

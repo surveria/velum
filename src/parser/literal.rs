@@ -364,7 +364,7 @@ impl ObjectPropertyName {
     }
 }
 
-const fn is_object_property_name_start(kind: &TokenKind) -> bool {
+pub(super) const fn is_object_property_name_start(kind: &TokenKind) -> bool {
     matches!(
         kind,
         TokenKind::Identifier(_)

@@ -299,13 +299,17 @@ fn rejects_class_early_errors() -> TestResult {
 }
 
 #[test]
-fn reports_unsupported_class_features_explicitly() -> TestResult {
+fn rejects_nonordinary_class_constructors() -> TestResult {
     ensure_error_contains(
-        "class G { *gen() {} }",
-        "class generator methods are not supported yet",
+        "class AsyncConstructor { async constructor() {} }",
+        "class constructor must be an ordinary method",
     )?;
     ensure_error_contains(
-        "class H { async m() {} }",
-        "class async methods are not supported yet",
+        "class GeneratorConstructor { *constructor() {} }",
+        "class constructor must be an ordinary method",
+    )?;
+    ensure_error_contains(
+        "class AsyncGeneratorConstructor { async *constructor() {} }",
+        "class constructor must be an ordinary method",
     )
 }

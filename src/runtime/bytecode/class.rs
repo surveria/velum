@@ -283,7 +283,7 @@ impl Context {
             name: None,
             bytecode: &member.bytecode,
             constructable: false,
-            kind: crate::syntax::FunctionKind::Ordinary,
+            kind: member.function_kind,
             class_constructor: false,
             prototype_parent: None,
             new_target_mode: BytecodeNewTargetMode::Own,

@@ -379,6 +379,7 @@ pub struct BytecodeClassField {
 pub struct BytecodeClassMember {
     pub key: BytecodeClassMemberKey,
     pub kind: BytecodeClassMemberKind,
+    pub function_kind: FunctionKind,
     pub is_static: bool,
     pub id: StaticFunctionId,
     pub bytecode: BytecodeFunction,

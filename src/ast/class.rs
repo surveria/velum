@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::syntax::{StaticFunctionId, StaticName};
+use crate::syntax::{FunctionKind, StaticFunctionId, StaticName};
 
 use super::{Expression, FunctionParam, ObjectPropertyKey, Statement};
 
@@ -54,11 +54,13 @@ pub struct ClassConstructor {
 pub struct ClassMember {
     pub key: ClassElementName,
     pub kind: ClassMemberKind,
+    pub function_kind: FunctionKind,
     pub is_static: bool,
     pub id: StaticFunctionId,
     pub name: Option<StaticName>,
     pub params: Rc<[FunctionParam]>,
     pub body: Rc<[Statement]>,
+    pub parameter_prologue_count: usize,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
