@@ -418,6 +418,10 @@ impl Context {
             counter.record(VmStorageKind::CacheEntry, function.param_frames.len())?;
             counter.record(
                 VmStorageKind::CacheEntry,
+                usize::from(function.self_binding.is_some()).saturating_mul(2),
+            )?;
+            counter.record(
+                VmStorageKind::CacheEntry,
                 function
                     .class_fields
                     .as_ref()

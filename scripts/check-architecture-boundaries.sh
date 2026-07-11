@@ -994,6 +994,7 @@ check_named_function_binding_boundary() {
     'self_binding: Option<StaticBinding>,' \
     'BindingCell::named_function' \
     'if init.bytecode.self_binding().is_some() {' \
+    'usize::from(function.self_binding.is_some()).saturating_mul(2)' \
     'pub(crate) fn compile_eval(' \
     'strict_write: bool,'; do
     if ! grep -R -q -F --include='*.rs' "${source}" "${repo_root}/src"; then
