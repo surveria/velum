@@ -142,6 +142,7 @@ pub enum BytecodeObjectProperty {
     Static(StaticName),
     StaticAccessor { key: StaticName, kind: AccessorKind },
     Computed,
+    ComputedInferredName,
     ComputedMethod,
     ComputedAccessor { kind: AccessorKind },
     Spread,
@@ -151,7 +152,10 @@ impl BytecodeObjectProperty {
     pub const fn stack_value_count(&self) -> usize {
         match self {
             Self::Static(_) | Self::StaticAccessor { .. } | Self::Spread => 1,
-            Self::Computed | Self::ComputedMethod | Self::ComputedAccessor { .. } => 2,
+            Self::Computed
+            | Self::ComputedInferredName
+            | Self::ComputedMethod
+            | Self::ComputedAccessor { .. } => 2,
         }
     }
 }
@@ -371,7 +375,6 @@ pub struct BytecodeClassMember {
     pub kind: BytecodeClassMemberKind,
     pub is_static: bool,
     pub id: StaticFunctionId,
-    pub name: Option<StaticName>,
     pub bytecode: BytecodeFunction,
 }
 

@@ -83,10 +83,25 @@ impl BytecodeCompiler<'_> {
         pattern: &BindingPattern,
         default: Option<&Expression>,
     ) -> Result<BytecodePatternTarget> {
+        let inferred_name = match pattern {
+            BindingPattern::Identifier(binding) => Some(binding.name()),
+            BindingPattern::Object { .. } | BindingPattern::Array { .. } => None,
+        };
         Ok(BytecodePatternTarget {
             pattern: self.compile_pattern(pattern)?,
             default: default
-                .map(|default| BytecodeBlock::compile_expression(default, self.layout))
+                .map(|default| {
+                    inferred_name.map_or_else(
+                        || BytecodeBlock::compile_expression(default, self.layout),
+                        |name| {
+                            BytecodeBlock::compile_expression_with_inferred_name(
+                                default,
+                                name,
+                                self.layout,
+                            )
+                        },
+                    )
+                })
                 .transpose()?,
         })
     }

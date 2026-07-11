@@ -1011,6 +1011,60 @@ check_named_function_binding_boundary() {
   fi
 }
 
+check_function_name_inference_boundary() {
+  local runtime_owners
+  local compiler_owners
+  local generated_name_users
+
+  runtime_owners="$(
+    function_owners 'fn[[:space:]]+set_function_name[[:space:]]*\(' \
+      | sed -E 's/[[:space:]]*\($//'
+  )"
+  compare_set "function name runtime owner allowlist" \
+    "${runtime_owners}" \
+    'src/runtime/function/names.rs:set_function_name'
+
+  compiler_owners="$(
+    cd "${repo_root}"
+    grep -R -H -E -o --include='*.rs' \
+      'fn[[:space:]]+compile_expr_with_inferred_name[[:space:]]*\(' \
+      src/compiler \
+      | sed -E 's/:fn[[:space:]]+/:/; s/[[:space:]]*\($//'
+  )"
+  compare_set "function name compiler owner allowlist" \
+    "${compiler_owners}" \
+    'src/compiler/inferred_name.rs:compile_expr_with_inferred_name'
+
+  generated_name_users="$(
+    cd "${repo_root}"
+    grep -R -l -F --include='*.rs' 'set_generated_function_name(' src/runtime | sort
+  )"
+  compare_set "generated function name user allowlist" \
+    "${generated_name_users}" \
+    'src/runtime/function/mod.rs
+src/runtime/function/names.rs
+src/runtime/native/builtins/function_constructor.rs'
+
+  for source in \
+    'infer_name: bool,' \
+    'ComputedInferredName,' \
+    'compile_expression_with_inferred_name(' \
+    'set_function_name_from_property(' \
+    'function_name_from_property(' \
+    'PropertyKey::symbol_id' \
+    'self.set_function_name(&function, &function_name, prefix)?;' \
+    'self.set_function_name_from_property(&value, &property, accessor)?;'; do
+    if ! grep -R -q -F --include='*.rs' "${source}" "${repo_root}/src"; then
+      fail "function name inference boundary changed; required shared source '${source}' is missing"
+    fi
+  done
+
+  if grep -R -q -F --include='*.rs' \
+      'set_computed_method_name' "${repo_root}/src"; then
+    fail "function name inference boundary changed; computed methods must use the shared SetFunctionName owner"
+  fi
+}
+
 check_direct_root_boundary() {
   local root_kinds
   local source
@@ -1859,6 +1913,7 @@ run_checks() {
   check_function_accessor_boundary
   check_sequence_expression_boundary
   check_named_function_binding_boundary
+  check_function_name_inference_boundary
   check_direct_root_boundary
   check_activation_frame_boundary
   check_bytecode_continuation_boundary
@@ -2010,6 +2065,12 @@ mutate_named_function_self_binding_owner() {
   local fixture_root="$1"
   sed -i 's/BindingCell::named_function/BindingCell::renamed_function/' \
     "${fixture_root}/src/runtime/function/storage.rs"
+}
+
+mutate_function_name_inference_owner() {
+  local fixture_root="$1"
+  printf '\nfn set_function_name() {}\n' \
+    >>"${fixture_root}/src/runtime/bytecode/ops/object_literal.rs"
 }
 
 mutate_host_local_value_identity() {
@@ -2439,6 +2500,8 @@ run_self_tests() {
     'sequence expression boundary changed' mutate_sequence_for_of_rhs
   expect_guard_failure "${temp_dir}" named-function-self-binding-owner \
     'named function binding boundary changed' mutate_named_function_self_binding_owner
+  expect_guard_failure "${temp_dir}" function-name-inference-owner \
+    'function name runtime owner allowlist changed' mutate_function_name_inference_owner
   expect_guard_failure "${temp_dir}" host-local-value-identity \
     'host local-value boundary changed' mutate_host_local_value_identity
   expect_guard_failure "${temp_dir}" javascript-exception-visibility \

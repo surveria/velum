@@ -148,7 +148,7 @@ impl Context {
                 ),
                 BytecodeClassMemberKey::Static(_) => None,
             };
-            let (key, name) = self.class_member_property_key(&field.key, computed_key)?;
+            let (key, name, _) = self.class_member_property_key(&field.key, computed_key)?;
             let resolved = ResolvedClassField {
                 key,
                 name,
@@ -198,7 +198,7 @@ impl Context {
     ) -> Result<FunctionId> {
         let function = self.create_bytecode_function(&BytecodeFunctionInit {
             static_function_id: member.id,
-            name: member.name.as_ref(),
+            name: None,
             bytecode: &member.bytecode,
             constructable: false,
             is_async: false,
@@ -210,10 +210,14 @@ impl Context {
             return Err(Error::runtime("class member creation failed"));
         };
 
-        let (key, name) = self.class_member_property_key(&member.key, computed_key)?;
-        if computed_key.is_some() {
-            self.set_computed_method_name(&function, &name)?;
-        }
+        let (key, name, function_name) =
+            self.class_member_property_key(&member.key, computed_key)?;
+        let prefix = match member.kind {
+            BytecodeClassMemberKind::Method => None,
+            BytecodeClassMemberKind::Getter => Some(crate::syntax::AccessorKind::Getter),
+            BytecodeClassMemberKind::Setter => Some(crate::syntax::AccessorKind::Setter),
+        };
+        self.set_function_name(&function, &function_name, prefix)?;
 
         let update = match member.kind {
             BytecodeClassMemberKind::Method => PropertyUpdate::Data(DataPropertyUpdate::new(
@@ -257,16 +261,17 @@ impl Context {
         &mut self,
         key: &BytecodeClassMemberKey,
         computed_key: Option<&Value>,
-    ) -> Result<(PropertyKey, String)> {
+    ) -> Result<(PropertyKey, String, String)> {
         match (key, computed_key) {
-            (BytecodeClassMemberKey::Static(name), _) => Ok((
-                self.intern_property_key(name.as_str())?,
-                name.as_str().to_owned(),
-            )),
+            (BytecodeClassMemberKey::Static(name), _) => {
+                let name = name.as_str().to_owned();
+                Ok((self.intern_property_key(&name)?, name.clone(), name))
+            }
             (BytecodeClassMemberKey::Computed, Some(value)) => {
                 let mut property = self.dynamic_property_key(value)?;
+                let function_name = self.function_name_from_property(&property)?;
                 let key = self.intern_dynamic_property_key(&mut property)?;
-                Ok((key, property.name().to_owned()))
+                Ok((key, property.name().to_owned(), function_name))
             }
             (BytecodeClassMemberKey::Computed, None) => {
                 Err(Error::runtime("class computed member key disappeared"))
