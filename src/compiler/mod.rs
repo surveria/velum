@@ -27,6 +27,7 @@ mod expression;
 mod function;
 mod hoist;
 mod inferred_name;
+mod member;
 mod object_literal;
 mod pattern;
 

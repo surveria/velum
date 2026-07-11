@@ -19,5 +19,5 @@ pub use types::{
     BytecodeDynamicProperty, BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration,
     BytecodeFunctionParam, BytecodeInstruction, BytecodeNewTargetMode, BytecodeObjectProperty,
     BytecodePattern, BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget,
-    BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
+    BytecodePrivateName, BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
 };
