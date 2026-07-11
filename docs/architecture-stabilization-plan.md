@@ -2484,8 +2484,15 @@ AS-09f profile evidence in draft PR #455:
   computed string/Symbol keys, prefixes, and async named self-binding
   preservation. The architecture guard fixes both owners, generated-name users,
   required bytecode metadata, and mutation-tests owner duplication;
-- full-corpus, performance, exact-tree CI, and canonical publication evidence
-  remain required before AS-09f can close.
+- the reviewed full baseline gains 434 variants and 217 files with no removed
+  pass: 186 `language/expressions` variants, 240 `language/statements`
+  variants, and eight `staging/sm` variants. Local full-corpus evidence passes
+  38,985/38,985 expected variants, 20,100/53,404 files, and
+  38,985/102,578 full variants; the permanent suites remain green at 69/69
+  engine fixtures, 118/118 active Test262 cases, and 96/96 QuickJS
+  differential cases;
+- performance, exact-tree CI, and canonical publication evidence remain
+  required before AS-09f can close.
 
 ### AS-10: Performance And Memory Checkpoints
 

@@ -685,7 +685,7 @@ decision sequence:
 | AS-09c | static class accessor and function descriptor boundary | PR #452 merged as `6f185e75`; shared JavaScript-function descriptors add 236 full-corpus variants / 118 files with no removed pass, and exact-tree/canonical evidence is green |
 | AS-09d | comma/sequence expression grammar boundary | PR #453 merged as `1fc9867`; exact-tree run `29142804842` certified tree `a23bd644`, post-merge run `29142896882` published report `20260711T062919Z` in `f2d2113`, and the baseline gained 335 variants / 205 files with no removed pass |
 | AS-09e | named function expression self binding | PR #454 merged as \`6e71c38\`; exact CI \`29144428112\` certified tree \`3b280888\`, post-merge run \`29144572464\` published report \`20260711T072934Z\` in \`90ca1cb\`, and the baseline gained 29 variants / 21 files with no removed pass |
-| AS-09f | \`SetFunctionName\` and anonymous-definition name inference | draft PR #455 installs one compiler metadata path and one runtime naming owner for declarations, identifier assignments, parameter/destructuring defaults, class/object methods and accessors, computed keys, prefixes, and Symbol descriptions; the focused \`fn-name\` profile rises from 6/2,086 to 432/2,086 variants |
+| AS-09f | \`SetFunctionName\` and anonymous-definition name inference | draft PR #455 installs one compiler metadata path and one runtime naming owner for declarations, identifier assignments, parameter/destructuring defaults, class/object methods and accessors, computed keys, prefixes, and Symbol descriptions; the focused \`fn-name\` profile rises from 6/2,086 to 432/2,086 variants, while the full baseline gains 434 variants / 217 files with no removed pass |
 
 ## AS-01b Guard Specification
 
