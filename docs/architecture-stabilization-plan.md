@@ -2333,8 +2333,13 @@ AS-09c profile evidence in draft PR #452:
   function `Object.defineProperty` behavior have permanent coverage;
 - the permanent registries remain green at 69/69 engine fixtures,
   118/118 active Test262 cases, and 96/96 QuickJS differential cases;
-- complete-corpus baseline refresh, paired sentinel measurements, exact-tree
-  CI, and canonical publication remain required before AS-09c can close.
+- adjacent main/branch sentinel medians are arithmetic 81.44/82.04 ms (+0.7%),
+  array-index 2.24/2.25 ms (+0.4%), property-read 224.65/229.53 ms (+2.2%),
+  function-call 159.34/152.98 ms (-4.0%), and string-scan 72.37/71.84 ms
+  (-0.7%). Every row is valid, branch variation is at most 2.3%, and no
+  performance regression is indicated;
+- exact-tree CI and canonical publication remain required before AS-09c can
+  close.
 
 ### AS-10: Performance And Memory Checkpoints
 
