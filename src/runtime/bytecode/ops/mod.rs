@@ -11,8 +11,8 @@ use crate::{
     runtime::control::Completion,
     runtime::native::NativeFunctionKind,
     runtime::numeric::{
-        bitwise_and, bitwise_or, bitwise_xor, number_shift_count, number_to_i32, number_to_uint32,
-        numeric_binary, shift_left, shift_right, shift_right_unsigned,
+        bitwise_and, bitwise_not, bitwise_or, bitwise_xor, number_shift_count, number_to_i32,
+        number_to_uint32, numeric_binary, shift_left, shift_right, shift_right_unsigned,
     },
     runtime::object::PropertyKey,
     runtime::property::DynamicPropertyKey,
@@ -95,6 +95,7 @@ impl Context {
             UnaryOp::Not => Ok(Value::Bool(!to_boolean(value))),
             UnaryOp::Negate => self.to_number(value).map(|value| Value::Number(-value)),
             UnaryOp::Plus => self.to_number(value).map(Value::Number),
+            UnaryOp::BitNot => bitwise_not(self, value),
             UnaryOp::Void => Ok(Value::Undefined),
             UnaryOp::Typeof | UnaryOp::Delete => Err(Error::runtime(
                 "non-bytecode unary operator reached bytecode unary path",
@@ -113,6 +114,7 @@ impl Context {
             let value = match op {
                 BytecodeNumericUnaryOp::Negate => -*value,
                 BytecodeNumericUnaryOp::Plus => *value,
+                BytecodeNumericUnaryOp::BitNot => f64::from(!number_to_i32(*value, "~")?),
             };
             return self.checked_value(Value::Number(value));
         }

@@ -258,7 +258,7 @@ impl BytecodeCompiler<'_> {
 
     fn compile_unary_expr(&mut self, op: UnaryOp, expr: &Expression) -> Result<()> {
         match op {
-            UnaryOp::Not | UnaryOp::Negate | UnaryOp::Plus | UnaryOp::Void => {
+            UnaryOp::Not | UnaryOp::Negate | UnaryOp::Plus | UnaryOp::BitNot | UnaryOp::Void => {
                 self.compile_expr(expr)?;
                 if let Some(op) = BytecodeNumericUnaryOp::from_unary(op) {
                     self.emit(BytecodeInstruction::NumberUnary(op));

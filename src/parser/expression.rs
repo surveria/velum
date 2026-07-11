@@ -87,6 +87,16 @@ impl Parser {
                 },
             ));
         }
+        if self.match_kind(&TokenKind::Tilde) {
+            let expr = self.unary()?;
+            return Ok(self.expression_node(
+                start,
+                Expr::Unary {
+                    op: UnaryOp::BitNot,
+                    expr: Box::new(expr),
+                },
+            ));
+        }
         if self.match_kind(&TokenKind::Minus) {
             let expr = self.unary()?;
             return Ok(self.expression_node(

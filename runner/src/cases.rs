@@ -781,6 +781,7 @@ fn engine_unary_cases() -> Vec<EngineCase> {
                 "true true true false false true",
                 "object undefined undefined undefined function",
                 "2 42 undefined",
+                "-1 -2 0 -6 -1 0",
             ],
             value: "42",
         },

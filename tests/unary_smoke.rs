@@ -63,6 +63,59 @@ fn rejects_delete_property_on_nullish_base() -> TestResult {
     ensure_runtime_error_contains("delete null.field", "Cannot convert undefined or null")
 }
 
+#[test]
+fn supports_bitwise_not_to_int32_semantics() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r"
+        ~0 === -1 &&
+            ~1 === -2 &&
+            ~-1 === 0 &&
+            ~2147483647 === -2147483648 &&
+            ~2147483648 === 2147483647 &&
+            ~4294967295 === 0 &&
+            ~4294967296 === -1 &&
+            ~NaN === -1 &&
+            ~Infinity === -1 &&
+            ~(-Infinity) === -1 &&
+            ~(-0) === -1 &&
+            ~1.9 === -2 &&
+            ~(-1.9) === 0
+        ",
+    )?;
+
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn bitwise_not_uses_numeric_coercion() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        ~"5" === -6 &&
+            ~true === -2 &&
+            ~false === -1 &&
+            ~null === -1 &&
+            ~undefined === -1 &&
+            ~{ valueOf: function() { return 2; } } === -3
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn bitwise_not_rejects_symbol_values() -> TestResult {
+    ensure_runtime_error_contains(
+        "~Symbol('sensor')",
+        "Cannot convert a Symbol value to a number",
+    )
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

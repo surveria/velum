@@ -114,12 +114,13 @@ fn bytecode_quickens_numeric_unary_with_fallbacks() -> TestResult {
         for (var i = 0; i < 6; i = i + 1) {
             total = total + +i + -(-i);
         }
-        total === 30 ? 42 : 0
+        var complemented = ~5;
+        total === 30 && complemented === -6 ? 42 : 0
         ",
     )?;
     ensure_at_least(
         script.usage().bytecode_numeric_instruction_count(),
-        7,
+        8,
         "bytecode numeric instructions",
     )?;
 
@@ -127,7 +128,10 @@ fn bytecode_quickens_numeric_unary_with_fallbacks() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))?;
 
     let value = vm.eval("-\"5\"")?;
-    ensure_value(&value, &Value::Number(-5.0))
+    ensure_value(&value, &Value::Number(-5.0))?;
+
+    let value = vm.eval("~\"5\"")?;
+    ensure_value(&value, &Value::Number(-6.0))
 }
 
 #[test]

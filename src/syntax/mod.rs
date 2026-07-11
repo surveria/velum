@@ -12,6 +12,7 @@ pub enum UnaryOp {
     Negate,
     Plus,
     Not,
+    BitNot,
     Typeof,
     Void,
     Delete,

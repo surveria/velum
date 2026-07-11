@@ -19,3 +19,4 @@ let typeReport =
 print(erasedName, erasedMissing, erasedIndex, erasedLength, erasedBinding, erasedUnknown);
 print(typeReport);
 print(values.length, side, voidValue);
+print(~0, ~1, ~-1, ~"5", ~NaN, ~4294967295);

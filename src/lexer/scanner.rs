@@ -107,6 +107,7 @@ impl<'a> Lexer<'a> {
                 ';' => self.simple(TokenKind::Semicolon),
                 ',' => self.simple(TokenKind::Comma),
                 '!' => self.bang_token(offset),
+                '~' => self.simple(TokenKind::Tilde),
                 '=' => self.equal_token(offset),
                 '<' => self.less_token(offset),
                 '>' => self.greater_token(offset),
