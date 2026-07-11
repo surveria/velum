@@ -8,9 +8,7 @@ use crate::{
     },
     error::{Error, Result},
     runtime::bytecode::coercion::relational_compare,
-    runtime::call::RuntimeCallArgs,
     runtime::control::Completion,
-    runtime::control::thrown_value_matches,
     runtime::native::NativeFunctionKind,
     runtime::numeric::{
         bitwise_and, bitwise_or, bitwise_xor, number_shift_count, number_to_i32, number_to_uint32,
@@ -25,7 +23,7 @@ use crate::{
         },
     },
     syntax::{BinaryOp, DeclKind, UnaryOp},
-    value::{ErrorName, Value},
+    value::Value,
 };
 
 const INSTANCEOF_PROTOTYPE_PROPERTY: &str = "prototype";
@@ -109,7 +107,9 @@ impl Context {
         op: BytecodeNumericUnaryOp,
         value: &Value,
     ) -> Result<Value> {
-        if let Value::Number(value) = value {
+        if self.optional_optimizations_enabled()
+            && let Value::Number(value) = value
+        {
             let value = match op {
                 BytecodeNumericUnaryOp::Negate => -*value,
                 BytecodeNumericUnaryOp::Plus => *value,
@@ -163,7 +163,9 @@ impl Context {
         left: &Value,
         right: &Value,
     ) -> Result<Value> {
-        if let (Value::Number(left), Value::Number(right)) = (left, right) {
+        if self.optional_optimizations_enabled()
+            && let (Value::Number(left), Value::Number(right)) = (left, right)
+        {
             let value = match op {
                 BytecodeNumericBinaryOp::Add => left + right,
                 BytecodeNumericBinaryOp::Sub => left - right,
@@ -207,7 +209,9 @@ impl Context {
         left: &Value,
         right: &Value,
     ) -> Result<Value> {
-        if let (Value::Number(left), Value::Number(right)) = (left, right) {
+        if self.optional_optimizations_enabled()
+            && let (Value::Number(left), Value::Number(right)) = (left, right)
+        {
             let value = match op {
                 BytecodeNumericCompareOp::Less => left < right,
                 BytecodeNumericCompareOp::LessEqual => left <= right,
@@ -225,7 +229,9 @@ impl Context {
         left: &Value,
         right: &Value,
     ) -> Result<Value> {
-        if let (Value::Number(left), Value::Number(right)) = (left, right) {
+        if self.optional_optimizations_enabled()
+            && let (Value::Number(left), Value::Number(right)) = (left, right)
+        {
             let equal = number_strict_equality(*left, *right);
             let value = match op {
                 BytecodeNumericEqualityOp::Equal | BytecodeNumericEqualityOp::StrictEqual => equal,
@@ -373,37 +379,5 @@ impl Context {
             return Ok(true);
         }
         self.objects.prototype_chain_has_object(*id, target)
-    }
-
-    pub(super) fn eval_bytecode_assert_throws(
-        &mut self,
-        expected: ErrorName,
-        callback: &Value,
-        message: Option<Value>,
-    ) -> Result<Value> {
-        if let Some(message) = message {
-            self.runtime_value(message)?;
-        }
-        let Value::Function(id) = callback else {
-            return Err(Error::runtime("assert.throws callback must be a function"));
-        };
-        let expected_name = expected.as_str();
-        match self.eval_function_completion(*id, RuntimeCallArgs::values(&[]))? {
-            Completion::Throw(value) => {
-                if thrown_value_matches(self, &value, expected_name)? {
-                    return Ok(Value::Undefined);
-                }
-                Err(Error::runtime(format!(
-                    "assert.throws expected {expected_name}, got {value}"
-                )))
-            }
-            Completion::Normal(_) | Completion::Return(_) => Err(Error::runtime(format!(
-                "assert.throws expected {expected_name}, but no exception was thrown"
-            ))),
-            completion @ (Completion::Break { .. } | Completion::Continue(_)) => {
-                completion.into_function_result()
-            }
-            completion @ Completion::Suspended(_) => completion.into_function_result(),
-        }
     }
 }

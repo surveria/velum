@@ -597,24 +597,21 @@ check_harness_boundaries() {
     printf '%s\n' "${compiler_comparisons}" \
       | sed -E 's/[[:space:]]*(==|!=)[[:space:]]*/ \1 /'
   )"
-  expected_comparisons='src/compiler/call.rs:.as_str() == "print"
-src/compiler/call.rs:.as_str() == "assert"
-src/compiler/call.rs:.as_str() != "throws"'
+  expected_comparisons=''
   compare_set "compiler source-name allowlist" "${compiler_comparisons}" "${expected_comparisons}"
 
   harness_paths="$(
     cd "${repo_root}"
     grep -R -l -E --include='*.rs' \
-      '(^|[^A-Za-z0-9_])(Print|AssertThrows)([^A-Za-z0-9_]|$)' \
+      'BytecodeInstruction::(Print|AssertThrows)|Self::(Print|AssertThrows)[[:space:]]*\{' \
       src/bytecode src/compiler src/runtime || true
   )"
-  expected_harness_paths='src/bytecode/metrics/mod.rs
-src/bytecode/types.rs
-src/compiler/call.rs
-src/compiler/mod.rs
-src/runtime/bytecode/call.rs
-src/runtime/bytecode/mod.rs'
+  expected_harness_paths=''
   compare_set "harness opcode use-site allowlist" "${harness_paths}" "${expected_harness_paths}"
+  if grep -E -q '^[[:space:]]+(Print|AssertThrows)[[:space:]]*\{' \
+      "${repo_root}/src/bytecode/types.rs"; then
+    fail "harness opcode boundary changed; harness-only bytecode variants are forbidden"
+  fi
 
   test262_paths="$(
     cd "${repo_root}"
@@ -1485,15 +1482,8 @@ output_payload_bytes
 performance_clock
 random_state
 runtime_steps
-bytecode_linear_segment_runs
-bytecode_linear_direct_runs
-call_depth
-native_call_cache_hits
-native_call_cache_misses
-native_call_cache_slow_paths
-call_value_cache_hits
-call_value_cache_misses
-call_value_cache_slow_paths'
+optimizer
+call_depth'
   compare_set "Context state-owner field allowlist" "${context_fields}" "${expected_context_fields}"
 
   object_fields="$(
@@ -1631,6 +1621,47 @@ src/runtime/function/fast_path.rs'
   compare_set "fast-path owner allowlist" "${fast_path_files}" "${expected_fast_path_files}"
 }
 
+check_optimizer_boundary() {
+  local direct_owners
+  local expected_direct_owners
+  local optimizer_fields
+
+  direct_owners="$(
+    cd "${repo_root}"
+    grep -R -l -F --include='*.rs' '.optimizer' src/runtime || true
+  )"
+  expected_direct_owners='src/runtime/mod.rs
+src/runtime/optimizer.rs'
+  compare_set "optimizer state owner allowlist" "${direct_owners}" "${expected_direct_owners}"
+
+  optimizer_fields="$({
+    awk '
+      /^pub\(in crate::runtime\) struct Optimizer \{/ { inside = 1; next }
+      inside && /^}/ { exit }
+      inside { print }
+    ' "${repo_root}/src/runtime/optimizer.rs"
+  } | sed -nE 's/^[[:space:]]*([a-z_][a-z0-9_]*):.*/\1/p')"
+  compare_set "optimizer profiling field allowlist" "${optimizer_fields}" \
+    'mode
+bytecode_linear_segment_runs
+bytecode_linear_direct_runs
+native_call_cache_hits
+native_call_cache_misses
+native_call_cache_slow_paths
+call_value_cache_hits
+call_value_cache_misses
+call_value_cache_slow_paths'
+
+  if ! grep -F -q 'pub const fn with_optimization_mode' \
+      "${repo_root}/src/api/embedding.rs" \
+    || ! grep -F -q 'pub const fn optimization_snapshot' \
+      "${repo_root}/src/api/embedding.rs" \
+    || ! grep -F -q 'pub(in crate::runtime) const fn optional_optimizations_enabled' \
+      "${repo_root}/src/runtime/mod.rs"; then
+    fail "optimizer policy boundary changed; public VM policy, snapshot, and one Context gate are required"
+  fi
+}
+
 run_checks() {
   require_file src/value/kind.rs
   require_file src/api/owned_value.rs
@@ -1643,6 +1674,7 @@ run_checks() {
   require_file src/runtime/bytecode/control/structured_switch.rs
   require_file src/runtime/bytecode/destructure_continuation.rs
   require_file src/runtime/function/suspended.rs
+  require_file src/runtime/optimizer.rs
   require_file src/runtime/gc.rs
   require_file src/runtime/object/accounting.rs
   require_file src/runtime/mod.rs
@@ -1685,6 +1717,7 @@ run_checks() {
   check_gc_boundary
   check_state_owner_allowlists
   check_optimization_owner_allowlists
+  check_optimizer_boundary
   printf '%s: ok\n' "${script_name}"
 }
 
@@ -2132,6 +2165,12 @@ mutate_fast_path_owner() {
     >"${fixture_root}/src/runtime/benchmark_fast_path.rs"
 }
 
+mutate_optimizer_state_owner() {
+  local fixture_root="$1"
+  printf 'fn architecture_probe(context: &mut super::Context) { context.optimizer.record_native_call_cache_hit(); }\n' \
+    >"${fixture_root}/src/runtime/optimizer_bypass.rs"
+}
+
 mutate_harness_opcode_owner() {
   local fixture_root="$1"
   printf 'fn architecture_probe(value: BytecodeInstruction) { let _ = BytecodeInstruction::Print { arg_count: 0 }; drop(value); }\n' \
@@ -2311,6 +2350,8 @@ run_self_tests() {
     'linear optimization owner allowlist changed' mutate_linear_owner
   expect_guard_failure "${temp_dir}" fast-path-owner \
     'fast-path owner allowlist changed' mutate_fast_path_owner
+  expect_guard_failure "${temp_dir}" optimizer-state-owner \
+    'optimizer state owner allowlist changed' mutate_optimizer_state_owner
   expect_guard_failure "${temp_dir}" harness-opcode-owner \
     'harness opcode use-site allowlist changed' mutate_harness_opcode_owner
 

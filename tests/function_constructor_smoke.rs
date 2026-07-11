@@ -1,5 +1,7 @@
 use rs_quickjs::{Runtime, Value};
 
+mod support;
+
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
 #[test]
@@ -112,6 +114,7 @@ fn function_constructor_rejects_invalid_source() -> TestResult {
 fn function_constructor_throws_catchable_syntax_errors() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
+    support::install_assert(&mut context)?;
 
     let value = context.eval(
         r#"

@@ -7,7 +7,7 @@ assert.throws(TypeError, function() {
   throw new TypeError("boom");
 }, "TypeError should match");
 
-assert.throws(Error, function() {
+assert.throws(RangeError, function() {
   throw new RangeError("range");
 });
 

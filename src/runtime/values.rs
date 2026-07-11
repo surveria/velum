@@ -274,30 +274,6 @@ impl Context {
         }
         Ok(())
     }
-
-    pub(crate) fn record_bytecode_linear_segment_run(&mut self) -> Result<()> {
-        self.bytecode_linear_segment_runs = self
-            .bytecode_linear_segment_runs
-            .checked_add(1)
-            .ok_or_else(|| Error::limit("bytecode linear segment runs overflowed"))?;
-        Ok(())
-    }
-
-    pub(crate) fn record_bytecode_linear_direct_run(&mut self) -> Result<()> {
-        self.bytecode_linear_direct_runs = self
-            .bytecode_linear_direct_runs
-            .checked_add(1)
-            .ok_or_else(|| Error::limit("bytecode linear direct runs overflowed"))?;
-        Ok(())
-    }
-
-    pub(crate) fn record_bytecode_linear_direct_runs(&mut self, runs: usize) -> Result<()> {
-        self.bytecode_linear_direct_runs = self
-            .bytecode_linear_direct_runs
-            .checked_add(runs)
-            .ok_or_else(|| Error::limit("bytecode linear direct runs overflowed"))?;
-        Ok(())
-    }
 }
 
 const fn requires_generic_add(value: &Value) -> bool {

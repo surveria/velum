@@ -555,19 +555,22 @@ that several optimization owners can perform semantic work directly.
 | --- | --- | --- | --- |
 | bytecode interpreter | `runtime/bytecode/mod.rs` and focused operation modules | base execution path | preserve through AS-06 |
 | ordinary object operations | `ObjectHeap` plus `Context` facades | widest current semantic path, but split by value kind | AS-02/AS-03 |
-| static property/name caches | `runtime/property/static_names` and object cacheable lookups | guarded misses generally return to value/object helpers | AS-08 central optimizer owner after AS-02 |
-| call caches/direct native calls | `CallValueCache`, `CallReference`, `NativeCallTarget`, `runtime/native/function/direct.rs` | most guarded misses return to native-kind or generic value dispatch | AS-08, after common `Call` |
-| linear plans/superinstructions | seven files under `runtime/bytecode/linear` | pattern compilation is optional; executor contains specialized member/numeric/property paths | AS-08 equivalence and optimizer-off coverage |
-| function fast paths | `bytecode/fast_path.rs` and `runtime/function/fast_path.rs` | optional compilation with normal bytecode fallback | AS-08 equivalence and accounting |
-| structured control and specializations | eighteen files under `runtime/bytecode/control`; `for_in`, `structured_do_while`, `try_catch`, and `loop_helpers` are reusable semantic owners while many named `*_loop.rs` files are recognizers | semantic owners feed the shared continuation record; each optimizer recognizer may decline, but accepted paths often reproduce property/call/control semantics | AS-06a2b owns durable control state; AS-08 audits optimizer equivalence |
-| dense array/native built-in paths | object array modules and `runtime/native/function` | a mix of explicit generic fallback and separate implementations | AS-03 first, AS-08 guards second |
-| harness opcodes | compiler/runtime handling of `Print` and `AssertThrows` | selected from source names rather than ordinary binding semantics | remove in AS-08; prevent growth in AS-01b |
+| optimizer policy and counters | `runtime/optimizer.rs` | one VM-local mode and stable snapshot own linear and call-cache counters | AS-08a boundary installed; guard rejects another direct state owner |
+| static property/name caches | `runtime/property/static_names` and object cacheable lookups | disabled mode leaves caches cold; guarded misses return to semantic value/object helpers | AS-08a mode gate installed; AS-08b audits invalidation evidence |
+| call caches/direct native calls | `CallValueCache`, `CallReference`, `NativeCallTarget`, `runtime/native/function/direct.rs` | disabled mode delegates to common `Call`; enabled guard misses use the same path | AS-08a mode gate installed |
+| linear plans/superinstructions | seven files under `runtime/bytecode/linear` | optional compilation/execution declines in disabled mode | AS-08a equivalence coverage installed; AS-08b audits breadth |
+| function fast paths | `bytecode/fast_path.rs` and `runtime/function/fast_path.rs` | disabled mode omits the optional plan and callback shortcut | AS-08a mode gate installed |
+| structured control and specializations | nineteen files under `runtime/bytecode/control`; reusable control owners coexist with named recognizers | disabled mode declines loop fast paths and uses continuation-owned generic execution | AS-08a equivalence coverage installed; AS-08b classifies each recognizer |
+| dense array/native built-in paths | bytecode array helpers and `runtime/native/function` | bytecode dense-array and direct-native shortcuts decline in disabled mode; physical dense storage remains a semantic backend | AS-08a mode gate installed; AS-08b audits built-in algorithm breadth |
+| test harness | ordinary lazy `print` native binding plus JavaScript `assert.throws` harness | normal binding/property/call semantics; no harness bytecode or compiler name recognition | AS-08a removed the legacy opcodes |
 
-The compiler recognizes an identifier spelled `print` and a member expression
-spelled `assert.throws`, emitting dedicated `BytecodeInstruction::Print` and
-`BytecodeInstruction::AssertThrows`. Identifier construction also recognizes an
-unbound `Test262Error` name. These are known baseline exceptions. No additional
-harness or benchmark name may enter language compilation.
+The compiler no longer recognizes `print` or `assert.throws` by source spelling.
+`print` materializes as an ordinary native global function and can be shadowed;
+`assert.throws` is ordinary JavaScript loaded by test support. The remaining
+unbound `Test262Error` construction fallback is recorded legacy test support.
+Architecture guards require zero harness-only bytecode variants and zero
+compiler source-name comparisons, and reject growth in the remaining
+`Test262Error` allowlist.
 
 The control specialization directory currently contains:
 
@@ -645,7 +648,8 @@ decision sequence:
 | AS-06a2b | recursive loop/try/finally state | typed continuation-owned loop/switch/iterator/try records merged in PR #442 with one in-place record per construct |
 | AS-06b | pending async execution | explicit suspended outcomes, detached await reactions, same-owner nested/control/pattern resume without side-effect replay, and Context/Vm run/cancel job APIs merged in PR #445 |
 | AS-07 | strong weak-collection entries and implicit roots | PR #446 adds an explicit-root marker, fixed-point WeakMap ephemerons, physical weak sweep, sparse non-moving arenas, cache invalidation, and ledger reconciliation; exact-tree validation is in progress |
-| AS-08 | caches, direct calls, linear/function/control paths, harness opcodes | one optimizer owner, optimizer-off equivalence, and removal of source-name semantics |
+| AS-08a | caches, direct calls, linear/function/control paths, harness opcodes | `runtime/optimizer.rs` owns policy/counters; disabled mode exercises generic fallbacks; source-name semantics and harness opcodes are removed in draft PR #447 |
+| AS-08b | named control recognizers and built-in specialization evidence | classify, replace, or remove workload-shaped paths using unrelated-workload and paired performance evidence |
 
 ## AS-01b Guard Specification
 
@@ -657,11 +661,11 @@ must fail on growth.
 | --- | --- | --- |
 | `Value` representation | the exact eleven internal/runtime variants in `value/kind.rs`, with Function, NativeFunction, HostFunction, and Object marked object-like; one separate five-variant portable `OwnedValue` | any unreviewed runtime variant or a portable variant that retains VM identity/id |
 | runtime/frontend separation | no `crate::ast`, parser, or lexer imports under `src/runtime` or `src/bytecode` | a runtime dependency on parser AST/frontend implementation |
-| harness source names | compiler recognition of only `print` and `assert.throws`, plus the constructor fallback for `Test262Error` | another compiler/runtime source-name special case or harness opcode |
-| harness opcodes | only `Print` and `AssertThrows` | another harness-only bytecode instruction or use site |
+| harness source names | zero compiler comparisons for `print` or `assert.throws`; only the runtime constructor fallback for `Test262Error` remains | another compiler/runtime source-name special case or growth in the recorded fallback |
+| harness opcodes | none | any harness-only bytecode instruction or use site |
 | semantic duplicates | the AS-03a1 equality owner, the AS-03a2 primitive/number/string/boolean owners, the AS-03b1a property-key owner, the AS-03b1b integer/length/index owners, and the AS-02c callable/constructor predicates | a new definition instead of delegation to an existing shared operation |
 | object side tables | Promise, collection, and iterator associations recorded above; bound-function payload store | a new object-id-indexed association without an inventory/plan update |
-| optimization owners | current linear/function/control modules | a new workload-shaped control module or compiler source-shape recognizer without plan evidence |
+| optimization owners | one direct optimizer-state owner plus the recorded linear/function/control modules | direct optimizer state access elsewhere, a new workload-shaped module, or a compiler source-shape recognizer without plan evidence |
 | VM clone boundary | no `Clone` implementation on `Vm` or `Context`; one capability identity/generation owner | reintroducing public VM-state cloning, removing the identity owner, or using cloning as handle transfer |
 | VM primitive owner boundary | one identity on each StringHeap, JsString, SymbolTable, and JsSymbol plus central checked-value validation | removing a primitive owner stamp/check or accepting a foreign colliding slot |
 | host local-value boundary | LocalValue and HostCall carry the active owner and retained registry; public JavaScript errors retain the owner and throw conversion validates it | accepting an unowned host throw, a foreign bound JavaScript value, or callback retention without the active registry |
@@ -694,6 +698,7 @@ rg -n 'pub enum Value|Function\(|NativeFunction\(|HostFunction\(|Object\(|Error\
 rg -n 'crate::ast|crate::parser|crate::lexer' src/runtime src/bytecode
 rg -n 'BytecodeInstruction::(Print|AssertThrows)' src/compiler src/runtime src/bytecode
 rg -n 'name\.as_str\(\) == "print"|assert\.throws|Test262Error' src/compiler src/runtime
+rg -n '\.optimizer|optional_optimizations_enabled' src/runtime
 rg -n 'fn (abstract_equality|strict_equality|same_value|same_value_zero|semantic_is_callable|semantic_is_constructor)' src/runtime
 rg -n 'pub struct Context|collections:|promises:|_object_slots:|_jobs:' src/runtime
 rg -n 'trait .*Trace|fn trace|root_set|roots|garbage|collect' src tests
@@ -704,10 +709,11 @@ git ls-files 'src/runtime/bytecode/linear/*.rs'
 Snapshot observations:
 
 - runtime and bytecode have no parser-AST imports;
-- the compiler has exactly the recorded `print` and `assert.throws` name
-  recognizers;
-- `Print` and `AssertThrows` each appear in compiler, bytecode type/metrics,
-  runtime dispatch, and runtime implementation paths;
+- the initial snapshot contained the recorded `print` and `assert.throws`
+  recognizers and harness opcodes; AS-08a removes them and the guard now
+  requires both searches to be empty;
+- optimizer policy and counters have one direct state owner, while optional
+  runtime paths consult the common Context gate;
 - the initial snapshot found three `SameValueZero` owners plus numeric array
   helpers and a fourth local `SameValue` owner; AS-03a1 collapses them into
   `runtime/abstract_operations/equality.rs`;

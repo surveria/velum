@@ -24,6 +24,7 @@ const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constr
 const ERROR_MESSAGE_PROPERTY: &str = "message";
 const ERROR_NAME_PROPERTY: &str = "name";
 const ERROR_PROTOTYPE_TO_STRING_NAME: &str = "toString";
+const PRINT_NAME: &str = "print";
 
 impl Context {
     pub(crate) fn builtin_value(&mut self, name: &str) -> Result<Option<Value>> {
@@ -71,6 +72,9 @@ impl Context {
             NUMBER_NAME => self.number_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
             PERFORMANCE_NAME => self.performance_object_value().map(Some),
+            PRINT_NAME => self
+                .global_function_value(NativeFunctionKind::Print)
+                .map(Some),
             PROMISE_NAME => self.promise_constructor_value().map(Some),
             PROXY_NAME => self.proxy_constructor_value().map(Some),
             REFLECT_NAME => self.reflect_object_value().map(Some),
@@ -127,6 +131,9 @@ impl Context {
             MAP_NAME => self.map_constructor_value().map(Some),
             NUMBER_NAME => self.number_constructor_value().map(Some),
             OBJECT_NAME => self.object_constructor_value().map(Some),
+            PRINT_NAME => self
+                .global_function_value(NativeFunctionKind::Print)
+                .map(Some),
             PROMISE_NAME => self.promise_constructor_value().map(Some),
             PROXY_NAME => self.proxy_constructor_value().map(Some),
             REGEXP_NAME => self.regexp_constructor_value().map(Some),

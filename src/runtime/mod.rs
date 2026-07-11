@@ -38,6 +38,7 @@ pub mod limits;
 pub mod native;
 pub mod numeric;
 pub mod object;
+mod optimizer;
 pub mod promise;
 pub mod property;
 pub mod retained_values;
@@ -57,6 +58,8 @@ use bytecode::BytecodeOutcome;
 use call::{BoundFunction, RuntimeCallArgs};
 pub use gc::{VmGarbageCollectionReport, VmGcKind, VmHeapReachabilitySnapshot};
 use native::{NativeFunctionKind, NativeFunctionRegistry};
+use optimizer::Optimizer;
+pub use optimizer::{OptimizationMode, VmOptimizationSnapshot};
 use promise::{Promise, PromiseId, PromiseJob};
 use property::static_names::{CallValueCache, StaticNameAtomCacheHandle};
 use property::well_known::{DescriptorPropertyKeys, WellKnownPropertyKeys};
@@ -114,15 +117,8 @@ pub struct Context {
     performance_clock: clock::PerformanceClock,
     random_state: u64,
     runtime_steps: usize,
-    bytecode_linear_segment_runs: usize,
-    bytecode_linear_direct_runs: usize,
+    optimizer: Optimizer,
     call_depth: usize,
-    native_call_cache_hits: usize,
-    native_call_cache_misses: usize,
-    native_call_cache_slow_paths: usize,
-    call_value_cache_hits: usize,
-    call_value_cache_misses: usize,
-    call_value_cache_slow_paths: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -252,7 +248,13 @@ impl Context {
 
     #[must_use]
     pub fn new(limits: RuntimeLimits) -> Self {
-        Self::with_performance_clock(limits, clock::PerformanceClock::system())
+        Self::with_optimization(limits, OptimizationMode::Enabled)
+    }
+
+    /// Creates a context with an explicit optional-optimization policy.
+    #[must_use]
+    pub fn with_optimization(limits: RuntimeLimits, mode: OptimizationMode) -> Self {
+        Self::with_performance_clock(limits, mode, clock::PerformanceClock::system())
     }
 
     /// Creates a context whose VM-local `performance.now()` uses `read` as its
@@ -264,11 +266,35 @@ impl Context {
     where
         F: Fn() -> std::time::Duration + 'static,
     {
-        Self::with_performance_clock(limits, clock::PerformanceClock::from_reader(read))
+        Self::with_optimization_and_monotonic_clock(limits, OptimizationMode::Enabled, read)
+    }
+
+    /// Creates a configured context with an embedder-provided monotonic clock.
+    #[must_use]
+    pub fn with_optimization_and_monotonic_clock<F>(
+        limits: RuntimeLimits,
+        mode: OptimizationMode,
+        read: F,
+    ) -> Self
+    where
+        F: Fn() -> std::time::Duration + 'static,
+    {
+        Self::with_performance_clock(limits, mode, clock::PerformanceClock::from_reader(read))
+    }
+
+    /// Returns the optimizer-owned policy and profiling counters.
+    #[must_use]
+    pub const fn optimization_snapshot(&self) -> VmOptimizationSnapshot {
+        self.optimizer.snapshot()
+    }
+
+    pub(in crate::runtime) const fn optional_optimizations_enabled(&self) -> bool {
+        self.optimizer.optional_paths_enabled()
     }
 
     fn with_performance_clock(
         limits: RuntimeLimits,
+        optimization_mode: OptimizationMode,
         performance_clock: clock::PerformanceClock,
     ) -> Self {
         let identity = VmIdentity::new();
@@ -322,15 +348,8 @@ impl Context {
             performance_clock,
             random_state: INITIAL_RANDOM_STATE,
             runtime_steps: 0,
-            bytecode_linear_segment_runs: 0,
-            bytecode_linear_direct_runs: 0,
+            optimizer: Optimizer::new(optimization_mode),
             call_depth: 0,
-            native_call_cache_hits: 0,
-            native_call_cache_misses: 0,
-            native_call_cache_slow_paths: 0,
-            call_value_cache_hits: 0,
-            call_value_cache_misses: 0,
-            call_value_cache_slow_paths: 0,
         }
     }
 
@@ -426,6 +445,9 @@ impl Context {
         args: &[Value],
         this_value: Value,
     ) -> Result<Completion> {
+        if !self.optional_optimizations_enabled() {
+            return self.call(callee, args, this_value);
+        }
         let site = site.site();
         if let Some(cache) = self.cached_call_value(site)? {
             if cache.matches_callee(callee) {

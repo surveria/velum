@@ -31,6 +31,9 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
+        if !self.optional_optimizations_enabled() {
+            return self.call_value(callee, args, this_value.clone());
+        }
         if let Value::NativeFunction(id) = callee {
             if let Some(kind) = self.cached_static_property_native_call_kind(access, *id)? {
                 self.record_native_call_cache_hit();
@@ -60,6 +63,9 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Option<Value>> {
+        if !self.optional_optimizations_enabled() {
+            return Ok(None);
+        }
         let Value::Object(object) = this_value else {
             return Ok(None);
         };
@@ -143,6 +149,9 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Option<Value>> {
+        if !self.optional_optimizations_enabled() {
+            return Ok(None);
+        }
         let Value::Object(object) = this_value else {
             return Ok(None);
         };
@@ -403,6 +412,9 @@ impl Context {
         id: NativeFunctionId,
         target: NativeCallTarget,
     ) -> Option<NativeFunctionKind> {
+        if !self.optional_optimizations_enabled() {
+            return None;
+        }
         let kind = NativeFunctionKind::from_call_target(target);
         self.native_function_id(kind)
             .filter(|expected| *expected == id)
@@ -415,7 +427,9 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        if let Some(target) = kind.to_call_target() {
+        if self.optional_optimizations_enabled()
+            && let Some(target) = kind.to_call_target()
+        {
             return self.eval_direct_native_call_target(target, args, this_value);
         }
         self.eval_native_function_kind(kind, runtime_call_args(args), this_value)
@@ -493,6 +507,7 @@ impl Context {
             NativeFunctionKind::JsonStringify => self.eval_json_stringify(args),
             NativeFunctionKind::Number => self.eval_number_constructor(args),
             NativeFunctionKind::PerformanceNow => Ok(self.eval_performance_now()),
+            NativeFunctionKind::Print => self.eval_print_call(args),
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),
             NativeFunctionKind::PromiseResolve => self.eval_promise_resolve(args),
             NativeFunctionKind::PromiseReject => self.eval_promise_reject(args),

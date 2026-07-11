@@ -15,6 +15,9 @@ impl Context {
         callback: &Value,
         args: &[Value],
     ) -> Result<Option<Value>> {
+        if !self.optional_optimizations_enabled() {
+            return Ok(None);
+        }
         let Value::Function(id) = callback else {
             return Ok(None);
         };

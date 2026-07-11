@@ -9,7 +9,7 @@ use crate::{
         AccessorKind, BinaryOp, DeclKind, StaticBinding, StaticCallSiteId, StaticFunctionId,
         StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
     },
-    value::{ErrorName, Value},
+    value::Value,
 };
 
 use super::block::BytecodeBlock;
@@ -603,13 +603,6 @@ pub enum BytecodeInstruction {
         property: BytecodeDynamicProperty,
         native: Option<NativeCallTarget>,
         arg_count: usize,
-    },
-    Print {
-        arg_count: usize,
-    },
-    AssertThrows {
-        expected: ErrorName,
-        has_message: bool,
     },
     Construct {
         constructor: BytecodeBinding,

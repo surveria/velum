@@ -148,6 +148,9 @@ impl CompiledBindingFrame {
 
 impl Context {
     pub(crate) fn current_static_binding_cache(&self) -> Option<StaticBindingCacheHandle> {
+        if !self.optional_optimizations_enabled() {
+            return None;
+        }
         self.static_binding_caches.last().cloned()
     }
 
@@ -244,6 +247,9 @@ impl Context {
         &self,
         binding: &StaticBinding,
     ) -> Result<Option<BindingCell>> {
+        if !self.optional_optimizations_enabled() {
+            return self.get_binding_by_name(binding);
+        }
         if let Some(cell) = self.cached_static_binding(binding)? {
             return Ok(Some(cell));
         }
@@ -273,6 +279,16 @@ impl Context {
         self.binding_at_location(location)
     }
 
+    fn get_binding_by_name(&self, binding: &StaticBinding) -> Result<Option<BindingCell>> {
+        let Some(atom) = self.lookup_static_name_atom(binding.name())? else {
+            return Ok(None);
+        };
+        let Some(location) = self.resolve_binding_location(atom) else {
+            return Ok(None);
+        };
+        self.binding_at_location(location)
+    }
+
     pub(crate) fn get_binding_bytecode(
         &self,
         binding: &BytecodeBinding,
@@ -291,6 +307,9 @@ impl Context {
         &self,
         binding: &BytecodeBinding,
     ) -> Option<Value> {
+        if !self.optional_optimizations_enabled() {
+            return None;
+        }
         if binding.operand() != BindingOperand::Unresolved {
             return None;
         }
@@ -310,6 +329,9 @@ impl Context {
         &mut self,
         binding: &BytecodeBinding,
     ) -> Result<Option<Value>> {
+        if !self.optional_optimizations_enabled() {
+            return Ok(None);
+        }
         if binding.operand() != BindingOperand::Unresolved {
             return Ok(None);
         }

@@ -3,6 +3,7 @@ use crate::{
     bytecode::{BytecodeAddress, BytecodeInstruction},
     error::{Error, Result},
     runtime::{Context, control::Completion},
+    value::Value,
 };
 
 impl Context {
@@ -31,9 +32,12 @@ impl Context {
     ) -> Result<Option<Completion>> {
         let right = state.stack.pop()?;
         let left = state.stack.pop()?;
-        state
-            .stack
-            .push(self.string_concat_step(left, &right, final_result)?);
+        let value = if self.optional_optimizations_enabled() {
+            self.string_concat_step(left, &right, final_result)?
+        } else {
+            self.add(&left, &right)?
+        };
+        state.stack.push(value);
         state.pc = next;
         Ok(None)
     }
@@ -46,9 +50,12 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let left = state.stack.pop()?;
-        state
-            .stack
-            .push(self.string_concat_static_step(left, text, final_result)?);
+        let value = if self.optional_optimizations_enabled() {
+            self.string_concat_static_step(left, text, final_result)?
+        } else {
+            self.add(&left, &Value::String(text.to_owned()))?
+        };
+        state.stack.push(value);
         state.pc = next;
         Ok(None)
     }

@@ -17,11 +17,13 @@ impl Context {
         object: &Value,
         property: &BytecodeProperty,
     ) -> Result<Value> {
-        if let Some(value) = self.get_array_length_property_value(object)? {
-            return Ok(value);
-        }
-        if let Some(value) = string_length_value_if_string(object, property.name().as_str())? {
-            return Ok(value);
+        if self.optional_optimizations_enabled() {
+            if let Some(value) = self.get_array_length_property_value(object)? {
+                return Ok(value);
+            }
+            if let Some(value) = string_length_value_if_string(object, property.name().as_str())? {
+                return Ok(value);
+            }
         }
         self.get_static_property_value(object, property.name(), property.access())
     }
@@ -32,7 +34,8 @@ impl Context {
         property: &BytecodeProperty,
         index: BytecodeArrayIndex,
     ) -> Result<Value> {
-        if let Value::Object(id) = object
+        if self.optional_optimizations_enabled()
+            && let Value::Object(id) = object
             && let Some(value) = self
                 .objects
                 .array_index_value_if_array(*id, index.index()?)?
@@ -47,6 +50,9 @@ impl Context {
         object: &Value,
         property: &Value,
     ) -> Result<Option<Value>> {
+        if !self.optional_optimizations_enabled() {
+            return Ok(None);
+        }
         let Value::Object(id) = object else {
             return Ok(None);
         };
@@ -67,7 +73,8 @@ impl Context {
         value: Value,
     ) -> Result<()> {
         let value = self.runtime_value(value)?;
-        if let Value::Object(id) = object
+        if self.optional_optimizations_enabled()
+            && let Value::Object(id) = object
             && self.objects.set_array_index_if_array(
                 *id,
                 index.index()?,
@@ -86,6 +93,9 @@ impl Context {
         property: &Value,
         value: Value,
     ) -> Result<bool> {
+        if !self.optional_optimizations_enabled() {
+            return Ok(false);
+        }
         let Value::Object(id) = object else {
             return Ok(false);
         };
@@ -105,6 +115,15 @@ impl Context {
         op: UpdateOp,
         prefix: bool,
     ) -> Result<Value> {
+        if !self.optional_optimizations_enabled() {
+            return self.eval_bytecode_update_static_property(
+                object,
+                property.name(),
+                property.access(),
+                op,
+                prefix,
+            );
+        }
         let Some(mutation) =
             self.try_array_index_read_modify_write(object, index.index()?, |_, old_value| {
                 Self::updated_bytecode_number(old_value, op)
@@ -129,6 +148,9 @@ impl Context {
         op: UpdateOp,
         prefix: bool,
     ) -> Result<Option<Value>> {
+        if !self.optional_optimizations_enabled() {
+            return Ok(None);
+        }
         let Value::Object(id) = object else {
             return Ok(None);
         };
@@ -154,6 +176,15 @@ impl Context {
         index: BytecodeArrayIndex,
         right: &Value,
     ) -> Result<Value> {
+        if !self.optional_optimizations_enabled() {
+            return self.eval_bytecode_static_compound_assignment(
+                op,
+                object,
+                property.name(),
+                property.access(),
+                right,
+            );
+        }
         let Some(mutation) = self.try_array_index_read_modify_write(
             object,
             index.index()?,
@@ -179,6 +210,9 @@ impl Context {
         access: StaticPropertyAccessId,
         right: &Value,
     ) -> Result<Option<Value>> {
+        if !self.optional_optimizations_enabled() {
+            return Ok(None);
+        }
         let Value::Object(id) = object else {
             return Ok(None);
         };

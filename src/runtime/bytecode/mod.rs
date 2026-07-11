@@ -113,8 +113,6 @@ impl Context {
             | BytecodeInstruction::SuperMember { .. }
             | BytecodeInstruction::CallSuperMember { .. }
             | BytecodeInstruction::CallSuperMemberSpread { .. }
-            | BytecodeInstruction::Print { .. }
-            | BytecodeInstruction::AssertThrows { .. }
             | BytecodeInstruction::Construct { .. }
             | BytecodeInstruction::ConstructValue { .. }
             | BytecodeInstruction::CreateFunction { .. }

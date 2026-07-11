@@ -1,5 +1,7 @@
 use rs_quickjs::{Runtime, Value};
 
+mod support;
+
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
 #[test]
@@ -188,6 +190,7 @@ fn rejects_adjacent_string_literals_after_var_initializer() -> TestResult {
 fn assert_throws_observes_reference_error_from_eval_line_terminator_source() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
+    support::install_assert(&mut context)?;
 
     let value = context.eval(
         r#"
