@@ -38,7 +38,7 @@ fn promise_all_uses_custom_constructor_and_idempotent_elements() -> TestResult {
 #[test]
 fn promise_all_preserves_subclass_new_target() -> TestResult {
     ensure_eval(
-        r#"
+        r"
         let executorCalls = 0;
         class SubPromise extends Promise {
             constructor(executor) {
@@ -49,7 +49,7 @@ fn promise_all_preserves_subclass_new_target() -> TestResult {
         let result = Promise.all.call(SubPromise, []);
         result instanceof SubPromise && result.constructor === SubPromise &&
             executorCalls === 1 ? 42 : 0
-        "#,
+        ",
         &Value::Number(42.0),
     )
 }
@@ -93,7 +93,7 @@ fn promise_all_closes_iterator_and_rejects_on_abrupt_resolve() -> TestResult {
 #[test]
 fn promise_all_calls_custom_capability_reject_on_abrupt_resolve() -> TestResult {
     ensure_eval(
-        r#"
+        r"
         let marker = {};
         let rejected = false;
         function Constructor(executor) {
@@ -104,7 +104,7 @@ fn promise_all_calls_custom_capability_reject_on_abrupt_resolve() -> TestResult 
         Constructor.resolve = function() { throw marker; };
         Promise.all.call(Constructor, [1]);
         rejected ? 42 : 0
-        "#,
+        ",
         &Value::Number(42.0),
     )
 }
