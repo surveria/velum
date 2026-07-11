@@ -212,6 +212,9 @@ impl Context {
         &mut self,
         source: &Value,
     ) -> Result<Option<Vec<Value>>> {
+        if matches!(source, Value::Undefined | Value::Null) {
+            return Ok(None);
+        }
         self.symbol_constructor_value()?;
         let Some(symbol) = self.iterator_symbol() else {
             return Ok(None);
