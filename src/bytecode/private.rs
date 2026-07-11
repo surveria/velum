@@ -15,3 +15,13 @@ impl BytecodePrivateName {
         &self.name
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BytecodeClassMemberKey {
+    Static(StaticName),
+    Computed,
+    /// Index into the owning class's `private_names` declaration list.
+    Private {
+        index: u32,
+    },
+}

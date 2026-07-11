@@ -13,13 +13,13 @@ pub use numeric::{
     BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
     BytecodeNumericUnaryOp,
 };
-pub use private::BytecodePrivateName;
+pub use private::{BytecodeClassMemberKey, BytecodePrivateName};
 pub use types::{
     BytecodeAddress, BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding,
     BytecodeCallSite, BytecodeCatch, BytecodeClass, BytecodeClassField, BytecodeClassMember,
-    BytecodeClassMemberKey, BytecodeClassMemberKind, BytecodeCompletion, BytecodeDestructureMode,
-    BytecodeDynamicProperty, BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration,
-    BytecodeFunctionParam, BytecodeInstruction, BytecodeNewTargetMode, BytecodeObjectProperty,
-    BytecodePattern, BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget,
-    BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
+    BytecodeClassMemberKind, BytecodeCompletion, BytecodeDestructureMode, BytecodeDynamicProperty,
+    BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeFunctionParam,
+    BytecodeInstruction, BytecodeNewTargetMode, BytecodeObjectProperty, BytecodePattern,
+    BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget, BytecodeProgram,
+    BytecodeProperty, BytecodeSwitchCase,
 };

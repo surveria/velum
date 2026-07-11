@@ -93,6 +93,18 @@ impl Context {
                     },
                 ))
             }
+            BytecodeAssignmentTarget::PrivateProperty { object, property } => {
+                let object = match self.eval_pattern_block(object)? {
+                    PatternStep::Value(object) => object,
+                    PatternStep::Abrupt(completion) => {
+                        return Ok(PatternStep::Abrupt(completion));
+                    }
+                };
+                let name = self.resolve_private_name(property)?;
+                Ok(PatternStep::Value(
+                    BytecodeAssignmentReference::PrivateProperty { object, name },
+                ))
+            }
         }
     }
 }

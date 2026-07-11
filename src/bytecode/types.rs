@@ -18,7 +18,7 @@ use super::numeric::{
     BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
     BytecodeNumericUnaryOp,
 };
-use super::private::BytecodePrivateName;
+use super::private::{BytecodeClassMemberKey, BytecodePrivateName};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeProgram {
@@ -382,16 +382,6 @@ pub struct BytecodeClassMember {
     pub is_static: bool,
     pub id: StaticFunctionId,
     pub bytecode: BytecodeFunction,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BytecodeClassMemberKey {
-    Static(StaticName),
-    Computed,
-    /// Index into the owning class's `private_names` declaration list.
-    Private {
-        index: u32,
-    },
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]

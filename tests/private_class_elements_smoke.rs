@@ -186,6 +186,19 @@ fn supports_private_fields_updates_and_brand_checks() -> TestResult {
         counter.update() + ":" + counter.has(counter) + ":" + counter.has({})
         "#,
         "5:6:true:false",
+    )?;
+    ensure_string(
+        r#"
+        class Box {
+            #value = 0;
+            assign(source) {
+                ({ value: this.#value } = source);
+                return this.#value;
+            }
+        }
+        "" + new Box().assign({ value: 7 })
+        "#,
+        "7",
     )
 }
 
