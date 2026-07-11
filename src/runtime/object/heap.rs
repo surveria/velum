@@ -13,48 +13,6 @@ use super::{
 };
 
 impl ObjectHeap {
-    pub(crate) fn own_data_property_value(
-        &self,
-        id: ObjectId,
-        property: PropertyLookup<'_>,
-    ) -> Result<Option<Value>> {
-        let Some(key) = property.key() else {
-            return Ok(None);
-        };
-        let object = self.object(id)?;
-        if object.array_length.is_some() {
-            return Ok(None);
-        }
-        let Some(property) = object.named_property(&self.shapes, key)? else {
-            return Ok(None);
-        };
-        Ok(property.data_value_ref().cloned())
-    }
-
-    pub(crate) fn set_own_data_property_value(
-        &mut self,
-        id: ObjectId,
-        property: PropertyLookup<'_>,
-        value: Value,
-    ) -> Result<bool> {
-        let Some(key) = property.key() else {
-            return Ok(false);
-        };
-        let object = self.object(id)?;
-        if object.array_length.is_some() {
-            return Ok(false);
-        }
-        let Some(property) = object.named_property(&self.shapes, key)? else {
-            return Ok(false);
-        };
-        if property.data_value_ref().is_none() || !property.is_writable() {
-            return Ok(false);
-        }
-        let (object, shapes) = self.object_mut_with_shapes(id)?;
-        object.named_property_mut(shapes, key)?.set_value(value);
-        Ok(true)
-    }
-
     pub fn create(
         &mut self,
         properties: Vec<ObjectPropertyInit<'_>>,

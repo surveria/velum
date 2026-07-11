@@ -1576,27 +1576,27 @@ check_optimization_owner_allowlists() {
     cd "${repo_root}"
     find src/runtime/bytecode/control -maxdepth 1 -type f -name '*.rs' -printf '%p\n'
   )"
-  expected_control_files='src/runtime/bytecode/control/array_add_loop.rs
-src/runtime/bytecode/control/array_fill_loop.rs
-src/runtime/bytecode/control/block_lexical_loop.rs
-src/runtime/bytecode/control/compound_assignment_loop.rs
-src/runtime/bytecode/control/constructor_prototype_loop.rs
-src/runtime/bytecode/control/for_in.rs
-src/runtime/bytecode/control/for_loop.rs
-src/runtime/bytecode/control/function_apply_has_instance_loop.rs
-src/runtime/bytecode/control/loop_helpers.rs
-src/runtime/bytecode/control/object_literal_loop.rs
-src/runtime/bytecode/control/string_concat_loop.rs
+  expected_control_files='src/runtime/bytecode/control/for_in.rs
 src/runtime/bytecode/control/structured_do_while.rs
 src/runtime/bytecode/control/structured_switch.rs
-src/runtime/bytecode/control/switch_for_loop.rs
-src/runtime/bytecode/control/try_catch.rs
-src/runtime/bytecode/control/try_catch_loop.rs
-src/runtime/bytecode/control/try_finally_loop.rs
-src/runtime/bytecode/control/update_expression_loop.rs
-src/runtime/bytecode/control/while_loop.rs'
+src/runtime/bytecode/control/try_catch.rs'
   compare_set "structured-control optimization owner allowlist" \
     "${control_files}" "${expected_control_files}"
+
+  local shaped_control_markers
+  shaped_control_markers="$(
+    grep -R -nE \
+      'LoopFastPath|loop_fast_path|BytecodeCatchFastPath|BytecodeTryFinallyFastPath|body_fast_path|try_fast_path' \
+      "${repo_root}/src/runtime/bytecode/control.rs" \
+      "${repo_root}/src/runtime/bytecode/control" \
+      "${repo_root}/src/compiler/control.rs" \
+      "${repo_root}/src/bytecode/fast_path.rs" \
+      "${repo_root}/src/bytecode/types.rs" || true
+  )"
+  if [[ -n "${shaped_control_markers}" ]]; then
+    printf '%s\n' "${shaped_control_markers}" >&2
+    fail "workload-shaped control recognizer boundary changed; use reusable bytecode plans"
+  fi
 
   linear_files="$(
     cd "${repo_root}"
@@ -2153,6 +2153,12 @@ mutate_control_owner() {
     >"${fixture_root}/src/runtime/bytecode/control/benchmark_loop.rs"
 }
 
+mutate_control_recognizer() {
+  local fixture_root="$1"
+  printf '\nstruct BenchmarkLoopFastPath;\nfn compile_benchmark_loop_fast_path() {}\n' \
+    >>"${fixture_root}/src/runtime/bytecode/control.rs"
+}
+
 mutate_linear_owner() {
   local fixture_root="$1"
   printf 'pub(super) fn benchmark_linear_architecture_probe() {}\n' \
@@ -2346,6 +2352,8 @@ run_self_tests() {
     'VM primitive owner boundary changed' mutate_vm_primitive_owner
   expect_guard_failure "${temp_dir}" control-owner \
     'structured-control optimization owner allowlist changed' mutate_control_owner
+  expect_guard_failure "${temp_dir}" control-recognizer \
+    'workload-shaped control recognizer boundary changed' mutate_control_recognizer
   expect_guard_failure "${temp_dir}" linear-owner \
     'linear optimization owner allowlist changed' mutate_linear_owner
   expect_guard_failure "${temp_dir}" fast-path-owner \

@@ -13,7 +13,7 @@ fn expect_value(source: &str, expected: &Value) -> TestResult {
 }
 
 #[test]
-fn supports_numeric_switch_fast_path() -> TestResult {
+fn supports_numeric_switch_dispatch() -> TestResult {
     expect_value(
         r"
         let values = [10, 20, 30, 40];

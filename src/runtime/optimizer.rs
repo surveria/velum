@@ -180,10 +180,6 @@ impl super::Context {
         self.optimizer.record_linear_direct_runs(1)
     }
 
-    pub(super) fn record_bytecode_linear_direct_runs(&mut self, runs: usize) -> crate::Result<()> {
-        self.optimizer.record_linear_direct_runs(runs)
-    }
-
     pub(super) const fn record_native_call_cache_hit(&mut self) {
         self.optimizer.record_native_call_cache_hit();
     }

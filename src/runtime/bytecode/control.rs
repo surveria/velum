@@ -1,22 +1,7 @@
-mod array_add_loop;
-mod array_fill_loop;
-mod block_lexical_loop;
-mod compound_assignment_loop;
-mod constructor_prototype_loop;
 mod for_in;
-mod for_loop;
-mod function_apply_has_instance_loop;
-mod loop_helpers;
-mod object_literal_loop;
-mod string_concat_loop;
 mod structured_do_while;
 mod structured_switch;
-mod switch_for_loop;
 mod try_catch;
-mod try_catch_loop;
-mod try_finally_loop;
-mod update_expression_loop;
-mod while_loop;
 
 use crate::{
     bytecode::{BytecodeAddress, BytecodeBlock, BytecodeInstruction},
@@ -36,7 +21,6 @@ use super::{
         BytecodeState, bytecode_loop_completion, init_completion_to_result, loop_label_matches,
     },
 };
-use for_loop::BytecodeForBodyFastPath;
 use try_catch::BytecodeTryParts;
 
 #[derive(Debug, Clone, Copy)]
@@ -51,7 +35,6 @@ struct BytecodeForParts<'a> {
 
 struct BytecodeForPlans<'a> {
     condition: Option<BytecodeLinearPlan<'a>>,
-    body_fast_path: Option<BytecodeForBodyFastPath<'a>>,
     body: Option<BytecodeLinearPlan<'a>>,
     update: Option<BytecodeLinearPlan<'a>>,
 }
@@ -148,7 +131,6 @@ impl Context {
                 body,
                 body_scoped,
                 body_direct_throw,
-                try_fast_path,
                 catch,
                 finally_body,
                 finally_scoped,
@@ -157,7 +139,6 @@ impl Context {
                     body,
                     *body_scoped,
                     body_direct_throw.as_ref(),
-                    try_fast_path.as_deref(),
                     catch.as_ref(),
                     finally_body.as_ref(),
                     *finally_scoped,
@@ -243,11 +224,6 @@ impl Context {
         body: &BytecodeBlock,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
-        if let Some(fast_path) = self.compile_bytecode_while_loop_fast_path(condition, body)?
-            && self.bytecode_while_loop_fast_path_ready(&fast_path)?
-        {
-            return self.eval_bytecode_while_loop_fast_path(state, next, &fast_path);
-        }
         let condition_plan = self.compile_bytecode_linear_plan(condition)?;
         let body_plan = self.compile_bytecode_linear_plan(body)?;
         let handle = self
@@ -387,23 +363,6 @@ impl Context {
                 }
             }
             *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Condition;
-            let fast_path = self.run_bytecode_control_action(handle, &control, |context| {
-                let fast_path = context.compile_bytecode_for_loop_fast_path(
-                    parts.condition,
-                    parts.update,
-                    parts.body,
-                )?;
-                match fast_path {
-                    Some(fast_path) if context.bytecode_for_loop_fast_path_ready(&fast_path)? => {
-                        Ok(Some(fast_path))
-                    }
-                    Some(_) | None => Ok(None),
-                }
-            })?;
-            if let Some(fast_path) = fast_path {
-                let result = self.eval_bytecode_for_loop_fast_path(state, next, &fast_path);
-                return self.finish_bytecode_control_result(handle, result);
-            }
         }
         let plans = self.run_bytecode_control_action(handle, &control, |context| {
             context.compile_structured_for_plans(parts)
@@ -495,13 +454,8 @@ impl Context {
             self.run_bytecode_control_action(handle, control, Self::step)?;
         }
         *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Body;
-        let completion = self.eval_structured_for_body(
-            handle,
-            control,
-            parts.body,
-            plans.body_fast_path.as_ref(),
-            plans.body.as_ref(),
-        )?;
+        let completion =
+            self.eval_structured_for_body(handle, control, parts.body, plans.body.as_ref())?;
         let (_, last) = control.loop_state_mut(BytecodeLoopKind::For)?;
         let Some(completion) = bytecode_loop_completion(last, completion, parts.labels) else {
             return Ok(StructuredForAction::Continue);
@@ -550,12 +504,7 @@ impl Context {
         } else {
             None
         };
-        let body_fast_path = self.compile_bytecode_for_body_fast_path(parts.body)?;
-        let body = if body_fast_path.is_none() {
-            self.compile_bytecode_linear_plan(parts.body)?
-        } else {
-            None
-        };
+        let body = self.compile_bytecode_linear_plan(parts.body)?;
         let update = if let Some(update) = parts.update {
             self.compile_bytecode_linear_plan(update)?
         } else {
@@ -563,7 +512,6 @@ impl Context {
         };
         Ok(BytecodeForPlans {
             condition,
-            body_fast_path,
             body,
             update,
         })
@@ -574,14 +522,8 @@ impl Context {
         handle: super::control_continuation::BytecodeControlHandle,
         control: &mut BytecodeControlRecord,
         body: &BytecodeBlock,
-        fast_path: Option<&BytecodeForBodyFastPath<'_>>,
         body_plan: Option<&BytecodeLinearPlan<'_>>,
     ) -> Result<Completion> {
-        if let Some(fast_path) = fast_path {
-            return self.run_bytecode_control_action(handle, control, |context| {
-                context.eval_bytecode_for_body_fast_path(fast_path)
-            });
-        }
         self.run_bytecode_control_segment(
             handle,
             control,

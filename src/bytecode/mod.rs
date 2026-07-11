@@ -6,7 +6,7 @@ mod numeric;
 mod types;
 
 pub use block::BytecodeBlock;
-pub use fast_path::{BytecodeCatchFastPath, BytecodeDirectThrow};
+pub use fast_path::BytecodeDirectThrow;
 pub use hoist::BytecodeHoistPlan;
 pub use numeric::{
     BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
@@ -19,5 +19,5 @@ pub use types::{
     BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeFunctionParam,
     BytecodeInstruction, BytecodeNewTargetMode, BytecodeObjectProperty, BytecodePattern,
     BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget, BytecodeProgram,
-    BytecodeProperty, BytecodeSwitchCase, BytecodeTryFinallyFastPath,
+    BytecodeProperty, BytecodeSwitchCase,
 };

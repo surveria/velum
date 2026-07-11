@@ -436,7 +436,7 @@ fn bytecode_runs_direct_linear_loop_condition_and_update() -> TestResult {
 }
 
 #[test]
-fn bytecode_runs_direct_masked_continue_for_body() -> TestResult {
+fn bytecode_runs_structured_for_with_continue() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
     let script = vm.compile(
@@ -463,11 +463,11 @@ fn bytecode_runs_direct_masked_continue_for_body() -> TestResult {
         .bytecode_linear_direct_runs
         .checked_sub(initial_direct_runs)
         .ok_or("bytecode linear direct counter moved backwards")?;
-    ensure_at_least(direct_run_delta, 180, "bytecode linear direct runs")
+    ensure_at_least(direct_run_delta, 120, "bytecode linear direct runs")
 }
 
 #[test]
-fn bytecode_runs_direct_numeric_array_fill_for_body() -> TestResult {
+fn bytecode_runs_structured_numeric_array_fill_body() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
     let script = vm.compile(
@@ -499,7 +499,7 @@ fn bytecode_runs_direct_numeric_array_fill_for_body() -> TestResult {
 }
 
 #[test]
-fn bytecode_runs_direct_string_concat_length_loop_body() -> TestResult {
+fn bytecode_runs_structured_string_concat_body() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
     let script = vm.compile(
@@ -526,7 +526,7 @@ fn bytecode_runs_direct_string_concat_length_loop_body() -> TestResult {
 }
 
 #[test]
-fn bytecode_runs_direct_block_lexical_loop_body() -> TestResult {
+fn bytecode_runs_structured_block_lexical_body() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
     let script = vm.compile(
@@ -554,11 +554,11 @@ fn bytecode_runs_direct_block_lexical_loop_body() -> TestResult {
         .bytecode_linear_direct_runs
         .checked_sub(initial_direct_runs)
         .ok_or("bytecode linear direct counter moved backwards")?;
-    ensure_at_least(direct_run_delta, 180, "bytecode linear direct runs")
+    ensure_at_least(direct_run_delta, 120, "bytecode linear direct runs")
 }
 
 #[test]
-fn bytecode_runs_direct_break_continue_while_body() -> TestResult {
+fn bytecode_runs_structured_while_with_break_and_continue() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
     let script = vm.compile(
@@ -590,7 +590,7 @@ fn bytecode_runs_direct_break_continue_while_body() -> TestResult {
         .bytecode_linear_direct_runs
         .checked_sub(initial_direct_runs)
         .ok_or("bytecode linear direct counter moved backwards")?;
-    ensure_at_least(direct_run_delta, 200, "bytecode linear direct runs")
+    ensure_at_least(direct_run_delta, 80, "bytecode linear direct runs")
 }
 
 #[test]
