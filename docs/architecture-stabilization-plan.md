@@ -2688,9 +2688,10 @@ AS-09q profile evidence in draft PR #476:
 - focused engine coverage checks descriptors, generic receiver behavior,
   inherited concrete TypedArray behavior, and configurable replacement;
 - the complete focused `Symbol.species` profile advances from 8/58 to 58/58
-  variants and from 4/29 to 29/29 files. Required exact-tree CI will determine
-  the full-corpus pass-set change; feature work does not refresh that baseline
-  locally.
+  variants and from 4/29 to 29/29 files. Required exact-tree run `29171770363`
+  adds 62 full-corpus variants and 31 conforming files with no baseline
+  removals, moving the canonical 58,620 variants / 30,139 files to a candidate
+  58,682 variants / 30,170 files on tested tree `d5d874c1`.
 
 ### AS-10: Performance And Memory Checkpoints
 
