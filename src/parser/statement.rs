@@ -110,6 +110,10 @@ impl Parser {
             && self.check(&TokenKind::Let)
             && self.peek_has_line_terminator_before(1)
             && !self.peek_kind_is(1, &TokenKind::LBracket)
+            && !self.peek_kind_is(1, &TokenKind::Await)
+            && !self.peek_token(1).is_some_and(|token| {
+                matches!(&token.kind, TokenKind::Identifier(name) if name == super::YIELD_IDENTIFIER_NAME)
+            })
     }
 
     fn let_expression_statement(&mut self) -> Result<Stmt> {
