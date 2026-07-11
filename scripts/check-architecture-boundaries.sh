@@ -885,6 +885,39 @@ src/runtime/native/builtins/function_constructor.rs'
   fi
 }
 
+check_function_accessor_boundary() {
+  local definition_owners
+  definition_owners="$(
+    function_owners 'fn[[:space:]]+define_function_property_key[[:space:]]*\(' \
+      | sed -E 's/[[:space:]]*\($//'
+  )"
+  compare_set "function accessor owner allowlist" \
+    "${definition_owners}" \
+    'src/runtime/function/property_dispatch.rs:define_function_property_key'
+
+  if grep -R -q -F --include='*.rs' \
+      'class static accessors are not supported yet' \
+      "${repo_root}/src"; then
+    fail "function accessor boundary changed; class accessors must not regain a split rejection"
+  fi
+  if grep -R -q -F --include='*.rs' \
+      'accessor properties are not supported on function objects' \
+      "${repo_root}/src"; then
+    fail "function accessor boundary changed; JavaScript functions require shared accessor descriptors"
+  fi
+
+  for source in \
+    'property: ObjectProperty,' \
+    'ObjectProperty::from_update(update)' \
+    'self.get_function_property_lookup(*id, receiver, property)?' \
+    'self.function_inheritance_prototype_value(*id)?' \
+    'write_function_property_with_receiver('; do
+    if ! grep -R -q -F --include='*.rs' "${source}" "${repo_root}/src/runtime"; then
+      fail "function accessor boundary changed; required shared source '${source}' is missing"
+    fi
+  done
+}
+
 check_direct_root_boundary() {
   local root_kinds
   local source
@@ -1730,6 +1763,7 @@ run_checks() {
   check_harness_boundaries
   check_semantic_duplicate_allowlists
   check_completion_error_boundary
+  check_function_accessor_boundary
   check_direct_root_boundary
   check_activation_frame_boundary
   check_bytecode_continuation_boundary
@@ -1857,6 +1891,12 @@ mutate_dynamic_compilation_owner() {
   local fixture_root="$1"
   printf '\nfn dynamic_compilation_error(error: Error) -> Error { error }\n' \
     >>"${fixture_root}/src/runtime/native/builtins/eval.rs"
+}
+
+mutate_function_accessor_owner() {
+  local fixture_root="$1"
+  printf '\nfn define_function_property_key() {}\n' \
+    >>"${fixture_root}/src/runtime/bytecode/class.rs"
 }
 
 mutate_host_local_value_identity() {
@@ -2278,6 +2318,8 @@ run_self_tests() {
     'legacy completion/error boundary' mutate_legacy_completion_conversion
   expect_guard_failure "${temp_dir}" dynamic-compilation-owner \
     'dynamic compilation error owner allowlist changed' mutate_dynamic_compilation_owner
+  expect_guard_failure "${temp_dir}" function-accessor-owner \
+    'function accessor owner allowlist changed' mutate_function_accessor_owner
   expect_guard_failure "${temp_dir}" host-local-value-identity \
     'host local-value boundary changed' mutate_host_local_value_identity
   expect_guard_failure "${temp_dir}" javascript-exception-visibility \

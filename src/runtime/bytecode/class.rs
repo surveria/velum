@@ -179,7 +179,12 @@ impl Context {
                 Some(PropertyEnumerable::Yes),
                 Some(PropertyConfigurable::Yes),
             );
-            self.define_function_property_key(constructor_id, &field.name, field.key, update)?;
+            self.define_function_property_key(
+                constructor_id,
+                &field.name,
+                field.key,
+                PropertyUpdate::Data(update),
+            )?;
         }
         Ok(())
     }
@@ -210,22 +215,6 @@ impl Context {
             self.set_computed_method_name(&function, &name)?;
         }
 
-        if member.is_static {
-            if member.kind != BytecodeClassMemberKind::Method {
-                return Err(Error::runtime(
-                    "class static accessors are not supported yet",
-                ));
-            }
-            let update = DataPropertyUpdate::new(
-                Some(function),
-                Some(PropertyWritable::Yes),
-                Some(PropertyEnumerable::No),
-                Some(PropertyConfigurable::Yes),
-            );
-            self.define_function_property_key(constructor_id, &name, key, update)?;
-            return Ok(function_id);
-        }
-
         let update = match member.kind {
             BytecodeClassMemberKind::Method => PropertyUpdate::Data(DataPropertyUpdate::new(
                 Some(function),
@@ -250,6 +239,10 @@ impl Context {
                 ))
             }
         };
+        if member.is_static {
+            self.define_function_property_key(constructor_id, &name, key, update)?;
+            return Ok(function_id);
+        }
         self.objects.define_property(
             prototype_id,
             key,

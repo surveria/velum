@@ -41,8 +41,15 @@ impl Context {
             }
             Value::Function(id) => {
                 let key = self.semantic_property_key(property)?;
-                self.set_function_property_key(*id, property.name(), key, value)?;
-                SemanticPropertyWrite::Resolved(true)
+                let mut dynamic = DynamicPropertyKey::new(property.name().to_owned(), Some(key));
+                let receiver = Value::Function(*id);
+                let updated = self.write_function_property_with_receiver(
+                    *id,
+                    &mut dynamic,
+                    value,
+                    &receiver,
+                )?;
+                SemanticPropertyWrite::Resolved(updated)
             }
             Value::NativeFunction(id) => {
                 let key = self.semantic_property_key(property)?;
@@ -70,6 +77,34 @@ impl Context {
             | Value::Symbol(_) => return Ok(None),
         };
         Ok(Some(write))
+    }
+
+    fn write_function_property_with_receiver(
+        &mut self,
+        target: crate::value::FunctionId,
+        property: &mut DynamicPropertyKey,
+        value: Value,
+        receiver: &Value,
+    ) -> Result<bool> {
+        if let Some(descriptor) =
+            self.function_own_property_descriptor_lookup(target, property.lookup())?
+        {
+            return self.reflect_write_with_descriptor(property, value, receiver, descriptor);
+        }
+        let Some(parent) = self.function_static_parent_value(target)? else {
+            return self.reflect_define_receiver_property(property, value, receiver);
+        };
+        match parent {
+            Value::Function(parent) => {
+                self.write_function_property_with_receiver(parent, property, value, receiver)
+            }
+            Value::Null | Value::Undefined => {
+                self.reflect_define_receiver_property(property, value, receiver)
+            }
+            parent => self
+                .semantic_reflect_property_write(&parent, property, value, receiver)
+                .map(|updated| updated.unwrap_or(false)),
+        }
     }
 
     /// Finishes an object-like write after an optimizer declines the ordinary
@@ -247,20 +282,25 @@ impl Context {
             new_property.then_some(PropertyEnumerable::Yes),
             new_property.then_some(PropertyConfigurable::Yes),
         );
-        let complete = DataPropertyDescriptor::new(
-            value,
-            PropertyWritable::Yes,
-            PropertyEnumerable::Yes,
-            PropertyConfigurable::Yes,
-        );
-        let descriptor_value =
-            self.create_property_descriptor_object(&OwnPropertyDescriptor::Data(complete))?;
-        self.semantic_define_own_property_update_with_descriptor(
-            receiver,
-            property,
-            PropertyUpdate::Data(update),
-            &descriptor_value,
-        )
+        if let Value::Object(id) = receiver
+            && self.objects.is_proxy(*id)
+        {
+            let complete = DataPropertyDescriptor::new(
+                value,
+                PropertyWritable::Yes,
+                PropertyEnumerable::Yes,
+                PropertyConfigurable::Yes,
+            );
+            let descriptor_value =
+                self.create_property_descriptor_object(&OwnPropertyDescriptor::Data(complete))?;
+            return self.semantic_define_own_property_update_with_descriptor(
+                receiver,
+                property,
+                PropertyUpdate::Data(update),
+                &descriptor_value,
+            );
+        }
+        self.semantic_define_own_property_update(receiver, property, PropertyUpdate::Data(update))
     }
 
     fn semantic_property_key(&mut self, property: PropertyLookup<'_>) -> Result<PropertyKey> {

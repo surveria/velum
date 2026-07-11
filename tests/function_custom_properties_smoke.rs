@@ -167,6 +167,38 @@ fn keeps_builtin_function_metadata_read_only() -> TestResult {
     )
 }
 
+#[test]
+fn supports_accessor_descriptors_on_javascript_functions() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let stored = 0;
+        function sample() {}
+        Object.defineProperty(sample, "value", {
+            get() { return stored; },
+            set(next) { stored = next; },
+            configurable: true
+        });
+        Object.defineProperty(sample, "name", {
+            get() { return "renamed"; },
+            configurable: true
+        });
+        sample.value = 42;
+        const descriptor = Object.getOwnPropertyDescriptor(sample, "value");
+        sample.value === 42 &&
+            sample.name === "renamed" &&
+            typeof descriptor.get === "function" &&
+            typeof descriptor.set === "function" &&
+            descriptor.enumerable === false &&
+            descriptor.configurable === true ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

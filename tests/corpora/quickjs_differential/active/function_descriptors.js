@@ -13,6 +13,18 @@ let hiddenDescriptor = Object.getOwnPropertyDescriptor(f, "hidden");
 let nameDescriptor = Object.getOwnPropertyDescriptor(f, "name");
 let lengthDescriptor = Object.getOwnPropertyDescriptor(f, "length");
 let functionKeys = Object.keys(f);
+let accessorStored = 0;
+Object.defineProperty(f, "value", {
+    get() { return accessorStored; },
+    set(next) { accessorStored = next; },
+    configurable: true
+});
+f.value = 42;
+let accessorDescriptor = Object.getOwnPropertyDescriptor(f, "value");
+Object.defineProperty(f, "name", {
+    get() { return "renamed"; },
+    configurable: true
+});
 
 Object.defineProperty(Object.keys, "tag", {
     value: "native",
@@ -58,4 +70,12 @@ print(
     nativeNameDescriptor.configurable,
     nativeLengthDescriptor.value,
     nativeLengthDescriptor.configurable
+);
+print(
+    f.value,
+    f.name,
+    typeof accessorDescriptor.get,
+    typeof accessorDescriptor.set,
+    accessorDescriptor.enumerable,
+    accessorDescriptor.configurable
 );

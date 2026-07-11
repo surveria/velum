@@ -6,7 +6,7 @@ use crate::{
     runtime::Context,
     runtime::object::{
         DataPropertyUpdate, OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyConfigurable,
-        PropertyEnumerable, PropertyKey, PropertyWritable,
+        PropertyEnumerable, PropertyKey, PropertyUpdate, PropertyWritable,
     },
     syntax::AccessorKind,
     value::Value,
@@ -155,12 +155,12 @@ impl Context {
             *id,
             FUNCTION_NAME_PROPERTY,
             key,
-            DataPropertyUpdate::new(
+            PropertyUpdate::Data(DataPropertyUpdate::new(
                 Some(value),
                 Some(PropertyWritable::No),
                 Some(PropertyEnumerable::No),
                 Some(PropertyConfigurable::Yes),
-            ),
+            )),
         )
     }
 }
