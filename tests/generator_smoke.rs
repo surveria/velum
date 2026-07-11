@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value};
+use rs_quickjs::{Error, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -13,6 +13,16 @@ fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
         return Ok(());
     }
     Err(format!("expected value {expected:?}, got {actual:?}").into())
+}
+
+fn ensure_parse_error(source: &str) -> TestResult {
+    let Err(error) = eval(source) else {
+        return Err(format!("expected '{source}' to fail during parsing").into());
+    };
+    if matches!(error, Error::Parse { .. }) {
+        return Ok(());
+    }
+    Err(format!("expected parse error, got '{error}'").into())
 }
 
 #[test]
@@ -30,6 +40,19 @@ fn generator_declaration_yields_and_returns() -> TestResult {
         "#,
     )?;
     ensure_value(&value, &Value::String("40:false:42:true".to_owned()))
+}
+
+#[test]
+fn rejects_generator_declaration_early_errors() -> TestResult {
+    for source in [
+        "if (true) function* values() {}",
+        "{ function* values() {} let values; }",
+        "switch (0) { case 0: function* values() {} default: var values; }",
+        "({ *values(item) { let item; } });",
+    ] {
+        ensure_parse_error(source)?;
+    }
+    Ok(())
 }
 
 #[test]

@@ -95,6 +95,11 @@ impl Parser {
     }
 
     pub(super) fn validate_assignment_identifier(&self, name: &str) -> Result<()> {
+        if (self.yield_identifier_is_reserved() && name == YIELD_IDENTIFIER_NAME)
+            || (self.await_identifier_is_reserved() && name == "await")
+        {
+            return Err(self.parse_error("invalid contextual assignment target"));
+        }
         if !self.is_strict_mode() {
             return Ok(());
         }

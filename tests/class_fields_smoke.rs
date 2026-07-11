@@ -80,6 +80,19 @@ fn executes_class_static_blocks_once_with_scoped_bindings() -> TestResult {
 }
 
 #[test]
+fn rejects_class_static_block_early_errors() -> TestResult {
+    for source in [
+        "class Sample { static { await; } }",
+        "class Sample { static { arguments; } }",
+        "while (false) { class Sample { static { break; } } }",
+        "class Sample { static { let value; var value; } }",
+    ] {
+        ensure_error_contains(source, "parser error")?;
+    }
+    Ok(())
+}
+
+#[test]
 fn supports_computed_string_and_numeric_field_keys() -> TestResult {
     ensure_string(
         r#"

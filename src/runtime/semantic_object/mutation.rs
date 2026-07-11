@@ -94,7 +94,7 @@ impl Context {
         let parent = if let Some(parent) = self.function_static_parent_value(target)? {
             parent
         } else {
-            if !Self::should_materialize_function_prototype_for(property.lookup()) {
+            if !self.function_should_materialize_prototype_for(target, property.lookup())? {
                 return self.reflect_define_receiver_property(property, value, receiver);
             }
             self.function_object_prototype_value(target)?

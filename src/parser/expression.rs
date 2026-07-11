@@ -483,6 +483,12 @@ impl Parser {
             }
             TokenKind::Super => self.super_expression(token_span)?,
             TokenKind::Identifier(name) => {
+                if self.class_static_block_identifiers_are_restricted() && name == "arguments" {
+                    return Err(Error::parse_at(
+                        "arguments is not allowed in a class static block",
+                        token_span,
+                    ));
+                }
                 if self.yield_identifier_is_reserved() && name == super::YIELD_IDENTIFIER_NAME {
                     return Err(Error::parse_at(
                         "yield is not a valid identifier reference",
@@ -542,6 +548,8 @@ impl Parser {
         };
         let start = self.current_span();
         let inherited_strict = self.is_strict_mode();
+        let inherited_await_reserved = self.await_identifier_is_reserved();
+        let inherited_yield_reserved = self.yield_identifier_is_reserved();
         if signature.is_async {
             self.consume(
                 &TokenKind::Async,
@@ -549,18 +557,43 @@ impl Parser {
             )?;
         }
         let parameters = match signature.parameters {
-            ArrowParameters::Single => super::function::ParsedParameters {
-                params: vec![FunctionParam::new(
-                    self.consume_binding_identifier("expected arrow function parameter")?,
-                    None,
-                )],
-                pattern_prologue: Vec::new(),
-                is_simple: true,
-            },
+            ArrowParameters::Single => {
+                let parameter = self.with_await_context(
+                    false,
+                    signature.is_async || inherited_await_reserved,
+                    |parser| {
+                        parser.with_yield_expression(false, |parser| {
+                            parser.with_yield_identifier_reserved(
+                                inherited_yield_reserved,
+                                |parser| {
+                                    parser.consume_binding_identifier(
+                                        "expected arrow function parameter",
+                                    )
+                                },
+                            )
+                        })
+                    },
+                )?;
+                super::function::ParsedParameters {
+                    params: vec![FunctionParam::new(parameter, None)],
+                    pattern_prologue: Vec::new(),
+                    is_simple: true,
+                }
+            }
             ArrowParameters::Parenthesized => {
                 self.consume(&TokenKind::LParen, "expected '(' before arrow parameters")?;
-                let parameters =
-                    self.with_await_context(false, signature.is_async, Self::function_parameters)?;
+                let parameters = self.with_await_context(
+                    false,
+                    signature.is_async || inherited_await_reserved,
+                    |parser| {
+                        parser.with_yield_expression(false, |parser| {
+                            parser.with_yield_identifier_reserved(
+                                inherited_yield_reserved,
+                                Self::function_parameters,
+                            )
+                        })
+                    },
+                )?;
                 self.consume(&TokenKind::RParen, "expected ')' after arrow parameters")?;
                 parameters
             }

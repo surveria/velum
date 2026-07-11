@@ -10,7 +10,9 @@ impl Parser {
     pub(super) fn function_expression(&mut self, kind: FunctionKind) -> Result<Expression> {
         let start = self.previous_span();
         let inherited_strict = self.is_strict_mode();
-        let name = self.with_await_identifier_reserved(kind.is_async(), |parser| {
+        let name_await_reserved = kind.is_async()
+            || (self.await_expression_is_allowed() && self.await_identifier_is_reserved());
+        let name = self.with_await_identifier_reserved(name_await_reserved, |parser| {
             if !parser.next_is_identifier() {
                 return Ok(None);
             }
@@ -47,6 +49,9 @@ impl Parser {
             inherited_strict,
             body.contains_use_strict,
         )?;
+        if kind.is_generator() {
+            self.validate_generator_parameter_lexicals(&parameters.params, &body.statements)?;
+        }
         let id = self.static_function()?;
         let (params, statements, parameter_prologue_count) =
             parameters.apply_prologue(body.statements);

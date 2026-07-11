@@ -236,6 +236,9 @@ impl Parser {
             inherited_strict,
             body.contains_use_strict,
         )?;
+        if kind.is_generator() {
+            self.validate_generator_parameter_lexicals(&parameters.params, &body.statements)?;
+        }
         let id = self.static_function()?;
         let (params, statements, parameter_prologue_count) =
             parameters.apply_prologue(body.statements);

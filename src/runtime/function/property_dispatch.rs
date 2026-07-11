@@ -25,10 +25,15 @@ impl Context {
                 OwnPropertyDescriptor::Accessor(_) => Ok(Value::Undefined),
             };
         }
+        if Self::is_restricted_property(property)
+            && !self.function_uses_restricted_prototype(id, property)?
+        {
+            return Ok(Value::Undefined);
+        }
         let parent = if let Some(parent) = self.function_static_parent_value(id)? {
             parent
         } else {
-            if !Self::should_materialize_function_prototype_for(property) {
+            if !self.function_should_materialize_prototype_for(id, property)? {
                 return Ok(Value::Undefined);
             }
             self.function_object_prototype_value(id)?
@@ -114,7 +119,7 @@ impl Context {
         let parent = if let Some(parent) = self.function_static_parent_value(id)? {
             parent
         } else {
-            if !Self::should_materialize_function_prototype_for(property) {
+            if !self.function_should_materialize_prototype_for(id, property)? {
                 return Ok(false);
             }
             self.function_object_prototype_value(id)?

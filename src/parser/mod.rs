@@ -11,6 +11,7 @@ mod assignment;
 mod await_context;
 mod binary;
 mod class;
+mod early_errors;
 mod expression;
 mod function;
 mod function_expression;
@@ -89,6 +90,13 @@ struct Parser {
     await_identifier_context: AwaitIdentifierContext,
     yield_expression_context: YieldExpressionContext,
     yield_identifier_context: YieldIdentifierContext,
+    class_static_block_identifiers: ClassStaticBlockIdentifierContext,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum ClassStaticBlockIdentifierContext {
+    Allowed,
+    Restricted,
 }
 
 impl Parser {
@@ -115,6 +123,7 @@ impl Parser {
             await_identifier_context: AwaitIdentifierContext::Allowed,
             yield_expression_context: YieldExpressionContext::Forbidden,
             yield_identifier_context: YieldIdentifierContext::Allowed,
+            class_static_block_identifiers: ClassStaticBlockIdentifierContext::Allowed,
         }
     }
 
@@ -446,7 +455,10 @@ impl Parser {
             .checked_add(1)
             .ok_or_else(|| Error::limit("new.target scope depth overflowed"))?;
         let previous_control_context = std::mem::take(&mut self.control_context);
+        let previous_static_block_identifiers = self.class_static_block_identifiers;
+        self.class_static_block_identifiers = ClassStaticBlockIdentifierContext::Allowed;
         let result = parse(self);
+        self.class_static_block_identifiers = previous_static_block_identifiers;
         self.control_context = previous_control_context;
         self.new_target_scope_depth = self.new_target_scope_depth.saturating_sub(1);
         result
@@ -454,6 +466,34 @@ impl Parser {
 
     pub(super) const fn allows_new_target(&self) -> bool {
         self.new_target_scope_depth > 0
+    }
+
+    pub(super) fn with_isolated_control_context<T>(
+        &mut self,
+        parse: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let previous = std::mem::take(&mut self.control_context);
+        let result = parse(self);
+        self.control_context = previous;
+        result
+    }
+
+    pub(super) fn with_class_static_block_identifiers<T>(
+        &mut self,
+        parse: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let previous = self.class_static_block_identifiers;
+        self.class_static_block_identifiers = ClassStaticBlockIdentifierContext::Restricted;
+        let result = parse(self);
+        self.class_static_block_identifiers = previous;
+        result
+    }
+
+    pub(super) const fn class_static_block_identifiers_are_restricted(&self) -> bool {
+        matches!(
+            self.class_static_block_identifiers,
+            ClassStaticBlockIdentifierContext::Restricted
+        )
     }
 
     pub(super) fn with_iteration_statement<T>(

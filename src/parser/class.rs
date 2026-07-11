@@ -202,9 +202,13 @@ impl Parser {
             .advance()
             .ok_or_else(|| self.parse_error("expected 'static' before class static block"))?;
         self.consume(&TokenKind::LBrace, "expected '{' after 'static'")?;
-        let mut body = self.with_super_context(true, false, |parser| {
-            parser.with_await_context(false, false, |parser| {
-                parser.with_yield_expression(false, Self::block_statements)
+        let mut body = self.with_class_static_block_identifiers(|parser| {
+            parser.with_isolated_control_context(|parser| {
+                parser.with_super_context(true, false, |parser| {
+                    parser.with_await_context(false, true, |parser| {
+                        parser.with_yield_expression(false, Self::block_statements)
+                    })
+                })
             })
         })?;
         if body.is_empty() {
@@ -222,6 +226,7 @@ impl Parser {
                 static_token.span,
             ));
         }
+        self.validate_static_block_declarations(&body)?;
         static_blocks.push(ClassStaticBlock { body: body.into() });
         Ok(())
     }

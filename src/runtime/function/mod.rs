@@ -586,7 +586,7 @@ impl Context {
         id: NativeFunctionId,
         property: PropertyLookup<'_>,
     ) -> Result<Value> {
-        if !Self::should_materialize_function_prototype_for(property) {
+        if !self.should_materialize_function_prototype_for(property) {
             return Ok(Value::Undefined);
         }
         let prototype = self.native_function_object_prototype_value(id)?;
@@ -610,21 +610,49 @@ impl Context {
     }
 
     pub(in crate::runtime) fn should_materialize_function_prototype_for(
+        &self,
         property: PropertyLookup<'_>,
     ) -> bool {
-        matches!(property.key(), Some(PropertyKey::Symbol(_)))
+        self.native_function_id(NativeFunctionKind::Function)
+            .is_some()
+            || matches!(property.key(), Some(PropertyKey::Symbol(_)))
             || property.name() == PROTOTYPE_CONSTRUCTOR_PROPERTY
             || property.name() == FUNCTION_PROTOTYPE_APPLY_PROPERTY
             || property.name() == FUNCTION_PROTOTYPE_BIND_PROPERTY
             || property.name() == FUNCTION_PROTOTYPE_CALL_PROPERTY
             || property.name() == FUNCTION_PROTOTYPE_TO_STRING_PROPERTY
-            || property.name() == FUNCTION_PROTOTYPE_ARGUMENTS_PROPERTY
-            || property.name() == FUNCTION_PROTOTYPE_CALLER_PROPERTY
             || property.name() == OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME
             || property.name() == OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME
             || property.name() == OBJECT_PROTOTYPE_VALUE_OF_NAME
             || property.name() == OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME
             || property.name() == OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME
+    }
+
+    pub(in crate::runtime) fn function_should_materialize_prototype_for(
+        &self,
+        id: FunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<bool> {
+        if self.should_materialize_function_prototype_for(property) {
+            return Ok(true);
+        }
+        self.function_uses_restricted_prototype(id, property)
+    }
+
+    pub(in crate::runtime) fn function_uses_restricted_prototype(
+        &self,
+        id: FunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<bool> {
+        let kind = self.function(id)?.kind;
+        Ok((kind.is_generator() || kind.is_async()) && Self::is_restricted_property(property))
+    }
+
+    pub(in crate::runtime) fn is_restricted_property(property: PropertyLookup<'_>) -> bool {
+        matches!(
+            property.name(),
+            FUNCTION_PROTOTYPE_ARGUMENTS_PROPERTY | FUNCTION_PROTOTYPE_CALLER_PROPERTY
+        )
     }
 
     pub(crate) fn native_function_object_prototype_value(

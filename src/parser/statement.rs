@@ -139,6 +139,7 @@ impl Parser {
             statements.push(self.statement()?);
         }
         self.consume(&TokenKind::RBrace, "expected '}' after block")?;
+        self.validate_generator_block_declarations(&statements)?;
         Ok(statements)
     }
 
@@ -186,8 +187,11 @@ impl Parser {
         let condition = self.expression()?;
         self.consume(&TokenKind::RParen, "expected ')' after if condition")?;
         let consequent = Box::new(self.statement()?);
+        self.reject_generator_single_statement(&consequent)?;
         let alternate = if self.match_kind(&TokenKind::Else) {
-            Some(Box::new(self.statement()?))
+            let alternate = Box::new(self.statement()?);
+            self.reject_generator_single_statement(&alternate)?;
+            Some(alternate)
         } else {
             None
         };
@@ -203,6 +207,7 @@ impl Parser {
         let condition = self.expression()?;
         self.consume(&TokenKind::RParen, "expected ')' after while condition")?;
         let body = Box::new(self.with_iteration_statement(Self::statement)?);
+        self.reject_generator_single_statement(&body)?;
         Ok(Stmt::While { condition, body })
     }
 
@@ -271,6 +276,7 @@ impl Parser {
         let label_names: Vec<_> = labels.iter().map(|label| label.name.clone()).collect();
         let body =
             self.with_labeled_statement(&label_names, is_iteration_target, Self::statement)?;
+        self.reject_generator_single_statement(&body)?;
         Ok(Self::nest_labeled_statements(labels, body))
     }
 
@@ -284,6 +290,9 @@ impl Parser {
                 return Err(self.parse_error("yield is not a valid label name"));
             }
             self.consume(&TokenKind::Colon, "expected ':' after label name")?;
+            if labels.iter().any(|label: &ParsedLabel| label.name == name) {
+                return Err(self.parse_error("duplicate label in labeled statement"));
+            }
             labels.push(ParsedLabel { name, start });
             if !self.label_statement_start() {
                 break;
@@ -367,6 +376,7 @@ impl Parser {
         if let Some((target, object, head)) = self.for_in_header()? {
             self.consume(&TokenKind::RParen, "expected ')' after for-in expression")?;
             let body = Box::new(self.with_iteration_statement(Self::statement)?);
+            self.reject_generator_single_statement(&body)?;
             return Ok(match head {
                 ForHeadKind::In => Stmt::ForIn {
                     target,
@@ -400,6 +410,7 @@ impl Parser {
         };
         self.consume(&TokenKind::RParen, "expected ')' after for clauses")?;
         let body = Box::new(self.with_iteration_statement(Self::statement)?);
+        self.reject_generator_single_statement(&body)?;
         Ok(Stmt::For {
             init,
             condition,
@@ -518,6 +529,7 @@ impl Parser {
         self.consume(&TokenKind::LBrace, "expected '{' before switch body")?;
 
         let cases = self.with_switch_statement(Self::switch_cases)?;
+        self.validate_generator_switch_declarations(&cases)?;
         Ok(Stmt::Switch {
             discriminant,
             cases,
@@ -621,7 +633,8 @@ impl Parser {
     }
 
     fn function_declaration(&mut self, kind: FunctionKind) -> Result<Stmt> {
-        let name = self.with_await_identifier_reserved(kind.is_async(), |parser| {
+        let name_await_reserved = kind.is_async() || self.await_identifier_is_reserved();
+        let name = self.with_await_identifier_reserved(name_await_reserved, |parser| {
             parser.consume_binding_identifier("expected function declaration name")
         })?;
         let inherited_strict = self.is_strict_mode();
@@ -652,6 +665,9 @@ impl Parser {
             inherited_strict,
             body.contains_use_strict,
         )?;
+        if kind.is_generator() {
+            self.validate_generator_parameter_lexicals(&parameters.params, &body.statements)?;
+        }
         let id = self.static_function()?;
         let (params, statements, parameter_prologue_count) =
             parameters.apply_prologue(body.statements);

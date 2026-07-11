@@ -472,7 +472,7 @@ impl Context {
         self.heap_string_value(kind.name())
     }
 
-    pub(in crate::runtime::native) fn native_function_id(
+    pub(in crate::runtime) fn native_function_id(
         &self,
         kind: NativeFunctionKind,
     ) -> Option<NativeFunctionId> {
