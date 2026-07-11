@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260711T175840Z.md`
-- Task: PR #464: runtime: add Iterator global and iterator helper methods
-- Performance: 5.59x (4/5 >1.00x) (from `rsqjs-test-report-20260711T175840Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T175840Z.md`)
+- `rsqjs-test-report-20260711T175926Z.md`
+- Task: PR #472: AS-09o: complete Object.create semantics
+- Performance: 5.65x (4/5 >1.00x) (from `rsqjs-test-report-20260711T175926Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T175926Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 52377 passed / 50201 failed (51.06%) (from `rsqjs-test-report-20260711T175840Z.md`)
+- Full Test262: 52511 passed / 50067 failed (51.19%) (from `rsqjs-test-report-20260711T175926Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -455,3 +455,4 @@ Latest report:
 | `20260711T171604Z` `06bb7c1` PR #469: AS-09m: vendor RegExp engine sources | 5.67x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 51351 passed / 51227 failed (50.06%) |
 | `20260711T173134Z` `125658b` PR #470: AS-09n: complete Object.assign semantics | 5.62x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 51379 passed / 51199 failed (50.09%) |
 | `20260711T175840Z` `ddb3e61` PR #464: runtime: add Iterator global and iterator helper methods | 5.59x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 52377 passed / 50201 failed (51.06%) |
+| `20260711T175926Z` `4d1c7fb` PR #472: AS-09o: complete Object.create semantics | 5.65x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 52511 passed / 50067 failed (51.19%) |
