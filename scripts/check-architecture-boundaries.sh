@@ -1775,6 +1775,7 @@ byte_buffer
 data_view
 typed_array
 is_raw_json
+arguments_brand
 prototype
 extensibility
 storage_ledger'

@@ -150,6 +150,7 @@ in one `Object` record.
 | Numeric TypedArray | `typed_array` on `Object`, carrying an element kind and referencing a buffer object plus shared byte buffer | typed-array indexed branches plus ordinary properties; AS-09j generalizes the previous Uint8-only payload without adding an edge category |
 | DataView | `data_view` on `Object`, carrying a byte range and referencing an ArrayBuffer object plus shared byte buffer | DataView accessors and numeric get/set methods; AS-09k reuses the existing internal-slot edge category |
 | Raw JSON marker | `is_raw_json` boolean on `Object` | JSON built-ins |
+| Arguments object | `arguments_brand` boolean on the existing dense-array-backed `Object`; it adds no variable-size payload or strong edge | function-call argument materialization plus the shared `Object.prototype.toString` builtin-class owner; AS-09o preserves indexed array storage while distinguishing `[object Arguments]` without a JavaScript-visible marker property |
 
 The following object kinds use `Value::Object` identity but keep their internal
 slots in `Context` side tables instead of `Object`:
