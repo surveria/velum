@@ -62,29 +62,58 @@ impl Context {
     }
 
     pub(in crate::runtime) fn create_pending_promise(&mut self) -> Result<(PromiseId, Value)> {
-        self.promises.reserve_insert()?;
-        self.storage_ledger.grow_count(VmStorageKind::Promise, 1)?;
-        let id = PromiseId::new(self.promises.next_index());
-        let object = match self.create_promise_object(id) {
+        let prototype = self.promise_constructor_prototype()?;
+        self.create_pending_promise_with_prototype(prototype)
+    }
+
+    pub(in crate::runtime) fn create_pending_promise_with_prototype(
+        &mut self,
+        prototype: ObjectId,
+    ) -> Result<(PromiseId, Value)> {
+        let id = self.allocate_pending_promise_record()?;
+        let object = match self.create_promise_object(id, prototype) {
             Ok(object) => object,
             Err(error) => {
-                self.storage_ledger
-                    .release_count(VmStorageKind::Promise, 1)?;
+                self.rollback_pending_promise_record(id)?;
                 return Err(error);
             }
         };
+        Ok((id, object))
+    }
+
+    pub(in crate::runtime) fn create_pending_promise_for_object(
+        &mut self,
+        object: ObjectId,
+    ) -> Result<PromiseId> {
+        self.objects.validate_id(object)?;
+        let id = self.allocate_pending_promise_record()?;
+        if let Err(error) = self.remember_promise_object(object, id) {
+            self.rollback_pending_promise_record(id)?;
+            return Err(error);
+        }
+        Ok(id)
+    }
+
+    fn allocate_pending_promise_record(&mut self) -> Result<PromiseId> {
+        self.promises.reserve_insert()?;
+        self.promises.reserve_removals(1)?;
+        self.storage_ledger.grow_count(VmStorageKind::Promise, 1)?;
+        let id = PromiseId::new(self.promises.next_index());
         if let Err(error) = self.promises.insert_at_next(id.index(), Promise::pending()) {
             self.storage_ledger
                 .release_count(VmStorageKind::Promise, 1)?;
             return Err(error);
         }
-        Ok((id, object))
+        Ok(id)
     }
 
-    pub(in crate::runtime) fn create_fulfilled_promise(&mut self, value: Value) -> Result<Value> {
-        let (id, object) = self.create_pending_promise()?;
-        self.fulfill_promise(id, value)?;
-        Ok(object)
+    fn rollback_pending_promise_record(&mut self, id: PromiseId) -> Result<()> {
+        if self.promises.remove_reserved(id.index())?.is_none() {
+            return Err(Error::runtime(
+                "pending Promise rollback record disappeared",
+            ));
+        }
+        self.storage_ledger.release_count(VmStorageKind::Promise, 1)
     }
 
     pub(in crate::runtime) fn create_rejected_promise(&mut self, reason: Value) -> Result<Value> {
@@ -431,8 +460,7 @@ impl Context {
         Ok(None)
     }
 
-    fn create_promise_object(&mut self, promise: PromiseId) -> Result<Value> {
-        let prototype = self.promise_constructor_prototype()?;
+    fn create_promise_object(&mut self, promise: PromiseId, prototype: ObjectId) -> Result<Value> {
         let constructor_key = self.object_constructor_property_key()?;
         let object = self.objects.create_with_prototype_id(
             Some(prototype),

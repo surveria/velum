@@ -53,6 +53,10 @@ impl IteratorSource {
     pub(in crate::runtime) fn root_values(&self) -> impl Iterator<Item = &Value> {
         self.root_value_slots().into_iter().flatten()
     }
+
+    pub(in crate::runtime) const fn mark_done(&mut self) {
+        set_protocol_done(self);
+    }
 }
 
 /// Outcome of the shared `IteratorStep` and `IteratorValue` sequence.

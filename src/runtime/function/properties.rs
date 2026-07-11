@@ -6,7 +6,7 @@ use crate::{
     },
     runtime::trace::{StrongEdgeReference, StrongEdgeVisitor},
     runtime::{VmStorageKind, storage_ledger::VmStorageLedger},
-    storage::atom::AtomTable,
+    storage::{atom::AtomTable, symbol::SymbolId},
     value::Value,
 };
 
@@ -371,6 +371,42 @@ impl FunctionProperties {
             }
         }
         Ok(keys)
+    }
+
+    pub(in crate::runtime) fn own_keys(
+        &self,
+        atoms: &AtomTable,
+    ) -> Result<(Vec<String>, Vec<SymbolId>)> {
+        let mut names = Vec::new();
+        if self
+            .intrinsic_descriptor(FunctionPropertyKind::Length)
+            .is_some()
+        {
+            names.push(FUNCTION_LENGTH_PROPERTY.to_owned());
+        }
+        if self
+            .intrinsic_descriptor(FunctionPropertyKind::Name)
+            .is_some()
+        {
+            names.push(FUNCTION_NAME_PROPERTY.to_owned());
+        }
+        if self
+            .intrinsic_descriptor(FunctionPropertyKind::Prototype)
+            .is_some()
+        {
+            names.push(FUNCTION_PROTOTYPE_PROPERTY.to_owned());
+        }
+        for key in &self.property_order {
+            if let Some(atom) = key.atom() {
+                names.push(atoms.name(atom)?.to_owned());
+            }
+        }
+        let symbols = self
+            .property_order
+            .iter()
+            .filter_map(|key| key.symbol_id())
+            .collect();
+        Ok((names, symbols))
     }
 
     pub(in crate::runtime) fn define_builtin(

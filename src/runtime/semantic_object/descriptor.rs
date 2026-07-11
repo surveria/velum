@@ -99,14 +99,19 @@ impl Context {
             Value::Function(id) => {
                 self.define_function_property_key(*id, property.name(), key, update)?;
             }
-            Value::NativeFunction(id) => {
-                let PropertyUpdate::Data(update) = update else {
-                    return Err(Error::runtime(
-                        "accessor properties are not supported on native function objects",
-                    ));
-                };
-                self.define_native_function_property_key(*id, property.name(), key, update)?;
-            }
+            Value::NativeFunction(id) => match update {
+                PropertyUpdate::Data(update) => {
+                    self.define_native_function_property_key(*id, property.name(), key, update)?;
+                }
+                PropertyUpdate::Accessor(update) => {
+                    self.define_native_function_accessor_property_key(
+                        *id,
+                        property.name(),
+                        key,
+                        update,
+                    )?;
+                }
+            },
             Value::HostFunction(_) => {
                 return Err(Error::runtime(
                     "property definition target is not supported",

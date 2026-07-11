@@ -58,9 +58,13 @@ impl Context {
             Value::Function(id) => {
                 self.eval_class_super_constructor_completion(id, args, &this_value, new_target)?
             }
-            // Native superclasses cannot initialize an existing instance;
-            // run them for effect compatibility and keep the current this.
-            Value::NativeFunction(_) => Completion::Normal(Value::Undefined),
+            Value::NativeFunction(id) => {
+                let kind = self.native_function(id)?.kind();
+                if kind == crate::runtime::native::NativeFunctionKind::Promise {
+                    self.initialize_promise_super_instance(args, &this_value)?;
+                }
+                Completion::Normal(Value::Undefined)
+            }
             _ => return Err(Error::type_error(SUPER_NOT_CONSTRUCTOR_ERROR)),
         };
         let Completion::Normal(_) = completion else {

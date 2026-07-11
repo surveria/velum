@@ -1454,6 +1454,7 @@ check_callable_edge_boundary() {
   for source in \
     'NativeFunctionKind::BoundFunction(id)' \
     'NativeFunctionKind::CollectionIteratorNext(id)' \
+    'NativeFunctionKind::PromiseCapabilityExecutor {' \
     'NativeFunctionKind::PromiseAllResolveElement { state, .. }' \
     'NativeFunctionKind::PromiseResolver { promise, .. }' \
     'NativeFunctionKind::ProxyRevoke(id)'; do
@@ -1478,6 +1479,7 @@ check_callable_edge_boundary() {
   compare_set "native function id-payload allowlist" "${native_id_variants}" \
     'BoundFunction(BoundFunctionId),
 CollectionIteratorNext(crate::runtime::collections::CollectionIteratorId),
+capability_state:ObjectId,
 promise:crate::runtime::promise::PromiseId,
 ProxyRevoke(ObjectId),
 state:ObjectId,'

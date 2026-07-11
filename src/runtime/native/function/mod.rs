@@ -195,7 +195,10 @@ impl NativeFunction {
                 VmCallableEdgeKind::NativeFunctionInternal,
                 StrongEdgeReference::Promise(promise),
             ),
-            NativeFunctionKind::PromiseAllResolveElement { state, .. } => visitor.visit(
+            NativeFunctionKind::PromiseAllResolveElement { state, .. }
+            | NativeFunctionKind::PromiseCapabilityExecutor {
+                capability_state: state,
+            } => visitor.visit(
                 VmCallableEdgeKind::NativeFunctionInternal,
                 StrongEdgeReference::Object(state),
             ),

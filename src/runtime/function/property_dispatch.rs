@@ -277,6 +277,22 @@ impl Context {
         function.properties.keys(&self.atoms)
     }
 
+    pub(crate) fn function_own_keys(
+        &self,
+        id: FunctionId,
+    ) -> Result<(Vec<String>, Vec<crate::storage::symbol::SymbolId>)> {
+        let function = self.function(id)?;
+        function.properties.own_keys(&self.atoms)
+    }
+
+    pub(crate) fn native_function_own_keys(
+        &self,
+        id: NativeFunctionId,
+    ) -> Result<(Vec<String>, Vec<crate::storage::symbol::SymbolId>)> {
+        let function = self.native_function(id)?;
+        function.properties().own_keys(&self.atoms)
+    }
+
     pub(in crate::runtime) fn set_function_static_parent(
         &mut self,
         id: FunctionId,

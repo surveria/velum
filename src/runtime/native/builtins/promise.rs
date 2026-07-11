@@ -2,23 +2,45 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
-        abstract_operations::IteratorStep,
+        abstract_operations::{IteratorSource, IteratorStep},
         call::RuntimeCallArgs,
         control::Completion,
         control::runtime_exception_value,
-        object::{ObjectPropertyInit, PropertyEnumerable},
+        native::NativeFunctionKind,
+        object::{
+            DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
+            PropertyUpdate, PropertyWritable,
+        },
+        roots::VmRootKind,
     },
-    value::Value,
+    value::{ObjectId, Value},
 };
 
 use super::{
-    NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, PROMISE_ALL_NAME, PROMISE_CATCH_NAME,
-    PROMISE_NAME, PROMISE_REJECT_NAME, PROMISE_RESOLVE_NAME, PROMISE_THEN_NAME,
+    OBJECT_CONSTRUCTOR_PROPERTY, PROMISE_ALL_NAME, PROMISE_CATCH_NAME, PROMISE_NAME,
+    PROMISE_REJECT_NAME, PROMISE_RESOLVE_NAME, PROMISE_THEN_NAME,
 };
 
+const PROMISE_CAPABILITY_REJECT_PROPERTY: &str = "[[PromiseCapabilityReject]]";
+const PROMISE_CAPABILITY_RESOLVE_PROPERTY: &str = "[[PromiseCapabilityResolve]]";
+const PROMISE_ALL_ALREADY_CALLED_PROPERTY: &str = "[[PromiseAllAlreadyCalled]]";
+const PROMISE_ALL_SHARED_STATE_PROPERTY: &str = "[[PromiseAllSharedState]]";
 const PROMISE_ALL_VALUES_PROPERTY: &str = "[[PromiseAllValues]]";
 const PROMISE_ALL_REMAINING_PROPERTY: &str = "[[PromiseAllRemaining]]";
-const PROMISE_ALL_RESULT_PROPERTY: &str = "[[PromiseAllResult]]";
+const PROMISE_ALL_RESOLVE_PROPERTY: &str = "[[PromiseAllResolve]]";
+const PROMISE_ALL_COUNT_ERROR: &str = "Promise.all input count exceeds numeric range";
+
+struct PromiseCapability {
+    promise: Value,
+    resolve: Value,
+    reject: Value,
+}
+
+impl PromiseCapability {
+    fn root_values(&self) -> [&Value; 3] {
+        [&self.promise, &self.resolve, &self.reject]
+    }
+}
 
 impl Context {
     pub(in crate::runtime) fn promise_constructor_value(&mut self) -> Result<Value> {
@@ -53,6 +75,52 @@ impl Context {
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
+        let prototype = self.promise_constructor_prototype()?;
+        self.eval_promise_constructor_with_prototype(args, prototype)
+    }
+
+    pub(in crate::runtime) fn construct_promise_with_new_target(
+        &mut self,
+        args: &[Value],
+        new_target: &Value,
+    ) -> Result<Value> {
+        let prototype = match self.constructor_instance_prototype(new_target)? {
+            Some(prototype) => prototype,
+            None => self.promise_constructor_prototype()?,
+        };
+        self.eval_promise_constructor_with_prototype(args, prototype)
+    }
+
+    fn eval_promise_constructor_with_prototype(
+        &mut self,
+        args: &[Value],
+        prototype: ObjectId,
+    ) -> Result<Value> {
+        let executor = self.promise_executor_argument(args)?;
+        let (promise, object) = self.create_pending_promise_with_prototype(prototype)?;
+        self.run_promise_executor(promise, object, executor)
+    }
+
+    pub(in crate::runtime) fn initialize_promise_super_instance(
+        &mut self,
+        args: &[Value],
+        this_value: &Value,
+    ) -> Result<()> {
+        let executor = self.promise_executor_argument(args)?;
+        let Value::Object(object) = this_value else {
+            return Err(Error::runtime("Promise super receiver is not an object"));
+        };
+        if self.promise_id_from_value(this_value).is_ok() {
+            return Err(Error::type_error(
+                "Promise super constructor was called twice",
+            ));
+        }
+        let promise = self.create_pending_promise_for_object(*object)?;
+        self.run_promise_executor(promise, this_value.clone(), executor)
+            .map(|_object| ())
+    }
+
+    fn promise_executor_argument(&self, args: &[Value]) -> Result<Value> {
         let Some(executor) = args.first().cloned() else {
             return Err(Error::type_error(
                 "Promise constructor requires an executor",
@@ -61,8 +129,15 @@ impl Context {
         if !self.semantic_is_callable(&executor)? {
             return Err(Error::type_error("Promise executor must be callable"));
         }
+        Ok(executor)
+    }
 
-        let (promise, object) = self.create_pending_promise()?;
+    fn run_promise_executor(
+        &mut self,
+        promise: crate::runtime::promise::PromiseId,
+        object: Value,
+        executor: Value,
+    ) -> Result<Value> {
         let resolve = self.create_promise_resolving_function(
             promise,
             crate::runtime::promise::PromiseResolverKind::Resolve,
@@ -110,7 +185,9 @@ impl Context {
         if self.promise_id_from_value(&value).is_ok() {
             return Ok(value);
         }
-        self.create_fulfilled_promise(value)
+        let (promise, object) = self.create_pending_promise()?;
+        self.resolve_promise(promise, value)?;
+        Ok(object)
     }
 
     pub(in crate::runtime::native) fn eval_promise_reject(
@@ -166,6 +243,32 @@ impl Context {
         self.promise_then(promise, None, on_rejected)
     }
 
+    pub(in crate::runtime::native) fn eval_promise_native_function_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Option<Result<Value>> {
+        match kind {
+            NativeFunctionKind::Promise => Some(self.eval_promise_constructor(args)),
+            NativeFunctionKind::PromiseAll => Some(self.eval_promise_all(args, this_value)),
+            NativeFunctionKind::PromiseAllResolveElement { state, index } => {
+                Some(self.eval_promise_all_resolve_element(state, index, args))
+            }
+            NativeFunctionKind::PromiseCapabilityExecutor { capability_state } => {
+                Some(self.eval_promise_capability_executor(capability_state, args))
+            }
+            NativeFunctionKind::PromiseResolve => Some(self.eval_promise_resolve(args)),
+            NativeFunctionKind::PromiseReject => Some(self.eval_promise_reject(args)),
+            NativeFunctionKind::PromiseThen => Some(self.eval_promise_then(args, this_value)),
+            NativeFunctionKind::PromiseCatch => Some(self.eval_promise_catch(args, this_value)),
+            NativeFunctionKind::PromiseResolver { promise, kind } => {
+                Some(self.eval_promise_resolver(promise, kind, args))
+            }
+            _ => None,
+        }
+    }
+
     pub(in crate::runtime) fn promise_constructor_prototype(
         &mut self,
     ) -> Result<crate::value::ObjectId> {
@@ -204,82 +307,213 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let intrinsic = self.promise_constructor_value()?;
-        if this_value != &intrinsic {
+        let iterable = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
+        let capability = self.new_promise_capability(this_value)?;
+        let _root_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            capability
+                .root_values()
+                .into_iter()
+                .chain(std::iter::once(&iterable)),
+        )?;
+        let setup = self.setup_promise_all(&capability, this_value, iterable);
+        if let Err(error) = setup {
+            self.reject_promise_all_capability(&capability, error)?;
+        }
+        Ok(capability.promise)
+    }
+
+    fn new_promise_capability(&mut self, constructor: &Value) -> Result<PromiseCapability> {
+        if !self.semantic_is_constructor(constructor)? {
             return Err(Error::type_error(
-                "Promise.all requires the intrinsic Promise constructor",
+                "Promise.all receiver must be a constructor",
             ));
         }
-        let (result_promise, result_object) = self.create_pending_promise()?;
-        let iterable = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
-        let setup = self.setup_promise_all(result_promise, result_object.clone(), iterable);
-        if let Err(error) = setup {
-            let Some(reason) = runtime_exception_value(self, &error)? else {
-                return Err(error);
-            };
-            self.reject_promise(result_promise, reason)?;
+        let intrinsic = self.promise_constructor_value()?;
+        if constructor == &intrinsic {
+            return self.create_intrinsic_promise_capability();
         }
-        Ok(result_object)
+        let state = self.create_promise_internal_state()?;
+        self.define_non_enumerable_object_property(
+            state,
+            PROMISE_CAPABILITY_RESOLVE_PROPERTY,
+            Value::Undefined,
+        )?;
+        self.define_non_enumerable_object_property(
+            state,
+            PROMISE_CAPABILITY_REJECT_PROPERTY,
+            Value::Undefined,
+        )?;
+        let executor = self.create_ephemeral_native_function(
+            NativeFunctionKind::PromiseCapabilityExecutor {
+                capability_state: state,
+            },
+            Value::Undefined,
+        )?;
+        let promise = self.semantic_construct(
+            constructor,
+            std::slice::from_ref(&executor),
+            constructor.clone(),
+        )?;
+        let state = Value::Object(state);
+        let resolve = self.get_named(&state, PROMISE_CAPABILITY_RESOLVE_PROPERTY)?;
+        let reject = self.get_named(&state, PROMISE_CAPABILITY_REJECT_PROPERTY)?;
+        if !self.semantic_is_callable(&resolve)? || !self.semantic_is_callable(&reject)? {
+            return Err(Error::type_error(
+                "Promise capability resolve and reject must be callable",
+            ));
+        }
+        Ok(PromiseCapability {
+            promise,
+            resolve,
+            reject,
+        })
+    }
+
+    fn create_intrinsic_promise_capability(&mut self) -> Result<PromiseCapability> {
+        let (promise, object) = self.create_pending_promise()?;
+        let resolve = self.create_promise_resolving_function(
+            promise,
+            crate::runtime::promise::PromiseResolverKind::Resolve,
+        )?;
+        let reject = self.create_promise_resolving_function(
+            promise,
+            crate::runtime::promise::PromiseResolverKind::Reject,
+        )?;
+        Ok(PromiseCapability {
+            promise: object,
+            resolve,
+            reject,
+        })
+    }
+
+    pub(in crate::runtime::native) fn eval_promise_capability_executor(
+        &mut self,
+        state: ObjectId,
+        args: RuntimeCallArgs<'_>,
+    ) -> Result<Value> {
+        let state_value = Value::Object(state);
+        let resolve = self.get_named(&state_value, PROMISE_CAPABILITY_RESOLVE_PROPERTY)?;
+        let reject = self.get_named(&state_value, PROMISE_CAPABILITY_REJECT_PROPERTY)?;
+        if !matches!(resolve, Value::Undefined) || !matches!(reject, Value::Undefined) {
+            return Err(Error::type_error(
+                "Promise capability executor was already initialized",
+            ));
+        }
+        let values = args.as_slice();
+        self.define_non_enumerable_object_property(
+            state,
+            PROMISE_CAPABILITY_RESOLVE_PROPERTY,
+            values.first().cloned().unwrap_or(Value::Undefined),
+        )?;
+        self.define_non_enumerable_object_property(
+            state,
+            PROMISE_CAPABILITY_REJECT_PROPERTY,
+            values.get(1).cloned().unwrap_or(Value::Undefined),
+        )?;
+        Ok(Value::Undefined)
+    }
+
+    fn reject_promise_all_capability(
+        &mut self,
+        capability: &PromiseCapability,
+        error: Error,
+    ) -> Result<()> {
+        let Some(reason) = runtime_exception_value(self, &error)? else {
+            return Err(error);
+        };
+        self.call_value(&capability.reject, &[reason], Value::Undefined)
+            .map(|_value| ())
     }
 
     fn setup_promise_all(
         &mut self,
-        result_promise: crate::runtime::promise::PromiseId,
-        result_object: Value,
+        capability: &PromiseCapability,
+        constructor: &Value,
         iterable: Value,
     ) -> Result<()> {
+        let promise_resolve = self.get_named(constructor, PROMISE_RESOLVE_NAME)?;
+        if !self.semantic_is_callable(&promise_resolve)? {
+            return Err(Error::type_error("Promise resolve method must be callable"));
+        }
         let mut iterator = self.get_iterator(iterable)?;
-        let mut inputs = Vec::new();
-        loop {
-            self.step()?;
-            match self.iterator_step(&mut iterator)? {
-                IteratorStep::Value(value) => inputs.push(value),
-                IteratorStep::Done => break,
-                IteratorStep::Abrupt(completion) => return completion.into_result().map(|_| ()),
-            }
+        let result =
+            self.perform_promise_all(capability, constructor, &promise_resolve, &mut iterator);
+        match result {
+            Ok(()) => Ok(()),
+            Err(error) => Err(self.iterator_close_on_error(&mut iterator, error)),
         }
+    }
 
-        let values = self.create_array_from_elements(vec![Value::Undefined; inputs.len()])?;
-        if inputs.is_empty() {
-            return self.resolve_promise(result_promise, values);
-        }
-
-        let constructor_key = self.object_constructor_property_key()?;
-        let state = self.objects.create_empty_data_object(
-            constructor_key,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
+    fn perform_promise_all(
+        &mut self,
+        capability: &PromiseCapability,
+        constructor: &Value,
+        promise_resolve: &Value,
+        iterator: &mut IteratorSource,
+    ) -> Result<()> {
+        let _iterator_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, iterator.root_values())?;
+        let values = self.create_array_from_elements(Vec::new())?;
+        let state = self.create_promise_internal_state()?;
+        let state_value = Value::Object(state);
+        let _state_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            std::iter::once(&state_value),
         )?;
-        self.define_non_enumerable_object_property(state, PROMISE_ALL_VALUES_PROPERTY, values)?;
+        self.define_non_enumerable_object_property(
+            state,
+            PROMISE_ALL_VALUES_PROPERTY,
+            values.clone(),
+        )?;
         self.define_non_enumerable_object_property(
             state,
             PROMISE_ALL_REMAINING_PROPERTY,
-            Value::Number(Self::usize_to_number(
-                inputs.len(),
-                "Promise.all input count exceeds numeric range",
-            )?),
+            Value::Number(1.0),
         )?;
         self.define_non_enumerable_object_property(
             state,
-            PROMISE_ALL_RESULT_PROPERTY,
-            result_object,
+            PROMISE_ALL_RESOLVE_PROPERTY,
+            capability.resolve.clone(),
         )?;
-
-        for (index, input) in inputs.into_iter().enumerate() {
-            let input_promise = self.promise_resolve_for_await(input)?;
-            let on_fulfilled = self.create_ephemeral_native_function(
-                NativeFunctionKind::PromiseAllResolveElement { state, index },
-                Value::Undefined,
+        let mut index = 0_usize;
+        loop {
+            self.step()?;
+            let step = match self.iterator_step(iterator) {
+                Ok(step) => step,
+                Err(error) => {
+                    iterator.mark_done();
+                    return Err(error);
+                }
+            };
+            let input = match step {
+                IteratorStep::Value(value) => value,
+                IteratorStep::Done => {
+                    if self.change_promise_all_remaining(state, false)? == 0 {
+                        self.call_value(&capability.resolve, &[values], Value::Undefined)?;
+                    }
+                    return Ok(());
+                }
+                IteratorStep::Abrupt(completion) => return completion.into_result().map(|_| ()),
+            };
+            self.set_promise_all_value(&values, index, Value::Undefined)?;
+            let next_promise = self.call_value(
+                promise_resolve,
+                std::slice::from_ref(&input),
+                constructor.clone(),
             )?;
-            let on_rejected = self.create_promise_resolving_function(
-                result_promise,
-                crate::runtime::promise::PromiseResolverKind::Reject,
+            let resolve_element = self.create_promise_all_resolve_element(state, index)?;
+            self.change_promise_all_remaining(state, true)?;
+            let then = self.get_named(&next_promise, PROMISE_THEN_NAME)?;
+            self.call_value(
+                &then,
+                &[resolve_element, capability.reject.clone()],
+                next_promise,
             )?;
-            let chained =
-                self.promise_then(input_promise, Some(on_fulfilled), Some(on_rejected))?;
-            drop(chained);
+            index = index
+                .checked_add(1)
+                .ok_or_else(|| Error::limit(PROMISE_ALL_COUNT_ERROR))?;
         }
-        Ok(())
     }
 
     pub(in crate::runtime::native) fn eval_promise_all_resolve_element(
@@ -288,37 +522,111 @@ impl Context {
         index: usize,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let state_value = Value::Object(state);
-        let values = self.get_named(&state_value, PROMISE_ALL_VALUES_PROPERTY)?;
-        let Value::Object(values_id) = values.clone() else {
-            return Err(Error::runtime("Promise.all values state is not an array"));
+        let element_state = Value::Object(state);
+        let already_called = self.get_named(&element_state, PROMISE_ALL_ALREADY_CALLED_PROPERTY)?;
+        let Value::Bool(already_called) = already_called else {
+            return Err(Error::runtime("Promise.all call state is not boolean"));
         };
-        let value = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
-        if !self.objects.set_array_index_if_array(
-            values_id,
-            index,
-            value,
-            self.limits.max_object_properties,
-        )? {
-            return Err(Error::runtime("Promise.all values state is not an array"));
+        if already_called {
+            return Ok(Value::Undefined);
         }
+        self.define_non_enumerable_object_property(
+            state,
+            PROMISE_ALL_ALREADY_CALLED_PROPERTY,
+            Value::Bool(true),
+        )?;
+        let shared_state = self.get_named(&element_state, PROMISE_ALL_SHARED_STATE_PROPERTY)?;
+        let Value::Object(shared_state) = shared_state else {
+            return Err(Error::runtime("Promise.all shared state is not an object"));
+        };
+        let shared_value = Value::Object(shared_state);
+        let values = self.get_named(&shared_value, PROMISE_ALL_VALUES_PROPERTY)?;
+        let value = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
+        self.set_promise_all_value(&values, index, value)?;
+        if self.change_promise_all_remaining(shared_state, false)? == 0 {
+            let resolve = self.get_named(&shared_value, PROMISE_ALL_RESOLVE_PROPERTY)?;
+            self.call_value(&resolve, &[values], Value::Undefined)?;
+        }
+        Ok(Value::Undefined)
+    }
 
+    fn create_promise_internal_state(&mut self) -> Result<ObjectId> {
+        let constructor_key = self.object_constructor_property_key()?;
+        self.objects.create_empty_data_object(
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn create_promise_all_resolve_element(
+        &mut self,
+        shared_state: ObjectId,
+        index: usize,
+    ) -> Result<Value> {
+        let state = self.create_promise_internal_state()?;
+        self.define_non_enumerable_object_property(
+            state,
+            PROMISE_ALL_ALREADY_CALLED_PROPERTY,
+            Value::Bool(false),
+        )?;
+        self.define_non_enumerable_object_property(
+            state,
+            PROMISE_ALL_SHARED_STATE_PROPERTY,
+            Value::Object(shared_state),
+        )?;
+        self.create_ephemeral_native_function(
+            NativeFunctionKind::PromiseAllResolveElement { state, index },
+            Value::Undefined,
+        )
+    }
+
+    fn change_promise_all_remaining(&mut self, state: ObjectId, increment: bool) -> Result<usize> {
+        let state_value = Value::Object(state);
         let remaining = self.get_named(&state_value, PROMISE_ALL_REMAINING_PROPERTY)?;
         let Value::Number(remaining) = remaining else {
             return Err(Error::runtime("Promise.all remaining state is not numeric"));
         };
-        let next = remaining - 1.0;
+        let remaining =
+            Self::finite_nonnegative_integer_to_usize(remaining, PROMISE_ALL_COUNT_ERROR)?;
+        let next = if increment {
+            remaining
+                .checked_add(1)
+                .ok_or_else(|| Error::limit(PROMISE_ALL_COUNT_ERROR))?
+        } else {
+            remaining
+                .checked_sub(1)
+                .ok_or_else(|| Error::runtime("Promise.all remaining state underflowed"))?
+        };
         self.define_non_enumerable_object_property(
             state,
             PROMISE_ALL_REMAINING_PROPERTY,
-            Value::Number(next),
+            Value::Number(Self::usize_to_number(next, PROMISE_ALL_COUNT_ERROR)?),
         )?;
-        if next == 0.0 {
-            let result = self.get_named(&state_value, PROMISE_ALL_RESULT_PROPERTY)?;
-            let result_promise = self.promise_id_from_value(&result)?;
-            self.resolve_promise(result_promise, values)?;
+        Ok(next)
+    }
+
+    fn set_promise_all_value(&mut self, values: &Value, index: usize, value: Value) -> Result<()> {
+        let Value::Object(values) = values else {
+            return Err(Error::runtime("Promise.all values state is not an array"));
+        };
+        if self.objects.array_len_if_array(*values)?.is_none() {
+            return Err(Error::runtime("Promise.all values state is not an array"));
         }
-        Ok(Value::Undefined)
+        let property = index.to_string();
+        let key = self.intern_property_key(&property)?;
+        self.objects.define_property(
+            *values,
+            key,
+            &property,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(value),
+                Some(PropertyWritable::Yes),
+                Some(PropertyEnumerable::Yes),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )
     }
 
     fn define_promise_static_method(
