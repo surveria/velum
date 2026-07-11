@@ -172,17 +172,7 @@ jobs:
           fi
           if [[ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" \
             || "${{ github.event.inputs.correctness }}" == "true" ]]; then
-            quality_status=0
-            correctness_status=0
-            RSQJS_FAST_RUNNER=1 ./scripts/check-fast.sh &
-            quality_pid=$!
-            RSQJS_SKIP_QUALITY_GATES=1 ./scripts/check-correctness.sh || correctness_status=$?
-            wait "${quality_pid}" || quality_status=$?
-            if ((quality_status != 0 || correctness_status != 0)); then
-              printf 'parallel CI lanes failed: quality=%s correctness=%s\n' \
-                "${quality_status}" "${correctness_status}" >&2
-              exit 1
-            fi
+            ./scripts/check-correctness.sh
           elif [[ "${{ github.event.inputs.full }}" == "true" ]]; then
             ./scripts/test-all.sh
           else
