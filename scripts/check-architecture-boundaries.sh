@@ -893,7 +893,7 @@ check_function_accessor_boundary() {
   )"
   compare_set "function accessor owner allowlist" \
     "${definition_owners}" \
-    'src/runtime/function/mod.rs:define_function_property_key'
+    'src/runtime/function/property_dispatch.rs:define_function_property_key'
 
   if grep -R -q -F --include='*.rs' \
       'class static accessors are not supported yet' \
