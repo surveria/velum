@@ -229,6 +229,9 @@ impl Context {
                 super_binding,
                 static_parent: None,
                 class_fields: None,
+                class_private_slots: None,
+                private_environment: self.active_private_environment.clone(),
+                private_slots: Vec::new(),
                 params_remembered: std::cell::Cell::new(false),
                 scope_template,
                 new_target: FunctionNewTarget::from_mode(

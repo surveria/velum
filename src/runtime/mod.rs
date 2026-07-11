@@ -40,6 +40,7 @@ pub mod native;
 pub mod numeric;
 pub mod object;
 mod optimizer;
+mod private;
 pub mod promise;
 pub mod property;
 pub mod retained_values;
@@ -97,6 +98,8 @@ pub struct Context {
     builtin_globals: BindingScope,
     locals: Vec<BindingScope>,
     activation_frames: Vec<activation::ActivationFrame>,
+    active_private_environment: Option<Rc<private::PrivateEnvironment>>,
+    next_private_environment_id: u64,
     functions: SlotArena<Function>,
     native_functions: SlotArena<native::NativeFunction>,
     native_function_registry: NativeFunctionRegistry,
@@ -149,6 +152,9 @@ struct Function {
     super_binding: Option<Rc<function::FunctionSuperBinding>>,
     static_parent: Option<Value>,
     class_fields: Option<Rc<[function::ResolvedClassField]>>,
+    class_private_slots: Option<Rc<[private::PrivateSlot]>>,
+    private_environment: Option<Rc<private::PrivateEnvironment>>,
+    private_slots: Vec<private::PrivateSlot>,
     params_remembered: std::cell::Cell<bool>,
     scope_template: Option<Rc<function::FunctionScopeTemplate>>,
     new_target: FunctionNewTarget,
@@ -337,6 +343,8 @@ impl Context {
             builtin_globals: BindingScope::new_active(storage_ledger.clone()),
             locals: Vec::new(),
             activation_frames: Vec::new(),
+            active_private_environment: None,
+            next_private_environment_id: 0,
             functions: SlotArena::new(),
             native_functions: SlotArena::new(),
             native_function_registry: NativeFunctionRegistry::new(),

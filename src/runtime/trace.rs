@@ -370,10 +370,30 @@ impl Function {
         }
         if let Some(fields) = &self.class_fields {
             for field in fields.iter() {
+                if let Some(key) = field.property_key() {
+                    visitor.visit(
+                        VmCallableEdgeKind::JavaScriptFunctionInternal,
+                        StrongEdgeReference::PropertyKey(key),
+                    )?;
+                }
+            }
+        }
+        for slot in &self.private_slots {
+            for value in slot.value.values() {
                 visitor.visit(
                     VmCallableEdgeKind::JavaScriptFunctionInternal,
-                    StrongEdgeReference::PropertyKey(field.key),
+                    StrongEdgeReference::Value(value),
                 )?;
+            }
+        }
+        if let Some(slots) = &self.class_private_slots {
+            for slot in slots.iter() {
+                for value in slot.value.values() {
+                    visitor.visit(
+                        VmCallableEdgeKind::JavaScriptFunctionInternal,
+                        StrongEdgeReference::Value(value),
+                    )?;
+                }
             }
         }
         if let FunctionNewTarget::Lexical(value) = &self.new_target {

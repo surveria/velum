@@ -499,6 +499,9 @@ pub struct BytecodeCatch {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BytecodeInstruction {
+    BeginPrivateEnvironment {
+        names: Rc<[StaticName]>,
+    },
     PushLiteral(Value),
     PushString(StaticString),
     TemplateConcat {

@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use super::FunctionSuperBinding;
 
+use crate::runtime::private::{PrivateNameId, PrivateSlot, PrivateSlotValue};
 use crate::{
     error::{Error, Result},
     runtime::Context,
@@ -10,16 +11,112 @@ use crate::{
     value::{FunctionId, Value},
 };
 
-/// A resolved public instance field: the property key computed at class
-/// definition time plus the lazily evaluated initializer block.
+/// One resolved instance field initialized during construction.
 #[derive(Debug)]
-pub(in crate::runtime) struct ResolvedClassField {
-    pub(in crate::runtime) key: crate::runtime::object::PropertyKey,
-    pub(in crate::runtime) name: String,
-    pub(in crate::runtime) initializer: Option<crate::bytecode::BytecodeBlock>,
+pub(in crate::runtime) enum ResolvedClassField {
+    Public {
+        key: crate::runtime::object::PropertyKey,
+        name: String,
+        initializer: Option<crate::bytecode::BytecodeBlock>,
+    },
+    Private {
+        name: PrivateNameId,
+        initializer: Option<crate::bytecode::BytecodeBlock>,
+    },
+}
+
+impl ResolvedClassField {
+    pub(in crate::runtime) const fn property_key(
+        &self,
+    ) -> Option<crate::runtime::object::PropertyKey> {
+        match self {
+            Self::Public { key, .. } => Some(*key),
+            Self::Private { .. } => None,
+        }
+    }
 }
 
 impl Context {
+    pub(in crate::runtime) fn add_function_private_slot(
+        &mut self,
+        id: FunctionId,
+        name: PrivateNameId,
+        value: PrivateSlotValue,
+    ) -> Result<()> {
+        let function = self.function(id)?;
+        if function.private_slots.iter().any(|slot| slot.id == name) {
+            return Err(Error::type_error("private slot is already defined"));
+        }
+        let property_count = function
+            .properties
+            .storage_property_count()?
+            .checked_add(function.private_slots.len())
+            .and_then(|count| count.checked_add(1))
+            .ok_or_else(|| Error::limit("function property count overflowed"))?;
+        if property_count > self.limits.max_object_properties {
+            return Err(Error::limit(
+                "function property count exceeded configured limit",
+            ));
+        }
+        let reservation = self
+            .storage_ledger
+            .reserve_count(crate::runtime::VmStorageKind::ObjectProperty, 1)?;
+        self.function_mut(id)?
+            .private_slots
+            .push(PrivateSlot { id: name, value });
+        reservation.commit()
+    }
+
+    pub(in crate::runtime) fn function_private_slot(
+        &self,
+        id: FunctionId,
+        name: PrivateNameId,
+    ) -> Result<Option<PrivateSlotValue>> {
+        Ok(self
+            .function(id)?
+            .private_slots
+            .iter()
+            .find(|slot| slot.id == name)
+            .map(|slot| slot.value.clone()))
+    }
+
+    pub(in crate::runtime) fn set_function_private_field(
+        &mut self,
+        id: FunctionId,
+        name: PrivateNameId,
+        value: Value,
+    ) -> Result<bool> {
+        let Some(slot) = self
+            .function_mut(id)?
+            .private_slots
+            .iter_mut()
+            .find(|slot| slot.id == name)
+        else {
+            return Ok(false);
+        };
+        let PrivateSlotValue::Field(current) = &mut slot.value else {
+            return Ok(false);
+        };
+        *current = value;
+        Ok(true)
+    }
+
+    pub(in crate::runtime) fn replace_function_private_slot(
+        &mut self,
+        id: FunctionId,
+        name: PrivateNameId,
+        value: PrivateSlotValue,
+    ) -> Result<()> {
+        let slot = self
+            .function_mut(id)?
+            .private_slots
+            .iter_mut()
+            .find(|slot| slot.id == name)
+            .ok_or_else(|| Error::runtime("private slot disappeared"))?;
+        slot.value = value;
+        Ok(())
+    }
+
     /// Runs a parent class constructor for `super(...)`: the current `this`
     /// is initialized in place, the parent's return-object override is
     /// ignored, and throws propagate as completions.
@@ -83,6 +180,27 @@ impl Context {
         Ok(())
     }
 
+    pub(in crate::runtime) fn set_function_class_private_slots(
+        &mut self,
+        id: FunctionId,
+        slots: Rc<[PrivateSlot]>,
+    ) -> Result<()> {
+        let previous_count = self
+            .function(id)?
+            .class_private_slots
+            .as_ref()
+            .map_or(0, |existing| existing.len());
+        let additional_count = slots.len().saturating_sub(previous_count);
+        let removed_count = previous_count.saturating_sub(slots.len());
+        let reservation = self
+            .storage_ledger
+            .reserve_count(crate::runtime::VmStorageKind::CacheEntry, additional_count)?;
+        reservation.commit()?;
+        self.function_mut(id)?.class_private_slots = Some(slots);
+        self.storage_ledger
+            .release_count(crate::runtime::VmStorageKind::CacheEntry, removed_count)
+    }
+
     /// True when the function is a derived class constructor whose fields
     /// initialize after `super()` instead of at construction entry.
     pub(in crate::runtime) fn is_derived_class_constructor(&self, id: FunctionId) -> bool {
@@ -101,37 +219,58 @@ impl Context {
         id: FunctionId,
         instance: &Value,
     ) -> Result<()> {
-        let Some(fields) = self.function(id)?.class_fields.clone() else {
-            return Ok(());
-        };
-        let Value::Object(object_id) = instance else {
+        let private_slots = self.function(id)?.class_private_slots.clone();
+        let fields = self.function(id)?.class_fields.clone();
+        if let Some(private_slots) = private_slots {
+            for slot in private_slots.iter() {
+                self.add_private_slot_to_value(instance, slot.id, slot.value.clone())?;
+            }
+        }
+        let Some(fields) = fields else {
             return Ok(());
         };
         for field in fields.iter() {
             self.push_temporary_this(instance.clone())?;
-            let value = field
-                .initializer
+            let initializer = match field {
+                ResolvedClassField::Public { initializer, .. }
+                | ResolvedClassField::Private { initializer, .. } => initializer,
+            };
+            let value = initializer
                 .as_ref()
                 .map_or(Ok(Completion::Normal(Value::Undefined)), |initializer| {
                     self.eval_bytecode_block(initializer)
                 });
             self.pop_temporary_this()?;
             let value = value?.into_result()?;
-            let update = crate::runtime::object::PropertyUpdate::Data(
-                crate::runtime::object::DataPropertyUpdate::new(
-                    Some(value),
-                    Some(crate::runtime::object::PropertyWritable::Yes),
-                    Some(crate::runtime::object::PropertyEnumerable::Yes),
-                    Some(crate::runtime::object::PropertyConfigurable::Yes),
-                ),
-            );
-            self.objects.define_property(
-                *object_id,
-                field.key,
-                &field.name,
-                update,
-                self.limits.max_object_properties,
-            )?;
+            match field {
+                ResolvedClassField::Public { key, name, .. } => {
+                    let Value::Object(object_id) = instance else {
+                        return Err(Error::type_error("class field receiver is not an object"));
+                    };
+                    let update = crate::runtime::object::PropertyUpdate::Data(
+                        crate::runtime::object::DataPropertyUpdate::new(
+                            Some(value),
+                            Some(crate::runtime::object::PropertyWritable::Yes),
+                            Some(crate::runtime::object::PropertyEnumerable::Yes),
+                            Some(crate::runtime::object::PropertyConfigurable::Yes),
+                        ),
+                    );
+                    self.objects.define_property(
+                        *object_id,
+                        *key,
+                        name,
+                        update,
+                        self.limits.max_object_properties,
+                    )?;
+                }
+                ResolvedClassField::Private { name, .. } => {
+                    self.add_private_slot_to_value(
+                        instance,
+                        *name,
+                        PrivateSlotValue::Field(value),
+                    )?;
+                }
+            }
         }
         Ok(())
     }

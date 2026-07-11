@@ -64,6 +64,7 @@ impl Object {
             byte_buffer: None,
             data_view: None,
             typed_array: None,
+            private_slots: Vec::new(),
             is_raw_json: false,
             prototype: None,
             extensibility: super::ObjectExtensibility::Extensible,

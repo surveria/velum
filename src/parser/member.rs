@@ -6,7 +6,7 @@ use crate::{
     value::Value,
 };
 
-use super::{Parser, expression::keyword_property_name};
+use super::{Parser, property_name::keyword_property_name};
 
 impl Parser {
     /// Parses one `.name` or `.#name` member suffix after its consumed dot.

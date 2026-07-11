@@ -60,6 +60,14 @@ impl Object {
                 .visit_strong_edges(VmObjectEdgeKind::Property, visitor)?;
         }
         self.array_storage.visit_strong_edges(visitor)?;
+        for slot in &self.private_slots {
+            for value in slot.value.values() {
+                visitor.visit(
+                    VmObjectEdgeKind::InternalSlot,
+                    StrongEdgeReference::Value(value),
+                )?;
+            }
+        }
         if let Some(prototype) = self.prototype {
             visitor.visit(
                 VmObjectEdgeKind::Prototype,

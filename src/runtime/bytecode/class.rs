@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use crate::runtime::private::{PrivateSlot, PrivateSlotValue};
 use crate::{
     bytecode::{
         BytecodeAddress, BytecodeClass, BytecodeClassMember, BytecodeClassMemberKey,
@@ -86,6 +87,7 @@ impl Context {
             .map_or(Value::Undefined, |heritage| heritage.constructor.clone());
 
         let mut computed_keys = computed_keys.into_iter();
+        let mut instance_private_slots: Vec<PrivateSlot> = Vec::new();
         for member in class.members.iter() {
             let computed_key = match member.key {
                 BytecodeClassMemberKey::Computed => Some(
@@ -93,14 +95,31 @@ impl Context {
                         .next()
                         .ok_or_else(|| Error::runtime("class computed member key disappeared"))?,
                 ),
-                BytecodeClassMemberKey::Static(_) => None,
+                BytecodeClassMemberKey::Static(_) | BytecodeClassMemberKey::Private { .. } => None,
             };
-            let function_id = self.install_class_member(
+            let (function_id, private_slot) = self.install_class_member(
                 member,
                 computed_key.as_ref(),
                 *constructor_id,
                 prototype_id,
+                &class.private_names,
             )?;
+            if let Some(private_slot) = private_slot {
+                if member.is_static {
+                    self.add_or_merge_private_slot_to_value(
+                        &constructor,
+                        private_slot.id,
+                        private_slot.value,
+                    )?;
+                } else if let Some(existing) = instance_private_slots
+                    .iter_mut()
+                    .find(|slot| slot.id == private_slot.id)
+                {
+                    existing.value.merge_accessor(private_slot.value)?;
+                } else {
+                    instance_private_slots.push(private_slot);
+                }
+            }
             let home = if member.is_static {
                 static_home.clone()
             } else {
@@ -116,6 +135,10 @@ impl Context {
                     }),
                 )?;
             }
+        }
+
+        if !instance_private_slots.is_empty() {
+            self.set_function_class_private_slots(*constructor_id, instance_private_slots.into())?;
         }
 
         self.install_class_fields(class, &constructor, *constructor_id, &field_computed_keys)?;
@@ -161,13 +184,22 @@ impl Context {
                         .next()
                         .ok_or_else(|| Error::runtime("class field key disappeared"))?,
                 ),
-                BytecodeClassMemberKey::Static(_) => None,
+                BytecodeClassMemberKey::Static(_) | BytecodeClassMemberKey::Private { .. } => None,
             };
-            let (key, name, _) = self.class_member_property_key(&field.key, computed_key)?;
-            let resolved = ResolvedClassField {
-                key,
-                name,
-                initializer: field.initializer.clone(),
+            let resolved = match &field.key {
+                BytecodeClassMemberKey::Private { index } => ResolvedClassField::Private {
+                    name: self.resolve_own_private_name(*index)?,
+                    initializer: field.initializer.clone(),
+                },
+                BytecodeClassMemberKey::Static(_) | BytecodeClassMemberKey::Computed => {
+                    let (key, name, _) =
+                        self.class_member_property_key(&field.key, computed_key)?;
+                    ResolvedClassField::Public {
+                        key,
+                        name,
+                        initializer: field.initializer.clone(),
+                    }
+                }
             };
             if field.is_static {
                 static_fields.push(resolved);
@@ -180,7 +212,11 @@ impl Context {
         }
         for field in static_fields {
             self.push_temporary_this(constructor.clone())?;
-            let value = field.initializer.as_ref().map_or(
+            let initializer = match &field {
+                ResolvedClassField::Public { initializer, .. }
+                | ResolvedClassField::Private { initializer, .. } => initializer,
+            };
+            let value = initializer.as_ref().map_or(
                 Ok(crate::runtime::control::Completion::Normal(
                     Value::Undefined,
                 )),
@@ -188,18 +224,29 @@ impl Context {
             );
             self.pop_temporary_this()?;
             let value = value?.into_result()?;
-            let update = DataPropertyUpdate::new(
-                Some(value),
-                Some(PropertyWritable::Yes),
-                Some(PropertyEnumerable::Yes),
-                Some(PropertyConfigurable::Yes),
-            );
-            self.define_function_property_key(
-                constructor_id,
-                &field.name,
-                field.key,
-                PropertyUpdate::Data(update),
-            )?;
+            match field {
+                ResolvedClassField::Public { key, name, .. } => {
+                    let update = DataPropertyUpdate::new(
+                        Some(value),
+                        Some(PropertyWritable::Yes),
+                        Some(PropertyEnumerable::Yes),
+                        Some(PropertyConfigurable::Yes),
+                    );
+                    self.define_function_property_key(
+                        constructor_id,
+                        &name,
+                        key,
+                        PropertyUpdate::Data(update),
+                    )?;
+                }
+                ResolvedClassField::Private { name, .. } => {
+                    self.add_private_slot_to_value(
+                        constructor,
+                        name,
+                        PrivateSlotValue::Field(value),
+                    )?;
+                }
+            }
         }
         Ok(())
     }
@@ -210,7 +257,8 @@ impl Context {
         computed_key: Option<&Value>,
         constructor_id: FunctionId,
         prototype_id: ObjectId,
-    ) -> Result<FunctionId> {
+        private_names: &[crate::syntax::StaticName],
+    ) -> Result<(FunctionId, Option<PrivateSlot>)> {
         let function = self.create_bytecode_function(&BytecodeFunctionInit {
             static_function_id: member.id,
             name: None,
@@ -225,13 +273,40 @@ impl Context {
             return Err(Error::runtime("class member creation failed"));
         };
 
-        let (key, name, function_name) =
-            self.class_member_property_key(&member.key, computed_key)?;
         let prefix = match member.kind {
             BytecodeClassMemberKind::Method => None,
             BytecodeClassMemberKind::Getter => Some(crate::syntax::AccessorKind::Getter),
             BytecodeClassMemberKind::Setter => Some(crate::syntax::AccessorKind::Setter),
         };
+        if let BytecodeClassMemberKey::Private { index } = member.key {
+            let index_usize = usize::try_from(index)
+                .map_err(|_| Error::limit("private name index exceeded supported range"))?;
+            let name = private_names
+                .get(index_usize)
+                .ok_or_else(|| Error::runtime("private class member name disappeared"))?;
+            self.set_function_name(&function, name.as_str(), prefix)?;
+            let value = match member.kind {
+                BytecodeClassMemberKind::Method => PrivateSlotValue::Method(function),
+                BytecodeClassMemberKind::Getter => PrivateSlotValue::Accessor {
+                    getter: Some(function),
+                    setter: None,
+                },
+                BytecodeClassMemberKind::Setter => PrivateSlotValue::Accessor {
+                    getter: None,
+                    setter: Some(function),
+                },
+            };
+            return Ok((
+                function_id,
+                Some(PrivateSlot {
+                    id: self.resolve_own_private_name(index)?,
+                    value,
+                }),
+            ));
+        }
+
+        let (key, name, function_name) =
+            self.class_member_property_key(&member.key, computed_key)?;
         self.set_function_name(&function, &function_name, prefix)?;
 
         let update = match member.kind {
@@ -260,7 +335,7 @@ impl Context {
         };
         if member.is_static {
             self.define_function_property_key(constructor_id, &name, key, update)?;
-            return Ok(function_id);
+            return Ok((function_id, None));
         }
         self.objects.define_property(
             prototype_id,
@@ -269,7 +344,7 @@ impl Context {
             update,
             self.limits.max_object_properties,
         )?;
-        Ok(function_id)
+        Ok((function_id, None))
     }
 
     fn class_member_property_key(
@@ -290,6 +365,9 @@ impl Context {
             }
             (BytecodeClassMemberKey::Computed, None) => {
                 Err(Error::runtime("class computed member key disappeared"))
+            }
+            (BytecodeClassMemberKey::Private { .. }, _) => {
+                Err(Error::runtime("private class element has no property key"))
             }
         }
     }

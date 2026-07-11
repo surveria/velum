@@ -1,7 +1,12 @@
+use std::rc::Rc;
+
 use crate::{
     bytecode::{BytecodeAddress, BytecodeCompletion},
     error::{Error, Result},
-    runtime::{abstract_operations::YieldDelegateContinuation, control::Completion},
+    runtime::{
+        abstract_operations::YieldDelegateContinuation, control::Completion,
+        private::PrivateEnvironment,
+    },
     syntax::StaticName,
     value::Value,
 };
@@ -13,6 +18,7 @@ pub(in crate::runtime) struct BytecodeState {
     pub(super) pc: BytecodeAddress,
     pub(super) stack: BytecodeStack,
     pub(super) last: Value,
+    private_environment: Option<Rc<PrivateEnvironment>>,
     suspend: Option<Box<BytecodeSuspendState>>,
 }
 
@@ -40,6 +46,19 @@ impl BytecodeState {
             pc: BytecodeAddress::new(0),
             stack: BytecodeStack::new(),
             last: Value::Undefined,
+            private_environment: None,
+            suspend: None,
+        }
+    }
+
+    pub(in crate::runtime) const fn with_private_environment(
+        private_environment: Option<Rc<PrivateEnvironment>>,
+    ) -> Self {
+        Self {
+            pc: BytecodeAddress::new(0),
+            stack: BytecodeStack::new(),
+            last: Value::Undefined,
+            private_environment,
             suspend: None,
         }
     }
@@ -49,6 +68,17 @@ impl BytecodeState {
         self.stack.clear();
         self.last = Value::Undefined;
         self.suspend = None;
+    }
+
+    pub(in crate::runtime) fn private_environment(&self) -> Option<Rc<PrivateEnvironment>> {
+        self.private_environment.clone()
+    }
+
+    pub(in crate::runtime) fn replace_private_environment(
+        &mut self,
+        environment: Option<Rc<PrivateEnvironment>>,
+    ) -> Option<Rc<PrivateEnvironment>> {
+        std::mem::replace(&mut self.private_environment, environment)
     }
 
     pub(super) fn prepare_run(&mut self) -> Result<()> {

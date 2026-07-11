@@ -308,6 +308,7 @@ impl<'a> BytecodeCompiler<'a> {
                 Ok(())
             }
             BytecodeInstruction::PushLiteral(_)
+            | BytecodeInstruction::BeginPrivateEnvironment { .. }
             | BytecodeInstruction::PushString(_)
             | BytecodeInstruction::TemplateConcat { .. }
             | BytecodeInstruction::StringConcat { .. }
@@ -355,6 +356,13 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::CompoundComputedProperty { .. }
             | BytecodeInstruction::LogicalAssignment { .. }
             | BytecodeInstruction::StaticMember { .. }
+            | BytecodeInstruction::PrivateMember { .. }
+            | BytecodeInstruction::PrivateAssign { .. }
+            | BytecodeInstruction::CompoundPrivateProperty { .. }
+            | BytecodeInstruction::UpdatePrivateProperty { .. }
+            | BytecodeInstruction::CallPrivateMember { .. }
+            | BytecodeInstruction::CallPrivateMemberSpread { .. }
+            | BytecodeInstruction::PrivateIn { .. }
             | BytecodeInstruction::ArrayLength { .. }
             | BytecodeInstruction::ArrayIndexMember { .. }
             | BytecodeInstruction::ComputedMember { .. }
@@ -415,11 +423,15 @@ impl<'a> BytecodeCompiler<'a> {
         class: &crate::ast::ClassLiteral,
         inferred_name: Option<&StaticName>,
     ) -> Result<()> {
+        let private_names = Self::class_private_names(class);
+        self.emit(BytecodeInstruction::BeginPrivateEnvironment {
+            names: private_names.clone(),
+        });
         if let Some(heritage) = &class.heritage {
             self.compile_expr(heritage)?;
         }
-        let members = self.compile_class_members(class)?;
-        let fields = self.compile_class_fields(class)?;
+        let members = self.compile_class_members(class, &private_names)?;
+        let fields = self.compile_class_fields(class, &private_names)?;
         let static_blocks = class
             .static_blocks
             .iter()
@@ -441,6 +453,7 @@ impl<'a> BytecodeCompiler<'a> {
                 members: members.into(),
                 fields: fields.into(),
                 static_blocks: static_blocks.into(),
+                private_names,
             }),
         });
         Ok(())
@@ -451,10 +464,11 @@ impl<'a> BytecodeCompiler<'a> {
     fn compile_class_members(
         &mut self,
         class: &crate::ast::ClassLiteral,
+        private_names: &[StaticName],
     ) -> Result<Vec<BytecodeClassMember>> {
         let mut members = Vec::with_capacity(class.members.len());
         for member in &class.members {
-            let key = self.compile_class_element_key(&member.key, "method")?;
+            let key = self.compile_class_element_key(&member.key, private_names)?;
             let kind = match member.kind {
                 crate::ast::ClassMemberKind::Method => BytecodeClassMemberKind::Method,
                 crate::ast::ClassMemberKind::Getter => BytecodeClassMemberKind::Getter,
@@ -483,10 +497,11 @@ impl<'a> BytecodeCompiler<'a> {
     fn compile_class_fields(
         &mut self,
         class: &crate::ast::ClassLiteral,
+        private_names: &[StaticName],
     ) -> Result<Vec<BytecodeClassField>> {
         let mut fields = Vec::with_capacity(class.fields.len());
         for field in &class.fields {
-            let key = self.compile_class_element_key(&field.key, "field")?;
+            let key = self.compile_class_element_key(&field.key, private_names)?;
             fields.push(BytecodeClassField {
                 key,
                 is_static: field.is_static,
@@ -515,7 +530,7 @@ impl<'a> BytecodeCompiler<'a> {
     fn compile_class_element_key(
         &mut self,
         key: &crate::ast::ClassElementName,
-        element: &str,
+        private_names: &[StaticName],
     ) -> Result<BytecodeClassMemberKey> {
         match key {
             crate::ast::ClassElementName::Property(ObjectPropertyKey::Static(name)) => {
@@ -525,10 +540,38 @@ impl<'a> BytecodeCompiler<'a> {
                 self.compile_expr(expr)?;
                 Ok(BytecodeClassMemberKey::Computed)
             }
-            crate::ast::ClassElementName::Private(_) => Err(Error::runtime(format!(
-                "private class {element}s are not supported yet"
-            ))),
+            crate::ast::ClassElementName::Private(name) => {
+                let index = private_names
+                    .iter()
+                    .position(|candidate| candidate.as_str() == name.as_str())
+                    .ok_or_else(|| Error::runtime("private class name disappeared"))?;
+                let index = u32::try_from(index)
+                    .map_err(|_| Error::limit("private class name index overflowed"))?;
+                Ok(BytecodeClassMemberKey::Private { index })
+            }
         }
+    }
+
+    fn class_private_names(class: &crate::ast::ClassLiteral) -> Rc<[StaticName]> {
+        let mut names = Vec::new();
+        for key in class
+            .members
+            .iter()
+            .map(|member| &member.key)
+            .chain(class.fields.iter().map(|field| &field.key))
+        {
+            let crate::ast::ClassElementName::Private(name) = key else {
+                continue;
+            };
+            if names
+                .iter()
+                .any(|candidate: &StaticName| candidate.as_str() == name.as_str())
+            {
+                continue;
+            }
+            names.push(name.clone());
+        }
+        names.into()
     }
 
     fn compile_block_statement(

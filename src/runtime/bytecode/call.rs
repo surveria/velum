@@ -25,6 +25,10 @@ impl Context {
             | BytecodeInstruction::CallComputedMember { .. } => {
                 self.eval_bytecode_invocation_instruction(state, instruction, next)
             }
+            BytecodeInstruction::CallPrivateMember {
+                property,
+                arg_count,
+            } => self.eval_bytecode_call_private_member(state, property, *arg_count, next),
             BytecodeInstruction::CollectSpreadArgs { spread_flags } => {
                 self.eval_bytecode_collect_spread_args(state, spread_flags, next)
             }
@@ -44,11 +48,20 @@ impl Context {
             BytecodeInstruction::CallComputedMemberSpread { property } => {
                 self.eval_bytecode_call_computed_member_spread(state, *property, next)
             }
+            BytecodeInstruction::CallPrivateMemberSpread { property } => {
+                self.eval_bytecode_call_private_member_spread(state, property, next)
+            }
             BytecodeInstruction::ConstructValueSpread => {
                 self.eval_bytecode_construct_value_spread(state, next)
             }
             BytecodeInstruction::CreateClass { class } => {
-                self.eval_bytecode_create_class(state, class, next)
+                let result = self.eval_bytecode_create_class(state, class, next);
+                let leave = self.leave_private_environment(state);
+                match (result, leave) {
+                    (Ok(completion), Ok(())) => Ok(completion),
+                    (Err(error), Ok(())) => Err(error),
+                    (Ok(_), Err(error)) | (Err(_), Err(error)) => Err(error),
+                }
             }
             BytecodeInstruction::CallSuper { arg_count } => {
                 self.eval_bytecode_call_super(state, *arg_count, next)

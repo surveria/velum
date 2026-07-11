@@ -5,7 +5,7 @@ use crate::{
     value::Value,
 };
 
-use super::{Parser, SUPER_IDENTIFIER_NAME, property_name::keyword_property_name};
+use super::{Parser, SUPER_IDENTIFIER_NAME};
 
 const NEW_TARGET_PROPERTY_NAME: &str = "target";
 const IMPORT_BINDING_NAME: &str = "import";

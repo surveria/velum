@@ -411,7 +411,10 @@ impl Context {
             counter.record(VmStorageKind::Binding, function.upvalues.len())?;
             counter.record(
                 VmStorageKind::ObjectProperty,
-                function.properties.storage_property_count()?,
+                function
+                    .properties
+                    .storage_property_count()?
+                    .saturating_add(function.private_slots.len()),
             )?;
             counter.record(
                 VmStorageKind::SourceRecord,
@@ -430,6 +433,13 @@ impl Context {
                     .class_fields
                     .as_ref()
                     .map_or(0, |fields| fields.len()),
+            )?;
+            counter.record(
+                VmStorageKind::CacheEntry,
+                function
+                    .class_private_slots
+                    .as_ref()
+                    .map_or(0, |slots| slots.len()),
             )?;
             counter.record(
                 VmStorageKind::CacheEntry,

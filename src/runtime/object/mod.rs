@@ -10,6 +10,7 @@ mod data_view;
 mod date;
 mod heap;
 mod integrity;
+mod private_slot;
 mod property;
 mod prototype;
 mod proxy;
@@ -111,6 +112,7 @@ struct Object {
     byte_buffer: Option<ByteBuffer>,
     data_view: Option<DataViewView>,
     typed_array: Option<TypedArrayView>,
+    private_slots: Vec<crate::runtime::private::PrivateSlot>,
     is_raw_json: bool,
     prototype: Option<ObjectId>,
     extensibility: ObjectExtensibility,
@@ -145,6 +147,7 @@ impl Object {
             byte_buffer: None,
             data_view: None,
             typed_array: None,
+            private_slots: Vec::new(),
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
@@ -213,6 +216,7 @@ impl Object {
             byte_buffer: None,
             data_view: None,
             typed_array: None,
+            private_slots: Vec::new(),
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
@@ -237,6 +241,7 @@ impl Object {
             byte_buffer: None,
             data_view: None,
             typed_array: None,
+            private_slots: Vec::new(),
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
@@ -261,6 +266,7 @@ impl Object {
             byte_buffer: None,
             data_view: None,
             typed_array: None,
+            private_slots: Vec::new(),
             is_raw_json: false,
             prototype: None,
             extensibility: ObjectExtensibility::Extensible,
@@ -716,6 +722,7 @@ impl Object {
         self.named_properties
             .len()
             .saturating_add(self.array_storage.property_count())
+            .saturating_add(self.private_slots.len())
     }
 }
 

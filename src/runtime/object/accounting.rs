@@ -50,6 +50,7 @@ impl ObjectHeap {
             properties = properties
                 .checked_add(object.named_properties.len())
                 .and_then(|count| count.checked_add(object.array_storage.property_count()))
+                .and_then(|count| count.checked_add(object.private_slots.len()))
                 .ok_or_else(|| Error::limit("object property count overflowed"))?;
         }
         Ok(ObjectStorageCounts {

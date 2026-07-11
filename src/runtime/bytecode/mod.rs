@@ -13,6 +13,7 @@ mod in_operator;
 mod instruction_stack;
 mod linear;
 mod ops;
+mod private_ops;
 mod spread;
 pub(in crate::runtime) mod state;
 mod string_concat;
@@ -39,7 +40,8 @@ impl Context {
     ) -> Result<Option<Completion>> {
         let next = state.next_pc()?;
         match instruction {
-            BytecodeInstruction::PushLiteral(_)
+            BytecodeInstruction::BeginPrivateEnvironment { .. }
+            | BytecodeInstruction::PushLiteral(_)
             | BytecodeInstruction::PushString(_)
             | BytecodeInstruction::TemplateConcat { .. }
             | BytecodeInstruction::StringConcat { .. }
@@ -90,15 +92,24 @@ impl Context {
             | BytecodeInstruction::ComputedPropertyAssign { .. } => {
                 self.eval_bytecode_property_instruction(state, instruction, next)
             }
+            BytecodeInstruction::PrivateMember { .. }
+            | BytecodeInstruction::PrivateAssign { .. }
+            | BytecodeInstruction::CompoundPrivateProperty { .. }
+            | BytecodeInstruction::UpdatePrivateProperty { .. }
+            | BytecodeInstruction::PrivateIn { .. } => {
+                self.eval_bytecode_private_instruction(state, instruction, next)
+            }
             BytecodeInstruction::CallBinding { .. }
             | BytecodeInstruction::CallValue { .. }
             | BytecodeInstruction::CallStaticMember { .. }
             | BytecodeInstruction::CallComputedMember { .. }
+            | BytecodeInstruction::CallPrivateMember { .. }
             | BytecodeInstruction::CollectSpreadArgs { .. }
             | BytecodeInstruction::CallBindingSpread { .. }
             | BytecodeInstruction::CallValueSpread
             | BytecodeInstruction::CallStaticMemberSpread { .. }
             | BytecodeInstruction::CallComputedMemberSpread { .. }
+            | BytecodeInstruction::CallPrivateMemberSpread { .. }
             | BytecodeInstruction::ConstructValueSpread
             | BytecodeInstruction::ArrayLiteralSpread { .. }
             | BytecodeInstruction::CreateClass { .. }
