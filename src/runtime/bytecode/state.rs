@@ -154,7 +154,11 @@ impl BytecodeState {
             Completion::Normal(_) if discards_normal => (None, None),
             Completion::Normal(value) => (Some(value), None),
             completion @ Completion::Throw(_) => (None, Some(completion)),
-            completion @ Completion::Return(_) if permits_abrupt => (None, Some(completion)),
+            completion @ (Completion::Return(_) | Completion::ReturnDirect(_))
+                if permits_abrupt =>
+            {
+                (None, Some(completion))
+            }
             completion => return completion.into_result().map(|_| ()),
         };
         let suspend = self.suspend_state_mut();

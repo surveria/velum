@@ -214,6 +214,14 @@ impl DetachedFunctionExecution {
         self.function
     }
 
+    pub(in crate::runtime) fn has_yield_delegate(&self) -> bool {
+        self.activations.iter().any(|frame| {
+            frame
+                .continuation()
+                .is_some_and(super::super::bytecode::BytecodeContinuationFrame::has_yield_delegate)
+        })
+    }
+
     fn take_owners(self) -> (Vec<BindingScope>, Vec<ActivationFrame>) {
         (self.locals, self.activations)
     }

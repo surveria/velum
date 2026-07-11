@@ -102,6 +102,12 @@ impl BytecodeContinuationFrame {
             && self.resumed_child.is_none()
     }
 
+    pub(in crate::runtime) fn has_yield_delegate(&self) -> bool {
+        self.parked_state
+            .as_ref()
+            .is_some_and(|state| state.has_yield_delegate())
+    }
+
     const fn is_running(&self) -> bool {
         self.parked_state.is_none()
     }

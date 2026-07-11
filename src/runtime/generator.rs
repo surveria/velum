@@ -139,6 +139,7 @@ enum GeneratorState {
 enum AsyncGeneratorAwaitState {
     Body(DetachedFunctionExecution),
     DelegatedYield(DetachedFunctionExecution),
+    ResumeReturn(DetachedFunctionExecution),
     Yield(DetachedFunctionExecution),
     Return,
 }
@@ -146,9 +147,10 @@ enum AsyncGeneratorAwaitState {
 impl AsyncGeneratorAwaitState {
     const fn execution(&self) -> Option<&DetachedFunctionExecution> {
         match self {
-            Self::Body(execution) | Self::DelegatedYield(execution) | Self::Yield(execution) => {
-                Some(execution)
-            }
+            Self::Body(execution)
+            | Self::DelegatedYield(execution)
+            | Self::ResumeReturn(execution)
+            | Self::Yield(execution) => Some(execution),
             Self::Return => None,
         }
     }

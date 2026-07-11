@@ -249,3 +249,34 @@ fn queued_requests_wait_for_the_current_yield_value() -> TestResult {
     let value = context.eval("trace")?;
     ensure_value(&value, &Value::String("1:2:true:2".to_owned()))
 }
+
+#[test]
+fn return_resumption_observes_thenable_before_later_promise_jobs() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    context.eval(
+        r#"
+        let events = [];
+        async function* values() {
+            events.push("start");
+            yield 123;
+            events.push("unreachable");
+        }
+        Promise.resolve(0)
+            .then(() => events.push("tick 1"))
+            .then(() => events.push("tick 2"));
+        const iterator = values();
+        iterator.next();
+        iterator.return({
+            get then() {
+                events.push("get then");
+            }
+        });
+        "#,
+    )?;
+    let value = context.eval("events.join('|')")?;
+    ensure_value(
+        &value,
+        &Value::String("start|tick 1|get then|tick 2".to_owned()),
+    )
+}

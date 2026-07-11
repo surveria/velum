@@ -59,14 +59,20 @@ pub(in crate::runtime) enum IteratorStep {
 pub(in crate::runtime) struct YieldDelegateContinuation {
     source: IteratorSource,
     asynchronous: bool,
+    await_yielded_values: bool,
     pending: Option<YieldDelegateDone>,
 }
 
 impl YieldDelegateContinuation {
-    pub(in crate::runtime) const fn new(source: IteratorSource, asynchronous: bool) -> Self {
+    pub(in crate::runtime) const fn new(
+        source: IteratorSource,
+        asynchronous: bool,
+        await_yielded_values: bool,
+    ) -> Self {
         Self {
             source,
             asynchronous,
+            await_yielded_values,
             pending: None,
         }
     }
@@ -90,6 +96,7 @@ pub(in crate::runtime) enum YieldDelegateStep {
 enum YieldDelegateDone {
     Normal,
     Return,
+    ResumeReturn,
     CloseThrow,
 }
 
@@ -148,14 +155,18 @@ impl Context {
     pub(in crate::runtime) fn get_async_iterator(
         &mut self,
         iterable: Value,
-    ) -> Result<IteratorSource> {
+    ) -> Result<(IteratorSource, bool)> {
         if let Some(method) = self.async_iterator_method(&iterable)? {
-            return self.get_iterator_from_method(&iterable, &method);
+            return self
+                .get_iterator_from_method(&iterable, &method)
+                .map(|source| (source, false));
         }
         if let Some(method) = self.iterator_method(&iterable)? {
-            return self.get_iterator_from_method(&iterable, &method);
+            return self
+                .get_iterator_from_method(&iterable, &method)
+                .map(|source| (source, true));
         }
-        self.get_iterator(iterable)
+        self.get_iterator(iterable).map(|source| (source, true))
     }
 
     /// ECMAScript `GetIteratorFromMethod`, shared by ordinary iterable
@@ -307,13 +318,16 @@ impl Context {
                 YieldDelegateDone::Normal,
             ),
             Some(Completion::Return(value)) => {
-                let Some(method) = self
-                    .yield_delegate_named_method(&continuation.source, ITERATOR_RETURN_PROPERTY)?
-                else {
-                    set_protocol_done(&mut continuation.source);
-                    return Ok(YieldDelegateStep::Return(value));
+                let Completion::Suspended(awaited) = self.eval_bytecode_await(value)? else {
+                    return Err(Error::runtime(
+                        "async yield delegation return did not await its resumption value",
+                    ));
                 };
-                (method, value, YieldDelegateDone::Return)
+                continuation.pending = Some(YieldDelegateDone::ResumeReturn);
+                return Ok(YieldDelegateStep::Await(awaited));
+            }
+            Some(Completion::ReturnDirect(value)) => {
+                return self.async_yield_delegate_return(continuation, value);
             }
             Some(Completion::Throw(value)) => {
                 let Some(method) =
@@ -380,6 +394,22 @@ impl Context {
         done_kind: YieldDelegateDone,
         resume: Option<Completion>,
     ) -> Result<YieldDelegateStep> {
+        if done_kind == YieldDelegateDone::ResumeReturn {
+            return match resume {
+                Some(Completion::Normal(value)) => {
+                    self.async_yield_delegate_return(continuation, value)
+                }
+                Some(Completion::Throw(value)) => {
+                    Ok(YieldDelegateStep::Abrupt(Completion::Throw(value)))
+                }
+                Some(completion) => Err(Error::runtime(format!(
+                    "invalid async yield return resumption completion {completion:?}"
+                ))),
+                None => Err(Error::runtime(
+                    "async yield return resumption Promise resumed without a completion",
+                )),
+            };
+        }
         if done_kind == YieldDelegateDone::CloseThrow {
             return match resume {
                 Some(Completion::Normal(result))
@@ -403,7 +433,7 @@ impl Context {
         }
         match resume {
             Some(Completion::Normal(result)) => {
-                self.yield_delegate_result(&mut continuation.source, &result, done_kind)
+                self.async_yield_delegate_result(continuation, &result, done_kind)
             }
             Some(Completion::Throw(value)) => {
                 set_protocol_done(&mut continuation.source);
@@ -416,6 +446,74 @@ impl Context {
                 "async yield delegation Promise resumed without a completion",
             )),
         }
+    }
+
+    fn async_yield_delegate_return(
+        &mut self,
+        continuation: &mut YieldDelegateContinuation,
+        value: Value,
+    ) -> Result<YieldDelegateStep> {
+        let Some(method) =
+            self.yield_delegate_named_method(&continuation.source, ITERATOR_RETURN_PROPERTY)?
+        else {
+            set_protocol_done(&mut continuation.source);
+            return Ok(YieldDelegateStep::Return(value));
+        };
+        let iterator = protocol_iterator(&continuation.source)?;
+        let result = match self.call(&method, &[value], iterator)? {
+            Completion::Normal(result) => result,
+            Completion::Throw(value) => {
+                set_protocol_done(&mut continuation.source);
+                return Ok(YieldDelegateStep::Abrupt(Completion::Throw(value)));
+            }
+            completion => return completion.into_result().map(YieldDelegateStep::Complete),
+        };
+        let Completion::Suspended(awaited) = self.eval_bytecode_await(result)? else {
+            return Err(Error::runtime(
+                "async yield delegation did not await an iterator return result",
+            ));
+        };
+        continuation.pending = Some(YieldDelegateDone::Return);
+        Ok(YieldDelegateStep::Await(awaited))
+    }
+
+    fn async_yield_delegate_result(
+        &mut self,
+        continuation: &mut YieldDelegateContinuation,
+        result: &Value,
+        done_kind: YieldDelegateDone,
+    ) -> Result<YieldDelegateStep> {
+        if self.semantic_object_ref(result)?.is_none() {
+            return Err(Error::type_error(format!(
+                "iterator result '{result}' is not an object"
+            )));
+        }
+        let _result_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(result))?;
+        let done = to_boolean(&self.get_named(result, ITERATOR_RESULT_DONE_PROPERTY)?);
+        let value = self.get_named(result, ITERATOR_RESULT_VALUE_PROPERTY)?;
+        if !done {
+            let payload = self.create_array_from_elements(vec![
+                Value::Bool(continuation.await_yielded_values),
+                value,
+            ])?;
+            return Ok(YieldDelegateStep::YieldedIteratorResult(payload));
+        }
+        set_protocol_done(&mut continuation.source);
+        Ok(match done_kind {
+            YieldDelegateDone::Normal => YieldDelegateStep::Complete(value),
+            YieldDelegateDone::Return => YieldDelegateStep::Return(value),
+            YieldDelegateDone::ResumeReturn => {
+                return Err(Error::runtime(
+                    "async return resumption reached iterator result handling",
+                ));
+            }
+            YieldDelegateDone::CloseThrow => {
+                return Err(Error::runtime(
+                    "async iterator close reached ordinary delegation result handling",
+                ));
+            }
+        })
     }
 
     fn yield_delegate_next_method(source: &IteratorSource) -> Result<Value> {
@@ -554,6 +652,11 @@ impl Context {
         Ok(match done_kind {
             YieldDelegateDone::Normal => YieldDelegateStep::Complete(value),
             YieldDelegateDone::Return => YieldDelegateStep::Return(value),
+            YieldDelegateDone::ResumeReturn => {
+                return Err(Error::runtime(
+                    "async return resumption reached synchronous iterator result handling",
+                ));
+            }
             YieldDelegateDone::CloseThrow => {
                 return Err(Error::runtime(
                     "async iterator close reached ordinary delegation result handling",

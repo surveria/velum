@@ -185,12 +185,15 @@ impl Context {
         } else {
             let iterable = state.stack.pop()?;
             let asynchronous = self.current_function_is_async_generator()?;
-            let source = if asynchronous {
+            let (source, await_yielded_values) = if asynchronous {
                 self.get_async_iterator(iterable)?
             } else {
-                self.get_iterator(iterable)?
+                (self.get_iterator(iterable)?, false)
             };
-            (YieldDelegateContinuation::new(source, asynchronous), None)
+            (
+                YieldDelegateContinuation::new(source, asynchronous, await_yielded_values),
+                None,
+            )
         };
         match self.yield_delegate_step(&mut continuation, resume)? {
             YieldDelegateStep::Await(awaited) => {

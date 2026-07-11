@@ -10,7 +10,6 @@ use crate::{
         PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate,
         PropertyWritable,
     },
-    runtime::property::get_property,
     runtime::{CompiledBindingFrame, Context},
     syntax::{StaticFunctionId, StaticName},
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
@@ -619,8 +618,13 @@ impl Context {
         let Some(property) = self.known_function_prototype_lookup(property) else {
             return Ok(Value::Undefined);
         };
-        let value = get_property(&self.objects, &prototype, property)?;
-        self.runtime_property_value(value)
+        let receiver = Value::NativeFunction(id);
+        let Some(read) =
+            self.semantic_property_read_with_receiver(&prototype, &receiver, property)?
+        else {
+            return Ok(Value::Undefined);
+        };
+        self.finish_semantic_property_read(read, &receiver, property)
     }
 
     fn known_function_prototype_lookup<'a>(

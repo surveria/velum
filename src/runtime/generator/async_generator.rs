@@ -18,7 +18,7 @@ use super::{
     ASYNC_GENERATOR_TAG, ASYNC_ITERATOR_SYMBOL_DISPLAY, ASYNC_ITERATOR_SYMBOL_PROPERTY,
     AsyncGeneratorAwaitState, AsyncGeneratorRequest, AsyncGeneratorStep, GENERATOR_EXECUTING_ERROR,
     GENERATOR_RECEIVER_ERROR, GeneratorId, GeneratorResumeKind, GeneratorState, ITERATOR_NEXT_NAME,
-    ITERATOR_RESULT_VALUE_NAME, ITERATOR_RETURN_NAME, ITERATOR_THROW_NAME, TO_STRING_TAG_PROPERTY,
+    ITERATOR_RETURN_NAME, ITERATOR_THROW_NAME, TO_STRING_TAG_PROPERTY,
     TO_STRING_TAG_SYMBOL_DISPLAY,
 };
 
@@ -55,6 +55,18 @@ impl Context {
             ),
             constructor_key,
             self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
+        self.objects.define_property(
+            prototype,
+            constructor_key,
+            "constructor",
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                None,
+                Some(PropertyWritable::No),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
             self.limits.max_object_properties,
         )?;
         let prototype_key = self.intern_property_key("prototype")?;
@@ -281,6 +293,28 @@ impl Context {
             }
             GeneratorState::Suspended(execution) => {
                 let function = execution.function();
+                if kind == GeneratorResumeKind::Return && !execution.has_yield_delegate() {
+                    let awaited = match self.eval_bytecode_await(value) {
+                        Ok(Completion::Suspended(awaited)) => awaited,
+                        Ok(completion) => {
+                            return Err(Error::runtime(format!(
+                                "async generator return resumption produced {completion:?}"
+                            )));
+                        }
+                        Err(error) => {
+                            let Some(reason) = runtime_exception_value(self, &error)? else {
+                                return Err(error);
+                            };
+                            let completion = self
+                                .resume_function_execution(execution, Completion::Throw(reason))?;
+                            return self.finish_async_generator_completion(function, completion);
+                        }
+                    };
+                    return Ok(AsyncGeneratorStep::Awaiting(
+                        AsyncGeneratorAwaitState::ResumeReturn(execution),
+                        awaited,
+                    ));
+                }
                 let resume = match kind {
                     GeneratorResumeKind::Next => Completion::Normal(value),
                     GeneratorResumeKind::Return => Completion::Return(value),
@@ -369,9 +403,25 @@ impl Context {
                 ))
             }
             (
-                AsyncGeneratorAwaitState::DelegatedYield(_) | AsyncGeneratorAwaitState::Return,
+                AsyncGeneratorAwaitState::Return | AsyncGeneratorAwaitState::DelegatedYield(_),
                 Completion::Throw(value),
             ) => Err(Error::javascript(value)),
+            (AsyncGeneratorAwaitState::ResumeReturn(execution), resume) => {
+                let function = execution.function();
+                let resume = match resume {
+                    Completion::Normal(value) => Completion::ReturnDirect(value),
+                    Completion::Throw(value) => Completion::Throw(value),
+                    completion => {
+                        return Err(Error::runtime(format!(
+                            "invalid async generator return resumption {completion:?}"
+                        )));
+                    }
+                };
+                match self.resume_function_execution(execution, resume) {
+                    Ok(completion) => self.finish_async_generator_completion(function, completion),
+                    Err(error) => Err(error),
+                }
+            }
             (AsyncGeneratorAwaitState::Yield(execution), Completion::Throw(value)) => {
                 let function = execution.function();
                 match self.resume_function_execution(execution, Completion::Throw(value)) {
@@ -407,6 +457,7 @@ impl Context {
                 GeneratorState::Awaiting(
                     AsyncGeneratorAwaitState::Body(execution)
                     | AsyncGeneratorAwaitState::DelegatedYield(execution)
+                    | AsyncGeneratorAwaitState::ResumeReturn(execution)
                     | AsyncGeneratorAwaitState::Yield(execution),
                 )
                 | GeneratorState::Suspended(execution) => Some(execution),
@@ -452,21 +503,25 @@ impl Context {
                 ))
             }
             Completion::YieldedIteratorResult(result) => {
-                if self.semantic_object_ref(&result)?.is_none() {
-                    return Err(Error::type_error(
-                        "delegated async generator result is not an object",
+                let await_value = self.get_named(&result, "0")?;
+                let value = self.get_named(&result, "1")?;
+                if await_value == Value::Bool(true) {
+                    let Completion::Suspended(awaited) = self.eval_bytecode_await(value)? else {
+                        return Err(Error::runtime(
+                            "async generator delegated yield did not await a Promise",
+                        ));
+                    };
+                    let execution = self.detach_function_execution(function)?;
+                    return Ok(AsyncGeneratorStep::Awaiting(
+                        AsyncGeneratorAwaitState::DelegatedYield(execution),
+                        awaited,
                     ));
                 }
-                let value = self.get_named(&result, ITERATOR_RESULT_VALUE_NAME)?;
-                let Completion::Suspended(awaited) = self.eval_bytecode_await(value)? else {
-                    return Err(Error::runtime(
-                        "async generator delegated yield did not await a Promise",
-                    ));
-                };
                 let execution = self.detach_function_execution(function)?;
-                Ok(AsyncGeneratorStep::Awaiting(
-                    AsyncGeneratorAwaitState::DelegatedYield(execution),
-                    awaited,
+                let result = self.create_generator_result(value, false)?;
+                Ok(AsyncGeneratorStep::Settled(
+                    GeneratorState::Suspended(execution),
+                    result,
                 ))
             }
             Completion::Return(value) => {
