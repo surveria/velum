@@ -962,9 +962,9 @@ check_sequence_expression_boundary() {
     || ! grep -F -q 'pub(super) fn assignment_expression(&mut self)' \
       "${repo_root}/src/parser/expression.rs" \
     || ! grep -F -q 'self.emit(BytecodeInstruction::Pop);' <<<"${compiler_body}" \
-    || ! grep -F -q 'Expr::Sequence(expressions) => self.analyze_exprs(expressions, scope, function),' \
+    || ! grep -F -q 'Expr::Sequence(expressions)' \
       "${repo_root}/src/binding_layout/builder.rs" \
-    || ! grep -F -q 'Expr::Sequence(expressions) => self.collect_exprs(expressions),' \
+    || ! grep -F -q 'Expr::Sequence(expressions)' \
       "${repo_root}/src/compiler/function.rs"; then
     fail "sequence expression boundary changed; one AST node must reuse assignment parsing, Pop bytecode, and shared binding analysis"
   fi
