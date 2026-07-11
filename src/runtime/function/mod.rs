@@ -22,6 +22,7 @@ mod class_support;
 mod execution;
 mod fast_path;
 mod intrinsic;
+mod names;
 mod parameters;
 mod properties;
 mod property_dispatch;

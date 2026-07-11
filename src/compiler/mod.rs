@@ -3,9 +3,8 @@ use std::rc::Rc;
 use crate::{
     api::native_call::NativeCallTarget,
     ast::{
-        BinaryOp, DeclKind, Expr, Expression, ObjectProperty, ObjectPropertyKey,
-        ObjectPropertyKind, Program, Statement, StaticBinding, StaticPropertyAccessId, Stmt,
-        UnaryOp, UpdateOp,
+        BinaryOp, DeclKind, Expr, Expression, ObjectPropertyKey, Program, Statement, StaticBinding,
+        StaticPropertyAccessId, Stmt, UnaryOp, UpdateOp,
     },
     binding_metadata::BindingLayout,
     bytecode::{
@@ -14,11 +13,11 @@ use crate::{
         BytecodeClassMemberKind, BytecodeCompletion, BytecodeDynamicProperty, BytecodeFunction,
         BytecodeFunctionParam, BytecodeHoistPlan, BytecodeInstruction, BytecodeNewTargetMode,
         BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
-        BytecodeNumericUnaryOp, BytecodeObjectProperty, BytecodeProgram, BytecodeProperty,
+        BytecodeNumericUnaryOp, BytecodeProgram, BytecodeProperty,
     },
     error::{Error, Result},
     source::{SourceId, SourceSpan},
-    syntax::{AccessorKind, StaticName, StaticString},
+    syntax::{StaticName, StaticString},
 };
 
 mod call;
@@ -26,6 +25,8 @@ mod control;
 mod expression;
 mod function;
 mod hoist;
+mod inferred_name;
+mod object_literal;
 mod pattern;
 
 const ARRAY_LENGTH_PROPERTY: &str = "length";
@@ -230,7 +231,7 @@ impl<'a> BytecodeCompiler<'a> {
         init: Option<&Expression>,
     ) -> Result<()> {
         if let Some(init) = init {
-            self.compile_expr(init)?;
+            self.compile_expr_with_inferred_name(init, name.name())?;
         }
         self.emit(BytecodeInstruction::DeclareBinding {
             name: self.compile_binding(name)?,
@@ -369,6 +370,14 @@ impl<'a> BytecodeCompiler<'a> {
     }
 
     pub(super) fn compile_class_literal(&mut self, class: &crate::ast::ClassLiteral) -> Result<()> {
+        self.compile_class_literal_with_inferred_name(class, None)
+    }
+
+    pub(super) fn compile_class_literal_with_inferred_name(
+        &mut self,
+        class: &crate::ast::ClassLiteral,
+        inferred_name: Option<&StaticName>,
+    ) -> Result<()> {
         if let Some(heritage) = &class.heritage {
             self.compile_expr(heritage)?;
         }
@@ -391,7 +400,6 @@ impl<'a> BytecodeCompiler<'a> {
                 kind,
                 is_static: member.is_static,
                 id: member.id,
-                name: member.name.clone(),
                 bytecode: BytecodeFunction::compile(
                     None,
                     &member.params,
@@ -416,13 +424,24 @@ impl<'a> BytecodeCompiler<'a> {
                 initializer: field
                     .initializer
                     .as_ref()
-                    .map(|initializer| BytecodeBlock::compile_expression(initializer, self.layout))
+                    .map(|initializer| {
+                        field.name.as_ref().map_or_else(
+                            || BytecodeBlock::compile_expression(initializer, self.layout),
+                            |name| {
+                                BytecodeBlock::compile_expression_with_inferred_name(
+                                    initializer,
+                                    name,
+                                    self.layout,
+                                )
+                            },
+                        )
+                    })
                     .transpose()?,
             });
         }
         self.emit(BytecodeInstruction::CreateClass {
             class: Rc::new(BytecodeClass {
-                name: class.name.clone(),
+                name: class.name.clone().or_else(|| inferred_name.cloned()),
                 heritage: class.heritage.is_some(),
                 constructor_id: class.constructor.id,
                 constructor: BytecodeFunction::compile(

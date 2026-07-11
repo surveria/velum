@@ -87,6 +87,7 @@ pub enum Expr {
     Assignment {
         name: StaticBinding,
         strict: bool,
+        infer_name: bool,
         expr: Box<Expression>,
     },
     CompoundAssignment {

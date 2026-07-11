@@ -2448,8 +2448,57 @@ AS-09e profile evidence in draft PR #454:
   on the branch, so the isolated first-pair property delta is environmental;
   arithmetic's repeat delta remains about +4.7% and is explicitly tracked for
   the canonical post-merge measurement;
-- exact-tree CI and canonical publication remain required before AS-09e can
-  close.
+- PR #454 squash-merged as \`6e71c38\`; required run \`29144428112\` certified
+  exact tree \`3b280888\`, post-merge run \`29144572464\` passed performance and
+  publication, and report-only commit \`90ca1cb\` published
+  \`reports/test-runs/rsqjs-test-report-20260711T072934Z.*\` with all five
+  sentinels valid.
+
+AS-09f profile evidence in draft PR #455:
+
+- the canonical \`fn-name\` profile contains 1,056 files and 2,086 variants.
+  Before this tranche only 3 files and 6 variants passed; 432 failures already
+  reached runtime naming semantics while the remaining groups were dominated
+  by generators, private class elements, destructuring assignment, and
+  \`for-await-of\`;
+- one \`compile_expr_with_inferred_name\` owner lowers anonymous ordinary,
+  arrow, async, and class definitions with static inferred-name metadata.
+  Declarations, true identifier assignments, plain parameter defaults,
+  destructuring binding defaults, static object properties, and class fields
+  reuse that owner. Parenthesized and member assignment targets explicitly
+  retain empty names;
+- one runtime \`set_function_name\` owner handles the observable name descriptor,
+  getter/setter prefixes, and computed property keys. Symbol keys use bracketed
+  descriptions (\`[description]\`) or an empty base name instead of reusing the
+  property's diagnostic \`Symbol(description)\` text;
+- class and object methods/accessors resolve the property key once and delegate
+  to the same owner. Named-function lexical self bindings from AS-09e remain
+  independent from display metadata;
+- the focused profile now passes 219/1,056 files and 432/2,086 variants, a gain
+  of 216 files and 426 variants. Its six remaining ordinary runtime failures
+  are async named-function tests and are tracked separately from name
+  inference; all other residual groups require unsupported syntax or unrelated
+  runtime features;
+- direct tests cover declarations, assignments, parentheses/member exclusions,
+  parameter and destructuring defaults, object/class methods and accessors,
+  computed string/Symbol keys, prefixes, and async named self-binding
+  preservation. The architecture guard fixes both owners, generated-name users,
+  required bytecode metadata, and mutation-tests owner duplication;
+- the reviewed full baseline gains 434 variants and 217 files with no removed
+  pass: 186 `language/expressions` variants, 240 `language/statements`
+  variants, and eight `staging/sm` variants. Local full-corpus evidence passes
+  38,985/38,985 expected variants, 20,100/53,404 files, and
+  38,985/102,578 full variants; the permanent suites remain green at 69/69
+  engine fixtures, 118/118 active Test262 cases, and 96/96 QuickJS
+  differential cases in
+  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260711T080344Z.*`;
+- an adjacent canonical-main/branch performance pair keeps all five sentinels
+  valid. Branch medians versus main are arithmetic 81.17/85.01 ms, array
+  2.29/2.25 ms, property 228.87/233.28 ms, function 158.78/156.63 ms, and
+  string 70.63/70.92 ms. The changes are small and mixed-direction, with no
+  systematic regression;
+- exact-tree CI and canonical publication evidence remain required before
+  AS-09f can close.
 
 ### AS-10: Performance And Memory Checkpoints
 

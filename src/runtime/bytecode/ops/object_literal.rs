@@ -5,14 +5,11 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime::object::{
-        DataPropertyUpdate, OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyConfigurable,
-        PropertyEnumerable, PropertyKey, PropertyUpdate, PropertyWritable,
+        OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyEnumerable, PropertyKey,
     },
     syntax::AccessorKind,
     value::Value,
 };
-
-const FUNCTION_NAME_PROPERTY: &str = "name";
 
 impl Context {
     pub(in crate::runtime::bytecode) fn create_bytecode_object_literal(
@@ -42,6 +39,7 @@ impl Context {
                 }
                 BytecodeObjectProperty::StaticAccessor { key: name, kind } => {
                     let value = next_object_literal_stack_value(&mut values)?;
+                    self.set_function_name(&value, name.as_str(), Some(*kind))?;
                     let key = self.intern_static_property_key(name)?;
                     entries.push(RuntimeObjectLiteralEntry {
                         key,
@@ -55,11 +53,13 @@ impl Context {
                     self.push_spread_literal_entries(&source, &mut dynamic_names, &mut entries)?;
                 }
                 BytecodeObjectProperty::Computed
+                | BytecodeObjectProperty::ComputedInferredName
                 | BytecodeObjectProperty::ComputedMethod
                 | BytecodeObjectProperty::ComputedAccessor { .. } => {
                     let set_method_name = matches!(
                         property,
-                        BytecodeObjectProperty::ComputedMethod
+                        BytecodeObjectProperty::ComputedInferredName
+                            | BytecodeObjectProperty::ComputedMethod
                             | BytecodeObjectProperty::ComputedAccessor { .. }
                     );
                     let accessor = match property {
@@ -71,7 +71,7 @@ impl Context {
                     let mut property = self.dynamic_property_key(&key_value)?;
                     let key = self.intern_dynamic_property_key(&mut property)?;
                     if set_method_name {
-                        self.set_computed_method_name(&value, property.name())?;
+                        self.set_function_name_from_property(&value, &property, accessor)?;
                     }
                     let name_index = dynamic_names.len();
                     dynamic_names.push(property.name().to_owned());
@@ -139,29 +139,6 @@ impl Context {
             });
         }
         Ok(())
-    }
-
-    pub(in crate::runtime::bytecode) fn set_computed_method_name(
-        &mut self,
-        value: &Value,
-        name: &str,
-    ) -> Result<()> {
-        let Value::Function(id) = value else {
-            return Ok(());
-        };
-        let key = self.intern_property_key(FUNCTION_NAME_PROPERTY)?;
-        let value = self.heap_string_value(name)?;
-        self.define_function_property_key(
-            *id,
-            FUNCTION_NAME_PROPERTY,
-            key,
-            PropertyUpdate::Data(DataPropertyUpdate::new(
-                Some(value),
-                Some(PropertyWritable::No),
-                Some(PropertyEnumerable::No),
-                Some(PropertyConfigurable::Yes),
-            )),
-        )
     }
 }
 

@@ -69,6 +69,7 @@ impl Parser {
             return self.compound_assignment_expr(target, op, value, operator_span);
         }
         let start = target.span();
+        let infer_name = matches!(target.kind(), Expr::Identifier(_));
         let Some(target) = Self::assignment_target(target) else {
             return Err(Error::parse_at("invalid assignment target", operator_span));
         };
@@ -76,6 +77,7 @@ impl Parser {
             Expr::Identifier(name) => Expr::Assignment {
                 name,
                 strict: self.is_strict_mode(),
+                infer_name,
                 expr: Box::new(value),
             },
             Expr::Member {

@@ -1,11 +1,10 @@
 use std::rc::Rc;
 
 use super::{
-    ARRAY_LENGTH_PROPERTY, AccessorKind, BinaryOp, BytecodeBinding, BytecodeBlock,
-    BytecodeCompiler, BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
-    BytecodeNumericEqualityOp, BytecodeNumericUnaryOp, BytecodeObjectProperty, Error, Expr,
-    Expression, NativeCallTarget, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, Result,
-    StaticBinding, StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
+    ARRAY_LENGTH_PROPERTY, BinaryOp, BytecodeBinding, BytecodeBlock, BytecodeCompiler,
+    BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
+    BytecodeNumericEqualityOp, BytecodeNumericUnaryOp, Error, Expr, Expression, NativeCallTarget,
+    Result, StaticBinding, StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
     checked_template_part_count, constructor_binding_expr, has_spread_arg,
 };
 
@@ -131,9 +130,12 @@ impl BytecodeCompiler<'_> {
 
     fn compile_mutation_expr(&mut self, expr: &Expr) -> Result<()> {
         match expr {
-            Expr::Assignment { name, strict, expr } => {
-                self.compile_binding_assignment_expr(name, *strict, expr)
-            }
+            Expr::Assignment {
+                name,
+                strict,
+                infer_name,
+                expr,
+            } => self.compile_binding_assignment_expr(name, *strict, *infer_name, expr),
             Expr::Update {
                 op,
                 prefix,
@@ -189,9 +191,14 @@ impl BytecodeCompiler<'_> {
         &mut self,
         name: &StaticBinding,
         strict: bool,
+        infer_name: bool,
         expr: &Expression,
     ) -> Result<()> {
-        self.compile_expr(expr)?;
+        if infer_name {
+            self.compile_expr_with_inferred_name(expr, name.name())?;
+        } else {
+            self.compile_expr(expr)?;
+        }
         self.emit(BytecodeInstruction::StoreBinding(
             BytecodeBinding::compile_write(name, self.layout, strict)?,
         ));
@@ -669,49 +676,6 @@ impl BytecodeCompiler<'_> {
         self.compile_expr(alternate)?;
         let end_address = self.current_address();
         self.patch_jump(end_jump, end_address)
-    }
-
-    fn compile_object_literal(&mut self, properties: &[ObjectProperty]) -> Result<()> {
-        let mut operands = Vec::with_capacity(properties.len());
-        for property in properties {
-            if property.kind == ObjectPropertyKind::Spread {
-                self.compile_expr(&property.value)?;
-                operands.push(BytecodeObjectProperty::Spread);
-                continue;
-            }
-            let accessor = match property.kind {
-                ObjectPropertyKind::Init | ObjectPropertyKind::Spread => None,
-                ObjectPropertyKind::Get => Some(AccessorKind::Getter),
-                ObjectPropertyKind::Set => Some(AccessorKind::Setter),
-            };
-            match &property.key {
-                ObjectPropertyKey::Static(key) => {
-                    operands.push(accessor.map_or_else(
-                        || BytecodeObjectProperty::Static(key.clone()),
-                        |kind| BytecodeObjectProperty::StaticAccessor {
-                            key: key.clone(),
-                            kind,
-                        },
-                    ));
-                }
-                ObjectPropertyKey::Computed(expr) => {
-                    self.compile_expr(expr)?;
-                    let property = match accessor {
-                        Some(kind) => BytecodeObjectProperty::ComputedAccessor { kind },
-                        None if matches!(property.value.kind(), Expr::MethodFunction { .. }) => {
-                            BytecodeObjectProperty::ComputedMethod
-                        }
-                        None => BytecodeObjectProperty::Computed,
-                    };
-                    operands.push(property);
-                }
-            }
-            self.compile_expr(&property.value)?;
-        }
-        self.emit(BytecodeInstruction::ObjectLiteral {
-            properties: Rc::from(operands.into_boxed_slice()),
-        });
-        Ok(())
     }
 
     fn compile_array_literal(&mut self, elements: &[Expression]) -> Result<()> {

@@ -28,7 +28,16 @@ struct FunctionCompileSpec<'a> {
 
 impl BytecodeCompiler<'_> {
     pub(super) fn compile_function_literal(&mut self, expr: &Expr) -> Result<()> {
-        let spec = function_compile_spec(expr)?;
+        let spec = function_compile_spec(expr, None)?;
+        self.compile_function_expr(spec)
+    }
+
+    pub(super) fn compile_function_literal_with_inferred_name(
+        &mut self,
+        expr: &Expr,
+        inferred_name: &StaticName,
+    ) -> Result<()> {
+        let spec = function_compile_spec(expr, Some(inferred_name))?;
         self.compile_function_expr(spec)
     }
 
@@ -87,17 +96,23 @@ fn compile_param_defaults(
     params
         .iter()
         .map(|param| {
-            param
-                .default
-                .as_ref()
-                .map(|expr| BytecodeBlock::compile_expression(expr, layout))
-                .transpose()
+            param.default.as_ref().map_or(Ok(None), |expr| {
+                BytecodeBlock::compile_expression_with_inferred_name(
+                    expr,
+                    param.name.name(),
+                    layout,
+                )
+                .map(Some)
+            })
         })
         .collect::<Result<Vec<_>>>()
         .map(Into::into)
 }
 
-fn function_compile_spec(expr: &Expr) -> Result<FunctionCompileSpec<'_>> {
+fn function_compile_spec<'a>(
+    expr: &'a Expr,
+    inferred_name: Option<&StaticName>,
+) -> Result<FunctionCompileSpec<'a>> {
     match expr {
         Expr::Function {
             id,
@@ -107,7 +122,10 @@ fn function_compile_spec(expr: &Expr) -> Result<FunctionCompileSpec<'_>> {
             is_async,
         } => Ok(FunctionCompileSpec {
             id: *id,
-            name: name.as_ref().map(|binding| binding.name().clone()),
+            name: name
+                .as_ref()
+                .map(|binding| binding.name().clone())
+                .or_else(|| inferred_name.cloned()),
             self_binding: name.clone(),
             params,
             body,
@@ -122,7 +140,7 @@ fn function_compile_spec(expr: &Expr) -> Result<FunctionCompileSpec<'_>> {
             is_async,
         } => Ok(FunctionCompileSpec {
             id: *id,
-            name: None,
+            name: inferred_name.cloned(),
             self_binding: None,
             params,
             body,
