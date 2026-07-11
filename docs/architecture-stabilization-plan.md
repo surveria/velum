@@ -2354,21 +2354,47 @@ AS-09d profile evidence in draft PR #453:
   delimiter-sensitive `AssignmentExpression` contexts. Binding analysis and
   capture collection traverse that shared node, and compilation evaluates
   operands left-to-right through the existing `Pop` instruction while keeping
-  the last value; there is no comma-specific runtime or bytecode instruction;
+  the last value; there is no comma-specific runtime or bytecode instruction.
+  The sequence entrypoint and await context are isolated in small parser
+  modules so the former 800-line expression and parser roots remain below the
+  repository limit;
 - the focused comma profile now passes 5/6 files and 10/11 variants, and all
   six linked static-accessor variants pass. The only comma-profile residual is
   `tco-final.js`, whose named recursive function binding is unavailable and
   belongs to a separate function/TCO tranche;
 - direct tests cover order, result selection, precedence, computed-member and
   callee contexts, delimiter preservation for calls/declarations/arrays/object
-  literals, and invalid assignment targets. Existing engine, active Test262,
-  and QuickJS differential fixtures now keep comma semantics in their permanent
-  registries without adding another registry row;
+  literals, invalid assignment targets, and surrounding early errors. Existing
+  engine, active Test262, and QuickJS differential fixtures now keep comma
+  semantics in their permanent registries without adding another registry row;
+- the first complete-corpus pass exposed 43 previously accidental negative
+  passes: the old parser stopped at a leading comma before reaching invalid
+  function parameters or `for-of` heads. The final grammar records non-simple
+  and unique parameters, strict `yield`, ordinary-function `await` context, and
+  the `for-of` `AssignmentExpression` RHS explicitly. The 43-case regression
+  profile then passes 44/44 variants instead of relying on the missing comma
+  syntax;
+- the reviewed full baseline gains 335 variants and 205 files with no removed
+  pass: 106 `language/expressions`, 89 `language/statements`, 48 annex-B
+  language, 44 `language/eval-code`, 16 `language/statementList`, 14 built-in
+  String, six staging, six built-in Object, three module-code, two comments,
+  and one global-code variant. Local correctness passes at 38,522/38,522
+  expected variants, 19,862/53,404 files, and 38,522/102,578 full variants;
+- both baseline-refresh and clean correctness runs pass with 69/69 engine
+  fixtures, 118/118 active Test262 cases, 96/96 QuickJS differential cases,
+  119/119 runner tests, strict clippy, documentation, architecture mutations,
+  and touched-file size checks;
 - an architecture guard fixes the single parser/compiler ownership model,
   forbids a sequence-specific bytecode variant, requires shared binding
-  traversal, and mutation-tests removal of the intermediate `Pop` semantics;
-- full baseline delta, paired sentinels, exact-tree CI, and canonical
-  publication remain required before AS-09d can close.
+  traversal, and mutation-tests both intermediate `Pop` semantics and the
+  `for-of` assignment-expression delimiter;
+- adjacent main/branch sentinel medians are arithmetic 83.03/81.38 ms (-2.0%),
+  array-index 2.32/2.34 ms (+0.9%), property-read 224.47/222.04 ms (-1.1%),
+  function-call 153.58/153.51 ms (-0.05%), and string-scan 71.33/71.74 ms
+  (+0.6%). Every row is valid, branch variation is at most 1.7%, and no
+  performance regression is indicated;
+- exact-tree CI and canonical publication remain required before AS-09d can
+  close.
 
 ### AS-10: Performance And Memory Checkpoints
 
