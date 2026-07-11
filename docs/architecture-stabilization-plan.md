@@ -2317,6 +2317,11 @@ AS-09c profile evidence in draft PR #452:
 - the ten residual variants are surrounding syntax gaps rather than descriptor
   failures: six class-expression cases require comma-expression parsing and
   four computed-name cases require generator/yield parsing;
+- the reviewed full baseline gains 236 variants and 118 files with no removed
+  pass: 122 `language/statements`, 100 `language/expressions`, six staging,
+  four `language/computed-property-names`, and four built-in Object variants.
+  Local correctness passes at 38,187/38,187 expected variants,
+  19,657/53,404 files, and 38,187/102,578 full variants;
 - JavaScript function custom properties now reuse `ObjectProperty` data and
   accessor payloads. `semantic_property_read_with_receiver`, receiver-aware
   `[[Set]]`, `[[GetOwnProperty]]`, and `[[DefineOwnProperty]]` therefore serve
@@ -2326,6 +2331,8 @@ AS-09c profile evidence in draft PR #452:
   Literal/computed keys, getter/setter merging, configurable intrinsic
   replacement, descriptor attributes, storage accounting, and ordinary
   function `Object.defineProperty` behavior have permanent coverage;
+- the permanent registries remain green at 69/69 engine fixtures,
+  118/118 active Test262 cases, and 96/96 QuickJS differential cases;
 - complete-corpus baseline refresh, paired sentinel measurements, exact-tree
   CI, and canonical publication remain required before AS-09c can close.
 

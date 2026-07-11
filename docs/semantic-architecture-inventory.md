@@ -667,7 +667,7 @@ decision sequence:
 | AS-08b | named control recognizers and built-in specialization evidence | PR #449 merged as `7802932e`; source-shaped control execution is removed, one broad guarded reduction remains, and exact-tree/canonical evidence is green |
 | AS-09a | unary bitwise NOT compatibility | PR #450 merged as `672d57a2`; 32 new Test262 variants, exact-tree correctness, paired performance, and canonical publication are green |
 | AS-09b | dynamic compilation error boundary | PR #451 merged as `b11ce20f`; one typed SyntaxError mapper preserves dynamic source spans, adds 198 full-corpus variants with no removed pass, and has green exact-tree/canonical evidence |
-| AS-09c | static class accessor and function descriptor boundary | draft PR #452 removes parser/runtime static-accessor rejections, reuses `ObjectProperty` descriptor payloads for JavaScript functions, and raises the focused profile by 80 variants while preserving 96/96 QuickJS cases |
+| AS-09c | static class accessor and function descriptor boundary | draft PR #452 removes parser/runtime static-accessor rejections, reuses `ObjectProperty` descriptor payloads for JavaScript functions, and adds 236 full-corpus variants / 118 files with no removed pass while preserving 96/96 QuickJS cases |
 
 ## AS-01b Guard Specification
 
