@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260711T192700Z.md`
-- Task: PR #471: runtime: implement ECMAScript UTF-16 strings
-- Performance: 8.99x (4/5 >1.00x) (from `rsqjs-test-report-20260711T192700Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T192700Z.md`)
+- `rsqjs-test-report-20260711T224535Z.md`
+- Task: PR #475: ci: tolerate host-owned writable benchmark lock files
+- Performance: 9.02x (4/5 >1.00x) (from `rsqjs-test-report-20260711T224535Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T224535Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 57238 passed / 45340 failed (55.80%) (from `rsqjs-test-report-20260711T192700Z.md`)
+- Full Test262: 58620 passed / 43958 failed (57.15%) (from `rsqjs-test-report-20260711T224535Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -460,3 +460,4 @@ Latest report:
 | `20260711T183721Z` `2cbd7b5` PR #468: runtime: add %TypedArray% intrinsic and prototype methods | 5.61x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 53289 passed / 49289 failed (51.95%) |
 | `20260711T191640Z` `b093ea4` PR #473: AS-09p: complete Object.defineProperties semantics | 9.08x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 58616 passed / 43962 failed (57.14%) |
 | `20260711T192700Z` `1d9263d` PR #471: runtime: implement ECMAScript UTF-16 strings | 8.99x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 57238 passed / 45340 failed (55.80%) |
+| `20260711T224535Z` `8f8fc2d` PR #475: ci: tolerate host-owned writable benchmark lock files | 9.02x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 58620 passed / 43958 failed (57.15%) |
