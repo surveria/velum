@@ -2713,8 +2713,10 @@ AS-09r profile evidence in draft PR #478:
   194/196 variants and from 57/98 to 97/98 conforming files. The sole residual
   source file contains a BigInt literal and fails in the lexer before reaching
   Promise semantics;
-- complete exact-tree CI and canonical publication remain required before
-  AS-09r can close.
+- exact-tree run `29172860321` certifies semantic tree `019c6da3`: the complete
+  baseline adds 142 variants / 71 conforming files with no removals, producing
+  a 58,824-variant / 30,241-file pass candidate. Canonical publication remains
+  required before AS-09r can close.
 
 ### AS-10: Performance And Memory Checkpoints
 
