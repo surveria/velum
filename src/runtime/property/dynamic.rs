@@ -55,6 +55,11 @@ impl Context {
         self.heap_utf16_string_value(&[unit])
     }
 
+    pub(in crate::runtime) fn heap_string_char_value(&mut self, ch: char) -> Result<Value> {
+        let mut buffer = [0_u16; 2];
+        self.heap_utf16_string_value(ch.encode_utf16(&mut buffer))
+    }
+
     pub(in crate::runtime) fn get_utf16_string_property_value(
         &mut self,
         receiver: &Value,
