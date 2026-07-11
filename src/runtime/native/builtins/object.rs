@@ -597,14 +597,11 @@ impl Context {
     }
 
     pub(in crate::runtime) fn has_own_property_value(
-        &mut self,
+        &self,
         target: &Value,
         property: &DynamicPropertyKey,
     ) -> Result<bool> {
         match target {
-            Value::Object(id) if self.is_global_object_id(*id) => self
-                .global_object_property_descriptor(*id, property.lookup())
-                .map(|descriptor| descriptor.is_some()),
             Value::Object(id) => self.objects.has_own(*id, property.lookup()),
             Value::Function(id) => self.has_function_property_lookup(*id, property.lookup()),
             Value::NativeFunction(id) => {

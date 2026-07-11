@@ -201,7 +201,14 @@ impl Context {
     pub(in crate::runtime::native) fn eval_promise_all(
         &mut self,
         args: RuntimeCallArgs<'_>,
+        this_value: &Value,
     ) -> Result<Value> {
+        let intrinsic = self.promise_constructor_value()?;
+        if this_value != &intrinsic {
+            return Err(Error::type_error(
+                "Promise.all requires the intrinsic Promise constructor",
+            ));
+        }
         let (result_promise, result_object) = self.create_pending_promise()?;
         let iterable = args.as_slice().first().cloned().unwrap_or(Value::Undefined);
         let setup = self.setup_promise_all(result_promise, result_object.clone(), iterable);
