@@ -41,6 +41,39 @@ impl<'a> FunctionParameterState<'a> {
 }
 
 impl Context {
+    pub(super) fn compile_function_self_binding(
+        &mut self,
+        bytecode: &BytecodeFunction,
+        layout: Option<&BindingLayout>,
+    ) -> Result<Option<super::FunctionSelfBinding>> {
+        bytecode
+            .self_binding()
+            .map(|binding| {
+                let atom = self.intern_static_name_atom(binding.name())?;
+                let frame = function_self_binding_frame(binding.id(), layout)?;
+                Ok(super::FunctionSelfBinding::new(atom, frame))
+            })
+            .transpose()
+    }
+
+    pub(super) fn compile_function_arguments_binding(
+        &mut self,
+        bytecode: &BytecodeFunction,
+        layout: Option<&BindingLayout>,
+    ) -> Result<Option<super::FunctionArgumentsBinding>> {
+        if !bytecode.uses_arguments() {
+            return Ok(None);
+        }
+        bytecode
+            .arguments_binding()
+            .map(|binding| {
+                let atom = self.intern_static_name_atom(binding.name())?;
+                let frame = function_arguments_binding_frame(binding.id(), layout)?;
+                Ok(super::FunctionArgumentsBinding::new(atom, frame))
+            })
+            .transpose()
+    }
+
     pub(super) fn function_param_atoms(
         &mut self,
         params: &[BytecodeFunctionParam],
