@@ -21,7 +21,10 @@ pub enum TokenKind {
     TemplateHead(Vec<u16>),
     TemplateMiddle(Vec<u16>),
     TemplateTail(Vec<u16>),
-    RegExp { pattern: String, flags: String },
+    RegExp {
+        pattern: String,
+        flags: String,
+    },
     Identifier(String),
     /// A `#name` private identifier; the text keeps its leading `#` so
     /// private names can never collide with public identifier names.
