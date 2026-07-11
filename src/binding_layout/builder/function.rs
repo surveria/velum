@@ -1,5 +1,5 @@
 use crate::{
-    ast::{FunctionParam, Statement, StaticBinding, StaticFunctionId},
+    ast::{Expression, FunctionParam, Statement, StaticBinding, StaticFunctionId},
     binding_metadata::{FunctionScopeId, ScopeId, types::ScopeKind},
     error::Result,
 };
@@ -7,6 +7,17 @@ use crate::{
 use super::LayoutBuilder;
 
 impl LayoutBuilder {
+    pub(super) fn analyze_exprs(
+        &mut self,
+        exprs: &[Expression],
+        scope: ScopeId,
+        function: FunctionScopeId,
+    ) -> Result<()> {
+        exprs
+            .iter()
+            .try_for_each(|expr| self.analyze_expr(expr, scope, function))
+    }
+
     pub(super) fn analyze_function(
         &mut self,
         id: StaticFunctionId,

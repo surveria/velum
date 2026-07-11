@@ -26,7 +26,7 @@ pub(in crate::runtime) enum ResolvedClassField {
 }
 
 impl ResolvedClassField {
-    pub(in crate::runtime) const fn property_key(
+    pub(in crate::runtime) const fn traced_public_key(
         &self,
     ) -> Option<crate::runtime::object::PropertyKey> {
         match self {
@@ -70,27 +70,27 @@ impl Context {
     pub(in crate::runtime) fn function_private_slot(
         &self,
         id: FunctionId,
-        name: PrivateNameId,
+        name: &PrivateNameId,
     ) -> Result<Option<PrivateSlotValue>> {
         Ok(self
             .function(id)?
             .private_slots
             .iter()
-            .find(|slot| slot.id == name)
+            .find(|slot| slot.id == *name)
             .map(|slot| slot.value.clone()))
     }
 
     pub(in crate::runtime) fn set_function_private_field(
         &mut self,
         id: FunctionId,
-        name: PrivateNameId,
+        name: &PrivateNameId,
         value: Value,
     ) -> Result<bool> {
         let Some(slot) = self
             .function_mut(id)?
             .private_slots
             .iter_mut()
-            .find(|slot| slot.id == name)
+            .find(|slot| slot.id == *name)
         else {
             return Ok(false);
         };
@@ -104,14 +104,14 @@ impl Context {
     pub(in crate::runtime) fn replace_function_private_slot(
         &mut self,
         id: FunctionId,
-        name: PrivateNameId,
+        name: &PrivateNameId,
         value: PrivateSlotValue,
     ) -> Result<()> {
         let slot = self
             .function_mut(id)?
             .private_slots
             .iter_mut()
-            .find(|slot| slot.id == name)
+            .find(|slot| slot.id == *name)
             .ok_or_else(|| Error::runtime("private slot disappeared"))?;
         slot.value = value;
         Ok(())
@@ -223,7 +223,7 @@ impl Context {
         let fields = self.function(id)?.class_fields.clone();
         if let Some(private_slots) = private_slots {
             for slot in private_slots.iter() {
-                self.add_private_slot_to_value(instance, slot.id, slot.value.clone())?;
+                self.add_private_slot_to_value(instance, slot.id.clone(), slot.value.clone())?;
             }
         }
         let Some(fields) = fields else {
@@ -266,7 +266,7 @@ impl Context {
                 ResolvedClassField::Private { name, .. } => {
                     self.add_private_slot_to_value(
                         instance,
-                        *name,
+                        name.clone(),
                         PrivateSlotValue::Field(value),
                     )?;
                 }

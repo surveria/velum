@@ -86,6 +86,29 @@ impl Context {
             .as_ref()
             .map_or(Value::Undefined, |heritage| heritage.constructor.clone());
 
+        let targets = ClassInstallationTargets {
+            constructor: constructor.clone(),
+            constructor_id: *constructor_id,
+            prototype_id,
+            instance_home,
+            static_home,
+        };
+        self.install_class_members(class, computed_keys, &targets)?;
+
+        self.install_class_fields(class, &constructor, *constructor_id, &field_computed_keys)?;
+        self.evaluate_class_static_blocks(class, &constructor)?;
+
+        state.stack.push(constructor);
+        state.pc = next;
+        Ok(None)
+    }
+
+    fn install_class_members(
+        &mut self,
+        class: &BytecodeClass,
+        computed_keys: Vec<Value>,
+        targets: &ClassInstallationTargets,
+    ) -> Result<()> {
         let mut computed_keys = computed_keys.into_iter();
         let mut instance_private_slots: Vec<PrivateSlot> = Vec::new();
         for member in class.members.iter() {
@@ -100,14 +123,14 @@ impl Context {
             let (function_id, private_slot) = self.install_class_member(
                 member,
                 computed_key.as_ref(),
-                *constructor_id,
-                prototype_id,
+                targets.constructor_id,
+                targets.prototype_id,
                 &class.private_names,
             )?;
             if let Some(private_slot) = private_slot {
                 if member.is_static {
                     self.add_or_merge_private_slot_to_value(
-                        &constructor,
+                        &targets.constructor,
                         private_slot.id,
                         private_slot.value,
                     )?;
@@ -121,9 +144,9 @@ impl Context {
                 }
             }
             let home = if member.is_static {
-                static_home.clone()
+                targets.static_home.clone()
             } else {
-                instance_home.clone()
+                targets.instance_home.clone()
             };
             if !matches!(home, Value::Undefined) {
                 self.set_function_super_binding(
@@ -136,17 +159,13 @@ impl Context {
                 )?;
             }
         }
-
         if !instance_private_slots.is_empty() {
-            self.set_function_class_private_slots(*constructor_id, instance_private_slots.into())?;
+            self.set_function_class_private_slots(
+                targets.constructor_id,
+                instance_private_slots.into(),
+            )?;
         }
-
-        self.install_class_fields(class, &constructor, *constructor_id, &field_computed_keys)?;
-        self.evaluate_class_static_blocks(class, &constructor)?;
-
-        state.stack.push(constructor);
-        state.pc = next;
-        Ok(None)
+        Ok(())
     }
 
     fn evaluate_class_static_blocks(
@@ -408,6 +427,14 @@ impl Context {
 }
 
 const CLASS_PROTOTYPE_PROPERTY: &str = "prototype";
+
+struct ClassInstallationTargets {
+    constructor: Value,
+    constructor_id: FunctionId,
+    prototype_id: ObjectId,
+    instance_home: Value,
+    static_home: Value,
+}
 
 /// Resolved `extends` heritage: the parent constructor value plus its
 /// prototype object used as the parent of the class prototype.

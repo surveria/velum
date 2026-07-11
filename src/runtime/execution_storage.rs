@@ -5,7 +5,7 @@ use crate::{
 
 use super::{
     Context, FunctionUpvalues, VmStorageKind, activation::ActivationFrame,
-    binding::scope::BindingScope, function::FunctionSuperBinding,
+    binding::scope::BindingScope, function::FunctionSuperBinding, private::PrivateEnvironment,
 };
 
 impl Context {
@@ -46,6 +46,7 @@ impl Context {
         this_value: Value,
         new_target: Value,
         super_binding: Option<std::rc::Rc<FunctionSuperBinding>>,
+        private_environment: Option<std::rc::Rc<PrivateEnvironment>>,
     ) -> Result<usize> {
         self.storage_ledger
             .grow_count(VmStorageKind::Binding, upvalues.len())?;
@@ -65,6 +66,7 @@ impl Context {
             this_value,
             new_target,
             super_binding,
+            private_environment,
         ));
         Ok(base)
     }
@@ -140,8 +142,9 @@ impl Context {
     pub(super) fn push_temporary_this(&mut self, value: Value) -> Result<()> {
         self.storage_ledger
             .grow_count(VmStorageKind::ExecutionFrame, 1)?;
+        let private_environment = self.current_private_environment();
         self.activation_frames
-            .push(ActivationFrame::temporary_this(value));
+            .push(ActivationFrame::temporary_this(value, private_environment));
         Ok(())
     }
 
@@ -251,5 +254,26 @@ impl Context {
             }
         }
         None
+    }
+
+    pub(in crate::runtime) fn current_private_environment(
+        &self,
+    ) -> Option<std::rc::Rc<PrivateEnvironment>> {
+        self.activation_frames
+            .last()
+            .and_then(ActivationFrame::private_environment)
+            .cloned()
+    }
+
+    pub(in crate::runtime) fn set_current_private_environment(
+        &mut self,
+        environment: Option<std::rc::Rc<PrivateEnvironment>>,
+    ) -> Result<()> {
+        let frame = self
+            .activation_frames
+            .last_mut()
+            .ok_or_else(|| Error::runtime("private environment activation disappeared"))?;
+        *frame.private_environment_mut() = environment;
+        Ok(())
     }
 }

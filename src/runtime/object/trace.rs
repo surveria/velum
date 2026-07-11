@@ -17,6 +17,18 @@ impl ObjectHeap {
         for object in &self.objects {
             object.visit_strong_edges(visitor)?;
         }
+        for (index, _object) in self.objects.indexed() {
+            if let Some(slots) = self.private_slots.get(index) {
+                for slot in slots {
+                    for value in slot.value.values() {
+                        visitor.visit(
+                            VmObjectEdgeKind::InternalSlot,
+                            StrongEdgeReference::Value(value),
+                        )?;
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
@@ -60,14 +72,6 @@ impl Object {
                 .visit_strong_edges(VmObjectEdgeKind::Property, visitor)?;
         }
         self.array_storage.visit_strong_edges(visitor)?;
-        for slot in &self.private_slots {
-            for value in slot.value.values() {
-                visitor.visit(
-                    VmObjectEdgeKind::InternalSlot,
-                    StrongEdgeReference::Value(value),
-                )?;
-            }
-        }
         if let Some(prototype) = self.prototype {
             visitor.visit(
                 VmObjectEdgeKind::Prototype,

@@ -6,6 +6,20 @@ use super::{
 use crate::bytecode::BytecodePrivateName;
 
 impl BytecodeCompiler<'_> {
+    pub(super) fn compile_private_expression(&mut self, expr: &Expr) -> Result<()> {
+        match expr {
+            Expr::PrivateMember { object, name } => {
+                self.compile_private_member_expr(object, name)?;
+            }
+            Expr::PrivateAssignment { object, name, expr } => {
+                self.compile_private_assignment(object, name, expr)?;
+            }
+            Expr::PrivateIn { name, object } => self.compile_private_in_expr(name, object)?,
+            _ => return Err(Error::runtime("expression is not a private operation")),
+        }
+        Ok(())
+    }
+
     pub(super) fn compile_static_property_assignment(
         &mut self,
         object: &Expression,

@@ -33,12 +33,18 @@ use crate::{
 use state::BytecodeState;
 
 impl Context {
+    // Keeping the opcode families together makes the dispatcher exhaustive and
+    // keeps every instruction routed through exactly one subsystem.
+    #[allow(clippy::too_many_lines)]
     fn eval_bytecode_instruction(
         &mut self,
         state: &mut BytecodeState,
         instruction: &BytecodeInstruction,
     ) -> Result<Option<Completion>> {
         let next = state.next_pc()?;
+        if let Some(result) = self.try_eval_bytecode_private_instruction(state, instruction, next) {
+            return result;
+        }
         match instruction {
             BytecodeInstruction::BeginPrivateEnvironment { .. }
             | BytecodeInstruction::PushLiteral(_)
@@ -92,24 +98,15 @@ impl Context {
             | BytecodeInstruction::ComputedPropertyAssign { .. } => {
                 self.eval_bytecode_property_instruction(state, instruction, next)
             }
-            BytecodeInstruction::PrivateMember { .. }
-            | BytecodeInstruction::PrivateAssign { .. }
-            | BytecodeInstruction::CompoundPrivateProperty { .. }
-            | BytecodeInstruction::UpdatePrivateProperty { .. }
-            | BytecodeInstruction::PrivateIn { .. } => {
-                self.eval_bytecode_private_instruction(state, instruction, next)
-            }
             BytecodeInstruction::CallBinding { .. }
             | BytecodeInstruction::CallValue { .. }
             | BytecodeInstruction::CallStaticMember { .. }
             | BytecodeInstruction::CallComputedMember { .. }
-            | BytecodeInstruction::CallPrivateMember { .. }
             | BytecodeInstruction::CollectSpreadArgs { .. }
             | BytecodeInstruction::CallBindingSpread { .. }
             | BytecodeInstruction::CallValueSpread
             | BytecodeInstruction::CallStaticMemberSpread { .. }
             | BytecodeInstruction::CallComputedMemberSpread { .. }
-            | BytecodeInstruction::CallPrivateMemberSpread { .. }
             | BytecodeInstruction::ConstructValueSpread
             | BytecodeInstruction::ArrayLiteralSpread { .. }
             | BytecodeInstruction::CreateClass { .. }
@@ -142,6 +139,7 @@ impl Context {
             | BytecodeInstruction::Complete(_) => {
                 self.eval_bytecode_control_instruction(state, instruction, next)
             }
+            _ => Err(Error::runtime("private bytecode dispatch mismatch")),
         }
     }
 

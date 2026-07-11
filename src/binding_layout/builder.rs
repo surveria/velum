@@ -631,18 +631,6 @@ impl LayoutBuilder {
         }
     }
 
-    fn analyze_exprs(
-        &mut self,
-        exprs: &[Expression],
-        scope: ScopeId,
-        function: FunctionScopeId,
-    ) -> Result<()> {
-        for expr in exprs {
-            self.analyze_expr(expr, scope, function)?;
-        }
-        Ok(())
-    }
-
     fn analyze_object_properties(
         &mut self,
         properties: &[ObjectProperty],

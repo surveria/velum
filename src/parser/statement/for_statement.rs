@@ -207,6 +207,11 @@ impl Parser {
         if self.match_kind(&TokenKind::Semicolon) {
             return Ok(None);
         }
+        if self.starts_private_in_expression() {
+            return Err(self.parse_error(
+                "private brand checks are not allowed in an unparenthesized for initializer",
+            ));
+        }
         if self.match_kind(&TokenKind::Let) {
             let kind = self.for_var_decl(DeclKind::Let)?;
             return Ok(Some(Box::new(self.statement_node(start, kind))));

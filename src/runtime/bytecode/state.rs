@@ -74,7 +74,7 @@ impl BytecodeState {
         self.private_environment.clone()
     }
 
-    pub(in crate::runtime) fn replace_private_environment(
+    pub(in crate::runtime) const fn replace_private_environment(
         &mut self,
         environment: Option<Rc<PrivateEnvironment>>,
     ) -> Option<Rc<PrivateEnvironment>> {

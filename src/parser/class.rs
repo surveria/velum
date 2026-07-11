@@ -30,6 +30,7 @@ struct ParsedClassFunction {
 const CLASS_STATIC_KEYWORD: &str = "static";
 const CLASS_GETTER_KEYWORD: &str = "get";
 const CLASS_SETTER_KEYWORD: &str = "set";
+const CLASS_AUTO_ACCESSOR_KEYWORD: &str = "accessor";
 const CLASS_CONSTRUCTOR_NAME: &str = "constructor";
 const CLASS_PROTOTYPE_NAME: &str = "prototype";
 /// Synthesized rest parameter for default derived constructors.
@@ -61,24 +62,17 @@ impl Parser {
     fn class_literal_tail(&mut self, name: Option<StaticName>) -> Result<ClassLiteral> {
         let previous_strict = self.is_strict_mode();
         self.set_strict_mode(true);
-        self.push_class_private_scope();
-        let result = self
-            .class_heritage_and_body(name)
-            .and_then(|class| self.pop_class_private_scope().map(|()| class));
-        self.set_strict_mode(previous_strict);
-        result
-    }
-
-    /// Parses the optional `extends` heritage and the class body inside the
-    /// class's own private-name scope, so heritage expressions may reference
-    /// private names the body declares.
-    fn class_heritage_and_body(&mut self, name: Option<StaticName>) -> Result<ClassLiteral> {
         let heritage = if self.match_kind(&TokenKind::Extends) {
             Some(self.call()?)
         } else {
             None
         };
-        self.class_body_literal(name, heritage)
+        self.push_class_private_scope();
+        let result = self
+            .class_body_literal(name, heritage)
+            .and_then(|class| self.pop_class_private_scope().map(|()| class));
+        self.set_strict_mode(previous_strict);
+        result
     }
 
     fn class_body_literal(
@@ -163,6 +157,7 @@ impl Parser {
         if is_static {
             self.reject_unsupported_class_member()?;
         }
+        let is_auto_accessor = self.match_class_auto_accessor_prefix();
         let accessor = self.match_class_accessor_prefix();
         let key = self.class_element_key()?;
         let key_name = Self::class_member_key_name(&key);
@@ -172,6 +167,9 @@ impl Parser {
                 return Err(self.parse_error("expected '(' after class accessor name"));
             }
             return self.class_field(key, key_name, is_static, member_offset, fields);
+        }
+        if is_auto_accessor {
+            return Err(self.parse_error("auto-accessor class elements cannot be methods"));
         }
 
         if matches!(&key, ClassKeySeed::Property(_))
@@ -246,7 +244,7 @@ impl Parser {
             .advance()
             .ok_or_else(|| self.parse_error("expected 'static' before class static block"))?;
         self.consume(&TokenKind::LBrace, "expected '{' after 'static'")?;
-        let mut body = self.with_class_static_block_identifiers(|parser| {
+        let mut body = self.with_restricted_class_arguments(|parser| {
             parser.with_isolated_control_context(|parser| {
                 parser.with_super_context(true, false, |parser| {
                     parser.with_await_context(false, true, |parser| {
@@ -304,13 +302,11 @@ impl Parser {
             }
         }
         let initializer = if self.match_kind(&TokenKind::Equal) {
-            Some(self.assignment_expression()?)
+            Some(self.with_restricted_class_arguments(Self::assignment_expression)?)
         } else {
             None
         };
-        if self.check(&TokenKind::Semicolon) && self.advance().is_none() {
-            return Err(self.parse_error("expected ';' after class field"));
-        }
+        self.consume_statement_terminator("expected statement terminator after class field")?;
         fields.push(crate::ast::ClassField {
             key: Self::class_element_name(key),
             is_static,
@@ -442,6 +438,19 @@ impl Parser {
             return Some(kind);
         }
         None
+    }
+
+    /// Consumes the decorators auto-accessor prefix while lowering the
+    /// element through the existing field representation.
+    fn match_class_auto_accessor_prefix(&mut self) -> bool {
+        let is_prefix = self.peek().is_some_and(|token| {
+            matches!(&token.kind, TokenKind::Identifier(name) if name == CLASS_AUTO_ACCESSOR_KEYWORD)
+        }) && !self.peek_has_line_terminator_before(1)
+            && !self.peek_kind_is(1, &TokenKind::LParen)
+            && !self.peek_kind_is(1, &TokenKind::Equal)
+            && !self.peek_kind_is(1, &TokenKind::Semicolon)
+            && !self.peek_kind_is(1, &TokenKind::RBrace);
+        is_prefix && self.advance().is_some()
     }
 
     fn reject_unsupported_class_member(&self) -> Result<()> {

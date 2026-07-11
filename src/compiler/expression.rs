@@ -107,15 +107,9 @@ impl BytecodeCompiler<'_> {
                 property,
                 access,
             } => return self.compile_computed_member_expr(object, property, *access),
-            Expr::PrivateMember { object, name } => {
-                return self.compile_private_member_expr(object, name);
-            }
-            Expr::PrivateAssignment { object, name, expr } => {
-                return self.compile_private_assignment(object, name, expr);
-            }
-            Expr::PrivateIn { name, object } => {
-                return self.compile_private_in_expr(name, object);
-            }
+            Expr::PrivateMember { .. }
+            | Expr::PrivateAssignment { .. }
+            | Expr::PrivateIn { .. } => return self.compile_private_expression(expr),
             Expr::Object(properties) => return self.compile_object_literal(properties),
             Expr::ArrayHole => return Err(Error::runtime("array elision outside array literal")),
             Expr::Array(elements) => return self.compile_array_literal(elements),

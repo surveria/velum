@@ -299,105 +299,17 @@ impl<'a> BytecodeCompiler<'a> {
             .instructions
             .get_mut(index.index())
             .ok_or_else(|| Error::runtime("bytecode jump patch target disappeared"))?;
-        match instruction {
-            BytecodeInstruction::Jump(address)
-            | BytecodeInstruction::JumpIfFalse(address)
-            | BytecodeInstruction::JumpIfFalseKeep(address)
-            | BytecodeInstruction::JumpIfTrueKeep(address) => {
-                *address = target;
-                Ok(())
-            }
-            BytecodeInstruction::PushLiteral(_)
-            | BytecodeInstruction::BeginPrivateEnvironment { .. }
-            | BytecodeInstruction::PushString(_)
-            | BytecodeInstruction::TemplateConcat { .. }
-            | BytecodeInstruction::StringConcat { .. }
-            | BytecodeInstruction::StringConcatStatic { .. }
-            | BytecodeInstruction::CollectSpreadArgs { .. }
-            | BytecodeInstruction::CallBindingSpread { .. }
-            | BytecodeInstruction::CallValueSpread
-            | BytecodeInstruction::CallStaticMemberSpread { .. }
-            | BytecodeInstruction::CallComputedMemberSpread { .. }
-            | BytecodeInstruction::ConstructValueSpread
-            | BytecodeInstruction::ArrayLiteralSpread { .. }
-            | BytecodeInstruction::CreateRegExp { .. }
-            | BytecodeInstruction::PushUndefined
-            | BytecodeInstruction::LoadThis
-            | BytecodeInstruction::LoadNewTarget
-            | BytecodeInstruction::LoadBinding(_)
-            | BytecodeInstruction::StoreBinding(_)
-            | BytecodeInstruction::DeclareBinding { .. }
-            | BytecodeInstruction::StoreLast
-            | BytecodeInstruction::Pop
-            | BytecodeInstruction::Unary(_)
-            | BytecodeInstruction::NumberUnary(_)
-            | BytecodeInstruction::Await
-            | BytecodeInstruction::GeneratorStart
-            | BytecodeInstruction::Yield { .. }
-            | BytecodeInstruction::NullishCoalescing { .. }
-            | BytecodeInstruction::TypeOfBinding(_)
-            | BytecodeInstruction::TypeOfValue
-            | BytecodeInstruction::DeleteBinding(_)
-            | BytecodeInstruction::DeleteStaticProperty { .. }
-            | BytecodeInstruction::DeleteComputedProperty { .. }
-            | BytecodeInstruction::DeleteValue
-            | BytecodeInstruction::UpdateBinding { .. }
-            | BytecodeInstruction::UpdateStaticProperty { .. }
-            | BytecodeInstruction::UpdateArrayIndexProperty { .. }
-            | BytecodeInstruction::UpdateComputedProperty { .. }
-            | BytecodeInstruction::Binary { .. }
-            | BytecodeInstruction::InStaticProperty { .. }
-            | BytecodeInstruction::NumberBinary(_)
-            | BytecodeInstruction::NumberCompare(_)
-            | BytecodeInstruction::NumberEquality(_)
-            | BytecodeInstruction::CompoundStoreBinding { .. }
-            | BytecodeInstruction::CompoundStaticProperty { .. }
-            | BytecodeInstruction::CompoundArrayIndexProperty { .. }
-            | BytecodeInstruction::CompoundComputedProperty { .. }
-            | BytecodeInstruction::LogicalAssignment { .. }
-            | BytecodeInstruction::StaticMember { .. }
-            | BytecodeInstruction::PrivateMember { .. }
-            | BytecodeInstruction::PrivateAssign { .. }
-            | BytecodeInstruction::CompoundPrivateProperty { .. }
-            | BytecodeInstruction::UpdatePrivateProperty { .. }
-            | BytecodeInstruction::CallPrivateMember { .. }
-            | BytecodeInstruction::CallPrivateMemberSpread { .. }
-            | BytecodeInstruction::PrivateIn { .. }
-            | BytecodeInstruction::ArrayLength { .. }
-            | BytecodeInstruction::ArrayIndexMember { .. }
-            | BytecodeInstruction::ComputedMember { .. }
-            | BytecodeInstruction::StaticPropertyAssign { .. }
-            | BytecodeInstruction::ArrayIndexAssign { .. }
-            | BytecodeInstruction::ComputedPropertyAssign { .. }
-            | BytecodeInstruction::CallBinding { .. }
-            | BytecodeInstruction::CallValue { .. }
-            | BytecodeInstruction::CallStaticMember { .. }
-            | BytecodeInstruction::CallComputedMember { .. }
-            | BytecodeInstruction::Construct { .. }
-            | BytecodeInstruction::ConstructValue { .. }
-            | BytecodeInstruction::CreateFunction { .. }
-            | BytecodeInstruction::ArrayLiteral { .. }
-            | BytecodeInstruction::ObjectLiteral { .. }
-            | BytecodeInstruction::While { .. }
-            | BytecodeInstruction::DoWhile { .. }
-            | BytecodeInstruction::For { .. }
-            | BytecodeInstruction::ForIn { .. }
-            | BytecodeInstruction::ForOf { .. }
-            | BytecodeInstruction::DestructurePattern { .. }
-            | BytecodeInstruction::CreateClass { .. }
-            | BytecodeInstruction::CallSuper { .. }
-            | BytecodeInstruction::CallSuperSpread
-            | BytecodeInstruction::SuperMember { .. }
-            | BytecodeInstruction::CallSuperMember { .. }
-            | BytecodeInstruction::CallSuperMemberSpread { .. }
-            | BytecodeInstruction::Switch { .. }
-            | BytecodeInstruction::Try { .. }
-            | BytecodeInstruction::Label { .. }
-            | BytecodeInstruction::ScopedBlock(_)
-            | BytecodeInstruction::Complete(_) => Err(Error::runtime(
-                "bytecode jump patch target is not a jump instruction",
-            )),
+        if let BytecodeInstruction::Jump(address)
+        | BytecodeInstruction::JumpIfFalse(address)
+        | BytecodeInstruction::JumpIfFalseKeep(address)
+        | BytecodeInstruction::JumpIfTrueKeep(address) = instruction
+        {
+            *address = target;
+            return Ok(());
         }
+        Err(Error::runtime(
+            "bytecode jump patch target is not a jump instruction",
+        ))
     }
 
     fn compile_class_declaration(
@@ -424,12 +336,12 @@ impl<'a> BytecodeCompiler<'a> {
         inferred_name: Option<&StaticName>,
     ) -> Result<()> {
         let private_names = Self::class_private_names(class);
-        self.emit(BytecodeInstruction::BeginPrivateEnvironment {
-            names: private_names.clone(),
-        });
         if let Some(heritage) = &class.heritage {
             self.compile_expr(heritage)?;
         }
+        self.emit(BytecodeInstruction::BeginPrivateEnvironment {
+            names: private_names.clone(),
+        });
         let members = self.compile_class_members(class, &private_names)?;
         let fields = self.compile_class_fields(class, &private_names)?;
         let static_blocks = class

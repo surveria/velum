@@ -129,6 +129,11 @@ impl Parser {
         )))
     }
 
+    pub(super) fn starts_private_in_expression(&self) -> bool {
+        matches!(self.peek_kind(0), Some(TokenKind::PrivateName(_)))
+            && self.peek_kind_is(1, &TokenKind::In)
+    }
+
     fn shift(&mut self) -> Result<Expression> {
         self.left_assoc(
             Self::term,

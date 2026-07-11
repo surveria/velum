@@ -46,11 +46,13 @@ impl ObjectStorageCounts {
 impl ObjectHeap {
     pub(in crate::runtime) fn storage_counts(&self) -> Result<ObjectStorageCounts> {
         let mut properties = 0_usize;
-        for object in &self.objects {
+        for (index, object) in self.objects.indexed() {
             properties = properties
                 .checked_add(object.named_properties.len())
                 .and_then(|count| count.checked_add(object.array_storage.property_count()))
-                .and_then(|count| count.checked_add(object.private_slots.len()))
+                .and_then(|count| {
+                    count.checked_add(self.private_slots.get(index).map_or(0, std::vec::Vec::len))
+                })
                 .ok_or_else(|| Error::limit("object property count overflowed"))?;
         }
         Ok(ObjectStorageCounts {

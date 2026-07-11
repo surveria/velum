@@ -18,6 +18,7 @@ use super::numeric::{
     BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
     BytecodeNumericUnaryOp,
 };
+use super::private::BytecodePrivateName;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeProgram {
@@ -318,25 +319,6 @@ impl BytecodeDynamicProperty {
     }
 }
 
-/// One `#name` reference. The runtime resolves the name against the chain
-/// of class private environments captured by the executing function, so the
-/// operand carries only the source name text; parser early errors guarantee
-/// a declaration exists on every non-eval path.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BytecodePrivateName {
-    name: StaticName,
-}
-
-impl BytecodePrivateName {
-    pub(crate) const fn new(name: StaticName) -> Self {
-        Self { name }
-    }
-
-    pub const fn name(&self) -> &StaticName {
-        &self.name
-    }
-}
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct BytecodeCallSite {
     site: StaticCallSiteId,
@@ -625,14 +607,11 @@ pub enum BytecodeInstruction {
     StaticMember {
         property: BytecodeProperty,
     },
-    /// Reads one private slot: pops the object, pushes the slot value or the
-    /// getter result, and throws a TypeError on a missing brand.
+    /// Reads a private slot with brand and accessor semantics.
     PrivateMember {
         property: BytecodePrivateName,
     },
-    /// Writes one private slot: pops the value then the object, pushes the
-    /// value back, and throws a TypeError on a missing brand or a method or
-    /// getter-only slot.
+    /// Writes a private slot with brand and accessor semantics.
     PrivateAssign {
         property: BytecodePrivateName,
     },

@@ -3,6 +3,7 @@ mod fast_path;
 mod hoist;
 mod metrics;
 mod numeric;
+mod private;
 mod types;
 
 pub use block::BytecodeBlock;
@@ -12,6 +13,7 @@ pub use numeric::{
     BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
     BytecodeNumericUnaryOp,
 };
+pub use private::BytecodePrivateName;
 pub use types::{
     BytecodeAddress, BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding,
     BytecodeCallSite, BytecodeCatch, BytecodeClass, BytecodeClassField, BytecodeClassMember,
@@ -19,5 +21,5 @@ pub use types::{
     BytecodeDynamicProperty, BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration,
     BytecodeFunctionParam, BytecodeInstruction, BytecodeNewTargetMode, BytecodeObjectProperty,
     BytecodePattern, BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget,
-    BytecodePrivateName, BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
+    BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
 };

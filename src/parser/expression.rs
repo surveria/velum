@@ -414,9 +414,9 @@ impl Parser {
             }
             TokenKind::Super => self.super_expression(token_span)?,
             TokenKind::Identifier(name) => {
-                if self.class_static_block_identifiers_are_restricted() && name == "arguments" {
+                if self.class_arguments_are_restricted() && name == "arguments" {
                     return Err(Error::parse_at(
-                        "arguments is not allowed in a class static block",
+                        "arguments is not allowed in a class field or static block",
                         token_span,
                     ));
                 }

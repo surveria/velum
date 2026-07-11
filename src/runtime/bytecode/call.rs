@@ -56,12 +56,8 @@ impl Context {
             }
             BytecodeInstruction::CreateClass { class } => {
                 let result = self.eval_bytecode_create_class(state, class, next);
-                let leave = self.leave_private_environment(state);
-                match (result, leave) {
-                    (Ok(completion), Ok(())) => Ok(completion),
-                    (Err(error), Ok(())) => Err(error),
-                    (Ok(_), Err(error)) | (Err(_), Err(error)) => Err(error),
-                }
+                self.leave_private_environment(state)?;
+                result
             }
             BytecodeInstruction::CallSuper { arg_count } => {
                 self.eval_bytecode_call_super(state, *arg_count, next)

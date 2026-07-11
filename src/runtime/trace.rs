@@ -370,7 +370,7 @@ impl Function {
         }
         if let Some(fields) = &self.class_fields {
             for field in fields.iter() {
-                if let Some(key) = field.property_key() {
+                if let Some(key) = field.traced_public_key() {
                     visitor.visit(
                         VmCallableEdgeKind::JavaScriptFunctionInternal,
                         StrongEdgeReference::PropertyKey(key),

@@ -330,8 +330,10 @@ impl Context {
             });
         }
         let index = self.activation_frames.len();
+        let private_environment = self.current_private_environment();
         self.activation_frames
             .push(ActivationFrame::bytecode(continuation));
+        self.set_current_private_environment(private_environment)?;
         Ok(BytecodeContinuationHandle {
             activation_index: index,
             owns_activation: true,

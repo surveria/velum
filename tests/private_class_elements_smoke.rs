@@ -112,6 +112,38 @@ fn rejects_malformed_private_tokens() -> TestResult {
 }
 
 #[test]
+fn rejects_private_class_element_early_errors() -> TestResult {
+    ensure_error_contains(
+        "class C { #x = () => arguments; }",
+        "arguments is not allowed in a class field",
+    )?;
+    ensure_error_contains(
+        "class C extends class { x = this.#foo; } { #foo; }",
+        "private name '#foo' must be declared in an enclosing class",
+    )?;
+    ensure_error_contains(
+        "class C { #x #y }",
+        "expected statement terminator after class field",
+    )?;
+    ensure_error_contains(
+        "class C { #field; constructor() { for (#field in value;;) break; } }",
+        "private brand checks are not allowed",
+    )
+}
+
+#[test]
+fn accepts_auto_accessor_syntax_without_weakening_field_terminators() -> TestResult {
+    ensure_string(
+        "class C { accessor #value = 3; read() { return this.#value; } } '' + new C().read()",
+        "3",
+    )?;
+    ensure_error_contains(
+        "class C { #x #y }",
+        "expected statement terminator after class field",
+    )
+}
+
+#[test]
 fn allows_private_names_across_nested_functions_and_classes() -> TestResult {
     // Inner classes may reference outer private names; parsing must accept
     // both even while runtime support is pending.
@@ -232,6 +264,17 @@ fn preserves_private_environments_in_nested_classes_and_closures() -> TestResult
         "" + outer.reader().read(outer)
         "#,
         "11",
+    )?;
+    ensure_string(
+        r#"
+        class Base {}
+        class Outer {
+            #base = Base;
+            make() { return class Inner extends this.#base {}; }
+        }
+        "" + (new (new Outer().make())() instanceof Base)
+        "#,
+        "true",
     )
 }
 

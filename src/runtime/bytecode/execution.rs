@@ -79,8 +79,7 @@ impl Context {
     ) -> Result<BytecodeOutcome> {
         let local_base = self.locals.len();
         let activation_base = self.activation_frames.len();
-        let mut state =
-            BytecodeState::with_private_environment(self.active_private_environment.clone());
+        let mut state = BytecodeState::with_private_environment(self.current_private_environment());
         let outcome = self.eval_bytecode_block_outcome_with_state(bytecode.block(), &mut state)?;
         if outcome.is_suspended() {
             self.discard_execution_suffix(local_base, activation_base)?;
@@ -98,8 +97,7 @@ impl Context {
         if let Some(completion) = self.take_resumed_bytecode_child(block)? {
             return Ok(completion);
         }
-        let mut state =
-            BytecodeState::with_private_environment(self.active_private_environment.clone());
+        let mut state = BytecodeState::with_private_environment(self.current_private_environment());
         self.eval_bytecode_block_outcome_with_state(block, &mut state)
             .map(BytecodeOutcome::completion)
     }
@@ -265,11 +263,7 @@ impl Context {
                 )?
             };
             self.step().map_err(|error| error.with_runtime_span(span))?;
-            let previous_environment = self.active_private_environment.clone();
-            self.active_private_environment = state.private_environment();
-            let instruction_result = self.eval_bytecode_instruction(state, step.instruction());
-            self.active_private_environment = previous_environment;
-            let completion = match instruction_result {
+            let completion = match self.eval_bytecode_instruction(state, step.instruction()) {
                 Ok(completion) => completion,
                 Err(error) => self.bytecode_error_completion(error, span)?,
             };
@@ -336,11 +330,7 @@ impl Context {
                 state.synchronous_root_values(),
             )?;
             self.step().map_err(|error| error.with_runtime_span(span))?;
-            let previous_environment = self.active_private_environment.clone();
-            self.active_private_environment = state.private_environment();
-            let instruction_result = self.eval_bytecode_instruction(state, step.instruction());
-            self.active_private_environment = previous_environment;
-            let completion = match instruction_result {
+            let completion = match self.eval_bytecode_instruction(state, step.instruction()) {
                 Ok(completion) => completion,
                 Err(error) => self.bytecode_error_completion(error, span)?,
             };

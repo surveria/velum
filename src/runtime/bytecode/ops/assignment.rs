@@ -75,7 +75,7 @@ impl BytecodeAssignmentReference {
                 }
                 context.get_cached_dynamic_property_value(object, property, *access)
             }
-            Self::PrivateProperty { object, name } => context.read_private_slot(object, *name),
+            Self::PrivateProperty { object, name } => context.read_private_slot(object, name),
         }
     }
 
@@ -116,7 +116,7 @@ impl BytecodeAssignmentReference {
                 context.set_cached_dynamic_property_value(object, &mut property, *access, value)
             }
             Self::PrivateProperty { object, name } => {
-                context.write_private_slot(object, *name, value)
+                context.write_private_slot(object, name, value)
             }
         }
     }
@@ -424,7 +424,7 @@ impl Context {
             BytecodeAssignmentTarget::PrivateProperty { object, property } => {
                 let object = self.eval_bytecode_expression(object)?;
                 let name = self.resolve_private_name(property)?;
-                self.write_private_slot(&object, name, value)
+                self.write_private_slot(&object, &name, value)
             }
         }
     }
