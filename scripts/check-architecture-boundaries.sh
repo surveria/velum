@@ -496,7 +496,7 @@ check_frontend_span_boundary() {
       | sed '/^[[:space:]]*\/\//d' \
       | tr -d '[:space:]'
   )"
-  expected_token_fields='pubkind:TokenKind,pubspan:SourceSpan,publine_terminator_before:bool,'
+  expected_token_fields='pubkind:TokenKind,pubspan:SourceSpan,publine_terminator_before:bool,pubidentifier_escaped:bool,'
   if [[ "${token_fields}" != "${expected_token_fields}" ]]; then
     fail "frontend token span boundary changed; tokens require one canonical SourceSpan"
   fi
@@ -967,7 +967,7 @@ check_sequence_expression_boundary() {
     || ! grep -F -q 'Expr::Sequence(expressions)' \
       "${repo_root}/src/compiler/function.rs" \
     || ! grep -F -q 'ForHeadKind::Of => self.assignment_expression(),' \
-      "${repo_root}/src/parser/statement.rs" \
+      "${repo_root}/src/parser/statement/for_statement.rs" \
     || ! grep -F -q 'enum AwaitExpressionContext {' \
       "${repo_root}/src/parser/await_context.rs" \
     || ! grep -F -q 'pub(super) is_simple: bool,' \
@@ -1104,7 +1104,7 @@ src/compiler/mod.rs'
     'compile_assignment_pattern(' \
     'assignment_reference_for_pattern(' \
     'assign_bytecode_or_create_sloppy_global(' \
-    'self.iterator_close(&mut source, completion).map(Some)'; do
+    'completion = self.iterator_close(source, completion)?;'; do
     if ! grep -R -q -F --include='*.rs' "${source}" "${repo_root}/src"; then
       fail "destructuring assignment boundary changed; required shared source '${source}' is missing"
     fi
@@ -2122,7 +2122,7 @@ mutate_sequence_expression_pop() {
 mutate_sequence_for_of_rhs() {
   local fixture_root="$1"
   sed -i 's/ForHeadKind::Of => self.assignment_expression(),/ForHeadKind::Of => self.expression(),/' \
-    "${fixture_root}/src/parser/statement.rs"
+    "${fixture_root}/src/parser/statement/for_statement.rs"
 }
 
 mutate_named_function_self_binding_owner() {

@@ -14,7 +14,6 @@ use crate::{
 use super::scope_rules::for_init_needs_layout_scope;
 
 mod function;
-
 pub(super) struct LayoutBuilder {
     operands: Vec<BindingOperand>,
     static_functions: Vec<Option<FunctionScopeId>>,

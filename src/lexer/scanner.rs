@@ -661,7 +661,7 @@ impl<'a> Lexer<'a> {
         }
 
         let kind = identifier_kind(text, escaped);
-        self.push_identifier(kind, offset, escaped);
+        self.push_with_identifier_escape(kind, offset, escaped);
         Ok(())
     }
 
@@ -740,10 +740,6 @@ impl<'a> Lexer<'a> {
 
     fn push(&mut self, kind: TokenKind, offset: usize) {
         self.push_with_identifier_escape(kind, offset, false);
-    }
-
-    fn push_identifier(&mut self, kind: TokenKind, offset: usize, escaped: bool) {
-        self.push_with_identifier_escape(kind, offset, escaped);
     }
 
     fn push_with_identifier_escape(
