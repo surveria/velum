@@ -11,8 +11,10 @@ const ZERO_INDEX: f64 = 0.0;
 
 #[derive(Debug)]
 struct StringRegExpMatch {
-    start: usize,
-    end: usize,
+    byte_start: usize,
+    byte_end: usize,
+    code_unit_start: usize,
+    code_unit_end: usize,
     text: String,
 }
 
@@ -36,8 +38,8 @@ impl Context {
         self.string_regexp_set_last_index(pattern, 0)?;
         let mut matches = Vec::new();
         while let Some(matched) = self.string_regexp_exec_match(pattern, &text)? {
-            let match_end = matched.end;
-            let is_empty_match = matched.start == matched.end;
+            let match_end = matched.code_unit_end;
+            let is_empty_match = matched.text.is_empty();
             matches.push(matched.text);
             if matches.len() > self.limits.max_object_properties {
                 return Err(Error::limit(
@@ -73,7 +75,7 @@ impl Context {
         let matched = self.string_regexp_exec_match(pattern, &text)?;
         self.string_regexp_set_last_index_value(pattern, previous)?;
         Ok(Value::Number(match matched {
-            Some(matched) => index_to_number(matched.start)?,
+            Some(matched) => index_to_number(matched.code_unit_start)?,
             None => -1.0,
         }))
     }
@@ -151,24 +153,7 @@ impl Context {
         text: &str,
     ) -> Result<Option<StringRegExpMatch>> {
         let result = self.regexp_exec(pattern, text)?;
-        let Value::Object(id) = result else {
-            return Ok(None);
-        };
-        let index = self
-            .get_named(&Value::Object(id), REGEXP_MATCH_INDEX_PROPERTY)?
-            .as_number()
-            .ok_or_else(|| Error::runtime("RegExp match index is not numeric"))?;
-        let start = number_to_usize(index)?;
-        let matched_value = self.get_named(&Value::Object(id), FIRST_MATCH_PROPERTY)?;
-        let matched = self.to_string(&matched_value)?;
-        let end = start
-            .checked_add(matched.len())
-            .ok_or_else(|| Error::limit("RegExp match end overflowed"))?;
-        Ok(Some(StringRegExpMatch {
-            start,
-            end,
-            text: matched,
-        }))
+        self.string_regexp_match_from_value(text, &result)
     }
 
     fn string_match_plain(&mut self, text: &str, needle: &str) -> Result<Value> {
@@ -187,7 +172,7 @@ impl Context {
         let Some(matched) = self.string_regexp_exec_match(pattern, text)? else {
             return self.heap_string_value(text);
         };
-        let output = replace_span(text, matched.start, matched.end, replacement)?;
+        let output = replace_span(text, matched.byte_start, matched.byte_end, replacement)?;
         self.check_string_len(&output)?;
         self.heap_string_value(&output)
     }
@@ -202,15 +187,15 @@ impl Context {
         let mut output = String::new();
         let mut cursor = 0usize;
         while let Some(matched) = self.string_regexp_exec_match(pattern, text)? {
-            if matched.start < cursor {
+            if matched.byte_start < cursor {
                 return Err(Error::runtime("RegExp global match moved backwards"));
             }
-            push_checked_slice(&mut output, text, cursor, matched.start)?;
+            push_checked_slice(&mut output, text, cursor, matched.byte_start)?;
             output.push_str(replacement);
-            cursor = matched.end;
+            cursor = matched.byte_end;
             self.check_string_len(&output)?;
-            if matched.start == matched.end {
-                self.string_regexp_advance_last_index(pattern, text, matched.end)?;
+            if matched.text.is_empty() {
+                self.string_regexp_advance_last_index(pattern, text, matched.code_unit_end)?;
             }
         }
         push_checked_slice(&mut output, text, cursor, text.len())?;
@@ -230,13 +215,13 @@ impl Context {
             let Some(matched) = self.string_regexp_exec_match_from(separator, text, cursor)? else {
                 break;
             };
-            if matched.start < cursor {
+            if matched.byte_start < cursor {
                 return Err(Error::runtime("RegExp split match moved backwards"));
             }
-            parts.push(slice_to_string(text, cursor, matched.start)?);
-            cursor = matched.end;
-            if matched.start == matched.end {
-                cursor = next_char_boundary(text, matched.end);
+            parts.push(slice_to_string(text, cursor, matched.byte_start)?);
+            cursor = matched.byte_end;
+            if matched.text.is_empty() {
+                cursor = next_char_boundary(text, matched.byte_end);
             }
         }
         if parts.len() < limit {
@@ -251,12 +236,18 @@ impl Context {
         text: &str,
         start: usize,
     ) -> Result<Option<StringRegExpMatch>> {
-        let result = self.regexp_exec_from(pattern, text, start)?;
-        self.string_regexp_match_from_value(&result)
+        let code_unit_start = text
+            .get(..start)
+            .ok_or_else(|| Error::runtime("RegExp split start is not a string boundary"))?
+            .encode_utf16()
+            .count();
+        let result = self.regexp_exec_from(pattern, text, code_unit_start)?;
+        self.string_regexp_match_from_value(text, &result)
     }
 
     fn string_regexp_match_from_value(
         &mut self,
+        text: &str,
         result: &Value,
     ) -> Result<Option<StringRegExpMatch>> {
         let Value::Object(id) = result else {
@@ -266,15 +257,23 @@ impl Context {
             .get_named(&Value::Object(*id), REGEXP_MATCH_INDEX_PROPERTY)?
             .as_number()
             .ok_or_else(|| Error::runtime("RegExp match index is not numeric"))?;
-        let start = number_to_usize(index)?;
+        let code_unit_start = number_to_usize(index)?;
         let matched_value = self.get_named(&Value::Object(*id), FIRST_MATCH_PROPERTY)?;
         let matched = self.to_string(&matched_value)?;
-        let end = start
+        let byte_start = utf16_index_to_byte_boundary(text, code_unit_start).ok_or_else(|| {
+            Error::runtime("RegExp match index is not a valid UTF-16 string boundary")
+        })?;
+        let byte_end = byte_start
             .checked_add(matched.len())
             .ok_or_else(|| Error::limit("RegExp match end overflowed"))?;
+        let code_unit_end = code_unit_start
+            .checked_add(matched.encode_utf16().count())
+            .ok_or_else(|| Error::limit("RegExp match code-unit end overflowed"))?;
         Ok(Some(StringRegExpMatch {
-            start,
-            end,
+            byte_start,
+            byte_end,
+            code_unit_start,
+            code_unit_end,
             text: matched,
         }))
     }
@@ -301,8 +300,19 @@ impl Context {
         text: &str,
         index: usize,
     ) -> Result<()> {
-        let next = next_char_boundary(text, index);
+        let unicode = self.string_regexp_is_unicode(pattern)?;
+        let next = advance_utf16_index(text, index, unicode)?;
         self.string_regexp_set_last_index(pattern, next)
+    }
+
+    fn string_regexp_is_unicode(&self, value: &Value) -> Result<bool> {
+        let Value::Object(id) = value else {
+            return Ok(false);
+        };
+        Ok(self
+            .objects
+            .regexp_value(*id)?
+            .is_some_and(|regexp| regexp.flags().contains('u') || regexp.flags().contains('v')))
     }
 
     fn string_values_array(&mut self, values: Vec<String>) -> Result<Value> {
@@ -401,6 +411,45 @@ fn next_char_boundary(text: &str, index: usize) -> usize {
     text.get(index..)
         .and_then(|tail| tail.chars().next())
         .map_or(text.len(), |ch| index.saturating_add(ch.len_utf8()))
+}
+
+fn utf16_index_to_byte_boundary(text: &str, index: usize) -> Option<usize> {
+    let mut code_units = 0usize;
+    for (byte_index, ch) in text.char_indices() {
+        if code_units == index {
+            return Some(byte_index);
+        }
+        code_units = code_units.checked_add(ch.len_utf16())?;
+        if code_units == index {
+            return byte_index.checked_add(ch.len_utf8());
+        }
+        if code_units > index {
+            return None;
+        }
+    }
+    (code_units == index).then_some(text.len())
+}
+
+fn advance_utf16_index(text: &str, index: usize, unicode: bool) -> Result<usize> {
+    let units = text.encode_utf16().collect::<Vec<_>>();
+    let Some(first) = units.get(index).copied() else {
+        return index
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("RegExp string index overflowed"));
+    };
+    let width = if unicode
+        && (0xD800..=0xDBFF).contains(&first)
+        && units
+            .get(index.saturating_add(1))
+            .is_some_and(|second| (0xDC00..=0xDFFF).contains(second))
+    {
+        2
+    } else {
+        1
+    };
+    index
+        .checked_add(width)
+        .ok_or_else(|| Error::limit("RegExp string index overflowed"))
 }
 
 fn number_to_usize(number: f64) -> Result<usize> {

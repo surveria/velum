@@ -12,7 +12,7 @@ use crate::{
     value::Value,
 };
 
-use super::engine::{RegExpMatch, regexp_index_usize_to_number};
+use super::engine::{RegExpMatch, RegExpSpan, regexp_index_usize_to_number};
 
 impl Context {
     pub(super) fn regexp_match_array(
@@ -22,7 +22,7 @@ impl Context {
         has_indices: bool,
     ) -> Result<Value> {
         let matched_text = input
-            .get(matched.start..matched.end)
+            .get(matched.span.bytes.clone())
             .ok_or_else(|| Error::runtime("RegExp match span is not a string boundary"))?;
         self.array_constructor_value()?;
         let prototype = self.objects.existing_array_prototype_id()?;
@@ -48,7 +48,7 @@ impl Context {
         self.define_regexp_data_property(
             id,
             "index",
-            Value::Number(regexp_index_usize_to_number(matched.start)?),
+            Value::Number(regexp_index_usize_to_number(matched.span.code_units.start)?),
             PropertyWritable::Yes,
             PropertyEnumerable::Yes,
             PropertyConfigurable::Yes,
@@ -85,12 +85,12 @@ impl Context {
         Ok(Value::Object(id))
     }
 
-    fn regexp_capture_value(&mut self, input: &str, range: Option<&Range<usize>>) -> Result<Value> {
-        let Some(range) = range else {
+    fn regexp_capture_value(&mut self, input: &str, span: Option<&RegExpSpan>) -> Result<Value> {
+        let Some(span) = span else {
             return Ok(Value::Undefined);
         };
         let text = input
-            .get(range.clone())
+            .get(span.bytes.clone())
             .ok_or_else(|| Error::runtime("RegExp capture span is not a string boundary"))?;
         self.heap_string_value(text)
     }
@@ -98,7 +98,7 @@ impl Context {
     fn regexp_named_capture_groups(
         &mut self,
         input: &str,
-        captures: &[(String, Option<Range<usize>>)],
+        captures: &[(String, Option<RegExpSpan>)],
     ) -> Result<Value> {
         if captures.is_empty() {
             return Ok(Value::Undefined);
@@ -135,10 +135,10 @@ impl Context {
             .checked_add(1)
             .ok_or_else(|| Error::limit("RegExp indices count exceeded supported range"))?;
         let mut values = Vec::with_capacity(count);
-        values.push(self.regexp_index_pair(matched.start..matched.end)?);
+        values.push(self.regexp_index_pair(matched.span.code_units.clone())?);
         for capture in &matched.captures {
-            values.push(if let Some(range) = capture {
-                self.regexp_index_pair(range.clone())?
+            values.push(if let Some(span) = capture {
+                self.regexp_index_pair(span.code_units.clone())?
             } else {
                 Value::Undefined
             });
@@ -169,7 +169,7 @@ impl Context {
 
     fn regexp_named_capture_indices_groups(
         &mut self,
-        captures: &[(String, Option<Range<usize>>)],
+        captures: &[(String, Option<RegExpSpan>)],
     ) -> Result<Value> {
         if captures.is_empty() {
             return Ok(Value::Undefined);
@@ -182,9 +182,9 @@ impl Context {
                 "RegExp indices groups value is not an object",
             ));
         };
-        for (name, range) in captures {
-            let value = if let Some(range) = range {
-                self.regexp_index_pair(range.clone())?
+        for (name, span) in captures {
+            let value = if let Some(span) = span {
+                self.regexp_index_pair(span.code_units.clone())?
             } else {
                 Value::Undefined
             };

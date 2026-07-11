@@ -144,7 +144,7 @@ in one `Object` record.
 | Boxed String | `string_value` on `Object` | string virtual properties plus ordinary properties |
 | Boxed Boolean/Number/Symbol | `primitive_value` on `Object` | built-in receiver checks plus ordinary properties |
 | Date | `date_value` on `Object` | Date built-ins plus ordinary properties |
-| RegExp | `regexp_value` on `Object` | RegExp built-ins plus ordinary properties |
+| RegExp | `regexp_value` on `Object` retains only source and flags; the safe-Rust `regress` compiler/executor is transient per construction or execution | RegExp built-ins plus ordinary properties; compilation and matching charge the owning context's runtime-step budget without retaining cross-VM compiled state |
 | Proxy | `proxy_value` on `Object` | repeated pre-dispatch in get/has/set/delete/prototype/descriptor/call/construct paths |
 | ArrayBuffer | `byte_buffer` on `Object`; bytes are `Rc<RefCell<Vec<u8>>>` | typed-array built-ins plus ordinary properties |
 | Numeric TypedArray | `typed_array` on `Object`, carrying an element kind and referencing a buffer object plus shared byte buffer | typed-array indexed branches plus ordinary properties; AS-09j generalizes the previous Uint8-only payload without adding an edge category |

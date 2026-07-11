@@ -13,6 +13,7 @@ use crate::{
         digits_to_number, is_exponent_marker, is_identifier_part, is_identifier_start,
         is_line_terminator, numeric_prefix, unicode_char,
     },
+    regexp_syntax::validate_regexp_literal,
     source::{SourceId, SourceSpan},
 };
 
@@ -188,7 +189,9 @@ impl<'a> Lexer<'a> {
                     in_class = false;
                 }
                 '/' if !in_class => {
-                    let flags = self.regexp_flags(offset)?;
+                    let flags = self.regexp_flags();
+                    validate_regexp_literal(&pattern, &flags)
+                        .map_err(|error| Error::lex(error.to_string(), offset))?;
                     self.push(TokenKind::RegExp { pattern, flags }, offset);
                     return Ok(());
                 }
@@ -201,22 +204,16 @@ impl<'a> Lexer<'a> {
         ))
     }
 
-    fn regexp_flags(&mut self, offset: usize) -> Result<String> {
+    fn regexp_flags(&mut self) -> String {
         let mut flags = String::new();
         while let Some((_, ch)) = self.peek() {
             if !is_identifier_part(ch) {
                 break;
             }
-            if flags.contains(ch) {
-                return Err(Error::lex(
-                    format!("duplicate regular expression flag '{ch}'"),
-                    offset,
-                ));
-            }
             flags.push(ch);
             self.advance();
         }
-        Ok(flags)
+        flags
     }
 
     fn prefixed_number(&mut self, offset: usize, radix: u32, description: &str) -> Result<()> {
@@ -528,12 +525,13 @@ impl<'a> Lexer<'a> {
                     self.advance();
                 }
             }
-            other => {
+            '1'..='9' => {
                 return Err(Error::lex(
-                    format!("unsupported escape sequence '\\{other}'"),
+                    "legacy octal escape sequences are not supported",
                     escape_offset,
                 ));
             }
+            other => output.push(other),
         }
         Ok(())
     }

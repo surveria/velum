@@ -170,6 +170,9 @@ let patternOk =
   /[abc]+/.exec("zzcab")[0] === "cab";
 
 let advanced = /(?<prefix>a|b)(c+)(?=d)/d.exec("xxacccd");
+let astral = /😀/du.exec("x😀y");
+let astralGlobal = /😀/gu;
+let astralGlobalMatch = astralGlobal.exec("x😀y");
 let syntaxErrors = 0;
 try {
   new RegExp("(");
@@ -196,6 +199,14 @@ let advancedPatternOk =
   /(?<=key=)(\w+)/.exec("key=value")[1] === "value" &&
   /^(a|b)\1$/.test("aa") &&
   !/^(a|b)\1$/.test("ab") &&
+  astral.index === 1 &&
+  astral.indices[0][0] === 1 &&
+  astral.indices[0][1] === 3 &&
+  astralGlobalMatch.index === 1 &&
+  astralGlobal.lastIndex === 3 &&
+  "😀a".search(/a/u) === 2 &&
+  "x😀y".replace(/😀/u, "z") === "xzy" &&
+  "😀".match(/(?:)/gu).length === 2 &&
   syntaxErrors === 2;
 
 if (!descriptorOk || !execOk || !patternOk || !advancedPatternOk || !receiverError) {

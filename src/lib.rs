@@ -13,6 +13,7 @@ mod error;
 mod lexer;
 mod ownership;
 mod parser;
+mod regexp_syntax;
 mod runtime;
 mod source;
 mod storage;

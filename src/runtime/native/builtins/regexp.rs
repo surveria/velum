@@ -16,7 +16,7 @@ mod engine;
 mod match_result;
 
 use engine::{
-    RegExpFlags, escaped_regexp_source, regexp_find, regexp_index_usize_to_number,
+    escaped_regexp_source, parse_regexp_flags, regexp_find, regexp_index_usize_to_number,
     validate_regexp_pattern,
 };
 
@@ -166,6 +166,8 @@ impl Context {
         if !global {
             return self.regexp_exec(this_value, &input);
         }
+        let data = self.regexp_receiver_data(this_value)?;
+        let flags = parse_regexp_flags(data.flags())?;
         self.set_regexp_last_index(this_value, 0)?;
         let mut matches = Vec::new();
         while let Some(matched) = self.regexp_match_text(this_value, &input)? {
@@ -176,7 +178,9 @@ impl Context {
             }
             if is_empty {
                 let index = self.regexp_last_index(this_value, &input)?;
-                self.set_regexp_last_index(this_value, next_char_boundary(&input, index))?;
+                let next =
+                    advance_utf16_index(&input, index, flags.unicode() || flags.unicode_sets())?;
+                self.set_regexp_last_index(this_value, next)?;
             }
         }
         if matches.is_empty() {
@@ -243,8 +247,9 @@ impl Context {
     }
 
     fn create_regexp_object_from_text(&mut self, pattern: &str, flags: &str) -> Result<Value> {
-        let parsed_flags = RegExpFlags::parse(flags)?;
-        validate_regexp_pattern(pattern, &parsed_flags)?;
+        self.charge_regexp_work(pattern, "")?;
+        let parsed_flags = parse_regexp_flags(flags)?;
+        validate_regexp_pattern(pattern, parsed_flags)?;
         self.check_string_len(pattern)?;
         self.check_string_len(flags)?;
         let prototype = self.regexp_constructor_prototype()?;
@@ -479,7 +484,7 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let regexp = self.regexp_receiver_data(this_value)?;
-        let flags = RegExpFlags::parse(regexp.flags())?;
+        let flags = parse_regexp_flags(regexp.flags())?;
         match kind {
             NativeFunctionKind::RegExpPrototypeDotAllGetter => Ok(Value::Bool(flags.dot_all())),
             NativeFunctionKind::RegExpPrototypeFlagsGetter => {
@@ -525,13 +530,14 @@ impl Context {
         input: &str,
     ) -> Result<Value> {
         let regexp = self.regexp_receiver_data(this_value)?;
-        let flags = RegExpFlags::parse(regexp.flags())?;
+        let flags = parse_regexp_flags(regexp.flags())?;
+        self.charge_regexp_work(regexp.pattern(), input)?;
         let start = if flags.global() || flags.sticky() {
             self.regexp_last_index(this_value, input)?
         } else {
             0
         };
-        let matched = regexp_find(regexp.pattern(), &flags, input, start)?;
+        let matched = regexp_find(regexp.pattern(), flags, input, start)?;
         let Some(matched) = matched else {
             if flags.global() || flags.sticky() {
                 self.set_regexp_last_index(this_value, 0)?;
@@ -539,7 +545,7 @@ impl Context {
             return Ok(Value::Null);
         };
         if flags.global() || flags.sticky() {
-            self.set_regexp_last_index(this_value, matched.end)?;
+            self.set_regexp_last_index(this_value, matched.span.code_units.end)?;
         }
         self.regexp_match_array(input, &matched, flags.has_indices())
     }
@@ -551,8 +557,9 @@ impl Context {
         start: usize,
     ) -> Result<Value> {
         let regexp = self.regexp_receiver_data(this_value)?;
-        let flags = RegExpFlags::parse(regexp.flags())?;
-        let Some(matched) = regexp_find(regexp.pattern(), &flags, input, start)? else {
+        let flags = parse_regexp_flags(regexp.flags())?;
+        self.charge_regexp_work(regexp.pattern(), input)?;
+        let Some(matched) = regexp_find(regexp.pattern(), flags, input, start)? else {
             return Ok(Value::Null);
         };
         self.regexp_match_array(input, &matched, flags.has_indices())
@@ -560,13 +567,25 @@ impl Context {
 
     const fn discard_regexp_extra_args(_args: &[Value]) {}
 
+    fn charge_regexp_work(&mut self, pattern: &str, input: &str) -> Result<()> {
+        let steps = pattern
+            .encode_utf16()
+            .count()
+            .checked_add(input.encode_utf16().count())
+            .and_then(|steps| steps.checked_add(1))
+            .ok_or_else(|| Error::limit("RegExp work estimate overflowed"))?;
+        self.charge_runtime_steps(steps)
+    }
+
     fn regexp_last_index(&mut self, this_value: &Value, input: &str) -> Result<usize> {
         let value = self.get_named(this_value, REGEXP_LAST_INDEX_PROPERTY)?;
         let index = self.to_length(&value)?;
-        let input_length = u64::try_from(input.len())
+        let input_length = u64::try_from(input.encode_utf16().count())
             .map_err(|_| Error::limit("RegExp input length exceeded supported range"))?;
         if index > input_length {
-            return Ok(input.len().saturating_add(1));
+            let input_length = usize::try_from(input_length)
+                .map_err(|_| Error::limit("RegExp input length exceeded supported range"))?;
+            return Ok(input_length.saturating_add(1));
         }
         Self::length_to_usize(index, "RegExp lastIndex exceeded supported range")
     }
@@ -601,7 +620,7 @@ impl Context {
 
     fn regexp_match_all_results(&mut self, pattern: &Value, input: &str) -> Result<Vec<Value>> {
         let data = self.regexp_receiver_data(pattern)?;
-        let flags = RegExpFlags::parse(data.flags())?;
+        let flags = parse_regexp_flags(data.flags())?;
         let matcher = self.create_regexp_object_from_text(data.pattern(), data.flags())?;
         let start = self.regexp_last_index(pattern, input)?;
         self.set_regexp_last_index(&matcher, start)?;
@@ -627,7 +646,9 @@ impl Context {
             }
             if is_empty {
                 let index = self.regexp_last_index(&matcher, input)?;
-                self.set_regexp_last_index(&matcher, next_char_boundary(input, index))?;
+                let next =
+                    advance_utf16_index(input, index, flags.unicode() || flags.unicode_sets())?;
+                self.set_regexp_last_index(&matcher, next)?;
             }
         }
     }
@@ -667,12 +688,24 @@ const fn value_is_undefined(value: &Value) -> bool {
     matches!(value, Value::Undefined)
 }
 
-fn next_char_boundary(text: &str, index: usize) -> usize {
-    text.get(index..)
-        .and_then(|tail| tail.chars().next())
-        .map_or_else(
-            || index.saturating_add(1),
-            |ch| index.saturating_add(ch.len_utf8()),
-        )
-        .min(text.len())
+fn advance_utf16_index(text: &str, index: usize, unicode: bool) -> Result<usize> {
+    let units = text.encode_utf16().collect::<Vec<_>>();
+    let Some(first) = units.get(index).copied() else {
+        return index
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("RegExp string index overflowed"));
+    };
+    let width = if unicode
+        && (0xD800..=0xDBFF).contains(&first)
+        && units
+            .get(index.saturating_add(1))
+            .is_some_and(|second| (0xDC00..=0xDFFF).contains(second))
+    {
+        2
+    } else {
+        1
+    };
+    index
+        .checked_add(width)
+        .ok_or_else(|| Error::limit("RegExp string index overflowed"))
 }
