@@ -2594,6 +2594,29 @@ AS-09h profile evidence in draft PR #457:
   Exact-tree CI and canonical publication evidence remain required before
   AS-09h can close.
 
+AS-09l profile evidence in draft PR #466:
+
+- `for await...of` extends the existing `ForOf` AST, bytecode, binding-layout,
+  compiler, metrics, and activation-owned continuation with one explicit async
+  mode instead of introducing another interpreter path;
+- async iterators await each `next()` result, while synchronous fallback wraps
+  iterator results through the Promise job owner and awaits each yielded value;
+  abrupt completion awaits `return()` through `AsyncIteratorClose`;
+- destructuring binding and assignment heads reuse the resumable pattern
+  walker, including computed targets that suspend, and the loop head is not
+  re-evaluated when execution resumes;
+- the focused `language/statements/for-await-of` profile advances from
+  178/2,433 to 2,427/2,433 variants and from 92/1,235 to 1,230/1,235 files;
+- on the current AS-09m RegExp base, the reviewed full Test262 baseline moves
+  from 48,510 to 51,351 variants through 2,841 additions and no removals. The
+  complete correctness gate is green at 69/69 engine fixtures, 120/120 active
+  Test262 cases, 98/98 QuickJS differential cases, 26,491/53,404 conforming
+  files, and 51,351/102,578 full variants in
+  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260711T165404Z.*`;
+- four residual variants expose the separately owned block-scoped function
+  declaration instantiation gap, and two Annex B variants require the
+  `$262.createRealm` harness. Neither residual is specific to async iteration.
+
 ### AS-10: Performance And Memory Checkpoints
 
 Maintain a stable core benchmark cohort whose history remains comparable even

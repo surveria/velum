@@ -10,6 +10,11 @@ use crate::{
 use super::to_boolean;
 
 mod async_delegate;
+mod async_iteration;
+
+pub(in crate::runtime) use async_iteration::{
+    AsyncIteratorCloseStep, AsyncIteratorContinuation, AsyncIteratorStep,
+};
 
 const ITERATOR_SYMBOL_DISPLAY_NAME: &str = "Symbol(Symbol.iterator)";
 const ITERATOR_NEXT_PROPERTY: &str = "next";
@@ -54,6 +59,30 @@ pub(in crate::runtime) enum IteratorStep {
     Done,
     /// An abrupt completion thrown directly by the iterator's `next` method.
     Abrupt(Completion),
+}
+
+/// Iterator state selected by an ordinary or asynchronous for-of head.
+#[derive(Debug)]
+pub(in crate::runtime) enum ForOfIterator {
+    Synchronous(IteratorSource),
+    Asynchronous(AsyncIteratorContinuation),
+}
+
+impl ForOfIterator {
+    pub(in crate::runtime) fn root_values(&self) -> impl Iterator<Item = &Value> {
+        match self {
+            Self::Synchronous(source) => source.root_values().collect::<Vec<_>>(),
+            Self::Asynchronous(continuation) => continuation.root_values().collect::<Vec<_>>(),
+        }
+        .into_iter()
+    }
+
+    pub(in crate::runtime) const fn source_mut(&mut self) -> &mut IteratorSource {
+        match self {
+            Self::Synchronous(source) => source,
+            Self::Asynchronous(continuation) => continuation.source_mut(),
+        }
+    }
 }
 
 /// Persistent iterator state owned by a suspended `yield*` instruction.

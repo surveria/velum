@@ -43,9 +43,21 @@ impl Context {
                     context.assign_bytecode(name, value)
                 })?
             }
-            BytecodeForInTarget::PatternBinding { pattern, kind } => {
-                self.eval_for_in_pattern_loop(keys, pattern, *kind, body, labels)?
-            }
+            BytecodeForInTarget::PatternBinding { pattern, kind } => self
+                .eval_for_in_pattern_loop(
+                    keys,
+                    pattern,
+                    crate::bytecode::BytecodeDestructureMode::Declaration(*kind),
+                    body,
+                    labels,
+                )?,
+            BytecodeForInTarget::PatternAssignment(pattern) => self.eval_for_in_pattern_loop(
+                keys,
+                pattern,
+                crate::bytecode::BytecodeDestructureMode::Assignment,
+                body,
+                labels,
+            )?,
             BytecodeForInTarget::Assignment(target) => {
                 self.eval_bytecode_for_in_assignment_loop(keys, body, labels, |context, key| {
                     let value = context.heap_string_value(&key)?;

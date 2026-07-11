@@ -1,7 +1,7 @@
 use crate::{
     error::{Error, Result},
     runtime::{
-        Context, VmStorageKind, abstract_operations::IteratorSource, activation::ActivationFrame,
+        Context, VmStorageKind, abstract_operations::ForOfIterator, activation::ActivationFrame,
         control::Completion,
     },
     value::Value,
@@ -32,6 +32,7 @@ pub(super) enum BytecodeLoopPhase {
     Condition,
     Body,
     Update,
+    Close,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -64,9 +65,11 @@ pub(super) enum BytecodeControlRecord {
     },
     ForOf {
         phase: BytecodeLoopPhase,
-        source: Option<IteratorSource>,
+        iterator: Option<ForOfIterator>,
         body_state: BytecodeState,
         last: Value,
+        awaiting: bool,
+        resume: Option<Completion>,
     },
     Switch {
         body_state: BytecodeState,
@@ -84,6 +87,18 @@ pub(super) enum BytecodeControlRecord {
 
 impl BytecodeControlRecord {
     pub(super) fn resume_suspension(&mut self, completion: Completion) -> Result<bool> {
+        if let Self::ForOf {
+            awaiting: true,
+            resume,
+            ..
+        } = self
+        {
+            *resume = Some(completion);
+            if let Self::ForOf { awaiting, .. } = self {
+                *awaiting = false;
+            }
+            return Ok(true);
+        }
         let state = match self {
             Self::Loop {
                 phase,
@@ -93,7 +108,9 @@ impl BytecodeControlRecord {
                 ..
             } => match phase {
                 BytecodeLoopPhase::Initialize | BytecodeLoopPhase::Condition => condition_state,
-                BytecodeLoopPhase::Destructure | BytecodeLoopPhase::Body => body_state,
+                BytecodeLoopPhase::Destructure
+                | BytecodeLoopPhase::Body
+                | BytecodeLoopPhase::Close => body_state,
                 BytecodeLoopPhase::Update => update_state,
             },
             Self::ForIn { body_state, .. }
@@ -146,12 +163,14 @@ impl BytecodeControlRecord {
         }
     }
 
-    pub(super) const fn for_of(source: IteratorSource) -> Self {
+    pub(super) const fn for_of(iterator: Option<ForOfIterator>) -> Self {
         Self::ForOf {
             phase: BytecodeLoopPhase::Initialize,
-            source: Some(source),
+            iterator,
             body_state: BytecodeState::new(),
             last: Value::Undefined,
+            awaiting: false,
+            resume: None,
         }
     }
 
@@ -190,16 +209,20 @@ impl BytecodeControlRecord {
                 roots.push(last);
             }
             Self::ForOf {
-                source,
+                iterator,
                 body_state,
                 last,
+                resume,
                 ..
             } => {
-                if let Some(source) = source {
-                    roots.extend(source.root_values());
+                if let Some(iterator) = iterator {
+                    roots.extend(iterator.root_values());
                 }
                 roots.extend(body_state.root_values());
                 roots.push(last);
+                if let Some(value) = resume.as_ref().and_then(completion_value) {
+                    roots.push(value);
+                }
             }
             Self::Try {
                 body_state,
@@ -277,27 +300,76 @@ impl BytecodeControlRecord {
         Ok((phase, last))
     }
 
-    fn iterator_source_mut(&mut self) -> Result<&mut IteratorSource> {
-        let Self::ForOf { source, .. } = self else {
+    pub(super) fn for_of_iterator_mut(&mut self) -> Result<&mut ForOfIterator> {
+        let Self::ForOf { iterator, .. } = self else {
             return Err(Error::runtime("structured iterator record mismatch"));
         };
-        source
+        iterator
             .as_mut()
             .ok_or_else(|| Error::runtime("structured iterator source disappeared"))
+    }
+
+    pub(super) fn mark_for_of_awaiting(&mut self) -> Result<()> {
+        let Self::ForOf {
+            awaiting, resume, ..
+        } = self
+        else {
+            return Err(Error::runtime("structured iterator record mismatch"));
+        };
+        if *awaiting || resume.is_some() {
+            return Err(Error::runtime(
+                "structured iterator already has an await completion",
+            ));
+        }
+        *awaiting = true;
+        Ok(())
+    }
+
+    pub(super) fn take_for_of_resume(&mut self) -> Result<Option<Completion>> {
+        let Self::ForOf {
+            awaiting, resume, ..
+        } = self
+        else {
+            return Err(Error::runtime("structured iterator record mismatch"));
+        };
+        if *awaiting {
+            return Err(Error::runtime(
+                "structured iterator await has not resumed yet",
+            ));
+        }
+        Ok(resume.take())
     }
 
     fn transient_root_values(&self) -> impl Iterator<Item = &Value> {
         let roots = match self {
             Self::Loop { last, .. } | Self::ForIn { last, .. } | Self::Switch { last, .. } => {
-                [Some(last), None, None]
+                [Some(last), None, None, None]
             }
-            Self::ForOf { source, last, .. } => {
-                let [first, second] = source
+            Self::ForOf {
+                iterator,
+                last,
+                resume,
+                ..
+            } => {
+                let values = iterator
                     .as_ref()
-                    .map_or([None, None], IteratorSource::root_value_slots);
-                [Some(last), first, second]
+                    .map(ForOfIterator::root_values)
+                    .into_iter()
+                    .flatten()
+                    .collect::<Vec<_>>();
+                [
+                    Some(last),
+                    values.first().copied(),
+                    values.get(1).copied(),
+                    resume.as_ref().and_then(completion_value),
+                ]
             }
-            Self::Try { pending, .. } => [pending.as_ref().and_then(completion_value), None, None],
+            Self::Try { pending, .. } => [
+                pending.as_ref().and_then(completion_value),
+                None,
+                None,
+                None,
+            ],
         };
         roots.into_iter().flatten()
     }
@@ -307,13 +379,22 @@ impl BytecodeControlRecord {
             Self::Loop { last, .. } | Self::ForIn { last, .. } | Self::Switch { last, .. } => {
                 crate::runtime::transient_roots::is_traceable(last)
             }
-            Self::ForOf { source, last, .. } => {
+            Self::ForOf {
+                iterator,
+                last,
+                resume,
+                ..
+            } => {
                 crate::runtime::transient_roots::is_traceable(last)
-                    || source.as_ref().is_some_and(|source| {
-                        let [first, second] = source.root_value_slots();
-                        first.is_some_and(crate::runtime::transient_roots::is_traceable)
-                            || second.is_some_and(crate::runtime::transient_roots::is_traceable)
+                    || iterator.as_ref().is_some_and(|iterator| {
+                        iterator
+                            .root_values()
+                            .any(crate::runtime::transient_roots::is_traceable)
                     })
+                    || resume
+                        .as_ref()
+                        .and_then(completion_value)
+                        .is_some_and(crate::runtime::transient_roots::is_traceable)
             }
             Self::Try { pending, .. } => pending
                 .as_ref()
@@ -504,11 +585,11 @@ impl Context {
         run(self)
     }
 
-    pub(super) fn run_bytecode_iterator_action<T>(
+    pub(super) fn run_bytecode_for_of_action<T>(
         &mut self,
         handle: BytecodeControlHandle,
         record: &mut BytecodeControlRecord,
-        run: impl FnOnce(&mut Self, &mut IteratorSource) -> Result<T>,
+        run: impl FnOnce(&mut Self, &mut ForOfIterator) -> Result<T>,
     ) -> Result<T> {
         let _root_scope = if record.has_traceable_transient_roots() {
             Some(self.transient_root_scope(
@@ -518,7 +599,7 @@ impl Context {
         } else {
             None
         };
-        let result = run(self, record.iterator_source_mut()?);
+        let result = run(self, record.for_of_iterator_mut()?);
         match result {
             Ok(value) => Ok(value),
             Err(error) => {
@@ -547,7 +628,10 @@ impl Context {
             .checked_sub(1)
             .ok_or_else(|| Error::runtime("structured control activation stack is empty"))?;
         if handle.activation_index != expected {
-            return Err(Error::runtime("structured control activation mismatch"));
+            return Err(Error::runtime(format!(
+                "structured control activation mismatch: expected {expected}, actual {}",
+                handle.activation_index
+            )));
         }
         self.activation_frames
             .get_mut(handle.activation_index)

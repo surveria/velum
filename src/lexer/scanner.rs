@@ -130,6 +130,7 @@ impl<'a> Lexer<'a> {
             kind: TokenKind::Eof,
             span: SourceSpan::point(self.source_id, self.source.len()),
             line_terminator_before: self.line_terminator_before,
+            identifier_escaped: false,
         });
         Ok(self.tokens)
     }
@@ -660,7 +661,7 @@ impl<'a> Lexer<'a> {
         }
 
         let kind = identifier_kind(text, escaped);
-        self.push(kind, offset);
+        self.push_with_identifier_escape(kind, offset, escaped);
         Ok(())
     }
 
@@ -738,11 +739,21 @@ impl<'a> Lexer<'a> {
     }
 
     fn push(&mut self, kind: TokenKind, offset: usize) {
+        self.push_with_identifier_escape(kind, offset, false);
+    }
+
+    fn push_with_identifier_escape(
+        &mut self,
+        kind: TokenKind,
+        offset: usize,
+        identifier_escaped: bool,
+    ) {
         let span = SourceSpan::from_valid_bounds(self.source_id, offset, self.current_offset());
         self.tokens.push(Token {
             kind,
             span,
             line_terminator_before: self.line_terminator_before,
+            identifier_escaped,
         });
         self.line_terminator_before = false;
     }

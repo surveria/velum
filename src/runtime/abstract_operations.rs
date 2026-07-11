@@ -12,6 +12,7 @@ pub(in crate::runtime) use equality::{
     strict_equality,
 };
 pub(in crate::runtime) use iterator::{
+    AsyncIteratorCloseStep, AsyncIteratorContinuation, AsyncIteratorStep, ForOfIterator,
     IteratorSource, IteratorStep, YieldDelegateContinuation, YieldDelegateStep,
 };
 pub(in crate::runtime) use property_call::SetFailureBehavior;

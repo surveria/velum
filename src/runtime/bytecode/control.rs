@@ -16,6 +16,7 @@ use super::{
     control_continuation::{
         BytecodeControlRecord, BytecodeControlStateSlot, BytecodeLoopKind, BytecodeLoopPhase,
     },
+    for_of::BytecodeForOfParts,
     linear::BytecodeLinearPlan,
     state::{
         BytecodeState, bytecode_loop_completion, init_completion_to_result, loop_label_matches,
@@ -113,12 +114,9 @@ impl Context {
                 object,
                 body,
             } => self.eval_bytecode_for_in(state, labels.as_deref(), target, object, body, next),
-            BytecodeInstruction::ForOf {
-                labels,
-                target,
-                object,
-                body,
-            } => self.eval_bytecode_for_of(state, labels.as_deref(), target, object, body, next),
+            instruction @ BytecodeInstruction::ForOf { .. } => {
+                self.eval_bytecode_for_of_instruction(state, instruction, next)
+            }
             BytecodeInstruction::DestructurePattern { pattern, mode } => {
                 self.eval_bytecode_destructure_instruction(state, pattern, *mode, next)
             }
@@ -149,8 +147,7 @@ impl Context {
                 self.eval_bytecode_label(state, label, body, next)
             }
             BytecodeInstruction::ScopedBlock(block) => {
-                let completion = self.eval_bytecode_scoped_block(block)?;
-                Ok(Self::store_or_return_completion(state, completion, next))
+                self.eval_bytecode_scoped_block_instruction(state, block, next)
             }
             BytecodeInstruction::Jump(target) => {
                 state.pc = *target;
@@ -176,6 +173,36 @@ impl Context {
             }
             _ => Err(Error::runtime("bytecode control instruction mismatch")),
         }
+    }
+
+    fn eval_bytecode_for_of_instruction(
+        &mut self,
+        state: &mut BytecodeState,
+        instruction: &BytecodeInstruction,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let BytecodeInstruction::ForOf {
+            labels,
+            target,
+            object,
+            body,
+            asynchronous,
+        } = instruction
+        else {
+            return Err(Error::runtime("bytecode for-of instruction mismatch"));
+        };
+        let parts = BytecodeForOfParts::new(labels.as_deref(), target, object, body, *asynchronous);
+        self.eval_bytecode_for_of(state, parts, next)
+    }
+
+    fn eval_bytecode_scoped_block_instruction(
+        &mut self,
+        state: &mut BytecodeState,
+        block: &BytecodeBlock,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let completion = self.eval_bytecode_scoped_block(block)?;
+        Ok(Self::store_or_return_completion(state, completion, next))
     }
 
     pub(super) fn store_or_return_completion(

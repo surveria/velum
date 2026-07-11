@@ -1,22 +1,12 @@
 use crate::{
-    ast::{
-        CatchClause, DeclKind, Expression, ForInTarget, FunctionKind, Statement, Stmt, SwitchCase,
-    },
+    ast::{CatchClause, DeclKind, Expr, Expression, FunctionKind, Statement, Stmt, SwitchCase},
     error::{Error, Result},
     lexer::TokenKind,
 };
 
 use super::{ParsedFunctionBody, Parser};
 
-const FOR_OF_KEYWORD: &str = "of";
-
-/// Distinguishes `for (target in object)` from `for (target of iterable)`
-/// after the shared head target has been parsed.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-enum ForHeadKind {
-    In,
-    Of,
-}
+mod for_statement;
 
 struct ParsedLabel {
     name: crate::ast::StaticName,
@@ -97,6 +87,9 @@ impl Parser {
         if self.match_kind(&TokenKind::Class) {
             return self.class_declaration();
         }
+        if self.let_starts_expression_statement() {
+            return self.let_expression_statement();
+        }
         if self.match_kind(&TokenKind::Let) {
             return self.var_decl(DeclKind::Let);
         }
@@ -110,6 +103,28 @@ impl Parser {
         let expr = self.expression()?;
         self.consume_statement_terminator("expected statement terminator")?;
         Ok(Stmt::Expr(expr))
+    }
+
+    fn let_starts_expression_statement(&self) -> bool {
+        !self.is_strict_mode()
+            && self.check(&TokenKind::Let)
+            && self.peek_has_line_terminator_before(1)
+            && !self.peek_kind_is(1, &TokenKind::LBracket)
+            && !self.peek_kind_is(1, &TokenKind::Await)
+            && !self.peek_token(1).is_some_and(|token| {
+                matches!(&token.kind, TokenKind::Identifier(name) if name == super::YIELD_IDENTIFIER_NAME)
+            })
+    }
+
+    fn let_expression_statement(&mut self) -> Result<Stmt> {
+        let token = self
+            .advance()
+            .ok_or_else(|| self.parse_error("expected 'let' identifier"))?;
+        let name = self.static_name_borrowed_at("let", token.offset())?;
+        let binding = self.static_binding(name)?;
+        let expression = Expression::new(Expr::Identifier(binding), token.span);
+        self.consume_statement_terminator("expected statement terminator after 'let'")?;
+        Ok(Stmt::Expr(expression))
     }
 
     fn with_statement_depth(
@@ -189,10 +204,10 @@ impl Parser {
         let condition = self.expression()?;
         self.consume(&TokenKind::RParen, "expected ')' after if condition")?;
         let consequent = Box::new(self.statement()?);
-        self.reject_generator_single_statement(&consequent)?;
+        self.reject_invalid_single_statement(&consequent)?;
         let alternate = if self.match_kind(&TokenKind::Else) {
             let alternate = Box::new(self.statement()?);
-            self.reject_generator_single_statement(&alternate)?;
+            self.reject_invalid_single_statement(&alternate)?;
             Some(alternate)
         } else {
             None
@@ -209,7 +224,7 @@ impl Parser {
         let condition = self.expression()?;
         self.consume(&TokenKind::RParen, "expected ')' after while condition")?;
         let body = Box::new(self.with_iteration_statement(Self::statement)?);
-        self.reject_generator_single_statement(&body)?;
+        self.reject_invalid_single_statement(&body)?;
         Ok(Stmt::While { condition, body })
     }
 
@@ -278,7 +293,7 @@ impl Parser {
         let label_names: Vec<_> = labels.iter().map(|label| label.name.clone()).collect();
         let body =
             self.with_labeled_statement(&label_names, is_iteration_target, Self::statement)?;
-        self.reject_generator_single_statement(&body)?;
+        self.reject_invalid_single_statement(&body)?;
         Ok(Self::nest_labeled_statements(labels, body))
     }
 
@@ -366,162 +381,6 @@ impl Parser {
             return self.consume_identifier(message).map(Some);
         }
         Ok(None)
-    }
-
-    fn for_statement(&mut self) -> Result<Stmt> {
-        self.consume(&TokenKind::LParen, "expected '(' after 'for'")?;
-        let cursor = self.cursor;
-        let expression_depth = self.expression_depth;
-        let static_names = self.static_names.clone();
-        let static_bindings = self.static_bindings.clone();
-        let static_functions = self.static_functions.clone();
-        if let Some((target, object, head)) = self.for_in_header()? {
-            self.consume(&TokenKind::RParen, "expected ')' after for-in expression")?;
-            let body = Box::new(self.with_iteration_statement(Self::statement)?);
-            self.reject_generator_single_statement(&body)?;
-            return Ok(match head {
-                ForHeadKind::In => Stmt::ForIn {
-                    target,
-                    object,
-                    body,
-                },
-                ForHeadKind::Of => Stmt::ForOf {
-                    target,
-                    object,
-                    body,
-                },
-            });
-        }
-        self.cursor = cursor;
-        self.expression_depth = expression_depth;
-        self.static_names = static_names;
-        self.static_bindings = static_bindings;
-        self.static_functions = static_functions;
-
-        let init = self.for_init()?;
-        let condition = if self.check(&TokenKind::Semicolon) {
-            None
-        } else {
-            Some(self.expression()?)
-        };
-        self.consume(&TokenKind::Semicolon, "expected ';' after for condition")?;
-        let update = if self.check(&TokenKind::RParen) {
-            None
-        } else {
-            Some(self.expression()?)
-        };
-        self.consume(&TokenKind::RParen, "expected ')' after for clauses")?;
-        let body = Box::new(self.with_iteration_statement(Self::statement)?);
-        self.reject_generator_single_statement(&body)?;
-        Ok(Stmt::For {
-            init,
-            condition,
-            update,
-            body,
-        })
-    }
-
-    fn for_in_header(&mut self) -> Result<Option<(ForInTarget, Expression, ForHeadKind)>> {
-        if self.match_kind(&TokenKind::Let) {
-            return self.for_in_binding_header(DeclKind::Let);
-        }
-        if self.match_kind(&TokenKind::Const) {
-            return self.for_in_binding_header(DeclKind::Const);
-        }
-        if self.match_kind(&TokenKind::Var) {
-            return self.for_in_binding_header(DeclKind::Var);
-        }
-
-        if !self.for_in_assignment_target_start() {
-            return Ok(None);
-        }
-        let target = self.call()?;
-        let Some(head) = self.match_for_head_kind() else {
-            return Ok(None);
-        };
-        let Some(target) = Self::assignment_target(target) else {
-            return Err(self.parse_error("invalid for-in assignment target"));
-        };
-        let object = self.for_head_rhs(head)?;
-        Ok(Some((ForInTarget::Assignment(target), object, head)))
-    }
-
-    fn for_in_binding_header(
-        &mut self,
-        kind: DeclKind,
-    ) -> Result<Option<(ForInTarget, Expression, ForHeadKind)>> {
-        if self.next_is_binding_pattern() {
-            let pattern = self.binding_pattern()?;
-            let Some(head) = self.match_for_head_kind() else {
-                return Ok(None);
-            };
-            let object = self.for_head_rhs(head)?;
-            let target = ForInTarget::PatternBinding {
-                pattern: Box::new(pattern),
-                kind,
-            };
-            return Ok(Some((target, object, head)));
-        }
-        let name = self.consume_binding_identifier("expected for-in binding name")?;
-        let Some(head) = self.match_for_head_kind() else {
-            return Ok(None);
-        };
-        let object = self.for_head_rhs(head)?;
-        Ok(Some((ForInTarget::Binding { name, kind }, object, head)))
-    }
-
-    fn for_head_rhs(&mut self, head: ForHeadKind) -> Result<Expression> {
-        match head {
-            ForHeadKind::In => self.expression(),
-            ForHeadKind::Of => self.assignment_expression(),
-        }
-    }
-
-    fn match_for_head_kind(&mut self) -> Option<ForHeadKind> {
-        if self.match_kind(&TokenKind::In) {
-            return Some(ForHeadKind::In);
-        }
-        if self.next_is_contextual_of() && self.advance().is_some() {
-            return Some(ForHeadKind::Of);
-        }
-        None
-    }
-
-    fn next_is_contextual_of(&self) -> bool {
-        self.peek().is_some_and(
-            |token| matches!(&token.kind, TokenKind::Identifier(name) if name == FOR_OF_KEYWORD),
-        )
-    }
-
-    fn for_in_assignment_target_start(&self) -> bool {
-        self.peek().is_some_and(|token| {
-            matches!(
-                &token.kind,
-                TokenKind::Identifier(_) | TokenKind::Async | TokenKind::LParen
-            )
-        })
-    }
-
-    fn for_init(&mut self) -> Result<Option<Box<Statement>>> {
-        let start = self.current_span();
-        if self.match_kind(&TokenKind::Semicolon) {
-            return Ok(None);
-        }
-        if self.match_kind(&TokenKind::Let) {
-            let kind = self.for_var_decl(DeclKind::Let)?;
-            return Ok(Some(Box::new(self.statement_node(start, kind))));
-        }
-        if self.match_kind(&TokenKind::Const) {
-            let kind = self.for_var_decl(DeclKind::Const)?;
-            return Ok(Some(Box::new(self.statement_node(start, kind))));
-        }
-        if self.match_kind(&TokenKind::Var) {
-            let kind = self.for_var_decl(DeclKind::Var)?;
-            return Ok(Some(Box::new(self.statement_node(start, kind))));
-        }
-        let expr = self.expression()?;
-        self.consume(&TokenKind::Semicolon, "expected ';' after for initializer")?;
-        Ok(Some(Box::new(self.statement_node(start, Stmt::Expr(expr)))))
     }
 
     fn switch_statement(&mut self) -> Result<Stmt> {

@@ -14,7 +14,6 @@ use crate::{
 use super::scope_rules::for_init_needs_layout_scope;
 
 mod function;
-
 pub(super) struct LayoutBuilder {
     operands: Vec<BindingOperand>,
     static_functions: Vec<Option<FunctionScopeId>>,
@@ -166,6 +165,7 @@ impl LayoutBuilder {
                     } => self.declare_pattern(pattern, var_scope)?,
                     ForInTarget::Binding { .. }
                     | ForInTarget::PatternBinding { .. }
+                    | ForInTarget::PatternAssignment { .. }
                     | ForInTarget::Assignment(_) => {}
                 }
                 self.collect_hoisted_vars(body, var_scope)
@@ -277,6 +277,7 @@ impl LayoutBuilder {
                 target,
                 object,
                 body,
+                ..
             } => self.analyze_for_in(target, object, body, scope, var_scope, function),
             Stmt::Switch {
                 discriminant,
@@ -388,6 +389,10 @@ impl LayoutBuilder {
             }
             ForInTarget::Assignment(target) => {
                 self.analyze_expr(target, scope, function)?;
+                self.analyze_statement(body, scope, var_scope, function)
+            }
+            ForInTarget::PatternAssignment { pattern, .. } => {
+                pattern.for_each_expr(&mut |expr| self.analyze_expr(expr, scope, function))?;
                 self.analyze_statement(body, scope, var_scope, function)
             }
         }

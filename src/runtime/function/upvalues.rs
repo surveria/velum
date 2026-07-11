@@ -107,7 +107,10 @@ impl<'a> UpvalueCollector<'a> {
             binding,
         )?;
         let cell = cell.ok_or_else(|| {
-            Error::runtime("compiled upvalue declaration did not resolve to a runtime cell")
+            Error::runtime(format!(
+                "compiled upvalue declaration '{}' did not resolve to a runtime cell",
+                binding.as_str()
+            ))
         })?;
         *target = Some(cell);
         Ok(())
