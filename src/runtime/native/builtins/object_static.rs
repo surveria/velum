@@ -5,8 +5,8 @@ use crate::{
         abstract_operations::same_value,
         call::RuntimeCallArgs,
         object::{
-            DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable, PropertyUpdate,
-            PropertyWritable,
+            DataPropertyUpdate, OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable,
+            PropertyUpdate, PropertyWritable,
         },
         property::DynamicPropertyKey,
         roots::VmRootKind,
@@ -34,6 +34,8 @@ impl Context {
         args: &[Value],
     ) -> Result<Value> {
         let target = self.object_assign_target(Self::argument_or_undefined(args.first()))?;
+        let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
+        roots.add_values(std::iter::once(&target))?;
         for source in args.iter().skip(1) {
             self.copy_enumerable_properties(&target, source)?;
         }
@@ -372,18 +374,44 @@ impl Context {
         if matches!(source, Value::Undefined | Value::Null) {
             return Ok(());
         }
-        let keys = self.own_enumerable_keys(source)?;
+        let keys = self.semantic_own_property_keys(source)?;
+        let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
+        roots.add_values(keys.iter())?;
         for key in keys {
-            let value = self.get_named(source, &key)?;
-            self.set_named_property_on_target(target, &key, value)?;
+            let mut property = self.dynamic_property_key(&key)?;
+            let Some(descriptor) = self.semantic_own_property_descriptor(source, &property)? else {
+                continue;
+            };
+            let enumerable = match descriptor {
+                OwnPropertyDescriptor::Data(descriptor) => descriptor.enumerable(),
+                OwnPropertyDescriptor::Accessor(descriptor) => descriptor.enumerable(),
+            };
+            if !enumerable.is_yes() {
+                continue;
+            }
+            let value = self.get(source, property.lookup())?;
+            let _value_scope =
+                self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(&value))?;
+            let updated = self
+                .semantic_reflect_property_write(target, &mut property, value, target)?
+                .unwrap_or(false);
+            if !updated {
+                return Err(Error::type_error(format!(
+                    "Object.assign could not set property '{}'",
+                    property.name()
+                )));
+            }
         }
         Ok(())
     }
 
     fn object_assign_target(&mut self, value: Value) -> Result<Value> {
         match value {
-            Value::Object(_) | Value::Function(_) | Value::NativeFunction(_) => Ok(value),
-            Value::Undefined | Value::Null => Err(Error::runtime(
+            Value::Object(_)
+            | Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_) => Ok(value),
+            Value::Undefined | Value::Null => Err(Error::type_error(
                 "Object.assign target cannot be converted to an object",
             )),
             Value::Bool(_)
@@ -394,9 +422,6 @@ impl Context {
                 let args = [value];
                 self.eval_direct_object_constructor(&args)
             }
-            Value::HostFunction(_) => Err(Error::runtime(
-                "Object.assign target does not support property assignment",
-            )),
         }
     }
 
@@ -457,35 +482,6 @@ impl Context {
             )),
             self.limits.max_object_properties,
         )
-    }
-
-    fn set_named_property_on_target(
-        &mut self,
-        target: &Value,
-        property_name: &str,
-        value: Value,
-    ) -> Result<()> {
-        let key = self.intern_property_key(property_name)?;
-        let value = self.runtime_value(value)?;
-        match target {
-            Value::Object(_) => {
-                self.set_property_value_with_accessors(target, key, property_name, value)
-            }
-            Value::Function(id) => self.set_function_property_key(*id, property_name, key, value),
-            Value::NativeFunction(id) => {
-                self.set_native_function_property_key(*id, property_name, key, value)
-            }
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::String(_)
-            | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::HostFunction(_) => Err(Error::runtime(
-                "Object.assign target must support property assignment",
-            )),
-        }
     }
 
     fn create_array_with_prototype(

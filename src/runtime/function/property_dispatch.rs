@@ -201,21 +201,6 @@ impl Context {
         self.finish_semantic_property_presence(presence, property)
     }
 
-    pub(crate) fn set_function_property_key(
-        &mut self,
-        id: FunctionId,
-        property: &str,
-        key: PropertyKey,
-        value: Value,
-    ) -> Result<()> {
-        let max_properties = self.limits.max_object_properties;
-        let property_kind = FunctionPropertyKind::from_name(property);
-        let function = self.function_mut(id)?;
-        function
-            .properties
-            .set(key, property_kind, value, max_properties)
-    }
-
     pub(crate) fn define_function_property_key(
         &mut self,
         id: FunctionId,

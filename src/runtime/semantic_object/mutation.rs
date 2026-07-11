@@ -14,6 +14,8 @@ use crate::{
 
 use super::{SemanticPropertyDelete, SemanticPropertyWrite};
 
+const ARRAY_LENGTH_PROPERTY: &str = "length";
+
 impl Context {
     /// Runs shared object-like `[[Set]]` pre-dispatch. Only an ordinary object
     /// reaches the tail consumed by storage or an inline cache.
@@ -280,6 +282,14 @@ impl Context {
                 }
                 OwnPropertyDescriptor::Data(_) => {}
             }
+        }
+        if property.name() == ARRAY_LENGTH_PROPERTY
+            && let Value::Object(id) = receiver
+            && self.objects.array_len_if_array(*id)?.is_some()
+        {
+            let length = self.array_length_from_value(&value)?;
+            self.objects.set_array_length(*id, length)?;
+            return Ok(true);
         }
         let update = DataPropertyUpdate::new(
             Some(value.clone()),
