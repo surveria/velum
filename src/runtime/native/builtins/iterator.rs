@@ -1,7 +1,7 @@
 use crate::{
     error::{Error, Result},
     runtime::{
-        Context, VmStorageKind,
+        Context,
         call::RuntimeCallArgs,
         collections::{IteratorHelperMode, IteratorHelperState},
         native::IteratorFunctionKind,
@@ -65,8 +65,13 @@ impl Context {
         let name = self.native_function_name_value(constructor_kind)?;
         self.push_native_function_with_id(id, constructor_kind, Value::Object(prototype), name)?;
         self.install_iterator_prototype_methods(prototype)?;
+        let (helper_prototype, wrapped_prototype) =
+            self.create_iterator_intrinsic_prototypes(prototype)?;
         let from =
-            self.iterator_method_value(NativeFunctionKind::Iterator(IteratorFunctionKind::From))?;
+            self.iterator_method_value(NativeFunctionKind::Iterator(IteratorFunctionKind::From {
+                helper_prototype,
+                wrapped_prototype,
+            }))?;
         let from_key = self.intern_property_key(ITERATOR_FROM_NAME)?;
         self.define_native_function_property_key(
             id,
@@ -371,49 +376,62 @@ impl Context {
         Ok(id)
     }
 
-    /// %IteratorHelperPrototype%: shared parent of every lazy helper object.
-    fn iterator_helper_prototype_id(&mut self) -> Result<ObjectId> {
-        if let Some(id) = self.iterator_helper_prototype {
-            return Ok(id);
-        }
-        let parent = self.iterator_prototype_object_id()?;
+    fn create_iterator_intrinsic_prototypes(
+        &mut self,
+        parent: ObjectId,
+    ) -> Result<(ObjectId, ObjectId)> {
         let constructor_key = self.object_constructor_property_key()?;
-        let value = self.objects.create_with_prototype(
+        let helper = self.objects.create_with_prototype(
             Some(parent),
             constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
         )?;
-        let Value::Object(id) = value else {
+        let Value::Object(helper_prototype) = helper else {
             return Err(Error::runtime("iterator helper prototype creation failed"));
         };
-        self.install_iterator_to_string_tag(id, ITERATOR_HELPER_TAG)?;
-        self.storage_ledger
-            .grow_count(VmStorageKind::Association, 1)?;
-        self.iterator_helper_prototype = Some(id);
-        Ok(id)
+        self.install_iterator_to_string_tag(helper_prototype, ITERATOR_HELPER_TAG)?;
+        let wrapped = self.objects.create_with_prototype(
+            Some(parent),
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
+        let Value::Object(wrapped_prototype) = wrapped else {
+            return Err(Error::runtime("wrapped iterator prototype creation failed"));
+        };
+        Ok((helper_prototype, wrapped_prototype))
+    }
+
+    fn iterator_intrinsic_prototype_ids(&self) -> Result<(ObjectId, ObjectId)> {
+        let placeholder = ObjectId::new(0);
+        let lookup_kind = NativeFunctionKind::Iterator(IteratorFunctionKind::From {
+            helper_prototype: placeholder,
+            wrapped_prototype: placeholder,
+        });
+        let id = self
+            .native_function_id(lookup_kind)
+            .ok_or_else(|| Error::runtime("Iterator.from intrinsic is not initialized"))?;
+        let NativeFunctionKind::Iterator(IteratorFunctionKind::From {
+            helper_prototype,
+            wrapped_prototype,
+        }) = self.native_function(id)?.kind()
+        else {
+            return Err(Error::runtime("Iterator.from intrinsic kind is invalid"));
+        };
+        Ok((helper_prototype, wrapped_prototype))
+    }
+
+    /// %IteratorHelperPrototype%: shared parent of every lazy helper object.
+    fn iterator_helper_prototype_id(&self) -> Result<ObjectId> {
+        self.iterator_intrinsic_prototype_ids()
+            .map(|(helper, _wrapped)| helper)
     }
 
     /// %WrapForValidIteratorPrototype%: parent of `Iterator.from` wrappers.
-    fn wrapped_iterator_prototype_id(&mut self) -> Result<ObjectId> {
-        if let Some(id) = self.wrapped_iterator_prototype {
-            return Ok(id);
-        }
-        let parent = self.iterator_prototype_object_id()?;
-        let constructor_key = self.object_constructor_property_key()?;
-        let value = self.objects.create_with_prototype(
-            Some(parent),
-            constructor_key,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )?;
-        let Value::Object(id) = value else {
-            return Err(Error::runtime("wrapped iterator prototype creation failed"));
-        };
-        self.storage_ledger
-            .grow_count(VmStorageKind::Association, 1)?;
-        self.wrapped_iterator_prototype = Some(id);
-        Ok(id)
+    fn wrapped_iterator_prototype_id(&self) -> Result<ObjectId> {
+        self.iterator_intrinsic_prototype_ids()
+            .map(|(_helper, wrapped)| wrapped)
     }
 
     pub(in crate::runtime::native) fn eval_iterator_abstract_call() -> Result<Value> {

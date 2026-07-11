@@ -489,7 +489,7 @@ const fn typed_array_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot
 const fn iterator_slot(kind: IteratorFunctionKind) -> Option<NativeFunctionSlot> {
     match kind {
         IteratorFunctionKind::Constructor => Some(ITERATOR_SLOT),
-        IteratorFunctionKind::From => Some(ITERATOR_FROM_SLOT),
+        IteratorFunctionKind::From { .. } => Some(ITERATOR_FROM_SLOT),
         IteratorFunctionKind::PrototypeMap => Some(ITERATOR_PROTOTYPE_MAP_SLOT),
         IteratorFunctionKind::PrototypeFilter => Some(ITERATOR_PROTOTYPE_FILTER_SLOT),
         IteratorFunctionKind::PrototypeTake => Some(ITERATOR_PROTOTYPE_TAKE_SLOT),

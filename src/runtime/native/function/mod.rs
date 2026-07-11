@@ -178,6 +178,16 @@ impl NativeFunction {
                         StrongEdgeReference::CollectionIterator(id),
                     );
                 }
+                if let Some((helper, wrapped)) = kind.prototype_anchors() {
+                    visitor.visit(
+                        VmCallableEdgeKind::NativeFunctionInternal,
+                        StrongEdgeReference::Object(helper),
+                    )?;
+                    return visitor.visit(
+                        VmCallableEdgeKind::NativeFunctionInternal,
+                        StrongEdgeReference::Object(wrapped),
+                    );
+                }
                 Ok(())
             }
             NativeFunctionKind::PromiseResolver { promise, .. } => visitor.visit(

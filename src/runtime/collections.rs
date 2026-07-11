@@ -379,15 +379,7 @@ impl CollectionIteratorState {
         V: StrongEdgeVisitor<VmAsyncEdgeKind>,
     {
         match self {
-            Self::Snapshot(state) => {
-                for item in &state.items {
-                    visitor.visit(
-                        VmAsyncEdgeKind::IteratorItem,
-                        StrongEdgeReference::Value(item),
-                    )?;
-                }
-                Ok(())
-            }
+            Self::Snapshot(state) => state.visit_strong_edges(visitor),
             Self::Helper(state) => state.visit_strong_edges(visitor),
             Self::Wrap(state) => {
                 for value in [&state.iterator, &state.next] {
@@ -410,6 +402,21 @@ impl CollectionIteratorState {
             Self::Helper(_) => ITERATOR_HELPER_ITEM_CHARGE,
             Self::Wrap(_) => WRAPPED_ITERATOR_ITEM_CHARGE,
         }
+    }
+}
+
+impl SnapshotIteratorState {
+    fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
+    where
+        V: StrongEdgeVisitor<VmAsyncEdgeKind>,
+    {
+        for item in &self.items {
+            visitor.visit(
+                VmAsyncEdgeKind::IteratorItem,
+                StrongEdgeReference::Value(item),
+            )?;
+        }
+        Ok(())
     }
 }
 

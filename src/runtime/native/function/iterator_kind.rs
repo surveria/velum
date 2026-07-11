@@ -1,4 +1,4 @@
-use crate::runtime::collections::CollectionIteratorId;
+use crate::{runtime::collections::CollectionIteratorId, value::ObjectId};
 
 pub(in crate::runtime) const ITERATOR_NAME: &str = "Iterator";
 pub(in crate::runtime::native) const ITERATOR_FROM_NAME: &str = "from";
@@ -30,7 +30,10 @@ const ITERATOR_NULLARY_LENGTH: f64 = 0.0;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(in crate::runtime) enum IteratorFunctionKind {
     Constructor,
-    From,
+    From {
+        helper_prototype: ObjectId,
+        wrapped_prototype: ObjectId,
+    },
     PrototypeMap,
     PrototypeFilter,
     PrototypeTake,
@@ -65,7 +68,7 @@ impl IteratorFunctionKind {
             | Self::HelperReturn(_)
             | Self::WrapNext(_)
             | Self::WrapReturn(_) => ITERATOR_NULLARY_LENGTH,
-            Self::From
+            Self::From { .. }
             | Self::PrototypeMap
             | Self::PrototypeFilter
             | Self::PrototypeTake
@@ -84,7 +87,7 @@ impl IteratorFunctionKind {
     pub(in crate::runtime::native) const fn name(self) -> &'static str {
         match self {
             Self::Constructor => ITERATOR_NAME,
-            Self::From => ITERATOR_FROM_NAME,
+            Self::From { .. } => ITERATOR_FROM_NAME,
             Self::PrototypeMap => ITERATOR_PROTOTYPE_MAP_NAME,
             Self::PrototypeFilter => ITERATOR_PROTOTYPE_FILTER_NAME,
             Self::PrototypeTake => ITERATOR_PROTOTYPE_TAKE_NAME,
@@ -115,7 +118,7 @@ impl IteratorFunctionKind {
             | Self::WrapNext(id)
             | Self::WrapReturn(id) => Some(id),
             Self::Constructor
-            | Self::From
+            | Self::From { .. }
             | Self::PrototypeMap
             | Self::PrototypeFilter
             | Self::PrototypeTake
@@ -132,6 +135,16 @@ impl IteratorFunctionKind {
             | Self::PrototypeConstructorSetter
             | Self::PrototypeToStringTagGetter
             | Self::PrototypeToStringTagSetter => None,
+        }
+    }
+
+    pub(in crate::runtime) const fn prototype_anchors(self) -> Option<(ObjectId, ObjectId)> {
+        match self {
+            Self::From {
+                helper_prototype,
+                wrapped_prototype,
+            } => Some((helper_prototype, wrapped_prototype)),
+            _ => None,
         }
     }
 }

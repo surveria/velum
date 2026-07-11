@@ -18,7 +18,7 @@ impl Context {
         };
         let result = match kind {
             IteratorFunctionKind::Constructor => Self::eval_iterator_abstract_call(),
-            IteratorFunctionKind::From => self.eval_iterator_from(args),
+            IteratorFunctionKind::From { .. } => self.eval_iterator_from(args),
             IteratorFunctionKind::PrototypeMap => {
                 self.eval_iterator_prototype_map(args, this_value)
             }

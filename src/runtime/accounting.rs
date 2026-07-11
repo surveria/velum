@@ -592,14 +592,6 @@ impl Context {
         )?;
         counter.record(
             VmStorageKind::Association,
-            usize::from(self.iterator_helper_prototype.is_some()),
-        )?;
-        counter.record(
-            VmStorageKind::Association,
-            usize::from(self.wrapped_iterator_prototype.is_some()),
-        )?;
-        counter.record(
-            VmStorageKind::Association,
             usize::from(self.generator_function_prototype.is_some()),
         )?;
         counter.record(
