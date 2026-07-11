@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260711T125926Z.md`
-- Task: PR #460: runner: move benchmark chart legends to the left
-- Performance: 5.59x (4/5 >1.00x) (from `rsqjs-test-report-20260711T125926Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T125926Z.md`)
+- `rsqjs-test-report-20260711T135451Z.md`
+- Task: PR #462: AS-09j: add numeric typed array family
+- Performance: 5.58x (4/5 >1.00x) (from `rsqjs-test-report-20260711T135451Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T135451Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 42709 passed / 59869 failed (41.64%) (from `rsqjs-test-report-20260711T125926Z.md`)
+- Full Test262: 45684 passed / 56894 failed (44.54%) (from `rsqjs-test-report-20260711T135451Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -447,3 +447,4 @@ Latest report:
 | `20260711T093233Z` `75483ae` PR #458: workflow: coordinate parallel agents with local task registry | 5.49x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 39835 passed / 62743 failed (38.83%) |
 | `20260711T113811Z` `6da84d9` PR #457: AS-09h: add synchronous generator support | 5.38x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 42709 passed / 59869 failed (41.64%) |
 | `20260711T125926Z` `61562aa` PR #460: runner: move benchmark chart legends to the left | 5.59x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 42709 passed / 59869 failed (41.64%) |
+| `20260711T135451Z` `707ddc6` PR #462: AS-09j: add numeric typed array family | 5.58x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 45684 passed / 56894 failed (44.54%) |
