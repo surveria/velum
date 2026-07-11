@@ -3,7 +3,6 @@ use std::rc::Rc;
 use crate::{
     bytecode::{BytecodeFunction, BytecodeNewTargetMode},
     error::{Error, Result},
-    runtime::Context,
     runtime::call::RuntimeCallArgs,
     runtime::control::Completion,
     runtime::object::{
@@ -11,6 +10,7 @@ use crate::{
         PropertyEnumerable, PropertyKey, PropertyLookup, PropertyWritable,
     },
     runtime::property::get_property,
+    runtime::{CompiledBindingFrame, Context},
     syntax::{StaticFunctionId, StaticName},
     value::{FunctionId, NativeFunctionId, ObjectId, Value},
 };
@@ -145,13 +145,7 @@ impl Context {
         let static_binding_layout = self.current_static_binding_layout();
         let param_frames =
             parameters::function_param_frames(params, static_binding_layout.as_ref())?;
-        let fast_path = FunctionFastPath::compile(
-            init.bytecode,
-            &param_frames,
-            init.new_target_mode,
-            init.is_async,
-            init.class_constructor,
-        )?;
+        let fast_path = self.compile_optional_function_fast_path(init, &param_frames)?;
         let upvalues = self.capture_function_upvalues(
             init.static_function_id,
             init.bytecode.capture_bindings(),
@@ -205,6 +199,23 @@ impl Context {
             },
         )?;
         Ok(function)
+    }
+
+    fn compile_optional_function_fast_path(
+        &self,
+        init: &BytecodeFunctionInit<'_>,
+        param_frames: &[Option<CompiledBindingFrame>],
+    ) -> Result<Option<FunctionFastPath>> {
+        if !self.optional_optimizations_enabled() {
+            return Ok(None);
+        }
+        FunctionFastPath::compile(
+            init.bytecode,
+            param_frames,
+            init.new_target_mode,
+            init.is_async,
+            init.class_constructor,
+        )
     }
 
     fn bytecode_function_super_binding(

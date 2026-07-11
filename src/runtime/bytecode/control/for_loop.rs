@@ -93,6 +93,9 @@ impl Context {
         update: Option<&'a BytecodeBlock>,
         body: &'a BytecodeBlock,
     ) -> Result<Option<BytecodeForLoopFastPath<'a>>> {
+        if !self.optional_optimizations_enabled() {
+            return Ok(None);
+        }
         let (Some(condition), Some(update)) = (condition, update) else {
             return Ok(None);
         };
@@ -445,6 +448,9 @@ impl Context {
         &mut self,
         body: &'a BytecodeBlock,
     ) -> Result<Option<BytecodeForBodyFastPath<'a>>> {
+        if !self.optional_optimizations_enabled() {
+            return Ok(None);
+        }
         let [
             BytecodeInstruction::LoadBinding(test),
             BytecodeInstruction::PushLiteral(Value::Number(test_mask)),

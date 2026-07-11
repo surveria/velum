@@ -25,6 +25,9 @@ impl Context {
         &mut self,
         block: &'a BytecodeBlock,
     ) -> Result<Option<BytecodeLinearPlan<'a>>> {
+        if !self.optional_optimizations_enabled() {
+            return Ok(None);
+        }
         let instructions = block.instructions();
         let mut builder = BytecodeLinearPlanBuilder::new(instructions.len());
         let mut ops = Vec::new();

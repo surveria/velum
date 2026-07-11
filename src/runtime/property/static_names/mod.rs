@@ -72,6 +72,9 @@ impl Context {
     }
 
     pub(crate) fn current_static_name_atom_cache(&self) -> Option<StaticNameAtomCacheHandle> {
+        if !self.optional_optimizations_enabled() {
+            return None;
+        }
         self.static_name_atom_caches.last().cloned()
     }
 

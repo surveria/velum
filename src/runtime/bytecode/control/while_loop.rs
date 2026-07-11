@@ -72,6 +72,9 @@ impl Context {
         condition: &'a BytecodeBlock,
         body: &'a BytecodeBlock,
     ) -> Result<Option<BytecodeWhileLoopFastPath<'a>>> {
+        if !self.optional_optimizations_enabled() {
+            return Ok(None);
+        }
         if let Some(fast_path) =
             self.compile_break_continue_while_loop_fast_path(condition, body)?
         {

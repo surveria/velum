@@ -7,8 +7,9 @@ use crate::runtime::Context;
 use crate::runtime::VmRootSnapshot;
 use crate::runtime::limits::RuntimeLimits;
 use crate::runtime::{
-    RetainedValue, VmAsyncEdgeSnapshot, VmCallableEdgeSnapshot, VmGarbageCollectionReport,
-    VmHeapReachabilitySnapshot, VmObjectEdgeSnapshot, VmStorageSnapshot,
+    OptimizationMode, RetainedValue, VmAsyncEdgeSnapshot, VmCallableEdgeSnapshot,
+    VmGarbageCollectionReport, VmHeapReachabilitySnapshot, VmObjectEdgeSnapshot,
+    VmOptimizationSnapshot, VmStorageSnapshot,
 };
 use crate::value::Value;
 use std::time::Duration;
@@ -77,17 +78,34 @@ impl Default for Engine {
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct VmConfig {
     limits: RuntimeLimits,
+    optimization_mode: OptimizationMode,
 }
 
 impl VmConfig {
     #[must_use]
     pub const fn with_limits(limits: RuntimeLimits) -> Self {
-        Self { limits }
+        Self {
+            limits,
+            optimization_mode: OptimizationMode::Enabled,
+        }
     }
 
     #[must_use]
     pub fn limits(&self) -> RuntimeLimits {
         self.limits.clone()
+    }
+
+    /// Selects whether VMs use optional optimized execution paths.
+    #[must_use]
+    pub const fn with_optimization_mode(mut self, mode: OptimizationMode) -> Self {
+        self.optimization_mode = mode;
+        self
+    }
+
+    /// Returns the configured optional-optimization policy.
+    #[must_use]
+    pub const fn optimization_mode(&self) -> OptimizationMode {
+        self.optimization_mode
     }
 }
 
@@ -106,9 +124,10 @@ impl Vm {
     #[must_use]
     pub fn with_config(config: VmConfig) -> Self {
         let limits = config.limits();
+        let optimization_mode = config.optimization_mode();
         Self {
             config,
-            context: Context::new(limits),
+            context: Context::with_optimization(limits, optimization_mode),
         }
     }
 
@@ -121,9 +140,14 @@ impl Vm {
         F: Fn() -> Duration + 'static,
     {
         let limits = config.limits();
+        let optimization_mode = config.optimization_mode();
         Self {
             config,
-            context: Context::with_monotonic_clock(limits, read),
+            context: Context::with_optimization_and_monotonic_clock(
+                limits,
+                optimization_mode,
+                read,
+            ),
         }
     }
 
@@ -309,10 +333,11 @@ impl Vm {
 
     #[must_use]
     pub fn resource_usage(&self) -> VmResourceUsage {
+        let optimization = self.optimization_snapshot();
         VmResourceUsage {
             runtime_steps: self.context.runtime_steps(),
-            bytecode_linear_segment_runs: self.context.bytecode_linear_segment_runs(),
-            bytecode_linear_direct_runs: self.context.bytecode_linear_direct_runs(),
+            bytecode_linear_segment_runs: optimization.bytecode_linear_segment_runs(),
+            bytecode_linear_direct_runs: optimization.bytecode_linear_direct_runs(),
             output_entries: self.context.output().len(),
             global_bindings: self.context.global_binding_count(),
             atom_count: self.context.atom_count(),
@@ -322,13 +347,19 @@ impl Vm {
             native_function_count: self.context.native_function_count(),
             prototype_lookup_version: self.context.prototype_lookup_version(),
             upvalue_cell_count: self.context.upvalue_cell_count(),
-            native_call_cache_hits: self.context.native_call_cache_hits(),
-            native_call_cache_misses: self.context.native_call_cache_misses(),
-            native_call_cache_slow_paths: self.context.native_call_cache_slow_paths(),
-            call_value_cache_hits: self.context.call_value_cache_hits(),
-            call_value_cache_misses: self.context.call_value_cache_misses(),
-            call_value_cache_slow_paths: self.context.call_value_cache_slow_paths(),
+            native_call_cache_hits: optimization.native_call_cache_hits(),
+            native_call_cache_misses: optimization.native_call_cache_misses(),
+            native_call_cache_slow_paths: optimization.native_call_cache_slow_paths(),
+            call_value_cache_hits: optimization.call_value_cache_hits(),
+            call_value_cache_misses: optimization.call_value_cache_misses(),
+            call_value_cache_slow_paths: optimization.call_value_cache_slow_paths(),
         }
+    }
+
+    /// Returns the VM's optimization policy and stable profiling counters.
+    #[must_use]
+    pub const fn optimization_snapshot(&self) -> VmOptimizationSnapshot {
+        self.context.optimization_snapshot()
     }
 
     /// Counts the VM's currently stored direct root references.

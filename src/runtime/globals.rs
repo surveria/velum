@@ -45,60 +45,28 @@ impl Context {
         self.runtime_steps
     }
 
-    pub(crate) const fn bytecode_linear_segment_runs(&self) -> usize {
-        self.bytecode_linear_segment_runs
-    }
-
-    pub(crate) const fn bytecode_linear_direct_runs(&self) -> usize {
-        self.bytecode_linear_direct_runs
-    }
-
-    pub(crate) const fn native_call_cache_hits(&self) -> usize {
-        self.native_call_cache_hits
-    }
-
-    pub(crate) const fn native_call_cache_misses(&self) -> usize {
-        self.native_call_cache_misses
-    }
-
-    pub(crate) const fn native_call_cache_slow_paths(&self) -> usize {
-        self.native_call_cache_slow_paths
-    }
-
-    pub(crate) const fn call_value_cache_hits(&self) -> usize {
-        self.call_value_cache_hits
-    }
-
-    pub(crate) const fn call_value_cache_misses(&self) -> usize {
-        self.call_value_cache_misses
-    }
-
-    pub(crate) const fn call_value_cache_slow_paths(&self) -> usize {
-        self.call_value_cache_slow_paths
-    }
-
     pub(super) const fn record_native_call_cache_hit(&mut self) {
-        self.native_call_cache_hits = self.native_call_cache_hits.saturating_add(1);
+        self.optimizer.record_native_call_cache_hit();
     }
 
     pub(super) const fn record_native_call_cache_miss(&mut self) {
-        self.native_call_cache_misses = self.native_call_cache_misses.saturating_add(1);
+        self.optimizer.record_native_call_cache_miss();
     }
 
     pub(super) const fn record_native_call_cache_slow_path(&mut self) {
-        self.native_call_cache_slow_paths = self.native_call_cache_slow_paths.saturating_add(1);
+        self.optimizer.record_native_call_cache_slow_path();
     }
 
     pub(super) const fn record_call_value_cache_hit(&mut self) {
-        self.call_value_cache_hits = self.call_value_cache_hits.saturating_add(1);
+        self.optimizer.record_call_value_cache_hit();
     }
 
     pub(super) const fn record_call_value_cache_miss(&mut self) {
-        self.call_value_cache_misses = self.call_value_cache_misses.saturating_add(1);
+        self.optimizer.record_call_value_cache_miss();
     }
 
     pub(super) const fn record_call_value_cache_slow_path(&mut self) {
-        self.call_value_cache_slow_paths = self.call_value_cache_slow_paths.saturating_add(1);
+        self.optimizer.record_call_value_cache_slow_path();
     }
 
     #[must_use]

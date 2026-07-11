@@ -148,6 +148,9 @@ impl CompiledBindingFrame {
 
 impl Context {
     pub(crate) fn current_static_binding_cache(&self) -> Option<StaticBindingCacheHandle> {
+        if !self.optional_optimizations_enabled() {
+            return None;
+        }
         self.static_binding_caches.last().cloned()
     }
 
@@ -310,6 +313,9 @@ impl Context {
         &mut self,
         binding: &BytecodeBinding,
     ) -> Result<Option<Value>> {
+        if !self.optional_optimizations_enabled() {
+            return Ok(None);
+        }
         if binding.operand() != BindingOperand::Unresolved {
             return Ok(None);
         }
