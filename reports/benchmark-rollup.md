@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260711T113811Z.md`
-- Task: PR #457: AS-09h: add synchronous generator support
-- Performance: 5.38x (4/5 >1.00x) (from `rsqjs-test-report-20260711T113811Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T113811Z.md`)
+- `rsqjs-test-report-20260711T125926Z.md`
+- Task: PR #460: runner: move benchmark chart legends to the left
+- Performance: 5.59x (4/5 >1.00x) (from `rsqjs-test-report-20260711T125926Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T125926Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 42709 passed / 59869 failed (41.64%) (from `rsqjs-test-report-20260711T113811Z.md`)
+- Full Test262: 42709 passed / 59869 failed (41.64%) (from `rsqjs-test-report-20260711T125926Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -446,3 +446,4 @@ Latest report:
 | `20260711T090657Z` `dfe699f` PR #456: AS-09g: add destructuring assignment | 5.50x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 39835 passed / 62743 failed (38.83%) |
 | `20260711T093233Z` `75483ae` PR #458: workflow: coordinate parallel agents with local task registry | 5.49x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 39835 passed / 62743 failed (38.83%) |
 | `20260711T113811Z` `6da84d9` PR #457: AS-09h: add synchronous generator support | 5.38x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 42709 passed / 59869 failed (41.64%) |
+| `20260711T125926Z` `61562aa` PR #460: runner: move benchmark chart legends to the left | 5.59x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 42709 passed / 59869 failed (41.64%) |
