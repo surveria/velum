@@ -108,6 +108,16 @@ impl ActivationFrame {
         }
     }
 
+    pub(in crate::runtime) const fn function_id(&self) -> Option<FunctionId> {
+        match self {
+            Self::Call { continuation, .. } => match continuation {
+                Some(continuation) => continuation.function_id(),
+                None => None,
+            },
+            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } | Self::Bytecode { .. } => None,
+        }
+    }
+
     pub(in crate::runtime) const fn this_value(&self) -> Option<&Value> {
         match self {
             Self::Call { this_value, .. } | Self::TemporaryThis { this_value, .. } => {

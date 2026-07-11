@@ -206,6 +206,33 @@ fn object_spread_copies_symbol_properties_for_generators() -> TestResult {
 }
 
 #[test]
+fn direct_eval_reports_generator_scope_conflicts_as_syntax_errors() -> TestResult {
+    let value = eval(
+        r#"
+        function* parameterConflict(value = eval("var value = 42")) {}
+        function* lexicalConflict() {
+            let value;
+            eval("var value");
+        }
+        let parameterThrew = false;
+        let lexicalThrew = false;
+        try {
+            parameterConflict();
+        } catch (error) {
+            parameterThrew = error instanceof SyntaxError;
+        }
+        try {
+            lexicalConflict().next();
+        } catch (error) {
+            lexicalThrew = error instanceof SyntaxError;
+        }
+        parameterThrew + ":" + lexicalThrew
+        "#,
+    )?;
+    ensure_value(&value, &Value::String("true:true".to_owned()))
+}
+
+#[test]
 fn yield_delegate_forwards_next_and_completion_values() -> TestResult {
     let value = eval(
         r#"
