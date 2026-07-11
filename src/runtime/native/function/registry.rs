@@ -248,7 +248,14 @@ const ITERATOR_PROTOTYPE_FOR_EACH_SLOT: NativeFunctionSlot = NativeFunctionSlot:
 const ITERATOR_PROTOTYPE_SOME_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(255);
 const ITERATOR_PROTOTYPE_EVERY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(256);
 const ITERATOR_PROTOTYPE_FIND_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(257);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 258;
+const ITERATOR_PROTOTYPE_DISPOSE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(258);
+const ITERATOR_PROTOTYPE_CONSTRUCTOR_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(259);
+const ITERATOR_PROTOTYPE_CONSTRUCTOR_SETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(260);
+const ITERATOR_PROTOTYPE_TO_STRING_TAG_GETTER_SLOT: NativeFunctionSlot =
+    NativeFunctionSlot::new(261);
+const ITERATOR_PROTOTYPE_TO_STRING_TAG_SETTER_SLOT: NativeFunctionSlot =
+    NativeFunctionSlot::new(262);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 263;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -494,6 +501,19 @@ const fn iterator_slot(kind: IteratorFunctionKind) -> Option<NativeFunctionSlot>
         IteratorFunctionKind::PrototypeSome => Some(ITERATOR_PROTOTYPE_SOME_SLOT),
         IteratorFunctionKind::PrototypeEvery => Some(ITERATOR_PROTOTYPE_EVERY_SLOT),
         IteratorFunctionKind::PrototypeFind => Some(ITERATOR_PROTOTYPE_FIND_SLOT),
+        IteratorFunctionKind::PrototypeDispose => Some(ITERATOR_PROTOTYPE_DISPOSE_SLOT),
+        IteratorFunctionKind::PrototypeConstructorGetter => {
+            Some(ITERATOR_PROTOTYPE_CONSTRUCTOR_GETTER_SLOT)
+        }
+        IteratorFunctionKind::PrototypeConstructorSetter => {
+            Some(ITERATOR_PROTOTYPE_CONSTRUCTOR_SETTER_SLOT)
+        }
+        IteratorFunctionKind::PrototypeToStringTagGetter => {
+            Some(ITERATOR_PROTOTYPE_TO_STRING_TAG_GETTER_SLOT)
+        }
+        IteratorFunctionKind::PrototypeToStringTagSetter => {
+            Some(ITERATOR_PROTOTYPE_TO_STRING_TAG_SETTER_SLOT)
+        }
         IteratorFunctionKind::HelperNext(_)
         | IteratorFunctionKind::HelperReturn(_)
         | IteratorFunctionKind::WrapNext(_)

@@ -52,6 +52,17 @@ impl Context {
             IteratorFunctionKind::PrototypeFind => {
                 self.eval_iterator_consumer(IteratorConsumer::Find, args, this_value)
             }
+            IteratorFunctionKind::PrototypeDispose => {
+                self.eval_iterator_prototype_dispose(this_value)
+            }
+            IteratorFunctionKind::PrototypeConstructorGetter
+            | IteratorFunctionKind::PrototypeToStringTagGetter => {
+                self.eval_iterator_prototype_getter(kind)
+            }
+            IteratorFunctionKind::PrototypeConstructorSetter
+            | IteratorFunctionKind::PrototypeToStringTagSetter => {
+                self.eval_iterator_prototype_setter(kind, args, this_value)
+            }
             IteratorFunctionKind::HelperNext(id) => self.eval_iterator_helper_next(id),
             IteratorFunctionKind::HelperReturn(id) => self.eval_iterator_helper_return(id),
             IteratorFunctionKind::WrapNext(id) => self.eval_wrapped_iterator_next(id),

@@ -451,17 +451,17 @@ impl Context {
         )?;
         let next_key = self.intern_property_key(ITERATOR_NEXT_NAME)?;
         let constructor_key = self.object_constructor_property_key()?;
-        let object = self.objects.create_with_prototype(
+        let prototype = self.objects.create_with_prototype(
             Some(iterator_prototype),
             constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
         )?;
-        let Value::Object(object_id) = &object else {
-            return Err(Error::runtime("iterator object creation failed"));
+        let Value::Object(prototype_id) = prototype else {
+            return Err(Error::runtime("iterator prototype creation failed"));
         };
         self.objects.define_property(
-            *object_id,
+            prototype_id,
             next_key,
             ITERATOR_NEXT_NAME,
             PropertyUpdate::Data(DataPropertyUpdate::new(
@@ -478,7 +478,7 @@ impl Context {
             let self_fn =
                 self.create_native_function(NativeFunctionKind::IteratorSelf, Value::Undefined)?;
             self.objects.define_property(
-                *object_id,
+                prototype_id,
                 PropertyKey::symbol(symbol),
                 ITERATOR_SYMBOL_DISPLAY,
                 PropertyUpdate::Data(DataPropertyUpdate::new(
@@ -490,7 +490,12 @@ impl Context {
                 self.limits.max_object_properties,
             )?;
         }
-        Ok(object)
+        self.objects.create_with_prototype(
+            Some(prototype_id),
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )
     }
 
     pub(in crate::runtime::native) fn create_tagged_collection_iterator_object(

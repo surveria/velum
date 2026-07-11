@@ -15,6 +15,11 @@ pub(in crate::runtime::native) const ITERATOR_PROTOTYPE_EVERY_NAME: &str = "ever
 pub(in crate::runtime::native) const ITERATOR_PROTOTYPE_FIND_NAME: &str = "find";
 const ITERATOR_HELPER_NEXT_NAME: &str = "next";
 const ITERATOR_HELPER_RETURN_NAME: &str = "return";
+const ITERATOR_PROTOTYPE_CONSTRUCTOR_GETTER_NAME: &str = "get constructor";
+const ITERATOR_PROTOTYPE_CONSTRUCTOR_SETTER_NAME: &str = "set constructor";
+const ITERATOR_PROTOTYPE_DISPOSE_NAME: &str = "[Symbol.dispose]";
+const ITERATOR_PROTOTYPE_TO_STRING_TAG_GETTER_NAME: &str = "get [Symbol.toStringTag]";
+const ITERATOR_PROTOTYPE_TO_STRING_TAG_SETTER_NAME: &str = "set [Symbol.toStringTag]";
 
 const ITERATOR_UNARY_LENGTH: f64 = 1.0;
 const ITERATOR_NULLARY_LENGTH: f64 = 0.0;
@@ -37,6 +42,11 @@ pub(in crate::runtime) enum IteratorFunctionKind {
     PrototypeSome,
     PrototypeEvery,
     PrototypeFind,
+    PrototypeDispose,
+    PrototypeConstructorGetter,
+    PrototypeConstructorSetter,
+    PrototypeToStringTagGetter,
+    PrototypeToStringTagSetter,
     HelperNext(CollectionIteratorId),
     HelperReturn(CollectionIteratorId),
     WrapNext(CollectionIteratorId),
@@ -48,6 +58,9 @@ impl IteratorFunctionKind {
         match self {
             Self::Constructor
             | Self::PrototypeToArray
+            | Self::PrototypeDispose
+            | Self::PrototypeConstructorGetter
+            | Self::PrototypeToStringTagGetter
             | Self::HelperNext(_)
             | Self::HelperReturn(_)
             | Self::WrapNext(_)
@@ -62,7 +75,9 @@ impl IteratorFunctionKind {
             | Self::PrototypeForEach
             | Self::PrototypeSome
             | Self::PrototypeEvery
-            | Self::PrototypeFind => ITERATOR_UNARY_LENGTH,
+            | Self::PrototypeFind
+            | Self::PrototypeConstructorSetter
+            | Self::PrototypeToStringTagSetter => ITERATOR_UNARY_LENGTH,
         }
     }
 
@@ -81,6 +96,11 @@ impl IteratorFunctionKind {
             Self::PrototypeSome => ITERATOR_PROTOTYPE_SOME_NAME,
             Self::PrototypeEvery => ITERATOR_PROTOTYPE_EVERY_NAME,
             Self::PrototypeFind => ITERATOR_PROTOTYPE_FIND_NAME,
+            Self::PrototypeDispose => ITERATOR_PROTOTYPE_DISPOSE_NAME,
+            Self::PrototypeConstructorGetter => ITERATOR_PROTOTYPE_CONSTRUCTOR_GETTER_NAME,
+            Self::PrototypeConstructorSetter => ITERATOR_PROTOTYPE_CONSTRUCTOR_SETTER_NAME,
+            Self::PrototypeToStringTagGetter => ITERATOR_PROTOTYPE_TO_STRING_TAG_GETTER_NAME,
+            Self::PrototypeToStringTagSetter => ITERATOR_PROTOTYPE_TO_STRING_TAG_SETTER_NAME,
             Self::HelperNext(_) | Self::WrapNext(_) => ITERATOR_HELPER_NEXT_NAME,
             Self::HelperReturn(_) | Self::WrapReturn(_) => ITERATOR_HELPER_RETURN_NAME,
         }
@@ -106,7 +126,12 @@ impl IteratorFunctionKind {
             | Self::PrototypeForEach
             | Self::PrototypeSome
             | Self::PrototypeEvery
-            | Self::PrototypeFind => None,
+            | Self::PrototypeFind
+            | Self::PrototypeDispose
+            | Self::PrototypeConstructorGetter
+            | Self::PrototypeConstructorSetter
+            | Self::PrototypeToStringTagGetter
+            | Self::PrototypeToStringTagSetter => None,
         }
     }
 }

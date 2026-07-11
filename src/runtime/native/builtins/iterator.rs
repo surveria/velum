@@ -6,7 +6,7 @@ use crate::{
         collections::{IteratorHelperMode, IteratorHelperState},
         native::IteratorFunctionKind,
         object::{
-            DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
+            AccessorPropertyUpdate, DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable,
             PropertyKey, PropertyUpdate, PropertyWritable,
         },
         property::DynamicPropertyKey,
@@ -32,6 +32,8 @@ const ITERATOR_SYMBOL_DISPLAY: &str = "[Symbol.iterator]";
 const ITERATOR_SYMBOL_DISPLAY_NAME: &str = "Symbol(Symbol.iterator)";
 const TO_STRING_TAG_SYMBOL_DISPLAY: &str = "[Symbol.toStringTag]";
 const TO_STRING_TAG_PROPERTY: &str = "toStringTag";
+const DISPOSE_SYMBOL_DISPLAY: &str = "[Symbol.dispose]";
+const DISPOSE_SYMBOL_PROPERTY: &str = "dispose";
 
 const ITERATOR_ABSTRACT_ERROR: &str =
     "Iterator is an abstract constructor and cannot be invoked directly";
@@ -41,6 +43,8 @@ const ITERATOR_LIMIT_NAN_ERROR: &str = "Iterator helper limit must not be NaN";
 const ITERATOR_LIMIT_NEGATIVE_ERROR: &str = "Iterator helper limit must be non-negative";
 const ITERATOR_FROM_PRIMITIVE_ERROR: &str = "Iterator.from source must be an object or a string";
 const ITERATOR_FROM_RESULT_ERROR: &str = "Iterator.from source did not produce an object iterator";
+const ITERATOR_PROTOTYPE_SETTER_ERROR: &str =
+    "Iterator prototype accessor requires a distinct object receiver";
 
 impl Context {
     pub(in crate::runtime::native) fn iterator_constructor_value(&mut self) -> Result<Value> {
@@ -52,14 +56,8 @@ impl Context {
         let id = self.next_native_function_id();
         let constructor = Value::NativeFunction(id);
         let constructor_key = self.object_constructor_property_key()?;
-        let prototype = self.objects.create_with_prototype_property(
+        let prototype = self.objects.create_with_prototype_id(
             None,
-            ObjectPropertyInit::new(
-                constructor_key,
-                OBJECT_CONSTRUCTOR_PROPERTY,
-                constructor.clone(),
-                PropertyEnumerable::No,
-            ),
             constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
@@ -95,6 +93,7 @@ impl Context {
     }
 
     fn install_iterator_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
+        self.install_iterator_constructor_accessor(prototype)?;
         let methods: &[(&str, IteratorFunctionKind)] = &[
             (
                 ITERATOR_PROTOTYPE_MAP_NAME,
@@ -146,7 +145,30 @@ impl Context {
             self.define_non_enumerable_object_property(prototype, name, method)?;
         }
         self.install_iterator_symbol_self(prototype)?;
-        self.install_iterator_to_string_tag(prototype, ITERATOR_TAG)
+        self.install_iterator_symbol_dispose(prototype)?;
+        self.install_iterator_to_string_tag_accessor(prototype)
+    }
+
+    fn install_iterator_constructor_accessor(&mut self, prototype: ObjectId) -> Result<()> {
+        let getter = self.iterator_method_value(NativeFunctionKind::Iterator(
+            IteratorFunctionKind::PrototypeConstructorGetter,
+        ))?;
+        let setter = self.iterator_method_value(NativeFunctionKind::Iterator(
+            IteratorFunctionKind::PrototypeConstructorSetter,
+        ))?;
+        let key = self.intern_property_key(OBJECT_CONSTRUCTOR_PROPERTY)?;
+        self.objects.define_property(
+            prototype,
+            key,
+            OBJECT_CONSTRUCTOR_PROPERTY,
+            PropertyUpdate::Accessor(AccessorPropertyUpdate::new(
+                Some(getter),
+                Some(setter),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )
     }
 
     fn install_iterator_symbol_self(&mut self, prototype: ObjectId) -> Result<()> {
@@ -171,6 +193,55 @@ impl Context {
         Ok(())
     }
 
+    fn install_iterator_symbol_dispose(&mut self, prototype: ObjectId) -> Result<()> {
+        let symbol_constructor = self.symbol_constructor_value()?;
+        let dispose_symbol = self.get_named(&symbol_constructor, DISPOSE_SYMBOL_PROPERTY)?;
+        let Value::Symbol(symbol) = dispose_symbol else {
+            return Err(Error::runtime("Symbol.dispose is not initialized"));
+        };
+        let dispose = self.iterator_method_value(NativeFunctionKind::Iterator(
+            IteratorFunctionKind::PrototypeDispose,
+        ))?;
+        self.objects.define_property(
+            prototype,
+            PropertyKey::symbol(symbol.id()),
+            DISPOSE_SYMBOL_DISPLAY,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(dispose),
+                Some(PropertyWritable::Yes),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )
+    }
+
+    fn install_iterator_to_string_tag_accessor(&mut self, prototype: ObjectId) -> Result<()> {
+        let symbol_constructor = self.symbol_constructor_value()?;
+        let tag_symbol = self.get_named(&symbol_constructor, TO_STRING_TAG_PROPERTY)?;
+        let Value::Symbol(symbol) = tag_symbol else {
+            return Err(Error::runtime("Symbol.toStringTag is not initialized"));
+        };
+        let getter = self.iterator_method_value(NativeFunctionKind::Iterator(
+            IteratorFunctionKind::PrototypeToStringTagGetter,
+        ))?;
+        let setter = self.iterator_method_value(NativeFunctionKind::Iterator(
+            IteratorFunctionKind::PrototypeToStringTagSetter,
+        ))?;
+        self.objects.define_property(
+            prototype,
+            PropertyKey::symbol(symbol.id()),
+            TO_STRING_TAG_SYMBOL_DISPLAY,
+            PropertyUpdate::Accessor(AccessorPropertyUpdate::new(
+                Some(getter),
+                Some(setter),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )
+    }
+
     fn install_iterator_to_string_tag(&mut self, prototype: ObjectId, tag: &str) -> Result<()> {
         let symbol_constructor = self.symbol_constructor_value()?;
         let tag_symbol = self.get_named(&symbol_constructor, TO_STRING_TAG_PROPERTY)?;
@@ -191,6 +262,103 @@ impl Context {
             self.limits.max_object_properties,
         )?;
         Ok(())
+    }
+
+    pub(in crate::runtime::native) fn eval_iterator_prototype_dispose(
+        &mut self,
+        this_value: &Value,
+    ) -> Result<Value> {
+        if let Some(return_method) = self.get_named_method(this_value, ITERATOR_RETURN_NAME)? {
+            self.call_value(&return_method, &[], this_value.clone())?;
+        }
+        Ok(Value::Undefined)
+    }
+
+    pub(in crate::runtime::native) fn eval_iterator_prototype_getter(
+        &mut self,
+        kind: IteratorFunctionKind,
+    ) -> Result<Value> {
+        match kind {
+            IteratorFunctionKind::PrototypeConstructorGetter => self.iterator_constructor_value(),
+            IteratorFunctionKind::PrototypeToStringTagGetter => {
+                self.heap_string_value(ITERATOR_TAG)
+            }
+            _ => Err(Error::runtime("invalid Iterator prototype getter kind")),
+        }
+    }
+
+    pub(in crate::runtime::native) fn eval_iterator_prototype_setter(
+        &mut self,
+        kind: IteratorFunctionKind,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Result<Value> {
+        let property = self.iterator_prototype_setter_property(kind)?;
+        let value = first_arg(&args);
+        self.setter_that_ignores_iterator_prototype(property, this_value, value)?;
+        Ok(Value::Undefined)
+    }
+
+    fn iterator_prototype_setter_property(
+        &mut self,
+        kind: IteratorFunctionKind,
+    ) -> Result<DynamicPropertyKey> {
+        match kind {
+            IteratorFunctionKind::PrototypeConstructorSetter => Ok(DynamicPropertyKey::new(
+                OBJECT_CONSTRUCTOR_PROPERTY.to_owned(),
+                None,
+            )),
+            IteratorFunctionKind::PrototypeToStringTagSetter => {
+                let symbol_constructor = self.symbol_constructor_value()?;
+                let tag_symbol = self.get_named(&symbol_constructor, TO_STRING_TAG_PROPERTY)?;
+                let Value::Symbol(symbol) = tag_symbol else {
+                    return Err(Error::runtime("Symbol.toStringTag is not initialized"));
+                };
+                Ok(DynamicPropertyKey::new(
+                    TO_STRING_TAG_SYMBOL_DISPLAY.to_owned(),
+                    Some(PropertyKey::symbol(symbol.id())),
+                ))
+            }
+            _ => Err(Error::runtime("invalid Iterator prototype setter kind")),
+        }
+    }
+
+    /// Implements `SetterThatIgnoresPrototypeProperties` for the two special
+    /// accessors installed on %Iterator.prototype%.
+    fn setter_that_ignores_iterator_prototype(
+        &mut self,
+        mut property: DynamicPropertyKey,
+        this_value: &Value,
+        value: Value,
+    ) -> Result<()> {
+        if self.semantic_object_ref(this_value)?.is_none() {
+            return Err(Error::type_error(ITERATOR_PROTOTYPE_SETTER_ERROR));
+        }
+        let home = self.iterator_prototype_object_id()?;
+        if this_value == &Value::Object(home) {
+            return Err(Error::type_error(ITERATOR_PROTOTYPE_SETTER_ERROR));
+        }
+        if self
+            .semantic_own_property_descriptor(this_value, &property)?
+            .is_none()
+        {
+            let update = PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(value),
+                Some(PropertyWritable::Yes),
+                Some(PropertyEnumerable::Yes),
+                Some(PropertyConfigurable::Yes),
+            ));
+            if self.semantic_define_own_property_update(this_value, &mut property, update)? {
+                return Ok(());
+            }
+            return Err(Error::type_error(ITERATOR_PROTOTYPE_SETTER_ERROR));
+        }
+        if self.semantic_reflect_property_write(this_value, &mut property, value, this_value)?
+            == Some(true)
+        {
+            return Ok(());
+        }
+        Err(Error::type_error(ITERATOR_PROTOTYPE_SETTER_ERROR))
     }
 
     /// %Iterator.prototype%, materializing the constructor on first use.
@@ -290,6 +458,15 @@ impl Context {
         Ok(callback)
     }
 
+    fn close_after_iterator_validation_error(&mut self, iterator: &Value, error: Error) -> Error {
+        let mut source = crate::runtime::abstract_operations::IteratorSource::Protocol {
+            iterator: iterator.clone(),
+            next: Value::Undefined,
+            done: false,
+        };
+        self.iterator_close_on_error(&mut source, error)
+    }
+
     /// ECMAScript `GetIteratorDirect`: capture the receiver and its `next`.
     pub(in crate::runtime::native) fn iterator_direct_next(
         &mut self,
@@ -331,7 +508,12 @@ impl Context {
         mode: fn(Value) -> IteratorHelperMode,
     ) -> Result<Value> {
         self.require_iterator_receiver(this_value)?;
-        let callback = self.require_callable_argument(&args)?;
+        let callback = match self.require_callable_argument(&args) {
+            Ok(callback) => callback,
+            Err(error) => {
+                return Err(self.close_after_iterator_validation_error(this_value, error));
+            }
+        };
         let next = self.iterator_direct_next(this_value)?;
         self.create_iterator_helper_object(IteratorHelperState {
             iterator: this_value.clone(),
@@ -380,7 +562,24 @@ impl Context {
         mode: fn(f64) -> IteratorHelperMode,
     ) -> Result<Value> {
         self.require_iterator_receiver(this_value)?;
-        let limit = first_arg(&args);
+        let integer = match self.validated_iterator_limit(&args) {
+            Ok(integer) => integer,
+            Err(error) => {
+                return Err(self.close_after_iterator_validation_error(this_value, error));
+            }
+        };
+        let next = self.iterator_direct_next(this_value)?;
+        self.create_iterator_helper_object(IteratorHelperState {
+            iterator: this_value.clone(),
+            next,
+            counter: 0.0,
+            done: false,
+            mode: mode(integer),
+        })
+    }
+
+    fn validated_iterator_limit(&mut self, args: &RuntimeCallArgs<'_>) -> Result<f64> {
+        let limit = first_arg(args);
         let number = self.to_number(&limit)?;
         if number.is_nan() {
             return Err(Error::exception(
@@ -395,14 +594,7 @@ impl Context {
                 ITERATOR_LIMIT_NEGATIVE_ERROR,
             ));
         }
-        let next = self.iterator_direct_next(this_value)?;
-        self.create_iterator_helper_object(IteratorHelperState {
-            iterator: this_value.clone(),
-            next,
-            counter: 0.0,
-            done: false,
-            mode: mode(integer),
-        })
+        Ok(integer)
     }
 
     pub(in crate::runtime::native) fn eval_iterator_prototype_take(
@@ -469,35 +661,46 @@ impl Context {
     /// JavaScript iterator object always backs the result.
     fn iterator_flattenable_source(&mut self, input: &Value) -> Result<Value> {
         match input {
-            Value::Object(_) => {
-                let method = self.flattenable_iterator_method(input)?;
-                let iterator = if let Some(method) = method {
-                    self.call_value(&method, &[], input.clone())?
-                } else {
-                    input.clone()
-                };
-                if self.semantic_object_ref(&iterator)?.is_none() {
-                    return Err(Error::type_error(ITERATOR_FROM_RESULT_ERROR));
-                }
-                Ok(iterator)
-            }
-            Value::String(text) => {
-                let chars: Vec<char> = text.chars().collect();
-                self.string_snapshot_iterator(&chars)
-            }
-            Value::HeapString(text) => {
-                let chars: Vec<char> = text.as_str().chars().collect();
-                self.string_snapshot_iterator(&chars)
-            }
+            Value::String(_) | Value::HeapString(_) => self.iterator_string_source(input),
             Value::Undefined
             | Value::Null
             | Value::Bool(_)
             | Value::Number(_)
-            | Value::Symbol(_)
+            | Value::Symbol(_) => Err(Error::type_error(ITERATOR_FROM_PRIMITIVE_ERROR)),
+            Value::Object(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
-            | Value::HostFunction(_) => Err(Error::type_error(ITERATOR_FROM_PRIMITIVE_ERROR)),
+            | Value::HostFunction(_) => self.iterator_object_source(input),
         }
+    }
+
+    fn iterator_object_source(&mut self, input: &Value) -> Result<Value> {
+        let method = self.flattenable_iterator_method(input)?;
+        let iterator = if let Some(method) = method {
+            self.call_value(&method, &[], input.clone())?
+        } else {
+            input.clone()
+        };
+        if self.semantic_object_ref(&iterator)?.is_none() {
+            return Err(Error::type_error(ITERATOR_FROM_RESULT_ERROR));
+        }
+        Ok(iterator)
+    }
+
+    fn iterator_string_source(&mut self, input: &Value) -> Result<Value> {
+        if let Some(method) = self.flattenable_iterator_method(input)? {
+            let iterator = self.call_value(&method, &[], input.clone())?;
+            if self.semantic_object_ref(&iterator)?.is_none() {
+                return Err(Error::type_error(ITERATOR_FROM_RESULT_ERROR));
+            }
+            return Ok(iterator);
+        }
+        let chars = match input {
+            Value::String(text) => text.chars().collect::<Vec<_>>(),
+            Value::HeapString(text) => text.as_str().chars().collect::<Vec<_>>(),
+            _ => return Err(Error::runtime("string iterator source is not a string")),
+        };
+        self.string_snapshot_iterator(&chars)
     }
 
     fn string_snapshot_iterator(&mut self, chars: &[char]) -> Result<Value> {

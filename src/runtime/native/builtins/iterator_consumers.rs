@@ -47,6 +47,15 @@ impl Context {
         Ok(callback)
     }
 
+    fn close_after_consumer_validation_error(&mut self, iterator: &Value, error: Error) -> Error {
+        let mut source = IteratorSource::Protocol {
+            iterator: iterator.clone(),
+            next: Value::Undefined,
+            done: false,
+        };
+        self.iterator_close_on_error(&mut source, error)
+    }
+
     fn consumer_callback_call(
         &mut self,
         source: &mut IteratorSource,
@@ -107,7 +116,12 @@ impl Context {
         if self.semantic_object_ref(this_value)?.is_none() {
             return Err(Error::type_error(ITERATOR_RECEIVER_ERROR));
         }
-        let callback = self.consumer_callable(&args)?;
+        let callback = match self.consumer_callable(&args) {
+            Ok(callback) => callback,
+            Err(error) => {
+                return Err(self.close_after_consumer_validation_error(this_value, error));
+            }
+        };
         let next = self.get_named(this_value, ITERATOR_NEXT_NAME)?;
         let mut source = IteratorSource::Protocol {
             iterator: this_value.clone(),
@@ -163,7 +177,12 @@ impl Context {
         if self.semantic_object_ref(this_value)?.is_none() {
             return Err(Error::type_error(ITERATOR_RECEIVER_ERROR));
         }
-        let reducer = self.consumer_callable(&args)?;
+        let reducer = match self.consumer_callable(&args) {
+            Ok(reducer) => reducer,
+            Err(error) => {
+                return Err(self.close_after_consumer_validation_error(this_value, error));
+            }
+        };
         let initial = args.as_slice().get(1).cloned();
         let next = self.get_named(this_value, ITERATOR_NEXT_NAME)?;
         let mut source = IteratorSource::Protocol {

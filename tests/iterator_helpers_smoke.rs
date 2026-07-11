@@ -216,10 +216,10 @@ fn helper_callback_errors_close_the_underlying_iterator() -> TestResult {
 #[test]
 fn helper_objects_report_iterator_helper_tag() -> TestResult {
     ensure_string(
-        r#"
+        r"
         function* nums() { yield 1; }
         Object.prototype.toString.call(nums().map(x => x))
-        "#,
+        ",
         "[object Iterator Helper]",
     )
 }
@@ -229,14 +229,98 @@ fn iterator_results_survive_garbage_collection() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     context.eval(
-        r#"
+        r"
         function* nums() { yield 1; yield 2; yield 3; }
         globalThis.helper = nums().map(x => x * 2);
         globalThis.first = helper.next().value;
-        "#,
+        ",
     )?;
     context.collect_garbage()?;
     let value =
         context.eval("first + \":\" + helper.next().value + \":\" + helper.next().value")?;
     ensure_value(&value, &Value::String("2:4:6".to_owned()))
+}
+
+#[test]
+fn iterator_intrinsic_prototype_surface_is_spec_shaped() -> TestResult {
+    ensure_string(
+        r#"
+        const arrayIteratorPrototype = Object.getPrototypeOf([].values());
+        const iteratorPrototype = Object.getPrototypeOf(arrayIteratorPrototype);
+        const constructorDesc = Object.getOwnPropertyDescriptor(iteratorPrototype, "constructor");
+        const tagDesc = Object.getOwnPropertyDescriptor(iteratorPrototype, Symbol.toStringTag);
+        const child = Object.create(iteratorPrototype);
+        constructorDesc.set.call(child, 123);
+        tagDesc.set.call(child, "Child Iterator");
+        let homeThrows = false;
+        try { constructorDesc.set.call(iteratorPrototype, 0); }
+        catch (e) { homeThrows = e instanceof TypeError; }
+        let disposed = 0;
+        const disposable = Object.create(iteratorPrototype);
+        disposable.return = function () { disposed += 1; return { done: true }; };
+        const disposeResult = disposable[Symbol.dispose]();
+        (iteratorPrototype === Iterator.prototype) + ":"
+            + (typeof constructorDesc.get) + ":" + (typeof constructorDesc.set) + ":"
+            + (constructorDesc.get.call() === Iterator) + ":" + tagDesc.get.call() + ":"
+            + child.constructor + ":" + child[Symbol.toStringTag] + ":" + homeThrows + ":"
+            + disposed + ":" + (disposeResult === undefined)
+        "#,
+        "true:function:function:true:Iterator:123:Child Iterator:true:1:true",
+    )
+}
+
+#[test]
+fn argument_validation_closes_without_reading_next() -> TestResult {
+    ensure_value(
+        &eval(
+            r#"
+            let closed = 0;
+            const closable = {
+                __proto__: Iterator.prototype,
+                get next() { throw new Error("next must not be read"); },
+                return() { closed += 1; return {}; }
+            };
+            const attempt = fn => { try { fn(); } catch (e) {} };
+            attempt(() => closable.map());
+            attempt(() => closable.filter({}));
+            attempt(() => closable.flatMap());
+            attempt(() => closable.reduce());
+            attempt(() => closable.forEach(null));
+            attempt(() => closable.some());
+            attempt(() => closable.every(1));
+            attempt(() => closable.find());
+            attempt(() => closable.take(NaN));
+            attempt(() => closable.drop(-1));
+            closed
+            "#,
+        )?,
+        &Value::Number(10.0),
+    )
+}
+
+#[test]
+fn iterator_from_observes_strings_and_accepts_callable_objects() -> TestResult {
+    ensure_string(
+        r#"
+        const original = String.prototype[Symbol.iterator];
+        let observedType = "none";
+        Object.defineProperty(String.prototype, Symbol.iterator, {
+            configurable: true,
+            get() {
+                "use strict";
+                observedType = typeof this;
+                return original;
+            }
+        });
+        const text = Iterator.from("ab").toArray().join(",");
+        function source() {}
+        source.index = 0;
+        source.next = function () {
+            source.index += 1;
+            return { value: source.index, done: source.index > 2 };
+        };
+        text + ":" + observedType + ":" + Iterator.from(source).toArray().join(",")
+        "#,
+        "a,b:string:1,2",
+    )
 }
