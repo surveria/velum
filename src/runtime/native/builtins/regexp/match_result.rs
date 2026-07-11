@@ -17,13 +17,13 @@ use super::engine::{RegExpMatch, RegExpSpan, regexp_index_usize_to_number};
 impl Context {
     pub(super) fn regexp_match_array(
         &mut self,
-        input: &str,
+        input: &[u16],
         matched: &RegExpMatch,
         has_indices: bool,
     ) -> Result<Value> {
         let matched_text = input
-            .get(matched.span.bytes.clone())
-            .ok_or_else(|| Error::runtime("RegExp match span is not a string boundary"))?;
+            .get(matched.span.code_units.clone())
+            .ok_or_else(|| Error::runtime("RegExp match span is outside the input"))?;
         self.array_constructor_value()?;
         let prototype = self.objects.existing_array_prototype_id()?;
         let capture_count = matched
@@ -32,7 +32,7 @@ impl Context {
             .checked_add(1)
             .ok_or_else(|| Error::limit("RegExp capture count exceeded supported range"))?;
         let mut values = Vec::with_capacity(capture_count);
-        values.push(self.heap_string_value(matched_text)?);
+        values.push(self.heap_utf16_string_value(matched_text)?);
         for capture in &matched.captures {
             values.push(self.regexp_capture_value(input, capture.as_ref())?);
         }
@@ -53,7 +53,7 @@ impl Context {
             PropertyEnumerable::Yes,
             PropertyConfigurable::Yes,
         )?;
-        let input_value = self.heap_string_value(input)?;
+        let input_value = self.heap_utf16_string_value(input)?;
         self.define_regexp_data_property(
             id,
             "input",
@@ -85,19 +85,19 @@ impl Context {
         Ok(Value::Object(id))
     }
 
-    fn regexp_capture_value(&mut self, input: &str, span: Option<&RegExpSpan>) -> Result<Value> {
+    fn regexp_capture_value(&mut self, input: &[u16], span: Option<&RegExpSpan>) -> Result<Value> {
         let Some(span) = span else {
             return Ok(Value::Undefined);
         };
         let text = input
-            .get(span.bytes.clone())
-            .ok_or_else(|| Error::runtime("RegExp capture span is not a string boundary"))?;
-        self.heap_string_value(text)
+            .get(span.code_units.clone())
+            .ok_or_else(|| Error::runtime("RegExp capture span is outside the input"))?;
+        self.heap_utf16_string_value(text)
     }
 
     fn regexp_named_capture_groups(
         &mut self,
-        input: &str,
+        input: &[u16],
         captures: &[(String, Option<RegExpSpan>)],
     ) -> Result<Value> {
         if captures.is_empty() {

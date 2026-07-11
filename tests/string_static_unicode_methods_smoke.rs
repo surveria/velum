@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Runtime, Value};
+use rs_quickjs::{Engine, OwnedValue, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -95,6 +95,9 @@ fn preserves_lone_utf16_surrogates_in_strings_and_regexp_tests() -> TestResult {
         let braced = "\u{DFFF}";
         let template = `\uD800`;
         let concatenated = "prefix" + high + low + "suffix";
+        let matched = /^(.)$/u.exec(high);
+        let dynamicPattern = new RegExp(high, "u");
+        let boxed = new String(high);
         let iterated = [];
         for (let value of high) iterated.push(value.charCodeAt(0));
 
@@ -112,12 +115,33 @@ fn preserves_lone_utf16_surrogates_in_strings_and_regexp_tests() -> TestResult {
             concatenated.charCodeAt(7) === 0xDFFF &&
             iterated.length === 1 &&
             iterated[0] === 0xD800 &&
+            matched[0].charCodeAt(0) === 0xD800 &&
+            matched[1].charCodeAt(0) === 0xD800 &&
+            matched.input.charCodeAt(0) === 0xD800 &&
+            dynamicPattern.test(high) &&
+            dynamicPattern.source.charCodeAt(0) === 0xD800 &&
+            String.prototype.valueOf.call(boxed).charCodeAt(0) === 0xD800 &&
+            String.prototype.toString.call(boxed).charCodeAt(0) === 0xD800 &&
             /^\D$/u.test(high) &&
             /^.$/su.test(low) ? 42 : 0
         "#,
     )?;
 
-    ensure_value(&value, &Value::Number(42.0))
+    ensure_value(&value, &Value::Number(42.0))?;
+    let surrogate = context.eval("String.fromCodePoint(0xD800)")?;
+    let Value::HeapString(text) = &surrogate else {
+        return Err(format!("expected heap string, got {surrogate:?}").into());
+    };
+    if text.as_utf16() != [0xD800] || text.as_utf8().is_some() {
+        return Err(format!("unexpected lone-surrogate representation: {text:?}").into());
+    }
+    let Err(error) = OwnedValue::try_from(&surrogate) else {
+        return Err("lone surrogate unexpectedly converted to UTF-8 OwnedValue".into());
+    };
+    if !error.to_string().contains("lone surrogates") {
+        return Err(format!("unexpected OwnedValue conversion error: {error}").into());
+    }
+    Ok(())
 }
 
 #[test]

@@ -46,9 +46,16 @@ impl JsString {
         self.id
     }
 
+    /// Returns UTF-8 text, replacing lone surrogates with U+FFFD.
     #[must_use]
     pub fn as_str(&self) -> &str {
         self.data.as_str()
+    }
+
+    /// Returns a lossless UTF-8 view when the code-unit sequence is well-formed.
+    #[must_use]
+    pub fn as_utf8(&self) -> Option<&str> {
+        self.is_well_formed().then_some(self.data.as_str())
     }
 
     /// Returns the exact ECMAScript UTF-16 code-unit sequence.
@@ -66,6 +73,12 @@ impl JsString {
     #[must_use]
     pub fn into_string(self) -> String {
         self.data.as_str().to_owned()
+    }
+
+    /// Converts into UTF-8 when the code-unit sequence is well-formed.
+    #[must_use]
+    pub fn into_utf8(self) -> Option<String> {
+        self.is_well_formed().then(|| self.data.as_str().to_owned())
     }
 }
 

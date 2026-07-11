@@ -13,8 +13,8 @@ ECMAScript-oriented regular expression compiler and executor maintained at
 - license: MIT OR Apache-2.0
 
 `LICENSE-MIT`, `LICENSE-APACHE`, `README.md`, `Cargo.toml.orig`, and every
-library source file are preserved from the published package. The tracked
-`VENDORED-SOURCE-SHA256SUMS` file records the initial source snapshot.
+library source file were imported from the published package. The tracked
+`VENDORED-SOURCE-SHA256SUMS` file records the current reviewed source state.
 
 ## Local integration
 
@@ -28,6 +28,13 @@ The source is intentionally kept in its upstream file layout so future fixes
 can be compared and forwarded. Large upstream and generated Rust files are
 covered by `scripts/check-vendored-regress.sh` and its source manifest instead
 of the project-owned 800-line source-file gate.
+
+## Local deviations
+
+- `unicode.rs` and `parse.rs` recognize the ECMAScript `Unknown` and `Zzzz`
+  aliases for both `Script` and `Script_Extensions`. The resulting character
+  class is the union of the `Cn`, `Co`, and `Cs` general categories, including
+  direct support for negated `\P` escapes.
 
 When changing vendored source, update `VENDORED-SOURCE-SHA256SUMS` in the same
 commit and describe the semantic deviation here or in the owning pull request.

@@ -1001,7 +1001,7 @@ where
                         let negate = ec == 'P' as u32;
                         match self.try_consume_unicode_property_escape()? {
                             PropertyEscapeKind::CharacterClass(s) => Ok(Some(ClassAtom::Range {
-                                iv: CodePointSet::from_sorted_disjoint_intervals(s.to_vec()),
+                                iv: CodePointSet::from_sorted_disjoint_intervals(s),
                                 negate,
                             })),
                             PropertyEscapeKind::StringSet(_) => error("Invalid property escape"),
@@ -1259,7 +1259,7 @@ where
                         match self.try_consume_unicode_property_escape()? {
                             PropertyEscapeKind::CharacterClass(intervals) => {
                                 Ok(CharacterClassEscape(CodePointSet::from_sorted_disjoint_intervals(
-                                    intervals.to_vec(),
+                                    intervals,
                                 )))
                             }
                             PropertyEscapeKind::StringSet(_) if negate_set => error("Invalid character escape"),
@@ -1274,7 +1274,7 @@ where
                         match self.try_consume_unicode_property_escape()? {
                             PropertyEscapeKind::CharacterClass(s) => {
                                 Ok(CharacterClassEscape(CodePointSet::from_sorted_disjoint_intervals(
-                                    s.to_vec(),
+                                    s,
                                 ).inverted()))
                             }
                             PropertyEscapeKind::StringSet(_) => error("Invalid character escape"),
@@ -1613,7 +1613,7 @@ where
                     PropertyEscapeKind::CharacterClass(s) => {
                         Ok(ir::Node::Bracket(BracketContents {
                             invert: negate,
-                            cps: CodePointSet::from_sorted_disjoint_intervals(s.to_vec()),
+                            cps: CodePointSet::from_sorted_disjoint_intervals(s),
                         }))
                     }
                     PropertyEscapeKind::StringSet(_) if negate => error("Invalid character escape"),

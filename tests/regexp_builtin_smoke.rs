@@ -81,6 +81,8 @@ fn supports_ecmascript_patterns_captures_and_match_indices() -> TestResult {
         let astralGlobal = /😀/gu;
         let astralGlobalMatch = astralGlobal.exec("x😀y");
         let unknownScript = /\p{Script_Extensions=Unknown}/u;
+        let unknownPrimaryScript = /\p{Script=Unknown}/u;
+        let notUnknownPrimaryScript = /\P{sc=Zzzz}/u;
         let syntaxErrors = 0;
         try {
             new RegExp("(");
@@ -120,6 +122,10 @@ fn supports_ecmascript_patterns_captures_and_match_indices() -> TestResult {
             unknownScript.test("\u{0378}") &&
             unknownScript.test("\uE000") &&
             !unknownScript.test("A") &&
+            unknownPrimaryScript.test("\u{0378}") &&
+            !unknownPrimaryScript.test("A") &&
+            notUnknownPrimaryScript.test("A") &&
+            !notUnknownPrimaryScript.test("\u{0378}") &&
             syntaxErrors === 2 ? 42 : 0
         "#,
     )?;

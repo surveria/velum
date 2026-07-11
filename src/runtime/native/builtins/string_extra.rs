@@ -240,7 +240,7 @@ impl Context {
     ) -> Result<Value> {
         Self::discard_extra_args(args.as_slice());
         let text = self.strict_string_value(this_value)?;
-        self.heap_string_value(&text)
+        self.heap_utf16_string_value(&text)
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_value_of(
@@ -250,7 +250,7 @@ impl Context {
     ) -> Result<Value> {
         Self::discard_extra_args(args.as_slice());
         let text = self.strict_string_value(this_value)?;
-        self.heap_string_value(&text)
+        self.heap_utf16_string_value(&text)
     }
 
     fn define_string_static_method(
@@ -294,14 +294,14 @@ impl Context {
         Ok(output)
     }
 
-    fn strict_string_value(&self, value: &Value) -> Result<String> {
+    fn strict_string_value(&self, value: &Value) -> Result<Vec<u16>> {
         match value {
-            Value::String(value) => Ok(value.clone()),
-            Value::HeapString(value) => Ok(value.as_str().to_owned()),
+            Value::String(value) => Ok(value.encode_utf16().collect()),
+            Value::HeapString(value) => Ok(value.as_utf16().to_vec()),
             Value::Object(id) => self
                 .objects
-                .string_object_value(*id)?
-                .map(ToOwned::to_owned)
+                .string_object_utf16_value(*id)?
+                .map(<[u16]>::to_vec)
                 .ok_or_else(|| Error::type_error(STRING_VALUE_RECEIVER_ERROR)),
             _ => Err(Error::type_error(STRING_VALUE_RECEIVER_ERROR)),
         }

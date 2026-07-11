@@ -6,6 +6,8 @@ use crate::{
 };
 
 const VM_LOCAL_VALUE_ERROR: &str = "VM-local value cannot be converted to OwnedValue";
+const ILL_FORMED_STRING_ERROR: &str =
+    "JavaScript string containing lone surrogates cannot be converted to UTF-8 OwnedValue";
 
 /// A JavaScript primitive that owns all of its data and can cross VM
 /// boundaries without retaining a VM identity or root.
@@ -42,7 +44,11 @@ impl TryFrom<&Value> for OwnedValue {
             Value::Bool(value) => Ok(Self::Bool(*value)),
             Value::Number(value) => Ok(Self::Number(*value)),
             Value::String(value) => Ok(Self::String(value.clone())),
-            Value::HeapString(value) => Ok(Self::String(value.as_str().to_owned())),
+            Value::HeapString(value) => value
+                .as_utf8()
+                .map(str::to_owned)
+                .map(Self::String)
+                .ok_or_else(|| Error::runtime(ILL_FORMED_STRING_ERROR)),
             Value::Symbol(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
@@ -62,7 +68,10 @@ impl TryFrom<Value> for OwnedValue {
             Value::Bool(value) => Ok(Self::Bool(value)),
             Value::Number(value) => Ok(Self::Number(value)),
             Value::String(value) => Ok(Self::String(value)),
-            Value::HeapString(value) => Ok(Self::String(value.into_string())),
+            Value::HeapString(value) => value
+                .into_utf8()
+                .map(Self::String)
+                .ok_or_else(|| Error::runtime(ILL_FORMED_STRING_ERROR)),
             Value::Symbol(_)
             | Value::Function(_)
             | Value::NativeFunction(_)
