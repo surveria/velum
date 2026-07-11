@@ -218,6 +218,64 @@ fn object_assign_uses_throwing_set_and_array_exotic_semantics() -> TestResult {
     ensure_value(&value, &Value::Bool(true))
 }
 
+#[test]
+fn object_create_uses_catchable_type_errors_and_shared_descriptors() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        function throwsTypeError(callback) {
+            try {
+                callback();
+                return false;
+            } catch (error) {
+                return error instanceof TypeError;
+            }
+        }
+
+        let prototype = { inherited: 1 };
+        let symbol = Symbol("created");
+        let properties = {};
+        Object.defineProperty(properties, "alpha", {
+            enumerable: true,
+            get: function() {
+                return { value: 2, enumerable: true };
+            }
+        });
+        Object.defineProperty(properties, symbol, {
+            enumerable: true,
+            value: { value: 3, writable: true }
+        });
+        let created = Object.create(prototype, properties);
+        let argumentsValue = (function() { return arguments; })(1, 2);
+
+        let unchanged = {};
+        throwsTypeError(function() {
+            Object.defineProperties(unchanged, {
+                first: { value: 1 },
+                second: null
+            });
+        });
+
+        throwsTypeError(function() { Object.create(undefined); }) &&
+            throwsTypeError(function() { Object.create(true); }) &&
+            throwsTypeError(function() { Object.create(2); }) &&
+            throwsTypeError(function() { Object.create("prototype"); }) &&
+            throwsTypeError(function() { Object.create({}, null); }) &&
+            throwsTypeError(function() { Object.create({}, "x"); }) &&
+            throwsTypeError(function() { Object.create({}, { value: undefined }); }) &&
+            Object.getPrototypeOf(created) === prototype &&
+            created.inherited === 1 && created.alpha === 2 && created[symbol] === 3 &&
+            Object.prototype.toString.call(argumentsValue) === "[object Arguments]" &&
+            Object.prototype.propertyIsEnumerable.call(created, "alpha") &&
+            !Object.prototype.propertyIsEnumerable.call(created, symbol) &&
+            !Object.hasOwn(unchanged, "first") &&
+            Object.getPrototypeOf(Object.create(null, "")) === null
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

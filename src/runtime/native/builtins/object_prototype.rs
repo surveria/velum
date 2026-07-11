@@ -13,6 +13,7 @@ use crate::{
 const OBJECT_UNDEFINED_TAG: &str = "[object Undefined]";
 const OBJECT_NULL_TAG: &str = "[object Null]";
 const TAG_ARRAY: &str = "Array";
+const TAG_ARGUMENTS: &str = "Arguments";
 const TAG_FUNCTION: &str = "Function";
 const TAG_ERROR: &str = "Error";
 const TAG_BOOLEAN: &str = "Boolean";
@@ -176,6 +177,9 @@ impl Context {
     fn object_builtin_class(&self, id: ObjectId) -> Result<&'static str> {
         if self.objects.error_metadata(id)?.is_some() {
             return Ok(TAG_ERROR);
+        }
+        if self.objects.is_arguments_object(id)? {
+            return Ok(TAG_ARGUMENTS);
         }
         if self.objects.array_len_if_array(id)?.is_some() {
             return Ok(TAG_ARRAY);

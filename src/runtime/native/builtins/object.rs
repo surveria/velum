@@ -368,7 +368,7 @@ impl Context {
         value: &Value,
     ) -> Result<PropertyUpdate> {
         if self.semantic_object_ref(value)?.is_none() {
-            return Err(Error::runtime("property descriptor must be an object"));
+            return Err(Error::type_error("property descriptor must be an object"));
         }
         let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
         let get = self.optional_descriptor_accessor(value, DESCRIPTOR_GET_PROPERTY)?;

@@ -197,6 +197,15 @@ impl ObjectHeap {
         Ok(self.object(id)?.is_raw_json)
     }
 
+    pub(crate) fn mark_arguments_object(&mut self, id: ObjectId) -> Result<()> {
+        self.object_mut(id)?.arguments_brand = true;
+        Ok(())
+    }
+
+    pub(crate) fn is_arguments_object(&self, id: ObjectId) -> Result<bool> {
+        Ok(self.object(id)?.arguments_brand)
+    }
+
     pub(crate) fn create_with_prototype_property(
         &mut self,
         prototype: Option<ObjectId>,

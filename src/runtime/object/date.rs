@@ -65,6 +65,7 @@ impl Object {
             data_view: None,
             typed_array: None,
             is_raw_json: false,
+            arguments_brand: false,
             prototype: None,
             extensibility: super::ObjectExtensibility::Extensible,
             storage_ledger: None,
