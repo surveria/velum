@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260711T030752Z.md`
-- Task: PR #447: AS-08a: isolate optimization from semantics
-- Performance: 5.66x (4/5 >1.00x) (from `rsqjs-test-report-20260711T030752Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T030752Z.md`)
+- `rsqjs-test-report-20260711T034409Z.md`
+- Task: PR #449: AS-08b: audit control-flow specializations
+- Performance: 5.78x (4/5 >1.00x) (from `rsqjs-test-report-20260711T034409Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T034409Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 37721 passed / 64857 failed (36.77%) (from `rsqjs-test-report-20260711T030752Z.md`)
+- Full Test262: 37721 passed / 64857 failed (36.77%) (from `rsqjs-test-report-20260711T034409Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -436,3 +436,4 @@ Latest report:
 | `20260711T013950Z` `62e2725` PR #446: AS-07a: add safe collection and correct weak edges | 5.65x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36514 passed / 66064 failed (35.60%) |
 | `20260711T025726Z` `c5e3311` PR #448: runner: stop publishing duplicate JPEG benchmark chart | 5.67x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36514 passed / 66064 failed (35.60%) |
 | `20260711T030752Z` `bc52a72` PR #447: AS-08a: isolate optimization from semantics | 5.66x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 37721 passed / 64857 failed (36.77%) |
+| `20260711T034409Z` `7802932` PR #449: AS-08b: audit control-flow specializations | 5.78x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 37721 passed / 64857 failed (36.77%) |
