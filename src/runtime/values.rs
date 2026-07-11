@@ -54,8 +54,8 @@ impl Context {
     ) -> Result<Value> {
         if requires_generic_add(&left)
             || requires_generic_add(right)
-            || matches!(left, Value::HeapString(_))
-            || matches!(right, Value::HeapString(_))
+            || !has_exact_utf8(&left)
+            || !has_exact_utf8(right)
             || (!matches!(left, Value::String(_) | Value::HeapString(_))
                 && !matches!(right, Value::String(_) | Value::HeapString(_)))
         {
@@ -87,7 +87,7 @@ impl Context {
         } else {
             left
         };
-        if matches!(left, Value::HeapString(_)) {
+        if !has_exact_utf8(&left) {
             return self.add(&left, &Value::String(right.to_owned()));
         }
         let mut text = match left {
@@ -221,7 +221,7 @@ impl Context {
         match &value {
             Value::String(text) => self.check_string_len(text)?,
             Value::HeapString(text) => {
-                self.check_string_len(text.as_str())?;
+                self.check_utf16_string_len(text.as_utf16())?;
                 if text.identity() != self.identity() {
                     return Err(Error::runtime(FOREIGN_VM_VALUE_ERROR));
                 }
@@ -316,6 +316,10 @@ impl Context {
 
 const fn requires_generic_add(value: &Value) -> bool {
     !crate::runtime::abstract_operations::is_primitive(value) || matches!(value, Value::Symbol(_))
+}
+
+fn has_exact_utf8(value: &Value) -> bool {
+    !matches!(value, Value::HeapString(text) if !text.is_well_formed())
 }
 
 fn primitive_utf16_units(value: &Value) -> Result<Vec<u16>> {

@@ -62,7 +62,8 @@ mutation, key, extensibility, equality, and identity behavior uses the same
 ordinary object paths as other `ObjectId` values.
 
 Primitive variants are `Undefined`, `Null`, `Bool`, `Number`, `String`,
-`HeapString`, and `Symbol`. `HeapString` and `Symbol` contain VM-owned ids or
+`HeapString`, and `Symbol`. `HeapString` owns exact UTF-16 code units plus a
+cached UTF-8 or diagnostic rendering; `HeapString` and `Symbol` contain VM-owned ids or
 VM-owned shared data even though public `Value` does not encode a VM identity.
 
 All current ids are slot indexes without a VM id or generation. A stale id or a
@@ -144,7 +145,7 @@ in one `Object` record.
 | Boxed String | `string_value` on `Object` | string virtual properties plus ordinary properties |
 | Boxed Boolean/Number/Symbol | `primitive_value` on `Object` | built-in receiver checks plus ordinary properties |
 | Date | `date_value` on `Object` | Date built-ins plus ordinary properties |
-| RegExp | `regexp_value` on `Object` retains only source and flags; the in-tree `src/regress` compiler/executor is transient per construction or execution | RegExp built-ins plus ordinary properties; compilation and matching charge the owning context's runtime-step budget without retaining cross-VM compiled state |
+| RegExp | `regexp_value` on `Object` retains exact UTF-16 source units and flags; the in-tree `src/regress` compiler/executor is transient per construction or execution | RegExp built-ins plus ordinary properties; compilation and matching consume UTF-16 directly and charge the owning context's runtime-step budget without retaining cross-VM compiled state |
 | Proxy | `proxy_value` on `Object` | repeated pre-dispatch in get/has/set/delete/prototype/descriptor/call/construct paths |
 | ArrayBuffer | `byte_buffer` on `Object`; bytes are `Rc<RefCell<Vec<u8>>>` | typed-array built-ins plus ordinary properties |
 | Numeric TypedArray | `typed_array` on `Object`, carrying an element kind and referencing a buffer object plus shared byte buffer | typed-array indexed branches plus ordinary properties; AS-09j generalizes the previous Uint8-only payload without adding an edge category |
@@ -302,7 +303,7 @@ identity without a special equality exception.
 | integer-or-infinity | `Context::to_integer_or_infinity` plus the primitive `integer_or_infinity_from_number` in `runtime/abstract_operations/conversion.rs` | AS-03b1b routes observable Array, String, Number, and buffer arguments through the Context owner; Date and Set reuse the primitive normalization only after their specification-required prechecks |
 | length/index conversion | `Context::to_length` and `Context::to_index` in `runtime/abstract_operations/conversion.rs` | AS-03b1b preserves the full safe-integer range for array-like objects and separates specification values from checked `usize`, array-storage, byte-buffer, execution-step, and allocation limits |
 | boolean conversion | `to_boolean` in `runtime/abstract_operations/conversion.rs` | AS-03a2b removes `Value::is_truthy`; bytecode control flow, logical operators, callbacks, Proxy traps, RegExp, Set, and the Boolean constructor delegate to one pure owner |
-| string conversion | `Context::to_string` plus `to_string_primitive` in `runtime/abstract_operations/conversion.rs`; `Function.prototype.toString` is a real intrinsic used by `ToPrimitive` | AS-03a2b routes observable conversion consumers through this owner; Rust `Display for Value` remains diagnostic, including error reporting rather than ECMAScript property-key semantics |
+| string conversion | `Context::to_string`/`to_string_primitive` for well-formed UTF-8 consumers and `Context::to_utf16_string` for exact ECMAScript values; `Function.prototype.toString` is a real intrinsic used by `ToPrimitive` | AS-03a2b routes observable conversion consumers through this owner; UTF-16 paths preserve lone surrogates, while Rust `Display for Value` remains diagnostic rather than an ECMAScript conversion |
 
 AS-03a2 is split into AS-03a2a (`ToPrimitive`/`ToNumber`) and AS-03a2b
 (`ToString`/`ToBoolean`) because the two groups have independent consumer
