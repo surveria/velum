@@ -518,6 +518,10 @@ impl Context {
             NativeFunctionKind::PerformanceNow => Ok(self.eval_performance_now()),
             NativeFunctionKind::Print => self.eval_print_call(args),
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),
+            NativeFunctionKind::PromiseAll => self.eval_promise_all(args),
+            NativeFunctionKind::PromiseAllResolveElement { state, index } => {
+                self.eval_promise_all_resolve_element(state, index, args)
+            }
             NativeFunctionKind::PromiseResolve => self.eval_promise_resolve(args),
             NativeFunctionKind::PromiseReject => self.eval_promise_reject(args),
             NativeFunctionKind::PromiseThen => self.eval_promise_then(args, this_value),

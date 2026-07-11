@@ -153,6 +153,10 @@ pub(in crate::runtime::native) const OBJECT_SEAL_NAME: &str = "seal";
 pub(in crate::runtime::native) const OBJECT_VALUES_NAME: &str = "values";
 const PROMISE_CATCH_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const PROMISE_CATCH_NAME: &str = "catch";
+const PROMISE_ALL_FUNCTION_LENGTH: f64 = 1.0;
+pub(in crate::runtime::native) const PROMISE_ALL_NAME: &str = "all";
+const PROMISE_ALL_RESOLVE_ELEMENT_FUNCTION_LENGTH: f64 = 1.0;
+const PROMISE_ALL_RESOLVE_ELEMENT_NAME: &str = "";
 const PROMISE_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const PROMISE_NAME: &str = "Promise";
 pub(in crate::runtime::native) const PROXY_NAME: &str = "Proxy";
@@ -383,6 +387,11 @@ pub(in crate::runtime) enum NativeFunctionKind {
     PerformanceNow,
     Print,
     Promise,
+    PromiseAll,
+    PromiseAllResolveElement {
+        state: ObjectId,
+        index: usize,
+    },
     PromiseResolve,
     PromiseReject,
     PromiseThen,
@@ -590,6 +599,10 @@ impl NativeFunctionKind {
             Self::Number => Some(NUMBER_FUNCTION_LENGTH),
             Self::Print | Self::ThrowTypeError => Some(0.0),
             Self::Promise => Some(PROMISE_FUNCTION_LENGTH),
+            Self::PromiseAll => Some(PROMISE_ALL_FUNCTION_LENGTH),
+            Self::PromiseAllResolveElement { .. } => {
+                Some(PROMISE_ALL_RESOLVE_ELEMENT_FUNCTION_LENGTH)
+            }
             Self::PromiseResolve => Some(PROMISE_RESOLVE_FUNCTION_LENGTH),
             Self::PromiseReject => Some(PROMISE_REJECT_FUNCTION_LENGTH),
             Self::PromiseThen => Some(PROMISE_THEN_FUNCTION_LENGTH),
@@ -713,6 +726,8 @@ impl NativeFunctionKind {
             Self::Number => Some(NUMBER_NAME),
             Self::Print => Some("print"),
             Self::Promise => Some(PROMISE_NAME),
+            Self::PromiseAll => Some(PROMISE_ALL_NAME),
+            Self::PromiseAllResolveElement { .. } => Some(PROMISE_ALL_RESOLVE_ELEMENT_NAME),
             Self::PromiseResolve => Some(PROMISE_RESOLVE_NAME),
             Self::PromiseReject => Some(PROMISE_REJECT_NAME),
             Self::PromiseThen => Some(PROMISE_THEN_NAME),

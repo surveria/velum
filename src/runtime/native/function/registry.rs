@@ -217,7 +217,8 @@ const ASYNC_GENERATOR_NEXT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(20
 const ASYNC_GENERATOR_RETURN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(209);
 const ASYNC_GENERATOR_THROW_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(210);
 const ASYNC_GENERATOR_FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(211);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 212;
+const PROMISE_ALL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(212);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 213;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -382,6 +383,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::ObjectSeal => Some(OBJECT_SEAL_SLOT),
         NativeFunctionKind::ObjectValues => Some(OBJECT_VALUES_SLOT),
         NativeFunctionKind::Promise => Some(PROMISE_SLOT),
+        NativeFunctionKind::PromiseAll => Some(PROMISE_ALL_SLOT),
         NativeFunctionKind::PromiseResolve => Some(PROMISE_RESOLVE_SLOT),
         NativeFunctionKind::PromiseReject => Some(PROMISE_REJECT_SLOT),
         NativeFunctionKind::PromiseThen => Some(PROMISE_THEN_SLOT),

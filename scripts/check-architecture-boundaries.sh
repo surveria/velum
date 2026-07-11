@@ -1454,6 +1454,7 @@ check_callable_edge_boundary() {
   for source in \
     'NativeFunctionKind::BoundFunction(id)' \
     'NativeFunctionKind::CollectionIteratorNext(id)' \
+    'NativeFunctionKind::PromiseAllResolveElement { state, .. }' \
     'NativeFunctionKind::PromiseResolver { promise, .. }' \
     'NativeFunctionKind::ProxyRevoke(id)'; do
     if ! grep -F -q "${source}" "${repo_root}/src/runtime/native/function/mod.rs"; then
@@ -1478,7 +1479,8 @@ check_callable_edge_boundary() {
     'BoundFunction(BoundFunctionId),
 CollectionIteratorNext(crate::runtime::collections::CollectionIteratorId),
 promise:crate::runtime::promise::PromiseId,
-ProxyRevoke(ObjectId),'
+ProxyRevoke(ObjectId),
+state:ObjectId,'
 
   if ! grep -F -q 'pub fn callable_edge_snapshot(&self) -> Result<VmCallableEdgeSnapshot>' \
       "${repo_root}/src/api/embedding.rs"; then

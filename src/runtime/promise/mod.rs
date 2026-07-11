@@ -243,7 +243,10 @@ impl Context {
         Ok(Completion::Suspended(promise))
     }
 
-    fn promise_resolve_for_await(&mut self, value: Value) -> Result<PromiseId> {
+    pub(in crate::runtime) fn promise_resolve_for_await(
+        &mut self,
+        value: Value,
+    ) -> Result<PromiseId> {
         if let Ok(promise) = self.promise_id_from_value(&value) {
             let constructor = self.get_named(&value, "constructor")?;
             let intrinsic = self.promise_constructor_value()?;
