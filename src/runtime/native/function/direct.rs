@@ -498,6 +498,21 @@ impl Context {
             NativeFunctionKind::FunctionPrototypeToString => {
                 self.eval_function_prototype_to_string(args, this_value)
             }
+            NativeFunctionKind::GeneratorNext => self.eval_generator_resume(
+                args,
+                this_value,
+                crate::runtime::generator::GeneratorResumeKind::Next,
+            ),
+            NativeFunctionKind::GeneratorReturn => self.eval_generator_resume(
+                args,
+                this_value,
+                crate::runtime::generator::GeneratorResumeKind::Return,
+            ),
+            NativeFunctionKind::GeneratorThrow => self.eval_generator_resume(
+                args,
+                this_value,
+                crate::runtime::generator::GeneratorResumeKind::Throw,
+            ),
             NativeFunctionKind::Date(kind) => {
                 self.eval_date_native_function_kind(kind, args, this_value)
             }

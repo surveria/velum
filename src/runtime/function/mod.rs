@@ -59,7 +59,7 @@ pub(super) use fast_path::FunctionFastPath;
 use parameters::FunctionParameterState;
 pub(in crate::runtime) use parameters::{FunctionScopeTemplate, FunctionSelfBinding};
 pub(super) use properties::{FunctionIntrinsicDefaults, FunctionProperties};
-pub(in crate::runtime) use suspended::SuspendedAsyncFunction;
+pub(in crate::runtime) use suspended::{DetachedFunctionExecution, SuspendedAsyncFunction};
 
 const FUNCTION_PROTOTYPE_APPLY_PROPERTY: &str = "apply";
 const FUNCTION_PROTOTYPE_BIND_PROPERTY: &str = "bind";
@@ -100,7 +100,7 @@ pub(super) struct BytecodeFunctionInit<'a> {
     pub(super) name: Option<&'a StaticName>,
     pub(super) bytecode: &'a BytecodeFunction,
     pub(super) constructable: bool,
-    pub(super) is_async: bool,
+    pub(super) kind: crate::syntax::FunctionKind,
     pub(super) class_constructor: bool,
     pub(super) prototype_parent: Option<crate::value::ObjectId>,
     pub(super) new_target_mode: BytecodeNewTargetMode,
@@ -129,13 +129,22 @@ impl Context {
                 self.limits.max_object_properties,
             )?;
             Value::Object(prototype_id)
+        } else if init.kind.is_generator() {
+            let constructor_key = self.object_constructor_property_key()?;
+            let generator_prototype = self.generator_prototype_id()?;
+            self.objects.create_with_prototype(
+                Some(generator_prototype),
+                constructor_key,
+                self.limits.max_objects,
+                self.limits.max_object_properties,
+            )?
         } else {
             Value::Undefined
         };
         let function_name = self.function_name_value(init.name)?;
         let params = init.bytecode.params();
         let arity = parameters::function_arity(params);
-        let prototype_default = init.constructable.then(|| {
+        let prototype_default = (init.constructable || init.kind.is_generator()).then(|| {
             DataPropertyDescriptor::new(
                 prototype.clone(),
                 PropertyWritable::Yes,
@@ -195,7 +204,7 @@ impl Context {
                 static_binding_layout,
                 properties,
                 constructable: init.constructable,
-                is_async: init.is_async,
+                kind: init.kind,
                 class_constructor: init.class_constructor,
                 super_binding,
                 static_parent: None,
@@ -241,7 +250,7 @@ impl Context {
             init.bytecode,
             param_frames,
             init.new_target_mode,
-            init.is_async,
+            init.kind.is_async() || init.kind.is_generator(),
             init.class_constructor,
         )
     }
@@ -264,9 +273,25 @@ impl Context {
     ) -> Result<Completion> {
         self.reject_class_constructor_call(id)?;
         let new_target = self.function_direct_call_new_target(id)?;
-        if self.function(id)?.is_async {
+        if self.function(id)?.kind.is_async() {
             let value = self.eval_async_function_with_this(id, args, this_value, new_target)?;
             return Ok(Completion::Normal(value));
+        }
+        if self.function(id)?.kind.is_generator() {
+            let completion = self.eval_generator_function_completion_with_this_and_new_target(
+                id, args, this_value, new_target,
+            )?;
+            return match completion {
+                Completion::GeneratorStart => {
+                    let execution = self.detach_function_execution(id)?;
+                    self.create_generator_object(id, execution)
+                        .map(Completion::Normal)
+                }
+                completion @ Completion::Throw(_) => Ok(completion),
+                completion => Err(Error::runtime(format!(
+                    "generator initialization produced invalid completion {completion:?}"
+                ))),
+            };
         }
         self.eval_function_completion_with_this_and_new_target(id, args, this_value, new_target)?
             .into_call_completion()
@@ -384,11 +409,7 @@ impl Context {
             &bytecode,
             remember_params,
         );
-        if CAN_SUSPEND
-            && result
-                .as_ref()
-                .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
-        {
+        if CAN_SUSPEND && result.as_ref().is_ok_and(Completion::suspends_execution) {
             return result;
         }
         let binding_result =
@@ -466,6 +487,10 @@ impl Context {
         self.functions
             .get(id.index())
             .ok_or_else(|| Error::runtime("function id is not defined"))
+    }
+
+    pub(in crate::runtime) fn function_prototype_value(&self, id: FunctionId) -> Result<Value> {
+        Ok(self.function(id)?.properties.prototype())
     }
 
     pub(in crate::runtime) fn function_source_text(&self, id: FunctionId) -> Result<String> {

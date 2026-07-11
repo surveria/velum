@@ -47,15 +47,23 @@ impl<'a> HoistCollector<'a> {
         id: crate::syntax::StaticFunctionId,
         params: &std::rc::Rc<[crate::ast::FunctionParam]>,
         body: &std::rc::Rc<[Statement]>,
-        is_async: bool,
+        parameter_prologue_count: usize,
+        kind: crate::syntax::FunctionKind,
     ) -> Result<()> {
         self.var_declarations.push(name.clone());
         let declaration = BytecodeFunctionDeclaration::new(
             BytecodeBinding::compile(name, self.layout)?,
             id,
             name.name().clone(),
-            BytecodeFunction::compile(None, params, body, self.layout)?,
-            is_async,
+            BytecodeFunction::compile(
+                None,
+                params,
+                body,
+                kind,
+                parameter_prologue_count,
+                self.layout,
+            )?,
+            kind,
         );
         self.function_declarations.push(declaration);
         Ok(())
@@ -155,8 +163,16 @@ impl<'a> HoistCollector<'a> {
                 id,
                 params,
                 body,
-                is_async,
-            } => self.collect_function_declaration(name, *id, params, body, *is_async),
+                parameter_prologue_count,
+                kind,
+            } => self.collect_function_declaration(
+                name,
+                *id,
+                params,
+                body,
+                *parameter_prologue_count,
+                *kind,
+            ),
             Stmt::Empty
             | Stmt::Break(_)
             | Stmt::Continue(_)

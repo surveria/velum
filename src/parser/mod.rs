@@ -19,8 +19,10 @@ mod pattern;
 mod sequence;
 mod statement;
 mod strict;
+mod yield_context;
 
 use await_context::AwaitExpressionContext;
+use yield_context::YieldExpressionContext;
 
 const ASYNC_IDENTIFIER_NAME: &str = "async";
 const ARGUMENTS_IDENTIFIER_NAME: &str = "arguments";
@@ -81,6 +83,8 @@ struct Parser {
     static_call_site_count: usize,
     strict_mode: bool,
     await_expression_context: AwaitExpressionContext,
+    yield_expression_context: YieldExpressionContext,
+    yield_identifier_reserved: bool,
 }
 
 impl Parser {
@@ -104,6 +108,8 @@ impl Parser {
             static_call_site_count: 0,
             strict_mode,
             await_expression_context: AwaitExpressionContext::Allowed,
+            yield_expression_context: YieldExpressionContext::Forbidden,
+            yield_identifier_reserved: false,
         }
     }
 
@@ -167,6 +173,11 @@ impl Parser {
             return Err(self.parse_error("super is not a valid binding identifier"));
         }
         let name = self.consume_identifier(message)?;
+        if (self.yield_identifier_is_reserved() || self.is_strict_mode())
+            && name.as_str() == YIELD_IDENTIFIER_NAME
+        {
+            return Err(self.parse_error("yield is not a valid binding identifier"));
+        }
         self.static_binding(name)
     }
 

@@ -75,9 +75,12 @@ impl Context {
     }
 
     pub(crate) fn function_object_prototype_value(&mut self, id: FunctionId) -> Result<Value> {
-        let is_async = self.function(id)?.is_async;
-        if is_async {
+        let kind = self.function(id)?.kind;
+        if kind.is_async() {
             return self.async_function_constructor_prototype_value();
+        }
+        if kind.is_generator() {
+            return self.generator_function_prototype_value();
         }
         self.function_constructor_prototype_value()
     }
@@ -104,11 +107,10 @@ impl Context {
     ) -> Result<bool> {
         let function = self.function(id)?;
         let property_kind = FunctionPropertyKind::from_name(property.name());
-        if property_kind.is_intrinsic_slot() && function.properties.has_intrinsic(property_kind) {
+        if function.properties.has_intrinsic(property_kind) {
             return Ok(true);
         }
-        Ok((property_kind.is_prototype() && function.constructable)
-            || function.properties.has(property))
+        Ok(function.properties.has(property))
     }
 
     pub(crate) fn set_function_property_key(

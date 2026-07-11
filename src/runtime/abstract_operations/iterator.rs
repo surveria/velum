@@ -239,7 +239,9 @@ impl Context {
             completion @ (Completion::Return(_)
             | Completion::Break { .. }
             | Completion::Continue(_)) => completion.into_result().map(Completion::Normal),
-            completion @ Completion::Suspended(_) => Ok(completion),
+            completion @ (Completion::Suspended(_)
+            | Completion::GeneratorStart
+            | Completion::Yielded(_)) => Ok(completion),
         }
     }
 
@@ -341,6 +343,7 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         | Completion::Throw(value)
         | Completion::Return(value)
         | Completion::Break { value, .. } => Some(value),
-        Completion::Continue(_) | Completion::Suspended(_) => None,
+        Completion::Yielded(value) => Some(value),
+        Completion::Continue(_) | Completion::Suspended(_) | Completion::GeneratorStart => None,
     }
 }

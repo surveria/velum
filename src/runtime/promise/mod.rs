@@ -199,6 +199,19 @@ impl Context {
                 let continuation = self.detach_suspended_async_function(id, promise)?;
                 self.add_async_await_reaction(awaited, continuation)?;
             }
+            Completion::Yielded(value) => {
+                let reason = self.create_error_object(
+                    JavaScriptErrorMetadata::new(
+                        ErrorName::TypeError,
+                        format!("async function yielded unexpected value {value}"),
+                    ),
+                    true,
+                )?;
+                self.reject_promise(promise, reason)?;
+            }
+            Completion::GeneratorStart => {
+                return Err(Error::runtime("async function entered generator start"));
+            }
         }
         Ok(object)
     }
@@ -543,6 +556,19 @@ impl Context {
                     self.detach_suspended_async_function(function, result_promise)?;
                 self.add_async_await_reaction(awaited, continuation)
             }
+            Completion::Yielded(value) => {
+                let reason = self.create_error_object(
+                    JavaScriptErrorMetadata::new(
+                        ErrorName::TypeError,
+                        format!("async function yielded unexpected value {value}"),
+                    ),
+                    true,
+                )?;
+                self.reject_promise(result_promise, reason)
+            }
+            Completion::GeneratorStart => Err(Error::runtime(
+                "async function resumed into generator start",
+            )),
             Completion::Break { .. } | Completion::Continue(_) => {
                 let reason = self.create_error_object(
                     JavaScriptErrorMetadata::new(

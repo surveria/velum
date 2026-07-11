@@ -8,12 +8,12 @@ use crate::{
     },
     binding_metadata::BindingLayout,
     error::{Error, Result},
-    syntax::{StaticFunctionId, StaticName},
+    syntax::{FunctionKind, StaticFunctionId, StaticName},
 };
 
 use super::{
     BytecodeBlock, BytecodeCompiler, BytecodeFunction, BytecodeFunctionParam, BytecodeHoistPlan,
-    BytecodeInstruction, BytecodeNewTargetMode, StatementValue,
+    BytecodeInstruction, BytecodeNewTargetMode,
 };
 
 struct FunctionCompileSpec<'a> {
@@ -22,8 +22,9 @@ struct FunctionCompileSpec<'a> {
     self_binding: Option<StaticBinding>,
     params: &'a Rc<[FunctionParam]>,
     body: &'a [Statement],
+    parameter_prologue_count: usize,
     constructable: bool,
-    is_async: bool,
+    kind: FunctionKind,
     new_target_mode: BytecodeNewTargetMode,
 }
 
@@ -50,10 +51,12 @@ impl BytecodeCompiler<'_> {
                 spec.self_binding,
                 spec.params,
                 spec.body,
+                spec.kind,
+                spec.parameter_prologue_count,
                 self.layout,
             )?,
             constructable: spec.constructable,
-            is_async: spec.is_async,
+            kind: spec.kind,
             new_target_mode: spec.new_target_mode,
         });
         Ok(())
@@ -65,6 +68,8 @@ impl BytecodeFunction {
         self_binding: Option<StaticBinding>,
         params: &[FunctionParam],
         statements: &[Statement],
+        kind: FunctionKind,
+        parameter_prologue_count: usize,
         layout: &BindingLayout,
     ) -> Result<Self> {
         let collected = CaptureBindingCollector::collect_function(params, statements);
@@ -72,7 +77,12 @@ impl BytecodeFunction {
             self_binding,
             compile_params(params),
             compile_param_defaults(params, layout)?,
-            BytecodeBlock::compile_statements(statements, StatementValue::Store, layout)?,
+            BytecodeBlock::compile_function_statements(
+                statements,
+                kind,
+                parameter_prologue_count,
+                layout,
+            )?,
             BytecodeHoistPlan::compile(statements, layout)?,
             collected.bindings,
             collected.uses_arguments,
@@ -120,7 +130,8 @@ fn function_compile_spec<'a>(
             name,
             params,
             body,
-            is_async,
+            parameter_prologue_count,
+            kind,
         } => Ok(FunctionCompileSpec {
             id: *id,
             name: name
@@ -130,23 +141,26 @@ fn function_compile_spec<'a>(
             self_binding: name.clone(),
             params,
             body,
-            constructable: !*is_async,
-            is_async: *is_async,
+            parameter_prologue_count: *parameter_prologue_count,
+            constructable: kind.is_constructable(),
+            kind: *kind,
             new_target_mode: BytecodeNewTargetMode::Own,
         }),
         Expr::ArrowFunction {
             id,
             params,
             body,
-            is_async,
+            parameter_prologue_count,
+            kind,
         } => Ok(FunctionCompileSpec {
             id: *id,
             name: inferred_name.cloned(),
             self_binding: None,
             params,
             body,
+            parameter_prologue_count: *parameter_prologue_count,
             constructable: false,
-            is_async: *is_async,
+            kind: *kind,
             new_target_mode: BytecodeNewTargetMode::Lexical,
         }),
         Expr::MethodFunction {
@@ -154,15 +168,17 @@ fn function_compile_spec<'a>(
             name,
             params,
             body,
-            is_async,
+            parameter_prologue_count,
+            kind,
         } => Ok(FunctionCompileSpec {
             id: *id,
             name: name.clone(),
             self_binding: None,
             params,
             body,
+            parameter_prologue_count: *parameter_prologue_count,
             constructable: false,
-            is_async: *is_async,
+            kind: *kind,
             new_target_mode: BytecodeNewTargetMode::Own,
         }),
         _ => Err(Error::runtime("expected function expression")),
@@ -389,6 +405,11 @@ impl CaptureBindingCollector {
             | Expr::Update { expr, .. }
             | Expr::Await(expr) => {
                 self.collect_expr(expr);
+            }
+            Expr::Yield { expr, .. } => {
+                if let Some(expr) = expr {
+                    self.collect_expr(expr);
+                }
             }
             Expr::Binary { left, right, .. } => {
                 self.collect_expr(left);

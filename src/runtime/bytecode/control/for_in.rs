@@ -111,7 +111,7 @@ impl Context {
             );
             if body_result
                 .as_ref()
-                .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
+                .is_ok_and(Completion::suspends_execution)
             {
                 let completion = body_result?;
                 self.park_bytecode_control(handle, control)?;
@@ -177,7 +177,7 @@ impl Context {
                 BytecodeControlStateSlot::Body,
                 |context, body_state| context.eval_bytecode_block_with_state(body, body_state),
             )?;
-            if matches!(completion, Completion::Suspended(_)) {
+            if completion.suspends_execution() {
                 self.park_bytecode_control(handle, control)?;
                 return Ok(completion);
             }

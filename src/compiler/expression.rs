@@ -72,6 +72,16 @@ impl BytecodeCompiler<'_> {
                 self.compile_expr(expr)?;
                 self.emit(BytecodeInstruction::Await);
             }
+            Expr::Yield { expr, delegate } => {
+                if let Some(expr) = expr {
+                    self.compile_expr(expr)?;
+                } else {
+                    self.emit(BytecodeInstruction::PushUndefined);
+                }
+                self.emit(BytecodeInstruction::Yield {
+                    delegate: *delegate,
+                });
+            }
             Expr::Unary { op, expr } => return self.compile_unary_expr(*op, expr),
             Expr::Binary {
                 op,

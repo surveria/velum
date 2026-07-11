@@ -83,7 +83,7 @@ pub(super) enum BytecodeControlRecord {
 }
 
 impl BytecodeControlRecord {
-    pub(super) fn resume_await(&mut self, completion: Completion) -> Result<bool> {
+    pub(super) fn resume_suspension(&mut self, completion: Completion) -> Result<bool> {
         let state = match self {
             Self::Loop {
                 phase,
@@ -111,10 +111,10 @@ impl BytecodeControlRecord {
                 BytecodeTryPhase::Finally => finally_state,
             },
         };
-        if !state.is_awaiting() {
+        if !state.is_awaiting() && !state.is_generator_starting() && !state.is_yielding() {
             return Ok(false);
         }
-        state.resume_await(completion)?;
+        state.resume_suspension(completion)?;
         Ok(true)
     }
 
@@ -563,6 +563,7 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         | Completion::Throw(value)
         | Completion::Return(value)
         | Completion::Break { value, .. } => Some(value),
-        Completion::Continue(_) | Completion::Suspended(_) => None,
+        Completion::Yielded(value) => Some(value),
+        Completion::Continue(_) | Completion::Suspended(_) | Completion::GeneratorStart => None,
     }
 }

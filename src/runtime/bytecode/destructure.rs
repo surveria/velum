@@ -61,7 +61,7 @@ impl Context {
                 state.pc = next;
                 Ok(None)
             }
-            DestructureOutcome::Abrupt(completion @ Completion::Suspended(_)) => {
+            DestructureOutcome::Abrupt(completion) if completion.suspends_execution() => {
                 Ok(Some(completion))
             }
             DestructureOutcome::Abrupt(completion) => {
@@ -97,7 +97,7 @@ impl Context {
             let Some(completion) = abrupt else {
                 continue;
             };
-            if matches!(completion, Completion::Suspended(_)) {
+            if completion.suspends_execution() {
                 state.store_destructure_continuation(continuation)?;
                 return Ok(DestructureOutcome::Abrupt(completion));
             }
@@ -566,9 +566,10 @@ impl Context {
     fn eval_pattern_block(&mut self, block: &BytecodeBlock) -> Result<PatternStep<Value>> {
         match self.eval_bytecode_block(block)? {
             Completion::Normal(value) => Ok(PatternStep::Value(value)),
-            completion @ (Completion::Throw(_) | Completion::Suspended(_)) => {
-                Ok(PatternStep::Abrupt(completion))
-            }
+            completion @ (Completion::Throw(_)
+            | Completion::Suspended(_)
+            | Completion::GeneratorStart
+            | Completion::Yielded(_)) => Ok(PatternStep::Abrupt(completion)),
             completion @ (Completion::Return(_)
             | Completion::Break { .. }
             | Completion::Continue(_)) => completion.into_result().map(PatternStep::Value),
@@ -632,7 +633,7 @@ impl Context {
                     DestructureOutcome::Completed => {
                         *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Body;
                     }
-                    DestructureOutcome::Abrupt(completion @ Completion::Suspended(_)) => {
+                    DestructureOutcome::Abrupt(completion) if completion.suspends_execution() => {
                         self.park_bytecode_control(handle, control)?;
                         return Ok(completion);
                     }
@@ -649,7 +650,7 @@ impl Context {
             );
             if body_result
                 .as_ref()
-                .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
+                .is_ok_and(Completion::suspends_execution)
             {
                 let completion = body_result?;
                 self.park_bytecode_control(handle, control)?;
@@ -719,7 +720,7 @@ impl Context {
                     DestructureOutcome::Completed => {
                         *control.for_in_state_mut()?.0 = BytecodeLoopPhase::Body;
                     }
-                    DestructureOutcome::Abrupt(completion @ Completion::Suspended(_)) => {
+                    DestructureOutcome::Abrupt(completion) if completion.suspends_execution() => {
                         self.park_bytecode_control(handle, control)?;
                         return Ok(completion);
                     }
@@ -737,7 +738,7 @@ impl Context {
             );
             if body_result
                 .as_ref()
-                .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
+                .is_ok_and(Completion::suspends_execution)
             {
                 let completion = body_result?;
                 self.park_bytecode_control(handle, control)?;

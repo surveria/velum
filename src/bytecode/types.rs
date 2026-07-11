@@ -6,8 +6,8 @@ use crate::{
     bytecode::BytecodeHoistPlan,
     error::{Error, Result},
     syntax::{
-        AccessorKind, BinaryOp, DeclKind, StaticBinding, StaticCallSiteId, StaticFunctionId,
-        StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
+        AccessorKind, BinaryOp, DeclKind, FunctionKind, StaticBinding, StaticCallSiteId,
+        StaticFunctionId, StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
     },
     value::Value,
 };
@@ -172,7 +172,7 @@ pub struct BytecodeFunctionDeclaration {
     id: StaticFunctionId,
     function_name: StaticName,
     bytecode: BytecodeFunction,
-    is_async: bool,
+    kind: FunctionKind,
 }
 
 impl BytecodeFunctionDeclaration {
@@ -181,14 +181,14 @@ impl BytecodeFunctionDeclaration {
         id: StaticFunctionId,
         function_name: StaticName,
         bytecode: BytecodeFunction,
-        is_async: bool,
+        kind: FunctionKind,
     ) -> Self {
         Self {
             name,
             id,
             function_name,
             bytecode,
-            is_async,
+            kind,
         }
     }
 
@@ -208,8 +208,8 @@ impl BytecodeFunctionDeclaration {
         &self.bytecode
     }
 
-    pub const fn is_async(&self) -> bool {
-        self.is_async
+    pub const fn kind(&self) -> FunctionKind {
+        self.kind
     }
 }
 
@@ -516,6 +516,10 @@ pub enum BytecodeInstruction {
     Unary(UnaryOp),
     NumberUnary(BytecodeNumericUnaryOp),
     Await,
+    GeneratorStart,
+    Yield {
+        delegate: bool,
+    },
     NullishCoalescing {
         right: BytecodeBlock,
     },
@@ -639,7 +643,7 @@ pub enum BytecodeInstruction {
         name: Option<StaticName>,
         bytecode: BytecodeFunction,
         constructable: bool,
-        is_async: bool,
+        kind: FunctionKind,
         new_target_mode: BytecodeNewTargetMode,
     },
     ArrayLiteral {

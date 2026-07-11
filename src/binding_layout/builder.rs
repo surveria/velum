@@ -535,6 +535,12 @@ impl LayoutBuilder {
             | Expr::Unary { expr, .. }
             | Expr::Await(expr)
             | Expr::Update { expr, .. } => self.analyze_expr(expr, scope, function),
+            Expr::Yield { expr, .. } => {
+                if let Some(expr) = expr {
+                    self.analyze_expr(expr, scope, function)?;
+                }
+                Ok(())
+            }
             Expr::Binary { left, right, .. } => {
                 self.analyze_expr(left, scope, function)?;
                 self.analyze_expr(right, scope, function)

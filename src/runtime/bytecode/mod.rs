@@ -64,6 +64,8 @@ impl Context {
             | BytecodeInstruction::Unary(_)
             | BytecodeInstruction::NumberUnary(_)
             | BytecodeInstruction::Await
+            | BytecodeInstruction::GeneratorStart
+            | BytecodeInstruction::Yield { .. }
             | BytecodeInstruction::NullishCoalescing { .. }
             | BytecodeInstruction::TypeOfBinding(_)
             | BytecodeInstruction::TypeOfValue => {
@@ -219,6 +221,14 @@ impl Context {
                 self.eval_bytecode_unary_instruction(state, instruction, next)
             }
             BytecodeInstruction::Await => self.eval_bytecode_await_instruction(state, next),
+            BytecodeInstruction::GeneratorStart => {
+                state.pc = next;
+                state.mark_generator_start_suspended();
+                Ok(Some(Completion::GeneratorStart))
+            }
+            BytecodeInstruction::Yield { delegate } => {
+                self.eval_bytecode_yield_instruction(state, next, *delegate)
+            }
             BytecodeInstruction::NullishCoalescing { right } => {
                 self.eval_bytecode_nullish_coalescing(state, right, next)
             }
@@ -260,8 +270,25 @@ impl Context {
             }
             completion @ (Completion::Return(_)
             | Completion::Break { .. }
-            | Completion::Continue(_)) => completion.into_result().map(|_| None),
+            | Completion::Continue(_)
+            | Completion::GeneratorStart
+            | Completion::Yielded(_)) => completion.into_result().map(|_| None),
         }
+    }
+
+    fn eval_bytecode_yield_instruction(
+        &mut self,
+        state: &mut BytecodeState,
+        next: BytecodeAddress,
+        delegate: bool,
+    ) -> Result<Option<Completion>> {
+        if delegate {
+            return Err(Error::runtime("yield delegation is not implemented yet"));
+        }
+        let value = state.stack.pop()?;
+        state.pc = next;
+        state.mark_yield_suspended();
+        Ok(Some(Completion::Yielded(value)))
     }
 
     fn eval_bytecode_nullish_coalescing(
@@ -277,7 +304,10 @@ impl Context {
                     state.stack.pop()?;
                     state.stack.push(value);
                 }
-                completion @ (Completion::Throw(_) | Completion::Suspended(_)) => {
+                completion @ (Completion::Throw(_)
+                | Completion::Suspended(_)
+                | Completion::GeneratorStart
+                | Completion::Yielded(_)) => {
                     return Ok(Some(completion));
                 }
                 completion @ (Completion::Return(_)

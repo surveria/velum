@@ -30,13 +30,14 @@ impl ParsedParameters {
     pub(super) fn apply_prologue(
         self,
         mut body: Vec<Statement>,
-    ) -> (Vec<FunctionParam>, Vec<Statement>) {
+    ) -> (Vec<FunctionParam>, Vec<Statement>, usize) {
+        let prologue_count = self.pattern_prologue.len();
         if self.pattern_prologue.is_empty() {
-            return (self.params, body);
+            return (self.params, body, 0);
         }
         let mut statements = self.pattern_prologue;
         statements.append(&mut body);
-        (self.params, statements)
+        (self.params, statements, prologue_count)
     }
 }
 

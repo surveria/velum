@@ -301,7 +301,8 @@ impl Parser {
             body.contains_use_strict,
         )?;
         let id = self.static_function()?;
-        let (params, statements) = parameters.apply_prologue(body.statements);
+        let (params, statements, _parameter_prologue_count) =
+            parameters.apply_prologue(body.statements);
         Ok(ParsedClassFunction {
             id,
             params: params.into(),

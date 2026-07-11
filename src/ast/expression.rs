@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    syntax::{BinaryOp, UnaryOp, UpdateOp},
+    syntax::{BinaryOp, FunctionKind, UnaryOp, UpdateOp},
     value::Value,
 };
 
@@ -67,6 +67,10 @@ pub enum Expr {
         expr: Box<Expression>,
     },
     Await(Box<Expression>),
+    Yield {
+        expr: Option<Box<Expression>>,
+        delegate: bool,
+    },
     Update {
         op: UpdateOp,
         prefix: bool,
@@ -134,20 +138,23 @@ pub enum Expr {
         name: Option<StaticBinding>,
         params: Rc<[FunctionParam]>,
         body: Rc<[Statement]>,
-        is_async: bool,
+        parameter_prologue_count: usize,
+        kind: FunctionKind,
     },
     ArrowFunction {
         id: StaticFunctionId,
         params: Rc<[FunctionParam]>,
         body: Rc<[Statement]>,
-        is_async: bool,
+        parameter_prologue_count: usize,
+        kind: FunctionKind,
     },
     MethodFunction {
         id: StaticFunctionId,
         name: Option<StaticName>,
         params: Rc<[FunctionParam]>,
         body: Rc<[Statement]>,
-        is_async: bool,
+        parameter_prologue_count: usize,
+        kind: FunctionKind,
     },
     Object(Vec<ObjectProperty>),
     ArrayHole,

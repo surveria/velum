@@ -374,7 +374,7 @@ impl Context {
         )
     }
 
-    pub(in crate::runtime::native) fn create_native_function(
+    pub(in crate::runtime) fn create_native_function(
         &mut self,
         kind: NativeFunctionKind,
         prototype: Value,

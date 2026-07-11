@@ -17,6 +17,13 @@ pub(in crate::runtime) enum BytecodeOutcome {
         awaited: crate::runtime::promise::PromiseId,
         span: Option<SourceSpan>,
     },
+    Yielded {
+        value: Value,
+        span: Option<SourceSpan>,
+    },
+    GeneratorStart {
+        span: Option<SourceSpan>,
+    },
 }
 
 impl BytecodeOutcome {
@@ -24,12 +31,17 @@ impl BytecodeOutcome {
         match self {
             Self::Completed { completion, .. } => completion,
             Self::Suspended { awaited, .. } => Completion::Suspended(awaited),
+            Self::Yielded { value, .. } => Completion::Yielded(value),
+            Self::GeneratorStart { .. } => Completion::GeneratorStart,
         }
     }
 
     pub(in crate::runtime) const fn span(&self) -> Option<SourceSpan> {
         match self {
-            Self::Completed { span, .. } | Self::Suspended { span, .. } => *span,
+            Self::Completed { span, .. }
+            | Self::Suspended { span, .. }
+            | Self::Yielded { span, .. }
+            | Self::GeneratorStart { span } => *span,
         }
     }
 
@@ -44,7 +56,10 @@ impl BytecodeOutcome {
     }
 
     pub(in crate::runtime) const fn is_suspended(&self) -> bool {
-        matches!(self, Self::Suspended { .. })
+        matches!(
+            self,
+            Self::Suspended { .. } | Self::Yielded { .. } | Self::GeneratorStart { .. }
+        )
     }
 }
 
@@ -132,7 +147,7 @@ impl Context {
                     .and_then(Option::as_mut)
                     .ok_or_else(|| Error::runtime("suspended bytecode continuation disappeared"))?;
                 if let Some(completion) = resume.take() {
-                    continuation.resume_await(completion)?;
+                    continuation.resume_suspension(completion)?;
                 }
                 let program_function = continuation.function_id();
                 let block = continuation.program_block();
@@ -254,6 +269,21 @@ impl Context {
                             awaited,
                             span: Some(span),
                         }
+                    }
+                    Completion::Yielded(value) => {
+                        if !state.is_suspended() {
+                            state.mark_child_suspended();
+                        }
+                        BytecodeOutcome::Yielded {
+                            value,
+                            span: Some(span),
+                        }
+                    }
+                    Completion::GeneratorStart => {
+                        if !state.is_suspended() {
+                            state.mark_child_suspended();
+                        }
+                        BytecodeOutcome::GeneratorStart { span: Some(span) }
                     }
                     completion => BytecodeOutcome::Completed {
                         completion,

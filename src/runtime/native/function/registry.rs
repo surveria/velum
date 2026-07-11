@@ -210,7 +210,10 @@ const REGEXP_SYMBOL_MATCH_ALL_SLOT: NativeFunctionSlot = NativeFunctionSlot::new
 const SYMBOL_FOR_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(202);
 const SYMBOL_KEY_FOR_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(203);
 const FUNCTION_PROTOTYPE_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(204);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 205;
+const GENERATOR_NEXT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(205);
+const GENERATOR_RETURN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(206);
+const GENERATOR_THROW_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(207);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 208;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -335,6 +338,9 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::ErrorConstructor(name) => Some(error_constructor_slot(name)),
         NativeFunctionKind::ErrorPrototypeToString => Some(ERROR_PROTOTYPE_TO_STRING_SLOT),
         NativeFunctionKind::Function => Some(FUNCTION_SLOT),
+        NativeFunctionKind::GeneratorNext => Some(GENERATOR_NEXT_SLOT),
+        NativeFunctionKind::GeneratorReturn => Some(GENERATOR_RETURN_SLOT),
+        NativeFunctionKind::GeneratorThrow => Some(GENERATOR_THROW_SLOT),
         NativeFunctionKind::JsonIsRawJson => Some(JSON_IS_RAW_JSON_SLOT),
         NativeFunctionKind::JsonParse => Some(JSON_PARSE_SLOT),
         NativeFunctionKind::JsonRawJson => Some(JSON_RAW_JSON_SLOT),

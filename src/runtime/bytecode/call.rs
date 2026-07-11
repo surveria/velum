@@ -274,7 +274,7 @@ impl Context {
                 name,
                 bytecode,
                 constructable,
-                is_async,
+                kind,
                 new_target_mode,
             } => {
                 let function = self.create_bytecode_function(&BytecodeFunctionInit {
@@ -282,7 +282,7 @@ impl Context {
                     name: name.as_ref(),
                     bytecode,
                     constructable: *constructable,
-                    is_async: *is_async,
+                    kind: *kind,
                     class_constructor: false,
                     prototype_parent: None,
                     new_target_mode: *new_target_mode,

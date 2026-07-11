@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::syntax::DeclKind;
 
 use super::{
-    AstNode, BindingPattern, ClassLiteral, Expression, FunctionParam, StaticBinding,
+    AstNode, BindingPattern, ClassLiteral, Expression, FunctionKind, FunctionParam, StaticBinding,
     StaticFunctionId, StaticName,
 };
 
@@ -70,7 +70,8 @@ pub enum Stmt {
         id: StaticFunctionId,
         params: Rc<[FunctionParam]>,
         body: Rc<[Statement]>,
-        is_async: bool,
+        parameter_prologue_count: usize,
+        kind: FunctionKind,
     },
     VarDecl {
         name: StaticBinding,
