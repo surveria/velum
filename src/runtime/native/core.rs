@@ -176,6 +176,9 @@ impl Context {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
             NativeFunctionKind::ArrayBuffer => self.construct_array_buffer(args),
             NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
+            NativeFunctionKind::AsyncGeneratorFunction => {
+                self.eval_async_generator_function_constructor(args)
+            }
             NativeFunctionKind::Function => self.eval_function_constructor(args),
             NativeFunctionKind::RegExp => self.construct_regexp_object(args),
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),

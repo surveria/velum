@@ -131,6 +131,16 @@ impl Context {
             )?;
             return Ok(Value::Object(prototype_id));
         }
+        if init.kind.is_async_generator() {
+            let constructor_key = self.object_constructor_property_key()?;
+            let generator_prototype = self.async_generator_prototype_id()?;
+            return self.objects.create_with_prototype(
+                Some(generator_prototype),
+                constructor_key,
+                self.limits.max_objects,
+                self.limits.max_object_properties,
+            );
+        }
         if init.kind.is_generator() {
             let constructor_key = self.object_constructor_property_key()?;
             let generator_prototype = self.generator_prototype_id()?;
@@ -284,6 +294,22 @@ impl Context {
     ) -> Result<Completion> {
         self.reject_class_constructor_call(id)?;
         let new_target = self.function_direct_call_new_target(id)?;
+        if self.function(id)?.kind.is_async_generator() {
+            let completion = self.eval_generator_function_completion_with_this_and_new_target(
+                id, args, this_value, new_target,
+            )?;
+            return match completion {
+                Completion::GeneratorStart => {
+                    let execution = self.detach_function_execution(id)?;
+                    self.create_generator_object(id, execution)
+                        .map(Completion::Normal)
+                }
+                completion @ Completion::Throw(_) => Ok(completion),
+                completion => Err(Error::runtime(format!(
+                    "async generator initialization produced invalid completion {completion:?}"
+                ))),
+            };
+        }
         if self.function(id)?.kind.is_async() {
             let value = self.eval_async_function_with_this(id, args, this_value, new_target)?;
             return Ok(Completion::Normal(value));
@@ -660,7 +686,10 @@ impl Context {
         id: NativeFunctionId,
     ) -> Result<Value> {
         let kind = self.native_function(id)?.kind();
-        if kind == NativeFunctionKind::AsyncFunction {
+        if matches!(
+            kind,
+            NativeFunctionKind::AsyncFunction | NativeFunctionKind::AsyncGeneratorFunction
+        ) {
             return self.function_constructor_value();
         }
         self.function_constructor_prototype_value()

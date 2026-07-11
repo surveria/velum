@@ -146,8 +146,8 @@ impl BytecodeState {
                 "bytecode state is not awaiting a resume completion",
             ));
         }
-        let delegates = self.is_yielding() && self.has_yield_delegate();
-        let permits_abrupt = self.is_yielding() || self.is_generator_starting();
+        let delegates = self.has_yield_delegate();
+        let permits_abrupt = self.is_yielding() || delegates || self.is_generator_starting();
         let discards_normal = self.is_generator_starting();
         let (value, resume_completion) = match completion {
             completion if delegates => (None, Some(completion)),

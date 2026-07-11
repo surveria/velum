@@ -996,7 +996,7 @@ check_named_function_binding_boundary() {
     'if init.bytecode.self_binding().is_some() {' \
     'usize::from(function.self_binding.is_some()).saturating_mul(2)' \
     'self.set_generated_function_name(id, GENERATED_FUNCTION_NAME)?;' \
-    'function_source(params, body, is_async, None)' \
+    'function_source(params, body, kind, None)' \
     'pub(crate) fn compile_eval(' \
     'strict_write: bool,'; do
     if ! grep -R -q -F --include='*.rs' "${source}" "${repo_root}/src"; then
@@ -1710,6 +1710,9 @@ well_known_properties
 iterator_symbol
 generator_prototype
 generator_function_prototype
+async_iterator_prototype
+async_generator_prototype
+async_generator_function_prototype
 descriptor_property_keys
 static_name_atom_caches
 static_binding_caches

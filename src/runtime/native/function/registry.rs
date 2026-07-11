@@ -213,7 +213,11 @@ const FUNCTION_PROTOTYPE_TO_STRING_SLOT: NativeFunctionSlot = NativeFunctionSlot
 const GENERATOR_NEXT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(205);
 const GENERATOR_RETURN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(206);
 const GENERATOR_THROW_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(207);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 208;
+const ASYNC_GENERATOR_NEXT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(208);
+const ASYNC_GENERATOR_RETURN_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(209);
+const ASYNC_GENERATOR_THROW_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(210);
+const ASYNC_GENERATOR_FUNCTION_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(211);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 212;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -336,6 +340,10 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
 
     match kind {
         NativeFunctionKind::AsyncFunction => Some(ASYNC_FUNCTION_SLOT),
+        NativeFunctionKind::AsyncGeneratorFunction => Some(ASYNC_GENERATOR_FUNCTION_SLOT),
+        NativeFunctionKind::AsyncGeneratorNext => Some(ASYNC_GENERATOR_NEXT_SLOT),
+        NativeFunctionKind::AsyncGeneratorReturn => Some(ASYNC_GENERATOR_RETURN_SLOT),
+        NativeFunctionKind::AsyncGeneratorThrow => Some(ASYNC_GENERATOR_THROW_SLOT),
         NativeFunctionKind::Boolean => Some(BOOLEAN_SLOT),
         NativeFunctionKind::Eval => Some(EVAL_SLOT),
         NativeFunctionKind::ErrorConstructor(name) => Some(error_constructor_slot(name)),

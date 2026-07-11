@@ -472,9 +472,15 @@ impl Context {
         if let Some(result) = self.eval_regexp_native_function_kind(kind, args, this_value) {
             return result;
         }
+        if let Some(result) = self.eval_generator_native_function_kind(kind, args, this_value) {
+            return result;
+        }
         match kind {
             NativeFunctionKind::ArrayBuffer => self.construct_array_buffer(args),
             NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
+            NativeFunctionKind::AsyncGeneratorFunction => {
+                self.eval_async_generator_function_constructor(args)
+            }
             NativeFunctionKind::Boolean => self.eval_boolean_constructor(args),
             NativeFunctionKind::BoundFunction(id) => self.eval_bound_function(id, args),
             NativeFunctionKind::Eval => self.eval_eval_function(args),
@@ -498,21 +504,6 @@ impl Context {
             NativeFunctionKind::FunctionPrototypeToString => {
                 self.eval_function_prototype_to_string(args, this_value)
             }
-            NativeFunctionKind::GeneratorNext => self.eval_generator_resume(
-                args,
-                this_value,
-                crate::runtime::generator::GeneratorResumeKind::Next,
-            ),
-            NativeFunctionKind::GeneratorReturn => self.eval_generator_resume(
-                args,
-                this_value,
-                crate::runtime::generator::GeneratorResumeKind::Return,
-            ),
-            NativeFunctionKind::GeneratorThrow => self.eval_generator_resume(
-                args,
-                this_value,
-                crate::runtime::generator::GeneratorResumeKind::Throw,
-            ),
             NativeFunctionKind::ThrowTypeError => {
                 Err(Error::type_error("restricted function property access"))
             }
@@ -552,6 +543,26 @@ impl Context {
                         })
                 }),
         }
+    }
+
+    fn eval_generator_native_function_kind(
+        &mut self,
+        kind: NativeFunctionKind,
+        args: RuntimeCallArgs<'_>,
+        this_value: &Value,
+    ) -> Option<Result<Value>> {
+        use crate::runtime::generator::GeneratorResumeKind;
+
+        let (resume, asynchronous) = match kind {
+            NativeFunctionKind::GeneratorNext => (GeneratorResumeKind::Next, false),
+            NativeFunctionKind::GeneratorReturn => (GeneratorResumeKind::Return, false),
+            NativeFunctionKind::GeneratorThrow => (GeneratorResumeKind::Throw, false),
+            NativeFunctionKind::AsyncGeneratorNext => (GeneratorResumeKind::Next, true),
+            NativeFunctionKind::AsyncGeneratorReturn => (GeneratorResumeKind::Return, true),
+            NativeFunctionKind::AsyncGeneratorThrow => (GeneratorResumeKind::Throw, true),
+            _ => return None,
+        };
+        Some(self.eval_generator_resume(args, this_value, resume, asynchronous))
     }
 
     fn eval_object_native_function_kind(

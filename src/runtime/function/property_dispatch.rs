@@ -71,6 +71,9 @@ impl Context {
 
     pub(crate) fn function_object_prototype_value(&mut self, id: FunctionId) -> Result<Value> {
         let kind = self.function(id)?.kind;
+        if kind.is_async_generator() {
+            return self.async_generator_function_prototype_value();
+        }
         if kind.is_async() {
             return self.async_function_constructor_prototype_value();
         }

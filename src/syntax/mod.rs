@@ -70,6 +70,10 @@ pub enum FunctionKind {
 }
 
 impl FunctionKind {
+    pub const fn is_async_generator(self) -> bool {
+        matches!(self, Self::AsyncGenerator)
+    }
+
     pub const fn is_async(self) -> bool {
         matches!(self, Self::Async | Self::AsyncGenerator)
     }

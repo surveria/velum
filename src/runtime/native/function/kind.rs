@@ -13,8 +13,10 @@ pub(in crate::runtime::native) use regexp::{
 
 const ARRAY_BUFFER_FUNCTION_LENGTH: f64 = 1.0;
 const ASYNC_FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
+const ASYNC_GENERATOR_FUNCTION_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const ARRAY_BUFFER_NAME: &str = "ArrayBuffer";
 pub(in crate::runtime::native) const ASYNC_FUNCTION_NAME: &str = "AsyncFunction";
+pub(in crate::runtime::native) const ASYNC_GENERATOR_FUNCTION_NAME: &str = "AsyncGeneratorFunction";
 const BOOLEAN_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const BOOLEAN_NAME: &str = "Boolean";
 const EVAL_FUNCTION_LENGTH: f64 = 1.0;
@@ -255,6 +257,10 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ArrayValues,
     ArrayBuffer,
     AsyncFunction,
+    AsyncGeneratorFunction,
+    AsyncGeneratorNext,
+    AsyncGeneratorReturn,
+    AsyncGeneratorThrow,
     Boolean,
     BooleanPrototypeToString,
     BooleanPrototypeValueOf,
@@ -493,6 +499,7 @@ impl NativeFunctionKind {
             self,
             Self::Array
                 | Self::AsyncFunction
+                | Self::AsyncGeneratorFunction
                 | Self::Boolean
                 | Self::ErrorConstructor(_)
                 | Self::Function
@@ -558,6 +565,7 @@ impl NativeFunctionKind {
             Self::ArrayBuffer => Some(ARRAY_BUFFER_FUNCTION_LENGTH),
             Self::Uint8Array => Some(UINT8_ARRAY_FUNCTION_LENGTH),
             Self::AsyncFunction => Some(ASYNC_FUNCTION_FUNCTION_LENGTH),
+            Self::AsyncGeneratorFunction => Some(ASYNC_GENERATOR_FUNCTION_FUNCTION_LENGTH),
             Self::Boolean => Some(BOOLEAN_FUNCTION_LENGTH),
             Self::BoundFunction(_) => Some(BOUND_FUNCTION_LENGTH),
             Self::Eval => Some(EVAL_FUNCTION_LENGTH),
@@ -569,7 +577,12 @@ impl NativeFunctionKind {
             Self::FunctionPrototypeApply => Some(FUNCTION_PROTOTYPE_APPLY_LENGTH),
             Self::FunctionPrototypeHasInstance => Some(FUNCTION_PROTOTYPE_HAS_INSTANCE_LENGTH),
             Self::FunctionPrototypeToString => Some(FUNCTION_PROTOTYPE_TO_STRING_LENGTH),
-            Self::GeneratorNext | Self::GeneratorReturn | Self::GeneratorThrow => Some(1.0),
+            Self::AsyncGeneratorNext
+            | Self::AsyncGeneratorReturn
+            | Self::AsyncGeneratorThrow
+            | Self::GeneratorNext
+            | Self::GeneratorReturn
+            | Self::GeneratorThrow => Some(1.0),
             Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_FUNCTION_LENGTH),
             Self::JsonParse => Some(JSON_PARSE_FUNCTION_LENGTH),
             Self::JsonRawJson => Some(JSON_RAW_JSON_FUNCTION_LENGTH),
@@ -676,6 +689,10 @@ impl NativeFunctionKind {
     const fn core_name(self) -> Option<&'static str> {
         match self {
             Self::AsyncFunction => Some(ASYNC_FUNCTION_NAME),
+            Self::AsyncGeneratorFunction => Some(ASYNC_GENERATOR_FUNCTION_NAME),
+            Self::AsyncGeneratorNext | Self::GeneratorNext => Some("next"),
+            Self::AsyncGeneratorReturn | Self::GeneratorReturn => Some("return"),
+            Self::AsyncGeneratorThrow | Self::GeneratorThrow => Some("throw"),
             Self::ArrayBuffer => Some(ARRAY_BUFFER_NAME),
             Self::Boolean => Some(BOOLEAN_NAME),
             Self::BoundFunction(_) => Some(BOUND_FUNCTION_NAME),
@@ -688,9 +705,6 @@ impl NativeFunctionKind {
             Self::FunctionPrototypeApply => Some(FUNCTION_PROTOTYPE_APPLY_NAME),
             Self::FunctionPrototypeHasInstance => Some(FUNCTION_PROTOTYPE_HAS_INSTANCE_NAME),
             Self::FunctionPrototypeToString => Some(FUNCTION_PROTOTYPE_TO_STRING_NAME),
-            Self::GeneratorNext => Some("next"),
-            Self::GeneratorReturn => Some("return"),
-            Self::GeneratorThrow => Some("throw"),
             Self::ThrowTypeError => Some(""),
             Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_NAME),
             Self::JsonParse => Some(JSON_PARSE_NAME),

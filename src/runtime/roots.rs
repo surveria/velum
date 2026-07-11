@@ -224,6 +224,15 @@ impl Context {
         if let Some(id) = self.generator_function_prototype {
             visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
         }
+        if let Some(id) = self.async_iterator_prototype {
+            visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
+        }
+        if let Some(id) = self.async_generator_prototype {
+            visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
+        }
+        if let Some(id) = self.async_generator_function_prototype {
+            visitor.visit_value(VmRootKind::RuntimeAnchor, &Value::Object(id))?;
+        }
         if let Some(symbol) = self.iterator_symbol {
             visitor.visit_property_key(VmRootKind::RuntimeAnchor, PropertyKey::symbol(symbol))?;
         }

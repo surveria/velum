@@ -58,11 +58,17 @@ pub(in crate::runtime) enum IteratorStep {
 #[derive(Debug)]
 pub(in crate::runtime) struct YieldDelegateContinuation {
     source: IteratorSource,
+    asynchronous: bool,
+    pending: Option<YieldDelegateDone>,
 }
 
 impl YieldDelegateContinuation {
-    pub(in crate::runtime) const fn new(source: IteratorSource) -> Self {
-        Self { source }
+    pub(in crate::runtime) const fn new(source: IteratorSource, asynchronous: bool) -> Self {
+        Self {
+            source,
+            asynchronous,
+            pending: None,
+        }
     }
 
     pub(in crate::runtime) fn root_values(&self) -> impl Iterator<Item = &Value> {
@@ -72,6 +78,7 @@ impl YieldDelegateContinuation {
 
 /// One externally observable step of the `yield*` delegation loop.
 pub(in crate::runtime) enum YieldDelegateStep {
+    Await(crate::runtime::promise::PromiseId),
     Yielded(Value),
     YieldedIteratorResult(Value),
     Complete(Value),
@@ -135,6 +142,19 @@ impl Context {
             }
             Value::Undefined | Value::Null => Err(not_iterable_error(&iterable)),
         }
+    }
+
+    pub(in crate::runtime) fn get_async_iterator(
+        &mut self,
+        iterable: Value,
+    ) -> Result<IteratorSource> {
+        if let Some(method) = self.async_iterator_method(&iterable)? {
+            return self.get_iterator_from_method(&iterable, &method);
+        }
+        if let Some(method) = self.iterator_method(&iterable)? {
+            return self.get_iterator_from_method(&iterable, &method);
+        }
+        self.get_iterator(iterable)
     }
 
     /// ECMAScript `GetIteratorFromMethod`, shared by ordinary iterable
@@ -240,6 +260,9 @@ impl Context {
             VmRootKind::TransientTemporary,
             resume.as_ref().and_then(completion_value),
         )?;
+        if continuation.asynchronous {
+            return self.async_yield_delegate_step(continuation, resume);
+        }
         match resume {
             None => self.yield_delegate_next(&mut continuation.source, &Value::Undefined),
             Some(Completion::Normal(value)) => {
@@ -260,6 +283,100 @@ impl Context {
                 | Completion::YieldedIteratorResult(_),
             ) => Err(Error::runtime("invalid yield delegation resume completion")),
         }
+    }
+
+    fn async_yield_delegate_step(
+        &mut self,
+        continuation: &mut YieldDelegateContinuation,
+        resume: Option<Completion>,
+    ) -> Result<YieldDelegateStep> {
+        if let Some(done_kind) = continuation.pending.take() {
+            return match resume {
+                Some(Completion::Normal(result)) => {
+                    self.yield_delegate_result(&mut continuation.source, &result, done_kind)
+                }
+                Some(Completion::Throw(value)) => {
+                    set_protocol_done(&mut continuation.source);
+                    Ok(YieldDelegateStep::Abrupt(Completion::Throw(value)))
+                }
+                Some(completion) => Err(Error::runtime(format!(
+                    "invalid async yield delegation completion {completion:?}"
+                ))),
+                None => Err(Error::runtime(
+                    "async yield delegation Promise resumed without a completion",
+                )),
+            };
+        }
+
+        let (method, value, done_kind) = match resume {
+            None => (
+                Self::yield_delegate_next_method(&continuation.source)?,
+                Value::Undefined,
+                YieldDelegateDone::Normal,
+            ),
+            Some(Completion::Normal(value)) => (
+                Self::yield_delegate_next_method(&continuation.source)?,
+                value,
+                YieldDelegateDone::Normal,
+            ),
+            Some(Completion::Return(value)) => {
+                let Some(method) = self
+                    .yield_delegate_named_method(&continuation.source, ITERATOR_RETURN_PROPERTY)?
+                else {
+                    set_protocol_done(&mut continuation.source);
+                    return Ok(YieldDelegateStep::Return(value));
+                };
+                (method, value, YieldDelegateDone::Return)
+            }
+            Some(Completion::Throw(value)) => {
+                let Some(method) =
+                    self.yield_delegate_named_method(&continuation.source, "throw")?
+                else {
+                    set_protocol_done(&mut continuation.source);
+                    return Err(Error::type_error("delegated iterator has no throw method"));
+                };
+                (method, value, YieldDelegateDone::Normal)
+            }
+            Some(completion) => {
+                return Err(Error::runtime(format!(
+                    "invalid async yield delegation resume completion {completion:?}"
+                )));
+            }
+        };
+        let iterator = protocol_iterator(&continuation.source)?;
+        let result = match self.call(&method, &[value], iterator)? {
+            Completion::Normal(result) => result,
+            Completion::Throw(value) => {
+                set_protocol_done(&mut continuation.source);
+                return Ok(YieldDelegateStep::Abrupt(Completion::Throw(value)));
+            }
+            completion => return completion.into_result().map(YieldDelegateStep::Complete),
+        };
+        let Completion::Suspended(awaited) = self.eval_bytecode_await(result)? else {
+            return Err(Error::runtime(
+                "async yield delegation did not await an iterator result",
+            ));
+        };
+        continuation.pending = Some(done_kind);
+        Ok(YieldDelegateStep::Await(awaited))
+    }
+
+    fn yield_delegate_next_method(source: &IteratorSource) -> Result<Value> {
+        let IteratorSource::Protocol { next, .. } = source else {
+            return Err(Error::runtime(
+                "async yield delegation source is not protocol-based",
+            ));
+        };
+        Ok(next.clone())
+    }
+
+    fn yield_delegate_named_method(
+        &mut self,
+        source: &IteratorSource,
+        name: &str,
+    ) -> Result<Option<Value>> {
+        let iterator = protocol_iterator(source)?;
+        self.get_named_method(&iterator, name)
     }
 
     fn yield_delegate_next(
@@ -483,6 +600,19 @@ impl Context {
         self.get_method(iterable, key.lookup())
     }
 
+    fn async_iterator_method(&mut self, iterable: &Value) -> Result<Option<Value>> {
+        let constructor = self.symbol_constructor_value()?;
+        let symbol = self.get_named(&constructor, "asyncIterator")?;
+        let Value::Symbol(symbol) = symbol else {
+            return Err(Error::runtime("Symbol.asyncIterator is not initialized"));
+        };
+        let key = DynamicPropertyKey::new(
+            "[Symbol.asyncIterator]".to_owned(),
+            Some(PropertyKey::symbol(symbol.id())),
+        );
+        self.get_method(iterable, key.lookup())
+    }
+
     fn is_default_array_iterator_method(&self, method: &Value) -> Result<bool> {
         let Value::NativeFunction(id) = method else {
             return Ok(false);
@@ -531,6 +661,13 @@ fn protocol_iterator_to_close(source: &mut IteratorSource) -> Option<Value> {
     }
     *done = true;
     Some(iterator.clone())
+}
+
+fn protocol_iterator(source: &IteratorSource) -> Result<Value> {
+    let IteratorSource::Protocol { iterator, .. } = source else {
+        return Err(Error::runtime("iterator source is not protocol-based"));
+    };
+    Ok(iterator.clone())
 }
 
 const fn is_resource_limit(error: &Error) -> bool {

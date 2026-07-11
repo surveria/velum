@@ -436,7 +436,8 @@ impl Parser {
     fn arguments(&mut self) -> Result<Vec<Expression>> {
         let mut args = Vec::new();
         loop {
-            if self.match_kind(&TokenKind::DotDotDot) {
+            let spread = self.match_kind(&TokenKind::DotDotDot);
+            if spread {
                 let start = self.previous_span();
                 let expression = self.assignment_expression()?;
                 args.push(self.expression_node(start, Expr::Spread(Box::new(expression))));
@@ -444,6 +445,12 @@ impl Parser {
                 args.push(self.assignment_expression()?);
             }
             if !self.match_kind(&TokenKind::Comma) {
+                break;
+            }
+            if self.check(&TokenKind::RParen) {
+                if spread {
+                    return Err(self.parse_error("rest argument must not have a trailing comma"));
+                }
                 break;
             }
         }

@@ -7,6 +7,7 @@ impl NativeFunctionKind {
             Self::Array
                 | Self::ArrayBuffer
                 | Self::AsyncFunction
+                | Self::AsyncGeneratorFunction
                 | Self::Boolean
                 | Self::ErrorConstructor(_)
                 | Self::Function

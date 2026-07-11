@@ -183,12 +183,20 @@ impl Context {
             stored
         } else {
             let iterable = state.stack.pop()?;
-            (
-                YieldDelegateContinuation::new(self.get_iterator(iterable)?),
-                None,
-            )
+            let asynchronous = self.current_function_is_async_generator()?;
+            let source = if asynchronous {
+                self.get_async_iterator(iterable)?
+            } else {
+                self.get_iterator(iterable)?
+            };
+            (YieldDelegateContinuation::new(source, asynchronous), None)
         };
         match self.yield_delegate_step(&mut continuation, resume)? {
+            YieldDelegateStep::Await(awaited) => {
+                state.store_yield_delegate(continuation)?;
+                state.mark_await_suspended();
+                Ok(Some(Completion::Suspended(awaited)))
+            }
             YieldDelegateStep::Yielded(value) => {
                 state.store_yield_delegate(continuation)?;
                 state.mark_yield_suspended();
@@ -207,6 +215,16 @@ impl Context {
             YieldDelegateStep::Return(value) => Ok(Some(Completion::Return(value))),
             YieldDelegateStep::Abrupt(completion) => Ok(Some(completion)),
         }
+    }
+
+    fn current_function_is_async_generator(&self) -> Result<bool> {
+        let function = self
+            .activation_frames
+            .iter()
+            .rev()
+            .find_map(crate::runtime::activation::ActivationFrame::function_id)
+            .ok_or_else(|| Error::runtime("yield delegation function activation disappeared"))?;
+        Ok(self.function(function)?.kind.is_async_generator())
     }
 
     fn eval_bytecode_nullish_coalescing(
