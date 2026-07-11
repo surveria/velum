@@ -12,12 +12,12 @@ use crate::{
     value::Value,
 };
 
+use super::BytecodeDirectThrow;
 use super::block::BytecodeBlock;
 use super::numeric::{
     BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
     BytecodeNumericUnaryOp,
 };
-use super::{BytecodeCatchFastPath, BytecodeDirectThrow};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeProgram {
@@ -430,18 +430,6 @@ pub struct BytecodeCatch {
     pub param: Option<BytecodeBinding>,
     pub body: BytecodeBlock,
     pub body_scoped: bool,
-    pub body_fast_path: Option<BytecodeCatchFastPath>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct BytecodeTryFinallyFastPath {
-    pub(crate) index: BytecodeBinding,
-    pub(crate) index_mask: f64,
-    pub(crate) throw_right: f64,
-    pub(crate) throw_value: f64,
-    pub(crate) total: BytecodeBinding,
-    pub(crate) try_add: f64,
-    pub(crate) finally_add: f64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -687,7 +675,6 @@ pub enum BytecodeInstruction {
         body: BytecodeBlock,
         body_scoped: bool,
         body_direct_throw: Option<BytecodeDirectThrow>,
-        try_fast_path: Option<Box<BytecodeTryFinallyFastPath>>,
         catch: Option<BytecodeCatch>,
         finally_body: Option<BytecodeBlock>,
         finally_scoped: bool,

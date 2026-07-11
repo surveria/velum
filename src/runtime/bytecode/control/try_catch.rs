@@ -1,12 +1,10 @@
 use crate::{
     bytecode::{
-        BytecodeAddress, BytecodeBinding, BytecodeBlock, BytecodeCatch, BytecodeCatchFastPath,
-        BytecodeDirectThrow, BytecodeNumericBinaryOp, BytecodeTryFinallyFastPath,
+        BytecodeAddress, BytecodeBinding, BytecodeBlock, BytecodeCatch, BytecodeDirectThrow,
     },
     error::{Error, Result},
     runtime::{
         Context,
-        abstract_operations::{number_strict_equality, strict_equality},
         binding::scope::BindingCell,
         bytecode::{
             control_continuation::{
@@ -15,9 +13,8 @@ use crate::{
             state::BytecodeState,
         },
         control::Completion,
-        numeric::number_to_i32,
     },
-    syntax::{DeclKind, StaticString},
+    syntax::DeclKind,
     value::Value,
 };
 
@@ -26,7 +23,6 @@ pub(super) struct BytecodeTryParts<'a> {
     body: &'a BytecodeBlock,
     body_scoped: bool,
     body_direct_throw: Option<&'a BytecodeDirectThrow>,
-    try_fast_path: Option<&'a BytecodeTryFinallyFastPath>,
     catch: Option<&'a BytecodeCatch>,
     finally_body: Option<&'a BytecodeBlock>,
     finally_scoped: bool,
@@ -37,7 +33,6 @@ impl<'a> BytecodeTryParts<'a> {
         body: &'a BytecodeBlock,
         body_scoped: bool,
         body_direct_throw: Option<&'a BytecodeDirectThrow>,
-        try_fast_path: Option<&'a BytecodeTryFinallyFastPath>,
         catch: Option<&'a BytecodeCatch>,
         finally_body: Option<&'a BytecodeBlock>,
         finally_scoped: bool,
@@ -46,7 +41,6 @@ impl<'a> BytecodeTryParts<'a> {
             body,
             body_scoped,
             body_direct_throw,
-            try_fast_path,
             catch,
             finally_body,
             finally_scoped,
@@ -62,12 +56,6 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let resumes = self.resumes_bytecode_control();
-        if !resumes
-            && let Some(fast_path) = parts.try_fast_path
-            && let Some(completion) = self.eval_bytecode_try_finally_fast_path(fast_path)?
-        {
-            return Ok(Self::store_or_return_completion(state, completion, next));
-        }
         let handle = self.push_bytecode_control(BytecodeControlRecord::try_record())?;
         let mut control = self.checkout_bytecode_control(handle)?;
         if let Some(completion) =
@@ -197,39 +185,6 @@ impl Context {
         Ok(None)
     }
 
-    fn eval_bytecode_try_finally_fast_path(
-        &mut self,
-        fast_path: &BytecodeTryFinallyFastPath,
-    ) -> Result<Option<Completion>> {
-        let Some(index_cell) = self.get_binding_bytecode(&fast_path.index)? else {
-            return Ok(None);
-        };
-        let Some(total_cell) = self.get_or_materialize_binding_bytecode(&fast_path.total)? else {
-            return Ok(None);
-        };
-        let Value::Number(index) = index_cell.value(fast_path.index.name())? else {
-            return Ok(None);
-        };
-        let Value::Number(mut total) = total_cell.value(fast_path.total.name())? else {
-            return Ok(None);
-        };
-        let mask = number_to_i32(fast_path.index_mask, "try finally mask")?;
-        let masked = f64::from(number_to_i32(index, "try finally index")? & mask);
-        let branch_add = if number_strict_equality(masked, fast_path.throw_right) {
-            fast_path.throw_value
-        } else {
-            fast_path.try_add
-        };
-        self.step()?;
-        self.record_bytecode_linear_direct_run()?;
-        total += branch_add;
-        let branch_value = self.checked_value(Value::Number(total))?;
-        total += fast_path.finally_add;
-        let total_value = self.checked_value(Value::Number(total))?;
-        self.assign_fast_path_cell(&fast_path.total, &total_cell, total_value)?;
-        Ok(Some(Completion::Normal(branch_value)))
-    }
-
     fn eval_bytecode_direct_throw(
         &mut self,
         direct_throw: &BytecodeDirectThrow,
@@ -260,14 +215,7 @@ impl Context {
         let result = if resumes {
             self.eval_bytecode_try_block_with_state(&catch.body, catch.body_scoped, state)
         } else {
-            self.eval_bytecode_catch_scope(
-                param,
-                value,
-                &catch.body,
-                catch.body_scoped,
-                catch.body_fast_path.as_ref(),
-                state,
-            )
+            self.eval_bytecode_catch_scope(param, value, &catch.body, catch.body_scoped, state)
         };
         if result
             .as_ref()
@@ -288,7 +236,6 @@ impl Context {
         value: Value,
         body: &BytecodeBlock,
         body_scoped: bool,
-        fast_path: Option<&BytecodeCatchFastPath>,
         state: &mut BytecodeState,
     ) -> Result<Completion> {
         let atom = self.ensure_binding_capacity_static(param.name())?;
@@ -303,9 +250,6 @@ impl Context {
             )?;
         self.mark_active_binding_frame_slot(frame, inserted)?;
         self.remember_active_static_binding(param.name(), atom)?;
-        if let Some(fast_path) = fast_path {
-            return self.eval_bytecode_catch_fast_path(fast_path);
-        }
         self.eval_bytecode_try_block_with_state(body, body_scoped, state)
     }
 
@@ -334,53 +278,5 @@ impl Context {
             return Err(Error::runtime("bytecode try lexical scope disappeared"));
         }
         result
-    }
-
-    fn eval_bytecode_catch_fast_path(
-        &mut self,
-        fast_path: &BytecodeCatchFastPath,
-    ) -> Result<Completion> {
-        match fast_path {
-            BytecodeCatchFastPath::StrictStringIncrement {
-                test,
-                expected,
-                target,
-                addend,
-            } => self.eval_bytecode_catch_string_increment(test, expected, target, *addend),
-        }
-    }
-
-    fn eval_bytecode_catch_string_increment(
-        &mut self,
-        test: &BytecodeBinding,
-        expected: &StaticString,
-        target: &BytecodeBinding,
-        addend: f64,
-    ) -> Result<Completion> {
-        self.step()?;
-        let left = self.eval_bytecode_identifier(test)?;
-        self.step()?;
-        let right = self.static_string_value(expected)?;
-        self.step()?;
-        let matched = strict_equality(&left, &right);
-        self.step()?;
-        if !matched {
-            self.step()?;
-            self.step()?;
-            return Ok(Completion::Normal(Value::Undefined));
-        }
-
-        self.step()?;
-        let left = self.eval_bytecode_identifier(target)?;
-        self.step()?;
-        let right = Value::Number(addend);
-        self.step()?;
-        let value =
-            self.eval_bytecode_number_binary(BytecodeNumericBinaryOp::Add, &left, &right)?;
-        self.step()?;
-        self.assign_bytecode_or_builtin(target, value.clone())?;
-        self.step()?;
-        self.step()?;
-        Ok(Completion::Normal(value))
     }
 }

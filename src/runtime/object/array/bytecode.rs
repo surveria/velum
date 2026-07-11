@@ -36,52 +36,6 @@ impl ObjectHeap {
         self.get_array_index(id, index).map(Some)
     }
 
-    pub(crate) fn packed_numeric_array_values_if_array(
-        &self,
-        id: ObjectId,
-    ) -> Result<Option<Vec<f64>>> {
-        let Some(length) = self.array_len_if_array(id)? else {
-            return Ok(None);
-        };
-        let Some(properties) = self.object(id)?.packed_array_properties(length) else {
-            return Ok(None);
-        };
-        let mut values = Vec::with_capacity(properties.len());
-        for property in properties {
-            if !property.has_default_array_attributes() {
-                return Ok(None);
-            }
-            let Value::Number(value) = property.value() else {
-                return Ok(None);
-            };
-            values.push(value);
-        }
-        Ok(Some(values))
-    }
-
-    pub(crate) fn set_packed_numeric_array_values_if_array(
-        &mut self,
-        id: ObjectId,
-        values: &[f64],
-        max_properties: usize,
-    ) -> Result<bool> {
-        let Some(length) = self.array_len_if_array(id)? else {
-            return Ok(false);
-        };
-        if length != values.len() {
-            return Ok(false);
-        }
-        if self.packed_numeric_array_values_if_array(id)?.is_none() {
-            return Ok(false);
-        }
-        for (index, value) in values.iter().copied().enumerate() {
-            if !self.set_array_index_if_array(id, index, Value::Number(value), max_properties)? {
-                return Ok(false);
-            }
-        }
-        Ok(true)
-    }
-
     pub(crate) fn has_own_array_index_if_array(
         &self,
         id: ObjectId,

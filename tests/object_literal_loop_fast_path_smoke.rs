@@ -3,7 +3,7 @@ use rs_quickjs::{Engine, Value};
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
-fn bytecode_runs_direct_object_literal_loop_body() -> TestResult {
+fn bytecode_runs_structured_object_literal_loop_body() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
     let script = vm.compile(

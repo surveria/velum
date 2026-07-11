@@ -3,14 +3,11 @@ use std::rc::Rc;
 use crate::{
     ast::{CatchClause, DeclKind, Expr, Expression, ForInTarget, Statement, Stmt, SwitchCase},
     bytecode::{
-        BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock, BytecodeCatch,
-        BytecodeCatchFastPath, BytecodeCompletion, BytecodeDirectThrow, BytecodeForInTarget,
-        BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeNumericEqualityOp,
-        BytecodeSwitchCase, BytecodeTryFinallyFastPath,
+        BytecodeAssignmentTarget, BytecodeBlock, BytecodeCatch, BytecodeDirectThrow,
+        BytecodeForInTarget, BytecodeInstruction, BytecodeSwitchCase,
     },
     error::{Error, Result},
     syntax::StaticName,
-    value::Value,
 };
 
 use super::{BytecodeCompiler, StatementValue, statements_need_lexical_scope};
@@ -288,32 +285,20 @@ impl BytecodeCompiler<'_> {
                     self.layout,
                 )?;
                 let body_scoped = statements_need_lexical_scope(&catch.body);
-                let body_fast_path =
-                    BytecodeCatchFastPath::from_unscoped_body(param.as_ref(), &body, body_scoped);
                 Ok(BytecodeCatch {
                     param,
                     body,
                     body_scoped,
-                    body_fast_path,
                 })
             })
             .transpose()?;
         let finally_body = finally_body
             .map(|body| BytecodeBlock::compile_statements(body, StatementValue::Store, self.layout))
             .transpose()?;
-        let try_fast_path = bytecode_try_finally_fast_path(
-            &body_block,
-            body_scoped,
-            catch.as_ref(),
-            finally_body.as_ref(),
-            finally_scoped,
-        )
-        .map(Box::new);
         self.emit(BytecodeInstruction::Try {
             body: body_block,
             body_scoped,
             body_direct_throw,
-            try_fast_path,
             catch,
             finally_body,
             finally_scoped,
@@ -399,91 +384,6 @@ impl BytecodeCompiler<'_> {
             _ => Err(Error::runtime("invalid bytecode assignment target")),
         }
     }
-}
-
-fn bytecode_try_finally_fast_path(
-    body: &BytecodeBlock,
-    body_scoped: bool,
-    catch: Option<&BytecodeCatch>,
-    finally_body: Option<&BytecodeBlock>,
-    finally_scoped: bool,
-) -> Option<BytecodeTryFinallyFastPath> {
-    if body_scoped || finally_scoped {
-        return None;
-    }
-    let [
-        BytecodeInstruction::LoadBinding(index),
-        BytecodeInstruction::PushLiteral(Value::Number(index_mask)),
-        BytecodeInstruction::NumberBinary(BytecodeNumericBinaryOp::BitAnd),
-        BytecodeInstruction::PushLiteral(Value::Number(throw_right)),
-        BytecodeInstruction::NumberEquality(BytecodeNumericEqualityOp::StrictEqual),
-        BytecodeInstruction::JumpIfFalse(alternate),
-        BytecodeInstruction::PushLiteral(Value::Number(throw_value)),
-        BytecodeInstruction::Complete(BytecodeCompletion::Throw),
-        BytecodeInstruction::Jump(end),
-        BytecodeInstruction::PushUndefined,
-        BytecodeInstruction::StoreLast,
-        BytecodeInstruction::LoadBinding(try_total_read),
-        BytecodeInstruction::PushLiteral(Value::Number(try_add)),
-        BytecodeInstruction::NumberBinary(BytecodeNumericBinaryOp::Add),
-        BytecodeInstruction::StoreBinding(try_total_write),
-        BytecodeInstruction::StoreLast,
-    ] = body.instructions()
-    else {
-        return None;
-    };
-    if alternate.index() != 9
-        || end.index() != 11
-        || !same_bytecode_binding(try_total_read, try_total_write)
-    {
-        return None;
-    }
-    let catch = catch?;
-    if catch.body_scoped {
-        return None;
-    }
-    let catch_param = catch.param.as_ref()?;
-    let [
-        BytecodeInstruction::LoadBinding(catch_total_read),
-        BytecodeInstruction::LoadBinding(catch_error),
-        BytecodeInstruction::NumberBinary(BytecodeNumericBinaryOp::Add),
-        BytecodeInstruction::StoreBinding(catch_total_write),
-        BytecodeInstruction::StoreLast,
-    ] = catch.body.instructions()
-    else {
-        return None;
-    };
-    let [
-        BytecodeInstruction::LoadBinding(finally_total_read),
-        BytecodeInstruction::PushLiteral(Value::Number(finally_add)),
-        BytecodeInstruction::NumberBinary(BytecodeNumericBinaryOp::Add),
-        BytecodeInstruction::StoreBinding(finally_total_write),
-        BytecodeInstruction::StoreLast,
-    ] = finally_body?.instructions()
-    else {
-        return None;
-    };
-    if !same_bytecode_binding(catch_param, catch_error)
-        || !same_bytecode_binding(try_total_write, catch_total_read)
-        || !same_bytecode_binding(try_total_write, catch_total_write)
-        || !same_bytecode_binding(try_total_write, finally_total_read)
-        || !same_bytecode_binding(try_total_write, finally_total_write)
-    {
-        return None;
-    }
-    Some(BytecodeTryFinallyFastPath {
-        index: index.clone(),
-        index_mask: *index_mask,
-        throw_right: *throw_right,
-        throw_value: *throw_value,
-        total: try_total_write.clone(),
-        try_add: *try_add,
-        finally_add: *finally_add,
-    })
-}
-
-fn same_bytecode_binding(left: &BytecodeBinding, right: &BytecodeBinding) -> bool {
-    left.operand() == right.operand() && left.name().as_str() == right.name().as_str()
 }
 
 fn collect_label_chain<'a>(

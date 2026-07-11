@@ -48,14 +48,24 @@ policy and stable profiling counters. `OptimizationMode::Enabled` is the
 default. `OptimizationMode::Disabled` executes the same compiled bytecode but
 routes direct binding operands, numeric and string quickening, dense-array
 shortcuts, inline/native call caches, linear plans, function fast paths, and
-specialized loop paths through their generic semantic fallbacks. The disabled
-mode is an equivalence and diagnosis tool, not a separate interpreter or a
-security boundary.
+the guarded packed numeric array reduction through their generic semantic
+fallbacks. Structured `for`, `while`, `do-while`, `for-in`, `switch`, and
+`try` execution is always continuation-owned; there are no workload-shaped
+whole-loop executors. The disabled mode is an equivalence and diagnosis tool,
+not a separate interpreter or a security boundary.
 
 Optimization state may be read or mutated only through the optimizer boundary.
 Guard misses must preserve completion, output, and error behavior. The public
 `Vm::optimization_snapshot` exposes the selected mode and stable counters
 without exposing cache records or runtime ids.
+
+Reusable control machinery is limited to `for_in`, `structured_do_while`,
+`structured_switch`, and `try_catch`. Counted loops execute their original
+condition, body, and update bytecode through linear plans. One broad linear
+reduction plan may sum a packed default numeric array when binding identity,
+numeric values, array shape, unit update, and step accounting are all proven;
+any hole, indexed prototype behavior, non-number, or guard miss runs the same
+structured bytecode path.
 
 Test support is not part of bytecode semantics. `print` is an ordinary lazy
 native global binding and therefore follows normal lookup, call, shadowing,

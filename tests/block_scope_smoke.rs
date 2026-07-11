@@ -179,7 +179,7 @@ fn preserves_direct_throw_unreachable_tail() -> TestResult {
 }
 
 #[test]
-fn preserves_direct_catch_fast_path_false_branch() -> TestResult {
+fn preserves_structured_catch_false_branch() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
 
