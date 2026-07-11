@@ -5,6 +5,7 @@ pub struct Token {
     pub kind: TokenKind,
     pub span: SourceSpan,
     pub line_terminator_before: bool,
+    pub identifier_escaped: bool,
 }
 
 impl Token {

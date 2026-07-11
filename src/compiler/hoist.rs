@@ -134,6 +134,7 @@ impl<'a> HoistCollector<'a> {
                     } => self.collect_pattern_var_declarations(pattern),
                     ForInTarget::Binding { .. }
                     | ForInTarget::PatternBinding { .. }
+                    | ForInTarget::PatternAssignment { .. }
                     | ForInTarget::Assignment(_) => {}
                 }
                 self.collect_statement(body)

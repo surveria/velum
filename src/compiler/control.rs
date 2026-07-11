@@ -117,8 +117,9 @@ impl BytecodeCompiler<'_> {
                 target,
                 object,
                 body,
+                asynchronous,
             } => {
-                return self.compile_labeled_for_of(labels, target, object, body);
+                return self.compile_labeled_for_of(labels, target, object, body, *asynchronous);
             }
             Stmt::Block(_)
             | Stmt::DeclList(_)
@@ -209,8 +210,9 @@ impl BytecodeCompiler<'_> {
         target: &ForInTarget,
         object: &Expression,
         body: &Statement,
+        asynchronous: bool,
     ) -> Result<()> {
-        self.compile_labeled_for_of(None, target, object, body)
+        self.compile_labeled_for_of(None, target, object, body, asynchronous)
     }
 
     fn compile_labeled_for_of(
@@ -219,12 +221,14 @@ impl BytecodeCompiler<'_> {
         target: &ForInTarget,
         object: &Expression,
         body: &Statement,
+        asynchronous: bool,
     ) -> Result<()> {
         self.emit(BytecodeInstruction::ForOf {
             labels,
             target: self.compile_for_in_target(target)?,
             object: BytecodeBlock::compile_expression(object, self.layout)?,
             body: self.compile_statement_block(body, StatementValue::Store)?,
+            asynchronous,
         });
         Ok(())
     }
@@ -338,6 +342,11 @@ impl BytecodeCompiler<'_> {
                     pattern: Rc::new(self.compile_pattern(pattern)?),
                     kind: *kind,
                 })
+            }
+            ForInTarget::PatternAssignment { pattern, strict } => {
+                Ok(BytecodeForInTarget::PatternAssignment(Rc::new(
+                    self.compile_assignment_pattern(pattern, *strict)?,
+                )))
             }
             ForInTarget::Assignment(expr) => self
                 .compile_assignment_target(expr)

@@ -3,8 +3,8 @@ use std::rc::Rc;
 use crate::syntax::DeclKind;
 
 use super::{
-    AstNode, BindingPattern, ClassLiteral, Expression, FunctionKind, FunctionParam, StaticBinding,
-    StaticFunctionId, StaticName,
+    AssignmentPattern, AstNode, BindingPattern, ClassLiteral, Expression, FunctionKind,
+    FunctionParam, StaticBinding, StaticFunctionId, StaticName,
 };
 
 pub type Statement = AstNode<Stmt>;
@@ -51,6 +51,7 @@ pub enum Stmt {
         target: ForInTarget,
         object: Expression,
         body: Box<Statement>,
+        asynchronous: bool,
     },
     Switch {
         discriminant: Expression,
@@ -99,6 +100,10 @@ pub enum ForInTarget {
     PatternBinding {
         pattern: Box<BindingPattern>,
         kind: DeclKind,
+    },
+    PatternAssignment {
+        pattern: Box<AssignmentPattern>,
+        strict: bool,
     },
     Assignment(Expression),
 }

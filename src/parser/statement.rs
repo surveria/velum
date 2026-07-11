@@ -1,6 +1,7 @@
 use crate::{
     ast::{
-        CatchClause, DeclKind, Expression, ForInTarget, FunctionKind, Statement, Stmt, SwitchCase,
+        CatchClause, DeclKind, Expr, Expression, ForInTarget, FunctionKind, Statement, Stmt,
+        SwitchCase,
     },
     error::{Error, Result},
     lexer::TokenKind,
@@ -97,6 +98,9 @@ impl Parser {
         if self.match_kind(&TokenKind::Class) {
             return self.class_declaration();
         }
+        if self.let_starts_expression_statement() {
+            return self.let_expression_statement();
+        }
         if self.match_kind(&TokenKind::Let) {
             return self.var_decl(DeclKind::Let);
         }
@@ -110,6 +114,24 @@ impl Parser {
         let expr = self.expression()?;
         self.consume_statement_terminator("expected statement terminator")?;
         Ok(Stmt::Expr(expr))
+    }
+
+    fn let_starts_expression_statement(&self) -> bool {
+        !self.is_strict_mode()
+            && self.check(&TokenKind::Let)
+            && self.peek_has_line_terminator_before(1)
+            && !self.peek_kind_is(1, &TokenKind::LBracket)
+    }
+
+    fn let_expression_statement(&mut self) -> Result<Stmt> {
+        let token = self
+            .advance()
+            .ok_or_else(|| self.parse_error("expected 'let' identifier"))?;
+        let name = self.static_name_borrowed_at("let", token.offset())?;
+        let binding = self.static_binding(name)?;
+        let expression = Expression::new(Expr::Identifier(binding), token.span);
+        self.consume_statement_terminator("expected statement terminator after 'let'")?;
+        Ok(Stmt::Expr(expression))
     }
 
     fn with_statement_depth(
@@ -189,10 +211,10 @@ impl Parser {
         let condition = self.expression()?;
         self.consume(&TokenKind::RParen, "expected ')' after if condition")?;
         let consequent = Box::new(self.statement()?);
-        self.reject_generator_single_statement(&consequent)?;
+        self.reject_invalid_single_statement(&consequent)?;
         let alternate = if self.match_kind(&TokenKind::Else) {
             let alternate = Box::new(self.statement()?);
-            self.reject_generator_single_statement(&alternate)?;
+            self.reject_invalid_single_statement(&alternate)?;
             Some(alternate)
         } else {
             None
@@ -209,7 +231,7 @@ impl Parser {
         let condition = self.expression()?;
         self.consume(&TokenKind::RParen, "expected ')' after while condition")?;
         let body = Box::new(self.with_iteration_statement(Self::statement)?);
-        self.reject_generator_single_statement(&body)?;
+        self.reject_invalid_single_statement(&body)?;
         Ok(Stmt::While { condition, body })
     }
 
@@ -278,7 +300,7 @@ impl Parser {
         let label_names: Vec<_> = labels.iter().map(|label| label.name.clone()).collect();
         let body =
             self.with_labeled_statement(&label_names, is_iteration_target, Self::statement)?;
-        self.reject_generator_single_statement(&body)?;
+        self.reject_invalid_single_statement(&body)?;
         Ok(Self::nest_labeled_statements(labels, body))
     }
 
@@ -369,6 +391,12 @@ impl Parser {
     }
 
     fn for_statement(&mut self) -> Result<Stmt> {
+        let asynchronous = self.match_kind(&TokenKind::Await);
+        if asynchronous
+            && (!self.await_expression_is_allowed() || !self.await_identifier_is_reserved())
+        {
+            return Err(self.parse_error("for-await-of is only valid in an async function"));
+        }
         self.consume(&TokenKind::LParen, "expected '(' after 'for'")?;
         let cursor = self.cursor;
         let expression_depth = self.expression_depth;
@@ -376,21 +404,34 @@ impl Parser {
         let static_bindings = self.static_bindings.clone();
         let static_functions = self.static_functions.clone();
         if let Some((target, object, head)) = self.for_in_header()? {
+            if asynchronous && head == ForHeadKind::In {
+                return Err(self.parse_error("for-await statement requires an 'of' head"));
+            }
             self.consume(&TokenKind::RParen, "expected ')' after for-in expression")?;
             let body = Box::new(self.with_iteration_statement(Self::statement)?);
-            self.reject_generator_single_statement(&body)?;
+            self.reject_invalid_single_statement(&body)?;
             return Ok(match head {
                 ForHeadKind::In => Stmt::ForIn {
                     target,
                     object,
                     body,
                 },
+                ForHeadKind::Of if asynchronous => Stmt::ForOf {
+                    target,
+                    object,
+                    body,
+                    asynchronous: true,
+                },
                 ForHeadKind::Of => Stmt::ForOf {
                     target,
                     object,
                     body,
+                    asynchronous: false,
                 },
             });
+        }
+        if asynchronous {
+            return Err(self.parse_error("expected 'of' in for-await-of statement"));
         }
         self.cursor = cursor;
         self.expression_depth = expression_depth;
@@ -412,7 +453,7 @@ impl Parser {
         };
         self.consume(&TokenKind::RParen, "expected ')' after for clauses")?;
         let body = Box::new(self.with_iteration_statement(Self::statement)?);
-        self.reject_generator_single_statement(&body)?;
+        self.reject_invalid_single_statement(&body)?;
         Ok(Stmt::For {
             init,
             condition,
@@ -430,6 +471,22 @@ impl Parser {
         }
         if self.match_kind(&TokenKind::Var) {
             return self.for_in_binding_header(DeclKind::Var);
+        }
+
+        if self.for_in_assignment_pattern_start() {
+            let pattern = self.assignment_pattern()?;
+            let Some(head) = self.match_for_head_kind() else {
+                return Ok(None);
+            };
+            let object = self.for_head_rhs(head)?;
+            return Ok(Some((
+                ForInTarget::PatternAssignment {
+                    pattern: Box::new(pattern),
+                    strict: self.is_strict_mode(),
+                },
+                object,
+                head,
+            )));
         }
 
         if !self.for_in_assignment_target_start() {
@@ -488,9 +545,10 @@ impl Parser {
     }
 
     fn next_is_contextual_of(&self) -> bool {
-        self.peek().is_some_and(
-            |token| matches!(&token.kind, TokenKind::Identifier(name) if name == FOR_OF_KEYWORD),
-        )
+        self.peek().is_some_and(|token| {
+            !token.identifier_escaped
+                && matches!(&token.kind, TokenKind::Identifier(name) if name == FOR_OF_KEYWORD)
+        })
     }
 
     fn for_in_assignment_target_start(&self) -> bool {
@@ -500,6 +558,21 @@ impl Parser {
                 TokenKind::Identifier(_) | TokenKind::Async | TokenKind::LParen
             )
         })
+    }
+
+    fn for_in_assignment_pattern_start(&self) -> bool {
+        let Some(closing) = self.outer_literal_closing_offset() else {
+            return false;
+        };
+        matches!(
+            self.peek_kind(closing.saturating_add(1)),
+            Some(TokenKind::In)
+        ) || self
+            .peek_token(closing.saturating_add(1))
+            .is_some_and(|token| {
+                !token.identifier_escaped
+                    && matches!(&token.kind, TokenKind::Identifier(name) if name == FOR_OF_KEYWORD)
+            })
     }
 
     fn for_init(&mut self) -> Result<Option<Box<Statement>>> {

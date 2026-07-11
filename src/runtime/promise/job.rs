@@ -28,7 +28,7 @@ pub(in crate::runtime) enum PromiseReaction {
 }
 
 impl PromiseReaction {
-    pub(super) const fn new(
+    pub(in crate::runtime) const fn new(
         result: PromiseId,
         on_fulfilled: Option<Value>,
         on_rejected: Option<Value>,

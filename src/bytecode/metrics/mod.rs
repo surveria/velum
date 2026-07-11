@@ -630,7 +630,9 @@ impl BytecodeForInTarget {
     fn property_operand_count(&self) -> usize {
         match self {
             Self::Binding { .. } => 0,
-            Self::PatternBinding { pattern, .. } => pattern.property_operand_count(),
+            Self::PatternBinding { pattern, .. } | Self::PatternAssignment(pattern) => {
+                pattern.property_operand_count()
+            }
             Self::Assignment(target) => target.property_operand_count(),
         }
     }
@@ -638,7 +640,9 @@ impl BytecodeForInTarget {
     fn direct_native_call_count(&self) -> usize {
         match self {
             Self::Binding { .. } => 0,
-            Self::PatternBinding { pattern, .. } => pattern.direct_native_call_count(),
+            Self::PatternBinding { pattern, .. } | Self::PatternAssignment(pattern) => {
+                pattern.direct_native_call_count()
+            }
             Self::Assignment(target) => target.direct_native_call_count(),
         }
     }
@@ -646,7 +650,9 @@ impl BytecodeForInTarget {
     fn array_native_call_count(&self) -> usize {
         match self {
             Self::Binding { .. } => 0,
-            Self::PatternBinding { pattern, .. } => pattern.array_native_call_count(),
+            Self::PatternBinding { pattern, .. } | Self::PatternAssignment(pattern) => {
+                pattern.array_native_call_count()
+            }
             Self::Assignment(target) => target.array_native_call_count(),
         }
     }
@@ -654,7 +660,9 @@ impl BytecodeForInTarget {
     fn numeric_instruction_count(&self) -> usize {
         match self {
             Self::Binding { .. } => 0,
-            Self::PatternBinding { pattern, .. } => pattern.numeric_instruction_count(),
+            Self::PatternBinding { pattern, .. } | Self::PatternAssignment(pattern) => {
+                pattern.numeric_instruction_count()
+            }
             Self::Assignment(target) => target.numeric_instruction_count(),
         }
     }
@@ -662,7 +670,9 @@ impl BytecodeForInTarget {
     fn binding_operand_count(&self) -> usize {
         match self {
             Self::Binding { name, .. } => name.direct_operand_count(),
-            Self::PatternBinding { pattern, .. } => pattern.binding_operand_count(),
+            Self::PatternBinding { pattern, .. } | Self::PatternAssignment(pattern) => {
+                pattern.binding_operand_count()
+            }
             Self::Assignment(target) => target.binding_operand_count(),
         }
     }
@@ -670,7 +680,9 @@ impl BytecodeForInTarget {
     fn nested_instruction_count(&self) -> usize {
         match self {
             Self::Binding { .. } => 0,
-            Self::PatternBinding { pattern, .. } => pattern.nested_instruction_count(),
+            Self::PatternBinding { pattern, .. } | Self::PatternAssignment(pattern) => {
+                pattern.nested_instruction_count()
+            }
             Self::Assignment(target) => target.nested_instruction_count(),
         }
     }

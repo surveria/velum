@@ -279,6 +279,7 @@ impl CaptureBindingCollector {
                 target,
                 object,
                 body,
+                ..
             } => {
                 self.collect_for_in_target(target);
                 self.collect_expr(object);
@@ -329,6 +330,9 @@ impl CaptureBindingCollector {
         match target {
             ForInTarget::Binding { .. } => {}
             ForInTarget::PatternBinding { pattern, .. } => self.collect_pattern(pattern),
+            ForInTarget::PatternAssignment { pattern, .. } => {
+                self.collect_assignment_pattern(pattern);
+            }
             ForInTarget::Assignment(expr) => self.collect_expr(expr),
         }
     }

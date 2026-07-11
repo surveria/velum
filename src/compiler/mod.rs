@@ -189,7 +189,8 @@ impl<'a> BytecodeCompiler<'a> {
                 target,
                 object,
                 body,
-            } => self.compile_for_of(target, object, body),
+                asynchronous,
+            } => self.compile_for_of(target, object, body, *asynchronous),
             Stmt::PatternDecl {
                 pattern,
                 kind,

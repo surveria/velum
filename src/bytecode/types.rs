@@ -343,6 +343,7 @@ pub enum BytecodeForInTarget {
         pattern: Rc<BytecodePattern>,
         kind: DeclKind,
     },
+    PatternAssignment(Rc<BytecodePattern>),
     Assignment(BytecodeAssignmentTarget),
 }
 
@@ -683,6 +684,7 @@ pub enum BytecodeInstruction {
         target: BytecodeForInTarget,
         object: BytecodeBlock,
         body: BytecodeBlock,
+        asynchronous: bool,
     },
     DestructurePattern {
         pattern: Rc<BytecodePattern>,

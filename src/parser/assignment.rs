@@ -100,7 +100,7 @@ impl Parser {
         )
     }
 
-    fn outer_literal_closing_offset(&self) -> Option<usize> {
+    pub(super) fn outer_literal_closing_offset(&self) -> Option<usize> {
         let first = self.peek_kind(0)?;
         let first = match first {
             TokenKind::LBrace => Delimiter::Brace,

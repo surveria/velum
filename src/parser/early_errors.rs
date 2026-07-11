@@ -8,14 +8,21 @@ use crate::{
 use super::Parser;
 
 impl Parser {
-    pub(super) fn reject_generator_single_statement(&self, statement: &Statement) -> Result<()> {
+    pub(super) fn reject_invalid_single_statement(&self, statement: &Statement) -> Result<()> {
         if matches!(
             statement.kind(),
             Stmt::FunctionDecl { kind, .. } if kind.is_generator()
+        ) || matches!(
+            statement.kind(),
+            Stmt::VarDecl {
+                kind: DeclKind::Let | DeclKind::Const,
+                ..
+            } | Stmt::PatternDecl {
+                kind: DeclKind::Let | DeclKind::Const,
+                ..
+            }
         ) {
-            return Err(
-                self.parse_error("generator declaration is not allowed as a single statement body")
-            );
+            return Err(self.parse_error("declaration is not allowed as a single statement body"));
         }
         Ok(())
     }
@@ -212,6 +219,7 @@ impl Parser {
                     } => Self::collect_pattern_names(pattern, names)?,
                     crate::ast::ForInTarget::Binding { .. }
                     | crate::ast::ForInTarget::PatternBinding { .. }
+                    | crate::ast::ForInTarget::PatternAssignment { .. }
                     | crate::ast::ForInTarget::Assignment(_) => {}
                 }
                 Self::collect_var_names(body, names)?;
