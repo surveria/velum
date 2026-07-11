@@ -2454,7 +2454,7 @@ AS-09e profile evidence in draft PR #454:
   \`reports/test-runs/rsqjs-test-report-20260711T072934Z.*\` with all five
   sentinels valid.
 
-AS-09f profile evidence in draft PR #455:
+AS-09f canonical evidence from PR #455:
 
 - the canonical \`fn-name\` profile contains 1,056 files and 2,086 variants.
   Before this tranche only 3 files and 6 variants passed; 432 failures already
@@ -2497,8 +2497,46 @@ AS-09f profile evidence in draft PR #455:
   2.29/2.25 ms, property 228.87/233.28 ms, function 158.78/156.63 ms, and
   string 70.63/70.92 ms. The changes are small and mixed-direction, with no
   systematic regression;
-- exact-tree CI and canonical publication evidence remain required before
-  AS-09f can close.
+- PR #455 squash-merged as `6c71713`; required run `29145629944` certified
+  exact tree `4b42cadb`, post-merge run `29145743199` passed performance and
+  publication, and report-only commit `ae507a1` published
+  `reports/test-runs/rsqjs-test-report-20260711T081229Z.*` with all five
+  sentinels valid.
+
+AS-09g profile evidence in draft PR #456:
+
+- an exhaustive canonical-main profile separated the broad 2,302-case
+  `invalid assignment target` diagnostic into coherent syntax families. The
+  `language/expressions/assignment/dstr` family contains 640 variants across
+  368 files; before this tranche 131 variants and 78 files passed;
+- one typed `AssignmentPattern` AST accepts object/array cover grammar without
+  mutating ordinary literal nodes. Leaves retain identifier, static-property,
+  or computed-property expressions, while nested patterns, defaults, elisions,
+  and rest targets remain explicit;
+- binding and assignment patterns compile into one `BytecodePattern` tree and
+  one `DestructurePattern` instruction. `BytecodeDestructureMode` distinguishes
+  declaration cleanup from assignment-expression result preservation; no
+  second runtime walker or assignment-only opcode tree exists;
+- the existing resumable destructuring owner now evaluates assignment
+  references before iterator steps or object property reads, retains resolved
+  references as continuation roots, applies defaults before `PutValue`, and
+  closes live iterators on reference/default/set failures. Object and array
+  rest reuse the same path;
+- unresolved sloppy writes use one explicit global-creation boundary, strict
+  assignment patterns reject restricted/future-reserved identifiers during
+  parsing, decimal literals accept the standard trailing dot form, and
+  nullish member access raises a typed TypeError;
+- direct tests cover nested patterns, result preservation, literal member
+  targets, reference/iterator/default order, sloppy globals, strict early
+  errors, and inferred names. The focused profile now passes 576/640 variants
+  and 334/368 files, gains of 445 variants and 256 files. Fifty-eight of the
+  64 residual variants require generator/yield support; four require the
+  separate lexical TDZ-instantiation owner and two require symbol-aware object
+  rest ordering;
+- the architecture guard fixes the single runtime walker, assignment-reference
+  owner, compiler users, typed mode/leaf metadata, and mutation-tests a second
+  walker. Full-corpus, performance, exact-tree CI, and canonical publication
+  evidence remain required before AS-09g can close.
 
 ### AS-10: Performance And Memory Checkpoints
 
