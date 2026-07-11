@@ -45,7 +45,7 @@ impl Parser {
     fn object_literal_property(&mut self) -> Result<ObjectProperty> {
         let start = self.current_span();
         if self.match_kind(&TokenKind::DotDotDot) {
-            let value = self.expression()?;
+            let value = self.assignment_expression()?;
             let key = ObjectPropertyKey::Static(self.static_name(SPREAD_PROPERTY_KEY.to_owned())?);
             return Ok(ObjectProperty {
                 key,
@@ -70,7 +70,7 @@ impl Parser {
         }
         let name = self.object_property_key()?;
         if self.match_kind(&TokenKind::Colon) {
-            let value = self.expression()?;
+            let value = self.assignment_expression()?;
             return Ok(ObjectProperty {
                 key: name.into_key(),
                 kind: ObjectPropertyKind::Init,
@@ -121,7 +121,7 @@ impl Parser {
     ) -> Result<ObjectProperty> {
         self.consume(&TokenKind::LParen, "expected '(' after accessor name")?;
         let inherited_strict = self.is_strict_mode();
-        let parameters = self.function_parameters()?;
+        let parameters = self.with_await_expression(false, Self::function_parameters)?;
         self.consume(&TokenKind::RParen, "expected ')' after accessor parameters")?;
         match kind {
             ObjectPropertyKind::Get if !parameters.params.is_empty() => {
@@ -149,11 +149,12 @@ impl Parser {
         self.consume(&TokenKind::LBrace, "expected '{' before accessor body")?;
         let body = self.with_new_target_scope(|parser| {
             parser.with_super_context(false, false, |parser| {
-                parser.function_body(inherited_strict)
+                parser.with_await_expression(false, |parser| parser.function_body(inherited_strict))
             })
         })?;
         self.validate_function_parameters(
             &parameters.params,
+            parameters.is_simple,
             inherited_strict,
             body.contains_use_strict,
         )?;
@@ -200,16 +201,20 @@ impl Parser {
         start: crate::SourceSpan,
     ) -> Result<ObjectProperty> {
         let inherited_strict = self.is_strict_mode();
-        let parameters = self.function_parameters()?;
+        let parameters = self.with_await_expression(false, Self::function_parameters)?;
+        self.reject_duplicate_parameters(&parameters.params)?;
         self.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before method body")?;
         let body = self.with_new_target_scope(|parser| {
             parser.with_super_context(false, false, |parser| {
-                parser.function_body(inherited_strict)
+                parser.with_await_expression(is_async, |parser| {
+                    parser.function_body(inherited_strict)
+                })
             })
         })?;
         self.validate_function_parameters(
             &parameters.params,
+            parameters.is_simple,
             inherited_strict,
             body.contains_use_strict,
         )?;
@@ -247,7 +252,7 @@ impl Parser {
         loop {
             if self.match_kind(&TokenKind::DotDotDot) {
                 let spread_start = self.previous_span();
-                let expression = self.expression()?;
+                let expression = self.assignment_expression()?;
                 elements
                     .push(self.expression_node(spread_start, Expr::Spread(Box::new(expression))));
             } else if self.peek_kind_is(0, &TokenKind::Comma)
@@ -255,7 +260,7 @@ impl Parser {
             {
                 elements.push(Expression::new(Expr::ArrayHole, self.current_span()));
             } else {
-                elements.push(self.expression()?);
+                elements.push(self.assignment_expression()?);
             }
             if !self.match_kind(&TokenKind::Comma) {
                 break;
@@ -271,7 +276,7 @@ impl Parser {
 
     pub(super) fn object_property_key(&mut self) -> Result<ObjectPropertyName> {
         if self.match_kind(&TokenKind::LBracket) {
-            let expr = self.expression()?;
+            let expr = self.assignment_expression()?;
             self.consume(
                 &TokenKind::RBracket,
                 "expected ']' after computed object property name",

@@ -61,6 +61,7 @@ pub enum Expr {
     NewTarget,
     Identifier(StaticBinding),
     Parenthesized(Box<Expression>),
+    Sequence(Vec<Expression>),
     Unary {
         op: UnaryOp,
         expr: Box<Expression>,

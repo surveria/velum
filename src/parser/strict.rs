@@ -1,7 +1,10 @@
 use crate::ast::{Expr, FunctionParam, Statement, StaticBinding, StaticName, Stmt};
 use crate::error::Result;
 
-use super::{ARGUMENTS_IDENTIFIER_NAME, EVAL_IDENTIFIER_NAME, Parser, USE_STRICT_DIRECTIVE};
+use super::{
+    ARGUMENTS_IDENTIFIER_NAME, EVAL_IDENTIFIER_NAME, Parser, USE_STRICT_DIRECTIVE,
+    YIELD_IDENTIFIER_NAME,
+};
 
 impl Parser {
     pub(super) fn update_directive_prologue(
@@ -34,10 +37,11 @@ impl Parser {
     pub(super) fn validate_function_parameters(
         &self,
         params: &[FunctionParam],
+        parameters_are_simple: bool,
         inherited_strict: bool,
         body_contains_use_strict: bool,
     ) -> Result<()> {
-        if body_contains_use_strict && Self::parameter_list_is_non_simple(params) {
+        if body_contains_use_strict && !parameters_are_simple {
             return Err(
                 self.parse_error("use strict directive is not allowed with non-simple parameters")
             );
@@ -56,14 +60,15 @@ impl Parser {
     pub(super) fn reject_duplicate_non_simple_parameters(
         &self,
         params: &[FunctionParam],
+        parameters_are_simple: bool,
     ) -> Result<()> {
-        if Self::parameter_list_is_non_simple(params) {
+        if !parameters_are_simple {
             self.reject_duplicate_parameters(params)?;
         }
         Ok(())
     }
 
-    fn reject_duplicate_parameters(&self, params: &[FunctionParam]) -> Result<()> {
+    pub(super) fn reject_duplicate_parameters(&self, params: &[FunctionParam]) -> Result<()> {
         let mut seen = Vec::new();
         for param in params {
             let name = param.name.as_str();
@@ -78,6 +83,13 @@ impl Parser {
     fn reject_restricted_strict_name(&self, name: &str) -> Result<()> {
         if Self::is_restricted_strict_name(name) {
             return Err(self.parse_error("eval and arguments are not valid strict binding names"));
+        }
+        Ok(())
+    }
+
+    pub(super) fn validate_strict_identifier_reference(&self, name: &str) -> Result<()> {
+        if self.is_strict_mode() && name == YIELD_IDENTIFIER_NAME {
+            return Err(self.parse_error("yield is not a valid strict identifier reference"));
         }
         Ok(())
     }
@@ -101,10 +113,9 @@ impl Parser {
     }
 
     fn is_restricted_strict_name(name: &str) -> bool {
-        matches!(name, EVAL_IDENTIFIER_NAME | ARGUMENTS_IDENTIFIER_NAME)
-    }
-
-    fn parameter_list_is_non_simple(params: &[FunctionParam]) -> bool {
-        params.iter().any(|param| param.default.is_some())
+        matches!(
+            name,
+            EVAL_IDENTIFIER_NAME | ARGUMENTS_IDENTIFIER_NAME | YIELD_IDENTIFIER_NAME
+        )
     }
 }

@@ -1,1 +1,3 @@
-1 + 2 * 3 - 4 / 2
+let sequenceTrace = 0;
+let sequenceValue = (sequenceTrace = sequenceTrace + 1, 4);
+sequenceTrace + sequenceValue

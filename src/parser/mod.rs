@@ -9,20 +9,25 @@ use crate::runtime::limits::RuntimeLimits;
 use crate::source::{SourceId, SourceSpan};
 
 mod assignment;
+mod await_context;
 mod binary;
 mod class;
 mod expression;
 mod function;
 mod literal;
 mod pattern;
+mod sequence;
 mod statement;
 mod strict;
+
+use await_context::AwaitExpressionContext;
 
 const ASYNC_IDENTIFIER_NAME: &str = "async";
 const ARGUMENTS_IDENTIFIER_NAME: &str = "arguments";
 const EVAL_IDENTIFIER_NAME: &str = "eval";
 const SUPER_IDENTIFIER_NAME: &str = "super";
 const USE_STRICT_DIRECTIVE: &str = "use strict";
+const YIELD_IDENTIFIER_NAME: &str = "yield";
 
 pub struct ParsedFunctionBody {
     pub statements: Vec<Statement>,
@@ -67,6 +72,7 @@ struct Parser {
     allow_super_call: bool,
     static_call_site_count: usize,
     strict_mode: bool,
+    await_expression_context: AwaitExpressionContext,
 }
 
 impl Parser {
@@ -89,6 +95,7 @@ impl Parser {
             allow_super_call: false,
             static_call_site_count: 0,
             strict_mode: false,
+            await_expression_context: AwaitExpressionContext::Allowed,
         }
     }
 

@@ -489,7 +489,7 @@ dependencies do not overlap.
 | AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
 | AS-07 | Complete | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | PR #446 merged as `62e2725`; exact-tree correctness, paired sentinels, post-merge performance, and canonical report publication passed. |
 | AS-08 | Complete | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a and AS-08b merged through PR #449; exact-tree correctness, disabled-mode equivalence, specialization audit, paired sentinels, and canonical publication passed. |
-| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09a and AS-09b are complete; AS-09c extends shared function descriptors for static class accessors without a class-only property store. |
+| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09a through AS-09c are complete; AS-09d adds the foundational comma-expression grammar boundary without a dedicated runtime path. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
 
 ## Program Item Details
@@ -2306,7 +2306,7 @@ AS-09b completion evidence from PR #451:
   `reports/test-runs/rsqjs-test-report-20260711T043324Z.*` with all five
   sentinels valid.
 
-AS-09c profile evidence in draft PR #452:
+AS-09c completion evidence from PR #452:
 
 - the canonical failure profile exposed separate parser and runtime rejections
   for static class getters/setters even though instance accessors, static
@@ -2338,7 +2338,62 @@ AS-09c profile evidence in draft PR #452:
   function-call 159.34/152.98 ms (-4.0%), and string-scan 72.37/71.84 ms
   (-0.7%). Every row is valid, branch variation is at most 2.3%, and no
   performance regression is indicated;
-- exact-tree CI and canonical publication remain required before AS-09c can
+- PR #452 squash-merged as `6f185e75`; required run `29141583947` certified
+  exact tree `38ef6d2d`, post-merge run `29141677509` passed performance and
+  publication, and report-only commit `5fd7ffc` published
+  `reports/test-runs/rsqjs-test-report-20260711T054406Z.*` with all five
+  sentinels valid.
+
+AS-09d profile evidence in draft PR #453:
+
+- comma expressions were a foundational grammar gap: the focused upstream
+  profile passed 0/6 files and 0/11 variants before the change, and six
+  otherwise-correct static class accessor variants from AS-09c were blocked by
+  the same missing expression form;
+- one `Expr::Sequence` node now separates full `Expression` contexts from
+  delimiter-sensitive `AssignmentExpression` contexts. Binding analysis and
+  capture collection traverse that shared node, and compilation evaluates
+  operands left-to-right through the existing `Pop` instruction while keeping
+  the last value; there is no comma-specific runtime or bytecode instruction.
+  The sequence entrypoint and await context are isolated in small parser
+  modules so the former 800-line expression and parser roots remain below the
+  repository limit;
+- the focused comma profile now passes 5/6 files and 10/11 variants, and all
+  six linked static-accessor variants pass. The only comma-profile residual is
+  `tco-final.js`, whose named recursive function binding is unavailable and
+  belongs to a separate function/TCO tranche;
+- direct tests cover order, result selection, precedence, computed-member and
+  callee contexts, delimiter preservation for calls/declarations/arrays/object
+  literals, invalid assignment targets, and surrounding early errors. Existing
+  engine, active Test262, and QuickJS differential fixtures now keep comma
+  semantics in their permanent registries without adding another registry row;
+- the first complete-corpus pass exposed 43 previously accidental negative
+  passes: the old parser stopped at a leading comma before reaching invalid
+  function parameters or `for-of` heads. The final grammar records non-simple
+  and unique parameters, strict `yield`, ordinary-function `await` context, and
+  the `for-of` `AssignmentExpression` RHS explicitly. The 43-case regression
+  profile then passes 44/44 variants instead of relying on the missing comma
+  syntax;
+- the reviewed full baseline gains 335 variants and 205 files with no removed
+  pass: 106 `language/expressions`, 89 `language/statements`, 48 annex-B
+  language, 44 `language/eval-code`, 16 `language/statementList`, 14 built-in
+  String, six staging, six built-in Object, three module-code, two comments,
+  and one global-code variant. Local correctness passes at 38,522/38,522
+  expected variants, 19,862/53,404 files, and 38,522/102,578 full variants;
+- both baseline-refresh and clean correctness runs pass with 69/69 engine
+  fixtures, 118/118 active Test262 cases, 96/96 QuickJS differential cases,
+  119/119 runner tests, strict clippy, documentation, architecture mutations,
+  and touched-file size checks;
+- an architecture guard fixes the single parser/compiler ownership model,
+  forbids a sequence-specific bytecode variant, requires shared binding
+  traversal, and mutation-tests both intermediate `Pop` semantics and the
+  `for-of` assignment-expression delimiter;
+- adjacent main/branch sentinel medians are arithmetic 83.03/81.38 ms (-2.0%),
+  array-index 2.32/2.34 ms (+0.9%), property-read 224.47/222.04 ms (-1.1%),
+  function-call 153.58/153.51 ms (-0.05%), and string-scan 71.33/71.74 ms
+  (+0.6%). Every row is valid, branch variation is at most 1.7%, and no
+  performance regression is indicated;
+- exact-tree CI and canonical publication remain required before AS-09d can
   close.
 
 ### AS-10: Performance And Memory Checkpoints

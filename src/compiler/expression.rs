@@ -66,12 +66,9 @@ impl BytecodeCompiler<'_> {
                     property: Self::compile_property(property, *access),
                 });
             }
-            Expr::Spread(_) => {
-                return Err(Error::runtime(
-                    "spread is only valid in call arguments and literals",
-                ));
-            }
+            Expr::Spread(_) => return Err(Self::spread_outside_literal_error()),
             Expr::Parenthesized(expr) => return self.compile_expr(expr),
+            Expr::Sequence(expressions) => return self.compile_sequence_expr(expressions),
             Expr::Await(expr) => {
                 self.compile_expr(expr)?;
                 self.emit(BytecodeInstruction::Await);
@@ -131,6 +128,21 @@ impl BytecodeCompiler<'_> {
             Expr::New { constructor, args } => self.compile_new_expr(constructor, args)?,
         }
         Ok(())
+    }
+
+    fn compile_sequence_expr(&mut self, expressions: &[Expression]) -> Result<()> {
+        let Some((last, leading)) = expressions.split_last() else {
+            return Err(Error::runtime("sequence expression cannot be empty"));
+        };
+        for expression in leading {
+            self.compile_expr(expression)?;
+            self.emit(BytecodeInstruction::Pop);
+        }
+        self.compile_expr(last)
+    }
+
+    fn spread_outside_literal_error() -> Error {
+        Error::runtime("spread is only valid in call arguments and literals")
     }
 
     fn compile_template_literal(

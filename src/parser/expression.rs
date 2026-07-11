@@ -24,13 +24,12 @@ struct ArrowSignature {
 }
 
 impl Parser {
-    pub(super) fn expression(&mut self) -> Result<Expression> {
-        self.with_expression_depth(Self::assignment)
-    }
-
     pub(super) fn unary(&mut self) -> Result<Expression> {
         let start = self.current_span();
         if self.match_kind(&TokenKind::Await) {
+            if !self.await_expression_is_allowed() {
+                return Err(self.parse_error("await expression is not allowed in this function"));
+            }
             let expr = self.unary()?;
             return Ok(self.expression_node(start, Expr::Await(Box::new(expr))));
         }
@@ -437,10 +436,10 @@ impl Parser {
         loop {
             if self.match_kind(&TokenKind::DotDotDot) {
                 let start = self.previous_span();
-                let expression = self.expression()?;
+                let expression = self.assignment_expression()?;
                 args.push(self.expression_node(start, Expr::Spread(Box::new(expression))));
             } else {
-                args.push(self.expression()?);
+                args.push(self.assignment_expression()?);
             }
             if !self.match_kind(&TokenKind::Comma) {
                 break;
@@ -481,10 +480,13 @@ impl Parser {
                 ));
             }
             TokenKind::Super => self.super_expression(token_span)?,
-            TokenKind::Identifier(name) => Expression::new(
-                Expr::Identifier(self.static_binding_name(name)?),
-                token_span,
-            ),
+            TokenKind::Identifier(name) => {
+                self.validate_strict_identifier_reference(&name)?;
+                Expression::new(
+                    Expr::Identifier(self.static_binding_name(name)?),
+                    token_span,
+                )
+            }
             TokenKind::Function => self.function_expression(false)?,
             TokenKind::Class => self.class_expression()?,
             TokenKind::Async => {
@@ -529,18 +531,21 @@ impl Parser {
                     None,
                 )],
                 pattern_prologue: Vec::new(),
+                is_simple: true,
             },
             ArrowParameters::Parenthesized => {
                 self.consume(&TokenKind::LParen, "expected '(' before arrow parameters")?;
-                let parameters = self.function_parameters()?;
+                let parameters = self.with_await_expression(false, Self::function_parameters)?;
                 self.consume(&TokenKind::RParen, "expected ')' after arrow parameters")?;
                 parameters
             }
         };
+        self.reject_duplicate_parameters(&parameters.params)?;
         self.consume(&TokenKind::Arrow, "expected '=>' after arrow parameters")?;
-        let body = self.arrow_body(inherited_strict)?;
+        let body = self.arrow_body(inherited_strict, signature.is_async)?;
         self.validate_function_parameters(
             &parameters.params,
+            parameters.is_simple,
             inherited_strict,
             body.contains_use_strict,
         )?;
@@ -557,15 +562,21 @@ impl Parser {
         )))
     }
 
-    fn arrow_body(&mut self, inherited_strict: bool) -> Result<super::ParsedFunctionBody> {
-        if self.match_kind(&TokenKind::LBrace) {
-            return self.function_body(inherited_strict);
-        }
-        let value = self.assignment()?;
-        let span = value.span();
-        Ok(super::ParsedFunctionBody {
-            statements: vec![Statement::new(Stmt::Return(Some(value)), span)],
-            contains_use_strict: false,
+    fn arrow_body(
+        &mut self,
+        inherited_strict: bool,
+        is_async: bool,
+    ) -> Result<super::ParsedFunctionBody> {
+        self.with_await_expression(is_async, |parser| {
+            if parser.match_kind(&TokenKind::LBrace) {
+                return parser.function_body(inherited_strict);
+            }
+            let value = parser.assignment()?;
+            let span = value.span();
+            Ok(super::ParsedFunctionBody {
+                statements: vec![Statement::new(Stmt::Return(Some(value)), span)],
+                contains_use_strict: false,
+            })
         })
     }
 
@@ -657,16 +668,19 @@ impl Parser {
             None
         };
         self.consume(&TokenKind::LParen, "expected '(' after 'function'")?;
-        let parameters = self.function_parameters()?;
+        let parameters = self.with_await_expression(false, Self::function_parameters)?;
         self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
         let body = self.with_new_target_scope(|parser| {
             parser.with_super_context(false, false, |parser| {
-                parser.function_body(inherited_strict)
+                parser.with_await_expression(is_async, |parser| {
+                    parser.function_body(inherited_strict)
+                })
             })
         })?;
         self.validate_function_parameters(
             &parameters.params,
+            parameters.is_simple,
             inherited_strict,
             body.contains_use_strict,
         )?;
@@ -682,27 +696,6 @@ impl Parser {
                 is_async,
             },
         ))
-    }
-
-    fn with_expression_depth(
-        &mut self,
-        parse: impl FnOnce(&mut Self) -> Result<Expression>,
-    ) -> Result<Expression> {
-        self.expression_depth = self
-            .expression_depth
-            .checked_add(1)
-            .ok_or_else(|| Error::limit("expression nesting overflowed"))?;
-        self.max_expression_depth = self.max_expression_depth.max(self.expression_depth);
-        if self.expression_depth > self.limits.max_expression_depth {
-            self.expression_depth = self.expression_depth.saturating_sub(1);
-            return Err(Error::limit(format!(
-                "expression nesting exceeded {}",
-                self.limits.max_expression_depth
-            )));
-        }
-        let result = parse(self);
-        self.expression_depth = self.expression_depth.saturating_sub(1);
-        result
     }
 
     fn consume_property_name(&mut self, message: &str) -> Result<StaticName> {
