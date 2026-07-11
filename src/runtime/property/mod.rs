@@ -53,7 +53,7 @@ pub fn get_property(
             .map(|value| PropertyValue::from_object_value(value, object)),
         Value::String(value) => string_property(value, property.name()),
         Value::HeapString(value) => string_property(value.as_str(), property.name()),
-        value => Err(Error::runtime(format!(
+        value => Err(Error::type_error(format!(
             "member access '{}' is not supported for {}",
             property.name(),
             value.type_name()

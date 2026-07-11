@@ -15,10 +15,11 @@ use crate::{
     value::Value,
 };
 
-enum BytecodeAssignmentReference {
+#[derive(Debug, Clone)]
+pub(in crate::runtime::bytecode) enum BytecodeAssignmentReference {
     Binding {
         name: BytecodeBinding,
-        cell: BindingCell,
+        cell: Option<BindingCell>,
     },
     StaticProperty {
         object: Value,
@@ -40,7 +41,14 @@ enum BytecodeAssignmentReference {
 impl BytecodeAssignmentReference {
     fn get(&self, context: &mut Context) -> Result<Value> {
         match self {
-            Self::Binding { name, cell } => cell.value(name.name()),
+            Self::Binding { name, cell } => {
+                let Some(cell) = cell else {
+                    return context
+                        .unresolved_global_property_value(name.name().name())?
+                        .ok_or_else(|| reference_error_undefined(name.name()));
+                };
+                cell.value(name.name())
+            }
             Self::StaticProperty { object, property } => {
                 context.get_static_property_value(object, property.name(), property.access())
             }
@@ -65,9 +73,18 @@ impl BytecodeAssignmentReference {
         }
     }
 
-    fn set(&self, context: &mut Context, value: Value) -> Result<()> {
+    pub(in crate::runtime::bytecode) fn set(
+        &self,
+        context: &mut Context,
+        value: Value,
+    ) -> Result<()> {
         match self {
-            Self::Binding { name, cell } => context.assign_bytecode_cell(name, cell, value),
+            Self::Binding { name, cell } => {
+                if let Some(cell) = cell {
+                    return context.assign_bytecode_cell(name, cell, value);
+                }
+                context.assign_bytecode_or_create_sloppy_global(name, value)
+            }
             Self::StaticProperty { object, property } => {
                 context.set_static_property_value(object, property.name(), property.access(), value)
             }
@@ -92,6 +109,20 @@ impl BytecodeAssignmentReference {
                 let mut property = property.clone();
                 context.set_cached_dynamic_property_value(object, &mut property, *access, value)
             }
+        }
+    }
+
+    pub(in crate::runtime::bytecode) fn root_values(&self) -> Vec<&Value> {
+        match self {
+            Self::Binding { .. } => Vec::new(),
+            Self::StaticProperty { object, .. } | Self::ArrayIndexProperty { object, .. } => {
+                vec![object]
+            }
+            Self::ComputedProperty {
+                object,
+                property_value,
+                ..
+            } => vec![object, property_value],
         }
     }
 }
@@ -293,15 +324,13 @@ impl Context {
         self.runtime_value(value)
     }
 
-    fn eval_bytecode_assignment_reference(
+    pub(in crate::runtime::bytecode) fn eval_bytecode_assignment_reference(
         &mut self,
         target: &BytecodeAssignmentTarget,
     ) -> Result<BytecodeAssignmentReference> {
         match target {
             BytecodeAssignmentTarget::Binding(name) => {
-                let cell = self
-                    .get_or_materialize_binding_bytecode(name)?
-                    .ok_or_else(|| reference_error_undefined(name.name()))?;
+                let cell = self.get_or_materialize_binding_bytecode(name)?;
                 Ok(BytecodeAssignmentReference::Binding {
                     name: name.clone(),
                     cell,
@@ -346,7 +375,9 @@ impl Context {
         value: Value,
     ) -> Result<()> {
         match target {
-            BytecodeAssignmentTarget::Binding(name) => self.assign_bytecode(name, value),
+            BytecodeAssignmentTarget::Binding(name) => {
+                self.assign_bytecode_or_create_sloppy_global(name, value)
+            }
             BytecodeAssignmentTarget::StaticProperty { object, property } => {
                 let object = self.eval_bytecode_expression(object)?;
                 self.set_static_property_value(&object, property.name(), property.access(), value)

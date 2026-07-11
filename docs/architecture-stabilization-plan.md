@@ -2454,7 +2454,7 @@ AS-09e profile evidence in draft PR #454:
   \`reports/test-runs/rsqjs-test-report-20260711T072934Z.*\` with all five
   sentinels valid.
 
-AS-09f profile evidence in draft PR #455:
+AS-09f canonical evidence from PR #455:
 
 - the canonical \`fn-name\` profile contains 1,056 files and 2,086 variants.
   Before this tranche only 3 files and 6 variants passed; 432 failures already
@@ -2497,8 +2497,62 @@ AS-09f profile evidence in draft PR #455:
   2.29/2.25 ms, property 228.87/233.28 ms, function 158.78/156.63 ms, and
   string 70.63/70.92 ms. The changes are small and mixed-direction, with no
   systematic regression;
-- exact-tree CI and canonical publication evidence remain required before
-  AS-09f can close.
+- PR #455 squash-merged as `6c71713`; required run `29145629944` certified
+  exact tree `4b42cadb`, post-merge run `29145743199` passed performance and
+  publication, and report-only commit `ae507a1` published
+  `reports/test-runs/rsqjs-test-report-20260711T081229Z.*` with all five
+  sentinels valid.
+
+AS-09g profile evidence in draft PR #456:
+
+- an exhaustive canonical-main profile separated the broad 2,302-case
+  `invalid assignment target` diagnostic into coherent syntax families. The
+  `language/expressions/assignment/dstr` family contains 640 variants across
+  368 files; before this tranche 131 variants and 78 files passed;
+- one typed `AssignmentPattern` AST accepts object/array cover grammar without
+  mutating ordinary literal nodes. Leaves retain identifier, static-property,
+  or computed-property expressions, while nested patterns, defaults, elisions,
+  and rest targets remain explicit;
+- binding and assignment patterns compile into one `BytecodePattern` tree and
+  one `DestructurePattern` instruction. `BytecodeDestructureMode` distinguishes
+  declaration cleanup from assignment-expression result preservation; no
+  second runtime walker or assignment-only opcode tree exists;
+- the existing resumable destructuring owner now evaluates assignment
+  references before iterator steps or object property reads, retains resolved
+  references as continuation roots, applies defaults before `PutValue`, and
+  closes live iterators on reference/default/set failures. Object and array
+  rest reuse the same path;
+- unresolved sloppy writes use one explicit global-creation boundary, strict
+  assignment patterns reject restricted/future-reserved identifiers during
+  parsing, decimal literals accept the standard trailing dot form, and
+  nullish member access raises a typed TypeError;
+- direct tests cover nested patterns, result preservation, literal member
+  targets, reference/iterator/default order, sloppy globals, strict early
+  errors, and inferred names. The focused profile now passes 580/640 variants
+  and 338/368 files, gains of 449 variants and 260 files. Fifty-eight of the
+  60 residual variants require generator/yield support; two require
+  symbol-aware object rest ordering;
+- the reviewed full baseline gains 850 variants and 512 files with no removed
+  pass. The largest variant gains are 499 `language/expressions`, 78
+  `built-ins/Number`, 53 `built-ins/Function`, 49 staging, and 36
+  `built-ins/Promise`, with another 135 variants distributed across shared
+  syntax/runtime consumers. Local full-corpus evidence passes 39,835/39,835
+  expected variants, 20,612/53,404 files, and 39,835/102,578 full variants;
+  the permanent suites remain green at 69/69 engine fixtures, 118/118 active
+  Test262 cases, and 96/96 QuickJS differential cases in
+  `target/as09g-full-baseline-final.*`; the complete local correctness gate
+  reproduces those totals in
+  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260711T085840Z.*`;
+- adjacent main/branch and reverse-control performance pairs keep every
+  sentinel valid. The primary branch/main medians are arithmetic 88.97/92.61
+  ms, array 2.35/2.44 ms, property 242.45/294.04 ms, function 163.20/162.96
+  ms, and string 73.88/74.29 ms. The reverse branch/main control is
+  86.32/110.42, 2.31/2.85, 233.82/241.79, 158.58/161.79, and 72.71/72.78 ms,
+  respectively. Both orders show no regression;
+- the architecture guard fixes the single runtime walker, assignment-reference
+  owner, compiler users, typed mode/leaf metadata, and mutation-tests a second
+  walker. Exact-tree CI and canonical publication evidence remain required
+  before AS-09g can close.
 
 ### AS-10: Performance And Memory Checkpoints
 

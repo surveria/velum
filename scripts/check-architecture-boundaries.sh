@@ -1065,6 +1065,56 @@ src/runtime/native/builtins/function_constructor.rs'
   fi
 }
 
+check_destructuring_assignment_boundary() {
+  local runtime_owners
+  local reference_owners
+  local compiler_users
+
+  runtime_owners="$(
+    function_owners 'fn[[:space:]]+eval_resumable_destructure[[:space:]]*\(' \
+      | sed -E 's/[[:space:]]*\($//'
+  )"
+  compare_set "destructuring runtime owner allowlist" \
+    "${runtime_owners}" \
+    'src/runtime/bytecode/destructure.rs:eval_resumable_destructure'
+
+  reference_owners="$(
+    function_owners 'fn[[:space:]]+eval_bytecode_assignment_reference[[:space:]]*\(' \
+      | sed -E 's/[[:space:]]*\($//'
+  )"
+  compare_set "assignment reference owner allowlist" \
+    "${reference_owners}" \
+    'src/runtime/bytecode/ops/assignment.rs:eval_bytecode_assignment_reference'
+
+  compiler_users="$(
+    cd "${repo_root}"
+    grep -R -l -F --include='*.rs' \
+      'BytecodeInstruction::DestructurePattern {' src/compiler || true
+  )"
+  compare_set "destructuring compiler user allowlist" \
+    "${compiler_users}" \
+    'src/compiler/expression.rs
+src/compiler/mod.rs'
+
+  for source in \
+    'pub enum AssignmentPattern {' \
+    'DestructuringAssignment {' \
+    'Assignment(BytecodeAssignmentTarget),' \
+    'pub enum BytecodeDestructureMode {' \
+    'compile_assignment_pattern(' \
+    'assignment_reference_for_pattern(' \
+    'assign_bytecode_or_create_sloppy_global(' \
+    'self.iterator_close(&mut source, completion).map(Some)'; do
+    if ! grep -R -q -F --include='*.rs' "${source}" "${repo_root}/src"; then
+      fail "destructuring assignment boundary changed; required shared source '${source}' is missing"
+    fi
+  done
+
+  if grep -R -q -F --include='*.rs' 'BytecodeAssignmentPattern' "${repo_root}/src"; then
+    fail "destructuring assignment boundary changed; assignment and binding patterns must share one bytecode walker"
+  fi
+}
+
 check_direct_root_boundary() {
   local root_kinds
   local source
@@ -1343,7 +1393,7 @@ check_suspended_execution_boundary() {
 
   for source in \
     'pub(super) struct DestructureContinuation {' \
-    'Default { value: Value },' \
+    'reference: Option<BytecodeAssignmentReference>,' \
     'Self::Array { source, .. } => source.root_values().collect(),'; do
     if ! grep -F -q "${source}" \
         "${repo_root}/src/runtime/bytecode/destructure_continuation.rs"; then
@@ -1914,6 +1964,7 @@ run_checks() {
   check_sequence_expression_boundary
   check_named_function_binding_boundary
   check_function_name_inference_boundary
+  check_destructuring_assignment_boundary
   check_direct_root_boundary
   check_activation_frame_boundary
   check_bytecode_continuation_boundary
@@ -2071,6 +2122,12 @@ mutate_function_name_inference_owner() {
   local fixture_root="$1"
   printf '\nfn set_function_name() {}\n' \
     >>"${fixture_root}/src/runtime/bytecode/ops/object_literal.rs"
+}
+
+mutate_destructuring_assignment_owner() {
+  local fixture_root="$1"
+  printf '\nfn eval_resumable_destructure() {}\n' \
+    >>"${fixture_root}/src/runtime/bytecode/class.rs"
 }
 
 mutate_host_local_value_identity() {
@@ -2502,6 +2559,8 @@ run_self_tests() {
     'named function binding boundary changed' mutate_named_function_self_binding_owner
   expect_guard_failure "${temp_dir}" function-name-inference-owner \
     'function name runtime owner allowlist changed' mutate_function_name_inference_owner
+  expect_guard_failure "${temp_dir}" destructuring-assignment-owner \
+    'destructuring runtime owner allowlist changed' mutate_destructuring_assignment_owner
   expect_guard_failure "${temp_dir}" host-local-value-identity \
     'host local-value boundary changed' mutate_host_local_value_identity
   expect_guard_failure "${temp_dir}" javascript-exception-visibility \

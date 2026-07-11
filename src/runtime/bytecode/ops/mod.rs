@@ -1,6 +1,8 @@
 mod assignment;
 mod object_literal;
 
+pub(super) use assignment::BytecodeAssignmentReference;
+
 use crate::{
     bytecode::{
         BytecodeBinding, BytecodeDynamicProperty, BytecodeNumericBinaryOp,
@@ -70,7 +72,10 @@ impl Context {
         if let Some(binding) = self.get_binding_bytecode(name)? {
             return self.checked_value(binding.value(name.name())?);
         }
-        self.builtin_value(name.name().name())?
+        if let Some(value) = self.builtin_value(name.name().name())? {
+            return Ok(value);
+        }
+        self.unresolved_global_property_value(name.name().name())?
             .ok_or_else(|| crate::runtime::control::reference_error_undefined(name.name()))
     }
 
@@ -83,7 +88,10 @@ impl Context {
             let type_name = self.semantic_type_name(&value)?;
             return self.heap_string_value(type_name);
         }
-        if let Some(value) = self.builtin_value(name.name().name())? {
+        if let Some(value) = self
+            .builtin_value(name.name().name())?
+            .or(self.unresolved_global_property_value(name.name().name())?)
+        {
             let type_name = self.semantic_type_name(&value)?;
             return self.heap_string_value(type_name);
         }

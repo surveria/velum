@@ -1,7 +1,7 @@
 use crate::{
     bytecode::{
-        BytecodeAddress, BytecodeBinding, BytecodeBlock, BytecodePattern, BytecodePatternKey,
-        BytecodePatternProperty, BytecodePatternTarget,
+        BytecodeAddress, BytecodeBlock, BytecodeDestructureMode, BytecodePattern,
+        BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget,
     },
     error::{Error, Result},
     runtime::binding::scope::BindingScope,
@@ -10,6 +10,8 @@ use crate::{
     runtime::{
         Context,
         abstract_operations::{IteratorSource, IteratorStep},
+        control::runtime_exception_value,
+        property::DynamicPropertyKey,
     },
     syntax::{DeclKind, StaticName},
     value::Value,
@@ -18,6 +20,7 @@ use crate::{
 use super::{
     control_continuation::{BytecodeControlRecord, BytecodeLoopPhase},
     destructure_continuation::{DestructureContinuation, DestructureTask, ObjectPropertyPhase},
+    ops::BytecodeAssignmentReference,
     state::{BytecodeState, bytecode_loop_completion},
 };
 
@@ -41,7 +44,7 @@ impl Context {
         &mut self,
         state: &mut BytecodeState,
         pattern: &BytecodePattern,
-        kind: DeclKind,
+        mode: BytecodeDestructureMode,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let value = if state.has_destructure_continuation() {
@@ -49,10 +52,12 @@ impl Context {
         } else {
             Some(state.stack.peek()?.clone())
         };
-        match self.eval_resumable_destructure(state, pattern, kind, value)? {
+        match self.eval_resumable_destructure(state, pattern, mode, value)? {
             DestructureOutcome::Completed => {
-                state.stack.pop()?;
-                state.last = Value::Undefined;
+                if let BytecodeDestructureMode::Declaration(_) = mode {
+                    state.stack.pop()?;
+                    state.last = Value::Undefined;
+                }
                 state.pc = next;
                 Ok(None)
             }
@@ -70,7 +75,7 @@ impl Context {
         &mut self,
         state: &mut BytecodeState,
         pattern: &BytecodePattern,
-        kind: DeclKind,
+        mode: BytecodeDestructureMode,
         value: Option<Value>,
     ) -> Result<DestructureOutcome> {
         let mut continuation = if let Some(continuation) = state.take_destructure_continuation() {
@@ -79,13 +84,16 @@ impl Context {
             let value = value.ok_or_else(|| {
                 Error::runtime("bytecode destructuring value disappeared before start")
             })?;
-            DestructureContinuation::new(pattern.clone(), kind, value)
+            DestructureContinuation::new(pattern.clone(), mode, value)
         };
         loop {
             let Some(task) = continuation.tasks.pop() else {
                 return Ok(DestructureOutcome::Completed);
             };
-            let abrupt = self.run_destructure_task(&mut continuation, task)?;
+            let abrupt = match self.run_destructure_task(&mut continuation, task) {
+                Ok(abrupt) => abrupt,
+                Err(error) => Some(self.destructure_error_completion(error)?),
+            };
             let Some(completion) = abrupt else {
                 continue;
             };
@@ -96,6 +104,14 @@ impl Context {
             let completion = self.close_destructure_iterators(&mut continuation, completion)?;
             return Ok(DestructureOutcome::Abrupt(completion));
         }
+    }
+
+    fn destructure_error_completion(&mut self, error: Error) -> Result<Completion> {
+        let Some(value) = runtime_exception_value(self, &error)? else {
+            return Err(error);
+        };
+        self.checked_value(value.clone())?;
+        Ok(Completion::Throw(value))
     }
 
     fn run_destructure_task(
@@ -141,9 +157,11 @@ impl Context {
                 next,
                 exhausted,
             ),
-            DestructureTask::ArrayElement { target, value } => {
-                self.run_destructure_element_task(continuation, target, value)
-            }
+            DestructureTask::ArrayElement {
+                target,
+                value,
+                reference,
+            } => self.run_destructure_element_task(continuation, target, value, reference),
         }
     }
 
@@ -156,7 +174,20 @@ impl Context {
         self.step()?;
         match pattern {
             BytecodePattern::Binding(name) => {
-                self.eval_bytecode_declaration(&name, continuation.kind, Some(value))?;
+                let BytecodeDestructureMode::Declaration(kind) = continuation.mode else {
+                    return Err(Error::runtime(
+                        "binding pattern leaf used by assignment destructuring",
+                    ));
+                };
+                self.eval_bytecode_declaration(&name, kind, Some(value))?;
+            }
+            BytecodePattern::Assignment(target) => {
+                if continuation.mode != BytecodeDestructureMode::Assignment {
+                    return Err(Error::runtime(
+                        "assignment pattern leaf used by declaration destructuring",
+                    ));
+                }
+                self.assign_bytecode_target(&target, value)?;
             }
             BytecodePattern::Object { properties, rest } => {
                 if matches!(value, Value::Undefined | Value::Null) {
@@ -191,7 +222,7 @@ impl Context {
         &mut self,
         continuation: &mut DestructureContinuation,
         properties: std::rc::Rc<[BytecodePatternProperty]>,
-        rest: Option<BytecodeBinding>,
+        rest: Option<std::rc::Rc<BytecodePattern>>,
         source: Value,
         next: usize,
         consumed: Vec<String>,
@@ -215,9 +246,17 @@ impl Context {
             });
             return Ok(None);
         }
-        if let Some(rest_binding) = rest {
+        if let Some(rest_pattern) = rest {
+            let reference = self.assignment_reference_for_pattern(&rest_pattern)?;
             let rest_value = self.destructure_rest_object(&source, &consumed)?;
-            self.eval_bytecode_declaration(&rest_binding, continuation.kind, Some(rest_value))?;
+            if let Some(reference) = reference {
+                reference.set(self, rest_value)?;
+            } else {
+                continuation.tasks.push(DestructureTask::Pattern {
+                    pattern: rest_pattern.as_ref().clone(),
+                    value: rest_value,
+                });
+            }
         }
         Ok(None)
     }
@@ -232,8 +271,8 @@ impl Context {
     ) -> Result<Option<Completion>> {
         match phase {
             ObjectPropertyPhase::Read => {
-                let (name, value) = match self.read_resumable_pattern_property(&source, &key)? {
-                    PatternStep::Value(read) => (read.name, read.value),
+                let resolved_key = match self.resolve_resumable_pattern_property_key(&key)? {
+                    PatternStep::Value(key) => key,
                     PatternStep::Abrupt(completion) => {
                         continuation.tasks.push(DestructureTask::ObjectProperty {
                             key,
@@ -244,15 +283,20 @@ impl Context {
                         return Ok(Some(completion));
                     }
                 };
-                Self::record_destructure_consumed_name(continuation, name)?;
+                Self::record_destructure_consumed_name(
+                    continuation,
+                    resolved_key.name().to_owned(),
+                )?;
+                let reference = self.assignment_reference_for_pattern(&target.pattern)?;
+                let value = self.get(&source, resolved_key.lookup())?;
                 continuation.tasks.push(DestructureTask::ObjectProperty {
                     key,
                     target,
                     source,
-                    phase: ObjectPropertyPhase::Default { value },
+                    phase: ObjectPropertyPhase::Default { value, reference },
                 });
             }
-            ObjectPropertyPhase::Default { value } => {
+            ObjectPropertyPhase::Default { value, reference } => {
                 let value =
                     match self.apply_pattern_default(value.clone(), target.default.as_ref())? {
                         PatternStep::Value(value) => value,
@@ -261,32 +305,34 @@ impl Context {
                                 key,
                                 target,
                                 source,
-                                phase: ObjectPropertyPhase::Default { value },
+                                phase: ObjectPropertyPhase::Default { value, reference },
                             });
                             return Ok(Some(completion));
                         }
                     };
-                continuation.tasks.push(DestructureTask::Pattern {
-                    pattern: target.pattern,
-                    value,
-                });
+                if let Some(reference) = reference {
+                    reference.set(self, value)?;
+                } else {
+                    continuation.tasks.push(DestructureTask::Pattern {
+                        pattern: target.pattern,
+                        value,
+                    });
+                }
             }
         }
         Ok(None)
     }
 
-    fn read_resumable_pattern_property(
+    fn resolve_resumable_pattern_property_key(
         &mut self,
-        source: &Value,
         key: &BytecodePatternKey,
-    ) -> Result<PatternStep<PatternPropertyRead>> {
+    ) -> Result<PatternStep<DynamicPropertyKey>> {
         let key_value = match key {
             BytecodePatternKey::Static(name) => {
-                let value = self.get_named(source, name.as_str())?;
-                return Ok(PatternStep::Value(PatternPropertyRead {
-                    name: name.as_str().to_owned(),
-                    value,
-                }));
+                return Ok(PatternStep::Value(DynamicPropertyKey::new(
+                    name.as_str().to_owned(),
+                    self.known_property_key(name.as_str()),
+                )));
             }
             BytecodePatternKey::Computed(block) => match self.eval_pattern_block(block)? {
                 PatternStep::Value(value) => value,
@@ -295,10 +341,8 @@ impl Context {
                 }
             },
         };
-        let key = self.dynamic_property_key(&key_value)?;
-        let name = key.name().to_owned();
-        let value = self.get(source, key.lookup())?;
-        Ok(PatternStep::Value(PatternPropertyRead { name, value }))
+        self.dynamic_property_key(&key_value)
+            .map(PatternStep::Value)
     }
 
     fn record_destructure_consumed_name(
@@ -328,6 +372,20 @@ impl Context {
     ) -> Result<Option<Completion>> {
         if let Some(element) = elements.get(next).cloned() {
             self.step()?;
+            let reference = if let Some(target) = element.as_ref() {
+                match self.assignment_reference_for_pattern(&target.pattern) {
+                    Ok(reference) => reference,
+                    Err(error) => {
+                        let completion = self.destructure_error_completion(error)?;
+                        if exhausted {
+                            return Ok(Some(completion));
+                        }
+                        return self.iterator_close(&mut source, completion).map(Some);
+                    }
+                }
+            } else {
+                None
+            };
             let value = if exhausted {
                 Value::Undefined
             } else {
@@ -351,13 +409,25 @@ impl Context {
                 exhausted,
             });
             if let Some(target) = element {
-                continuation
-                    .tasks
-                    .push(DestructureTask::ArrayElement { target, value });
+                continuation.tasks.push(DestructureTask::ArrayElement {
+                    target,
+                    value,
+                    reference,
+                });
             }
             return Ok(None);
         }
         if let Some(rest_pattern) = rest {
+            let reference = match self.assignment_reference_for_pattern(&rest_pattern) {
+                Ok(reference) => reference,
+                Err(error) => {
+                    let completion = self.destructure_error_completion(error)?;
+                    if exhausted {
+                        return Ok(Some(completion));
+                    }
+                    return self.iterator_close(&mut source, completion).map(Some);
+                }
+            };
             let mut items = Vec::new();
             while !exhausted {
                 self.step()?;
@@ -368,10 +438,14 @@ impl Context {
                 }
             }
             let rest_value = self.create_array_from_elements(items)?;
-            continuation.tasks.push(DestructureTask::Pattern {
-                pattern: rest_pattern.as_ref().clone(),
-                value: rest_value,
-            });
+            if let Some(reference) = reference {
+                reference.set(self, rest_value)?;
+            } else {
+                continuation.tasks.push(DestructureTask::Pattern {
+                    pattern: rest_pattern.as_ref().clone(),
+                    value: rest_value,
+                });
+            }
             return Ok(None);
         }
         if !exhausted {
@@ -389,21 +463,38 @@ impl Context {
         continuation: &mut DestructureContinuation,
         target: BytecodePatternTarget,
         value: Value,
+        reference: Option<BytecodeAssignmentReference>,
     ) -> Result<Option<Completion>> {
         let resolved = match self.apply_pattern_default(value.clone(), target.default.as_ref())? {
             PatternStep::Value(value) => value,
             PatternStep::Abrupt(completion) => {
-                continuation
-                    .tasks
-                    .push(DestructureTask::ArrayElement { target, value });
+                continuation.tasks.push(DestructureTask::ArrayElement {
+                    target,
+                    value,
+                    reference,
+                });
                 return Ok(Some(completion));
             }
         };
-        continuation.tasks.push(DestructureTask::Pattern {
-            pattern: target.pattern,
-            value: resolved,
-        });
+        if let Some(reference) = reference {
+            reference.set(self, resolved)?;
+        } else {
+            continuation.tasks.push(DestructureTask::Pattern {
+                pattern: target.pattern,
+                value: resolved,
+            });
+        }
         Ok(None)
+    }
+
+    fn assignment_reference_for_pattern(
+        &mut self,
+        pattern: &BytecodePattern,
+    ) -> Result<Option<BytecodeAssignmentReference>> {
+        let BytecodePattern::Assignment(target) = pattern else {
+            return Ok(None);
+        };
+        self.eval_bytecode_assignment_reference(target).map(Some)
     }
 
     fn close_destructure_iterators(
@@ -522,7 +613,12 @@ impl Context {
                     &mut control,
                     super::control_continuation::BytecodeControlStateSlot::Body,
                     |context, state| {
-                        context.eval_resumable_destructure(state, pattern, kind, value)
+                        context.eval_resumable_destructure(
+                            state,
+                            pattern,
+                            BytecodeDestructureMode::Declaration(kind),
+                            value,
+                        )
                     },
                 );
                 let destructure = match destructure {
@@ -611,7 +707,12 @@ impl Context {
                     &mut control,
                     super::control_continuation::BytecodeControlStateSlot::Body,
                     |context, state| {
-                        context.eval_resumable_destructure(state, pattern, kind, value)
+                        context.eval_resumable_destructure(
+                            state,
+                            pattern,
+                            BytecodeDestructureMode::Declaration(kind),
+                            value,
+                        )
                     },
                 )?;
                 match destructure {
@@ -661,11 +762,4 @@ impl Context {
         }
         Ok(())
     }
-}
-
-/// A property read produced by an object pattern key: the consumed key name
-/// plus the value it resolved to.
-struct PatternPropertyRead {
-    name: String,
-    value: Value,
 }

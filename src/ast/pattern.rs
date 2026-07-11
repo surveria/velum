@@ -18,13 +18,13 @@ pub enum BindingPattern {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjectBindingProperty {
-    pub key: BindingPropertyKey,
+    pub key: PatternPropertyKey,
     pub target: BindingPattern,
     pub default: Option<Expression>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum BindingPropertyKey {
+pub enum PatternPropertyKey {
     Static(StaticName),
     Computed(Expression),
 }
@@ -75,7 +75,7 @@ impl BindingPattern {
             Self::Identifier(_) => Ok(()),
             Self::Object { properties, .. } => {
                 for property in properties {
-                    if let BindingPropertyKey::Computed(key) = &property.key {
+                    if let PatternPropertyKey::Computed(key) = &property.key {
                         visit(key)?;
                     }
                     if let Some(default) = &property.default {
@@ -91,6 +91,74 @@ impl BindingPattern {
                         visit(default)?;
                     }
                     element.target.for_each_expr(visit)?;
+                }
+                if let Some(rest) = rest {
+                    rest.for_each_expr(visit)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// A destructuring assignment target. Unlike a binding pattern, leaves may be
+/// existing bindings or property references and therefore retain expressions.
+#[derive(Debug, Clone, PartialEq)]
+pub enum AssignmentPattern {
+    Target(Expression),
+    Object {
+        properties: Vec<ObjectAssignmentProperty>,
+        rest: Option<Box<Expression>>,
+    },
+    Array {
+        /// `None` entries are elisions that consume one iterator step.
+        elements: Vec<Option<ArrayAssignmentElement>>,
+        rest: Option<Box<Self>>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjectAssignmentProperty {
+    pub key: PatternPropertyKey,
+    pub target: AssignmentPattern,
+    pub default: Option<Expression>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArrayAssignmentElement {
+    pub target: AssignmentPattern,
+    pub default: Option<Expression>,
+}
+
+impl AssignmentPattern {
+    /// Visits assignment targets, computed keys, and defaults in source order.
+    pub fn for_each_expr<E>(
+        &self,
+        visit: &mut impl FnMut(&Expression) -> Result<(), E>,
+    ) -> Result<(), E> {
+        match self {
+            Self::Target(target) => visit(target),
+            Self::Object { properties, rest } => {
+                for property in properties {
+                    if let PatternPropertyKey::Computed(key) = &property.key {
+                        visit(key)?;
+                    }
+                    property.target.for_each_expr(visit)?;
+                    if let Some(default) = &property.default {
+                        visit(default)?;
+                    }
+                }
+                if let Some(rest) = rest {
+                    visit(rest)?;
+                }
+                Ok(())
+            }
+            Self::Array { elements, rest } => {
+                for element in elements.iter().flatten() {
+                    element.target.for_each_expr(visit)?;
+                    if let Some(default) = &element.default {
+                        visit(default)?;
+                    }
                 }
                 if let Some(rest) = rest {
                     rest.for_each_expr(visit)?;

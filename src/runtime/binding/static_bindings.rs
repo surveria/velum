@@ -353,17 +353,6 @@ impl Context {
         self.assign_bytecode_cell(binding, &cell, value)
     }
 
-    pub(crate) fn assign_bytecode_or_builtin(
-        &mut self,
-        binding: &BytecodeBinding,
-        value: Value,
-    ) -> Result<()> {
-        let Some(cell) = self.get_or_materialize_binding_bytecode(binding)? else {
-            return Err(reference_error_undefined(binding.name()));
-        };
-        self.assign_bytecode_cell(binding, &cell, value)
-    }
-
     pub(crate) fn assign_bytecode_cell(
         &mut self,
         binding: &BytecodeBinding,

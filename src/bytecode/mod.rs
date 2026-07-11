@@ -15,9 +15,9 @@ pub use numeric::{
 pub use types::{
     BytecodeAddress, BytecodeArrayIndex, BytecodeAssignmentTarget, BytecodeBinding,
     BytecodeCallSite, BytecodeCatch, BytecodeClass, BytecodeClassField, BytecodeClassMember,
-    BytecodeClassMemberKey, BytecodeClassMemberKind, BytecodeCompletion, BytecodeDynamicProperty,
-    BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration, BytecodeFunctionParam,
-    BytecodeInstruction, BytecodeNewTargetMode, BytecodeObjectProperty, BytecodePattern,
-    BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget, BytecodeProgram,
-    BytecodeProperty, BytecodeSwitchCase,
+    BytecodeClassMemberKey, BytecodeClassMemberKind, BytecodeCompletion, BytecodeDestructureMode,
+    BytecodeDynamicProperty, BytecodeForInTarget, BytecodeFunction, BytecodeFunctionDeclaration,
+    BytecodeFunctionParam, BytecodeInstruction, BytecodeNewTargetMode, BytecodeObjectProperty,
+    BytecodePattern, BytecodePatternKey, BytecodePatternProperty, BytecodePatternTarget,
+    BytecodeProgram, BytecodeProperty, BytecodeSwitchCase,
 };

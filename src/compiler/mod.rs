@@ -10,10 +10,11 @@ use crate::{
     bytecode::{
         BytecodeAddress, BytecodeArrayIndex, BytecodeBinding, BytecodeBlock, BytecodeCallSite,
         BytecodeClass, BytecodeClassField, BytecodeClassMember, BytecodeClassMemberKey,
-        BytecodeClassMemberKind, BytecodeCompletion, BytecodeDynamicProperty, BytecodeFunction,
-        BytecodeFunctionParam, BytecodeHoistPlan, BytecodeInstruction, BytecodeNewTargetMode,
-        BytecodeNumericBinaryOp, BytecodeNumericCompareOp, BytecodeNumericEqualityOp,
-        BytecodeNumericUnaryOp, BytecodeProgram, BytecodeProperty,
+        BytecodeClassMemberKind, BytecodeCompletion, BytecodeDestructureMode,
+        BytecodeDynamicProperty, BytecodeFunction, BytecodeFunctionParam, BytecodeHoistPlan,
+        BytecodeInstruction, BytecodeNewTargetMode, BytecodeNumericBinaryOp,
+        BytecodeNumericCompareOp, BytecodeNumericEqualityOp, BytecodeNumericUnaryOp,
+        BytecodeProgram, BytecodeProperty,
     },
     error::{Error, Result},
     source::{SourceId, SourceSpan},
@@ -169,7 +170,7 @@ impl<'a> BytecodeCompiler<'a> {
                 let pattern = self.compile_pattern(pattern)?;
                 self.emit(BytecodeInstruction::DestructurePattern {
                     pattern: Rc::new(pattern),
-                    kind: *kind,
+                    mode: BytecodeDestructureMode::Declaration(*kind),
                 });
                 Ok(())
             }

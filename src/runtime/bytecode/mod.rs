@@ -185,7 +185,7 @@ impl Context {
             }
             BytecodeInstruction::StoreBinding(binding) => {
                 let value = state.stack.pop()?;
-                self.assign_bytecode_or_builtin(binding, value.clone())?;
+                self.assign_bytecode_or_create_sloppy_global(binding, value.clone())?;
                 state.stack.push(value);
                 state.pc = next;
                 Ok(None)
@@ -391,7 +391,12 @@ impl Context {
         match instruction {
             BytecodeInstruction::DeleteBinding(binding) => {
                 let exists = self.binding_exists_or_materialize_bytecode(binding)?;
-                state.stack.push(Value::Bool(!exists));
+                let deleted = if exists {
+                    false
+                } else {
+                    self.delete_unresolved_global_property(binding.name().name())?
+                };
+                state.stack.push(Value::Bool(deleted));
                 state.pc = next;
                 Ok(None)
             }

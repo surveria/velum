@@ -11,12 +11,87 @@ impl Parser {
         if let Some(function) = self.arrow_function()? {
             return Ok(function);
         }
+        if self.assignment_pattern_followed_by_equal() {
+            let start = self.current_span();
+            let pattern = self.assignment_pattern()?;
+            self.consume(
+                &TokenKind::Equal,
+                "expected '=' after destructuring assignment pattern",
+            )?;
+            let expr = self.assignment()?;
+            return Ok(self.expression_node(
+                start,
+                Expr::DestructuringAssignment {
+                    pattern: Box::new(pattern),
+                    strict: self.is_strict_mode(),
+                    expr: Box::new(expr),
+                },
+            ));
+        }
         let target = self.conditional()?;
         let Some((operator, offset)) = self.assignment_operator() else {
             return Ok(target);
         };
         let value = self.assignment()?;
         self.assignment_expr(target, operator, value, offset)
+    }
+
+    /// Array and object literals become assignment patterns only when the
+    /// matching outer delimiter is immediately followed by `=`. This keeps
+    /// ordinary literal parsing on the existing expression path without
+    /// speculative parser-table mutations.
+    fn assignment_pattern_followed_by_equal(&self) -> bool {
+        let Some(offset) = self.outer_literal_closing_offset() else {
+            return false;
+        };
+        self.peek_kind(offset.saturating_add(1))
+            .is_some_and(|next| next == &TokenKind::Equal)
+    }
+
+    pub(super) fn literal_starts_assignment_target(&self) -> bool {
+        let Some(offset) = self.outer_literal_closing_offset() else {
+            return false;
+        };
+        matches!(
+            self.peek_kind(offset.saturating_add(1)),
+            Some(TokenKind::Dot | TokenKind::LBracket)
+        )
+    }
+
+    fn outer_literal_closing_offset(&self) -> Option<usize> {
+        let first = self.peek_kind(0)?;
+        let first = match first {
+            TokenKind::LBrace => Delimiter::Brace,
+            TokenKind::LBracket => Delimiter::Bracket,
+            _ => return None,
+        };
+        let mut delimiters = vec![first];
+        let mut offset = 1usize;
+        while let Some(kind) = self.peek_kind(offset) {
+            let closing = match kind {
+                TokenKind::RParen => Some(Delimiter::Paren),
+                TokenKind::RBrace => Some(Delimiter::Brace),
+                TokenKind::RBracket => Some(Delimiter::Bracket),
+                _ => None,
+            };
+            if let Some(closing) = closing {
+                if delimiters.pop() != Some(closing) {
+                    return None;
+                }
+            } else {
+                match kind {
+                    TokenKind::LParen => delimiters.push(Delimiter::Paren),
+                    TokenKind::LBrace => delimiters.push(Delimiter::Brace),
+                    TokenKind::LBracket => delimiters.push(Delimiter::Bracket),
+                    _ => {}
+                }
+            }
+            if delimiters.is_empty() {
+                return Some(offset);
+            }
+            offset = offset.saturating_add(1);
+        }
+        None
     }
 
     fn assignment_operator(&mut self) -> Option<(Option<BinaryOp>, crate::SourceSpan)> {
@@ -118,6 +193,7 @@ impl Parser {
             | Expr::Binary { .. }
             | Expr::Conditional { .. }
             | Expr::Assignment { .. }
+            | Expr::DestructuringAssignment { .. }
             | Expr::CompoundAssignment { .. }
             | Expr::PropertyAssignment { .. }
             | Expr::ComputedPropertyAssignment { .. }
@@ -156,4 +232,11 @@ impl Parser {
             },
         ))
     }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum Delimiter {
+    Paren,
+    Brace,
+    Bracket,
 }

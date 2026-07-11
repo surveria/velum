@@ -2,24 +2,29 @@ use std::rc::Rc;
 
 use crate::{
     bytecode::{
-        BytecodeBinding, BytecodePattern, BytecodePatternKey, BytecodePatternProperty,
+        BytecodeDestructureMode, BytecodePattern, BytecodePatternKey, BytecodePatternProperty,
         BytecodePatternTarget,
     },
     runtime::abstract_operations::IteratorSource,
-    syntax::DeclKind,
     value::Value,
 };
 
+use super::ops::BytecodeAssignmentReference;
+
 #[derive(Debug)]
 pub(super) struct DestructureContinuation {
-    pub(super) kind: DeclKind,
+    pub(super) mode: BytecodeDestructureMode,
     pub(super) tasks: Vec<DestructureTask>,
 }
 
 impl DestructureContinuation {
-    pub(super) fn new(pattern: BytecodePattern, kind: DeclKind, value: Value) -> Self {
+    pub(super) fn new(
+        pattern: BytecodePattern,
+        mode: BytecodeDestructureMode,
+        value: Value,
+    ) -> Self {
         Self {
-            kind,
+            mode,
             tasks: vec![DestructureTask::Pattern { pattern, value }],
         }
     }
@@ -37,7 +42,7 @@ pub(super) enum DestructureTask {
     },
     Object {
         properties: Rc<[BytecodePatternProperty]>,
-        rest: Option<BytecodeBinding>,
+        rest: Option<Rc<BytecodePattern>>,
         source: Value,
         next: usize,
         consumed: Vec<String>,
@@ -58,16 +63,34 @@ pub(super) enum DestructureTask {
     ArrayElement {
         target: BytecodePatternTarget,
         value: Value,
+        reference: Option<BytecodeAssignmentReference>,
     },
 }
 
 impl DestructureTask {
     fn root_values(&self) -> Vec<&Value> {
         match self {
-            Self::Pattern { value, .. }
-            | Self::Object { source: value, .. }
-            | Self::ObjectProperty { source: value, .. }
-            | Self::ArrayElement { value, .. } => vec![value],
+            Self::Pattern { value, .. } | Self::Object { source: value, .. } => vec![value],
+            Self::ObjectProperty { source, phase, .. } => {
+                let mut values = vec![source];
+                if let ObjectPropertyPhase::Default {
+                    reference: Some(reference),
+                    ..
+                } = phase
+                {
+                    values.extend(reference.root_values());
+                }
+                values
+            }
+            Self::ArrayElement {
+                value, reference, ..
+            } => {
+                let mut values = vec![value];
+                if let Some(reference) = reference {
+                    values.extend(reference.root_values());
+                }
+                values
+            }
             Self::Array { source, .. } => source.root_values().collect(),
         }
     }
@@ -76,5 +99,8 @@ impl DestructureTask {
 #[derive(Debug)]
 pub(super) enum ObjectPropertyPhase {
     Read,
-    Default { value: Value },
+    Default {
+        value: Value,
+        reference: Option<BytecodeAssignmentReference>,
+    },
 }

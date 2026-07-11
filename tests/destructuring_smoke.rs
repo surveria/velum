@@ -291,3 +291,102 @@ fn rejects_malformed_patterns() -> TestResult {
         "expected ']' after array binding pattern",
     )
 }
+
+#[test]
+fn assigns_nested_patterns_and_preserves_rhs_value() -> TestResult {
+    ensure_string(
+        r#"
+        let first, second, tail, rest;
+        let values = [undefined, {value: 2}, 3, 4];
+        let result = [first = 1, {value: second}, ...tail] = values;
+        ({keep: first, ...rest} = {keep: 5, extra: 6});
+        "" + first + ":" + second + ":" + tail.length + ":" + tail[0]
+            + ":" + rest.extra + ":" + (result === values)
+        "#,
+        "5:2:2:3:6:true",
+    )
+}
+
+#[test]
+fn assigns_literal_member_targets() -> TestResult {
+    ensure_string(
+        r#"
+        let assigned = 0;
+        [{
+            set value(next) { assigned = next; }
+        }.value = 9] = [];
+        "" + assigned
+        "#,
+        "9",
+    )
+}
+
+#[test]
+fn evaluates_array_target_reference_before_iterator_and_default() -> TestResult {
+    ensure_string(
+        r#"
+        let log = [];
+        let target = {
+            set value(next) { log.push("set:" + next); }
+        };
+        function key() { log.push("target"); return "value"; }
+        function fallback() { log.push("default"); return 7; }
+        let iterable = {};
+        iterable[Symbol.iterator] = function () {
+            return {
+                next: function () {
+                    log.push("next");
+                    return {done: false, value: undefined};
+                },
+                return: function () {
+                    log.push("return");
+                    return {};
+                }
+            };
+        };
+        [target[key()] = fallback()] = iterable;
+        log.join("|")
+        "#,
+        "target|next|default|set:7|return",
+    )
+}
+
+#[test]
+fn creates_sloppy_globals_and_rejects_strict_targets() -> TestResult {
+    ensure_string(
+        r#"
+        [createdByPattern] = [11];
+        let observed = "" + createdByPattern + ":" + globalThis.createdByPattern;
+        let deleted = delete createdByPattern;
+        function tdzProbe() {
+            try {
+                [futureLexical] = [];
+            } catch (error) {
+                return error instanceof ReferenceError;
+            }
+            let futureLexical;
+            return false;
+        }
+        observed + ":" + deleted + ":" + (typeof createdByPattern) + ":"
+            + tdzProbe()
+        "#,
+        "11:11:true:undefined:true",
+    )?;
+    ensure_error_contains(
+        r#""use strict"; [arguments] = [];"#,
+        "invalid strict assignment target",
+    )
+}
+
+#[test]
+fn infers_names_for_assignment_pattern_defaults() -> TestResult {
+    ensure_string(
+        r#"
+        let callback, Constructor;
+        [callback = function() {}] = [];
+        ({value: Constructor = class {}} = {});
+        callback.name + ":" + Constructor.name
+        "#,
+        "callback:Constructor",
+    )
+}

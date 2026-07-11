@@ -84,9 +84,10 @@ impl BytecodeCompiler<'_> {
                 consequent,
                 alternate,
             } => return self.compile_conditional_expr(condition, consequent, alternate),
-            Expr::Assignment { .. } | Expr::Update { .. } | Expr::CompoundAssignment { .. } => {
-                return self.compile_mutation_expr(expr);
-            }
+            Expr::Assignment { .. }
+            | Expr::DestructuringAssignment { .. }
+            | Expr::Update { .. }
+            | Expr::CompoundAssignment { .. } => return self.compile_mutation_expr(expr),
             Expr::PropertyAssignment {
                 object,
                 property,
@@ -136,6 +137,19 @@ impl BytecodeCompiler<'_> {
                 infer_name,
                 expr,
             } => self.compile_binding_assignment_expr(name, *strict, *infer_name, expr),
+            Expr::DestructuringAssignment {
+                pattern,
+                strict,
+                expr,
+            } => {
+                self.compile_expr(expr)?;
+                let pattern = self.compile_assignment_pattern(pattern, *strict)?;
+                self.emit(BytecodeInstruction::DestructurePattern {
+                    pattern: std::rc::Rc::new(pattern),
+                    mode: crate::bytecode::BytecodeDestructureMode::Assignment,
+                });
+                Ok(())
+            }
             Expr::Update {
                 op,
                 prefix,

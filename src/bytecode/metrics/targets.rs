@@ -3,6 +3,21 @@ use crate::bytecode::{
 };
 
 impl BytecodeAssignmentTarget {
+    pub(super) fn for_each_block(&self, visit: &mut impl FnMut(&BytecodeBlock)) {
+        match self {
+            Self::Binding(_) => {}
+            Self::StaticProperty { object, .. } | Self::ArrayIndexProperty { object, .. } => {
+                visit(object);
+            }
+            Self::ComputedProperty {
+                object, property, ..
+            } => {
+                visit(object);
+                visit(property);
+            }
+        }
+    }
+
     pub(super) fn property_operand_count(&self) -> usize {
         match self {
             Self::Binding(_) => 0,

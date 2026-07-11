@@ -232,14 +232,14 @@ impl<'a> Lexer<'a> {
     fn decimal_number(&mut self, offset: usize) -> Result<()> {
         let mut text = self.digit_sequence(RADIX_DECIMAL, offset, "decimal numeric literal")?;
 
-        if self.peek_char() == Some(DECIMAL_POINT)
-            && matches!(self.peek_next_char(), Some('0'..='9'))
-        {
+        if self.peek_char() == Some(DECIMAL_POINT) {
             self.advance();
             text.push(DECIMAL_POINT);
-            let fraction =
-                self.digit_sequence(RADIX_DECIMAL, offset, "decimal fraction literal")?;
-            text.push_str(&fraction);
+            if matches!(self.peek_char(), Some('0'..='9')) {
+                let fraction =
+                    self.digit_sequence(RADIX_DECIMAL, offset, "decimal fraction literal")?;
+                text.push_str(&fraction);
+            }
         }
 
         if self.peek_char().is_some_and(is_exponent_marker) {

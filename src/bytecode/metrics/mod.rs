@@ -719,6 +719,7 @@ impl BytecodePattern {
     fn for_each_block(&self, count: &mut impl FnMut(&BytecodeBlock)) {
         match self {
             Self::Binding(_) => {}
+            Self::Assignment(target) => target.for_each_block(count),
             Self::Object { properties, .. } => {
                 for property in properties.iter() {
                     if let BytecodePatternKey::Computed(block) = &property.key {
