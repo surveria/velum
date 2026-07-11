@@ -487,8 +487,8 @@ dependencies do not overlap.
 | AS-04 | Complete | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans merged in PR #421 with exact-tree correctness and canonical report publication. |
 | AS-05 | Complete | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05b2c3 are merged through PR #436 with exact-tree correctness, complete owner-limit reconciliation, and canonical report publication. |
 | AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
-| AS-07 | In progress | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Draft PR #446 implements an explicit-root collector, non-moving sparse arenas, fixed-point WeakMap ephemerons, WeakSet/WeakMap reclamation, hard-limit reuse, and ledger reconciliation; full validation and performance evidence remain in progress. |
-| AS-08 | Backlog | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | Optimizer on/off equivalence, harness opcodes removed, workload-shaped paths replaced or justified by broad evidence. |
+| AS-07 | Complete | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | PR #446 merged as `62e2725`; exact-tree correctness, paired sentinels, post-merge performance, and canonical report publication passed. |
+| AS-08 | In progress | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a is active in draft PR #447 with one optimizer owner, disabled-mode equivalence, and harness opcodes removed; AS-08b retains the workload-shape audit. |
 | AS-09 | Backlog | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | Multiple feature clusters land through shared semantics without new architecture exceptions. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
 
@@ -2089,7 +2089,7 @@ WeakMap and WeakSet must stop retaining keys strongly. WeakRef and
 FinalizationRegistry remain gated until collection order and callback/job
 semantics are specified and tested.
 
-AS-07a local implementation evidence (draft PR #446):
+AS-07a completion evidence (PR #446, merged as `62e2725`):
 
 - `SlotArena<T>` provides safe non-moving storage with vacant slots for
   objects, callable payloads, Promises, collections, and iterators; heap
@@ -2121,8 +2121,13 @@ AS-07a local implementation evidence (draft PR #446):
   (-0.4%), array-index 2.53/2.44 ms (+3.7%), property-read 229.57/228.34 ms
   (+0.5%), function-call 158.98/158.41 ms (+0.4%), and string-scan
   71.64/70.34 ms (+1.8%). All rows are valid, checksums match, and branch
-  variation is at most 1.1%. Exact-tree correctness and full Test262 evidence
-  remain to be attached by the required ready-PR CI before merge.
+  variation is at most 1.1%; all rows are valid and checksums match;
+- required CI run `29134794187` certified tree `697112ae` with 117/117 active
+  fixtures, 36,514/36,514 expected Test262 variants, 36,514/102,578 full
+  variants, and 95/95 QuickJS differential cases;
+- post-merge run `29134943008` attempt 3 published the canonical report
+  `reports/test-runs/rsqjs-test-report-20260711T013950Z.*` in report-only
+  commit `8925145`.
 
 ### AS-08: Optimization Isolation
 
@@ -2139,6 +2144,33 @@ Audit existing narrow loop paths. Keep a path only when it expresses a reusable
 operation, has complete guards, and demonstrates value across unrelated
 workloads. Remove or replace harness-specific bytecode and source-name
 recognition.
+
+AS-08a local evidence in draft PR #447:
+
+- `runtime/optimizer.rs` owns the VM-local mode and stable linear/call-cache
+  counters; the previous scattered `Context` fields are removed;
+- `VmConfig` selects enabled or disabled optional paths and
+  `Vm::optimization_snapshot` exposes stable diagnostics;
+- disabled mode bypasses direct binding operands, numeric/string quickening,
+  dense-array bytecode shortcuts, static/call caches, direct native calls,
+  linear plans, function/callback fast paths, and loop recognizers;
+- optimizer-on/off tests compare values, output, and uncaught errors across
+  numeric/array/string, binding/closure, call/property, and Proxy/completion
+  clusters; disabled counters remain zero;
+- compiler source-name handling and the `Print`/`AssertThrows` bytecode/runtime
+  paths are deleted; `print` is an ordinary native binding and
+  `assert.throws` is supplied by JavaScript test support;
+- the architecture guard fixes the single optimizer-state owner and requires
+  zero harness opcodes/source-name comparisons, with mutation self-tests;
+- focused engine fixtures pass at 68/68 and the active Test262 subset passes at
+  117/117; required exact-tree correctness and paired performance remain to be
+  attached before merge.
+
+AS-08b remains responsible for classifying every named control recognizer and
+for removing or replacing any path that lacks broad unrelated-workload
+evidence. Physical dense-array storage remains a semantic backend; AS-08b
+separately audits specialized built-in algorithms rather than conflating them
+with bytecode quickening.
 
 ### AS-09: Profile-Based Compatibility Expansion
 
@@ -2256,9 +2288,12 @@ reviewable scope.
 37. AS-06b: add suspend/resume outcomes and correct pending `await` behavior
     (complete in PR #445 with exact-tree CI and canonical publication).
 38. AS-07a: add safe collection over explicit roots and correct weak edges
-    (in progress in draft PR #446).
+    (complete in PR #446, merged as `62e2725`).
 39. AS-08a: move reusable optimization state behind one optimizer/quickening
-    boundary and remove harness-specific opcodes.
+    boundary and remove harness-specific opcodes (in progress in draft PR
+    #447).
+40. AS-08b: audit named recognizers and specialized built-in algorithms against
+    broad equivalence and performance evidence.
 
 ## Updating This Plan
 

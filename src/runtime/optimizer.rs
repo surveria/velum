@@ -170,3 +170,41 @@ impl Optimizer {
         self.call_value_cache_slow_paths = self.call_value_cache_slow_paths.saturating_add(1);
     }
 }
+
+impl super::Context {
+    pub(super) fn record_bytecode_linear_segment_run(&mut self) -> crate::Result<()> {
+        self.optimizer.record_linear_segment_runs(1)
+    }
+
+    pub(super) fn record_bytecode_linear_direct_run(&mut self) -> crate::Result<()> {
+        self.optimizer.record_linear_direct_runs(1)
+    }
+
+    pub(super) fn record_bytecode_linear_direct_runs(&mut self, runs: usize) -> crate::Result<()> {
+        self.optimizer.record_linear_direct_runs(runs)
+    }
+
+    pub(super) const fn record_native_call_cache_hit(&mut self) {
+        self.optimizer.record_native_call_cache_hit();
+    }
+
+    pub(super) const fn record_native_call_cache_miss(&mut self) {
+        self.optimizer.record_native_call_cache_miss();
+    }
+
+    pub(super) const fn record_native_call_cache_slow_path(&mut self) {
+        self.optimizer.record_native_call_cache_slow_path();
+    }
+
+    pub(super) const fn record_call_value_cache_hit(&mut self) {
+        self.optimizer.record_call_value_cache_hit();
+    }
+
+    pub(super) const fn record_call_value_cache_miss(&mut self) {
+        self.optimizer.record_call_value_cache_miss();
+    }
+
+    pub(super) const fn record_call_value_cache_slow_path(&mut self) {
+        self.optimizer.record_call_value_cache_slow_path();
+    }
+}

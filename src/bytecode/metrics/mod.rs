@@ -565,8 +565,6 @@ impl BytecodeInstruction {
                 | Self::CallValue { .. }
                 | Self::CallStaticMember { .. }
                 | Self::CallComputedMember { .. }
-                | Self::Print { .. }
-                | Self::AssertThrows { .. }
                 | Self::Construct { .. }
                 | Self::ConstructValue { .. }
                 | Self::PushLiteral(_)

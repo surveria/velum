@@ -1,11 +1,14 @@
 use rs_quickjs::{Runtime, Value};
 
+mod support;
+
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn catches_non_callable_call_type_errors() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
+    support::install_assert(&mut context)?;
 
     let value = context.eval(
         r#"
@@ -32,6 +35,7 @@ fn catches_non_callable_call_type_errors() -> TestResult {
 fn catches_non_constructable_function_type_errors() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
+    support::install_assert(&mut context)?;
 
     let value = context.eval(
         r#"
@@ -66,6 +70,7 @@ fn catches_non_constructable_function_type_errors() -> TestResult {
 fn catches_function_prototype_call_and_bind_type_errors() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
+    support::install_assert(&mut context)?;
 
     let value = context.eval(
         r"
@@ -88,6 +93,7 @@ fn catches_function_prototype_call_and_bind_type_errors() -> TestResult {
 fn catches_throw_from_called_js_function() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
+    support::install_assert(&mut context)?;
 
     let value = context.eval(
         r#"
@@ -118,6 +124,7 @@ fn catches_throw_from_called_js_function() -> TestResult {
 fn catches_promise_constructor_type_errors() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
+    support::install_assert(&mut context)?;
 
     let value = context.eval(
         r#"

@@ -274,18 +274,6 @@ impl Context {
         }
         Ok(())
     }
-
-    pub(crate) fn record_bytecode_linear_segment_run(&mut self) -> Result<()> {
-        self.optimizer.record_linear_segment_runs(1)
-    }
-
-    pub(crate) fn record_bytecode_linear_direct_run(&mut self) -> Result<()> {
-        self.optimizer.record_linear_direct_runs(1)
-    }
-
-    pub(crate) fn record_bytecode_linear_direct_runs(&mut self, runs: usize) -> Result<()> {
-        self.optimizer.record_linear_direct_runs(runs)
-    }
 }
 
 const fn requires_generic_add(value: &Value) -> bool {

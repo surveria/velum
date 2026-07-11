@@ -507,6 +507,7 @@ impl Context {
             NativeFunctionKind::JsonStringify => self.eval_json_stringify(args),
             NativeFunctionKind::Number => self.eval_number_constructor(args),
             NativeFunctionKind::PerformanceNow => Ok(self.eval_performance_now()),
+            NativeFunctionKind::Print => self.eval_print_call(args),
             NativeFunctionKind::Promise => self.eval_promise_constructor(args),
             NativeFunctionKind::PromiseResolve => self.eval_promise_resolve(args),
             NativeFunctionKind::PromiseReject => self.eval_promise_reject(args),

@@ -1,8 +1,8 @@
 use crate::{
     api::native_call::NativeCallTarget,
     ast::{Expr, Expression, StaticCallSiteId},
-    error::{Error, Result},
-    value::{ErrorName, Value},
+    error::Result,
+    value::Value,
 };
 
 use super::{BytecodeCallSite, BytecodeCompiler, BytecodeInstruction, has_spread_arg};
@@ -17,34 +17,7 @@ impl BytecodeCompiler<'_> {
         if has_spread_arg(args) {
             return self.compile_spread_call_expr(callee, args);
         }
-        if let Some(expected) = assert_throws_expected_error(callee, args)? {
-            let callback = args
-                .get(1)
-                .ok_or_else(|| Error::runtime("assert.throws requires a callback"))?;
-            self.compile_expr(callback)?;
-            if let Some(message) = args.get(2) {
-                self.compile_expr(message)?;
-            }
-            if args.get(3).is_some() {
-                return Err(Error::runtime(
-                    "assert.throws supports at most three arguments",
-                ));
-            }
-            self.emit(BytecodeInstruction::AssertThrows {
-                expected,
-                has_message: args.get(2).is_some(),
-            });
-            return Ok(());
-        }
-
         match callee.kind() {
-            Expr::Identifier(name) if name.as_str() == "print" => {
-                self.compile_args(args)?;
-                self.emit(BytecodeInstruction::Print {
-                    arg_count: args.len(),
-                });
-                Ok(())
-            }
             Expr::Identifier(name) => {
                 self.compile_args(args)?;
                 self.emit(BytecodeInstruction::CallBinding {
@@ -176,36 +149,4 @@ fn computed_property_native_target(property: &Expression) -> Option<NativeCallTa
         ) => NativeCallTarget::from_property_name(&value.to_string()),
         _ => None,
     }
-}
-
-fn assert_throws_expected_error(
-    callee: &Expression,
-    args: &[Expression],
-) -> Result<Option<ErrorName>> {
-    let Expr::Member {
-        object, property, ..
-    } = callee.kind()
-    else {
-        return Ok(None);
-    };
-    if !matches!(object.kind(), Expr::Identifier(name) if name.as_str() == "assert")
-        || property.as_str() != "throws"
-    {
-        return Ok(None);
-    }
-    let Some(expected) = args.first() else {
-        return Err(Error::runtime("assert.throws requires an expected error"));
-    };
-    let Expr::Identifier(name) = expected.kind() else {
-        return Err(Error::runtime(
-            "assert.throws first argument must be an error constructor",
-        ));
-    };
-    ErrorName::from_constructor_name(name)
-        .ok_or_else(|| {
-            Error::runtime(format!(
-                "assert.throws error constructor '{name}' is not supported"
-            ))
-        })
-        .map(Some)
 }

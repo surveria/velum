@@ -244,14 +244,6 @@ impl Context {
             .into_call_completion()
     }
 
-    pub(crate) fn eval_function_completion(
-        &mut self,
-        id: FunctionId,
-        args: RuntimeCallArgs<'_>,
-    ) -> Result<Completion> {
-        self.eval_function_completion_with_this(id, args, Value::Undefined)
-    }
-
     pub(crate) fn eval_function_completion_with_this(
         &mut self,
         id: FunctionId,

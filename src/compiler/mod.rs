@@ -327,8 +327,6 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::CallValue { .. }
             | BytecodeInstruction::CallStaticMember { .. }
             | BytecodeInstruction::CallComputedMember { .. }
-            | BytecodeInstruction::Print { .. }
-            | BytecodeInstruction::AssertThrows { .. }
             | BytecodeInstruction::Construct { .. }
             | BytecodeInstruction::ConstructValue { .. }
             | BytecodeInstruction::CreateFunction { .. }

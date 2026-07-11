@@ -43,6 +43,26 @@ cannot prove the optimization is valid. Runtime code must not call that an AST
 fallback, and it must never fall back to a parser-AST interpreter, retain AST
 statement bodies in function objects, or reparse from runtime code.
 
+`runtime/optimizer.rs` is the single owner of the VM-local optional-optimization
+policy and stable profiling counters. `OptimizationMode::Enabled` is the
+default. `OptimizationMode::Disabled` executes the same compiled bytecode but
+routes direct binding operands, numeric and string quickening, dense-array
+shortcuts, inline/native call caches, linear plans, function fast paths, and
+specialized loop paths through their generic semantic fallbacks. The disabled
+mode is an equivalence and diagnosis tool, not a separate interpreter or a
+security boundary.
+
+Optimization state may be read or mutated only through the optimizer boundary.
+Guard misses must preserve completion, output, and error behavior. The public
+`Vm::optimization_snapshot` exposes the selected mode and stable counters
+without exposing cache records or runtime ids.
+
+Test support is not part of bytecode semantics. `print` is an ordinary lazy
+native global binding and therefore follows normal lookup, call, shadowing,
+metadata, and error rules. `assert.throws` is installed by the JavaScript test
+harness. The compiler and bytecode model contain no source-name recognizers or
+harness-only instructions for either function.
+
 Removing the parser AST itself is a separate front-end redesign, not fallback
 cleanup. It requires a direct parser-to-frontend-IR or parser-to-bytecode
 pipeline that still preserves binding analysis, diagnostics, resource

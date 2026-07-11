@@ -434,6 +434,11 @@ fn execute_engine_case(case: &EngineCase) -> anyhow::Result<()> {
 
     let runtime = Runtime::new();
     let mut context = runtime.context();
+    context
+        .eval(include_str!("../../tests/harness/assert.js"))
+        .map_err(|error| {
+            anyhow::anyhow!("failed to install test harness for case '{}': {error}", case.id)
+        })?;
     let result = context.eval(&source);
 
     match &case.expectation {

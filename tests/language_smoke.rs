@@ -1,5 +1,7 @@
 use rs_quickjs::{Error, Runtime, RuntimeLimits, Value};
 
+mod support;
+
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
 fn eval(source: &str) -> rs_quickjs::Result<Value> {
@@ -495,17 +497,16 @@ fn supports_array_literals_and_index_properties() -> TestResult {
 fn supports_assert_throws_and_reference_errors() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
+    support::install_assert(&mut context)?;
 
     let value = context.eval(
         r"
         var first, second = 40, third = second + 2;
         let caught_name;
         let caught_message;
-
         assert.throws(ReferenceError, function() {
             absent = absent;
         });
-
         try {
             missing = missing;
         } catch (error) {
@@ -513,7 +514,6 @@ fn supports_assert_throws_and_reference_errors() -> TestResult {
             caught_message = error.message;
             print(error);
         }
-
         third
         ",
     )?;
@@ -533,7 +533,10 @@ fn supports_assert_throws_and_reference_errors() -> TestResult {
         &["ReferenceError: 'missing' is not defined".to_owned()],
     )?;
 
-    let Err(error) = eval(
+    let runtime = Runtime::new();
+    let mut failing_context = runtime.context();
+    support::install_assert(&mut failing_context)?;
+    let Err(error) = failing_context.eval(
         r"
         assert.throws(ReferenceError, function() {
             1;
@@ -579,6 +582,7 @@ fn supports_error_object_properties() -> TestResult {
 fn supports_standard_error_constructors() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
+    support::install_assert(&mut context)?;
 
     let value = context.eval(
         r#"
@@ -586,22 +590,18 @@ fn supports_standard_error_constructors() -> TestResult {
         let plain = Error("plain", value = value + 1);
         let typed = new TypeError("typed");
         let syntax = SyntaxError("syntax");
-
         assert.throws(TypeError, function() {
             throw new TypeError("boom");
         }, "TypeError should match");
-
         assert.throws(Error, function() {
             throw new RangeError("range");
         });
-
         if (TypeError.prototype.constructor === TypeError) {
             value = value + 20;
         }
         if (SyntaxError.name === "SyntaxError" && SyntaxError.length === 1) {
             value = value + 21;
         }
-
         print(
             plain.name,
             plain.message,

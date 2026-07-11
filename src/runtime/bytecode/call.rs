@@ -5,9 +5,7 @@ use crate::{
         BytecodeProperty,
     },
     error::{Error, Result},
-    runtime::{
-        Context, call::RuntimeCallArgs, control::Completion, function::BytecodeFunctionInit,
-    },
+    runtime::{Context, control::Completion, function::BytecodeFunctionInit},
     value::Value,
 };
 
@@ -24,9 +22,7 @@ impl Context {
             BytecodeInstruction::CallBinding { .. }
             | BytecodeInstruction::CallValue { .. }
             | BytecodeInstruction::CallStaticMember { .. }
-            | BytecodeInstruction::CallComputedMember { .. }
-            | BytecodeInstruction::Print { .. }
-            | BytecodeInstruction::AssertThrows { .. } => {
+            | BytecodeInstruction::CallComputedMember { .. } => {
                 self.eval_bytecode_invocation_instruction(state, instruction, next)
             }
             BytecodeInstruction::CollectSpreadArgs { spread_flags } => {
@@ -148,30 +144,6 @@ impl Context {
                 };
                 state.pc = next;
                 state.stack.push(value);
-                Ok(None)
-            }
-            BytecodeInstruction::Print { arg_count } => {
-                let args = state.stack.tail(*arg_count)?;
-                let value = self.eval_print_call(RuntimeCallArgs::values(args))?;
-                state.stack.drop_tail(*arg_count)?;
-                state.stack.push(value);
-                state.pc = next;
-                Ok(None)
-            }
-            BytecodeInstruction::AssertThrows {
-                expected,
-                has_message,
-            } => {
-                let message = if *has_message {
-                    Some(state.stack.pop()?)
-                } else {
-                    None
-                };
-                let callback = state.stack.pop()?;
-                state
-                    .stack
-                    .push(self.eval_bytecode_assert_throws(*expected, &callback, message)?);
-                state.pc = next;
                 Ok(None)
             }
             BytecodeInstruction::Construct { .. }

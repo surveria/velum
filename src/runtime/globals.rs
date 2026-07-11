@@ -45,30 +45,6 @@ impl Context {
         self.runtime_steps
     }
 
-    pub(super) const fn record_native_call_cache_hit(&mut self) {
-        self.optimizer.record_native_call_cache_hit();
-    }
-
-    pub(super) const fn record_native_call_cache_miss(&mut self) {
-        self.optimizer.record_native_call_cache_miss();
-    }
-
-    pub(super) const fn record_native_call_cache_slow_path(&mut self) {
-        self.optimizer.record_native_call_cache_slow_path();
-    }
-
-    pub(super) const fn record_call_value_cache_hit(&mut self) {
-        self.optimizer.record_call_value_cache_hit();
-    }
-
-    pub(super) const fn record_call_value_cache_miss(&mut self) {
-        self.optimizer.record_call_value_cache_miss();
-    }
-
-    pub(super) const fn record_call_value_cache_slow_path(&mut self) {
-        self.optimizer.record_call_value_cache_slow_path();
-    }
-
     #[must_use]
     pub const fn atom_count(&self) -> usize {
         self.atoms.len()
