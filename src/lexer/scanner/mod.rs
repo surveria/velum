@@ -1,10 +1,7 @@
 use super::{Token, TokenKind};
 use crate::{
     error::{Error, Result},
-    lexer::classification::{
-        EscapeContext, IdentifierPosition, identifier_kind, identifier_position_allows,
-        token_kind_can_precede_regexp,
-    },
+    lexer::classification::{EscapeContext, token_kind_can_precede_regexp},
     lexer::support::{
         ASCII_BACKSPACE, ASCII_FORM_FEED, ASCII_VERTICAL_TAB, BIGINT_SUFFIX, DECIMAL_POINT,
         HEX_ESCAPE_DIGITS, LINE_SEPARATOR, MAX_BRACED_UNICODE_ESCAPE_DIGITS,
@@ -17,6 +14,7 @@ use crate::{
     source::{SourceId, SourceSpan},
 };
 
+mod names;
 mod operators;
 
 pub fn lex(source: &str, source_id: SourceId) -> Result<Vec<Token>> {
@@ -77,6 +75,7 @@ impl<'a> Lexer<'a> {
                 '#' if self.cursor == 0 && self.peek_next_char() == Some('!') => {
                     self.hashbang_comment();
                 }
+                '#' => self.private_name(offset)?,
                 '/' if self.peek_next_char() == Some('/') => self.line_comment(),
                 '/' if self.peek_next_char() == Some('*') => self.block_comment(offset)?,
                 '0'..='9' => self.number(offset)?,
@@ -639,68 +638,6 @@ impl<'a> Lexer<'a> {
             value = checked_hex_accumulate(value, digit, digit_offset, description)?;
         }
         Ok(value)
-    }
-
-    fn identifier(&mut self, offset: usize) -> Result<()> {
-        let mut text = String::new();
-        let mut escaped = self.identifier_escape_start();
-        let start = self.identifier_char(offset, IdentifierPosition::Start)?;
-        text.push(start);
-
-        while let Some((current_offset, ch)) = self.peek() {
-            if self.identifier_escape_start() {
-                escaped = true;
-                let escaped = self.identifier_char(current_offset, IdentifierPosition::Part)?;
-                text.push(escaped);
-            } else if is_identifier_part(ch) {
-                self.advance();
-                text.push(ch);
-            } else {
-                break;
-            }
-        }
-
-        let kind = identifier_kind(text, escaped);
-        self.push_with_identifier_escape(kind, offset, escaped);
-        Ok(())
-    }
-
-    fn identifier_escape_start(&self) -> bool {
-        self.peek_char() == Some('\\') && self.peek_next_char() == Some('u')
-    }
-
-    fn identifier_char(&mut self, offset: usize, position: IdentifierPosition) -> Result<char> {
-        let Some((current_offset, ch)) = self.peek() else {
-            return Err(Error::lex("unterminated identifier", offset));
-        };
-        let value = if ch == '\\' {
-            self.identifier_escape(current_offset)?
-        } else {
-            self.advance();
-            ch
-        };
-        if identifier_position_allows(value, position) {
-            return Ok(value);
-        }
-        Err(Error::lex(
-            format!("invalid identifier character '{value}'"),
-            current_offset,
-        ))
-    }
-
-    fn identifier_escape(&mut self, slash_offset: usize) -> Result<char> {
-        self.advance();
-        let Some((escape_offset, escaped)) = self.peek() else {
-            return Err(Error::lex("unterminated identifier escape", slash_offset));
-        };
-        if escaped != 'u' {
-            return Err(Error::lex(
-                "identifier escape must use a unicode escape",
-                escape_offset,
-            ));
-        }
-        self.advance();
-        self.unicode_escape(escape_offset)
     }
 
     fn hashbang_comment(&mut self) {
