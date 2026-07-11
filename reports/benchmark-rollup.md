@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260711T025726Z.md`
-- Task: PR #448: runner: stop publishing duplicate JPEG benchmark chart
-- Performance: 5.67x (4/5 >1.00x) (from `rsqjs-test-report-20260711T025726Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T025726Z.md`)
+- `rsqjs-test-report-20260711T030752Z.md`
+- Task: PR #447: AS-08a: isolate optimization from semantics
+- Performance: 5.66x (4/5 >1.00x) (from `rsqjs-test-report-20260711T030752Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T030752Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 36514 passed / 66064 failed (35.60%) (from `rsqjs-test-report-20260711T025726Z.md`)
+- Full Test262: 37721 passed / 64857 failed (36.77%) (from `rsqjs-test-report-20260711T030752Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -435,3 +435,4 @@ Latest report:
 | `20260711T005008Z` `9e25e77` PR #445: AS-06b: add suspended bytecode outcomes and pending await | 5.60x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36514 passed / 66064 failed (35.60%) |
 | `20260711T013950Z` `62e2725` PR #446: AS-07a: add safe collection and correct weak edges | 5.65x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36514 passed / 66064 failed (35.60%) |
 | `20260711T025726Z` `c5e3311` PR #448: runner: stop publishing duplicate JPEG benchmark chart | 5.67x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 36514 passed / 66064 failed (35.60%) |
+| `20260711T030752Z` `bc52a72` PR #447: AS-08a: isolate optimization from semantics | 5.66x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 37721 passed / 64857 failed (36.77%) |
