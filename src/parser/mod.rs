@@ -14,6 +14,7 @@ mod binary;
 mod class;
 mod expression;
 mod function;
+mod function_expression;
 mod literal;
 mod pattern;
 mod sequence;
@@ -21,10 +22,11 @@ mod statement;
 mod strict;
 mod yield_context;
 
-use await_context::AwaitExpressionContext;
+use await_context::{AwaitExpressionContext, AwaitIdentifierContext};
 use yield_context::{YieldExpressionContext, YieldIdentifierContext};
 
 const ASYNC_IDENTIFIER_NAME: &str = "async";
+const AWAIT_IDENTIFIER_NAME: &str = "await";
 const ARGUMENTS_IDENTIFIER_NAME: &str = "arguments";
 const EVAL_IDENTIFIER_NAME: &str = "eval";
 const SUPER_IDENTIFIER_NAME: &str = "super";
@@ -83,6 +85,7 @@ struct Parser {
     static_call_site_count: usize,
     strict_mode: bool,
     await_expression_context: AwaitExpressionContext,
+    await_identifier_context: AwaitIdentifierContext,
     yield_expression_context: YieldExpressionContext,
     yield_identifier_context: YieldIdentifierContext,
 }
@@ -108,6 +111,7 @@ impl Parser {
             static_call_site_count: 0,
             strict_mode,
             await_expression_context: AwaitExpressionContext::Allowed,
+            await_identifier_context: AwaitIdentifierContext::Allowed,
             yield_expression_context: YieldExpressionContext::Forbidden,
             yield_identifier_context: YieldIdentifierContext::Allowed,
         }
@@ -161,6 +165,9 @@ impl Parser {
             )),
             TokenKind::Identifier(name) => self.static_name_at(name, token_offset),
             TokenKind::Async => self.static_name_borrowed_at(ASYNC_IDENTIFIER_NAME, token_offset),
+            TokenKind::Await if !self.await_identifier_is_reserved() => {
+                self.static_name_borrowed_at(AWAIT_IDENTIFIER_NAME, token_offset)
+            }
             _ => Err(Error::parse_at(message, token_span)),
         }
     }
@@ -258,6 +265,11 @@ impl Parser {
         self.static_binding(name)
     }
 
+    pub(super) fn contextual_await_binding(&mut self, offset: usize) -> Result<StaticBinding> {
+        let name = self.static_name_borrowed_at(AWAIT_IDENTIFIER_NAME, offset)?;
+        self.static_binding(name)
+    }
+
     fn static_name_at(&mut self, name: String, offset: usize) -> Result<StaticName> {
         self.static_names.intern_owned(name, offset)
     }
@@ -267,8 +279,10 @@ impl Parser {
     }
 
     pub(super) fn next_is_identifier(&self) -> bool {
-        self.peek()
-            .is_some_and(|token| Self::is_identifier_name(&token.kind))
+        self.peek().is_some_and(|token| {
+            Self::is_identifier_name(&token.kind)
+                || (token.kind == TokenKind::Await && !self.await_identifier_is_reserved())
+        })
     }
 
     pub(super) fn peek_kind(&self, offset: usize) -> Option<&TokenKind> {
@@ -297,7 +311,10 @@ impl Parser {
     }
 
     pub(super) fn peek_is_identifier_name(&self, offset: usize) -> bool {
-        self.peek_kind(offset).is_some_and(Self::is_identifier_name)
+        self.peek_kind(offset).is_some_and(|kind| {
+            Self::is_identifier_name(kind)
+                || (*kind == TokenKind::Await && !self.await_identifier_is_reserved())
+        })
     }
 
     const fn is_identifier_name(kind: &TokenKind) -> bool {

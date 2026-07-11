@@ -5,8 +5,8 @@ use crate::{
     runtime::Context,
     runtime::call::RuntimeCallArgs,
     runtime::object::{
-        DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
-        PropertyKey, PropertyUpdate, PropertyWritable,
+        AccessorPropertyUpdate, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
+        PropertyEnumerable, PropertyKey, PropertyUpdate, PropertyWritable,
     },
     value::{ObjectId, Value},
 };
@@ -21,6 +21,8 @@ const GENERATED_FUNCTION_NAME: &str = "anonymous";
 const SYMBOL_TO_STRING_TAG_PROPERTY: &str = "toStringTag";
 const SYMBOL_HAS_INSTANCE_PROPERTY: &str = "hasInstance";
 const SYMBOL_HAS_INSTANCE_DISPLAY: &str = "[Symbol.hasInstance]";
+const FUNCTION_RESTRICTED_ARGUMENTS_PROPERTY: &str = "arguments";
+const FUNCTION_RESTRICTED_CALLER_PROPERTY: &str = "caller";
 
 impl Context {
     pub(in crate::runtime) fn function_constructor_value(&mut self) -> Result<Value> {
@@ -196,7 +198,38 @@ impl Context {
             to_string,
         )?;
 
+        self.install_function_prototype_restricted_properties(prototype, &prototype_value)?;
         self.install_function_prototype_has_instance(prototype, prototype_value)
+    }
+
+    fn install_function_prototype_restricted_properties(
+        &mut self,
+        prototype: ObjectId,
+        prototype_value: &Value,
+    ) -> Result<()> {
+        let thrower = self.create_ephemeral_native_function(
+            NativeFunctionKind::ThrowTypeError,
+            prototype_value.clone(),
+        )?;
+        for property in [
+            FUNCTION_RESTRICTED_ARGUMENTS_PROPERTY,
+            FUNCTION_RESTRICTED_CALLER_PROPERTY,
+        ] {
+            let key = self.intern_property_key(property)?;
+            self.objects.define_property(
+                prototype,
+                key,
+                property,
+                PropertyUpdate::Accessor(AccessorPropertyUpdate::new(
+                    Some(thrower.clone()),
+                    Some(thrower.clone()),
+                    Some(PropertyEnumerable::No),
+                    Some(PropertyConfigurable::No),
+                )),
+                self.limits.max_object_properties,
+            )?;
+        }
+        Ok(())
     }
 
     pub(in crate::runtime::native) fn eval_function_prototype_to_string(

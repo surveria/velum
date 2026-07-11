@@ -29,10 +29,7 @@ struct ArrowSignature {
 impl Parser {
     pub(super) fn unary(&mut self) -> Result<Expression> {
         let start = self.current_span();
-        if self.match_kind(&TokenKind::Await) {
-            if !self.await_expression_is_allowed() {
-                return Err(self.parse_error("await expression is not allowed in this function"));
-            }
+        if self.await_expression_is_allowed() && self.match_kind(&TokenKind::Await) {
             let expr = self.unary()?;
             return Ok(self.expression_node(start, Expr::Await(Box::new(expr))));
         }
@@ -498,6 +495,10 @@ impl Parser {
                     token_span,
                 )
             }
+            TokenKind::Await if !self.await_identifier_is_reserved() => Expression::new(
+                Expr::Identifier(self.contextual_await_binding(token_span.start())?),
+                token_span,
+            ),
             TokenKind::Function => {
                 let kind = if self.match_kind(&TokenKind::Star) {
                     FunctionKind::Generator
@@ -558,7 +559,8 @@ impl Parser {
             },
             ArrowParameters::Parenthesized => {
                 self.consume(&TokenKind::LParen, "expected '(' before arrow parameters")?;
-                let parameters = self.with_await_expression(false, Self::function_parameters)?;
+                let parameters =
+                    self.with_await_context(false, signature.is_async, Self::function_parameters)?;
                 self.consume(&TokenKind::RParen, "expected ')' after arrow parameters")?;
                 parameters
             }
@@ -596,7 +598,7 @@ impl Parser {
         inherited_strict: bool,
         is_async: bool,
     ) -> Result<super::ParsedFunctionBody> {
-        self.with_await_expression(is_async, |parser| {
+        self.with_await_context(is_async, is_async, |parser| {
             parser.with_yield_expression(false, |parser| {
                 if parser.match_kind(&TokenKind::LBrace) {
                     return parser.function_body(inherited_strict);
@@ -686,61 +688,6 @@ impl Parser {
             offset = offset.checked_add(1)?;
         }
     }
-    fn function_expression(&mut self, kind: FunctionKind) -> Result<Expression> {
-        let start = self.previous_span();
-        let inherited_strict = self.is_strict_mode();
-        let name = if self.next_is_identifier() {
-            let name = self.consume_identifier("expected function name")?;
-            if kind.is_generator() && name.as_str() == super::YIELD_IDENTIFIER_NAME {
-                return Err(self.parse_error("yield is not a valid generator function name"));
-            }
-            if inherited_strict {
-                self.validate_function_name_in_strict_code(&name)?;
-            }
-            Some(self.static_binding(name)?)
-        } else {
-            None
-        };
-        self.consume(&TokenKind::LParen, "expected '(' after 'function'")?;
-        let parameters = self.with_await_expression(false, |parser| {
-            parser.with_yield_expression(false, |parser| {
-                parser
-                    .with_yield_identifier_reserved(kind.is_generator(), Self::function_parameters)
-            })
-        })?;
-        self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
-        self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
-        let body = self.with_new_target_scope(|parser| {
-            parser.with_super_context(false, false, |parser| {
-                parser.with_await_expression(kind.is_async(), |parser| {
-                    parser.with_yield_expression(kind.is_generator(), |parser| {
-                        parser.function_body(inherited_strict)
-                    })
-                })
-            })
-        })?;
-        self.validate_function_parameters(
-            &parameters.params,
-            parameters.is_simple,
-            inherited_strict,
-            body.contains_use_strict,
-        )?;
-        let id = self.static_function()?;
-        let (params, statements, parameter_prologue_count) =
-            parameters.apply_prologue(body.statements);
-        Ok(self.expression_node(
-            start,
-            Expr::Function {
-                id,
-                name,
-                params: params.into(),
-                body: statements.into(),
-                parameter_prologue_count,
-                kind,
-            },
-        ))
-    }
-
     fn consume_property_name(&mut self, message: &str) -> Result<StaticName> {
         let token = self.advance().ok_or_else(|| self.parse_error(message))?;
         let token_span = token.span;

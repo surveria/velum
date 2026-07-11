@@ -104,13 +104,18 @@ impl Context {
             }
             Value::Object(id) => {
                 if let Some(method) = self.iterator_method(&iterable)? {
+                    if self.objects.array_len_if_array(*id)?.is_some()
+                        && self.is_default_array_iterator_method(&method)?
+                    {
+                        return Ok(IteratorSource::ArrayIndex {
+                            array: iterable,
+                            index: 0,
+                        });
+                    }
                     return self.get_iterator_from_method(&iterable, &method);
                 }
                 if self.objects.array_len_if_array(*id)?.is_some() {
-                    return Ok(IteratorSource::ArrayIndex {
-                        array: iterable,
-                        index: 0,
-                    });
+                    return Err(not_iterable_error(&iterable));
                 }
                 if let Some(text) = self.string_object_primitive_value(*id)? {
                     return Ok(chars_source(text));
@@ -476,6 +481,14 @@ impl Context {
             Some(PropertyKey::symbol(symbol)),
         );
         self.get_method(iterable, key.lookup())
+    }
+
+    fn is_default_array_iterator_method(&self, method: &Value) -> Result<bool> {
+        let Value::NativeFunction(id) = method else {
+            return Ok(false);
+        };
+        Ok(self.native_function(*id)?.kind()
+            == crate::runtime::native::NativeFunctionKind::ArrayValues)
     }
 
     fn iterator_root_scope(&self, source: &IteratorSource) -> Result<TransientRootScope> {

@@ -621,16 +621,15 @@ impl Parser {
     }
 
     fn function_declaration(&mut self, kind: FunctionKind) -> Result<Stmt> {
-        let name = self.consume_binding_identifier("expected function declaration name")?;
-        if kind.is_generator() && name.as_str() == super::YIELD_IDENTIFIER_NAME {
-            return Err(self.parse_error("yield is not a valid generator function name"));
-        }
+        let name = self.with_await_identifier_reserved(kind.is_async(), |parser| {
+            parser.consume_binding_identifier("expected function declaration name")
+        })?;
         let inherited_strict = self.is_strict_mode();
         if inherited_strict {
             self.validate_function_binding_in_strict_code(&name)?;
         }
         self.consume(&TokenKind::LParen, "expected '(' after function name")?;
-        let parameters = self.with_await_expression(false, |parser| {
+        let parameters = self.with_await_context(false, kind.is_async(), |parser| {
             parser.with_yield_expression(false, |parser| {
                 parser
                     .with_yield_identifier_reserved(kind.is_generator(), Self::function_parameters)
@@ -640,7 +639,7 @@ impl Parser {
         self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
         let body = self.with_new_target_scope(|parser| {
             parser.with_super_context(false, false, |parser| {
-                parser.with_await_expression(kind.is_async(), |parser| {
+                parser.with_await_context(kind.is_async(), kind.is_async(), |parser| {
                     parser.with_yield_expression(kind.is_generator(), |parser| {
                         parser.function_body(inherited_strict)
                     })

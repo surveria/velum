@@ -128,7 +128,7 @@ impl Parser {
     ) -> Result<ObjectProperty> {
         self.consume(&TokenKind::LParen, "expected '(' after accessor name")?;
         let inherited_strict = self.is_strict_mode();
-        let parameters = self.with_await_expression(false, Self::function_parameters)?;
+        let parameters = self.with_await_context(false, false, Self::function_parameters)?;
         self.consume(&TokenKind::RParen, "expected ')' after accessor parameters")?;
         match kind {
             ObjectPropertyKind::Get if !parameters.params.is_empty() => {
@@ -156,7 +156,9 @@ impl Parser {
         self.consume(&TokenKind::LBrace, "expected '{' before accessor body")?;
         let body = self.with_new_target_scope(|parser| {
             parser.with_super_context(false, false, |parser| {
-                parser.with_await_expression(false, |parser| parser.function_body(inherited_strict))
+                parser.with_await_context(false, false, |parser| {
+                    parser.function_body(inherited_strict)
+                })
             })
         })?;
         self.validate_function_parameters(
@@ -210,7 +212,7 @@ impl Parser {
         start: crate::SourceSpan,
     ) -> Result<ObjectProperty> {
         let inherited_strict = self.is_strict_mode();
-        let parameters = self.with_await_expression(false, |parser| {
+        let parameters = self.with_await_context(false, kind.is_async(), |parser| {
             parser.with_yield_expression(false, |parser| {
                 parser
                     .with_yield_identifier_reserved(kind.is_generator(), Self::function_parameters)
@@ -221,7 +223,7 @@ impl Parser {
         self.consume(&TokenKind::LBrace, "expected '{' before method body")?;
         let body = self.with_new_target_scope(|parser| {
             parser.with_super_context(false, false, |parser| {
-                parser.with_await_expression(kind.is_async(), |parser| {
+                parser.with_await_context(kind.is_async(), kind.is_async(), |parser| {
                     parser.with_yield_expression(kind.is_generator(), |parser| {
                         parser.function_body(inherited_strict)
                     })

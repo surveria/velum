@@ -444,6 +444,10 @@ impl LayoutBuilder {
                 self.analyze_expr(initializer, scope, function)?;
             }
         }
+        for block in &class.static_blocks {
+            let block_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
+            self.analyze_statements(&block.body, block_scope, block_scope, function)?;
+        }
         Ok(())
     }
 

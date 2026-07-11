@@ -513,6 +513,9 @@ impl Context {
                 this_value,
                 crate::runtime::generator::GeneratorResumeKind::Throw,
             ),
+            NativeFunctionKind::ThrowTypeError => {
+                Err(Error::type_error("restricted function property access"))
+            }
             NativeFunctionKind::Date(kind) => {
                 self.eval_date_native_function_kind(kind, args, this_value)
             }

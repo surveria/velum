@@ -687,6 +687,9 @@ impl BytecodeClass {
                 total = total.saturating_add(count(initializer));
             }
         }
+        for block in self.static_blocks.iter() {
+            total = total.saturating_add(count(block));
+        }
         total
     }
 

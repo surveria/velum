@@ -78,6 +78,16 @@ impl BytecodeBlock {
         compiler.emit(BytecodeInstruction::StoreLast);
         compiler.finish()
     }
+
+    fn compile_scoped_statements(statements: &[Statement], layout: &BindingLayout) -> Result<Self> {
+        let fallback_span = statements
+            .first()
+            .map_or_else(|| SourceSpan::point(SourceId::UNKNOWN, 0), Statement::span);
+        let inner = Self::compile_statements(statements, StatementValue::Store, layout)?;
+        let mut compiler = BytecodeCompiler::new(layout, fallback_span);
+        compiler.emit(BytecodeInstruction::ScopedBlock(inner));
+        compiler.finish()
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -463,6 +473,11 @@ impl<'a> BytecodeCompiler<'a> {
                     .transpose()?,
             });
         }
+        let static_blocks = class
+            .static_blocks
+            .iter()
+            .map(|block| BytecodeBlock::compile_scoped_statements(&block.body, self.layout))
+            .collect::<Result<Vec<_>>>()?;
         self.emit(BytecodeInstruction::CreateClass {
             class: Rc::new(BytecodeClass {
                 name: class.name.clone().or_else(|| inferred_name.cloned()),
@@ -478,6 +493,7 @@ impl<'a> BytecodeCompiler<'a> {
                 )?,
                 members: members.into(),
                 fields: fields.into(),
+                static_blocks: static_blocks.into(),
             }),
         });
         Ok(())

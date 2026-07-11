@@ -148,6 +148,64 @@ fn generator_destructuring_parameter_errors_are_catchable_on_call() -> TestResul
 }
 
 #[test]
+fn synchronous_generators_treat_await_as_an_identifier() -> TestResult {
+    let value = eval(
+        r"
+        var await = 40;
+        var parameterValue = 0;
+        var bodyValue = 0;
+        class Holder {
+            static {
+                (function* await(value) {});
+                (function*(value = await) {
+                    parameterValue = value;
+                    bodyValue = await + 2;
+                })().next();
+            }
+        }
+        parameterValue + bodyValue
+        ",
+    )?;
+    ensure_value(&value, &Value::Number(82.0))
+}
+
+#[test]
+fn generator_parameters_observe_array_iterator_deletion() -> TestResult {
+    let value = eval(
+        r"
+        function* values([value]) {
+            yield value;
+        }
+        delete Array.prototype[Symbol.iterator];
+        let caught = false;
+        try {
+            values([42]);
+        } catch (error) {
+            caught = error instanceof TypeError;
+        }
+        caught
+        ",
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn object_spread_copies_symbol_properties_for_generators() -> TestResult {
+    let value = eval(
+        r#"
+        const key = Symbol("generator");
+        const source = {};
+        source[key] = 42;
+        function* values() {
+            yield ({ ...source })[key];
+        }
+        values().next().value
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn yield_delegate_forwards_next_and_completion_values() -> TestResult {
     let value = eval(
         r#"

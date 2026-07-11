@@ -202,7 +202,7 @@ impl Context {
                 }
             }
             Value::Function(id) => SemanticPropertyPresence::Resolved(
-                self.has_function_property_lookup(*id, property)?,
+                self.has_function_property_including_prototype_lookup(*id, property)?,
             ),
             Value::NativeFunction(id) => SemanticPropertyPresence::Resolved(
                 self.has_native_function_property_lookup(*id, property)?,

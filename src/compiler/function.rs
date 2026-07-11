@@ -352,6 +352,9 @@ impl CaptureBindingCollector {
                 self.collect_expr(initializer);
             }
         }
+        for block in &class.static_blocks {
+            self.collect_statements(&block.body);
+        }
     }
 
     fn collect_pattern(&mut self, pattern: &BindingPattern) {

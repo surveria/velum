@@ -1,4 +1,14 @@
-use crate::{error::Result, runtime::Context, value::ObjectId, value::Value};
+use crate::{
+    error::{Error, Result},
+    runtime::{
+        Context,
+        object::{
+            DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable, PropertyKey,
+            PropertyUpdate, PropertyWritable,
+        },
+    },
+    value::{ObjectId, Value},
+};
 
 use super::NativeFunctionKind;
 
@@ -35,6 +45,8 @@ const ARRAY_PROTOTYPE_TO_SORTED_PROPERTY: &str = "toSorted";
 const ARRAY_PROTOTYPE_TO_REVERSED_PROPERTY: &str = "toReversed";
 const ARRAY_PROTOTYPE_TO_SPLICED_PROPERTY: &str = "toSpliced";
 const ARRAY_PROTOTYPE_WITH_PROPERTY: &str = "with";
+const ARRAY_PROTOTYPE_VALUES_PROPERTY: &str = "values";
+const ARRAY_ITERATOR_SYMBOL_DISPLAY: &str = "[Symbol.iterator]";
 
 /// `Array.prototype` method table installed as non-enumerable data properties.
 const ARRAY_PROTOTYPE_METHODS: [(&str, NativeFunctionKind); 33] = [
@@ -145,6 +157,29 @@ impl Context {
             let method = self.create_native_function(kind, Value::Undefined)?;
             self.define_non_enumerable_object_property(prototype, property, method)?;
         }
+        let values =
+            self.create_native_function(NativeFunctionKind::ArrayValues, Value::Undefined)?;
+        self.define_non_enumerable_object_property(
+            prototype,
+            ARRAY_PROTOTYPE_VALUES_PROPERTY,
+            values.clone(),
+        )?;
+        self.symbol_constructor_value()?;
+        let Some(symbol) = self.iterator_symbol() else {
+            return Err(Error::runtime("Symbol.iterator is not initialized"));
+        };
+        self.objects.define_property(
+            prototype,
+            PropertyKey::symbol(symbol),
+            ARRAY_ITERATOR_SYMBOL_DISPLAY,
+            PropertyUpdate::Data(DataPropertyUpdate::new(
+                Some(values),
+                Some(PropertyWritable::Yes),
+                Some(PropertyEnumerable::No),
+                Some(PropertyConfigurable::Yes),
+            )),
+            self.limits.max_object_properties,
+        )?;
         Ok(())
     }
 }

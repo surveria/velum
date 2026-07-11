@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use crate::{
     ast::{
-        ClassConstructor, ClassLiteral, ClassMember, ClassMemberKind, Expr, Expression,
-        ObjectPropertyKey, Statement, Stmt,
+        ClassConstructor, ClassLiteral, ClassMember, ClassMemberKind, ClassStaticBlock, Expr,
+        Expression, ObjectPropertyKey, Statement, Stmt,
     },
     error::{Error, Result},
     lexer::TokenKind,
@@ -74,6 +74,7 @@ impl Parser {
         let mut constructor = None;
         let mut members = Vec::new();
         let mut fields = Vec::new();
+        let mut static_blocks = Vec::new();
         while !self.check(&TokenKind::RBrace) {
             if self.at_end() {
                 return Err(self.parse_error("expected '}' after class body"));
@@ -81,7 +82,13 @@ impl Parser {
             if self.match_kind(&TokenKind::Semicolon) {
                 continue;
             }
-            self.class_member(&mut constructor, &mut members, &mut fields, derived)?;
+            self.class_member(
+                &mut constructor,
+                &mut members,
+                &mut fields,
+                &mut static_blocks,
+                derived,
+            )?;
         }
         self.consume(&TokenKind::RBrace, "expected '}' after class body")?;
         let constructor = match constructor {
@@ -95,6 +102,7 @@ impl Parser {
             constructor,
             members,
             fields,
+            static_blocks,
         })
     }
 
@@ -126,10 +134,14 @@ impl Parser {
         constructor: &mut Option<ClassConstructor>,
         members: &mut Vec<ClassMember>,
         fields: &mut Vec<crate::ast::ClassField>,
+        static_blocks: &mut Vec<ClassStaticBlock>,
         derived: bool,
     ) -> Result<()> {
         let member_offset = self.offset();
         self.reject_unsupported_class_member()?;
+        if self.class_static_block_start() {
+            return self.class_static_block(static_blocks);
+        }
         let is_static = self.match_class_static_prefix();
         if is_static {
             self.reject_unsupported_class_member()?;
@@ -177,6 +189,40 @@ impl Parser {
             params: function.params,
             body: function.body,
         });
+        Ok(())
+    }
+
+    fn class_static_block_start(&self) -> bool {
+        matches!(self.peek_kind(0), Some(TokenKind::Identifier(name)) if name == CLASS_STATIC_KEYWORD)
+            && self.peek_kind_is(1, &TokenKind::LBrace)
+    }
+
+    fn class_static_block(&mut self, static_blocks: &mut Vec<ClassStaticBlock>) -> Result<()> {
+        let static_token = self
+            .advance()
+            .ok_or_else(|| self.parse_error("expected 'static' before class static block"))?;
+        self.consume(&TokenKind::LBrace, "expected '{' after 'static'")?;
+        let mut body = self.with_super_context(true, false, |parser| {
+            parser.with_await_context(false, false, |parser| {
+                parser.with_yield_expression(false, Self::block_statements)
+            })
+        })?;
+        if body.is_empty() {
+            body.push(crate::ast::Statement::new(
+                crate::ast::Stmt::Empty,
+                static_token.span,
+            ));
+        }
+        if body
+            .iter()
+            .any(|statement| matches!(statement.kind(), crate::ast::Stmt::Return(_)))
+        {
+            return Err(Error::parse_at(
+                "return is not allowed in a class static block",
+                static_token.span,
+            ));
+        }
+        static_blocks.push(ClassStaticBlock { body: body.into() });
         Ok(())
     }
 
@@ -260,7 +306,7 @@ impl Parser {
         allow_super_call: bool,
     ) -> Result<ParsedClassFunction> {
         self.consume(&TokenKind::LParen, "expected '(' after class member name")?;
-        let parameters = self.with_await_expression(false, Self::function_parameters)?;
+        let parameters = self.with_await_context(false, false, Self::function_parameters)?;
         self.consume(
             &TokenKind::RParen,
             "expected ')' after class member parameters",
@@ -291,7 +337,7 @@ impl Parser {
         self.consume(&TokenKind::LBrace, "expected '{' before class member body")?;
         let body = self.with_new_target_scope(|parser| {
             parser.with_super_context(true, allow_super_call, |parser| {
-                parser.with_await_expression(false, |parser| parser.function_body(true))
+                parser.with_await_context(false, false, |parser| parser.function_body(true))
             })
         })?;
         self.validate_function_parameters(
