@@ -27,6 +27,7 @@ mod primitive_kind;
 mod reflect_kind;
 mod registry;
 mod string_kind;
+mod typed_array_kind;
 
 use super::number_intrinsic_property;
 
@@ -99,6 +100,7 @@ pub(in crate::runtime::native) use primitive_kind::{
 };
 pub(in crate::runtime::native) use reflect_kind::REFLECT_NAME;
 pub(in crate::runtime) use registry::NativeFunctionRegistry;
+pub(in crate::runtime) use typed_array_kind::TypedArrayFunctionKind;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunction {

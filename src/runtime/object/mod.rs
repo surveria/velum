@@ -636,25 +636,13 @@ impl Object {
         let Some(view) = self.typed_array.as_ref() else {
             return Ok(None);
         };
-        match property {
-            "length" => Ok(Some(Value::Number(usize_property_number(view.length())?))),
-            "byteLength" => Ok(Some(Value::Number(usize_property_number(
-                view.byte_length()?,
-            )?))),
-            "byteOffset" => Ok(Some(Value::Number(usize_property_number(
-                view.byte_offset(),
-            )?))),
-            "buffer" => Ok(Some(Value::Object(view.buffer_object()))),
-            _ => {
-                let Some(index) = ArrayIndex::parse(property) else {
-                    return Ok(None);
-                };
-                let Some(number) = view.read(index.position()?)? else {
-                    return Ok(None);
-                };
-                Ok(Some(Value::Number(number)))
-            }
-        }
+        let Some(index) = ArrayIndex::parse(property) else {
+            return Ok(None);
+        };
+        let Some(number) = view.read(index.position()?)? else {
+            return Ok(None);
+        };
+        Ok(Some(Value::Number(number)))
     }
 
     fn has_typed_array_property(&self, property: &str) -> Result<bool> {
@@ -664,9 +652,6 @@ impl Object {
         let Some(view) = self.typed_array.as_ref() else {
             return Ok(false);
         };
-        if matches!(property, "length" | "byteLength" | "byteOffset" | "buffer") {
-            return Ok(true);
-        }
         let Some(index) = ArrayIndex::parse(property) else {
             return Ok(false);
         };

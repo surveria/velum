@@ -147,7 +147,7 @@ impl Context {
                 self.get_function_property_lookup(*id, receiver, property)?,
             ),
             Value::NativeFunction(id) => SemanticPropertyRead::Resolved(
-                self.get_native_function_property_lookup(*id, property)?,
+                self.get_native_function_property_lookup(*id, receiver, property)?,
             ),
             Value::HostFunction(_) => {
                 let value = get_property(&self.objects, object, property)?;
@@ -205,7 +205,7 @@ impl Context {
                 self.has_function_property_including_prototype_lookup(*id, property)?,
             ),
             Value::NativeFunction(id) => SemanticPropertyPresence::Resolved(
-                self.has_native_function_property_lookup(*id, property)?,
+                self.has_native_function_property_including_prototype_lookup(*id, property)?,
             ),
             Value::HostFunction(_) => {
                 SemanticPropertyPresence::Resolved(has_property(&self.objects, object, property)?)

@@ -1,6 +1,6 @@
 use super::{
     data_view_kind::DataViewFunctionKind, date_kind::DateFunctionKind,
-    iterator_kind::IteratorFunctionKind,
+    iterator_kind::IteratorFunctionKind, typed_array_kind::TypedArrayFunctionKind,
 };
 use crate::runtime::object::TypedArrayElementKind;
 use crate::value::{BoundFunctionId, ErrorName, ObjectId};
@@ -493,6 +493,8 @@ pub(in crate::runtime) enum NativeFunctionKind {
     SymbolPrototypeToString,
     SymbolPrototypeValueOf,
     ThrowTypeError,
+    TypedArrayIntrinsic,
+    TypedArrayPrototype(TypedArrayFunctionKind),
     TypedArray(TypedArrayElementKind),
     WeakMap,
     WeakMapDelete,
@@ -526,6 +528,7 @@ impl NativeFunctionKind {
                 | Self::Set
                 | Self::Symbol
                 | Self::ArrayBuffer
+                | Self::TypedArrayIntrinsic
                 | Self::TypedArray(_)
                 | Self::WeakMap
                 | Self::WeakSet
@@ -541,6 +544,9 @@ impl NativeFunctionKind {
             return kind.length();
         }
         if let Self::Iterator(kind) = self {
+            return kind.length();
+        }
+        if let Self::TypedArrayPrototype(kind) = self {
             return kind.length();
         }
         if let Some(length) = self.collection_length() {
@@ -610,7 +616,7 @@ impl NativeFunctionKind {
             Self::JsonRawJson => Some(JSON_RAW_JSON_FUNCTION_LENGTH),
             Self::JsonStringify => Some(JSON_STRINGIFY_FUNCTION_LENGTH),
             Self::Number => Some(NUMBER_FUNCTION_LENGTH),
-            Self::Print | Self::ThrowTypeError => Some(0.0),
+            Self::Print | Self::ThrowTypeError | Self::TypedArrayIntrinsic => Some(0.0),
             Self::Promise => Some(PROMISE_FUNCTION_LENGTH),
             Self::PromiseAll => Some(PROMISE_ALL_FUNCTION_LENGTH),
             Self::PromiseAllResolveElement { .. } => {
@@ -640,6 +646,9 @@ impl NativeFunctionKind {
             return kind.name();
         }
         if let Self::Iterator(kind) = self {
+            return kind.name();
+        }
+        if let Self::TypedArrayPrototype(kind) = self {
             return kind.name();
         }
         if let Some(name) = self.collection_name() {
@@ -766,6 +775,7 @@ impl NativeFunctionKind {
             Self::Symbol => Some(SYMBOL_NAME),
             Self::SymbolFor => Some("for"),
             Self::SymbolKeyFor => Some("keyFor"),
+            Self::TypedArrayIntrinsic => Some("TypedArray"),
             Self::TypedArray(kind) => Some(kind.name()),
             _ => None,
         }

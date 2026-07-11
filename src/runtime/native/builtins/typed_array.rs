@@ -8,9 +8,13 @@ use crate::{
             ByteBuffer, ByteBufferOrigin, ObjectPropertyInit, PropertyEnumerable,
             TypedArrayElementKind, TypedArrayView,
         },
+        roots::VmRootKind,
     },
     value::{ErrorName, ObjectId, Value},
 };
+
+mod install;
+mod methods;
 
 const BYTES_PER_ELEMENT_PROPERTY: &str = "BYTES_PER_ELEMENT";
 const TYPED_ARRAY_LENGTH_LIMIT_ERROR: &str = "typed array length exceeded supported range";
@@ -28,7 +32,7 @@ impl Context {
         self.object_constructor_value()?;
         let id = self.next_native_function_id();
         let constructor = Value::NativeFunction(id);
-        let prototype = self.typed_storage_prototype_with_constructor(constructor.clone())?;
+        let prototype = self.typed_storage_prototype_with_constructor(constructor.clone(), None)?;
         let name = self.native_function_name_value(NativeFunctionKind::ArrayBuffer)?;
         self.push_native_function_with_id(
             id,
@@ -48,10 +52,14 @@ impl Context {
         if let Some(id) = self.native_function_id(function_kind) {
             return Ok(Value::NativeFunction(id));
         }
-        self.object_constructor_value()?;
+        self.typed_array_intrinsic_constructor_value()?;
+        let shared_prototype = self.typed_array_intrinsic_prototype()?;
         let id = self.next_native_function_id();
         let constructor = Value::NativeFunction(id);
-        let prototype = self.typed_storage_prototype_with_constructor(constructor.clone())?;
+        let prototype = self.typed_storage_prototype_with_constructor(
+            constructor.clone(),
+            Some(shared_prototype),
+        )?;
         let name = self.native_function_name_value(function_kind)?;
         self.push_native_function_with_id(id, function_kind, Value::Object(prototype), name)?;
         self.define_non_enumerable_object_property(
@@ -80,6 +88,8 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let values = args.as_slice();
+        let _root_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, values.iter())?;
         let source = values.first().cloned().unwrap_or(Value::Undefined);
         if let Value::Object(buffer_object) = source
             && let Some(buffer) = self.objects.array_buffer(buffer_object)?
@@ -91,6 +101,9 @@ impl Context {
                 values.get(1),
                 values.get(2),
             );
+        }
+        if let Some(values) = self.typed_array_iterable_values(&source)? {
+            return self.create_typed_array_from_values(element_kind, values);
         }
         if self.semantic_object_ref(&source)?.is_some() {
             return self.create_typed_array_from_array_like(element_kind, &source);
@@ -155,6 +168,32 @@ impl Context {
         }
         let value = self.create_typed_array_with_length(element_kind, length)?;
         let Value::Object(id) = value else {
+            return Err(Error::runtime(
+                "typed array allocation did not return an object",
+            ));
+        };
+        for (index, number) in numbers.into_iter().enumerate() {
+            if !self.objects.set_typed_array_number(id, index, number)? {
+                return Err(Error::runtime(
+                    "typed array initialization index is out of bounds",
+                ));
+            }
+        }
+        Ok(Value::Object(id))
+    }
+
+    pub(super) fn create_typed_array_from_values(
+        &mut self,
+        element_kind: TypedArrayElementKind,
+        values: Vec<Value>,
+    ) -> Result<Value> {
+        self.check_typed_array_length(element_kind, values.len())?;
+        let mut numbers = Vec::with_capacity(values.len());
+        for value in values {
+            numbers.push(self.to_number(&value)?);
+        }
+        let result = self.create_typed_array_with_length(element_kind, numbers.len())?;
+        let Value::Object(id) = result else {
             return Err(Error::runtime(
                 "typed array allocation did not return an object",
             ));
@@ -278,10 +317,14 @@ impl Context {
             .map(Value::Object)
     }
 
-    fn typed_storage_prototype_with_constructor(&mut self, constructor: Value) -> Result<ObjectId> {
+    fn typed_storage_prototype_with_constructor(
+        &mut self,
+        constructor: Value,
+        parent: Option<ObjectId>,
+    ) -> Result<ObjectId> {
         let constructor_key = self.object_constructor_property_key()?;
         self.objects.create_with_prototype_property(
-            None,
+            parent,
             ObjectPropertyInit::new(
                 constructor_key,
                 OBJECT_CONSTRUCTOR_PROPERTY,

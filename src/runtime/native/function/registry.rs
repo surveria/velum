@@ -255,7 +255,8 @@ const ITERATOR_PROTOTYPE_TO_STRING_TAG_GETTER_SLOT: NativeFunctionSlot =
     NativeFunctionSlot::new(261);
 const ITERATOR_PROTOTYPE_TO_STRING_TAG_SETTER_SLOT: NativeFunctionSlot =
     NativeFunctionSlot::new(262);
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 263;
+const TYPED_ARRAY_INTRINSIC_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(263);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 264;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -397,6 +398,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::GeneratorNext => Some(GENERATOR_NEXT_SLOT),
         NativeFunctionKind::GeneratorReturn => Some(GENERATOR_RETURN_SLOT),
         NativeFunctionKind::GeneratorThrow => Some(GENERATOR_THROW_SLOT),
+        NativeFunctionKind::TypedArrayIntrinsic => Some(TYPED_ARRAY_INTRINSIC_SLOT),
         NativeFunctionKind::JsonIsRawJson => Some(JSON_IS_RAW_JSON_SLOT),
         NativeFunctionKind::JsonParse => Some(JSON_PARSE_SLOT),
         NativeFunctionKind::JsonRawJson => Some(JSON_RAW_JSON_SLOT),
