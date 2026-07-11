@@ -295,7 +295,7 @@ impl LayoutBuilder {
             }
             Stmt::FunctionDecl {
                 id, params, body, ..
-            } => self.analyze_function(*id, params, body, scope, function),
+            } => self.analyze_function(*id, None, params, body, scope, function),
             Stmt::Empty | Stmt::Return(None) | Stmt::Break(_) | Stmt::Continue(_) => Ok(()),
             Stmt::VarDecl { init, .. } => {
                 if let Some(init) = init {
@@ -415,6 +415,7 @@ impl LayoutBuilder {
         }
         self.analyze_function(
             class.constructor.id,
+            None,
             &class.constructor.params,
             &class.constructor.body,
             scope,
@@ -424,7 +425,14 @@ impl LayoutBuilder {
             if let crate::ast::ObjectPropertyKey::Computed(key) = &member.key {
                 self.analyze_expr(key, scope, function)?;
             }
-            self.analyze_function(member.id, &member.params, &member.body, scope, function)?;
+            self.analyze_function(
+                member.id,
+                None,
+                &member.params,
+                &member.body,
+                scope,
+                function,
+            )?;
         }
         for field in &class.fields {
             if let crate::ast::ObjectPropertyKey::Computed(key) = &field.key {
@@ -538,7 +546,7 @@ impl LayoutBuilder {
                 self.analyze_expr(consequent, scope, function)?;
                 self.analyze_expr(alternate, scope, function)
             }
-            Expr::Assignment { name, expr } => {
+            Expr::Assignment { name, expr, .. } => {
                 self.resolve(name, scope, function)?;
                 self.analyze_expr(expr, scope, function)
             }
@@ -572,14 +580,18 @@ impl LayoutBuilder {
                 self.analyze_exprs(args, scope, function)
             }
             Expr::Function {
-                id, params, body, ..
-            }
-            | Expr::ArrowFunction {
+                id,
+                name,
+                params,
+                body,
+                ..
+            } => self.analyze_function(*id, name.as_ref(), params, body, scope, function),
+            Expr::ArrowFunction {
                 id, params, body, ..
             }
             | Expr::MethodFunction {
                 id, params, body, ..
-            } => self.analyze_function(*id, params, body, scope, function),
+            } => self.analyze_function(*id, None, params, body, scope, function),
             Expr::Object(properties) => self.analyze_object_properties(properties, scope, function),
             Expr::Array(elements) => self.analyze_exprs(elements, scope, function),
             Expr::New { constructor, args } => {
@@ -619,6 +631,7 @@ impl LayoutBuilder {
     fn analyze_function(
         &mut self,
         id: StaticFunctionId,
+        self_binding: Option<&StaticBinding>,
         params: &[FunctionParam],
         body: &[Statement],
         parent_scope: ScopeId,
@@ -626,7 +639,15 @@ impl LayoutBuilder {
     ) -> Result<()> {
         let function = self.add_function(Some(parent_function));
         self.record_static_function(id, function)?;
-        let function_scope = self.add_scope(Some(parent_scope), function, ScopeKind::Local);
+        let function_parent_scope = if let Some(self_binding) = self_binding {
+            let self_scope = self.add_scope(Some(parent_scope), function, ScopeKind::Local);
+            self.declare(self_scope, self_binding)?;
+            self_scope
+        } else {
+            parent_scope
+        };
+        let function_scope =
+            self.add_scope(Some(function_parent_scope), function, ScopeKind::Local);
         for param in params {
             self.declare(function_scope, &param.name)?;
         }

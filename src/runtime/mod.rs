@@ -123,6 +123,7 @@ pub struct Context {
 
 #[derive(Debug, Clone)]
 struct Function {
+    self_binding: Option<function::FunctionSelfBinding>,
     param_binding_ids: Rc<[StaticBindingId]>,
     param_atoms: Rc<[AtomId]>,
     param_frames: Rc<[Option<CompiledBindingFrame>]>,
@@ -189,6 +190,7 @@ enum CallReference {
     DirectNative {
         target: NativeCallTarget,
         this_value: Value,
+        strict: bool,
     },
 }
 
@@ -500,9 +502,10 @@ impl Context {
         &mut self,
         callee: &BytecodeBinding,
         native: Option<NativeCallTarget>,
+        strict: bool,
         args: &[Value],
     ) -> Result<Completion> {
-        let reference = self.eval_bytecode_identifier_call_reference(callee, native)?;
+        let reference = self.eval_bytecode_identifier_call_reference(callee, native, strict)?;
         self.eval_call_reference_completion(reference, args)
     }
 
@@ -518,9 +521,18 @@ impl Context {
                     RuntimeCallArgs::values(args),
                     this_value,
                 ),
-            CallReference::DirectNative { target, this_value } => self
-                .eval_direct_native_call_target(target, args, &this_value)
-                .map(Completion::Normal),
+            CallReference::DirectNative {
+                target,
+                this_value,
+                strict,
+            } => {
+                let value = if target == NativeCallTarget::Eval {
+                    self.eval_eval_function_with_strict(RuntimeCallArgs::values(args), strict)?
+                } else {
+                    self.eval_direct_native_call_target(target, args, &this_value)?
+                };
+                Ok(Completion::Normal(value))
+            }
             CallReference::Native { kind, this_value } => self
                 .eval_direct_or_generic_native_function_kind(kind, args, &this_value)
                 .map(Completion::Normal),
@@ -532,21 +544,23 @@ impl Context {
         &mut self,
         callee: &BytecodeBinding,
         native: Option<NativeCallTarget>,
+        strict: bool,
     ) -> Result<CallReference> {
         if let Some(function) = self.unresolved_direct_builtin_callable(callee)? {
-            return self.call_reference_from_value(callee, native, function);
+            return self.call_reference_from_value(callee, native, strict, function);
         }
         let Some(binding) = self.get_or_materialize_binding_bytecode(callee)? else {
             return Err(reference_error_undefined(callee.name()));
         };
         let function = binding.value(callee.name())?;
-        self.call_reference_from_value(callee, native, function)
+        self.call_reference_from_value(callee, native, strict, function)
     }
 
     fn call_reference_from_value(
         &self,
         callee: &BytecodeBinding,
         native: Option<NativeCallTarget>,
+        strict: bool,
         function: Value,
     ) -> Result<CallReference> {
         if let Value::Function(id) = function {
@@ -562,6 +576,7 @@ impl Context {
                 return Ok(CallReference::DirectNative {
                     target,
                     this_value: Value::Undefined,
+                    strict,
                 });
             }
             if let Some(kind) = self.cached_static_binding_native_call_kind(callee.name(), id)? {

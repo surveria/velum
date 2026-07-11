@@ -35,7 +35,15 @@ pub struct ParsedFunctionBody {
 }
 
 pub fn parse_with_usage(tokens: Vec<Token>, limits: RuntimeLimits) -> Result<ParsedProgram> {
-    Parser::new(tokens, limits).parse()
+    parse_with_usage_in_mode(tokens, limits, false)
+}
+
+pub(crate) fn parse_with_usage_in_mode(
+    tokens: Vec<Token>,
+    limits: RuntimeLimits,
+    strict_mode: bool,
+) -> Result<ParsedProgram> {
+    Parser::new(tokens, limits, strict_mode).parse()
 }
 
 pub struct ParsedProgram {
@@ -76,7 +84,7 @@ struct Parser {
 }
 
 impl Parser {
-    const fn new(tokens: Vec<Token>, limits: RuntimeLimits) -> Self {
+    const fn new(tokens: Vec<Token>, limits: RuntimeLimits, strict_mode: bool) -> Self {
         Self {
             tokens,
             cursor: 0,
@@ -94,7 +102,7 @@ impl Parser {
             allow_super_property: false,
             allow_super_call: false,
             static_call_site_count: 0,
-            strict_mode: false,
+            strict_mode,
             await_expression_context: AwaitExpressionContext::Allowed,
         }
     }

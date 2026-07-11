@@ -13,11 +13,13 @@ impl Context {
         param_frame_count: usize,
         has_fast_path: bool,
         scope_template: Option<&FunctionScopeTemplate>,
+        has_self_binding: bool,
     ) -> Result<usize> {
         let count = param_binding_count
             .checked_add(param_atom_count)
             .and_then(|count| count.checked_add(param_frame_count))
             .and_then(|count| count.checked_add(usize::from(has_fast_path)))
+            .and_then(|count| count.checked_add(usize::from(has_self_binding).saturating_mul(2)))
             .ok_or_else(|| Error::limit("function metadata cache count overflowed"))?;
         if let Some(template) = scope_template {
             return count
@@ -79,8 +81,10 @@ impl Context {
         &mut self,
         local_base: usize,
         binds_arguments: bool,
+        has_self_binding: bool,
     ) -> Result<()> {
-        let expected_local_count = expected_function_local_count(local_base, binds_arguments)?;
+        let expected_local_count =
+            expected_function_local_count(local_base, binds_arguments, has_self_binding)?;
         let actual_local_count = self.locals.len();
         let local_scope_stack_ok = actual_local_count == expected_local_count;
         self.leave_function_local_frame(local_base)?;
@@ -90,5 +94,31 @@ impl Context {
             )));
         }
         Ok(())
+    }
+
+    pub(super) fn named_function_self_scope(
+        &self,
+        function: crate::value::FunctionId,
+        binding: super::FunctionSelfBinding,
+    ) -> Result<BindingScope> {
+        self.ensure_extra_binding_capacity(1)?;
+        let frame = binding.frame();
+        let scope = frame
+            .scope()
+            .ok_or_else(|| Error::runtime("named function binding scope is not local"))?;
+        if frame.slot().index() != 0 {
+            return Err(Error::runtime(
+                "named function binding is not the first self-scope slot",
+            ));
+        }
+        BindingScope::from_compiled_slots(
+            scope,
+            vec![(
+                binding.atom(),
+                crate::runtime::binding::scope::BindingCell::named_function(Value::Function(
+                    function,
+                )),
+            )],
+        )
     }
 }

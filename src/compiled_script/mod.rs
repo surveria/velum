@@ -23,7 +23,7 @@ pub struct CompiledScript {
 
 impl CompiledScript {
     pub(crate) fn compile(source: &str, limits: RuntimeLimits) -> Result<Self> {
-        Self::compile_with_name(None, source, limits)
+        Self::compile_with_name_and_mode(None, source, limits, false)
     }
 
     pub(crate) fn compile_named(
@@ -31,21 +31,34 @@ impl CompiledScript {
         source: &str,
         limits: RuntimeLimits,
     ) -> Result<Self> {
-        Self::compile_with_name(Some(source_name), source, limits)
+        Self::compile_with_name_and_mode(Some(source_name), source, limits, false)
     }
 
-    fn compile_with_name(
+    pub(crate) fn compile_eval(
+        source: &str,
+        limits: RuntimeLimits,
+        strict_mode: bool,
+    ) -> Result<Self> {
+        Self::compile_with_name_and_mode(None, source, limits, strict_mode)
+    }
+
+    fn compile_with_name_and_mode(
         source_name: Option<&str>,
         source: &str,
         limits: RuntimeLimits,
+        strict_mode: bool,
     ) -> Result<Self> {
         check_source_len(source, &limits)?;
         check_source_name_len(source_name, &limits)?;
         let source_id = SourceId::for_optional_name(source_name, source);
         let tokens =
             lexer::lex(source, source_id).map_err(|error| error.with_source(source_id, source))?;
-        let parsed = parser::parse_with_usage(tokens, limits)
-            .map_err(|error| error.with_source(source_id, source))?;
+        let parsed = if strict_mode {
+            parser::parse_with_usage_in_mode(tokens, limits, true)
+        } else {
+            parser::parse_with_usage(tokens, limits)
+        }
+        .map_err(|error| error.with_source(source_id, source))?;
         let program = parsed.program;
         let binding_layout = BindingLayout::build(
             &program,

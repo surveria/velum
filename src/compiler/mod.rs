@@ -392,7 +392,12 @@ impl<'a> BytecodeCompiler<'a> {
                 is_static: member.is_static,
                 id: member.id,
                 name: member.name.clone(),
-                bytecode: BytecodeFunction::compile(&member.params, &member.body, self.layout)?,
+                bytecode: BytecodeFunction::compile(
+                    None,
+                    &member.params,
+                    &member.body,
+                    self.layout,
+                )?,
             });
         }
         let mut fields = Vec::with_capacity(class.fields.len());
@@ -421,6 +426,7 @@ impl<'a> BytecodeCompiler<'a> {
                 heritage: class.heritage.is_some(),
                 constructor_id: class.constructor.id,
                 constructor: BytecodeFunction::compile(
+                    None,
                     &class.constructor.params,
                     &class.constructor.body,
                     self.layout,

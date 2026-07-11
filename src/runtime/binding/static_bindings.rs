@@ -371,7 +371,7 @@ impl Context {
         value: Value,
     ) -> Result<()> {
         let value = self.checked_value(value)?;
-        cell.assign(binding.name(), value.clone())?;
+        cell.assign_bytecode(binding.name(), value.clone(), binding.strict_write())?;
         self.sync_builtin_binding_global_property(binding, cell, value)
     }
 

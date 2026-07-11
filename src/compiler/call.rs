@@ -12,6 +12,7 @@ impl BytecodeCompiler<'_> {
         &mut self,
         callee: &Expression,
         site: StaticCallSiteId,
+        strict: bool,
         args: &[Expression],
     ) -> Result<()> {
         if has_spread_arg(args) {
@@ -23,6 +24,7 @@ impl BytecodeCompiler<'_> {
                 self.emit(BytecodeInstruction::CallBinding {
                     callee: self.compile_binding(name)?,
                     native: NativeCallTarget::from_binding_name(name.as_str()),
+                    strict,
                     arg_count: args.len(),
                 });
                 Ok(())
@@ -64,7 +66,7 @@ impl BytecodeCompiler<'_> {
                 });
                 Ok(())
             }
-            Expr::Parenthesized(callee) => self.compile_call_expr(callee, site, args),
+            Expr::Parenthesized(callee) => self.compile_call_expr(callee, site, strict, args),
             _ => {
                 self.compile_expr(callee)?;
                 self.compile_args(args)?;

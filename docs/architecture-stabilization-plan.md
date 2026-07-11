@@ -489,7 +489,7 @@ dependencies do not overlap.
 | AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
 | AS-07 | Complete | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | PR #446 merged as `62e2725`; exact-tree correctness, paired sentinels, post-merge performance, and canonical report publication passed. |
 | AS-08 | Complete | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a and AS-08b merged through PR #449; exact-tree correctness, disabled-mode equivalence, specialization audit, paired sentinels, and canonical publication passed. |
-| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09a through AS-09c are complete; AS-09d adds the foundational comma-expression grammar boundary without a dedicated runtime path. |
+| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09a through AS-09d are complete; AS-09e adds the private named-function self-binding boundary and inherited strict direct eval. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
 
 ## Program Item Details
@@ -2393,7 +2393,37 @@ AS-09d profile evidence in draft PR #453:
   function-call 153.58/153.51 ms (-0.05%), and string-scan 71.33/71.74 ms
   (+0.6%). Every row is valid, branch variation is at most 1.7%, and no
   performance regression is indicated;
-- exact-tree CI and canonical publication remain required before AS-09d can
+- PR #453 squash-merged as `1fc9867`; required run `29142804842` certified
+  exact tree `a23bd644`, post-merge run `29142896882` passed performance and
+  publication, and report-only commit `f2d2113` published
+  `reports/test-runs/rsqjs-test-report-20260711T062919Z.*` with all five
+  sentinels valid.
+
+AS-09e profile evidence in draft PR #454:
+
+- a function-expression name is now a `StaticBinding`, not only `Function.name`
+  metadata. Binding layout creates one private local self scope outside the
+  parameter/body scope, so parameters and body declarations shadow normally
+  while recursion, parameter defaults, and nested closures resolve one compiled
+  slot without leaking the name to the outer environment;
+- each call materializes the private slot from precomputed atom/frame metadata.
+  The cell stores the function identity and has a typed immutable assignment
+  policy: sloppy writes are ignored while strict writes request a catchable
+  `TypeError`. Simple, compound, and update binding bytecode carry source
+  strictness explicitly;
+- direct `eval` call bytecode carries the caller's strict mode into dynamic
+  compilation. Indirect eval and other native calls keep their existing
+  behavior, and no runtime source-name comparison defines the semantic path;
+- the focused profile moved from 2/12 to 12/12 named-function variants. Direct
+  recursion, outside isolation, parameter shadowing, default-parameter and
+  nested closure capture, direct/arrow/eval writes, and strict/sloppy behavior
+  have permanent integration coverage. The adjacent comma `tco-final.js`
+  residual now resolves its function name and fails only at the existing call
+  depth limit, so tail-call optimization remains a separate tranche;
+- the architecture guard fixes one layout/runtime owner, requires compiled
+  slots and typed strictness, rejects runtime source-name comparisons, and
+  mutation-tests the runtime owner. Full-corpus baseline, paired sentinels,
+  exact-tree CI, and canonical publication remain required before AS-09e can
   close.
 
 ### AS-10: Performance And Memory Checkpoints

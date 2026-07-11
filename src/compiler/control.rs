@@ -3,8 +3,8 @@ use std::rc::Rc;
 use crate::{
     ast::{CatchClause, DeclKind, Expr, Expression, ForInTarget, Statement, Stmt, SwitchCase},
     bytecode::{
-        BytecodeAssignmentTarget, BytecodeBlock, BytecodeCatch, BytecodeDirectThrow,
-        BytecodeForInTarget, BytecodeInstruction, BytecodeSwitchCase,
+        BytecodeAssignmentTarget, BytecodeBinding, BytecodeBlock, BytecodeCatch,
+        BytecodeDirectThrow, BytecodeForInTarget, BytecodeInstruction, BytecodeSwitchCase,
     },
     error::{Error, Result},
     syntax::StaticName,
@@ -349,9 +349,17 @@ impl BytecodeCompiler<'_> {
         &self,
         expr: &Expression,
     ) -> Result<BytecodeAssignmentTarget> {
+        self.compile_assignment_target_with_strict(expr, false)
+    }
+
+    pub(super) fn compile_assignment_target_with_strict(
+        &self,
+        expr: &Expression,
+        strict: bool,
+    ) -> Result<BytecodeAssignmentTarget> {
         match expr.kind() {
             Expr::Identifier(name) => Ok(BytecodeAssignmentTarget::Binding(
-                self.compile_binding(name)?,
+                BytecodeBinding::compile_write(name, self.layout, strict)?,
             )),
             Expr::Member {
                 object,
@@ -380,7 +388,7 @@ impl BytecodeCompiler<'_> {
                 property: BytecodeBlock::compile_expression(property, self.layout)?,
                 operand: Self::compile_dynamic_property(*access),
             }),
-            Expr::Parenthesized(expr) => self.compile_assignment_target(expr),
+            Expr::Parenthesized(expr) => self.compile_assignment_target_with_strict(expr, strict),
             _ => Err(Error::runtime("invalid bytecode assignment target")),
         }
     }

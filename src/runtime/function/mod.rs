@@ -49,13 +49,14 @@ struct FunctionCallSetup {
         Option<crate::runtime::binding::static_bindings::StaticBindingCacheHandle>,
     static_binding_layout: Option<crate::binding_metadata::BindingLayout>,
     binds_arguments: bool,
+    self_binding: Option<FunctionSelfBinding>,
     super_binding: Option<Rc<FunctionSuperBinding>>,
     remember_params: bool,
     scope_template: Option<Rc<FunctionScopeTemplate>>,
 }
 pub(super) use fast_path::FunctionFastPath;
 use parameters::FunctionParameterState;
-pub(in crate::runtime) use parameters::FunctionScopeTemplate;
+pub(in crate::runtime) use parameters::{FunctionScopeTemplate, FunctionSelfBinding};
 pub(super) use properties::{FunctionIntrinsicDefaults, FunctionProperties};
 pub(in crate::runtime) use suspended::SuspendedAsyncFunction;
 
@@ -67,16 +68,18 @@ const FUNCTION_PROTOTYPE_TO_STRING_PROPERTY: &str = "toString";
 use super::FunctionNewTarget;
 use properties::{FunctionPropertyKind, PROTOTYPE_CONSTRUCTOR_PROPERTY};
 
-fn expected_function_local_count(base: usize, binds_arguments: bool) -> Result<usize> {
+fn expected_function_local_count(
+    base: usize,
+    binds_arguments: bool,
+    has_self_binding: bool,
+) -> Result<usize> {
     let with_function_scope = base
         .checked_add(1)
         .ok_or_else(|| Error::limit("function local scope count overflowed"))?;
-    if binds_arguments {
-        return with_function_scope
-            .checked_add(1)
-            .ok_or_else(|| Error::limit("function local scope count overflowed"));
-    }
-    Ok(with_function_scope)
+    with_function_scope
+        .checked_add(usize::from(binds_arguments))
+        .and_then(|count| count.checked_add(usize::from(has_self_binding)))
+        .ok_or_else(|| Error::limit("function local scope count overflowed"))
 }
 
 /// Super references available to a class constructor or method body: the
@@ -147,6 +150,18 @@ impl Context {
         let static_binding_layout = self.current_static_binding_layout();
         let param_frames =
             parameters::function_param_frames(params, static_binding_layout.as_ref())?;
+        let self_binding = init
+            .bytecode
+            .self_binding()
+            .map(|binding| {
+                let atom = self.intern_static_name_atom(binding.name())?;
+                let frame = parameters::function_self_binding_frame(
+                    binding.id(),
+                    static_binding_layout.as_ref(),
+                )?;
+                Ok(FunctionSelfBinding::new(atom, frame))
+            })
+            .transpose()?;
         let fast_path = self.compile_optional_function_fast_path(init, &param_frames)?;
         let upvalues = self.capture_function_upvalues(
             init.static_function_id,
@@ -165,6 +180,7 @@ impl Context {
             param_frames.len(),
             fast_path.is_some(),
             scope_template.as_deref(),
+            self_binding.is_some(),
         )?;
         let properties = self.activate_function_storage(
             upvalues.cells.len(),
@@ -175,6 +191,7 @@ impl Context {
         self.functions.insert_at_next(
             id.index(),
             super::Function {
+                self_binding,
                 param_binding_ids,
                 param_atoms,
                 param_frames,
@@ -209,6 +226,9 @@ impl Context {
         param_frames: &[Option<CompiledBindingFrame>],
     ) -> Result<Option<FunctionFastPath>> {
         if !self.optional_optimizations_enabled() {
+            return Ok(None);
+        }
+        if init.bytecode.self_binding().is_some() {
             return Ok(None);
         }
         FunctionFastPath::compile(
@@ -276,6 +296,7 @@ impl Context {
             static_binding_layout: function.static_binding_layout.clone(),
             binds_arguments: function.bytecode.uses_arguments()
                 && !matches!(function.new_target, FunctionNewTarget::Lexical(_)),
+            self_binding: function.self_binding,
             super_binding: function.super_binding.clone(),
             remember_params: !function.params_remembered.replace(true),
             scope_template: function.scope_template.clone(),
@@ -303,6 +324,7 @@ impl Context {
             static_binding_cache,
             static_binding_layout,
             binds_arguments,
+            self_binding,
             super_binding,
             remember_params,
             scope_template,
@@ -321,6 +343,14 @@ impl Context {
         let has_parameter_defaults = bytecode.has_parameter_defaults();
         let local_base =
             self.push_call_activation(id, upvalues, this_value, new_target, super_binding)?;
+        if let Some(self_binding) = self_binding {
+            let self_scope = self.named_function_self_scope(id, self_binding)?;
+            if let Err(error) = self.push_lexical_scope_with(self_scope) {
+                self.leave_function_local_frame(local_base)?;
+                self.pop_call_activation(local_base)?;
+                return Err(error);
+            }
+        }
         let scope_result = if let Some(template) = scope_template.as_deref() {
             self.function_scope_from_template(template, args)
         } else {
@@ -355,7 +385,8 @@ impl Context {
         {
             return result;
         }
-        let binding_result = self.pop_function_binding_storage(local_base, binds_arguments);
+        let binding_result =
+            self.pop_function_binding_storage(local_base, binds_arguments, self_binding.is_some());
         let activation_result = self.pop_call_activation(local_base);
         binding_result?;
         activation_result?;

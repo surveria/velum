@@ -75,6 +75,7 @@ impl Parser {
         let kind = match target.into_kind() {
             Expr::Identifier(name) => Expr::Assignment {
                 name,
+                strict: self.is_strict_mode(),
                 expr: Box::new(value),
             },
             Expr::Member {
@@ -147,6 +148,7 @@ impl Parser {
             start,
             Expr::CompoundAssignment {
                 op,
+                strict: self.is_strict_mode(),
                 target: Box::new(target),
                 expr: Box::new(value),
             },

@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use super::{
-    ARRAY_LENGTH_PROPERTY, AccessorKind, BinaryOp, BytecodeBlock, BytecodeCompiler,
-    BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
+    ARRAY_LENGTH_PROPERTY, AccessorKind, BinaryOp, BytecodeBinding, BytecodeBlock,
+    BytecodeCompiler, BytecodeInstruction, BytecodeNumericBinaryOp, BytecodeNumericCompareOp,
     BytecodeNumericEqualityOp, BytecodeNumericUnaryOp, BytecodeObjectProperty, Error, Expr,
     Expression, NativeCallTarget, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind, Result,
     StaticBinding, StaticName, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
@@ -85,8 +85,8 @@ impl BytecodeCompiler<'_> {
                 consequent,
                 alternate,
             } => return self.compile_conditional_expr(condition, consequent, alternate),
-            Expr::Assignment { name, expr } => {
-                return self.compile_binding_assignment_expr(name, expr);
+            Expr::Assignment { name, strict, expr } => {
+                return self.compile_binding_assignment_expr(name, *strict, expr);
             }
             Expr::PropertyAssignment {
                 object,
@@ -113,14 +113,29 @@ impl BytecodeCompiler<'_> {
             Expr::Object(properties) => return self.compile_object_literal(properties),
             Expr::ArrayHole => return Err(Error::runtime("array elision outside array literal")),
             Expr::Array(elements) => return self.compile_array_literal(elements),
-            Expr::Update { op, prefix, expr } => {
-                return self.compile_update_expr(*op, *prefix, expr);
+            Expr::Update {
+                op,
+                prefix,
+                strict,
+                expr,
+            } => {
+                return self.compile_update_expr(*op, *prefix, *strict, expr);
             }
-            Expr::CompoundAssignment { op, target, expr } => {
-                return self.compile_compound_assignment(*op, target, expr);
+            Expr::CompoundAssignment {
+                op,
+                strict,
+                target,
+                expr,
+            } => {
+                return self.compile_compound_assignment(*op, *strict, target, expr);
             }
-            Expr::Call { callee, site, args } => {
-                return self.compile_call_expr(callee, *site, args);
+            Expr::Call {
+                callee,
+                site,
+                strict,
+                args,
+            } => {
+                return self.compile_call_expr(callee, *site, *strict, args);
             }
             Expr::Function { .. } | Expr::ArrowFunction { .. } | Expr::MethodFunction { .. } => {
                 return self.compile_function_literal(expr);
@@ -168,11 +183,12 @@ impl BytecodeCompiler<'_> {
     fn compile_binding_assignment_expr(
         &mut self,
         name: &StaticBinding,
+        strict: bool,
         expr: &Expression,
     ) -> Result<()> {
         self.compile_expr(expr)?;
         self.emit(BytecodeInstruction::StoreBinding(
-            self.compile_binding(name)?,
+            BytecodeBinding::compile_write(name, self.layout, strict)?,
         ));
         Ok(())
     }
@@ -505,11 +521,17 @@ impl BytecodeCompiler<'_> {
         self.patch_jump(end_jump, end)
     }
 
-    fn compile_update_expr(&mut self, op: UpdateOp, prefix: bool, expr: &Expression) -> Result<()> {
+    fn compile_update_expr(
+        &mut self,
+        op: UpdateOp,
+        prefix: bool,
+        strict: bool,
+        expr: &Expression,
+    ) -> Result<()> {
         match expr.kind() {
             Expr::Identifier(name) => {
                 self.emit(BytecodeInstruction::UpdateBinding {
-                    name: self.compile_binding(name)?,
+                    name: BytecodeBinding::compile_write(name, self.layout, strict)?,
                     op,
                     prefix,
                 });
@@ -552,7 +574,7 @@ impl BytecodeCompiler<'_> {
                 });
                 Ok(())
             }
-            Expr::Parenthesized(expr) => self.compile_update_expr(op, prefix, expr),
+            Expr::Parenthesized(expr) => self.compile_update_expr(op, prefix, strict, expr),
             _ => Err(Error::runtime("invalid bytecode update target")),
         }
     }
@@ -560,6 +582,7 @@ impl BytecodeCompiler<'_> {
     fn compile_compound_assignment(
         &mut self,
         op: BinaryOp,
+        strict: bool,
         target: &Expression,
         expr: &Expression,
     ) -> Result<()> {
@@ -567,7 +590,7 @@ impl BytecodeCompiler<'_> {
             op,
             BinaryOp::LogicalAnd | BinaryOp::LogicalOr | BinaryOp::NullishCoalescing
         ) {
-            let target = self.compile_assignment_target(target)?;
+            let target = self.compile_assignment_target_with_strict(target, strict)?;
             self.emit(BytecodeInstruction::LogicalAssignment {
                 op,
                 target,
@@ -579,7 +602,7 @@ impl BytecodeCompiler<'_> {
             Expr::Identifier(name) => {
                 self.compile_expr(expr)?;
                 self.emit(BytecodeInstruction::CompoundStoreBinding {
-                    name: self.compile_binding(name)?,
+                    name: BytecodeBinding::compile_write(name, self.layout, strict)?,
                     op,
                 });
                 Ok(())
@@ -617,7 +640,9 @@ impl BytecodeCompiler<'_> {
                 });
                 Ok(())
             }
-            Expr::Parenthesized(target) => self.compile_compound_assignment(op, target, expr),
+            Expr::Parenthesized(target) => {
+                self.compile_compound_assignment(op, strict, target, expr)
+            }
             _ => Err(Error::runtime(
                 "invalid bytecode compound assignment target",
             )),

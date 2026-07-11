@@ -396,6 +396,51 @@ pub(in crate::runtime) struct FunctionScopeTemplate {
     pub(super) param_count: usize,
 }
 
+/// Precomputed local slot for a named function expression's private
+/// immutable self binding.
+#[derive(Debug, Clone, Copy)]
+pub(in crate::runtime) struct FunctionSelfBinding {
+    atom: AtomId,
+    frame: CompiledBindingFrame,
+}
+
+impl FunctionSelfBinding {
+    pub(super) const fn new(atom: AtomId, frame: CompiledBindingFrame) -> Self {
+        Self { atom, frame }
+    }
+
+    pub(super) const fn atom(self) -> AtomId {
+        self.atom
+    }
+
+    pub(super) const fn frame(self) -> CompiledBindingFrame {
+        self.frame
+    }
+}
+
+pub(super) fn function_self_binding_frame(
+    binding: StaticBindingId,
+    layout: Option<&BindingLayout>,
+) -> Result<CompiledBindingFrame> {
+    let layout = layout.ok_or_else(|| {
+        Error::runtime("named function binding requires a compiled binding layout")
+    })?;
+    let operand = layout
+        .operand_for_binding_id(binding)?
+        .ok_or_else(|| Error::runtime("named function binding layout is not defined"))?;
+    match operand {
+        BindingOperand::Local { scope, slot } => Ok(CompiledBindingFrame::local(
+            scope,
+            BindingSlot::from_index(slot.index()?),
+        )),
+        BindingOperand::Global { .. }
+        | BindingOperand::Upvalue { .. }
+        | BindingOperand::Unresolved => Err(Error::runtime(
+            "named function binding layout is not a local slot",
+        )),
+    }
+}
+
 impl FunctionScopeTemplate {
     pub(in crate::runtime) fn storage_entry_count(&self) -> Result<usize> {
         self.index.storage_entry_count()

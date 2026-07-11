@@ -18,6 +18,7 @@ use super::{
 struct FunctionCompileSpec<'a> {
     id: StaticFunctionId,
     name: Option<StaticName>,
+    self_binding: Option<StaticBinding>,
     params: &'a Rc<[FunctionParam]>,
     body: &'a [Statement],
     constructable: bool,
@@ -35,7 +36,12 @@ impl BytecodeCompiler<'_> {
         self.emit(BytecodeInstruction::CreateFunction {
             id: spec.id,
             name: spec.name,
-            bytecode: BytecodeFunction::compile(spec.params, spec.body, self.layout)?,
+            bytecode: BytecodeFunction::compile(
+                spec.self_binding,
+                spec.params,
+                spec.body,
+                self.layout,
+            )?,
             constructable: spec.constructable,
             is_async: spec.is_async,
             new_target_mode: spec.new_target_mode,
@@ -46,12 +52,14 @@ impl BytecodeCompiler<'_> {
 
 impl BytecodeFunction {
     pub fn compile(
+        self_binding: Option<StaticBinding>,
         params: &[FunctionParam],
         statements: &[Statement],
         layout: &BindingLayout,
     ) -> Result<Self> {
         let collected = CaptureBindingCollector::collect_function(params, statements);
         Ok(Self::new(
+            self_binding,
             compile_params(params),
             compile_param_defaults(params, layout)?,
             BytecodeBlock::compile_statements(statements, StatementValue::Store, layout)?,
@@ -99,7 +107,8 @@ fn function_compile_spec(expr: &Expr) -> Result<FunctionCompileSpec<'_>> {
             is_async,
         } => Ok(FunctionCompileSpec {
             id: *id,
-            name: name.clone(),
+            name: name.as_ref().map(|binding| binding.name().clone()),
+            self_binding: name.clone(),
             params,
             body,
             constructable: !*is_async,
@@ -114,6 +123,7 @@ fn function_compile_spec(expr: &Expr) -> Result<FunctionCompileSpec<'_>> {
         } => Ok(FunctionCompileSpec {
             id: *id,
             name: None,
+            self_binding: None,
             params,
             body,
             constructable: false,
@@ -129,6 +139,7 @@ fn function_compile_spec(expr: &Expr) -> Result<FunctionCompileSpec<'_>> {
         } => Ok(FunctionCompileSpec {
             id: *id,
             name: name.clone(),
+            self_binding: None,
             params,
             body,
             constructable: false,
@@ -373,7 +384,7 @@ impl CaptureBindingCollector {
                 self.collect_expr(consequent);
                 self.collect_expr(alternate);
             }
-            Expr::Assignment { name, expr } => {
+            Expr::Assignment { name, expr, .. } => {
                 self.collect_binding(name);
                 self.collect_expr(expr);
             }

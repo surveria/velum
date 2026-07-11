@@ -54,7 +54,7 @@ impl<'a> HoistCollector<'a> {
             BytecodeBinding::compile(name, self.layout)?,
             id,
             name.name().clone(),
-            BytecodeFunction::compile(params, body, self.layout)?,
+            BytecodeFunction::compile(None, params, body, self.layout)?,
             is_async,
         );
         self.function_declarations.push(declaration);

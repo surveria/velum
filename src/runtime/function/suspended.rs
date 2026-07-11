@@ -98,7 +98,11 @@ impl Context {
                 self.activation_frames.len()
             )));
         }
-        let binding_result = self.pop_function_binding_storage(local_base, setup.binds_arguments);
+        let binding_result = self.pop_function_binding_storage(
+            local_base,
+            setup.binds_arguments,
+            setup.self_binding.is_some(),
+        );
         let activation_result = self.pop_call_activation(local_base);
         binding_result?;
         activation_result?;
