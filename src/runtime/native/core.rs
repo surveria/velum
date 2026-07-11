@@ -389,8 +389,8 @@ impl Context {
         Ok(Value::NativeFunction(id))
     }
 
-    pub(in crate::runtime::native) const fn next_native_function_id(&self) -> NativeFunctionId {
-        NativeFunctionId::new(self.native_functions.len())
+    pub(in crate::runtime::native) fn next_native_function_id(&self) -> NativeFunctionId {
+        NativeFunctionId::new(self.native_functions.next_index())
     }
 
     pub(in crate::runtime::native) fn push_native_function_with_id(
@@ -400,7 +400,7 @@ impl Context {
         prototype: Value,
         name: Value,
     ) -> Result<()> {
-        if id.index() != self.native_functions.len() {
+        if id.index() != self.native_functions.next_index() {
             return Err(Error::runtime(
                 "native function id insertion order mismatch",
             ));
@@ -440,11 +440,12 @@ impl Context {
         prototype: Value,
         name: Value,
     ) -> Result<()> {
-        if id.index() != self.native_functions.len() {
+        if id.index() != self.native_functions.next_index() {
             return Err(Error::runtime(
                 "native function id insertion order mismatch",
             ));
         }
+        self.native_functions.reserve_insert()?;
         let reservation = self
             .storage_ledger
             .reserve_count(crate::runtime::VmStorageKind::NativeFunction, 1)?;
@@ -453,7 +454,7 @@ impl Context {
             .properties_mut()
             .activate_storage(self.storage_ledger.clone())?;
         reservation.commit()?;
-        self.native_functions.push(function);
+        self.native_functions.insert_at_next(id.index(), function)?;
         Ok(())
     }
 

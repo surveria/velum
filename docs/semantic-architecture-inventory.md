@@ -412,14 +412,15 @@ contract across the ordinary object arena. AS-05b1b3 adds explicit strong,
 weak, and ephemeron traversal for Promise, collection, and iterator side
 stores. AS-05b1c adds scoped roots for Rust-local execution values. AS-05a2d
 adds explicit identity- and generation-checked handles for callback captures
-and values retained after an embedding call.
+and values retained after an embedding call. AS-07a consumes this contract in
+one marker and a safe non-moving sweep over sparse indexed arenas.
 
 | Store category | Current fields/owners | Implicit strong edges | Current public accounting |
 | --- | --- | --- | --- |
-| interned names and text | `atoms`, `strings`, `symbols`, well-known caches | strings/symbol registry retain shared text | logical Atom/HeapString/Symbol, cache, and association counts plus existing string bytes |
+| interned names and text | permanent `atoms`, sparse `strings` and `symbols`, well-known caches | registered Symbols and their keys are direct roots; live Symbol descriptions trace heap strings | logical Atom/HeapString/Symbol, cache, and association counts plus existing string bytes; AS-07 reclaims unmarked strings/Symbols |
 | bindings and closures | globals, builtin globals, activation-owned upvalue frames, `BindingCell(Rc<Mutex<Binding>>)` | binding values and captured cells | logical Binding, ExecutionFrame, and binding-index CacheEntry counts |
-| executable functions | functions, native functions/registry, bound functions, host functions | typed AS-05b1b1 edges cover properties, upvalues, super/static/class/new-target state, native id payloads, and bound args/targets; immutable bytecode contains only VM-independent literals; opaque callback captures use AS-05a2d retained handles | logical JavaScriptFunction/NativeFunction/BoundFunction/HostCallback counts plus callable property, metadata-cache, binding, and source-record counts |
-| objects | `ObjectHeap`, shapes, prototypes, properties, arrays, buffers, typed-array views | typed AS-05b1b2 edges cover named/dense/sparse properties, accessors, prototypes, boxed strings/Symbols, Proxy state, and typed-array buffer-object links; cached prototypes and shape/property-key metadata are direct anchors | logical Object/ObjectProperty/ByteBuffer counts plus shape CacheEntry and anchor Association counts; payload bytes remain AS-05b2b |
+| executable functions | sparse function, native-function, bound-function, and host-function arenas plus the native registry | typed AS-05b1b1 edges cover properties, upvalues, super/static/class/new-target state, native id payloads, and bound args/targets; immutable bytecode contains only VM-independent literals; opaque callback captures use AS-05a2d retained handles | logical JavaScriptFunction/NativeFunction/BoundFunction/HostCallback counts plus callable property, metadata-cache, binding, and source-record counts; AS-07 sweeps unmarked arena records |
+| objects | sparse `ObjectHeap`, shapes, prototypes, properties, arrays, buffers, typed-array views | typed AS-05b1b2 edges cover named/dense/sparse properties, accessors, prototypes, boxed strings/Symbols, Proxy state, and typed-array buffer-object links; cached prototypes and shape/property-key metadata are direct anchors | logical Object/ObjectProperty/ByteBuffer counts plus shape CacheEntry and anchor Association counts; AS-07 recomputes live payload counters after sweep |
 | collections | collection stores with retained kind, object slots, iterator snapshots | typed object associations, strong Map/Set entries and iterator items, weak WeakSet keys, and WeakMap ephemerons | logical Collection/CollectionEntry/CollectionIterator/IteratorItem and Association counts plus asynchronous edge snapshot |
 | promises/jobs | promises, object slots, ordinary reactions, await reactions that own detached async activations, and the ready-job queue | typed object associations, strong results/handlers/settled values, suspended locals/activations/bytecode values, and direct queued-job roots | logical Promise/PromiseReaction/PromiseJob and Association counts plus suspended ExecutionFrame/Binding/CacheEntry ownership and the asynchronous edge snapshot |
 | active execution | one `activation_frames` stack owns call local bases, upvalues, `this`, `new.target`, super, a function-id or owned-block continuation program key, parked interpreter state, a resumable child completion, typed structured-control records, and resumable destructuring tasks plus temporary-this/eval-boundary/standalone-bytecode variants; suspended suffixes move unchanged into await reactions | explicit call/block activations, active and suspended function program roots, parked bytecode/control/pattern operands, live destructuring iterators, and scoped traceable operand/call/iterator/descriptor/Proxy values | one logical ExecutionFrame per activation, lexical scope, and structured-control record plus suspended-owner reconciliation, TransientRoot counts, and a fourteen-category root snapshot |
@@ -441,9 +442,11 @@ same visitor for object properties, prototypes, boxed primitives, Proxy
 state, and typed-array links. AS-05b1b3 adds typed object-to-side-store
 associations plus a separate `WeakEdgeVisitor` contract. Map/Set and iterator
 slots remain strong, WeakSet emits weak keys, and WeakMap emits ephemeron
-pairs. Counts intentionally include primitive and duplicate strong slots; a
-future marker ignores primitives and deduplicates identities. Physical weak
-entry reclamation remains AS-07 work.
+pairs. AS-07a's marker ignores primitives, deduplicates heap identities,
+drains strong edges, and repeatedly admits ephemeron values whose keys became
+reachable until no new edge is found. Sweep physically removes dead weak
+entries and reconciles their collection-entry accounting before vacating
+unreachable owner records.
 
 `RuntimeLimits` retains its source, syntax, step, string, binding, object, and
 per-object property limits. AS-05b2c1 adds `VmStorageLimits`, an unlimited-by-
@@ -516,9 +519,9 @@ captures are inspectable. AS-05a2d roots embedder-held data through opaque
 identity- and slot-generation-stamped handles. Collector-enabled APIs must use
 that boundary; legacy raw-result calls cannot authorize arena reclamation.
 
-### Provisional Root Set For AS-05b
+### Executable Root Set For AS-07
 
-The root/trace contract must at least enumerate:
+The collector root/trace contract enumerates:
 
 1. global, builtin-global, local, and captured binding cells: direct roots are
    executable in AS-05b1a;
@@ -640,8 +643,8 @@ decision sequence:
 | AS-06a1 | parallel call-state vectors | one VM-owned call/temporary/evaluation activation stack merged in PR #438 |
 | AS-06a2a | outer block state and program position | activation-owned block/program-counter/operand continuation merged in PR #439; synchronous function overhead removed in PR #440 |
 | AS-06a2b | recursive loop/try/finally state | typed continuation-owned loop/switch/iterator/try records merged in PR #442 with one in-place record per construct |
-| AS-06b | pending async execution | explicit suspended outcomes, detached await reactions, same-owner nested/control/pattern resume without side-effect replay, and Context/Vm run/cancel job APIs implemented in PR #445 |
-| AS-07 | strong weak-collection entries and implicit roots | safe collection with explicit weak edges |
+| AS-06b | pending async execution | explicit suspended outcomes, detached await reactions, same-owner nested/control/pattern resume without side-effect replay, and Context/Vm run/cancel job APIs merged in PR #445 |
+| AS-07 | strong weak-collection entries and implicit roots | PR #446 adds an explicit-root marker, fixed-point WeakMap ephemerons, physical weak sweep, sparse non-moving arenas, cache invalidation, and ledger reconciliation; exact-tree validation is in progress |
 | AS-08 | caches, direct calls, linear/function/control paths, harness opcodes | one optimizer owner, optimizer-off equivalence, and removal of source-name semantics |
 
 ## AS-01b Guard Specification

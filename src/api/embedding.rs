@@ -7,8 +7,8 @@ use crate::runtime::Context;
 use crate::runtime::VmRootSnapshot;
 use crate::runtime::limits::RuntimeLimits;
 use crate::runtime::{
-    RetainedValue, VmAsyncEdgeSnapshot, VmCallableEdgeSnapshot, VmObjectEdgeSnapshot,
-    VmStorageSnapshot,
+    RetainedValue, VmAsyncEdgeSnapshot, VmCallableEdgeSnapshot, VmGarbageCollectionReport,
+    VmHeapReachabilitySnapshot, VmObjectEdgeSnapshot, VmStorageSnapshot,
 };
 use crate::value::Value;
 use std::time::Duration;
@@ -363,6 +363,25 @@ impl Vm {
     /// an incompatible trace strength.
     pub fn async_edge_snapshot(&self) -> Result<VmAsyncEdgeSnapshot> {
         self.context.async_edge_snapshot()
+    }
+
+    /// Marks VM records reachable from the explicit root and edge contracts
+    /// without mutating the heap.
+    ///
+    /// # Errors
+    /// Fails if a root or edge points outside its live arena or a count
+    /// exceeds the supported range.
+    pub fn heap_reachability_snapshot(&self) -> Result<VmHeapReachabilitySnapshot> {
+        self.context.heap_reachability_snapshot()
+    }
+
+    /// Reclaims VM records that are not reachable from explicit roots.
+    ///
+    /// # Errors
+    /// Fails if tracing, arena reclamation, or storage reconciliation detects
+    /// an invalid VM invariant.
+    pub fn collect_garbage(&mut self) -> Result<VmGarbageCollectionReport> {
+        self.context.collect_garbage()
     }
 
     /// Counts logical records and variable-size payload bytes retained by

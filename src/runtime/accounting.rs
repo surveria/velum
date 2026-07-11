@@ -3,6 +3,26 @@ use crate::error::{Error, Result};
 use super::Context;
 
 pub(super) const STORAGE_KIND_COUNT: usize = 26;
+const LEDGER_ENFORCED_KINDS: [VmStorageKind; 18] = [
+    VmStorageKind::Binding,
+    VmStorageKind::JavaScriptFunction,
+    VmStorageKind::NativeFunction,
+    VmStorageKind::BoundFunction,
+    VmStorageKind::ObjectProperty,
+    VmStorageKind::CacheEntry,
+    VmStorageKind::Collection,
+    VmStorageKind::CollectionEntry,
+    VmStorageKind::CollectionIterator,
+    VmStorageKind::IteratorItem,
+    VmStorageKind::Promise,
+    VmStorageKind::PromiseReaction,
+    VmStorageKind::PromiseJob,
+    VmStorageKind::RetainedHandle,
+    VmStorageKind::TransientRoot,
+    VmStorageKind::ExecutionFrame,
+    VmStorageKind::Association,
+    VmStorageKind::Module,
+];
 
 /// Stable logical owner categories for VM-local retained storage.
 ///
@@ -124,18 +144,22 @@ pub struct VmStorageSnapshot {
 
 impl VmStorageSnapshot {
     fn capture(context: &Context) -> Result<Self> {
+        let snapshot = Self::capture_owners(context)?;
+        context.ensure_durable_storage_ledger_matches(&snapshot)?;
+        context.ensure_storage_snapshot_within_limits(&snapshot)?;
+        Ok(snapshot)
+    }
+
+    fn capture_owners(context: &Context) -> Result<Self> {
         let mut counter = StorageCounter::new();
         context.record_storage_counts(&mut counter)?;
         context.record_storage_payload_bytes(&mut counter)?;
-        let snapshot = Self {
+        Ok(Self {
             counts: counter.counts,
             payload_bytes: counter.payload_bytes,
             total: counter.total,
             total_payload_bytes: counter.total_payload_bytes,
-        };
-        context.ensure_durable_storage_ledger_matches(&snapshot)?;
-        context.ensure_storage_snapshot_within_limits(&snapshot)?;
-        Ok(snapshot)
+        })
     }
 
     /// Returns the logical record count for one owner category.
@@ -229,27 +253,7 @@ impl Context {
     }
 
     fn ensure_durable_storage_ledger_matches(&self, snapshot: &VmStorageSnapshot) -> Result<()> {
-        const ENFORCED_KINDS: [VmStorageKind; 18] = [
-            VmStorageKind::Binding,
-            VmStorageKind::JavaScriptFunction,
-            VmStorageKind::NativeFunction,
-            VmStorageKind::BoundFunction,
-            VmStorageKind::ObjectProperty,
-            VmStorageKind::CacheEntry,
-            VmStorageKind::Collection,
-            VmStorageKind::CollectionEntry,
-            VmStorageKind::CollectionIterator,
-            VmStorageKind::IteratorItem,
-            VmStorageKind::Promise,
-            VmStorageKind::PromiseReaction,
-            VmStorageKind::PromiseJob,
-            VmStorageKind::RetainedHandle,
-            VmStorageKind::TransientRoot,
-            VmStorageKind::ExecutionFrame,
-            VmStorageKind::Association,
-            VmStorageKind::Module,
-        ];
-        for kind in ENFORCED_KINDS {
+        for kind in LEDGER_ENFORCED_KINDS {
             let observed = snapshot.count(kind);
             let tracked = self.storage_ledger.count(kind)?;
             if tracked != observed {
@@ -259,6 +263,34 @@ impl Context {
             }
         }
         Ok(())
+    }
+
+    pub(in crate::runtime) fn owner_storage_snapshot(&self) -> Result<VmStorageSnapshot> {
+        VmStorageSnapshot::capture_owners(self)
+    }
+
+    pub(in crate::runtime) fn release_collected_storage(
+        &self,
+        before: &VmStorageSnapshot,
+        after: &VmStorageSnapshot,
+    ) -> Result<()> {
+        self.ensure_durable_storage_ledger_matches(before)?;
+        for kind in LEDGER_ENFORCED_KINDS {
+            if after.count(kind) > before.count(kind) {
+                return Err(Error::runtime(format!(
+                    "{kind:?} owner count grew during garbage collection"
+                )));
+            }
+        }
+        for kind in LEDGER_ENFORCED_KINDS {
+            let released = before
+                .count(kind)
+                .checked_sub(after.count(kind))
+                .ok_or_else(|| Error::runtime("collected storage count underflowed"))?;
+            self.storage_ledger.release_count(kind, released)?;
+        }
+        self.ensure_durable_storage_ledger_matches(after)?;
+        self.ensure_storage_snapshot_within_limits(after)
     }
 
     fn ensure_storage_snapshot_within_limits(&self, snapshot: &VmStorageSnapshot) -> Result<()> {

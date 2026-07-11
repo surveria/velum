@@ -202,16 +202,18 @@ impl Context {
         let reservation = self
             .storage_ledger
             .reserve_count(crate::runtime::VmStorageKind::BoundFunction, 1)?;
-        let id = BoundFunctionId::new(self.bound_functions.len());
+        self.bound_functions.reserve_insert()?;
+        self.bound_functions.reserve_removals(1)?;
+        let id = BoundFunctionId::new(self.bound_functions.next_index());
         reservation.commit()?;
         self.bound_functions
-            .push(BoundFunction::new(target, this_value, args));
+            .insert_at_next(id.index(), BoundFunction::new(target, this_value, args))?;
         let result =
             self.create_ephemeral_native_function(NativeFunctionKind::BoundFunction(id), prototype);
         match result {
             Ok(value) => Ok(value),
             Err(error) => {
-                let removed = self.bound_functions.pop();
+                let removed = self.bound_functions.remove_reserved(id.index())?;
                 if removed.is_none() {
                     return Err(Error::runtime("bound function rollback failed"));
                 }

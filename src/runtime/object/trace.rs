@@ -20,6 +20,14 @@ impl ObjectHeap {
         Ok(())
     }
 
+    pub(in crate::runtime) fn visit_object_strong_edges<V: StrongEdgeVisitor<VmObjectEdgeKind>>(
+        &self,
+        id: crate::value::ObjectId,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.object(id)?.visit_strong_edges(visitor)
+    }
+
     pub(in crate::runtime) fn visit_direct_roots<V: DirectRootVisitor>(
         &self,
         visitor: &mut V,

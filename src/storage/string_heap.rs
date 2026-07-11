@@ -1,6 +1,6 @@
 use std::{
     borrow::Borrow,
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     fmt,
     hash::{Hash, Hasher},
     rc::Rc,
@@ -114,7 +114,9 @@ impl fmt::Display for JsString {
 pub struct StringHeap {
     identity: VmIdentity,
     entries: HashMap<StringDataRef, StringId>,
-    strings: Vec<StringDataRef>,
+    strings: Vec<Option<StringDataRef>>,
+    free: Vec<usize>,
+    live: usize,
     bytes: usize,
     max_count: usize,
     max_bytes: usize,
@@ -126,6 +128,8 @@ impl StringHeap {
             identity,
             entries: HashMap::new(),
             strings: Vec::new(),
+            free: Vec::new(),
+            live: 0,
             bytes: 0,
             max_count,
             max_bytes,
@@ -133,7 +137,7 @@ impl StringHeap {
     }
 
     pub const fn len(&self) -> usize {
-        self.strings.len()
+        self.live
     }
 
     pub const fn bytes(&self) -> usize {
@@ -165,6 +169,7 @@ impl StringHeap {
     pub fn get(&self, id: StringId) -> Result<&str> {
         self.strings
             .get(id.index()?)
+            .and_then(Option::as_ref)
             .map(StringDataRef::as_str)
             .ok_or_else(|| Error::runtime("string id is not defined"))
     }
@@ -173,19 +178,26 @@ impl StringHeap {
         let data = self
             .strings
             .get(id.index()?)
+            .and_then(Option::as_ref)
             .cloned()
             .ok_or_else(|| Error::runtime("string id is not defined"))?;
         Ok(JsString::new(id, data))
     }
 
     fn insert_string(&mut self, text: String) -> Result<JsString> {
-        if self.strings.len() >= self.max_count {
+        if self.live >= self.max_count {
             return Err(Error::limit(format!(
                 "HeapString record count exceeded {}",
                 self.max_count
             )));
         }
-        let id = StringId::from_index(self.strings.len())?;
+        let index = self.free.last().copied().unwrap_or(self.strings.len());
+        if self.free.is_empty() {
+            self.strings
+                .try_reserve(1)
+                .map_err(|error| Error::limit(format!("string heap exhausted: {error}")))?;
+        }
+        let id = StringId::from_index(index)?;
         let updated_bytes = self
             .bytes
             .checked_add(text.len())
@@ -197,9 +209,60 @@ impl StringHeap {
             )));
         }
         let data = StringDataRef::new(self.identity.clone(), text);
-        self.strings.push(data.clone());
+        if self.free.pop().is_some() {
+            let Some(slot) = self.strings.get_mut(index) else {
+                return Err(Error::runtime("string heap free slot is not defined"));
+            };
+            if slot.replace(data.clone()).is_some() {
+                return Err(Error::runtime("string heap free slot is occupied"));
+            }
+        } else {
+            self.strings.push(Some(data.clone()));
+        }
         self.entries.insert(data, id);
+        self.live = self
+            .live
+            .checked_add(1)
+            .ok_or_else(|| Error::limit("string heap live count overflowed"))?;
         self.bytes = updated_bytes;
         self.js_string(id)
+    }
+
+    pub(crate) fn sweep_unmarked(&mut self, marked: &BTreeSet<StringId>) -> Result<usize> {
+        let mut removed = 0_usize;
+        for (index, slot) in self.strings.iter().enumerate() {
+            let id = StringId::from_index(index)?;
+            if slot.is_some() && !marked.contains(&id) {
+                removed = removed
+                    .checked_add(1)
+                    .ok_or_else(|| Error::limit("string sweep count overflowed"))?;
+            }
+        }
+        self.free
+            .try_reserve(removed)
+            .map_err(|error| Error::limit(format!("string free list exhausted: {error}")))?;
+        for index in 0..self.strings.len() {
+            let id = StringId::from_index(index)?;
+            if marked.contains(&id) {
+                continue;
+            }
+            let Some(data) = self.strings.get_mut(index).and_then(Option::take) else {
+                continue;
+            };
+            self.bytes = self
+                .bytes
+                .checked_sub(data.as_str().len())
+                .ok_or_else(|| Error::runtime("string heap byte count underflowed"))?;
+            let removed_id = self.entries.remove(data.as_str());
+            if removed_id != Some(id) {
+                return Err(Error::runtime("string heap index removal mismatch"));
+            }
+            self.free.push(index);
+        }
+        self.live = self
+            .live
+            .checked_sub(removed)
+            .ok_or_else(|| Error::runtime("string heap live count underflowed"))?;
+        Ok(removed)
     }
 }
