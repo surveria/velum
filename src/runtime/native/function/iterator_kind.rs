@@ -33,6 +33,7 @@ pub(in crate::runtime) enum IteratorFunctionKind {
     From {
         helper_prototype: ObjectId,
         wrapped_prototype: ObjectId,
+        collection_prototype: ObjectId,
     },
     PrototypeMap,
     PrototypeFilter,
@@ -138,12 +139,13 @@ impl IteratorFunctionKind {
         }
     }
 
-    pub(in crate::runtime) const fn prototype_anchors(self) -> Option<(ObjectId, ObjectId)> {
+    pub(in crate::runtime) const fn prototype_anchors(self) -> Option<[ObjectId; 3]> {
         match self {
             Self::From {
                 helper_prototype,
                 wrapped_prototype,
-            } => Some((helper_prototype, wrapped_prototype)),
+                collection_prototype,
+            } => Some([helper_prototype, wrapped_prototype, collection_prototype]),
             _ => None,
         }
     }

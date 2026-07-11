@@ -65,12 +65,13 @@ impl Context {
         let name = self.native_function_name_value(constructor_kind)?;
         self.push_native_function_with_id(id, constructor_kind, Value::Object(prototype), name)?;
         self.install_iterator_prototype_methods(prototype)?;
-        let (helper_prototype, wrapped_prototype) =
+        let (helper_prototype, wrapped_prototype, collection_prototype) =
             self.create_iterator_intrinsic_prototypes(prototype)?;
         let from =
             self.iterator_method_value(NativeFunctionKind::Iterator(IteratorFunctionKind::From {
                 helper_prototype,
                 wrapped_prototype,
+                collection_prototype,
             }))?;
         let from_key = self.intern_property_key(ITERATOR_FROM_NAME)?;
         self.define_native_function_property_key(
@@ -379,7 +380,7 @@ impl Context {
     fn create_iterator_intrinsic_prototypes(
         &mut self,
         parent: ObjectId,
-    ) -> Result<(ObjectId, ObjectId)> {
+    ) -> Result<(ObjectId, ObjectId, ObjectId)> {
         let constructor_key = self.object_constructor_property_key()?;
         let helper = self.objects.create_with_prototype(
             Some(parent),
@@ -400,14 +401,26 @@ impl Context {
         let Value::Object(wrapped_prototype) = wrapped else {
             return Err(Error::runtime("wrapped iterator prototype creation failed"));
         };
-        Ok((helper_prototype, wrapped_prototype))
+        let collection = self.objects.create_with_prototype(
+            Some(parent),
+            constructor_key,
+            self.limits.max_objects,
+            self.limits.max_object_properties,
+        )?;
+        let Value::Object(collection_prototype) = collection else {
+            return Err(Error::runtime(
+                "collection iterator prototype creation failed",
+            ));
+        };
+        Ok((helper_prototype, wrapped_prototype, collection_prototype))
     }
 
-    fn iterator_intrinsic_prototype_ids(&self) -> Result<(ObjectId, ObjectId)> {
+    fn iterator_intrinsic_prototype_ids(&self) -> Result<(ObjectId, ObjectId, ObjectId)> {
         let placeholder = ObjectId::new(0);
         let lookup_kind = NativeFunctionKind::Iterator(IteratorFunctionKind::From {
             helper_prototype: placeholder,
             wrapped_prototype: placeholder,
+            collection_prototype: placeholder,
         });
         let id = self
             .native_function_id(lookup_kind)
@@ -415,23 +428,32 @@ impl Context {
         let NativeFunctionKind::Iterator(IteratorFunctionKind::From {
             helper_prototype,
             wrapped_prototype,
+            collection_prototype,
         }) = self.native_function(id)?.kind()
         else {
             return Err(Error::runtime("Iterator.from intrinsic kind is invalid"));
         };
-        Ok((helper_prototype, wrapped_prototype))
+        Ok((helper_prototype, wrapped_prototype, collection_prototype))
     }
 
     /// %IteratorHelperPrototype%: shared parent of every lazy helper object.
     fn iterator_helper_prototype_id(&self) -> Result<ObjectId> {
         self.iterator_intrinsic_prototype_ids()
-            .map(|(helper, _wrapped)| helper)
+            .map(|(helper, _wrapped, _collection)| helper)
     }
 
     /// %WrapForValidIteratorPrototype%: parent of `Iterator.from` wrappers.
     fn wrapped_iterator_prototype_id(&self) -> Result<ObjectId> {
         self.iterator_intrinsic_prototype_ids()
-            .map(|(_helper, wrapped)| wrapped)
+            .map(|(_helper, wrapped, _collection)| wrapped)
+    }
+
+    pub(in crate::runtime::native) fn collection_iterator_prototype_id(
+        &mut self,
+    ) -> Result<ObjectId> {
+        self.iterator_constructor_value()?;
+        self.iterator_intrinsic_prototype_ids()
+            .map(|(_helper, _wrapped, collection)| collection)
     }
 
     pub(in crate::runtime::native) fn eval_iterator_abstract_call() -> Result<Value> {

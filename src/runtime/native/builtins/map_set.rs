@@ -442,8 +442,9 @@ impl Context {
         &mut self,
         items: Vec<Value>,
     ) -> Result<Value> {
-        // Built-in iterator objects inherit the ES2025 iterator helpers.
-        let iterator_prototype = self.iterator_prototype_object_id()?;
+        // Array and snapshot iterators share one prototype that inherits the
+        // ES2025 iterator helpers.
+        let iterator_prototype = self.collection_iterator_prototype_id()?;
         let iterator_id = self.create_collection_iterator(items)?;
         let next = self.create_native_function(
             NativeFunctionKind::CollectionIteratorNext(iterator_id),
@@ -451,17 +452,17 @@ impl Context {
         )?;
         let next_key = self.intern_property_key(ITERATOR_NEXT_NAME)?;
         let constructor_key = self.object_constructor_property_key()?;
-        let prototype = self.objects.create_with_prototype(
+        let object = self.objects.create_with_prototype(
             Some(iterator_prototype),
             constructor_key,
             self.limits.max_objects,
             self.limits.max_object_properties,
         )?;
-        let Value::Object(prototype_id) = prototype else {
-            return Err(Error::runtime("iterator prototype creation failed"));
+        let Value::Object(object_id) = &object else {
+            return Err(Error::runtime("iterator object creation failed"));
         };
         self.objects.define_property(
-            prototype_id,
+            *object_id,
             next_key,
             ITERATOR_NEXT_NAME,
             PropertyUpdate::Data(DataPropertyUpdate::new(
@@ -478,7 +479,7 @@ impl Context {
             let self_fn =
                 self.create_native_function(NativeFunctionKind::IteratorSelf, Value::Undefined)?;
             self.objects.define_property(
-                prototype_id,
+                *object_id,
                 PropertyKey::symbol(symbol),
                 ITERATOR_SYMBOL_DISPLAY,
                 PropertyUpdate::Data(DataPropertyUpdate::new(
@@ -490,12 +491,7 @@ impl Context {
                 self.limits.max_object_properties,
             )?;
         }
-        self.objects.create_with_prototype(
-            Some(prototype_id),
-            constructor_key,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )
+        Ok(object)
     }
 
     pub(in crate::runtime::native) fn create_tagged_collection_iterator_object(
