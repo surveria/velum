@@ -140,6 +140,84 @@ fn rejects_define_properties_on_nullish_targets() -> TestResult {
     ensure_eval_error(&null_result)
 }
 
+#[test]
+fn object_assign_preserves_own_key_order_and_symbol_identity() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let log = "";
+        let first = Symbol("first");
+        let second = Symbol("second");
+        let source = {};
+        Object.defineProperty(source, first, {
+            enumerable: true,
+            get: function() { log = log + ":first"; return 1; }
+        });
+        Object.defineProperty(source, "alpha", {
+            enumerable: true,
+            get: function() { log = log + ":alpha"; return 2; }
+        });
+        Object.defineProperty(source, second, {
+            enumerable: true,
+            get: function() { log = log + ":second"; return 3; }
+        });
+        Object.defineProperty(source, "beta", {
+            enumerable: true,
+            get: function() { log = log + ":beta"; return 4; }
+        });
+        let target = Object.assign({}, source);
+        log === ":alpha:beta:first:second" &&
+            target.alpha === 2 && target.beta === 4 &&
+            target[first] === 1 && target[second] === 3
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn object_assign_uses_throwing_set_and_array_exotic_semantics() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        function throwsTypeError(callback) {
+            try {
+                callback();
+                return false;
+            } catch (error) {
+                return error instanceof TypeError;
+            }
+        }
+
+        let readonly = {};
+        Object.defineProperty(readonly, "value", { value: 1, writable: false });
+        let nonExtensible = Object.preventExtensions({ existing: 1 });
+        Object.assign(nonExtensible, { existing: 2 });
+
+        let setterValue = 0;
+        let accessor = Object.freeze({
+            set value(next) { setterValue = next; }
+        });
+        Object.assign(accessor, { value: 7 });
+
+        let array = [7, 8, 9];
+        Object.assign(array, { 1: 2, length: 2 });
+        Object.assign(array, { 3: 4 });
+
+        throwsTypeError(function() { Object.assign(null, {}); }) &&
+            throwsTypeError(function() { Object.assign(undefined, {}); }) &&
+            throwsTypeError(function() { Object.assign(readonly, { value: 2 }); }) &&
+            throwsTypeError(function() { Object.assign(nonExtensible, { added: 3 }); }) &&
+            throwsTypeError(function() { Object.assign("a", [1]); }) &&
+            nonExtensible.existing === 2 && setterValue === 7 &&
+            array.length === 4 && array[0] === 7 && array[1] === 2 &&
+            array[2] === undefined && array[3] === 4
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

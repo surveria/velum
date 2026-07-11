@@ -77,7 +77,7 @@ impl Context {
         )
     }
 
-    fn array_length_from_value(&mut self, value: &Value) -> Result<usize> {
+    pub(in crate::runtime) fn array_length_from_value(&mut self, value: &Value) -> Result<usize> {
         let number = self.to_number(value)?;
         if !number.is_finite()
             || number < 0.0
