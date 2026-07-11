@@ -504,7 +504,7 @@ impl Context {
                 GeneratorState::Completed,
                 self.create_generator_result(Value::Undefined, true)?,
             )),
-            Completion::Return(value) => Ok((
+            Completion::Return(value) | Completion::ReturnDirect(value) => Ok((
                 GeneratorState::Completed,
                 self.create_generator_result(value, true)?,
             )),

@@ -37,7 +37,7 @@ impl Context {
             this_value.clone(),
             new_target,
         )? {
-            Completion::Normal(_) | Completion::Return(_) => {
+            Completion::Normal(_) | Completion::Return(_) | Completion::ReturnDirect(_) => {
                 Ok(Completion::Normal(Value::Undefined))
             }
             completion @ Completion::Throw(_) => Ok(completion),

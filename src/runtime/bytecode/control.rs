@@ -292,7 +292,8 @@ impl Context {
                 completion @ (Completion::Break { .. }
                 | Completion::Continue(Some(_))
                 | Completion::Throw(_)
-                | Completion::Return(_)) => {
+                | Completion::Return(_)
+                | Completion::ReturnDirect(_)) => {
                     return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
                 }
                 completion @ (Completion::Suspended(_)
@@ -564,6 +565,7 @@ impl Context {
                 Completion::Normal(value) => BytecodeCondition::Value(to_boolean(&value)),
                 completion @ (Completion::Throw(_)
                 | Completion::Return(_)
+                | Completion::ReturnDirect(_)
                 | Completion::Break { .. }
                 | Completion::Continue(_)
                 | Completion::Suspended(_)
@@ -578,6 +580,7 @@ impl Context {
             Completion::Normal(value) => Ok(BytecodeCondition::Value(to_boolean(&value))),
             completion @ (Completion::Throw(_)
             | Completion::Return(_)
+            | Completion::ReturnDirect(_)
             | Completion::Break { .. }
             | Completion::Continue(_)
             | Completion::Suspended(_)

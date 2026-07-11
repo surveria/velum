@@ -712,7 +712,7 @@ impl Context {
             object.clone(),
             new_target,
         )? {
-            Completion::Return(value) => {
+            Completion::Return(value) | Completion::ReturnDirect(value) => {
                 if self.semantic_object_ref(&value)?.is_some() {
                     return Ok(value);
                 }

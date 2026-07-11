@@ -233,10 +233,13 @@ impl<'a> BytecodeCompiler<'a> {
             Stmt::Return(expr) => {
                 if let Some(expr) = expr {
                     self.compile_expr(expr)?;
+                    self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Return));
                 } else {
                     self.emit(BytecodeInstruction::PushUndefined);
+                    self.emit(BytecodeInstruction::Complete(
+                        BytecodeCompletion::ReturnDirect,
+                    ));
                 }
-                self.emit(BytecodeInstruction::Complete(BytecodeCompletion::Return));
                 Ok(())
             }
             Stmt::Empty | Stmt::FunctionDecl { .. } => Ok(()),

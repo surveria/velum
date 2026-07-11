@@ -331,6 +331,9 @@ impl BytecodeState {
             }),
             BytecodeCompletion::Continue(label) => Ok(Completion::Continue(label)),
             BytecodeCompletion::Return => Ok(Completion::Return(self.stack.pop_single()?)),
+            BytecodeCompletion::ReturnDirect => {
+                Ok(Completion::ReturnDirect(self.stack.pop_single()?))
+            }
             BytecodeCompletion::Throw => Ok(Completion::Throw(self.stack.pop_single()?)),
         }
     }
@@ -356,6 +359,7 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         Completion::Normal(value)
         | Completion::Throw(value)
         | Completion::Return(value)
+        | Completion::ReturnDirect(value)
         | Completion::Break { value, .. }
         | Completion::Yielded(value)
         | Completion::YieldedIteratorResult(value) => Some(value),
@@ -479,6 +483,7 @@ pub(super) fn bytecode_loop_completion(
         | Completion::Continue(Some(_))
         | Completion::Throw(_)
         | Completion::Return(_)
+        | Completion::ReturnDirect(_)
         | Completion::Suspended(_)
         | Completion::GeneratorStart
         | Completion::Yielded(_)

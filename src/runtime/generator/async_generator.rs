@@ -265,6 +265,17 @@ impl Context {
                 Err(Error::runtime(GENERATOR_EXECUTING_ERROR))
             }
             GeneratorState::Completed => {
+                if kind == GeneratorResumeKind::Return {
+                    let Completion::Suspended(awaited) = self.eval_bytecode_await(value)? else {
+                        return Err(Error::runtime(
+                            "completed async generator return did not await a Promise",
+                        ));
+                    };
+                    return Ok(AsyncGeneratorStep::Awaiting(
+                        AsyncGeneratorAwaitState::Return,
+                        awaited,
+                    ));
+                }
                 let (state, value) = self.resume_completed_generator(kind, value)?;
                 Ok(AsyncGeneratorStep::Settled(state, value))
             }

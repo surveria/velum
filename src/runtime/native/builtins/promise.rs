@@ -16,7 +16,7 @@ use super::{
 };
 
 impl Context {
-    pub(in crate::runtime::native) fn promise_constructor_value(&mut self) -> Result<Value> {
+    pub(in crate::runtime) fn promise_constructor_value(&mut self) -> Result<Value> {
         if let Some(id) = self.native_function_id(NativeFunctionKind::Promise) {
             return Ok(Value::NativeFunction(id));
         }

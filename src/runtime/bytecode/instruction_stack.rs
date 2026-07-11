@@ -149,6 +149,7 @@ impl Context {
                 Ok(Some(completion))
             }
             completion @ (Completion::Return(_)
+            | Completion::ReturnDirect(_)
             | Completion::Break { .. }
             | Completion::Continue(_)
             | Completion::GeneratorStart
@@ -246,6 +247,7 @@ impl Context {
                 | Completion::Yielded(_)
                 | Completion::YieldedIteratorResult(_)) => return Ok(Some(completion)),
                 completion @ (Completion::Return(_)
+                | Completion::ReturnDirect(_)
                 | Completion::Break { .. }
                 | Completion::Continue(_)) => return completion.into_result().map(|_| None),
             }

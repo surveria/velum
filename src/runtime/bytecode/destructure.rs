@@ -572,6 +572,7 @@ impl Context {
             | Completion::Yielded(_)
             | Completion::YieldedIteratorResult(_)) => Ok(PatternStep::Abrupt(completion)),
             completion @ (Completion::Return(_)
+            | Completion::ReturnDirect(_)
             | Completion::Break { .. }
             | Completion::Continue(_)) => completion.into_result().map(PatternStep::Value),
         }

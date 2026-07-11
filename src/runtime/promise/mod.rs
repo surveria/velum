@@ -203,7 +203,9 @@ impl Context {
             id, args, this_value, new_target,
         )? {
             Completion::Normal(_) => self.resolve_promise(promise, Value::Undefined)?,
-            Completion::Return(value) => self.resolve_promise(promise, value)?,
+            Completion::Return(value) | Completion::ReturnDirect(value) => {
+                self.resolve_promise(promise, value)?;
+            }
             Completion::Throw(value) => self.reject_promise(promise, value)?,
             Completion::Break { .. } | Completion::Continue(_) => {
                 let reason = self.create_error_object(
@@ -237,14 +239,21 @@ impl Context {
     }
 
     pub(in crate::runtime) fn eval_bytecode_await(&mut self, value: Value) -> Result<Completion> {
-        let promise = if let Ok(promise) = self.promise_id_from_value(&value) {
-            promise
-        } else {
-            let (promise, _object) = self.create_pending_promise()?;
-            self.resolve_promise(promise, value)?;
-            promise
-        };
+        let promise = self.promise_resolve_for_await(value)?;
         Ok(Completion::Suspended(promise))
+    }
+
+    fn promise_resolve_for_await(&mut self, value: Value) -> Result<PromiseId> {
+        if let Ok(promise) = self.promise_id_from_value(&value) {
+            let constructor = self.get_named(&value, "constructor")?;
+            let intrinsic = self.promise_constructor_value()?;
+            if constructor == intrinsic {
+                return Ok(promise);
+            }
+        }
+        let (promise, _object) = self.create_pending_promise()?;
+        self.resolve_promise(promise, value)?;
+        Ok(promise)
     }
 
     fn add_async_await_reaction(
@@ -613,7 +622,9 @@ impl Context {
         };
         match completion {
             Completion::Normal(_) => self.resolve_promise(result_promise, Value::Undefined),
-            Completion::Return(value) => self.resolve_promise(result_promise, value),
+            Completion::Return(value) | Completion::ReturnDirect(value) => {
+                self.resolve_promise(result_promise, value)
+            }
             Completion::Throw(value) => self.reject_promise(result_promise, value),
             Completion::Suspended(awaited) => {
                 let continuation =

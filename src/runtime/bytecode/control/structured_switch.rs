@@ -236,6 +236,7 @@ impl Context {
                 }
                 completion @ (Completion::Throw(_)
                 | Completion::Return(_)
+                | Completion::ReturnDirect(_)
                 | Completion::Break { .. }
                 | Completion::Continue(_)
                 | Completion::Suspended(_)

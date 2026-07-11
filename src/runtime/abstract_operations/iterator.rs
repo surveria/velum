@@ -86,10 +86,11 @@ pub(in crate::runtime) enum YieldDelegateStep {
     Abrupt(Completion),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum YieldDelegateDone {
     Normal,
     Return,
+    CloseThrow,
 }
 
 impl Context {
@@ -268,7 +269,7 @@ impl Context {
             Some(Completion::Normal(value)) => {
                 self.yield_delegate_next(&mut continuation.source, &value)
             }
-            Some(Completion::Return(value)) => {
+            Some(Completion::Return(value) | Completion::ReturnDirect(value)) => {
                 self.yield_delegate_return(&mut continuation.source, &value)
             }
             Some(Completion::Throw(value)) => {
@@ -291,21 +292,7 @@ impl Context {
         resume: Option<Completion>,
     ) -> Result<YieldDelegateStep> {
         if let Some(done_kind) = continuation.pending.take() {
-            return match resume {
-                Some(Completion::Normal(result)) => {
-                    self.yield_delegate_result(&mut continuation.source, &result, done_kind)
-                }
-                Some(Completion::Throw(value)) => {
-                    set_protocol_done(&mut continuation.source);
-                    Ok(YieldDelegateStep::Abrupt(Completion::Throw(value)))
-                }
-                Some(completion) => Err(Error::runtime(format!(
-                    "invalid async yield delegation completion {completion:?}"
-                ))),
-                None => Err(Error::runtime(
-                    "async yield delegation Promise resumed without a completion",
-                )),
-            };
+            return self.resume_async_yield_delegate_pending(continuation, done_kind, resume);
         }
 
         let (method, value, done_kind) = match resume {
@@ -332,6 +319,32 @@ impl Context {
                 let Some(method) =
                     self.yield_delegate_named_method(&continuation.source, "throw")?
                 else {
+                    let return_method = self.yield_delegate_named_method(
+                        &continuation.source,
+                        ITERATOR_RETURN_PROPERTY,
+                    )?;
+                    if let Some(return_method) = return_method {
+                        let iterator = protocol_iterator(&continuation.source)?;
+                        let result = match self.call(&return_method, &[], iterator)? {
+                            Completion::Normal(result) => result,
+                            Completion::Throw(value) => {
+                                set_protocol_done(&mut continuation.source);
+                                return Ok(YieldDelegateStep::Abrupt(Completion::Throw(value)));
+                            }
+                            completion => {
+                                return completion.into_result().map(YieldDelegateStep::Complete);
+                            }
+                        };
+                        let Completion::Suspended(awaited) = self.eval_bytecode_await(result)?
+                        else {
+                            return Err(Error::runtime(
+                                "async iterator close did not await its result",
+                            ));
+                        };
+                        continuation.pending = Some(YieldDelegateDone::CloseThrow);
+                        set_protocol_done(&mut continuation.source);
+                        return Ok(YieldDelegateStep::Await(awaited));
+                    }
                     set_protocol_done(&mut continuation.source);
                     return Err(Error::type_error("delegated iterator has no throw method"));
                 };
@@ -359,6 +372,50 @@ impl Context {
         };
         continuation.pending = Some(done_kind);
         Ok(YieldDelegateStep::Await(awaited))
+    }
+
+    fn resume_async_yield_delegate_pending(
+        &mut self,
+        continuation: &mut YieldDelegateContinuation,
+        done_kind: YieldDelegateDone,
+        resume: Option<Completion>,
+    ) -> Result<YieldDelegateStep> {
+        if done_kind == YieldDelegateDone::CloseThrow {
+            return match resume {
+                Some(Completion::Normal(result))
+                    if self.semantic_object_ref(&result)?.is_some() =>
+                {
+                    Err(Error::type_error("delegated iterator has no throw method"))
+                }
+                Some(Completion::Normal(_)) => Err(Error::type_error(
+                    "iterator return method must return an object",
+                )),
+                Some(Completion::Throw(value)) => {
+                    Ok(YieldDelegateStep::Abrupt(Completion::Throw(value)))
+                }
+                Some(completion) => Err(Error::runtime(format!(
+                    "invalid async iterator close completion {completion:?}"
+                ))),
+                None => Err(Error::runtime(
+                    "async iterator close resumed without a completion",
+                )),
+            };
+        }
+        match resume {
+            Some(Completion::Normal(result)) => {
+                self.yield_delegate_result(&mut continuation.source, &result, done_kind)
+            }
+            Some(Completion::Throw(value)) => {
+                set_protocol_done(&mut continuation.source);
+                Ok(YieldDelegateStep::Abrupt(Completion::Throw(value)))
+            }
+            Some(completion) => Err(Error::runtime(format!(
+                "invalid async yield delegation completion {completion:?}"
+            ))),
+            None => Err(Error::runtime(
+                "async yield delegation Promise resumed without a completion",
+            )),
+        }
     }
 
     fn yield_delegate_next_method(source: &IteratorSource) -> Result<Value> {
@@ -497,6 +554,11 @@ impl Context {
         Ok(match done_kind {
             YieldDelegateDone::Normal => YieldDelegateStep::Complete(value),
             YieldDelegateDone::Return => YieldDelegateStep::Return(value),
+            YieldDelegateDone::CloseThrow => {
+                return Err(Error::runtime(
+                    "async iterator close reached ordinary delegation result handling",
+                ));
+            }
         })
     }
 
@@ -545,6 +607,7 @@ impl Context {
             )),
             abrupt @ Completion::Throw(_) => Ok(abrupt),
             completion @ (Completion::Return(_)
+            | Completion::ReturnDirect(_)
             | Completion::Break { .. }
             | Completion::Continue(_)) => completion.into_result().map(Completion::Normal),
             completion @ (Completion::Suspended(_)
@@ -679,6 +742,7 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         Completion::Normal(value)
         | Completion::Throw(value)
         | Completion::Return(value)
+        | Completion::ReturnDirect(value)
         | Completion::Break { value, .. }
         | Completion::Yielded(value)
         | Completion::YieldedIteratorResult(value) => Some(value),
