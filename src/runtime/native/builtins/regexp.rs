@@ -16,8 +16,8 @@ mod engine;
 mod match_result;
 
 use engine::{
-    escaped_regexp_source, parse_regexp_flags, regexp_find, regexp_index_usize_to_number,
-    validate_regexp_pattern,
+    escaped_regexp_source_utf16, parse_regexp_flags, regexp_find_utf16,
+    regexp_index_usize_to_number, regexp_test_utf16, validate_regexp_pattern_utf16,
 };
 
 use super::{
@@ -88,17 +88,17 @@ impl Context {
             {
                 return Ok(value.clone());
             }
-            return self.create_regexp_object_from_text(&pattern, &flags);
+            return self.create_regexp_object_from_utf16(&pattern, &flags);
         }
         let pattern = match args.first() {
-            None | Some(Value::Undefined) => String::new(),
-            Some(value) => self.to_string(value)?,
+            None | Some(Value::Undefined) => Vec::new(),
+            Some(value) => self.to_utf16_string(value)?,
         };
         let flags = match flags_value {
             None | Some(Value::Undefined) => String::new(),
             Some(value) => self.to_string(value)?,
         };
-        self.create_regexp_object_from_text(&pattern, &flags)
+        self.create_regexp_object_from_utf16(&pattern, &flags)
     }
 
     pub(in crate::runtime::native) fn construct_regexp_object(
@@ -113,8 +113,8 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let input = self.regexp_argument_or_undefined(args.as_slice().first())?;
-        self.regexp_exec(this_value, &input)
+        let input = self.regexp_argument_utf16_or_undefined(args.as_slice().first())?;
+        self.regexp_exec_code_units(this_value, &input)
     }
 
     pub(in crate::runtime::native) fn eval_regexp_prototype_test(
@@ -122,11 +122,9 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let input = self.regexp_argument_or_undefined(args.as_slice().first())?;
-        Ok(Value::Bool(!matches!(
-            self.regexp_exec(this_value, &input)?,
-            Value::Null
-        )))
+        let input = self.regexp_argument_utf16_or_undefined(args.as_slice().first())?;
+        self.regexp_test_code_units(this_value, &input)
+            .map(Value::Bool)
     }
 
     pub(in crate::runtime::native) fn eval_regexp_prototype_to_string(
@@ -247,14 +245,19 @@ impl Context {
     }
 
     fn create_regexp_object_from_text(&mut self, pattern: &str, flags: &str) -> Result<Value> {
-        self.charge_regexp_work(pattern, "")?;
+        let pattern = pattern.encode_utf16().collect::<Vec<_>>();
+        self.create_regexp_object_from_utf16(&pattern, flags)
+    }
+
+    fn create_regexp_object_from_utf16(&mut self, pattern: &[u16], flags: &str) -> Result<Value> {
+        self.charge_regexp_utf16_work(pattern, &[])?;
         let parsed_flags = parse_regexp_flags(flags)?;
-        validate_regexp_pattern(pattern, parsed_flags)?;
-        self.check_string_len(pattern)?;
+        validate_regexp_pattern_utf16(pattern, parsed_flags)?;
+        self.check_utf16_string_len(pattern)?;
         self.check_string_len(flags)?;
         let prototype = self.regexp_constructor_prototype()?;
         let id = self.objects.create_regexp(
-            RegExpValue::new(pattern.to_owned(), flags.to_owned()),
+            RegExpValue::new_utf16(pattern.to_vec(), flags.to_owned()),
             prototype,
             self.limits.max_objects,
         )?;
@@ -273,14 +276,14 @@ impl Context {
         &mut self,
         pattern_value: Option<&Value>,
         flags_value: Option<&Value>,
-    ) -> Result<Option<(String, String)>> {
+    ) -> Result<Option<(Vec<u16>, String)>> {
         let Some(Value::Object(id)) = pattern_value else {
             return Ok(None);
         };
         let Some(regexp) = self.objects.regexp_value(*id)?.cloned() else {
             return Ok(None);
         };
-        let pattern = regexp.pattern().to_owned();
+        let pattern = regexp.pattern_utf16().to_vec();
         let flags = if flags_value.is_none_or(value_is_undefined) {
             regexp.flags().to_owned()
         } else {
@@ -296,6 +299,13 @@ impl Context {
         match value {
             Some(value) => self.to_string(value),
             None => self.to_string(&Value::Undefined),
+        }
+    }
+
+    fn regexp_argument_utf16_or_undefined(&mut self, value: Option<&Value>) -> Result<Vec<u16>> {
+        match value {
+            Some(value) => self.to_utf16_string(value),
+            None => self.to_utf16_string(&Value::Undefined),
         }
     }
 
@@ -502,8 +512,8 @@ impl Context {
                 Ok(Value::Bool(flags.multiline()))
             }
             NativeFunctionKind::RegExpPrototypeSourceGetter => {
-                let source = escaped_regexp_source(regexp.pattern());
-                self.heap_string_value(&source)
+                let source = escaped_regexp_source_utf16(regexp.pattern_utf16());
+                self.heap_utf16_string_value(&source)
             }
             NativeFunctionKind::RegExpPrototypeStickyGetter => Ok(Value::Bool(flags.sticky())),
             NativeFunctionKind::RegExpPrototypeUnicodeGetter => Ok(Value::Bool(flags.unicode())),
@@ -524,20 +534,47 @@ impl Context {
             .ok_or_else(|| Error::type_error(REGEXP_RECEIVER_ERROR))
     }
 
+    fn regexp_test_code_units(&mut self, this_value: &Value, input: &[u16]) -> Result<bool> {
+        let regexp = self.regexp_receiver_data(this_value)?;
+        let flags = parse_regexp_flags(regexp.flags())?;
+        self.charge_regexp_utf16_work(regexp.pattern_utf16(), input)?;
+        let start = if flags.global() || flags.sticky() {
+            self.regexp_last_index_utf16(this_value, input)?
+        } else {
+            0
+        };
+        let matched = regexp_test_utf16(regexp.pattern_utf16(), flags, input, start)?;
+        let Some(range) = matched else {
+            if flags.global() || flags.sticky() {
+                self.set_regexp_last_index(this_value, 0)?;
+            }
+            return Ok(false);
+        };
+        if flags.global() || flags.sticky() {
+            self.set_regexp_last_index(this_value, range.end)?;
+        }
+        Ok(true)
+    }
+
     pub(in crate::runtime::native) fn regexp_exec(
         &mut self,
         this_value: &Value,
         input: &str,
     ) -> Result<Value> {
+        let input = input.encode_utf16().collect::<Vec<_>>();
+        self.regexp_exec_code_units(this_value, &input)
+    }
+
+    fn regexp_exec_code_units(&mut self, this_value: &Value, input: &[u16]) -> Result<Value> {
         let regexp = self.regexp_receiver_data(this_value)?;
         let flags = parse_regexp_flags(regexp.flags())?;
-        self.charge_regexp_work(regexp.pattern(), input)?;
+        self.charge_regexp_utf16_work(regexp.pattern_utf16(), input)?;
         let start = if flags.global() || flags.sticky() {
-            self.regexp_last_index(this_value, input)?
+            self.regexp_last_index_utf16(this_value, input)?
         } else {
             0
         };
-        let matched = regexp_find(regexp.pattern(), flags, input, start)?;
+        let matched = regexp_find_utf16(regexp.pattern_utf16(), flags, input, start)?;
         let Some(matched) = matched else {
             if flags.global() || flags.sticky() {
                 self.set_regexp_last_index(this_value, 0)?;
@@ -556,22 +593,22 @@ impl Context {
         input: &str,
         start: usize,
     ) -> Result<Value> {
+        let input = input.encode_utf16().collect::<Vec<_>>();
         let regexp = self.regexp_receiver_data(this_value)?;
         let flags = parse_regexp_flags(regexp.flags())?;
-        self.charge_regexp_work(regexp.pattern(), input)?;
-        let Some(matched) = regexp_find(regexp.pattern(), flags, input, start)? else {
+        self.charge_regexp_utf16_work(regexp.pattern_utf16(), &input)?;
+        let Some(matched) = regexp_find_utf16(regexp.pattern_utf16(), flags, &input, start)? else {
             return Ok(Value::Null);
         };
-        self.regexp_match_array(input, &matched, flags.has_indices())
+        self.regexp_match_array(&input, &matched, flags.has_indices())
     }
 
     const fn discard_regexp_extra_args(_args: &[Value]) {}
 
-    fn charge_regexp_work(&mut self, pattern: &str, input: &str) -> Result<()> {
+    fn charge_regexp_utf16_work(&mut self, pattern: &[u16], input: &[u16]) -> Result<()> {
         let steps = pattern
-            .encode_utf16()
-            .count()
-            .checked_add(input.encode_utf16().count())
+            .len()
+            .checked_add(input.len())
             .and_then(|steps| steps.checked_add(1))
             .ok_or_else(|| Error::limit("RegExp work estimate overflowed"))?;
         self.charge_runtime_steps(steps)
@@ -581,6 +618,19 @@ impl Context {
         let value = self.get_named(this_value, REGEXP_LAST_INDEX_PROPERTY)?;
         let index = self.to_length(&value)?;
         let input_length = u64::try_from(input.encode_utf16().count())
+            .map_err(|_| Error::limit("RegExp input length exceeded supported range"))?;
+        if index > input_length {
+            let input_length = usize::try_from(input_length)
+                .map_err(|_| Error::limit("RegExp input length exceeded supported range"))?;
+            return Ok(input_length.saturating_add(1));
+        }
+        Self::length_to_usize(index, "RegExp lastIndex exceeded supported range")
+    }
+
+    fn regexp_last_index_utf16(&mut self, this_value: &Value, input: &[u16]) -> Result<usize> {
+        let value = self.get_named(this_value, REGEXP_LAST_INDEX_PROPERTY)?;
+        let index = self.to_length(&value)?;
+        let input_length = u64::try_from(input.len())
             .map_err(|_| Error::limit("RegExp input length exceeded supported range"))?;
         if index > input_length {
             let input_length = usize::try_from(input_length)
@@ -621,7 +671,7 @@ impl Context {
     fn regexp_match_all_results(&mut self, pattern: &Value, input: &str) -> Result<Vec<Value>> {
         let data = self.regexp_receiver_data(pattern)?;
         let flags = parse_regexp_flags(data.flags())?;
-        let matcher = self.create_regexp_object_from_text(data.pattern(), data.flags())?;
+        let matcher = self.create_regexp_object_from_utf16(data.pattern_utf16(), data.flags())?;
         let start = self.regexp_last_index(pattern, input)?;
         self.set_regexp_last_index(&matcher, start)?;
         let mut results = Vec::new();

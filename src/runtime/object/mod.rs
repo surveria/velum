@@ -51,7 +51,7 @@ const PROTOTYPE_PROPERTY: &str = "__proto__";
 #[derive(Debug, Clone, PartialEq)]
 pub enum ObjectPropertyValue {
     Value(Value),
-    StringCharacter(char),
+    StringCodeUnit(u16),
     /// An accessor property was found; the payload is its getter function,
     /// which the caller must invoke with the original receiver as `this`.
     Getter(Value),
@@ -306,8 +306,8 @@ impl Object {
         property: PropertyLookup<'_>,
         shapes: &ShapeTable,
     ) -> Result<Option<ObjectPropertyValue>> {
-        if let Some(ch) = self.virtual_string_character(property.name())? {
-            return Ok(Some(ObjectPropertyValue::StringCharacter(ch)));
+        if let Some(unit) = self.virtual_string_code_unit(property.name())? {
+            return Ok(Some(ObjectPropertyValue::StringCodeUnit(unit)));
         }
         if let Some(length) = self
             .array_length

@@ -19,7 +19,7 @@ impl ObjectHeap {
         max_objects: usize,
         max_properties: usize,
     ) -> Result<Value> {
-        let length = string_character_count(value.as_str())?;
+        let length = string_code_unit_count(value.as_utf16())?;
         let mut object = Object::string(value);
         object.prototype = Some(prototype);
         object.define(
@@ -33,12 +33,12 @@ impl ObjectHeap {
         self.push_object(object, max_objects).map(Value::Object)
     }
 
-    pub(crate) fn string_object_character(
+    pub(crate) fn string_object_code_unit(
         &self,
         id: ObjectId,
         property: &str,
-    ) -> Result<Option<char>> {
-        self.object(id)?.virtual_string_character(property)
+    ) -> Result<Option<u16>> {
+        self.object(id)?.virtual_string_code_unit(property)
     }
 
     pub(crate) fn string_object_value(&self, id: ObjectId) -> Result<Option<&str>> {
@@ -47,6 +47,14 @@ impl ObjectHeap {
             .string_value
             .as_ref()
             .map(crate::storage::string_heap::JsString::as_str))
+    }
+
+    pub(crate) fn string_object_utf16_value(&self, id: ObjectId) -> Result<Option<&[u16]>> {
+        Ok(self
+            .object(id)?
+            .string_value
+            .as_ref()
+            .map(crate::storage::string_heap::JsString::as_utf16))
     }
 }
 
@@ -84,11 +92,11 @@ impl Object {
     }
 
     pub(super) fn has_virtual_string_property_name(&self, property: &str) -> Result<bool> {
-        self.virtual_string_character(property)
+        self.virtual_string_code_unit(property)
             .map(|value| value.is_some())
     }
 
-    pub(super) fn virtual_string_character(&self, property: &str) -> Result<Option<char>> {
+    pub(super) fn virtual_string_code_unit(&self, property: &str) -> Result<Option<u16>> {
         let Some(value) = self.string_value.as_ref() else {
             return Ok(None);
         };
@@ -96,13 +104,13 @@ impl Object {
             return Ok(None);
         };
         let position = index.position()?;
-        Ok(value.as_str().chars().nth(position))
+        Ok(value.as_utf16().get(position).copied())
     }
 
     pub(super) fn virtual_string_key_count(&self) -> usize {
         self.string_value
             .as_ref()
-            .map_or(0, |value| value.as_str().chars().count())
+            .map_or(0, |value| value.as_utf16().len())
     }
 
     pub(super) fn has_virtual_string_keys(&self) -> bool {
@@ -115,7 +123,7 @@ impl Object {
         let Some(value) = self.string_value.as_ref() else {
             return Ok(());
         };
-        let len = string_character_count(value.as_str())?;
+        let len = string_code_unit_count(value.as_utf16())?;
         for index in 0..len {
             super::property::push_unique_key(keys, index.to_string());
         }
@@ -123,8 +131,8 @@ impl Object {
     }
 }
 
-fn string_character_count(value: &str) -> Result<usize> {
-    let count = value.chars().count();
+fn string_code_unit_count(value: &[u16]) -> Result<usize> {
+    let count = value.len();
     u32::try_from(count)
         .map_err(|_| Error::limit(STRING_LENGTH_LIMIT_ERROR))
         .map(|_| count)

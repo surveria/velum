@@ -49,14 +49,17 @@ impl std::ops::Deref for StaticName {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StaticString {
     id: StaticStringId,
+    units: Rc<[u16]>,
     text: Rc<str>,
 }
 
 impl StaticString {
-    pub fn new(id: StaticStringId, value: String) -> Self {
+    pub fn new(id: StaticStringId, value: Vec<u16>) -> Self {
+        let text = String::from_utf16_lossy(&value);
         Self {
             id,
-            text: Rc::from(value.into_boxed_str()),
+            units: Rc::from(value.into_boxed_slice()),
+            text: Rc::from(text.into_boxed_str()),
         }
     }
 
@@ -66,6 +69,10 @@ impl StaticString {
 
     pub fn as_str(&self) -> &str {
         self.text.as_ref()
+    }
+
+    pub fn as_utf16(&self) -> &[u16] {
+        self.units.as_ref()
     }
 }
 

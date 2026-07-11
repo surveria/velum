@@ -338,7 +338,7 @@ pub fn add_icase_code_points(mut input: CodePointSet) -> CodePointSet {
 }
 
 pub(crate) enum PropertyEscapeKind {
-    CharacterClass(&'static [Interval]),
+    CharacterClass(Vec<Interval>),
     StringSet(&'static [&'static [u32]]),
 }
 
@@ -365,23 +365,31 @@ pub(crate) fn unicode_property_from_str(
     name: Option<UnicodePropertyName>,
     unicode_sets: bool,
 ) -> Option<PropertyEscapeKind> {
+    if matches!(
+        name,
+        Some(UnicodePropertyName::Script | UnicodePropertyName::ScriptExtensions)
+    ) && matches!(s, "Unknown" | "Zzzz")
+    {
+        return unknown_script_ranges().map(PropertyEscapeKind::CharacterClass);
+    }
     match name {
         Some(UnicodePropertyName::GeneralCategory) => Some(PropertyEscapeKind::CharacterClass(
             general_category_property_value_ranges(
                 &unicode_property_value_general_category_from_str(s)?,
-            ),
+            )
+            .to_vec(),
         )),
         Some(UnicodePropertyName::Script) => Some(PropertyEscapeKind::CharacterClass(
-            script_value_ranges(&unicode_property_value_script_from_str(s)?),
+            script_value_ranges(&unicode_property_value_script_from_str(s)?).to_vec(),
         )),
         Some(UnicodePropertyName::ScriptExtensions) => Some(PropertyEscapeKind::CharacterClass(
-            script_extensions_value_ranges(&unicode_property_value_script_from_str(s)?),
+            script_extensions_value_ranges(&unicode_property_value_script_from_str(s)?).to_vec(),
         )),
         None => {
             if let Some(value) = unicode_property_binary_from_str(s) {
-                return Some(PropertyEscapeKind::CharacterClass(binary_property_ranges(
-                    &value,
-                )));
+                return Some(PropertyEscapeKind::CharacterClass(
+                    binary_property_ranges(&value).to_vec(),
+                ));
             }
             if unicode_sets && let Some(value) = unicode_string_property_from_str(s) {
                 return Some(PropertyEscapeKind::StringSet(string_property_sets(&value)));
@@ -389,10 +397,22 @@ pub(crate) fn unicode_property_from_str(
             Some(PropertyEscapeKind::CharacterClass(
                 general_category_property_value_ranges(
                     &unicode_property_value_general_category_from_str(s)?,
-                ),
+                )
+                .to_vec(),
             ))
         }
     }
+}
+
+fn unknown_script_ranges() -> Option<Vec<Interval>> {
+    let mut ranges = CodePointSet::new();
+    for category in ["Cn", "Co", "Cs"] {
+        let value = unicode_property_value_general_category_from_str(category)?;
+        for interval in general_category_property_value_ranges(&value) {
+            ranges.add(*interval);
+        }
+    }
+    Some(ranges.intervals().to_vec())
 }
 
 #[cfg(test)]

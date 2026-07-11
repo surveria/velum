@@ -1,5 +1,3 @@
-use std::char;
-
 use crate::{
     error::{Error, Result},
     runtime::{Context, call::RuntimeCallArgs, object::PropertyEnumerable},
@@ -72,17 +70,13 @@ impl Context {
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        let mut output = String::new();
+        let mut output = Vec::new();
         for value in args {
             let unit = Self::to_uint16(self.to_number(value)?)?;
-            if let Some(ch) = char::from_u32(u32::from(unit)) {
-                output.push(ch);
-            } else {
-                output.push(char::REPLACEMENT_CHARACTER);
-            }
-            self.check_string_len(&output)?;
+            output.push(unit);
+            self.check_utf16_string_len(&output)?;
         }
-        self.heap_string_value(&output)
+        self.heap_utf16_string_value(&output)
     }
 
     pub(in crate::runtime::native) fn eval_string_from_code_point(
@@ -96,19 +90,13 @@ impl Context {
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        let mut output = String::new();
+        let mut output = Vec::new();
         for value in args {
             let code_point = self.code_point_argument(value)?;
-            let Some(ch) = char::from_u32(code_point) else {
-                return Err(Error::exception(
-                    ErrorName::RangeError,
-                    RANGE_CODE_POINT_ERROR,
-                ));
-            };
-            output.push(ch);
-            self.check_string_len(&output)?;
+            append_code_point_utf16(&mut output, code_point)?;
+            self.check_utf16_string_len(&output)?;
         }
-        self.heap_string_value(&output)
+        self.heap_utf16_string_value(&output)
     }
 
     pub(in crate::runtime::native) fn eval_string_raw(
@@ -158,15 +146,15 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let text = self.string_receiver_value(this_value)?;
-        let length = text.chars().count();
+        let text = self.string_receiver_utf16(this_value)?;
+        let length = text.len();
         let Some(index) = self.relative_index(args.first(), length)? else {
             return Ok(Value::Undefined);
         };
-        let Some(ch) = text.chars().nth(index) else {
+        let Some(unit) = text.get(index).copied() else {
             return Ok(Value::Undefined);
         };
-        self.heap_string_char_value(ch)
+        self.heap_string_code_unit_value(unit)
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_code_point_at(
@@ -182,8 +170,7 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let text = self.string_receiver_value(this_value)?;
-        let units = text.encode_utf16().collect::<Vec<_>>();
+        let units = self.string_receiver_utf16(this_value)?;
         let position = self.position_arg(args.first())?;
         let Some(unit) = units.get(position).copied() else {
             return Ok(Value::Undefined);
@@ -253,7 +240,7 @@ impl Context {
     ) -> Result<Value> {
         Self::discard_extra_args(args.as_slice());
         let text = self.strict_string_value(this_value)?;
-        self.heap_string_value(&text)
+        self.heap_utf16_string_value(&text)
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_value_of(
@@ -263,7 +250,7 @@ impl Context {
     ) -> Result<Value> {
         Self::discard_extra_args(args.as_slice());
         let text = self.strict_string_value(this_value)?;
-        self.heap_string_value(&text)
+        self.heap_utf16_string_value(&text)
     }
 
     fn define_string_static_method(
@@ -307,14 +294,14 @@ impl Context {
         Ok(output)
     }
 
-    fn strict_string_value(&self, value: &Value) -> Result<String> {
+    fn strict_string_value(&self, value: &Value) -> Result<Vec<u16>> {
         match value {
-            Value::String(value) => Ok(value.clone()),
-            Value::HeapString(value) => Ok(value.as_str().to_owned()),
+            Value::String(value) => Ok(value.encode_utf16().collect()),
+            Value::HeapString(value) => Ok(value.as_utf16().to_vec()),
             Value::Object(id) => self
                 .objects
-                .string_object_value(*id)?
-                .map(ToOwned::to_owned)
+                .string_object_utf16_value(*id)?
+                .map(<[u16]>::to_vec)
                 .ok_or_else(|| Error::type_error(STRING_VALUE_RECEIVER_ERROR)),
             _ => Err(Error::type_error(STRING_VALUE_RECEIVER_ERROR)),
         }
@@ -420,6 +407,23 @@ impl Context {
     }
 
     const fn discard_extra_args(_args: &[Value]) {}
+}
+
+fn append_code_point_utf16(output: &mut Vec<u16>, code_point: u32) -> Result<()> {
+    if let Ok(unit) = u16::try_from(code_point) {
+        output.push(unit);
+        return Ok(());
+    }
+    let supplementary = code_point
+        .checked_sub(0x1_0000)
+        .ok_or_else(|| Error::exception(ErrorName::RangeError, RANGE_CODE_POINT_ERROR))?;
+    let high = u16::try_from(0xD800 + (supplementary >> 10))
+        .map_err(|_| Error::exception(ErrorName::RangeError, RANGE_CODE_POINT_ERROR))?;
+    let low = u16::try_from(0xDC00 + (supplementary & 0x3FF))
+        .map_err(|_| Error::exception(ErrorName::RangeError, RANGE_CODE_POINT_ERROR))?;
+    output.push(high);
+    output.push(low);
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy)]

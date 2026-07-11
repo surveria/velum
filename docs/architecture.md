@@ -38,6 +38,23 @@ project-authored Rust files. Changes under `src/regress/src` must update that
 manifest and carry focused engine behavior tests so an intentional fork stays
 distinguishable from accidental vendor drift.
 
+### ECMAScript string representation
+
+Heap strings own their authoritative ECMAScript value as a sequence of UTF-16
+code units. This permits lone surrogates, makes indexed properties and
+`length` code-unit based, and lets string iteration combine only valid
+surrogate pairs. A cached UTF-8 rendering is exact for well-formed strings and
+replacement-character based only for diagnostics that cannot carry arbitrary
+UTF-16.
+
+Source literals, templates, `String.fromCharCode`, `String.fromCodePoint`,
+concatenation, slicing, and RegExp patterns/results preserve the code-unit
+sequence when they enter the runtime string heap. The in-tree RegExp executor
+receives UTF-16 directly, so matching and capture indices use the same units as
+ECMAScript `lastIndex`. Rust `str`, `String`, and `OwnedValue::String`
+conversions accept only well-formed values; embedders can inspect
+`JsString::as_utf16` when exact ill-formed strings must cross the API boundary.
+
 The parser AST is not a runtime fallback. It is consumed by binding analysis and
 the compiler, then `CompiledScript` stores a `BytecodeProgram` and
 bytecode-owned function metadata for execution. The `bytecode` module must not

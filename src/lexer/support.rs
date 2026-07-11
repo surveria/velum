@@ -96,3 +96,25 @@ pub const fn numeric_prefix(ch: Option<char>) -> Option<(u32, &'static str)> {
 pub fn unicode_char(value: u32, offset: usize, description: &str) -> Result<char> {
     char::from_u32(value).ok_or_else(|| Error::lex(format!("{description} is invalid"), offset))
 }
+
+pub fn push_utf16_char(output: &mut Vec<u16>, ch: char) {
+    let mut buffer = [0_u16; 2];
+    output.extend_from_slice(ch.encode_utf16(&mut buffer));
+}
+
+pub fn append_utf16_value(output: &mut Vec<u16>, value: u32, offset: usize) -> Result<()> {
+    if let Ok(unit) = u16::try_from(value) {
+        output.push(unit);
+        return Ok(());
+    }
+    let supplementary = value
+        .checked_sub(0x1_0000)
+        .ok_or_else(|| Error::lex("unicode escape is invalid", offset))?;
+    let high = u16::try_from(0xD800 + (supplementary >> 10))
+        .map_err(|_| Error::lex("unicode escape is invalid", offset))?;
+    let low = u16::try_from(0xDC00 + (supplementary & 0x3FF))
+        .map_err(|_| Error::lex("unicode escape is invalid", offset))?;
+    output.push(high);
+    output.push(low);
+    Ok(())
+}

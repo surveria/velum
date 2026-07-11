@@ -17,10 +17,10 @@ impl Token {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     Number(f64),
-    String(String),
-    TemplateHead(String),
-    TemplateMiddle(String),
-    TemplateTail(String),
+    String(Vec<u16>),
+    TemplateHead(Vec<u16>),
+    TemplateMiddle(Vec<u16>),
+    TemplateTail(Vec<u16>),
     RegExp {
         pattern: String,
         flags: String,

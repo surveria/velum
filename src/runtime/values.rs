@@ -13,7 +13,7 @@ const FOREIGN_VM_VALUE_ERROR: &str = "value belongs to another VM";
 
 impl Context {
     pub(crate) fn static_string_value(&mut self, value: &StaticString) -> Result<Value> {
-        self.heap_string_value(value.as_str())
+        self.heap_utf16_string_value(value.as_utf16())
     }
 
     pub(crate) fn runtime_value(&mut self, value: Value) -> Result<Value> {
@@ -38,8 +38,8 @@ impl Context {
         if matches!(left, Value::String(_) | Value::HeapString(_))
             || matches!(right, Value::String(_) | Value::HeapString(_))
         {
-            let value = self.concat_values(&left, &right)?;
-            return self.heap_string_owned_value(value);
+            let value = self.concat_utf16_values(&left, &right)?;
+            return self.heap_utf16_string_value(&value);
         }
         let left = self.to_number(&left)?;
         let right = self.to_number(&right)?;
@@ -54,6 +54,8 @@ impl Context {
     ) -> Result<Value> {
         if requires_generic_add(&left)
             || requires_generic_add(right)
+            || !has_exact_utf8(&left)
+            || !has_exact_utf8(right)
             || (!matches!(left, Value::String(_) | Value::HeapString(_))
                 && !matches!(right, Value::String(_) | Value::HeapString(_)))
         {
@@ -85,6 +87,9 @@ impl Context {
         } else {
             left
         };
+        if !has_exact_utf8(&left) {
+            return self.add(&left, &Value::String(right.to_owned()));
+        }
         let mut text = match left {
             Value::String(mut text) => {
                 self.push_concat_text(&mut text, right)?;
@@ -119,6 +124,28 @@ impl Context {
         self.push_primitive_string(&mut text, left)?;
         self.push_primitive_string(&mut text, right)?;
         Ok(text)
+    }
+
+    fn concat_utf16_values(&self, left: &Value, right: &Value) -> Result<Vec<u16>> {
+        let left = primitive_utf16_units(left)?;
+        let right = primitive_utf16_units(right)?;
+        let length = left
+            .len()
+            .checked_add(right.len())
+            .ok_or_else(|| Error::limit("string length exceeded supported range"))?;
+        if length > self.limits.max_string_len {
+            return Err(Error::limit(format!(
+                "string length {length} exceeded {}",
+                self.limits.max_string_len
+            )));
+        }
+        let mut output = Vec::new();
+        output.try_reserve(length).map_err(|_| {
+            Error::limit("string concatenation allocation exceeded supported range")
+        })?;
+        output.extend_from_slice(&left);
+        output.extend_from_slice(&right);
+        Ok(output)
     }
 
     fn concat_value_with_static(&self, left: &Value, right: &str) -> Result<String> {
@@ -194,7 +221,7 @@ impl Context {
         match &value {
             Value::String(text) => self.check_string_len(text)?,
             Value::HeapString(text) => {
-                self.check_string_len(text.as_str())?;
+                self.check_utf16_string_len(text.as_utf16())?;
                 if text.identity() != self.identity() {
                     return Err(Error::runtime(FOREIGN_VM_VALUE_ERROR));
                 }
@@ -247,6 +274,17 @@ impl Context {
         Ok(())
     }
 
+    pub(crate) fn check_utf16_string_len(&self, units: &[u16]) -> Result<()> {
+        if units.len() > self.limits.max_string_len {
+            return Err(Error::limit(format!(
+                "string length {} exceeded {}",
+                units.len(),
+                self.limits.max_string_len
+            )));
+        }
+        Ok(())
+    }
+
     pub(crate) fn step(&mut self) -> Result<()> {
         self.runtime_steps = self
             .runtime_steps
@@ -278,4 +316,16 @@ impl Context {
 
 const fn requires_generic_add(value: &Value) -> bool {
     !crate::runtime::abstract_operations::is_primitive(value) || matches!(value, Value::Symbol(_))
+}
+
+fn has_exact_utf8(value: &Value) -> bool {
+    !matches!(value, Value::HeapString(text) if !text.is_well_formed())
+}
+
+fn primitive_utf16_units(value: &Value) -> Result<Vec<u16>> {
+    match value {
+        Value::String(text) => Ok(text.encode_utf16().collect()),
+        Value::HeapString(text) => Ok(text.as_utf16().to_vec()),
+        value => to_string_primitive(value).map(|text| text.encode_utf16().collect()),
+    }
 }

@@ -35,7 +35,7 @@ impl Context {
             if property.key().is_some_and(|key| key.symbol_id().is_some()) {
                 return self.get_string_prototype_symbol_property(object, property);
             }
-            return self.get_string_property_value(object, value.as_str(), property.name());
+            return self.get_utf16_string_property_value(object, value.as_utf16(), property.name());
         }
         if let Some(value) =
             self.primitive_prototype_property_value_with_lookup(object, property)?

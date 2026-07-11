@@ -68,7 +68,11 @@ impl Context {
             return self.get_string_property_value(object, value, property.as_str());
         }
         if let Value::HeapString(value) = object {
-            return self.get_string_property_value(object, value.as_str(), property.as_str());
+            return self.get_utf16_string_property_value(
+                object,
+                value.as_utf16(),
+                property.as_str(),
+            );
         }
         if let Some(value) = self.primitive_prototype_property_value(object, property.as_str())? {
             return Ok(value);
@@ -115,7 +119,7 @@ impl Context {
             return self.get_string_property_value(object, value, property.name());
         }
         if let Value::HeapString(value) = object {
-            return self.get_string_property_value(object, value.as_str(), property.name());
+            return self.get_utf16_string_property_value(object, value.as_utf16(), property.name());
         }
         if let Some(value) = self.primitive_prototype_property_value(object, property.name())? {
             return Ok(value);

@@ -1,4 +1,7 @@
-use super::{Token, TokenKind};
+use super::{
+    Token, TokenKind,
+    template::{TemplatePartPosition, TemplateSubstitutionState},
+};
 use crate::{
     error::{Error, Result},
     lexer::classification::{EscapeContext, token_kind_can_precede_regexp},
@@ -6,9 +9,10 @@ use crate::{
         ASCII_BACKSPACE, ASCII_FORM_FEED, ASCII_VERTICAL_TAB, BIGINT_SUFFIX, DECIMAL_POINT,
         HEX_ESCAPE_DIGITS, LINE_SEPARATOR, MAX_BRACED_UNICODE_ESCAPE_DIGITS,
         MAX_UNICODE_CODE_POINT, NUMERIC_SEPARATOR, PARAGRAPH_SEPARATOR, RADIX_DECIMAL,
-        TEMPLATE_SUBSTITUTION_START, UNICODE_ESCAPE_DIGITS, checked_hex_accumulate, digit_value,
-        digits_to_number, is_exponent_marker, is_identifier_part, is_identifier_start,
-        is_line_terminator, numeric_prefix, unicode_char,
+        TEMPLATE_SUBSTITUTION_START, UNICODE_ESCAPE_DIGITS, append_utf16_value,
+        checked_hex_accumulate, digit_value, digits_to_number, is_exponent_marker,
+        is_identifier_part, is_identifier_start, is_line_terminator, numeric_prefix,
+        push_utf16_char, unicode_char,
     },
     regexp_syntax::validate_regexp_literal,
     source::{SourceId, SourceSpan},
@@ -29,25 +33,6 @@ struct Lexer<'a> {
     tokens: Vec<Token>,
     line_terminator_before: bool,
     template_substitutions: Vec<TemplateSubstitutionState>,
-}
-
-/// Tracks one open `${` substitution of a template literal while its
-/// expression tokens are produced by the main scanning loop.
-#[derive(Debug)]
-struct TemplateSubstitutionState {
-    /// Count of `{` tokens opened inside the substitution expression that a
-    /// later `}` must close before the substitution itself can end.
-    open_braces: usize,
-    /// Offset of the `${` marker, used for unterminated-substitution errors.
-    substitution_offset: usize,
-}
-
-/// Distinguishes scanning the leading template part (after the opening
-/// backtick) from scanning a continuation part (after a substitution `}`).
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-enum TemplatePartPosition {
-    Head,
-    Continuation,
 }
 
 impl<'a> Lexer<'a> {
@@ -345,7 +330,7 @@ impl<'a> Lexer<'a> {
 
     fn string(&mut self, offset: usize, quote: char) -> Result<()> {
         self.advance();
-        let mut output = String::new();
+        let mut output = Vec::new();
 
         while let Some((current_offset, ch)) = self.peek() {
             self.advance();
@@ -356,14 +341,14 @@ impl<'a> Lexer<'a> {
                 }
                 '\\' => self.string_escape(current_offset, &mut output)?,
                 '\n' | '\r' => return Err(Error::lex("unterminated string literal", offset)),
-                other => output.push(other),
+                other => push_utf16_char(&mut output, other),
             }
         }
 
         Err(Error::lex("unterminated string literal", offset))
     }
 
-    fn string_escape(&mut self, slash_offset: usize, output: &mut String) -> Result<()> {
+    fn string_escape(&mut self, slash_offset: usize, output: &mut Vec<u16>) -> Result<()> {
         self.escape_sequence(slash_offset, output, EscapeContext::String)
     }
 
@@ -373,7 +358,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn template_part(&mut self, offset: usize, position: TemplatePartPosition) -> Result<()> {
-        let mut output = String::new();
+        let mut output = Vec::new();
 
         while let Some((current_offset, ch)) = self.peek() {
             self.advance();
@@ -389,15 +374,15 @@ impl<'a> Lexer<'a> {
                     );
                 }
                 '\\' => self.template_escape(current_offset, &mut output)?,
-                '\n' => output.push('\n'),
+                '\n' => push_utf16_char(&mut output, '\n'),
                 '\r' => {
                     if self.peek_char() == Some('\n') {
                         self.advance();
                     }
-                    output.push('\n');
+                    push_utf16_char(&mut output, '\n');
                 }
-                LINE_SEPARATOR | PARAGRAPH_SEPARATOR => output.push(ch),
-                other => output.push(other),
+                LINE_SEPARATOR | PARAGRAPH_SEPARATOR => push_utf16_char(&mut output, ch),
+                other => push_utf16_char(&mut output, other),
             }
         }
 
@@ -407,7 +392,7 @@ impl<'a> Lexer<'a> {
     fn end_template_part(
         &mut self,
         position: TemplatePartPosition,
-        output: String,
+        output: Vec<u16>,
         offset: usize,
     ) -> Result<()> {
         match position {
@@ -431,7 +416,7 @@ impl<'a> Lexer<'a> {
     fn begin_template_substitution(
         &mut self,
         position: TemplatePartPosition,
-        output: String,
+        output: Vec<u16>,
         offset: usize,
         substitution_offset: usize,
     ) -> Result<()> {
@@ -486,14 +471,14 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn template_escape(&mut self, slash_offset: usize, output: &mut String) -> Result<()> {
+    fn template_escape(&mut self, slash_offset: usize, output: &mut Vec<u16>) -> Result<()> {
         self.escape_sequence(slash_offset, output, EscapeContext::Template)
     }
 
     fn escape_sequence(
         &mut self,
         slash_offset: usize,
-        output: &mut String,
+        output: &mut Vec<u16>,
         context: EscapeContext,
     ) -> Result<()> {
         let Some((escape_offset, escaped)) = self.peek() else {
@@ -501,24 +486,23 @@ impl<'a> Lexer<'a> {
         };
         self.advance();
         match escaped {
-            'b' => output.push(ASCII_BACKSPACE),
-            'f' => output.push(ASCII_FORM_FEED),
-            'n' => output.push('\n'),
-            'r' => output.push('\r'),
-            't' => output.push('\t'),
-            'v' => output.push(ASCII_VERTICAL_TAB),
+            'b' => push_utf16_char(output, ASCII_BACKSPACE),
+            'f' => push_utf16_char(output, ASCII_FORM_FEED),
+            'n' => push_utf16_char(output, '\n'),
+            'r' => push_utf16_char(output, '\r'),
+            't' => push_utf16_char(output, '\t'),
+            'v' => push_utf16_char(output, ASCII_VERTICAL_TAB),
             '0' => self.zero_escape(escape_offset, output)?,
-            'x' => output.push(self.fixed_hex_escape(
-                escape_offset,
-                HEX_ESCAPE_DIGITS,
-                "hex escape",
-            )?),
-            'u' => output.push(self.unicode_escape(escape_offset)?),
-            '\\' => output.push('\\'),
-            '"' => output.push('"'),
-            '\'' => output.push('\''),
-            '`' if context == EscapeContext::Template => output.push('`'),
-            '$' if context == EscapeContext::Template => output.push('$'),
+            'x' => {
+                let ch = self.fixed_hex_escape(escape_offset, HEX_ESCAPE_DIGITS, "hex escape")?;
+                push_utf16_char(output, ch);
+            }
+            'u' => self.string_unicode_escape(escape_offset, output)?,
+            '\\' => push_utf16_char(output, '\\'),
+            '"' => push_utf16_char(output, '"'),
+            '\'' => push_utf16_char(output, '\''),
+            '`' if context == EscapeContext::Template => push_utf16_char(output, '`'),
+            '$' if context == EscapeContext::Template => push_utf16_char(output, '$'),
             '\n' | LINE_SEPARATOR | PARAGRAPH_SEPARATOR => {}
             '\r' => {
                 if self.peek_char() == Some('\n') {
@@ -531,30 +515,40 @@ impl<'a> Lexer<'a> {
                     escape_offset,
                 ));
             }
-            other => output.push(other),
+            other => push_utf16_char(output, other),
         }
         Ok(())
     }
 
-    fn zero_escape(&self, escape_offset: usize, output: &mut String) -> Result<()> {
+    fn zero_escape(&self, escape_offset: usize, output: &mut Vec<u16>) -> Result<()> {
         if self.peek_char().is_some_and(|ch| ch.is_ascii_digit()) {
             return Err(Error::lex(
                 "legacy octal escape sequences are not supported",
                 escape_offset,
             ));
         }
-        output.push('\0');
+        push_utf16_char(output, '\0');
         Ok(())
+    }
+
+    fn string_unicode_escape(&mut self, escape_offset: usize, output: &mut Vec<u16>) -> Result<()> {
+        let value = if self.match_char('{') {
+            self.braced_unicode_escape_value(escape_offset)?
+        } else {
+            self.hex_digits(escape_offset, UNICODE_ESCAPE_DIGITS, "unicode escape")?
+        };
+        append_utf16_value(output, value, escape_offset)
     }
 
     fn unicode_escape(&mut self, escape_offset: usize) -> Result<char> {
         if self.match_char('{') {
-            return self.braced_unicode_escape(escape_offset);
+            let value = self.braced_unicode_escape_value(escape_offset)?;
+            return unicode_char(value, escape_offset, "braced unicode escape");
         }
         self.fixed_hex_escape(escape_offset, UNICODE_ESCAPE_DIGITS, "unicode escape")
     }
 
-    fn braced_unicode_escape(&mut self, escape_offset: usize) -> Result<char> {
+    fn braced_unicode_escape_value(&mut self, escape_offset: usize) -> Result<u32> {
         let mut value = 0u32;
         let mut digits = 0usize;
         loop {
@@ -565,7 +559,7 @@ impl<'a> Lexer<'a> {
                 ));
             };
             if ch == '}' {
-                return self.finish_braced_unicode_escape(escape_offset, value, digits);
+                return self.finish_braced_unicode_escape_value(escape_offset, value, digits);
             }
             if digits >= MAX_BRACED_UNICODE_ESCAPE_DIGITS {
                 return Err(Error::lex(
@@ -591,17 +585,17 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn finish_braced_unicode_escape(
+    fn finish_braced_unicode_escape_value(
         &mut self,
         escape_offset: usize,
         value: u32,
         digits: usize,
-    ) -> Result<char> {
+    ) -> Result<u32> {
         if digits == 0 {
             return Err(Error::lex("empty braced unicode escape", escape_offset));
         }
         self.advance();
-        unicode_char(value, escape_offset, "braced unicode escape")
+        Ok(value)
     }
 
     fn fixed_hex_escape(

@@ -179,6 +179,21 @@ impl Context {
         Ok(text)
     }
 
+    /// ECMAScript `ToString`, retaining the exact UTF-16 code-unit sequence.
+    #[allow(clippy::wrong_self_convention)]
+    pub(in crate::runtime) fn to_utf16_string(&mut self, value: &Value) -> Result<Vec<u16>> {
+        let primitive = self.to_primitive(value, PreferredType::String)?;
+        let units = match primitive {
+            Value::String(text) => text.encode_utf16().collect(),
+            Value::HeapString(text) => text.as_utf16().to_vec(),
+            primitive => to_string_primitive(&primitive)?
+                .encode_utf16()
+                .collect::<Vec<_>>(),
+        };
+        self.check_utf16_string_len(&units)?;
+        Ok(units)
+    }
+
     /// ECMAScript `ToPropertyKey`, preserving Symbol identity.
     // The specification name is intentional; conversion can invoke JavaScript.
     #[allow(clippy::wrong_self_convention)]

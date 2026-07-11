@@ -322,10 +322,18 @@ impl Parser {
                     shorthand_name: Some(name),
                 })
             }
-            TokenKind::String(name) => Ok(ObjectPropertyName::Static {
-                key: self.static_name(name)?,
-                shorthand_name: None,
-            }),
+            TokenKind::String(name) => {
+                let name = String::from_utf16(&name).map_err(|_| {
+                    Error::parse_at(
+                        "object property names containing lone surrogates are not supported yet",
+                        token_span,
+                    )
+                })?;
+                Ok(ObjectPropertyName::Static {
+                    key: self.static_name(name)?,
+                    shorthand_name: None,
+                })
+            }
             TokenKind::Number(value) => Ok(ObjectPropertyName::Static {
                 key: self.static_name(Value::Number(value).to_string())?,
                 shorthand_name: None,

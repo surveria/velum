@@ -101,7 +101,7 @@ impl<'value> FromJsValue<'value> for &'value str {
     fn from_js_value(value: &'value Value) -> Option<Self> {
         match value {
             Value::String(value) => Some(value.as_str()),
-            Value::HeapString(value) => Some(value.as_str()),
+            Value::HeapString(value) => value.as_utf8(),
             _ => None,
         }
     }
@@ -113,7 +113,7 @@ impl FromJsValue<'_> for String {
     fn from_js_value(value: &Value) -> Option<Self> {
         match value {
             Value::String(value) => Some(value.clone()),
-            Value::HeapString(value) => Some(value.as_str().to_owned()),
+            Value::HeapString(value) => value.as_utf8().map(str::to_owned),
             _ => None,
         }
     }

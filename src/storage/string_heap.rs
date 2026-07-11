@@ -1,8 +1,6 @@
 use std::{
-    borrow::Borrow,
     collections::{BTreeSet, HashMap},
     fmt,
-    hash::{Hash, Hasher},
     rc::Rc,
 };
 
@@ -48,14 +46,39 @@ impl JsString {
         self.id
     }
 
+    /// Returns UTF-8 text, replacing lone surrogates with U+FFFD.
     #[must_use]
     pub fn as_str(&self) -> &str {
         self.data.as_str()
     }
 
+    /// Returns a lossless UTF-8 view when the code-unit sequence is well-formed.
+    #[must_use]
+    pub fn as_utf8(&self) -> Option<&str> {
+        self.is_well_formed().then_some(self.data.as_str())
+    }
+
+    /// Returns the exact ECMAScript UTF-16 code-unit sequence.
+    #[must_use]
+    pub fn as_utf16(&self) -> &[u16] {
+        self.data.as_utf16()
+    }
+
+    /// Returns whether this value can be represented losslessly as UTF-8.
+    #[must_use]
+    pub fn is_well_formed(&self) -> bool {
+        self.data.is_well_formed()
+    }
+
     #[must_use]
     pub fn into_string(self) -> String {
         self.data.as_str().to_owned()
+    }
+
+    /// Converts into UTF-8 when the code-unit sequence is well-formed.
+    #[must_use]
+    pub fn into_utf8(self) -> Option<String> {
+        self.is_well_formed().then(|| self.data.as_str().to_owned())
     }
 }
 
@@ -68,37 +91,51 @@ impl PartialEq for JsString {
 #[derive(Debug)]
 struct StringData {
     identity: VmIdentity,
+    units: Rc<[u16]>,
+    /// UTF-8 for well-formed strings and replacement-character rendering for
+    /// strings containing lone surrogates. JavaScript semantics use `units`.
     text: String,
+    well_formed: bool,
 }
 
 #[derive(Clone, Debug)]
 struct StringDataRef(Rc<StringData>);
 
 impl StringDataRef {
-    fn new(identity: VmIdentity, text: String) -> Self {
-        Self(Rc::new(StringData { identity, text }))
+    fn new(identity: VmIdentity, units: Vec<u16>, utf8: Option<String>) -> Self {
+        let decoded = String::from_utf16(&units);
+        let (text, well_formed) = decoded.map_or_else(
+            |_| (String::from_utf16_lossy(&units), false),
+            |text| (utf8.unwrap_or(text), true),
+        );
+        Self(Rc::new(StringData {
+            identity,
+            units: Rc::from(units.into_boxed_slice()),
+            text,
+            well_formed,
+        }))
     }
 
     fn as_str(&self) -> &str {
         self.0.text.as_str()
     }
-}
 
-impl Borrow<str> for StringDataRef {
-    fn borrow(&self) -> &str {
-        self.as_str()
+    fn as_utf16(&self) -> &[u16] {
+        self.0.units.as_ref()
     }
-}
 
-impl Hash for StringDataRef {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_str().hash(state);
+    fn is_well_formed(&self) -> bool {
+        self.0.well_formed
+    }
+
+    fn storage_bytes(&self) -> usize {
+        self.0.text.len()
     }
 }
 
 impl PartialEq for StringDataRef {
     fn eq(&self, other: &Self) -> bool {
-        self.as_str() == other.as_str()
+        self.as_utf16() == other.as_utf16()
     }
 }
 
@@ -113,7 +150,7 @@ impl fmt::Display for JsString {
 #[derive(Debug, Clone)]
 pub struct StringHeap {
     identity: VmIdentity,
-    entries: HashMap<StringDataRef, StringId>,
+    entries: HashMap<Rc<[u16]>, StringId>,
     strings: Vec<Option<StringDataRef>>,
     free: Vec<usize>,
     live: usize,
@@ -149,21 +186,31 @@ impl StringHeap {
     }
 
     pub(crate) fn contains(&self, text: &str) -> bool {
-        self.entries.contains_key(text)
+        let units = text.encode_utf16().collect::<Vec<_>>();
+        self.contains_utf16(&units)
+    }
+
+    pub(crate) fn contains_utf16(&self, units: &[u16]) -> bool {
+        self.entries.contains_key(units)
     }
 
     pub fn intern(&mut self, text: &str) -> Result<JsString> {
-        if let Some(id) = self.entries.get(text).copied() {
-            return self.js_string(id);
-        }
-        self.insert_string(text.to_owned())
+        self.intern_owned(text.to_owned())
     }
 
     pub fn intern_owned(&mut self, text: String) -> Result<JsString> {
-        if let Some(id) = self.entries.get(text.as_str()).copied() {
+        let units = text.encode_utf16().collect::<Vec<_>>();
+        if let Some(id) = self.entries.get(units.as_slice()).copied() {
             return self.js_string(id);
         }
-        self.insert_string(text)
+        self.insert_string(units, Some(text))
+    }
+
+    pub fn intern_utf16(&mut self, units: &[u16]) -> Result<JsString> {
+        if let Some(id) = self.entries.get(units).copied() {
+            return self.js_string(id);
+        }
+        self.insert_string(units.to_vec(), None)
     }
 
     pub fn get(&self, id: StringId) -> Result<&str> {
@@ -184,7 +231,7 @@ impl StringHeap {
         Ok(JsString::new(id, data))
     }
 
-    fn insert_string(&mut self, text: String) -> Result<JsString> {
+    fn insert_string(&mut self, units: Vec<u16>, utf8: Option<String>) -> Result<JsString> {
         if self.live >= self.max_count {
             return Err(Error::limit(format!(
                 "HeapString record count exceeded {}",
@@ -198,9 +245,10 @@ impl StringHeap {
                 .map_err(|error| Error::limit(format!("string heap exhausted: {error}")))?;
         }
         let id = StringId::from_index(index)?;
+        let data = StringDataRef::new(self.identity.clone(), units, utf8);
         let updated_bytes = self
             .bytes
-            .checked_add(text.len())
+            .checked_add(data.storage_bytes())
             .ok_or_else(|| Error::limit("string heap byte count overflowed"))?;
         if updated_bytes > self.max_bytes {
             return Err(Error::limit(format!(
@@ -208,7 +256,6 @@ impl StringHeap {
                 self.max_bytes
             )));
         }
-        let data = StringDataRef::new(self.identity.clone(), text);
         if self.free.pop().is_some() {
             let Some(slot) = self.strings.get_mut(index) else {
                 return Err(Error::runtime("string heap free slot is not defined"));
@@ -219,7 +266,7 @@ impl StringHeap {
         } else {
             self.strings.push(Some(data.clone()));
         }
-        self.entries.insert(data, id);
+        self.entries.insert(data.0.units.clone(), id);
         self.live = self
             .live
             .checked_add(1)
@@ -251,9 +298,9 @@ impl StringHeap {
             };
             self.bytes = self
                 .bytes
-                .checked_sub(data.as_str().len())
+                .checked_sub(data.storage_bytes())
                 .ok_or_else(|| Error::runtime("string heap byte count underflowed"))?;
-            let removed_id = self.entries.remove(data.as_str());
+            let removed_id = self.entries.remove(data.as_utf16());
             if removed_id != Some(id) {
                 return Err(Error::runtime("string heap index removal mismatch"));
             }

@@ -1,4 +1,4 @@
-use rs_quickjs::{Engine, Runtime, Value};
+use rs_quickjs::{Engine, OwnedValue, Runtime, Value};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -80,6 +80,68 @@ fn supports_string_static_and_unicode_methods() -> TestResult {
         context.output(),
         &["Cam", "9731", "a1b2c", "a 00cam camaba"],
     )
+}
+
+#[test]
+fn preserves_lone_utf16_surrogates_in_strings_and_regexp_tests() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let high = String.fromCodePoint(0xD800);
+        let low = String.fromCharCode(0xDFFF);
+        let literal = "\uD800";
+        let braced = "\u{DFFF}";
+        let template = `\uD800`;
+        let concatenated = "prefix" + high + low + "suffix";
+        let matched = /^(.)$/u.exec(high);
+        let dynamicPattern = new RegExp(high, "u");
+        let boxed = new String(high);
+        let iterated = [];
+        for (let value of high) iterated.push(value.charCodeAt(0));
+
+        high.length === 1 &&
+            high.charCodeAt(0) === 0xD800 &&
+            high.codePointAt(0) === 0xD800 &&
+            high[0].charCodeAt(0) === 0xD800 &&
+            low.length === 1 &&
+            low.charCodeAt(0) === 0xDFFF &&
+            literal.charCodeAt(0) === 0xD800 &&
+            braced.charCodeAt(0) === 0xDFFF &&
+            template.charCodeAt(0) === 0xD800 &&
+            concatenated.length === 14 &&
+            concatenated.charCodeAt(6) === 0xD800 &&
+            concatenated.charCodeAt(7) === 0xDFFF &&
+            iterated.length === 1 &&
+            iterated[0] === 0xD800 &&
+            matched[0].charCodeAt(0) === 0xD800 &&
+            matched[1].charCodeAt(0) === 0xD800 &&
+            matched.input.charCodeAt(0) === 0xD800 &&
+            dynamicPattern.test(high) &&
+            dynamicPattern.source.charCodeAt(0) === 0xD800 &&
+            String.prototype.valueOf.call(boxed).charCodeAt(0) === 0xD800 &&
+            String.prototype.toString.call(boxed).charCodeAt(0) === 0xD800 &&
+            /^\D$/u.test(high) &&
+            /^.$/su.test(low) ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))?;
+    let surrogate = context.eval("String.fromCodePoint(0xD800)")?;
+    let Value::HeapString(text) = &surrogate else {
+        return Err(format!("expected heap string, got {surrogate:?}").into());
+    };
+    if text.as_utf16() != [0xD800] || text.as_utf8().is_some() {
+        return Err(format!("unexpected lone-surrogate representation: {text:?}").into());
+    }
+    let Err(error) = OwnedValue::try_from(&surrogate) else {
+        return Err("lone surrogate unexpectedly converted to UTF-8 OwnedValue".into());
+    };
+    if !error.to_string().contains("lone surrogates") {
+        return Err(format!("unexpected OwnedValue conversion error: {error}").into());
+    }
+    Ok(())
 }
 
 #[test]

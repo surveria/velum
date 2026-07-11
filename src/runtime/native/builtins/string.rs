@@ -46,16 +46,16 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let value = self.eval_string_argument(args.as_slice())?;
-        self.heap_string_value(&value)
+        let value = self.eval_string_argument_utf16(args.as_slice())?;
+        self.heap_utf16_string_value(&value)
     }
 
     pub(in crate::runtime::native) fn eval_direct_string_constructor(
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        let value = self.eval_string_argument(args)?;
-        self.heap_string_value(&value)
+        let value = self.eval_string_argument_utf16(args)?;
+        self.heap_utf16_string_value(&value)
     }
 
     pub(in crate::runtime::native) fn construct_string_object(
@@ -63,22 +63,22 @@ impl Context {
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
         let value = match args.as_slice().first() {
-            Some(value) => self.to_string(value)?,
-            None => String::new(),
+            Some(value) => self.to_utf16_string(value)?,
+            None => Vec::new(),
         };
-        self.create_string_object_from_text(&value)
+        self.create_string_object_from_utf16(&value)
     }
 
     pub(in crate::runtime::native) fn create_string_object_from_value(
         &mut self,
         value: &Value,
     ) -> Result<Value> {
-        let value = self.string_argument_text(value)?;
-        self.create_string_object_from_text(&value)
+        let value = self.string_argument_utf16(value)?;
+        self.create_string_object_from_utf16(&value)
     }
 
-    fn create_string_object_from_text(&mut self, value: &str) -> Result<Value> {
-        let value = self.intern_heap_string(value)?;
+    fn create_string_object_from_utf16(&mut self, value: &[u16]) -> Result<Value> {
+        let value = self.intern_utf16_heap_string(value)?;
         let prototype = self.string_constructor_prototype()?;
         let length_key = self.intern_property_key(STRING_LENGTH_PROPERTY)?;
         self.objects.create_string_object(
@@ -103,12 +103,12 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let text = self.string_receiver_value(this_value)?;
+        let text = self.string_receiver_utf16(this_value)?;
         let position = self.string_position_arg(args.first())?;
-        let Some(ch) = Self::char_at(&text, position) else {
+        let Some(unit) = Self::char_at(&text, position) else {
             return self.heap_string_value(EMPTY_STRING);
         };
-        self.heap_string_char_value(ch)
+        self.heap_string_code_unit_value(unit)
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_char_code_at(
@@ -124,12 +124,12 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let text = self.string_receiver_value(this_value)?;
+        let text = self.string_receiver_utf16(this_value)?;
         let position = self.string_position_arg(args.first())?;
-        let Some(ch) = Self::char_at(&text, position) else {
+        let Some(unit) = Self::char_at(&text, position) else {
             return Ok(Value::Number(f64::NAN));
         };
-        Ok(Value::Number(f64::from(u32::from(ch))))
+        Ok(Value::Number(f64::from(unit)))
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_concat(
@@ -145,12 +145,12 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let mut output = self.string_receiver_value(this_value)?;
+        let mut output = self.string_receiver_utf16(this_value)?;
         for value in args {
-            output.push_str(&self.string_argument_text(value)?);
-            self.check_string_len(&output)?;
+            output.extend(self.string_argument_utf16(value)?);
+            self.check_utf16_string_len(&output)?;
         }
-        self.heap_string_value(&output)
+        self.heap_utf16_string_value(&output)
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_includes(
@@ -166,12 +166,12 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let text = self.string_receiver_value(this_value)?;
-        let needle = self.string_argument_or_undefined(args.first())?;
+        let text = self.string_receiver_utf16(this_value)?;
+        let needle = self.string_argument_utf16_or_undefined(args.first())?;
         let position = self.clamped_start_position(args.get(1), Self::char_len(&text))?;
         Ok(Value::Bool(Self::string_contains_from(
             &text, &needle, position,
-        )?))
+        )))
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_index_of(
@@ -187,10 +187,10 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let text = self.string_receiver_value(this_value)?;
-        let needle = self.string_argument_or_undefined(args.first())?;
+        let text = self.string_receiver_utf16(this_value)?;
+        let needle = self.string_argument_utf16_or_undefined(args.first())?;
         let position = self.clamped_start_position(args.get(1), Self::char_len(&text))?;
-        let index = Self::string_index_of_from(&text, &needle, position)?;
+        let index = Self::string_index_of_from(&text, &needle, position);
         Ok(Value::Number(Self::optional_index_to_number(index)?))
     }
 
@@ -207,10 +207,10 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let text = self.string_receiver_value(this_value)?;
-        let needle = self.string_argument_or_undefined(args.first())?;
+        let text = self.string_receiver_utf16(this_value)?;
+        let needle = self.string_argument_utf16_or_undefined(args.first())?;
         let position = self.last_index_position(args.get(1), Self::char_len(&text))?;
-        let index = Self::string_last_index_of(&text, &needle, position)?;
+        let index = Self::string_last_index_of(&text, &needle, position);
         Ok(Value::Number(Self::optional_index_to_number(index)?))
     }
 
@@ -227,12 +227,12 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let text = self.string_receiver_value(this_value)?;
+        let text = self.string_receiver_utf16(this_value)?;
         let length = Self::char_len(&text);
         let start = self.slice_bound(args.first(), length, 0)?;
         let end = self.slice_bound(args.get(1), length, length)?;
         let output = Self::char_range(&text, start, end)?;
-        self.heap_string_value(&output)
+        self.heap_utf16_string_value(&output)
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_substring(
@@ -248,7 +248,7 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let text = self.string_receiver_value(this_value)?;
+        let text = self.string_receiver_utf16(this_value)?;
         let length = Self::char_len(&text);
         let mut start = self.substring_bound(args.first(), length, 0)?;
         let mut end = self.substring_bound(args.get(1), length, length)?;
@@ -256,7 +256,7 @@ impl Context {
             std::mem::swap(&mut start, &mut end);
         }
         let output = Self::char_range(&text, start, end)?;
-        self.heap_string_value(&output)
+        self.heap_utf16_string_value(&output)
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_starts_with(
@@ -272,12 +272,12 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let text = self.string_receiver_value(this_value)?;
-        let needle = self.string_argument_or_undefined(args.first())?;
+        let text = self.string_receiver_utf16(this_value)?;
+        let needle = self.string_argument_utf16_or_undefined(args.first())?;
         let position = self.clamped_start_position(args.get(1), Self::char_len(&text))?;
         Ok(Value::Bool(Self::string_starts_with_at(
             &text, &needle, position,
-        )?))
+        )))
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_ends_with(
@@ -293,8 +293,8 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let text = self.string_receiver_value(this_value)?;
-        let needle = self.string_argument_or_undefined(args.first())?;
+        let text = self.string_receiver_utf16(this_value)?;
+        let needle = self.string_argument_utf16_or_undefined(args.first())?;
         let length = Self::char_len(&text);
         let end_position = self.ends_with_position(args.get(1), length)?;
         Ok(Value::Bool(Self::string_ends_with_at(
@@ -317,20 +317,23 @@ impl Context {
         args: &[Value],
         this_value: &Value,
     ) -> Result<Value> {
-        let text = self.string_receiver_value(this_value)?;
+        let text = self.string_receiver_utf16(this_value)?;
         let count = self.repeat_count(args.first())?;
-        let byte_len = text
+        let unit_len = text
             .len()
             .checked_mul(count)
-            .ok_or_else(|| Error::limit("string repeat byte length overflowed"))?;
-        if byte_len > self.limits.max_string_len {
+            .ok_or_else(|| Error::limit("string repeat length overflowed"))?;
+        if unit_len > self.limits.max_string_len {
             return Err(Error::limit("string length limit exceeded"));
         }
-        let mut output = String::with_capacity(byte_len);
+        let mut output = Vec::new();
+        output
+            .try_reserve(unit_len)
+            .map_err(|_| Error::limit("string repeat allocation exceeded supported range"))?;
         for _ in 0..count {
-            output.push_str(&text);
+            output.extend_from_slice(&text);
         }
-        self.heap_string_value(&output)
+        self.heap_utf16_string_value(&output)
     }
 
     pub(in crate::runtime::native) fn eval_string_prototype_trim(
@@ -425,17 +428,21 @@ impl Context {
         }
     }
 
-    fn eval_string_argument(&mut self, args: &[Value]) -> Result<String> {
+    fn eval_string_argument_utf16(&mut self, args: &[Value]) -> Result<Vec<u16>> {
         let Some(value) = args.first() else {
-            return Ok(String::new());
+            return Ok(Vec::new());
         };
         let primitive = self.to_primitive(value, PreferredType::String)?;
-        let text = match primitive {
-            Value::Symbol(symbol) => symbol.display_name(),
-            primitive => to_string_primitive(&primitive)?,
+        let units = match primitive {
+            Value::Symbol(symbol) => symbol.display_name().encode_utf16().collect(),
+            Value::String(text) => text.encode_utf16().collect(),
+            Value::HeapString(text) => text.as_utf16().to_vec(),
+            primitive => to_string_primitive(&primitive)?
+                .encode_utf16()
+                .collect::<Vec<_>>(),
         };
-        self.check_string_len(&text)?;
-        Ok(text)
+        self.check_utf16_string_len(&units)?;
+        Ok(units)
     }
 
     fn install_string_prototype_methods(&mut self, prototype: ObjectId) -> Result<()> {
@@ -461,6 +468,21 @@ impl Context {
         })
     }
 
+    pub(in crate::runtime::native) fn string_receiver_utf16(
+        &mut self,
+        value: &Value,
+    ) -> Result<Vec<u16>> {
+        if matches!(value, Value::Undefined | Value::Null) {
+            return Err(Error::type_error(STRING_METHOD_NULLISH_RECEIVER_ERROR));
+        }
+        self.to_utf16_string(value).map_err(|error| {
+            if matches!(value, Value::Symbol(_)) {
+                return Error::type_error(STRING_METHOD_SYMBOL_RECEIVER_ERROR);
+            }
+            error
+        })
+    }
+
     pub(in crate::runtime::native) fn string_argument_text(
         &mut self,
         value: &Value,
@@ -468,11 +490,18 @@ impl Context {
         self.to_string(value)
     }
 
-    fn string_argument_or_undefined(&mut self, value: Option<&Value>) -> Result<String> {
+    pub(in crate::runtime::native) fn string_argument_utf16(
+        &mut self,
+        value: &Value,
+    ) -> Result<Vec<u16>> {
+        self.to_utf16_string(value)
+    }
+
+    fn string_argument_utf16_or_undefined(&mut self, value: Option<&Value>) -> Result<Vec<u16>> {
         if let Some(value) = value {
-            self.string_argument_text(value)
+            self.string_argument_utf16(value)
         } else {
-            self.to_string(&Value::Undefined)
+            self.to_utf16_string(&Value::Undefined)
         }
     }
 
@@ -491,73 +520,65 @@ impl Context {
         .map_or(usize::MAX, |index| index))
     }
 
-    fn char_at(text: &str, position: usize) -> Option<char> {
+    fn char_at(text: &[u16], position: usize) -> Option<u16> {
         if position >= Self::char_len(text) {
             return None;
         }
-        text.chars().nth(position)
+        text.get(position).copied()
     }
 
-    fn char_len(text: &str) -> usize {
-        text.chars().count()
+    const fn char_len(text: &[u16]) -> usize {
+        text.len()
     }
 
-    fn char_range(text: &str, start: usize, end: usize) -> Result<String> {
+    fn char_range(text: &[u16], start: usize, end: usize) -> Result<Vec<u16>> {
         if end <= start {
-            return Ok(String::new());
+            return Ok(Vec::new());
         }
-        let count = end
-            .checked_sub(start)
-            .ok_or_else(|| Error::limit("string range length overflowed"))?;
-        Ok(text.chars().skip(start).take(count).collect())
+        text.get(start..end)
+            .map(<[u16]>::to_vec)
+            .ok_or_else(|| Error::runtime("string range is outside the code-unit sequence"))
     }
 
-    fn string_contains_from(text: &str, needle: &str, position: usize) -> Result<bool> {
-        Self::string_index_of_from(text, needle, position).map(|index| index.is_some())
+    fn string_contains_from(text: &[u16], needle: &[u16], position: usize) -> bool {
+        Self::string_index_of_from(text, needle, position).is_some()
     }
 
-    fn string_index_of_from(text: &str, needle: &str, position: usize) -> Result<Option<usize>> {
+    fn string_index_of_from(text: &[u16], needle: &[u16], position: usize) -> Option<usize> {
         let length = Self::char_len(text);
         if position > length {
-            return Ok(None);
+            return None;
         }
         if needle.is_empty() {
-            return Ok(Some(position));
+            return Some(position);
         }
-        for index in position..=length {
-            if Self::string_starts_with_at(text, needle, index)? {
-                return Ok(Some(index));
-            }
-        }
-        Ok(None)
+        (position..=length).find(|index| Self::string_starts_with_at(text, needle, *index))
     }
 
-    fn string_last_index_of(text: &str, needle: &str, position: usize) -> Result<Option<usize>> {
+    fn string_last_index_of(text: &[u16], needle: &[u16], position: usize) -> Option<usize> {
         let length = Self::char_len(text);
         let end = position.min(length);
         if needle.is_empty() {
-            return Ok(Some(end));
+            return Some(end);
         }
-        for index in (0..=end).rev() {
-            if Self::string_starts_with_at(text, needle, index)? {
-                return Ok(Some(index));
-            }
-        }
-        Ok(None)
+        (0..=end)
+            .rev()
+            .find(|index| Self::string_starts_with_at(text, needle, *index))
     }
 
-    fn string_starts_with_at(text: &str, needle: &str, position: usize) -> Result<bool> {
+    fn string_starts_with_at(text: &[u16], needle: &[u16], position: usize) -> bool {
         let needle_len = Self::char_len(needle);
         let Some(end) = position.checked_add(needle_len) else {
-            return Ok(false);
+            return false;
         };
         if end > Self::char_len(text) {
-            return Ok(false);
+            return false;
         }
-        Self::char_range(text, position, end).map(|candidate| candidate == needle)
+        text.get(position..end)
+            .is_some_and(|candidate| candidate == needle)
     }
 
-    fn string_ends_with_at(text: &str, needle: &str, end_position: usize) -> Result<bool> {
+    fn string_ends_with_at(text: &[u16], needle: &[u16], end_position: usize) -> Result<bool> {
         let needle_len = Self::char_len(needle);
         if needle_len > end_position {
             return Ok(false);
@@ -565,7 +586,7 @@ impl Context {
         let start = end_position
             .checked_sub(needle_len)
             .ok_or_else(|| Error::limit("string end position underflowed"))?;
-        Self::string_starts_with_at(text, needle, start)
+        Ok(Self::string_starts_with_at(text, needle, start))
     }
 
     fn clamped_start_position(&mut self, value: Option<&Value>, length: usize) -> Result<usize> {

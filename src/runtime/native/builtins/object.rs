@@ -142,10 +142,10 @@ impl Context {
         id: ObjectId,
         property: &DynamicPropertyKey,
     ) -> Result<Option<DataPropertyDescriptor>> {
-        let Some(ch) = self.objects.string_object_character(id, property.name())? else {
+        let Some(unit) = self.objects.string_object_code_unit(id, property.name())? else {
             return Ok(None);
         };
-        let value = self.heap_string_char_value(ch)?;
+        let value = self.heap_string_code_unit_value(unit)?;
         Ok(Some(DataPropertyDescriptor::new(
             value,
             PropertyWritable::No,
