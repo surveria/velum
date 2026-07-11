@@ -127,7 +127,7 @@ impl Context {
         Ok(scope)
     }
 
-    pub(super) fn eval_function_body(
+    pub(super) fn eval_function_body<const CAN_SUSPEND: bool>(
         &mut self,
         static_name_atom_cache: Option<StaticNameAtomCacheHandle>,
         static_binding_cache: Option<StaticBindingCacheHandle>,
@@ -173,8 +173,10 @@ impl Context {
                         context
                             .hoist_bytecode_declarations(bytecode.hoist_plan())
                             .and_then(|()| {
-                                context
-                                    .eval_function_body_after_setup(parameters.function, bytecode)
+                                context.eval_function_body_after_setup::<CAN_SUSPEND>(
+                                    parameters.function,
+                                    bytecode,
+                                )
                             })
                     },
                 )
@@ -193,7 +195,10 @@ impl Context {
                     context
                         .hoist_bytecode_declarations(bytecode.hoist_plan())
                         .and_then(|()| {
-                            context.eval_function_body_after_setup(parameters.function, bytecode)
+                            context.eval_function_body_after_setup::<CAN_SUSPEND>(
+                                parameters.function,
+                                bytecode,
+                            )
                         })
                 })
             }
@@ -209,13 +214,16 @@ impl Context {
                 }
                 self.hoist_bytecode_declarations(bytecode.hoist_plan())
                     .and_then(|()| {
-                        self.eval_function_body_after_setup(parameters.function, bytecode)
+                        self.eval_function_body_after_setup::<CAN_SUSPEND>(
+                            parameters.function,
+                            bytecode,
+                        )
                     })
             }
         }
     }
 
-    fn eval_function_body_after_setup(
+    fn eval_function_body_after_setup<const CAN_SUSPEND: bool>(
         &mut self,
         function: FunctionId,
         bytecode: &BytecodeFunction,
@@ -223,7 +231,7 @@ impl Context {
         if let Some(completion) = self.eval_bytecode_function_fast_path(bytecode)? {
             return Ok(completion);
         }
-        self.eval_bytecode_function_body(function, bytecode.body())
+        self.eval_bytecode_function_body::<CAN_SUSPEND>(function, bytecode.body())
     }
 
     fn remember_function_params(

@@ -19,10 +19,10 @@ use super::state::BytecodeState;
 #[derive(Debug)]
 pub(in crate::runtime) struct BytecodeContinuationFrame {
     program: BytecodeContinuationProgram,
-    parked_state: Option<BytecodeState>,
+    parked_state: Option<Box<BytecodeState>>,
     control_stack: Vec<Option<BytecodeControlRecord>>,
     control_cursor: usize,
-    resumed_child: Option<(BytecodeBlock, Completion)>,
+    resumed_child: Option<Box<(BytecodeBlock, Completion)>>,
 }
 
 const fn completion_value(completion: &Completion) -> Option<&Value> {
@@ -71,7 +71,7 @@ impl BytecodeContinuationFrame {
     pub(in crate::runtime) fn root_values(&self) -> impl Iterator<Item = &Value> {
         self.parked_state
             .iter()
-            .flat_map(BytecodeState::root_values)
+            .flat_map(|state| state.root_values())
             .chain(
                 self.control_stack
                     .iter()
@@ -81,7 +81,7 @@ impl BytecodeContinuationFrame {
             .chain(
                 self.resumed_child
                     .iter()
-                    .filter_map(|(_, completion)| completion_value(completion)),
+                    .filter_map(|resumed| completion_value(&resumed.1)),
             )
     }
 
@@ -177,7 +177,7 @@ impl BytecodeContinuationFrame {
         if self.parked_state.is_some() {
             return Err(Error::runtime("bytecode state is already parked"));
         }
-        self.parked_state = Some(state);
+        self.parked_state = Some(Box::new(state));
         Ok(())
     }
 
@@ -189,6 +189,7 @@ impl BytecodeContinuationFrame {
         }
         self.parked_state
             .take()
+            .map(|state| *state)
             .ok_or_else(|| Error::runtime("bytecode state is not parked"))
     }
 
@@ -196,7 +197,7 @@ impl BytecodeContinuationFrame {
         if self
             .parked_state
             .as_ref()
-            .is_some_and(BytecodeState::is_awaiting)
+            .is_some_and(|state| state.is_awaiting())
         {
             return self
                 .parked_state
@@ -229,14 +230,14 @@ impl BytecodeContinuationFrame {
         if self.resumed_child.is_some() {
             return Err(Error::runtime("resumed bytecode child is already stored"));
         }
-        self.resumed_child = Some((block, completion));
+        self.resumed_child = Some(Box::new((block, completion)));
         Ok(())
     }
 
     pub(in crate::runtime) fn has_resumed_child(&self, block: &BytecodeBlock) -> bool {
         self.resumed_child
             .as_ref()
-            .is_some_and(|(stored, _)| stored == block)
+            .is_some_and(|resumed| &resumed.0 == block)
     }
 
     pub(in crate::runtime) fn take_resumed_child(
@@ -246,10 +247,11 @@ impl BytecodeContinuationFrame {
         if !self.has_resumed_child(block) {
             return Ok(None);
         }
-        let (_, completion) = self
+        let resumed = self
             .resumed_child
             .take()
             .ok_or_else(|| Error::runtime("resumed bytecode child disappeared"))?;
+        let (_, completion) = *resumed;
         Ok(Some(completion))
     }
 
@@ -339,7 +341,10 @@ impl Context {
             .checked_sub(1)
             .ok_or_else(|| Error::runtime("bytecode continuation stack is empty"))?;
         if handle.activation_index != expected {
-            return Err(Error::runtime("bytecode continuation unwind mismatch"));
+            return Err(Error::runtime(format!(
+                "bytecode continuation unwind mismatch: expected {expected}, actual {}",
+                handle.activation_index
+            )));
         }
         let activation = self
             .activation_frames

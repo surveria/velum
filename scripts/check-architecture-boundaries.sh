@@ -1005,7 +1005,7 @@ check_bytecode_continuation_boundary() {
   for source in \
     'pub(in crate::runtime) struct BytecodeContinuationFrame {' \
     'program: BytecodeContinuationProgram,' \
-    'parked_state: Option<BytecodeState>,' \
+    'parked_state: Option<Box<BytecodeState>>,' \
     'enum BytecodeContinuationProgram {' \
     'Function(FunctionId),' \
     'Block { block: BytecodeBlock },' \
@@ -1132,8 +1132,9 @@ check_suspended_execution_boundary() {
   fi
 
   for source in \
+    'suspend: Option<Box<BytecodeSuspendState>>,' \
     'destructure: Option<DestructureContinuation>,' \
-    '.flat_map(DestructureContinuation::root_values),'; do
+    'pub(super) fn synchronous_root_values(&self) -> impl Iterator<Item = &Value> {'; do
     if ! grep -F -q "${source}" \
         "${repo_root}/src/runtime/bytecode/state.rs"; then
       fail "suspended execution boundary changed; destructuring must remain parked and rooted in bytecode state"
@@ -1769,7 +1770,7 @@ mutate_activation_frame_upvalues() {
 
 mutate_bytecode_continuation_state() {
   local fixture_root="$1"
-  sed -i '/    parked_state: Option<BytecodeState>,/d' \
+  sed -i '/    parked_state: Option<Box<BytecodeState>>,/d' \
     "${fixture_root}/src/runtime/bytecode/continuation.rs"
 }
 

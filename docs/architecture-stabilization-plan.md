@@ -2038,6 +2038,9 @@ AS-06b local implementation evidence (draft PR #445):
 - parent bytecode states distinguish direct awaits from suspended children,
   and typed destructuring tasks retain property/default phases, consumed keys,
   and iterator sources without replaying observable side effects;
+- suspend-only metadata and parked states use lazy boxed owners, while ordinary
+  functions retain a const-specialized synchronous driver and compact operand
+  root view;
 - non-Promise, fulfilled, rejected, pending, repeated, and nested awaits use
   Promise jobs. Rejections re-enter as throw completions;
 - `Context` and `Vm` expose `run_jobs`, `pending_job_count`, and `cancel_jobs`.
@@ -2048,9 +2051,24 @@ AS-06b local implementation evidence (draft PR #445):
   rejection, nested logical/pattern evaluation, structured control,
   cancellation, accounting reconciliation, and the top-level-await gate;
 - architecture guards and their mutation self-tests cover the explicit
-  outcome, cancellation release, and rooted destructuring owner. Complete
-  fast/correctness gates, Test262/QuickJS totals, and paired sentinel
-  performance evidence remain to be attached before the PR leaves draft.
+  outcome, cancellation release, rooted destructuring owner, and cold suspend
+  boundary. The complete engine/runner fast gate passes with 119 runner tests;
+  exact-tree correctness, Test262/QuickJS totals, and CI artifact evidence
+  remain to be attached before merge.
+
+AS-06b local performance checkpoint:
+
+- a first paired run exposed an 8.8% function-call regression (166.42 ms
+  against 152.90 ms), so the draft was not advanced to CI;
+- moving suspend metadata behind lazy owners, keeping synchronous calls
+  const-specialized, and separating hot operand roots from cold continuation
+  roots reduced the final function-call result to 160.35 ms;
+- the final adjacent branch/base medians are arithmetic 84.32/79.01 ms,
+  array-index 2.57/2.37 ms, property-read 229.96/225.02 ms, function-call
+  160.35/151.74 ms, and string-scan 70.34/68.97 ms. Every row is valid with at
+  most 0.6% sample variation; all deltas remain below 10%, while property-read,
+  function-call, and string-scan are within 5.7% of the paired base after the
+  cold-path split.
 
 ### AS-07: Collection And Weak Semantics
 

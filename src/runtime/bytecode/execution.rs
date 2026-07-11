@@ -88,12 +88,16 @@ impl Context {
             .map(BytecodeOutcome::completion)
     }
 
-    pub(in crate::runtime) fn eval_bytecode_function_body(
+    pub(in crate::runtime) fn eval_bytecode_function_body<const CAN_SUSPEND: bool>(
         &mut self,
         function: FunctionId,
         block: &BytecodeBlock,
     ) -> Result<Completion> {
         self.ensure_running_function_continuation(function)?;
+        if !CAN_SUSPEND {
+            let mut state = BytecodeState::new();
+            return self.run_synchronous_bytecode_state(block, &mut state);
+        }
         let activation_index = self
             .activation_frames
             .len()
@@ -193,7 +197,11 @@ impl Context {
         let outcome = match self.run_bytecode_state(block, state) {
             Ok(outcome) => outcome,
             Err(error) => {
-                self.pop_bytecode_continuation(frame)?;
+                if let Err(unwind) = self.pop_bytecode_continuation(frame) {
+                    return Err(Error::runtime(format!(
+                        "bytecode continuation cleanup failed after '{error}': {unwind}"
+                    )));
+                }
                 return Err(error);
             }
         };
@@ -220,8 +228,14 @@ impl Context {
         }
         while let Some(step) = block.step(state.pc)? {
             let span = step.span();
-            let _root_scope =
-                self.transient_root_scope(VmRootKind::TransientOperand, state.root_values())?;
+            let _root_scope = if state.has_suspend_state() {
+                self.transient_root_scope(VmRootKind::TransientOperand, state.root_values())?
+            } else {
+                self.transient_root_scope(
+                    VmRootKind::TransientOperand,
+                    state.synchronous_root_values(),
+                )?
+            };
             self.step().map_err(|error| error.with_runtime_span(span))?;
             let completion = match self.eval_bytecode_instruction(state, step.instruction()) {
                 Ok(completion) => completion,
@@ -231,14 +245,16 @@ impl Context {
                 if let Completion::Throw(value) = &completion {
                     self.annotate_error_value_span(value, span)?;
                 }
-                if matches!(completion, Completion::Suspended(_)) && !state.is_suspended() {
-                    state.mark_child_suspended();
-                }
                 return Ok(match completion {
-                    Completion::Suspended(awaited) => BytecodeOutcome::Suspended {
-                        awaited,
-                        span: Some(span),
-                    },
+                    Completion::Suspended(awaited) => {
+                        if !state.is_suspended() {
+                            state.mark_child_suspended();
+                        }
+                        BytecodeOutcome::Suspended {
+                            awaited,
+                            span: Some(span),
+                        }
+                    }
                     completion => BytecodeOutcome::Completed {
                         completion,
                         span: Some(span),
@@ -250,6 +266,32 @@ impl Context {
             completion: Completion::Normal(state.last.clone()),
             span: None,
         })
+    }
+
+    fn run_synchronous_bytecode_state(
+        &mut self,
+        block: &BytecodeBlock,
+        state: &mut BytecodeState,
+    ) -> Result<Completion> {
+        while let Some(step) = block.step(state.pc)? {
+            let span = step.span();
+            let _root_scope = self.transient_root_scope(
+                VmRootKind::TransientOperand,
+                state.synchronous_root_values(),
+            )?;
+            self.step().map_err(|error| error.with_runtime_span(span))?;
+            let completion = match self.eval_bytecode_instruction(state, step.instruction()) {
+                Ok(completion) => completion,
+                Err(error) => self.bytecode_error_completion(error, span)?,
+            };
+            if let Some(completion) = completion {
+                if let Completion::Throw(value) = &completion {
+                    self.annotate_error_value_span(value, span)?;
+                }
+                return Ok(completion);
+            }
+        }
+        Ok(Completion::Normal(state.last.clone()))
     }
 
     pub(super) fn eval_bytecode_expression(&mut self, block: &BytecodeBlock) -> Result<Value> {

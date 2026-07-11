@@ -13,11 +13,22 @@ pub(in crate::runtime) struct BytecodeState {
     pub(super) pc: BytecodeAddress,
     pub(super) stack: BytecodeStack,
     pub(super) last: Value,
-    suspended: bool,
-    awaiting: bool,
-    resume_ready: bool,
+    suspend: Option<Box<BytecodeSuspendState>>,
+}
+
+#[derive(Debug)]
+struct BytecodeSuspendState {
+    phase: BytecodeSuspendPhase,
     resume_completion: Option<Completion>,
     destructure: Option<DestructureContinuation>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum BytecodeSuspendPhase {
+    Running,
+    Awaiting,
+    ChildSuspended,
+    ResumeReady,
 }
 
 impl BytecodeState {
@@ -26,11 +37,7 @@ impl BytecodeState {
             pc: BytecodeAddress::new(0),
             stack: BytecodeStack::new(),
             last: Value::Undefined,
-            suspended: false,
-            awaiting: false,
-            resume_ready: false,
-            resume_completion: None,
-            destructure: None,
+            suspend: None,
         }
     }
 
@@ -38,98 +45,160 @@ impl BytecodeState {
         self.pc = BytecodeAddress::new(0);
         self.stack.clear();
         self.last = Value::Undefined;
-        self.suspended = false;
-        self.awaiting = false;
-        self.resume_ready = false;
-        self.resume_completion = None;
-        self.destructure = None;
+        self.suspend = None;
     }
 
     pub(super) fn prepare_run(&mut self) -> Result<()> {
-        if self.awaiting {
-            return Err(Error::runtime(
-                "suspended bytecode state has no resume value",
-            ));
-        }
-        if self.suspended {
-            self.suspended = false;
+        if self.suspend.is_none() {
+            self.pc = BytecodeAddress::new(0);
+            self.stack.clear();
+            self.last = Value::Undefined;
             return Ok(());
         }
-        if self.resume_ready {
-            self.resume_ready = false;
-            return Ok(());
+        self.prepare_suspended_run()
+    }
+
+    #[cold]
+    fn prepare_suspended_run(&mut self) -> Result<()> {
+        if let Some(suspend) = self.suspend.as_mut() {
+            match suspend.phase {
+                BytecodeSuspendPhase::Awaiting => {
+                    return Err(Error::runtime(
+                        "suspended bytecode state has no resume value",
+                    ));
+                }
+                BytecodeSuspendPhase::ChildSuspended | BytecodeSuspendPhase::ResumeReady => {
+                    suspend.phase = BytecodeSuspendPhase::Running;
+                    return Ok(());
+                }
+                BytecodeSuspendPhase::Running if suspend.destructure.is_some() => return Ok(()),
+                BytecodeSuspendPhase::Running => {}
+            }
         }
         self.reset();
         Ok(())
     }
 
-    pub(super) const fn mark_await_suspended(&mut self) {
-        self.suspended = true;
-        self.awaiting = true;
+    pub(super) const fn has_suspend_state(&self) -> bool {
+        self.suspend.is_some()
     }
 
-    pub(super) const fn mark_child_suspended(&mut self) {
-        self.suspended = true;
+    pub(super) fn mark_await_suspended(&mut self) {
+        self.suspend_state_mut().phase = BytecodeSuspendPhase::Awaiting;
     }
 
-    pub(super) const fn is_suspended(&self) -> bool {
-        self.suspended
+    pub(super) fn mark_child_suspended(&mut self) {
+        self.suspend_state_mut().phase = BytecodeSuspendPhase::ChildSuspended;
     }
 
-    pub(super) const fn is_awaiting(&self) -> bool {
-        self.awaiting
+    pub(super) fn is_suspended(&self) -> bool {
+        self.suspend.as_ref().is_some_and(|suspend| {
+            matches!(
+                suspend.phase,
+                BytecodeSuspendPhase::Awaiting | BytecodeSuspendPhase::ChildSuspended
+            )
+        })
     }
 
-    pub(super) const fn is_resuming(&self) -> bool {
-        self.suspended || self.resume_ready
+    pub(super) fn is_awaiting(&self) -> bool {
+        self.suspend
+            .as_ref()
+            .is_some_and(|suspend| suspend.phase == BytecodeSuspendPhase::Awaiting)
+    }
+
+    pub(super) fn is_resuming(&self) -> bool {
+        self.suspend
+            .as_ref()
+            .is_some_and(|suspend| suspend.phase != BytecodeSuspendPhase::Running)
     }
 
     pub(super) fn resume_await(&mut self, completion: Completion) -> Result<()> {
-        if !self.awaiting {
+        if !self.is_awaiting() {
             return Err(Error::runtime(
                 "bytecode state is not awaiting a resume value",
             ));
         }
-        self.suspended = false;
-        self.awaiting = false;
-        self.resume_ready = true;
-        match completion {
-            Completion::Normal(value) => self.stack.push(value),
-            completion @ Completion::Throw(_) => self.resume_completion = Some(completion),
+        let (value, resume_completion) = match completion {
+            Completion::Normal(value) => (Some(value), None),
+            completion @ Completion::Throw(_) => (None, Some(completion)),
             completion => return completion.into_result().map(|_| ()),
+        };
+        let suspend = self.suspend_state_mut();
+        suspend.phase = BytecodeSuspendPhase::ResumeReady;
+        suspend.resume_completion = resume_completion;
+        if let Some(value) = value {
+            self.stack.push(value);
         }
         Ok(())
     }
 
-    pub(super) const fn take_resume_completion(&mut self) -> Option<Completion> {
-        self.resume_completion.take()
+    pub(super) fn take_resume_completion(&mut self) -> Option<Completion> {
+        let completion = self
+            .suspend
+            .as_mut()
+            .and_then(|suspend| suspend.resume_completion.take());
+        self.release_empty_suspend_state();
+        completion
     }
 
-    pub(super) const fn begin_run(&mut self) {
-        self.resume_ready = false;
+    pub(super) fn begin_run(&mut self) {
+        if let Some(suspend) = self.suspend.as_mut()
+            && matches!(
+                suspend.phase,
+                BytecodeSuspendPhase::ChildSuspended | BytecodeSuspendPhase::ResumeReady
+            )
+        {
+            suspend.phase = BytecodeSuspendPhase::Running;
+        }
     }
 
-    pub(super) const fn has_destructure_continuation(&self) -> bool {
-        self.destructure.is_some()
+    pub(super) fn has_destructure_continuation(&self) -> bool {
+        self.suspend
+            .as_ref()
+            .is_some_and(|suspend| suspend.destructure.is_some())
     }
 
-    pub(super) const fn take_destructure_continuation(
-        &mut self,
-    ) -> Option<DestructureContinuation> {
-        self.destructure.take()
+    pub(super) fn take_destructure_continuation(&mut self) -> Option<DestructureContinuation> {
+        let continuation = self
+            .suspend
+            .as_mut()
+            .and_then(|suspend| suspend.destructure.take());
+        self.release_empty_suspend_state();
+        continuation
     }
 
     pub(super) fn store_destructure_continuation(
         &mut self,
         continuation: DestructureContinuation,
     ) -> Result<()> {
-        if self.destructure.is_some() {
+        let suspend = self.suspend_state_mut();
+        if suspend.destructure.is_some() {
             return Err(Error::runtime(
                 "bytecode destructuring continuation is already stored",
             ));
         }
-        self.destructure = Some(continuation);
+        suspend.destructure = Some(continuation);
         Ok(())
+    }
+
+    fn suspend_state_mut(&mut self) -> &mut BytecodeSuspendState {
+        self.suspend.get_or_insert_with(|| {
+            Box::new(BytecodeSuspendState {
+                phase: BytecodeSuspendPhase::Running,
+                resume_completion: None,
+                destructure: None,
+            })
+        })
+    }
+
+    fn release_empty_suspend_state(&mut self) {
+        if self.suspend.as_ref().is_some_and(|suspend| {
+            suspend.phase == BytecodeSuspendPhase::Running
+                && suspend.resume_completion.is_none()
+                && suspend.destructure.is_none()
+        }) {
+            self.suspend = None;
+        }
     }
 
     pub(super) fn next_pc(&self) -> Result<BytecodeAddress> {
@@ -141,17 +210,46 @@ impl BytecodeState {
         Ok(BytecodeAddress::new(next))
     }
 
-    pub(in crate::runtime) fn root_values(&self) -> impl Iterator<Item = &Value> {
+    pub(in crate::runtime) fn root_values(&self) -> BytecodeStateRootValues<'_> {
+        let mut cold = Vec::new();
+        if let Some(suspend) = self.suspend.as_ref() {
+            if let Some(value) = suspend
+                .resume_completion
+                .as_ref()
+                .and_then(completion_value)
+            {
+                cold.push(value);
+            }
+            if let Some(destructure) = suspend.destructure.as_ref() {
+                cold.extend(destructure.root_values());
+            }
+        }
+        self.root_values_with_cold(cold)
+    }
+
+    pub(super) fn synchronous_root_values(&self) -> impl Iterator<Item = &Value> {
         self.stack
             .values()
             .iter()
             .chain(std::iter::once(&self.last))
-            .chain(self.resume_completion.iter().filter_map(completion_value))
-            .chain(
-                self.destructure
-                    .iter()
-                    .flat_map(DestructureContinuation::root_values),
-            )
+    }
+
+    fn root_values_with_cold<'state>(
+        &'state self,
+        cold: Vec<&'state Value>,
+    ) -> BytecodeStateRootValues<'state> {
+        BytecodeStateRootValues {
+            hot: self
+                .stack
+                .values()
+                .iter()
+                .chain(std::iter::once(&self.last)),
+            cold: if cold.is_empty() {
+                None
+            } else {
+                Some(cold.into_iter())
+            },
+        }
     }
 
     pub(super) fn complete(&mut self, completion: BytecodeCompletion) -> Result<Completion> {
@@ -164,6 +262,21 @@ impl BytecodeState {
             BytecodeCompletion::Return => Ok(Completion::Return(self.stack.pop_single()?)),
             BytecodeCompletion::Throw => Ok(Completion::Throw(self.stack.pop_single()?)),
         }
+    }
+}
+
+pub(in crate::runtime) struct BytecodeStateRootValues<'state> {
+    hot: std::iter::Chain<std::slice::Iter<'state, Value>, std::iter::Once<&'state Value>>,
+    cold: Option<std::vec::IntoIter<&'state Value>>,
+}
+
+impl<'state> Iterator for BytecodeStateRootValues<'state> {
+    type Item = &'state Value;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.hot
+            .next()
+            .or_else(|| self.cold.as_mut().and_then(Iterator::next))
     }
 }
 

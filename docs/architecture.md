@@ -92,6 +92,12 @@ array-element phases, consumed keys, and live iterator records therefore
 survive suspension without repeating computed keys, property reads, iterator
 steps, or already-created bindings.
 
+Suspend-only state stays behind lazy boxed owners. Ordinary functions use a
+const-specialized synchronous call path and the original compact operand-root
+iterator; control and async execution consult cold resume roots only when a
+state is actually parked. This keeps pending execution explicit without
+making every synchronous instruction traverse the async ownership graph.
+
 Awaited non-Promise values and already settled Promises still resume through a
 later Promise job. Rejection is injected into the awaiting bytecode state as a
 throw completion, so surrounding catch/finally records observe the same path
