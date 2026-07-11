@@ -660,7 +660,7 @@ impl Parser {
                 &TokenKind::Equal,
                 "destructuring declaration requires an initializer",
             )?;
-            let init = self.expression()?;
+            let init = self.assignment_expression()?;
             return Ok(self.statement_node(
                 start,
                 Stmt::PatternDecl {
@@ -672,7 +672,7 @@ impl Parser {
         }
         let name = self.consume_binding_identifier("expected binding name")?;
         let init = if self.match_kind(&TokenKind::Equal) {
-            Some(self.expression()?)
+            Some(self.assignment_expression()?)
         } else if kind == DeclKind::Const {
             return Err(self.parse_error("const declaration requires an initializer"));
         } else {

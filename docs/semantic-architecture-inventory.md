@@ -406,6 +406,17 @@ JavaScript, and resource-limit errors remain separate typed channels while
 `Error::source_span` and built-in Error metadata expose their optional origin.
 No runtime owner retains source text, tokens, or AST.
 
+AS-09d adds one explicit grammar seam between full `Expression` and
+delimiter-sensitive `AssignmentExpression` contexts. `Expr::Sequence` is the
+only comma-expression AST owner; binding layout and capture collection recurse
+through it, and the compiler lowers every non-final operand to the existing
+`Pop` instruction. Call arguments, declaration initializers, array elements,
+object values and computed keys, binding defaults, and class-field initializers
+enter through `assignment_expression`, while parentheses, computed-member
+access, return/throw, conditions, and expression statements retain the full
+expression entrypoint. No sequence-specific runtime store, opcode, or semantic
+facade exists.
+
 ## VM Store, Root, And Accounting Map
 
 `Context` is the aggregate owner. AS-05b1a adds one executable direct-root
@@ -667,7 +678,8 @@ decision sequence:
 | AS-08b | named control recognizers and built-in specialization evidence | PR #449 merged as `7802932e`; source-shaped control execution is removed, one broad guarded reduction remains, and exact-tree/canonical evidence is green |
 | AS-09a | unary bitwise NOT compatibility | PR #450 merged as `672d57a2`; 32 new Test262 variants, exact-tree correctness, paired performance, and canonical publication are green |
 | AS-09b | dynamic compilation error boundary | PR #451 merged as `b11ce20f`; one typed SyntaxError mapper preserves dynamic source spans, adds 198 full-corpus variants with no removed pass, and has green exact-tree/canonical evidence |
-| AS-09c | static class accessor and function descriptor boundary | draft PR #452 removes parser/runtime static-accessor rejections, reuses `ObjectProperty` descriptor payloads for JavaScript functions, and adds 236 full-corpus variants / 118 files with no removed pass while preserving 96/96 QuickJS cases |
+| AS-09c | static class accessor and function descriptor boundary | PR #452 merged as `6f185e75`; shared JavaScript-function descriptors add 236 full-corpus variants / 118 files with no removed pass, and exact-tree/canonical evidence is green |
+| AS-09d | comma/sequence expression grammar boundary | draft PR #453 adds one sequence AST owner, reuses ordinary assignment parsing and `Pop` lowering, passes 16/17 focused linked variants, and keeps the named-function/TCO residual separate |
 
 ## AS-01b Guard Specification
 
@@ -681,6 +693,7 @@ must fail on growth.
 | runtime/frontend separation | no `crate::ast`, parser, or lexer imports under `src/runtime` or `src/bytecode` | a runtime dependency on parser AST/frontend implementation |
 | harness source names | zero compiler comparisons for `print` or `assert.throws`; only the runtime constructor fallback for `Test262Error` remains | another compiler/runtime source-name special case or growth in the recorded fallback |
 | harness opcodes | none | any harness-only bytecode instruction or use site |
+| sequence expressions | one `Expr::Sequence` parser/compiler owner, shared binding traversal, ordinary `Pop` lowering, and no dedicated bytecode variant | a second parser/compiler owner, a sequence runtime/opcode path, or loss of intermediate-value discard semantics |
 | semantic duplicates | the AS-03a1 equality owner, the AS-03a2 primitive/number/string/boolean owners, the AS-03b1a property-key owner, the AS-03b1b integer/length/index owners, and the AS-02c callable/constructor predicates | a new definition instead of delegation to an existing shared operation |
 | object side tables | Promise, collection, and iterator associations recorded above; bound-function payload store | a new object-id-indexed association without an inventory/plan update |
 | optimization owners | one direct optimizer-state owner, eight recorded linear modules, three function fast-path files, and four reusable control modules; zero loop/catch/try source-shape recognizers | direct optimizer state access elsewhere, a new workload-shaped module, or a compiler/runtime source-shape recognizer without reusable plan evidence |

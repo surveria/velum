@@ -205,7 +205,7 @@ impl Parser {
             }
         }
         let initializer = if self.match_kind(&TokenKind::Equal) {
-            Some(self.expression()?)
+            Some(self.assignment_expression()?)
         } else {
             None
         };

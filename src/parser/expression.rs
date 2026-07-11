@@ -25,7 +25,27 @@ struct ArrowSignature {
 
 impl Parser {
     pub(super) fn expression(&mut self) -> Result<Expression> {
+        self.with_expression_depth(Self::sequence_expression)
+    }
+
+    pub(super) fn assignment_expression(&mut self) -> Result<Expression> {
         self.with_expression_depth(Self::assignment)
+    }
+
+    fn sequence_expression(&mut self) -> Result<Expression> {
+        let first = self.assignment()?;
+        if !self.match_kind(&TokenKind::Comma) {
+            return Ok(first);
+        }
+        let start = first.span();
+        let mut expressions = vec![first];
+        loop {
+            expressions.push(self.assignment()?);
+            if !self.match_kind(&TokenKind::Comma) {
+                break;
+            }
+        }
+        Ok(self.expression_node(start, Expr::Sequence(expressions)))
     }
 
     pub(super) fn unary(&mut self) -> Result<Expression> {
@@ -437,10 +457,10 @@ impl Parser {
         loop {
             if self.match_kind(&TokenKind::DotDotDot) {
                 let start = self.previous_span();
-                let expression = self.expression()?;
+                let expression = self.assignment_expression()?;
                 args.push(self.expression_node(start, Expr::Spread(Box::new(expression))));
             } else {
-                args.push(self.expression()?);
+                args.push(self.assignment_expression()?);
             }
             if !self.match_kind(&TokenKind::Comma) {
                 break;

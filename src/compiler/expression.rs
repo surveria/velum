@@ -72,6 +72,7 @@ impl BytecodeCompiler<'_> {
                 ));
             }
             Expr::Parenthesized(expr) => return self.compile_expr(expr),
+            Expr::Sequence(expressions) => return self.compile_sequence_expr(expressions),
             Expr::Await(expr) => {
                 self.compile_expr(expr)?;
                 self.emit(BytecodeInstruction::Await);
@@ -131,6 +132,17 @@ impl BytecodeCompiler<'_> {
             Expr::New { constructor, args } => self.compile_new_expr(constructor, args)?,
         }
         Ok(())
+    }
+
+    fn compile_sequence_expr(&mut self, expressions: &[Expression]) -> Result<()> {
+        let Some((last, leading)) = expressions.split_last() else {
+            return Err(Error::runtime("sequence expression cannot be empty"));
+        };
+        for expression in leading {
+            self.compile_expr(expression)?;
+            self.emit(BytecodeInstruction::Pop);
+        }
+        self.compile_expr(last)
     }
 
     fn compile_template_literal(

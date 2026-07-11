@@ -918,6 +918,58 @@ check_function_accessor_boundary() {
   done
 }
 
+check_sequence_expression_boundary() {
+  local parser_owners
+  local compiler_owners
+  local compiler_body
+  local bytecode_owners
+
+  parser_owners="$(
+    cd "${repo_root}"
+    grep -R -l -F --include='*.rs' \
+      'self.expression_node(start, Expr::Sequence(expressions))' src/parser || true
+  )"
+  compare_set "sequence expression parser owner allowlist" \
+    "${parser_owners}" \
+    'src/parser/expression.rs'
+
+  compiler_owners="$(
+    cd "${repo_root}"
+    grep -R -l -E --include='*.rs' \
+      'fn[[:space:]]+compile_sequence_expr[[:space:]]*\(' src/compiler || true
+  )"
+  compare_set "sequence expression compiler owner allowlist" \
+    "${compiler_owners}" \
+    'src/compiler/expression.rs'
+  compiler_body="$(
+    awk '
+      /fn compile_sequence_expr/ { inside = 1 }
+      inside { print }
+      inside && /^    }/ { exit }
+    ' "${repo_root}/src/compiler/expression.rs"
+  )"
+
+  bytecode_owners="$(
+    cd "${repo_root}"
+    grep -R -l -F --include='*.rs' 'Sequence' src/bytecode || true
+  )"
+  compare_set "sequence expression bytecode owner allowlist" \
+    "${bytecode_owners}" \
+    ''
+
+  if ! grep -F -q 'Sequence(Vec<Expression>),' \
+      "${repo_root}/src/ast/expression.rs" \
+    || ! grep -F -q 'pub(super) fn assignment_expression(&mut self)' \
+      "${repo_root}/src/parser/expression.rs" \
+    || ! grep -F -q 'self.emit(BytecodeInstruction::Pop);' <<<"${compiler_body}" \
+    || ! grep -F -q 'Expr::Sequence(expressions) => self.analyze_exprs(expressions, scope, function),' \
+      "${repo_root}/src/binding_layout/builder.rs" \
+    || ! grep -F -q 'Expr::Sequence(expressions) => self.collect_exprs(expressions),' \
+      "${repo_root}/src/compiler/function.rs"; then
+    fail "sequence expression boundary changed; one AST node must reuse assignment parsing, Pop bytecode, and shared binding analysis"
+  fi
+}
+
 check_direct_root_boundary() {
   local root_kinds
   local source
@@ -1764,6 +1816,7 @@ run_checks() {
   check_semantic_duplicate_allowlists
   check_completion_error_boundary
   check_function_accessor_boundary
+  check_sequence_expression_boundary
   check_direct_root_boundary
   check_activation_frame_boundary
   check_bytecode_continuation_boundary
@@ -1897,6 +1950,12 @@ mutate_function_accessor_owner() {
   local fixture_root="$1"
   printf '\nfn define_function_property_key() {}\n' \
     >>"${fixture_root}/src/runtime/bytecode/class.rs"
+}
+
+mutate_sequence_expression_pop() {
+  local fixture_root="$1"
+  sed -i '/fn compile_sequence_expr/,/^    }/ { /self.emit(BytecodeInstruction::Pop);/d; }' \
+    "${fixture_root}/src/compiler/expression.rs"
 }
 
 mutate_host_local_value_identity() {
@@ -2320,6 +2379,8 @@ run_self_tests() {
     'dynamic compilation error owner allowlist changed' mutate_dynamic_compilation_owner
   expect_guard_failure "${temp_dir}" function-accessor-owner \
     'function accessor owner allowlist changed' mutate_function_accessor_owner
+  expect_guard_failure "${temp_dir}" sequence-expression-pop \
+    'sequence expression boundary changed' mutate_sequence_expression_pop
   expect_guard_failure "${temp_dir}" host-local-value-identity \
     'host local-value boundary changed' mutate_host_local_value_identity
   expect_guard_failure "${temp_dir}" javascript-exception-visibility \

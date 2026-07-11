@@ -113,7 +113,7 @@ impl Parser {
 
     fn optional_binding_default(&mut self) -> Result<Option<crate::ast::Expression>> {
         if self.match_kind(&TokenKind::Equal) {
-            return Ok(Some(self.expression()?));
+            return Ok(Some(self.assignment_expression()?));
         }
         Ok(None)
     }

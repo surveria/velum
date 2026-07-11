@@ -45,7 +45,7 @@ impl Parser {
     fn object_literal_property(&mut self) -> Result<ObjectProperty> {
         let start = self.current_span();
         if self.match_kind(&TokenKind::DotDotDot) {
-            let value = self.expression()?;
+            let value = self.assignment_expression()?;
             let key = ObjectPropertyKey::Static(self.static_name(SPREAD_PROPERTY_KEY.to_owned())?);
             return Ok(ObjectProperty {
                 key,
@@ -70,7 +70,7 @@ impl Parser {
         }
         let name = self.object_property_key()?;
         if self.match_kind(&TokenKind::Colon) {
-            let value = self.expression()?;
+            let value = self.assignment_expression()?;
             return Ok(ObjectProperty {
                 key: name.into_key(),
                 kind: ObjectPropertyKind::Init,
@@ -247,7 +247,7 @@ impl Parser {
         loop {
             if self.match_kind(&TokenKind::DotDotDot) {
                 let spread_start = self.previous_span();
-                let expression = self.expression()?;
+                let expression = self.assignment_expression()?;
                 elements
                     .push(self.expression_node(spread_start, Expr::Spread(Box::new(expression))));
             } else if self.peek_kind_is(0, &TokenKind::Comma)
@@ -255,7 +255,7 @@ impl Parser {
             {
                 elements.push(Expression::new(Expr::ArrayHole, self.current_span()));
             } else {
-                elements.push(self.expression()?);
+                elements.push(self.assignment_expression()?);
             }
             if !self.match_kind(&TokenKind::Comma) {
                 break;
@@ -271,7 +271,7 @@ impl Parser {
 
     pub(super) fn object_property_key(&mut self) -> Result<ObjectPropertyName> {
         if self.match_kind(&TokenKind::LBracket) {
-            let expr = self.expression()?;
+            let expr = self.assignment_expression()?;
             self.consume(
                 &TokenKind::RBracket,
                 "expected ']' after computed object property name",

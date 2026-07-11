@@ -519,6 +519,7 @@ impl LayoutBuilder {
             Expr::Identifier(binding) => self.resolve(binding, scope, function),
             Expr::Class(class) => self.analyze_class(class, scope, function),
             Expr::SuperCall { args } => self.analyze_exprs(args, scope, function),
+            Expr::Sequence(expressions) => self.analyze_exprs(expressions, scope, function),
             Expr::Parenthesized(expr)
             | Expr::Spread(expr)
             | Expr::Unary { expr, .. }

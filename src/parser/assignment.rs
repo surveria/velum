@@ -108,6 +108,7 @@ impl Parser {
             | Expr::This
             | Expr::NewTarget
             | Expr::Parenthesized(_)
+            | Expr::Sequence(_)
             | Expr::Unary { .. }
             | Expr::Await(_)
             | Expr::Update { .. }

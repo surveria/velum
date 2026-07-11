@@ -346,6 +346,7 @@ impl CaptureBindingCollector {
             | Expr::MethodFunction { params, body, .. } => self.collect_function_body(params, body),
             Expr::Class(class) => self.collect_class(class),
             Expr::SuperCall { args } => self.collect_exprs(args),
+            Expr::Sequence(expressions) => self.collect_exprs(expressions),
             Expr::Identifier(binding) => self.collect_binding(binding),
             Expr::New { constructor, args } => {
                 self.collect_expr(constructor);
