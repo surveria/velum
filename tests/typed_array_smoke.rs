@@ -180,6 +180,135 @@ fn rejects_misaligned_views_and_calls_without_new() -> TestResult {
     ensure_value(&value, &Value::Number(4.0))
 }
 
+#[test]
+fn exposes_shared_typed_array_intrinsics_and_accessors() -> TestResult {
+    ensure_eval(
+        r#"
+        let intrinsic = Object.getPrototypeOf(Uint8Array);
+        let shared = Object.getPrototypeOf(Uint8Array.prototype);
+        let lengthDescriptor = Object.getOwnPropertyDescriptor(shared, "length");
+        let tagDescriptor = Object.getOwnPropertyDescriptor(shared, Symbol.toStringTag);
+        let speciesDescriptor = Object.getOwnPropertyDescriptor(intrinsic, Symbol.species);
+        let value = new Uint8Array([1, 2, 3]);
+
+        intrinsic.name === "TypedArray" && intrinsic.length === 0 &&
+            Object.getPrototypeOf(Int16Array) === intrinsic &&
+            Object.getPrototypeOf(Int16Array.prototype) === shared &&
+            shared.constructor === intrinsic && value.constructor === Uint8Array &&
+            value.length === 3 && value.byteLength === 3 && value.byteOffset === 0 &&
+            value.buffer.byteLength === 3 && value[Symbol.toStringTag] === "Uint8Array" &&
+            typeof lengthDescriptor.get === "function" &&
+            lengthDescriptor.enumerable === false && lengthDescriptor.configurable === true &&
+            typeof tagDescriptor.get === "function" &&
+            typeof speciesDescriptor.get === "function" &&
+            Uint8Array[Symbol.species] === Uint8Array &&
+            typeof Uint8Array.from === "function" && typeof Uint8Array.of === "function"
+            ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
+fn supports_typed_array_callbacks_search_and_copy_methods() -> TestResult {
+    ensure_eval(
+        r#"
+        let source = new Uint8Array([3, 1, 2, 3]);
+        let visited = [];
+        source.forEach((value, index) => visited.push(value + index));
+        let mapped = source.map(value => value + 1);
+        let filtered = source.filter(value => value > 1);
+        let copy = source.slice(1, 3);
+        let reversed = source.toReversed();
+        let replaced = source.with(1, 9);
+
+        visited.join(",") === "3,2,4,6" &&
+            mapped instanceof Uint8Array && mapped.join(",") === "4,2,3,4" &&
+            filtered instanceof Uint8Array && filtered.join(",") === "3,2,3" &&
+            copy instanceof Uint8Array && copy.join(",") === "1,2" &&
+            reversed.join(",") === "3,2,1,3" && replaced.join(",") === "3,9,2,3" &&
+            source.every(value => value > 0) && source.some(value => value === 2) &&
+            source.find(value => value === 2) === 2 &&
+            source.findIndex(value => value === 3) === 0 &&
+            source.findLast(value => value === 3) === 3 &&
+            source.findLastIndex(value => value === 3) === 3 &&
+            source.reduce((sum, value) => sum + value, 0) === 9 &&
+            source.reduceRight((sum, value) => sum * 10 + value, 0) === 3213 &&
+            source.includes(2) && source.indexOf(3) === 0 && source.lastIndexOf(3) === 3 &&
+            source.at(-1) === 3 && source.toString() === "3,1,2,3" &&
+            source.toLocaleString() === "3,1,2,3" ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
+fn supports_typed_array_mutation_sort_iteration_and_statics() -> TestResult {
+    ensure_eval(
+        r#"
+        let target = new Uint8Array([1, 2, 3, 4]);
+        target.set(target.subarray(0, 3), 1);
+        let shared = target.subarray(1, 3);
+        shared[0] = 9;
+        target.copyWithin(2, 0, 2).fill(7, 3);
+
+        let sorted = new Float64Array([10, 2, NaN, -0, 0]).toSorted();
+        let mutable = new Float64Array([10, 2, NaN, -0, 0]);
+        mutable.sort();
+        let keyItems = [];
+        for (let key of target.keys()) keyItems.push(key);
+        let valueItems = [];
+        for (let value of target.values()) valueItems.push(value);
+        let entries = [];
+        for (let entry of target.entries()) entries.push(entry.join(":"));
+        let keys = keyItems.join(",");
+        let values = valueItems.join(",");
+        let from = Uint16Array.from([1, 2, 3], value => value * 2);
+        let of = Int8Array.of(127, 128, -129);
+
+        target.join(",") === "1,9,1,7" && shared.buffer === target.buffer &&
+            sorted[0] === 0 && 1 / sorted[0] === -Infinity && sorted[1] === 0 &&
+            sorted[2] === 2 && sorted[3] === 10 && Number.isNaN(sorted[4]) &&
+            mutable.join(",") === sorted.join(",") && keys === "0,1,2,3" &&
+            values === "1,9,1,7" && entries.join(",") === "0:1,1:9,2:1,3:7" &&
+            from instanceof Uint16Array && from.join(",") === "2,4,6" &&
+            of.join(",") === "127,-128,127" ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
+#[test]
+fn honors_species_and_rejects_invalid_receivers() -> TestResult {
+    ensure_eval(
+        r#"
+        Object.defineProperty(Uint8Array, Symbol.species, {
+          value: Int16Array,
+          configurable: true
+        });
+        let mapped = new Uint8Array([1, 2]).map(value => value + 300);
+        let failures = 0;
+        try { Object.getPrototypeOf(Uint8Array.prototype).map.call([], value => value); }
+        catch (error) { if (error instanceof TypeError) failures = failures + 1; }
+        try { Object.getPrototypeOf(Uint8Array.prototype).set.call({}, [1]); }
+        catch (error) { if (error instanceof TypeError) failures = failures + 1; }
+        try { new Uint8Array(2).set([1, 2, 3]); }
+        catch (error) { if (error instanceof RangeError) failures = failures + 1; }
+
+        mapped instanceof Int16Array && mapped.join(",") === "301,302" && failures === 3
+            ? 42 : 0
+        "#,
+        &Value::Number(42.0),
+    )
+}
+
+fn ensure_eval(source: &str, expected: &Value) -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let actual = context.eval(source)?;
+    ensure_value(&actual, expected)
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

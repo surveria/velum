@@ -518,6 +518,12 @@ impl Context {
             NativeFunctionKind::DataView(kind) => {
                 self.eval_data_view_native_function_kind(kind, args, this_value)
             }
+            NativeFunctionKind::TypedArrayIntrinsic => {
+                Err(Error::type_error("%TypedArray% is an abstract constructor"))
+            }
+            NativeFunctionKind::TypedArrayPrototype(kind) => {
+                self.eval_typed_array_native_function_kind(kind, args, this_value)
+            }
             NativeFunctionKind::JsonIsRawJson => self.eval_json_is_raw_json(args),
             NativeFunctionKind::JsonParse => self.eval_json_parse(args),
             NativeFunctionKind::JsonRawJson => self.eval_json_raw_json(args),

@@ -6,9 +6,9 @@ use crate::{
     runtime::call::RuntimeCallArgs,
     runtime::control::Completion,
     runtime::object::{
-        DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, OwnPropertyDescriptor,
-        PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate,
-        PropertyWritable,
+        AccessorPropertyUpdate, DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit,
+        OwnPropertyDescriptor, PropertyConfigurable, PropertyEnumerable, PropertyKey,
+        PropertyLookup, PropertyUpdate, PropertyWritable,
     },
     runtime::{CompiledBindingFrame, Context},
     syntax::{StaticFunctionId, StaticName},
@@ -628,6 +628,9 @@ impl Context {
         id: NativeFunctionId,
     ) -> Result<Value> {
         let kind = self.native_function(id)?.kind();
+        if matches!(kind, NativeFunctionKind::TypedArray(_)) {
+            return self.typed_array_intrinsic_constructor_value();
+        }
         if matches!(
             kind,
             NativeFunctionKind::AsyncFunction | NativeFunctionKind::AsyncGeneratorFunction
@@ -641,28 +644,24 @@ impl Context {
         &self,
         id: NativeFunctionId,
         property: PropertyLookup<'_>,
-    ) -> Result<Option<DataPropertyDescriptor>> {
+    ) -> Result<Option<OwnPropertyDescriptor>> {
         let function = self.native_function(id)?;
         let property_name = property.name();
         let property_kind = FunctionPropertyKind::from_name(property_name);
         if let Some(descriptor) = function.properties().intrinsic_descriptor(property_kind) {
-            return Ok(Some(descriptor));
+            return Ok(Some(OwnPropertyDescriptor::Data(descriptor)));
         }
         if let Some(value) = function.intrinsic_property(property_name) {
-            return Ok(Some(DataPropertyDescriptor::new(
-                value,
-                PropertyWritable::No,
-                PropertyEnumerable::No,
-                PropertyConfigurable::No,
+            return Ok(Some(OwnPropertyDescriptor::Data(
+                DataPropertyDescriptor::new(
+                    value,
+                    PropertyWritable::No,
+                    PropertyEnumerable::No,
+                    PropertyConfigurable::No,
+                ),
             )));
         }
-        Ok(function
-            .properties()
-            .own_property_descriptor(property)
-            .and_then(|descriptor| match descriptor {
-                OwnPropertyDescriptor::Data(descriptor) => Some(descriptor),
-                OwnPropertyDescriptor::Accessor(_) => None,
-            }))
+        Ok(function.properties().own_property_descriptor(property))
     }
 
     pub(crate) fn has_native_function_property_lookup(
@@ -683,6 +682,30 @@ impl Context {
                 .is_some());
         }
         Ok(function.has_intrinsic_property(property_name) || function.properties().has(property))
+    }
+
+    pub(crate) fn has_native_function_property_including_prototype_lookup(
+        &mut self,
+        id: NativeFunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<bool> {
+        if self.has_native_function_property_lookup(id, property)? {
+            return Ok(true);
+        }
+        let kind = self.native_function(id)?.kind();
+        if !matches!(kind, NativeFunctionKind::TypedArray(_))
+            && !self.should_materialize_function_prototype_for(property)
+        {
+            return Ok(false);
+        }
+        let parent = self.native_function_object_prototype_value(id)?;
+        if matches!(parent, Value::Null | Value::Undefined) {
+            return Ok(false);
+        }
+        let Some(presence) = self.semantic_property_presence(&parent, property)? else {
+            return Ok(false);
+        };
+        self.finish_semantic_property_presence(presence, property)
     }
 
     pub(crate) fn set_native_function_property_key(
@@ -724,6 +747,24 @@ impl Context {
             key,
             property_kind,
             PropertyUpdate::Data(update),
+            max_properties,
+        )
+    }
+
+    pub(crate) fn define_native_function_accessor_property_key(
+        &mut self,
+        id: NativeFunctionId,
+        property: &str,
+        key: PropertyKey,
+        update: AccessorPropertyUpdate,
+    ) -> Result<()> {
+        let property_kind = FunctionPropertyKind::from_name(property);
+        let max_properties = self.limits.max_object_properties;
+        let function = self.native_function_mut(id)?;
+        function.properties_mut().define_property(
+            key,
+            property_kind,
+            PropertyUpdate::Accessor(update),
             max_properties,
         )
     }

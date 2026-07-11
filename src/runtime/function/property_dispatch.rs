@@ -8,56 +8,81 @@ use crate::{
 };
 
 use super::properties::FunctionPropertyKind;
+use crate::runtime::native::NativeFunctionKind;
 
 impl Context {
     pub(crate) fn get_native_function_property_lookup(
         &mut self,
         id: NativeFunctionId,
+        receiver: &Value,
         property: PropertyLookup<'_>,
     ) -> Result<Value> {
         let property_name = property.name();
         let property_kind = FunctionPropertyKind::from_name(property_name);
-        let own_value = {
+        let own_descriptor = {
             let function = self.native_function(id)?;
-            function
+            let intrinsic = function
                 .properties()
                 .intrinsic_value(property_kind)
-                .or_else(|| function.intrinsic_property(property_name))
+                .map(|value| {
+                    OwnPropertyDescriptor::Data(
+                        crate::runtime::object::DataPropertyDescriptor::new(
+                            value,
+                            crate::runtime::object::PropertyWritable::No,
+                            crate::runtime::object::PropertyEnumerable::No,
+                            crate::runtime::object::PropertyConfigurable::Yes,
+                        ),
+                    )
+                });
+            intrinsic
                 .or_else(|| {
-                    function
-                        .properties()
-                        .own_property_descriptor(property)
-                        .and_then(|descriptor| match descriptor {
-                            OwnPropertyDescriptor::Data(descriptor) => Some(descriptor.value()),
-                            OwnPropertyDescriptor::Accessor(_) => None,
-                        })
+                    function.intrinsic_property(property_name).map(|value| {
+                        OwnPropertyDescriptor::Data(
+                            crate::runtime::object::DataPropertyDescriptor::new(
+                                value,
+                                crate::runtime::object::PropertyWritable::No,
+                                crate::runtime::object::PropertyEnumerable::No,
+                                crate::runtime::object::PropertyConfigurable::No,
+                            ),
+                        )
+                    })
                 })
+                .or_else(|| function.properties().own_property_descriptor(property))
         };
-        if let Some(value) = own_value {
-            return self.checked_value(value);
+        if let Some(descriptor) = own_descriptor {
+            return match descriptor {
+                OwnPropertyDescriptor::Data(descriptor) => self.checked_value(descriptor.value()),
+                OwnPropertyDescriptor::Accessor(descriptor) if descriptor.has_getter() => {
+                    self.call_accessor_getter(descriptor.get_ref(), receiver.clone())
+                }
+                OwnPropertyDescriptor::Accessor(_) => Ok(Value::Undefined),
+            };
         }
-        self.get_native_function_object_prototype_property(id, property)
+        self.get_native_function_object_prototype_property(id, receiver, property)
     }
 
     fn get_native_function_object_prototype_property(
         &mut self,
         id: NativeFunctionId,
+        receiver: &Value,
         property: PropertyLookup<'_>,
     ) -> Result<Value> {
-        if !self.should_materialize_function_prototype_for(property) {
+        let kind = self.native_function(id)?.kind();
+        if !matches!(kind, NativeFunctionKind::TypedArray(_))
+            && !self.should_materialize_function_prototype_for(property)
+        {
             return Ok(Value::Undefined);
         }
         let prototype = self.native_function_object_prototype_value(id)?;
         let Some(property) = self.known_function_prototype_lookup(property) else {
             return Ok(Value::Undefined);
         };
-        let receiver = Value::NativeFunction(id);
         let Some(read) =
-            self.semantic_property_read_with_receiver(&prototype, &receiver, property)?
+            self.semantic_property_read_with_receiver(&prototype, receiver, property)?
         else {
             return Ok(Value::Undefined);
         };
-        self.finish_semantic_property_read(read, &receiver, property)
+        self.finish_semantic_property_read(read, receiver, property)
     }
 
     fn known_function_prototype_lookup<'a>(

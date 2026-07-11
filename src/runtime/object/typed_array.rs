@@ -204,6 +204,10 @@ impl TypedArrayView {
         self.buffer_object
     }
 
+    pub(in crate::runtime) const fn element_kind(&self) -> TypedArrayElementKind {
+        self.element_kind
+    }
+
     pub fn read(&self, index: usize) -> Result<Option<f64>> {
         let Some(absolute) = self.element_offset(index)? else {
             return Ok(None);

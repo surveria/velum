@@ -71,4 +71,31 @@ if (failures !== 4) {
   throw new Test262Error("typed storage constructor error mismatch");
 }
 
+var typedArrayIntrinsic = Object.getPrototypeOf(Uint8Array);
+var sharedTypedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype);
+var methodSource = new Uint8Array([3, 1, 2, 3]);
+var mapped = methodSource.map(function(value) { return value + 1; });
+var filtered = methodSource.filter(function(value) { return value > 1; });
+var sliced = methodSource.slice(1, 3);
+var reversed = methodSource.toReversed();
+var replaced = methodSource.with(1, 9);
+var sorted = new Float64Array([10, 2, NaN, -0, 0]).toSorted();
+var subarray = methodSource.subarray(1, 3);
+subarray[0] = 8;
+
+if (typedArrayIntrinsic.name !== "TypedArray" || typedArrayIntrinsic.length !== 0 ||
+    Object.getPrototypeOf(Int16Array) !== typedArrayIntrinsic ||
+    Object.getPrototypeOf(Int16Array.prototype) !== sharedTypedArrayPrototype ||
+    sharedTypedArrayPrototype.constructor !== typedArrayIntrinsic ||
+    methodSource[Symbol.toStringTag] !== "Uint8Array" ||
+    mapped.join(",") !== "4,2,3,4" || filtered.join(",") !== "3,2,3" ||
+    sliced.join(",") !== "1,2" || reversed.join(",") !== "3,2,1,3" ||
+    replaced.join(",") !== "3,9,2,3" || methodSource.join(",") !== "3,8,2,3" ||
+    subarray.buffer !== methodSource.buffer || 1 / sorted[0] !== -Infinity ||
+    sorted[2] !== 2 || sorted[3] !== 10 || !Number.isNaN(sorted[4]) ||
+    Uint16Array.from([1, 2], function(value) { return value * 2; }).join(",") !== "2,4" ||
+    Int8Array.of(127, 128, -129).join(",") !== "127,-128,127") {
+  throw new Test262Error("typed array prototype method mismatch");
+}
+
 42;

@@ -147,9 +147,9 @@ impl Context {
             Value::Function(id) => {
                 self.function_own_property_descriptor_lookup(*id, property.lookup())
             }
-            Value::NativeFunction(id) => Ok(self
-                .native_function_own_property_descriptor_lookup(*id, property.lookup())?
-                .map(OwnPropertyDescriptor::Data)),
+            Value::NativeFunction(id) => {
+                self.native_function_own_property_descriptor_lookup(*id, property.lookup())
+            }
             Value::HostFunction(_) => Err(Error::runtime(
                 "property descriptor target cannot be converted to an object",
             )),
