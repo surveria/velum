@@ -412,7 +412,7 @@ impl Parser {
         let Some(target) = Self::assignment_target(target) else {
             return Err(self.parse_error("invalid for-in assignment target"));
         };
-        let object = self.expression()?;
+        let object = self.for_head_rhs(head)?;
         Ok(Some((ForInTarget::Assignment(target), object, head)))
     }
 
@@ -425,7 +425,7 @@ impl Parser {
             let Some(head) = self.match_for_head_kind() else {
                 return Ok(None);
             };
-            let object = self.expression()?;
+            let object = self.for_head_rhs(head)?;
             let target = ForInTarget::PatternBinding {
                 pattern: Box::new(pattern),
                 kind,
@@ -436,8 +436,15 @@ impl Parser {
         let Some(head) = self.match_for_head_kind() else {
             return Ok(None);
         };
-        let object = self.expression()?;
+        let object = self.for_head_rhs(head)?;
         Ok(Some((ForInTarget::Binding { name, kind }, object, head)))
+    }
+
+    fn for_head_rhs(&mut self, head: ForHeadKind) -> Result<Expression> {
+        match head {
+            ForHeadKind::In => self.expression(),
+            ForHeadKind::Of => self.assignment_expression(),
+        }
     }
 
     fn match_for_head_kind(&mut self) -> Option<ForHeadKind> {
@@ -603,16 +610,19 @@ impl Parser {
             self.validate_function_binding_in_strict_code(&name)?;
         }
         self.consume(&TokenKind::LParen, "expected '(' after function name")?;
-        let parameters = self.function_parameters()?;
+        let parameters = self.with_await_expression(false, Self::function_parameters)?;
         self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
         let body = self.with_new_target_scope(|parser| {
             parser.with_super_context(false, false, |parser| {
-                parser.function_body(inherited_strict)
+                parser.with_await_expression(is_async, |parser| {
+                    parser.function_body(inherited_strict)
+                })
             })
         })?;
         self.validate_function_parameters(
             &parameters.params,
+            parameters.is_simple,
             inherited_strict,
             body.contains_use_strict,
         )?;

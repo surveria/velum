@@ -78,3 +78,18 @@ fn sequence_expression_is_not_an_assignment_target() -> TestResult {
         "invalid assignment target",
     )
 }
+
+#[test]
+fn exposes_surrounding_early_errors_after_a_leading_sequence_operand() -> TestResult {
+    ensure_error_contains(
+        r#"0, ([element]) => { "use strict"; };"#,
+        "use strict directive is not allowed with non-simple parameters",
+    )?;
+    ensure_error_contains("0, (left, left) => {};", "duplicate parameter name")?;
+    ensure_error_contains("0, class { method(value = yield) {} };", "yield")?;
+    ensure_error_contains("0, function () { await 1; };", "await expression")?;
+    ensure_error_contains(
+        "let value; for (value of [], []) {}",
+        "expected ')' after for-in",
+    )
+}

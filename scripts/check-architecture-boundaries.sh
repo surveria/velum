@@ -508,7 +508,7 @@ check_frontend_span_boundary() {
     fail "frontend AST span boundary changed; expressions and statements require AstNode"
   fi
   if ! grep -F -q 'pub(super) fn expression(&mut self) -> Result<Expression>' \
-      "${repo_root}/src/parser/expression.rs" \
+      "${repo_root}/src/parser/sequence.rs" \
     || ! grep -F -q 'pub(super) fn statement(&mut self) -> Result<Statement>' \
       "${repo_root}/src/parser/statement.rs"; then
     fail "parser AST span boundary changed; parser roots must return span-bearing nodes"
@@ -931,7 +931,7 @@ check_sequence_expression_boundary() {
   )"
   compare_set "sequence expression parser owner allowlist" \
     "${parser_owners}" \
-    'src/parser/expression.rs'
+    'src/parser/sequence.rs'
 
   compiler_owners="$(
     cd "${repo_root}"
@@ -960,13 +960,21 @@ check_sequence_expression_boundary() {
   if ! grep -F -q 'Sequence(Vec<Expression>),' \
       "${repo_root}/src/ast/expression.rs" \
     || ! grep -F -q 'pub(super) fn assignment_expression(&mut self)' \
-      "${repo_root}/src/parser/expression.rs" \
+      "${repo_root}/src/parser/sequence.rs" \
     || ! grep -F -q 'self.emit(BytecodeInstruction::Pop);' <<<"${compiler_body}" \
     || ! grep -F -q 'Expr::Sequence(expressions)' \
       "${repo_root}/src/binding_layout/builder.rs" \
     || ! grep -F -q 'Expr::Sequence(expressions)' \
-      "${repo_root}/src/compiler/function.rs"; then
-    fail "sequence expression boundary changed; one AST node must reuse assignment parsing, Pop bytecode, and shared binding analysis"
+      "${repo_root}/src/compiler/function.rs" \
+    || ! grep -F -q 'ForHeadKind::Of => self.assignment_expression(),' \
+      "${repo_root}/src/parser/statement.rs" \
+    || ! grep -F -q 'enum AwaitExpressionContext {' \
+      "${repo_root}/src/parser/await_context.rs" \
+    || ! grep -F -q 'pub(super) is_simple: bool,' \
+      "${repo_root}/src/parser/function.rs" \
+    || ! grep -F -q 'YIELD_IDENTIFIER_NAME' \
+      "${repo_root}/src/parser/strict.rs"; then
+    fail "sequence expression boundary changed; one AST node must preserve assignment delimiters, early errors, Pop bytecode, and shared binding analysis"
   fi
 }
 
@@ -1958,6 +1966,12 @@ mutate_sequence_expression_pop() {
     "${fixture_root}/src/compiler/expression.rs"
 }
 
+mutate_sequence_for_of_rhs() {
+  local fixture_root="$1"
+  sed -i 's/ForHeadKind::Of => self.assignment_expression(),/ForHeadKind::Of => self.expression(),/' \
+    "${fixture_root}/src/parser/statement.rs"
+}
+
 mutate_host_local_value_identity() {
   local fixture_root="$1"
   sed -i '/    identity: &.value VmIdentity,/d' \
@@ -2381,6 +2395,8 @@ run_self_tests() {
     'function accessor owner allowlist changed' mutate_function_accessor_owner
   expect_guard_failure "${temp_dir}" sequence-expression-pop \
     'sequence expression boundary changed' mutate_sequence_expression_pop
+  expect_guard_failure "${temp_dir}" sequence-for-of-rhs \
+    'sequence expression boundary changed' mutate_sequence_for_of_rhs
   expect_guard_failure "${temp_dir}" host-local-value-identity \
     'host local-value boundary changed' mutate_host_local_value_identity
   expect_guard_failure "${temp_dir}" javascript-exception-visibility \

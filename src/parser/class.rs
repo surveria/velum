@@ -260,7 +260,7 @@ impl Parser {
         allow_super_call: bool,
     ) -> Result<ParsedClassFunction> {
         self.consume(&TokenKind::LParen, "expected '(' after class member name")?;
-        let parameters = self.function_parameters()?;
+        let parameters = self.with_await_expression(false, Self::function_parameters)?;
         self.consume(
             &TokenKind::RParen,
             "expected ')' after class member parameters",
@@ -290,9 +290,16 @@ impl Parser {
         }
         self.consume(&TokenKind::LBrace, "expected '{' before class member body")?;
         let body = self.with_new_target_scope(|parser| {
-            parser.with_super_context(true, allow_super_call, |parser| parser.function_body(true))
+            parser.with_super_context(true, allow_super_call, |parser| {
+                parser.with_await_expression(false, |parser| parser.function_body(true))
+            })
         })?;
-        self.validate_function_parameters(&parameters.params, true, body.contains_use_strict)?;
+        self.validate_function_parameters(
+            &parameters.params,
+            parameters.is_simple,
+            true,
+            body.contains_use_strict,
+        )?;
         let id = self.static_function()?;
         let (params, statements) = parameters.apply_prologue(body.statements);
         Ok(ParsedClassFunction {

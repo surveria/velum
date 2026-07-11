@@ -121,7 +121,7 @@ impl Parser {
     ) -> Result<ObjectProperty> {
         self.consume(&TokenKind::LParen, "expected '(' after accessor name")?;
         let inherited_strict = self.is_strict_mode();
-        let parameters = self.function_parameters()?;
+        let parameters = self.with_await_expression(false, Self::function_parameters)?;
         self.consume(&TokenKind::RParen, "expected ')' after accessor parameters")?;
         match kind {
             ObjectPropertyKind::Get if !parameters.params.is_empty() => {
@@ -149,11 +149,12 @@ impl Parser {
         self.consume(&TokenKind::LBrace, "expected '{' before accessor body")?;
         let body = self.with_new_target_scope(|parser| {
             parser.with_super_context(false, false, |parser| {
-                parser.function_body(inherited_strict)
+                parser.with_await_expression(false, |parser| parser.function_body(inherited_strict))
             })
         })?;
         self.validate_function_parameters(
             &parameters.params,
+            parameters.is_simple,
             inherited_strict,
             body.contains_use_strict,
         )?;
@@ -200,16 +201,20 @@ impl Parser {
         start: crate::SourceSpan,
     ) -> Result<ObjectProperty> {
         let inherited_strict = self.is_strict_mode();
-        let parameters = self.function_parameters()?;
+        let parameters = self.with_await_expression(false, Self::function_parameters)?;
+        self.reject_duplicate_parameters(&parameters.params)?;
         self.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before method body")?;
         let body = self.with_new_target_scope(|parser| {
             parser.with_super_context(false, false, |parser| {
-                parser.function_body(inherited_strict)
+                parser.with_await_expression(is_async, |parser| {
+                    parser.function_body(inherited_strict)
+                })
             })
         })?;
         self.validate_function_parameters(
             &parameters.params,
+            parameters.is_simple,
             inherited_strict,
             body.contains_use_strict,
         )?;

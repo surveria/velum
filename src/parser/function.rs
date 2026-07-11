@@ -22,6 +22,7 @@ const REST_PATTERN_PARAM_NAME: &str = "%rest%";
 pub(super) struct ParsedParameters {
     pub(super) params: Vec<FunctionParam>,
     pub(super) pattern_prologue: Vec<Statement>,
+    pub(super) is_simple: bool,
 }
 
 impl ParsedParameters {
@@ -43,10 +44,12 @@ impl Parser {
     pub(super) fn function_parameters(&mut self) -> Result<ParsedParameters> {
         let mut params = Vec::new();
         let mut pattern_prologue = Vec::new();
+        let mut is_simple = true;
         if self.check(&TokenKind::RParen) {
             return Ok(ParsedParameters {
                 params,
                 pattern_prologue,
+                is_simple,
             });
         }
 
@@ -55,14 +58,17 @@ impl Parser {
                 break;
             }
             if self.match_kind(&TokenKind::DotDotDot) {
+                is_simple = false;
                 self.rest_parameter(&mut params, &mut pattern_prologue)?;
                 break;
             }
             if self.next_is_binding_pattern() {
+                is_simple = false;
                 self.pattern_parameter(&mut params, &mut pattern_prologue)?;
             } else {
                 let name = self.consume_binding_identifier("expected function parameter name")?;
                 let default = if self.match_kind(&TokenKind::Equal) {
+                    is_simple = false;
                     Some(self.assignment()?)
                 } else {
                     None
@@ -74,10 +80,11 @@ impl Parser {
             }
         }
 
-        self.reject_duplicate_non_simple_parameters(&params)?;
+        self.reject_duplicate_non_simple_parameters(&params, is_simple)?;
         Ok(ParsedParameters {
             params,
             pattern_prologue,
+            is_simple,
         })
     }
 
