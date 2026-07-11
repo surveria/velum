@@ -2583,9 +2583,16 @@ AS-09h profile evidence in draft PR #457:
 - direct generator, GC, async-edge, class-static-block, function-accessor,
   Array-iterator, Symbol-spread, and eval-conflict tests pass under strict
   Clippy. The suspension guard now names the generalized
-  `resume_suspension` boundary shared by await and generator completions.
-  Full baseline, exact-tree CI, and canonical publication evidence remain
-  required before AS-09h can close.
+  `resume_suspension` boundary shared by await and generator completions;
+- the complete reviewed Test262 baseline reaches 42,709 passing variants:
+  2,885 additions and eleven removals, for a net gain of 2,874. Every removal
+  is a `#module` row that previously passed accidentally because the runner
+  maps module metadata to strict script execution; contextual `await` and
+  generator syntax exposed that missing parse goal. A dedicated module parse
+  goal must own restoring those rows instead of adding script-mode heuristics.
+  The final full-corpus rate is 41.63%, with 22,108 conforming files (41.39%).
+  Exact-tree CI and canonical publication evidence remain required before
+  AS-09h can close.
 
 ### AS-10: Performance And Memory Checkpoints
 
