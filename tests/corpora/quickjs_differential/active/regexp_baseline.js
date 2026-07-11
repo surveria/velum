@@ -19,6 +19,10 @@ print(RegExp(global) === global, new RegExp(global) === global, cloned.source, c
 print(new RegExp("").source, new RegExp("/\n\r").source);
 print(/a/gim.source, /a/gim.flags, /a/gim.global, /a/gim.ignoreCase, /a/gim.multiline);
 print(/a/s.dotAll, /a/u.unicode, /a/y.sticky);
+let advanced = /(?<prefix>a|b)(c+)(?=d)/d.exec("xxacccd");
+print(advanced.join("|"), advanced.index, advanced.groups.prefix);
+print(advanced.indices[0].join("-"), advanced.indices.groups.prefix.join("-"));
+print(/(?<=key=)(\w+)/.exec("key=value")[1], /^(a|b)\1$/.test("aa"), /^(a|b)\1$/.test("ab"));
 print(/a/gim.toString(), new RegExp("").toString(), RegExp.prototype.toString.call({ source: "x", flags: "g" }));
 print(RegExp.prototype.toString.name, RegExp.prototype.toString.length);
 print(RegExp.prototype[Symbol.match].name, RegExp.prototype[Symbol.match].length);

@@ -13,8 +13,12 @@ use crate::{
 };
 
 mod engine;
+mod match_result;
 
-use engine::{RegExpFlags, escaped_regexp_source, regexp_find, regexp_index_usize_to_number};
+use engine::{
+    RegExpFlags, escaped_regexp_source, regexp_find, regexp_index_usize_to_number,
+    validate_regexp_pattern,
+};
 
 use super::{
     NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, REGEXP_NAME, REGEXP_PROTOTYPE_EXEC_NAME,
@@ -239,7 +243,8 @@ impl Context {
     }
 
     fn create_regexp_object_from_text(&mut self, pattern: &str, flags: &str) -> Result<Value> {
-        validate_regexp_flags(flags)?;
+        let parsed_flags = RegExpFlags::parse(flags)?;
+        validate_regexp_pattern(pattern, &parsed_flags)?;
         self.check_string_len(pattern)?;
         self.check_string_len(flags)?;
         let prototype = self.regexp_constructor_prototype()?;
@@ -253,6 +258,7 @@ impl Context {
             REGEXP_LAST_INDEX_PROPERTY,
             Value::Number(ZERO_INDEX),
             PropertyWritable::Yes,
+            PropertyEnumerable::No,
             PropertyConfigurable::No,
         )?;
         Ok(Value::Object(id))
@@ -294,13 +300,14 @@ impl Context {
         name: &str,
         value: Value,
         writable: PropertyWritable,
+        enumerable: PropertyEnumerable,
         configurable: PropertyConfigurable,
     ) -> Result<()> {
         let key = self.intern_property_key(name)?;
         let update = PropertyUpdate::Data(DataPropertyUpdate::new(
             Some(value),
             Some(writable),
-            Some(PropertyEnumerable::No),
+            Some(enumerable),
             Some(configurable),
         ));
         self.objects
@@ -534,7 +541,7 @@ impl Context {
         if flags.global() || flags.sticky() {
             self.set_regexp_last_index(this_value, matched.end)?;
         }
-        self.regexp_match_array(input, matched.start, matched.end)
+        self.regexp_match_array(input, &matched, flags.has_indices())
     }
 
     pub(in crate::runtime::native) fn regexp_exec_from(
@@ -548,7 +555,7 @@ impl Context {
         let Some(matched) = regexp_find(regexp.pattern(), &flags, input, start)? else {
             return Ok(Value::Null);
         };
-        self.regexp_match_array(input, matched.start, matched.end)
+        self.regexp_match_array(input, &matched, flags.has_indices())
     }
 
     const fn discard_regexp_extra_args(_args: &[Value]) {}
@@ -581,40 +588,6 @@ impl Context {
             crate::runtime::abstract_operations::SetFailureBehavior::Throw,
         )
         .map(|_| ())
-    }
-
-    fn regexp_match_array(&mut self, input: &str, start: usize, end: usize) -> Result<Value> {
-        let matched = input
-            .get(start..end)
-            .ok_or_else(|| Error::runtime("RegExp match span is not a string boundary"))?;
-        self.array_constructor_value()?;
-        let prototype = self.objects.existing_array_prototype_id()?;
-        let matched_value = self.heap_string_value(matched)?;
-        let array = self.objects.create_array(
-            vec![matched_value],
-            prototype,
-            self.limits.max_objects,
-            self.limits.max_object_properties,
-        )?;
-        let Value::Object(id) = array else {
-            return Err(Error::runtime("RegExp match result is not an array object"));
-        };
-        self.define_regexp_data_property(
-            id,
-            "index",
-            Value::Number(regexp_index_usize_to_number(start)?),
-            PropertyWritable::Yes,
-            PropertyConfigurable::Yes,
-        )?;
-        let input_value = self.heap_string_value(input)?;
-        self.define_regexp_data_property(
-            id,
-            "input",
-            input_value,
-            PropertyWritable::Yes,
-            PropertyConfigurable::Yes,
-        )?;
-        Ok(Value::Object(id))
     }
 
     fn regexp_match_text(&mut self, pattern: &Value, input: &str) -> Result<Option<String>> {
@@ -688,10 +661,6 @@ impl Context {
 pub(in crate::runtime::native) enum RegExpCallMode {
     Call,
     Construct,
-}
-
-fn validate_regexp_flags(flags: &str) -> Result<()> {
-    RegExpFlags::parse(flags).map(|_| ())
 }
 
 const fn value_is_undefined(value: &Value) -> bool {

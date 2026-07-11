@@ -67,6 +67,51 @@ fn supports_regexp_constructor_and_preserves_slash_operator() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))
 }
 
+#[test]
+fn supports_ecmascript_patterns_captures_and_match_indices() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let match = /(?<prefix>a|b)(c+)(?=d)/d.exec("xxacccd");
+        let lookbehind = /(?<=key=)(\w+)/.exec("key=value");
+        let backreference = /^(a|b)\1$/.test("aa") && !/^(a|b)\1$/.test("ab");
+        let syntaxErrors = 0;
+        try {
+            new RegExp("(");
+        } catch (error) {
+            if (error instanceof SyntaxError) syntaxErrors += 1;
+        }
+        try {
+            new RegExp("a", "gg");
+        } catch (error) {
+            if (error instanceof SyntaxError) syntaxErrors += 1;
+        }
+
+        match[0] === "accc" &&
+            match[1] === "a" &&
+            match[2] === "ccc" &&
+            match.length === 3 &&
+            match.index === 2 &&
+            match.input === "xxacccd" &&
+            match.groups.prefix === "a" &&
+            Object.getPrototypeOf(match.groups) === null &&
+            match.indices[0][0] === 2 &&
+            match.indices[0][1] === 6 &&
+            match.indices[1][0] === 2 &&
+            match.indices.groups.prefix[0] === 2 &&
+            match.indices.groups.prefix[1] === 3 &&
+            lookbehind[0] === "value" &&
+            lookbehind[1] === "value" &&
+            backreference &&
+            syntaxErrors === 2 ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

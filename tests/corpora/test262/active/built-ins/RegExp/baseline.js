@@ -169,7 +169,36 @@ let patternOk =
   /\w+/.exec("++abc")[0] === "abc" &&
   /[abc]+/.exec("zzcab")[0] === "cab";
 
-if (!descriptorOk || !execOk || !patternOk || !receiverError) {
+let advanced = /(?<prefix>a|b)(c+)(?=d)/d.exec("xxacccd");
+let syntaxErrors = 0;
+try {
+  new RegExp("(");
+} catch (error) {
+  if (error instanceof SyntaxError) syntaxErrors += 1;
+}
+try {
+  new RegExp("a", "gg");
+} catch (error) {
+  if (error instanceof SyntaxError) syntaxErrors += 1;
+}
+let advancedPatternOk =
+  advanced[0] === "accc" &&
+  advanced[1] === "a" &&
+  advanced[2] === "ccc" &&
+  advanced.length === 3 &&
+  advanced.index === 2 &&
+  advanced.groups.prefix === "a" &&
+  Object.getPrototypeOf(advanced.groups) === null &&
+  advanced.indices[0][0] === 2 &&
+  advanced.indices[0][1] === 6 &&
+  advanced.indices.groups.prefix[0] === 2 &&
+  advanced.indices.groups.prefix[1] === 3 &&
+  /(?<=key=)(\w+)/.exec("key=value")[1] === "value" &&
+  /^(a|b)\1$/.test("aa") &&
+  !/^(a|b)\1$/.test("ab") &&
+  syntaxErrors === 2;
+
+if (!descriptorOk || !execOk || !patternOk || !advancedPatternOk || !receiverError) {
   throw new Test262Error("RegExp baseline behavior was unexpected");
 }
 

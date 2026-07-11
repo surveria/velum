@@ -1,4 +1,18 @@
-use crate::error::{Error, Result};
+use std::ops::Range;
+
+use regress::{Flags, Regex};
+
+use crate::{
+    error::{Error, Result},
+    value::ErrorName,
+};
+
+const INVALID_REGEXP_PATTERN_ERROR: &str = "invalid regular expression pattern";
+const UNSUPPORTED_REGEXP_FLAG_ERROR: &str = "unsupported regular expression flag";
+
+pub(super) fn validate_regexp_pattern(pattern: &str, flags: &RegExpFlags) -> Result<()> {
+    compile_regexp(pattern, flags).map(drop)
+}
 
 pub(super) fn regexp_find(
     pattern: &str,
@@ -9,21 +23,45 @@ pub(super) fn regexp_find(
     if start > input.len() {
         return Ok(None);
     }
-    let pattern = RegExpProgram::compile(pattern)?;
-    if flags.sticky() {
-        return Ok(pattern.match_at(input, start, flags));
+    let Some(start) = next_string_boundary(input, start) else {
+        return Ok(None);
+    };
+    let compiled = compile_regexp(pattern, flags)?;
+    let Some(matched) = compiled.find_from(input, start).next() else {
+        return Ok(None);
+    };
+    if flags.sticky() && matched.start() != start {
+        return Ok(None);
     }
-    let starts = input
+    let named_captures = matched
+        .named_groups()
+        .map(|(name, range)| (name.to_owned(), range))
+        .collect();
+    Ok(Some(RegExpMatch {
+        start: matched.start(),
+        end: matched.end(),
+        captures: matched.captures,
+        named_captures,
+    }))
+}
+
+fn compile_regexp(pattern: &str, flags: &RegExpFlags) -> Result<Regex> {
+    Regex::with_flags(pattern, flags.regress_flags()).map_err(|error| {
+        Error::exception(
+            ErrorName::SyntaxError,
+            format!("{INVALID_REGEXP_PATTERN_ERROR}: {error}"),
+        )
+    })
+}
+
+fn next_string_boundary(input: &str, start: usize) -> Option<usize> {
+    if input.is_char_boundary(start) {
+        return Some(start);
+    }
+    input
         .char_indices()
         .map(|(index, _)| index)
-        .chain(std::iter::once(input.len()))
-        .filter(|index| *index >= start);
-    for index in starts {
-        if let Some(matched) = pattern.match_at(input, index, flags) {
-            return Ok(Some(matched));
-        }
-    }
-    Ok(None)
+        .find(|index| *index > start)
 }
 
 #[derive(Debug, Default)]
@@ -51,18 +89,31 @@ impl RegExpFlags {
             'd' => REGEXP_FLAG_HAS_INDICES,
             'v' => REGEXP_FLAG_UNICODE_SETS,
             _ => {
-                return Err(Error::runtime(format!(
-                    "{UNSUPPORTED_REGEXP_FLAG_ERROR}: {flag}"
-                )));
+                return Err(Error::exception(
+                    ErrorName::SyntaxError,
+                    format!("{UNSUPPORTED_REGEXP_FLAG_ERROR}: {flag}"),
+                ));
             }
         };
         if self.bits & bit != 0 {
-            return Err(Error::runtime(format!(
-                "duplicate regular expression flag: {flag}"
-            )));
+            return Err(Error::exception(
+                ErrorName::SyntaxError,
+                format!("duplicate regular expression flag: {flag}"),
+            ));
         }
         self.bits |= bit;
         Ok(())
+    }
+
+    const fn regress_flags(&self) -> Flags {
+        Flags {
+            icase: self.ignore_case(),
+            multiline: self.multiline(),
+            dot_all: self.dot_all(),
+            no_opt: false,
+            unicode: self.unicode(),
+            unicode_sets: self.unicode_sets(),
+        }
     }
 
     pub(super) const fn ignore_case(&self) -> bool {
@@ -135,314 +186,12 @@ pub(super) fn escaped_regexp_source(pattern: &str) -> String {
     escaped
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(super) struct RegExpMatch {
     pub(super) start: usize,
     pub(super) end: usize,
-}
-
-#[derive(Debug, Clone)]
-struct RegExpProgram {
-    atoms: Vec<RegExpAtom>,
-    anchored_start: bool,
-    anchored_end: bool,
-}
-
-impl RegExpProgram {
-    fn compile(pattern: &str) -> Result<Self> {
-        if pattern.starts_with("(?:[A-Za-z") {
-            return Ok(Self::single(RegExpAtomMatcher::IdentifierStart));
-        }
-        if pattern.starts_with("(?:[0-9A-Z_a-z") {
-            return Ok(Self::single(RegExpAtomMatcher::IdentifierContinue));
-        }
-        let mut chars = pattern.chars().peekable();
-        let anchored_start = chars.next_if_eq(&'^').is_some();
-        let mut atoms = Vec::new();
-        while let Some(ch) = chars.next() {
-            if ch == '$' && chars.peek().is_none() {
-                return Ok(Self {
-                    atoms,
-                    anchored_start,
-                    anchored_end: true,
-                });
-            }
-            let mut atom = RegExpAtom::compile(ch, &mut chars)?;
-            if let Some(quantifier) = chars.next_if(|ch| is_quantifier(*ch)) {
-                atom.quantifier = match quantifier {
-                    '*' => RegExpQuantifier::ZeroOrMore,
-                    '+' => RegExpQuantifier::OneOrMore,
-                    '?' => RegExpQuantifier::ZeroOrOne,
-                    _ => return Err(Error::runtime("unsupported RegExp quantifier")),
-                };
-            }
-            atoms.push(atom);
-        }
-        Ok(Self {
-            atoms,
-            anchored_start,
-            anchored_end: false,
-        })
-    }
-
-    fn single(matcher: RegExpAtomMatcher) -> Self {
-        Self {
-            atoms: vec![RegExpAtom {
-                matcher,
-                quantifier: RegExpQuantifier::Once,
-            }],
-            anchored_start: false,
-            anchored_end: false,
-        }
-    }
-
-    fn match_at(&self, input: &str, start: usize, flags: &RegExpFlags) -> Option<RegExpMatch> {
-        if self.anchored_start && start != 0 && !line_start(input, start, flags) {
-            return None;
-        }
-        let mut index = start;
-        for atom in &self.atoms {
-            index = atom.consume(input, index, flags)?;
-        }
-        if self.anchored_end && index != input.len() && !line_end(input, index, flags) {
-            return None;
-        }
-        Some(RegExpMatch { start, end: index })
-    }
-}
-
-#[derive(Debug, Clone)]
-struct RegExpAtom {
-    matcher: RegExpAtomMatcher,
-    quantifier: RegExpQuantifier,
-}
-
-impl RegExpAtom {
-    fn compile(ch: char, chars: &mut impl Iterator<Item = char>) -> Result<Self> {
-        let matcher = if ch == '\\' {
-            escaped_atom(
-                chars
-                    .next()
-                    .ok_or_else(|| Error::runtime("unterminated regular expression escape"))?,
-            )
-        } else if ch == '.' {
-            RegExpAtomMatcher::Any
-        } else if ch == '[' {
-            class_atom(chars)?
-        } else if is_regexp_meta_char(ch) {
-            return Err(Error::runtime("unsupported regular expression syntax"));
-        } else {
-            RegExpAtomMatcher::Char(ch)
-        };
-        Ok(Self {
-            matcher,
-            quantifier: RegExpQuantifier::Once,
-        })
-    }
-
-    fn consume(&self, input: &str, index: usize, flags: &RegExpFlags) -> Option<usize> {
-        match self.quantifier {
-            RegExpQuantifier::Once => self.matcher.consume(input, index, flags),
-            RegExpQuantifier::ZeroOrOne => {
-                self.matcher.consume(input, index, flags).or(Some(index))
-            }
-            RegExpQuantifier::ZeroOrMore => Some(self.consume_repeating(input, index, flags)),
-            RegExpQuantifier::OneOrMore => {
-                let first = self.matcher.consume(input, index, flags)?;
-                Some(self.consume_repeating(input, first, flags))
-            }
-        }
-    }
-
-    fn consume_repeating(&self, input: &str, mut index: usize, flags: &RegExpFlags) -> usize {
-        while let Some(next) = self.matcher.consume(input, index, flags) {
-            if next == index {
-                return index;
-            }
-            index = next;
-        }
-        index
-    }
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-enum RegExpQuantifier {
-    Once,
-    ZeroOrMore,
-    OneOrMore,
-    ZeroOrOne,
-}
-
-#[derive(Debug, Clone)]
-enum RegExpAtomMatcher {
-    Any,
-    Char(char),
-    Digit,
-    NotDigit,
-    Word,
-    NotWord,
-    Whitespace,
-    NotWhitespace,
-    Newline,
-    SpaceSeparator,
-    IdentifierStart,
-    IdentifierContinue,
-    Class(Vec<char>),
-}
-
-impl RegExpAtomMatcher {
-    fn consume(&self, input: &str, index: usize, flags: &RegExpFlags) -> Option<usize> {
-        let ch = input.get(index..)?.chars().next()?;
-        let matched = match self {
-            Self::Any => flags.dot_all() || !is_newline_char(ch),
-            Self::Char(expected) => char_eq(*expected, ch, flags),
-            Self::Digit => ch.is_ascii_digit(),
-            Self::NotDigit => !ch.is_ascii_digit(),
-            Self::Word => is_word_char(ch),
-            Self::NotWord => !is_word_char(ch),
-            Self::Whitespace => is_whitespace_char(ch),
-            Self::NotWhitespace => !is_whitespace_char(ch),
-            Self::Newline => is_newline_char(ch),
-            Self::SpaceSeparator => is_space_separator_char(ch),
-            Self::IdentifierStart => is_identifier_start_char(ch),
-            Self::IdentifierContinue => is_identifier_continue_char(ch),
-            Self::Class(chars) => chars.iter().any(|expected| char_eq(*expected, ch, flags)),
-        };
-        matched.then(|| index.saturating_add(ch.len_utf8()))
-    }
-}
-
-const fn escaped_atom(ch: char) -> RegExpAtomMatcher {
-    match ch {
-        'd' => RegExpAtomMatcher::Digit,
-        'D' => RegExpAtomMatcher::NotDigit,
-        'w' => RegExpAtomMatcher::Word,
-        'W' => RegExpAtomMatcher::NotWord,
-        's' => RegExpAtomMatcher::Whitespace,
-        'S' => RegExpAtomMatcher::NotWhitespace,
-        'n' => RegExpAtomMatcher::Char('\n'),
-        'r' => RegExpAtomMatcher::Char('\r'),
-        't' => RegExpAtomMatcher::Char('\t'),
-        escaped => RegExpAtomMatcher::Char(escaped),
-    }
-}
-
-fn class_atom(chars: &mut impl Iterator<Item = char>) -> Result<RegExpAtomMatcher> {
-    let mut class_chars = Vec::new();
-    let mut raw = String::new();
-    while let Some(ch) = chars.next() {
-        if ch == ']' {
-            return Ok(classify_class(&raw, class_chars));
-        }
-        raw.push(ch);
-        if ch == '\\' {
-            let escaped = chars
-                .next()
-                .ok_or_else(|| Error::runtime("unterminated regular expression character class"))?;
-            raw.push(escaped);
-            class_chars.push(escaped_literal_char(escaped));
-        } else {
-            class_chars.push(ch);
-        }
-    }
-    Err(Error::runtime(
-        "unterminated regular expression character class",
-    ))
-}
-
-fn classify_class(raw: &str, chars: Vec<char>) -> RegExpAtomMatcher {
-    if raw == "\\u000A\\u000D\\u2028\\u2029" {
-        return RegExpAtomMatcher::Newline;
-    }
-    if raw == "\\u0009\\u000B\\u000C\\u0020\\u00A0\\uFEFF" {
-        return RegExpAtomMatcher::Whitespace;
-    }
-    if raw.starts_with(" \\xA0\\u1680") {
-        return RegExpAtomMatcher::SpaceSeparator;
-    }
-    if raw.starts_with("A-Za-z") {
-        return RegExpAtomMatcher::IdentifierStart;
-    }
-    if raw.starts_with("0-9A-Z_a-z") {
-        return RegExpAtomMatcher::IdentifierContinue;
-    }
-    RegExpAtomMatcher::Class(chars)
-}
-
-const fn escaped_literal_char(ch: char) -> char {
-    match ch {
-        'n' => '\n',
-        'r' => '\r',
-        't' => '\t',
-        'v' => '\u{000B}',
-        'f' => '\u{000C}',
-        escaped => escaped,
-    }
-}
-
-const fn char_eq(left: char, right: char, flags: &RegExpFlags) -> bool {
-    if flags.ignore_case() {
-        left.eq_ignore_ascii_case(&right)
-    } else {
-        left == right
-    }
-}
-
-fn line_start(input: &str, index: usize, flags: &RegExpFlags) -> bool {
-    flags.multiline()
-        && input
-            .get(..index)
-            .and_then(|text| text.chars().next_back())
-            .is_some_and(is_newline_char)
-}
-
-fn line_end(input: &str, index: usize, flags: &RegExpFlags) -> bool {
-    flags.multiline()
-        && input
-            .get(index..)
-            .and_then(|text| text.chars().next())
-            .is_some_and(is_newline_char)
-}
-
-const fn is_quantifier(ch: char) -> bool {
-    matches!(ch, '*' | '+' | '?')
-}
-
-const fn is_regexp_meta_char(ch: char) -> bool {
-    matches!(ch, '(' | ')' | '{' | '}' | '|')
-}
-
-const fn is_word_char(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || ch == '_'
-}
-
-const fn is_newline_char(ch: char) -> bool {
-    matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}')
-}
-
-fn is_whitespace_char(ch: char) -> bool {
-    matches!(
-        ch,
-        '\u{0009}' | '\u{000B}' | '\u{000C}' | '\u{0020}' | '\u{00A0}' | '\u{FEFF}'
-    ) || is_space_separator_char(ch)
-}
-
-fn is_space_separator_char(ch: char) -> bool {
-    matches!(
-        ch,
-        '\u{0020}' | '\u{00A0}' | '\u{1680}' | '\u{202F}' | '\u{205F}' | '\u{3000}'
-    ) || ('\u{2000}'..='\u{200A}').contains(&ch)
-}
-
-fn is_identifier_start_char(ch: char) -> bool {
-    ch == '$' || ch == '_' || ch.is_ascii_alphabetic() || ch.is_alphabetic()
-}
-
-fn is_identifier_continue_char(ch: char) -> bool {
-    is_identifier_start_char(ch)
-        || ch.is_ascii_digit()
-        || ch.is_numeric()
-        || matches!(ch, '\u{200C}' | '\u{200D}')
+    pub(super) captures: Vec<Option<Range<usize>>>,
+    pub(super) named_captures: Vec<(String, Option<Range<usize>>)>,
 }
 
 pub(super) fn regexp_index_usize_to_number(index: usize) -> Result<f64> {
@@ -459,4 +208,3 @@ const REGEXP_FLAG_UNICODE: u16 = 1 << 4;
 const REGEXP_FLAG_STICKY: u16 = 1 << 5;
 const REGEXP_FLAG_HAS_INDICES: u16 = 1 << 6;
 const REGEXP_FLAG_UNICODE_SETS: u16 = 1 << 7;
-const UNSUPPORTED_REGEXP_FLAG_ERROR: &str = "unsupported regular expression flag";
