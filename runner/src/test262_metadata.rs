@@ -95,10 +95,7 @@ assert.throws = function (expectedErrorConstructor, func, message) {
     if (threw !== true) {
         throw new Test262Error(message || "Expected function to throw");
     }
-    if (expectedErrorConstructor === Test262Error) {
-        return;
-    }
-    if (expectedErrorConstructor.name !== undefined && error.name === expectedErrorConstructor.name) {
+    if (error.constructor === expectedErrorConstructor) {
         return;
     }
     throw new Test262Error(message || "Unexpected thrown error type");

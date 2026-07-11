@@ -1,5 +1,7 @@
 use rs_quickjs::{Runtime, Value};
 
+mod support;
+
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
 #[test]
@@ -30,6 +32,28 @@ fn print_uses_ordinary_binding_and_call_semantics() -> TestResult {
         context.output()
     )
     .into())
+}
+
+#[test]
+fn assert_harness_requires_the_exact_error_constructor() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    support::install_assert(&mut context)?;
+
+    let value = context.eval(
+        r#"
+        let rejected = false;
+        try {
+            assert.throws(Error, function () {
+                throw new TypeError("wrong constructor");
+            });
+        } catch (error) {
+            rejected = true;
+        }
+        rejected ? 42 : 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
 }
 
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {

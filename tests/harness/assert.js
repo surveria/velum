@@ -12,7 +12,7 @@ assert.throws = function (expectedErrorConstructor, callback, message) {
     if (threw !== true) {
         throw new Error(message || "assert.throws expected an exception, but no exception was thrown");
     }
-    if (error instanceof expectedErrorConstructor || expectedErrorConstructor.name === error.name) {
+    if (error.constructor === expectedErrorConstructor) {
         return;
     }
     throw new Error(
