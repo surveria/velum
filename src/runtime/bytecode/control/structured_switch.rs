@@ -110,8 +110,8 @@ impl Context {
         cases: &[BytecodeSwitchCase],
     ) -> Result<BytecodeSwitchStartIndex> {
         match self.bytecode_numeric_switch_start_index(discriminant, cases)? {
-            start @ BytecodeSwitchStartIndex::Resolved(_)
-            | start @ BytecodeSwitchStartIndex::Completion(_) => return Ok(start),
+            start @ (BytecodeSwitchStartIndex::Resolved(_)
+            | BytecodeSwitchStartIndex::Completion(_)) => return Ok(start),
             BytecodeSwitchStartIndex::Unsupported => {}
         }
         let discriminant = match self.eval_bytecode_block(discriminant)? {

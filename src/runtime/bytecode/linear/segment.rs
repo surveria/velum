@@ -121,6 +121,9 @@ impl Context {
                 if let Completion::Throw(value) = &completion {
                     self.annotate_error_value_span(value, span)?;
                 }
+                if matches!(completion, Completion::Suspended(_)) && !state.is_suspended() {
+                    state.mark_child_suspended();
+                }
                 return Ok(completion);
             }
         }

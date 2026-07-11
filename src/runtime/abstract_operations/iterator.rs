@@ -341,7 +341,6 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         | Completion::Throw(value)
         | Completion::Return(value)
         | Completion::Break { value, .. } => Some(value),
-        Completion::Continue(_) => None,
-        Completion::Suspended(_) => None,
+        Completion::Continue(_) | Completion::Suspended(_) => None,
     }
 }

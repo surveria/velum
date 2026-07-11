@@ -95,7 +95,10 @@ impl Context {
                 },
             )?;
             match condition_result {
-                BytecodeCondition::Value(true) => {}
+                BytecodeCondition::Value(true) => {
+                    *control.loop_state_mut(BytecodeLoopKind::DoWhile)?.0 =
+                        BytecodeLoopPhase::Initialize;
+                }
                 BytecodeCondition::Value(false) => break,
                 BytecodeCondition::Completion(completion @ Completion::Suspended(_)) => {
                     self.park_bytecode_control(handle, control)?;

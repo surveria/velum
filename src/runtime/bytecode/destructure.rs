@@ -17,6 +17,7 @@ use crate::{
 
 use super::{
     control_continuation::{BytecodeControlRecord, BytecodeLoopPhase},
+    destructure_continuation::{DestructureContinuation, DestructureTask, ObjectPropertyPhase},
     state::{BytecodeState, bytecode_loop_completion},
 };
 
@@ -35,12 +36,6 @@ enum PatternStep<T> {
     Abrupt(Completion),
 }
 
-/// Result of one pattern-target loop iteration in a `for-in`/`for-of` head.
-enum PatternIteration {
-    Body(Completion),
-    DestructureAbrupt(Completion),
-}
-
 impl Context {
     pub(super) fn eval_bytecode_destructure_instruction(
         &mut self,
@@ -49,115 +44,384 @@ impl Context {
         kind: DeclKind,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
-        let value = state.stack.pop()?;
-        match self.destructure_pattern(pattern, kind, value)? {
+        let value = if state.has_destructure_continuation() {
+            None
+        } else {
+            Some(state.stack.peek()?.clone())
+        };
+        match self.eval_resumable_destructure(state, pattern, kind, value)? {
             DestructureOutcome::Completed => {
+                state.stack.pop()?;
                 state.last = Value::Undefined;
                 state.pc = next;
                 Ok(None)
             }
-            DestructureOutcome::Abrupt(completion) => Ok(Some(completion)),
+            DestructureOutcome::Abrupt(completion @ Completion::Suspended(_)) => {
+                Ok(Some(completion))
+            }
+            DestructureOutcome::Abrupt(completion) => {
+                state.stack.pop()?;
+                Ok(Some(completion))
+            }
         }
     }
 
-    pub(super) fn destructure_pattern(
+    fn eval_resumable_destructure(
         &mut self,
+        state: &mut BytecodeState,
         pattern: &BytecodePattern,
         kind: DeclKind,
-        value: Value,
+        value: Option<Value>,
     ) -> Result<DestructureOutcome> {
+        let mut continuation = if let Some(continuation) = state.take_destructure_continuation() {
+            continuation
+        } else {
+            let value = value.ok_or_else(|| {
+                Error::runtime("bytecode destructuring value disappeared before start")
+            })?;
+            DestructureContinuation::new(pattern.clone(), kind, value)
+        };
+        loop {
+            let Some(task) = continuation.tasks.pop() else {
+                return Ok(DestructureOutcome::Completed);
+            };
+            let abrupt = self.run_destructure_task(&mut continuation, task)?;
+            let Some(completion) = abrupt else {
+                continue;
+            };
+            if matches!(completion, Completion::Suspended(_)) {
+                state.store_destructure_continuation(continuation)?;
+                return Ok(DestructureOutcome::Abrupt(completion));
+            }
+            let completion = self.close_destructure_iterators(&mut continuation, completion)?;
+            return Ok(DestructureOutcome::Abrupt(completion));
+        }
+    }
+
+    fn run_destructure_task(
+        &mut self,
+        continuation: &mut DestructureContinuation,
+        task: DestructureTask,
+    ) -> Result<Option<Completion>> {
+        match task {
+            DestructureTask::Pattern { pattern, value } => {
+                self.run_destructure_pattern_task(continuation, pattern, value)
+            }
+            DestructureTask::Object {
+                properties,
+                rest,
+                source,
+                next,
+                consumed,
+            } => self.run_destructure_object_task(
+                continuation,
+                properties,
+                rest,
+                source,
+                next,
+                consumed,
+            ),
+            DestructureTask::ObjectProperty {
+                key,
+                target,
+                source,
+                phase,
+            } => self.run_destructure_property_task(continuation, key, target, source, phase),
+            DestructureTask::Array {
+                elements,
+                rest,
+                source,
+                next,
+                exhausted,
+            } => self.run_destructure_array_task(
+                continuation,
+                elements,
+                rest,
+                source,
+                next,
+                exhausted,
+            ),
+            DestructureTask::ArrayElement { target, value } => {
+                self.run_destructure_element_task(continuation, target, value)
+            }
+        }
+    }
+
+    fn run_destructure_pattern_task(
+        &mut self,
+        continuation: &mut DestructureContinuation,
+        pattern: BytecodePattern,
+        value: Value,
+    ) -> Result<Option<Completion>> {
         self.step()?;
         match pattern {
             BytecodePattern::Binding(name) => {
-                self.eval_bytecode_declaration(name, kind, Some(value))?;
-                Ok(DestructureOutcome::Completed)
+                self.eval_bytecode_declaration(&name, continuation.kind, Some(value))?;
             }
             BytecodePattern::Object { properties, rest } => {
-                self.destructure_object(properties, rest.as_ref(), kind, &value)
+                if matches!(value, Value::Undefined | Value::Null) {
+                    return Err(Error::type_error(format!(
+                        "cannot destructure '{value}' into an object pattern"
+                    )));
+                }
+                continuation.tasks.push(DestructureTask::Object {
+                    properties,
+                    rest,
+                    source: value,
+                    next: 0,
+                    consumed: Vec::new(),
+                });
             }
             BytecodePattern::Array { elements, rest } => {
-                self.destructure_array(elements, rest.as_deref(), kind, value)
+                let source = self.get_iterator(value)?;
+                continuation.tasks.push(DestructureTask::Array {
+                    elements,
+                    rest,
+                    source,
+                    next: 0,
+                    exhausted: false,
+                });
             }
         }
+        Ok(None)
     }
 
-    fn destructure_object(
+    #[allow(clippy::too_many_arguments)]
+    fn run_destructure_object_task(
         &mut self,
-        properties: &[BytecodePatternProperty],
-        rest: Option<&BytecodeBinding>,
-        kind: DeclKind,
-        source: &Value,
-    ) -> Result<DestructureOutcome> {
-        if matches!(source, Value::Undefined | Value::Null) {
-            return Err(Error::type_error(format!(
-                "cannot destructure '{source}' into an object pattern"
-            )));
-        }
-        let mut consumed = rest.map(|_| Vec::new());
-        for property in properties {
-            let value = match self.destructure_property_read(source, &property.key)? {
-                PatternStep::Value(PatternPropertyRead { name, value }) => {
-                    if let Some(consumed) = consumed.as_mut() {
-                        consumed.push(name);
-                    }
-                    value
-                }
-                PatternStep::Abrupt(completion) => {
-                    return Ok(DestructureOutcome::Abrupt(completion));
-                }
-            };
-            let value = match self.apply_pattern_default(value, property.target.default.as_ref())? {
-                PatternStep::Value(value) => value,
-                PatternStep::Abrupt(completion) => {
-                    return Ok(DestructureOutcome::Abrupt(completion));
-                }
-            };
-            match self.destructure_pattern(&property.target.pattern, kind, value)? {
-                DestructureOutcome::Completed => {}
-                abrupt @ DestructureOutcome::Abrupt(_) => return Ok(abrupt),
-            }
+        continuation: &mut DestructureContinuation,
+        properties: std::rc::Rc<[BytecodePatternProperty]>,
+        rest: Option<BytecodeBinding>,
+        source: Value,
+        next: usize,
+        consumed: Vec<String>,
+    ) -> Result<Option<Completion>> {
+        if let Some(property) = properties.get(next).cloned() {
+            let next = next
+                .checked_add(1)
+                .ok_or_else(|| Error::limit("destructuring property cursor overflowed"))?;
+            continuation.tasks.push(DestructureTask::Object {
+                properties,
+                rest,
+                source: source.clone(),
+                next,
+                consumed,
+            });
+            continuation.tasks.push(DestructureTask::ObjectProperty {
+                key: property.key,
+                target: property.target,
+                source,
+                phase: ObjectPropertyPhase::Read,
+            });
+            return Ok(None);
         }
         if let Some(rest_binding) = rest {
-            let consumed = consumed.unwrap_or_default();
-            let rest_value = self.destructure_rest_object(source, &consumed)?;
-            self.eval_bytecode_declaration(rest_binding, kind, Some(rest_value))?;
+            let rest_value = self.destructure_rest_object(&source, &consumed)?;
+            self.eval_bytecode_declaration(&rest_binding, continuation.kind, Some(rest_value))?;
         }
-        Ok(DestructureOutcome::Completed)
+        Ok(None)
     }
 
-    fn destructure_property_read(
+    fn run_destructure_property_task(
+        &mut self,
+        continuation: &mut DestructureContinuation,
+        key: BytecodePatternKey,
+        target: BytecodePatternTarget,
+        source: Value,
+        phase: ObjectPropertyPhase,
+    ) -> Result<Option<Completion>> {
+        match phase {
+            ObjectPropertyPhase::Read => {
+                let (name, value) = match self.read_resumable_pattern_property(&source, &key)? {
+                    PatternStep::Value(read) => (read.name, read.value),
+                    PatternStep::Abrupt(completion) => {
+                        continuation.tasks.push(DestructureTask::ObjectProperty {
+                            key,
+                            target,
+                            source,
+                            phase: ObjectPropertyPhase::Read,
+                        });
+                        return Ok(Some(completion));
+                    }
+                };
+                Self::record_destructure_consumed_name(continuation, name)?;
+                continuation.tasks.push(DestructureTask::ObjectProperty {
+                    key,
+                    target,
+                    source,
+                    phase: ObjectPropertyPhase::Default { value },
+                });
+            }
+            ObjectPropertyPhase::Default { value } => {
+                let value =
+                    match self.apply_pattern_default(value.clone(), target.default.as_ref())? {
+                        PatternStep::Value(value) => value,
+                        PatternStep::Abrupt(completion) => {
+                            continuation.tasks.push(DestructureTask::ObjectProperty {
+                                key,
+                                target,
+                                source,
+                                phase: ObjectPropertyPhase::Default { value },
+                            });
+                            return Ok(Some(completion));
+                        }
+                    };
+                continuation.tasks.push(DestructureTask::Pattern {
+                    pattern: target.pattern,
+                    value,
+                });
+            }
+        }
+        Ok(None)
+    }
+
+    fn read_resumable_pattern_property(
         &mut self,
         source: &Value,
         key: &BytecodePatternKey,
     ) -> Result<PatternStep<PatternPropertyRead>> {
-        match key {
+        let key_value = match key {
             BytecodePatternKey::Static(name) => {
                 let value = self.get_named(source, name.as_str())?;
-                Ok(PatternStep::Value(PatternPropertyRead {
+                return Ok(PatternStep::Value(PatternPropertyRead {
                     name: name.as_str().to_owned(),
                     value,
-                }))
+                }));
             }
-            BytecodePatternKey::Computed(block) => {
-                let key_value = match self.eval_pattern_block(block)? {
-                    PatternStep::Value(value) => value,
-                    PatternStep::Abrupt(completion) => {
-                        return Ok(PatternStep::Abrupt(completion));
-                    }
-                };
-                if matches!(key_value, Value::Symbol(_)) {
-                    let key = self.dynamic_property_key(&key_value)?;
-                    let value = self.get(source, key.lookup())?;
-                    return Ok(PatternStep::Value(PatternPropertyRead {
-                        name: key.name().to_owned(),
-                        value,
-                    }));
+            BytecodePatternKey::Computed(block) => match self.eval_pattern_block(block)? {
+                PatternStep::Value(value) => value,
+                PatternStep::Abrupt(completion) => {
+                    return Ok(PatternStep::Abrupt(completion));
                 }
-                let name = self.dynamic_property_key(&key_value)?.name().to_owned();
-                let value = self.get_named(source, &name)?;
-                Ok(PatternStep::Value(PatternPropertyRead { name, value }))
+            },
+        };
+        let key = self.dynamic_property_key(&key_value)?;
+        let name = key.name().to_owned();
+        let value = self.get(source, key.lookup())?;
+        Ok(PatternStep::Value(PatternPropertyRead { name, value }))
+    }
+
+    fn record_destructure_consumed_name(
+        continuation: &mut DestructureContinuation,
+        name: String,
+    ) -> Result<()> {
+        for task in continuation.tasks.iter_mut().rev() {
+            if let DestructureTask::Object { consumed, .. } = task {
+                consumed.push(name);
+                return Ok(());
             }
         }
+        Err(Error::runtime(
+            "destructuring object property lost its parent task",
+        ))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn run_destructure_array_task(
+        &mut self,
+        continuation: &mut DestructureContinuation,
+        elements: std::rc::Rc<[Option<BytecodePatternTarget>]>,
+        rest: Option<std::rc::Rc<BytecodePattern>>,
+        mut source: IteratorSource,
+        next: usize,
+        mut exhausted: bool,
+    ) -> Result<Option<Completion>> {
+        if let Some(element) = elements.get(next).cloned() {
+            self.step()?;
+            let value = if exhausted {
+                Value::Undefined
+            } else {
+                match self.iterator_step(&mut source)? {
+                    IteratorStep::Value(value) => value,
+                    IteratorStep::Done => {
+                        exhausted = true;
+                        Value::Undefined
+                    }
+                    IteratorStep::Abrupt(completion) => return Ok(Some(completion)),
+                }
+            };
+            let next = next
+                .checked_add(1)
+                .ok_or_else(|| Error::limit("destructuring element cursor overflowed"))?;
+            continuation.tasks.push(DestructureTask::Array {
+                elements,
+                rest,
+                source,
+                next,
+                exhausted,
+            });
+            if let Some(target) = element {
+                continuation
+                    .tasks
+                    .push(DestructureTask::ArrayElement { target, value });
+            }
+            return Ok(None);
+        }
+        if let Some(rest_pattern) = rest {
+            let mut items = Vec::new();
+            while !exhausted {
+                self.step()?;
+                match self.iterator_step(&mut source)? {
+                    IteratorStep::Value(value) => items.push(value),
+                    IteratorStep::Done => exhausted = true,
+                    IteratorStep::Abrupt(completion) => return Ok(Some(completion)),
+                }
+            }
+            let rest_value = self.create_array_from_elements(items)?;
+            continuation.tasks.push(DestructureTask::Pattern {
+                pattern: rest_pattern.as_ref().clone(),
+                value: rest_value,
+            });
+            return Ok(None);
+        }
+        if !exhausted {
+            let completion =
+                self.iterator_close(&mut source, Completion::Normal(Value::Undefined))?;
+            if !matches!(completion, Completion::Normal(_)) {
+                return Ok(Some(completion));
+            }
+        }
+        Ok(None)
+    }
+
+    fn run_destructure_element_task(
+        &mut self,
+        continuation: &mut DestructureContinuation,
+        target: BytecodePatternTarget,
+        value: Value,
+    ) -> Result<Option<Completion>> {
+        let resolved = match self.apply_pattern_default(value.clone(), target.default.as_ref())? {
+            PatternStep::Value(value) => value,
+            PatternStep::Abrupt(completion) => {
+                continuation
+                    .tasks
+                    .push(DestructureTask::ArrayElement { target, value });
+                return Ok(Some(completion));
+            }
+        };
+        continuation.tasks.push(DestructureTask::Pattern {
+            pattern: target.pattern,
+            value: resolved,
+        });
+        Ok(None)
+    }
+
+    fn close_destructure_iterators(
+        &mut self,
+        continuation: &mut DestructureContinuation,
+        mut completion: Completion,
+    ) -> Result<Completion> {
+        for task in continuation.tasks.iter_mut().rev() {
+            if let DestructureTask::Array {
+                source, exhausted, ..
+            } = task
+                && !*exhausted
+            {
+                completion = self.iterator_close(source, completion)?;
+                *exhausted = true;
+            }
+        }
+        Ok(completion)
     }
 
     fn destructure_rest_object(&mut self, source: &Value, consumed: &[String]) -> Result<Value> {
@@ -194,79 +458,6 @@ impl Context {
         )
     }
 
-    fn destructure_array(
-        &mut self,
-        elements: &[Option<BytecodePatternTarget>],
-        rest: Option<&BytecodePattern>,
-        kind: DeclKind,
-        value: Value,
-    ) -> Result<DestructureOutcome> {
-        let mut source = self.get_iterator(value)?;
-        let mut exhausted = false;
-        for element in elements {
-            self.step()?;
-            let step_value = if exhausted {
-                Value::Undefined
-            } else {
-                match self.iterator_step(&mut source)? {
-                    IteratorStep::Value(value) => value,
-                    IteratorStep::Done => {
-                        exhausted = true;
-                        Value::Undefined
-                    }
-                    // A throw from next() propagates without IteratorClose.
-                    IteratorStep::Abrupt(completion) => {
-                        return Ok(DestructureOutcome::Abrupt(completion));
-                    }
-                }
-            };
-            let Some(target) = element else {
-                continue;
-            };
-            let step_value =
-                match self.apply_pattern_default(step_value, target.default.as_ref())? {
-                    PatternStep::Value(value) => value,
-                    PatternStep::Abrupt(completion) => {
-                        let completion = self.iterator_close(&mut source, completion)?;
-                        return Ok(DestructureOutcome::Abrupt(completion));
-                    }
-                };
-            match self.destructure_pattern(&target.pattern, kind, step_value)? {
-                DestructureOutcome::Completed => {}
-                DestructureOutcome::Abrupt(completion) => {
-                    let completion = self.iterator_close(&mut source, completion)?;
-                    return Ok(DestructureOutcome::Abrupt(completion));
-                }
-            }
-        }
-        if let Some(rest) = rest {
-            let mut items = Vec::new();
-            while !exhausted {
-                self.step()?;
-                match self.iterator_step(&mut source)? {
-                    IteratorStep::Value(value) => items.push(value),
-                    IteratorStep::Done => exhausted = true,
-                    IteratorStep::Abrupt(completion) => {
-                        return Ok(DestructureOutcome::Abrupt(completion));
-                    }
-                }
-            }
-            let rest_value = self.create_array_from_elements(items)?;
-            match self.destructure_pattern(rest, kind, rest_value)? {
-                DestructureOutcome::Completed => {}
-                abrupt @ DestructureOutcome::Abrupt(_) => return Ok(abrupt),
-            }
-        } else if !exhausted {
-            // The pattern finished before the iterator: IteratorClose.
-            let completion =
-                self.iterator_close(&mut source, Completion::Normal(Value::Undefined))?;
-            if !matches!(completion, Completion::Normal(_)) {
-                return Ok(DestructureOutcome::Abrupt(completion));
-            }
-        }
-        Ok(DestructureOutcome::Completed)
-    }
-
     fn apply_pattern_default(
         &mut self,
         value: Value,
@@ -284,11 +475,12 @@ impl Context {
     fn eval_pattern_block(&mut self, block: &BytecodeBlock) -> Result<PatternStep<Value>> {
         match self.eval_bytecode_block(block)? {
             Completion::Normal(value) => Ok(PatternStep::Value(value)),
-            completion @ Completion::Throw(_) => Ok(PatternStep::Abrupt(completion)),
+            completion @ (Completion::Throw(_) | Completion::Suspended(_)) => {
+                Ok(PatternStep::Abrupt(completion))
+            }
             completion @ (Completion::Return(_)
             | Completion::Break { .. }
             | Completion::Continue(_)) => completion.into_result().map(PatternStep::Value),
-            completion @ Completion::Suspended(_) => Ok(PatternStep::Abrupt(completion)),
         }
     }
 
@@ -303,38 +495,80 @@ impl Context {
         let handle = self.push_bytecode_control(BytecodeControlRecord::for_of(source))?;
         let mut control = self.checkout_bytecode_control(handle)?;
         loop {
-            *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Initialize;
-            let step =
-                self.run_bytecode_iterator_action(handle, &mut control, |context, source| {
-                    context.step()?;
-                    context.iterator_step(source)
-                })?;
-            let value = match step {
-                IteratorStep::Value(value) => value,
-                IteratorStep::Done => break,
-                IteratorStep::Abrupt(completion) => {
-                    return Self::finish_for_of_control(self, handle, completion);
+            let phase = *control.for_of_state_mut()?.0;
+            let value = if phase == BytecodeLoopPhase::Initialize {
+                let step =
+                    self.run_bytecode_iterator_action(handle, &mut control, |context, source| {
+                        context.step()?;
+                        context.iterator_step(source)
+                    })?;
+                let value = match step {
+                    IteratorStep::Value(value) => value,
+                    IteratorStep::Done => break,
+                    IteratorStep::Abrupt(completion) => {
+                        return Self::finish_for_of_control(self, handle, completion);
+                    }
+                };
+                if matches!(kind, DeclKind::Let | DeclKind::Const) {
+                    self.push_lexical_scope_with(BindingScope::new())?;
                 }
+                *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Destructure;
+                Some(value)
+            } else {
+                None
             };
-            *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Body;
-            let iteration = self.run_bytecode_control_action_result(&control, |context| {
-                context.eval_pattern_iteration(pattern, kind, value, body)
-            });
-            let iteration = match iteration {
-                Ok(iteration) => iteration,
-                Err(error) => return self.close_for_of_error(handle, control, error),
-            };
-            match iteration {
-                PatternIteration::Body(completion) => {
-                    let (_, last) = control.for_of_state_mut()?;
-                    if let Some(completion) = bytecode_loop_completion(last, completion, labels) {
+            if *control.for_of_state_mut()?.0 == BytecodeLoopPhase::Destructure {
+                let destructure = self.run_bytecode_control_segment_result(
+                    &mut control,
+                    super::control_continuation::BytecodeControlStateSlot::Body,
+                    |context, state| {
+                        context.eval_resumable_destructure(state, pattern, kind, value)
+                    },
+                );
+                let destructure = match destructure {
+                    Ok(destructure) => destructure,
+                    Err(error) => {
+                        self.pop_pattern_iteration_scope(kind)?;
+                        return self.close_for_of_error(handle, control, error);
+                    }
+                };
+                match destructure {
+                    DestructureOutcome::Completed => {
+                        *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Body;
+                    }
+                    DestructureOutcome::Abrupt(completion @ Completion::Suspended(_)) => {
+                        self.park_bytecode_control(handle, control)?;
+                        return Ok(completion);
+                    }
+                    DestructureOutcome::Abrupt(completion) => {
+                        self.pop_pattern_iteration_scope(kind)?;
                         return self.close_for_of_completion(handle, control, completion);
                     }
                 }
-                PatternIteration::DestructureAbrupt(completion) => {
-                    return self.close_for_of_completion(handle, control, completion);
-                }
             }
+            let body_result = self.run_bytecode_control_segment_result(
+                &mut control,
+                super::control_continuation::BytecodeControlStateSlot::Body,
+                |context, state| context.eval_bytecode_block_with_state(body, state),
+            );
+            if body_result
+                .as_ref()
+                .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
+            {
+                let completion = body_result?;
+                self.park_bytecode_control(handle, control)?;
+                return Ok(completion);
+            }
+            self.pop_pattern_iteration_scope(kind)?;
+            let completion = match body_result {
+                Ok(completion) => completion,
+                Err(error) => return self.close_for_of_error(handle, control, error),
+            };
+            let (_, last) = control.for_of_state_mut()?;
+            if let Some(completion) = bytecode_loop_completion(last, completion, labels) {
+                return self.close_for_of_completion(handle, control, completion);
+            }
+            *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Initialize;
         }
         let (_, last) = control.for_of_state_mut()?;
         let completion = Completion::Normal(std::mem::replace(last, Value::Undefined));
@@ -352,69 +586,80 @@ impl Context {
         let handle = self.push_bytecode_control(BytecodeControlRecord::for_in(keys))?;
         let mut control = self.checkout_bytecode_control(handle)?;
         loop {
-            let (phase, keys, _) = control.for_in_state_mut()?;
-            *phase = BytecodeLoopPhase::Initialize;
-            let Some(key) = keys.next() else {
-                break;
+            let phase = *control.for_in_state_mut()?.0;
+            let value = if phase == BytecodeLoopPhase::Initialize {
+                let key = {
+                    let (_, keys, _) = control.for_in_state_mut()?;
+                    let Some(key) = keys.next() else {
+                        break;
+                    };
+                    key
+                };
+                self.step()?;
+                let value = self.heap_string_value(&key)?;
+                if matches!(kind, DeclKind::Let | DeclKind::Const) {
+                    self.push_lexical_scope_with(BindingScope::new())?;
+                }
+                *control.for_in_state_mut()?.0 = BytecodeLoopPhase::Destructure;
+                Some(value)
+            } else {
+                None
             };
-            *control.for_in_state_mut()?.0 = BytecodeLoopPhase::Body;
-            let iteration = self.run_bytecode_control_action(handle, &control, |context| {
-                context.step()?;
-                let value = context.heap_string_value(&key)?;
-                context.eval_pattern_iteration(pattern, kind, value, body)
-            })?;
-            match iteration {
-                PatternIteration::Body(completion) => {
-                    let (_, _, last) = control.for_in_state_mut()?;
-                    if let Some(completion) = bytecode_loop_completion(last, completion, labels) {
+            if *control.for_in_state_mut()?.0 == BytecodeLoopPhase::Destructure {
+                let destructure = self.run_bytecode_control_segment(
+                    handle,
+                    &mut control,
+                    super::control_continuation::BytecodeControlStateSlot::Body,
+                    |context, state| {
+                        context.eval_resumable_destructure(state, pattern, kind, value)
+                    },
+                )?;
+                match destructure {
+                    DestructureOutcome::Completed => {
+                        *control.for_in_state_mut()?.0 = BytecodeLoopPhase::Body;
+                    }
+                    DestructureOutcome::Abrupt(completion @ Completion::Suspended(_)) => {
+                        self.park_bytecode_control(handle, control)?;
+                        return Ok(completion);
+                    }
+                    DestructureOutcome::Abrupt(completion) => {
+                        self.pop_pattern_iteration_scope(kind)?;
                         return self.finish_bytecode_control_result(handle, Ok(completion));
                     }
                 }
-                PatternIteration::DestructureAbrupt(completion) => {
-                    return self.finish_bytecode_control_result(handle, Ok(completion));
-                }
             }
+            let body_result = self.run_bytecode_control_segment(
+                handle,
+                &mut control,
+                super::control_continuation::BytecodeControlStateSlot::Body,
+                |context, state| context.eval_bytecode_block_with_state(body, state),
+            );
+            if body_result
+                .as_ref()
+                .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
+            {
+                let completion = body_result?;
+                self.park_bytecode_control(handle, control)?;
+                return Ok(completion);
+            }
+            self.pop_pattern_iteration_scope(kind)?;
+            let completion = body_result?;
+            let (_, _, last) = control.for_in_state_mut()?;
+            if let Some(completion) = bytecode_loop_completion(last, completion, labels) {
+                return self.finish_bytecode_control_result(handle, Ok(completion));
+            }
+            *control.for_in_state_mut()?.0 = BytecodeLoopPhase::Initialize;
         }
         let (_, _, last) = control.for_in_state_mut()?;
         let completion = Completion::Normal(std::mem::replace(last, Value::Undefined));
         self.finish_bytecode_control_result(handle, Ok(completion))
     }
 
-    /// Destructures one loop value and runs the loop body, giving lexical
-    /// kinds a fresh per-iteration scope for their pattern bindings.
-    fn eval_pattern_iteration(
-        &mut self,
-        pattern: &BytecodePattern,
-        kind: DeclKind,
-        value: Value,
-        body: &BytecodeBlock,
-    ) -> Result<PatternIteration> {
-        let lexical = matches!(kind, DeclKind::Let | DeclKind::Const);
-        if lexical {
-            self.push_lexical_scope_with(BindingScope::new())?;
-        }
-        let iteration = self.destructured_body_completion(pattern, kind, value, body);
-        if lexical && self.pop_lexical_scope()?.is_none() {
+    fn pop_pattern_iteration_scope(&mut self, kind: DeclKind) -> Result<()> {
+        if matches!(kind, DeclKind::Let | DeclKind::Const) && self.pop_lexical_scope()?.is_none() {
             return Err(Error::runtime("bytecode pattern loop scope disappeared"));
         }
-        iteration
-    }
-
-    fn destructured_body_completion(
-        &mut self,
-        pattern: &BytecodePattern,
-        kind: DeclKind,
-        value: Value,
-        body: &BytecodeBlock,
-    ) -> Result<PatternIteration> {
-        match self.destructure_pattern(pattern, kind, value)? {
-            DestructureOutcome::Completed => {
-                Ok(PatternIteration::Body(self.eval_bytecode_block(body)?))
-            }
-            DestructureOutcome::Abrupt(completion) => {
-                Ok(PatternIteration::DestructureAbrupt(completion))
-            }
-        }
+        Ok(())
     }
 }
 

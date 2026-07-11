@@ -6,6 +6,7 @@ mod continuation;
 mod control;
 mod control_continuation;
 mod destructure;
+mod destructure_continuation;
 mod execution;
 mod for_of;
 mod in_operator;
@@ -221,13 +222,7 @@ impl Context {
             }
             BytecodeInstruction::Await => self.eval_bytecode_await_instruction(state, next),
             BytecodeInstruction::NullishCoalescing { right } => {
-                let left = state.stack.peek()?.clone();
-                if matches!(left, Value::Undefined | Value::Null) {
-                    state.stack.pop()?;
-                    state.stack.push(self.eval_bytecode_expression(right)?);
-                }
-                state.pc = next;
-                Ok(None)
+                self.eval_bytecode_nullish_coalescing(state, right, next)
             }
             BytecodeInstruction::TypeOfBinding(binding) => {
                 state
@@ -262,13 +257,38 @@ impl Context {
             Completion::Throw(value) => Ok(Some(Completion::Throw(value))),
             completion @ Completion::Suspended(_) => {
                 state.pc = next;
-                state.mark_suspended();
+                state.mark_await_suspended();
                 Ok(Some(completion))
             }
             completion @ (Completion::Return(_)
             | Completion::Break { .. }
             | Completion::Continue(_)) => completion.into_result().map(|_| None),
         }
+    }
+
+    fn eval_bytecode_nullish_coalescing(
+        &mut self,
+        state: &mut BytecodeState,
+        right: &crate::bytecode::BytecodeBlock,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        let left = state.stack.peek()?.clone();
+        if matches!(left, Value::Undefined | Value::Null) {
+            match self.eval_bytecode_block(right)? {
+                Completion::Normal(value) => {
+                    state.stack.pop()?;
+                    state.stack.push(value);
+                }
+                completion @ (Completion::Throw(_) | Completion::Suspended(_)) => {
+                    return Ok(Some(completion));
+                }
+                completion @ (Completion::Return(_)
+                | Completion::Break { .. }
+                | Completion::Continue(_)) => return completion.into_result().map(|_| None),
+            }
+        }
+        state.pc = next;
+        Ok(None)
     }
 
     fn eval_bytecode_template_concat(

@@ -6,14 +6,18 @@ use crate::{
     value::Value,
 };
 
-#[derive(Debug, Clone)]
+use super::destructure_continuation::DestructureContinuation;
+
+#[derive(Debug)]
 pub(in crate::runtime) struct BytecodeState {
     pub(super) pc: BytecodeAddress,
     pub(super) stack: BytecodeStack,
     pub(super) last: Value,
     suspended: bool,
+    awaiting: bool,
     resume_ready: bool,
     resume_completion: Option<Completion>,
+    destructure: Option<DestructureContinuation>,
 }
 
 impl BytecodeState {
@@ -23,8 +27,10 @@ impl BytecodeState {
             stack: BytecodeStack::new(),
             last: Value::Undefined,
             suspended: false,
+            awaiting: false,
             resume_ready: false,
             resume_completion: None,
+            destructure: None,
         }
     }
 
@@ -33,15 +39,21 @@ impl BytecodeState {
         self.stack.clear();
         self.last = Value::Undefined;
         self.suspended = false;
+        self.awaiting = false;
         self.resume_ready = false;
         self.resume_completion = None;
+        self.destructure = None;
     }
 
     pub(super) fn prepare_run(&mut self) -> Result<()> {
-        if self.suspended {
+        if self.awaiting {
             return Err(Error::runtime(
                 "suspended bytecode state has no resume value",
             ));
+        }
+        if self.suspended {
+            self.suspended = false;
+            return Ok(());
         }
         if self.resume_ready {
             self.resume_ready = false;
@@ -51,7 +63,12 @@ impl BytecodeState {
         Ok(())
     }
 
-    pub(super) const fn mark_suspended(&mut self) {
+    pub(super) const fn mark_await_suspended(&mut self) {
+        self.suspended = true;
+        self.awaiting = true;
+    }
+
+    pub(super) const fn mark_child_suspended(&mut self) {
         self.suspended = true;
     }
 
@@ -59,17 +76,22 @@ impl BytecodeState {
         self.suspended
     }
 
+    pub(super) const fn is_awaiting(&self) -> bool {
+        self.awaiting
+    }
+
     pub(super) const fn is_resuming(&self) -> bool {
         self.suspended || self.resume_ready
     }
 
     pub(super) fn resume_await(&mut self, completion: Completion) -> Result<()> {
-        if !self.suspended {
+        if !self.awaiting {
             return Err(Error::runtime(
                 "bytecode state is not awaiting a resume value",
             ));
         }
         self.suspended = false;
+        self.awaiting = false;
         self.resume_ready = true;
         match completion {
             Completion::Normal(value) => self.stack.push(value),
@@ -79,12 +101,35 @@ impl BytecodeState {
         Ok(())
     }
 
-    pub(super) fn take_resume_completion(&mut self) -> Option<Completion> {
+    pub(super) const fn take_resume_completion(&mut self) -> Option<Completion> {
         self.resume_completion.take()
     }
 
     pub(super) const fn begin_run(&mut self) {
         self.resume_ready = false;
+    }
+
+    pub(super) const fn has_destructure_continuation(&self) -> bool {
+        self.destructure.is_some()
+    }
+
+    pub(super) const fn take_destructure_continuation(
+        &mut self,
+    ) -> Option<DestructureContinuation> {
+        self.destructure.take()
+    }
+
+    pub(super) fn store_destructure_continuation(
+        &mut self,
+        continuation: DestructureContinuation,
+    ) -> Result<()> {
+        if self.destructure.is_some() {
+            return Err(Error::runtime(
+                "bytecode destructuring continuation is already stored",
+            ));
+        }
+        self.destructure = Some(continuation);
+        Ok(())
     }
 
     pub(super) fn next_pc(&self) -> Result<BytecodeAddress> {
@@ -102,6 +147,11 @@ impl BytecodeState {
             .iter()
             .chain(std::iter::once(&self.last))
             .chain(self.resume_completion.iter().filter_map(completion_value))
+            .chain(
+                self.destructure
+                    .iter()
+                    .flat_map(DestructureContinuation::root_values),
+            )
     }
 
     pub(super) fn complete(&mut self, completion: BytecodeCompletion) -> Result<Completion> {

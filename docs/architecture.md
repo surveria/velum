@@ -62,7 +62,7 @@ AS-06a2a attaches a `BytecodeContinuationFrame` to the current activation.
 Function calls use their stable `FunctionId` as the program key, while general
 and top-level frames own an immutable `BytecodeBlock`. Running program-counter,
 operand-stack, and last-value state stays with the synchronous driver and its
-transient root registry. A future suspended outcome moves that state into the
+transient root registry. A suspended outcome moves that state into the
 frame's `parked_state`; the `BytecodeFrame` direct-root category traces both
 active function ids and parked operands.
 
@@ -75,9 +75,33 @@ roots, while parked records participate in the `BytecodeFrame` direct-root
 category. Each record is charged as an `ExecutionFrame` and must be empty at
 activation unwind.
 
-This is not yet a suspended interpreter. AS-06b may add suspended outcomes by
-parking the already complete bytecode and structured-control state in their
-continuation slots; it must not introduce a second async execution model.
+AS-06b uses that same owner for asynchronous execution. `BytecodeOutcome`
+distinguishes completed and suspended runs. A pending `await` advances its
+instruction state, parks the activation suffix and lexical scopes inside a
+typed Promise reaction, and later reattaches those exact owners when the
+reaction job runs. Nested bytecode blocks return their completion to the
+parked parent continuation, while a control cursor re-enters the existing
+loop, iterator, switch, or try record at its recorded phase. No second async
+interpreter or reconstructed source execution path exists.
+
+Parent bytecode state distinguishes a direct `await` from suspension in a
+nested child. This preserves the parent's program counter, operand stack, and
+lexical-scope ownership without routing the settled value to the wrong frame.
+Destructuring keeps a typed task stack in that same state. Object-property and
+array-element phases, consumed keys, and live iterator records therefore
+survive suspension without repeating computed keys, property reads, iterator
+steps, or already-created bindings.
+
+Awaited non-Promise values and already settled Promises still resume through a
+later Promise job. Rejection is injected into the awaiting bytecode state as a
+throw completion, so surrounding catch/finally records observe the same path
+as synchronous throws. `Context` and `Vm` expose `run_jobs`,
+`pending_job_count`, and the shutdown-oriented `cancel_jobs`; cancellation
+discards ready and pending reactions, releases parked frames and bindings,
+and leaves affected Promise objects pending. Legacy `eval` continues draining
+ready jobs after a normal script for compatibility. Top-level await remains
+gated until an asynchronous evaluation result API exists and is rejected
+without retaining execution frames.
 
 ## Embedding Model
 

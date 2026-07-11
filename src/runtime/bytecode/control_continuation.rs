@@ -28,6 +28,7 @@ pub(super) enum BytecodeLoopKind {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum BytecodeLoopPhase {
     Initialize,
+    Destructure,
     Condition,
     Body,
     Update,
@@ -92,7 +93,7 @@ impl BytecodeControlRecord {
                 ..
             } => match phase {
                 BytecodeLoopPhase::Initialize | BytecodeLoopPhase::Condition => condition_state,
-                BytecodeLoopPhase::Body => body_state,
+                BytecodeLoopPhase::Destructure | BytecodeLoopPhase::Body => body_state,
                 BytecodeLoopPhase::Update => update_state,
             },
             Self::ForIn { body_state, .. }
@@ -110,7 +111,7 @@ impl BytecodeControlRecord {
                 BytecodeTryPhase::Finally => finally_state,
             },
         };
-        if !state.is_suspended() {
+        if !state.is_awaiting() {
             return Ok(false);
         }
         state.resume_await(completion)?;
@@ -562,7 +563,6 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         | Completion::Throw(value)
         | Completion::Return(value)
         | Completion::Break { value, .. } => Some(value),
-        Completion::Continue(_) => None,
-        Completion::Suspended(_) => None,
+        Completion::Continue(_) | Completion::Suspended(_) => None,
     }
 }

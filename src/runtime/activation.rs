@@ -83,15 +83,15 @@ impl ActivationFrame {
         }
     }
 
-    pub(in crate::runtime) fn rebase_local_base(&mut self, local_base: usize) -> Result<(), ()> {
+    pub(in crate::runtime) const fn rebase_local_base(
+        &mut self,
+        local_base: usize,
+    ) -> Result<(), ()> {
         match self {
             Self::Call {
                 local_base: base, ..
-            } => {
-                *base = local_base;
-                Ok(())
             }
-            Self::EvalBoundary {
+            | Self::EvalBoundary {
                 local_base: base, ..
             } => {
                 *base = local_base;

@@ -909,7 +909,9 @@ check_direct_root_boundary() {
 
   if ! grep -F -q 'pub(in crate::runtime) fn visit_direct_roots<V: DirectRootVisitor>' \
       "${repo_root}/src/runtime/promise/job.rs" \
-    || ! grep -F -q 'visitor.visit_promise(VmRootKind::QueuedJob, reaction.result)?;' \
+    || ! grep -F -q 'visitor.visit_promise(VmRootKind::QueuedJob, *result)?;' \
+      "${repo_root}/src/runtime/promise/job.rs" \
+    || ! grep -F -q 'Self::Await { continuation } => continuation.visit_direct_roots(visitor),' \
       "${repo_root}/src/runtime/promise/job.rs" \
     || ! grep -F -q 'pub fn root_snapshot(&self) -> Result<VmRootSnapshot>' \
       "${repo_root}/src/api/embedding.rs" \
@@ -1006,7 +1008,7 @@ check_bytecode_continuation_boundary() {
     'parked_state: Option<BytecodeState>,' \
     'enum BytecodeContinuationProgram {' \
     'Function(FunctionId),' \
-    'Block { _block: BytecodeBlock },' \
+    'Block { block: BytecodeBlock },' \
     'pub(in crate::runtime) const fn function(function: FunctionId) -> Self {' \
     'pub(in crate::runtime) const fn block(block: BytecodeBlock) -> Self {' \
     'pub(super) fn ensure_running_function_continuation(' \
@@ -1022,14 +1024,14 @@ check_bytecode_continuation_boundary() {
   local block_clone_count
   block_clone_count="$(grep -F -c 'block.clone()' \
     "${repo_root}/src/runtime/bytecode/continuation.rs" || true)"
-  if [[ "${block_clone_count}" != '1' ]]; then
-    fail "bytecode continuation boundary changed; running entry must create one durable block owner without another block clone"
+  if [[ "${block_clone_count}" != '2' ]]; then
+    fail "bytecode continuation boundary changed; running entry requires one durable block owner and one explicit resume clone"
   fi
 
   for source in \
     'state.reset();' \
     'let frame = self.push_bytecode_continuation(block)?;' \
-    'let outcome = self.run_bytecode_state(block, state);' \
+    'let outcome = match self.run_bytecode_state(block, state) {' \
     'self.pop_bytecode_continuation(frame)?;' \
     'self.ensure_running_function_continuation(function)?;' \
     'self.run_bytecode_state(block, &mut state)'; do
@@ -1044,8 +1046,9 @@ check_structured_control_boundary() {
   for source in \
     'control_stack: Vec<Option<BytecodeControlRecord>>,' \
     '.flat_map(BytecodeControlRecord::root_values),' \
-    'pub(super) fn push_control(' \
+    'pub(super) fn enter_control(' \
     'pub(super) fn checkout_control(' \
+    'pub(super) fn park_control(' \
     'pub(super) fn finish_control('; do
     if ! grep -F -q "${source}" \
         "${repo_root}/src/runtime/bytecode/continuation.rs"; then
@@ -1072,6 +1075,84 @@ check_structured_control_boundary() {
   if ! grep -F -q 'counter.record(VmStorageKind::ExecutionFrame, continuation.control_count())?;' \
       "${repo_root}/src/runtime/accounting.rs"; then
     fail "structured control boundary changed; control records must remain charged as execution frames"
+  fi
+}
+
+check_suspended_execution_boundary() {
+  for source in \
+    'pub(in crate::runtime) enum BytecodeOutcome {' \
+    'pub(in crate::runtime) fn resume_bytecode_activation(' \
+    'continuation.resume_await(completion)?;' \
+    'self.park_bytecode_state_at(activation_index, state)?;'; do
+    if ! grep -F -q "${source}" \
+        "${repo_root}/src/runtime/bytecode/execution.rs"; then
+      fail "suspended execution boundary changed; AS-06b requires one explicit park and resume outcome"
+    fi
+  done
+
+  if ! grep -F -x -q '    Suspended {' \
+      "${repo_root}/src/runtime/bytecode/execution.rs"; then
+    fail "suspended execution boundary changed; AS-06b requires a distinct suspended outcome variant"
+  fi
+
+  for source in \
+    'pub(in crate::runtime) struct SuspendedAsyncFunction {' \
+    'pub(in crate::runtime) fn cancel_storage(' \
+    'self.discard_execution_suffix(local_base, activation_base)?;'; do
+    if ! grep -F -q "${source}" \
+        "${repo_root}/src/runtime/function/suspended.rs"; then
+      fail "suspended execution boundary changed; detached activations must retain and release one VM-owned suffix"
+    fi
+  done
+
+  for source in \
+    'Await {' \
+    'continuation: Box<SuspendedAsyncFunction>,' \
+    'continuation.visit_direct_roots(visitor)'; do
+    if ! grep -F -q "${source}" \
+        "${repo_root}/src/runtime/promise/job.rs"; then
+      fail "suspended execution boundary changed; await reactions must own and root detached activations"
+    fi
+  done
+
+  for source in \
+    'Ok(Completion::Suspended(promise))' \
+    'pub fn run_jobs(&mut self) -> Result<usize> {' \
+    'pub fn cancel_jobs(&mut self) -> Result<usize> {' \
+    'continuation.cancel_storage(&self.storage_ledger)?;'; do
+    if ! grep -F -q "${source}" \
+        "${repo_root}/src/runtime/promise/mod.rs"; then
+      fail "suspended execution boundary changed; pending await and embedder job ownership must stay explicit"
+    fi
+  done
+
+  if ! grep -F -q 'self.suspended_async_execution_frame_count()?,' \
+      "${repo_root}/src/runtime/accounting.rs"; then
+    fail "suspended execution boundary changed; parked frames must remain in storage reconciliation"
+  fi
+
+  for source in \
+    'destructure: Option<DestructureContinuation>,' \
+    '.flat_map(DestructureContinuation::root_values),'; do
+    if ! grep -F -q "${source}" \
+        "${repo_root}/src/runtime/bytecode/state.rs"; then
+      fail "suspended execution boundary changed; destructuring must remain parked and rooted in bytecode state"
+    fi
+  done
+
+  for source in \
+    'pub(super) struct DestructureContinuation {' \
+    'Default { value: Value },' \
+    'Self::Array { source, .. } => source.root_values().collect(),'; do
+    if ! grep -F -q "${source}" \
+        "${repo_root}/src/runtime/bytecode/destructure_continuation.rs"; then
+      fail "suspended execution boundary changed; destructuring tasks must preserve phase and iterator roots"
+    fi
+  done
+
+  if ! grep -F -q 'state.store_destructure_continuation(continuation)?;' \
+      "${repo_root}/src/runtime/bytecode/destructure.rs"; then
+    fail "suspended execution boundary changed; pending pattern evaluation must not replay completed side effects"
   fi
 }
 
@@ -1275,9 +1356,10 @@ check_async_edge_boundary() {
   done
 
   for source in \
-    'StrongEdgeReference::Promise(self.result)' \
-    'if let Some(handler) = &self.on_fulfilled {' \
-    'if let Some(handler) = &self.on_rejected {'; do
+    'StrongEdgeReference::Promise(*result)' \
+    'if let Some(handler) = on_fulfilled {' \
+    'if let Some(handler) = on_rejected {' \
+    'Self::Await { continuation } => continuation.visit_strong_edges(visitor)?,'; do
     if ! grep -F -q "${source}" "${repo_root}/src/runtime/promise/job.rs"; then
       fail "asynchronous edge boundary changed; Promise reaction source '${source}' is missing"
     fi
@@ -1466,6 +1548,7 @@ src/runtime/bytecode/control/loop_helpers.rs
 src/runtime/bytecode/control/object_literal_loop.rs
 src/runtime/bytecode/control/string_concat_loop.rs
 src/runtime/bytecode/control/structured_do_while.rs
+src/runtime/bytecode/control/structured_switch.rs
 src/runtime/bytecode/control/switch_for_loop.rs
 src/runtime/bytecode/control/try_catch.rs
 src/runtime/bytecode/control/try_catch_loop.rs
@@ -1506,6 +1589,9 @@ run_checks() {
   require_file src/runtime/activation.rs
   require_file src/runtime/bytecode/continuation.rs
   require_file src/runtime/bytecode/control_continuation.rs
+  require_file src/runtime/bytecode/control/structured_switch.rs
+  require_file src/runtime/bytecode/destructure_continuation.rs
+  require_file src/runtime/function/suspended.rs
   require_file src/runtime/object/accounting.rs
   require_file src/runtime/mod.rs
   require_file src/runtime/roots.rs
@@ -1540,6 +1626,7 @@ run_checks() {
   check_activation_frame_boundary
   check_bytecode_continuation_boundary
   check_structured_control_boundary
+  check_suspended_execution_boundary
   check_callable_edge_boundary
   check_object_edge_boundary
   check_async_edge_boundary
@@ -1716,6 +1803,24 @@ mutate_structured_control_in_place() {
     "${fixture_root}/src/runtime/bytecode/control_continuation.rs"
 }
 
+mutate_suspended_outcome() {
+  local fixture_root="$1"
+  sed -i '/^    Suspended {$/d' \
+    "${fixture_root}/src/runtime/bytecode/execution.rs"
+}
+
+mutate_suspended_cancel_release() {
+  local fixture_root="$1"
+  sed -i '/continuation.cancel_storage(&self.storage_ledger)?;/d' \
+    "${fixture_root}/src/runtime/promise/mod.rs"
+}
+
+mutate_suspended_destructure_owner() {
+  local fixture_root="$1"
+  sed -i '/    destructure: Option<DestructureContinuation>,/d' \
+    "${fixture_root}/src/runtime/bytecode/state.rs"
+}
+
 mutate_bytecode_frame_root() {
   local fixture_root="$1"
   sed -i '/visitor.visit_value(VmRootKind::BytecodeFrame, value)?;/d' \
@@ -1880,7 +1985,7 @@ mutate_object_shape_root() {
 
 mutate_promise_reaction_edge() {
   local fixture_root="$1"
-  sed -i '/StrongEdgeReference::Promise(self.result)/d' \
+  sed -i '/StrongEdgeReference::Promise(\*result)/d' \
     "${fixture_root}/src/runtime/promise/job.rs"
 }
 
@@ -2045,6 +2150,12 @@ run_self_tests() {
     'structured control boundary changed' mutate_structured_control_owner
   expect_guard_failure "${temp_dir}" structured-control-in-place \
     'structured control boundary changed' mutate_structured_control_in_place
+  expect_guard_failure "${temp_dir}" suspended-outcome \
+    'suspended execution boundary changed' mutate_suspended_outcome
+  expect_guard_failure "${temp_dir}" suspended-cancel-release \
+    'suspended execution boundary changed' mutate_suspended_cancel_release
+  expect_guard_failure "${temp_dir}" suspended-destructure-owner \
+    'suspended execution boundary changed' mutate_suspended_destructure_owner
   expect_guard_failure "${temp_dir}" bytecode-frame-root \
     'direct root boundary changed' mutate_bytecode_frame_root
   expect_guard_failure "${temp_dir}" native-registry-root \

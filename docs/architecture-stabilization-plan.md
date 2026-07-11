@@ -25,10 +25,9 @@ version policy, and uses the validation lane appropriate to the change.
 - Review baseline: `origin/main` at `f0e4666`
 - Test baseline: 34,002 of 102,578 full Test262 variants passed in
   `reports/test-runs/rsqjs-test-report-20260709T213555Z.md`
-- Current program state: AS-01 through AS-05, AS-06a1, AS-06a2a, and its
-  AS-06a2a1 performance follow-up are complete through PR #440. Draft PR #442
-  moves loop, switch, iterator, and try/finally state into structured control
-  records before AS-06b adds suspended outcomes
+- Current program state: AS-01 through AS-05 and AS-06a are complete through
+  PR #442. Draft PR #445 adds suspended outcomes, same-owner async resume, and
+  embedder-controlled job lifecycle APIs
 
 The baseline is historical evidence, not a value to keep editing after every
 merge. Current task selection must always use the newest trusted report.
@@ -487,7 +486,7 @@ dependencies do not overlap.
 | AS-03 | Complete | Centralize ECMAScript abstract operations. | AS-01, AS-02 foundation | AS-03a1 equality merged in PR #409; AS-03a2 conversions completed through PRs #410 and #411; AS-03b1a `ToPropertyKey` merged in PR #412; AS-03b1b integer/length/index conversion merged in PR #413; AS-03b2 property/method/call operations merged in PR #414; AS-03b3 iterator operations merged in PR #415. |
 | AS-04 | Complete | Separate JavaScript completions from engine failures and add source metadata. | AS-01; coordinate with AS-02 | AS-04a typed throw boundary merged in PR #416; AS-04b1 ordinary Error object identity merged in PR #418; AS-04b2a source identity/frontend diagnostics merged in PR #419; AS-04b2b1 token ranges/span-bearing AST merged in PR #420; AS-04b2b2 bytecode/runtime spans merged in PR #421 with exact-tree correctness and canonical report publication. |
 | AS-05 | Complete | Define VM-bound handles, roots, and complete resource accounting. | AS-02 foundation, AS-04 | AS-05a1 through AS-05b2c3 are merged through PR #436 with exact-tree correctness, complete owner-limit reconciliation, and canonical report publication. |
-| AS-06 | In progress | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 call activations, AS-06a2a outer block continuations, and the AS-06a2a1 synchronous-overhead follow-up merged in PRs #438 through #440. Draft PR #442 owns AS-06a2b structured control records before suspend/resume outcomes. |
+| AS-06 | In progress | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. Draft PR #445 implements AS-06b suspended outcomes, detached async owners, resumable nested/control/pattern state, and embedder job lifecycle APIs. |
 | AS-07 | Backlog | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | Collector with explicit roots, deterministic teardown, hard heap limits, correct WeakMap/WeakSet behavior. |
 | AS-08 | Backlog | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | Optimizer on/off equivalence, harness opcodes removed, workload-shaped paths replaced or justified by broad evidence. |
 | AS-09 | Backlog | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | Multiple feature clusters land through shared semantics without new architecture exceptions. |
@@ -2026,6 +2025,33 @@ Migrate the existing synchronous engine before exposing new async behavior:
 6. resume pending promises and generators through the VM job/frame APIs;
 7. add explicit job-draining and cancellation surfaces for embedders.
 
+AS-06b local implementation evidence (draft PR #445):
+
+- `BytecodeOutcome` now distinguishes completed and suspended execution, and
+  pending `await` never drains the job queue or consumes an unresolved value;
+- one `SuspendedAsyncFunction` moves the existing lexical scopes and activation
+  suffix into a typed await reaction. Settlement reattaches the same owners and
+  resumes the same bytecode/control driver;
+- continuation-owned cursors and recorded phases resume nested blocks, while,
+  do/while, for, for-in, for-of, switch, catch, and finally without replaying
+  completed iterations or introducing a parallel interpreter;
+- parent bytecode states distinguish direct awaits from suspended children,
+  and typed destructuring tasks retain property/default phases, consumed keys,
+  and iterator sources without replaying observable side effects;
+- non-Promise, fulfilled, rejected, pending, repeated, and nested awaits use
+  Promise jobs. Rejections re-enter as throw completions;
+- `Context` and `Vm` expose `run_jobs`, `pending_job_count`, and `cancel_jobs`.
+  Cancellation releases detached bindings, activations, control records,
+  reactions, jobs, roots, and cache accounting; top-level await remains gated
+  until an asynchronous evaluation API exists and fails without frame leakage;
+- focused tests cover ordering, later settlement, repeated suspension,
+  rejection, nested logical/pattern evaluation, structured control,
+  cancellation, accounting reconciliation, and the top-level-await gate;
+- architecture guards and their mutation self-tests cover the explicit
+  outcome, cancellation release, and rooted destructuring owner. Complete
+  fast/correctness gates, Test262/QuickJS totals, and paired sentinel
+  performance evidence remain to be attached before the PR leaves draft.
+
 ### AS-07: Collection And Weak Semantics
 
 Start with a safe non-moving collector over indexed arenas. The collector must
@@ -2165,7 +2191,8 @@ reviewable scope.
     #440).
 36. AS-06a2b: replace recursive loop/try/finally durability with explicit
     control continuation records.
-37. AS-06b: add suspend/resume outcomes and correct pending `await` behavior.
+37. AS-06b: add suspend/resume outcomes and correct pending `await` behavior
+    (implemented in draft PR #445; final guards and validation in progress).
 38. AS-07a: add safe collection over explicit roots and correct weak edges.
 39. AS-08a: move reusable optimization state behind one optimizer/quickening
     boundary and remove harness-specific opcodes.

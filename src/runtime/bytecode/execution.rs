@@ -190,9 +190,16 @@ impl Context {
     ) -> Result<BytecodeOutcome> {
         state.reset();
         let frame = self.push_bytecode_continuation(block)?;
-        let outcome = self.run_bytecode_state(block, state)?;
+        let outcome = match self.run_bytecode_state(block, state) {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                self.pop_bytecode_continuation(frame)?;
+                return Err(error);
+            }
+        };
         if outcome.is_suspended() {
-            self.park_bytecode_continuation_state(frame, state.clone())?;
+            let parked = std::mem::replace(state, BytecodeState::new());
+            self.park_bytecode_continuation_state(frame, parked)?;
             return Ok(outcome);
         }
         self.pop_bytecode_continuation(frame)?;
@@ -223,6 +230,9 @@ impl Context {
             if let Some(completion) = completion {
                 if let Completion::Throw(value) = &completion {
                     self.annotate_error_value_span(value, span)?;
+                }
+                if matches!(completion, Completion::Suspended(_)) && !state.is_suspended() {
+                    state.mark_child_suspended();
                 }
                 return Ok(match completion {
                     Completion::Suspended(awaited) => BytecodeOutcome::Suspended {

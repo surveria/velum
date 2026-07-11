@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::{
     bytecode::BytecodeBlock,
     error::{Error, Result},
@@ -36,7 +38,7 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
 #[derive(Debug)]
 enum BytecodeContinuationProgram {
     Function(FunctionId),
-    Block { _block: BytecodeBlock },
+    Block { block: BytecodeBlock },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -58,7 +60,7 @@ impl BytecodeContinuationFrame {
 
     pub(in crate::runtime) const fn block(block: BytecodeBlock) -> Self {
         Self {
-            program: BytecodeContinuationProgram::Block { _block: block },
+            program: BytecodeContinuationProgram::Block { block },
             parked_state: None,
             control_stack: Vec::new(),
             control_cursor: 0,
@@ -111,16 +113,18 @@ impl BytecodeContinuationFrame {
 
     pub(super) fn enter_control(&mut self, record: BytecodeControlRecord) -> Result<usize> {
         let index = self.control_cursor;
-        if index < self.control_stack.len() {
-            if !self.control_stack.get(index).is_some_and(Option::is_some) {
-                return Err(Error::runtime(
-                    "structured control resume record is already running",
-                ));
+        match index.cmp(&self.control_stack.len()) {
+            Ordering::Less => {
+                if !self.control_stack.get(index).is_some_and(Option::is_some) {
+                    return Err(Error::runtime(
+                        "structured control resume record is already running",
+                    ));
+                }
             }
-        } else if index == self.control_stack.len() {
-            self.control_stack.push(Some(record));
-        } else {
-            return Err(Error::runtime("structured control cursor overflowed"));
+            Ordering::Equal => self.control_stack.push(Some(record)),
+            Ordering::Greater => {
+                return Err(Error::runtime("structured control cursor overflowed"));
+            }
         }
         self.control_cursor = self
             .control_cursor
@@ -192,7 +196,7 @@ impl BytecodeContinuationFrame {
         if self
             .parked_state
             .as_ref()
-            .is_some_and(BytecodeState::is_suspended)
+            .is_some_and(BytecodeState::is_awaiting)
         {
             return self
                 .parked_state
@@ -213,7 +217,7 @@ impl BytecodeContinuationFrame {
     pub(in crate::runtime) fn program_block(&self) -> Option<BytecodeBlock> {
         match &self.program {
             BytecodeContinuationProgram::Function(_) => None,
-            BytecodeContinuationProgram::Block { _block } => Some(_block.clone()),
+            BytecodeContinuationProgram::Block { block } => Some(block.clone()),
         }
     }
 

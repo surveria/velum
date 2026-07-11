@@ -1,4 +1,4 @@
-use rs_quickjs::{Runtime, Value, Vm, VmStorageKind};
+use rs_quickjs::{Runtime, Value, Vm, VmAsyncEdgeKind, VmStorageKind};
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -303,6 +303,76 @@ fn await_resumes_across_structured_control_kinds() -> TestResult {
 }
 
 #[test]
+fn await_resumes_inside_nested_expressions_and_patterns() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    context.eval(
+        r"
+        let result = 0;
+        let keyReads = 0;
+        function key() {
+            keyReads = keyReads + 1;
+            return 'head';
+        }
+        async function task() {
+            let { [key()]: head, tail = await Promise.resolve(2) } = { head: 40 };
+            let [left = await Promise.resolve(20)] = [undefined];
+            let right = false || await Promise.resolve(22);
+            let fallback = null ?? await Promise.resolve(0);
+            let forOfTotal = 0;
+            for (let [item = await Promise.resolve(21)] of [[], []]) {
+                forOfTotal = forOfTotal + item;
+            }
+            let forInTotal = 0;
+            for (let { missing = await Promise.resolve(21) } in { a: 1, b: 2 }) {
+                forInTotal = forInTotal + missing;
+            }
+            return left + right + fallback + head + tail + forOfTotal +
+                forInTotal - 126 +
+                (keyReads === 1 ? 0 : 1000);
+        }
+        task().then(function(value) { result = value; });
+        ",
+    )?;
+
+    ensure_value(&context.eval("result")?, &Value::Number(42.0))
+}
+
+#[test]
+fn rejected_await_can_resume_catch_and_async_finally() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    context.eval(
+        r#"
+        let result = "";
+        async function task() {
+            try {
+                await Promise.reject("offline");
+                return "unreachable";
+            } catch (error) {
+                try {
+                    return error + await Promise.resolve("-caught");
+                } finally {
+                    await Promise.resolve("cleanup");
+                }
+            }
+        }
+        task().then(
+            function(value) { result = value; },
+            function(error) { result = error.name + ":" + error.message; }
+        );
+        "#,
+    )?;
+
+    ensure_value(
+        &context.eval("result")?,
+        &Value::String("offline-caught".to_owned()),
+    )
+}
+
+#[test]
 fn embedder_can_cancel_parked_async_jobs() -> TestResult {
     let mut vm = Vm::new();
     vm.eval(
@@ -323,6 +393,13 @@ fn embedder_can_cancel_parked_async_jobs() -> TestResult {
     {
         return Err("expected parked async storage before cancellation".into());
     }
+    if vm
+        .async_edge_snapshot()?
+        .count(VmAsyncEdgeKind::PromiseReaction)
+        == 0
+    {
+        return Err("expected parked async Promise-reaction edges".into());
+    }
     let cancelled = vm.cancel_jobs()?;
     if cancelled == 0 {
         return Err("expected at least one cancelled Promise reaction".into());
@@ -336,6 +413,13 @@ fn embedder_can_cancel_parked_async_jobs() -> TestResult {
     }
     if after.count(VmStorageKind::PromiseReaction) != 0 {
         return Err("expected cancellation to release Promise reactions".into());
+    }
+    if vm
+        .async_edge_snapshot()?
+        .count(VmAsyncEdgeKind::PromiseReaction)
+        != 0
+    {
+        return Err("expected cancellation to release async reaction edges".into());
     }
     vm.eval("resolveLater(1)")?;
     ensure_value(&vm.eval("resumed")?, &Value::Bool(false))

@@ -56,6 +56,12 @@ struct BytecodeForPlans<'a> {
     update: Option<BytecodeLinearPlan<'a>>,
 }
 
+enum StructuredForAction {
+    Continue,
+    Break,
+    Completion(Completion),
+}
+
 #[derive(Debug, Clone, PartialEq)]
 enum BytecodeCondition {
     Value(bool),
@@ -403,91 +409,136 @@ impl Context {
             context.compile_structured_for_plans(parts)
         })?;
         loop {
-            let phase = *control.loop_state_mut(BytecodeLoopKind::For)?.0;
-            if phase != BytecodeLoopPhase::Body
-                && phase != BytecodeLoopPhase::Update
-                && let Some(condition) = parts.condition
-            {
-                *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Condition;
-                let condition_result = self.run_bytecode_control_segment(
-                    handle,
-                    &mut control,
-                    BytecodeControlStateSlot::Condition,
-                    |context, condition_state| {
-                        context.eval_bytecode_condition_with_state(
-                            condition,
-                            plans.condition.as_ref(),
-                            condition_state,
-                        )
-                    },
-                )?;
-                match condition_result {
-                    BytecodeCondition::Value(true) => {}
-                    BytecodeCondition::Value(false) => break,
-                    BytecodeCondition::Completion(completion @ Completion::Suspended(_)) => {
-                        self.park_bytecode_control(handle, control)?;
-                        return Ok(Some(completion));
-                    }
-                    BytecodeCondition::Completion(completion) => {
-                        return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
-                    }
-                }
-            }
-            if phase != BytecodeLoopPhase::Update {
-                if phase != BytecodeLoopPhase::Body
-                    && let Err(error) = self.step()
-                {
-                    return self.finish_bytecode_control_result(handle, Err(error));
-                }
-                *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Body;
-                let body_completion = self.eval_structured_for_body(
-                    handle,
-                    &mut control,
-                    parts.body,
-                    plans.body_fast_path.as_ref(),
-                    plans.body.as_ref(),
-                )?;
-                let (_, last) = control.loop_state_mut(BytecodeLoopKind::For)?;
-                if let Some(completion) =
-                    bytecode_loop_completion(last, body_completion, parts.labels)
-                {
+            match self.eval_structured_for_condition(handle, &mut control, parts, &plans)? {
+                StructuredForAction::Continue => {}
+                StructuredForAction::Break => break,
+                StructuredForAction::Completion(completion) => {
                     if matches!(completion, Completion::Suspended(_)) {
                         self.park_bytecode_control(handle, control)?;
                         return Ok(Some(completion));
                     }
-                    if let Completion::Normal(value) = completion {
-                        *last = value;
-                        break;
+                    return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
+                }
+            }
+            match self.eval_structured_for_iteration(handle, &mut control, parts, &plans)? {
+                StructuredForAction::Continue => {}
+                StructuredForAction::Break => break,
+                StructuredForAction::Completion(completion) => {
+                    if matches!(completion, Completion::Suspended(_)) {
+                        self.park_bytecode_control(handle, control)?;
+                        return Ok(Some(completion));
                     }
                     return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
                 }
             }
-            if let Some(update) = parts.update {
-                *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Update;
-                let completion = self.run_bytecode_control_segment(
-                    handle,
-                    &mut control,
-                    BytecodeControlStateSlot::Update,
-                    |context, update_state| {
-                        context.eval_bytecode_expression_with_plan(
-                            update,
-                            plans.update.as_ref(),
-                            update_state,
-                        )
-                    },
-                )?;
-                if matches!(completion, Completion::Suspended(_)) {
-                    self.park_bytecode_control(handle, control)?;
-                    return Ok(Some(completion));
-                }
-                completion.into_result()?;
+            if let StructuredForAction::Completion(completion) =
+                self.eval_structured_for_update(handle, &mut control, parts, &plans)?
+            {
+                self.park_bytecode_control(handle, control)?;
+                return Ok(Some(completion));
             }
-            *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Condition;
         }
         let (_, last) = control.loop_state_mut(BytecodeLoopKind::For)?;
         state.last = std::mem::replace(last, Value::Undefined);
         state.pc = next;
         self.finish_bytecode_control_result(handle, Ok(None))
+    }
+
+    fn eval_structured_for_condition(
+        &mut self,
+        handle: super::control_continuation::BytecodeControlHandle,
+        control: &mut BytecodeControlRecord,
+        parts: BytecodeForParts<'_>,
+        plans: &BytecodeForPlans<'_>,
+    ) -> Result<StructuredForAction> {
+        let phase = *control.loop_state_mut(BytecodeLoopKind::For)?.0;
+        if matches!(phase, BytecodeLoopPhase::Body | BytecodeLoopPhase::Update) {
+            return Ok(StructuredForAction::Continue);
+        }
+        let Some(condition) = parts.condition else {
+            return Ok(StructuredForAction::Continue);
+        };
+        *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Condition;
+        let result = self.run_bytecode_control_segment(
+            handle,
+            control,
+            BytecodeControlStateSlot::Condition,
+            |context, state| {
+                context.eval_bytecode_condition_with_state(
+                    condition,
+                    plans.condition.as_ref(),
+                    state,
+                )
+            },
+        )?;
+        Ok(match result {
+            BytecodeCondition::Value(true) => StructuredForAction::Continue,
+            BytecodeCondition::Value(false) => StructuredForAction::Break,
+            BytecodeCondition::Completion(completion) => {
+                StructuredForAction::Completion(completion)
+            }
+        })
+    }
+
+    fn eval_structured_for_iteration(
+        &mut self,
+        handle: super::control_continuation::BytecodeControlHandle,
+        control: &mut BytecodeControlRecord,
+        parts: BytecodeForParts<'_>,
+        plans: &BytecodeForPlans<'_>,
+    ) -> Result<StructuredForAction> {
+        let phase = *control.loop_state_mut(BytecodeLoopKind::For)?.0;
+        if phase == BytecodeLoopPhase::Update {
+            return Ok(StructuredForAction::Continue);
+        }
+        if phase != BytecodeLoopPhase::Body {
+            self.run_bytecode_control_action(handle, control, Self::step)?;
+        }
+        *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Body;
+        let completion = self.eval_structured_for_body(
+            handle,
+            control,
+            parts.body,
+            plans.body_fast_path.as_ref(),
+            plans.body.as_ref(),
+        )?;
+        let (_, last) = control.loop_state_mut(BytecodeLoopKind::For)?;
+        let Some(completion) = bytecode_loop_completion(last, completion, parts.labels) else {
+            return Ok(StructuredForAction::Continue);
+        };
+        if let Completion::Normal(value) = completion {
+            *last = value;
+            return Ok(StructuredForAction::Break);
+        }
+        Ok(StructuredForAction::Completion(completion))
+    }
+
+    fn eval_structured_for_update(
+        &mut self,
+        handle: super::control_continuation::BytecodeControlHandle,
+        control: &mut BytecodeControlRecord,
+        parts: BytecodeForParts<'_>,
+        plans: &BytecodeForPlans<'_>,
+    ) -> Result<StructuredForAction> {
+        if let Some(update) = parts.update {
+            *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Update;
+            let completion = self.run_bytecode_control_segment(
+                handle,
+                control,
+                BytecodeControlStateSlot::Update,
+                |context, state| {
+                    context.eval_bytecode_expression_with_plan(update, plans.update.as_ref(), state)
+                },
+            )?;
+            if matches!(completion, Completion::Suspended(_)) {
+                return Ok(StructuredForAction::Completion(completion));
+            }
+            if let Err(error) = completion.into_result() {
+                return self.finish_bytecode_control_result(handle, Err(error));
+            }
+        }
+        *control.loop_state_mut(BytecodeLoopKind::For)?.0 = BytecodeLoopPhase::Condition;
+        Ok(StructuredForAction::Continue)
     }
 
     fn compile_structured_for_plans<'a>(
@@ -553,8 +604,8 @@ impl Context {
                 completion @ (Completion::Throw(_)
                 | Completion::Return(_)
                 | Completion::Break { .. }
-                | Completion::Continue(_)) => BytecodeCondition::Completion(completion),
-                completion @ Completion::Suspended(_) => BytecodeCondition::Completion(completion),
+                | Completion::Continue(_)
+                | Completion::Suspended(_)) => BytecodeCondition::Completion(completion),
             });
         }
         match self.eval_bytecode_block_with_linear_plan(condition, plan, state)? {
@@ -562,8 +613,8 @@ impl Context {
             completion @ (Completion::Throw(_)
             | Completion::Return(_)
             | Completion::Break { .. }
-            | Completion::Continue(_)) => Ok(BytecodeCondition::Completion(completion)),
-            completion @ Completion::Suspended(_) => Ok(BytecodeCondition::Completion(completion)),
+            | Completion::Continue(_)
+            | Completion::Suspended(_)) => Ok(BytecodeCondition::Completion(completion)),
         }
     }
 
