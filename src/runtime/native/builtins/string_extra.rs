@@ -70,9 +70,9 @@ impl Context {
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        let mut output = Vec::new();
+        let mut output = Vec::with_capacity(args.len());
         for value in args {
-            let unit = Self::to_uint16(self.to_number(value)?)?;
+            let unit = Self::to_uint16(self.to_number(value)?);
             output.push(unit);
             self.check_utf16_string_len(&output)?;
         }
@@ -90,7 +90,7 @@ impl Context {
         &mut self,
         args: &[Value],
     ) -> Result<Value> {
-        let mut output = Vec::new();
+        let mut output = Vec::with_capacity(args.len());
         for value in args {
             let code_point = self.code_point_argument(value)?;
             append_code_point_utf16(&mut output, code_point)?;
@@ -364,7 +364,16 @@ impl Context {
     }
 
     fn code_point_argument(&mut self, value: &Value) -> Result<u32> {
-        let number = self.to_number(value)?;
+        let number = if let Value::Number(number) = value {
+            *number
+        } else {
+            self.to_number(value)?
+        };
+        Self::validated_code_point(number)
+    }
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn validated_code_point(number: f64) -> Result<u32> {
         if !number.is_finite() || !(0.0..=MAX_CODE_POINT).contains(&number) || number.fract() != 0.0
         {
             return Err(Error::exception(
@@ -372,14 +381,13 @@ impl Context {
                 RANGE_CODE_POINT_ERROR,
             ));
         }
-        let text = format!("{number:.0}");
-        text.parse::<u32>()
-            .map_err(|_| Error::exception(ErrorName::RangeError, RANGE_CODE_POINT_ERROR))
+        Ok(number as u32)
     }
 
-    fn to_uint16(number: f64) -> Result<u16> {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn to_uint16(number: f64) -> u16 {
         if !number.is_finite() || number == 0.0 {
-            return Ok(0);
+            return 0;
         }
         let integer = if number.is_sign_negative() {
             number.ceil()
@@ -387,9 +395,7 @@ impl Context {
             number.floor()
         };
         let unit = integer.rem_euclid(UINT16_MODULO);
-        let text = format!("{unit:.0}");
-        text.parse::<u16>()
-            .map_err(|_| Error::limit("uint16 conversion exceeded supported range"))
+        unit as u16
     }
 
     const fn is_high_surrogate(unit: u16) -> bool {

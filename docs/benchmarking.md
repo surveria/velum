@@ -7,7 +7,7 @@ The target is not to beat desktop JIT engines. The target is to stay close to Qu
 Correctness and performance are deliberately separate:
 
 - `scripts/check-fast.sh` is the local iteration loop. It does not download external corpora or run benchmarks.
-- `scripts/check-correctness.sh` is the required ready-PR and merge-queue gate. It runs all formatting, lint, test, documentation, active-fixture, QuickJS differential, and full Test262 checks, but no project or JetStream benchmarks.
+- `scripts/check-correctness.sh` is the required ready-PR and merge-queue gate. It runs all formatting, lint, test, documentation, active-fixture, QuickJS differential, and full Test262 checks, but no project or JetStream benchmarks. GitHub Actions overlaps the fast quality lane with the release full-corpus lane and joins both results into the required `rust` check; the complete corpus is never weakened or omitted.
 - After a merge, CI checks out the exact merge commit and runs only the prepared project sentinel set with the committed QuickJS baseline. It does not prepare QuickJS shell/Test262 inputs or rerun correctness. The publisher composes this performance model with the already-required exact-tree correctness model, preserving both Test262 progress and merge-to-merge performance history.
 - `scripts/test-all.sh` is the explicit combined/manual lane. It defaults to the five project sentinels with JetStream disabled; set `RSQJS_BENCH_SET`, a focused filter, or the dedicated JetStream switch explicitly when deeper diagnostics are needed. It is not a routine local prerequisite for an ordinary feature PR.
 - `scripts/run-jetstream.sh` is the standalone JetStream lane. It does not run engine fixtures, Test262, differential checks, or project benchmarks.

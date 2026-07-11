@@ -27,11 +27,15 @@ if [[ "${GITHUB_ACTIONS:-false}" == "true" && "${RSQJS_REPORT_EXHAUSTIVE:-0}" ==
   printf 'RSQJS_REPORT_EXHAUSTIVE is local-only and cannot run in GitHub Actions\n' >&2
   exit 1
 fi
+if [[ "${RSQJS_SKIP_QUALITY_GATES:-0}" == "1" && "${GITHUB_ACTIONS:-false}" != "true" ]]; then
+  printf 'RSQJS_SKIP_QUALITY_GATES is reserved for the parallel GitHub Actions correctness lane\n' >&2
+  exit 1
+fi
 
 # Post-merge performance collection reuses the exact tree that already passed
 # the required correctness gate. The runner locks only measured benchmark
 # execution; preparation and compilation remain outside the exclusive slot.
-if [[ "${RSQJS_PERFORMANCE_ONLY:-0}" != "1" ]]; then
+if [[ "${RSQJS_PERFORMANCE_ONLY:-0}" != "1" && "${RSQJS_SKIP_QUALITY_GATES:-0}" != "1" ]]; then
   # --- Fast gates: run the cheap checks first so the pipeline stops before it
   # compiles anything or downloads corpora. On pull requests and merge groups CI
   # sets RSQJS_BASE_REF, which turns on base-relative policy gates.
