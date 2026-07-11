@@ -11,6 +11,7 @@ use crate::{
         property::DynamicPropertyKey,
         roots::VmRootKind,
         semantic_object::SemanticIntegrityLevel,
+        transient_roots::TransientRootScope,
     },
     value::{ObjectId, Value},
 };
@@ -57,10 +58,12 @@ impl Context {
         let object = self
             .objects
             .create_with_exact_prototype(prototype, self.limits.max_objects)?;
+        let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
+        roots.add_values(std::iter::once(&object).chain(args.get(1)))?;
         if let Some(properties) = args.get(1)
             && !matches!(properties, Value::Undefined)
         {
-            self.define_properties_on_target(&object, properties)?;
+            self.define_properties_on_target_with_roots(&object, properties, &roots)?;
         }
         Ok(object)
     }
@@ -309,8 +312,19 @@ impl Context {
     }
 
     fn define_properties_on_target(&mut self, target: &Value, properties: &Value) -> Result<()> {
+        let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
+        roots.add_values([target, properties])?;
+        self.define_properties_on_target_with_roots(target, properties, &roots)
+    }
+
+    fn define_properties_on_target_with_roots(
+        &mut self,
+        target: &Value,
+        properties: &Value,
+        roots: &TransientRootScope,
+    ) -> Result<()> {
         Self::validate_define_properties_target(target)?;
-        let updates = self.pending_property_updates(properties)?;
+        let updates = self.pending_property_updates(properties, roots)?;
         for PendingPropertyUpdate {
             mut property,
             update,
@@ -350,19 +364,32 @@ impl Context {
     fn pending_property_updates(
         &mut self,
         properties: &Value,
+        roots: &TransientRootScope,
     ) -> Result<Vec<PendingPropertyUpdate>> {
-        let keys = self.own_enumerable_keys(properties)?;
+        let keys = self.semantic_own_property_keys(properties)?;
+        roots.add_values(keys.iter())?;
         let mut updates = Vec::with_capacity(keys.len());
-        let roots = self.active_transient_root_scope(VmRootKind::TransientTemporary)?;
-        for name in keys {
-            let descriptor_value = self.get_named(properties, &name)?;
+        for key in keys {
+            let property = self.dynamic_property_key(&key)?;
+            let Some(descriptor) = self.semantic_own_property_descriptor(properties, &property)?
+            else {
+                continue;
+            };
+            let enumerable = match descriptor {
+                OwnPropertyDescriptor::Data(descriptor) => descriptor.enumerable(),
+                OwnPropertyDescriptor::Accessor(descriptor) => descriptor.enumerable(),
+            };
+            if !enumerable.is_yes() {
+                continue;
+            }
+            let descriptor_value = self.get(properties, property.lookup())?;
             let update = self.property_update_from_value(&descriptor_value)?;
             roots.add_values(
                 std::iter::once(&descriptor_value)
                     .chain(update.trace_values().into_iter().flatten()),
             )?;
             updates.push(PendingPropertyUpdate {
-                property: self.named_dynamic_property(name),
+                property,
                 update,
                 descriptor: descriptor_value,
             });
@@ -434,12 +461,12 @@ impl Context {
             | Value::Number(_)
             | Value::String(_)
             | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::Function(_)
-            | Value::NativeFunction(_)
-            | Value::HostFunction(_) => Err(Error::runtime(
+            | Value::Symbol(_) => Err(Error::type_error(
                 "Object.create prototype must be an object or null",
             )),
+            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => Err(
+                Error::runtime("Object.create callable prototypes are not supported"),
+            ),
         }
     }
 

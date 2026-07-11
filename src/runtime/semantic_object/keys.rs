@@ -14,7 +14,7 @@ impl Context {
         let Some(object_ref) = self.semantic_object_ref(target)? else {
             return match target {
                 Value::String(_) | Value::HeapString(_) => self.enumerable_keys(target),
-                Value::Undefined | Value::Null => Err(Error::runtime(
+                Value::Undefined | Value::Null => Err(Error::type_error(
                     "Object.keys target cannot be converted to an object",
                 )),
                 Value::Bool(_)
@@ -95,7 +95,7 @@ impl Context {
                 | Value::Function(_)
                 | Value::NativeFunction(_)
                 | Value::HostFunction(_) => Ok(Vec::new()),
-                Value::Undefined | Value::Null => Err(Error::runtime(
+                Value::Undefined | Value::Null => Err(Error::type_error(
                     "own property keys target cannot be converted to an object",
                 )),
             };
