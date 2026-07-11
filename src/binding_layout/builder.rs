@@ -1,8 +1,8 @@
 use crate::{
     ast::{
-        BindingPattern, CatchClause, DeclKind, Expr, Expression, ForInTarget, FunctionParam,
-        ObjectProperty, ObjectPropertyKey, Program, Statement, StaticBinding, StaticFunctionId,
-        StaticNameId, Stmt, SwitchCase,
+        BindingPattern, CatchClause, DeclKind, Expr, Expression, ForInTarget, ObjectProperty,
+        ObjectPropertyKey, Program, Statement, StaticBinding, StaticFunctionId, StaticNameId, Stmt,
+        SwitchCase,
     },
     binding_metadata::{
         BindingLayout, BindingLayoutParts, BindingOperand, FunctionScopeId, LocalSlot, ScopeId,
@@ -12,6 +12,8 @@ use crate::{
 };
 
 use super::scope_rules::for_init_needs_layout_scope;
+
+mod function;
 
 pub(super) struct LayoutBuilder {
     operands: Vec<BindingOperand>,
@@ -626,37 +628,6 @@ impl LayoutBuilder {
             self.analyze_expr(&property.value, scope, function)?;
         }
         Ok(())
-    }
-
-    fn analyze_function(
-        &mut self,
-        id: StaticFunctionId,
-        self_binding: Option<&StaticBinding>,
-        params: &[FunctionParam],
-        body: &[Statement],
-        parent_scope: ScopeId,
-        parent_function: FunctionScopeId,
-    ) -> Result<()> {
-        let function = self.add_function(Some(parent_function));
-        self.record_static_function(id, function)?;
-        let function_parent_scope = if let Some(self_binding) = self_binding {
-            let self_scope = self.add_scope(Some(parent_scope), function, ScopeKind::Local);
-            self.declare(self_scope, self_binding)?;
-            self_scope
-        } else {
-            parent_scope
-        };
-        let function_scope =
-            self.add_scope(Some(function_parent_scope), function, ScopeKind::Local);
-        for param in params {
-            self.declare(function_scope, &param.name)?;
-        }
-        for param in params {
-            if let Some(default) = &param.default {
-                self.analyze_expr(default, function_scope, function)?;
-            }
-        }
-        self.analyze_statements(body, function_scope, function_scope, function)
     }
 
     fn declare(&mut self, scope: ScopeId, binding: &StaticBinding) -> Result<()> {
