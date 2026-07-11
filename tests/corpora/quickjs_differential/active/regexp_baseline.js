@@ -28,6 +28,8 @@ let astralGlobal = /😀/gu;
 let astralGlobalMatch = astralGlobal.exec("x😀y");
 print(astral.index, astral.indices[0].join("-"), astralGlobalMatch.index, astralGlobal.lastIndex);
 print("😀a".search(/a/u), "x😀y".replace(/😀/u, "z"), "😀".match(/(?:)/gu).length);
+let unknownScript = /\p{Script_Extensions=Unknown}/u;
+print(unknownScript.test("\u{0378}"), unknownScript.test("\uE000"), unknownScript.test("A"));
 print(/a/gim.toString(), new RegExp("").toString(), RegExp.prototype.toString.call({ source: "x", flags: "g" }));
 print(RegExp.prototype.toString.name, RegExp.prototype.toString.length);
 print(RegExp.prototype[Symbol.match].name, RegExp.prototype[Symbol.match].length);

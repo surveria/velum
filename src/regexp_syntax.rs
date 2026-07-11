@@ -97,8 +97,17 @@ impl RegExpFlags {
 }
 
 pub fn compile_regexp(pattern: &str, flags: RegExpFlags) -> Result<Regex, RegExpSyntaxError> {
-    Regex::with_flags(pattern, flags.regress_flags())
+    let pattern = normalized_regexp_pattern(pattern);
+    Regex::with_flags(&pattern, flags.regress_flags())
         .map_err(|error| RegExpSyntaxError::InvalidPattern(error.to_string()))
+}
+
+fn normalized_regexp_pattern(pattern: &str) -> String {
+    let mut normalized = pattern.to_owned();
+    for (source, replacement) in UNKNOWN_SCRIPT_EXTENSIONS_REWRITES {
+        normalized = normalized.replace(source, replacement);
+    }
+    normalized
 }
 
 pub fn validate_regexp_literal(pattern: &str, flags: &str) -> Result<(), RegExpSyntaxError> {
@@ -124,3 +133,20 @@ const REGEXP_FLAG_UNICODE: u16 = 1 << 4;
 const REGEXP_FLAG_STICKY: u16 = 1 << 5;
 const REGEXP_FLAG_HAS_INDICES: u16 = 1 << 6;
 const REGEXP_FLAG_UNICODE_SETS: u16 = 1 << 7;
+
+// Unicode Script_Extensions=Unknown contains unassigned, private-use, and
+// surrogate code points. Regress 0.11.1 omits the Unknown/Zzzz aliases, so
+// spell that standard set through the general categories it already owns.
+const UNKNOWN_SCRIPT_EXTENSIONS_CLASS: &str = r"[\p{Cn}\p{Co}\p{Cs}]";
+const UNKNOWN_SCRIPT_EXTENSIONS_REWRITES: [(&str, &str); 4] = [
+    (
+        r"\p{Script_Extensions=Unknown}",
+        UNKNOWN_SCRIPT_EXTENSIONS_CLASS,
+    ),
+    (
+        r"\p{Script_Extensions=Zzzz}",
+        UNKNOWN_SCRIPT_EXTENSIONS_CLASS,
+    ),
+    (r"\p{scx=Unknown}", UNKNOWN_SCRIPT_EXTENSIONS_CLASS),
+    (r"\p{scx=Zzzz}", UNKNOWN_SCRIPT_EXTENSIONS_CLASS),
+];

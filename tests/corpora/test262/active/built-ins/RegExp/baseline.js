@@ -173,6 +173,7 @@ let advanced = /(?<prefix>a|b)(c+)(?=d)/d.exec("xxacccd");
 let astral = /😀/du.exec("x😀y");
 let astralGlobal = /😀/gu;
 let astralGlobalMatch = astralGlobal.exec("x😀y");
+let unknownScript = /\p{Script_Extensions=Unknown}/u;
 let syntaxErrors = 0;
 try {
   new RegExp("(");
@@ -207,6 +208,9 @@ let advancedPatternOk =
   "😀a".search(/a/u) === 2 &&
   "x😀y".replace(/😀/u, "z") === "xzy" &&
   "😀".match(/(?:)/gu).length === 2 &&
+  unknownScript.test("\u{0378}") &&
+  unknownScript.test("\uE000") &&
+  !unknownScript.test("A") &&
   syntaxErrors === 2;
 
 if (!descriptorOk || !execOk || !patternOk || !advancedPatternOk || !receiverError) {
