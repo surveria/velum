@@ -26,10 +26,25 @@ These rules are mandatory for humans and agents working in any part of this repo
   Use the status, area, and task slug in those names to avoid likely overlap.
   Do not read record bodies by default; open only records whose filenames
   suggest a possible conflict or whose details are needed for recovery.
-- Treat this index as best-effort coordination. A stale or missing record must
-  not make repository recovery impossible. Lost work may be reconstructed from
-  local branches, signed commits, and worktrees, and a later dedicated recovery
-  task may inspect and finish or cancel abandoned work.
+- Treat `[claimed]`, `[in-progress]`, `[blocked]`, and `[ready]` records as
+  exclusive active reservations. Before selecting work, assume every
+  pre-existing non-terminal record belongs to another worker. A matching
+  `agent`, `agent_id`, goal, branch, worktree, pull request, or familiar task
+  history is not evidence that the current conversation owns it. Do not resume
+  or analyze its implementation, run commands in its worktree, or change its
+  record, branch, worktree, or pull request.
+- Resume a pre-existing non-terminal task only when the current conversation
+  explicitly shows that it previously created and claimed that exact record,
+  or when the user or recorded owner explicitly hands that task to the current
+  conversation. On handoff, update the record with a new session-unique
+  `agent_id`, `updated_at`, and a short handoff note before implementation. If
+  neither condition is satisfied, choose non-overlapping work instead.
+- Treat this index as best-effort coordination, but never treat suspected
+  staleness as permission for a silent takeover. Use a separately claimed
+  recovery task to inspect potentially abandoned work. Reassign it only after
+  the old record is explicitly cancelled or updated with a documented handoff;
+  if another active worker cannot be ruled out, leave the task untouched. Lost
+  work may be reconstructed from local branches, signed commits, and worktrees.
 - Claim selected work before implementation with one Markdown record named
   `[status]__YYYYMMDDTHHMMSSZ__area__short-task-slug__agent-id__task-id.md`.
   Use lowercase ASCII slugs without spaces. Prefer the existing commit
@@ -41,14 +56,18 @@ These rules are mandatory for humans and agents working in any part of this repo
   is pending, `[done]` only after merge, main update, and worktree cleanup, and
   `[cancelled]` when the task ends without integration. Rename the file and
   update its internal `status` together. Non-terminal records continue to
-  reserve their named area, but agents may use judgment when an old record is
-  clearly stale or a dedicated recovery task owns it.
+  reserve their described task scope and any overlapping implementation area
+  until they become terminal or are explicitly handed off.
 - Keep each record cheap to create and update. Start with YAML front matter for
   `schema_version`, `task_id`, `status`, `title`, `area`, `agent`, `agent_id`,
   `created_at`, `updated_at`, `branch`, `worktree`, and `pull_request`. A value
   may be `pending` or `none` while setup is incomplete or GitHub is unavailable.
-  Use `codex`, `claude-code`, `human`, or `other` for `agent`, and use a short
-  session-unique worker name for `agent_id`.
+  Use `codex`, `claude-code`, `human`, or `other` for `agent`. Use a newly
+  generated, session-unique ownership token for `agent_id`, such as
+  `codex-20260711t125548z-a7f3`; never use or reuse generic role labels such as
+  `root`, `main`, `codex`, or `worker`. The `agent_id` segment in the filename
+  must match the front matter. Treat legacy generic identifiers as unknown
+  owners, never as proof of current-session ownership.
   Follow it with short `Objective`, `Progress`, `Problems And Notes`, `Outcome`,
   and `Remaining Work` sections. Do not require speculative affected-path or
   semantic-owner analysis merely to claim a task.
