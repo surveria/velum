@@ -2114,8 +2114,15 @@ AS-07a local implementation evidence (draft PR #446):
   hard-limit reuse, suspended async owners, heap strings, cache-id reuse, and
   isolation between VMs;
 - atoms and shape metadata remain explicit cache roots for AS-08; WeakRef and
-  FinalizationRegistry remain gated. Full correctness, Test262, and paired
-  sentinel performance evidence remain to be attached before merge.
+  FinalizationRegistry remain gated;
+- the engine-wide all-target/all-feature suite, strict Clippy, architecture
+  guard mutation tests, and the runner-enabled fast gate pass locally;
+- adjacent branch/base sentinel medians are arithmetic 84.41/84.75 ms
+  (-0.4%), array-index 2.53/2.44 ms (+3.7%), property-read 229.57/228.34 ms
+  (+0.5%), function-call 158.98/158.41 ms (+0.4%), and string-scan
+  71.64/70.34 ms (+1.8%). All rows are valid, checksums match, and branch
+  variation is at most 1.1%. Exact-tree correctness and full Test262 evidence
+  remain to be attached by the required ready-PR CI before merge.
 
 ### AS-08: Optimization Isolation
 
