@@ -272,7 +272,8 @@ impl Context {
             | Completion::Break { .. }
             | Completion::Continue(_)
             | Completion::GeneratorStart
-            | Completion::Yielded(_)) => completion.into_result().map(|_| None),
+            | Completion::Yielded(_)
+            | Completion::YieldedIteratorResult(_)) => completion.into_result().map(|_| None),
         }
     }
 
@@ -283,12 +284,49 @@ impl Context {
         delegate: bool,
     ) -> Result<Option<Completion>> {
         if delegate {
-            return Err(Error::runtime("yield delegation is not implemented yet"));
+            return self.eval_bytecode_yield_delegate_instruction(state, next);
         }
         let value = state.stack.pop()?;
         state.pc = next;
         state.mark_yield_suspended();
         Ok(Some(Completion::Yielded(value)))
+    }
+
+    fn eval_bytecode_yield_delegate_instruction(
+        &mut self,
+        state: &mut BytecodeState,
+        next: BytecodeAddress,
+    ) -> Result<Option<Completion>> {
+        use crate::runtime::abstract_operations::{YieldDelegateContinuation, YieldDelegateStep};
+
+        let (mut continuation, resume) = if let Some(stored) = state.take_yield_delegate() {
+            stored
+        } else {
+            let iterable = state.stack.pop()?;
+            (
+                YieldDelegateContinuation::new(self.get_iterator(iterable)?),
+                None,
+            )
+        };
+        match self.yield_delegate_step(&mut continuation, resume)? {
+            YieldDelegateStep::Yielded(value) => {
+                state.store_yield_delegate(continuation)?;
+                state.mark_yield_suspended();
+                Ok(Some(Completion::Yielded(value)))
+            }
+            YieldDelegateStep::YieldedIteratorResult(result) => {
+                state.store_yield_delegate(continuation)?;
+                state.mark_yield_suspended();
+                Ok(Some(Completion::YieldedIteratorResult(result)))
+            }
+            YieldDelegateStep::Complete(value) => {
+                state.stack.push(value);
+                state.pc = next;
+                Ok(None)
+            }
+            YieldDelegateStep::Return(value) => Ok(Some(Completion::Return(value))),
+            YieldDelegateStep::Abrupt(completion) => Ok(Some(completion)),
+        }
     }
 
     fn eval_bytecode_nullish_coalescing(
@@ -307,7 +345,8 @@ impl Context {
                 completion @ (Completion::Throw(_)
                 | Completion::Suspended(_)
                 | Completion::GeneratorStart
-                | Completion::Yielded(_)) => {
+                | Completion::Yielded(_)
+                | Completion::YieldedIteratorResult(_)) => {
                     return Ok(Some(completion));
                 }
                 completion @ (Completion::Return(_)

@@ -21,6 +21,10 @@ pub(in crate::runtime) enum BytecodeOutcome {
         value: Value,
         span: Option<SourceSpan>,
     },
+    YieldedIteratorResult {
+        result: Value,
+        span: Option<SourceSpan>,
+    },
     GeneratorStart {
         span: Option<SourceSpan>,
     },
@@ -32,6 +36,7 @@ impl BytecodeOutcome {
             Self::Completed { completion, .. } => completion,
             Self::Suspended { awaited, .. } => Completion::Suspended(awaited),
             Self::Yielded { value, .. } => Completion::Yielded(value),
+            Self::YieldedIteratorResult { result, .. } => Completion::YieldedIteratorResult(result),
             Self::GeneratorStart { .. } => Completion::GeneratorStart,
         }
     }
@@ -41,6 +46,7 @@ impl BytecodeOutcome {
             Self::Completed { span, .. }
             | Self::Suspended { span, .. }
             | Self::Yielded { span, .. }
+            | Self::YieldedIteratorResult { span, .. }
             | Self::GeneratorStart { span } => *span,
         }
     }
@@ -58,7 +64,10 @@ impl BytecodeOutcome {
     pub(in crate::runtime) const fn is_suspended(&self) -> bool {
         matches!(
             self,
-            Self::Suspended { .. } | Self::Yielded { .. } | Self::GeneratorStart { .. }
+            Self::Suspended { .. }
+                | Self::Yielded { .. }
+                | Self::YieldedIteratorResult { .. }
+                | Self::GeneratorStart { .. }
         )
     }
 }
@@ -276,6 +285,15 @@ impl Context {
                         }
                         BytecodeOutcome::Yielded {
                             value,
+                            span: Some(span),
+                        }
+                    }
+                    Completion::YieldedIteratorResult(result) => {
+                        if !state.is_suspended() {
+                            state.mark_child_suspended();
+                        }
+                        BytecodeOutcome::YieldedIteratorResult {
+                            result,
                             span: Some(span),
                         }
                     }

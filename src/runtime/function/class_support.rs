@@ -45,7 +45,8 @@ impl Context {
             Completion::Continue(_) => Err(Error::runtime("continue statement outside loop")),
             completion @ (Completion::Suspended(_)
             | Completion::GeneratorStart
-            | Completion::Yielded(_)) => completion
+            | Completion::Yielded(_)
+            | Completion::YieldedIteratorResult(_)) => completion
                 .into_function_result()
                 .map(|_| Completion::Normal(Value::Undefined)),
         }

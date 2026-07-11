@@ -22,7 +22,7 @@ mod strict;
 mod yield_context;
 
 use await_context::AwaitExpressionContext;
-use yield_context::YieldExpressionContext;
+use yield_context::{YieldExpressionContext, YieldIdentifierContext};
 
 const ASYNC_IDENTIFIER_NAME: &str = "async";
 const ARGUMENTS_IDENTIFIER_NAME: &str = "arguments";
@@ -84,7 +84,7 @@ struct Parser {
     strict_mode: bool,
     await_expression_context: AwaitExpressionContext,
     yield_expression_context: YieldExpressionContext,
-    yield_identifier_reserved: bool,
+    yield_identifier_context: YieldIdentifierContext,
 }
 
 impl Parser {
@@ -109,7 +109,7 @@ impl Parser {
             strict_mode,
             await_expression_context: AwaitExpressionContext::Allowed,
             yield_expression_context: YieldExpressionContext::Forbidden,
-            yield_identifier_reserved: false,
+            yield_identifier_context: YieldIdentifierContext::Allowed,
         }
     }
 

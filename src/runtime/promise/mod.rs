@@ -199,7 +199,7 @@ impl Context {
                 let continuation = self.detach_suspended_async_function(id, promise)?;
                 self.add_async_await_reaction(awaited, continuation)?;
             }
-            Completion::Yielded(value) => {
+            Completion::Yielded(value) | Completion::YieldedIteratorResult(value) => {
                 let reason = self.create_error_object(
                     JavaScriptErrorMetadata::new(
                         ErrorName::TypeError,
@@ -556,7 +556,7 @@ impl Context {
                     self.detach_suspended_async_function(function, result_promise)?;
                 self.add_async_await_reaction(awaited, continuation)
             }
-            Completion::Yielded(value) => {
+            Completion::Yielded(value) | Completion::YieldedIteratorResult(value) => {
                 let reason = self.create_error_object(
                     JavaScriptErrorMetadata::new(
                         ErrorName::TypeError,

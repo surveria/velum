@@ -2,7 +2,9 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime::call::RuntimeCallArgs,
-    runtime::object::{ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable},
+    runtime::object::{
+        ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable, PropertyLookup,
+    },
     value::{ErrorName, NativeFunctionId, ObjectId, Value, format_ecmascript_number},
 };
 
@@ -149,6 +151,15 @@ impl Context {
     ) -> Result<Value> {
         let prototype = self.number_constructor_prototype()?;
         self.get_prototype_property_value_with_receiver(prototype, receiver, property)
+    }
+
+    pub(in crate::runtime) fn number_prototype_property_value_with_lookup(
+        &mut self,
+        receiver: &Value,
+        property: PropertyLookup<'_>,
+    ) -> Result<Value> {
+        let prototype = self.number_constructor_prototype()?;
+        self.get_prototype_property_value_with_lookup(prototype, receiver, property)
     }
 
     fn number_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<ObjectId> {

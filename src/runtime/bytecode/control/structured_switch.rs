@@ -240,7 +240,8 @@ impl Context {
                 | Completion::Continue(_)
                 | Completion::Suspended(_)
                 | Completion::GeneratorStart
-                | Completion::Yielded(_)) => return Ok((control, completion)),
+                | Completion::Yielded(_)
+                | Completion::YieldedIteratorResult(_)) => return Ok((control, completion)),
             }
         }
         let (_, last) = control.switch_state_mut()?;

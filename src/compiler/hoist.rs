@@ -80,6 +80,22 @@ impl<'a> HoistCollector<'a> {
         }
     }
 
+    fn collect_try_statements(
+        &mut self,
+        body: &[Statement],
+        catch_body: Option<&[Statement]>,
+        finally_body: Option<&[Statement]>,
+    ) -> Result<()> {
+        self.collect_statements(body)?;
+        if let Some(catch_body) = catch_body {
+            self.collect_statements(catch_body)?;
+        }
+        if let Some(finally_body) = finally_body {
+            self.collect_statements(finally_body)?;
+        }
+        Ok(())
+    }
+
     fn collect_statement(&mut self, statement: &Statement) -> Result<()> {
         match statement.kind() {
             Stmt::Block(statements) | Stmt::DeclList(statements) => {
@@ -132,16 +148,11 @@ impl<'a> HoistCollector<'a> {
                 body,
                 catch,
                 finally_body,
-            } => {
-                self.collect_statements(body)?;
-                if let Some(catch) = catch {
-                    self.collect_statements(&catch.body)?;
-                }
-                if let Some(finally_body) = finally_body {
-                    self.collect_statements(finally_body)?;
-                }
-                Ok(())
-            }
+            } => self.collect_try_statements(
+                body,
+                catch.as_ref().map(|clause| clause.body.as_ref()),
+                finally_body.as_deref(),
+            ),
             Stmt::VarDecl {
                 name,
                 kind: DeclKind::Var,

@@ -330,6 +330,9 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
     if let Some(slot) = regexp_slot(kind) {
         return Some(slot);
     }
+    if let Some(slot) = math_slot(kind) {
+        return Some(slot);
+    }
 
     match kind {
         NativeFunctionKind::AsyncFunction => Some(ASYNC_FUNCTION_SLOT),
@@ -345,6 +348,44 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::JsonParse => Some(JSON_PARSE_SLOT),
         NativeFunctionKind::JsonRawJson => Some(JSON_RAW_JSON_SLOT),
         NativeFunctionKind::JsonStringify => Some(JSON_STRINGIFY_SLOT),
+        NativeFunctionKind::Number => Some(NUMBER_SLOT),
+        NativeFunctionKind::Object => Some(OBJECT_SLOT),
+        NativeFunctionKind::ObjectAssign => Some(OBJECT_ASSIGN_SLOT),
+        NativeFunctionKind::ObjectCreate => Some(OBJECT_CREATE_SLOT),
+        NativeFunctionKind::ObjectDefineProperties => Some(OBJECT_DEFINE_PROPERTIES_SLOT),
+        NativeFunctionKind::ObjectDefineProperty => Some(OBJECT_DEFINE_PROPERTY_SLOT),
+        NativeFunctionKind::ObjectEntries => Some(OBJECT_ENTRIES_SLOT),
+        NativeFunctionKind::ObjectFreeze => Some(OBJECT_FREEZE_SLOT),
+        NativeFunctionKind::ObjectGetPrototypeOf => Some(OBJECT_GET_PROTOTYPE_OF_SLOT),
+        NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
+            Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_SLOT)
+        }
+        NativeFunctionKind::ObjectGetOwnPropertyDescriptors => {
+            Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_SLOT)
+        }
+        NativeFunctionKind::ObjectHasOwn => Some(OBJECT_HAS_OWN_SLOT),
+        NativeFunctionKind::ObjectIs => Some(OBJECT_IS_SLOT),
+        NativeFunctionKind::ObjectIsExtensible => Some(OBJECT_IS_EXTENSIBLE_SLOT),
+        NativeFunctionKind::ObjectIsFrozen => Some(OBJECT_IS_FROZEN_SLOT),
+        NativeFunctionKind::ObjectIsSealed => Some(OBJECT_IS_SEALED_SLOT),
+        NativeFunctionKind::ObjectKeys => Some(OBJECT_KEYS_SLOT),
+        NativeFunctionKind::ObjectPreventExtensions => Some(OBJECT_PREVENT_EXTENSIONS_SLOT),
+        NativeFunctionKind::ObjectSetPrototypeOf => Some(OBJECT_SET_PROTOTYPE_OF_SLOT),
+        NativeFunctionKind::ObjectSeal => Some(OBJECT_SEAL_SLOT),
+        NativeFunctionKind::ObjectValues => Some(OBJECT_VALUES_SLOT),
+        NativeFunctionKind::Promise => Some(PROMISE_SLOT),
+        NativeFunctionKind::PromiseResolve => Some(PROMISE_RESOLVE_SLOT),
+        NativeFunctionKind::PromiseReject => Some(PROMISE_REJECT_SLOT),
+        NativeFunctionKind::PromiseThen => Some(PROMISE_THEN_SLOT),
+        NativeFunctionKind::PromiseCatch => Some(PROMISE_CATCH_SLOT),
+        NativeFunctionKind::String => Some(STRING_SLOT),
+        NativeFunctionKind::Symbol => Some(SYMBOL_SLOT),
+        _ => collection_slot(kind),
+    }
+}
+
+const fn math_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
+    match kind {
         NativeFunctionKind::MathAbs => Some(MATH_ABS_SLOT),
         NativeFunctionKind::MathAcos => Some(MATH_ACOS_SLOT),
         NativeFunctionKind::MathAcosh => Some(MATH_ACOSH_SLOT),
@@ -382,39 +423,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::MathTan => Some(MATH_TAN_SLOT),
         NativeFunctionKind::MathTanh => Some(MATH_TANH_SLOT),
         NativeFunctionKind::MathTrunc => Some(MATH_TRUNC_SLOT),
-        NativeFunctionKind::Number => Some(NUMBER_SLOT),
-        NativeFunctionKind::Object => Some(OBJECT_SLOT),
-        NativeFunctionKind::ObjectAssign => Some(OBJECT_ASSIGN_SLOT),
-        NativeFunctionKind::ObjectCreate => Some(OBJECT_CREATE_SLOT),
-        NativeFunctionKind::ObjectDefineProperties => Some(OBJECT_DEFINE_PROPERTIES_SLOT),
-        NativeFunctionKind::ObjectDefineProperty => Some(OBJECT_DEFINE_PROPERTY_SLOT),
-        NativeFunctionKind::ObjectEntries => Some(OBJECT_ENTRIES_SLOT),
-        NativeFunctionKind::ObjectFreeze => Some(OBJECT_FREEZE_SLOT),
-        NativeFunctionKind::ObjectGetPrototypeOf => Some(OBJECT_GET_PROTOTYPE_OF_SLOT),
-        NativeFunctionKind::ObjectGetOwnPropertyDescriptor => {
-            Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR_SLOT)
-        }
-        NativeFunctionKind::ObjectGetOwnPropertyDescriptors => {
-            Some(OBJECT_GET_OWN_PROPERTY_DESCRIPTORS_SLOT)
-        }
-        NativeFunctionKind::ObjectHasOwn => Some(OBJECT_HAS_OWN_SLOT),
-        NativeFunctionKind::ObjectIs => Some(OBJECT_IS_SLOT),
-        NativeFunctionKind::ObjectIsExtensible => Some(OBJECT_IS_EXTENSIBLE_SLOT),
-        NativeFunctionKind::ObjectIsFrozen => Some(OBJECT_IS_FROZEN_SLOT),
-        NativeFunctionKind::ObjectIsSealed => Some(OBJECT_IS_SEALED_SLOT),
-        NativeFunctionKind::ObjectKeys => Some(OBJECT_KEYS_SLOT),
-        NativeFunctionKind::ObjectPreventExtensions => Some(OBJECT_PREVENT_EXTENSIONS_SLOT),
-        NativeFunctionKind::ObjectSetPrototypeOf => Some(OBJECT_SET_PROTOTYPE_OF_SLOT),
-        NativeFunctionKind::ObjectSeal => Some(OBJECT_SEAL_SLOT),
-        NativeFunctionKind::ObjectValues => Some(OBJECT_VALUES_SLOT),
-        NativeFunctionKind::Promise => Some(PROMISE_SLOT),
-        NativeFunctionKind::PromiseResolve => Some(PROMISE_RESOLVE_SLOT),
-        NativeFunctionKind::PromiseReject => Some(PROMISE_REJECT_SLOT),
-        NativeFunctionKind::PromiseThen => Some(PROMISE_THEN_SLOT),
-        NativeFunctionKind::PromiseCatch => Some(PROMISE_CATCH_SLOT),
-        NativeFunctionKind::String => Some(STRING_SLOT),
-        NativeFunctionKind::Symbol => Some(SYMBOL_SLOT),
-        _ => collection_slot(kind),
+        _ => None,
     }
 }
 

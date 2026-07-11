@@ -562,8 +562,9 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         Completion::Normal(value)
         | Completion::Throw(value)
         | Completion::Return(value)
-        | Completion::Break { value, .. } => Some(value),
-        Completion::Yielded(value) => Some(value),
+        | Completion::Break { value, .. }
+        | Completion::Yielded(value)
+        | Completion::YieldedIteratorResult(value) => Some(value),
         Completion::Continue(_) | Completion::Suspended(_) | Completion::GeneratorStart => None,
     }
 }

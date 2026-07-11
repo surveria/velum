@@ -1,7 +1,9 @@
 use crate::{
     error::{Error, Result},
     runtime::call::RuntimeCallArgs,
-    runtime::object::{ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable},
+    runtime::object::{
+        ObjectPrimitiveValue, ObjectPropertyInit, PropertyEnumerable, PropertyLookup,
+    },
     runtime::{Context, abstract_operations::to_boolean},
     value::{ObjectId, Value},
 };
@@ -111,6 +113,15 @@ impl Context {
     ) -> Result<Value> {
         let prototype = self.boolean_constructor_prototype()?;
         self.get_prototype_property_value_with_receiver(prototype, receiver, property)
+    }
+
+    pub(in crate::runtime) fn boolean_prototype_property_value_with_lookup(
+        &mut self,
+        receiver: &Value,
+        property: PropertyLookup<'_>,
+    ) -> Result<Value> {
+        let prototype = self.boolean_constructor_prototype()?;
+        self.get_prototype_property_value_with_lookup(prototype, receiver, property)
     }
 
     fn boolean_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<ObjectId> {

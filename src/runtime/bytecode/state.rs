@@ -1,7 +1,7 @@
 use crate::{
     bytecode::{BytecodeAddress, BytecodeCompletion},
     error::{Error, Result},
-    runtime::control::Completion,
+    runtime::{abstract_operations::YieldDelegateContinuation, control::Completion},
     syntax::StaticName,
     value::Value,
 };
@@ -21,6 +21,7 @@ struct BytecodeSuspendState {
     phase: BytecodeSuspendPhase,
     resume_completion: Option<Completion>,
     destructure: Option<DestructureContinuation>,
+    yield_delegate: Option<YieldDelegateContinuation>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -145,9 +146,11 @@ impl BytecodeState {
                 "bytecode state is not awaiting a resume completion",
             ));
         }
+        let delegates = self.is_yielding() && self.has_yield_delegate();
         let permits_abrupt = self.is_yielding() || self.is_generator_starting();
         let discards_normal = self.is_generator_starting();
         let (value, resume_completion) = match completion {
+            completion if delegates => (None, Some(completion)),
             Completion::Normal(_) if discards_normal => (None, None),
             Completion::Normal(value) => (Some(value), None),
             completion @ Completion::Throw(_) => (None, Some(completion)),
@@ -164,6 +167,9 @@ impl BytecodeState {
     }
 
     pub(super) fn take_resume_completion(&mut self) -> Option<Completion> {
+        if self.has_yield_delegate() {
+            return None;
+        }
         let completion = self
             .suspend
             .as_mut()
@@ -212,12 +218,42 @@ impl BytecodeState {
         Ok(())
     }
 
+    pub(super) fn has_yield_delegate(&self) -> bool {
+        self.suspend
+            .as_ref()
+            .is_some_and(|suspend| suspend.yield_delegate.is_some())
+    }
+
+    pub(super) fn take_yield_delegate(
+        &mut self,
+    ) -> Option<(YieldDelegateContinuation, Option<Completion>)> {
+        let suspend = self.suspend.as_mut()?;
+        let continuation = suspend.yield_delegate.take()?;
+        let resume = suspend.resume_completion.take();
+        Some((continuation, resume))
+    }
+
+    pub(super) fn store_yield_delegate(
+        &mut self,
+        continuation: YieldDelegateContinuation,
+    ) -> Result<()> {
+        let suspend = self.suspend_state_mut();
+        if suspend.yield_delegate.is_some() {
+            return Err(Error::runtime(
+                "bytecode yield delegation continuation is already stored",
+            ));
+        }
+        suspend.yield_delegate = Some(continuation);
+        Ok(())
+    }
+
     fn suspend_state_mut(&mut self) -> &mut BytecodeSuspendState {
         self.suspend.get_or_insert_with(|| {
             Box::new(BytecodeSuspendState {
                 phase: BytecodeSuspendPhase::Running,
                 resume_completion: None,
                 destructure: None,
+                yield_delegate: None,
             })
         })
     }
@@ -227,6 +263,7 @@ impl BytecodeState {
             suspend.phase == BytecodeSuspendPhase::Running
                 && suspend.resume_completion.is_none()
                 && suspend.destructure.is_none()
+                && suspend.yield_delegate.is_none()
         }) {
             self.suspend = None;
         }
@@ -253,6 +290,9 @@ impl BytecodeState {
             }
             if let Some(destructure) = suspend.destructure.as_ref() {
                 cold.extend(destructure.root_values());
+            }
+            if let Some(delegate) = suspend.yield_delegate.as_ref() {
+                cold.extend(delegate.root_values());
             }
         }
         self.root_values_with_cold(cold)
@@ -316,8 +356,9 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         Completion::Normal(value)
         | Completion::Throw(value)
         | Completion::Return(value)
-        | Completion::Break { value, .. } => Some(value),
-        Completion::Yielded(value) => Some(value),
+        | Completion::Break { value, .. }
+        | Completion::Yielded(value)
+        | Completion::YieldedIteratorResult(value) => Some(value),
         Completion::Continue(_) | Completion::Suspended(_) | Completion::GeneratorStart => None,
     }
 }
@@ -440,7 +481,8 @@ pub(super) fn bytecode_loop_completion(
         | Completion::Return(_)
         | Completion::Suspended(_)
         | Completion::GeneratorStart
-        | Completion::Yielded(_)) => Some(completion),
+        | Completion::Yielded(_)
+        | Completion::YieldedIteratorResult(_)) => Some(completion),
     }
 }
 

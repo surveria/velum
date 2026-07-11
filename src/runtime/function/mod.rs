@@ -107,6 +107,40 @@ pub(super) struct BytecodeFunctionInit<'a> {
 }
 
 impl Context {
+    fn create_bytecode_function_prototype(
+        &mut self,
+        id: FunctionId,
+        init: &BytecodeFunctionInit<'_>,
+    ) -> Result<Value> {
+        if init.constructable {
+            let constructor_key = self.intern_property_key(PROTOTYPE_CONSTRUCTOR_PROPERTY)?;
+            let prototype_id = self.objects.create_with_prototype_property(
+                init.prototype_parent,
+                ObjectPropertyInit::new(
+                    constructor_key,
+                    PROTOTYPE_CONSTRUCTOR_PROPERTY,
+                    Value::Function(id),
+                    PropertyEnumerable::No,
+                ),
+                constructor_key,
+                self.limits.max_objects,
+                self.limits.max_object_properties,
+            )?;
+            return Ok(Value::Object(prototype_id));
+        }
+        if init.kind.is_generator() {
+            let constructor_key = self.object_constructor_property_key()?;
+            let generator_prototype = self.generator_prototype_id()?;
+            return self.objects.create_with_prototype(
+                Some(generator_prototype),
+                constructor_key,
+                self.limits.max_objects,
+                self.limits.max_object_properties,
+            );
+        }
+        Ok(Value::Undefined)
+    }
+
     pub(super) fn create_bytecode_function(
         &mut self,
         init: &BytecodeFunctionInit<'_>,
@@ -114,33 +148,7 @@ impl Context {
         self.functions.reserve_insert()?;
         let id = FunctionId::new(self.functions.next_index());
         let function = Value::Function(id);
-        let prototype = if init.constructable {
-            let constructor_key = self.intern_property_key(PROTOTYPE_CONSTRUCTOR_PROPERTY)?;
-            let prototype_id = self.objects.create_with_prototype_property(
-                init.prototype_parent,
-                ObjectPropertyInit::new(
-                    constructor_key,
-                    PROTOTYPE_CONSTRUCTOR_PROPERTY,
-                    function.clone(),
-                    PropertyEnumerable::No,
-                ),
-                constructor_key,
-                self.limits.max_objects,
-                self.limits.max_object_properties,
-            )?;
-            Value::Object(prototype_id)
-        } else if init.kind.is_generator() {
-            let constructor_key = self.object_constructor_property_key()?;
-            let generator_prototype = self.generator_prototype_id()?;
-            self.objects.create_with_prototype(
-                Some(generator_prototype),
-                constructor_key,
-                self.limits.max_objects,
-                self.limits.max_object_properties,
-            )?
-        } else {
-            Value::Undefined
-        };
+        let prototype = self.create_bytecode_function_prototype(id, init)?;
         let function_name = self.function_name_value(init.name)?;
         let params = init.bytecode.params();
         let arity = parameters::function_arity(params);

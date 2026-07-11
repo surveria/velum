@@ -297,7 +297,8 @@ impl Context {
                 }
                 completion @ (Completion::Suspended(_)
                 | Completion::GeneratorStart
-                | Completion::Yielded(_)) => {
+                | Completion::Yielded(_)
+                | Completion::YieldedIteratorResult(_)) => {
                     self.park_bytecode_control(handle, control)?;
                     return Ok(Some(completion));
                 }
@@ -567,7 +568,10 @@ impl Context {
                 | Completion::Continue(_)
                 | Completion::Suspended(_)
                 | Completion::GeneratorStart
-                | Completion::Yielded(_)) => BytecodeCondition::Completion(completion),
+                | Completion::Yielded(_)
+                | Completion::YieldedIteratorResult(_)) => {
+                    BytecodeCondition::Completion(completion)
+                }
             });
         }
         match self.eval_bytecode_block_with_linear_plan(condition, plan, state)? {
@@ -578,7 +582,10 @@ impl Context {
             | Completion::Continue(_)
             | Completion::Suspended(_)
             | Completion::GeneratorStart
-            | Completion::Yielded(_)) => Ok(BytecodeCondition::Completion(completion)),
+            | Completion::Yielded(_)
+            | Completion::YieldedIteratorResult(_)) => {
+                Ok(BytecodeCondition::Completion(completion))
+            }
         }
     }
 

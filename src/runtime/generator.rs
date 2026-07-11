@@ -333,6 +333,15 @@ impl Context {
                 let result = self.create_generator_result(value, false)?;
                 Ok((GeneratorState::Suspended(execution), result))
             }
+            Completion::YieldedIteratorResult(result) => {
+                if self.semantic_object_ref(&result)?.is_none() {
+                    return Err(Error::runtime(
+                        "delegated generator result is not an object",
+                    ));
+                }
+                let execution = self.detach_function_execution(function)?;
+                Ok((GeneratorState::Suspended(execution), result))
+            }
             Completion::Normal(_) => Ok((
                 GeneratorState::Completed,
                 self.create_generator_result(Value::Undefined, true)?,
