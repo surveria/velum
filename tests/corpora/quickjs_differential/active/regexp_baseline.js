@@ -19,6 +19,17 @@ print(RegExp(global) === global, new RegExp(global) === global, cloned.source, c
 print(new RegExp("").source, new RegExp("/\n\r").source);
 print(/a/gim.source, /a/gim.flags, /a/gim.global, /a/gim.ignoreCase, /a/gim.multiline);
 print(/a/s.dotAll, /a/u.unicode, /a/y.sticky);
+let advanced = /(?<prefix>a|b)(c+)(?=d)/d.exec("xxacccd");
+print(advanced.join("|"), advanced.index, advanced.groups.prefix);
+print(advanced.indices[0].join("-"), advanced.indices.groups.prefix.join("-"));
+print(/(?<=key=)(\w+)/.exec("key=value")[1], /^(a|b)\1$/.test("aa"), /^(a|b)\1$/.test("ab"));
+let astral = /😀/du.exec("x😀y");
+let astralGlobal = /😀/gu;
+let astralGlobalMatch = astralGlobal.exec("x😀y");
+print(astral.index, astral.indices[0].join("-"), astralGlobalMatch.index, astralGlobal.lastIndex);
+print("😀a".search(/a/u), "x😀y".replace(/😀/u, "z"), "😀".match(/(?:)/gu).length);
+let unknownScript = /\p{Script_Extensions=Unknown}/u;
+print(unknownScript.test("\u{0378}"), unknownScript.test("\uE000"), unknownScript.test("A"));
 print(/a/gim.toString(), new RegExp("").toString(), RegExp.prototype.toString.call({ source: "x", flags: "g" }));
 print(RegExp.prototype.toString.name, RegExp.prototype.toString.length);
 print(RegExp.prototype[Symbol.match].name, RegExp.prototype[Symbol.match].length);

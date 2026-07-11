@@ -15,15 +15,16 @@ fn supports_common_string_escape_sequences() -> TestResult {
         let simple = "\b\f\n\r\t\v\0";
         let hex = "\x41\u0042\u{43}";
         let quoted = "\"\'\\";
+        let identity = "\a\c\-";
         let continuation = "front\
 door";
-        simple + ":" + hex + ":" + quoted + ":" + continuation
+        simple + ":" + hex + ":" + quoted + ":" + identity + ":" + continuation
         "#,
     )?;
 
     ensure_value(
         &value,
-        &Value::String("\u{0008}\u{000c}\n\r\t\u{000b}\0:ABC:\"'\\:frontdoor".to_owned()),
+        &Value::String("\u{0008}\u{000c}\n\r\t\u{000b}\0:ABC:\"'\\:ac-:frontdoor".to_owned()),
     )
 }
 
