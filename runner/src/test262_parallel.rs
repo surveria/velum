@@ -11,6 +11,9 @@ use crate::{
 const TEST_JOBS_ENV: &str = "RSQJS_TEST_JOBS";
 const DEFAULT_TEST_JOBS: usize = 4;
 const MAX_TEST_JOBS: usize = 32;
+// Test262 intentionally contains deep recursion probes. Keep the worker stack
+// large enough for the VM's checked call-depth limit to report the outcome.
+const TEST_WORKER_STACK_SIZE: usize = 16 * 1024 * 1024;
 
 #[derive(Debug)]
 pub struct Test262PathExecution {
@@ -26,6 +29,7 @@ pub fn execute_paths(
     let jobs = configured_jobs()?.min(test_paths.len().max(1));
     let pool = ThreadPoolBuilder::new()
         .num_threads(jobs)
+        .stack_size(TEST_WORKER_STACK_SIZE)
         .thread_name(|index| format!("rsqjs-test262-{index}"))
         .build()
         .context("failed to build the Test262 worker pool")?;
