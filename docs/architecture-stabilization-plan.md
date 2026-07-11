@@ -2164,14 +2164,14 @@ AS-08a local evidence in draft PR #447:
   zero harness opcodes/source-name comparisons, with mutation self-tests;
 - focused engine fixtures pass at 68/68, the active Test262 subset passes at
   117/117, and the runner-enabled fast gate is green;
-- the reviewed full-corpus refresh raises the pass set from 36,514 to 37,843
-  variants: 1,333 additions and four removals, for a net gain of 1,329. The
+- the reviewed full-corpus refresh raises the pass set from 36,514 to 37,721
+  variants: 1,211 additions and four removals, for a net gain of 1,207. The
   four removed Map/WeakMap `getOrInsertComputed` callback cases were false
   positives: the removed opcode accepted a missing-method `TypeError` when the
   test required an exact `Error` constructor. Both local harnesses now require
   exact constructor identity, matching upstream Test262;
-- refreshed local correctness passes at 37,843/37,843 expected variants,
-  19,475/53,404 files, 37,843/102,578 full variants, and 95/95 QuickJS;
+- refreshed local correctness passes at 37,721/37,721 expected variants,
+  19,414/53,404 files, 37,721/102,578 full variants, and 95/95 QuickJS;
 - adjacent branch/base sentinel medians are arithmetic 84.54/85.27 ms
   (-0.9%), array-index 2.57/2.50 ms (+2.8%), property-read 227.07/232.10 ms
   (-2.2%), function-call 158.83/159.06 ms (-0.1%), and string-scan
