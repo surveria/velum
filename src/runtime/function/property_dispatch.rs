@@ -25,7 +25,14 @@ impl Context {
                 OwnPropertyDescriptor::Accessor(_) => Ok(Value::Undefined),
             };
         }
-        let parent = self.function_inheritance_prototype_value(id)?;
+        let parent = if let Some(parent) = self.function_static_parent_value(id)? {
+            parent
+        } else {
+            if !Self::should_materialize_function_prototype_for(property) {
+                return Ok(Value::Undefined);
+            }
+            self.function_object_prototype_value(id)?
+        };
         if matches!(parent, Value::Null | Value::Undefined) {
             return Ok(Value::Undefined);
         }
@@ -104,7 +111,14 @@ impl Context {
         if self.has_function_property_lookup(id, property)? {
             return Ok(true);
         }
-        let parent = self.function_inheritance_prototype_value(id)?;
+        let parent = if let Some(parent) = self.function_static_parent_value(id)? {
+            parent
+        } else {
+            if !Self::should_materialize_function_prototype_for(property) {
+                return Ok(false);
+            }
+            self.function_object_prototype_value(id)?
+        };
         if matches!(parent, Value::Null | Value::Undefined) {
             return Ok(false);
         }

@@ -2554,6 +2554,39 @@ AS-09g profile evidence in draft PR #456:
   walker. Exact-tree CI and canonical publication evidence remain required
   before AS-09g can close.
 
+AS-09h profile evidence in draft PR #457:
+
+- synchronous generator declarations, expressions, and object methods compile
+  through the existing `BytecodeFunction` and activation-owned continuation;
+  `GeneratorStart`, yielded values, delegated raw iterator results, returns,
+  and throws are typed completions rather than a parallel interpreter;
+- `next`, `return`, and `throw` resume the same parked activation and lexical
+  scopes. `yield*` uses one resumable iterator record, forwards all three
+  completion kinds, performs iterator closing, and preserves observable raw
+  iterator-result identity where required;
+- suspended generator associations participate in direct roots, strong-edge
+  traversal, GC reclamation, storage accounting, and async-edge snapshots.
+  Nested delegated iterators survive collection while reachable and reclaim
+  after completion;
+- supporting semantic fixes expose the real Array iterator method, copy
+  enumerable Symbol keys during object spread, route JavaScript function
+  reads/writes/presence through inherited accessors, and add class static
+  blocks with contextual `await` identifiers;
+- direct eval declaration conflicts now become catchable `SyntaxError`
+  objects, including conflicts with non-simple parameters and sloppy body
+  lexical declarations;
+- the focused generator profile rises to 1,042/1,056 variants across 556
+  files. The remaining fourteen variants are owned by broader missing
+  facilities: eight need a shared dynamic eval environment captured by
+  closures, four need `with`/unscopables, and two need the Test262 realm
+  harness;
+- direct generator, GC, async-edge, class-static-block, function-accessor,
+  Array-iterator, Symbol-spread, and eval-conflict tests pass under strict
+  Clippy. The suspension guard now names the generalized
+  `resume_suspension` boundary shared by await and generator completions.
+  Full baseline, exact-tree CI, and canonical publication evidence remain
+  required before AS-09h can close.
+
 ### AS-10: Performance And Memory Checkpoints
 
 Maintain a stable core benchmark cohort whose history remains comparable even

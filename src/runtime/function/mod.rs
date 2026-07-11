@@ -32,7 +32,8 @@ mod upvalues;
 
 use crate::runtime::native::{
     NativeFunctionKind, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
-    OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
+    OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME, OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
+    OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME, OBJECT_PROTOTYPE_VALUE_OF_NAME,
 };
 pub(in crate::runtime) use class_support::ResolvedClassField;
 
@@ -65,6 +66,8 @@ const FUNCTION_PROTOTYPE_APPLY_PROPERTY: &str = "apply";
 const FUNCTION_PROTOTYPE_BIND_PROPERTY: &str = "bind";
 const FUNCTION_PROTOTYPE_CALL_PROPERTY: &str = "call";
 const FUNCTION_PROTOTYPE_TO_STRING_PROPERTY: &str = "toString";
+const FUNCTION_PROTOTYPE_ARGUMENTS_PROPERTY: &str = "arguments";
+const FUNCTION_PROTOTYPE_CALLER_PROPERTY: &str = "caller";
 
 use super::FunctionNewTarget;
 use properties::{FunctionPropertyKind, PROTOTYPE_CONSTRUCTOR_PROPERTY};
@@ -583,7 +586,7 @@ impl Context {
         id: NativeFunctionId,
         property: PropertyLookup<'_>,
     ) -> Result<Value> {
-        if !self.should_materialize_function_prototype_for(property) {
+        if !Self::should_materialize_function_prototype_for(property) {
             return Ok(Value::Undefined);
         }
         let prototype = self.native_function_object_prototype_value(id)?;
@@ -606,16 +609,22 @@ impl Context {
         Some(PropertyLookup::from_key(property.name(), key))
     }
 
-    fn should_materialize_function_prototype_for(&self, property: PropertyLookup<'_>) -> bool {
-        property.key().is_some()
-            || self.known_property_key(property.name()).is_some()
+    pub(in crate::runtime) fn should_materialize_function_prototype_for(
+        property: PropertyLookup<'_>,
+    ) -> bool {
+        matches!(property.key(), Some(PropertyKey::Symbol(_)))
             || property.name() == PROTOTYPE_CONSTRUCTOR_PROPERTY
             || property.name() == FUNCTION_PROTOTYPE_APPLY_PROPERTY
             || property.name() == FUNCTION_PROTOTYPE_BIND_PROPERTY
             || property.name() == FUNCTION_PROTOTYPE_CALL_PROPERTY
             || property.name() == FUNCTION_PROTOTYPE_TO_STRING_PROPERTY
+            || property.name() == FUNCTION_PROTOTYPE_ARGUMENTS_PROPERTY
+            || property.name() == FUNCTION_PROTOTYPE_CALLER_PROPERTY
             || property.name() == OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME
             || property.name() == OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME
+            || property.name() == OBJECT_PROTOTYPE_VALUE_OF_NAME
+            || property.name() == OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME
+            || property.name() == OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME
     }
 
     pub(crate) fn native_function_object_prototype_value(

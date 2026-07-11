@@ -1332,7 +1332,7 @@ check_suspended_execution_boundary() {
   for source in \
     'pub(in crate::runtime) enum BytecodeOutcome {' \
     'pub(in crate::runtime) fn resume_bytecode_activation(' \
-    'continuation.resume_await(completion)?;' \
+    'continuation.resume_suspension(completion)?;' \
     'self.park_bytecode_state_at(activation_index, state)?;'; do
     if ! grep -F -q "${source}" \
         "${repo_root}/src/runtime/bytecode/execution.rs"; then
@@ -1569,7 +1569,7 @@ check_async_edge_boundary() {
       inside { print }
     ' "${repo_root}/src/runtime/async_trace.rs"
   } | sed '/^[[:space:]]*\/\//d' | tr -d '[:space:]')"
-  if [[ "${edge_kinds}" != 'PromiseState,PromiseReaction,PromiseObjectAssociation,CollectionObjectAssociation,CollectionEntry,IteratorItem,WeakCollectionKey,WeakCollectionEphemeron,' ]]; then
+  if [[ "${edge_kinds}" != 'PromiseState,PromiseReaction,PromiseObjectAssociation,CollectionObjectAssociation,CollectionEntry,IteratorItem,WeakCollectionKey,WeakCollectionEphemeron,GeneratorObjectAssociation,GeneratorState,' ]]; then
     fail "asynchronous edge boundary changed; categories require an assigned AS migration"
   fi
 
@@ -1590,6 +1590,8 @@ check_async_edge_boundary() {
     'for (index, slot) in self.collection_object_slots.iter().enumerate() {' \
     'for collection in &self.collections {' \
     'for iterator in &self.collection_iterators {' \
+    'for (index, generator) in self.generator_object_slots.iter().enumerate() {' \
+    'for generator in &self.generators {' \
     'Self::WeakCollectionKey => VmAsyncEdgeStrength::Weak' \
     'Self::WeakCollectionEphemeron => VmAsyncEdgeStrength::Ephemeron'; do
     if ! grep -F -q "${source}" "${repo_root}/src/runtime/async_trace.rs"; then
@@ -1706,6 +1708,8 @@ strings
 symbols
 well_known_properties
 iterator_symbol
+generator_prototype
+generator_function_prototype
 descriptor_property_keys
 static_name_atom_caches
 static_binding_caches
@@ -1724,6 +1728,8 @@ global_object
 collections
 collection_object_slots
 collection_iterators
+generators
+generator_object_slots
 promises
 promise_object_slots
 promise_jobs
