@@ -5,6 +5,7 @@ use crate::{
     runtime::{
         async_trace::VmAsyncEdgeKind,
         collections::{CollectionId, CollectionIteratorId},
+        generator::GeneratorId,
         object::PropertyKey,
         promise::PromiseId,
         roots::{DirectRootVisitor, VmRootKind},
@@ -19,7 +20,7 @@ use crate::{
 
 use super::Context;
 
-const GC_KIND_COUNT: usize = 10;
+const GC_KIND_COUNT: usize = 11;
 
 /// Stable categories included in VM reachability and collection reports.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -34,6 +35,7 @@ pub enum VmGcKind {
     CollectionIterator,
     Symbol,
     HeapString,
+    Generator,
 }
 
 impl VmGcKind {
@@ -48,6 +50,7 @@ impl VmGcKind {
         Self::CollectionIterator,
         Self::Symbol,
         Self::HeapString,
+        Self::Generator,
     ];
 
     /// Returns all reachability categories in stable reporting order.
@@ -68,6 +71,7 @@ impl VmGcKind {
             Self::CollectionIterator => 7,
             Self::Symbol => 8,
             Self::HeapString => 9,
+            Self::Generator => 10,
         }
     }
 }
@@ -137,6 +141,7 @@ enum MarkTarget {
     CollectionIterator(CollectionIteratorId),
     Symbol(SymbolId),
     HeapString(StringId),
+    Generator(GeneratorId),
 }
 
 pub(in crate::runtime) struct Reachability {
@@ -148,6 +153,7 @@ pub(in crate::runtime) struct Reachability {
     promises: Vec<bool>,
     collections: Vec<bool>,
     collection_iterators: Vec<bool>,
+    generators: Vec<bool>,
     symbols: BTreeSet<SymbolId>,
     strings: BTreeSet<StringId>,
     queue: VecDeque<MarkTarget>,
@@ -165,6 +171,7 @@ impl Reachability {
             promises: vec![false; context.promises.slot_len()],
             collections: vec![false; context.collections.slot_len()],
             collection_iterators: vec![false; context.collection_iterators.slot_len()],
+            generators: vec![false; context.generators.slot_len()],
             symbols: BTreeSet::new(),
             strings: BTreeSet::new(),
             queue: VecDeque::new(),
@@ -206,6 +213,14 @@ impl Reachability {
                         .flatten()
                     {
                         self.mark_collection(collection)?;
+                    }
+                    if let Some(generator) = context
+                        .generator_object_slots
+                        .get(id.index())
+                        .copied()
+                        .flatten()
+                    {
+                        self.mark_generator(generator)?;
                     }
                 }
                 MarkTarget::Function(id) => context
@@ -252,6 +267,11 @@ impl Reachability {
                 MarkTarget::HeapString(id) => {
                     context.strings.get(id)?;
                 }
+                MarkTarget::Generator(id) => context
+                    .generators
+                    .get(id.index())
+                    .ok_or_else(|| Error::runtime("reachable generator record disappeared"))?
+                    .visit_strong_edges(self)?,
             }
         }
         Ok(())
@@ -269,6 +289,7 @@ impl Reachability {
             true_count(&self.collection_iterators),
             self.symbols.len(),
             self.strings.len(),
+            true_count(&self.generators),
         ];
         let totals = [
             context.objects.object_count(),
@@ -281,6 +302,7 @@ impl Reachability {
             context.collection_iterators.len(),
             context.symbols.len(),
             context.strings.len(),
+            context.generators.len(),
         ];
         let mut unreachable = [0_usize; GC_KIND_COUNT];
         for (index, (total, live)) in totals.into_iter().zip(reachable).enumerate() {
@@ -369,6 +391,15 @@ impl Reachability {
         )
     }
 
+    fn mark_generator(&mut self, id: GeneratorId) -> Result<bool> {
+        mark_slot(
+            &mut self.generators,
+            id.index(),
+            MarkTarget::Generator(id),
+            &mut self.queue,
+        )
+    }
+
     fn mark_symbol(&mut self, id: SymbolId) -> bool {
         if !self.symbols.insert(id) {
             return false;
@@ -435,6 +466,10 @@ impl Reachability {
                 self.mark_value(&Value::Object(object))?;
                 self.mark_collection(collection)?;
             }
+            StrongEdgeReference::GeneratorAssociation { object, generator } => {
+                self.mark_value(&Value::Object(object))?;
+                self.mark_generator(generator)?;
+            }
         }
         Ok(())
     }
@@ -465,6 +500,10 @@ impl Reachability {
 
     fn collection_is_reachable(&self, id: CollectionId) -> bool {
         self.collections.get(id.index()).copied().unwrap_or(false)
+    }
+
+    fn generator_is_reachable(&self, id: GeneratorId) -> bool {
+        self.generators.get(id.index()).copied().unwrap_or(false)
     }
 }
 
@@ -531,8 +570,9 @@ impl Context {
     }
 
     /// Reclaims records not reachable from the VM's explicit root contract.
-    /// Promise jobs, suspended async activations, retained handles, runtime
-    /// anchors, and registered Symbols participate in the mark phase.
+    /// Promise jobs, suspended async and generator activations, retained
+    /// handles, runtime anchors, and registered Symbols participate in the
+    /// mark phase.
     ///
     /// Raw VM-local [`Value`] ids are not durable across this call. Embedders
     /// must use retained handles for values that survive Context operations.
@@ -562,6 +602,7 @@ impl Context {
                 .sweep_unmarked(&reachability.collection_iterators)?,
             self.symbols.sweep_unmarked(&reachability.symbols)?,
             self.strings.sweep_unmarked(&reachability.strings)?,
+            self.generators.sweep_unmarked(&reachability.generators)?,
         ];
         let after = self.owner_storage_snapshot()?;
         self.release_collected_storage(&before, &after)?;
@@ -629,6 +670,15 @@ impl Context {
             let keep = slot.is_some_and(|(_kind, collection)| {
                 reachability.object_is_reachable(index)
                     && reachability.collection_is_reachable(collection)
+            });
+            if !keep {
+                *slot = None;
+            }
+        }
+        for (index, slot) in self.generator_object_slots.iter_mut().enumerate() {
+            let keep = slot.is_some_and(|generator| {
+                reachability.object_is_reachable(index)
+                    && reachability.generator_is_reachable(generator)
             });
             if !keep {
                 *slot = None;

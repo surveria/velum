@@ -444,6 +444,10 @@ impl LayoutBuilder {
                 self.analyze_expr(initializer, scope, function)?;
             }
         }
+        for block in &class.static_blocks {
+            let block_scope = self.add_scope(Some(scope), function, ScopeKind::Local);
+            self.analyze_statements(&block.body, block_scope, block_scope, function)?;
+        }
         Ok(())
     }
 
@@ -535,6 +539,12 @@ impl LayoutBuilder {
             | Expr::Unary { expr, .. }
             | Expr::Await(expr)
             | Expr::Update { expr, .. } => self.analyze_expr(expr, scope, function),
+            Expr::Yield { expr, .. } => {
+                if let Some(expr) = expr {
+                    self.analyze_expr(expr, scope, function)?;
+                }
+                Ok(())
+            }
             Expr::Binary { left, right, .. } => {
                 self.analyze_expr(left, scope, function)?;
                 self.analyze_expr(right, scope, function)

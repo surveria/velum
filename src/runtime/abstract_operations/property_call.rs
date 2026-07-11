@@ -37,7 +37,9 @@ impl Context {
             }
             return self.get_string_property_value(object, value.as_str(), property.name());
         }
-        if let Some(value) = self.primitive_prototype_property_value(object, property.name())? {
+        if let Some(value) =
+            self.primitive_prototype_property_value_with_lookup(object, property)?
+        {
             return Ok(value);
         }
         let value = get_property(&self.objects, object, property)?;

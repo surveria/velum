@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expr, Expression, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind},
+    ast::{Expr, Expression, FunctionKind, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind},
     error::{Error, Result},
     lexer::TokenKind,
     value::Value,
@@ -58,8 +58,15 @@ impl Parser {
                 &TokenKind::Async,
                 "expected 'async' before async object method",
             )?;
+            if self.match_kind(&TokenKind::Star) {
+                return Err(self.parse_error("async generator methods are not supported yet"));
+            }
             let name = self.object_property_key()?;
-            return self.object_method_property(name, true, start);
+            return self.object_method_property(name, FunctionKind::Async, start);
+        }
+        if self.match_kind(&TokenKind::Star) {
+            let name = self.object_property_key()?;
+            return self.object_method_property(name, FunctionKind::Generator, start);
         }
         if let Some(kind) = self.object_accessor_start() {
             let keyword = self
@@ -78,7 +85,7 @@ impl Parser {
             });
         }
         if self.match_kind(&TokenKind::LParen) {
-            return self.object_method_property_after_lparen(name, false, start);
+            return self.object_method_property_after_lparen(name, FunctionKind::Ordinary, start);
         }
         if let ObjectPropertyName::Static {
             key,
@@ -121,7 +128,7 @@ impl Parser {
     ) -> Result<ObjectProperty> {
         self.consume(&TokenKind::LParen, "expected '(' after accessor name")?;
         let inherited_strict = self.is_strict_mode();
-        let parameters = self.with_await_expression(false, Self::function_parameters)?;
+        let parameters = self.with_await_context(false, false, Self::function_parameters)?;
         self.consume(&TokenKind::RParen, "expected ')' after accessor parameters")?;
         match kind {
             ObjectPropertyKind::Get if !parameters.params.is_empty() => {
@@ -149,7 +156,9 @@ impl Parser {
         self.consume(&TokenKind::LBrace, "expected '{' before accessor body")?;
         let body = self.with_new_target_scope(|parser| {
             parser.with_super_context(false, false, |parser| {
-                parser.with_await_expression(false, |parser| parser.function_body(inherited_strict))
+                parser.with_await_context(false, false, |parser| {
+                    parser.function_body(inherited_strict)
+                })
             })
         })?;
         self.validate_function_parameters(
@@ -159,7 +168,8 @@ impl Parser {
             body.contains_use_strict,
         )?;
         let id = self.static_function()?;
-        let (params, statements) = parameters.apply_prologue(body.statements);
+        let (params, statements, parameter_prologue_count) =
+            parameters.apply_prologue(body.statements);
         let key = name.into_key();
         let name = match &key {
             ObjectPropertyKey::Static(name) => Some(name.clone()),
@@ -172,7 +182,8 @@ impl Parser {
                 name,
                 params: params.into(),
                 body: statements.into(),
-                is_async: false,
+                parameter_prologue_count,
+                kind: FunctionKind::Ordinary,
             },
         );
         Ok(ObjectProperty { key, kind, value })
@@ -187,28 +198,35 @@ impl Parser {
     fn object_method_property(
         &mut self,
         name: ObjectPropertyName,
-        is_async: bool,
+        kind: FunctionKind,
         start: crate::SourceSpan,
     ) -> Result<ObjectProperty> {
         self.consume(&TokenKind::LParen, "expected '(' after object method name")?;
-        self.object_method_property_after_lparen(name, is_async, start)
+        self.object_method_property_after_lparen(name, kind, start)
     }
 
     fn object_method_property_after_lparen(
         &mut self,
         name: ObjectPropertyName,
-        is_async: bool,
+        kind: FunctionKind,
         start: crate::SourceSpan,
     ) -> Result<ObjectProperty> {
         let inherited_strict = self.is_strict_mode();
-        let parameters = self.with_await_expression(false, Self::function_parameters)?;
+        let parameters = self.with_await_context(false, kind.is_async(), |parser| {
+            parser.with_yield_expression(false, |parser| {
+                parser
+                    .with_yield_identifier_reserved(kind.is_generator(), Self::function_parameters)
+            })
+        })?;
         self.reject_duplicate_parameters(&parameters.params)?;
         self.consume(&TokenKind::RParen, "expected ')' after method parameters")?;
         self.consume(&TokenKind::LBrace, "expected '{' before method body")?;
         let body = self.with_new_target_scope(|parser| {
             parser.with_super_context(false, false, |parser| {
-                parser.with_await_expression(is_async, |parser| {
-                    parser.function_body(inherited_strict)
+                parser.with_await_context(kind.is_async(), kind.is_async(), |parser| {
+                    parser.with_yield_expression(kind.is_generator(), |parser| {
+                        parser.function_body(inherited_strict)
+                    })
                 })
             })
         })?;
@@ -218,8 +236,12 @@ impl Parser {
             inherited_strict,
             body.contains_use_strict,
         )?;
+        if kind.is_generator() {
+            self.validate_generator_parameter_lexicals(&parameters.params, &body.statements)?;
+        }
         let id = self.static_function()?;
-        let (params, statements) = parameters.apply_prologue(body.statements);
+        let (params, statements, parameter_prologue_count) =
+            parameters.apply_prologue(body.statements);
         let key = name.into_key();
         let name = match &key {
             ObjectPropertyKey::Static(name) => Some(name.clone()),
@@ -232,7 +254,8 @@ impl Parser {
                 name,
                 params: params.into(),
                 body: statements.into(),
-                is_async,
+                parameter_prologue_count,
+                kind,
             },
         );
         Ok(ObjectProperty {

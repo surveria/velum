@@ -10,6 +10,7 @@ mod destructure_continuation;
 mod execution;
 mod for_of;
 mod in_operator;
+mod instruction_stack;
 mod linear;
 mod ops;
 mod spread;
@@ -24,20 +25,11 @@ use crate::{
     bytecode::{BytecodeAddress, BytecodeInstruction, BytecodeProperty},
     error::{Error, Result},
     runtime::{Context, control::Completion},
-    syntax::{StaticString, UpdateOp},
+    syntax::UpdateOp,
     value::Value,
 };
 
 use state::BytecodeState;
-
-fn eval_bytecode_push_undefined(
-    state: &mut BytecodeState,
-    next: BytecodeAddress,
-) -> Option<Completion> {
-    state.stack.push(Value::Undefined);
-    state.pc = next;
-    None
-}
 
 impl Context {
     fn eval_bytecode_instruction(
@@ -64,6 +56,8 @@ impl Context {
             | BytecodeInstruction::Unary(_)
             | BytecodeInstruction::NumberUnary(_)
             | BytecodeInstruction::Await
+            | BytecodeInstruction::GeneratorStart
+            | BytecodeInstruction::Yield { .. }
             | BytecodeInstruction::NullishCoalescing { .. }
             | BytecodeInstruction::TypeOfBinding(_)
             | BytecodeInstruction::TypeOfValue => {
@@ -137,208 +131,6 @@ impl Context {
             | BytecodeInstruction::Complete(_) => {
                 self.eval_bytecode_control_instruction(state, instruction, next)
             }
-        }
-    }
-
-    fn eval_bytecode_stack_instruction(
-        &mut self,
-        state: &mut BytecodeState,
-        instruction: &BytecodeInstruction,
-        next: BytecodeAddress,
-    ) -> Result<Option<Completion>> {
-        match instruction {
-            BytecodeInstruction::PushLiteral(value) => {
-                state.stack.push(self.runtime_value(value.clone())?);
-                state.pc = next;
-                Ok(None)
-            }
-            BytecodeInstruction::PushString(value) => {
-                state.stack.push(self.static_string_value(value)?);
-                state.pc = next;
-                Ok(None)
-            }
-            BytecodeInstruction::TemplateConcat { part_count } => {
-                self.eval_bytecode_template_concat(state, *part_count, next)
-            }
-            BytecodeInstruction::StringConcat { .. }
-            | BytecodeInstruction::StringConcatStatic { .. } => {
-                self.eval_bytecode_string_concat_instruction(state, instruction, next)
-            }
-            BytecodeInstruction::CreateRegExp { pattern, flags } => {
-                self.eval_bytecode_create_regexp(state, pattern, flags, next)
-            }
-            BytecodeInstruction::PushUndefined => Ok(eval_bytecode_push_undefined(state, next)),
-            BytecodeInstruction::LoadThis => {
-                state.stack.push(self.current_this()?);
-                state.pc = next;
-                Ok(None)
-            }
-            BytecodeInstruction::LoadNewTarget => {
-                state.stack.push(self.current_new_target()?);
-                state.pc = next;
-                Ok(None)
-            }
-            BytecodeInstruction::LoadBinding(binding) => {
-                state.stack.push(self.eval_bytecode_identifier(binding)?);
-                state.pc = next;
-                Ok(None)
-            }
-            BytecodeInstruction::StoreBinding(binding) => {
-                let value = state.stack.pop()?;
-                self.assign_bytecode_or_create_sloppy_global(binding, value.clone())?;
-                state.stack.push(value);
-                state.pc = next;
-                Ok(None)
-            }
-            BytecodeInstruction::DeclareBinding {
-                name,
-                kind,
-                has_init,
-            } => {
-                let value = if *has_init {
-                    Some(state.stack.pop()?)
-                } else {
-                    None
-                };
-                self.eval_bytecode_declaration(name, *kind, value)?;
-                state.last = Value::Undefined;
-                state.pc = next;
-                Ok(None)
-            }
-            BytecodeInstruction::StoreLast => {
-                state.last = state.stack.pop()?;
-                state.pc = next;
-                Ok(None)
-            }
-            BytecodeInstruction::Pop => {
-                state.stack.pop()?;
-                state.pc = next;
-                Ok(None)
-            }
-            BytecodeInstruction::Unary(_) | BytecodeInstruction::NumberUnary(_) => {
-                self.eval_bytecode_unary_instruction(state, instruction, next)
-            }
-            BytecodeInstruction::Await => self.eval_bytecode_await_instruction(state, next),
-            BytecodeInstruction::NullishCoalescing { right } => {
-                self.eval_bytecode_nullish_coalescing(state, right, next)
-            }
-            BytecodeInstruction::TypeOfBinding(binding) => {
-                state
-                    .stack
-                    .push(self.eval_bytecode_typeof_binding(binding)?);
-                state.pc = next;
-                Ok(None)
-            }
-            BytecodeInstruction::TypeOfValue => {
-                let value = state.stack.pop()?;
-                let type_name = self.semantic_type_name(&value)?;
-                state.stack.push(self.heap_string_value(type_name)?);
-                state.pc = next;
-                Ok(None)
-            }
-            _ => Err(Error::runtime("bytecode stack instruction mismatch")),
-        }
-    }
-
-    fn eval_bytecode_await_instruction(
-        &mut self,
-        state: &mut BytecodeState,
-        next: BytecodeAddress,
-    ) -> Result<Option<Completion>> {
-        let value = state.stack.pop()?;
-        match self.eval_bytecode_await(value)? {
-            Completion::Normal(value) => {
-                state.stack.push(value);
-                state.pc = next;
-                Ok(None)
-            }
-            Completion::Throw(value) => Ok(Some(Completion::Throw(value))),
-            completion @ Completion::Suspended(_) => {
-                state.pc = next;
-                state.mark_await_suspended();
-                Ok(Some(completion))
-            }
-            completion @ (Completion::Return(_)
-            | Completion::Break { .. }
-            | Completion::Continue(_)) => completion.into_result().map(|_| None),
-        }
-    }
-
-    fn eval_bytecode_nullish_coalescing(
-        &mut self,
-        state: &mut BytecodeState,
-        right: &crate::bytecode::BytecodeBlock,
-        next: BytecodeAddress,
-    ) -> Result<Option<Completion>> {
-        let left = state.stack.peek()?.clone();
-        if matches!(left, Value::Undefined | Value::Null) {
-            match self.eval_bytecode_block(right)? {
-                Completion::Normal(value) => {
-                    state.stack.pop()?;
-                    state.stack.push(value);
-                }
-                completion @ (Completion::Throw(_) | Completion::Suspended(_)) => {
-                    return Ok(Some(completion));
-                }
-                completion @ (Completion::Return(_)
-                | Completion::Break { .. }
-                | Completion::Continue(_)) => return completion.into_result().map(|_| None),
-            }
-        }
-        state.pc = next;
-        Ok(None)
-    }
-
-    fn eval_bytecode_template_concat(
-        &mut self,
-        state: &mut BytecodeState,
-        part_count: usize,
-        next: BytecodeAddress,
-    ) -> Result<Option<Completion>> {
-        let text = self.template_concat_text(state.stack.tail(part_count)?)?;
-        let value = self.heap_string_value(&text)?;
-        state.stack.drop_tail(part_count)?;
-        state.stack.push(value);
-        state.pc = next;
-        Ok(None)
-    }
-
-    fn eval_bytecode_create_regexp(
-        &mut self,
-        state: &mut BytecodeState,
-        pattern: &StaticString,
-        flags: &StaticString,
-        next: BytecodeAddress,
-    ) -> Result<Option<Completion>> {
-        state
-            .stack
-            .push(self.create_regexp_literal(pattern.as_str(), flags.as_str())?);
-        state.pc = next;
-        Ok(None)
-    }
-
-    fn eval_bytecode_unary_instruction(
-        &mut self,
-        state: &mut BytecodeState,
-        instruction: &BytecodeInstruction,
-        next: BytecodeAddress,
-    ) -> Result<Option<Completion>> {
-        match instruction {
-            BytecodeInstruction::Unary(op) => {
-                let value = state.stack.pop()?;
-                state.stack.push(self.eval_bytecode_unary(*op, &value)?);
-                state.pc = next;
-                Ok(None)
-            }
-            BytecodeInstruction::NumberUnary(op) => {
-                let value = state.stack.pop()?;
-                state
-                    .stack
-                    .push(self.eval_bytecode_number_unary(*op, &value)?);
-                state.pc = next;
-                Ok(None)
-            }
-            _ => Err(Error::runtime("bytecode unary instruction mismatch")),
         }
     }
 

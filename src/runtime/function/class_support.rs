@@ -43,7 +43,10 @@ impl Context {
             completion @ Completion::Throw(_) => Ok(completion),
             Completion::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Completion::Continue(_) => Err(Error::runtime("continue statement outside loop")),
-            completion @ Completion::Suspended(_) => completion
+            completion @ (Completion::Suspended(_)
+            | Completion::GeneratorStart
+            | Completion::Yielded(_)
+            | Completion::YieldedIteratorResult(_)) => completion
                 .into_function_result()
                 .map(|_| Completion::Normal(Value::Undefined)),
         }

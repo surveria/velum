@@ -47,15 +47,23 @@ impl<'a> HoistCollector<'a> {
         id: crate::syntax::StaticFunctionId,
         params: &std::rc::Rc<[crate::ast::FunctionParam]>,
         body: &std::rc::Rc<[Statement]>,
-        is_async: bool,
+        parameter_prologue_count: usize,
+        kind: crate::syntax::FunctionKind,
     ) -> Result<()> {
         self.var_declarations.push(name.clone());
         let declaration = BytecodeFunctionDeclaration::new(
             BytecodeBinding::compile(name, self.layout)?,
             id,
             name.name().clone(),
-            BytecodeFunction::compile(None, params, body, self.layout)?,
-            is_async,
+            BytecodeFunction::compile(
+                None,
+                params,
+                body,
+                kind,
+                parameter_prologue_count,
+                self.layout,
+            )?,
+            kind,
         );
         self.function_declarations.push(declaration);
         Ok(())
@@ -70,6 +78,22 @@ impl<'a> HoistCollector<'a> {
         match pattern.for_each_binding(&mut visit) {
             Ok(()) => {}
         }
+    }
+
+    fn collect_try_statements(
+        &mut self,
+        body: &[Statement],
+        catch_body: Option<&[Statement]>,
+        finally_body: Option<&[Statement]>,
+    ) -> Result<()> {
+        self.collect_statements(body)?;
+        if let Some(catch_body) = catch_body {
+            self.collect_statements(catch_body)?;
+        }
+        if let Some(finally_body) = finally_body {
+            self.collect_statements(finally_body)?;
+        }
+        Ok(())
     }
 
     fn collect_statement(&mut self, statement: &Statement) -> Result<()> {
@@ -124,16 +148,11 @@ impl<'a> HoistCollector<'a> {
                 body,
                 catch,
                 finally_body,
-            } => {
-                self.collect_statements(body)?;
-                if let Some(catch) = catch {
-                    self.collect_statements(&catch.body)?;
-                }
-                if let Some(finally_body) = finally_body {
-                    self.collect_statements(finally_body)?;
-                }
-                Ok(())
-            }
+            } => self.collect_try_statements(
+                body,
+                catch.as_ref().map(|clause| clause.body.as_ref()),
+                finally_body.as_deref(),
+            ),
             Stmt::VarDecl {
                 name,
                 kind: DeclKind::Var,
@@ -155,8 +174,16 @@ impl<'a> HoistCollector<'a> {
                 id,
                 params,
                 body,
-                is_async,
-            } => self.collect_function_declaration(name, *id, params, body, *is_async),
+                parameter_prologue_count,
+                kind,
+            } => self.collect_function_declaration(
+                name,
+                *id,
+                params,
+                body,
+                *parameter_prologue_count,
+                *kind,
+            ),
             Stmt::Empty
             | Stmt::Break(_)
             | Stmt::Continue(_)

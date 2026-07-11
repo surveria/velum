@@ -53,10 +53,39 @@ impl BytecodeBlock {
         compiler.finish()
     }
 
+    fn compile_function_statements(
+        statements: &[Statement],
+        kind: crate::syntax::FunctionKind,
+        parameter_prologue_count: usize,
+        layout: &BindingLayout,
+    ) -> Result<Self> {
+        let fallback_span = statements
+            .first()
+            .map_or_else(|| SourceSpan::point(SourceId::UNKNOWN, 0), Statement::span);
+        let mut compiler = BytecodeCompiler::new(layout, fallback_span);
+        let split = parameter_prologue_count.min(statements.len());
+        compiler.compile_statements(&statements[..split], StatementValue::Store)?;
+        if kind.is_generator() {
+            compiler.emit(BytecodeInstruction::GeneratorStart);
+        }
+        compiler.compile_statements(&statements[split..], StatementValue::Store)?;
+        compiler.finish()
+    }
+
     fn compile_expression(expr: &Expression, layout: &BindingLayout) -> Result<Self> {
         let mut compiler = BytecodeCompiler::new(layout, expr.span());
         compiler.compile_expr(expr)?;
         compiler.emit(BytecodeInstruction::StoreLast);
+        compiler.finish()
+    }
+
+    fn compile_scoped_statements(statements: &[Statement], layout: &BindingLayout) -> Result<Self> {
+        let fallback_span = statements
+            .first()
+            .map_or_else(|| SourceSpan::point(SourceId::UNKNOWN, 0), Statement::span);
+        let inner = Self::compile_statements(statements, StatementValue::Store, layout)?;
+        let mut compiler = BytecodeCompiler::new(layout, fallback_span);
+        compiler.emit(BytecodeInstruction::ScopedBlock(inner));
         compiler.finish()
     }
 }
@@ -297,6 +326,8 @@ impl<'a> BytecodeCompiler<'a> {
             | BytecodeInstruction::Unary(_)
             | BytecodeInstruction::NumberUnary(_)
             | BytecodeInstruction::Await
+            | BytecodeInstruction::GeneratorStart
+            | BytecodeInstruction::Yield { .. }
             | BytecodeInstruction::NullishCoalescing { .. }
             | BytecodeInstruction::TypeOfBinding(_)
             | BytecodeInstruction::TypeOfValue
@@ -405,6 +436,8 @@ impl<'a> BytecodeCompiler<'a> {
                     None,
                     &member.params,
                     &member.body,
+                    crate::syntax::FunctionKind::Ordinary,
+                    0,
                     self.layout,
                 )?,
             });
@@ -440,6 +473,11 @@ impl<'a> BytecodeCompiler<'a> {
                     .transpose()?,
             });
         }
+        let static_blocks = class
+            .static_blocks
+            .iter()
+            .map(|block| BytecodeBlock::compile_scoped_statements(&block.body, self.layout))
+            .collect::<Result<Vec<_>>>()?;
         self.emit(BytecodeInstruction::CreateClass {
             class: Rc::new(BytecodeClass {
                 name: class.name.clone().or_else(|| inferred_name.cloned()),
@@ -449,10 +487,13 @@ impl<'a> BytecodeCompiler<'a> {
                     None,
                     &class.constructor.params,
                     &class.constructor.body,
+                    crate::syntax::FunctionKind::Ordinary,
+                    0,
                     self.layout,
                 )?,
                 members: members.into(),
                 fields: fields.into(),
+                static_blocks: static_blocks.into(),
             }),
         });
         Ok(())

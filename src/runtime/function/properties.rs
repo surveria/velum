@@ -287,8 +287,7 @@ impl FunctionProperties {
     }
 
     pub(in crate::runtime) fn has_intrinsic(&self, property: FunctionPropertyKind) -> bool {
-        self.intrinsic(property)
-            .is_some_and(FunctionIntrinsicProperty::has)
+        self.intrinsic_descriptor(property).is_some()
     }
 
     pub(in crate::runtime) fn set(

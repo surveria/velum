@@ -53,7 +53,7 @@ impl Context {
             name: class.name.as_ref(),
             bytecode: &class.constructor,
             constructable: true,
-            is_async: false,
+            kind: crate::syntax::FunctionKind::Ordinary,
             class_constructor: true,
             prototype_parent: heritage.as_ref().and_then(ClassHeritage::prototype_parent),
             new_target_mode: BytecodeNewTargetMode::Own,
@@ -119,10 +119,25 @@ impl Context {
         }
 
         self.install_class_fields(class, &constructor, *constructor_id, &field_computed_keys)?;
+        self.evaluate_class_static_blocks(class, &constructor)?;
 
         state.stack.push(constructor);
         state.pc = next;
         Ok(None)
+    }
+
+    fn evaluate_class_static_blocks(
+        &mut self,
+        class: &BytecodeClass,
+        constructor: &Value,
+    ) -> Result<()> {
+        for block in class.static_blocks.iter() {
+            self.push_temporary_this(constructor.clone())?;
+            let completion = self.eval_bytecode_block(block);
+            self.pop_temporary_this()?;
+            completion?.into_result()?;
+        }
+        Ok(())
     }
 
     /// Resolves field keys once at class definition time, stores instance
@@ -201,7 +216,7 @@ impl Context {
             name: None,
             bytecode: &member.bytecode,
             constructable: false,
-            is_async: false,
+            kind: crate::syntax::FunctionKind::Ordinary,
             class_constructor: false,
             prototype_parent: None,
             new_target_mode: BytecodeNewTargetMode::Own,

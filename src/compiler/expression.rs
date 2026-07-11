@@ -68,10 +68,7 @@ impl BytecodeCompiler<'_> {
             Expr::Spread(_) => return Err(Self::spread_outside_literal_error()),
             Expr::Parenthesized(expr) => return self.compile_expr(expr),
             Expr::Sequence(expressions) => return self.compile_sequence_expr(expressions),
-            Expr::Await(expr) => {
-                self.compile_expr(expr)?;
-                self.emit(BytecodeInstruction::Await);
-            }
+            Expr::Await(_) | Expr::Yield { .. } => return self.compile_suspend_expr(expr),
             Expr::Unary { op, expr } => return self.compile_unary_expr(*op, expr),
             Expr::Binary {
                 op,
@@ -125,6 +122,27 @@ impl BytecodeCompiler<'_> {
                 return self.compile_function_literal(expr);
             }
             Expr::New { constructor, args } => self.compile_new_expr(constructor, args)?,
+        }
+        Ok(())
+    }
+
+    fn compile_suspend_expr(&mut self, expr: &Expr) -> Result<()> {
+        match expr {
+            Expr::Await(expr) => {
+                self.compile_expr(expr)?;
+                self.emit(BytecodeInstruction::Await);
+            }
+            Expr::Yield { expr, delegate } => {
+                if let Some(expr) = expr {
+                    self.compile_expr(expr)?;
+                } else {
+                    self.emit(BytecodeInstruction::PushUndefined);
+                }
+                self.emit(BytecodeInstruction::Yield {
+                    delegate: *delegate,
+                });
+            }
+            _ => return Err(Error::runtime("expected suspending expression")),
         }
         Ok(())
     }

@@ -199,6 +199,36 @@ fn supports_accessor_descriptors_on_javascript_functions() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))
 }
 
+#[test]
+fn javascript_functions_use_inherited_restricted_accessors() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        function* values() {}
+        let readThrew = false;
+        let writeThrew = false;
+        try {
+            returnValue = values.caller;
+        } catch (error) {
+            readThrew = error instanceof TypeError;
+        }
+        try {
+            values.arguments = 42;
+        } catch (error) {
+            writeThrew = error instanceof TypeError;
+        }
+        readThrew &&
+            writeThrew &&
+            !values.hasOwnProperty("caller") &&
+            ("caller" in values)
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Bool(true))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

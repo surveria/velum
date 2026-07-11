@@ -16,9 +16,22 @@ pub enum Completion {
     },
     Continue(Option<StaticName>),
     Suspended(PromiseId),
+    GeneratorStart,
+    Yielded(Value),
+    YieldedIteratorResult(Value),
 }
 
 impl Completion {
+    pub const fn suspends_execution(&self) -> bool {
+        matches!(
+            self,
+            Self::Suspended(_)
+                | Self::GeneratorStart
+                | Self::Yielded(_)
+                | Self::YieldedIteratorResult(_)
+        )
+    }
+
     pub fn into_result(self) -> Result<Value> {
         match self {
             Self::Normal(value) => Ok(value),
@@ -30,6 +43,12 @@ impl Completion {
             Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),
             Self::Suspended(_) => Err(Error::runtime(
                 "suspended bytecode escaped its execution owner",
+            )),
+            Self::Yielded(_) | Self::YieldedIteratorResult(_) => Err(Error::runtime(
+                "yielded bytecode escaped its generator owner",
+            )),
+            Self::GeneratorStart => Err(Error::runtime(
+                "generator start escaped its generator owner",
             )),
         }
     }
@@ -44,6 +63,12 @@ impl Completion {
             Self::Suspended(_) => Err(Error::runtime(
                 "suspended bytecode escaped its function owner",
             )),
+            Self::Yielded(_) | Self::YieldedIteratorResult(_) => Err(Error::runtime(
+                "yielded bytecode escaped its generator function owner",
+            )),
+            Self::GeneratorStart => Err(Error::runtime(
+                "generator start escaped its generator function owner",
+            )),
         }
     }
 
@@ -55,6 +80,10 @@ impl Completion {
             Self::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),
             Self::Suspended(_) => Err(Error::runtime("suspended bytecode escaped its call owner")),
+            Self::Yielded(_) | Self::YieldedIteratorResult(_) => {
+                Err(Error::runtime("yielded bytecode escaped its call owner"))
+            }
+            Self::GeneratorStart => Err(Error::runtime("generator start escaped its call owner")),
         }
     }
 
@@ -66,6 +95,12 @@ impl Completion {
             Self::Continue(_) => Err(Error::runtime("continue statement outside loop")),
             Self::Suspended(_) => Err(Error::runtime(
                 "suspended bytecode escaped its native-call owner",
+            )),
+            Self::Yielded(_) | Self::YieldedIteratorResult(_) => Err(Error::runtime(
+                "yielded bytecode escaped its native-call owner",
+            )),
+            Self::GeneratorStart => Err(Error::runtime(
+                "generator start escaped its native-call owner",
             )),
         }
     }

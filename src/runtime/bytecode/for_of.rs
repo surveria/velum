@@ -112,7 +112,7 @@ impl Context {
             );
             if body_result
                 .as_ref()
-                .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
+                .is_ok_and(Completion::suspends_execution)
             {
                 let completion = body_result?;
                 self.park_bytecode_control(handle, control)?;
@@ -188,7 +188,7 @@ impl Context {
                 Ok(completion) => completion,
                 Err(error) => return self.close_for_of_error(handle, control, error),
             };
-            if matches!(completion, Completion::Suspended(_)) {
+            if completion.suspends_execution() {
                 self.park_bytecode_control(handle, control)?;
                 return Ok(completion);
             }

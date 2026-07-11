@@ -1,6 +1,7 @@
 use super::date_kind::DateFunctionKind;
 use crate::value::{BoundFunctionId, ErrorName, ObjectId};
 
+mod math;
 mod regexp;
 mod string;
 mod utility;
@@ -251,6 +252,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     ArrayToReversed,
     ArrayToSpliced,
     ArrayWith,
+    ArrayValues,
     ArrayBuffer,
     AsyncFunction,
     Boolean,
@@ -269,6 +271,9 @@ pub(in crate::runtime) enum NativeFunctionKind {
     FunctionPrototypeApply,
     FunctionPrototypeHasInstance,
     FunctionPrototypeToString,
+    GeneratorNext,
+    GeneratorReturn,
+    GeneratorThrow,
     GlobalDecodeUri,
     GlobalDecodeUriComponent,
     GlobalEncodeUri,
@@ -469,6 +474,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     SymbolPrototypeDescriptionGetter,
     SymbolPrototypeToString,
     SymbolPrototypeValueOf,
+    ThrowTypeError,
     Uint8Array,
     WeakMap,
     WeakMapDelete,
@@ -547,49 +553,6 @@ impl NativeFunctionKind {
         FUNCTION_FUNCTION_LENGTH
     }
 
-    const fn math_length(self) -> Option<f64> {
-        match self {
-            Self::MathRandom => Some(MATH_FUNCTION_LENGTH_ZERO),
-            Self::MathAbs
-            | Self::MathAcos
-            | Self::MathAcosh
-            | Self::MathAsin
-            | Self::MathAsinh
-            | Self::MathAtan
-            | Self::MathAtanh
-            | Self::MathCbrt
-            | Self::MathCeil
-            | Self::MathClz32
-            | Self::MathCos
-            | Self::MathCosh
-            | Self::MathExp
-            | Self::MathExpm1
-            | Self::MathF16round
-            | Self::MathFloor
-            | Self::MathFround
-            | Self::MathLog
-            | Self::MathLog10
-            | Self::MathLog1p
-            | Self::MathLog2
-            | Self::MathRound
-            | Self::MathSign
-            | Self::MathSin
-            | Self::MathSinh
-            | Self::MathSqrt
-            | Self::MathSumPrecise
-            | Self::MathTan
-            | Self::MathTanh
-            | Self::MathTrunc => Some(MATH_FUNCTION_LENGTH_ONE),
-            Self::MathAtan2
-            | Self::MathHypot
-            | Self::MathImul
-            | Self::MathMax
-            | Self::MathMin
-            | Self::MathPow => Some(MATH_FUNCTION_LENGTH_TWO),
-            _ => None,
-        }
-    }
-
     const fn core_length(self) -> Option<f64> {
         match self {
             Self::ArrayBuffer => Some(ARRAY_BUFFER_FUNCTION_LENGTH),
@@ -606,12 +569,13 @@ impl NativeFunctionKind {
             Self::FunctionPrototypeApply => Some(FUNCTION_PROTOTYPE_APPLY_LENGTH),
             Self::FunctionPrototypeHasInstance => Some(FUNCTION_PROTOTYPE_HAS_INSTANCE_LENGTH),
             Self::FunctionPrototypeToString => Some(FUNCTION_PROTOTYPE_TO_STRING_LENGTH),
+            Self::GeneratorNext | Self::GeneratorReturn | Self::GeneratorThrow => Some(1.0),
             Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_FUNCTION_LENGTH),
             Self::JsonParse => Some(JSON_PARSE_FUNCTION_LENGTH),
             Self::JsonRawJson => Some(JSON_RAW_JSON_FUNCTION_LENGTH),
             Self::JsonStringify => Some(JSON_STRINGIFY_FUNCTION_LENGTH),
             Self::Number => Some(NUMBER_FUNCTION_LENGTH),
-            Self::Print => Some(0.0),
+            Self::Print | Self::ThrowTypeError => Some(0.0),
             Self::Promise => Some(PROMISE_FUNCTION_LENGTH),
             Self::PromiseResolve => Some(PROMISE_RESOLVE_FUNCTION_LENGTH),
             Self::PromiseReject => Some(PROMISE_REJECT_FUNCTION_LENGTH),
@@ -672,49 +636,6 @@ impl NativeFunctionKind {
         FUNCTION_NAME
     }
 
-    const fn math_name(self) -> Option<&'static str> {
-        match self {
-            Self::MathAbs => Some(MATH_ABS_NAME),
-            Self::MathAcos => Some(MATH_ACOS_NAME),
-            Self::MathAcosh => Some(MATH_ACOSH_NAME),
-            Self::MathAsin => Some(MATH_ASIN_NAME),
-            Self::MathAsinh => Some(MATH_ASINH_NAME),
-            Self::MathAtan => Some(MATH_ATAN_NAME),
-            Self::MathAtan2 => Some(MATH_ATAN2_NAME),
-            Self::MathAtanh => Some(MATH_ATANH_NAME),
-            Self::MathCbrt => Some(MATH_CBRT_NAME),
-            Self::MathCeil => Some(MATH_CEIL_NAME),
-            Self::MathClz32 => Some(MATH_CLZ32_NAME),
-            Self::MathCos => Some(MATH_COS_NAME),
-            Self::MathCosh => Some(MATH_COSH_NAME),
-            Self::MathExp => Some(MATH_EXP_NAME),
-            Self::MathExpm1 => Some(MATH_EXPM1_NAME),
-            Self::MathF16round => Some(MATH_F16ROUND_NAME),
-            Self::MathFloor => Some(MATH_FLOOR_NAME),
-            Self::MathFround => Some(MATH_FROUND_NAME),
-            Self::MathHypot => Some(MATH_HYPOT_NAME),
-            Self::MathImul => Some(MATH_IMUL_NAME),
-            Self::MathLog => Some(MATH_LOG_NAME),
-            Self::MathLog10 => Some(MATH_LOG10_NAME),
-            Self::MathLog1p => Some(MATH_LOG1P_NAME),
-            Self::MathLog2 => Some(MATH_LOG2_NAME),
-            Self::MathMax => Some(MATH_MAX_NAME),
-            Self::MathMin => Some(MATH_MIN_NAME),
-            Self::MathPow => Some(MATH_POW_NAME),
-            Self::MathRandom => Some(MATH_RANDOM_NAME),
-            Self::MathRound => Some(MATH_ROUND_NAME),
-            Self::MathSign => Some(MATH_SIGN_NAME),
-            Self::MathSin => Some(MATH_SIN_NAME),
-            Self::MathSinh => Some(MATH_SINH_NAME),
-            Self::MathSqrt => Some(MATH_SQRT_NAME),
-            Self::MathSumPrecise => Some(MATH_SUM_PRECISE_NAME),
-            Self::MathTan => Some(MATH_TAN_NAME),
-            Self::MathTanh => Some(MATH_TANH_NAME),
-            Self::MathTrunc => Some(MATH_TRUNC_NAME),
-            _ => None,
-        }
-    }
-
     const fn object_name(self) -> Option<&'static str> {
         match self {
             Self::Object => Some(OBJECT_NAME),
@@ -767,6 +688,10 @@ impl NativeFunctionKind {
             Self::FunctionPrototypeApply => Some(FUNCTION_PROTOTYPE_APPLY_NAME),
             Self::FunctionPrototypeHasInstance => Some(FUNCTION_PROTOTYPE_HAS_INSTANCE_NAME),
             Self::FunctionPrototypeToString => Some(FUNCTION_PROTOTYPE_TO_STRING_NAME),
+            Self::GeneratorNext => Some("next"),
+            Self::GeneratorReturn => Some("return"),
+            Self::GeneratorThrow => Some("throw"),
+            Self::ThrowTypeError => Some(""),
             Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_NAME),
             Self::JsonParse => Some(JSON_PARSE_NAME),
             Self::JsonRawJson => Some(JSON_RAW_JSON_NAME),

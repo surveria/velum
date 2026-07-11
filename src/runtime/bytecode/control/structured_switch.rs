@@ -66,7 +66,7 @@ impl Context {
             let completion = self.eval_bytecode_switch_cases(handle, control, cases);
             if completion
                 .as_ref()
-                .is_ok_and(|(_, completion)| matches!(completion, Completion::Suspended(_)))
+                .is_ok_and(|(_, completion)| completion.suspends_execution())
             {
                 completion
             } else {
@@ -94,7 +94,7 @@ impl Context {
             self.eval_bytecode_switch_cases(handle, control, cases)
         };
         let (control, completion) = result?;
-        if matches!(completion, Completion::Suspended(_)) {
+        if completion.suspends_execution() {
             self.park_bytecode_control(handle, control)?;
             return Ok(Some(completion));
         }
@@ -222,7 +222,7 @@ impl Context {
                     context.eval_bytecode_block_with_state(&case.body, body_state)
                 },
             )?;
-            if !matches!(completion, Completion::Suspended(_)) {
+            if !completion.suspends_execution() {
                 let (next_case, _) = control.switch_state_mut()?;
                 *next_case = next_case
                     .checked_add(1)
@@ -238,7 +238,10 @@ impl Context {
                 | Completion::Return(_)
                 | Completion::Break { .. }
                 | Completion::Continue(_)
-                | Completion::Suspended(_)) => return Ok((control, completion)),
+                | Completion::Suspended(_)
+                | Completion::GeneratorStart
+                | Completion::Yielded(_)
+                | Completion::YieldedIteratorResult(_)) => return Ok((control, completion)),
             }
         }
         let (_, last) = control.switch_state_mut()?;

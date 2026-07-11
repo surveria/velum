@@ -54,6 +54,37 @@ pub(in crate::runtime) enum IteratorStep {
     Abrupt(Completion),
 }
 
+/// Persistent iterator state owned by a suspended `yield*` instruction.
+#[derive(Debug)]
+pub(in crate::runtime) struct YieldDelegateContinuation {
+    source: IteratorSource,
+}
+
+impl YieldDelegateContinuation {
+    pub(in crate::runtime) const fn new(source: IteratorSource) -> Self {
+        Self { source }
+    }
+
+    pub(in crate::runtime) fn root_values(&self) -> impl Iterator<Item = &Value> {
+        self.source.root_values()
+    }
+}
+
+/// One externally observable step of the `yield*` delegation loop.
+pub(in crate::runtime) enum YieldDelegateStep {
+    Yielded(Value),
+    YieldedIteratorResult(Value),
+    Complete(Value),
+    Return(Value),
+    Abrupt(Completion),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum YieldDelegateDone {
+    Normal,
+    Return,
+}
+
 impl Context {
     /// ECMAScript `GetIterator` with guarded direct implementations for Array
     /// and String while their built-in protocol methods remain uninstalled.
@@ -73,30 +104,36 @@ impl Context {
             }
             Value::Object(id) => {
                 if let Some(method) = self.iterator_method(&iterable)? {
+                    if self.objects.array_len_if_array(*id)?.is_some()
+                        && self.is_default_array_iterator_method(&method)?
+                    {
+                        return Ok(IteratorSource::ArrayIndex {
+                            array: iterable,
+                            index: 0,
+                        });
+                    }
                     return self.get_iterator_from_method(&iterable, &method);
                 }
                 if self.objects.array_len_if_array(*id)?.is_some() {
-                    return Ok(IteratorSource::ArrayIndex {
-                        array: iterable,
-                        index: 0,
-                    });
+                    return Err(not_iterable_error(&iterable));
                 }
                 if let Some(text) = self.string_object_primitive_value(*id)? {
                     return Ok(chars_source(text));
                 }
                 Err(not_iterable_error(&iterable))
             }
-            Value::Function(_) | Value::NativeFunction(_) | Value::HostFunction(_) => {
+            Value::Function(_)
+            | Value::NativeFunction(_)
+            | Value::HostFunction(_)
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::Symbol(_) => {
                 let Some(method) = self.iterator_method(&iterable)? else {
                     return Err(not_iterable_error(&iterable));
                 };
                 self.get_iterator_from_method(&iterable, &method)
             }
-            Value::Undefined
-            | Value::Null
-            | Value::Bool(_)
-            | Value::Number(_)
-            | Value::Symbol(_) => Err(not_iterable_error(&iterable)),
+            Value::Undefined | Value::Null => Err(not_iterable_error(&iterable)),
         }
     }
 
@@ -192,6 +229,160 @@ impl Context {
         }
     }
 
+    /// Resumes the ECMAScript `yield*` delegation loop.
+    pub(in crate::runtime) fn yield_delegate_step(
+        &mut self,
+        continuation: &mut YieldDelegateContinuation,
+        resume: Option<Completion>,
+    ) -> Result<YieldDelegateStep> {
+        let _source_scope = self.iterator_root_scope(&continuation.source)?;
+        let _resume_scope = self.transient_root_scope(
+            VmRootKind::TransientTemporary,
+            resume.as_ref().and_then(completion_value),
+        )?;
+        match resume {
+            None => self.yield_delegate_next(&mut continuation.source, &Value::Undefined),
+            Some(Completion::Normal(value)) => {
+                self.yield_delegate_next(&mut continuation.source, &value)
+            }
+            Some(Completion::Return(value)) => {
+                self.yield_delegate_return(&mut continuation.source, &value)
+            }
+            Some(Completion::Throw(value)) => {
+                self.yield_delegate_throw(&mut continuation.source, &value)
+            }
+            Some(
+                Completion::Break { .. }
+                | Completion::Continue(_)
+                | Completion::Suspended(_)
+                | Completion::GeneratorStart
+                | Completion::Yielded(_)
+                | Completion::YieldedIteratorResult(_),
+            ) => Err(Error::runtime("invalid yield delegation resume completion")),
+        }
+    }
+
+    fn yield_delegate_next(
+        &mut self,
+        source: &mut IteratorSource,
+        value: &Value,
+    ) -> Result<YieldDelegateStep> {
+        match source {
+            IteratorSource::ArrayIndex { .. } | IteratorSource::Chars { .. } => {
+                match self.iterator_step(source)? {
+                    IteratorStep::Value(value) => Ok(YieldDelegateStep::Yielded(value)),
+                    IteratorStep::Done => Ok(YieldDelegateStep::Complete(Value::Undefined)),
+                    IteratorStep::Abrupt(completion) => Ok(YieldDelegateStep::Abrupt(completion)),
+                }
+            }
+            IteratorSource::Protocol {
+                iterator,
+                next,
+                done,
+            } => {
+                if *done {
+                    return Ok(YieldDelegateStep::Complete(Value::Undefined));
+                }
+                let iterator = iterator.clone();
+                let next = next.clone();
+                let result = match self.call(&next, std::slice::from_ref(value), iterator)? {
+                    Completion::Normal(result) => result,
+                    Completion::Throw(value) => {
+                        set_protocol_done(source);
+                        return Ok(YieldDelegateStep::Abrupt(Completion::Throw(value)));
+                    }
+                    completion => return completion.into_result().map(YieldDelegateStep::Complete),
+                };
+                self.yield_delegate_result(source, &result, YieldDelegateDone::Normal)
+            }
+        }
+    }
+
+    fn yield_delegate_return(
+        &mut self,
+        source: &mut IteratorSource,
+        value: &Value,
+    ) -> Result<YieldDelegateStep> {
+        let IteratorSource::Protocol { iterator, done, .. } = source else {
+            return Ok(YieldDelegateStep::Return(value.clone()));
+        };
+        if *done {
+            return Ok(YieldDelegateStep::Return(value.clone()));
+        }
+        let iterator = iterator.clone();
+        let Some(return_method) = self.get_named_method(&iterator, ITERATOR_RETURN_PROPERTY)?
+        else {
+            set_protocol_done(source);
+            return Ok(YieldDelegateStep::Return(value.clone()));
+        };
+        let result = match self.call(&return_method, std::slice::from_ref(value), iterator)? {
+            Completion::Normal(result) => result,
+            Completion::Throw(value) => {
+                set_protocol_done(source);
+                return Ok(YieldDelegateStep::Abrupt(Completion::Throw(value)));
+            }
+            completion => return completion.into_result().map(YieldDelegateStep::Complete),
+        };
+        self.yield_delegate_result(source, &result, YieldDelegateDone::Return)
+    }
+
+    fn yield_delegate_throw(
+        &mut self,
+        source: &mut IteratorSource,
+        value: &Value,
+    ) -> Result<YieldDelegateStep> {
+        let IteratorSource::Protocol { iterator, done, .. } = source else {
+            return Err(Error::type_error("delegated iterator has no throw method"));
+        };
+        if *done {
+            return Err(Error::type_error("delegated iterator has no throw method"));
+        }
+        let iterator = iterator.clone();
+        let Some(throw_method) = self.get_named_method(&iterator, "throw")? else {
+            return match self.iterator_close(source, Completion::Normal(Value::Undefined))? {
+                Completion::Normal(_) => {
+                    Err(Error::type_error("delegated iterator has no throw method"))
+                }
+                abrupt @ Completion::Throw(_) => Ok(YieldDelegateStep::Abrupt(abrupt)),
+                completion => completion.into_result().map(YieldDelegateStep::Complete),
+            };
+        };
+        let result = match self.call(&throw_method, std::slice::from_ref(value), iterator)? {
+            Completion::Normal(result) => result,
+            Completion::Throw(value) => {
+                set_protocol_done(source);
+                return Ok(YieldDelegateStep::Abrupt(Completion::Throw(value)));
+            }
+            completion => return completion.into_result().map(YieldDelegateStep::Complete),
+        };
+        self.yield_delegate_result(source, &result, YieldDelegateDone::Normal)
+    }
+
+    fn yield_delegate_result(
+        &mut self,
+        source: &mut IteratorSource,
+        result: &Value,
+        done_kind: YieldDelegateDone,
+    ) -> Result<YieldDelegateStep> {
+        if self.semantic_object_ref(result)?.is_none() {
+            return Err(Error::type_error(format!(
+                "iterator result '{result}' is not an object"
+            )));
+        }
+        let _result_scope =
+            self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::once(result))?;
+        let done = to_boolean(&self.get_named(result, ITERATOR_RESULT_DONE_PROPERTY)?);
+        if !done {
+            return Ok(YieldDelegateStep::YieldedIteratorResult(result.clone()));
+        }
+        set_protocol_done(source);
+        let value = self.get_named(result, ITERATOR_RESULT_VALUE_PROPERTY)?;
+        Ok(match done_kind {
+            YieldDelegateDone::Normal => YieldDelegateStep::Complete(value),
+            YieldDelegateDone::Return => YieldDelegateStep::Return(value),
+        })
+    }
+
     /// ECMAScript `IteratorClose`, including the rule that an original throw
     /// completion wins over failures while looking up or calling `return`.
     pub(in crate::runtime) fn iterator_close(
@@ -239,7 +430,10 @@ impl Context {
             completion @ (Completion::Return(_)
             | Completion::Break { .. }
             | Completion::Continue(_)) => completion.into_result().map(Completion::Normal),
-            completion @ Completion::Suspended(_) => Ok(completion),
+            completion @ (Completion::Suspended(_)
+            | Completion::GeneratorStart
+            | Completion::Yielded(_)
+            | Completion::YieldedIteratorResult(_)) => Ok(completion),
         }
     }
 
@@ -287,6 +481,14 @@ impl Context {
             Some(PropertyKey::symbol(symbol)),
         );
         self.get_method(iterable, key.lookup())
+    }
+
+    fn is_default_array_iterator_method(&self, method: &Value) -> Result<bool> {
+        let Value::NativeFunction(id) = method else {
+            return Ok(false);
+        };
+        Ok(self.native_function(*id)?.kind()
+            == crate::runtime::native::NativeFunctionKind::ArrayValues)
     }
 
     fn iterator_root_scope(&self, source: &IteratorSource) -> Result<TransientRootScope> {
@@ -340,7 +542,9 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         Completion::Normal(value)
         | Completion::Throw(value)
         | Completion::Return(value)
-        | Completion::Break { value, .. } => Some(value),
-        Completion::Continue(_) | Completion::Suspended(_) => None,
+        | Completion::Break { value, .. }
+        | Completion::Yielded(value)
+        | Completion::YieldedIteratorResult(value) => Some(value),
+        Completion::Continue(_) | Completion::Suspended(_) | Completion::GeneratorStart => None,
     }
 }

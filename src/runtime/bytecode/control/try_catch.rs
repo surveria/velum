@@ -109,7 +109,7 @@ impl Context {
                 },
             )?
         };
-        if matches!(completion, Completion::Suspended(_)) {
+        if completion.suspends_execution() {
             return Ok(Some(completion));
         }
         let catches = matches!(completion, Completion::Throw(_)) && parts.catch.is_some();
@@ -144,7 +144,7 @@ impl Context {
             BytecodeControlStateSlot::Catch,
             |context, state| context.eval_bytecode_catch(catch, value, state),
         )?;
-        if matches!(completion, Completion::Suspended(_)) {
+        if completion.suspends_execution() {
             return Ok(Some(completion));
         }
         *control.try_state_mut()?.1 = Some(completion);
@@ -176,7 +176,7 @@ impl Context {
                 )
             },
         )?;
-        if matches!(completion, Completion::Suspended(_)) {
+        if completion.suspends_execution() {
             return Ok(Some(completion));
         }
         if !matches!(completion, Completion::Normal(_)) {
@@ -217,10 +217,7 @@ impl Context {
         } else {
             self.eval_bytecode_catch_scope(param, value, &catch.body, catch.body_scoped, state)
         };
-        if result
-            .as_ref()
-            .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
-        {
+        if result.as_ref().is_ok_and(Completion::suspends_execution) {
             return result;
         }
         let removed = self.pop_lexical_scope()?;
@@ -267,10 +264,7 @@ impl Context {
             self.push_lexical_scope()?;
         }
         let result = self.eval_bytecode_block_with_state(block, state);
-        if result
-            .as_ref()
-            .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
-        {
+        if result.as_ref().is_ok_and(Completion::suspends_execution) {
             return result;
         }
         let removed = self.pop_lexical_scope()?;

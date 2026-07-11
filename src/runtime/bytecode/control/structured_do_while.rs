@@ -75,7 +75,10 @@ impl Context {
                     | Completion::Return(_)) => {
                         return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
                     }
-                    completion @ Completion::Suspended(_) => {
+                    completion @ (Completion::Suspended(_)
+                    | Completion::GeneratorStart
+                    | Completion::Yielded(_)
+                    | Completion::YieldedIteratorResult(_)) => {
                         self.park_bytecode_control(handle, control)?;
                         return Ok(Some(completion));
                     }
@@ -100,7 +103,7 @@ impl Context {
                         BytecodeLoopPhase::Initialize;
                 }
                 BytecodeCondition::Value(false) => break,
-                BytecodeCondition::Completion(completion @ Completion::Suspended(_)) => {
+                BytecodeCondition::Completion(completion) if completion.suspends_execution() => {
                     self.park_bytecode_control(handle, control)?;
                     return Ok(Some(completion));
                 }

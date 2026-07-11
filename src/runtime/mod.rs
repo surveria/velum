@@ -15,7 +15,7 @@ use crate::runtime::property::enumerable_property_keys;
 use crate::storage::atom::{AtomId, AtomTable};
 use crate::storage::string_heap::StringHeap;
 use crate::storage::symbol::SymbolTable;
-use crate::syntax::StaticBindingId;
+use crate::syntax::{FunctionKind, StaticBindingId};
 use crate::value::{ErrorName, FunctionId, Value};
 
 mod abstract_operations;
@@ -33,6 +33,7 @@ pub mod engine;
 mod execution_storage;
 pub mod function;
 mod gc;
+pub(in crate::runtime) mod generator;
 pub mod globals;
 pub mod limits;
 pub mod native;
@@ -106,6 +107,10 @@ pub struct Context {
     collections: SlotArena<collections::CollectionData>,
     collection_object_slots: Vec<Option<(collections::CollectionKind, collections::CollectionId)>>,
     collection_iterators: SlotArena<collections::CollectionIteratorState>,
+    generators: SlotArena<generator::GeneratorData>,
+    generator_object_slots: Vec<Option<generator::GeneratorId>>,
+    generator_prototype: Option<crate::value::ObjectId>,
+    generator_function_prototype: Option<crate::value::ObjectId>,
     promises: SlotArena<Promise>,
     promise_object_slots: Vec<Option<PromiseId>>,
     promise_jobs: VecDeque<PromiseJob>,
@@ -136,7 +141,7 @@ struct Function {
     static_binding_layout: Option<BindingLayout>,
     properties: function::FunctionProperties,
     constructable: bool,
-    is_async: bool,
+    kind: FunctionKind,
     class_constructor: bool,
     super_binding: Option<Rc<function::FunctionSuperBinding>>,
     static_parent: Option<Value>,
@@ -339,6 +344,10 @@ impl Context {
             collections: SlotArena::new(),
             collection_object_slots: Vec::new(),
             collection_iterators: SlotArena::new(),
+            generators: SlotArena::new(),
+            generator_object_slots: Vec::new(),
+            generator_prototype: None,
+            generator_function_prototype: None,
             promises: SlotArena::new(),
             promise_object_slots: Vec::new(),
             promise_jobs: VecDeque::new(),
@@ -707,7 +716,10 @@ impl Context {
             Completion::Throw(value) => Err(Error::javascript(value)),
             Completion::Break { .. } => Err(Error::runtime("break statement outside loop")),
             Completion::Continue(_) => Err(Error::runtime("continue statement outside loop")),
-            completion @ Completion::Suspended(_) => {
+            completion @ (Completion::Suspended(_)
+            | Completion::GeneratorStart
+            | Completion::Yielded(_)
+            | Completion::YieldedIteratorResult(_)) => {
                 completion.into_function_result().map(|_| object)
             }
         }

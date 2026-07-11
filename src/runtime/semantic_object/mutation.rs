@@ -91,8 +91,13 @@ impl Context {
         {
             return self.reflect_write_with_descriptor(property, value, receiver, descriptor);
         }
-        let Some(parent) = self.function_static_parent_value(target)? else {
-            return self.reflect_define_receiver_property(property, value, receiver);
+        let parent = if let Some(parent) = self.function_static_parent_value(target)? {
+            parent
+        } else {
+            if !self.function_should_materialize_prototype_for(target, property.lookup())? {
+                return self.reflect_define_receiver_property(property, value, receiver);
+            }
+            self.function_object_prototype_value(target)?
         };
         match parent {
             Value::Function(parent) => {

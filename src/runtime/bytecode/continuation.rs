@@ -30,8 +30,10 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         Completion::Normal(value)
         | Completion::Throw(value)
         | Completion::Return(value)
-        | Completion::Break { value, .. } => Some(value),
-        Completion::Continue(_) | Completion::Suspended(_) => None,
+        | Completion::Break { value, .. }
+        | Completion::Yielded(value)
+        | Completion::YieldedIteratorResult(value) => Some(value),
+        Completion::Continue(_) | Completion::Suspended(_) | Completion::GeneratorStart => None,
     }
 }
 
@@ -193,25 +195,23 @@ impl BytecodeContinuationFrame {
             .ok_or_else(|| Error::runtime("bytecode state is not parked"))
     }
 
-    pub(in crate::runtime) fn resume_await(&mut self, completion: Completion) -> Result<()> {
-        if self
-            .parked_state
-            .as_ref()
-            .is_some_and(|state| state.is_awaiting())
-        {
+    pub(in crate::runtime) fn resume_suspension(&mut self, completion: Completion) -> Result<()> {
+        if self.parked_state.as_ref().is_some_and(|state| {
+            state.is_awaiting() || state.is_generator_starting() || state.is_yielding()
+        }) {
             return self
                 .parked_state
                 .as_mut()
                 .ok_or_else(|| Error::runtime("parked bytecode state disappeared"))?
-                .resume_await(completion);
+                .resume_suspension(completion);
         }
         for record in self.control_stack.iter_mut().rev().flatten() {
-            if record.resume_await(completion.clone())? {
+            if record.resume_suspension(completion.clone())? {
                 return Ok(());
             }
         }
         Err(Error::runtime(
-            "suspended bytecode continuation has no awaiting state",
+            "suspended bytecode continuation has no resumable state",
         ))
     }
 

@@ -1,7 +1,7 @@
 use crate::{
     error::Result,
     runtime::Context,
-    runtime::object::PropertyKey,
+    runtime::object::{PropertyKey, PropertyLookup},
     runtime::property::{
         DynamicPropertyKey, PropertyValue, StringPropertyValue, get_property_with_receiver,
         has_property, string_property_value,
@@ -94,6 +94,25 @@ impl Context {
         }
     }
 
+    pub(in crate::runtime) fn primitive_prototype_property_value_with_lookup(
+        &mut self,
+        object: &Value,
+        property: PropertyLookup<'_>,
+    ) -> Result<Option<Value>> {
+        match object {
+            Value::Bool(_) => self
+                .boolean_prototype_property_value_with_lookup(object, property)
+                .map(Some),
+            Value::Number(_) => self
+                .number_prototype_property_value_with_lookup(object, property)
+                .map(Some),
+            Value::Symbol(_) => self
+                .symbol_prototype_property_value_with_lookup(object, property)
+                .map(Some),
+            _ => Ok(None),
+        }
+    }
+
     pub(in crate::runtime) fn get_prototype_property_value_with_receiver(
         &mut self,
         prototype: ObjectId,
@@ -101,7 +120,16 @@ impl Context {
         property: &str,
     ) -> Result<Value> {
         let lookup = self.property_lookup(property);
-        let value = get_property_with_receiver(&self.objects, prototype, receiver, lookup)?;
+        self.get_prototype_property_value_with_lookup(prototype, receiver, lookup)
+    }
+
+    pub(in crate::runtime) fn get_prototype_property_value_with_lookup(
+        &mut self,
+        prototype: ObjectId,
+        receiver: &Value,
+        property: PropertyLookup<'_>,
+    ) -> Result<Value> {
+        let value = get_property_with_receiver(&self.objects, prototype, receiver, property)?;
         self.runtime_property_value(value)
     }
 

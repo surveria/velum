@@ -399,6 +399,10 @@ impl Context {
                 counter.record(VmStorageKind::Binding, upvalues.len())?;
             }
         }
+        counter.record(
+            VmStorageKind::Binding,
+            self.suspended_generator_binding_count()?,
+        )?;
         Ok(())
     }
 
@@ -503,6 +507,10 @@ impl Context {
             VmStorageKind::ExecutionFrame,
             self.suspended_async_execution_frame_count()?,
         )?;
+        counter.record(
+            VmStorageKind::ExecutionFrame,
+            self.suspended_generator_execution_frame_count()?,
+        )?;
         for frame in &self.activation_frames {
             if let Some(continuation) = frame.continuation() {
                 counter.record(VmStorageKind::ExecutionFrame, continuation.control_count())?;
@@ -545,6 +553,10 @@ impl Context {
         counter.record(
             VmStorageKind::CacheEntry,
             self.native_function_registry.ids().count(),
+        )?;
+        counter.record(
+            VmStorageKind::CacheEntry,
+            self.suspended_generator_cache_entry_count()?,
         )
     }
 
@@ -561,6 +573,11 @@ impl Context {
             VmStorageKind::Association,
             self.promise_object_slots.iter().flatten().count(),
         )?;
+        counter.record(VmStorageKind::Association, self.generators.len())?;
+        counter.record(
+            VmStorageKind::Association,
+            self.generator_object_slots.iter().flatten().count(),
+        )?;
         counter.record(
             VmStorageKind::Association,
             usize::from(self.global_object.is_some()),
@@ -568,6 +585,14 @@ impl Context {
         counter.record(
             VmStorageKind::Association,
             usize::from(self.promise_prototype.is_some()),
+        )?;
+        counter.record(
+            VmStorageKind::Association,
+            usize::from(self.generator_prototype.is_some()),
+        )?;
+        counter.record(
+            VmStorageKind::Association,
+            usize::from(self.generator_function_prototype.is_some()),
         )?;
         counter.record(
             VmStorageKind::Association,

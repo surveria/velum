@@ -8,6 +8,9 @@ use super::Parser;
 
 impl Parser {
     pub(super) fn assignment(&mut self) -> Result<Expression> {
+        if self.yield_expression_is_allowed() && self.next_is_yield_identifier() {
+            return self.yield_expression();
+        }
         if let Some(function) = self.arrow_function()? {
             return Ok(function);
         }
@@ -34,6 +37,45 @@ impl Parser {
         };
         let value = self.assignment()?;
         self.assignment_expr(target, operator, value, offset)
+    }
+
+    fn next_is_yield_identifier(&self) -> bool {
+        self.peek().is_some_and(|token| {
+            matches!(&token.kind, TokenKind::Identifier(name) if name == super::YIELD_IDENTIFIER_NAME)
+        })
+    }
+
+    fn yield_expression(&mut self) -> Result<Expression> {
+        let start = self.current_span();
+        if self.advance().is_none() {
+            return Err(self.parse_error("expected yield expression"));
+        }
+        let has_line_terminator = self.peek_has_line_terminator_before(0);
+        if has_line_terminator && self.check(&TokenKind::Star) {
+            return Err(self.parse_error("line terminator is not allowed before 'yield*'"));
+        }
+        let delegate = !has_line_terminator && self.match_kind(&TokenKind::Star);
+        let expr = if has_line_terminator
+            || matches!(
+                self.peek_kind(0),
+                Some(
+                    TokenKind::Semicolon
+                        | TokenKind::Comma
+                        | TokenKind::Colon
+                        | TokenKind::RParen
+                        | TokenKind::RBracket
+                        | TokenKind::RBrace
+                        | TokenKind::Eof
+                )
+            ) {
+            None
+        } else {
+            Some(Box::new(self.assignment()?))
+        };
+        if delegate && expr.is_none() {
+            return Err(self.parse_error("expected expression after 'yield*'"));
+        }
+        Ok(self.expression_node(start, Expr::Yield { expr, delegate }))
     }
 
     /// Array and object literals become assignment patterns only when the
@@ -189,6 +231,7 @@ impl Parser {
             | Expr::Sequence(_)
             | Expr::Unary { .. }
             | Expr::Await(_)
+            | Expr::Yield { .. }
             | Expr::Update { .. }
             | Expr::Binary { .. }
             | Expr::Conditional { .. }

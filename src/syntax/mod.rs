@@ -60,6 +60,28 @@ pub enum DeclKind {
     Const,
 }
 
+/// Execution semantics attached to a JavaScript function definition.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum FunctionKind {
+    Ordinary,
+    Async,
+    Generator,
+}
+
+impl FunctionKind {
+    pub const fn is_async(self) -> bool {
+        matches!(self, Self::Async)
+    }
+
+    pub const fn is_generator(self) -> bool {
+        matches!(self, Self::Generator)
+    }
+
+    pub const fn is_constructable(self) -> bool {
+        matches!(self, Self::Ordinary)
+    }
+}
+
 /// Which half of an accessor property a function value installs.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum AccessorKind {

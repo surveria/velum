@@ -4,7 +4,7 @@ use crate::{
     runtime::call::RuntimeCallArgs,
     runtime::object::{
         AccessorPropertyUpdate, DataPropertyUpdate, ObjectPrimitiveValue, ObjectPropertyInit,
-        PropertyConfigurable, PropertyEnumerable, PropertyUpdate, PropertyWritable,
+        PropertyConfigurable, PropertyEnumerable, PropertyLookup, PropertyUpdate, PropertyWritable,
     },
     value::{NativeFunctionId, ObjectId, Value},
 };
@@ -191,6 +191,15 @@ impl Context {
     ) -> Result<Value> {
         let prototype = self.symbol_constructor_prototype()?;
         self.get_prototype_property_value_with_receiver(prototype, receiver, property)
+    }
+
+    pub(in crate::runtime) fn symbol_prototype_property_value_with_lookup(
+        &mut self,
+        receiver: &Value,
+        property: PropertyLookup<'_>,
+    ) -> Result<Value> {
+        let prototype = self.symbol_constructor_prototype()?;
+        self.get_prototype_property_value_with_lookup(prototype, receiver, property)
     }
 
     fn symbol_prototype_id_with_constructor(&mut self, constructor: Value) -> Result<ObjectId> {

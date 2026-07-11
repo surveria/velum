@@ -5,7 +5,9 @@ mod node;
 mod pattern;
 mod statement;
 
-pub use class::{ClassConstructor, ClassField, ClassLiteral, ClassMember, ClassMemberKind};
+pub use class::{
+    ClassConstructor, ClassField, ClassLiteral, ClassMember, ClassMemberKind, ClassStaticBlock,
+};
 pub use expression::{Expr, Expression, ObjectProperty, ObjectPropertyKey, ObjectPropertyKind};
 pub use function::FunctionParam;
 pub use node::AstNode;
@@ -16,7 +18,6 @@ pub use pattern::{
 pub use statement::{CatchClause, ForInTarget, Program, Statement, Stmt, SwitchCase};
 
 pub use crate::syntax::{
-    BinaryOp, DeclKind, StaticBinding, StaticBindingId, StaticCallSiteId, StaticFunctionId,
-    StaticName, StaticNameId, StaticPropertyAccessId, StaticString, StaticStringId, UnaryOp,
-    UpdateOp,
+    BinaryOp, DeclKind, FunctionKind, StaticBinding, StaticCallSiteId, StaticFunctionId,
+    StaticName, StaticNameId, StaticPropertyAccessId, StaticString, UnaryOp, UpdateOp,
 };

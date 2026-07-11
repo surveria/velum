@@ -5,7 +5,8 @@ use crate::{
     error::{Error, Result},
     runtime::Context,
     runtime::object::{
-        OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, PropertyEnumerable, PropertyKey,
+        OBJECT_CONSTRUCTOR_PROPERTY, ObjectPropertyInit, OwnPropertyDescriptor, PropertyEnumerable,
+        PropertyKey,
     },
     syntax::AccessorKind,
     value::Value,
@@ -126,11 +127,22 @@ impl Context {
         if matches!(source, Value::Undefined | Value::Null) {
             return Ok(());
         }
-        for key in self.own_enumerable_keys(source)? {
-            let value = self.get_named(source, &key)?;
-            let property_key = self.intern_property_key(&key)?;
+        for key_value in self.semantic_own_property_keys(source)? {
+            let mut property = self.dynamic_property_key(&key_value)?;
+            let Some(descriptor) = self.semantic_own_property_descriptor(source, &property)? else {
+                continue;
+            };
+            let enumerable = match descriptor {
+                OwnPropertyDescriptor::Data(descriptor) => descriptor.enumerable(),
+                OwnPropertyDescriptor::Accessor(descriptor) => descriptor.enumerable(),
+            };
+            if !enumerable.is_yes() {
+                continue;
+            }
+            let value = self.get(source, property.lookup())?;
+            let property_key = self.intern_dynamic_property_key(&mut property)?;
             let name_index = dynamic_names.len();
-            dynamic_names.push(key);
+            dynamic_names.push(property.name().to_owned());
             entries.push(RuntimeObjectLiteralEntry {
                 key: property_key,
                 name: RuntimeObjectLiteralName::Dynamic(name_index),

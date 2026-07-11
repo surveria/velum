@@ -62,6 +62,37 @@ fn initializes_static_fields_at_class_creation() -> TestResult {
 }
 
 #[test]
+fn executes_class_static_blocks_once_with_scoped_bindings() -> TestResult {
+    ensure_string(
+        r#"
+        let calls = 0;
+        class Registry {
+            static {
+                let local = 40;
+                calls = calls + 1;
+                this.value = local + 2;
+            }
+        }
+        "" + Registry.value + ":" + calls + ":" + typeof local
+        "#,
+        "42:1:undefined",
+    )
+}
+
+#[test]
+fn rejects_class_static_block_early_errors() -> TestResult {
+    for source in [
+        "class Sample { static { await; } }",
+        "class Sample { static { arguments; } }",
+        "while (false) { class Sample { static { break; } } }",
+        "class Sample { static { let value; var value; } }",
+    ] {
+        ensure_error_contains(source, "parser error")?;
+    }
+    Ok(())
+}
+
+#[test]
 fn supports_computed_string_and_numeric_field_keys() -> TestResult {
     ensure_string(
         r#"

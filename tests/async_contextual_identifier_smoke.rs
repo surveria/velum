@@ -79,6 +79,19 @@ fn rejects_bare_async_without_statement_separator() -> TestResult {
     ensure_error_contains(&error, "expected statement terminator")
 }
 
+#[test]
+fn rejects_await_as_an_async_arrow_parameter() -> TestResult {
+    for source in ["async await => 1", "async aw\\u0061it => 1"] {
+        let Some(error) = eval(source).err() else {
+            return Err(format!("expected '{source}' to fail").into());
+        };
+        if !matches!(error, Error::Parse { .. }) {
+            return Err(format!("expected parse error, got '{error}'").into());
+        }
+    }
+    Ok(())
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

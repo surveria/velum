@@ -8,7 +8,7 @@ use crate::{
     runtime::object::{PropertyConfigurable, PropertyEnumerable, PropertyWritable},
     storage::atom::AtomId,
     syntax::{DeclKind, StaticBinding},
-    value::Value,
+    value::{ErrorName, Value},
 };
 
 use super::static_bindings::CompiledBindingFrame;
@@ -64,8 +64,8 @@ impl Context {
             static_function_id: declaration.id(),
             name: Some(declaration.function_name()),
             bytecode: declaration.bytecode(),
-            constructable: !declaration.is_async(),
-            is_async: declaration.is_async(),
+            constructable: declaration.kind().is_constructable(),
+            kind: declaration.kind(),
             class_constructor: false,
             prototype_parent: None,
             new_target_mode: BytecodeNewTargetMode::Own,
@@ -80,9 +80,10 @@ impl Context {
                 self.remember_active_static_binding(name, atom)?;
                 return Ok(());
             }
-            return Err(Error::runtime(format!(
-                "'{name}' has already been declared"
-            )));
+            return Err(Error::exception(
+                ErrorName::SyntaxError,
+                format!("'{name}' has already been declared"),
+            ));
         }
 
         self.ensure_binding_capacity_for_atom(atom)?;

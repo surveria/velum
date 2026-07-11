@@ -203,10 +203,7 @@ impl Context {
         }
         self.push_lexical_scope()?;
         let result = self.eval_bytecode_block(block);
-        if result
-            .as_ref()
-            .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
-        {
+        if result.as_ref().is_ok_and(Completion::suspends_execution) {
             return result;
         }
         let removed = self.pop_lexical_scope()?;
@@ -249,7 +246,9 @@ impl Context {
                 match condition_result {
                     BytecodeCondition::Value(true) => {}
                     BytecodeCondition::Value(false) => break,
-                    BytecodeCondition::Completion(completion @ Completion::Suspended(_)) => {
+                    BytecodeCondition::Completion(completion)
+                        if completion.suspends_execution() =>
+                    {
                         self.park_bytecode_control(handle, control)?;
                         return Ok(Some(completion));
                     }
@@ -296,7 +295,10 @@ impl Context {
                 | Completion::Return(_)) => {
                     return self.finish_bytecode_control_result(handle, Ok(Some(completion)));
                 }
-                completion @ Completion::Suspended(_) => {
+                completion @ (Completion::Suspended(_)
+                | Completion::GeneratorStart
+                | Completion::Yielded(_)
+                | Completion::YieldedIteratorResult(_)) => {
                     self.park_bytecode_control(handle, control)?;
                     return Ok(Some(completion));
                 }
@@ -320,10 +322,11 @@ impl Context {
             self.push_lexical_scope()?;
         }
         let result = self.eval_bytecode_for_loop(state, parts, next);
-        if result
-            .as_ref()
-            .is_ok_and(|completion| matches!(completion, Some(Completion::Suspended(_))))
-        {
+        if result.as_ref().is_ok_and(|completion| {
+            completion
+                .as_ref()
+                .is_some_and(Completion::suspends_execution)
+        }) {
             return result;
         }
         if parts.scoped {
@@ -354,7 +357,7 @@ impl Context {
                     BytecodeControlStateSlot::Condition,
                     |context, init_state| context.eval_bytecode_block_with_state(init, init_state),
                 )?;
-                if matches!(completion, Completion::Suspended(_)) {
+                if completion.suspends_execution() {
                     self.park_bytecode_control(handle, control)?;
                     return Ok(Some(completion));
                 }
@@ -388,7 +391,7 @@ impl Context {
                 StructuredForAction::Continue => {}
                 StructuredForAction::Break => break,
                 StructuredForAction::Completion(completion) => {
-                    if matches!(completion, Completion::Suspended(_)) {
+                    if completion.suspends_execution() {
                         self.park_bytecode_control(handle, control)?;
                         return Ok(Some(completion));
                     }
@@ -399,7 +402,7 @@ impl Context {
                 StructuredForAction::Continue => {}
                 StructuredForAction::Break => break,
                 StructuredForAction::Completion(completion) => {
-                    if matches!(completion, Completion::Suspended(_)) {
+                    if completion.suspends_execution() {
                         self.park_bytecode_control(handle, control)?;
                         return Ok(Some(completion));
                     }
@@ -500,7 +503,7 @@ impl Context {
                     context.eval_bytecode_expression_with_plan(update, plans.update.as_ref(), state)
                 },
             )?;
-            if matches!(completion, Completion::Suspended(_)) {
+            if completion.suspends_execution() {
                 return Ok(StructuredForAction::Completion(completion));
             }
             if let Err(error) = completion.into_result() {
@@ -563,7 +566,12 @@ impl Context {
                 | Completion::Return(_)
                 | Completion::Break { .. }
                 | Completion::Continue(_)
-                | Completion::Suspended(_)) => BytecodeCondition::Completion(completion),
+                | Completion::Suspended(_)
+                | Completion::GeneratorStart
+                | Completion::Yielded(_)
+                | Completion::YieldedIteratorResult(_)) => {
+                    BytecodeCondition::Completion(completion)
+                }
             });
         }
         match self.eval_bytecode_block_with_linear_plan(condition, plan, state)? {
@@ -572,7 +580,12 @@ impl Context {
             | Completion::Return(_)
             | Completion::Break { .. }
             | Completion::Continue(_)
-            | Completion::Suspended(_)) => Ok(BytecodeCondition::Completion(completion)),
+            | Completion::Suspended(_)
+            | Completion::GeneratorStart
+            | Completion::Yielded(_)
+            | Completion::YieldedIteratorResult(_)) => {
+                Ok(BytecodeCondition::Completion(completion))
+            }
         }
     }
 

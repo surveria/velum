@@ -5,8 +5,6 @@ use crate::syntax::{StaticFunctionId, StaticName};
 use super::{Expression, FunctionParam, ObjectPropertyKey, Statement};
 
 /// A parsed class body shared by class declarations and expressions.
-/// Inheritance, fields, and generator/async members are not represented yet;
-/// the parser rejects them with explicit unsupported-feature errors.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassLiteral {
     pub name: Option<StaticName>,
@@ -14,6 +12,14 @@ pub struct ClassLiteral {
     pub constructor: ClassConstructor,
     pub members: Vec<ClassMember>,
     pub fields: Vec<ClassField>,
+    pub static_blocks: Vec<ClassStaticBlock>,
+}
+
+/// A class static initialization block executed once with the constructor as
+/// its `this` value when the class definition is evaluated.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClassStaticBlock {
+    pub body: Rc<[Statement]>,
 }
 
 /// A public class field: instance fields initialize against the new object

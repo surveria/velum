@@ -1,5 +1,8 @@
 use crate::{
-    ast::{Expr, Expression, FunctionParam, Statement, StaticName, Stmt, UnaryOp, UpdateOp},
+    ast::{
+        Expr, Expression, FunctionKind, FunctionParam, Statement, StaticName, Stmt, UnaryOp,
+        UpdateOp,
+    },
     error::{Error, Result},
     lexer::TokenKind,
     value::Value,
@@ -26,10 +29,7 @@ struct ArrowSignature {
 impl Parser {
     pub(super) fn unary(&mut self) -> Result<Expression> {
         let start = self.current_span();
-        if self.match_kind(&TokenKind::Await) {
-            if !self.await_expression_is_allowed() {
-                return Err(self.parse_error("await expression is not allowed in this function"));
-            }
+        if self.await_expression_is_allowed() && self.match_kind(&TokenKind::Await) {
             let expr = self.unary()?;
             return Ok(self.expression_node(start, Expr::Await(Box::new(expr))));
         }
@@ -483,18 +483,46 @@ impl Parser {
             }
             TokenKind::Super => self.super_expression(token_span)?,
             TokenKind::Identifier(name) => {
+                if self.class_static_block_identifiers_are_restricted() && name == "arguments" {
+                    return Err(Error::parse_at(
+                        "arguments is not allowed in a class static block",
+                        token_span,
+                    ));
+                }
+                if self.yield_identifier_is_reserved() && name == super::YIELD_IDENTIFIER_NAME {
+                    return Err(Error::parse_at(
+                        "yield is not a valid identifier reference",
+                        token_span,
+                    ));
+                }
                 self.validate_strict_identifier_reference(&name)?;
                 Expression::new(
                     Expr::Identifier(self.static_binding_name(name)?),
                     token_span,
                 )
             }
-            TokenKind::Function => self.function_expression(false)?,
+            TokenKind::Await if !self.await_identifier_is_reserved() => Expression::new(
+                Expr::Identifier(self.contextual_await_binding(token_span.start())?),
+                token_span,
+            ),
+            TokenKind::Function => {
+                let kind = if self.match_kind(&TokenKind::Star) {
+                    FunctionKind::Generator
+                } else {
+                    FunctionKind::Ordinary
+                };
+                self.function_expression(kind)?
+            }
             TokenKind::Class => self.class_expression()?,
             TokenKind::Async => {
                 if self.peek_kind_is_no_line_terminator(0, &TokenKind::Function) {
                     self.consume(&TokenKind::Function, "expected 'function' after 'async'")?;
-                    self.function_expression(true)?
+                    if self.match_kind(&TokenKind::Star) {
+                        return Err(
+                            self.parse_error("async generator functions are not supported yet")
+                        );
+                    }
+                    self.function_expression(FunctionKind::Async)?
                 } else {
                     Expression::new(
                         Expr::Identifier(self.contextual_async_binding(token_span.start())?),
@@ -520,6 +548,8 @@ impl Parser {
         };
         let start = self.current_span();
         let inherited_strict = self.is_strict_mode();
+        let inherited_await_reserved = self.await_identifier_is_reserved();
+        let inherited_yield_reserved = self.yield_identifier_is_reserved();
         if signature.is_async {
             self.consume(
                 &TokenKind::Async,
@@ -527,17 +557,43 @@ impl Parser {
             )?;
         }
         let parameters = match signature.parameters {
-            ArrowParameters::Single => super::function::ParsedParameters {
-                params: vec![FunctionParam::new(
-                    self.consume_binding_identifier("expected arrow function parameter")?,
-                    None,
-                )],
-                pattern_prologue: Vec::new(),
-                is_simple: true,
-            },
+            ArrowParameters::Single => {
+                let parameter = self.with_await_context(
+                    false,
+                    signature.is_async || inherited_await_reserved,
+                    |parser| {
+                        parser.with_yield_expression(false, |parser| {
+                            parser.with_yield_identifier_reserved(
+                                inherited_yield_reserved,
+                                |parser| {
+                                    parser.consume_binding_identifier(
+                                        "expected arrow function parameter",
+                                    )
+                                },
+                            )
+                        })
+                    },
+                )?;
+                super::function::ParsedParameters {
+                    params: vec![FunctionParam::new(parameter, None)],
+                    pattern_prologue: Vec::new(),
+                    is_simple: true,
+                }
+            }
             ArrowParameters::Parenthesized => {
                 self.consume(&TokenKind::LParen, "expected '(' before arrow parameters")?;
-                let parameters = self.with_await_expression(false, Self::function_parameters)?;
+                let parameters = self.with_await_context(
+                    false,
+                    signature.is_async || inherited_await_reserved,
+                    |parser| {
+                        parser.with_yield_expression(false, |parser| {
+                            parser.with_yield_identifier_reserved(
+                                inherited_yield_reserved,
+                                Self::function_parameters,
+                            )
+                        })
+                    },
+                )?;
                 self.consume(&TokenKind::RParen, "expected ')' after arrow parameters")?;
                 parameters
             }
@@ -552,14 +608,20 @@ impl Parser {
             body.contains_use_strict,
         )?;
         let id = self.static_function()?;
-        let (params, statements) = parameters.apply_prologue(body.statements);
+        let (params, statements, parameter_prologue_count) =
+            parameters.apply_prologue(body.statements);
         Ok(Some(self.expression_node(
             start,
             Expr::ArrowFunction {
                 id,
                 params: params.into(),
                 body: statements.into(),
-                is_async: signature.is_async,
+                parameter_prologue_count,
+                kind: if signature.is_async {
+                    FunctionKind::Async
+                } else {
+                    FunctionKind::Ordinary
+                },
             },
         )))
     }
@@ -569,15 +631,17 @@ impl Parser {
         inherited_strict: bool,
         is_async: bool,
     ) -> Result<super::ParsedFunctionBody> {
-        self.with_await_expression(is_async, |parser| {
-            if parser.match_kind(&TokenKind::LBrace) {
-                return parser.function_body(inherited_strict);
-            }
-            let value = parser.assignment()?;
-            let span = value.span();
-            Ok(super::ParsedFunctionBody {
-                statements: vec![Statement::new(Stmt::Return(Some(value)), span)],
-                contains_use_strict: false,
+        self.with_await_context(is_async, is_async, |parser| {
+            parser.with_yield_expression(false, |parser| {
+                if parser.match_kind(&TokenKind::LBrace) {
+                    return parser.function_body(inherited_strict);
+                }
+                let value = parser.assignment()?;
+                let span = value.span();
+                Ok(super::ParsedFunctionBody {
+                    statements: vec![Statement::new(Stmt::Return(Some(value)), span)],
+                    contains_use_strict: false,
+                })
             })
         })
     }
@@ -657,49 +721,6 @@ impl Parser {
             offset = offset.checked_add(1)?;
         }
     }
-    fn function_expression(&mut self, is_async: bool) -> Result<Expression> {
-        let start = self.previous_span();
-        let inherited_strict = self.is_strict_mode();
-        let name = if self.next_is_identifier() {
-            let name = self.consume_identifier("expected function name")?;
-            if inherited_strict {
-                self.validate_function_name_in_strict_code(&name)?;
-            }
-            Some(self.static_binding(name)?)
-        } else {
-            None
-        };
-        self.consume(&TokenKind::LParen, "expected '(' after 'function'")?;
-        let parameters = self.with_await_expression(false, Self::function_parameters)?;
-        self.consume(&TokenKind::RParen, "expected ')' after function parameters")?;
-        self.consume(&TokenKind::LBrace, "expected '{' before function body")?;
-        let body = self.with_new_target_scope(|parser| {
-            parser.with_super_context(false, false, |parser| {
-                parser.with_await_expression(is_async, |parser| {
-                    parser.function_body(inherited_strict)
-                })
-            })
-        })?;
-        self.validate_function_parameters(
-            &parameters.params,
-            parameters.is_simple,
-            inherited_strict,
-            body.contains_use_strict,
-        )?;
-        let id = self.static_function()?;
-        let (params, statements) = parameters.apply_prologue(body.statements);
-        Ok(self.expression_node(
-            start,
-            Expr::Function {
-                id,
-                name,
-                params: params.into(),
-                body: statements.into(),
-                is_async,
-            },
-        ))
-    }
-
     fn consume_property_name(&mut self, message: &str) -> Result<StaticName> {
         let token = self.advance().ok_or_else(|| self.parse_error(message))?;
         let token_span = token.span;

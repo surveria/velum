@@ -32,7 +32,8 @@ mod upvalues;
 
 use crate::runtime::native::{
     NativeFunctionKind, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
-    OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
+    OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME, OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME,
+    OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME, OBJECT_PROTOTYPE_VALUE_OF_NAME,
 };
 pub(in crate::runtime) use class_support::ResolvedClassField;
 
@@ -59,12 +60,14 @@ pub(super) use fast_path::FunctionFastPath;
 use parameters::FunctionParameterState;
 pub(in crate::runtime) use parameters::{FunctionScopeTemplate, FunctionSelfBinding};
 pub(super) use properties::{FunctionIntrinsicDefaults, FunctionProperties};
-pub(in crate::runtime) use suspended::SuspendedAsyncFunction;
+pub(in crate::runtime) use suspended::{DetachedFunctionExecution, SuspendedAsyncFunction};
 
 const FUNCTION_PROTOTYPE_APPLY_PROPERTY: &str = "apply";
 const FUNCTION_PROTOTYPE_BIND_PROPERTY: &str = "bind";
 const FUNCTION_PROTOTYPE_CALL_PROPERTY: &str = "call";
 const FUNCTION_PROTOTYPE_TO_STRING_PROPERTY: &str = "toString";
+const FUNCTION_PROTOTYPE_ARGUMENTS_PROPERTY: &str = "arguments";
+const FUNCTION_PROTOTYPE_CALLER_PROPERTY: &str = "caller";
 
 use super::FunctionNewTarget;
 use properties::{FunctionPropertyKind, PROTOTYPE_CONSTRUCTOR_PROPERTY};
@@ -100,13 +103,47 @@ pub(super) struct BytecodeFunctionInit<'a> {
     pub(super) name: Option<&'a StaticName>,
     pub(super) bytecode: &'a BytecodeFunction,
     pub(super) constructable: bool,
-    pub(super) is_async: bool,
+    pub(super) kind: crate::syntax::FunctionKind,
     pub(super) class_constructor: bool,
     pub(super) prototype_parent: Option<crate::value::ObjectId>,
     pub(super) new_target_mode: BytecodeNewTargetMode,
 }
 
 impl Context {
+    fn create_bytecode_function_prototype(
+        &mut self,
+        id: FunctionId,
+        init: &BytecodeFunctionInit<'_>,
+    ) -> Result<Value> {
+        if init.constructable {
+            let constructor_key = self.intern_property_key(PROTOTYPE_CONSTRUCTOR_PROPERTY)?;
+            let prototype_id = self.objects.create_with_prototype_property(
+                init.prototype_parent,
+                ObjectPropertyInit::new(
+                    constructor_key,
+                    PROTOTYPE_CONSTRUCTOR_PROPERTY,
+                    Value::Function(id),
+                    PropertyEnumerable::No,
+                ),
+                constructor_key,
+                self.limits.max_objects,
+                self.limits.max_object_properties,
+            )?;
+            return Ok(Value::Object(prototype_id));
+        }
+        if init.kind.is_generator() {
+            let constructor_key = self.object_constructor_property_key()?;
+            let generator_prototype = self.generator_prototype_id()?;
+            return self.objects.create_with_prototype(
+                Some(generator_prototype),
+                constructor_key,
+                self.limits.max_objects,
+                self.limits.max_object_properties,
+            );
+        }
+        Ok(Value::Undefined)
+    }
+
     pub(super) fn create_bytecode_function(
         &mut self,
         init: &BytecodeFunctionInit<'_>,
@@ -114,28 +151,11 @@ impl Context {
         self.functions.reserve_insert()?;
         let id = FunctionId::new(self.functions.next_index());
         let function = Value::Function(id);
-        let prototype = if init.constructable {
-            let constructor_key = self.intern_property_key(PROTOTYPE_CONSTRUCTOR_PROPERTY)?;
-            let prototype_id = self.objects.create_with_prototype_property(
-                init.prototype_parent,
-                ObjectPropertyInit::new(
-                    constructor_key,
-                    PROTOTYPE_CONSTRUCTOR_PROPERTY,
-                    function.clone(),
-                    PropertyEnumerable::No,
-                ),
-                constructor_key,
-                self.limits.max_objects,
-                self.limits.max_object_properties,
-            )?;
-            Value::Object(prototype_id)
-        } else {
-            Value::Undefined
-        };
+        let prototype = self.create_bytecode_function_prototype(id, init)?;
         let function_name = self.function_name_value(init.name)?;
         let params = init.bytecode.params();
         let arity = parameters::function_arity(params);
-        let prototype_default = init.constructable.then(|| {
+        let prototype_default = (init.constructable || init.kind.is_generator()).then(|| {
             DataPropertyDescriptor::new(
                 prototype.clone(),
                 PropertyWritable::Yes,
@@ -195,7 +215,7 @@ impl Context {
                 static_binding_layout,
                 properties,
                 constructable: init.constructable,
-                is_async: init.is_async,
+                kind: init.kind,
                 class_constructor: init.class_constructor,
                 super_binding,
                 static_parent: None,
@@ -241,7 +261,7 @@ impl Context {
             init.bytecode,
             param_frames,
             init.new_target_mode,
-            init.is_async,
+            init.kind.is_async() || init.kind.is_generator(),
             init.class_constructor,
         )
     }
@@ -264,9 +284,25 @@ impl Context {
     ) -> Result<Completion> {
         self.reject_class_constructor_call(id)?;
         let new_target = self.function_direct_call_new_target(id)?;
-        if self.function(id)?.is_async {
+        if self.function(id)?.kind.is_async() {
             let value = self.eval_async_function_with_this(id, args, this_value, new_target)?;
             return Ok(Completion::Normal(value));
+        }
+        if self.function(id)?.kind.is_generator() {
+            let completion = self.eval_generator_function_completion_with_this_and_new_target(
+                id, args, this_value, new_target,
+            )?;
+            return match completion {
+                Completion::GeneratorStart => {
+                    let execution = self.detach_function_execution(id)?;
+                    self.create_generator_object(id, execution)
+                        .map(Completion::Normal)
+                }
+                completion @ Completion::Throw(_) => Ok(completion),
+                completion => Err(Error::runtime(format!(
+                    "generator initialization produced invalid completion {completion:?}"
+                ))),
+            };
         }
         self.eval_function_completion_with_this_and_new_target(id, args, this_value, new_target)?
             .into_call_completion()
@@ -384,11 +420,7 @@ impl Context {
             &bytecode,
             remember_params,
         );
-        if CAN_SUSPEND
-            && result
-                .as_ref()
-                .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
-        {
+        if CAN_SUSPEND && result.as_ref().is_ok_and(Completion::suspends_execution) {
             return result;
         }
         let binding_result =
@@ -466,6 +498,10 @@ impl Context {
         self.functions
             .get(id.index())
             .ok_or_else(|| Error::runtime("function id is not defined"))
+    }
+
+    pub(in crate::runtime) fn function_prototype_value(&self, id: FunctionId) -> Result<Value> {
+        Ok(self.function(id)?.properties.prototype())
     }
 
     pub(in crate::runtime) fn function_source_text(&self, id: FunctionId) -> Result<String> {
@@ -573,9 +609,13 @@ impl Context {
         Some(PropertyLookup::from_key(property.name(), key))
     }
 
-    fn should_materialize_function_prototype_for(&self, property: PropertyLookup<'_>) -> bool {
-        property.key().is_some()
-            || self.known_property_key(property.name()).is_some()
+    pub(in crate::runtime) fn should_materialize_function_prototype_for(
+        &self,
+        property: PropertyLookup<'_>,
+    ) -> bool {
+        self.native_function_id(NativeFunctionKind::Function)
+            .is_some()
+            || matches!(property.key(), Some(PropertyKey::Symbol(_)))
             || property.name() == PROTOTYPE_CONSTRUCTOR_PROPERTY
             || property.name() == FUNCTION_PROTOTYPE_APPLY_PROPERTY
             || property.name() == FUNCTION_PROTOTYPE_BIND_PROPERTY
@@ -583,6 +623,36 @@ impl Context {
             || property.name() == FUNCTION_PROTOTYPE_TO_STRING_PROPERTY
             || property.name() == OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME
             || property.name() == OBJECT_PROTOTYPE_PROPERTY_IS_ENUMERABLE_NAME
+            || property.name() == OBJECT_PROTOTYPE_VALUE_OF_NAME
+            || property.name() == OBJECT_PROTOTYPE_TO_LOCALE_STRING_NAME
+            || property.name() == OBJECT_PROTOTYPE_IS_PROTOTYPE_OF_NAME
+    }
+
+    pub(in crate::runtime) fn function_should_materialize_prototype_for(
+        &self,
+        id: FunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<bool> {
+        if self.should_materialize_function_prototype_for(property) {
+            return Ok(true);
+        }
+        self.function_uses_restricted_prototype(id, property)
+    }
+
+    pub(in crate::runtime) fn function_uses_restricted_prototype(
+        &self,
+        id: FunctionId,
+        property: PropertyLookup<'_>,
+    ) -> Result<bool> {
+        let kind = self.function(id)?.kind;
+        Ok((kind.is_generator() || kind.is_async()) && Self::is_restricted_property(property))
+    }
+
+    pub(in crate::runtime) fn is_restricted_property(property: PropertyLookup<'_>) -> bool {
+        matches!(
+            property.name(),
+            FUNCTION_PROTOTYPE_ARGUMENTS_PROPERTY | FUNCTION_PROTOTYPE_CALLER_PROPERTY
+        )
     }
 
     pub(crate) fn native_function_object_prototype_value(

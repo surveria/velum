@@ -15,11 +15,10 @@ use crate::{
 };
 
 impl Context {
-    pub(in crate::runtime) fn detach_suspended_async_function(
+    pub(in crate::runtime) fn detach_function_execution(
         &mut self,
         function: FunctionId,
-        result_promise: PromiseId,
-    ) -> Result<SuspendedAsyncFunction> {
+    ) -> Result<DetachedFunctionExecution> {
         let activation_index =
             self.activation_frames
                 .iter()
@@ -29,25 +28,41 @@ impl Context {
                             crate::runtime::bytecode::BytecodeContinuationFrame::function_id,
                         ) == Some(function)
                 })
-                .ok_or_else(|| Error::runtime("suspended async activation disappeared"))?;
+                .ok_or_else(|| Error::runtime("suspended function activation disappeared"))?;
         let local_base = self
             .activation_frames
             .get(activation_index)
             .and_then(ActivationFrame::local_base)
-            .ok_or_else(|| Error::runtime("suspended async local base disappeared"))?;
+            .ok_or_else(|| Error::runtime("suspended function local base disappeared"))?;
         let locals = self.locals.split_off(local_base);
         let activations = self.activation_frames.split_off(activation_index);
-        Ok(SuspendedAsyncFunction::new(
+        Ok(DetachedFunctionExecution::new(
             function,
-            result_promise,
             locals,
             activations,
         ))
     }
 
+    pub(in crate::runtime) fn detach_suspended_async_function(
+        &mut self,
+        function: FunctionId,
+        result_promise: PromiseId,
+    ) -> Result<SuspendedAsyncFunction> {
+        let execution = self.detach_function_execution(function)?;
+        Ok(SuspendedAsyncFunction::new(result_promise, execution))
+    }
+
     pub(in crate::runtime) fn resume_suspended_async_function(
         &mut self,
         continuation: SuspendedAsyncFunction,
+        resume: Completion,
+    ) -> Result<Completion> {
+        self.resume_function_execution(continuation.take_execution(), resume)
+    }
+
+    pub(in crate::runtime) fn resume_function_execution(
+        &mut self,
+        continuation: DetachedFunctionExecution,
         resume: Completion,
     ) -> Result<Completion> {
         let function = continuation.function();
@@ -78,10 +93,7 @@ impl Context {
             }),
             (None, _, _) => self.resume_bytecode_activation(function, &body, Some(resume)),
         };
-        if result
-            .as_ref()
-            .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
-        {
+        if result.as_ref().is_ok_and(Completion::suspends_execution) {
             return result;
         }
         if result.is_err() {
@@ -90,10 +102,10 @@ impl Context {
         }
         let expected_activation_count = activation_base
             .checked_add(1)
-            .ok_or_else(|| Error::limit("async activation count overflowed"))?;
+            .ok_or_else(|| Error::limit("suspended activation count overflowed"))?;
         if self.activation_frames.len() != expected_activation_count {
             return Err(Error::runtime(format!(
-                "async function completed with parked child activations: completion {:?}, expected {expected_activation_count}, actual {}",
+                "suspended function completed with parked child activations: completion {:?}, expected {expected_activation_count}, actual {}",
                 result.as_ref().ok(),
                 self.activation_frames.len()
             )));
@@ -117,22 +129,82 @@ impl Context {
 /// to the Context execution stacks.
 #[derive(Debug)]
 pub(in crate::runtime) struct SuspendedAsyncFunction {
-    function: FunctionId,
     result_promise: PromiseId,
+    execution: DetachedFunctionExecution,
+}
+
+#[derive(Debug)]
+pub(in crate::runtime) struct DetachedFunctionExecution {
+    function: FunctionId,
     locals: Vec<BindingScope>,
     activations: Vec<ActivationFrame>,
 }
 
 impl SuspendedAsyncFunction {
     pub(super) const fn new(
-        function: FunctionId,
         result_promise: PromiseId,
+        execution: DetachedFunctionExecution,
+    ) -> Self {
+        Self {
+            result_promise,
+            execution,
+        }
+    }
+
+    pub(in crate::runtime) const fn function(&self) -> FunctionId {
+        self.execution.function()
+    }
+
+    pub(in crate::runtime) const fn result_promise(&self) -> PromiseId {
+        self.result_promise
+    }
+
+    pub(super) fn take_execution(self) -> DetachedFunctionExecution {
+        self.execution
+    }
+
+    pub(in crate::runtime) fn execution_frame_count(&self) -> Result<usize> {
+        self.execution.execution_frame_count()
+    }
+
+    pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
+        self.execution.cache_entry_count()
+    }
+
+    pub(in crate::runtime) fn visit_direct_roots<V: DirectRootVisitor>(
+        &self,
+        visitor: &mut V,
+    ) -> Result<()> {
+        visitor.visit_promise(VmRootKind::QueuedJob, self.result_promise)?;
+        self.execution
+            .visit_direct_roots(visitor, VmRootKind::QueuedJob)
+    }
+
+    pub(in crate::runtime) fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
+    where
+        V: StrongEdgeVisitor<VmAsyncEdgeKind>,
+    {
+        visitor.visit(
+            VmAsyncEdgeKind::PromiseReaction,
+            StrongEdgeReference::Promise(self.result_promise),
+        )?;
+        self.execution
+            .visit_strong_edges(visitor, VmAsyncEdgeKind::PromiseReaction)
+    }
+
+    pub(in crate::runtime) fn cancel_storage(self, storage_ledger: &VmStorageLedger) -> Result<()> {
+        self.execution.cancel_storage(storage_ledger)
+    }
+}
+
+impl DetachedFunctionExecution {
+    const fn new(
+        function: FunctionId,
         locals: Vec<BindingScope>,
         activations: Vec<ActivationFrame>,
     ) -> Self {
         Self {
             function,
-            result_promise,
             locals,
             activations,
         }
@@ -142,11 +214,7 @@ impl SuspendedAsyncFunction {
         self.function
     }
 
-    pub(in crate::runtime) const fn result_promise(&self) -> PromiseId {
-        self.result_promise
-    }
-
-    pub(super) fn take_owners(self) -> (Vec<BindingScope>, Vec<ActivationFrame>) {
+    fn take_owners(self) -> (Vec<BindingScope>, Vec<ActivationFrame>) {
         (self.locals, self.activations)
     }
 
@@ -167,6 +235,21 @@ impl SuspendedAsyncFunction {
             .ok_or_else(|| Error::limit("suspended execution frame count overflowed"))
     }
 
+    pub(in crate::runtime) fn binding_count(&self) -> Result<usize> {
+        let local_count = self.locals.iter().try_fold(0_usize, |count, scope| {
+            count
+                .checked_add(scope.len())
+                .ok_or_else(|| Error::limit("suspended binding count overflowed"))
+        })?;
+        self.activations
+            .iter()
+            .try_fold(local_count, |count, frame| {
+                count
+                    .checked_add(frame.upvalues().map_or(0, |upvalues| upvalues.len()))
+                    .ok_or_else(|| Error::limit("suspended binding count overflowed"))
+            })
+    }
+
     pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
         self.locals.iter().try_fold(0_usize, |count, scope| {
             count
@@ -178,14 +261,14 @@ impl SuspendedAsyncFunction {
     pub(in crate::runtime) fn visit_direct_roots<V: DirectRootVisitor>(
         &self,
         visitor: &mut V,
+        kind: VmRootKind,
     ) -> Result<()> {
-        visitor.visit_promise(VmRootKind::QueuedJob, self.result_promise)?;
-        visitor.visit_value(VmRootKind::QueuedJob, &Value::Function(self.function))?;
+        visitor.visit_value(kind, &Value::Function(self.function))?;
         for scope in &self.locals {
             for cell in scope.cells() {
-                if let Some(result) = cell.with_initialized_value(|value| {
-                    visitor.visit_value(VmRootKind::QueuedJob, value)
-                }) {
+                if let Some(result) =
+                    cell.with_initialized_value(|value| visitor.visit_value(kind, value))
+                {
                     result?;
                 }
             }
@@ -193,56 +276,53 @@ impl SuspendedAsyncFunction {
         for frame in &self.activations {
             if let Some(upvalues) = frame.upvalues() {
                 for cell in upvalues.iter() {
-                    if let Some(result) = cell.with_initialized_value(|value| {
-                        visitor.visit_value(VmRootKind::QueuedJob, value)
-                    }) {
+                    if let Some(result) =
+                        cell.with_initialized_value(|value| visitor.visit_value(kind, value))
+                    {
                         result?;
                     }
                 }
             }
             if let Some(value) = frame.this_value() {
-                visitor.visit_value(VmRootKind::QueuedJob, value)?;
+                visitor.visit_value(kind, value)?;
             }
             if let Some(value) = frame.new_target() {
-                visitor.visit_value(VmRootKind::QueuedJob, value)?;
+                visitor.visit_value(kind, value)?;
             }
             if let Some(super_binding) = frame.super_binding() {
                 if let Some(constructor) = &super_binding.constructor {
-                    visitor.visit_value(VmRootKind::QueuedJob, constructor)?;
+                    visitor.visit_value(kind, constructor)?;
                 }
-                visitor.visit_value(VmRootKind::QueuedJob, &super_binding.home_prototype)?;
+                visitor.visit_value(kind, &super_binding.home_prototype)?;
             }
             if let Some(continuation) = frame.continuation() {
                 if let Some(function) = continuation.function_id() {
-                    visitor.visit_value(VmRootKind::QueuedJob, &Value::Function(function))?;
+                    visitor.visit_value(kind, &Value::Function(function))?;
                 }
                 for value in continuation.root_values() {
-                    visitor.visit_value(VmRootKind::QueuedJob, value)?;
+                    visitor.visit_value(kind, value)?;
                 }
             }
         }
         Ok(())
     }
 
-    pub(in crate::runtime) fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
+    pub(in crate::runtime) fn visit_strong_edges<V>(
+        &self,
+        visitor: &mut V,
+        kind: VmAsyncEdgeKind,
+    ) -> Result<()>
     where
         V: StrongEdgeVisitor<VmAsyncEdgeKind>,
     {
         visitor.visit(
-            VmAsyncEdgeKind::PromiseReaction,
-            StrongEdgeReference::Promise(self.result_promise),
-        )?;
-        visitor.visit(
-            VmAsyncEdgeKind::PromiseReaction,
+            kind,
             StrongEdgeReference::Value(&Value::Function(self.function)),
         )?;
         for scope in &self.locals {
             for cell in scope.cells() {
                 if let Some(result) = cell.with_initialized_value(|value| {
-                    visitor.visit(
-                        VmAsyncEdgeKind::PromiseReaction,
-                        StrongEdgeReference::Value(value),
-                    )
+                    visitor.visit(kind, StrongEdgeReference::Value(value))
                 }) {
                     result?;
                 }
@@ -252,51 +332,33 @@ impl SuspendedAsyncFunction {
             if let Some(upvalues) = frame.upvalues() {
                 for cell in upvalues.iter() {
                     if let Some(result) = cell.with_initialized_value(|value| {
-                        visitor.visit(
-                            VmAsyncEdgeKind::PromiseReaction,
-                            StrongEdgeReference::Value(value),
-                        )
+                        visitor.visit(kind, StrongEdgeReference::Value(value))
                     }) {
                         result?;
                     }
                 }
             }
-            if let Some(value) = frame.this_value() {
-                visitor.visit(
-                    VmAsyncEdgeKind::PromiseReaction,
-                    StrongEdgeReference::Value(value),
-                )?;
-            }
-            if let Some(value) = frame.new_target() {
-                visitor.visit(
-                    VmAsyncEdgeKind::PromiseReaction,
-                    StrongEdgeReference::Value(value),
-                )?;
+            for value in [frame.this_value(), frame.new_target()]
+                .into_iter()
+                .flatten()
+            {
+                visitor.visit(kind, StrongEdgeReference::Value(value))?;
             }
             if let Some(super_binding) = frame.super_binding() {
                 if let Some(constructor) = &super_binding.constructor {
-                    visitor.visit(
-                        VmAsyncEdgeKind::PromiseReaction,
-                        StrongEdgeReference::Value(constructor),
-                    )?;
+                    visitor.visit(kind, StrongEdgeReference::Value(constructor))?;
                 }
                 visitor.visit(
-                    VmAsyncEdgeKind::PromiseReaction,
+                    kind,
                     StrongEdgeReference::Value(&super_binding.home_prototype),
                 )?;
             }
             if let Some(continuation) = frame.continuation() {
                 if let Some(function) = continuation.function_id() {
-                    visitor.visit(
-                        VmAsyncEdgeKind::PromiseReaction,
-                        StrongEdgeReference::Value(&Value::Function(function)),
-                    )?;
+                    visitor.visit(kind, StrongEdgeReference::Value(&Value::Function(function)))?;
                 }
                 for value in continuation.root_values() {
-                    visitor.visit(
-                        VmAsyncEdgeKind::PromiseReaction,
-                        StrongEdgeReference::Value(value),
-                    )?;
+                    visitor.visit(kind, StrongEdgeReference::Value(value))?;
                 }
             }
         }

@@ -25,6 +25,16 @@ impl Context {
         self.eval_function_completion_with_mode::<true>(id, args, this_value, new_target)
     }
 
+    pub(in crate::runtime) fn eval_generator_function_completion_with_this_and_new_target(
+        &mut self,
+        id: FunctionId,
+        args: RuntimeCallArgs<'_>,
+        this_value: Value,
+        new_target: Value,
+    ) -> Result<Completion> {
+        self.eval_function_completion_with_mode::<true>(id, args, this_value, new_target)
+    }
+
     fn eval_function_completion_with_mode<const CAN_SUSPEND: bool>(
         &mut self,
         id: FunctionId,
