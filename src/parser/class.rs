@@ -167,12 +167,6 @@ impl Parser {
             Some(ClassMemberKind::Setter) => ClassMemberKind::Setter,
             Some(ClassMemberKind::Method) | None => ClassMemberKind::Method,
         };
-        if is_static && kind != ClassMemberKind::Method {
-            return Err(Error::parse(
-                "class static accessors are not supported yet",
-                member_offset,
-            ));
-        }
         let function = self.class_member_function(kind, member_offset, false)?;
         members.push(ClassMember {
             key: Self::class_property_key(key),

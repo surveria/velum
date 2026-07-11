@@ -196,12 +196,12 @@ proxies; several built-ins repeat the same matches.
 | `Call` | `Context::call`; `call_value` only converts at native-value boundaries | composes AS-02c `semantic_call` and preserves `Completion`; generic consumers and cache misses delegate while guarded direct backends remain separate | AS-03b2 complete in PR #414 |
 | `[[Get]]` | `Context::semantic_property_read[_with_receiver]` plus `finish_semantic_property_read` | AS-02b1 owns object-like dispatch; the AS-03b2 `Get` operation owns specification composition, while static caches optimize only the returned ordinary-object tail | AS-02b1 complete after PR #401 |
 | `[[HasProperty]]` | `Context::semantic_property_presence` plus `finish_semantic_property_presence` | AS-02b1 now owns object-like dispatch; static presence caches optimize only the returned ordinary-object tail, while primitive rejection remains in the property layer | AS-02b1 complete after PR #401; AS-03b later owns the abstract operation |
-| `[[Set]]` | `semantic_property_write` plus `finish_semantic_property_write`; `semantic_reflect_property_write` for explicit receivers | Static/dynamic caches optimize only ordinary tails; physical accessor/object/function stores remain backends; AS-03b2 `Set` chooses false versus throw | AS-02b2 complete in PR #403 |
-| `[[DefineOwnProperty]]` | `semantic_define_own_property_*` | ObjectHeap and function stores remain physical backends; function paths still reject accessors | AS-02b2 complete in PR #403 |
+| `[[Set]]` | `semantic_property_write` plus `finish_semantic_property_write`; `semantic_reflect_property_write` for explicit receivers | Static/dynamic caches optimize only ordinary tails; ordinary objects and JavaScript functions share data/accessor descriptor semantics, while AS-03b2 `Set` chooses false versus throw | AS-02b2 complete in PR #403; JavaScript function accessors added by AS-09c |
+| `[[DefineOwnProperty]]` | `semantic_define_own_property_*` | ObjectHeap and JavaScript function stores accept shared data/accessor updates; native functions remain a data-only physical backend | AS-02b2 complete in PR #403; JavaScript function accessors added by AS-09c |
 | `[[Delete]]` | `semantic_property_delete` plus `finish_semantic_property_delete` | Static/dynamic caches optimize only ordinary tails; primitive fallback remains in `property::delete_property` | AS-02b2 complete in PR #403; AS-03b owns primitive coercion |
 | `[[OwnPropertyKeys]]` | `semantic_own_property_keys` plus string/Symbol projections | ObjectHeap and function key stores remain physical backends; Proxy order and Symbol identity are preserved | AS-02b2 complete in PR #403 |
 | `[[GetOwnProperty]]` | `semantic_own_property_descriptor` | Object/string/global/function physical descriptor stores remain backends; HostFunction is rejected | AS-02b2 complete in PR #403 |
-| `[[GetPrototypeOf]]` | `semantic_get_prototype` | ObjectHeap/function/error prototype owners remain physical backends; HostFunction is rejected | AS-02b2 complete in PR #403 |
+| `[[GetPrototypeOf]]` | `semantic_get_prototype` | ObjectHeap/function/error prototype owners remain physical backends; derived class constructors expose their static parent and HostFunction is rejected | AS-02b2 complete in PR #403; static class inheritance aligned by AS-09c |
 | `[[SetPrototypeOf]]` | `semantic_try_set_prototype` | ObjectHeap stores only `ObjectId` prototypes, so function-valued prototypes remain unsupported storage debt | AS-02b2 complete in PR #403; AS-05 owns handle/storage redesign |
 | extensibility/integrity | `semantic_{is,prevent}_extensions` and semantic integrity-level methods | Ordinary objects use ObjectHeap directly; Proxy integrity composes traps and descriptors; function stores still lack extensibility state | AS-02b2 complete in PR #403; AS-05 owns complete accounting/state |
 
@@ -211,8 +211,10 @@ proxies; several built-ins repeat the same matches.
   descriptors, a prototype path, and own keys.
 - Error properties are synthesized as writable/enumerable/configurable data
   descriptors in some paths rather than stored as real own properties.
-- Function and native-function properties share a data structure but still
-  require separate physical id lookup and dispatch functions; their current
+- Function and native-function properties share a structure and common
+  `ObjectProperty` payload for custom entries, but still require separate
+  physical id lookup and dispatch functions. JavaScript functions accept data
+  and accessor updates; native functions remain data-only. Their current
   own-key backend also exposes only enumerable custom names rather than a full
   string/Symbol key list.
 - Array indexed properties, string virtual properties, and global bindings
@@ -352,7 +354,7 @@ The engine already has a useful JavaScript `Completion` enum with `Normal`,
 | --- | --- | --- |
 | Public `eval` | every `Throw(Value)` returns a value-preserving `Error::JavaScript`; built-in Error objects also carry structured diagnostic metadata | AS-04a merged in PR #416; AS-04b1 merged in PR #418; AS-05 later adds VM-bound handle identity |
 | Native built-ins | `Result<Value>` boundaries preserve arbitrary throws; typed built-in exception requests allocate an ordinary Error object in the active VM before becoming `Throw(Value)` | AS-04a merged in PR #416; AS-04b1 merged in PR #418 |
-| Dynamic compilation | one `dynamic_compilation_error` owner converts only eval and Function/AsyncFunction lexer/parser failures to typed `SyntaxError` requests while retaining the dynamic source span; runtime, resource, and existing JavaScript errors remain unchanged | AS-09b draft PR #451 removes the split eval/constructor mapping |
+| Dynamic compilation | one `dynamic_compilation_error` owner converts only eval and Function/AsyncFunction lexer/parser failures to typed `SyntaxError` requests while retaining the dynamic source span; runtime, resource, and existing JavaScript errors remain unchanged | AS-09b merged in PR #451 as `b11ce20f` |
 | Runtime-to-throw conversion | `runtime_exception_value` unwraps only typed JavaScript values or allocates a typed built-in error request; Runtime, host, parser, and resource errors are never classified by message text | AS-04a merged in PR #416; AS-04b1 object allocation merged in PR #418 |
 | Reference errors | `reference_error_undefined` and `reference_error_uninitialized` create typed ReferenceError requests that become ordinary objects in the active VM | AS-04a merged in PR #416; AS-04b1 merged in PR #418 |
 | Accessors and native callbacks | Completion conversion preserves primitive, Symbol, object, and Error throws; public host callbacks may use `Error::javascript(value)` intentionally | AS-04a merged in PR #416 |
@@ -664,7 +666,8 @@ decision sequence:
 | AS-08a | caches, direct calls, linear/function/control paths, harness opcodes | PR #447 merged as `bc52a723`; one optimizer owner, disabled-mode fallbacks, and zero harness source semantics are canonical |
 | AS-08b | named control recognizers and built-in specialization evidence | PR #449 merged as `7802932e`; source-shaped control execution is removed, one broad guarded reduction remains, and exact-tree/canonical evidence is green |
 | AS-09a | unary bitwise NOT compatibility | PR #450 merged as `672d57a2`; 32 new Test262 variants, exact-tree correctness, paired performance, and canonical publication are green |
-| AS-09b | dynamic compilation error boundary | draft PR #451 gives eval and Function/AsyncFunction one typed SyntaxError mapper, preserves dynamic source spans, and records 198 new full-corpus variants with no removed pass |
+| AS-09b | dynamic compilation error boundary | PR #451 merged as `b11ce20f`; one typed SyntaxError mapper preserves dynamic source spans, adds 198 full-corpus variants with no removed pass, and has green exact-tree/canonical evidence |
+| AS-09c | static class accessor and function descriptor boundary | draft PR #452 removes parser/runtime static-accessor rejections, reuses `ObjectProperty` descriptor payloads for JavaScript functions, and raises the focused profile by 80 variants while preserving 96/96 QuickJS cases |
 
 ## AS-01b Guard Specification
 

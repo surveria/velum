@@ -106,6 +106,66 @@ fn merges_getters_and_setters_on_the_prototype() -> TestResult {
 }
 
 #[test]
+fn merges_static_getters_and_setters_on_the_constructor() -> TestResult {
+    ensure_string(
+        r#"
+        class Registry {
+            static get value() {
+                return this.stored * 2;
+            }
+            static set value(next) {
+                this.stored = next / 2;
+            }
+        }
+        Registry.value = 42;
+        const descriptor = Object.getOwnPropertyDescriptor(Registry, "value");
+        "" + Registry.stored + ":" + Registry.value + ":"
+            + (typeof descriptor.get) + ":" + (typeof descriptor.set) + ":"
+            + descriptor.enumerable + ":" + descriptor.configurable
+        "#,
+        "21:42:function:function:false:true",
+    )
+}
+
+#[test]
+fn static_accessors_preserve_computed_keys_and_inherited_receivers() -> TestResult {
+    ensure_string(
+        r#"
+        const key = "value";
+        class Base {
+            static get [key]() {
+                return this.stored;
+            }
+            static set [key](next) {
+                this.stored = next;
+            }
+        }
+        class Child extends Base {}
+        Child.value = 42;
+        "" + Child.value + ":" + Base.value + ":"
+            + (Object.getPrototypeOf(Child) === Base)
+        "#,
+        "42:undefined:true",
+    )
+}
+
+#[test]
+fn static_accessors_can_replace_configurable_function_intrinsics() -> TestResult {
+    ensure_string(
+        r#"
+        class Named {
+            static get name() {
+                return "override";
+            }
+        }
+        const descriptor = Object.getOwnPropertyDescriptor(Named, "name");
+        Named.name + ":" + (typeof descriptor.get) + ":" + descriptor.enumerable
+        "#,
+        "override:function:false",
+    )
+}
+
+#[test]
 fn supports_computed_string_and_numeric_member_keys() -> TestResult {
     ensure_string(
         r#"
@@ -247,9 +307,5 @@ fn reports_unsupported_class_features_explicitly() -> TestResult {
     ensure_error_contains(
         "class H { async m() {} }",
         "class async methods are not supported yet",
-    )?;
-    ensure_error_contains(
-        "class I { static get x() { return 1 } }",
-        "class static accessors are not supported yet",
     )
 }

@@ -311,6 +311,15 @@ impl ObjectProperty {
         }
     }
 
+    pub(in crate::runtime) fn from_update(update: PropertyUpdate) -> Self {
+        match update {
+            PropertyUpdate::Data(update) => Self::from_descriptor(update.complete_for_new()),
+            PropertyUpdate::Accessor(update) => {
+                Self::from_accessor_descriptor(update.complete_for_new())
+            }
+        }
+    }
+
     pub fn value(&self) -> Value {
         match &self.payload {
             ObjectPropertyPayload::Data(descriptor) => descriptor.value(),
@@ -327,7 +336,7 @@ impl ObjectProperty {
         }
     }
 
-    pub(in crate::runtime::object) fn visit_strong_edges<Kind: Copy, V: StrongEdgeVisitor<Kind>>(
+    pub(in crate::runtime) fn visit_strong_edges<Kind: Copy, V: StrongEdgeVisitor<Kind>>(
         &self,
         kind: Kind,
         visitor: &mut V,

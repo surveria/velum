@@ -489,7 +489,7 @@ dependencies do not overlap.
 | AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
 | AS-07 | Complete | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | PR #446 merged as `62e2725`; exact-tree correctness, paired sentinels, post-merge performance, and canonical report publication passed. |
 | AS-08 | Complete | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a and AS-08b merged through PR #449; exact-tree correctness, disabled-mode equivalence, specialization audit, paired sentinels, and canonical publication passed. |
-| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09a starts the profile-driven expansion with unary bitwise NOT through the shared numeric semantics and no architecture exception. |
+| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09a and AS-09b are complete; AS-09c extends shared function descriptors for static class accessors without a class-only property store. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
 
 ## Program Item Details
@@ -2274,7 +2274,7 @@ AS-09a completion evidence from PR #450:
   `reports/test-runs/rsqjs-test-report-20260711T040754Z.*` with all five
   sentinels valid.
 
-AS-09b profile evidence in draft PR #451:
+AS-09b completion evidence from PR #451:
 
 - dynamic `eval` previously propagated lexer/parser failures as engine
   `Result` errors, while Function constructors independently converted the
@@ -2299,8 +2299,35 @@ AS-09b profile evidence in draft PR #451:
 - adjacent main/branch sentinel medians are arithmetic 81.85/82.05 ms (+0.2%),
   array-index 2.30/2.24 ms (-2.6%), property-read 218.22/225.12 ms (+3.2%),
   function-call 152.90/154.78 ms (+1.2%), and string-scan 70.16/70.37 ms
-  (+0.3%). Every row is valid and branch variation is at most 0.6%; exact-tree
-  CI and canonical publication remain required before AS-09b can close.
+  (+0.3%). Every row is valid and branch variation is at most 0.6%;
+- PR #451 squash-merged as `b11ce20f`; required run `29139688796` certified
+  exact tree `c2abb4b4`, post-merge run `29139793837` passed performance and
+  publication, and report-only commit `dfabb40` published
+  `reports/test-runs/rsqjs-test-report-20260711T043324Z.*` with all five
+  sentinels valid.
+
+AS-09c profile evidence in draft PR #452:
+
+- the canonical failure profile exposed separate parser and runtime rejections
+  for static class getters/setters even though instance accessors, static
+  methods, and ordinary object accessor descriptors already existed;
+- the focused pre-change profile passed 0/45 files and 0/90 variants. The
+  shared implementation raises it to 40/45 files and 80/90 variants while
+  preserving 96/96 QuickJS differential cases;
+- the ten residual variants are surrounding syntax gaps rather than descriptor
+  failures: six class-expression cases require comma-expression parsing and
+  four computed-name cases require generator/yield parsing;
+- JavaScript function custom properties now reuse `ObjectProperty` data and
+  accessor payloads. `semantic_property_read_with_receiver`, receiver-aware
+  `[[Set]]`, `[[GetOwnProperty]]`, and `[[DefineOwnProperty]]` therefore serve
+  class constructors without a class-specific descriptor side table;
+- derived constructor functions expose their static parent through the shared
+  prototype boundary, so inherited static accessors retain the derived receiver.
+  Literal/computed keys, getter/setter merging, configurable intrinsic
+  replacement, descriptor attributes, storage accounting, and ordinary
+  function `Object.defineProperty` behavior have permanent coverage;
+- complete-corpus baseline refresh, paired sentinel measurements, exact-tree
+  CI, and canonical publication remain required before AS-09c can close.
 
 ### AS-10: Performance And Memory Checkpoints
 

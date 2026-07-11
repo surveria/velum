@@ -1,8 +1,10 @@
 use crate::{
+    error::Result,
     runtime::object::{
-        DataPropertyDescriptor, DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable,
-        PropertyWritable,
+        DataPropertyDescriptor, DataPropertyUpdate, ObjectProperty, OwnPropertyDescriptor,
+        PropertyEnumerable, PropertyUpdate,
     },
+    runtime::trace::StrongEdgeVisitor,
     value::Value,
 };
 
@@ -99,78 +101,51 @@ impl FunctionIntrinsicProperty {
 
 #[derive(Debug, Clone)]
 pub(super) struct FunctionProperty {
-    descriptor: DataPropertyDescriptor,
+    property: ObjectProperty,
 }
 
 impl FunctionProperty {
     pub(super) const fn new(value: Value, enumerable: PropertyEnumerable) -> Self {
         Self {
-            descriptor: DataPropertyDescriptor::new(
-                value,
-                PropertyWritable::Yes,
-                enumerable,
-                PropertyConfigurable::Yes,
-            ),
+            property: ObjectProperty::ordinary(value, enumerable),
         }
     }
 
-    pub(super) fn from_update(update: DataPropertyUpdate) -> Self {
+    pub(super) fn from_update(update: PropertyUpdate) -> Self {
         Self {
-            descriptor: update.complete_for_new(),
+            property: ObjectProperty::from_update(update),
         }
     }
 
-    pub(super) fn value(&self) -> Value {
-        self.descriptor.value()
-    }
-
-    pub(super) const fn value_ref(&self) -> &Value {
-        self.descriptor.value_ref()
+    pub(super) fn visit_strong_edges<Kind: Copy, V: StrongEdgeVisitor<Kind>>(
+        &self,
+        kind: Kind,
+        visitor: &mut V,
+    ) -> Result<()> {
+        self.property.visit_strong_edges(kind, visitor)
     }
 
     pub(super) const fn is_configurable(&self) -> bool {
-        self.descriptor.configurable().is_yes()
+        self.property.is_configurable()
     }
 
     pub(super) const fn is_enumerable(&self) -> bool {
-        self.descriptor.enumerable().is_yes()
+        self.property.is_enumerable()
     }
 
-    pub(super) fn descriptor(&self) -> DataPropertyDescriptor {
-        self.descriptor.clone()
+    pub(super) fn descriptor(&self) -> OwnPropertyDescriptor {
+        self.property.own_descriptor()
     }
 
     pub(super) fn set_value(&mut self, value: Value) {
-        if self.descriptor.writable().is_yes() {
-            self.descriptor = DataPropertyDescriptor::new(
-                value,
-                self.descriptor.writable(),
-                self.descriptor.enumerable(),
-                self.descriptor.configurable(),
-            );
-        }
+        self.property.set_value(value);
     }
 
-    pub(super) fn define(&mut self, update: &DataPropertyUpdate) {
-        let value = update.value().unwrap_or_else(|| self.descriptor.value());
-        let writable = update
-            .writable()
-            .unwrap_or_else(|| self.descriptor.writable());
-        let enumerable = update
-            .enumerable()
-            .unwrap_or_else(|| self.descriptor.enumerable());
-        let configurable = update
-            .configurable()
-            .unwrap_or_else(|| self.descriptor.configurable());
-        self.descriptor = DataPropertyDescriptor::new(value, writable, enumerable, configurable);
+    pub(super) fn define(&mut self, update: PropertyUpdate) {
+        self.property.define(update);
     }
 
-    pub(super) fn set_enumerable(&mut self, enumerable: PropertyEnumerable) {
-        self.descriptor = DataPropertyDescriptor::new(
-            self.descriptor.value(),
-            self.descriptor.writable(),
-            enumerable,
-            self.descriptor.configurable(),
-        );
+    pub(super) const fn set_enumerable(&mut self, enumerable: PropertyEnumerable) {
+        self.property.set_enumerable(enumerable);
     }
 }

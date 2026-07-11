@@ -35,6 +35,28 @@ var boxed = new Boxed();
 boxed.value = 42;
 print(boxed.stored, boxed.value);
 
+var staticKey = "value";
+class StaticBase {
+  static get [staticKey]() {
+    return this.stored;
+  }
+  static set [staticKey](next) {
+    this.stored = next;
+  }
+}
+class StaticChild extends StaticBase {}
+StaticChild.value = 42;
+var staticDescriptor = Object.getOwnPropertyDescriptor(StaticBase, staticKey);
+print(
+  StaticChild.value,
+  StaticBase.value,
+  Object.getPrototypeOf(StaticChild) === StaticBase,
+  typeof staticDescriptor.get,
+  typeof staticDescriptor.set,
+  staticDescriptor.enumerable,
+  staticDescriptor.configurable
+);
+
 var suffix = "puted";
 class Keys {
   ["com" + suffix]() {

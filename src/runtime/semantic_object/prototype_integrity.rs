@@ -28,7 +28,7 @@ impl Context {
         let prototype = match object_ref.value {
             Value::Object(id) if self.objects.is_proxy(*id) => self.proxy_get_prototype_of(*id)?,
             Value::Object(id) => self.objects.prototype_value(*id)?,
-            Value::Function(id) => self.function_object_prototype_value(*id)?,
+            Value::Function(id) => self.function_inheritance_prototype_value(*id)?,
             Value::NativeFunction(id) => self.native_function_object_prototype_value(*id)?,
             Value::HostFunction(_) => {
                 return Err(Error::runtime("host function prototype is not available"));

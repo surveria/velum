@@ -6,8 +6,9 @@ use crate::{
     runtime::call::RuntimeCallArgs,
     runtime::control::Completion,
     runtime::object::{
-        DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable,
-        PropertyEnumerable, PropertyKey, PropertyLookup, PropertyWritable,
+        DataPropertyDescriptor, DataPropertyUpdate, ObjectPropertyInit, OwnPropertyDescriptor,
+        PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate,
+        PropertyWritable,
     },
     runtime::property::get_property,
     runtime::{CompiledBindingFrame, Context},
@@ -385,24 +386,48 @@ impl Context {
     pub(crate) fn get_function_property_lookup(
         &mut self,
         id: FunctionId,
+        receiver: &Value,
         property: PropertyLookup<'_>,
     ) -> Result<Value> {
-        let property_kind = FunctionPropertyKind::from_name(property.name());
-        let own_value = {
-            let function = self.function(id)?;
-            function.properties.own_value(property, property_kind)
-        };
-        if let Some(value) = own_value {
-            return self.checked_value(value);
+        if let Some(descriptor) = self.function_own_property_descriptor_lookup(id, property)? {
+            return match descriptor {
+                OwnPropertyDescriptor::Data(descriptor) => self.checked_value(descriptor.value()),
+                OwnPropertyDescriptor::Accessor(descriptor) if descriptor.has_getter() => {
+                    self.call_accessor_getter(descriptor.get_ref(), receiver.clone())
+                }
+                OwnPropertyDescriptor::Accessor(_) => Ok(Value::Undefined),
+            };
         }
-        let static_parent = self.function(id)?.static_parent.clone();
-        if let Some(parent) = static_parent {
-            let value = self.get_named(&parent, property.name())?;
-            if !matches!(value, Value::Undefined) {
-                return Ok(value);
+        if let Some(parent) = self.function(id)?.static_parent.clone() {
+            if matches!(parent, Value::Null | Value::Undefined) {
+                return Ok(Value::Undefined);
             }
+            let Some(read) =
+                self.semantic_property_read_with_receiver(&parent, receiver, property)?
+            else {
+                return Ok(Value::Undefined);
+            };
+            return self.finish_semantic_property_read(read, receiver, property);
         }
         self.get_function_object_prototype_property(id, property)
+    }
+
+    pub(in crate::runtime) fn function_inheritance_prototype_value(
+        &mut self,
+        id: FunctionId,
+    ) -> Result<Value> {
+        if let Some(parent) = self.function_static_parent_value(id)? {
+            return Ok(parent);
+        }
+        self.function_object_prototype_value(id)
+    }
+
+    pub(in crate::runtime) fn function_static_parent_value(
+        &self,
+        id: FunctionId,
+    ) -> Result<Option<Value>> {
+        self.function(id)
+            .map(|function| function.static_parent.clone())
     }
 
     fn get_function_object_prototype_property(
@@ -433,13 +458,13 @@ impl Context {
         &self,
         id: FunctionId,
         property: PropertyLookup<'_>,
-    ) -> Result<Option<DataPropertyDescriptor>> {
+    ) -> Result<Option<OwnPropertyDescriptor>> {
         let function = self.function(id)?;
         if let Some(descriptor) = function
             .properties
             .intrinsic_descriptor(FunctionPropertyKind::from_name(property.name()))
         {
-            return Ok(Some(descriptor));
+            return Ok(Some(OwnPropertyDescriptor::Data(descriptor)));
         }
         Ok(function.properties.own_property_descriptor(property))
     }
@@ -478,7 +503,7 @@ impl Context {
         id: FunctionId,
         property: &str,
         key: PropertyKey,
-        update: DataPropertyUpdate,
+        update: PropertyUpdate,
     ) -> Result<()> {
         let max_properties = self.limits.max_object_properties;
         let property_kind = FunctionPropertyKind::from_name(property);
@@ -608,8 +633,17 @@ impl Context {
             let function = self.native_function(id)?;
             function
                 .properties()
-                .own_value(property, property_kind)
+                .intrinsic_value(property_kind)
                 .or_else(|| function.intrinsic_property(property_name))
+                .or_else(|| {
+                    function
+                        .properties()
+                        .own_property_descriptor(property)
+                        .and_then(|descriptor| match descriptor {
+                            OwnPropertyDescriptor::Data(descriptor) => Some(descriptor.value()),
+                            OwnPropertyDescriptor::Accessor(_) => None,
+                        })
+                })
         };
         if let Some(value) = own_value {
             return self.checked_value(value);
@@ -687,7 +721,13 @@ impl Context {
                 PropertyConfigurable::No,
             )));
         }
-        Ok(function.properties().own_property_descriptor(property))
+        Ok(function
+            .properties()
+            .own_property_descriptor(property)
+            .and_then(|descriptor| match descriptor {
+                OwnPropertyDescriptor::Data(descriptor) => Some(descriptor),
+                OwnPropertyDescriptor::Accessor(_) => None,
+            }))
     }
 
     pub(crate) fn has_native_function_property_lookup(
@@ -745,9 +785,12 @@ impl Context {
         }
         let max_properties = self.limits.max_object_properties;
         let function = self.native_function_mut(id)?;
-        function
-            .properties_mut()
-            .define_property(key, property_kind, update, max_properties)
+        function.properties_mut().define_property(
+            key,
+            property_kind,
+            PropertyUpdate::Data(update),
+            max_properties,
+        )
     }
 
     pub(crate) fn delete_native_function_property_lookup(

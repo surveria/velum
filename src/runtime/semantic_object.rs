@@ -143,9 +143,9 @@ impl Context {
                     SemanticPropertyRead::ObjectTail(*id)
                 }
             }
-            Value::Function(id) => {
-                SemanticPropertyRead::Resolved(self.get_function_property_lookup(*id, property)?)
-            }
+            Value::Function(id) => SemanticPropertyRead::Resolved(
+                self.get_function_property_lookup(*id, receiver, property)?,
+            ),
             Value::NativeFunction(id) => SemanticPropertyRead::Resolved(
                 self.get_native_function_property_lookup(*id, property)?,
             ),

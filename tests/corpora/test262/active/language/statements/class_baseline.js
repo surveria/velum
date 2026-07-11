@@ -46,6 +46,30 @@ if (boxed.stored !== 21 || boxed.value !== 42) {
   throw new Test262Error("class accessor mismatch");
 }
 
+var staticKey = "value";
+class StaticBase {
+  static get [staticKey]() {
+    return this.stored;
+  }
+  static set [staticKey](next) {
+    this.stored = next;
+  }
+}
+class StaticChild extends StaticBase {}
+StaticChild.value = 42;
+var staticDescriptor = Object.getOwnPropertyDescriptor(StaticBase, staticKey);
+if (
+  StaticChild.value !== 42 ||
+  StaticBase.value !== undefined ||
+  Object.getPrototypeOf(StaticChild) !== StaticBase ||
+  typeof staticDescriptor.get !== "function" ||
+  typeof staticDescriptor.set !== "function" ||
+  staticDescriptor.enumerable !== false ||
+  staticDescriptor.configurable !== true
+) {
+  throw new Test262Error("static class accessor mismatch");
+}
+
 var suffix = "puted";
 class Keys {
   ["com" + suffix]() {

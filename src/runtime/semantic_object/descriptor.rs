@@ -73,17 +73,12 @@ impl Context {
                 )?;
             }
             Value::Function(id) => {
-                let PropertyUpdate::Data(update) = update else {
-                    return Err(Error::runtime(
-                        "accessor properties are not supported on function objects",
-                    ));
-                };
                 self.define_function_property_key(*id, property.name(), key, update)?;
             }
             Value::NativeFunction(id) => {
                 let PropertyUpdate::Data(update) = update else {
                     return Err(Error::runtime(
-                        "accessor properties are not supported on function objects",
+                        "accessor properties are not supported on native function objects",
                     ));
                 };
                 self.define_native_function_property_key(*id, property.name(), key, update)?;
@@ -149,9 +144,9 @@ impl Context {
                 }
                 self.global_object_property_descriptor(*id, property.lookup())
             }
-            Value::Function(id) => Ok(self
-                .function_own_property_descriptor_lookup(*id, property.lookup())?
-                .map(OwnPropertyDescriptor::Data)),
+            Value::Function(id) => {
+                self.function_own_property_descriptor_lookup(*id, property.lookup())
+            }
             Value::NativeFunction(id) => Ok(self
                 .native_function_own_property_descriptor_lookup(*id, property.lookup())?
                 .map(OwnPropertyDescriptor::Data)),

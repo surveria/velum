@@ -1,8 +1,8 @@
 use crate::{
     error::{Error, Result},
     runtime::object::{
-        DataPropertyDescriptor, DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable,
-        PropertyKey, PropertyLookup, PropertyWritable,
+        DataPropertyDescriptor, DataPropertyUpdate, OwnPropertyDescriptor, PropertyConfigurable,
+        PropertyEnumerable, PropertyKey, PropertyLookup, PropertyUpdate, PropertyWritable,
     },
     runtime::trace::{StrongEdgeReference, StrongEdgeVisitor},
     runtime::{VmStorageKind, storage_ledger::VmStorageLedger},
@@ -221,7 +221,7 @@ impl FunctionProperties {
         }
         for entry in &self.properties {
             visitor.visit(kind, StrongEdgeReference::PropertyKey(entry.key))?;
-            visitor.visit(kind, StrongEdgeReference::Value(entry.property.value_ref()))?;
+            entry.property.visit_strong_edges(kind, visitor)?;
         }
         for key in &self.property_order {
             visitor.visit(kind, StrongEdgeReference::PropertyKey(*key))?;
@@ -233,22 +233,10 @@ impl FunctionProperties {
         self.prototype.clone()
     }
 
-    pub(in crate::runtime) fn own_value(
-        &self,
-        property: PropertyLookup<'_>,
-        property_kind: FunctionPropertyKind,
-    ) -> Option<Value> {
-        if let Some(value) = self.intrinsic_value(property_kind) {
-            return Some(value);
-        }
-        let key = property.key()?;
-        self.function_property(key).map(FunctionProperty::value)
-    }
-
     pub(in crate::runtime) fn own_property_descriptor(
         &self,
         property: PropertyLookup<'_>,
-    ) -> Option<DataPropertyDescriptor> {
+    ) -> Option<OwnPropertyDescriptor> {
         let key = property.key()?;
         self.function_property(key)
             .map(FunctionProperty::descriptor)
@@ -390,23 +378,50 @@ impl FunctionProperties {
         &mut self,
         property: PropertyKey,
         property_kind: FunctionPropertyKind,
-        update: DataPropertyUpdate,
+        update: PropertyUpdate,
         max_properties: usize,
     ) -> Result<()> {
-        if let Some(default) = self.intrinsic_defaults.descriptor(property_kind)
-            && self.define_intrinsic(property_kind, default, &update)
-        {
-            return Ok(());
+        if let Some(default) = self.intrinsic_defaults.descriptor(property_kind) {
+            match &update {
+                PropertyUpdate::Data(data)
+                    if self.define_intrinsic(property_kind, &default, data) =>
+                {
+                    return Ok(());
+                }
+                PropertyUpdate::Accessor(_) => {
+                    if self.property_order.len() >= max_properties {
+                        return Err(Error::limit(format!(
+                            "function property count exceeded {max_properties}"
+                        )));
+                    }
+                    if self
+                        .delete_intrinsic(property_kind, default)
+                        .is_some_and(|deleted| deleted)
+                    {
+                        self.push_function_property(
+                            property,
+                            FunctionProperty::from_update(update),
+                        )?;
+                        if let Some(storage_ledger) = &self.storage_ledger {
+                            storage_ledger.release_count(VmStorageKind::ObjectProperty, 1)?;
+                        }
+                        return Ok(());
+                    }
+                }
+                PropertyUpdate::Data(_) => {}
+            }
         }
         if property_kind.is_prototype() {
-            if let Some(value) = update.value() {
+            if let PropertyUpdate::Data(update) = update
+                && let Some(value) = update.value()
+            {
                 self.intrinsic_defaults.set_prototype_value(value.clone());
                 self.prototype = value;
             }
             return Ok(());
         }
         if let Some(existing) = self.function_property_mut(property) {
-            existing.define(&update);
+            existing.define(update);
             return Ok(());
         }
         if self.property_order.len() >= max_properties {
@@ -454,13 +469,13 @@ impl FunctionProperties {
     fn define_intrinsic(
         &mut self,
         property: FunctionPropertyKind,
-        default: DataPropertyDescriptor,
+        default: &DataPropertyDescriptor,
         update: &DataPropertyUpdate,
     ) -> bool {
         let Some(intrinsic) = self.intrinsic_mut(property) else {
             return false;
         };
-        intrinsic.define(default, update)
+        intrinsic.define(default.clone(), update)
     }
 
     fn delete_intrinsic(
