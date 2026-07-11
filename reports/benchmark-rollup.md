@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260711T170251Z.md`
-- Task: PR #466: AS-09l: add for-await-of semantics
-- Performance: 5.67x (4/5 >1.00x) (from `rsqjs-test-report-20260711T170251Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T170251Z.md`)
+- `rsqjs-test-report-20260711T171604Z.md`
+- Task: PR #469: AS-09m: vendor RegExp engine sources
+- Performance: 5.67x (4/5 >1.00x) (from `rsqjs-test-report-20260711T171604Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T171604Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 51351 passed / 51227 failed (50.06%) (from `rsqjs-test-report-20260711T170251Z.md`)
+- Full Test262: 51351 passed / 51227 failed (50.06%) (from `rsqjs-test-report-20260711T171604Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -452,3 +452,4 @@ Latest report:
 | `20260711T142805Z` `961948d` PR #465: AS-09k: add DataView builtins | 5.43x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 46404 passed / 56174 failed (45.24%) |
 | `20260711T154031Z` `a9d0add` PR #467: AS-09l: expand RegExp pattern engine | 5.47x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 48510 passed / 54068 failed (47.29%) |
 | `20260711T170251Z` `45ffab4` PR #466: AS-09l: add for-await-of semantics | 5.67x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 51351 passed / 51227 failed (50.06%) |
+| `20260711T171604Z` `06bb7c1` PR #469: AS-09m: vendor RegExp engine sources | 5.67x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 51351 passed / 51227 failed (50.06%) |
