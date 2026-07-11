@@ -107,7 +107,7 @@ fn keeps_many_vms_isolated_after_one_vm_fails() -> TestResult {
                 bytecode_linear_segment_runs: report.resources.bytecode_linear_segment_runs,
                 bytecode_linear_direct_runs: report.resources.bytecode_linear_direct_runs,
                 output_entries: 1,
-                global_bindings: 1,
+                global_bindings: 2,
                 atom_count: report.resources.atom_count,
                 string_count: report.resources.string_count,
                 string_bytes: report.resources.string_bytes,
