@@ -2617,6 +2617,32 @@ AS-09l profile evidence in draft PR #466:
   declaration instantiation gap, and two Annex B variants require the
   `$262.createRealm` harness. Neither residual is specific to async iteration.
 
+AS-09n profile evidence in draft PR #470:
+
+- `Object.assign` now delegates key discovery, descriptor filtering, value
+  reads, and throwing writes to the shared semantic object and abstract
+  operation owners instead of maintaining a string-only native loop;
+- own String and Symbol keys preserve semantic ordering and identity, Proxy
+  traps remain observable, only enumerable descriptors are copied, getters and
+  inherited setters retain their receiver, and abrupt completion stops the copy
+  at the required point;
+- failed creation or readonly writes on frozen, sealed, or non-extensible
+  targets raise `TypeError`, while existing writable data and accessor targets
+  still succeed. Array `length` writes use the array exotic owner, including
+  shrink deletion and growth semantics;
+- direct object-static coverage exercises key ordering, Symbol identity,
+  getters, integrity levels, primitive targets, and array length mutation. The
+  focused `built-ins/Object/assign` profile advances from 48/76 to 76/76
+  variants;
+- after rebasing onto `b73db3d`, the complete correctness gate passes with
+  69/69 engine fixtures, 120/120 active Test262 cases, 98/98 QuickJS
+  differential cases, 26,505/53,404 conforming files, and 51,379/102,578 full
+  variants. The reviewed baseline adds 28 variants with no removals; local
+  artifact:
+  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260711T172227Z.*`.
+  Exact-tree CI and canonical publication evidence remain required before
+  AS-09n can close.
+
 ### AS-10: Performance And Memory Checkpoints
 
 Maintain a stable core benchmark cohort whose history remains comparable even
