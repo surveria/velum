@@ -17,6 +17,7 @@ const CHART_HEIGHT: u32 = 1200;
 const RATIO_PANEL_TITLE: &str = "Performance and memory geomean versus QuickJS";
 const JETSTREAM_PANEL_TITLE: &str = "JetStream shell latency geomean versus QuickJS";
 const TEST262_PANEL_TITLE: &str = "Full Test262 outcomes";
+const LEGEND_POSITION: SeriesLabelPosition = SeriesLabelPosition::MiddleLeft;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum ChartTheme {
@@ -153,6 +154,7 @@ fn draw_jetstream_panel<DB: DrawingBackend>(
         });
     chart
         .configure_series_labels()
+        .position(LEGEND_POSITION)
         .background_style(palette.background.mix(0.85))
         .border_style(palette.foreground)
         .label_font(("sans-serif", 15).into_font().color(&palette.foreground))
@@ -234,6 +236,7 @@ fn draw_ratio_panel<DB: DrawingBackend>(
         });
     chart
         .configure_series_labels()
+        .position(LEGEND_POSITION)
         .background_style(palette.background.mix(0.85))
         .border_style(palette.foreground)
         .label_font(("sans-serif", 15).into_font().color(&palette.foreground))
@@ -334,6 +337,7 @@ fn draw_test_panel<DB: DrawingBackend>(
         });
     chart
         .configure_series_labels()
+        .position(LEGEND_POSITION)
         .background_style(palette.background.mix(0.85))
         .border_style(palette.foreground)
         .label_font(("sans-serif", 15).into_font().color(&palette.foreground))
