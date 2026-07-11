@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::{
     error::{Error, Result},
     runtime::{
@@ -322,10 +324,10 @@ fn has_exact_utf8(value: &Value) -> bool {
     !matches!(value, Value::HeapString(text) if !text.is_well_formed())
 }
 
-fn primitive_utf16_units(value: &Value) -> Result<Vec<u16>> {
+fn primitive_utf16_units(value: &Value) -> Result<Cow<'_, [u16]>> {
     match value {
-        Value::String(text) => Ok(text.encode_utf16().collect()),
-        Value::HeapString(text) => Ok(text.as_utf16().to_vec()),
-        value => to_string_primitive(value).map(|text| text.encode_utf16().collect()),
+        Value::String(text) => Ok(Cow::Owned(text.encode_utf16().collect())),
+        Value::HeapString(text) => Ok(Cow::Borrowed(text.as_utf16())),
+        value => to_string_primitive(value).map(|text| Cow::Owned(text.encode_utf16().collect())),
     }
 }

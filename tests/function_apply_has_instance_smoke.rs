@@ -59,6 +59,32 @@ fn apply_composes_with_bound_functions() -> TestResult {
 }
 
 #[test]
+fn apply_preserves_observable_array_like_access() -> TestResult {
+    eval_is_42(
+        r#"
+        function collect(a, b, c) { return a * 100 + b * 10 + c; }
+        var getterCalls = 0;
+        var accessorArray = [1, 0, 3];
+        Object.defineProperty(accessorArray, "1", {
+            get: function () { getterCalls += 1; return 2; },
+            configurable: true
+        });
+        var inheritedArray = [4, 5, 6];
+        delete inheritedArray[1];
+        Array.prototype[1] = 2;
+        var accessorResult = collect.apply(null, accessorArray);
+        var inheritedResult = collect.apply(null, inheritedArray);
+        delete Array.prototype[1];
+        accessorResult === 123 &&
+            inheritedResult === 426 &&
+            getterCalls === 1
+            ? 42
+            : 0
+        "#,
+    )
+}
+
+#[test]
 fn has_instance_matches_prototype_chain() -> TestResult {
     eval_is_42(
         r"
