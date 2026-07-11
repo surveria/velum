@@ -489,7 +489,7 @@ dependencies do not overlap.
 | AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
 | AS-07 | Complete | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | PR #446 merged as `62e2725`; exact-tree correctness, paired sentinels, post-merge performance, and canonical report publication passed. |
 | AS-08 | Complete | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a and AS-08b merged through PR #449; exact-tree correctness, disabled-mode equivalence, specialization audit, paired sentinels, and canonical publication passed. |
-| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09a through AS-09d are complete; AS-09e adds the private named-function self-binding boundary and inherited strict direct eval. |
+| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09q consolidates standard `Symbol.species` accessors behind one shared native semantic owner and closes the complete focused profile. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
 
 ## Program Item Details
@@ -2675,6 +2675,22 @@ AS-09o profile evidence in draft PR #472:
   `target/rsqjs-reports/test-runs/rsqjs-test-report-20260711T174959Z.*`.
   Exact-tree CI and canonical publication evidence remain required before
   AS-09o can close.
+
+AS-09q profile evidence in draft PR #476:
+
+- one shared installer now defines the standard configurable,
+  non-enumerable `Symbol.species` accessor on Array, Promise, ArrayBuffer, Map,
+  Set, RegExp, and the `%TypedArray%` intrinsic instead of retaining a
+  typed-array-only getter path;
+- every constructor receives its own ephemeral native getter function, while
+  one generic native-function kind owns the required zero length,
+  `get [Symbol.species]` name, and receiver-preserving result;
+- focused engine coverage checks descriptors, generic receiver behavior,
+  inherited concrete TypedArray behavior, and configurable replacement;
+- the complete focused `Symbol.species` profile advances from 8/58 to 58/58
+  variants and from 4/29 to 29/29 files. Required exact-tree CI will determine
+  the full-corpus pass-set change; feature work does not refresh that baseline
+  locally.
 
 ### AS-10: Performance And Memory Checkpoints
 

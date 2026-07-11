@@ -478,6 +478,9 @@ impl Context {
         if let Some(result) = self.eval_generator_native_function_kind(kind, args, this_value) {
             return result;
         }
+        if let Some(result) = Self::eval_shared_function_accessor_kind(kind, this_value) {
+            return result;
+        }
         match kind {
             NativeFunctionKind::ArrayBuffer => {
                 Err(Error::type_error("ArrayBuffer constructor requires 'new'"))
@@ -508,9 +511,6 @@ impl Context {
             }
             NativeFunctionKind::FunctionPrototypeToString => {
                 self.eval_function_prototype_to_string(args, this_value)
-            }
-            NativeFunctionKind::ThrowTypeError => {
-                Err(Error::type_error("restricted function property access"))
             }
             NativeFunctionKind::Date(kind) => {
                 self.eval_date_native_function_kind(kind, args, this_value)
@@ -562,6 +562,19 @@ impl Context {
                             ))
                         })
                 }),
+        }
+    }
+
+    fn eval_shared_function_accessor_kind(
+        kind: NativeFunctionKind,
+        this_value: &Value,
+    ) -> Option<Result<Value>> {
+        match kind {
+            NativeFunctionKind::SpeciesGetter => Some(Ok(this_value.clone())),
+            NativeFunctionKind::ThrowTypeError => Some(Err(Error::type_error(
+                "restricted function property access",
+            ))),
+            _ => None,
         }
     }
 

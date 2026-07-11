@@ -14,8 +14,6 @@ use crate::{
 const FROM_PROPERTY: &str = "from";
 const OF_PROPERTY: &str = "of";
 const ITERATOR_SYMBOL_DISPLAY: &str = "[Symbol.iterator]";
-const SPECIES_SYMBOL_DISPLAY: &str = "[Symbol.species]";
-const SPECIES_SYMBOL_PROPERTY: &str = "species";
 const TO_STRING_TAG_SYMBOL_DISPLAY: &str = "[Symbol.toStringTag]";
 const TO_STRING_TAG_SYMBOL_PROPERTY: &str = "toStringTag";
 
@@ -120,26 +118,7 @@ impl Context {
                 ),
             )?;
         }
-        let symbol_constructor = self.symbol_constructor_value()?;
-        let species = self.get_named(&symbol_constructor, SPECIES_SYMBOL_PROPERTY)?;
-        let Value::Symbol(species) = species else {
-            return Err(Error::runtime("Symbol.species is not initialized"));
-        };
-        let getter = self.create_native_function(
-            NativeFunctionKind::TypedArrayPrototype(TypedArrayFunctionKind::SpeciesGetter),
-            Value::Undefined,
-        )?;
-        self.define_native_function_accessor_property_key(
-            id,
-            SPECIES_SYMBOL_DISPLAY,
-            PropertyKey::symbol(species.id()),
-            AccessorPropertyUpdate::new(
-                Some(getter),
-                None,
-                Some(PropertyEnumerable::No),
-                Some(PropertyConfigurable::Yes),
-            ),
-        )
+        self.install_species_accessor(id)
     }
 
     fn install_typed_array_prototype(&mut self, prototype: ObjectId) -> Result<()> {

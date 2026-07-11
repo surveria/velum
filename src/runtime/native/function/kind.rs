@@ -222,6 +222,8 @@ const SYMBOL_FUNCTION_LENGTH: f64 = 0.0;
 const SYMBOL_FOR_FUNCTION_LENGTH: f64 = 1.0;
 const SYMBOL_KEY_FOR_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const SYMBOL_NAME: &str = "Symbol";
+const SPECIES_GETTER_FUNCTION_LENGTH: f64 = 0.0;
+const SPECIES_GETTER_NAME: &str = "get [Symbol.species]";
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(in crate::runtime) enum NativeFunctionKind {
     Array,
@@ -486,6 +488,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     SetIsSubsetOf,
     SetIsSupersetOf,
     SetIsDisjointFrom,
+    SpeciesGetter,
     Symbol,
     SymbolFor,
     SymbolKeyFor,
@@ -631,6 +634,7 @@ impl NativeFunctionKind {
             Self::Proxy => Some(PROXY_FUNCTION_LENGTH),
             Self::ProxyRevocable => Some(PROXY_REVOCABLE_FUNCTION_LENGTH),
             Self::ProxyRevoke(_) => Some(PROXY_REVOKE_FUNCTION_LENGTH),
+            Self::SpeciesGetter => Some(SPECIES_GETTER_FUNCTION_LENGTH),
             Self::String => Some(STRING_FUNCTION_LENGTH),
             Self::Symbol => Some(SYMBOL_FUNCTION_LENGTH),
             Self::SymbolFor => Some(SYMBOL_FOR_FUNCTION_LENGTH),
@@ -772,6 +776,7 @@ impl NativeFunctionKind {
             Self::Proxy => Some(PROXY_NAME),
             Self::ProxyRevocable => Some(PROXY_REVOCABLE_NAME),
             Self::ProxyRevoke(_) => Some(PROXY_REVOKE_NAME),
+            Self::SpeciesGetter => Some(SPECIES_GETTER_NAME),
             Self::String => Some(STRING_NAME),
             Self::Symbol => Some(SYMBOL_NAME),
             Self::SymbolFor => Some("for"),

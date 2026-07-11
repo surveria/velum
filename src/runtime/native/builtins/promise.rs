@@ -33,6 +33,7 @@ impl Context {
         let name = self.native_function_name_value(NativeFunctionKind::Promise)?;
         self.push_native_function_with_id(id, NativeFunctionKind::Promise, prototype, name)?;
         self.install_promise_static_methods(id)?;
+        self.install_species_accessor(id)?;
         let Value::Object(prototype) = self.native_function(id)?.properties().prototype() else {
             return Err(Error::runtime("Promise prototype is not an object"));
         };

@@ -25,6 +25,7 @@ mod proxy;
 mod reflect;
 mod regexp;
 mod set_operations;
+mod species;
 mod string;
 mod string_extra;
 mod string_methods;

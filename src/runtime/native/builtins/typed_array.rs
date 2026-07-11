@@ -40,6 +40,7 @@ impl Context {
             Value::Object(prototype),
             name,
         )?;
+        self.install_species_accessor(id)?;
         self.insert_global_builtin(ARRAY_BUFFER_NAME, constructor.clone())?;
         Ok(constructor)
     }
