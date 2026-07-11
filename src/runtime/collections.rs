@@ -103,7 +103,7 @@ impl Context {
             .iter()
             .try_fold(0_usize, |count, iterator| {
                 count
-                    .checked_add(iterator.items.len())
+                    .checked_add(iterator.item_charge())
                     .ok_or_else(|| Error::limit("collection iterator item count overflowed"))
             })
     }
@@ -296,15 +296,117 @@ impl CollectionIteratorId {
     }
 }
 
+/// Fixed ledger charge for the bounded set of values one iterator-helper
+/// state can hold: underlying iterator, cached `next`, one callback, and an
+/// optional inner iterator pair for `flatMap`.
+const ITERATOR_HELPER_ITEM_CHARGE: usize = 5;
+/// Fixed ledger charge for a wrapped iterator: the target and its `next`.
+const WRAPPED_ITERATOR_ITEM_CHARGE: usize = 2;
+
+/// One live runtime iterator record. The arena historically backed only
+/// collection snapshot iterators; it also hosts lazy iterator-helper and
+/// `Iterator.from` wrapper states because the storage field and ledger kinds
+/// (`CollectionIterator` / `IteratorItem`) are frozen accounting categories.
+#[derive(Debug, Clone)]
+pub(in crate::runtime) enum CollectionIteratorState {
+    Snapshot(SnapshotIteratorState),
+    Helper(IteratorHelperState),
+    Wrap(WrappedIteratorState),
+}
+
+impl Default for CollectionIteratorState {
+    fn default() -> Self {
+        Self::Snapshot(SnapshotIteratorState::default())
+    }
+}
+
 /// Snapshot cursor backing one materialized collection iterator object.
 #[derive(Debug, Default, Clone)]
-pub(in crate::runtime) struct CollectionIteratorState {
+pub(in crate::runtime) struct SnapshotIteratorState {
     items: Vec<Value>,
     cursor: usize,
 }
 
+/// Lazy state for one ES2025 iterator-helper object.
+#[derive(Debug, Clone)]
+pub(in crate::runtime) struct IteratorHelperState {
+    pub(in crate::runtime) iterator: Value,
+    pub(in crate::runtime) next: Value,
+    pub(in crate::runtime) counter: f64,
+    pub(in crate::runtime) done: bool,
+    pub(in crate::runtime) mode: IteratorHelperMode,
+}
+
+/// Which helper transformation the state applies while stepping.
+#[derive(Debug, Clone)]
+pub(in crate::runtime) enum IteratorHelperMode {
+    Map {
+        mapper: Value,
+    },
+    Filter {
+        predicate: Value,
+    },
+    Take {
+        remaining: f64,
+    },
+    Drop {
+        remaining: f64,
+    },
+    FlatMap {
+        mapper: Value,
+        inner: Option<Box<InnerIteratorState>>,
+    },
+}
+
+/// Open inner iterator of an active `flatMap` helper.
+#[derive(Debug, Clone)]
+pub(in crate::runtime) struct InnerIteratorState {
+    pub(in crate::runtime) iterator: Value,
+    pub(in crate::runtime) next: Value,
+}
+
+/// `Iterator.from` wrapper target for iterators that do not inherit from
+/// %Iterator.prototype%.
+#[derive(Debug, Clone)]
+pub(in crate::runtime) struct WrappedIteratorState {
+    pub(in crate::runtime) iterator: Value,
+    pub(in crate::runtime) next: Value,
+}
+
 impl CollectionIteratorState {
     pub(in crate::runtime) fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
+    where
+        V: StrongEdgeVisitor<VmAsyncEdgeKind>,
+    {
+        match self {
+            Self::Snapshot(state) => state.visit_strong_edges(visitor),
+            Self::Helper(state) => state.visit_strong_edges(visitor),
+            Self::Wrap(state) => {
+                for value in [&state.iterator, &state.next] {
+                    visitor.visit(
+                        VmAsyncEdgeKind::IteratorItem,
+                        StrongEdgeReference::Value(value),
+                    )?;
+                }
+                Ok(())
+            }
+        }
+    }
+
+    /// The `IteratorItem` ledger charge this state was created with. The
+    /// charge is intentionally constant per state so creation-time growth and
+    /// post-collection reconciliation stay consistent.
+    const fn item_charge(&self) -> usize {
+        match self {
+            Self::Snapshot(state) => state.items.len(),
+            Self::Helper(_) => ITERATOR_HELPER_ITEM_CHARGE,
+            Self::Wrap(_) => WRAPPED_ITERATOR_ITEM_CHARGE,
+        }
+    }
+}
+
+impl SnapshotIteratorState {
+    fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
     where
         V: StrongEdgeVisitor<VmAsyncEdgeKind>,
     {
@@ -318,17 +420,77 @@ impl CollectionIteratorState {
     }
 }
 
+impl IteratorHelperState {
+    fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
+    where
+        V: StrongEdgeVisitor<VmAsyncEdgeKind>,
+    {
+        let mut visit = |value: &Value| {
+            visitor.visit(
+                VmAsyncEdgeKind::IteratorItem,
+                StrongEdgeReference::Value(value),
+            )
+        };
+        visit(&self.iterator)?;
+        visit(&self.next)?;
+        match &self.mode {
+            IteratorHelperMode::Map { mapper } | IteratorHelperMode::FlatMap { mapper, .. } => {
+                visit(mapper)?;
+            }
+            IteratorHelperMode::Filter { predicate } => visit(predicate)?,
+            IteratorHelperMode::Take { .. } | IteratorHelperMode::Drop { .. } => {}
+        }
+        if let IteratorHelperMode::FlatMap {
+            inner: Some(inner), ..
+        } = &self.mode
+        {
+            visit(&inner.iterator)?;
+            visit(&inner.next)?;
+        }
+        Ok(())
+    }
+}
+
 impl Context {
     pub(in crate::runtime) fn create_collection_iterator(
         &mut self,
         items: Vec<Value>,
     ) -> Result<CollectionIteratorId> {
+        self.insert_iterator_state(CollectionIteratorState::Snapshot(SnapshotIteratorState {
+            items,
+            cursor: 0,
+        }))
+    }
+
+    pub(in crate::runtime) fn create_iterator_helper(
+        &mut self,
+        state: IteratorHelperState,
+    ) -> Result<CollectionIteratorId> {
+        self.insert_iterator_state(CollectionIteratorState::Helper(state))
+    }
+
+    pub(in crate::runtime) fn create_wrapped_iterator(
+        &mut self,
+        iterator: Value,
+        next: Value,
+    ) -> Result<CollectionIteratorId> {
+        self.insert_iterator_state(CollectionIteratorState::Wrap(WrappedIteratorState {
+            iterator,
+            next,
+        }))
+    }
+
+    fn insert_iterator_state(
+        &mut self,
+        state: CollectionIteratorState,
+    ) -> Result<CollectionIteratorId> {
+        let item_charge = state.item_charge();
         self.collection_iterators.reserve_insert()?;
         self.storage_ledger
             .grow_count(VmStorageKind::CollectionIterator, 1)?;
         if let Err(error) = self
             .storage_ledger
-            .grow_count(VmStorageKind::IteratorItem, items.len())
+            .grow_count(VmStorageKind::IteratorItem, item_charge)
         {
             self.storage_ledger
                 .release_count(VmStorageKind::CollectionIterator, 1)?;
@@ -336,19 +498,25 @@ impl Context {
         }
         let id = CollectionIteratorId(self.collection_iterators.next_index());
         self.collection_iterators
-            .insert_at_next(id.index(), CollectionIteratorState { items, cursor: 0 })?;
+            .insert_at_next(id.index(), state)?;
         Ok(id)
     }
 
-    /// Advances the iterator, returning the next item or None when finished.
+    /// Advances the snapshot iterator, returning the next item or None when
+    /// finished.
     pub(in crate::runtime) fn collection_iterator_step(
         &mut self,
         id: CollectionIteratorId,
     ) -> Result<Option<Value>> {
-        let state = self
+        let CollectionIteratorState::Snapshot(state) = self
             .collection_iterators
             .get_mut(id.index())
-            .ok_or_else(|| Error::runtime("collection iterator disappeared"))?;
+            .ok_or_else(|| Error::runtime("collection iterator disappeared"))?
+        else {
+            return Err(Error::runtime(
+                "iterator state is not a snapshot collection iterator",
+            ));
+        };
         let Some(item) = state.items.get(state.cursor).cloned() else {
             return Ok(None);
         };
@@ -357,6 +525,34 @@ impl Context {
             .checked_add(1)
             .ok_or_else(|| Error::limit("collection iterator cursor overflowed"))?;
         Ok(Some(item))
+    }
+
+    pub(in crate::runtime) fn iterator_helper_state_mut(
+        &mut self,
+        id: CollectionIteratorId,
+    ) -> Result<&mut IteratorHelperState> {
+        let CollectionIteratorState::Helper(state) = self
+            .collection_iterators
+            .get_mut(id.index())
+            .ok_or_else(|| Error::runtime("iterator helper state disappeared"))?
+        else {
+            return Err(Error::runtime("iterator state is not an iterator helper"));
+        };
+        Ok(state)
+    }
+
+    pub(in crate::runtime) fn wrapped_iterator_state(
+        &self,
+        id: CollectionIteratorId,
+    ) -> Result<&WrappedIteratorState> {
+        let CollectionIteratorState::Wrap(state) = self
+            .collection_iterators
+            .get(id.index())
+            .ok_or_else(|| Error::runtime("wrapped iterator state disappeared"))?
+        else {
+            return Err(Error::runtime("iterator state is not a wrapped iterator"));
+        };
+        Ok(state)
     }
 }
 

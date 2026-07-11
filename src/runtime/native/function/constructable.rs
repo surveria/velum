@@ -1,4 +1,4 @@
-use super::{DataViewFunctionKind, DateFunctionKind, NativeFunctionKind};
+use super::{DataViewFunctionKind, DateFunctionKind, IteratorFunctionKind, NativeFunctionKind};
 
 impl NativeFunctionKind {
     pub(in crate::runtime) const fn is_constructable(self) -> bool {
@@ -12,6 +12,7 @@ impl NativeFunctionKind {
                 | Self::DataView(DataViewFunctionKind::Constructor)
                 | Self::ErrorConstructor(_)
                 | Self::Function
+                | Self::Iterator(IteratorFunctionKind::Constructor)
                 | Self::Number
                 | Self::Object
                 | Self::Promise

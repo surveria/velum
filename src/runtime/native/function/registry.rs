@@ -4,7 +4,7 @@ use crate::{
     value::{ErrorName, NativeFunctionId},
 };
 
-use super::{DataViewFunctionKind, DateFunctionKind, NativeFunctionKind};
+use super::{DataViewFunctionKind, DateFunctionKind, IteratorFunctionKind, NativeFunctionKind};
 
 const ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(0);
 const ARRAY_CONCAT_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(1);
@@ -235,7 +235,27 @@ const DATA_VIEW_BYTE_LENGTH_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot
 const DATA_VIEW_BYTE_OFFSET_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(226);
 const DATA_VIEW_GET_SLOT_BASE: usize = 227;
 const DATA_VIEW_SET_SLOT_BASE: usize = 236;
-const NATIVE_FUNCTION_SLOT_COUNT: usize = 245;
+const ITERATOR_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(245);
+const ITERATOR_FROM_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(246);
+const ITERATOR_PROTOTYPE_MAP_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(247);
+const ITERATOR_PROTOTYPE_FILTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(248);
+const ITERATOR_PROTOTYPE_TAKE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(249);
+const ITERATOR_PROTOTYPE_DROP_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(250);
+const ITERATOR_PROTOTYPE_FLAT_MAP_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(251);
+const ITERATOR_PROTOTYPE_REDUCE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(252);
+const ITERATOR_PROTOTYPE_TO_ARRAY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(253);
+const ITERATOR_PROTOTYPE_FOR_EACH_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(254);
+const ITERATOR_PROTOTYPE_SOME_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(255);
+const ITERATOR_PROTOTYPE_EVERY_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(256);
+const ITERATOR_PROTOTYPE_FIND_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(257);
+const ITERATOR_PROTOTYPE_DISPOSE_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(258);
+const ITERATOR_PROTOTYPE_CONSTRUCTOR_GETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(259);
+const ITERATOR_PROTOTYPE_CONSTRUCTOR_SETTER_SLOT: NativeFunctionSlot = NativeFunctionSlot::new(260);
+const ITERATOR_PROTOTYPE_TO_STRING_TAG_GETTER_SLOT: NativeFunctionSlot =
+    NativeFunctionSlot::new(261);
+const ITERATOR_PROTOTYPE_TO_STRING_TAG_SETTER_SLOT: NativeFunctionSlot =
+    NativeFunctionSlot::new(262);
+const NATIVE_FUNCTION_SLOT_COUNT: usize = 263;
 
 #[derive(Debug, Clone)]
 pub(in crate::runtime) struct NativeFunctionRegistry {
@@ -414,6 +434,7 @@ const fn slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot> {
         NativeFunctionKind::PromiseCatch => Some(PROMISE_CATCH_SLOT),
         NativeFunctionKind::String => Some(STRING_SLOT),
         NativeFunctionKind::Symbol => Some(SYMBOL_SLOT),
+        NativeFunctionKind::Iterator(iterator_kind) => iterator_slot(iterator_kind),
         _ => collection_slot(kind),
     }
 }
@@ -462,6 +483,41 @@ const fn typed_array_slot(kind: NativeFunctionKind) -> Option<NativeFunctionSlot
         NativeFunctionKind::TypedArray(TypedArrayElementKind::Float32) => Some(FLOAT32_ARRAY_SLOT),
         NativeFunctionKind::TypedArray(TypedArrayElementKind::Float64) => Some(FLOAT64_ARRAY_SLOT),
         _ => None,
+    }
+}
+
+const fn iterator_slot(kind: IteratorFunctionKind) -> Option<NativeFunctionSlot> {
+    match kind {
+        IteratorFunctionKind::Constructor => Some(ITERATOR_SLOT),
+        IteratorFunctionKind::From { .. } => Some(ITERATOR_FROM_SLOT),
+        IteratorFunctionKind::PrototypeMap => Some(ITERATOR_PROTOTYPE_MAP_SLOT),
+        IteratorFunctionKind::PrototypeFilter => Some(ITERATOR_PROTOTYPE_FILTER_SLOT),
+        IteratorFunctionKind::PrototypeTake => Some(ITERATOR_PROTOTYPE_TAKE_SLOT),
+        IteratorFunctionKind::PrototypeDrop => Some(ITERATOR_PROTOTYPE_DROP_SLOT),
+        IteratorFunctionKind::PrototypeFlatMap => Some(ITERATOR_PROTOTYPE_FLAT_MAP_SLOT),
+        IteratorFunctionKind::PrototypeReduce => Some(ITERATOR_PROTOTYPE_REDUCE_SLOT),
+        IteratorFunctionKind::PrototypeToArray => Some(ITERATOR_PROTOTYPE_TO_ARRAY_SLOT),
+        IteratorFunctionKind::PrototypeForEach => Some(ITERATOR_PROTOTYPE_FOR_EACH_SLOT),
+        IteratorFunctionKind::PrototypeSome => Some(ITERATOR_PROTOTYPE_SOME_SLOT),
+        IteratorFunctionKind::PrototypeEvery => Some(ITERATOR_PROTOTYPE_EVERY_SLOT),
+        IteratorFunctionKind::PrototypeFind => Some(ITERATOR_PROTOTYPE_FIND_SLOT),
+        IteratorFunctionKind::PrototypeDispose => Some(ITERATOR_PROTOTYPE_DISPOSE_SLOT),
+        IteratorFunctionKind::PrototypeConstructorGetter => {
+            Some(ITERATOR_PROTOTYPE_CONSTRUCTOR_GETTER_SLOT)
+        }
+        IteratorFunctionKind::PrototypeConstructorSetter => {
+            Some(ITERATOR_PROTOTYPE_CONSTRUCTOR_SETTER_SLOT)
+        }
+        IteratorFunctionKind::PrototypeToStringTagGetter => {
+            Some(ITERATOR_PROTOTYPE_TO_STRING_TAG_GETTER_SLOT)
+        }
+        IteratorFunctionKind::PrototypeToStringTagSetter => {
+            Some(ITERATOR_PROTOTYPE_TO_STRING_TAG_SETTER_SLOT)
+        }
+        IteratorFunctionKind::HelperNext(_)
+        | IteratorFunctionKind::HelperReturn(_)
+        | IteratorFunctionKind::WrapNext(_)
+        | IteratorFunctionKind::WrapReturn(_) => None,
     }
 }
 

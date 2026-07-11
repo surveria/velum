@@ -1,7 +1,10 @@
 use crate::{
     error::{Error, Result},
     runtime::{
-        Context, call::RuntimeCallArgs, control::Completion, native::NativeFunctionKind,
+        Context,
+        call::RuntimeCallArgs,
+        control::Completion,
+        native::{IteratorFunctionKind, NativeFunctionKind},
         roots::VmRootKind,
     },
     value::Value,
@@ -142,6 +145,9 @@ impl Context {
                     let prototype = self.constructor_instance_prototype(&new_target)?;
                     return self
                         .eval_direct_error_constructor_with_prototype(name, args, prototype);
+                }
+                if kind == NativeFunctionKind::Iterator(IteratorFunctionKind::Constructor) {
+                    return self.construct_iterator_object(constructor, &new_target);
                 }
                 self.construct_native_function_kind(kind, RuntimeCallArgs::values(args))
             }
