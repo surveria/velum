@@ -1,4 +1,4 @@
-use super::date_kind::DateFunctionKind;
+use super::{data_view_kind::DataViewFunctionKind, date_kind::DateFunctionKind};
 use crate::runtime::object::TypedArrayElementKind;
 use crate::value::{BoundFunctionId, ErrorName, ObjectId};
 
@@ -267,6 +267,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     BooleanPrototypeToString,
     BooleanPrototypeValueOf,
     BoundFunction(BoundFunctionId),
+    DataView(DataViewFunctionKind),
     Date(DateFunctionKind),
     CollectionIteratorNext(crate::runtime::collections::CollectionIteratorId),
     IteratorSelf,
@@ -508,6 +509,7 @@ impl NativeFunctionKind {
                 | Self::AsyncFunction
                 | Self::AsyncGeneratorFunction
                 | Self::Boolean
+                | Self::DataView(DataViewFunctionKind::Constructor)
                 | Self::ErrorConstructor(_)
                 | Self::Function
                 | Self::Number
@@ -528,6 +530,9 @@ impl NativeFunctionKind {
 
     pub(in crate::runtime::native) const fn length(self) -> f64 {
         if let Self::Date(kind) = self {
+            return kind.length();
+        }
+        if let Self::DataView(kind) = self {
             return kind.length();
         }
         if let Some(length) = self.collection_length() {
@@ -621,6 +626,9 @@ impl NativeFunctionKind {
 
     pub(in crate::runtime::native) const fn name(self) -> &'static str {
         if let Self::Date(kind) = self {
+            return kind.name();
+        }
+        if let Self::DataView(kind) = self {
             return kind.name();
         }
         if let Some(name) = self.collection_name() {

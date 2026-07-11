@@ -6,6 +6,7 @@ mod accounting;
 mod array;
 mod base;
 mod data;
+mod data_view;
 mod date;
 mod heap;
 mod integrity;
@@ -21,6 +22,7 @@ mod typed_array;
 use array::{ArrayIndex, ArrayLength, ArrayStorage};
 use base::LiteralPrototype;
 pub use base::ObjectHeap;
+pub(in crate::runtime) use data_view::{DataViewElementKind, DataViewView};
 pub use date::DateValue;
 pub(in crate::runtime) use property::AccessorPropertyDescriptor;
 use property::NamedProperty;
@@ -107,6 +109,7 @@ struct Object {
     regexp_value: Option<RegExpValue>,
     proxy_value: Option<ProxyValue>,
     byte_buffer: Option<ByteBuffer>,
+    data_view: Option<DataViewView>,
     typed_array: Option<TypedArrayView>,
     is_raw_json: bool,
     prototype: Option<ObjectId>,
@@ -140,6 +143,7 @@ impl Object {
             regexp_value: None,
             proxy_value: None,
             byte_buffer: None,
+            data_view: None,
             typed_array: None,
             is_raw_json: false,
             prototype: None,
@@ -207,6 +211,7 @@ impl Object {
             regexp_value: None,
             proxy_value: None,
             byte_buffer: None,
+            data_view: None,
             typed_array: None,
             is_raw_json: false,
             prototype: None,
@@ -230,6 +235,7 @@ impl Object {
             regexp_value: None,
             proxy_value: None,
             byte_buffer: None,
+            data_view: None,
             typed_array: None,
             is_raw_json: false,
             prototype: None,
@@ -253,6 +259,7 @@ impl Object {
             regexp_value: None,
             proxy_value: None,
             byte_buffer: None,
+            data_view: None,
             typed_array: None,
             is_raw_json: false,
             prototype: None,
