@@ -21,6 +21,23 @@ interpreter paths.
 8. `runtime`: owns globals, host functions, output, and resource counters.
 9. `value`: defines the current JavaScript value model.
 
+### In-tree RegExp engine
+
+`src/regress` contains the complete source of the ECMAScript-oriented RegExp
+compiler and executor used by the root engine. It is a non-publishable local
+crate and the root `Cargo.toml` references it only through a relative `path`, so
+RegExp compilation never depends on downloading a `regress` package from a
+registry. Keeping the upstream crate boundary preserves its compiler,
+optimizer, bytecode, Unicode tables, and executor namespace while making every
+source file versioned and editable with the JavaScript engine.
+
+The vendored component retains its upstream dual MIT/Apache-2.0 licenses and a
+source checksum manifest. Its large generated Unicode tables and upstream
+source layout use a dedicated provenance gate instead of the 800-line gate for
+project-authored Rust files. Changes under `src/regress/src` must update that
+manifest and carry focused engine behavior tests so an intentional fork stays
+distinguishable from accidental vendor drift.
+
 The parser AST is not a runtime fallback. It is consumed by binding analysis and
 the compiler, then `CompiledScript` stores a `BytecodeProgram` and
 bytecode-owned function metadata for execution. The `bytecode` module must not

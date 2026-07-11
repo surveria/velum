@@ -11,6 +11,7 @@ fi
 
 # Cheap PR/local gate: keep source quality high without materializing external
 # corpora or running sequential QuickJS benchmark/report generation.
+"${script_dir}/check-vendored-regress.sh"
 "${script_dir}/check-touched-file-sizes.sh" "${RSQJS_BASE_REF:-origin/main}"
 "${script_dir}/check-architecture-boundaries.sh" --self-test
 "${script_dir}/test-report-artifact-metadata.sh"

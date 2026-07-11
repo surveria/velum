@@ -35,6 +35,14 @@ fi
 failed=0
 for rust_file in "${rust_files[@]}"; do
   [[ -f "${rust_file}" ]] || continue
+  if [[ "${rust_file}" == src/regress/src/*.rs ]]; then
+    if ! grep -Fq "  ${rust_file}" src/regress/VENDORED-SOURCE-SHA256SUMS; then
+      fail "vendored Rust file is missing from the source manifest: ${rust_file}"
+    fi
+    printf 'check-touched-file-sizes: vendored snapshot %s (dedicated checksum gate)\n' \
+      "${rust_file}"
+    continue
+  fi
   line_count="$(wc -l <"${rust_file}")"
   line_count="${line_count//[[:space:]]/}"
   if [[ "${line_count}" -le "${max_lines}" ]]; then

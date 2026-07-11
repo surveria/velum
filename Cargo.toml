@@ -2,7 +2,7 @@
 # excludes the `runner/` nested workspace, which carries heavier report and
 # benchmark dependencies.
 [workspace]
-exclude = ["runner"]
+exclude = ["runner", "src/regress"]
 
 [package]
 name = "rs-quickjs"
@@ -27,7 +27,7 @@ path = "src/bin/rsqjs.rs"
 [dependencies]
 anyhow = "1"
 parking_lot = "0.12"
-regress = { version = "0.11.1", default-features = false, features = ["prohibit-unsafe", "std", "utf16"] }
+regress = { path = "src/regress", default-features = false, features = ["prohibit-unsafe", "std", "utf16"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"
 unicode-ident = "1"
