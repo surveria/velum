@@ -106,8 +106,11 @@ impl Context {
         if matches!(value, Value::Undefined | Value::Null) {
             return Ok(Vec::new());
         }
-        if !matches!(value, Value::Object(_)) {
+        let Value::Object(id) = value else {
             return Err(Error::type_error(APPLY_ARGUMENTS_NOT_ARRAY_LIKE_ERROR));
+        };
+        if let Some(values) = self.objects.packed_default_array_values_if_array(*id)? {
+            return Ok(values);
         }
         let length_value = self.get_named(value, ARRAY_LIKE_LENGTH_PROPERTY)?;
         let length = self.array_like_length_from_value(&length_value)?;

@@ -22,6 +22,7 @@ mod build_info;
 mod case_registry;
 mod cases;
 mod failure_classification;
+mod host_benchmark_lock;
 mod jetstream;
 mod jetstream_baseline;
 mod jetstream_mode;
@@ -366,12 +367,12 @@ fn build_report(
         corpora.push(run_quickjs_corpus(quickjs));
     }
     let benchmarks = if matches!(report_kind, ReportKind::Full | ReportKind::Performance) {
-        benchmarks::run()
+        host_benchmark_lock::with_exclusive("project benchmark suite", || Ok(benchmarks::run()))?
     } else {
         benchmarks::BenchmarkReport::not_run()
     };
     let jetstream = if include_jetstream {
-        jetstream::run()?
+        host_benchmark_lock::with_exclusive("JetStream benchmark suite", jetstream::run)?
     } else {
         jetstream::JetStreamReport::not_run()
     };

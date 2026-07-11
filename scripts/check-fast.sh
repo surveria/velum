@@ -5,10 +5,6 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 cd "${repo_root}"
 
-if [[ -z "${RSQJS_HOST_LOCK_HELD:-}" ]]; then
-  exec "${script_dir}/with-host-lock.sh" shared -- "$0" "$@"
-fi
-
 # Cheap PR/local gate: keep source quality high without materializing external
 # corpora or running sequential QuickJS benchmark/report generation.
 "${script_dir}/check-vendored-regress.sh"

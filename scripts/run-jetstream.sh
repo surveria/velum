@@ -5,10 +5,6 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 cd "${repo_root}"
 
-if [[ -z "${RSQJS_HOST_LOCK_HELD:-}" ]]; then
-  exec "${script_dir}/with-host-lock.sh" exclusive -- "$0" "$@"
-fi
-
 if (($# > 1)); then
   printf 'usage: %s [report-path]\n' "$0" >&2
   exit 2

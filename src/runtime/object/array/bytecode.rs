@@ -1,5 +1,6 @@
 use crate::{
-    error::{Error, Result},
+    error::Result,
+    runtime::object::property::PrototypeTraversalBudget,
     value::{ObjectId, Value},
 };
 
@@ -9,12 +10,9 @@ use crate::runtime::object::typed_array_number;
 impl ObjectHeap {
     fn array_index_has_accessor_in_chain(&self, id: ObjectId, index: ArrayIndex) -> Result<bool> {
         let mut current = Some(id);
-        let mut visited = Vec::new();
+        let mut budget = PrototypeTraversalBudget::from_object_count(self.object_count());
         while let Some(current_id) = current {
-            if visited.contains(&current_id) {
-                return Err(Error::runtime("prototype cycle detected"));
-            }
-            visited.push(current_id);
+            budget.enter_next()?;
             let object = self.object(current_id)?;
             if let Some(property) = object.array_storage.dense_property(index) {
                 return Ok(property.accessor().is_some());

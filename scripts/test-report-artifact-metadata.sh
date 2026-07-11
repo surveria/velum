@@ -61,6 +61,20 @@ fi
 valid_artifact_relative_path "test-runs/report.md" test-runs report.md ||
   fail_test "rejected canonical relative path"
 
+valid_baseline="${tmp_dir}/test262-pass-baseline.txt"
+{
+  printf '%s\n' '# rsqjs-test262-pass-baseline-v1'
+  printf '%s\n' '# test262_commit=64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1'
+  printf '%s\n' 'built-ins/Array/a.js#default'
+  printf '%s\n' 'built-ins/RegExp/r.js#strict'
+} > "${valid_baseline}"
+valid_test262_baseline_candidate "${valid_baseline}" ||
+  fail_test "rejected valid Test262 pass baseline candidate"
+printf '%s\n' 'built-ins/Array/a.js#default' >> "${valid_baseline}"
+if valid_test262_baseline_candidate "${valid_baseline}"; then
+  fail_test "accepted unsorted or duplicate Test262 pass baseline candidate"
+fi
+
 tree_sha="0123456789abcdef0123456789abcdef01234567"
 head_sha="89abcdef0123456789abcdef0123456789abcdef"
 head_tree="fedcba9876543210fedcba9876543210fedcba98"

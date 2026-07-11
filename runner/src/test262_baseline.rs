@@ -17,9 +17,11 @@ const BASELINE_PATH: &str = "tests/corpora/test262/full-pass-baseline.txt";
 const BASELINE_SCHEMA: &str = "# rsqjs-test262-pass-baseline-v1";
 const PINNED_TEST262_COMMIT: &str = "64ff467c0c1d60c077995bb7c5f93a9d8cc8ade1";
 const UPDATE_BASELINE_ENV: &str = "RSQJS_TEST262_UPDATE_PASS_BASELINE";
+const PASS_CANDIDATE_PATH_ENV: &str = "RSQJS_TEST262_PASS_CANDIDATE_PATH";
 
 pub fn verify_or_update(rows: &[CaseRow]) -> anyhow::Result<CorpusReport> {
     let current = passing_case_ids(rows);
+    write_candidate_if_requested(&current)?;
     let expected = if update_requested() {
         write_baseline(&current)?;
         current.clone()
@@ -47,13 +49,14 @@ fn comparison_report(expected: &BTreeSet<String>, current: &BTreeSet<String>) ->
         )
     }));
     rows.extend(improvements.iter().map(|case| {
-        mismatch_row(
+        comparison_row(
             case,
-            "new passing Test262 variant requires an explicit baseline refresh",
+            STATUS_PASSED,
+            "new passing Test262 variant recorded in the CI baseline candidate",
         )
     }));
-    let failed = regressions.len().saturating_add(improvements.len());
-    let passed = expected.intersection(current).count();
+    let failed = regressions.len();
+    let passed = current.len();
     CorpusReport {
         name: BASELINE_CORPUS_NAME,
         required: true,
@@ -71,10 +74,14 @@ fn comparison_report(expected: &BTreeSet<String>, current: &BTreeSet<String>) ->
 }
 
 fn mismatch_row(case: &str, detail: &str) -> CaseRow {
+    comparison_row(case, STATUS_FAILED, detail)
+}
+
+fn comparison_row(case: &str, status: &str, detail: &str) -> CaseRow {
     let path = case.split_once('#').map_or(case, |(path, _)| path);
     CaseRow {
         case: case.to_owned(),
-        status: STATUS_FAILED.to_owned(),
+        status: status.to_owned(),
         source: source_label(path),
         detail: detail.to_owned(),
         elapsed: Duration::ZERO,
@@ -111,9 +118,29 @@ fn read_baseline() -> anyhow::Result<BTreeSet<String>> {
 }
 
 fn write_baseline(cases: &BTreeSet<String>) -> anyhow::Result<()> {
+    let path = baseline_path()?;
+    write_baseline_at(&path, cases)
+}
+
+fn write_candidate_if_requested(cases: &BTreeSet<String>) -> anyhow::Result<()> {
+    let Some(path) = env::var_os(PASS_CANDIDATE_PATH_ENV) else {
+        return Ok(());
+    };
+    let path = PathBuf::from(path);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "failed to create Test262 pass candidate directory '{}'",
+                parent.display()
+            )
+        })?;
+    }
+    write_baseline_at(&path, cases)
+}
+
+fn write_baseline_at(path: &Path, cases: &BTreeSet<String>) -> anyhow::Result<()> {
     use fmt::Write as _;
 
-    let path = baseline_path()?;
     let mut body = String::new();
     writeln!(&mut body, "{BASELINE_SCHEMA}").context("failed to render baseline schema")?;
     writeln!(&mut body, "# test262_commit={PINNED_TEST262_COMMIT}")
@@ -121,7 +148,7 @@ fn write_baseline(cases: &BTreeSet<String>) -> anyhow::Result<()> {
     for case in cases {
         writeln!(&mut body, "{case}").context("failed to render Test262 baseline case")?;
     }
-    fs::write(&path, body)
+    fs::write(path, body)
         .with_context(|| format!("failed to write Test262 pass baseline '{}'", path.display()))
 }
 
@@ -139,3 +166,7 @@ fn update_requested() -> bool {
         value == "1" || value.eq_ignore_ascii_case("true") || value.eq_ignore_ascii_case("yes")
     })
 }
+
+#[cfg(test)]
+#[path = "test262_baseline_tests.rs"]
+mod tests;
