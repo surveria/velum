@@ -2528,15 +2528,23 @@ AS-09g profile evidence in draft PR #456:
   nullish member access raises a typed TypeError;
 - direct tests cover nested patterns, result preservation, literal member
   targets, reference/iterator/default order, sloppy globals, strict early
-  errors, and inferred names. The focused profile now passes 576/640 variants
-  and 334/368 files, gains of 445 variants and 256 files. Fifty-eight of the
-  64 residual variants require generator/yield support; four require the
-  separate lexical TDZ-instantiation owner and two require symbol-aware object
-  rest ordering;
+  errors, and inferred names. The focused profile now passes 580/640 variants
+  and 338/368 files, gains of 449 variants and 260 files. Fifty-eight of the
+  60 residual variants require generator/yield support; two require
+  symbol-aware object rest ordering;
+- the reviewed full baseline gains 850 variants and 512 files with no removed
+  pass. The largest variant gains are 499 `language/expressions`, 78
+  `built-ins/Number`, 53 `built-ins/Function`, 49 staging, and 36
+  `built-ins/Promise`, with another 135 variants distributed across shared
+  syntax/runtime consumers. Local full-corpus evidence passes 39,835/39,835
+  expected variants, 20,612/53,404 files, and 39,835/102,578 full variants;
+  the permanent suites remain green at 69/69 engine fixtures, 118/118 active
+  Test262 cases, and 96/96 QuickJS differential cases in
+  `target/as09g-full-baseline-final.*`;
 - the architecture guard fixes the single runtime walker, assignment-reference
   owner, compiler users, typed mode/leaf metadata, and mutation-tests a second
-  walker. Full-corpus, performance, exact-tree CI, and canonical publication
-  evidence remain required before AS-09g can close.
+  walker. Performance, exact-tree CI, and canonical publication evidence remain
+  required before AS-09g can close.
 
 ### AS-10: Performance And Memory Checkpoints
 

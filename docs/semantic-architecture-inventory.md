@@ -686,7 +686,7 @@ decision sequence:
 | AS-09d | comma/sequence expression grammar boundary | PR #453 merged as `1fc9867`; exact-tree run `29142804842` certified tree `a23bd644`, post-merge run `29142896882` published report `20260711T062919Z` in `f2d2113`, and the baseline gained 335 variants / 205 files with no removed pass |
 | AS-09e | named function expression self binding | PR #454 merged as \`6e71c38\`; exact CI \`29144428112\` certified tree \`3b280888\`, post-merge run \`29144572464\` published report \`20260711T072934Z\` in \`90ca1cb\`, and the baseline gained 29 variants / 21 files with no removed pass |
 | AS-09f | \`SetFunctionName\` and anonymous-definition name inference | PR #455 merged as `6c71713`; exact CI `29145629944` certified tree `4b42cadb`, post-merge run `29145743199` published report `20260711T081229Z` in `ae507a1`, and the full baseline gained 434 variants / 217 files with no removed pass |
-| AS-09g | destructuring assignment | draft PR #456 adds typed assignment-pattern leaves to the existing resumable `BytecodePattern` walker, preserves reference/default/iterator ordering and assignment expression results, and raises the focused `assignment/dstr` profile from 131/640 to 576/640 variants |
+| AS-09g | destructuring assignment | draft PR #456 adds typed assignment-pattern leaves to the existing resumable `BytecodePattern` walker, preserves reference/default/iterator ordering and assignment expression results, raises the focused `assignment/dstr` profile from 131/640 to 580/640 variants, and adds 850 full-corpus variants / 512 files with no removed pass |
 
 ## AS-01b Guard Specification
 
