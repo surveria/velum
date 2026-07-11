@@ -2,7 +2,6 @@ use crate::{
     bytecode::{BytecodeAddress, BytecodeBlock},
     error::{Error, Result},
     runtime::{Context, control::Completion},
-    value::Value,
 };
 
 use super::{BytecodeLinearOp, BytecodeState};
@@ -85,12 +84,11 @@ impl Context {
         block: &BytecodeBlock,
         plan: Option<&BytecodeLinearPlan<'_>>,
         state: &mut BytecodeState,
-    ) -> Result<Value> {
+    ) -> Result<Completion> {
         if let Some(value) = self.eval_bytecode_linear_direct_expression(block, plan)? {
-            return Ok(value);
+            return Ok(Completion::Normal(value));
         }
-        self.eval_bytecode_block_with_linear_plan(block, plan, state)?
-            .into_result()
+        self.eval_bytecode_block_with_linear_plan(block, plan, state)
     }
 
     fn eval_bytecode_segmented_plan(
@@ -99,7 +97,11 @@ impl Context {
         plan: &BytecodeLinearPlan<'_>,
         state: &mut BytecodeState,
     ) -> Result<Completion> {
-        state.reset();
+        state.prepare_run()?;
+        state.begin_run();
+        if let Some(completion) = state.take_resume_completion() {
+            return Ok(completion);
+        }
         while let Some(step) = block.step(state.pc)? {
             let instruction = step.instruction();
             let span = step.span();
@@ -118,6 +120,11 @@ impl Context {
             if let Some(completion) = completion {
                 if let Completion::Throw(value) = &completion {
                     self.annotate_error_value_span(value, span)?;
+                }
+                if let Completion::Suspended(_) = completion
+                    && !state.is_suspended()
+                {
+                    state.mark_child_suspended();
                 }
                 return Ok(completion);
             }

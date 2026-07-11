@@ -77,7 +77,7 @@ impl Context {
         let mut array = None;
         for (case_index, case) in cases.iter().enumerate() {
             let test = if let Some(test) = &case.test {
-                let Some(value) = super::bytecode_numeric_switch_case_test(test) else {
+                let Some(value) = super::structured_switch::numeric_switch_case_test(test) else {
                     return Ok(None);
                 };
                 Some(value)

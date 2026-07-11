@@ -83,6 +83,24 @@ impl ActivationFrame {
         }
     }
 
+    pub(in crate::runtime) const fn rebase_local_base(
+        &mut self,
+        local_base: usize,
+    ) -> Result<(), ()> {
+        match self {
+            Self::Call {
+                local_base: base, ..
+            }
+            | Self::EvalBoundary {
+                local_base: base, ..
+            } => {
+                *base = local_base;
+                Ok(())
+            }
+            Self::TemporaryThis { .. } | Self::Bytecode { .. } => Err(()),
+        }
+    }
+
     pub(in crate::runtime) const fn upvalues(&self) -> Option<&FunctionUpvalues> {
         match self {
             Self::Call { upvalues, .. } => Some(upvalues),

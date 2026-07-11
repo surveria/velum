@@ -61,65 +61,28 @@ impl Context {
         parts: BytecodeTryParts<'_>,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
-        if let Some(fast_path) = parts.try_fast_path
+        let resumes = self.resumes_bytecode_control();
+        if !resumes
+            && let Some(fast_path) = parts.try_fast_path
             && let Some(completion) = self.eval_bytecode_try_finally_fast_path(fast_path)?
         {
             return Ok(Self::store_or_return_completion(state, completion, next));
         }
         let handle = self.push_bytecode_control(BytecodeControlRecord::try_record())?;
         let mut control = self.checkout_bytecode_control(handle)?;
-        let completion = if let Some(direct_throw) = parts.body_direct_throw {
-            match self.eval_bytecode_direct_throw(direct_throw) {
-                Ok(completion) => completion,
-                Err(error) => {
-                    return self.finish_bytecode_control_result(handle, Err(error));
-                }
-            }
-        } else {
-            self.run_bytecode_control_segment(
-                handle,
-                &mut control,
-                BytecodeControlStateSlot::Body,
-                |context, body_state| {
-                    context.eval_bytecode_try_block_with_state(
-                        parts.body,
-                        parts.body_scoped,
-                        body_state,
-                    )
-                },
-            )?
-        };
-        *control.try_state_mut()?.1 = Some(completion);
-        if let (Some(Completion::Throw(value)), Some(catch)) =
-            (control.try_state_mut()?.1.as_ref(), parts.catch)
+        if let Some(completion) =
+            self.eval_structured_try_body(handle, &mut control, parts, resumes)?
         {
-            let value = value.clone();
-            *control.try_state_mut()?.0 = BytecodeTryPhase::Catch;
-            let completion = self.run_bytecode_control_segment(
-                handle,
-                &mut control,
-                BytecodeControlStateSlot::Catch,
-                |context, catch_state| context.eval_bytecode_catch(catch, value, catch_state),
-            )?;
-            *control.try_state_mut()?.1 = Some(completion);
+            self.park_bytecode_control(handle, control)?;
+            return Ok(Some(completion));
         }
-        if let Some(finally_body) = parts.finally_body {
-            *control.try_state_mut()?.0 = BytecodeTryPhase::Finally;
-            let finally_completion = self.run_bytecode_control_segment(
-                handle,
-                &mut control,
-                BytecodeControlStateSlot::Finally,
-                |context, finally_state| {
-                    context.eval_bytecode_try_block_with_state(
-                        finally_body,
-                        parts.finally_scoped,
-                        finally_state,
-                    )
-                },
-            )?;
-            if !matches!(finally_completion, Completion::Normal(_)) {
-                *control.try_state_mut()?.1 = Some(finally_completion);
-            }
+        if let Some(completion) = self.eval_structured_catch(handle, &mut control, parts)? {
+            self.park_bytecode_control(handle, control)?;
+            return Ok(Some(completion));
+        }
+        if let Some(completion) = self.eval_structured_finally(handle, &mut control, parts)? {
+            self.park_bytecode_control(handle, control)?;
+            return Ok(Some(completion));
         }
         let completion = control
             .try_state_mut()?
@@ -129,6 +92,109 @@ impl Context {
         let result =
             completion.map(|completion| Self::store_or_return_completion(state, completion, next));
         self.finish_bytecode_control_result(handle, result)
+    }
+
+    fn eval_structured_try_body(
+        &mut self,
+        handle: super::super::control_continuation::BytecodeControlHandle,
+        control: &mut BytecodeControlRecord,
+        parts: BytecodeTryParts<'_>,
+        resumes: bool,
+    ) -> Result<Option<Completion>> {
+        if control.try_state_mut()?.0 != &BytecodeTryPhase::Body {
+            return Ok(None);
+        }
+        let completion = if !resumes && let Some(direct_throw) = parts.body_direct_throw {
+            match self.eval_bytecode_direct_throw(direct_throw) {
+                Ok(completion) => completion,
+                Err(error) => {
+                    return self.finish_bytecode_control_result(handle, Err(error));
+                }
+            }
+        } else {
+            self.run_bytecode_control_segment(
+                handle,
+                control,
+                BytecodeControlStateSlot::Body,
+                |context, state| {
+                    context.eval_bytecode_try_block_with_state(parts.body, parts.body_scoped, state)
+                },
+            )?
+        };
+        if matches!(completion, Completion::Suspended(_)) {
+            return Ok(Some(completion));
+        }
+        let catches = matches!(completion, Completion::Throw(_)) && parts.catch.is_some();
+        *control.try_state_mut()?.1 = Some(completion);
+        *control.try_state_mut()?.0 = if catches {
+            BytecodeTryPhase::Catch
+        } else {
+            BytecodeTryPhase::Finally
+        };
+        Ok(None)
+    }
+
+    fn eval_structured_catch(
+        &mut self,
+        handle: super::super::control_continuation::BytecodeControlHandle,
+        control: &mut BytecodeControlRecord,
+        parts: BytecodeTryParts<'_>,
+    ) -> Result<Option<Completion>> {
+        if control.try_state_mut()?.0 != &BytecodeTryPhase::Catch {
+            return Ok(None);
+        }
+        let catch = parts
+            .catch
+            .ok_or_else(|| Error::runtime("structured catch definition disappeared"))?;
+        let Some(Completion::Throw(value)) = control.try_state_mut()?.1.as_ref() else {
+            return Err(Error::runtime("structured catch value disappeared"));
+        };
+        let value = value.clone();
+        let completion = self.run_bytecode_control_segment(
+            handle,
+            control,
+            BytecodeControlStateSlot::Catch,
+            |context, state| context.eval_bytecode_catch(catch, value, state),
+        )?;
+        if matches!(completion, Completion::Suspended(_)) {
+            return Ok(Some(completion));
+        }
+        *control.try_state_mut()?.1 = Some(completion);
+        *control.try_state_mut()?.0 = BytecodeTryPhase::Finally;
+        Ok(None)
+    }
+
+    fn eval_structured_finally(
+        &mut self,
+        handle: super::super::control_continuation::BytecodeControlHandle,
+        control: &mut BytecodeControlRecord,
+        parts: BytecodeTryParts<'_>,
+    ) -> Result<Option<Completion>> {
+        if control.try_state_mut()?.0 != &BytecodeTryPhase::Finally {
+            return Ok(None);
+        }
+        let Some(finally_body) = parts.finally_body else {
+            return Ok(None);
+        };
+        let completion = self.run_bytecode_control_segment(
+            handle,
+            control,
+            BytecodeControlStateSlot::Finally,
+            |context, state| {
+                context.eval_bytecode_try_block_with_state(
+                    finally_body,
+                    parts.finally_scoped,
+                    state,
+                )
+            },
+        )?;
+        if matches!(completion, Completion::Suspended(_)) {
+            return Ok(Some(completion));
+        }
+        if !matches!(completion, Completion::Normal(_)) {
+            *control.try_state_mut()?.1 = Some(completion);
+        }
+        Ok(None)
     }
 
     fn eval_bytecode_try_finally_fast_path(
@@ -187,15 +253,28 @@ impl Context {
         let Some(param) = catch.param.as_ref() else {
             return self.eval_bytecode_try_block_with_state(&catch.body, catch.body_scoped, state);
         };
-        self.push_lexical_scope()?;
-        let result = self.eval_bytecode_catch_scope(
-            param,
-            value,
-            &catch.body,
-            catch.body_scoped,
-            catch.body_fast_path.as_ref(),
-            state,
-        );
+        let resumes = state.is_resuming();
+        if !resumes {
+            self.push_lexical_scope()?;
+        }
+        let result = if resumes {
+            self.eval_bytecode_try_block_with_state(&catch.body, catch.body_scoped, state)
+        } else {
+            self.eval_bytecode_catch_scope(
+                param,
+                value,
+                &catch.body,
+                catch.body_scoped,
+                catch.body_fast_path.as_ref(),
+                state,
+            )
+        };
+        if result
+            .as_ref()
+            .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
+        {
+            return result;
+        }
         let removed = self.pop_lexical_scope()?;
         if removed.is_none() {
             return Err(Error::runtime("bytecode catch lexical scope disappeared"));
@@ -239,8 +318,17 @@ impl Context {
         if !scoped {
             return self.eval_bytecode_block_with_state(block, state);
         }
-        self.push_lexical_scope()?;
+        let resumes = state.is_resuming();
+        if !resumes {
+            self.push_lexical_scope()?;
+        }
         let result = self.eval_bytecode_block_with_state(block, state);
+        if result
+            .as_ref()
+            .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
+        {
+            return result;
+        }
         let removed = self.pop_lexical_scope()?;
         if removed.is_none() {
             return Err(Error::runtime("bytecode try lexical scope disappeared"));

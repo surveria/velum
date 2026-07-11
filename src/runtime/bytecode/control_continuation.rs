@@ -28,6 +28,7 @@ pub(super) enum BytecodeLoopKind {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum BytecodeLoopPhase {
     Initialize,
+    Destructure,
     Condition,
     Body,
     Update,
@@ -82,6 +83,41 @@ pub(super) enum BytecodeControlRecord {
 }
 
 impl BytecodeControlRecord {
+    pub(super) fn resume_await(&mut self, completion: Completion) -> Result<bool> {
+        let state = match self {
+            Self::Loop {
+                phase,
+                condition_state,
+                body_state,
+                update_state,
+                ..
+            } => match phase {
+                BytecodeLoopPhase::Initialize | BytecodeLoopPhase::Condition => condition_state,
+                BytecodeLoopPhase::Destructure | BytecodeLoopPhase::Body => body_state,
+                BytecodeLoopPhase::Update => update_state,
+            },
+            Self::ForIn { body_state, .. }
+            | Self::ForOf { body_state, .. }
+            | Self::Switch { body_state, .. } => body_state,
+            Self::Try {
+                phase,
+                body_state,
+                catch_state,
+                finally_state,
+                ..
+            } => match phase {
+                BytecodeTryPhase::Body => body_state,
+                BytecodeTryPhase::Catch => catch_state,
+                BytecodeTryPhase::Finally => finally_state,
+            },
+        };
+        if !state.is_awaiting() {
+            return Ok(false);
+        }
+        state.resume_await(completion)?;
+        Ok(true)
+    }
+
     pub(super) const fn loop_record(kind: BytecodeLoopKind) -> Self {
         Self::Loop {
             kind,
@@ -319,6 +355,13 @@ pub(super) struct BytecodeControlHandle {
 }
 
 impl Context {
+    pub(super) fn resumes_bytecode_control(&self) -> bool {
+        self.activation_frames
+            .last()
+            .and_then(ActivationFrame::continuation)
+            .is_some_and(super::BytecodeContinuationFrame::resumes_control)
+    }
+
     pub(super) fn push_bytecode_control(
         &mut self,
         record: BytecodeControlRecord,
@@ -338,15 +381,31 @@ impl Context {
                 "structured control has no continuation owner",
             ));
         }
-        self.storage_ledger
-            .grow_count(VmStorageKind::ExecutionFrame, 1)?;
+        let resumes = self
+            .activation_frames
+            .get(activation_index)
+            .and_then(ActivationFrame::continuation)
+            .is_some_and(super::BytecodeContinuationFrame::resumes_control);
+        if !resumes {
+            self.storage_ledger
+                .grow_count(VmStorageKind::ExecutionFrame, 1)?;
+        }
         let continuation = self
             .activation_frames
             .get_mut(activation_index)
             .map(ActivationFrame::continuation_mut)
             .and_then(Option::as_mut)
             .ok_or_else(|| Error::runtime("structured control continuation disappeared"))?;
-        let control_index = continuation.push_control(record);
+        let control_index = match continuation.enter_control(record) {
+            Ok(index) => index,
+            Err(error) => {
+                if !resumes {
+                    self.storage_ledger
+                        .release_count(VmStorageKind::ExecutionFrame, 1)?;
+                }
+                return Err(error);
+            }
+        };
         Ok(BytecodeControlHandle {
             activation_index,
             control_index,
@@ -366,6 +425,19 @@ impl Context {
             .finish_control(handle.control_index)?;
         self.storage_ledger
             .release_count(VmStorageKind::ExecutionFrame, 1)
+    }
+
+    pub(super) fn park_bytecode_control(
+        &mut self,
+        handle: BytecodeControlHandle,
+        record: BytecodeControlRecord,
+    ) -> Result<()> {
+        self.activation_frames
+            .get_mut(handle.activation_index)
+            .map(ActivationFrame::continuation_mut)
+            .and_then(Option::as_mut)
+            .ok_or_else(|| Error::runtime("structured control continuation disappeared"))?
+            .park_control(handle.control_index, record)
     }
 
     pub(super) fn run_bytecode_control_segment<T>(
@@ -491,6 +563,6 @@ const fn completion_value(completion: &Completion) -> Option<&Value> {
         | Completion::Throw(value)
         | Completion::Return(value)
         | Completion::Break { value, .. } => Some(value),
-        Completion::Continue(_) => None,
+        Completion::Continue(_) | Completion::Suspended(_) => None,
     }
 }

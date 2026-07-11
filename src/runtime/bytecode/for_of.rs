@@ -65,41 +65,44 @@ impl Context {
         let handle = self.push_bytecode_control(BytecodeControlRecord::for_of(source))?;
         let mut control = self.checkout_bytecode_control(handle)?;
         loop {
-            *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Initialize;
-            let step =
-                self.run_bytecode_iterator_action(handle, &mut control, |context, source| {
-                    context.step()?;
-                    context.iterator_step(source)
-                })?;
-            let value = match step {
-                IteratorStep::Value(value) => value,
-                IteratorStep::Done => break,
-                IteratorStep::Abrupt(completion) => {
-                    return Self::finish_for_of_control(self, handle, completion);
-                }
-            };
-            let binding_result = self.run_bytecode_control_action_result(&control, |context| {
-                let inserted = scope.insert_or_replace_at_optional_slot(
-                    atom,
-                    BindingCell::new(value, mutable, kind),
-                    frame.map(crate::runtime::CompiledBindingFrame::slot),
-                )?;
-                if let Some(frame) = frame {
-                    Self::mark_binding_scope_frame_slot(&mut scope, frame, inserted)?;
-                }
-                context.push_lexical_scope_with(scope)?;
-                if let Err(error) = context.remember_active_static_binding(name.name(), atom) {
-                    if context.pop_lexical_scope()?.is_none() {
-                        return Err(Error::runtime(
-                            "bytecode for-of lexical scope disappeared after binding failure",
-                        ));
+            let resumes_body = *control.for_of_state_mut()?.0 == BytecodeLoopPhase::Body;
+            if !resumes_body {
+                *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Initialize;
+                let step =
+                    self.run_bytecode_iterator_action(handle, &mut control, |context, source| {
+                        context.step()?;
+                        context.iterator_step(source)
+                    })?;
+                let value = match step {
+                    IteratorStep::Value(value) => value,
+                    IteratorStep::Done => break,
+                    IteratorStep::Abrupt(completion) => {
+                        return Self::finish_for_of_control(self, handle, completion);
                     }
-                    return Err(error);
+                };
+                let binding_result = self.run_bytecode_control_action_result(&control, |context| {
+                    let inserted = scope.insert_or_replace_at_optional_slot(
+                        atom,
+                        BindingCell::new(value, mutable, kind),
+                        frame.map(crate::runtime::CompiledBindingFrame::slot),
+                    )?;
+                    if let Some(frame) = frame {
+                        Self::mark_binding_scope_frame_slot(&mut scope, frame, inserted)?;
+                    }
+                    context.push_lexical_scope_with(scope)?;
+                    if let Err(error) = context.remember_active_static_binding(name.name(), atom) {
+                        if context.pop_lexical_scope()?.is_none() {
+                            return Err(Error::runtime(
+                                "bytecode for-of lexical scope disappeared after binding failure",
+                            ));
+                        }
+                        return Err(error);
+                    }
+                    Ok(())
+                });
+                if let Err(error) = binding_result {
+                    return self.close_for_of_error(handle, control, error);
                 }
-                Ok(())
-            });
-            if let Err(error) = binding_result {
-                return self.close_for_of_error(handle, control, error);
             }
             *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Body;
             let body_result = self.run_bytecode_control_segment_result(
@@ -107,6 +110,14 @@ impl Context {
                 BytecodeControlStateSlot::Body,
                 |context, body_state| context.eval_bytecode_block_with_state(body, body_state),
             );
+            if body_result
+                .as_ref()
+                .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
+            {
+                let completion = body_result?;
+                self.park_bytecode_control(handle, control)?;
+                return Ok(completion);
+            }
             let removed_scope = self.pop_lexical_scope();
             scope = match removed_scope {
                 Ok(Some(scope)) => scope,
@@ -129,6 +140,7 @@ impl Context {
             if let Some(completion) = bytecode_loop_completion(last, completion, labels) {
                 return self.close_for_of_completion(handle, control, completion);
             }
+            *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Initialize;
         }
         let (_, last) = control.for_of_state_mut()?;
         let completion = Completion::Normal(std::mem::replace(last, Value::Undefined));
@@ -145,23 +157,26 @@ impl Context {
         let handle = self.push_bytecode_control(BytecodeControlRecord::for_of(source))?;
         let mut control = self.checkout_bytecode_control(handle)?;
         loop {
-            *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Initialize;
-            let step =
-                self.run_bytecode_iterator_action(handle, &mut control, |context, source| {
-                    context.step()?;
-                    context.iterator_step(source)
-                })?;
-            let value = match step {
-                IteratorStep::Value(value) => value,
-                IteratorStep::Done => break,
-                IteratorStep::Abrupt(completion) => {
-                    return Self::finish_for_of_control(self, handle, completion);
+            let resumes_body = *control.for_of_state_mut()?.0 == BytecodeLoopPhase::Body;
+            if !resumes_body {
+                *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Initialize;
+                let step =
+                    self.run_bytecode_iterator_action(handle, &mut control, |context, source| {
+                        context.step()?;
+                        context.iterator_step(source)
+                    })?;
+                let value = match step {
+                    IteratorStep::Value(value) => value,
+                    IteratorStep::Done => break,
+                    IteratorStep::Abrupt(completion) => {
+                        return Self::finish_for_of_control(self, handle, completion);
+                    }
+                };
+                let assign_result = self
+                    .run_bytecode_control_action_result(&control, |context| assign(context, value));
+                if let Err(error) = assign_result {
+                    return self.close_for_of_error(handle, control, error);
                 }
-            };
-            let assign_result =
-                self.run_bytecode_control_action_result(&control, |context| assign(context, value));
-            if let Err(error) = assign_result {
-                return self.close_for_of_error(handle, control, error);
             }
             *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Body;
             let completion = self.run_bytecode_control_segment_result(
@@ -173,10 +188,15 @@ impl Context {
                 Ok(completion) => completion,
                 Err(error) => return self.close_for_of_error(handle, control, error),
             };
+            if matches!(completion, Completion::Suspended(_)) {
+                self.park_bytecode_control(handle, control)?;
+                return Ok(completion);
+            }
             let (_, last) = control.for_of_state_mut()?;
             if let Some(completion) = bytecode_loop_completion(last, completion, labels) {
                 return self.close_for_of_completion(handle, control, completion);
             }
+            *control.for_of_state_mut()?.0 = BytecodeLoopPhase::Initialize;
         }
         let (_, last) = control.for_of_state_mut()?;
         let completion = Completion::Normal(std::mem::replace(last, Value::Undefined));

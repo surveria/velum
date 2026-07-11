@@ -403,6 +403,7 @@ impl Context {
             completion @ (Completion::Break { .. } | Completion::Continue(_)) => {
                 completion.into_function_result()
             }
+            completion @ Completion::Suspended(_) => completion.into_function_result(),
         }
     }
 }

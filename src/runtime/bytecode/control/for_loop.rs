@@ -317,7 +317,8 @@ impl Context {
                 completion @ (Completion::Break { .. }
                 | Completion::Continue(Some(_))
                 | Completion::Throw(_)
-                | Completion::Return(_)) => return Ok(Some(completion)),
+                | Completion::Return(_)
+                | Completion::Suspended(_)) => return Ok(Some(completion)),
             }
             self.record_bytecode_linear_direct_run()?;
             self.fast_loop_update(fast_path)?;

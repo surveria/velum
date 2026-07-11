@@ -238,12 +238,18 @@ fn test262_basic_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/async_await",
             path: PATH_TEST262_ASYNC_AWAIT,
-            expectation: Expectation::Value("42"),
+            expectation: Expectation::OutputAndValue {
+                output: &["async-await:42"],
+                value: "42",
+            },
         },
         EngineCase {
             id: "language/expressions/async_arrow",
             path: PATH_TEST262_ASYNC_ARROW,
-            expectation: Expectation::Value("42"),
+            expectation: Expectation::OutputAndValue {
+                output: &["async-arrow:42"],
+                value: "42",
+            },
         },
     ]
 }
@@ -268,7 +274,10 @@ fn test262_function_expression_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "language/expressions/default_parameters",
             path: PATH_TEST262_DEFAULT_PARAMETERS,
-            expectation: Expectation::Value("42"),
+            expectation: Expectation::OutputAndValue {
+                output: &["default-parameters:42"],
+                value: "42",
+            },
         },
         EngineCase {
             id: "language/statements/function_declaration",
@@ -576,7 +585,10 @@ fn test262_global_builtin_cases() -> Vec<EngineCase> {
         EngineCase {
             id: "built-ins/Promise/basic",
             path: PATH_TEST262_PROMISE_BUILTIN,
-            expectation: Expectation::Value("42"),
+            expectation: Expectation::OutputAndValue {
+                output: &["promise-basic:42"],
+                value: "42",
+            },
         },
         EngineCase {
             id: "built-ins/RegExp/baseline",

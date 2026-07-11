@@ -29,6 +29,36 @@ impl Context {
         })
     }
 
+    pub(in crate::runtime) fn suspended_async_execution_frame_count(&self) -> Result<usize> {
+        let promise_frames = self.promises.iter().try_fold(0_usize, |count, promise| {
+            count
+                .checked_add(promise.suspended_execution_frame_count()?)
+                .ok_or_else(|| Error::limit("suspended execution frame count overflowed"))
+        })?;
+        self.promise_jobs
+            .iter()
+            .try_fold(promise_frames, |count, job| {
+                count
+                    .checked_add(job.execution_frame_count()?)
+                    .ok_or_else(|| Error::limit("suspended execution frame count overflowed"))
+            })
+    }
+
+    pub(in crate::runtime) fn suspended_async_cache_entry_count(&self) -> Result<usize> {
+        let promise_entries = self.promises.iter().try_fold(0_usize, |count, promise| {
+            count
+                .checked_add(promise.suspended_cache_entry_count()?)
+                .ok_or_else(|| Error::limit("suspended cache entry count overflowed"))
+        })?;
+        self.promise_jobs
+            .iter()
+            .try_fold(promise_entries, |count, job| {
+                count
+                    .checked_add(job.cache_entry_count()?)
+                    .ok_or_else(|| Error::limit("suspended cache entry count overflowed"))
+            })
+    }
+
     pub(in crate::runtime) fn create_pending_promise(&mut self) -> Result<(PromiseId, Value)> {
         self.storage_ledger.grow_count(VmStorageKind::Promise, 1)?;
         let id = PromiseId::new(self.promises.len());
@@ -115,34 +145,24 @@ impl Context {
         promise: PromiseId,
         reaction: PromiseReaction,
     ) -> Result<()> {
-        let state = self.promise_state(promise)?.clone();
-        match state {
-            PromiseState::Pending { .. } => {
-                self.storage_ledger
-                    .grow_count(VmStorageKind::PromiseReaction, 1)?;
-                let PromiseState::Pending { reactions } = &mut self.promise_mut(promise)?.state
-                else {
-                    self.storage_ledger
-                        .release_count(VmStorageKind::PromiseReaction, 1)?;
-                    return Err(Error::runtime(
-                        "Promise state changed while adding reaction",
-                    ));
-                };
-                reactions.push(reaction);
-            }
-            PromiseState::Fulfilled(value) => {
-                self.enqueue_promise_job(PromiseJob::Reaction {
-                    reaction,
-                    state: PromiseSettledState::fulfilled(value),
-                })?;
-            }
-            PromiseState::Rejected(reason) => {
-                self.enqueue_promise_job(PromiseJob::Reaction {
-                    reaction,
-                    state: PromiseSettledState::rejected(reason),
-                })?;
-            }
+        let settled = match self.promise_state(promise)? {
+            PromiseState::Pending { .. } => None,
+            PromiseState::Fulfilled(value) => Some(PromiseSettledState::fulfilled(value.clone())),
+            PromiseState::Rejected(reason) => Some(PromiseSettledState::rejected(reason.clone())),
+        };
+        if let Some(state) = settled {
+            return self.enqueue_promise_job(PromiseJob::Reaction { reaction, state });
         }
+        self.storage_ledger
+            .grow_count(VmStorageKind::PromiseReaction, 1)?;
+        let PromiseState::Pending { reactions } = &mut self.promise_mut(promise)?.state else {
+            self.storage_ledger
+                .release_count(VmStorageKind::PromiseReaction, 1)?;
+            return Err(Error::runtime(
+                "Promise state changed while adding reaction",
+            ));
+        };
+        reactions.push(reaction);
         Ok(())
     }
 
@@ -154,9 +174,9 @@ impl Context {
         new_target: Value,
     ) -> Result<Value> {
         let (promise, object) = self.create_pending_promise()?;
-        match self
-            .eval_function_completion_with_this_and_new_target(id, args, this_value, new_target)?
-        {
+        match self.eval_async_function_completion_with_this_and_new_target(
+            id, args, this_value, new_target,
+        )? {
             Completion::Normal(_) => self.resolve_promise(promise, Value::Undefined)?,
             Completion::Return(value) => self.resolve_promise(promise, value)?,
             Completion::Throw(value) => self.reject_promise(promise, value)?,
@@ -170,32 +190,138 @@ impl Context {
                 )?;
                 self.reject_promise(promise, reason)?;
             }
+            Completion::Suspended(awaited) => {
+                let continuation = self.detach_suspended_async_function(id, promise)?;
+                self.add_async_await_reaction(awaited, continuation)?;
+            }
         }
         Ok(object)
     }
 
     pub(in crate::runtime) fn eval_bytecode_await(&mut self, value: Value) -> Result<Completion> {
-        let Ok(promise) = self.promise_id_from_value(&value) else {
-            return Ok(Completion::Normal(value));
+        let promise = if let Ok(promise) = self.promise_id_from_value(&value) {
+            promise
+        } else {
+            let (promise, _object) = self.create_pending_promise()?;
+            self.fulfill_promise(promise, value)?;
+            promise
         };
-        self.drain_promise_jobs()?;
-        match self.promise_state(promise)? {
-            PromiseState::Fulfilled(value) => Ok(Completion::Normal(value.clone())),
-            PromiseState::Rejected(value) => Ok(Completion::Throw(value.clone())),
-            PromiseState::Pending { .. } => Err(Error::runtime(
-                "awaited Promise is still pending after draining the job queue",
-            )),
-        }
+        Ok(Completion::Suspended(promise))
     }
 
-    pub(crate) fn drain_promise_jobs(&mut self) -> Result<()> {
+    fn add_async_await_reaction(
+        &mut self,
+        promise: PromiseId,
+        continuation: crate::runtime::function::SuspendedAsyncFunction,
+    ) -> Result<()> {
+        let settled = match self.promise_state(promise)? {
+            PromiseState::Pending { .. } => None,
+            PromiseState::Fulfilled(value) => Some(PromiseSettledState::fulfilled(value.clone())),
+            PromiseState::Rejected(reason) => Some(PromiseSettledState::rejected(reason.clone())),
+        };
+        let storage_kind = if settled.is_some() {
+            VmStorageKind::PromiseJob
+        } else {
+            VmStorageKind::PromiseReaction
+        };
+        if let Err(error) = self.storage_ledger.grow_count(storage_kind, 1) {
+            continuation.cancel_storage(&self.storage_ledger)?;
+            return Err(error);
+        }
+        let reaction = PromiseReaction::awaiting(continuation);
+        if let Some(state) = settled {
+            self.promise_jobs
+                .push_back(PromiseJob::Reaction { reaction, state });
+            return Ok(());
+        }
+        let PromiseState::Pending { reactions } = &mut self.promise_mut(promise)?.state else {
+            self.storage_ledger.release_count(storage_kind, 1)?;
+            let Some(continuation) = reaction.into_suspended() else {
+                return Err(Error::runtime("async await reaction disappeared"));
+            };
+            continuation.cancel_storage(&self.storage_ledger)?;
+            return Err(Error::runtime(
+                "Promise state changed while adding await reaction",
+            ));
+        };
+        reactions.push(reaction);
+        Ok(())
+    }
+
+    /// Runs queued Promise reactions until the VM job queue is empty.
+    ///
+    /// Returns the number of jobs executed, including jobs enqueued by an
+    /// earlier job in the same drain.
+    ///
+    /// # Errors
+    /// Fails when a job raises an unhandled runtime or resource-limit error.
+    pub fn run_jobs(&mut self) -> Result<usize> {
+        let mut count = 0_usize;
         while let Some(job) = self.promise_jobs.pop_front() {
             self.storage_ledger
                 .release_count(VmStorageKind::PromiseJob, 1)?;
             self.step()?;
             self.run_promise_job(job)?;
+            count = count
+                .checked_add(1)
+                .ok_or_else(|| Error::limit("Promise job execution count overflowed"))?;
         }
-        Ok(())
+        Ok(count)
+    }
+
+    /// Returns the number of Promise jobs currently ready to run.
+    #[must_use]
+    pub fn pending_job_count(&self) -> usize {
+        self.promise_jobs.len()
+    }
+
+    /// Discards every ready Promise job and every reaction waiting on a
+    /// pending Promise, including parked async function activations.
+    ///
+    /// Pending Promise objects remain pending. Their discarded handlers will
+    /// not run if the Promise is settled later. This is an embedder shutdown
+    /// and cancellation boundary, not a JavaScript-visible rejection.
+    ///
+    /// Returns the number of discarded ready jobs and pending reactions.
+    ///
+    /// # Errors
+    /// Fails if VM storage-accounting invariants cannot be reconciled.
+    pub fn cancel_jobs(&mut self) -> Result<usize> {
+        let mut reaction_count = 0_usize;
+        let mut suspended = Vec::new();
+        for promise in &mut self.promises {
+            let PromiseState::Pending { reactions } = &mut promise.state else {
+                continue;
+            };
+            let removed = std::mem::take(reactions);
+            reaction_count = reaction_count
+                .checked_add(removed.len())
+                .ok_or_else(|| Error::limit("Promise cancellation count overflowed"))?;
+            suspended.extend(
+                removed
+                    .into_iter()
+                    .filter_map(PromiseReaction::into_suspended),
+            );
+        }
+        let jobs = std::mem::take(&mut self.promise_jobs);
+        let job_count = jobs.len();
+        suspended.extend(jobs.into_iter().filter_map(PromiseJob::into_suspended));
+
+        self.storage_ledger
+            .release_count(VmStorageKind::PromiseReaction, reaction_count)?;
+        self.storage_ledger
+            .release_count(VmStorageKind::PromiseJob, job_count)?;
+        let storage_ledger = self.storage_ledger.clone();
+        for continuation in suspended {
+            continuation.cancel_storage(&storage_ledger)?;
+        }
+        reaction_count
+            .checked_add(job_count)
+            .ok_or_else(|| Error::limit("Promise cancellation count overflowed"))
+    }
+
+    pub(crate) fn drain_promise_jobs(&mut self) -> Result<()> {
+        self.run_jobs().map(|_count| ())
     }
 
     pub(in crate::runtime) fn create_promise_resolving_function(
@@ -351,23 +477,76 @@ impl Context {
         reaction: PromiseReaction,
         state: PromiseSettledState,
     ) -> Result<()> {
+        let PromiseReaction::Then {
+            result,
+            on_fulfilled,
+            on_rejected,
+        } = reaction
+        else {
+            if let PromiseReaction::Await { continuation } = reaction {
+                return self.resume_async_function(*continuation, state);
+            }
+            return Err(Error::runtime("Promise reaction kind disappeared"));
+        };
         let handler = match state.status {
-            PromiseStatus::Fulfilled => reaction.on_fulfilled,
-            PromiseStatus::Rejected => reaction.on_rejected,
+            PromiseStatus::Fulfilled => on_fulfilled,
+            PromiseStatus::Rejected => on_rejected,
         };
         let Some(handler) = handler else {
             return match state.status {
-                PromiseStatus::Fulfilled => self.resolve_promise(reaction.result, state.value),
-                PromiseStatus::Rejected => self.reject_promise(reaction.result, state.value),
+                PromiseStatus::Fulfilled => self.resolve_promise(result, state.value),
+                PromiseStatus::Rejected => self.reject_promise(result, state.value),
             };
         };
         match self.call_value(&handler, &[state.value], Value::Undefined) {
-            Ok(value) => self.resolve_promise(reaction.result, value),
+            Ok(value) => self.resolve_promise(result, value),
             Err(error) => {
                 let Some(reason) = runtime_exception_value(self, &error)? else {
                     return Err(error);
                 };
-                self.reject_promise(reaction.result, reason)
+                self.reject_promise(result, reason)
+            }
+        }
+    }
+
+    fn resume_async_function(
+        &mut self,
+        continuation: crate::runtime::function::SuspendedAsyncFunction,
+        state: PromiseSettledState,
+    ) -> Result<()> {
+        let function = continuation.function();
+        let result_promise = continuation.result_promise();
+        let resume = match state.status {
+            PromiseStatus::Fulfilled => Completion::Normal(state.value),
+            PromiseStatus::Rejected => Completion::Throw(state.value),
+        };
+        let completion = match self.resume_suspended_async_function(continuation, resume) {
+            Ok(completion) => completion,
+            Err(error) => {
+                let Some(reason) = runtime_exception_value(self, &error)? else {
+                    return Err(error);
+                };
+                return self.reject_promise(result_promise, reason);
+            }
+        };
+        match completion {
+            Completion::Normal(_) => self.resolve_promise(result_promise, Value::Undefined),
+            Completion::Return(value) => self.resolve_promise(result_promise, value),
+            Completion::Throw(value) => self.reject_promise(result_promise, value),
+            Completion::Suspended(awaited) => {
+                let continuation =
+                    self.detach_suspended_async_function(function, result_promise)?;
+                self.add_async_await_reaction(awaited, continuation)
+            }
+            Completion::Break { .. } | Completion::Continue(_) => {
+                let reason = self.create_error_object(
+                    JavaScriptErrorMetadata::new(
+                        ErrorName::SyntaxError,
+                        "invalid async function completion",
+                    ),
+                    true,
+                )?;
+                self.reject_promise(result_promise, reason)
             }
         }
     }

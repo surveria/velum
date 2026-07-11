@@ -18,11 +18,13 @@ use crate::{
 mod arguments;
 mod callback_fast_path;
 mod class_support;
+mod execution;
 mod fast_path;
 mod intrinsic;
 mod parameters;
 mod properties;
 mod storage;
+mod suspended;
 mod upvalues;
 
 use crate::runtime::native::{
@@ -53,6 +55,7 @@ pub(super) use fast_path::FunctionFastPath;
 use parameters::FunctionParameterState;
 pub(in crate::runtime) use parameters::FunctionScopeTemplate;
 pub(super) use properties::{FunctionIntrinsicDefaults, FunctionProperties};
+pub(in crate::runtime) use suspended::SuspendedAsyncFunction;
 
 const FUNCTION_PROTOTYPE_APPLY_PROPERTY: &str = "apply";
 const FUNCTION_PROTOTYPE_BIND_PROPERTY: &str = "bind";
@@ -237,30 +240,6 @@ impl Context {
         self.eval_function_completion_with_this_and_new_target(id, args, this_value, new_target)
     }
 
-    pub(crate) fn eval_function_completion_with_this_and_new_target(
-        &mut self,
-        id: FunctionId,
-        args: RuntimeCallArgs<'_>,
-        this_value: Value,
-        new_target: Value,
-    ) -> Result<Completion> {
-        self.call_depth = self
-            .call_depth
-            .checked_add(1)
-            .ok_or_else(|| Error::limit("call stack depth overflowed"))?;
-        if self.call_depth > self.limits.max_expression_depth {
-            self.call_depth = self.call_depth.saturating_sub(1);
-            return Err(Error::limit(format!(
-                "call stack depth exceeded {}",
-                self.limits.max_expression_depth
-            )));
-        }
-        let result =
-            self.eval_function_completion_with_this_inner(id, args, this_value, new_target);
-        self.call_depth = self.call_depth.saturating_sub(1);
-        result
-    }
-
     fn function_direct_call_new_target(&self, id: FunctionId) -> Result<Value> {
         match &self.function(id)?.new_target {
             FunctionNewTarget::Own => Ok(Value::Undefined),
@@ -287,7 +266,7 @@ impl Context {
         })
     }
 
-    fn eval_function_completion_with_this_inner(
+    pub(super) fn eval_function_completion_with_this_inner<const CAN_SUSPEND: bool>(
         &mut self,
         id: FunctionId,
         args: RuntimeCallArgs<'_>,
@@ -345,7 +324,7 @@ impl Context {
             self.pop_call_activation(local_base)?;
             return Err(error);
         }
-        let result = self.eval_function_body(
+        let result = self.eval_function_body::<CAN_SUSPEND>(
             static_name_atom_cache,
             static_binding_cache,
             static_binding_layout,
@@ -353,6 +332,13 @@ impl Context {
             &bytecode,
             remember_params,
         );
+        if CAN_SUSPEND
+            && result
+                .as_ref()
+                .is_ok_and(|completion| matches!(completion, Completion::Suspended(_)))
+        {
+            return result;
+        }
         let binding_result = self.pop_function_binding_storage(local_base, binds_arguments);
         let activation_result = self.pop_call_activation(local_base);
         binding_result?;
