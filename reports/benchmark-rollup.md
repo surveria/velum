@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260711T043324Z.md`
-- Task: PR #451: AS-09b: make eval syntax errors catchable
-- Performance: 5.57x (4/5 >1.00x) (from `rsqjs-test-report-20260711T043324Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T043324Z.md`)
+- `rsqjs-test-report-20260711T054406Z.md`
+- Task: PR #452: AS-09c: support static class accessors
+- Performance: 5.41x (4/5 >1.00x) (from `rsqjs-test-report-20260711T054406Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T054406Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 37951 passed / 64627 failed (37.00%) (from `rsqjs-test-report-20260711T043324Z.md`)
+- Full Test262: 38187 passed / 64391 failed (37.23%) (from `rsqjs-test-report-20260711T054406Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -439,3 +439,4 @@ Latest report:
 | `20260711T034409Z` `7802932` PR #449: AS-08b: audit control-flow specializations | 5.78x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 37721 passed / 64857 failed (36.77%) |
 | `20260711T040754Z` `672d57a` PR #450: AS-09a: add bitwise NOT operator | 5.41x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 37753 passed / 64825 failed (36.80%) |
 | `20260711T043324Z` `b11ce20` PR #451: AS-09b: make eval syntax errors catchable | 5.57x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 37951 passed / 64627 failed (37.00%) |
+| `20260711T054406Z` `6f185e7` PR #452: AS-09c: support static class accessors | 5.41x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 38187 passed / 64391 failed (37.23%) |
