@@ -89,6 +89,9 @@ impl Context {
                 ARRAY_LENGTH_RANGE_ERROR,
             ));
         }
+        if number == 0.0 {
+            return Ok(0);
+        }
         let length = format!("{number:.0}")
             .parse::<u32>()
             .map_err(|_| Error::exception(ErrorName::RangeError, ARRAY_LENGTH_RANGE_ERROR))?;

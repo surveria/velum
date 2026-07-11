@@ -269,11 +269,8 @@ impl Context {
 
     fn delete_json_property(&mut self, holder: &Value, key: &str) -> Result<()> {
         let lookup = self.property_lookup(key);
-        let deleted = self.delete_property_value_with_lookup(holder, lookup)?;
-        if deleted {
-            return Ok(());
-        }
-        Err(Error::type_error("JSON reviver could not delete property"))
+        self.delete_property_value_with_lookup(holder, lookup)?;
+        Ok(())
     }
 
     fn set_json_property(&mut self, holder: &Value, key: &str, value: Value) -> Result<()> {

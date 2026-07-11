@@ -81,6 +81,30 @@ fn rejects_symbol_prototype_value_methods_for_wrong_receivers() -> TestResult {
     Err(format!("unexpected error: {text}").into())
 }
 
+#[test]
+fn exposes_redefinable_symbol_to_primitive() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let descriptor = Object.getOwnPropertyDescriptor(
+            Symbol.prototype,
+            Symbol.toPrimitive
+        );
+        let original = descriptor.value;
+        Object.defineProperty(Symbol.prototype, Symbol.toPrimitive, { value: null });
+        let fallback = Object(Symbol()) == "Symbol()";
+        Object.defineProperty(Symbol.prototype, Symbol.toPrimitive, { value: original });
+
+        typeof original === "function" && original.length === 1 &&
+            original.name === "[Symbol.toPrimitive]" &&
+            descriptor.writable === false && descriptor.enumerable === false &&
+            descriptor.configurable === true && fallback === false
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());

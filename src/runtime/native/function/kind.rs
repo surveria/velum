@@ -490,6 +490,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     SymbolFor,
     SymbolKeyFor,
     SymbolPrototypeDescriptionGetter,
+    SymbolPrototypeToPrimitive,
     SymbolPrototypeToString,
     SymbolPrototypeValueOf,
     ThrowTypeError,

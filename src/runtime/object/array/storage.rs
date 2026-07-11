@@ -520,6 +520,35 @@ impl ArrayStorage {
         }
     }
 
+    pub(in crate::runtime::object) fn indices_at_or_above(
+        &self,
+        start: usize,
+    ) -> Result<Vec<ArrayIndex>> {
+        let mut indices = Vec::new();
+        match &self.elements {
+            ArrayElements::Packed(elements) => {
+                for (position, _) in elements.iter().enumerate().skip(start) {
+                    indices.push(ArrayIndex::from_usize(position)?);
+                }
+            }
+            ArrayElements::Holey(elements) => {
+                for (position, element) in elements.iter().enumerate().skip(start) {
+                    if element.is_some() {
+                        indices.push(ArrayIndex::from_usize(position)?);
+                    }
+                }
+            }
+        }
+        for index in self.sparse_keys.keys() {
+            if index.position()? >= start {
+                indices.push(*index);
+            }
+        }
+        indices.sort_unstable();
+        indices.dedup();
+        Ok(indices)
+    }
+
     pub(in crate::runtime::object) fn insert_dense_property(
         &mut self,
         index: ArrayIndex,

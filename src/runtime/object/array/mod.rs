@@ -11,6 +11,7 @@ mod bytecode;
 mod fast;
 mod front;
 mod index;
+mod length;
 mod search;
 mod sort;
 mod storage;
@@ -111,24 +112,6 @@ impl ObjectHeap {
         self.delete_array_index(id, index)?;
         self.object_mut(id)?.array_length = Some(index.length());
         Ok(value)
-    }
-
-    /// Set the length of a dense array, deleting any elements at or beyond the
-    /// new length when shrinking and creating trailing holes when growing.
-    pub(crate) fn set_array_length(&mut self, id: ObjectId, new_length: usize) -> Result<()> {
-        let Some(current) = self.array_len_if_array(id)? else {
-            return Err(Error::runtime(
-                "set_array_length requires an array receiver",
-            ));
-        };
-        if new_length < current {
-            for index in (new_length..current).rev() {
-                let array_index = ArrayIndex::from_usize(index)?;
-                self.delete_array_index(id, array_index)?;
-            }
-        }
-        self.object_mut(id)?.array_length = Some(ArrayLength::from_usize(new_length)?);
-        Ok(())
     }
 
     pub(crate) fn array_slice(
@@ -728,12 +711,18 @@ impl Object {
     }
 
     fn delete_array_index(&mut self, index: ArrayIndex, shapes: &mut ShapeTable) -> Result<bool> {
-        if self.array_length.is_some() && self.delete_array_element(index)? {
-            return Ok(true);
+        if self.array_length.is_some() && self.has_array_element(index) {
+            return self.delete_array_element(index);
         }
         let Some(key) = self.array_storage.sparse_key(index) else {
             return Ok(true);
         };
+        if self
+            .named_property(shapes, key)?
+            .is_some_and(|property| !property.is_configurable())
+        {
+            return Ok(false);
+        }
         let removed = self.remove_named_property(shapes, key)?;
         self.array_storage.remove_sparse_key(index);
         if let Some(property) = removed

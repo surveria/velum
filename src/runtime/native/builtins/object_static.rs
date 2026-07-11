@@ -354,9 +354,11 @@ impl Context {
             | Value::Number(_)
             | Value::String(_)
             | Value::HeapString(_)
-            | Value::Symbol(_)
-            | Value::HostFunction(_) => Err(Error::runtime(
+            | Value::Symbol(_) => Err(Error::type_error(
                 "Object.defineProperties target must be an object",
+            )),
+            Value::HostFunction(_) => Err(Error::runtime(
+                "Object.defineProperties host-function targets are not supported",
             )),
         }
     }
