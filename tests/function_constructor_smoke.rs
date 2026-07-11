@@ -74,6 +74,26 @@ fn function_constructor_does_not_capture_caller_locals() -> TestResult {
 }
 
 #[test]
+fn function_constructor_name_is_metadata_not_a_lexical_binding() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let created = Function(
+            "return typeof anonymous + ':' + function() { return typeof anonymous; }();"
+        );
+        created.name + ":" + created()
+        "#,
+    )?;
+
+    ensure_value(
+        &value,
+        &Value::String("anonymous:undefined:undefined".to_owned()),
+    )
+}
+
+#[test]
 fn function_constructor_handles_parameter_line_comments() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

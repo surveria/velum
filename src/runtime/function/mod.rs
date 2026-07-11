@@ -499,6 +499,16 @@ impl Context {
         Ok(())
     }
 
+    pub(in crate::runtime) fn set_generated_function_name(
+        &mut self,
+        id: FunctionId,
+        name: &str,
+    ) -> Result<()> {
+        let value = self.heap_string_value(name)?;
+        self.function_mut(id)?.properties.set_generated_name(value);
+        Ok(())
+    }
+
     fn function_mut(&mut self, id: FunctionId) -> Result<&mut super::Function> {
         self.functions
             .get_mut(id.index())
