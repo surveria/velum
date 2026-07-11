@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260711T183721Z.md`
-- Task: PR #468: runtime: add %TypedArray% intrinsic and prototype methods
-- Performance: 5.61x (4/5 >1.00x) (from `rsqjs-test-report-20260711T183721Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T183721Z.md`)
+- `rsqjs-test-report-20260711T191640Z.md`
+- Task: PR #473: AS-09p: complete Object.defineProperties semantics
+- Performance: 9.08x (4/5 >1.00x) (from `rsqjs-test-report-20260711T191640Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T191640Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 53289 passed / 49289 failed (51.95%) (from `rsqjs-test-report-20260711T183721Z.md`)
+- Full Test262: 58616 passed / 43962 failed (57.14%) (from `rsqjs-test-report-20260711T191640Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -458,3 +458,4 @@ Latest report:
 | `20260711T175926Z` `4d1c7fb` PR #472: AS-09o: complete Object.create semantics | 5.65x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 52511 passed / 50067 failed (51.19%) |
 | `20260711T183638Z` `0a3cb64` PR #463: engine: add private class elements (#fields, #methods, brand checks) | 5.60x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 56188 passed / 46390 failed (54.78%) |
 | `20260711T183721Z` `2cbd7b5` PR #468: runtime: add %TypedArray% intrinsic and prototype methods | 5.61x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 53289 passed / 49289 failed (51.95%) |
+| `20260711T191640Z` `b093ea4` PR #473: AS-09p: complete Object.defineProperties semantics | 9.08x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 58616 passed / 43962 failed (57.14%) |
