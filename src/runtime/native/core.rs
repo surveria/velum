@@ -4,7 +4,7 @@ use crate::{
     runtime::Context,
     runtime::binding::scope::BindingCell,
     runtime::call::RuntimeCallArgs,
-    runtime::object::{ObjectPropertyInit, PropertyEnumerable},
+    runtime::object::{ObjectPropertyInit, PropertyEnumerable, TypedArrayElementKind},
     syntax::DeclKind,
     value::{ErrorName, NativeFunctionId, ObjectId, Value},
 };
@@ -16,8 +16,8 @@ use super::{
     GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME, GLOBAL_THIS_NAME,
     INFINITY_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME, NativeFunction,
     NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PERFORMANCE_NAME, PROMISE_NAME,
-    PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME, UINT8_ARRAY_NAME,
-    WEAK_MAP_NAME, WEAK_SET_NAME,
+    PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, STRING_NAME, SYMBOL_NAME, WEAK_MAP_NAME,
+    WEAK_SET_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -28,6 +28,9 @@ const PRINT_NAME: &str = "print";
 
 impl Context {
     pub(crate) fn builtin_value(&mut self, name: &str) -> Result<Option<Value>> {
+        if let Some(element_kind) = typed_array_element_kind(name) {
+            return self.typed_array_constructor_value(element_kind).map(Some);
+        }
         match name {
             ARRAY_NAME => self.array_constructor_value().map(Some),
             ARRAY_BUFFER_NAME => self.array_buffer_constructor_value().map(Some),
@@ -82,7 +85,6 @@ impl Context {
             SET_NAME => self.set_constructor_value().map(Some),
             STRING_NAME => self.string_constructor_value().map(Some),
             SYMBOL_NAME => self.symbol_constructor_value().map(Some),
-            UINT8_ARRAY_NAME => self.uint8_array_constructor_value().map(Some),
             WEAK_MAP_NAME => self.weak_map_constructor_value().map(Some),
             WEAK_SET_NAME => self.weak_set_constructor_value().map(Some),
             _ => {
@@ -97,6 +99,9 @@ impl Context {
     }
 
     pub(crate) fn direct_builtin_callable_value(&mut self, name: &str) -> Result<Option<Value>> {
+        if let Some(element_kind) = typed_array_element_kind(name) {
+            return self.typed_array_constructor_value(element_kind).map(Some);
+        }
         match name {
             ARRAY_NAME => self.array_constructor_value().map(Some),
             ARRAY_BUFFER_NAME => self.array_buffer_constructor_value().map(Some),
@@ -140,7 +145,6 @@ impl Context {
             SET_NAME => self.set_constructor_value().map(Some),
             STRING_NAME => self.string_constructor_value().map(Some),
             SYMBOL_NAME => self.symbol_constructor_value().map(Some),
-            UINT8_ARRAY_NAME => self.uint8_array_constructor_value().map(Some),
             WEAK_MAP_NAME => self.weak_map_constructor_value().map(Some),
             WEAK_SET_NAME => self.weak_set_constructor_value().map(Some),
             _ => {
@@ -191,7 +195,9 @@ impl Context {
             NativeFunctionKind::Date(DateFunctionKind::Constructor) => {
                 self.construct_date_object(args)
             }
-            NativeFunctionKind::Uint8Array => self.construct_uint8_array(args),
+            NativeFunctionKind::TypedArray(element_kind) => {
+                self.construct_typed_array(element_kind, args)
+            }
             NativeFunctionKind::Map => self.construct_collection_object(
                 crate::runtime::collections::CollectionKind::Map,
                 args,
@@ -616,4 +622,10 @@ impl Context {
         }
         self.to_string(&value)
     }
+}
+
+fn typed_array_element_kind(name: &str) -> Option<TypedArrayElementKind> {
+    TypedArrayElementKind::ALL
+        .into_iter()
+        .find(|element_kind| element_kind.name() == name)
 }

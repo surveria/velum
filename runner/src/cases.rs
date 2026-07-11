@@ -35,6 +35,8 @@ mod cases_test262_collections;
 mod cases_test262_proxy;
 #[path = "cases_test262_reflect.rs"]
 mod cases_test262_reflect;
+#[path = "cases_test262_typed_array.rs"]
+mod cases_test262_typed_array;
 
 pub use crate::benchmark_case::BenchmarkCase;
 pub use cases_reporting::{benchmark_cases, quickjs_differential_cases};

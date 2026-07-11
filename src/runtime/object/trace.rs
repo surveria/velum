@@ -81,7 +81,7 @@ impl Object {
         if let Some(proxy) = &self.proxy_value {
             proxy.visit_strong_edges(visitor)?;
         }
-        if let Some(view) = &self.uint8_array {
+        if let Some(view) = &self.typed_array {
             visitor.visit(
                 VmObjectEdgeKind::InternalSlot,
                 StrongEdgeReference::Object(view.buffer_object()),

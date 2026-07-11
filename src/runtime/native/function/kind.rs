@@ -1,4 +1,5 @@
 use super::date_kind::DateFunctionKind;
+use crate::runtime::object::TypedArrayElementKind;
 use crate::value::{BoundFunctionId, ErrorName, ObjectId};
 
 mod math;
@@ -218,9 +219,6 @@ const SYMBOL_FUNCTION_LENGTH: f64 = 0.0;
 const SYMBOL_FOR_FUNCTION_LENGTH: f64 = 1.0;
 const SYMBOL_KEY_FOR_FUNCTION_LENGTH: f64 = 1.0;
 pub(in crate::runtime::native) const SYMBOL_NAME: &str = "Symbol";
-const UINT8_ARRAY_FUNCTION_LENGTH: f64 = 1.0;
-pub(in crate::runtime::native) const UINT8_ARRAY_NAME: &str = "Uint8Array";
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(in crate::runtime) enum NativeFunctionKind {
     Array,
@@ -490,7 +488,7 @@ pub(in crate::runtime) enum NativeFunctionKind {
     SymbolPrototypeToString,
     SymbolPrototypeValueOf,
     ThrowTypeError,
-    Uint8Array,
+    TypedArray(TypedArrayElementKind),
     WeakMap,
     WeakMapDelete,
     WeakMapGet,
@@ -520,6 +518,8 @@ impl NativeFunctionKind {
                 | Self::Map
                 | Self::Set
                 | Self::Symbol
+                | Self::ArrayBuffer
+                | Self::TypedArray(_)
                 | Self::WeakMap
                 | Self::WeakSet
                 | Self::Date(DateFunctionKind::Constructor)
@@ -572,7 +572,13 @@ impl NativeFunctionKind {
     const fn core_length(self) -> Option<f64> {
         match self {
             Self::ArrayBuffer => Some(ARRAY_BUFFER_FUNCTION_LENGTH),
-            Self::Uint8Array => Some(UINT8_ARRAY_FUNCTION_LENGTH),
+            Self::TypedArray(_)
+            | Self::AsyncGeneratorNext
+            | Self::AsyncGeneratorReturn
+            | Self::AsyncGeneratorThrow
+            | Self::GeneratorNext
+            | Self::GeneratorReturn
+            | Self::GeneratorThrow => Some(1.0),
             Self::AsyncFunction => Some(ASYNC_FUNCTION_FUNCTION_LENGTH),
             Self::AsyncGeneratorFunction => Some(ASYNC_GENERATOR_FUNCTION_FUNCTION_LENGTH),
             Self::Boolean => Some(BOOLEAN_FUNCTION_LENGTH),
@@ -586,12 +592,6 @@ impl NativeFunctionKind {
             Self::FunctionPrototypeApply => Some(FUNCTION_PROTOTYPE_APPLY_LENGTH),
             Self::FunctionPrototypeHasInstance => Some(FUNCTION_PROTOTYPE_HAS_INSTANCE_LENGTH),
             Self::FunctionPrototypeToString => Some(FUNCTION_PROTOTYPE_TO_STRING_LENGTH),
-            Self::AsyncGeneratorNext
-            | Self::AsyncGeneratorReturn
-            | Self::AsyncGeneratorThrow
-            | Self::GeneratorNext
-            | Self::GeneratorReturn
-            | Self::GeneratorThrow => Some(1.0),
             Self::JsonIsRawJson => Some(JSON_IS_RAW_JSON_FUNCTION_LENGTH),
             Self::JsonParse => Some(JSON_PARSE_FUNCTION_LENGTH),
             Self::JsonRawJson => Some(JSON_RAW_JSON_FUNCTION_LENGTH),
@@ -747,7 +747,7 @@ impl NativeFunctionKind {
             Self::Symbol => Some(SYMBOL_NAME),
             Self::SymbolFor => Some("for"),
             Self::SymbolKeyFor => Some("keyFor"),
-            Self::Uint8Array => Some(UINT8_ARRAY_NAME),
+            Self::TypedArray(kind) => Some(kind.name()),
             _ => None,
         }
     }

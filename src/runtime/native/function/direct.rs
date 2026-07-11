@@ -476,7 +476,9 @@ impl Context {
             return result;
         }
         match kind {
-            NativeFunctionKind::ArrayBuffer => self.construct_array_buffer(args),
+            NativeFunctionKind::ArrayBuffer => {
+                Err(Error::type_error("ArrayBuffer constructor requires 'new'"))
+            }
             NativeFunctionKind::AsyncFunction => self.eval_async_function_constructor(args),
             NativeFunctionKind::AsyncGeneratorFunction => {
                 self.eval_async_generator_function_constructor(args)
@@ -535,7 +537,9 @@ impl Context {
             NativeFunctionKind::Symbol => self.eval_symbol_constructor(args),
             NativeFunctionKind::SymbolFor => self.eval_symbol_for(args),
             NativeFunctionKind::SymbolKeyFor => self.eval_symbol_key_for(args),
-            NativeFunctionKind::Uint8Array => self.construct_uint8_array(args),
+            NativeFunctionKind::TypedArray(_) => {
+                Err(Error::type_error("TypedArray constructor requires 'new'"))
+            }
             kind => self
                 .eval_primitive_native_function_kind(kind, args, this_value)
                 .unwrap_or_else(|| {

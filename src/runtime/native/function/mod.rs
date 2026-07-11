@@ -69,7 +69,7 @@ pub(in crate::runtime::native) use kind::{
     STRING_PROTOTYPE_TO_STRING_NAME, STRING_PROTOTYPE_TO_UPPER_CASE_NAME,
     STRING_PROTOTYPE_TRIM_END_NAME, STRING_PROTOTYPE_TRIM_LEFT_NAME, STRING_PROTOTYPE_TRIM_NAME,
     STRING_PROTOTYPE_TRIM_RIGHT_NAME, STRING_PROTOTYPE_TRIM_START_NAME,
-    STRING_PROTOTYPE_VALUE_OF_NAME, STRING_RAW_NAME, SYMBOL_NAME, UINT8_ARRAY_NAME,
+    STRING_PROTOTYPE_VALUE_OF_NAME, STRING_RAW_NAME, SYMBOL_NAME,
 };
 pub(in crate::runtime) use kind::{
     GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,
@@ -131,6 +131,11 @@ impl NativeFunction {
     pub(in crate::runtime) fn intrinsic_property(&self, property: &str) -> Option<Value> {
         match self.kind {
             NativeFunctionKind::Number => number_intrinsic_property(property),
+            NativeFunctionKind::TypedArray(kind) if property == "BYTES_PER_ELEMENT" => {
+                u32::try_from(kind.bytes_per_element())
+                    .ok()
+                    .map(|value| Value::Number(f64::from(value)))
+            }
             _ => None,
         }
     }

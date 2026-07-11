@@ -79,7 +79,7 @@ fn applies_to_index_to_array_buffer_lengths() -> TestResult {
 }
 
 #[test]
-fn applies_to_index_to_uint8_array_lengths() -> TestResult {
+fn applies_array_like_length_to_uint8_array_objects() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
     context.eval(
@@ -90,7 +90,7 @@ fn applies_to_index_to_uint8_array_lengths() -> TestResult {
             hints = hints + hint;
             return 4.9;
         };
-        let array = new Uint8Array(length);
+        let array = new Uint8Array({ length: length });
         "#,
     )?;
     let array = context.eval("array")?;
