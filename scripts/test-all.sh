@@ -43,6 +43,7 @@ if [[ "${RSQJS_PERFORMANCE_ONLY:-0}" != "1" ]]; then
   # --- Fast gates: run the cheap checks first so the pipeline stops before it
   # compiles anything or downloads corpora. On pull requests and merge groups CI
   # sets RSQJS_BASE_REF, which turns on base-relative policy gates.
+  "${script_dir}/check-vendored-regress.sh"
   "${script_dir}/check-touched-file-sizes.sh" "${RSQJS_BASE_REF:-origin/main}"
   "${script_dir}/check-architecture-boundaries.sh" --self-test
   "${script_dir}/test-report-artifact-metadata.sh"

@@ -32,6 +32,14 @@
 !/src/
 !/src/**/
 !/src/**/*.rs
+!/src/regress/Cargo.toml
+!/src/regress/Cargo.toml.orig
+!/src/regress/LICENSE-APACHE
+!/src/regress/LICENSE-MIT
+!/src/regress/README.md
+!/src/regress/VENDORED.md
+!/src/regress/VENDORED-SOURCE-SHA256SUMS
+!/src/regress/rustfmt.toml
 
 !/runner/
 !/runner/.gitignore

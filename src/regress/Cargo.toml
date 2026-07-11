@@ -1,0 +1,32 @@
+# Modified for in-tree use by rs-quickjs. The original published manifest is
+# preserved as Cargo.toml.orig next to this file.
+[package]
+name = "regress"
+version = "0.11.1"
+edition = "2024"
+authors = ["ridiculousfish <corydoras@ridiculousfish.com>"]
+description = "A regular expression engine targeting EcmaScript syntax"
+readme = "README.md"
+keywords = ["regex", "regexp"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ridiculousfish/regress"
+publish = false
+
+[workspace]
+
+[features]
+backend-pikevm = []
+default = ["backend-pikevm", "std"]
+index-positions = []
+pattern = []
+prohibit-unsafe = []
+std = ["memchr/std"]
+utf16 = []
+
+[lib]
+name = "regress"
+path = "src/lib.rs"
+
+[dependencies]
+hashbrown = "0.16.0"
+memchr = { version = "2.4.0", default-features = false }
