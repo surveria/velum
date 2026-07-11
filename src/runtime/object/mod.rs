@@ -320,9 +320,15 @@ impl Object {
         }
         if self.array_length.is_some()
             && let Some(index) = ArrayIndex::parse(property.name())
-            && let Some(value) = self.array_element_value(index)
+            && let Some(element) = self.array_storage.dense_property(index)
         {
-            return Ok(Some(ObjectPropertyValue::value(value)));
+            if let Some(accessor) = element.accessor() {
+                if accessor.has_getter() {
+                    return Ok(Some(ObjectPropertyValue::Getter(accessor.get())));
+                }
+                return Ok(Some(ObjectPropertyValue::value(Value::Undefined)));
+            }
+            return Ok(Some(ObjectPropertyValue::value(element.value())));
         }
         let Some(key) = property.key() else {
             return Ok(None);
@@ -579,9 +585,9 @@ impl Object {
         }
         if self.array_length.is_some()
             && let Some(index) = ArrayIndex::parse(property.name())
-            && self.delete_array_element(index)?
+            && self.has_array_element(index)
         {
-            return Ok(true);
+            return self.delete_array_element(index);
         }
         let Some(key) = property.key() else {
             return Ok(true);

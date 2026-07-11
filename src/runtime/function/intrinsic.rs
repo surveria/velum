@@ -141,8 +141,8 @@ impl FunctionProperty {
         self.property.set_value(value);
     }
 
-    pub(super) fn define(&mut self, update: PropertyUpdate) {
-        self.property.define(update);
+    pub(super) fn define(&mut self, update: PropertyUpdate) -> Result<()> {
+        self.property.define(update)
     }
 
     pub(super) const fn set_enumerable(&mut self, enumerable: PropertyEnumerable) {

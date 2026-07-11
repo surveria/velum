@@ -11,6 +11,8 @@ use crate::{
     value::Value,
 };
 
+const ARRAY_LENGTH_PROPERTY: &str = "length";
+
 impl Context {
     /// Applies `ToPropertyDescriptor` and dispatches object-like
     /// `[[DefineOwnProperty]]` through one owner.
@@ -61,6 +63,28 @@ impl Context {
                 "property definition target must be an object",
             ));
         };
+        if let Value::Object(id) = object_ref.value
+            && property.name() == ARRAY_LENGTH_PROPERTY
+            && self.objects.array_len_if_array(*id)?.is_some()
+        {
+            let PropertyUpdate::Data(mut update) = update else {
+                return Err(Error::type_error(
+                    "array length cannot be defined as an accessor property",
+                ));
+            };
+            let new_length = if let Some(value) = update.value() {
+                let length = self.array_length_from_value(&value)?;
+                let normalized = u32::try_from(length)
+                    .map_err(|_| Error::limit("array length exceeded supported range"))?;
+                update.replace_value(Value::Number(f64::from(normalized)));
+                Some(length)
+            } else {
+                None
+            };
+            self.objects
+                .define_array_length_property(*id, update, new_length)?;
+            return Ok(true);
+        }
         let key = self.intern_dynamic_property_key(property)?;
         match object_ref.value {
             Value::Object(id) => {

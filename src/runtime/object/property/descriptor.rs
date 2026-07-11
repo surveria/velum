@@ -9,6 +9,8 @@ use super::{
     ShapePropertyAttributes, ShapeTable,
 };
 
+mod validation;
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum PropertyEnumerable {
     Yes,
@@ -130,6 +132,14 @@ impl DataPropertyUpdate {
 
     pub const fn configurable(&self) -> Option<PropertyConfigurable> {
         self.configurable
+    }
+
+    pub(in crate::runtime) fn replace_value(&mut self, value: Value) {
+        self.value = Some(value);
+    }
+
+    const fn is_generic(&self) -> bool {
+        self.value.is_none() && self.writable.is_none()
     }
 
     pub fn complete_for_new(self) -> DataPropertyDescriptor {
@@ -297,7 +307,9 @@ impl ObjectProperty {
         }
     }
 
-    const fn from_descriptor(descriptor: DataPropertyDescriptor) -> Self {
+    pub(in crate::runtime::object) const fn from_descriptor(
+        descriptor: DataPropertyDescriptor,
+    ) -> Self {
         Self {
             payload: ObjectPropertyPayload::Data(descriptor),
             version: 0,
@@ -440,11 +452,16 @@ impl ObjectProperty {
         }
     }
 
-    pub fn define(&mut self, update: PropertyUpdate) {
+    pub fn define(&mut self, update: PropertyUpdate) -> Result<()> {
+        self.validate_update(&update)?;
         match update {
+            PropertyUpdate::Data(update) if update.is_generic() => {
+                self.define_generic(update.enumerable, update.configurable);
+            }
             PropertyUpdate::Data(update) => self.define_data(update),
             PropertyUpdate::Accessor(update) => self.define_accessor(update),
         }
+        Ok(())
     }
 
     pub(in crate::runtime::object) const fn seal(&mut self) {
@@ -501,6 +518,32 @@ impl ObjectProperty {
                 self.version = self.version.saturating_add(1);
             }
         }
+    }
+
+    const fn define_generic(
+        &mut self,
+        enumerable: Option<PropertyEnumerable>,
+        configurable: Option<PropertyConfigurable>,
+    ) {
+        match &mut self.payload {
+            ObjectPropertyPayload::Data(descriptor) => {
+                if let Some(enumerable) = enumerable {
+                    descriptor.enumerable = enumerable;
+                }
+                if let Some(configurable) = configurable {
+                    descriptor.configurable = configurable;
+                }
+            }
+            ObjectPropertyPayload::Accessor(descriptor) => {
+                if let Some(enumerable) = enumerable {
+                    descriptor.enumerable = enumerable;
+                }
+                if let Some(configurable) = configurable {
+                    descriptor.configurable = configurable;
+                }
+            }
+        }
+        self.version = self.version.saturating_add(1);
     }
 
     fn define_accessor(&mut self, update: AccessorPropertyUpdate) {
@@ -595,7 +638,7 @@ impl Object {
             && let Some(index) = ArrayIndex::parse(property.name())
             && let Some(descriptor) = self.array_element_descriptor(index)
         {
-            return Ok(Some(OwnPropertyDescriptor::Data(descriptor)));
+            return Ok(Some(descriptor));
         }
         let Some(key) = property.key() else {
             return Ok(None);
@@ -640,7 +683,7 @@ impl Object {
             let (was_enumerable, is_enumerable, attributes) = {
                 let existing = self.named_property_mut(shapes, property)?;
                 let was_enumerable = existing.is_enumerable();
-                existing.define(update);
+                existing.define(update)?;
                 (
                     was_enumerable,
                     existing.is_enumerable(),
@@ -679,23 +722,25 @@ impl Object {
         shapes: &mut ShapeTable,
         max_properties: usize,
     ) -> Result<()> {
+        if self
+            .array_length
+            .is_some_and(|length| !length.contains(index))
+            && !self.array_length_writable.is_yes()
+        {
+            return Err(crate::error::Error::type_error(
+                "cannot define an array index beyond non-writable length",
+            ));
+        }
         if index.dense_position(max_properties)?.is_none() {
             if !self.extensibility.is_extensible() {
                 return Err(crate::error::Error::type_error(
                     "cannot define property on non-extensible object",
                 ));
             }
+            self.define_named_property(property, update, shapes, max_properties)?;
             self.array_storage.insert_sparse_key(index, property);
-            return self.define_named_property(property, update, shapes, max_properties);
+            return self.extend_array_length(index);
         }
-        let PropertyUpdate::Data(update) = update else {
-            // Dense array element storage is data-only; accessor elements on
-            // arrays stay unsupported until array storage learns about them.
-            return Err(crate::error::Error::runtime(
-                "accessor properties are not supported on array elements",
-            ));
-        };
-
         let has_existing = self.array_storage.dense_property(index).is_some();
         if !has_existing && !self.extensibility.is_extensible() {
             return Err(crate::error::Error::type_error(
@@ -709,11 +754,11 @@ impl Object {
         }
         if let Some(existing) = self.array_storage.dense_property_mut(index)? {
             let was_enumerable = existing.is_enumerable();
-            existing.define(PropertyUpdate::Data(update));
+            existing.define(update)?;
             let is_enumerable = existing.is_enumerable();
             self.update_enumerable_property_count(was_enumerable, is_enumerable);
         } else {
-            let property = ObjectProperty::from_descriptor(update.complete_for_new());
+            let property = ObjectProperty::from_update(update);
             let is_enumerable = property.is_enumerable();
             let reservation = self.reserve_property_growth()?;
             let previous = self.array_storage.insert_dense_property(index, property)?;
@@ -732,19 +777,9 @@ impl Object {
         self.extend_array_length(index)
     }
 
-    fn array_element_descriptor(&self, index: ArrayIndex) -> Option<DataPropertyDescriptor> {
-        self.array_storage.dense_property(index).map(|property| {
-            match property.own_descriptor() {
-                OwnPropertyDescriptor::Data(descriptor) => descriptor,
-                // Array element storage is data-only by construction; map a
-                // stray accessor defensively to an undefined data descriptor.
-                OwnPropertyDescriptor::Accessor(descriptor) => DataPropertyDescriptor::new(
-                    Value::Undefined,
-                    PropertyWritable::No,
-                    descriptor.enumerable(),
-                    descriptor.configurable(),
-                ),
-            }
-        })
+    fn array_element_descriptor(&self, index: ArrayIndex) -> Option<OwnPropertyDescriptor> {
+        self.array_storage
+            .dense_property(index)
+            .map(ObjectProperty::own_descriptor)
     }
 }

@@ -7,7 +7,8 @@ use super::property::{
     CacheablePropertyPresence, CacheablePropertyValue, PrototypeTraversalBudget,
 };
 use super::{
-    AccessorWriteDisposition, ObjectHeap, ObjectPropertyValue, PROTOTYPE_PROPERTY, PropertyLookup,
+    AccessorWriteDisposition, ObjectHeap, ObjectPropertyValue, OwnPropertyDescriptor,
+    PROTOTYPE_PROPERTY, PropertyLookup,
 };
 
 const PROTOTYPE_CYCLE_SET_ERROR: &str = "prototype cycle is not allowed";
@@ -147,9 +148,8 @@ impl ObjectHeap {
             budget.enter_next()?;
             let object = self.object(current_id)?;
             if object.has_own(property, &self.shapes)? {
-                if let Some(key) = property.key()
-                    && let Some(named) = object.named_property(&self.shapes, key)?
-                    && let Some(accessor) = named.accessor()
+                if let Some(OwnPropertyDescriptor::Accessor(accessor)) =
+                    self.own_property_descriptor(current_id, property)?
                 {
                     if accessor.has_setter() {
                         return Ok(AccessorWriteDisposition::Setter(accessor.set()));

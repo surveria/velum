@@ -1,5 +1,5 @@
 use crate::{
-    error::Result,
+    error::{Error, Result},
     value::{ObjectId, Value},
 };
 
@@ -7,6 +7,28 @@ use super::{ArrayIndex, ObjectHeap};
 use crate::runtime::object::typed_array_number;
 
 impl ObjectHeap {
+    fn array_index_has_accessor_in_chain(&self, id: ObjectId, index: ArrayIndex) -> Result<bool> {
+        let mut current = Some(id);
+        let mut visited = Vec::new();
+        while let Some(current_id) = current {
+            if visited.contains(&current_id) {
+                return Err(Error::runtime("prototype cycle detected"));
+            }
+            visited.push(current_id);
+            let object = self.object(current_id)?;
+            if let Some(property) = object.array_storage.dense_property(index) {
+                return Ok(property.accessor().is_some());
+            }
+            if let Some(key) = object.array_storage.sparse_key(index)
+                && let Some(property) = object.named_property(&self.shapes, key)?
+            {
+                return Ok(property.accessor().is_some());
+            }
+            current = object.prototype;
+        }
+        Ok(false)
+    }
+
     pub(crate) fn dynamic_array_index_if_array(
         &self,
         id: ObjectId,
@@ -33,6 +55,9 @@ impl ObjectHeap {
             return Ok(None);
         }
         let index = ArrayIndex::from_usize(index)?;
+        if self.array_index_has_accessor_in_chain(id, index)? {
+            return Ok(None);
+        }
         self.get_array_index(id, index).map(Some)
     }
 
@@ -66,6 +91,9 @@ impl ObjectHeap {
             return Ok(false);
         }
         let index = ArrayIndex::from_usize(index)?;
+        if self.array_index_has_accessor_in_chain(id, index)? {
+            return Ok(false);
+        }
         if index.dense_position(max_properties)?.is_none() {
             return Ok(false);
         }

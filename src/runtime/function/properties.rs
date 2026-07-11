@@ -434,7 +434,7 @@ impl FunctionProperties {
             return Ok(());
         }
         if let Some(existing) = self.function_property_mut(property) {
-            existing.define(update);
+            existing.define(update)?;
             return Ok(());
         }
         if self.property_order.len() >= max_properties {

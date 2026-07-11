@@ -276,6 +276,126 @@ fn object_create_uses_catchable_type_errors_and_shared_descriptors() -> TestResu
     ensure_value(&value, &Value::Bool(true))
 }
 
+#[test]
+fn object_define_properties_validates_and_applies_shared_descriptors() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        function throwsTypeError(callback) {
+            try {
+                callback();
+                return false;
+            } catch (error) {
+                return error instanceof TypeError;
+            }
+        }
+
+        let setterValue = 0;
+        function getter() { return setterValue; }
+        function setter(value) { setterValue = value; }
+        let target = {};
+        Object.defineProperty(target, "locked", {
+            value: 1,
+            writable: false,
+            configurable: false
+        });
+        Object.defineProperty(target, "accessor", {
+            get: getter,
+            set: setter,
+            enumerable: true,
+            configurable: false
+        });
+        Object.defineProperties(target, { accessor: {} });
+        target.accessor = 7;
+
+        let atomic = {};
+        let atomicFailure = throwsTypeError(function() {
+            Object.defineProperties(atomic, {
+                first: { value: 1 },
+                second: null
+            });
+        });
+        let descriptor = Object.getOwnPropertyDescriptor(target, "accessor");
+
+        throwsTypeError(function() { Object.defineProperties(undefined, {}); }) &&
+            throwsTypeError(function() { Object.defineProperties(null, {}); }) &&
+            throwsTypeError(function() { Object.defineProperties(1, {}); }) &&
+            throwsTypeError(function() {
+                Object.defineProperties(target, { locked: { value: 2 } });
+            }) &&
+            throwsTypeError(function() {
+                Object.defineProperties(target, {
+                    accessor: { get: function() { return 2; } }
+                });
+            }) &&
+            throwsTypeError(function() {
+                Object.defineProperties(target, { accessor: { configurable: true } });
+            }) &&
+            atomicFailure && !Object.hasOwn(atomic, "first") &&
+            setterValue === 7 && target.accessor === 7 &&
+            descriptor.get === getter && descriptor.set === setter &&
+            descriptor.enumerable === true && descriptor.configurable === false
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn object_define_properties_preserves_array_exotic_invariants() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r#"
+        let array = [0, 1, 2];
+        Object.defineProperty(array, "1", { configurable: false });
+        let shrinkRejected = false;
+        try {
+            Object.defineProperties(array, {
+                length: { value: 0, writable: false }
+            });
+        } catch (error) {
+            shrinkRejected = error instanceof TypeError;
+        }
+        let lengthWriteRejected = false;
+        try {
+            array.length = 5;
+        } catch (error) {
+            lengthWriteRejected = error instanceof TypeError;
+        }
+
+        let setterValue = 0;
+        let accessorArray = [];
+        Object.defineProperties(accessorArray, {
+            "0": {
+                get: function() { return setterValue; },
+                set: function(value) { setterValue = value; },
+                enumerable: true
+            }
+        });
+        accessorArray[0] = 11;
+
+        let huge = [];
+        huge.length = 4294967294;
+        Object.defineProperties(huge, { length: { value: 0 } });
+        Object.defineProperties(huge, { "4294967294": { value: 19 } });
+
+        let negativeZero = [1, 2];
+        Object.defineProperties(negativeZero, { length: { value: -0 } });
+
+        shrinkRejected && lengthWriteRejected &&
+            array.length === 2 && array[0] === 0 && array[1] === 1 &&
+            !Object.hasOwn(array, "2") &&
+            Object.getOwnPropertyDescriptor(array, "length").writable === false &&
+            accessorArray.length === 1 && accessorArray[0] === 11 &&
+            setterValue === 11 &&
+            huge.length === 4294967295 && huge[4294967294] === 19 &&
+            negativeZero.length === 0
+        "#,
+    )?;
+    ensure_value(&value, &Value::Bool(true))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
