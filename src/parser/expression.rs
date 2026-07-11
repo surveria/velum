@@ -291,7 +291,7 @@ impl Parser {
         ))
     }
 
-    fn template_literal(&mut self, head: String, start: crate::SourceSpan) -> Result<Expression> {
+    fn template_literal(&mut self, head: Vec<u16>, start: crate::SourceSpan) -> Result<Expression> {
         let mut quasis = vec![self.static_string(head)?];
         let mut expressions = Vec::new();
         loop {
@@ -396,8 +396,8 @@ impl Parser {
             TokenKind::TemplateHead(head) => self.template_literal(head, token_span)?,
             TokenKind::RegExp { pattern, flags } => Expression::new(
                 Expr::RegExpLiteral {
-                    pattern: self.static_string(pattern)?,
-                    flags: self.static_string(flags)?,
+                    pattern: self.static_string(pattern.encode_utf16().collect())?,
+                    flags: self.static_string(flags.encode_utf16().collect())?,
                 },
                 token_span,
             ),

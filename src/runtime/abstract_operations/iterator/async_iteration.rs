@@ -89,17 +89,16 @@ impl Context {
             ));
         }
         match &mut continuation.source {
-            source @ (IteratorSource::ArrayIndex { .. } | IteratorSource::Chars { .. }) => {
-                match self.iterator_step(source)? {
-                    IteratorStep::Value(value) => {
-                        self.await_sync_iterator_result(continuation, value, false)
-                    }
-                    IteratorStep::Done => {
-                        self.await_sync_iterator_result(continuation, Value::Undefined, true)
-                    }
-                    IteratorStep::Abrupt(completion) => Ok(AsyncIteratorStep::Abrupt(completion)),
+            source @ (IteratorSource::ArrayIndex { .. }
+            | IteratorSource::Utf16CodePoints { .. }) => match self.iterator_step(source)? {
+                IteratorStep::Value(value) => {
+                    self.await_sync_iterator_result(continuation, value, false)
                 }
-            }
+                IteratorStep::Done => {
+                    self.await_sync_iterator_result(continuation, Value::Undefined, true)
+                }
+                IteratorStep::Abrupt(completion) => Ok(AsyncIteratorStep::Abrupt(completion)),
+            },
             IteratorSource::Protocol {
                 iterator,
                 next,

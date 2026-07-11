@@ -17,7 +17,7 @@ mod match_result;
 
 use engine::{
     escaped_regexp_source, parse_regexp_flags, regexp_find, regexp_index_usize_to_number,
-    validate_regexp_pattern,
+    regexp_test_utf16, validate_regexp_pattern,
 };
 
 use super::{
@@ -122,11 +122,9 @@ impl Context {
         args: RuntimeCallArgs<'_>,
         this_value: &Value,
     ) -> Result<Value> {
-        let input = self.regexp_argument_or_undefined(args.as_slice().first())?;
-        Ok(Value::Bool(!matches!(
-            self.regexp_exec(this_value, &input)?,
-            Value::Null
-        )))
+        let input = self.regexp_argument_utf16_or_undefined(args.as_slice().first())?;
+        self.regexp_test_code_units(this_value, &input)
+            .map(Value::Bool)
     }
 
     pub(in crate::runtime::native) fn eval_regexp_prototype_to_string(
@@ -296,6 +294,13 @@ impl Context {
         match value {
             Some(value) => self.to_string(value),
             None => self.to_string(&Value::Undefined),
+        }
+    }
+
+    fn regexp_argument_utf16_or_undefined(&mut self, value: Option<&Value>) -> Result<Vec<u16>> {
+        match value {
+            Some(value) => self.to_utf16_string(value),
+            None => self.to_utf16_string(&Value::Undefined),
         }
     }
 
@@ -524,6 +529,28 @@ impl Context {
             .ok_or_else(|| Error::type_error(REGEXP_RECEIVER_ERROR))
     }
 
+    fn regexp_test_code_units(&mut self, this_value: &Value, input: &[u16]) -> Result<bool> {
+        let regexp = self.regexp_receiver_data(this_value)?;
+        let flags = parse_regexp_flags(regexp.flags())?;
+        self.charge_regexp_utf16_work(regexp.pattern(), input)?;
+        let start = if flags.global() || flags.sticky() {
+            self.regexp_last_index_utf16(this_value, input)?
+        } else {
+            0
+        };
+        let matched = regexp_test_utf16(regexp.pattern(), flags, input, start)?;
+        let Some(range) = matched else {
+            if flags.global() || flags.sticky() {
+                self.set_regexp_last_index(this_value, 0)?;
+            }
+            return Ok(false);
+        };
+        if flags.global() || flags.sticky() {
+            self.set_regexp_last_index(this_value, range.end)?;
+        }
+        Ok(true)
+    }
+
     pub(in crate::runtime::native) fn regexp_exec(
         &mut self,
         this_value: &Value,
@@ -577,10 +604,33 @@ impl Context {
         self.charge_runtime_steps(steps)
     }
 
+    fn charge_regexp_utf16_work(&mut self, pattern: &str, input: &[u16]) -> Result<()> {
+        let steps = pattern
+            .encode_utf16()
+            .count()
+            .checked_add(input.len())
+            .and_then(|steps| steps.checked_add(1))
+            .ok_or_else(|| Error::limit("RegExp work estimate overflowed"))?;
+        self.charge_runtime_steps(steps)
+    }
+
     fn regexp_last_index(&mut self, this_value: &Value, input: &str) -> Result<usize> {
         let value = self.get_named(this_value, REGEXP_LAST_INDEX_PROPERTY)?;
         let index = self.to_length(&value)?;
         let input_length = u64::try_from(input.encode_utf16().count())
+            .map_err(|_| Error::limit("RegExp input length exceeded supported range"))?;
+        if index > input_length {
+            let input_length = usize::try_from(input_length)
+                .map_err(|_| Error::limit("RegExp input length exceeded supported range"))?;
+            return Ok(input_length.saturating_add(1));
+        }
+        Self::length_to_usize(index, "RegExp lastIndex exceeded supported range")
+    }
+
+    fn regexp_last_index_utf16(&mut self, this_value: &Value, input: &[u16]) -> Result<usize> {
+        let value = self.get_named(this_value, REGEXP_LAST_INDEX_PROPERTY)?;
+        let index = self.to_length(&value)?;
+        let input_length = u64::try_from(input.len())
             .map_err(|_| Error::limit("RegExp input length exceeded supported range"))?;
         if index > input_length {
             let input_length = usize::try_from(input_length)

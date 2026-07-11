@@ -17,14 +17,11 @@ impl Token {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     Number(f64),
-    String(String),
-    TemplateHead(String),
-    TemplateMiddle(String),
-    TemplateTail(String),
-    RegExp {
-        pattern: String,
-        flags: String,
-    },
+    String(Vec<u16>),
+    TemplateHead(Vec<u16>),
+    TemplateMiddle(Vec<u16>),
+    TemplateTail(Vec<u16>),
+    RegExp { pattern: String, flags: String },
     Identifier(String),
     /// A `#name` private identifier; the text keeps its leading `#` so
     /// private names can never collide with public identifier names.

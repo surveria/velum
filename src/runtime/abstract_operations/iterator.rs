@@ -30,7 +30,9 @@ pub(in crate::runtime) enum IteratorSource {
     /// observable length reads and element access.
     ArrayIndex { array: Value, index: usize },
     /// Code-point iteration over an immutable string snapshot.
-    Chars { chars: std::vec::IntoIter<char> },
+    Utf16CodePoints {
+        units: std::iter::Peekable<std::vec::IntoIter<u16>>,
+    },
     /// ECMAScript iterator record with the `next` method cached at acquisition.
     Protocol {
         iterator: Value,
@@ -44,7 +46,7 @@ impl IteratorSource {
         match self {
             Self::ArrayIndex { array, .. } => [Some(array), None],
             Self::Protocol { iterator, next, .. } => [Some(iterator), Some(next)],
-            Self::Chars { .. } => [None, None],
+            Self::Utf16CodePoints { .. } => [None, None],
         }
     }
 
@@ -140,13 +142,13 @@ impl Context {
                 if let Some(method) = self.iterator_method(&iterable)? {
                     return self.get_iterator_from_method(&iterable, &method);
                 }
-                Ok(chars_source(text))
+                Ok(utf16_source(text.encode_utf16()))
             }
             Value::HeapString(text) => {
                 if let Some(method) = self.iterator_method(&iterable)? {
                     return self.get_iterator_from_method(&iterable, &method);
                 }
-                Ok(chars_source(text.as_str()))
+                Ok(utf16_source(text.as_utf16().iter().copied()))
             }
             Value::Object(id) => {
                 if let Some(method) = self.iterator_method(&iterable)? {
@@ -163,8 +165,8 @@ impl Context {
                 if self.objects.array_len_if_array(*id)?.is_some() {
                     return Err(not_iterable_error(&iterable));
                 }
-                if let Some(text) = self.string_object_primitive_value(*id)? {
-                    return Ok(chars_source(text));
+                if let Some(text) = self.string_object_utf16_primitive_value(*id)? {
+                    return Ok(utf16_source(text.iter().copied()));
                 }
                 Err(not_iterable_error(&iterable))
             }
@@ -248,8 +250,23 @@ impl Context {
                 let array = array.clone();
                 Ok(IteratorStep::Value(self.get_named(&array, &key)?))
             }
-            IteratorSource::Chars { chars } => match chars.next() {
-                Some(ch) => Ok(IteratorStep::Value(self.heap_string_char_value(ch)?)),
+            IteratorSource::Utf16CodePoints { units } => match units.next() {
+                Some(first) => {
+                    let mut code_point = vec![first];
+                    if (0xD800..=0xDBFF).contains(&first)
+                        && units
+                            .peek()
+                            .is_some_and(|second| (0xDC00..=0xDFFF).contains(second))
+                    {
+                        let Some(second) = units.next() else {
+                            return Err(Error::runtime("UTF-16 iterator lookahead disappeared"));
+                        };
+                        code_point.push(second);
+                    }
+                    Ok(IteratorStep::Value(
+                        self.heap_utf16_string_value(&code_point)?,
+                    ))
+                }
                 None => Ok(IteratorStep::Done),
             },
             IteratorSource::Protocol {
@@ -334,7 +351,7 @@ impl Context {
         value: &Value,
     ) -> Result<YieldDelegateStep> {
         match source {
-            IteratorSource::ArrayIndex { .. } | IteratorSource::Chars { .. } => {
+            IteratorSource::ArrayIndex { .. } | IteratorSource::Utf16CodePoints { .. } => {
                 match self.iterator_step(source)? {
                     IteratorStep::Value(value) => Ok(YieldDelegateStep::Yielded(value)),
                     IteratorStep::Done => Ok(YieldDelegateStep::Complete(Value::Undefined)),
@@ -589,16 +606,16 @@ impl Context {
             IteratorSource::Protocol { iterator, next, .. } => {
                 self.transient_root_scope(VmRootKind::TransientTemporary, [iterator, next])
             }
-            IteratorSource::Chars { .. } => {
+            IteratorSource::Utf16CodePoints { .. } => {
                 self.transient_root_scope(VmRootKind::TransientTemporary, std::iter::empty())
             }
         }
     }
 }
 
-fn chars_source(text: &str) -> IteratorSource {
-    IteratorSource::Chars {
-        chars: text.chars().collect::<Vec<_>>().into_iter(),
+fn utf16_source(units: impl Iterator<Item = u16>) -> IteratorSource {
+    IteratorSource::Utf16CodePoints {
+        units: units.collect::<Vec<_>>().into_iter().peekable(),
     }
 }
 

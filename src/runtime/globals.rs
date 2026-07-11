@@ -157,12 +157,33 @@ impl Context {
         Ok(string)
     }
 
+    pub(crate) fn intern_utf16_heap_string(&mut self, units: &[u16]) -> Result<JsString> {
+        self.check_utf16_string_len(units)?;
+        let reservation = if self.strings.contains_utf16(units) {
+            None
+        } else {
+            Some(
+                self.storage_ledger
+                    .reserve_count(crate::runtime::VmStorageKind::CacheEntry, 1)?,
+            )
+        };
+        let string = self.strings.intern_utf16(units)?;
+        if let Some(reservation) = reservation {
+            reservation.commit()?;
+        }
+        Ok(string)
+    }
+
     pub(crate) fn heap_string_value(&mut self, text: &str) -> Result<Value> {
         self.intern_heap_string(text).map(Value::HeapString)
     }
 
     pub(crate) fn heap_string_owned_value(&mut self, text: String) -> Result<Value> {
         self.intern_owned_heap_string(text).map(Value::HeapString)
+    }
+
+    pub(crate) fn heap_utf16_string_value(&mut self, units: &[u16]) -> Result<Value> {
+        self.intern_utf16_heap_string(units).map(Value::HeapString)
     }
 
     pub(crate) fn create_symbol_value(&mut self, description: Option<&str>) -> Result<Value> {

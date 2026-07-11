@@ -24,7 +24,7 @@ impl StaticStringTable {
         self.strings.len()
     }
 
-    pub(super) fn intern_owned(&mut self, value: String, offset: usize) -> Result<StaticString> {
+    pub(super) fn intern_owned(&mut self, value: Vec<u16>, offset: usize) -> Result<StaticString> {
         let position = match self.static_string_position(&value) {
             Ok(position) => return self.static_string_at_index_position(position, offset),
             Err(position) => position,
@@ -58,9 +58,9 @@ impl StaticStringTable {
             .ok_or_else(|| Error::parse("static string id is not defined", offset))
     }
 
-    fn static_string_position(&self, value: &str) -> std::result::Result<usize, usize> {
+    fn static_string_position(&self, value: &[u16]) -> std::result::Result<usize, usize> {
         self.index
-            .binary_search_by(|entry| entry.as_str().cmp(value))
+            .binary_search_by(|entry| entry.as_utf16().cmp(value))
     }
 }
 
@@ -74,8 +74,8 @@ impl StaticStringIndexEntry {
         Self { value }
     }
 
-    fn as_str(&self) -> &str {
-        self.value.as_str()
+    fn as_utf16(&self) -> &[u16] {
+        self.value.as_utf16()
     }
 
     const fn id(&self) -> StaticStringId {

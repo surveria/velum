@@ -228,7 +228,7 @@ impl Parser {
         self.static_binding(name)
     }
 
-    pub(super) fn static_string(&mut self, value: String) -> Result<StaticString> {
+    pub(super) fn static_string(&mut self, value: Vec<u16>) -> Result<StaticString> {
         self.static_strings
             .intern_owned(value, self.previous_offset())
     }

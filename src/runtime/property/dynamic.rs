@@ -4,12 +4,11 @@ use crate::{
     runtime::object::{PropertyKey, PropertyLookup},
     runtime::property::{
         DynamicPropertyKey, PropertyValue, StringPropertyValue, get_property_with_receiver,
-        has_property, string_property_value,
+        has_property, string_property_value, utf16_string_property_value,
     },
     value::{ObjectId, Value},
 };
 
-const MAX_UTF8_CHAR_BYTES: usize = 4;
 const STRING_CONSTRUCTOR_PROPERTY: &str = "constructor";
 
 impl Context {
@@ -26,7 +25,7 @@ impl Context {
     ) -> Result<Value> {
         match value {
             PropertyValue::Value(value) => self.runtime_value(value),
-            PropertyValue::Character(ch) => self.heap_string_char_value(ch),
+            PropertyValue::CodeUnit(unit) => self.heap_string_code_unit_value(unit),
             PropertyValue::Getter { getter, receiver } => {
                 let value = self.call_accessor_getter(&getter, receiver)?;
                 self.runtime_value(value)
@@ -45,16 +44,33 @@ impl Context {
         }
         match string_property_value(value, property)? {
             StringPropertyValue::Length(value) => Ok(Value::Number(value)),
-            StringPropertyValue::Character(ch) => self.heap_string_char_value(ch),
+            StringPropertyValue::CodeUnit(unit) => self.heap_string_code_unit_value(unit),
             StringPropertyValue::Missing => {
                 self.string_prototype_property_value(receiver, property)
             }
         }
     }
 
-    pub(in crate::runtime) fn heap_string_char_value(&mut self, ch: char) -> Result<Value> {
-        let mut buffer = [0_u8; MAX_UTF8_CHAR_BYTES];
-        self.heap_string_value(ch.encode_utf8(&mut buffer))
+    pub(in crate::runtime) fn heap_string_code_unit_value(&mut self, unit: u16) -> Result<Value> {
+        self.heap_utf16_string_value(&[unit])
+    }
+
+    pub(in crate::runtime) fn get_utf16_string_property_value(
+        &mut self,
+        receiver: &Value,
+        value: &[u16],
+        property: &str,
+    ) -> Result<Value> {
+        if property == STRING_CONSTRUCTOR_PROPERTY {
+            return self.string_constructor_value();
+        }
+        match utf16_string_property_value(value, property)? {
+            StringPropertyValue::Length(value) => Ok(Value::Number(value)),
+            StringPropertyValue::CodeUnit(unit) => self.heap_string_code_unit_value(unit),
+            StringPropertyValue::Missing => {
+                self.string_prototype_property_value(receiver, property)
+            }
+        }
     }
 
     pub(in crate::runtime) fn get_string_object_property_value(
@@ -62,17 +78,17 @@ impl Context {
         id: ObjectId,
         property: &str,
     ) -> Result<Option<Value>> {
-        let Some(ch) = self.objects.string_object_character(id, property)? else {
+        let Some(unit) = self.objects.string_object_code_unit(id, property)? else {
             return Ok(None);
         };
-        self.heap_string_char_value(ch).map(Some)
+        self.heap_string_code_unit_value(unit).map(Some)
     }
 
-    pub(in crate::runtime) fn string_object_primitive_value(
+    pub(in crate::runtime) fn string_object_utf16_primitive_value(
         &self,
         id: ObjectId,
-    ) -> Result<Option<&str>> {
-        self.objects.string_object_value(id)
+    ) -> Result<Option<&[u16]>> {
+        self.objects.string_object_utf16_value(id)
     }
 
     pub(in crate::runtime) fn primitive_prototype_property_value(

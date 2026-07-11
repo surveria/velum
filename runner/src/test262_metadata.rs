@@ -30,9 +30,10 @@ const NEGATIVE_PHASE_RUNTIME: &str = "runtime";
 const TEST262_MAX_BINDINGS: usize = 65_536;
 const TEST262_MAX_OBJECT_PROPERTIES: usize = 65_536;
 const TEST262_MAX_OBJECTS: usize = 65_536;
-const TEST262_MAX_RUNTIME_STEPS: usize = 1_000_000;
+const TEST262_MAX_RUNTIME_STEPS: usize = 100_000_000;
 const TEST262_MAX_SOURCE_LEN: usize = 1_048_576;
 const TEST262_MAX_STATEMENTS: usize = 65_536;
+const TEST262_MAX_STRING_LEN: usize = 8_388_608;
 const COMPAT_STA_SOURCE: &str = r#"
 let Test262Error = function Test262Error(message) {
     this.message = message || "";
@@ -467,6 +468,7 @@ fn test262_limits() -> RuntimeLimits {
         max_source_len: TEST262_MAX_SOURCE_LEN,
         max_statements: TEST262_MAX_STATEMENTS,
         max_runtime_steps: TEST262_MAX_RUNTIME_STEPS,
+        max_string_len: TEST262_MAX_STRING_LEN,
         max_bindings: TEST262_MAX_BINDINGS,
         max_objects: TEST262_MAX_OBJECTS,
         max_object_properties: TEST262_MAX_OBJECT_PROPERTIES,

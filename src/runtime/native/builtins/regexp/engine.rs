@@ -50,6 +50,25 @@ pub(super) fn regexp_find(
     }))
 }
 
+pub(super) fn regexp_test_utf16(
+    pattern: &str,
+    flags: RegExpFlags,
+    input: &[u16],
+    start: usize,
+) -> Result<Option<Range<usize>>> {
+    if start > input.len() {
+        return Ok(None);
+    }
+    let compiled = compile_regexp(pattern, flags)?;
+    let Some(matched) = compiled.find_from_utf16(input, start).next() else {
+        return Ok(None);
+    };
+    if flags.sticky() && matched.start() != start {
+        return Ok(None);
+    }
+    Ok(Some(matched.range()))
+}
+
 fn compile_regexp(pattern: &str, flags: RegExpFlags) -> Result<regress::Regex> {
     compile_regexp_syntax(pattern, flags).map_err(|error| regexp_syntax_error(&error))
 }

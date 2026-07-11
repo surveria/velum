@@ -49,8 +49,12 @@ impl PartialEq for Value {
             (Self::Number(left), Self::Number(right)) => left == right,
             (Self::String(left), Self::String(right)) => left == right,
             (Self::HeapString(left), Self::HeapString(right)) => left == right,
-            (Self::String(left), Self::HeapString(right)) => left == right.as_str(),
-            (Self::HeapString(left), Self::String(right)) => left.as_str() == right,
+            (Self::String(left), Self::HeapString(right)) => {
+                left.encode_utf16().eq(right.as_utf16().iter().copied())
+            }
+            (Self::HeapString(left), Self::String(right)) => {
+                right.encode_utf16().eq(left.as_utf16().iter().copied())
+            }
             (Self::Symbol(left), Self::Symbol(right)) => left == right,
             (Self::Function(left), Self::Function(right)) => left == right,
             (Self::NativeFunction(left), Self::NativeFunction(right)) => left == right,

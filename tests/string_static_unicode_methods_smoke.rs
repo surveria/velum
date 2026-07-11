@@ -83,6 +83,44 @@ fn supports_string_static_and_unicode_methods() -> TestResult {
 }
 
 #[test]
+fn preserves_lone_utf16_surrogates_in_strings_and_regexp_tests() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let high = String.fromCodePoint(0xD800);
+        let low = String.fromCharCode(0xDFFF);
+        let literal = "\uD800";
+        let braced = "\u{DFFF}";
+        let template = `\uD800`;
+        let concatenated = "prefix" + high + low + "suffix";
+        let iterated = [];
+        for (let value of high) iterated.push(value.charCodeAt(0));
+
+        high.length === 1 &&
+            high.charCodeAt(0) === 0xD800 &&
+            high.codePointAt(0) === 0xD800 &&
+            high[0].charCodeAt(0) === 0xD800 &&
+            low.length === 1 &&
+            low.charCodeAt(0) === 0xDFFF &&
+            literal.charCodeAt(0) === 0xD800 &&
+            braced.charCodeAt(0) === 0xDFFF &&
+            template.charCodeAt(0) === 0xD800 &&
+            concatenated.length === 14 &&
+            concatenated.charCodeAt(6) === 0xD800 &&
+            concatenated.charCodeAt(7) === 0xDFFF &&
+            iterated.length === 1 &&
+            iterated[0] === 0xD800 &&
+            /^\D$/u.test(high) &&
+            /^.$/su.test(low) ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn rejects_invalid_string_static_and_value_receivers() -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();
