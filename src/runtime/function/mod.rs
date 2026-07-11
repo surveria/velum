@@ -23,6 +23,7 @@ mod fast_path;
 mod intrinsic;
 mod names;
 mod parameters;
+mod pre_setup;
 mod properties;
 mod property_dispatch;
 mod storage;
@@ -463,32 +464,6 @@ impl Context {
         binding_result?;
         activation_result?;
         result
-    }
-
-    fn try_eval_pre_setup_function_fast_path(
-        &mut self,
-        id: FunctionId,
-        raw_args: &[Value],
-    ) -> Result<Option<Completion>> {
-        let current_layout = self.current_static_binding_layout();
-        let Some((fast_path, fast_upvalues)) = ({
-            let function = self.function(id)?;
-            if function.static_binding_layout != current_layout {
-                return Ok(None);
-            }
-            function.fast_path.as_ref().map(|fast_path| {
-                let upvalues = if fast_path.needs_upvalues() {
-                    Some(Rc::clone(&function.upvalues))
-                } else {
-                    None
-                };
-                (Rc::clone(fast_path), upvalues)
-            })
-        }) else {
-            return Ok(None);
-        };
-        let upvalues = fast_upvalues.as_deref().unwrap_or(&[]);
-        self.eval_bytecode_function_pre_setup_fast_path(&fast_path, raw_args, upvalues)
     }
 
     pub(in crate::runtime) fn current_super_frame(&self) -> Option<Rc<FunctionSuperBinding>> {
