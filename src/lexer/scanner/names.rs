@@ -13,7 +13,7 @@ impl Lexer<'_> {
     pub(super) fn identifier(&mut self, offset: usize) -> Result<()> {
         let (text, escaped) = self.identifier_name_text(offset)?;
         let kind = identifier_kind(text, escaped);
-        self.push(kind, offset);
+        self.push_with_identifier_escape(kind, offset, escaped);
         Ok(())
     }
 

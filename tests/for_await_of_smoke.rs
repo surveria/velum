@@ -162,3 +162,12 @@ fn allows_for_await_only_in_async_functions() -> TestResult {
     }
     Err(format!("unexpected parser error: {error}").into())
 }
+
+#[test]
+fn rejects_escaped_for_await_of_keyword() -> TestResult {
+    let source = r"async function f() { for await (var value o\u0066 []) {} }";
+    if eval(source).is_err() {
+        return Ok(());
+    }
+    Err("escaped for-await-of keyword unexpectedly parsed".into())
+}
