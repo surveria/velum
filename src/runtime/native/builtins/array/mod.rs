@@ -57,6 +57,7 @@ impl Context {
         let name = self.native_function_name_value(NativeFunctionKind::Array)?;
         self.push_native_function_with_id(id, NativeFunctionKind::Array, prototype, name)?;
         self.install_array_static_methods(id)?;
+        self.install_species_accessor(id)?;
         self.install_array_prototype_methods(prototype_id)?;
         self.insert_global_builtin(ARRAY_NAME, constructor.clone())?;
         Ok(constructor)

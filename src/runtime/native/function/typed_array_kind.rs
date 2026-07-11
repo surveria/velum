@@ -30,7 +30,6 @@ pub(in crate::runtime) enum TypedArrayFunctionKind {
     Slice,
     Some,
     Sort,
-    SpeciesGetter,
     Subarray,
     ToLocaleString,
     ToReversed,
@@ -75,7 +74,6 @@ impl TypedArrayFunctionKind {
             | Self::LengthGetter
             | Self::Of
             | Self::Reverse
-            | Self::SpeciesGetter
             | Self::ToLocaleString
             | Self::ToReversed
             | Self::ToString
@@ -116,7 +114,6 @@ impl TypedArrayFunctionKind {
             Self::Slice => "slice",
             Self::Some => "some",
             Self::Sort => "sort",
-            Self::SpeciesGetter => "get [Symbol.species]",
             Self::Subarray => "subarray",
             Self::ToLocaleString => "toLocaleString",
             Self::ToReversed => "toReversed",

@@ -58,6 +58,7 @@ impl Context {
         let prototype = Value::Object(prototype_id);
         let name = self.native_function_name_value(NativeFunctionKind::RegExp)?;
         self.push_native_function_with_id(id, NativeFunctionKind::RegExp, prototype, name)?;
+        self.install_species_accessor(id)?;
         self.install_regexp_prototype_methods(prototype_id)?;
         self.install_regexp_prototype_symbol_methods(prototype_id)?;
         self.insert_global_builtin(REGEXP_NAME, constructor.clone())?;

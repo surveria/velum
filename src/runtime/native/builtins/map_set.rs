@@ -96,6 +96,7 @@ impl Context {
         )?;
         let name = self.native_function_name_value(constructor_kind)?;
         self.push_native_function_with_id(id, constructor_kind, Value::Object(prototype), name)?;
+        self.install_species_accessor(id)?;
         self.install_collection_prototype_methods(prototype, kind)?;
         let global_name = match kind {
             CollectionKind::Map => MAP_NAME,

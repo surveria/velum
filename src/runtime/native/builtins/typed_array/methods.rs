@@ -93,7 +93,6 @@ impl Context {
             | TypedArrayFunctionKind::ReduceRight
             | TypedArrayFunctionKind::Reverse
             | TypedArrayFunctionKind::Some
-            | TypedArrayFunctionKind::SpeciesGetter
             | TypedArrayFunctionKind::ToLocaleString
             | TypedArrayFunctionKind::ToString
             | TypedArrayFunctionKind::ToStringTagGetter => Err(Error::runtime(
@@ -128,7 +127,6 @@ impl Context {
             TypedArrayFunctionKind::ToStringTagGetter => {
                 Some(self.eval_typed_array_to_string_tag(this_value))
             }
-            TypedArrayFunctionKind::SpeciesGetter => Some(Ok(this_value.clone())),
             TypedArrayFunctionKind::From => Some(self.eval_typed_array_from(args, this_value)),
             TypedArrayFunctionKind::Of => Some(self.eval_typed_array_of(args, this_value)),
             _ => None,
