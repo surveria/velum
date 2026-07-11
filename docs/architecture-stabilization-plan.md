@@ -2540,11 +2540,19 @@ AS-09g profile evidence in draft PR #456:
   expected variants, 20,612/53,404 files, and 39,835/102,578 full variants;
   the permanent suites remain green at 69/69 engine fixtures, 118/118 active
   Test262 cases, and 96/96 QuickJS differential cases in
-  `target/as09g-full-baseline-final.*`;
+  `target/as09g-full-baseline-final.*`; the complete local correctness gate
+  reproduces those totals in
+  `target/rsqjs-reports/test-runs/rsqjs-test-report-20260711T085840Z.*`;
+- adjacent main/branch and reverse-control performance pairs keep every
+  sentinel valid. The primary branch/main medians are arithmetic 88.97/92.61
+  ms, array 2.35/2.44 ms, property 242.45/294.04 ms, function 163.20/162.96
+  ms, and string 73.88/74.29 ms. The reverse branch/main control is
+  86.32/110.42, 2.31/2.85, 233.82/241.79, 158.58/161.79, and 72.71/72.78 ms,
+  respectively. Both orders show no regression;
 - the architecture guard fixes the single runtime walker, assignment-reference
   owner, compiler users, typed mode/leaf metadata, and mutation-tests a second
-  walker. Performance, exact-tree CI, and canonical publication evidence remain
-  required before AS-09g can close.
+  walker. Exact-tree CI and canonical publication evidence remain required
+  before AS-09g can close.
 
 ### AS-10: Performance And Memory Checkpoints
 
