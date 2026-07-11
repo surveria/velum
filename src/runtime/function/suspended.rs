@@ -235,6 +235,21 @@ impl DetachedFunctionExecution {
             .ok_or_else(|| Error::limit("suspended execution frame count overflowed"))
     }
 
+    pub(in crate::runtime) fn binding_count(&self) -> Result<usize> {
+        let local_count = self.locals.iter().try_fold(0_usize, |count, scope| {
+            count
+                .checked_add(scope.len())
+                .ok_or_else(|| Error::limit("suspended binding count overflowed"))
+        })?;
+        self.activations
+            .iter()
+            .try_fold(local_count, |count, frame| {
+                count
+                    .checked_add(frame.upvalues().map_or(0, |upvalues| upvalues.len()))
+                    .ok_or_else(|| Error::limit("suspended binding count overflowed"))
+            })
+    }
+
     pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
         self.locals.iter().try_fold(0_usize, |count, scope| {
             count

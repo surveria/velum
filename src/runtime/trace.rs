@@ -2,6 +2,7 @@ use crate::{
     error::Result,
     runtime::{
         collections::{CollectionId, CollectionIteratorId},
+        generator::GeneratorId,
         object::PropertyKey,
         promise::PromiseId,
     },
@@ -187,6 +188,10 @@ pub(in crate::runtime) enum StrongEdgeReference<'value> {
     CollectionAssociation {
         object: ObjectId,
         collection: CollectionId,
+    },
+    GeneratorAssociation {
+        object: ObjectId,
+        generator: GeneratorId,
     },
 }
 
@@ -399,6 +404,10 @@ pub(in crate::runtime) const fn consume_reference(reference: &StrongEdgeReferenc
         StrongEdgeReference::CollectionAssociation {
             object: _object,
             collection: _collection,
+        } => {}
+        StrongEdgeReference::GeneratorAssociation {
+            object: _object,
+            generator: _generator,
         } => {}
     }
 }

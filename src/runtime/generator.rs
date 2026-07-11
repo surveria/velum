@@ -2,6 +2,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context, VmStorageKind,
+        async_trace::VmAsyncEdgeKind,
         call::RuntimeCallArgs,
         control::Completion,
         function::DetachedFunctionExecution,
@@ -10,6 +11,7 @@ use crate::{
             DataPropertyUpdate, ObjectPropertyInit, PropertyConfigurable, PropertyEnumerable,
             PropertyKey, PropertyUpdate, PropertyWritable,
         },
+        trace::StrongEdgeVisitor,
     },
     value::{FunctionId, ObjectId, Value},
 };
@@ -30,7 +32,7 @@ const GENERATOR_TAG: &str = "Generator";
 pub(in crate::runtime) struct GeneratorId(usize);
 
 impl GeneratorId {
-    const fn index(self) -> usize {
+    pub(in crate::runtime) const fn index(self) -> usize {
         self.0
     }
 }
@@ -48,10 +50,29 @@ impl GeneratorData {
         }
     }
 
+    pub(in crate::runtime) fn binding_count(&self) -> Result<usize> {
+        match &self.state {
+            GeneratorState::Suspended(execution) => execution.binding_count(),
+            GeneratorState::Executing | GeneratorState::Completed => Ok(0),
+        }
+    }
+
     pub(in crate::runtime) fn cache_entry_count(&self) -> Result<usize> {
         match &self.state {
             GeneratorState::Suspended(execution) => execution.cache_entry_count(),
             GeneratorState::Executing | GeneratorState::Completed => Ok(0),
+        }
+    }
+
+    pub(in crate::runtime) fn visit_strong_edges<V>(&self, visitor: &mut V) -> Result<()>
+    where
+        V: StrongEdgeVisitor<VmAsyncEdgeKind>,
+    {
+        match &self.state {
+            GeneratorState::Suspended(execution) => {
+                execution.visit_strong_edges(visitor, VmAsyncEdgeKind::GeneratorState)
+            }
+            GeneratorState::Executing | GeneratorState::Completed => Ok(()),
         }
     }
 }
@@ -71,6 +92,16 @@ pub(in crate::runtime) enum GeneratorResumeKind {
 }
 
 impl Context {
+    pub(in crate::runtime) fn suspended_generator_binding_count(&self) -> Result<usize> {
+        self.generators
+            .iter()
+            .try_fold(0_usize, |count, generator| {
+                count
+                    .checked_add(generator.binding_count()?)
+                    .ok_or_else(|| Error::limit("generator binding count overflowed"))
+            })
+    }
+
     pub(in crate::runtime) fn suspended_generator_execution_frame_count(&self) -> Result<usize> {
         self.generators
             .iter()

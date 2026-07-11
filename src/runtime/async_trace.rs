@@ -8,7 +8,7 @@ use super::{
     },
 };
 
-const ASYNC_EDGE_KIND_COUNT: usize = 8;
+const ASYNC_EDGE_KIND_COUNT: usize = 10;
 const ASYNC_EDGE_STRENGTH_COUNT: usize = 3;
 
 /// Trace strength assigned to one asynchronous-store edge category.
@@ -38,7 +38,7 @@ impl VmAsyncEdgeStrength {
     }
 }
 
-/// Edge categories owned by Promise, collection, and iterator side stores.
+/// Edge categories owned by Promise, collection, iterator, and generator side stores.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum VmAsyncEdgeKind {
@@ -50,6 +50,8 @@ pub enum VmAsyncEdgeKind {
     IteratorItem,
     WeakCollectionKey,
     WeakCollectionEphemeron,
+    GeneratorObjectAssociation,
+    GeneratorState,
 }
 
 impl VmAsyncEdgeKind {
@@ -62,6 +64,8 @@ impl VmAsyncEdgeKind {
         Self::IteratorItem,
         Self::WeakCollectionKey,
         Self::WeakCollectionEphemeron,
+        Self::GeneratorObjectAssociation,
+        Self::GeneratorState,
     ];
 
     /// Returns every asynchronous edge category in stable reporting order.
@@ -79,7 +83,9 @@ impl VmAsyncEdgeKind {
             | Self::PromiseObjectAssociation
             | Self::CollectionObjectAssociation
             | Self::CollectionEntry
-            | Self::IteratorItem => VmAsyncEdgeStrength::Strong,
+            | Self::IteratorItem
+            | Self::GeneratorObjectAssociation
+            | Self::GeneratorState => VmAsyncEdgeStrength::Strong,
             Self::WeakCollectionKey => VmAsyncEdgeStrength::Weak,
             Self::WeakCollectionEphemeron => VmAsyncEdgeStrength::Ephemeron,
         }
@@ -95,11 +101,13 @@ impl VmAsyncEdgeKind {
             Self::IteratorItem => 5,
             Self::WeakCollectionKey => 6,
             Self::WeakCollectionEphemeron => 7,
+            Self::GeneratorObjectAssociation => 8,
+            Self::GeneratorState => 9,
         }
     }
 }
 
-/// Counted view of trace records stored in asynchronous VM arenas.
+/// Counted view of trace records stored in resumable and asynchronous VM arenas.
 ///
 /// Strong counts describe physical reference slots. `WeakSet` keys and `WeakMap`
 /// ephemeron pairs are logical trace records because their duplicated backing
@@ -217,8 +225,8 @@ impl WeakEdgeVisitor<VmAsyncEdgeKind> for AsyncEdgeCounter {
 }
 
 impl Context {
-    /// Counts Promise, collection, iterator, weak-key, and ephemeron trace
-    /// records without exposing VM-local arena ids.
+    /// Counts Promise, collection, iterator, generator, weak-key, and
+    /// ephemeron trace records without exposing VM-local arena ids.
     ///
     /// # Errors
     /// Fails if an edge counter exceeds the supported range or a category is
@@ -261,6 +269,20 @@ impl Context {
         }
         for iterator in &self.collection_iterators {
             iterator.visit_strong_edges(visitor)?;
+        }
+        for (index, generator) in self.generator_object_slots.iter().enumerate() {
+            if let Some(generator) = generator {
+                visitor.visit(
+                    VmAsyncEdgeKind::GeneratorObjectAssociation,
+                    StrongEdgeReference::GeneratorAssociation {
+                        object: ObjectId::new(index),
+                        generator: *generator,
+                    },
+                )?;
+            }
+        }
+        for generator in &self.generators {
+            generator.visit_strong_edges(visitor)?;
         }
         Ok(())
     }

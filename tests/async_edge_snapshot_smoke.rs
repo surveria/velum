@@ -15,7 +15,7 @@ fn async_edge_snapshots_start_empty_and_classify_stable_categories() -> TestResu
     ensure_usize(snapshot.total(), 0, "fresh asynchronous edge total")?;
     ensure_usize(
         VmAsyncEdgeKind::all().len(),
-        8,
+        10,
         "asynchronous edge kind count",
     )?;
     ensure_usize(

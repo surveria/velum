@@ -399,6 +399,10 @@ impl Context {
                 counter.record(VmStorageKind::Binding, upvalues.len())?;
             }
         }
+        counter.record(
+            VmStorageKind::Binding,
+            self.suspended_generator_binding_count()?,
+        )?;
         Ok(())
     }
 

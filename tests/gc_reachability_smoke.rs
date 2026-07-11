@@ -1,8 +1,89 @@
 use rs_quickjs::{
-    Engine, EngineConfig, RuntimeLimits, VmConfig, VmGcKind, VmStorageKind, VmStorageLimits,
+    Engine, EngineConfig, RuntimeLimits, VmAsyncEdgeKind, VmConfig, VmGcKind, VmStorageKind,
+    VmStorageLimits,
 };
 
 type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
+
+#[test]
+fn traces_and_reclaims_suspended_generator_state() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.eval(
+        r"
+        var suspendedGenerator = (function* values() {
+            const retainedByFrame = { answer: 42 };
+            yield 1;
+            return retainedByFrame.answer;
+        })();
+        suspendedGenerator.next();
+        ",
+    )?;
+
+    let edges = vm.async_edge_snapshot()?;
+    ensure_positive(
+        edges.count(VmAsyncEdgeKind::GeneratorObjectAssociation),
+        "generator object association edges",
+    )?;
+    ensure_positive(
+        edges.count(VmAsyncEdgeKind::GeneratorState),
+        "suspended generator state edges",
+    )?;
+
+    let before = vm.heap_reachability_snapshot()?;
+    ensure_positive(
+        before.reachable(VmGcKind::Generator),
+        "reachable generator records",
+    )?;
+    vm.collect_garbage()?;
+    let value = vm.eval("suspendedGenerator.next().value")?;
+    ensure(
+        value.to_string() == "42",
+        "collection lost a value retained only by a suspended generator frame",
+    )?;
+
+    vm.eval("suspendedGenerator = null")?;
+    let released = vm.heap_reachability_snapshot()?;
+    ensure_positive(
+        released.unreachable(VmGcKind::Generator),
+        "unreachable generator records",
+    )?;
+    let report = vm.collect_garbage()?;
+    ensure_positive(
+        report.reclaimed(VmGcKind::Generator),
+        "reclaimed generator records",
+    )?;
+    vm.storage_snapshot()?;
+    Ok(())
+}
+
+#[test]
+fn traces_nested_yield_delegate_across_collection() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.eval(
+        r"
+        function* outerGenerator() {
+            function* innerGenerator() {
+                const received = yield 1;
+                return received + 1;
+            }
+            return yield* innerGenerator();
+        }
+        var delegatedGenerator = outerGenerator();
+        delegatedGenerator.next();
+        ",
+    )?;
+
+    vm.collect_garbage()?;
+    let value = vm.eval("delegatedGenerator.next(41).value")?;
+    ensure(
+        value.to_string() == "42",
+        "collection lost a nested generator retained by yield delegation",
+    )?;
+    vm.storage_snapshot()?;
+    Ok(())
+}
 
 #[test]
 fn marks_strong_roots_and_reports_unreachable_records() -> TestResult {
