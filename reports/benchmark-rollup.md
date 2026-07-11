@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260711T183638Z.md`
-- Task: PR #463: engine: add private class elements (#fields, #methods, brand checks)
-- Performance: 5.60x (4/5 >1.00x) (from `rsqjs-test-report-20260711T183638Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T183638Z.md`)
+- `rsqjs-test-report-20260711T183721Z.md`
+- Task: PR #468: runtime: add %TypedArray% intrinsic and prototype methods
+- Performance: 5.61x (4/5 >1.00x) (from `rsqjs-test-report-20260711T183721Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260711T183721Z.md`)
 - JetStream: 22.44x (4/4 >1.00x) (from `rsqjs-jetstream-report-20260710T055456Z.yaml`)
-- Full Test262: 56188 passed / 46390 failed (54.78%) (from `rsqjs-test-report-20260711T183638Z.md`)
+- Full Test262: 53289 passed / 49289 failed (51.95%) (from `rsqjs-test-report-20260711T183721Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -457,3 +457,4 @@ Latest report:
 | `20260711T175840Z` `ddb3e61` PR #464: runtime: add Iterator global and iterator helper methods | 5.59x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 52377 passed / 50201 failed (51.06%) |
 | `20260711T175926Z` `4d1c7fb` PR #472: AS-09o: complete Object.create semantics | 5.65x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 52511 passed / 50067 failed (51.19%) |
 | `20260711T183638Z` `0a3cb64` PR #463: engine: add private class elements (#fields, #methods, brand checks) | 5.60x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 56188 passed / 46390 failed (54.78%) |
+| `20260711T183721Z` `2cbd7b5` PR #468: runtime: add %TypedArray% intrinsic and prototype methods | 5.61x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 53289 passed / 49289 failed (51.95%) |
