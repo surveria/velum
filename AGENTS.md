@@ -11,9 +11,54 @@ These rules are mandatory for humans and agents working in any part of this repo
 
 ## Tasks, Branches, And Worktrees
 
+- Use the shared local `.agent-tasks` directory as a lightweight coordination
+  index before selecting repository work. The directory is intentionally
+  untracked and is not a replacement for branches, commits, worktrees, or pull
+  requests.
+- Resolve the one shared directory from any linked worktree with
+  `task_dir="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.agent-tasks"`
+  and create it with `mkdir -p "${task_dir}"` when necessary. Do not create a
+  separate `.agent-tasks` directory inside a linked worktree, do not commit its
+  contents, and do not add it to the `.gitignore` whitelist.
+- Before choosing a task, list only the filenames of the 40 most recently
+  modified records with
+  `find "${task_dir}" -maxdepth 1 -type f -name '*.md' -printf '%T@ %f\n' | sort -nr | head -n 40 | cut -d' ' -f2-`.
+  Use the status, area, and task slug in those names to avoid likely overlap.
+  Do not read record bodies by default; open only records whose filenames
+  suggest a possible conflict or whose details are needed for recovery.
+- Treat this index as best-effort coordination. A stale or missing record must
+  not make repository recovery impossible. Lost work may be reconstructed from
+  local branches, signed commits, and worktrees, and a later dedicated recovery
+  task may inspect and finish or cancel abandoned work.
+- Claim selected work before implementation with one Markdown record named
+  `[status]__YYYYMMDDTHHMMSSZ__area__short-task-slug__agent-id__task-id.md`.
+  Use lowercase ASCII slugs without spaces. Prefer the existing commit
+  categories as areas: `architecture`, `engine`, `runtime`, `parser`,
+  `bytecode`, `runner`, `tests`, `bench`, `ci`, `docs`, or `workflow`.
+- Use these filename statuses: `[claimed]` while repository setup is starting,
+  `[in-progress]` during implementation, `[blocked]` when work is paused on a
+  concrete blocker, `[ready]` when implementation is complete but integration
+  is pending, `[done]` only after merge, main update, and worktree cleanup, and
+  `[cancelled]` when the task ends without integration. Rename the file and
+  update its internal `status` together. Non-terminal records continue to
+  reserve their named area, but agents may use judgment when an old record is
+  clearly stale or a dedicated recovery task owns it.
+- Keep each record cheap to create and update. Start with YAML front matter for
+  `schema_version`, `task_id`, `status`, `title`, `area`, `agent`, `agent_id`,
+  `created_at`, `updated_at`, `branch`, `worktree`, and `pull_request`. A value
+  may be `pending` or `none` while setup is incomplete or GitHub is unavailable.
+  Use `codex`, `claude-code`, `human`, or `other` for `agent`, and use a short
+  session-unique worker name for `agent_id`.
+  Follow it with short `Objective`, `Progress`, `Problems And Notes`, `Outcome`,
+  and `Remaining Work` sections. Do not require speculative affected-path or
+  semantic-owner analysis merely to claim a task.
+- Update the record at meaningful checkpoints, before pausing or handing work
+  off, and when its status changes. Record concise recovery facts rather than
+  prompts, transcripts, exhaustive logs, secrets, or personal data. Leave
+  terminal records in the local directory so the recent history remains useful.
 - Create a separate git worktree for every task under `.claude/worktrees/<task>`.
 - Create a separate branch for every task from a fresh `origin/main`.
-- Immediately make the task visible on GitHub: create an empty start commit with `[skip ci]`, push the branch, and open a draft PR that describes the planned scope. If the branch already has a real first commit, push that instead of an empty commit.
+- When GitHub is available, immediately make the task visible there: create an empty start commit with `[skip ci]`, push the branch, and open a draft PR that describes the planned scope. If the branch already has a real first commit, push that instead of an empty commit. If GitHub is temporarily unavailable, record that fact in the local task record, preserve progress in signed local commits, and publish the branch and draft PR when access returns.
 - Keep the PR as draft while implementation is in progress. Draft PRs are for visibility and discussion; the full CI gate starts when the PR is marked ready for review or receives new ready-state commits.
 - Treat the draft PR branch as the live work log for the task. Split implementation into small, reviewable progress commits with descriptive messages, and push each completed work stage to the PR branch promptly.
 - Progress checkpoint commits must describe the concrete task progress they preserve, not just that work is in progress. Another agent must be able to reconstruct the task state from GitHub if the current agent session is interrupted.
