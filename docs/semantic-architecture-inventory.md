@@ -684,7 +684,7 @@ decision sequence:
 | AS-09b | dynamic compilation error boundary | PR #451 merged as `b11ce20f`; one typed SyntaxError mapper preserves dynamic source spans, adds 198 full-corpus variants with no removed pass, and has green exact-tree/canonical evidence |
 | AS-09c | static class accessor and function descriptor boundary | PR #452 merged as `6f185e75`; shared JavaScript-function descriptors add 236 full-corpus variants / 118 files with no removed pass, and exact-tree/canonical evidence is green |
 | AS-09d | comma/sequence expression grammar boundary | PR #453 merged as `1fc9867`; exact-tree run `29142804842` certified tree `a23bd644`, post-merge run `29142896882` published report `20260711T062919Z` in `f2d2113`, and the baseline gained 335 variants / 205 files with no removed pass |
-| AS-09e | named function expression self binding | draft PR #454 adds one compiled private self-binding scope, typed strict/sloppy immutable writes, and inherited strict direct eval; the focused named-function profile passes 12/12 variants while the separate TCO residual remains explicit |
+| AS-09e | named function expression self binding | draft PR #454 adds one compiled private self-binding scope, typed strict/sloppy immutable writes, inherited strict direct eval, and generated Function-constructor names that remain metadata-only; the reviewed baseline gains 29 variants / 21 files with no removed pass while the separate TCO residual remains explicit |
 
 ## AS-01b Guard Specification
 

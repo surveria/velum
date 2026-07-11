@@ -18597,6 +18597,7 @@ test/built-ins/eval/private-identifiers-not-empty.js#default
 test/built-ins/eval/private-identifiers-not-empty.js#strict
 test/built-ins/eval/prop-desc.js#default
 test/built-ins/eval/prop-desc.js#strict
+test/built-ins/global/10.2.1.1.3-4-16-s.js#strict
 test/built-ins/global/S10.2.3_A1.1_T1.js#default
 test/built-ins/global/S10.2.3_A1.1_T1.js#strict
 test/built-ins/global/S10.2.3_A1.1_T2.js#default
@@ -26588,6 +26589,12 @@ test/language/expressions/function/name-eval-strict.js#strict
 test/language/expressions/function/name-eval-stricteval.js#default
 test/language/expressions/function/name.js#default
 test/language/expressions/function/name.js#strict
+test/language/expressions/function/named-no-strict-reassign-fn-name-in-body-in-arrow.js#default
+test/language/expressions/function/named-no-strict-reassign-fn-name-in-body-in-eval.js#default
+test/language/expressions/function/named-no-strict-reassign-fn-name-in-body.js#default
+test/language/expressions/function/named-strict-error-reassign-fn-name-in-body-in-arrow.js#strict
+test/language/expressions/function/named-strict-error-reassign-fn-name-in-body-in-eval.js#strict
+test/language/expressions/function/named-strict-error-reassign-fn-name-in-body.js#strict
 test/language/expressions/function/object-destructuring-param-strict-body.js#default
 test/language/expressions/function/object-destructuring-param-strict-body.js#strict
 test/language/expressions/function/param-arguments-non-strict.js#default
@@ -26615,6 +26622,10 @@ test/language/expressions/function/rest-param-strict-body.js#default
 test/language/expressions/function/rest-param-strict-body.js#strict
 test/language/expressions/function/rest-params-trailing-comma-early-error.js#default
 test/language/expressions/function/rest-params-trailing-comma-early-error.js#strict
+test/language/expressions/function/scope-name-var-close.js#default
+test/language/expressions/function/scope-name-var-close.js#strict
+test/language/expressions/function/scope-name-var-open-non-strict.js#default
+test/language/expressions/function/scope-name-var-open-strict.js#strict
 test/language/expressions/function/scope-paramsbody-var-close.js#default
 test/language/expressions/function/scope-paramsbody-var-close.js#strict
 test/language/expressions/function/scope-paramsbody-var-open.js#default
@@ -34352,6 +34363,10 @@ test/language/statements/const/syntax/block-scope-syntax-const-declarations-with
 test/language/statements/const/syntax/block-scope-syntax-const-declarations-without-initialiser.js#strict
 test/language/statements/const/syntax/const-declaring-let-split-across-two-lines.js#default
 test/language/statements/const/syntax/const-declaring-let-split-across-two-lines.js#strict
+test/language/statements/const/syntax/const-invalid-assignment-next-expression-for.js#default
+test/language/statements/const/syntax/const-invalid-assignment-next-expression-for.js#strict
+test/language/statements/const/syntax/const-invalid-assignment-statement-body-for-of.js#default
+test/language/statements/const/syntax/const-invalid-assignment-statement-body-for-of.js#strict
 test/language/statements/const/syntax/const-outer-inner-let-bindings.js#default
 test/language/statements/const/syntax/const-outer-inner-let-bindings.js#strict
 test/language/statements/const/syntax/const.js#default
@@ -35852,6 +35867,7 @@ test/language/statements/function/13.0_4-17gs.js#strict
 test/language/statements/function/13.1-13gs.js#strict
 test/language/statements/function/13.1-19-s.js#default
 test/language/statements/function/13.1-1gs.js#strict
+test/language/statements/function/13.1-2-s.js#strict
 test/language/statements/function/13.1-21-s.js#default
 test/language/statements/function/13.1-22-s.js#default
 test/language/statements/function/13.1-23-s.js#default
@@ -35861,6 +35877,7 @@ test/language/statements/function/13.1-29-s.js#default
 test/language/statements/function/13.1-31-s.js#default
 test/language/statements/function/13.1-33-s.js#default
 test/language/statements/function/13.1-39-s.js#default
+test/language/statements/function/13.1-4-s.js#strict
 test/language/statements/function/13.1-41-s.js#default
 test/language/statements/function/13.1-4gs.js#strict
 test/language/statements/function/13.1-5gs.js#strict
@@ -36039,6 +36056,8 @@ test/language/statements/function/S13_A2_T2.js#default
 test/language/statements/function/S13_A2_T2.js#strict
 test/language/statements/function/S13_A2_T3.js#default
 test/language/statements/function/S13_A2_T3.js#strict
+test/language/statements/function/S13_A3_T1.js#default
+test/language/statements/function/S13_A3_T1.js#strict
 test/language/statements/function/S13_A3_T2.js#default
 test/language/statements/function/S13_A3_T2.js#strict
 test/language/statements/function/S13_A3_T3.js#default
@@ -36065,6 +36084,8 @@ test/language/statements/function/S13_A8_T2.js#default
 test/language/statements/function/S13_A8_T2.js#strict
 test/language/statements/function/S13_A9.js#default
 test/language/statements/function/S13_A9.js#strict
+test/language/statements/function/S14_A2.js#default
+test/language/statements/function/S14_A2.js#strict
 test/language/statements/function/S14_A3.js#default
 test/language/statements/function/S14_A3.js#strict
 test/language/statements/function/S14_A5_T1.js#default
@@ -37884,8 +37905,12 @@ test/staging/sm/Function/regress-518103.js#default
 test/staging/sm/Function/regress-518103.js#strict
 test/staging/sm/Function/regress-524826.js#default
 test/staging/sm/Function/regress-524826.js#strict
+test/staging/sm/Function/regress-528082.js#default
+test/staging/sm/Function/regress-528082.js#strict
 test/staging/sm/Function/regress-533254.js#default
 test/staging/sm/Function/regress-533254.js#strict
+test/staging/sm/Function/regress-545980.js#default
+test/staging/sm/Function/regress-545980.js#strict
 test/staging/sm/Function/rest-has-duplicated.js#default
 test/staging/sm/Function/return-finally.js#default
 test/staging/sm/Function/return-finally.js#strict
@@ -38467,6 +38492,7 @@ test/staging/sm/regress/regress-634210-3.js#default
 test/staging/sm/regress/regress-634210-3.js#strict
 test/staging/sm/regress/regress-634210-4.js#default
 test/staging/sm/regress/regress-634210-4.js#strict
+test/staging/sm/regress/regress-640075.js#strict
 test/staging/sm/regress/regress-642247.js#default
 test/staging/sm/regress/regress-642247.js#strict
 test/staging/sm/regress/regress-643222.js#default
@@ -38490,6 +38516,8 @@ test/staging/sm/statements/arrow-function-at-end-of-for-statement-head.js#defaul
 test/staging/sm/statements/arrow-function-at-end-of-for-statement-head.js#strict
 test/staging/sm/statements/for-inof-finally.js#default
 test/staging/sm/statements/for-inof-finally.js#strict
+test/staging/sm/statements/for-inof-loop-const-declaration.js#default
+test/staging/sm/statements/for-inof-loop-const-declaration.js#strict
 test/staging/sm/statements/for-inof-name-iteration-expression-contains-index-string.js#default
 test/staging/sm/statements/for-inof-name-iteration-expression-contains-index-string.js#strict
 test/staging/sm/statements/for-loop-declaration-contains-computed-name.js#default
@@ -38508,6 +38536,7 @@ test/staging/sm/statements/property-reference-self-assignment.js#default
 test/staging/sm/statements/property-reference-self-assignment.js#strict
 test/staging/sm/strict/8.7.2-01.js#default
 test/staging/sm/strict/8.7.2-01.js#strict
+test/staging/sm/strict/assign-to-callee-name.js#default
 test/staging/sm/strict/primitive-this-no-writeback.js#default
 test/staging/sm/strict/primitive-this-no-writeback.js#strict
 test/staging/sm/strict/regress-532041.js#default

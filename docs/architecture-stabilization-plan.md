@@ -2422,9 +2422,22 @@ AS-09e profile evidence in draft PR #454:
   depth limit, so tail-call optimization remains a separate tranche;
 - the architecture guard fixes one layout/runtime owner, requires compiled
   slots and typed strictness, rejects runtime source-name comparisons, and
-  mutation-tests the runtime owner. Full-corpus baseline, paired sentinels,
-  exact-tree CI, and canonical publication remain required before AS-09e can
-  close.
+  mutation-tests the runtime owner. Function-constructor source is compiled as
+  an anonymous function and receives `anonymous` only as intrinsic metadata, so
+  the generated display name does not accidentally create a lexical binding;
+- the reviewed full baseline gains 29 variants and 21 files with no removed
+  pass: ten `language/expressions`, ten `language/statements`, eight staging,
+  and one built-in global variant. Local correctness passes at
+  38,551/38,551 expected variants, 19,883/53,404 files, and
+  38,551/102,578 full variants; the permanent suites remain green at 69/69
+  engine fixtures, 118/118 active Test262 cases, and 96/96 QuickJS
+  differential cases;
+- newly reachable deep-recursion probes exposed the runner's default 2 MiB
+  worker stack before the VM could return its checked depth limit. Test262
+  workers now use an explicit 16 MiB stack; the full four-worker corpus
+  completes normally without changing engine call-depth policy;
+- a clean full gate, paired sentinels, exact-tree CI, and canonical publication
+  remain required before AS-09e can close.
 
 ### AS-10: Performance And Memory Checkpoints
 
