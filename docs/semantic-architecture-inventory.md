@@ -661,7 +661,8 @@ decision sequence:
 | AS-06b | pending async execution | explicit suspended outcomes, detached await reactions, same-owner nested/control/pattern resume without side-effect replay, and Context/Vm run/cancel job APIs merged in PR #445 |
 | AS-07 | strong weak-collection entries and implicit roots | PR #446 merged with exact-tree validation and canonical report publication |
 | AS-08a | caches, direct calls, linear/function/control paths, harness opcodes | PR #447 merged as `bc52a723`; one optimizer owner, disabled-mode fallbacks, and zero harness source semantics are canonical |
-| AS-08b | named control recognizers and built-in specialization evidence | draft PR #449 removes source-shaped control execution, retains one broad guarded reduction, fixes the no-regrowth guard, and records paired performance evidence |
+| AS-08b | named control recognizers and built-in specialization evidence | PR #449 merged as `7802932e`; source-shaped control execution is removed, one broad guarded reduction remains, and exact-tree/canonical evidence is green |
+| AS-09a | unary bitwise NOT compatibility | draft PR #450 routes `~` through the normal lexer, unary AST, numeric bytecode, and shared Number `ToInt32` semantics; focused Test262 passes 28/32 with only BigInt variants remaining |
 
 ## AS-01b Guard Specification
 

@@ -43,4 +43,15 @@ if (
     throw new Test262Error("delete produced unexpected boolean results");
 }
 
+if (
+    ~0 !== -1 ||
+    ~1 !== -2 ||
+    ~-1 !== 0 ||
+    ~"5" !== -6 ||
+    ~NaN !== -1 ||
+    ~4294967295 !== 0
+) {
+    throw new Test262Error("bitwise NOT produced unexpected int32 results");
+}
+
 42

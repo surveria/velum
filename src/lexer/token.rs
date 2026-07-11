@@ -77,6 +77,7 @@ pub enum TokenKind {
     Percent,
     PercentEqual,
     Bang,
+    Tilde,
     Arrow,
     Equal,
     EqualEqual,

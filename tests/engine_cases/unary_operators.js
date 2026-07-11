@@ -20,6 +20,9 @@ print(erasedName, erasedMissing, erasedIndex, erasedLength, erasedBinding, erase
 print(typeReport);
 print(values.length, side, voidValue);
 
+let bitwiseReport = [~0, ~1, ~-1, ~"5", ~NaN, ~4294967295];
+print(bitwiseReport.join(" "));
+
 camera.name === undefined &&
 values[0] === undefined &&
 values.length === 2 &&
@@ -31,4 +34,5 @@ erasedMissing === true &&
 erasedIndex === true &&
 erasedLength === false &&
 erasedBinding === false &&
-erasedUnknown === true ? 42 : 0
+erasedUnknown === true &&
+bitwiseReport.join(" ") === "-1 -2 0 -6 -1 0" ? 42 : 0

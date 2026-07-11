@@ -69,6 +69,7 @@ impl BytecodeNumericBinaryOp {
 pub enum BytecodeNumericUnaryOp {
     Negate,
     Plus,
+    BitNot,
 }
 
 impl BytecodeNumericUnaryOp {
@@ -76,6 +77,7 @@ impl BytecodeNumericUnaryOp {
         match op {
             UnaryOp::Negate => Some(Self::Negate),
             UnaryOp::Plus => Some(Self::Plus),
+            UnaryOp::BitNot => Some(Self::BitNot),
             UnaryOp::Not | UnaryOp::Void | UnaryOp::Typeof | UnaryOp::Delete => None,
         }
     }
@@ -84,6 +86,7 @@ impl BytecodeNumericUnaryOp {
         match self {
             Self::Negate => UnaryOp::Negate,
             Self::Plus => UnaryOp::Plus,
+            Self::BitNot => UnaryOp::BitNot,
         }
     }
 }

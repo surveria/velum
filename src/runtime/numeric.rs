@@ -43,6 +43,11 @@ pub fn bitwise_xor(context: &mut Context, left: &Value, right: &Value) -> Result
     Ok(Value::Number(f64::from(left ^ right)))
 }
 
+pub fn bitwise_not(context: &mut Context, value: &Value) -> Result<Value> {
+    let value = bitwise_i32(context, value, "~")?;
+    Ok(Value::Number(f64::from(!value)))
+}
+
 pub fn shift_left(context: &mut Context, left: &Value, right: &Value) -> Result<Value> {
     let left = bitwise_i32(context, left, "<<")?;
     let right = shift_count(context, right, "<<")?;
