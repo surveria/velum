@@ -2111,8 +2111,8 @@ AS-07a local implementation evidence (draft PR #446):
 - raw VM-local `Value` ids are explicitly non-durable across collection;
   retained handles are the supported embedder root boundary;
 - focused library tests cover retained roots, ephemerons, registered Symbols,
-  hard-limit reuse, suspended async owners, heap strings, cache-id reuse, and
-  isolation between VMs;
+  hard-limit reuse, suspended async survival and cancellation, heap strings,
+  cache-id reuse, and isolation between VMs;
 - atoms and shape metadata remain explicit cache roots for AS-08; WeakRef and
   FinalizationRegistry remain gated;
 - the engine-wide all-target/all-feature suite, strict Clippy, architecture
