@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T223836Z.md`
-- Task: PR #541: parser: restore identifier and ASI semantics
-- Performance: 6.01x (4/5 >1.00x) (from `rsqjs-test-report-20260712T223836Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T223836Z.md`)
+- `rsqjs-test-report-20260712T225435Z.md`
+- Task: PR #543: runtime: complete String match and search protocol residuals
+- Performance: 6.34x (4/5 >1.00x) (from `rsqjs-test-report-20260712T225435Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T225435Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 81455 passed / 21123 failed (79.41%) (from `rsqjs-test-report-20260712T223836Z.md`)
+- Full Test262: 81505 passed / 21073 failed (79.46%) (from `rsqjs-test-report-20260712T225435Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -510,3 +510,4 @@ Latest report:
 | `20260712T220109Z` `c95d456` PR #539: runtime: complete Uint8Array codec semantics | 7.29x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 81142 passed / 21436 failed (79.10%) |
 | `20260712T221409Z` `f6d7f39` PR #537: runtime: unify TypedArray view-record lifecycle semantics | 6.53x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 81346 passed / 21232 failed (79.30%) |
 | `20260712T223836Z` `cb718a5` PR #541: parser: restore identifier and ASI semantics | 6.01x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 81455 passed / 21123 failed (79.41%) |
+| `20260712T225435Z` `f02d675` PR #543: runtime: complete String match and search protocol residuals | 6.34x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 81505 passed / 21073 failed (79.46%) |
