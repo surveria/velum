@@ -70,7 +70,7 @@ impl Context {
                 let name = self.resolve_private_name(property)?;
                 let receiver = state.stack.pop()?;
                 let old = self.read_private_slot(&receiver, &name)?;
-                let updated = Self::updated_bytecode_number(&old, *op)?;
+                let (old, updated) = self.bytecode_update_values(&old, *op)?;
                 self.write_private_slot(&receiver, &name, updated.clone())?;
                 state.stack.push(if *prefix { updated } else { old });
             }

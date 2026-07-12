@@ -400,6 +400,11 @@ impl Context {
             state.pc = next;
             return Ok(None);
         }
+        if matches!(object, Value::Undefined | Value::Null) {
+            return Err(Error::type_error(
+                "Cannot read properties of undefined or null",
+            ));
+        }
         let key = self.dynamic_property_key(&key)?;
         state.stack.push(self.eval_bytecode_update_dynamic_property(
             &object,

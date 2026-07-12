@@ -319,7 +319,7 @@ impl Context {
         object: &Value,
         property: &StaticName,
         access: StaticPropertyAccessId,
-        update: impl FnOnce(&mut Self, &Value) -> Result<Value>,
+        update: impl FnOnce(&mut Self, &Value) -> Result<(Value, Value)>,
     ) -> Result<Option<(Value, Value)>> {
         let Value::Object(object_id) = object else {
             return Ok(None);
@@ -419,7 +419,7 @@ impl Context {
         object: &Value,
         property: &mut DynamicPropertyKey,
         access: StaticPropertyAccessId,
-        update: impl FnOnce(&mut Self, &Value) -> Result<Value>,
+        update: impl FnOnce(&mut Self, &Value) -> Result<(Value, Value)>,
     ) -> Result<Option<(Value, Value)>> {
         let Value::Object(object_id) = object else {
             return Ok(None);
@@ -495,7 +495,7 @@ impl Context {
         object: ObjectId,
         access: StaticPropertyAccessId,
         lookup: PropertyLookup<'_>,
-        update: impl FnOnce(&mut Self, &Value) -> Result<Value>,
+        update: impl FnOnce(&mut Self, &Value) -> Result<(Value, Value)>,
     ) -> Result<Option<CachedPropertyMutation>> {
         let Some(cache) = self.current_static_name_atom_cache() else {
             return Ok(None);
@@ -542,10 +542,10 @@ impl Context {
         object: ObjectId,
         lookup: CacheablePropertyLookup,
         old_value: Value,
-        update: impl FnOnce(&mut Self, &Value) -> Result<Value>,
+        update: impl FnOnce(&mut Self, &Value) -> Result<(Value, Value)>,
     ) -> Result<Option<CachedPropertyMutation>> {
         let old_value = self.runtime_value(old_value)?;
-        let new_value = update(self, &old_value)?;
+        let (old_value, new_value) = update(self, &old_value)?;
         let new_value = self.runtime_value(new_value)?;
         if self
             .objects

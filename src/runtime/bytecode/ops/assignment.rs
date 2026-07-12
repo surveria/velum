@@ -253,7 +253,7 @@ impl Context {
     ) -> Result<Value> {
         if let Some(reference) = self.resolve_with_binding(name)? {
             let old_value = reference.get(self, name)?;
-            let new_value = Self::updated_bytecode_number(&old_value, op)?;
+            let (old_value, new_value) = self.bytecode_update_values(&old_value, op)?;
             self.checked_value(new_value.clone())?;
             reference.set(self, name, new_value.clone())?;
             return Ok(if prefix { new_value } else { old_value });
@@ -262,7 +262,7 @@ impl Context {
             .get_binding_bytecode(name)?
             .ok_or_else(|| reference_error_undefined(name.name()))?;
         let old_value = binding.value(name.name())?;
-        let new_value = Self::updated_bytecode_number(&old_value, op)?;
+        let (old_value, new_value) = self.bytecode_update_values(&old_value, op)?;
         self.checked_value(new_value.clone())?;
         self.assign_bytecode_cell(name, &binding, new_value.clone())?;
         Ok(if prefix { new_value } else { old_value })
@@ -283,13 +283,13 @@ impl Context {
                     object,
                     property,
                     access,
-                    |_, value| Self::updated_bytecode_number(value, op),
+                    |context, value| context.bytecode_update_values(value, op),
                 )?
         {
             return Ok(if prefix { new_value } else { old_value });
         }
         let old_value = self.get_static_property_value(object, property, access)?;
-        let new_value = Self::updated_bytecode_number(&old_value, op)?;
+        let (old_value, new_value) = self.bytecode_update_values(&old_value, op)?;
         self.set_bytecode_static_property_reference(
             object,
             property,
@@ -315,13 +315,13 @@ impl Context {
                     object,
                     &mut property,
                     access,
-                    |_, value| Self::updated_bytecode_number(value, op),
+                    |context, value| context.bytecode_update_values(value, op),
                 )?
         {
             return Ok(if prefix { new_value } else { old_value });
         }
         let old_value = self.get_cached_dynamic_property_value(object, &property, access)?;
-        let new_value = Self::updated_bytecode_number(&old_value, op)?;
+        let (old_value, new_value) = self.bytecode_update_values(&old_value, op)?;
         self.set_bytecode_dynamic_property_reference(
             object,
             &mut property,
@@ -332,18 +332,17 @@ impl Context {
         Ok(if prefix { new_value } else { old_value })
     }
 
-    pub(in crate::runtime::bytecode) fn updated_bytecode_number(
+    pub(in crate::runtime::bytecode) fn bytecode_update_values(
+        &mut self,
         value: &Value,
         op: UpdateOp,
-    ) -> Result<Value> {
-        let Some(number) = value.as_number() else {
-            return Err(Error::runtime("update operator expects a number"));
-        };
+    ) -> Result<(Value, Value)> {
+        let number = self.to_number(value)?;
         let updated = match op {
             UpdateOp::Increment => number + 1.0,
             UpdateOp::Decrement => number - 1.0,
         };
-        Ok(Value::Number(updated))
+        Ok((Value::Number(number), Value::Number(updated)))
     }
 
     pub(in crate::runtime::bytecode) fn eval_bytecode_binding_compound_assignment(
@@ -381,7 +380,11 @@ impl Context {
                 object,
                 property,
                 access,
-                |context, old_value| context.eval_bytecode_compound_value(op, old_value, right),
+                |context, old_value| {
+                    context
+                        .eval_bytecode_compound_value(op, old_value, right)
+                        .map(|new_value| (old_value.clone(), new_value))
+                },
             )?
         {
             return Ok(value);
@@ -412,7 +415,11 @@ impl Context {
                 object,
                 &mut property,
                 access,
-                |context, old_value| context.eval_bytecode_compound_value(op, old_value, right),
+                |context, old_value| {
+                    context
+                        .eval_bytecode_compound_value(op, old_value, right)
+                        .map(|new_value| (old_value.clone(), new_value))
+                },
             )?
         {
             return Ok(value);

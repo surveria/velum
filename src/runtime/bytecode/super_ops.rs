@@ -159,7 +159,7 @@ impl Context {
         let property = self.finish_super_property(reference.property.clone())?;
         let current =
             self.get_super_property(&reference.base, &reference.receiver, property.lookup())?;
-        let updated = Self::updated_bytecode_number(&current, op)?;
+        let (current, updated) = self.bytecode_update_values(&current, op)?;
         self.checked_value(updated.clone())?;
         self.set_super_property(&reference, &property, updated.clone(), strict)?;
         self.runtime_value(if prefix { updated } else { current })
