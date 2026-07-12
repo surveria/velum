@@ -173,7 +173,7 @@ const fn instruction_uses_with_environment(instruction: &BytecodeInstruction) ->
             name.with_environment_count() > 0
         }
         BytecodeInstruction::CallBinding { callee, .. }
-        | BytecodeInstruction::CallBindingSpread { callee }
+        | BytecodeInstruction::CallBindingSpread { callee, .. }
         | BytecodeInstruction::Construct {
             constructor: callee,
             ..

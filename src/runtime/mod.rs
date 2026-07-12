@@ -4,11 +4,10 @@ use crate::api::host::HostFunction;
 use crate::api::native_call::NativeCallTarget;
 use crate::binding_metadata::BindingLayout;
 use crate::bytecode::{BytecodeBinding, BytecodeCallSite, BytecodeFunction, BytecodeNewTargetMode};
-use crate::compiled_script::CompiledScript;
 use crate::error::{Error, Result};
 use crate::ownership::VmIdentity;
 use crate::runtime::binding::scope::{BindingCell, BindingScope};
-use crate::runtime::control::{Completion, reference_error_undefined, runtime_exception_value};
+use crate::runtime::control::{Completion, reference_error_undefined};
 use crate::runtime::limits::RuntimeLimits;
 use crate::runtime::object::ObjectHeap;
 use crate::runtime::property::enumerable_property_keys;
@@ -46,6 +45,7 @@ pub mod promise;
 pub mod property;
 pub mod retained_values;
 mod roots;
+mod script_execution;
 mod semantic_object;
 mod storage_ledger;
 mod trace;
@@ -57,7 +57,6 @@ use arena::SlotArena;
 pub use async_trace::{VmAsyncEdgeKind, VmAsyncEdgeSnapshot, VmAsyncEdgeStrength};
 pub use binding::static_bindings::CompiledBindingFrame;
 use binding::static_bindings::StaticBindingCacheHandle;
-use bytecode::BytecodeOutcome;
 use call::{BoundFunction, RuntimeCallArgs};
 pub use gc::{VmGarbageCollectionReport, VmGcKind, VmHeapReachabilitySnapshot};
 use native::{NativeFunctionKind, NativeFunctionRegistry};
@@ -392,101 +391,6 @@ impl Context {
             optimizer: Optimizer::new(optimization_mode),
             call_depth: 0,
         }
-    }
-
-    /// # Errors
-    /// Fails when lexing, parsing, evaluation, or configured resource limits
-    /// fail. An uncaught JavaScript value is returned as
-    /// [`Error::JavaScript`](crate::Error::JavaScript).
-    ///
-    /// The returned raw value is not a durable root. Use `eval_owned` for a
-    /// portable primitive or `eval_retained` across later Context calls.
-    pub fn eval(&mut self, source: &str) -> Result<Value> {
-        let script = self.compile(source)?;
-        self.eval_compiled(&script)
-    }
-
-    /// # Errors
-    /// Fails when lexing, parsing, or configured compile-time resource limits fail.
-    pub fn compile(&self, source: &str) -> Result<CompiledScript> {
-        CompiledScript::compile(source, self.limits.clone())
-    }
-
-    /// Compiles source with a stable embedder-provided diagnostic name.
-    ///
-    /// # Errors
-    /// Fails when the source name exceeds configured string limits, or when
-    /// lexing, parsing, or configured compile-time resource limits fail.
-    pub fn compile_named(&self, source_name: &str, source: &str) -> Result<CompiledScript> {
-        CompiledScript::compile_named(source_name, source, self.limits.clone())
-    }
-
-    /// # Errors
-    /// Fails when the compiled script exceeds this context's limits or evaluation fails.
-    pub fn eval_compiled(&mut self, script: &CompiledScript) -> Result<Value> {
-        let outcome = self.eval_compiled_outcome(script)?;
-        let span = outcome.span();
-        let completion = outcome.completion();
-        let Completion::Throw(value) = completion else {
-            let result = completion.into_result();
-            return if let Some(span) = span {
-                result.map_err(|error| error.with_runtime_span(span))
-            } else {
-                result
-            };
-        };
-        let metadata = if let Value::Object(id) = &value {
-            self.objects.error_metadata(*id)?.cloned()
-        } else {
-            None
-        };
-        Err(Error::javascript_with_metadata(
-            self.identity.clone(),
-            value,
-            metadata,
-            span,
-        ))
-    }
-
-    pub(crate) fn eval_compiled_completion(
-        &mut self,
-        script: &CompiledScript,
-    ) -> Result<Completion> {
-        self.eval_compiled_outcome(script)
-            .map(BytecodeOutcome::completion)
-    }
-
-    fn eval_compiled_outcome(&mut self, script: &CompiledScript) -> Result<BytecodeOutcome> {
-        script.ensure_within_limits(&self.limits)?;
-        let static_name_cache = StaticNameAtomCacheHandle::new(
-            script.usage().static_name_count(),
-            script.usage().static_property_access_count(),
-            script.usage().static_call_site_count(),
-        );
-        let binding_cache = StaticBindingCacheHandle::new(script.binding_layout().operand_count());
-        self.with_static_name_caches(
-            static_name_cache,
-            binding_cache,
-            script.binding_layout().clone(),
-            |context| {
-                if let Err(error) =
-                    context.hoist_bytecode_declarations(script.bytecode().hoist_plan())
-                {
-                    let Some(value) = runtime_exception_value(context, &error)? else {
-                        return Err(error);
-                    };
-                    return Ok(BytecodeOutcome::Completed {
-                        completion: Completion::Throw(value),
-                        span: None,
-                    });
-                }
-                let outcome = context.eval_bytecode_program(script.bytecode())?;
-                if outcome.is_normal() {
-                    context.drain_promise_jobs()?;
-                }
-                Ok(outcome)
-            },
-        )
     }
 
     pub(crate) fn eval_cached_call_completion(

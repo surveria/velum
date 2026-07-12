@@ -59,6 +59,7 @@ pub fn parse_with_usage_in_mode(
 pub struct ParsedProgram {
     pub program: Program,
     pub usage: ParseUsage,
+    pub strict: bool,
 }
 
 pub struct ParseUsage {
@@ -168,6 +169,7 @@ impl Parser {
         Ok(ParsedProgram {
             program: Program { statements },
             usage,
+            strict: self.strict_mode,
         })
     }
 

@@ -454,6 +454,8 @@ pub enum BytecodeInstruction {
     },
     CallBindingSpread {
         callee: BytecodeBinding,
+        native: Option<NativeCallTarget>,
+        strict: bool,
     },
     CallValueSpread,
     CallStaticMemberSpread {

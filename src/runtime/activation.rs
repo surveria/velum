@@ -32,6 +32,7 @@ pub(in crate::runtime) enum ActivationFrame {
     },
     EvalBoundary {
         local_base: usize,
+        with_environments: Vec<Value>,
         private_environment: Option<Rc<PrivateEnvironment>>,
         continuation: Option<BytecodeContinuationFrame>,
     },
@@ -79,6 +80,7 @@ impl ActivationFrame {
     pub(in crate::runtime) const fn eval_boundary(local_base: usize) -> Self {
         Self::EvalBoundary {
             local_base,
+            with_environments: Vec::new(),
             private_environment: None,
             continuation: None,
         }
@@ -180,8 +182,11 @@ impl ActivationFrame {
             }
             | Self::Bytecode {
                 with_environments, ..
+            }
+            | Self::EvalBoundary {
+                with_environments, ..
             } => Some(with_environments),
-            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } => None,
+            Self::TemporaryThis { .. } => None,
         }
     }
 
@@ -192,8 +197,11 @@ impl ActivationFrame {
             }
             | Self::Bytecode {
                 with_environments, ..
+            }
+            | Self::EvalBoundary {
+                with_environments, ..
             } => Some(with_environments),
-            Self::TemporaryThis { .. } | Self::EvalBoundary { .. } => None,
+            Self::TemporaryThis { .. } => None,
         }
     }
 

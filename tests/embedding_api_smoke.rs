@@ -388,7 +388,7 @@ fn tracks_atoms_for_function_parameters_before_calls() -> TestResult {
 
     let value = vm.context().eval(
         r"
-        globalThis;
+        void globalThis;
         let add = function add(left, right) {
             return left + right;
         };

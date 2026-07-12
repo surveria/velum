@@ -542,7 +542,6 @@ impl Context {
                     let value = state.stack.pop()?;
                     self.assign_bytecode_cell(binding, cell, value)?;
                 }
-                state.last = Value::Undefined;
             }
             BytecodeLinearOp::StoreLast => {
                 state.last = state.stack.pop()?;

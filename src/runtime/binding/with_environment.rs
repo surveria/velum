@@ -93,11 +93,11 @@ impl Context {
 
     pub(in crate::runtime) fn current_with_environments(&self) -> &[Value] {
         for frame in self.activation_frames.iter().rev() {
-            if frame.is_eval_boundary() {
-                return &[];
-            }
             if let Some(environments) = frame.with_environments() {
                 return environments;
+            }
+            if frame.is_eval_boundary() {
+                return &[];
             }
         }
         &[]
@@ -115,9 +115,6 @@ impl Context {
             .activation_frames
             .get_mut(index)
             .ok_or_else(|| Error::runtime("with environment activation disappeared"))?;
-        if frame.is_eval_boundary() {
-            return Err(Error::runtime("with environment crossed an eval boundary"));
-        }
         frame
             .with_environments_mut()
             .ok_or_else(|| Error::runtime("with environment activation is unavailable"))
