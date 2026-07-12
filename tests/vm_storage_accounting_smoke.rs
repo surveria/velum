@@ -120,6 +120,25 @@ fn counts_every_materialized_vm_owner_category() -> TestResult {
     )
 }
 
+#[test]
+fn reconciles_arguments_binding_cache_entries() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.eval(
+        r"
+        function argumentCount() {
+            return arguments.length;
+        }
+        argumentCount(1, 2, 3);
+        ",
+    )?;
+
+    vm.storage_snapshot()?;
+    vm.collect_garbage()?;
+    vm.storage_snapshot()?;
+    Ok(())
+}
+
 fn ensure_materialized_payload_bytes(snapshot: &VmStorageSnapshot) -> TestResult {
     for (kind, label) in [
         (VmStorageKind::Atom, "atom text bytes"),

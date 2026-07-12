@@ -443,6 +443,10 @@ impl Context {
             )?;
             counter.record(
                 VmStorageKind::CacheEntry,
+                usize::from(function.arguments_binding.is_some()).saturating_mul(2),
+            )?;
+            counter.record(
+                VmStorageKind::CacheEntry,
                 function
                     .class_fields
                     .as_ref()

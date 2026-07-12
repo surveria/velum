@@ -206,8 +206,9 @@ impl Context {
         let Some(param) = catch.param.as_ref() else {
             return self.eval_bytecode_try_block_with_state(&catch.body, catch.body_scoped, state);
         };
-        let resumes = state.is_resuming();
-        if !resumes {
+        let resumes_destructure = state.has_destructure_continuation();
+        let resumes_body = state.is_resuming() && !resumes_destructure;
+        if !resumes_body && !resumes_destructure {
             self.push_lexical_scope()?;
             let hoist_result = catch.param_bindings.iter().try_for_each(|binding| {
                 self.hoist_bytecode_lexical_binding(binding, DeclKind::Let)
@@ -220,7 +221,7 @@ impl Context {
                 return Err(error);
             }
         }
-        let result = if resumes {
+        let result = if resumes_body {
             self.eval_bytecode_try_block_with_state(&catch.body, catch.body_scoped, state)
         } else {
             self.eval_bytecode_catch_scope(param, value, &catch.body, catch.body_scoped, state)

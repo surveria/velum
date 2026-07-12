@@ -18,16 +18,7 @@ impl ObjectHeap {
             object.visit_strong_edges(visitor)?;
         }
         for (index, _object) in self.objects.indexed() {
-            if let Some(slots) = self.private_slots.get(index) {
-                for slot in slots {
-                    for value in slot.value.values() {
-                        visitor.visit(
-                            VmObjectEdgeKind::InternalSlot,
-                            StrongEdgeReference::Value(value),
-                        )?;
-                    }
-                }
-            }
+            self.visit_private_slot_strong_edges(index, visitor)?;
         }
         Ok(())
     }
@@ -37,7 +28,26 @@ impl ObjectHeap {
         id: crate::value::ObjectId,
         visitor: &mut V,
     ) -> Result<()> {
-        self.object(id)?.visit_strong_edges(visitor)
+        self.object(id)?.visit_strong_edges(visitor)?;
+        self.visit_private_slot_strong_edges(id.index(), visitor)
+    }
+
+    fn visit_private_slot_strong_edges<V: StrongEdgeVisitor<VmObjectEdgeKind>>(
+        &self,
+        index: usize,
+        visitor: &mut V,
+    ) -> Result<()> {
+        if let Some(slots) = self.private_slots.get(index) {
+            for slot in slots {
+                for value in slot.value.values() {
+                    visitor.visit(
+                        VmObjectEdgeKind::InternalSlot,
+                        StrongEdgeReference::Value(value),
+                    )?;
+                }
+            }
+        }
+        Ok(())
     }
 
     pub(in crate::runtime) fn visit_direct_roots<V: DirectRootVisitor>(
