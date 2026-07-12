@@ -5,7 +5,7 @@ use crate::{
     error::{Error, Result},
 };
 
-use super::types::{BytecodeAddress, BytecodeInstruction};
+use super::{BytecodeAddress, BytecodeInstruction};
 
 /// One instruction and its canonical source range.
 pub struct BytecodeStep<'a> {

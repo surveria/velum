@@ -439,11 +439,13 @@ impl BytecodeCompiler<'_> {
                         object: BytecodeBlock::compile_expression(object, self.layout)?,
                         property,
                         index,
+                        strict,
                     });
                 }
                 Ok(BytecodeAssignmentTarget::StaticProperty {
                     object: BytecodeBlock::compile_expression(object, self.layout)?,
                     property,
+                    strict,
                 })
             }
             Expr::ComputedMember {
@@ -454,6 +456,7 @@ impl BytecodeCompiler<'_> {
                 object: BytecodeBlock::compile_expression(object, self.layout)?,
                 property: BytecodeBlock::compile_expression(property, self.layout)?,
                 operand: Self::compile_dynamic_property(*access),
+                strict,
             }),
             Expr::PrivateMember { object, name } => Ok(BytecodeAssignmentTarget::PrivateProperty {
                 object: BytecodeBlock::compile_expression(object, self.layout)?,

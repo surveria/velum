@@ -113,12 +113,14 @@ pub enum Expr {
         object: Box<Expression>,
         property: StaticName,
         access: StaticPropertyAccessId,
+        strict: bool,
         expr: Box<Expression>,
     },
     ComputedPropertyAssignment {
         object: Box<Expression>,
         property: Box<Expression>,
         access: StaticPropertyAccessId,
+        strict: bool,
         expr: Box<Expression>,
     },
     SuperPropertyAssignment {

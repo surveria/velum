@@ -152,10 +152,10 @@ impl Parser {
                 },
             );
         }
-        if self.match_kind(&TokenKind::PlusPlus) {
+        if !self.peek_has_line_terminator_before(0) && self.match_kind(&TokenKind::PlusPlus) {
             return self.update_expr(UpdateOp::Increment, false, expr, self.previous_span());
         }
-        if self.match_kind(&TokenKind::MinusMinus) {
+        if !self.peek_has_line_terminator_before(0) && self.match_kind(&TokenKind::MinusMinus) {
             return self.update_expr(UpdateOp::Decrement, false, expr, self.previous_span());
         }
         Ok(expr)
@@ -282,6 +282,7 @@ impl Parser {
         let start = if prefix { operator } else { expr.span() };
         let expr = Self::assignment_target(expr)
             .ok_or_else(|| Error::parse_at("invalid update target", operator))?;
+        self.validate_assignment_target(&expr)?;
         Ok(self.expression_node(
             start,
             Expr::Update {

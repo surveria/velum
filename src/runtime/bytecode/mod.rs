@@ -243,6 +243,7 @@ impl Context {
                 property,
                 op,
                 prefix,
+                strict,
             } => {
                 let object = state.stack.pop()?;
                 state.stack.push(self.eval_bytecode_update_static_property(
@@ -251,6 +252,7 @@ impl Context {
                     property.access(),
                     *op,
                     *prefix,
+                    *strict,
                 )?);
                 state.pc = next;
                 Ok(None)
@@ -260,11 +262,12 @@ impl Context {
                 index,
                 op,
                 prefix,
+                strict,
             } => {
                 let object = state.stack.pop()?;
-                state.stack.push(
-                    self.eval_bytecode_array_index_update(&object, property, *index, *op, *prefix)?,
-                );
+                state.stack.push(self.eval_bytecode_array_index_update(
+                    &object, property, *index, *op, *prefix, *strict,
+                )?);
                 state.pc = next;
                 Ok(None)
             }
@@ -272,8 +275,9 @@ impl Context {
                 property,
                 op,
                 prefix,
+                strict,
             } => self.eval_bytecode_update_computed_property_instruction(
-                state, *property, *op, *prefix, next,
+                state, *property, *op, *prefix, *strict, next,
             ),
             BytecodeInstruction::Binary { .. }
             | BytecodeInstruction::InStaticProperty { .. }
@@ -379,13 +383,19 @@ impl Context {
         property: crate::bytecode::BytecodeDynamicProperty,
         op: UpdateOp,
         prefix: bool,
+        strict: bool,
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         let key = state.stack.pop()?;
         let object = state.stack.pop()?;
-        if let Some(value) =
-            self.eval_dynamic_array_index_update(&object, &key, property.access(), op, prefix)?
-        {
+        if let Some(value) = self.eval_dynamic_array_index_update(
+            &object,
+            &key,
+            property.access(),
+            op,
+            prefix,
+            strict,
+        )? {
             state.stack.push(value);
             state.pc = next;
             return Ok(None);
@@ -397,6 +407,7 @@ impl Context {
             property.access(),
             op,
             prefix,
+            strict,
         )?);
         state.pc = next;
         Ok(None)
@@ -480,7 +491,11 @@ impl Context {
                     .stack
                     .push(self.eval_bytecode_binding_compound_assignment(*op, name, &right)?);
             }
-            BytecodeInstruction::CompoundStaticProperty { property, op } => {
+            BytecodeInstruction::CompoundStaticProperty {
+                property,
+                op,
+                strict,
+            } => {
                 let right = state.stack.pop()?;
                 let object = state.stack.pop()?;
                 state
@@ -491,24 +506,27 @@ impl Context {
                         property.name(),
                         property.access(),
                         &right,
+                        *strict,
                     )?);
             }
             BytecodeInstruction::CompoundArrayIndexProperty {
                 property,
                 index,
                 op,
+                strict,
             } => {
                 let right = state.stack.pop()?;
                 let object = state.stack.pop()?;
                 state
                     .stack
                     .push(self.eval_bytecode_array_index_compound_assignment(
-                        *op, &object, property, *index, &right,
+                        *op, &object, property, *index, &right, *strict,
                     )?);
             }
             BytecodeInstruction::CompoundComputedProperty {
                 property: operand,
                 op,
+                strict,
             } => {
                 let right = state.stack.pop()?;
                 let key = state.stack.pop()?;
@@ -519,6 +537,7 @@ impl Context {
                     &key,
                     operand.access(),
                     &right,
+                    *strict,
                 )? {
                     state.stack.push(value);
                     state.pc = next;
@@ -533,6 +552,7 @@ impl Context {
                         key,
                         operand.access(),
                         &right,
+                        *strict,
                     )?);
             }
             _ => return Err(Error::runtime("bytecode compound member mismatch")),
@@ -548,38 +568,53 @@ impl Context {
         next: BytecodeAddress,
     ) -> Result<Option<Completion>> {
         match instruction {
-            BytecodeInstruction::StaticPropertyAssign { property } => {
+            BytecodeInstruction::StaticPropertyAssign { property, strict } => {
                 let value = state.stack.pop()?;
                 let object = state.stack.pop()?;
-                self.set_static_property_value(
+                self.set_bytecode_static_property_reference(
                     &object,
                     property.name(),
                     property.access(),
                     value.clone(),
+                    *strict,
                 )?;
                 state.stack.push(value);
             }
-            BytecodeInstruction::ArrayIndexAssign { property, index } => {
+            BytecodeInstruction::ArrayIndexAssign {
+                property,
+                index,
+                strict,
+            } => {
                 let value = state.stack.pop()?;
                 let object = state.stack.pop()?;
-                self.set_bytecode_array_index_property(&object, property, *index, value.clone())?;
+                self.set_bytecode_array_index_property(
+                    &object,
+                    property,
+                    *index,
+                    value.clone(),
+                    *strict,
+                )?;
                 state.stack.push(value);
             }
-            BytecodeInstruction::ComputedPropertyAssign { property: operand } => {
+            BytecodeInstruction::ComputedPropertyAssign {
+                property: operand,
+                strict,
+            } => {
                 let value = state.stack.pop()?;
                 let key = state.stack.pop()?;
                 let object = state.stack.pop()?;
-                if self.set_dynamic_array_index_property(&object, &key, value.clone())? {
+                if self.set_dynamic_array_index_property(&object, &key, value.clone(), *strict)? {
                     state.stack.push(value);
                     state.pc = next;
                     return Ok(None);
                 }
                 let mut key = self.dynamic_property_key(&key)?;
-                self.set_cached_dynamic_property_value(
+                self.set_bytecode_dynamic_property_reference(
                     &object,
                     &mut key,
                     operand.access(),
                     value.clone(),
+                    *strict,
                 )?;
                 state.stack.push(value);
             }
