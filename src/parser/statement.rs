@@ -614,7 +614,7 @@ impl Parser {
 
     fn return_statement(&mut self) -> Result<Stmt> {
         if self.function_body_depth == 0 {
-            return Err(self.parse_error("return statement is only valid inside a function body"));
+            return Err(self.parse_error("return statement outside function"));
         }
         let value = if self.peek_has_line_terminator_before(0)
             || self.check(&TokenKind::Semicolon)
