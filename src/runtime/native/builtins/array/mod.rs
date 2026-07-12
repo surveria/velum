@@ -551,7 +551,7 @@ impl Context {
         Ok(())
     }
 
-    fn array_constructor_prototype(&mut self) -> Result<ObjectId> {
+    pub(in crate::runtime::native) fn array_constructor_prototype(&mut self) -> Result<ObjectId> {
         let Value::NativeFunction(id) = self.array_constructor_value()? else {
             return Err(Error::runtime("Array constructor value is not native"));
         };

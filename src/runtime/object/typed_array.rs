@@ -456,6 +456,9 @@ impl TypedArrayView {
         self.byte_offset
     }
 
+    pub(in crate::runtime) const fn raw_view_slots(&self) -> (usize, bool) {
+        (self.byte_offset, self.length_tracking)
+    }
     pub const fn buffer_object(&self) -> ObjectId {
         self.buffer_object
     }
