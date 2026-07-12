@@ -37,7 +37,7 @@ pub(super) struct KeyedGroup {
 }
 
 impl GroupByKey {
-    fn same_value(&self, other: &Self) -> bool {
+    fn matches(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Collection(left), Self::Collection(right)) => same_value(left, right),
             (Self::Property { key: left, .. }, Self::Property { key: right, .. }) => left == right,
@@ -164,7 +164,7 @@ impl Context {
         value: Value,
         iterator: &mut IteratorSource,
     ) -> Result<()> {
-        if let Some(group) = groups.iter_mut().find(|group| group.key.same_value(&key)) {
+        if let Some(group) = groups.iter_mut().find(|group| group.key.matches(&key)) {
             if let Err(error) = group.values.try_reserve(1) {
                 let error = Error::limit(format!("{GROUP_BY_STORAGE_ERROR}: {error}"));
                 return Err(self.iterator_close_on_error(iterator, error));
