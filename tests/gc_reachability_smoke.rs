@@ -143,6 +143,33 @@ fn marks_strong_roots_and_reports_unreachable_records() -> TestResult {
 }
 
 #[test]
+fn preserves_values_reachable_through_instance_private_fields() -> TestResult {
+    let engine = Engine::new();
+    let mut vm = engine.create_vm();
+    vm.eval(
+        r"
+        class PrivateHolder {
+            #value = { answer: 42 };
+
+            read() {
+                return this.#value.answer;
+            }
+        }
+        var privateHolder = new PrivateHolder();
+        ",
+    )?;
+
+    vm.collect_garbage()?;
+    let value = vm.eval("privateHolder.read()")?;
+    ensure(
+        value.to_string() == "42",
+        "collection lost a value retained only by an instance private field",
+    )?;
+    vm.storage_snapshot()?;
+    Ok(())
+}
+
+#[test]
 fn resolves_weak_map_ephemerons_without_marking_dead_keys() -> TestResult {
     let engine = Engine::new();
     let mut vm = engine.create_vm();
