@@ -26,6 +26,7 @@ impl Parser {
             parser.static_binding(name).map(Some)
         })?;
         self.consume(&TokenKind::LParen, "expected '(' after 'function'")?;
+        let arguments_snapshot = self.arguments_reference_snapshot();
         let parameters = self.with_await_context(false, kind.is_async(), |parser| {
             parser.with_yield_expression(false, |parser| {
                 parser
@@ -53,6 +54,12 @@ impl Parser {
             self.validate_generator_parameter_lexicals(&parameters.params, &body.statements)?;
         }
         let id = self.static_function()?;
+        let uses_arguments = self.arguments_referenced_since(arguments_snapshot);
+        let arguments_binding = if uses_arguments {
+            Some(self.implicit_arguments_binding()?)
+        } else {
+            None
+        };
         let (params, statements, parameter_prologue_count) =
             parameters.apply_prologue(body.statements);
         Ok(self.expression_node(
@@ -60,6 +67,7 @@ impl Parser {
             Expr::Function {
                 id,
                 name,
+                arguments_binding,
                 params: params.into(),
                 body: statements.into(),
                 parameter_prologue_count,

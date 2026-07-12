@@ -7,10 +7,14 @@ use crate::{
     },
     error::{Error, Result},
     lexer::TokenKind,
-    syntax::StaticName,
+    syntax::{FunctionKind, StaticName},
 };
 
-use super::{Parser, class_private::PrivateElementKind, literal::ObjectPropertyName};
+use super::{
+    Parser,
+    class_private::PrivateElementKind,
+    literal::{ObjectPropertyName, is_object_property_name_start},
+};
 
 /// One parsed class element key: an ordinary property name or a `#name`
 /// private identifier declared by this class body.
@@ -25,6 +29,8 @@ struct ParsedClassFunction {
     id: crate::syntax::StaticFunctionId,
     params: Rc<[crate::ast::FunctionParam]>,
     body: Rc<[Statement]>,
+    parameter_prologue_count: usize,
+    arguments_binding: Option<crate::syntax::StaticBinding>,
 }
 
 const CLASS_STATIC_KEYWORD: &str = "static";
@@ -120,6 +126,7 @@ impl Parser {
     fn default_class_constructor(&mut self) -> Result<ClassConstructor> {
         Ok(ClassConstructor {
             id: self.static_function()?,
+            arguments_binding: None,
             params: Vec::new().into(),
             body: Vec::new().into(),
         })
@@ -135,6 +142,7 @@ impl Parser {
         let forward = Expression::new(Expr::SuperCall { args: vec![spread] }, span);
         Ok(ClassConstructor {
             id: self.static_function()?,
+            arguments_binding: None,
             params: vec![crate::ast::FunctionParam::rest(rest)].into(),
             body: vec![Statement::new(Stmt::Expr(forward), span)].into(),
         })
@@ -149,20 +157,23 @@ impl Parser {
         derived: bool,
     ) -> Result<()> {
         let member_offset = self.offset();
-        self.reject_unsupported_class_member()?;
         if self.class_static_block_start() {
             return self.class_static_block(static_blocks);
         }
         let is_static = self.match_class_static_prefix();
-        if is_static {
-            self.reject_unsupported_class_member()?;
-        }
-        let is_auto_accessor = self.match_class_auto_accessor_prefix();
-        let accessor = self.match_class_accessor_prefix();
+        let function_kind = self.match_class_method_prefix();
+        let is_auto_accessor =
+            function_kind == FunctionKind::Ordinary && self.match_class_auto_accessor_prefix();
+        let accessor = (function_kind == FunctionKind::Ordinary)
+            .then(|| self.match_class_accessor_prefix())
+            .flatten();
         let key = self.class_element_key()?;
         let key_name = Self::class_member_key_name(&key);
 
         if !self.check(&TokenKind::LParen) {
+            if function_kind != FunctionKind::Ordinary {
+                return Err(self.parse_error("expected '(' after class method name"));
+            }
             if accessor.is_some() {
                 return Err(self.parse_error("expected '(' after class accessor name"));
             }
@@ -178,6 +189,7 @@ impl Parser {
             if !is_static && name.as_str() == CLASS_CONSTRUCTOR_NAME {
                 return self.class_constructor_member(
                     accessor,
+                    function_kind,
                     constructor,
                     member_offset,
                     derived,
@@ -205,15 +217,18 @@ impl Parser {
             let name = name.clone();
             self.declare_private_name(&name, private_kind, is_static, member_offset)?;
         }
-        let function = self.class_member_function(kind, member_offset, false)?;
+        let function = self.class_member_function(kind, function_kind, member_offset, false)?;
         members.push(ClassMember {
             key: Self::class_element_name(key),
             kind,
+            function_kind,
             is_static,
             id: function.id,
+            arguments_binding: function.arguments_binding,
             name: key_name,
             params: function.params,
             body: function.body,
+            parameter_prologue_count: function.parameter_prologue_count,
         });
         Ok(())
     }
@@ -319,6 +334,7 @@ impl Parser {
     fn class_constructor_member(
         &mut self,
         accessor: Option<ClassMemberKind>,
+        function_kind: FunctionKind,
         constructor: &mut Option<ClassConstructor>,
         member_offset: usize,
         derived: bool,
@@ -329,16 +345,27 @@ impl Parser {
                 member_offset,
             ));
         }
+        if function_kind != FunctionKind::Ordinary {
+            return Err(Error::parse(
+                "class constructor must be an ordinary method",
+                member_offset,
+            ));
+        }
         if constructor.is_some() {
             return Err(Error::parse(
                 "class body cannot declare two constructors",
                 member_offset,
             ));
         }
-        let function =
-            self.class_member_function(ClassMemberKind::Method, member_offset, derived)?;
+        let function = self.class_member_function(
+            ClassMemberKind::Method,
+            FunctionKind::Ordinary,
+            member_offset,
+            derived,
+        )?;
         *constructor = Some(ClassConstructor {
             id: function.id,
+            arguments_binding: function.arguments_binding,
             params: function.params,
             body: function.body,
         });
@@ -351,11 +378,21 @@ impl Parser {
     fn class_member_function(
         &mut self,
         kind: ClassMemberKind,
+        function_kind: FunctionKind,
         member_offset: usize,
         allow_super_call: bool,
     ) -> Result<ParsedClassFunction> {
+        let arguments_snapshot = self.arguments_reference_snapshot();
         self.consume(&TokenKind::LParen, "expected '(' after class member name")?;
-        let parameters = self.with_await_context(false, false, Self::function_parameters)?;
+        let parameters = self.with_await_context(false, function_kind.is_async(), |parser| {
+            parser.with_yield_expression(false, |parser| {
+                parser.with_yield_identifier_reserved(
+                    function_kind.is_generator(),
+                    Self::function_parameters,
+                )
+            })
+        })?;
+        self.reject_duplicate_parameters(&parameters.params)?;
         self.consume(
             &TokenKind::RParen,
             "expected ')' after class member parameters",
@@ -386,7 +423,15 @@ impl Parser {
         self.consume(&TokenKind::LBrace, "expected '{' before class member body")?;
         let body = self.with_new_target_scope(|parser| {
             parser.with_super_context(true, allow_super_call, |parser| {
-                parser.with_await_context(false, false, |parser| parser.function_body(true))
+                parser.with_await_context(
+                    function_kind.is_async(),
+                    function_kind.is_async(),
+                    |parser| {
+                        parser.with_yield_expression(function_kind.is_generator(), |parser| {
+                            parser.function_body(true)
+                        })
+                    },
+                )
             })
         })?;
         self.validate_function_parameters(
@@ -395,13 +440,23 @@ impl Parser {
             true,
             body.contains_use_strict,
         )?;
+        if function_kind.is_generator() {
+            self.validate_generator_parameter_lexicals(&parameters.params, &body.statements)?;
+        }
         let id = self.static_function()?;
-        let (params, statements, _parameter_prologue_count) =
+        let arguments_binding = if self.arguments_referenced_since(arguments_snapshot) {
+            Some(self.implicit_arguments_binding()?)
+        } else {
+            None
+        };
+        let (params, statements, parameter_prologue_count) =
             parameters.apply_prologue(body.statements);
         Ok(ParsedClassFunction {
             id,
             params: params.into(),
             body: statements.into(),
+            parameter_prologue_count,
+            arguments_binding,
         })
     }
 
@@ -453,14 +508,28 @@ impl Parser {
         is_prefix && self.advance().is_some()
     }
 
-    fn reject_unsupported_class_member(&self) -> Result<()> {
-        if self.check(&TokenKind::Star) {
-            return Err(self.parse_error("class generator methods are not supported yet"));
+    fn match_class_method_prefix(&mut self) -> FunctionKind {
+        if self.match_kind(&TokenKind::Star) {
+            return FunctionKind::Generator;
         }
-        if self.check(&TokenKind::Async) && !self.peek_kind_is(1, &TokenKind::LParen) {
-            return Err(self.parse_error("class async methods are not supported yet"));
+        if !self.class_async_method_start() || !self.match_kind(&TokenKind::Async) {
+            return FunctionKind::Ordinary;
         }
-        Ok(())
+        if self.match_kind(&TokenKind::Star) {
+            FunctionKind::AsyncGenerator
+        } else {
+            FunctionKind::Async
+        }
+    }
+
+    fn class_async_method_start(&self) -> bool {
+        if !self.peek_kind_is(0, &TokenKind::Async) || self.peek_has_line_terminator_before(1) {
+            return false;
+        }
+        if self.peek_kind_is(1, &TokenKind::Star) {
+            return self.peek_kind(2).is_some_and(class_element_name_start);
+        }
+        self.peek_kind(1).is_some_and(class_element_name_start)
     }
 
     fn class_member_key_name(key: &ClassKeySeed) -> Option<StaticName> {
@@ -486,4 +555,8 @@ impl Parser {
             ObjectPropertyName::Computed(expr) => ObjectPropertyKey::Computed(Box::new(expr)),
         }
     }
+}
+
+const fn class_element_name_start(kind: &TokenKind) -> bool {
+    matches!(kind, TokenKind::PrivateName(_)) || is_object_property_name_start(kind)
 }

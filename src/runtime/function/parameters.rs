@@ -41,6 +41,39 @@ impl<'a> FunctionParameterState<'a> {
 }
 
 impl Context {
+    pub(super) fn compile_function_self_binding(
+        &mut self,
+        bytecode: &BytecodeFunction,
+        layout: Option<&BindingLayout>,
+    ) -> Result<Option<super::FunctionSelfBinding>> {
+        bytecode
+            .self_binding()
+            .map(|binding| {
+                let atom = self.intern_static_name_atom(binding.name())?;
+                let frame = function_self_binding_frame(binding.id(), layout)?;
+                Ok(super::FunctionSelfBinding::new(atom, frame))
+            })
+            .transpose()
+    }
+
+    pub(super) fn compile_function_arguments_binding(
+        &mut self,
+        bytecode: &BytecodeFunction,
+        layout: Option<&BindingLayout>,
+    ) -> Result<Option<super::FunctionArgumentsBinding>> {
+        if !bytecode.uses_arguments() {
+            return Ok(None);
+        }
+        bytecode
+            .arguments_binding()
+            .map(|binding| {
+                let atom = self.intern_static_name_atom(binding.name())?;
+                let frame = function_arguments_binding_frame(binding.id(), layout)?;
+                Ok(super::FunctionArgumentsBinding::new(atom, frame))
+            })
+            .transpose()
+    }
+
     pub(super) fn function_param_atoms(
         &mut self,
         params: &[BytecodeFunctionParam],
@@ -125,6 +158,29 @@ impl Context {
             }
         }
         Ok(scope)
+    }
+
+    pub(super) fn arguments_binding_scope(
+        &mut self,
+        binding: FunctionArgumentsBinding,
+        original_args: &[Value],
+    ) -> Result<BindingScope> {
+        let frame = binding.frame();
+        let scope = frame
+            .scope()
+            .ok_or_else(|| Error::runtime("arguments binding scope is not local"))?;
+        if frame.slot().index() != 0 {
+            return Err(Error::runtime(
+                "arguments binding is not the first arguments-scope slot",
+            ));
+        }
+        self.ensure_extra_binding_capacity(1)?;
+        let cell = BindingCell::new(
+            self.create_arguments_object(original_args)?,
+            true,
+            DeclKind::Var,
+        );
+        BindingScope::from_compiled_slots(scope, vec![(binding.atom(), cell)])
     }
 
     pub(super) fn eval_function_body<const CAN_SUSPEND: bool>(
@@ -396,6 +452,27 @@ pub(in crate::runtime) struct FunctionScopeTemplate {
     pub(super) param_count: usize,
 }
 
+/// Precomputed local slot for a function's implicit `arguments` binding.
+#[derive(Debug, Clone, Copy)]
+pub(in crate::runtime) struct FunctionArgumentsBinding {
+    atom: AtomId,
+    frame: CompiledBindingFrame,
+}
+
+impl FunctionArgumentsBinding {
+    pub(super) const fn new(atom: AtomId, frame: CompiledBindingFrame) -> Self {
+        Self { atom, frame }
+    }
+
+    pub(super) const fn atom(self) -> AtomId {
+        self.atom
+    }
+
+    pub(super) const fn frame(self) -> CompiledBindingFrame {
+        self.frame
+    }
+}
+
 /// Precomputed local slot for a named function expression's private
 /// immutable self binding.
 #[derive(Debug, Clone, Copy)]
@@ -437,6 +514,28 @@ pub(super) fn function_self_binding_frame(
         | BindingOperand::Upvalue { .. }
         | BindingOperand::Unresolved => Err(Error::runtime(
             "named function binding layout is not a local slot",
+        )),
+    }
+}
+
+pub(super) fn function_arguments_binding_frame(
+    binding: StaticBindingId,
+    layout: Option<&BindingLayout>,
+) -> Result<CompiledBindingFrame> {
+    let layout = layout
+        .ok_or_else(|| Error::runtime("arguments binding requires a compiled binding layout"))?;
+    let operand = layout
+        .operand_for_binding_id(binding)?
+        .ok_or_else(|| Error::runtime("arguments binding layout is not defined"))?;
+    match operand {
+        BindingOperand::Local { scope, slot } => Ok(CompiledBindingFrame::local(
+            scope,
+            BindingSlot::from_index(slot.index()?),
+        )),
+        BindingOperand::Global { .. }
+        | BindingOperand::Upvalue { .. }
+        | BindingOperand::Unresolved => Err(Error::runtime(
+            "arguments binding layout is not a local slot",
         )),
     }
 }

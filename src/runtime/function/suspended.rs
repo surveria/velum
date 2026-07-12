@@ -112,7 +112,7 @@ impl Context {
         }
         let binding_result = self.pop_function_binding_storage(
             local_base,
-            setup.binds_arguments,
+            setup.arguments_binding.is_some(),
             setup.self_binding.is_some(),
         );
         let activation_result = self.pop_call_activation(local_base);

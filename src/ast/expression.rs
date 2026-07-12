@@ -152,6 +152,7 @@ pub enum Expr {
     Function {
         id: StaticFunctionId,
         name: Option<StaticBinding>,
+        arguments_binding: Option<StaticBinding>,
         params: Rc<[FunctionParam]>,
         body: Rc<[Statement]>,
         parameter_prologue_count: usize,
@@ -167,6 +168,7 @@ pub enum Expr {
     MethodFunction {
         id: StaticFunctionId,
         name: Option<StaticName>,
+        arguments_binding: Option<StaticBinding>,
         params: Rc<[FunctionParam]>,
         body: Rc<[Statement]>,
         parameter_prologue_count: usize,

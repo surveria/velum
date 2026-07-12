@@ -14,12 +14,16 @@ impl Context {
         has_fast_path: bool,
         scope_template: Option<&FunctionScopeTemplate>,
         has_self_binding: bool,
+        has_arguments_binding: bool,
     ) -> Result<usize> {
         let count = param_binding_count
             .checked_add(param_atom_count)
             .and_then(|count| count.checked_add(param_frame_count))
             .and_then(|count| count.checked_add(usize::from(has_fast_path)))
             .and_then(|count| count.checked_add(usize::from(has_self_binding).saturating_mul(2)))
+            .and_then(|count| {
+                count.checked_add(usize::from(has_arguments_binding).saturating_mul(2))
+            })
             .ok_or_else(|| Error::limit("function metadata cache count overflowed"))?;
         if let Some(template) = scope_template {
             return count
@@ -54,21 +58,14 @@ impl Context {
     pub(super) fn push_function_binding_storage(
         &mut self,
         local_base: usize,
+        arguments_scope: Option<BindingScope>,
         scope: BindingScope,
-        original_args: Option<&[Value]>,
     ) -> Result<()> {
-        if let Some(original_args) = original_args {
-            let wrapper = match self.arguments_wrapper_scope(original_args) {
-                Ok(wrapper) => wrapper,
-                Err(error) => {
-                    self.leave_function_local_frame(local_base)?;
-                    return Err(error);
-                }
-            };
-            if let Err(error) = self.push_lexical_scope_with(wrapper) {
-                self.leave_function_local_frame(local_base)?;
-                return Err(error);
-            }
+        if let Some(arguments_scope) = arguments_scope
+            && let Err(error) = self.push_lexical_scope_with(arguments_scope)
+        {
+            self.leave_function_local_frame(local_base)?;
+            return Err(error);
         }
         if let Err(error) = self.push_lexical_scope_with(scope) {
             self.leave_function_local_frame(local_base)?;
@@ -80,11 +77,11 @@ impl Context {
     pub(super) fn pop_function_binding_storage(
         &mut self,
         local_base: usize,
-        binds_arguments: bool,
+        has_arguments_binding: bool,
         has_self_binding: bool,
     ) -> Result<()> {
         let expected_local_count =
-            expected_function_local_count(local_base, binds_arguments, has_self_binding)?;
+            expected_function_local_count(local_base, has_arguments_binding, has_self_binding)?;
         let actual_local_count = self.locals.len();
         let local_scope_stack_ok = actual_local_count == expected_local_count;
         self.leave_function_local_frame(local_base)?;

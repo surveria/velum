@@ -30,6 +30,7 @@ impl Parser {
         let static_names = self.static_names.clone();
         let static_bindings = self.static_bindings.clone();
         let static_functions = self.static_functions.clone();
+        let arguments_reference_count = self.arguments_reference_count;
         if let Some((target, object, head)) = self.for_in_header()? {
             if asynchronous && head == ForHeadKind::In {
                 return Err(self.parse_error("for-await statement requires an 'of' head"));
@@ -65,6 +66,7 @@ impl Parser {
         self.static_names = static_names;
         self.static_bindings = static_bindings;
         self.static_functions = static_functions;
+        self.arguments_reference_count = arguments_reference_count;
 
         let init = self.for_init()?;
         let condition = if self.check(&TokenKind::Semicolon) {

@@ -133,6 +133,7 @@ pub struct Context {
 #[derive(Debug, Clone)]
 struct Function {
     self_binding: Option<function::FunctionSelfBinding>,
+    arguments_binding: Option<function::FunctionArgumentsBinding>,
     param_binding_ids: Rc<[StaticBindingId]>,
     param_atoms: Rc<[AtomId]>,
     param_frames: Rc<[Option<CompiledBindingFrame>]>,

@@ -43,6 +43,7 @@ impl BytecodeProgram {
 #[derive(Debug, Clone, PartialEq)]
 pub struct BytecodeFunction {
     self_binding: Option<StaticBinding>,
+    arguments_binding: Option<StaticBinding>,
     params: Rc<[BytecodeFunctionParam]>,
     param_defaults: Rc<[Option<BytecodeBlock>]>,
     body: BytecodeBlock,
@@ -51,29 +52,35 @@ pub struct BytecodeFunction {
     uses_arguments: bool,
 }
 
+pub struct BytecodeFunctionInit {
+    pub self_binding: Option<StaticBinding>,
+    pub arguments_binding: Option<StaticBinding>,
+    pub params: Rc<[BytecodeFunctionParam]>,
+    pub param_defaults: Rc<[Option<BytecodeBlock>]>,
+    pub body: BytecodeBlock,
+    pub hoist_plan: BytecodeHoistPlan,
+    pub capture_bindings: Rc<[StaticBinding]>,
+    pub uses_arguments: bool,
+}
 impl BytecodeFunction {
-    pub(crate) const fn new(
-        self_binding: Option<StaticBinding>,
-        params: Rc<[BytecodeFunctionParam]>,
-        param_defaults: Rc<[Option<BytecodeBlock>]>,
-        body: BytecodeBlock,
-        hoist_plan: BytecodeHoistPlan,
-        capture_bindings: Rc<[StaticBinding]>,
-        uses_arguments: bool,
-    ) -> Self {
+    pub(crate) fn new(init: BytecodeFunctionInit) -> Self {
         Self {
-            self_binding,
-            params,
-            param_defaults,
-            body,
-            hoist_plan,
-            capture_bindings,
-            uses_arguments,
+            self_binding: init.self_binding,
+            arguments_binding: init.arguments_binding,
+            params: init.params,
+            param_defaults: init.param_defaults,
+            body: init.body,
+            hoist_plan: init.hoist_plan,
+            capture_bindings: init.capture_bindings,
+            uses_arguments: init.uses_arguments,
         }
     }
-
     pub const fn self_binding(&self) -> Option<&StaticBinding> {
         self.self_binding.as_ref()
+    }
+
+    pub const fn arguments_binding(&self) -> Option<&StaticBinding> {
+        self.arguments_binding.as_ref()
     }
 
     pub const fn uses_arguments(&self) -> bool {
@@ -379,6 +386,7 @@ pub struct BytecodeClassField {
 pub struct BytecodeClassMember {
     pub key: BytecodeClassMemberKey,
     pub kind: BytecodeClassMemberKind,
+    pub function_kind: FunctionKind,
     pub is_static: bool,
     pub id: StaticFunctionId,
     pub bytecode: BytecodeFunction,

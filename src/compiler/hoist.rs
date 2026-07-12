@@ -43,13 +43,14 @@ impl<'a> HoistCollector<'a> {
 
     fn collect_function_declaration(
         &mut self,
-        name: &StaticBinding,
+        bindings: (&StaticBinding, Option<&StaticBinding>),
         id: crate::syntax::StaticFunctionId,
         params: &std::rc::Rc<[crate::ast::FunctionParam]>,
         body: &std::rc::Rc<[Statement]>,
         parameter_prologue_count: usize,
         kind: crate::syntax::FunctionKind,
     ) -> Result<()> {
+        let (name, arguments_binding) = bindings;
         self.var_declarations.push(name.clone());
         let declaration = BytecodeFunctionDeclaration::new(
             BytecodeBinding::compile(name, self.layout)?,
@@ -57,6 +58,7 @@ impl<'a> HoistCollector<'a> {
             name.name().clone(),
             BytecodeFunction::compile(
                 None,
+                arguments_binding.cloned(),
                 params,
                 body,
                 kind,
@@ -172,13 +174,15 @@ impl<'a> HoistCollector<'a> {
             }
             Stmt::FunctionDecl {
                 name,
+                arguments_binding,
                 id,
                 params,
                 body,
                 parameter_prologue_count,
                 kind,
+                ..
             } => self.collect_function_declaration(
-                name,
+                (name, arguments_binding.as_ref()),
                 *id,
                 params,
                 body,
