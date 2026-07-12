@@ -850,7 +850,8 @@ src/runtime/control/assertions.rs:runtime_exception_value'
   compare_set "dynamic compilation error user allowlist" \
     "${dynamic_compilation_users}" \
     'src/runtime/native/builtins/eval.rs
-src/runtime/native/builtins/function_constructor.rs'
+src/runtime/native/builtins/function_constructor.rs
+src/runtime/native/builtins/shadow_realm.rs'
   if grep -R -q -F --include='*.rs' 'generated_function_syntax_error' \
       "${repo_root}/src/runtime/native/builtins"; then
     fail "dynamic compilation error boundary changed; constructors must use the shared owner"
@@ -1493,8 +1494,9 @@ check_callable_edge_boundary() {
 
   for source in \
     'StrongEdgeReference::Value(&self.target)' \
-    'StrongEdgeReference::Value(&self.this_value)' \
-    'for arg in &self.args {'; do
+    'if let BoundFunctionBehavior::Ordinary { this_value, args } = &self.behavior {' \
+    'StrongEdgeReference::Value(this_value)' \
+    'for arg in args {'; do
     if ! grep -F -q "${source}" "${repo_root}/src/runtime/call/bound.rs"; then
       fail "callable edge boundary changed; bound function source '${source}' is missing"
     fi
@@ -1753,6 +1755,8 @@ inactive_realms
 locals
 modules
 module_evaluation_depth
+dynamic_module_loader
+active_module_name
 activation_frames
 functions
 native_functions
@@ -1803,6 +1807,7 @@ data_view
 typed_array
 is_raw_json
 arguments_brand
+shadow_realm
 prototype
 extensibility
 storage_ledger'
@@ -2402,7 +2407,7 @@ mutate_teardown_storage_snapshot() {
 
 mutate_bound_function_edge() {
   local fixture_root="$1"
-  sed -i '/for arg in &self.args {/d' \
+  sed -i '/for arg in args {/d' \
     "${fixture_root}/src/runtime/call/bound.rs"
 }
 

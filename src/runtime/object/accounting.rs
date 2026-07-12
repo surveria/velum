@@ -46,6 +46,7 @@ impl ObjectStorageCounts {
 impl ObjectHeap {
     pub(in crate::runtime) fn storage_counts(&self) -> Result<ObjectStorageCounts> {
         let mut properties = 0_usize;
+        let mut internal_associations = 0_usize;
         for (index, object) in self.objects.indexed() {
             properties = properties
                 .checked_add(object.named_properties.len())
@@ -54,6 +55,9 @@ impl ObjectHeap {
                     count.checked_add(self.private_slots.get(index).map_or(0, std::vec::Vec::len))
                 })
                 .ok_or_else(|| Error::limit("object property count overflowed"))?;
+            internal_associations = internal_associations
+                .checked_add(usize::from(object.shadow_realm.is_some()))
+                .ok_or_else(|| Error::limit("object association count overflowed"))?;
         }
         Ok(ObjectStorageCounts {
             objects: self.objects.len(),
@@ -62,6 +66,7 @@ impl ObjectHeap {
             cache_entries: self.shapes.storage_entry_count()?,
             associations: usize::from(self.object_prototype.is_some())
                 .checked_add(usize::from(self.array_prototype.is_some()))
+                .and_then(|count| count.checked_add(internal_associations))
                 .ok_or_else(|| Error::limit("object anchor association count overflowed"))?,
             object_payload_bytes: self.object_payload_bytes,
             byte_buffer_payload_bytes: self.byte_buffer_payload_bytes,

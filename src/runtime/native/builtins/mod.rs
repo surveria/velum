@@ -31,6 +31,7 @@ mod proxy_invariants;
 mod reflect;
 mod regexp;
 mod set_operations;
+mod shadow_realm;
 mod shared_array_buffer;
 mod species;
 mod string;

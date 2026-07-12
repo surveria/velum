@@ -230,6 +230,7 @@ fn execute_variant_result(
 
     let result = if metadata.has_flag(FLAG_MODULE) {
         let mut loader = Test262ModuleLoader::new(test262_dir);
+        context.set_dynamic_module_loader(loader.clone());
         context.eval_module_named(relative_path, source, &mut loader)
     } else {
         let source = variant_source(source, strict);

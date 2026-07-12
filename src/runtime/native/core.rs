@@ -18,8 +18,9 @@ use super::{
     GLOBAL_IS_NAN_NAME, GLOBAL_PARSE_FLOAT_NAME, GLOBAL_PARSE_INT_NAME, GLOBAL_THIS_NAME,
     INFINITY_NAME, ITERATOR_NAME, JSON_NAME, MAP_NAME, MATH_NAME, NAN_NAME, NUMBER_NAME,
     NativeFunction, NativeFunctionKind, OBJECT_CONSTRUCTOR_PROPERTY, OBJECT_NAME, PERFORMANCE_NAME,
-    PROMISE_NAME, PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, SHARED_ARRAY_BUFFER_NAME,
-    STRING_NAME, SYMBOL_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
+    PROMISE_NAME, PROXY_NAME, REFLECT_NAME, REGEXP_NAME, SET_NAME, SHADOW_REALM_NAME,
+    SHARED_ARRAY_BUFFER_NAME, STRING_NAME, SYMBOL_NAME, ShadowRealmFunctionKind, WEAK_MAP_NAME,
+    WEAK_SET_NAME,
 };
 
 const NATIVE_METHOD_NOT_CONSTRUCTOR_ERROR: &str = "native method is not a constructor";
@@ -40,6 +41,7 @@ impl Context {
             ARRAY_NAME => self.array_constructor_value().map(Some),
             ARRAY_BUFFER_NAME => self.array_buffer_constructor_value().map(Some),
             SHARED_ARRAY_BUFFER_NAME => self.shared_array_buffer_constructor_value().map(Some),
+            SHADOW_REALM_NAME => self.shadow_realm_constructor_value().map(Some),
             DATA_VIEW_NAME => self.data_view_constructor_value().map(Some),
             BOOLEAN_NAME => self.boolean_constructor_value().map(Some),
             BIGINT_NAME => self.bigint_constructor_value().map(Some),
@@ -119,6 +121,7 @@ impl Context {
             ARRAY_NAME => self.array_constructor_value().map(Some),
             ARRAY_BUFFER_NAME => self.array_buffer_constructor_value().map(Some),
             SHARED_ARRAY_BUFFER_NAME => self.shared_array_buffer_constructor_value().map(Some),
+            SHADOW_REALM_NAME => self.shadow_realm_constructor_value().map(Some),
             DATA_VIEW_NAME => self.data_view_constructor_value().map(Some),
             BOOLEAN_NAME => self.boolean_constructor_value().map(Some),
             BIGINT_NAME => self.bigint_constructor_value().map(Some),
@@ -201,6 +204,9 @@ impl Context {
             NativeFunctionKind::Array => self.eval_array_constructor(args),
             NativeFunctionKind::ArrayBuffer => self.construct_array_buffer(args),
             NativeFunctionKind::SharedArrayBuffer => self.construct_shared_array_buffer(args),
+            NativeFunctionKind::ShadowRealm(ShadowRealmFunctionKind::Constructor) => {
+                self.construct_shadow_realm()
+            }
             NativeFunctionKind::DataView(DataViewFunctionKind::Constructor) => {
                 self.construct_data_view(args)
             }

@@ -33,6 +33,7 @@ mod primitive_kind;
 mod reflect_kind;
 mod registry;
 mod registry_error;
+mod shadow_realm_kind;
 mod shared_array_buffer_kind;
 mod string_annexb_kind;
 mod string_kind;
@@ -125,6 +126,7 @@ pub(in crate::runtime::native) use primitive_kind::{
 };
 pub(in crate::runtime::native) use reflect_kind::REFLECT_NAME;
 pub(in crate::runtime) use registry::NativeFunctionRegistry;
+pub(in crate::runtime) use shadow_realm_kind::{SHADOW_REALM_NAME, ShadowRealmFunctionKind};
 pub(in crate::runtime::native) use shared_array_buffer_kind::SHARED_ARRAY_BUFFER_NAME;
 pub(in crate::runtime) use shared_array_buffer_kind::SharedArrayBufferFunctionKind;
 pub(in crate::runtime::native) use string_annexb_kind::StringAnnexBFunctionKind;

@@ -501,6 +501,7 @@ impl Context {
             }
             NativeFunctionKind::Boolean => self.eval_boolean_constructor(args),
             NativeFunctionKind::BoundFunction(id) => self.eval_bound_function(id, args),
+            NativeFunctionKind::ShadowRealm(kind) => self.eval_shadow_realm(kind, args, this_value),
             NativeFunctionKind::Eval => self.eval_eval_function(args),
             NativeFunctionKind::ErrorConstructor(name) => self.eval_error_constructor(name, args),
             NativeFunctionKind::ErrorPrototypeToString => {

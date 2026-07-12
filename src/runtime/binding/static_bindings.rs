@@ -147,6 +147,10 @@ impl CompiledBindingFrame {
 }
 
 impl Context {
+    pub(crate) fn current_static_binding_cache_owner(&self) -> Option<StaticBindingCacheHandle> {
+        self.static_binding_caches.last().cloned()
+    }
+
     pub(crate) fn current_static_binding_cache(&self) -> Option<StaticBindingCacheHandle> {
         if !self.optional_optimizations_enabled() {
             return None;

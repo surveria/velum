@@ -1,4 +1,10 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+    rc::Rc,
+};
+
+use parking_lot::Mutex;
 
 use crate::{
     binding_metadata::BindingLayout,
@@ -21,6 +27,31 @@ use crate::{
     },
     value::Value,
 };
+
+#[derive(Clone)]
+pub(super) struct DynamicModuleLoader {
+    owner: Rc<Mutex<Box<dyn ModuleLoader>>>,
+}
+
+impl DynamicModuleLoader {
+    fn new(loader: impl ModuleLoader + 'static) -> Self {
+        Self {
+            owner: Rc::new(Mutex::new(Box::new(loader))),
+        }
+    }
+}
+
+impl fmt::Debug for DynamicModuleLoader {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("DynamicModuleLoader")
+    }
+}
+
+impl ModuleLoader for DynamicModuleLoader {
+    fn load(&mut self, referrer: &str, request: &str) -> Result<crate::ModuleSource> {
+        self.owner.lock().load(referrer, request)
+    }
+}
 
 #[derive(Debug)]
 pub(super) struct ModuleRecord {
@@ -79,6 +110,12 @@ impl PendingModule {
 }
 
 impl Context {
+    /// Installs the VM-owned loader used by dynamic module operations such as
+    /// `ShadowRealm.prototype.importValue`.
+    pub fn set_dynamic_module_loader(&mut self, loader: impl ModuleLoader + 'static) {
+        self.dynamic_module_loader = Some(DynamicModuleLoader::new(loader));
+    }
+
     #[must_use]
     pub const fn loaded_module_count(&self) -> usize {
         self.modules.len()
@@ -111,6 +148,38 @@ impl Context {
             self.with_module_evaluation(|context| context.evaluate_module(0, &mut graph))?;
         self.persist_module_graph(graph)?;
         Ok(result)
+    }
+
+    pub(in crate::runtime) fn load_dynamic_module_export(
+        &mut self,
+        request: &str,
+        export_name: &str,
+    ) -> Result<Value> {
+        let referrer = self.active_module_name.clone().unwrap_or_default();
+        let mut loader = self
+            .dynamic_module_loader
+            .clone()
+            .ok_or_else(|| Error::runtime("dynamic module loader is not installed"))?;
+        let source = loader.load(&referrer, request)?;
+        let specifier = source.specifier().to_owned();
+        self.eval_module_named(&specifier, source.source(), &mut loader)?;
+        let namespace = self
+            .modules
+            .iter()
+            .rev()
+            .find(|module| module.name == specifier)
+            .map(|module| module.namespace.clone())
+            .ok_or_else(|| Error::runtime("dynamic module namespace was not persisted"))?;
+        let property = crate::runtime::property::DynamicPropertyKey::new(
+            export_name.to_owned(),
+            self.known_property_key(export_name),
+        );
+        if !self.has_own_property_value(&namespace, &property)? {
+            return Err(Error::type_error(format!(
+                "module '{specifier}' does not export '{export_name}'"
+            )));
+        }
+        self.get_named(&namespace, export_name)
     }
 
     fn with_module_evaluation<T>(
@@ -534,7 +603,7 @@ impl Context {
             self.evaluate_module(dependency, graph)?;
         }
 
-        let (script, scope) = {
+        let (name, script, scope) = {
             let module = graph
                 .get_mut(module_index)
                 .ok_or_else(|| Error::runtime("module evaluation index disappeared"))?;
@@ -542,10 +611,12 @@ impl Context {
                 .scope
                 .take()
                 .ok_or_else(|| Error::runtime("module scope is not instantiated"))?;
-            (module.module.script().clone(), scope)
+            (module.name.clone(), module.module.script().clone(), scope)
         };
         self.push_lexical_scope_with(scope)?;
+        let previous_module = self.active_module_name.replace(name);
         let outcome = self.evaluate_module_script(&script);
+        self.active_module_name = previous_module;
         let scope = self
             .pop_lexical_scope()?
             .ok_or_else(|| Error::runtime("module scope disappeared after evaluation"))?;

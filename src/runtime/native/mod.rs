@@ -1,6 +1,9 @@
 mod builtins;
 mod core;
+mod default_global_bindings;
 mod function;
+
+pub(super) use default_global_bindings::DEFAULT_GLOBAL_BINDING_NAMES;
 
 pub(in crate::runtime::native) use builtins::{
     CollectionIterationTarget, MAP_NAME, RegExpCallMode, SET_NAME, WEAK_MAP_NAME, WEAK_SET_NAME,
@@ -61,7 +64,8 @@ pub(in crate::runtime) use function::{
     AtomicsFunctionKind, DATA_VIEW_NAME, DATE_NAME, DATE_NOW_NAME, DATE_PARSE_NAME, DATE_UTC_NAME,
     DISPOSABLE_STACK_NAME, DataViewFunctionKind, DateFunctionKind, DisposableStackFunctionKind,
     ITERATOR_NAME, IteratorFunctionKind, NativeFunction, NativeFunctionKind,
-    NativeFunctionRegistry, SharedArrayBufferFunctionKind, TypedArrayFunctionKind,
+    NativeFunctionRegistry, SHADOW_REALM_NAME, ShadowRealmFunctionKind,
+    SharedArrayBufferFunctionKind, TypedArrayFunctionKind,
 };
 pub(in crate::runtime) use function::{
     GLOBAL_THIS_NAME, INFINITY_NAME, NAN_NAME, OBJECT_PROTOTYPE_HAS_OWN_PROPERTY_NAME,

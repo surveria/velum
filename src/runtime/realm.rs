@@ -49,6 +49,7 @@ pub(in crate::runtime) struct RealmState {
     pub(super) builtin_globals: BindingScope,
     pub(super) native_function_registry: NativeFunctionRegistry,
     pub(super) throw_type_error: Option<NativeFunctionId>,
+    pub(super) shadow_realm_constructor: Option<NativeFunctionId>,
     pub(super) global_object: Option<ObjectId>,
     pub(super) object_prototype: Option<ObjectId>,
     pub(super) array_prototype: Option<ObjectId>,
@@ -58,6 +59,7 @@ pub(in crate::runtime) struct RealmState {
     pub(super) async_generator_prototype: Option<ObjectId>,
     pub(super) async_generator_function_prototype: Option<ObjectId>,
     pub(super) promise_prototype: Option<ObjectId>,
+    pub(super) shadow_realm_prototype: Option<ObjectId>,
 }
 
 impl RealmState {
@@ -67,6 +69,7 @@ impl RealmState {
             builtin_globals: BindingScope::new_active(storage_ledger),
             native_function_registry: NativeFunctionRegistry::new(),
             throw_type_error: None,
+            shadow_realm_constructor: None,
             global_object: None,
             object_prototype: None,
             array_prototype: None,
@@ -76,6 +79,7 @@ impl RealmState {
             async_generator_prototype: None,
             async_generator_function_prototype: None,
             promise_prototype: None,
+            shadow_realm_prototype: None,
         }
     }
 
@@ -100,6 +104,7 @@ impl RealmState {
             self.object_prototype,
             self.array_prototype,
             self.promise_prototype,
+            self.shadow_realm_prototype,
             self.generator_prototype,
             self.generator_function_prototype,
             self.async_iterator_prototype,
@@ -110,6 +115,7 @@ impl RealmState {
         .flatten()
         .count()
         .saturating_add(usize::from(self.throw_type_error.is_some()))
+        .saturating_add(usize::from(self.shadow_realm_constructor.is_some()))
     }
 
     pub(super) fn anchor_objects(&self) -> impl Iterator<Item = ObjectId> {
@@ -118,6 +124,7 @@ impl RealmState {
             self.object_prototype,
             self.array_prototype,
             self.promise_prototype,
+            self.shadow_realm_prototype,
             self.generator_prototype,
             self.generator_function_prototype,
             self.async_iterator_prototype,
@@ -132,6 +139,7 @@ impl RealmState {
         self.native_function_registry
             .ids()
             .chain(self.throw_type_error)
+            .chain(self.shadow_realm_constructor)
     }
 }
 
@@ -150,6 +158,11 @@ impl Context {
     /// # Errors
     /// Fails when realm bookkeeping exceeds configured VM storage limits.
     pub fn create_realm(&mut self) -> Result<RealmId> {
+        let index = self.create_realm_index()?;
+        Ok(RealmId::new(self.identity.clone(), index))
+    }
+
+    pub(in crate::runtime) fn create_realm_index(&mut self) -> Result<RealmIndex> {
         self.inactive_realms
             .try_reserve(1)
             .map_err(|error| Error::limit(format!("realm storage exhausted: {error}")))?;
@@ -158,7 +171,7 @@ impl Context {
         let index = RealmIndex::new(self.inactive_realms.len());
         self.inactive_realms
             .push(Some(RealmState::new(self.storage_ledger.clone())));
-        Ok(RealmId::new(self.identity.clone(), index))
+        Ok(index)
     }
 
     /// Returns a realm's global object as a raw VM-local value.
@@ -240,7 +253,7 @@ impl Context {
         })
     }
 
-    fn callable_realm_index(&self, value: &Value) -> Result<RealmIndex> {
+    pub(in crate::runtime) fn callable_realm_index(&self, value: &Value) -> Result<RealmIndex> {
         let mut current = value.clone();
         let mut depth = 0_usize;
         loop {
@@ -252,6 +265,9 @@ impl Context {
                 Value::NativeFunction(id) => {
                     let function = self.native_function(id)?;
                     if let NativeFunctionKind::BoundFunction(bound) = function.kind() {
+                        if self.bound_function_is_shadow_realm(bound)? {
+                            return Ok(function.realm());
+                        }
                         current = self.bound_function_target(bound)?;
                     } else {
                         return Ok(function.realm());

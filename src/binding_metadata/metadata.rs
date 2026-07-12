@@ -11,10 +11,13 @@ use super::BindingLayout;
 
 impl BindingLayout {
     pub fn function_for_static_id(&self, id: StaticFunctionId) -> Result<Option<FunctionScopeId>> {
-        self.static_functions
-            .get(id.index()?)
-            .copied()
-            .ok_or_else(|| Error::runtime("static function layout slot is not defined"))
+        let index = id.index()?;
+        self.static_functions.get(index).copied().ok_or_else(|| {
+            Error::runtime(format!(
+                "static function layout slot {index} is not defined in {} slots",
+                self.static_functions.len()
+            ))
+        })
     }
 
     pub fn parent_function(&self, function: FunctionScopeId) -> Result<Option<FunctionScopeId>> {

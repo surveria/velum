@@ -170,8 +170,8 @@ impl Context {
         let intrinsic_defaults =
             FunctionIntrinsicDefaults::new(arity.value()?, function_name, prototype_default);
         let param_atoms = self.function_param_atoms(params)?;
-        let static_name_atom_cache = self.current_static_name_atom_cache();
-        let static_binding_cache = self.current_static_binding_cache();
+        let static_name_atom_cache = self.current_static_name_atom_cache_owner();
+        let static_binding_cache = self.current_static_binding_cache_owner();
         let static_binding_layout = self.current_static_binding_layout();
         let param_frames =
             parameters::function_param_frames(params, static_binding_layout.as_ref())?;
