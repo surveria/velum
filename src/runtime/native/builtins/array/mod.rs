@@ -380,22 +380,6 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let (start, end) = Self::eval_array_binary_values(args);
-        if let Value::Object(id) = this_value
-            && self.objects.array_len_if_array(*id)?.is_some()
-        {
-            let length = self.objects.array_len_for_slice(*id)?;
-            let start = self.array_slice_bound(start, length, 0)?;
-            let end = self.array_slice_bound(end, length, length)?.max(start);
-            let prototype = self.existing_array_constructor_prototype()?;
-            return self.objects.array_slice(
-                *id,
-                length,
-                start..end,
-                prototype,
-                self.limits.max_objects,
-                self.limits.max_object_properties,
-            );
-        }
         self.generic_array_slice(start, end, this_value)
     }
 

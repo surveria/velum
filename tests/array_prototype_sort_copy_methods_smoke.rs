@@ -109,6 +109,72 @@ fn splices_with_deletion_insertion_and_growth() -> TestResult {
 }
 
 #[test]
+fn splice_honors_species_results_and_operation_order() -> TestResult {
+    eval_is_42(
+        r#"
+        let log = "";
+        let values = [1, , 3, 4];
+        Object.defineProperty(values, "constructor", {
+            get: function() {
+                log = log + "constructor;";
+                return {
+                    get [Symbol.species]() {
+                        log = log + "species;";
+                        return function Result(length) {
+                            log = log + "construct:" + length + ";";
+                            return { kind: "splice" };
+                        };
+                    }
+                };
+            }
+        });
+        let start = { valueOf: function() { log = log + "start;"; return 1; } };
+        let count = { valueOf: function() { log = log + "count;"; return 2; } };
+
+        let removed = values.splice(start, count, "x");
+        let descriptor = Object.getOwnPropertyDescriptor(removed, "1");
+
+        log === "start;count;constructor;species;construct:2;" &&
+            removed.kind === "splice" &&
+            removed.length === 2 &&
+            !("0" in removed) && removed[1] === 3 &&
+            descriptor.writable && descriptor.enumerable && descriptor.configurable &&
+            values.join("|") === "1|x|4" ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
+fn splice_result_failures_precede_source_mutation() -> TestResult {
+    eval_is_42(
+        r#"
+        let values = [1, 2, 3];
+        function ClosedResult() {
+            return Object.preventExtensions({});
+        }
+        values.constructor = { [Symbol.species]: ClosedResult };
+
+        let failed = false;
+        try {
+            values.splice(1, 1, "x");
+        } catch (error) {
+            failed = error instanceof TypeError;
+        }
+
+        let limitFailed = false;
+        try {
+            Array.prototype.splice.call({ length: 9007199254740991 }, 0, 0, null);
+        } catch (error) {
+            limitFailed = error instanceof TypeError;
+        }
+
+        failed && limitFailed &&
+            values.length === 3 && values.join("|") === "1|2|3" ? 42 : 0
+        "#,
+    )
+}
+
+#[test]
 fn fills_and_copies_within_with_relative_bounds() -> TestResult {
     eval_is_42(
         r#"

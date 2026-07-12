@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::super::property::PrototypeTraversalBudget;
-use super::{ARRAY_INDEX_LIMIT_ERROR, ArrayIndex, Object, ObjectHeap, ObjectProperty};
+use super::{ARRAY_INDEX_LIMIT_ERROR, Object, ObjectHeap, ObjectProperty};
 
 impl ObjectHeap {
     pub(in crate::runtime::object) fn holey_array_includes_without_indexed_prototype(
@@ -220,56 +220,6 @@ impl ObjectHeap {
         Ok(Some(joined))
     }
 
-    pub(in crate::runtime::object) fn holey_array_slice_without_indexed_prototype(
-        &mut self,
-        id: ObjectId,
-        length: usize,
-        start: usize,
-        count: usize,
-        prototype: ObjectId,
-        limits: ArrayCopyLimits,
-    ) -> Result<Option<Value>> {
-        let Some(values) = self.holey_values_without_indexed_prototype(id, length, start, count)?
-        else {
-            return Ok(None);
-        };
-        let result = self.create_array_with_length(count, prototype, limits.max_objects)?;
-        let Value::Object(result_id) = result else {
-            return Err(Error::runtime("array slice result is not an object"));
-        };
-        for (offset, value) in values {
-            let target_index = ArrayIndex::from_usize(offset)?;
-            self.object_mut(result_id)?.set_array_index(
-                target_index,
-                value,
-                limits.max_properties,
-            )?;
-        }
-        Ok(Some(Value::Object(result_id)))
-    }
-
-    fn holey_values_without_indexed_prototype(
-        &self,
-        id: ObjectId,
-        length: usize,
-        start: usize,
-        count: usize,
-    ) -> Result<Option<Vec<(usize, Value)>>> {
-        let Some(properties) =
-            self.holey_properties_without_indexed_prototype(id, length, start, count)?
-        else {
-            return Ok(None);
-        };
-
-        let mut values = Vec::new();
-        for (offset, property) in properties.iter().skip(start).take(count).enumerate() {
-            if let Some(property) = property {
-                values.push((offset, property.value()));
-            }
-        }
-        Ok(Some(values))
-    }
-
     fn holey_properties_without_indexed_prototype(
         &self,
         id: ObjectId,
@@ -304,21 +254,6 @@ impl ObjectHeap {
             current = object.prototype;
         }
         Ok(false)
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(in crate::runtime::object) struct ArrayCopyLimits {
-    pub(in crate::runtime::object) max_objects: usize,
-    pub(in crate::runtime::object) max_properties: usize,
-}
-
-impl ArrayCopyLimits {
-    pub(in crate::runtime::object) const fn new(max_objects: usize, max_properties: usize) -> Self {
-        Self {
-            max_objects,
-            max_properties,
-        }
     }
 }
 

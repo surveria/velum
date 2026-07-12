@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 use crate::{
     error::{Error, Result},
     runtime::abstract_operations::{same_value_zero, strict_equality},
@@ -20,8 +18,6 @@ pub(super) use index::{ArrayIndex, ArrayLength};
 pub(super) use storage::ArrayStorage;
 
 use super::{ARRAY_INDEX_LIMIT_ERROR, Object, ObjectHeap, ObjectProperty, ShapeTable};
-use fast::ArrayCopyLimits;
-
 const ARRAY_INCLUDES_RECEIVER_ERROR: &str = "Array.prototype.includes requires an array receiver";
 const ARRAY_INDEX_OF_RECEIVER_ERROR: &str = "Array.prototype.indexOf requires an array receiver";
 const ARRAY_JOIN_RECEIVER_ERROR: &str = "Array.prototype.join requires an array receiver";
@@ -30,7 +26,6 @@ const ARRAY_LAST_INDEX_OF_RECEIVER_ERROR: &str =
 const ARRAY_POP_RECEIVER_ERROR: &str = "Array.prototype.pop requires an array receiver";
 const ARRAY_PUSH_RECEIVER_ERROR: &str = "Array.prototype.push requires an array receiver";
 const ARRAY_REVERSE_RECEIVER_ERROR: &str = "Array.prototype.reverse requires an array receiver";
-const ARRAY_SLICE_RECEIVER_ERROR: &str = "Array.prototype.slice requires an array receiver";
 const INDEX_NOT_FOUND: f64 = -1.0;
 
 impl ObjectHeap {
@@ -107,59 +102,6 @@ impl ObjectHeap {
         Ok(value)
     }
 
-    pub(crate) fn array_slice(
-        &mut self,
-        id: ObjectId,
-        length: usize,
-        range: Range<usize>,
-        prototype: ObjectId,
-        max_objects: usize,
-        max_properties: usize,
-    ) -> Result<Value> {
-        let count = range
-            .end
-            .checked_sub(range.start)
-            .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
-        if let Some(value) = self.create_packed_array_slice(
-            id,
-            length,
-            range.start,
-            count,
-            prototype,
-            ArrayCopyLimits::new(max_objects, max_properties),
-        )? {
-            return Ok(value);
-        }
-        if let Some(value) = self.holey_array_slice_without_indexed_prototype(
-            id,
-            length,
-            range.start,
-            count,
-            prototype,
-            ArrayCopyLimits::new(max_objects, max_properties),
-        )? {
-            return Ok(value);
-        }
-
-        let result = self.create_array_with_length(count, prototype, max_objects)?;
-        let Value::Object(result_id) = result else {
-            return Err(Error::runtime("array slice result is not an object"));
-        };
-
-        for offset in 0..count {
-            let source_index = range
-                .start
-                .checked_add(offset)
-                .ok_or_else(|| Error::limit(ARRAY_INDEX_LIMIT_ERROR))?;
-            let source_index = ArrayIndex::from_usize(source_index)?;
-            if let Some(value) = self.array_property_value_by_index(id, source_index)? {
-                let target_index = ArrayIndex::from_usize(offset)?;
-                self.set_array_index(result_id, target_index, value, max_properties)?;
-            }
-        }
-        Ok(Value::Object(result_id))
-    }
-
     pub(crate) fn array_reverse(&mut self, id: ObjectId, max_properties: usize) -> Result<Value> {
         let length = self
             .array_length_for_method(id, ARRAY_REVERSE_RECEIVER_ERROR)?
@@ -200,11 +142,6 @@ impl ObjectHeap {
 
     pub(crate) fn array_length_value_if_array(&self, id: ObjectId) -> Result<Option<Value>> {
         Ok(self.array_length_if_array(id)?.map(ArrayLength::value))
-    }
-
-    pub(crate) fn array_len_for_slice(&self, id: ObjectId) -> Result<usize> {
-        self.array_length_for_method(id, ARRAY_SLICE_RECEIVER_ERROR)?
-            .to_usize()
     }
 
     pub(crate) fn array_len_for_index_of(&self, id: ObjectId) -> Result<usize> {
@@ -490,20 +427,6 @@ impl ObjectHeap {
     pub(super) fn array_length_if_array(&self, id: ObjectId) -> Result<Option<ArrayLength>> {
         let object = self.object(id)?;
         Ok(object.array_length)
-    }
-
-    fn object_pair_for_concat(
-        objects: &mut crate::runtime::arena::SlotArena<Object>,
-        source_id: ObjectId,
-        result_id: ObjectId,
-    ) -> Result<(&Object, &mut Object)> {
-        if source_id == result_id {
-            return Err(Error::runtime("array concat source and result alias"));
-        }
-        let (source, result) = objects
-            .get_pair_mut(source_id.index(), result_id.index())
-            .ok_or_else(|| Error::runtime("object id is not defined"))?;
-        Ok((source, result))
     }
 }
 

@@ -115,6 +115,47 @@ fn supports_array_slice_on_array_like_objects() -> TestResult {
     ensure_value(&value, &Value::Number(42.0))
 }
 
+#[test]
+fn slice_honors_species_order_sparse_results_and_data_properties() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        let log = "";
+        let values = [1, , 3, 4];
+        Object.defineProperty(values, "constructor", {
+            get: function() {
+                log = log + "constructor;";
+                return {
+                    get [Symbol.species]() {
+                        log = log + "species;";
+                        return function Result(length) {
+                            log = log + "construct:" + length + ";";
+                            return { kind: "slice" };
+                        };
+                    }
+                };
+            }
+        });
+        let start = { valueOf: function() { log = log + "start;"; return 1; } };
+        let end = { valueOf: function() { log = log + "end;"; return 4; } };
+
+        let result = values.slice(start, end);
+        let descriptor = Object.getOwnPropertyDescriptor(result, "1");
+
+        log === "start;end;constructor;species;construct:3;" &&
+            result.kind === "slice" &&
+            result.length === 3 &&
+            !("0" in result) &&
+            result[1] === 3 && result[2] === 4 &&
+            descriptor.writable && descriptor.enumerable && descriptor.configurable ? 42 : 0
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Number(42.0))
+}
+
 fn ensure_value(actual: &Value, expected: &Value) -> TestResult {
     if actual == expected {
         return Ok(());
