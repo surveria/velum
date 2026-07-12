@@ -34,6 +34,10 @@ const TO_STRING_TAG_SYMBOL_DISPLAY: &str = "[Symbol.toStringTag]";
 const TO_STRING_TAG_PROPERTY: &str = "toStringTag";
 const DISPOSE_SYMBOL_DISPLAY: &str = "[Symbol.dispose]";
 const DISPOSE_SYMBOL_PROPERTY: &str = "dispose";
+const HIGH_SURROGATE_START: u16 = 0xD800;
+const HIGH_SURROGATE_END: u16 = 0xDBFF;
+const LOW_SURROGATE_START: u16 = 0xDC00;
+const LOW_SURROGATE_END: u16 = 0xDFFF;
 
 const ITERATOR_ABSTRACT_ERROR: &str =
     "Iterator is an abstract constructor and cannot be invoked directly";
@@ -737,18 +741,37 @@ impl Context {
             }
             return Ok(iterator);
         }
-        let chars = match input {
-            Value::String(text) => text.chars().collect::<Vec<_>>(),
-            Value::HeapString(text) => text.as_str().chars().collect::<Vec<_>>(),
-            _ => return Err(Error::runtime("string iterator source is not a string")),
-        };
-        self.string_snapshot_iterator(&chars)
+        let units = input
+            .string_units()
+            .ok_or_else(|| Error::runtime("string iterator source is not a string"))?;
+        self.string_snapshot_iterator(&units)
     }
 
-    fn string_snapshot_iterator(&mut self, chars: &[char]) -> Result<Value> {
-        let mut items = Vec::with_capacity(chars.len());
-        for ch in chars {
-            items.push(self.heap_string_char_value(*ch)?);
+    fn string_snapshot_iterator(&mut self, units: &[u16]) -> Result<Value> {
+        let mut items = Vec::with_capacity(units.len());
+        let mut index = 0_usize;
+        while let Some(first) = units.get(index).copied() {
+            let paired = (HIGH_SURROGATE_START..=HIGH_SURROGATE_END).contains(&first)
+                && units
+                    .get(index.saturating_add(1))
+                    .is_some_and(|next| (LOW_SURROGATE_START..=LOW_SURROGATE_END).contains(next));
+            let width = if paired { 2_usize } else { 1_usize };
+            let end = index
+                .checked_add(width)
+                .ok_or_else(|| Error::limit("string iterator index overflowed"))?;
+            let code_point = units
+                .get(index..end)
+                .ok_or_else(|| Error::runtime("string iterator code point disappeared"))?;
+            let value =
+                if width == 1 && !(HIGH_SURROGATE_START..=LOW_SURROGATE_END).contains(&first) {
+                    let ch = char::from_u32(u32::from(first))
+                        .ok_or_else(|| Error::runtime("string iterator code point is invalid"))?;
+                    self.heap_string_char_value(ch)?
+                } else {
+                    self.heap_utf16_string_value(code_point)?
+                };
+            items.push(value);
+            index = end;
         }
         self.create_collection_iterator_object(items)
     }

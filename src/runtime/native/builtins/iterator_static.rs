@@ -132,21 +132,13 @@ impl Context {
         if self.semantic_object_ref(&options)?.is_none() {
             return Err(Error::type_error(STATIC_ITERATOR_OPTIONS_ERROR));
         }
-        let mode = match self.get_named(&options, ZIP_MODE_NAME)? {
-            Value::Undefined => IteratorZipMode::Shortest,
-            Value::String(value) if value == ZIP_SHORTEST_NAME => IteratorZipMode::Shortest,
-            Value::HeapString(value) if value.as_str() == ZIP_SHORTEST_NAME => {
-                IteratorZipMode::Shortest
-            }
-            Value::String(value) if value == ZIP_LONGEST_NAME => IteratorZipMode::Longest,
-            Value::HeapString(value) if value.as_str() == ZIP_LONGEST_NAME => {
-                IteratorZipMode::Longest
-            }
-            Value::String(value) if value == ZIP_STRICT_NAME => IteratorZipMode::Strict,
-            Value::HeapString(value) if value.as_str() == ZIP_STRICT_NAME => {
-                IteratorZipMode::Strict
-            }
-            _ => return Err(Error::type_error(STATIC_ITERATOR_MODE_ERROR)),
+        let mode_value = self.get_named(&options, ZIP_MODE_NAME)?;
+        let mode = match mode_value.string_text() {
+            Some(ZIP_SHORTEST_NAME) => IteratorZipMode::Shortest,
+            Some(ZIP_LONGEST_NAME) => IteratorZipMode::Longest,
+            Some(ZIP_STRICT_NAME) => IteratorZipMode::Strict,
+            None if matches!(mode_value, Value::Undefined) => IteratorZipMode::Shortest,
+            Some(_) | None => return Err(Error::type_error(STATIC_ITERATOR_MODE_ERROR)),
         };
         if mode != IteratorZipMode::Longest {
             return Ok((mode, None));

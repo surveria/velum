@@ -29,23 +29,10 @@ impl Context {
         &mut self,
         args: RuntimeCallArgs<'_>,
     ) -> Result<Value> {
-        let input = match args.as_slice().first() {
-            Some(Value::String(text)) => text.encode_utf16().collect::<Vec<_>>(),
-            Some(Value::HeapString(text)) => text.as_utf16().to_vec(),
-            Some(
-                Value::Undefined
-                | Value::Null
-                | Value::Bool(_)
-                | Value::Number(_)
-                | Value::BigInt(_)
-                | Value::Symbol(_)
-                | Value::Function(_)
-                | Value::NativeFunction(_)
-                | Value::HostFunction(_)
-                | Value::Object(_),
-            )
-            | None => return Err(Error::type_error(ESCAPE_STRING_INPUT_ERROR)),
+        let Some(input) = args.as_slice().first().and_then(Value::string_units) else {
+            return Err(Error::type_error(ESCAPE_STRING_INPUT_ERROR));
         };
+        let input = input.into_owned();
         self.charge_runtime_steps(input.len())?;
         let output = escape_regexp_utf16(&input, self.limits.max_string_len)?;
         self.heap_utf16_string_value(&output)
