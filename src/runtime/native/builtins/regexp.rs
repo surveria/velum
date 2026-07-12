@@ -224,11 +224,17 @@ impl Context {
         this_value: &Value,
     ) -> Result<Value> {
         let input = self.regexp_argument_or_undefined(args.as_slice().first())?;
-        let replacement = self.regexp_argument_or_undefined(args.as_slice().get(1))?;
+        let replacement = args.as_slice().get(1).cloned().unwrap_or(Value::Undefined);
+        let replacement = if self.semantic_is_callable(&replacement)? {
+            replacement
+        } else {
+            let replacement = self.to_string(&replacement)?;
+            self.heap_string_value(&replacement)?
+        };
         if to_boolean(&self.get_named(this_value, REGEXP_GLOBAL_PROPERTY)?) {
-            return self.string_regexp_replace_global(&input, this_value, &replacement);
+            return self.string_regexp_replace_global_value(&input, this_value, &replacement);
         }
-        self.string_regexp_replace_first(&input, this_value, &replacement)
+        self.string_regexp_replace_first_value(&input, this_value, &replacement)
     }
 
     pub(in crate::runtime::native) fn eval_regexp_prototype_symbol_split(

@@ -6,6 +6,8 @@ use crate::{
 
 const REGEXP_LAST_INDEX_PROPERTY: &str = "lastIndex";
 const REGEXP_MATCH_INDEX_PROPERTY: &str = "index";
+const REGEXP_MATCH_GROUPS_PROPERTY: &str = "groups";
+const REGEXP_MATCH_LENGTH_PROPERTY: &str = "length";
 const FIRST_MATCH_PROPERTY: &str = "0";
 const ZERO_INDEX: f64 = 0.0;
 
@@ -16,6 +18,8 @@ struct StringRegExpMatch {
     code_unit_start: usize,
     code_unit_end: usize,
     text: String,
+    captures: Vec<Value>,
+    groups: Value,
 }
 
 impl Context {
@@ -203,6 +207,189 @@ impl Context {
         self.heap_string_value(&output)
     }
 
+    pub(in crate::runtime::native) fn string_regexp_replace_first_value(
+        &mut self,
+        text: &str,
+        pattern: &Value,
+        replacement: &Value,
+    ) -> Result<Value> {
+        let Some(matched) = self.string_regexp_exec_match(pattern, text)? else {
+            return self.heap_string_value(text);
+        };
+        let substitution = self.regexp_replacement_text(text, &matched, replacement)?;
+        let output = replace_span(text, matched.byte_start, matched.byte_end, &substitution)?;
+        self.check_string_len(&output)?;
+        self.heap_string_value(&output)
+    }
+
+    pub(in crate::runtime::native) fn string_regexp_replace_global_value(
+        &mut self,
+        text: &str,
+        pattern: &Value,
+        replacement: &Value,
+    ) -> Result<Value> {
+        self.string_regexp_set_last_index(pattern, 0)?;
+        let mut output = String::new();
+        let mut cursor = 0usize;
+        while let Some(matched) = self.string_regexp_exec_match(pattern, text)? {
+            if matched.byte_start < cursor {
+                return Err(Error::runtime("RegExp global match moved backwards"));
+            }
+            push_checked_slice(&mut output, text, cursor, matched.byte_start)?;
+            let substitution = self.regexp_replacement_text(text, &matched, replacement)?;
+            output.push_str(&substitution);
+            cursor = matched.byte_end;
+            self.check_string_len(&output)?;
+            if matched.text.is_empty() {
+                self.string_regexp_advance_last_index(pattern, text, matched.code_unit_end)?;
+            }
+        }
+        push_checked_slice(&mut output, text, cursor, text.len())?;
+        self.check_string_len(&output)?;
+        self.heap_string_value(&output)
+    }
+
+    fn regexp_replacement_text(
+        &mut self,
+        text: &str,
+        matched: &StringRegExpMatch,
+        replacement: &Value,
+    ) -> Result<String> {
+        if self.semantic_is_callable(replacement)? {
+            let mut args = Vec::with_capacity(matched.captures.len().saturating_add(4));
+            args.push(self.heap_string_value(&matched.text)?);
+            args.extend(matched.captures.iter().cloned());
+            args.push(Value::Number(index_to_number(matched.code_unit_start)?));
+            args.push(self.heap_string_value(text)?);
+            if !matches!(matched.groups, Value::Undefined) {
+                args.push(matched.groups.clone());
+            }
+            let value = self.call_value(replacement, &args, Value::Undefined)?;
+            return self.to_string(&value);
+        }
+        let replacement = self.to_string(replacement)?;
+        self.regexp_substitution(text, matched, &replacement)
+    }
+
+    fn regexp_substitution(
+        &mut self,
+        text: &str,
+        matched: &StringRegExpMatch,
+        replacement: &str,
+    ) -> Result<String> {
+        let chars = replacement.chars().collect::<Vec<_>>();
+        let mut output = String::new();
+        let mut index = 0usize;
+        while let Some(ch) = chars.get(index).copied() {
+            if ch != '$' {
+                output.push(ch);
+                index = index.saturating_add(1);
+                continue;
+            }
+            let Some(next) = chars.get(index.saturating_add(1)).copied() else {
+                output.push(ch);
+                break;
+            };
+            let consumed = match next {
+                '$' => {
+                    output.push('$');
+                    2
+                }
+                '&' => {
+                    output.push_str(&matched.text);
+                    2
+                }
+                '`' => {
+                    push_checked_slice(&mut output, text, 0, matched.byte_start)?;
+                    2
+                }
+                '\'' => {
+                    push_checked_slice(&mut output, text, matched.byte_end, text.len())?;
+                    2
+                }
+                '1'..='9' => self.append_regexp_numeric_capture(
+                    &mut output,
+                    &chars,
+                    index.saturating_add(1),
+                    &matched.captures,
+                )?,
+                '<' if !matches!(matched.groups, Value::Undefined) => self
+                    .append_regexp_named_capture(
+                        &mut output,
+                        &chars,
+                        index.saturating_add(2),
+                        &matched.groups,
+                    )?,
+                _ => {
+                    output.push('$');
+                    1
+                }
+            };
+            index = index.saturating_add(consumed);
+        }
+        Ok(output)
+    }
+
+    fn append_regexp_numeric_capture(
+        &mut self,
+        output: &mut String,
+        chars: &[char],
+        digit_index: usize,
+        captures: &[Value],
+    ) -> Result<usize> {
+        let first = chars
+            .get(digit_index)
+            .and_then(|digit| digit.to_digit(10))
+            .and_then(|digit| usize::try_from(digit).ok())
+            .ok_or_else(|| Error::runtime("RegExp replacement capture digit disappeared"))?;
+        let second = chars
+            .get(digit_index.saturating_add(1))
+            .and_then(|digit| digit.to_digit(10))
+            .and_then(|digit| usize::try_from(digit).ok());
+        let combined = second.and_then(|second| first.checked_mul(10)?.checked_add(second));
+        let (capture, consumed) = if combined.is_some_and(|capture| capture <= captures.len()) {
+            (combined.unwrap_or(first), 3)
+        } else if first <= captures.len() {
+            (first, 2)
+        } else {
+            output.push('$');
+            return Ok(1);
+        };
+        if let Some(value) = captures.get(capture.saturating_sub(1))
+            && !matches!(value, Value::Undefined)
+        {
+            output.push_str(&self.to_string(value)?);
+        }
+        Ok(consumed)
+    }
+
+    fn append_regexp_named_capture(
+        &mut self,
+        output: &mut String,
+        chars: &[char],
+        name_start: usize,
+        groups: &Value,
+    ) -> Result<usize> {
+        let Some(relative_end) = chars
+            .get(name_start..)
+            .and_then(|tail| tail.iter().position(|ch| *ch == '>'))
+        else {
+            output.push_str("$<");
+            return Ok(2);
+        };
+        let name_end = name_start.saturating_add(relative_end);
+        let name = chars
+            .get(name_start..name_end)
+            .ok_or_else(|| Error::runtime("RegExp replacement group name is out of bounds"))?
+            .iter()
+            .collect::<String>();
+        let value = self.get_named(groups, &name)?;
+        if !matches!(value, Value::Undefined) {
+            output.push_str(&self.to_string(&value)?);
+        }
+        Ok(relative_end.saturating_add(3))
+    }
+
     fn string_regexp_split(
         &mut self,
         text: &str,
@@ -260,6 +447,16 @@ impl Context {
         let code_unit_start = number_to_usize(index)?;
         let matched_value = self.get_named(&Value::Object(*id), FIRST_MATCH_PROPERTY)?;
         let matched = self.to_string(&matched_value)?;
+        let length_value = self.get_named(&Value::Object(*id), REGEXP_MATCH_LENGTH_PROPERTY)?;
+        let length = Self::length_to_usize(
+            self.to_length(&length_value)?,
+            "RegExp match capture count exceeded supported range",
+        )?;
+        let mut captures = Vec::with_capacity(length.saturating_sub(1));
+        for capture in 1..length {
+            captures.push(self.get_named(&Value::Object(*id), &capture.to_string())?);
+        }
+        let groups = self.get_named(&Value::Object(*id), REGEXP_MATCH_GROUPS_PROPERTY)?;
         let byte_start = utf16_index_to_byte_boundary(text, code_unit_start).ok_or_else(|| {
             Error::runtime("RegExp match index is not a valid UTF-16 string boundary")
         })?;
@@ -275,6 +472,8 @@ impl Context {
             code_unit_start,
             code_unit_end,
             text: matched,
+            captures,
+            groups,
         }))
     }
 

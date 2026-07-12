@@ -200,7 +200,7 @@ impl Context {
             NativeFunctionKind::StringPrototypeValueOf => {
                 Some(self.eval_string_prototype_value_of(args, this_value))
             }
-            _ => None,
+            _ => self.eval_modern_string_native_function_kind(kind, args, this_value),
         }
     }
 }

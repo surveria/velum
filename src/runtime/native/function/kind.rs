@@ -186,9 +186,12 @@ pub(in crate::runtime::native) const STRING_PROTOTYPE_ENDS_WITH_NAME: &str = "en
 pub(in crate::runtime::native) const STRING_PROTOTYPE_INCLUDES_NAME: &str = "includes";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_INDEX_OF_NAME: &str = "indexOf";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_LAST_INDEX_OF_NAME: &str = "lastIndexOf";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_ITERATOR_NAME: &str = "[Symbol.iterator]";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_MATCH_NAME: &str = "match";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_IS_WELL_FORMED_NAME: &str = "isWellFormed";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_REPEAT_NAME: &str = "repeat";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_REPLACE_NAME: &str = "replace";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_REPLACE_ALL_NAME: &str = "replaceAll";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_SEARCH_NAME: &str = "search";
 const STRING_PROTOTYPE_FUNCTION_LENGTH_TWO: f64 = 2.0;
 pub(in crate::runtime::native) const STRING_PROTOTYPE_PAD_END_NAME: &str = "padEnd";
@@ -203,6 +206,7 @@ pub(in crate::runtime::native) const STRING_PROTOTYPE_TO_LOCALE_LOWER_CASE_NAME:
 pub(in crate::runtime::native) const STRING_PROTOTYPE_TO_LOCALE_UPPER_CASE_NAME: &str =
     "toLocaleUpperCase";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_TO_LOWER_CASE_NAME: &str = "toLowerCase";
+pub(in crate::runtime::native) const STRING_PROTOTYPE_TO_WELL_FORMED_NAME: &str = "toWellFormed";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_TO_STRING_NAME: &str = "toString";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_TO_UPPER_CASE_NAME: &str = "toUpperCase";
 pub(in crate::runtime::native) const STRING_PROTOTYPE_TRIM_NAME: &str = "trim";
@@ -457,11 +461,14 @@ pub(in crate::runtime) enum NativeFunctionKind {
     StringPrototypeIncludes,
     StringPrototypeIndexOf,
     StringPrototypeLastIndexOf,
+    StringPrototypeIterator,
     StringPrototypeMatch,
+    StringPrototypeIsWellFormed,
     StringPrototypePadEnd,
     StringPrototypePadStart,
     StringPrototypeRepeat,
     StringPrototypeReplace,
+    StringPrototypeReplaceAll,
     StringPrototypeSearch,
     StringPrototypeSlice,
     StringPrototypeSplit,
@@ -470,12 +477,14 @@ pub(in crate::runtime) enum NativeFunctionKind {
     StringPrototypeToLocaleLowerCase,
     StringPrototypeToLocaleUpperCase,
     StringPrototypeToLowerCase,
+    StringPrototypeToWellFormed,
     StringPrototypeToString,
     StringPrototypeToUpperCase,
     StringPrototypeTrim,
     StringPrototypeTrimEnd,
     StringPrototypeTrimStart,
     StringPrototypeValueOf,
+    StringIteratorNext,
     StringRaw,
     Set,
     SetAdd,

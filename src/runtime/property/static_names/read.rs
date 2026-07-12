@@ -1,7 +1,9 @@
 use crate::{
     error::Result,
     runtime::Context,
-    runtime::object::{CacheablePropertyPresence, CacheablePropertyValue, PropertyLookup},
+    runtime::object::{
+        CacheablePropertyPresence, CacheablePropertyValue, PropertyKey, PropertyLookup,
+    },
     runtime::property::{DynamicPropertyKey, get_property, has_property},
     runtime::semantic_object::{SemanticPropertyPresence, SemanticPropertyRead},
     syntax::{StaticName, StaticPropertyAccessId},
@@ -114,6 +116,18 @@ impl Context {
                     property.lookup(),
                 ),
             };
+        }
+        if matches!(property.lookup().key(), Some(PropertyKey::Symbol(_)))
+            && matches!(
+                object,
+                Value::Bool(_)
+                    | Value::Number(_)
+                    | Value::String(_)
+                    | Value::HeapString(_)
+                    | Value::Symbol(_)
+            )
+        {
+            return self.get(object, property.lookup());
         }
         if let Value::String(value) = object {
             return self.get_string_property_value(object, value, property.name());
