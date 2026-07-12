@@ -1,0 +1,200 @@
+# Binding analysis and bytecode compiler
+
+> Детальный отчёт аудита архитектуры rs-quickjs. Подсистема: `binding-compiler`. Сгенерировано многоагентным аудитом 2026-07-12; каждая находка уровня medium/high прошла адверсариальную проверку отдельным агентом. Материал на английском (исходный текст аудита).
+
+## Subsystem assessment
+
+The scope-analysis → metadata → compiler pipeline is genuinely layered: the parser produces a span-carrying AST plus interned syntax tokens (StaticBinding/StaticName/StaticString), binding_layout resolves every reference to a typed BindingOperand (Global/Local/Upvalue/Unresolved) in an immutable Rc-sliced BindingLayout, and the compiler lowers through exactly one emit() boundary that keeps an instruction-aligned SourceSpan side table. The AST is verifiably compile-time-only — runtime consumes only BindingLayout and bytecode-embedded syntax tokens — so the headline decoupling claim holds. However, the layer boundary leaks in the other direction: at least four semantic predicates are computed twice on opposite sides of it (for-init scope need, annex-B function hoisting, free-binding capture, switch scope shape), and the copies have already diverged in one confirmed case (for-init lexical PatternDecl gets a layout scope but scoped:false bytecode). Lowering itself uses two coexisting paradigms — flat jump-patching for if/?:/&&/|| versus structured nested-BytecodeBlock instructions for loops/switch/try/with and even ??/logical-assignment — which doubles the runtime control-flow surface and multiplies the opcode set combinatorially (static/computed/array-index/private/super × read/write/update/compound/delete/call/spread), with strictness bits present on writes but silently absent from deletes and for-in assignment targets. Compile-time source-name recognition is broader than the inventory admits: ~160 identifier/property spellings are baked into Construct/Call instructions as NativeCallTarget hints, and a runtime switch recognizer pattern-matches the exact `x & mask` bytecode shape. CompiledScript/CompiledModule assembly is clean and limit-checked, though module imports ride through as parser-synthesized init-less `const` declarations filtered back out by string name. Overall quality is high for a prototype — no unsafe, no unchecked indexing, honest self-documentation — but the duplicated cross-layer predicates and the capture-binding side table are the debts most likely to produce silent miscompilation as the engine grows.
+
+## Strengths
+
+- Hard AST/runtime separation is real and mechanically guarded: runtime and bytecode import no parser AST; bytecode carries only interned syntax tokens plus the immutable BindingLayout, so the compile-time IR is genuinely discarded before execution.
+- Single emit() boundary in BytecodeCompiler (compiler/mod.rs:589) appends instruction and SourceSpan together, so every lowered instruction — including nested-block sub-compilers — has aligned diagnostic ranges with no second source map.
+- Typed slot newtypes (GlobalSlot/LocalSlot/UpvalueSlot, ScopeId, FunctionScopeId) with checked from_index/index conversions make it impossible to confuse the three binding address spaces, and every arena access returns Result instead of panicking.
+- BindingLayout is a compact, immutable, Rc-shared artifact with explicit Unresolved operands and per-reference with-environment counts, which lets `with` semantics stay layout-driven instead of runtime name-heuristic-driven.
+- Structured bytecode for loops/switch/try (blocks as data, completions as values) is what makes AS-06 resumable continuations and async generators possible without side-effect replay — a deliberate, coherent design choice, not an accident.
+- The project's self-documentation (semantic-architecture-inventory.md, AS-01b guards) is unusually honest and mostly matches the code; recorded exceptions like the Test262Error constructor fallback really are confined to where the docs say they are.
+
+## Confirmed findings (adversarially verified)
+
+### [HIGH] Duplicated for-init scope predicate has diverged: lexical destructuring for-init compiles with scoped:false
+
+- **Kind:** `risk` · **Location:** `src/compiler/control.rs:488` · **Status in project docs:** UNDOCUMENTED
+- **Verification verdict:** confirmed
+
+**Evidence:** compiler/control.rs:488 `for_init_needs_lexical_scope` matches only `Stmt::VarDecl{kind: Let|Const|Using|AwaitUsing}` (and DeclList of VarDecl); `Stmt::PatternDecl` falls through to `_ => false`. Its twin, binding_layout/scope_rules.rs:3 `for_init_needs_layout_scope`, explicitly returns true for `Stmt::PatternDecl` with lexical kinds. So `for (let [a, b] = x; ...)` gets a dedicated loop ScopeId with Local slots from the layout, but the emitted `BytecodeInstruction::For { scoped: false }` never triggers `push_lexical_scope()` at runtime (runtime/bytecode/control.rs:384).
+
+**Why it matters:** Two private copies of one semantic predicate ('does this for-init need a lexical scope') live on opposite sides of the layout/compiler boundary and already disagree. The DestructurePattern declaration then lands its Local{loop_scope,slot} bindings in whatever enclosing frame is current, is never popped after the loop, and per-iteration binding semantics are skipped — silent scope leakage/miscompilation for a completely ordinary construct.
+
+**Verifier notes:** The divergence is exactly as claimed: compiler/control.rs:488 omits Stmt::PatternDecl (both directly and inside DeclList) while binding_layout/scope_rules.rs:3 includes it, and the parser (parser/statement.rs:722-738 via for_statement.rs:252) really does produce Stmt::PatternDecl as a C-style for-init with no desugaring. The layout builder (builder.rs:331, builder/annex_b.rs:31-36) assigns the pattern's bindings Local{loop_scope,slot} operands in a dedicated loop scope that the runtime never pushes because For{scoped:false} gates push_lexical_scope (runtime/bytecode/control.rs:384) and skips the pop/dispose path (:395-426). Tracing the runtime declaration path (destructure.rs:183 → eval_bytecode_declaration → initialize_bytecode_lexical → define_static) shows the outcome is a hard runtime error at script top level ("global binding layout is not a global slot", static_bindings.rs:214-216) and, inside blocks, either a "binding frame layout scope mismatch" error (scope.rs:230-239) or silent leakage into the enclosing frame plus fast-path cache corruption via mis-marking the frame's compiled ScopeId; no test covers this construct (only for-of destructuring, a different path).
+
+**Verifier correction:** Confirmed with one refinement: the "per-iteration binding semantics are skipped" wording overstates — the engine implements no per-iteration environment copying even for scoped:true loops (a single loop-lifetime scope is pushed). What scoped:false actually loses is the loop-lifetime scope itself and its disposal pass. Traced consequences for `for (let [a,b] = x; ...)`: at script top level, define_static hits the Local-operand-in-global-frame arm and throws a spurious runtime error ("global binding layout is not a global slot"); inside a function/block, the bindings are defined into the enclosing frame (never popped, visible after the loop) and mark_active_binding_frame_slot either errors with "binding frame layout scope mismatch" or silently stamps the enclosing frame with the loop's compiled ScopeId, corrupting compiled fast-path binding lookup for that frame. The DeclList arm diverges the same way: an all-pattern list (for (let [a]=x, [b]=y; ;)) compiles scoped:false; only a mixed list containing a plain VarDecl gets scoped:true. No test exercises C-style for with a destructuring lexical init (tests only cover for-of, which uses the separate ForInTarget::PatternBinding path). High severity is fair: ordinary valid JS either errors at runtime or miscompiles silently.
+
+**Suggestion:** Delete the compiler copy and expose one predicate from binding_layout (or better: record the scoped decision in BindingLayout itself, e.g. a per-scope 'materialize at runtime' bit) so the compiler cannot disagree with the layout. Add a differential test with `for (let [a,b]=[1,2];;)`.
+
+### [MEDIUM] Closure capture info computed twice: CaptureBindingCollector AST re-walk mirrors layout upvalues and can desynchronize into hard runtime errors
+
+- **Kind:** `inelegant` · **Location:** `src/compiler/function.rs:390` · **Status in project docs:** UNDOCUMENTED
+- **Verification verdict:** partially-confirmed
+
+**Evidence:** compiler/function.rs:390 CaptureBindingCollector re-traverses the entire function subtree — including all nested function bodies — collecting every identifier reference into `capture_bindings`, deduped by O(n) linear scan (function.rs:740). At closure creation, runtime/function/upvalues.rs:100-145 intersects this list against BindingLayout upvalue operands to find cells, and finish() (upvalues.rs:59-98) hard-errors with "upvalue layout did not resolve captured cell" when any layout slot has no matching binding — the error path itself runs an O(slots×bindings) diagnostic search.
+
+**Why it matters:** BindingLayout already owns per-function upvalue lists (FunctionScope.upvalues: Vec<DeclarationRef>); capture_bindings is a second side table of the same concept, produced by a second full traversal, glued back together at runtime by searching. Nested functions make compilation O(size×depth) since every BytecodeFunction::compile re-walks all inner bodies. AS-09t's changelog note ('upvalue slot growth cannot truncate already captured higher slots') shows this seam has already bitten once.
+
+**Verifier notes:** All cited mechanics are accurate: CaptureBindingCollector (compiler/function.rs:376-748) re-walks the full subtree including nested function bodies with O(n) linear-scan dedupe, making per-function compilation walk each body once per enclosing depth level; runtime/function/upvalues.rs:100-145 intersects that list against BindingLayout upvalue operands and finish() (:59-98) hard-errors on any unfilled slot; FunctionScope.upvalues exists (binding_metadata/types.rs:149-152); the AS-09t note is verbatim at docs/semantic-architecture-inventory.md:716. However, capture_bindings is not a fully redundant mirror: the layout stores only ScopeId+StaticNameId with no name text, and runtime cell resolution (static_bindings.rs:409-428) requires the StaticName string for atom lookup, which capture_bindings alone carries (plus uses_arguments from the same walk). Also, tracing every upvalue-creating site in the layout builder (resolve() called only from Expr::Identifier at builder.rs:562 and Expr::Assignment at :594, with intermediate-function lifting always rooted at a collected identifier) shows the two traversals currently cover identical reference sources, so the hard error is an unreachable defensive guard today, and the AS-09t note refers to the runtime cell-vector growth fix rather than a collector/layout desync.
+
+**Verifier correction:** Closure capture info is derived by two parallel AST traversals kept in lockstep only by convention: LayoutBuilder computes per-function upvalue slot lists (FunctionScope.upvalues), while CaptureBindingCollector (compiler/function.rs:376) re-walks each function's entire subtree — including all nested bodies, making compilation O(size×depth) with O(n) linear-scan dedupe (function.rs:740) — and the runtime re-joins the two by search at closure creation (runtime/function/upvalues.rs:100-145), hard-erroring if a layout slot finds no matching binding (upvalues.rs:59-98). Caveats: capture_bindings is not purely redundant — the layout stores no name text, and runtime cell resolution needs StaticName strings for atom lookup, which only capture_bindings carries (plus the uses_arguments bit from the same walk); and both traversals currently source upvalues from exactly the same node kinds (Identifier and Assignment names), so the hard-error path is an unreachable defensive guard today, not an observed failure. The AS-09t changelog note cites a fix to runtime upvalue cell-slot growth, adjacent to but not the same as a collector/layout desync. Real cost is maintainability (every new AST node must be mirrored in both walks) and compile-time re-walking, not current correctness.
+
+**Suggestion:** Have LayoutBuilder record, per FunctionScopeId, the resolved parent-side operand for each upvalue slot (it has this at ensure_upvalue_slot time). Closure creation becomes a slot-indexed copy; delete CaptureBindingCollector entirely (keeping only a cheap uses_arguments scan or a parser-set flag).
+
+### [MEDIUM] Switch case tests are scoped and evaluated outside the switch block environment (TDZ divergence)
+
+- **Kind:** `risk` · **Location:** `src/binding_layout/builder.rs:491` · **Status in project docs:** UNDOCUMENTED
+- **Verification verdict:** confirmed
+
+**Evidence:** builder.rs:479-498 analyze_switch creates `switch_scope` for case statements but resolves each `case.test` in the OUTER `scope` (line 491). Consistently, the runtime computes the matching case index before pushing the lexical scope: structured_switch.rs:73 `bytecode_switch_start_index(...)` runs, then line 89 `push_lexical_scope()`.
+
+**Why it matters:** Per spec, CaseBlock evaluation creates the block environment first and case selector expressions evaluate inside it, so `switch (v) { case (x=1, 0): break; default: let x; }` must throw a TDZ ReferenceError; here the test resolves and writes in the enclosing scope. The engine is internally consistent but structurally locked into the divergence — both layout and lowering would need coordinated change, which is exactly the cost of the split.
+
+**Verifier notes:** builder.rs:491 resolves each case.test in the outer `scope` while line 488/493 put case-body lexical declarations in a separate `switch_scope`; structured_switch.rs:73 evaluates the discriminant and all case tests (generic path line 234) before line 89 pushes the lexical scope, and the scope_init (block-function instantiation) also runs only after case selection; compiler/control.rs:251-291 lowers tests with the same layout, hard-coding the select-then-push order into the Switch instruction shape. No guard, alternate evaluator, or documented invariant exists (no non-bytecode switch path in src/runtime, no docs note). Per ECMA-262, CaseBlock evaluation sets the block environment before case selector evaluation, so the cited TDZ example must throw a ReferenceError but here writes to the enclosing scope — the divergence and the coordinated-change cost claim are both accurate.
+
+**Suggestion:** Resolve case tests in switch_scope in the layout and move the runtime scope push before start-index selection, with scope_init (lexical hoists) executed first.
+
+### [MEDIUM] Strict-mode delete never throws: strictness bit carried on every write instruction but omitted from all delete instructions
+
+- **Kind:** `risk` · **Location:** `src/compiler/member.rs:111` · **Status in project docs:** UNDOCUMENTED
+- **Verification verdict:** confirmed
+
+**Evidence:** compile_delete_expr (member.rs:111-150) emits DeleteBinding/DeleteStaticProperty/DeleteComputedProperty/DeleteValue with no strict field, while sibling StaticPropertyAssign/UpdateStaticProperty/CompoundStaticProperty all carry `strict: bool`. The runtime path runtime/property/static_names/mod.rs:566 delete_static_property_value returns Value::Bool and consults no strictness anywhere, so `'use strict'; delete Object.prototype` evaluates to false instead of throwing TypeError (spec DeletePropertyOrThrow).
+
+**Why it matters:** AS-09aa deliberately threaded per-instruction strictness through every property *write* because frame strictness is unreliable across direct eval; delete has the identical requirement and was skipped, leaving an asymmetric reference model and a silent conformance hole that the existing 'no path may drop strictness' guard does not cover.
+
+**Verifier notes:** Every cited location checks out: compile_delete_expr (src/compiler/member.rs:111-150) emits all four delete instructions with no strict field (src/bytecode/types.rs:511-518), while sibling assign/update/compound instructions all carry strict:bool and the runtime write path maps strict to SetFailureBehavior::Throw (src/runtime/bytecode/ops/assignment.rs:632). The runtime delete chain never throws on failure — delete_static_property_value (src/runtime/property/static_names/mod.rs:566) unconditionally maps to Value::Bool, Object::delete returns Ok(false) for non-configurable properties (src/runtime/object/mod.rs:602-604), and delete_native_function_property_lookup returns Ok(false) for intrinsics (src/runtime/function/mod.rs:764-768), so the cited example produces false instead of TypeError. AS-09aa is real (docs/semantic-architecture-inventory.md:723) and its documented scope covers only property-write references, confirming delete was skipped; no test pins strict-mode delete behavior. Severity medium is fair for a silent spec-conformance hole in a Test262-gated engine.
+
+**Verifier correction:** Two minor framing corrections, neither weakening the finding: (1) the quoted "no path may drop strictness" guard is a paraphrase — no such literal invariant text exists in the repo; the documented AS-09aa row (docs/semantic-architecture-inventory.md:723) only lists write references in scope. (2) Per spec, only DeleteStaticProperty/DeleteComputedProperty need a runtime strict bit; strict `delete identifier` is an early SyntaxError (a parser concern — also unenforced, src/parser/expression.rs:65-75, which is an adjacent gap) and DeleteValue on a non-reference always yields true, so the fix surface is the two member-delete instructions plus a parser early error, not all four instructions.
+
+**Suggestion:** Add the strict bit to the three delete instructions (same plumbing as AS-09aa) and delegate rejection to the shared semantic delete owner with throw/false behavior mirroring SetFailureBehavior.
+
+### [MEDIUM] for-in/for-of member-expression targets hardcode strict=false, dropping strictness the AST never captured
+
+- **Kind:** `risk` · **Location:** `src/compiler/control.rs:409` · **Status in project docs:** UNDOCUMENTED
+- **Verification verdict:** confirmed
+
+**Evidence:** compile_for_in_target (control.rs:409-411) lowers `ForInTarget::Assignment(expr)` via compile_assignment_target (control.rs:415-419), which delegates with `strict=false` hardcoded. The sibling variant `ForInTarget::PatternAssignment { pattern, strict }` carries a strict flag from the parser, but `Assignment(Expression)` has no strictness field at all, so the compiler cannot do better.
+
+**Why it matters:** `'use strict'; for (obj.frozen in src) {}` performs a sloppy write reference: a failed [[Set]] (frozen object, no-op setter) silently continues instead of throwing TypeError. This violates the project's own AS-09aa guard clause ('a property assignment ... path that drops strictness'), and the asymmetry between the two ForInTarget variants shows the gap is structural, not intentional.
+
+**Verifier notes:** compile_for_in_target (src/compiler/control.rs:409-411) does lower ForInTarget::Assignment via compile_assignment_target, which hardcodes strict=false (control.rs:419), and the AST variant Assignment(Expression) has no strict field while sibling PatternAssignment carries strict stamped by the parser (ast/statement.rs:103-117, parser/statement/for_statement.rs:122-125). The runtime honors only the compiled flag: assign_bytecode_target (runtime/bytecode/ops/assignment.rs:583-604) passes *strict into set_bytecode_static_property_reference, whose bytecode_set_failure(strict) yields SetFailureBehavior::ReturnFalse, so a failed [[Set]] in strict code silently continues; no runtime strictness override or alternative ForIn evaluator exists. The quoted AS-09aa guard clause is real (docs/semantic-architecture-inventory.md:749, 'a property assignment ... path that drops strictness') and this path violates it. Severity medium is appropriate for silent spec divergence without broader corruption.
+
+**Verifier correction:** Claim verified end-to-end. Minor additions: the identifier-target case is also affected (BytecodeBinding::compile_write receives strict=false at control.rs:428-430), not just member expressions, and the same compiled targets feed both for-in (runtime/bytecode/control/for_in.rs:77-82) and for-of (runtime/bytecode/for_of.rs:123-127). Fix likely belongs in the parser: stamp is_strict_mode() onto ForInTarget::Assignment as was done for PatternAssignment.
+
+**Suggestion:** Add strict to ForInTarget::Assignment in the AST (parser already knows it — it sets it on PatternAssignment) and pass it through compile_assignment_target_with_strict.
+
+### [MEDIUM] Module imports ride the AST as synthetic init-less `const` declarations filtered back out by string name, with a full statement deep-clone
+
+- **Kind:** `hack` · **Location:** `src/compiler/mod.rs:55` · **Status in project docs:** UNDOCUMENTED
+- **Verification verdict:** confirmed
+
+**Evidence:** compile_module_program (mod.rs:55-79) builds `executable` by deep-cloning every top-level Statement and dropping `Stmt::VarDecl { kind: Const, init: None }` whose name string is in `import_local_names` (a BTreeSet<&str> built in compiled_script/mod.rs:259-264 from parser import entries), while BytecodeHoistPlan::compile still sees the unfiltered statements so the fake consts hoist as lexical cells.
+
+**Why it matters:** Import bindings have no first-class representation: the parser forges otherwise-illegal `const x;` declarations, the compiler recognizes them by name-string membership (not by node identity or a typed marker), and correctness depends on the hoist plan and the executable filter staying in agreement. Any future top-level transform that renames, wraps, or reorders declarations silently re-executes or double-declares an import. The clone of the whole top level is pure waste on top.
+
+**Verifier notes:** compile_module_program (src/compiler/mod.rs:60-77) does exactly what the claim says: it deep-clones surviving top-level statements while dropping Stmt::VarDecl{Const, init: None} whose name is in the import set built at src/compiled_script/mod.rs:260-264, and BytecodeHoistPlan::compile receives the unfiltered statements so the forged consts (created at src/parser/module.rs:110-117) hoist as lexical cells that runtime linking then aliases to export cells (src/runtime/module.rs:227-237). The invariant is load-bearing and one-sided: a missing hoist cell errors at link time, but a forged const leaking into the executable would emit DeclareBinding{Const, has_init: false} (src/compiler/mod.rs:336-351) and silently clobber the aliased cell; no comment documents this at any of the three sites. Two details are overstated, though: the filter matches an AST shape (const with no initializer) that user code cannot produce because src/parser/statement.rs:743-744 rejects init-less const, so no present input can misfilter, and the "full deep-clone" is softened by Rc-shared function bodies/params (src/ast/statement.rs:79-80).
+
+**Verifier correction:** Confirmed as a hack, with two corrections. (1) The name-string filter is not the sole discriminator: it also requires the exact shape `kind: Const, init: None`, which the parser makes impossible in user code (src/parser/statement.rs:743-744), and the forged statements and the name set derive in lockstep from the same module.imports entries — so the hazard is purely prospective under future top-level transforms, not a present misfiltering risk. The prospective failure mode is real and silent: a leaked forged const would compile to DeclareBinding{Const, has_init: false} and initialize the aliased import cell to undefined; runtime only guards the opposite direction (missing cell errors at src/runtime/module.rs:235). (2) "Full statement deep-clone" is overstated: FunctionDecl bodies/params are Rc<[...]> so top-level function declarations clone cheaply; only non-function top-level statements deep-clone, once, at compile time. Medium severity is fair given the undocumented three-site invariant (parser forge, compiler filter, hoist plan) whose violation would surface as silently-undefined imports rather than an error.
+
+**Suggestion:** Give the AST a typed ImportBinding statement (or a flag on VarDecl) produced by the module parser; the compiler then skips it structurally and the hoist plan claims it explicitly — no name matching, no cloned statement vector.
+
+### [MEDIUM] Annex-B function-in-block semantics split across three owners with string-keyed logic and an operand-discarding name-based store
+
+- **Kind:** `inelegant` · **Location:** `src/binding_layout/builder/annex_b.rs:69` · **Status in project docs:** UNDOCUMENTED
+- **Verification verdict:** confirmed
+
+**Evidence:** (1) annex_b.rs:69-127 computes blocked lexical names as BTreeSet<String>, cloning the set at every for/for-in/try/list nesting level and deep-cloning all switch-case statements (lines 123-127) to reshape them into a slice. (2) compiler/function.rs:90-107 re-derives 'later duplicate wins' with an O(n²) forward scan per block function. (3) compile_annex_b_function_update (function.rs:199-216) resolves the variable operand, checks it isn't Unresolved, then throws the operand away and emits `StoreAnnexBVar(name string)` for a runtime name-based store.
+
+**Why it matters:** One spec concept (B.3.3 legacy function hoisting) has three partial implementations in two layers, keyed by owned name strings even though interned StaticNameId exists; the layout decides where the var cell lives, the compiler independently re-decides which function wins, and the runtime write ignores the operand the layout produced. Divergence between the three shows up only as subtle sloppy-mode behavior differences.
+
+**Verifier notes:** All three cited code facts verified: annex_b.rs builds blocked-name sets as BTreeSet<String> (with .as_str().to_owned() at lines 188/206/219), clones the set at every nesting level (lines 75, 111, 118, 136), and deep-clones switch-case statements into a Vec just to reshape them (lines 122-127), even though interned Copy StaticNameId exists and is used for the same dedup in compiler/function.rs:142. compiler/function.rs:90-107 independently re-derives later-duplicate-wins via an O(n²) forward scan (and lines 139-180 implement a second, first-wins dedup idiom for the same duplicates). compile_annex_b_function_update resolves the variable operand, uses it only as an Unresolved guard, and emits StoreAnnexBVar(StaticName); at runtime assign_annex_b_var (runtime/binding/declaration.rs:51-71) re-finds the cell by a linear name+DeclKind::Var scan over all local scopes (without the frame limiting get_binding_by_atom applies), despite operand-based direct resolution machinery existing in static_bindings.rs. No hidden guard or invariant refutes the split-ownership characterization; the parser (statement.rs:658) and hoist collector (hoist.rs:245) add two more coordination points, so the fragmentation is if anything undercounted.
+
+**Verifier correction:** Two minor refinements: (1) the operand is not fully discarded — it serves as the guard that transports the layout's blocked decision to the compiler (Unresolved → skip update), which is the one deliberate cross-layer contract; the store itself ignores it. (2) A plain StoreBinding could not be reused because name-based resolution would hit the shadowing block-scoped lexical of the same name, so a dedicated instruction was necessary — the inelegance is that it re-locates the target by a kind-filtered name scan (which also ignores frame boundaries via self.locals.iter().rev() without current_local_frame_start()) instead of carrying the already-computed operand. Also, switch-case clones are deep for nested blocks/expressions but shallow (Rc) for nested function bodies. Fragmentation is actually five-way (parser eligibility at parser/statement.rs:658, layout blocking, hoist-plan operand re-check at compiler/hoist.rs:245, compiler duplicate-wins twice, runtime name scan) across three name representations (String, StaticNameId, AtomId).
+
+**Suggestion:** Move the whole annex-B decision into the layout pass (it already sees blocked names and declares the var binding) and record the winning function + resolved store operand in BindingLayout; compiler consumes, runtime stores by operand.
+
+### [MEDIUM] ~160 source-name spellings baked into Call/Construct bytecode as NativeCallTarget hints, with fixed-precedence collisions and Display-derived keys
+
+- **Kind:** `microopt-debt` · **Location:** `src/compiler/call.rs:26` · **Status in project docs:** documented (AS-plan)
+- **Verification verdict:** partially-confirmed (corrected severity: low)
+
+**Evidence:** CallBinding/CallStaticMember/CallComputedMember and Construct embed `NativeCallTarget::from_binding_name(name.as_str())` / `from_property_name(...)` (call.rs:26,41,56; expression.rs:320). api/native_call.rs:223 resolves collisions by trying Array names first, so "includes"/"concat"/"slice"/"indexOf" always hint the Array variant (StringPrototypeIncludes et al. are unreachable from this table) and "toString" always hints ErrorPrototypeToString. computed_property_native_target (call.rs:189-197) derives names from null/bool/number literals via `value.to_string()` — the Display impl the inventory itself classifies as diagnostic-only, not ECMAScript ToString.
+
+**Why it matters:** This is compile-time workload-shaped specialization: the name list is exactly the optimized built-ins set, every new built-in tempts another entry, and colliding hints mean e.g. string method calls carry permanently wrong hints whose guards must fail on every execution (dead check in the hot path). Using diagnostic Display to manufacture property keys couples an optimization to a formatting function that is explicitly documented as not owning conversion semantics.
+
+**Verifier notes:** The descriptive facts hold: hints are baked at compile time (call.rs:26,41,56; expression.rs:320), from_property_name tries Array names first so "includes"/"slice"/"toString" always hint Array/Error variants, and computed keys are derived via Value's Display. But the central harms are refuted by the runtime design: every consumption site (direct.rs:38, 76-93) checks a per-call-site kind cache BEFORE the hint, and on hint mismatch the callee's actual NativeFunctionKind is fetched, cached, and dispatched directly — so a "wrong" hint costs one guarded id comparison on the first execution per site, not a dead check on every execution, and StringPrototypeIncludes et al. remain fully reachable via NativeFunctionKind::to_call_target (call_target.rs), so string methods lose no optimization. The Display usage is restricted to Undefined/Null/Bool/Number, for which Display IS spec ToString (Number delegates to format_ecmascript_number, documented as ECMAScript Number::toString; the inventory's "diagnostic" caveat targets Symbol/Object/Function renderings), none of those renderings can match any table name, and correctness is everywhere protected by the direct_native_call_kind identity guard.
+
+**Verifier correction:** The ~160-name compile-time hint table is real workload-shaped specialization and its fixed Array-first precedence makes some hints systematically stale (e.g. string "includes" call sites embed ArrayIncludes forever), but hints are only cache seeds: the per-site native-call-kind caches are consulted before the hint, mispredictions self-correct to the callee's actual kind after the first execution, and an identity guard (direct_native_call_kind) prevents any incorrect dispatch. Residual issues are maintenance-only: every new optimized built-in requires another table entry, and computed_property_native_target's use of Display (though spec-accurate for the restricted Undefined/Null/Bool/Number variants and currently incapable of matching any table name) is a stylistic coupling that a shared literal-key ToString helper would make more robust.
+
+**Suggestion:** Long term, replace compile-time name hints with runtime call-site caches keyed by resolved callee identity (CallValueCache already exists). Short term: make from_property_name receiver-agnostic collisions explicit (return a small set or a neutral 'array-or-string' target) and derive literal keys via the shared ToString owner.
+
+## Additional low-severity findings (not separately verified)
+
+### [LOW] Try lowering pre-extracts `throw <literal>` from the body start (BytecodeDirectThrow) — a fast path shaped like the assert.throws harness idiom
+
+- **Kind:** `microopt-debt` · **Location:** `src/compiler/control.rs:305` · **Status in project docs:** UNDOCUMENTED
+
+**Evidence:** compile_try (control.rs:305-309) calls BytecodeDirectThrow::from_unscoped_block_start, which fires when the try body's first two instructions are PushLiteral/PushString/PushUndefined + Complete(Throw) (bytecode/fast_path.rs:16-31); runtime/bytecode/control/try_catch.rs:188-194 then rematerializes the thrown value through a separate path instead of executing the block.
+
+**Why it matters:** A whole-construct recognizer keyed to the source shape `try { throw <literal>; ... }` — the canonical assert.throws test idiom — that duplicates throw-value materialization in a second runtime path for three operand kinds. It is guarded and small, but it is precisely the category (test-harness-shaped specialization) the project's AS-08 work spent effort removing elsewhere.
+
+**Suggestion:** Measure whether it still pays; if kept, note it in the optimization-owner allowlist so the AS-01b guard tracks it like other recorded fast paths.
+
+### [LOW] String-concat chain quickening keyed on syntactic shape duplicates addition semantics across a second instruction family
+
+- **Kind:** `microopt-debt` · **Location:** `src/compiler/expression.rs:420` · **Status in project docs:** UNDOCUMENTED
+
+**Evidence:** compile_string_concat_chain (expression.rs:420-494) flattens left-associated `+` trees when the first addition has a static string literal operand (first_add_is_static_string_concat) and emits StringConcatStatic/StringConcat instructions instead of Binary(Add); collect_left_add_operands re-associates through parentheses.
+
+**Why it matters:** The guard itself is sound (a string in the first add forces string results down the chain), but the runtime StringConcat instructions must re-own ToPrimitive/ToString ordering for the remaining operands — a second implementation of addition's observable half, keyed to a source shape that exists because string-building benchmarks exist. Any conversion-order fix in the generic Binary(Add) owner must be mirrored here.
+
+**Suggestion:** Have StringConcat delegate operand conversion to the shared ToPrimitive/ToString owners (if it doesn't already), and add a differential test with a side-effecting toString in mid-chain position.
+
+### [LOW] Public CompiledScriptUsage bakes the optimizer taxonomy into the embedding API
+
+- **Kind:** `inelegant` · **Location:** `src/compiled_script/usage.rs:19` · **Status in project docs:** UNDOCUMENTED
+
+**Evidence:** usage.rs:19-21 exposes bytecode_direct_native_call_count, bytecode_array_native_call_count, and bytecode_numeric_instruction_count as public accessors on the embedder-visible CompiledScriptUsage; they are computed by classifying instructions at compile time (compiled_script/mod.rs:272-274).
+
+**Why it matters:** Metric names publicly encode internal optimization categories ('direct native call', 'numeric instruction'), so deleting or reshaping a specialization — the stated direction of AS-08 — becomes a public API break or a silently-lying counter. Metrics and semantics should not share a taxonomy.
+
+**Suggestion:** Keep public usage to frontend-stable facts (names, bindings, slots, instructions) and move optimizer-shaped counts to the internal optimizer snapshot that AS-08a already owns.
+
+## Optimization opportunities (post-cleanup)
+
+### [MEDIUM] Encode static lexical depth in Local operands to kill the runtime reverse frame scan
+
+- **Kind:** `perf-opportunity` · **Location:** `src/runtime/binding/static_binding_lookup.rs:81` · **Status in project docs:** UNDOCUMENTED
+
+**Evidence:** BindingOperand::Local carries an arbitrary ScopeId, so every local access scans `self.locals` frames in reverse comparing `frame.compiled_scope() == Some(scope)` (static_binding_lookup.rs:81-98) and then builds an atom-keyed BindingLocation. The layout (binding_layout/builder.rs:747-756) creates scopes with full parent chains, so relative lexical depth is statically known at resolve time.
+
+**Why it matters:** Local variable access — the hottest operation in any interpreter — is O(live frames) with an id comparison per frame plus atom plumbing, when the layout could emit (relative_frame_depth, slot) and make it a two-index array load. This also removes the frame 'compiled_scope' stamping that the scoped:false divergence (finding 1) exploits.
+
+**Suggestion:** After unifying the scope predicates, change BindingOperand::Local to {depth: u16, slot: u32} computed in resolve_operand, and give runtime frames a plain Vec indexed by depth from the activation base.
+
+### [MEDIUM] Derive closure capture lists from the layout instead of a second AST walk
+
+- **Kind:** `perf-opportunity` · **Location:** `src/binding_layout/upvalues.rs:40` · **Status in project docs:** UNDOCUMENTED
+
+**Evidence:** ensure_upvalue_slot (upvalues.rs:40-57) already knows, for each function's upvalue slot, the exact DeclarationRef and (via lift_upvalue_to_intermediate_functions) the parent function's slot for the same declaration; but this chain is discarded, forcing compiler/function.rs CaptureBindingCollector + runtime/function/upvalues.rs intersection at every closure creation.
+
+**Why it matters:** Closure creation is O(capture_bindings × slots) with layout lookups per pair, and compilation pays an extra full traversal per function literal (O(size × nesting depth)). All of it is reconstructable in O(slots) from data the layout builder computes and throws away.
+
+**Suggestion:** Store per-FunctionScope a Vec<UpvalueSource> (ParentSlot(u32) | ParentLocal{depth,slot} | Global) filled during ensure_upvalue_slot/lift; closure creation copies cells by index and CaptureBindingCollector is deleted.
+
+### [LOW] Annex-B blocked-name sets: use interned ids and stop cloning owned-string sets per nesting level
+
+- **Kind:** `perf-opportunity` · **Location:** `src/binding_layout/builder/annex_b.rs:75` · **Status in project docs:** UNDOCUMENTED
+
+**Evidence:** collect_annex_b_statement_list clones the inherited BTreeSet<String> for every statement list (annex_b.rs:75), and For/ForIn/Try arms clone it again per construct (lines 111, 118, 136); every name is an owned String (`name.name().as_str().to_owned()`, lines 188, 206, 219) even though StaticNameId is Copy+Ord and available everywhere. The Switch arm additionally deep-clones all case statements (lines 123-127) just to obtain a slice.
+
+**Why it matters:** Worst case (deeply nested blocks with many lexical names) is O(depth × names × name_len) allocation for a pass that could be O(names) with a scoped push/pop over a BTreeSet<StaticNameId> — a compile-time cost that grows with exactly the programs that already stress the pipeline.
+
+**Suggestion:** Switch to BTreeSet<StaticNameId> with push/pop scoping (record inserted ids, remove on exit) and iterate switch cases directly instead of cloning statements.

@@ -58,3 +58,7 @@
 !/tests/**/*.js
 !/tests/**/*.txt
 !/tests/**/*.tsv
+
+!/audit/
+!/audit/**/
+!/audit/**/*.md
