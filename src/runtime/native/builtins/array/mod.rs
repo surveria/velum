@@ -16,6 +16,7 @@ mod from_async;
 mod generic;
 mod iterator;
 mod mutate;
+mod of;
 mod prototype_registry;
 mod sort;
 
@@ -24,6 +25,7 @@ const ARRAY_JOIN_PROPERTY: &str = "join";
 const ARRAY_IS_ARRAY_PROPERTY: &str = "isArray";
 const ARRAY_FROM_PROPERTY: &str = "from";
 const ARRAY_FROM_ASYNC_PROPERTY: &str = "fromAsync";
+const ARRAY_OF_PROPERTY: &str = "of";
 const ARRAY_INDEX_NOT_FOUND: f64 = -1.0;
 
 impl Context {
@@ -548,6 +550,11 @@ impl Context {
         self.native_function_mut(constructor)?
             .properties_mut()
             .define_builtin(key, is_array, PropertyEnumerable::No)?;
+        let of = self.create_native_function(NativeFunctionKind::ArrayOf, Value::Undefined)?;
+        let key = self.intern_property_key(ARRAY_OF_PROPERTY)?;
+        self.native_function_mut(constructor)?
+            .properties_mut()
+            .define_builtin(key, of, PropertyEnumerable::No)?;
         Ok(())
     }
 

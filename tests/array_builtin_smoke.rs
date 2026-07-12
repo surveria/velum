@@ -91,10 +91,49 @@ fn supports_array_is_array_static_method() -> TestResult {
         r#"
         Array.isArray([]) &&
             Array.isArray(new Array(2)) &&
+            Array.isArray(Array.prototype) &&
+            Array.prototype.length === 0 &&
             !Array.isArray({ length: 0 }) &&
             !Array.isArray("value") &&
             Array.isArray.length === 1 &&
             Array.isArray.name === "isArray"
+        "#,
+    )?;
+
+    ensure_value(&value, &Value::Bool(true))
+}
+
+#[test]
+fn supports_array_of_constructor_and_property_semantics() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+
+    let value = context.eval(
+        r#"
+        function Custom(length) {
+            this.constructedLength = length;
+        }
+        Object.defineProperty(Custom.prototype, "0", {
+            set: function() { throw new Error("inherited setter must not run"); }
+        });
+
+        let intrinsic = Array.of("first", 2);
+        let custom = Array.of.call(Custom, "value");
+        let fallback = Array.of.call(Math.abs, 3);
+
+        Array.of.length === 0 &&
+            Array.of.name === "of" &&
+            Array.isArray(intrinsic) &&
+            intrinsic.length === 2 &&
+            intrinsic[0] === "first" &&
+            intrinsic[1] === 2 &&
+            custom instanceof Custom &&
+            custom.constructedLength === 1 &&
+            custom.length === 1 &&
+            custom[0] === "value" &&
+            Array.isArray(fallback) &&
+            fallback.length === 1 &&
+            fallback[0] === 3
         "#,
     )?;
 

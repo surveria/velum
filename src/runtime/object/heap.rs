@@ -309,7 +309,7 @@ impl ObjectHeap {
         } else {
             let object_prototype =
                 self.object_prototype_id(constructor_key, max_objects, max_properties)?;
-            let mut object = Object::ordinary();
+            let mut object = Object::array(ArrayLength::from_usize(0)?);
             object.prototype = Some(object_prototype);
             let id = self.push_object(object, max_objects)?;
             self.storage_ledger
