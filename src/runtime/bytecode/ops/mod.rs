@@ -49,8 +49,8 @@ impl Context {
                 }
             }
             DeclKind::Let => {
-                self.define_static(
-                    name.name(),
+                self.initialize_bytecode_lexical(
+                    name,
                     value.unwrap_or(Value::Undefined),
                     DeclKind::Let,
                 )?;
@@ -59,7 +59,7 @@ impl Context {
                 let Some(value) = value else {
                     return Err(Error::runtime("const declaration requires an initializer"));
                 };
-                self.define_static(name.name(), value, DeclKind::Const)?;
+                self.initialize_bytecode_lexical(name, value, DeclKind::Const)?;
             }
         }
         Ok(())

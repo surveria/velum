@@ -489,7 +489,7 @@ dependencies do not overlap.
 | AS-06 | Complete | Introduce explicit resumable execution frames. | AS-03, AS-04, AS-05 root contract | AS-06a1 through AS-06a2b merged in PRs #438 through #442. AS-06b merged in PR #445 as `9e25e77` with exact-tree correctness and canonical report publication. |
 | AS-07 | Complete | Add safe collection and correct weak-edge semantics. | AS-05, AS-06 | PR #446 merged as `62e2725`; exact-tree correctness, paired sentinels, post-merge performance, and canonical report publication passed. |
 | AS-08 | Complete | Isolate quickening, inline caches, and loop specialization from semantics. | AS-02, AS-03, AS-06 | AS-08a and AS-08b merged through PR #449; exact-tree correctness, disabled-mode equivalence, specialization audit, paired sentinels, and canonical publication passed. |
-| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09s applies shared construct, call, iterator, descriptor, and conversion owners to `Array.from`, leaving only realm-harness and non-strict-this prerequisites in the focused profile. |
+| AS-09 | In progress | Scale compatibility work across product profiles. | Relevant AS-02 through AS-07 gates | AS-09t adds a VM-owned async-operation continuation for `Array.fromAsync`, reuses Promise and iterator owners, and corrects lexical/upvalue lifetime gaps exposed by nested async helpers. |
 | AS-10 | Backlog | Run recurring performance and memory checkpoints. | Stable benchmark cohort; relevant subsystem maturity | Profile, stable latency/memory comparison, named cross-cutting debt, regression gate updates. |
 
 ## Program Item Details
@@ -2743,6 +2743,41 @@ AS-09s profile evidence in draft PR #480:
   baseline adds 113 variants / 58 conforming files with no removals, producing
   a 66,928-variant / 34,326-file pass candidate. Canonical publication remains
   required before AS-09s can close.
+
+AS-09t profile evidence in draft PR #481:
+
+- `Array.fromAsync` is installed with standard metadata and returns an
+  intrinsic Promise while preserving generic result-constructor behavior;
+- one VM-owned `ArrayFromAsyncContinuation` is stored by the existing Promise
+  reaction owner. It retains iterator or array-like state, result, mapper,
+  `thisArg`, pending await phase, and result Promise through the existing root
+  and strong-edge visitors;
+- async iterators await iterator-result Promises without awaiting yielded
+  values. Sync iterators reuse the shared AsyncFromSync continuation and await
+  yielded values exactly once, while array-like values and mapper results use
+  the Promise-resolution owner;
+- mapper, property-definition, and sync-yield rejection failures use resumable
+  `AsyncIteratorClose`. Final length writes use the shared throwing `Set`
+  operation, and intrinsic Array creation converts lengths above 2^32 - 1 to a
+  catchable `RangeError`;
+- lexical declarations in a function/program body are instantiated as
+  uninitialized cells before hoisted functions, preserving TDZ while allowing
+  a function declaration to capture a later lexical binding. Binding
+  instantiation is ordered by compiled slot across lexical and `var`
+  declarations;
+- the upvalue collector now grows its sparse slot vector monotonically. A
+  lower-index binding visited after a higher-index binding no longer truncates
+  the already captured cell;
+- five direct `Array.fromAsync` cases cover sync/array-like mapping, raw async
+  iterator values, sync rejection closing, custom construction, throwing
+  length writes, and oversized intrinsic arrays. Two direct environment cases
+  cover later lexical capture and out-of-order upvalue visits;
+- the exact `built-ins/Array/fromAsync/` profile advances from 0/186 to 156/186
+  variants and from 0/95 to 79/95 conforming files. All 30 residual variants
+  fail before the algorithm because BigInt syntax is unavailable either in the
+  source or the included `temporalHelpers.js` harness;
+- exact-tree correctness and canonical publication remain required before
+  AS-09t can close.
 
 ### AS-10: Performance And Memory Checkpoints
 

@@ -11,12 +11,13 @@ use crate::{
         property::DynamicPropertyKey,
         roots::VmRootKind,
     },
-    value::Value,
+    value::{ErrorName, Value},
 };
 
 const ARRAY_FROM_INDEX_LIMIT_ERROR: &str = "Array.from index exceeded supported range";
 const ARRAY_FROM_PROPERTY_ERROR: &str = "Array.from could not define a result property";
 const ARRAY_FROM_MAP_ERROR: &str = "Array.from map function is not callable";
+const ARRAY_FROM_LENGTH_RANGE_ERROR: &str = "Invalid array length";
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
 impl Context {
@@ -133,6 +134,14 @@ impl Context {
         if self.semantic_is_constructor(constructor)? {
             let arguments = length_value.as_slice();
             return self.semantic_construct(constructor, arguments, constructor.clone());
+        }
+        if length.is_some_and(|length| {
+            u64::try_from(length).map_or(true, |length| length > u64::from(u32::MAX))
+        }) {
+            return Err(Error::exception(
+                ErrorName::RangeError,
+                ARRAY_FROM_LENGTH_RANGE_ERROR,
+            ));
         }
         let arguments = length_value.as_slice();
         self.eval_direct_array_constructor(arguments)

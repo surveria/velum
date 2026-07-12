@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     binding_metadata::BindingLayout,
-    binding_metadata::{BindingOperand, FunctionScopeId},
+    binding_metadata::{BindingOperand, FunctionScopeId, UpvalueSlot},
     error::{Error, Result},
     runtime::Context,
     runtime::binding::scope::BindingCell,
@@ -23,15 +23,16 @@ impl Context {
             Error::runtime("compiled function is missing from the binding layout")
         })?;
         let expected_cell_count = layout.upvalue_count_for_function(function)?;
-        let mut collector = UpvalueCollector::new(self, layout, function, expected_cell_count);
+        let mut collector = UpvalueCollector::new(self, layout, id, function, expected_cell_count);
         collector.collect_bindings(capture_bindings)?;
-        collector.finish()
+        collector.finish(capture_bindings)
     }
 }
 
 struct UpvalueCollector<'a> {
     context: &'a Context,
     layout: &'a BindingLayout,
+    static_function: StaticFunctionId,
     function: FunctionScopeId,
     expected_cell_count: usize,
     cells: Vec<Option<BindingCell>>,
@@ -41,26 +42,53 @@ impl<'a> UpvalueCollector<'a> {
     const fn new(
         context: &'a Context,
         layout: &'a BindingLayout,
+        static_function: StaticFunctionId,
         function: FunctionScopeId,
         expected_cell_count: usize,
     ) -> Self {
         Self {
             context,
             layout,
+            static_function,
             function,
             expected_cell_count,
             cells: Vec::new(),
         }
     }
 
-    fn finish(mut self) -> Result<super::super::CapturedFunctionUpvalues> {
+    fn finish(
+        mut self,
+        bindings: &[StaticBinding],
+    ) -> Result<super::super::CapturedFunctionUpvalues> {
         self.cells.resize_with(self.expected_cell_count, || None);
         let mut cells = Vec::with_capacity(self.cells.len());
-        for cell in self.cells {
+        for (index, cell) in self.cells.into_iter().enumerate() {
             let Some(cell) = cell else {
-                return Err(Error::runtime(
-                    "compiled function upvalue layout did not resolve every captured cell",
-                ));
+                let slot = UpvalueSlot::from_index(index)?;
+                let declaration = self.layout.upvalue_declaration(self.function, slot)?;
+                let mut candidate = None;
+                if let Some(declaration) = declaration {
+                    for binding in bindings {
+                        let Some(BindingOperand::Upvalue { function, slot }) =
+                            self.layout.operand_for_binding_id(binding.id())?
+                        else {
+                            continue;
+                        };
+                        if self.layout.upvalue_declaration(function, slot)? == Some(declaration) {
+                            candidate = Some(binding);
+                            break;
+                        }
+                    }
+                }
+                let name = candidate.map_or("<transitive>", StaticBinding::as_str);
+                let operand = candidate
+                    .map(|binding| self.layout.operand_for_binding_id(binding.id()))
+                    .transpose()?
+                    .flatten();
+                return Err(Error::runtime(format!(
+                    "compiled function {:?} upvalue layout did not resolve captured cell {index} ('{name}', operand {operand:?})",
+                    self.static_function,
+                )));
             };
             cells.push(cell);
         }
@@ -120,7 +148,9 @@ impl<'a> UpvalueCollector<'a> {
         let required_len = index
             .checked_add(1)
             .ok_or_else(|| Error::limit("upvalue cell slot count overflowed"))?;
-        self.cells.resize_with(required_len, || None);
+        if self.cells.len() < required_len {
+            self.cells.resize_with(required_len, || None);
+        }
         Ok(())
     }
 }

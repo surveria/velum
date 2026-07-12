@@ -2,7 +2,7 @@ use crate::{
     error::{Error, Result},
     runtime::{
         Context,
-        abstract_operations::{same_value_zero, strict_equality},
+        abstract_operations::{SetFailureBehavior, same_value_zero, strict_equality},
     },
     value::Value,
 };
@@ -303,13 +303,10 @@ impl Context {
         object: &Value,
         length: usize,
     ) -> Result<()> {
-        if let Value::Object(id) = object
-            && self.objects.array_len_if_array(*id)?.is_some()
-        {
-            return self.objects.set_array_length(*id, length);
-        }
         let value = Self::array_like_length_value(length)?;
-        self.set_array_like_property(object, ARRAY_LENGTH_PROPERTY, value)
+        let lookup = self.property_lookup(ARRAY_LENGTH_PROPERTY);
+        self.set(object, lookup, value, object, SetFailureBehavior::Throw)
+            .map(|_| ())
     }
 
     pub(in crate::runtime) fn get_array_like_index(

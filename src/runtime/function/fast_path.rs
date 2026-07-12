@@ -760,12 +760,14 @@ fn params_have_unique_names(params: &[BytecodeFunctionParam]) -> bool {
 }
 
 fn has_empty_hoist(bytecode: &BytecodeFunction) -> bool {
-    bytecode.hoist_plan().var_declaration_count() == 0
+    bytecode.hoist_plan().lexical_declaration_count() == 0
+        && bytecode.hoist_plan().var_declaration_count() == 0
         && bytecode.hoist_plan().function_declaration_count() == 0
 }
 
 fn has_single_var_hoist(bytecode: &BytecodeFunction, binding: &BytecodeBinding) -> bool {
-    bytecode.hoist_plan().function_declaration_count() == 0
+    bytecode.hoist_plan().lexical_declaration_count() == 0
+        && bytecode.hoist_plan().function_declaration_count() == 0
         && bytecode.hoist_plan().var_declaration_count() == 1
         && bytecode
             .hoist_plan()

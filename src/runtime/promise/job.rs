@@ -140,14 +140,13 @@ impl PromiseReaction {
 
     pub(in crate::runtime) fn into_cancellation(self) -> Option<PromiseContinuationCancellation> {
         match self {
-            Self::Then { .. } => None,
             Self::Await { continuation } => Some(PromiseContinuationCancellation::AsyncFunction(
                 *continuation,
             )),
             Self::AsyncGeneratorAwait { generator } => {
                 Some(PromiseContinuationCancellation::AsyncGenerator(generator))
             }
-            Self::ArrayFromAsync { .. } => None,
+            Self::Then { .. } | Self::ArrayFromAsync { .. } => None,
         }
     }
 

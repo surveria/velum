@@ -67,6 +67,7 @@ pub(in crate::runtime) enum AsyncIteratorStep {
     Value(Value),
     Done,
     Abrupt(Completion),
+    AbruptWithOpenIterator(Completion),
 }
 
 pub(in crate::runtime) enum AsyncIteratorCloseStep {
@@ -149,6 +150,12 @@ impl Context {
                 AsyncIteratorPending::SyncIteratorResult { done: false },
                 Some(Completion::Normal(value)),
             ) => Ok(AsyncIteratorStep::Value(value)),
+            (
+                AsyncIteratorPending::SyncIteratorResult { done: false },
+                Some(Completion::Throw(value)),
+            ) => Ok(AsyncIteratorStep::AbruptWithOpenIterator(
+                Completion::Throw(value),
+            )),
             (_, Some(Completion::Throw(value))) => {
                 set_protocol_done(&mut continuation.source);
                 Ok(AsyncIteratorStep::Abrupt(Completion::Throw(value)))
