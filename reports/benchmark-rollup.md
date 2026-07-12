@@ -19,12 +19,12 @@ Artifacts:
 
 Latest report:
 
-- `rsqjs-test-report-20260712T150716Z.md`
-- Task: PR #518: runtime: complete TypedArray set residual semantics
-- Performance: 9.04x (4/5 >1.00x) (from `rsqjs-test-report-20260712T150716Z.md`)
-- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T150716Z.md`)
+- `rsqjs-test-report-20260712T153643Z.md`
+- Task: PR #519: runtime: complete string and RegExp split semantics
+- Performance: 9.13x (4/5 >1.00x) (from `rsqjs-test-report-20260712T153643Z.md`)
+- Memory: - (0/5 >1.00x) (from `rsqjs-test-report-20260712T153643Z.md`)
 - JetStream: 24.03x (6/7 >1.00x) (from `rsqjs-jetstream-report-20260712T061158Z.yaml`)
-- Full Test262: 78312 passed / 24266 failed (76.34%) (from `rsqjs-test-report-20260712T150716Z.md`)
+- Full Test262: 78456 passed / 24122 failed (76.48%) (from `rsqjs-test-report-20260712T153643Z.md`)
 
 | PR / task | Performance | Memory | JetStream | Full Test262 |
 | --- | ---: | ---: | ---: | ---: |
@@ -495,3 +495,4 @@ Latest report:
 | `20260712T140427Z` `1c7cf4c` PR #515: runtime: add SharedArrayBuffer and Atomics semantics | 9.03x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 77154 passed / 25424 failed (75.21%) |
 | `20260712T144532Z` `980567a` PR #516: runner: add Test262 host detachment semantics | 9.05x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 78256 passed / 24322 failed (76.29%) |
 | `20260712T150716Z` `578164f` PR #518: runtime: complete TypedArray set residual semantics | 9.04x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 78312 passed / 24266 failed (76.34%) |
+| `20260712T153643Z` `42423db` PR #519: runtime: complete string and RegExp split semantics | 9.13x (4/5 >1.00x) | - (0/5 >1.00x) | - (0/0 >1.00x) | 78456 passed / 24122 failed (76.48%) |
