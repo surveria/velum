@@ -18,11 +18,7 @@ pub(super) use index::{ArrayIndex, ArrayLength};
 pub(super) use storage::ArrayStorage;
 
 use super::{ARRAY_INDEX_LIMIT_ERROR, Object, ObjectHeap, ObjectProperty, ShapeTable};
-const ARRAY_INCLUDES_RECEIVER_ERROR: &str = "Array.prototype.includes requires an array receiver";
-const ARRAY_INDEX_OF_RECEIVER_ERROR: &str = "Array.prototype.indexOf requires an array receiver";
 const ARRAY_JOIN_RECEIVER_ERROR: &str = "Array.prototype.join requires an array receiver";
-const ARRAY_LAST_INDEX_OF_RECEIVER_ERROR: &str =
-    "Array.prototype.lastIndexOf requires an array receiver";
 const ARRAY_POP_RECEIVER_ERROR: &str = "Array.prototype.pop requires an array receiver";
 const ARRAY_PUSH_RECEIVER_ERROR: &str = "Array.prototype.push requires an array receiver";
 const ARRAY_REVERSE_RECEIVER_ERROR: &str = "Array.prototype.reverse requires an array receiver";
@@ -142,21 +138,6 @@ impl ObjectHeap {
 
     pub(crate) fn array_length_value_if_array(&self, id: ObjectId) -> Result<Option<Value>> {
         Ok(self.array_length_if_array(id)?.map(ArrayLength::value))
-    }
-
-    pub(crate) fn array_len_for_index_of(&self, id: ObjectId) -> Result<usize> {
-        self.array_length_for_method(id, ARRAY_INDEX_OF_RECEIVER_ERROR)?
-            .to_usize()
-    }
-
-    pub(crate) fn array_len_for_includes(&self, id: ObjectId) -> Result<usize> {
-        self.array_length_for_method(id, ARRAY_INCLUDES_RECEIVER_ERROR)?
-            .to_usize()
-    }
-
-    pub(crate) fn array_len_for_last_index_of(&self, id: ObjectId) -> Result<usize> {
-        self.array_length_for_method(id, ARRAY_LAST_INDEX_OF_RECEIVER_ERROR)?
-            .to_usize()
     }
 
     pub(crate) fn array_index_of(
@@ -360,7 +341,16 @@ impl ObjectHeap {
         id: ObjectId,
         length: usize,
     ) -> Result<Option<&[ObjectProperty]>> {
-        Ok(self.object(id)?.packed_array_properties(length))
+        let Some(properties) = self.object(id)?.packed_array_properties(length) else {
+            return Ok(None);
+        };
+        if properties
+            .iter()
+            .any(|property| property.accessor().is_some())
+        {
+            return Ok(None);
+        }
+        Ok(Some(properties))
     }
 
     pub(crate) fn packed_array_values_if_array(&self, id: ObjectId) -> Result<Option<Vec<Value>>> {
@@ -370,7 +360,14 @@ impl ObjectHeap {
         let Some(properties) = self.object(id)?.packed_array_properties(length) else {
             return Ok(None);
         };
-        Ok(Some(properties.iter().map(ObjectProperty::value).collect()))
+        let Some(values) = properties
+            .iter()
+            .map(ObjectProperty::data_value_ref)
+            .collect::<Option<Vec<_>>>()
+        else {
+            return Ok(None);
+        };
+        Ok(Some(values.into_iter().cloned().collect()))
     }
 
     pub(super) fn array_length_for_method(&self, id: ObjectId, error: &str) -> Result<ArrayLength> {

@@ -67,6 +67,38 @@ fn supports_parenthesized_exponentiation_and_targets() -> TestResult {
 }
 
 #[test]
+fn exponentiation_special_cases_match_math_pow_across_execution_tiers() -> TestResult {
+    let runtime = Runtime::new();
+    let mut context = runtime.context();
+    let value = context.eval(
+        r"
+        function exponentiate(left, right) {
+            return left ** right;
+        }
+        let generic = ({ valueOf: function() { return 1; } }) ** NaN;
+        let functionFast = exponentiate(-1, Infinity);
+        let flatMapFast = [1].flatMap(function(value) {
+            return [value ** NaN];
+        })[0];
+        let linear = 0;
+        for (let index = 0; index < 4; index = index + 1) {
+            linear = 1 ** NaN;
+        }
+
+        Number.isNaN(generic) &&
+            Number.isNaN(functionFast) &&
+            Number.isNaN(flatMapFast) &&
+            Number.isNaN(linear) &&
+            Number.isNaN(Math.pow(1, NaN)) &&
+            Number.isNaN(Math.pow(-1, Infinity))
+            ? 42
+            : 0
+        ",
+    )?;
+    ensure_value(&value, &Value::Number(42.0))
+}
+
+#[test]
 fn rejects_unparenthesized_unary_left_exponentiation() -> TestResult {
     ensure_error_contains("-2 ** 2", "unary expression cannot be the left operand")?;
     ensure_error_contains(

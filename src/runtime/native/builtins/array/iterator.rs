@@ -127,6 +127,22 @@ impl Context {
         Ok(prototype)
     }
 
+    pub(in crate::runtime) fn default_array_iterator_next_is_intact(&mut self) -> Result<bool> {
+        let prototype = self.array_iterator_prototype_id()?;
+        let key = self.intern_property_key(ARRAY_ITERATOR_NEXT_PROPERTY)?;
+        let property = DynamicPropertyKey::new(ARRAY_ITERATOR_NEXT_PROPERTY.to_owned(), Some(key));
+        let holder = Value::Object(prototype);
+        let Some(OwnPropertyDescriptor::Data(descriptor)) =
+            self.semantic_own_property_descriptor(&holder, &property)?
+        else {
+            return Ok(false);
+        };
+        let Value::NativeFunction(id) = descriptor.value() else {
+            return Ok(false);
+        };
+        Ok(self.native_function(id)?.kind() == NativeFunctionKind::ArrayIteratorNext)
+    }
+
     fn install_array_iterator_tag(&mut self, prototype: crate::value::ObjectId) -> Result<()> {
         let symbol_constructor = self.symbol_constructor_value()?;
         let tag = self.get_named(&symbol_constructor, TO_STRING_TAG_PROPERTY)?;

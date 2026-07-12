@@ -67,6 +67,9 @@ fn compiled_in_operator_hot_paths_run_linear_segments_without_interning_missing_
         var total = 0;
         var object = { a: 1 };
         var values = [1, 2, 3, 4];
+        var inherited = [];
+        inherited.length = 4;
+        Object.setPrototypeOf(inherited, { 2: 1 });
 
         for (var index = 0; index < 16; index = index + 1) {
             if ("a" in object) {
@@ -74,6 +77,9 @@ fn compiled_in_operator_hot_paths_run_linear_segments_without_interning_missing_
             }
             if ((index & 3) in values) {
                 total += 1;
+            }
+            if ((index & 3) in inherited) {
+                total += 2;
             }
             if ("missing" in object) {
                 total += 64;
@@ -86,7 +92,7 @@ fn compiled_in_operator_hot_paths_run_linear_segments_without_interning_missing_
 
     let segment_runs = vm.resource_usage().bytecode_linear_segment_runs;
     let value = vm.eval_compiled(&script)?;
-    ensure_value(&value, &Value::Number(32.0))?;
+    ensure_value(&value, &Value::Number(40.0))?;
     let segment_delta = vm
         .resource_usage()
         .bytecode_linear_segment_runs
@@ -96,7 +102,7 @@ fn compiled_in_operator_hot_paths_run_linear_segments_without_interning_missing_
 
     let atom_count = vm.resource_usage().atom_count;
     let value = vm.eval_compiled(&script)?;
-    ensure_value(&value, &Value::Number(32.0))?;
+    ensure_value(&value, &Value::Number(40.0))?;
     ensure_usize(vm.resource_usage().atom_count, atom_count)
 }
 

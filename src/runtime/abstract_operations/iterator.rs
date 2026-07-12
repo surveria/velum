@@ -239,6 +239,7 @@ impl Context {
         if let Value::Object(id) = iterable
             && self.objects.array_len_if_array(*id)?.is_some()
             && self.is_default_array_iterator_method(method)?
+            && self.default_array_iterator_next_is_intact()?
         {
             return Ok(IteratorSource::ArrayIndex {
                 array: iterable.clone(),

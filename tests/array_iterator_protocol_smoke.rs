@@ -81,6 +81,28 @@ fn array_iterator_next_rejects_incompatible_receivers() -> TestResult {
     )
 }
 
+#[test]
+fn array_iteration_observes_patched_iterator_prototype_next() -> TestResult {
+    eval_is_42(
+        r"
+        let prototype = Object.getPrototypeOf([].values());
+        let calls = 0;
+        prototype.next = function() {
+            calls = calls + 1;
+            return calls === 1
+                ? { value: 42, done: false }
+                : { value: undefined, done: true };
+        };
+
+        let values = [];
+        for (let value of [1, 2, 3]) {
+            values.push(value);
+        }
+        calls === 2 && values.length === 1 && values[0] === 42 ? 42 : 0
+        ",
+    )
+}
+
 fn eval_is_42(source: &str) -> TestResult {
     let runtime = Runtime::new();
     let mut context = runtime.context();

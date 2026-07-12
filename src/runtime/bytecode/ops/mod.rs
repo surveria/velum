@@ -13,8 +13,9 @@ use crate::{
     runtime::control::Completion,
     runtime::native::NativeFunctionKind,
     runtime::numeric::{
-        bitwise_and, bitwise_not, bitwise_or, bitwise_xor, number_shift_count, number_to_i32,
-        number_to_uint32, numeric_binary, shift_left, shift_right, shift_right_unsigned,
+        bitwise_and, bitwise_not, bitwise_or, bitwise_xor, number_exponentiate, number_shift_count,
+        number_to_i32, number_to_uint32, numeric_binary, shift_left, shift_right,
+        shift_right_unsigned,
     },
     runtime::object::PropertyKey,
     runtime::property::DynamicPropertyKey,
@@ -209,7 +210,7 @@ impl Context {
                 BytecodeNumericBinaryOp::Mul => left * right,
                 BytecodeNumericBinaryOp::Div => left / right,
                 BytecodeNumericBinaryOp::Rem => left % right,
-                BytecodeNumericBinaryOp::Pow => left.powf(*right),
+                BytecodeNumericBinaryOp::Pow => number_exponentiate(*left, *right),
                 BytecodeNumericBinaryOp::BitAnd => {
                     f64::from(number_to_i32(*left, "&")? & number_to_i32(*right, "&")?)
                 }

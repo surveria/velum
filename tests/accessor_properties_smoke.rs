@@ -193,6 +193,75 @@ fn getter_can_throw_catchable_error() -> TestResult {
 }
 
 #[test]
+fn array_builtins_observe_index_accessors() -> TestResult {
+    ensure_eval(
+        r#"
+        let searchReads = 0;
+        let search = [1, 2, 3];
+        Object.defineProperty(search, "1", {
+            get: function() {
+                searchReads = searchReads + 1;
+                return 42;
+            },
+            enumerable: true,
+            configurable: true
+        });
+        let index = search.indexOf(42);
+        let included = search.includes(42);
+        let lastIndex = search.lastIndexOf(42);
+        let joined = search.join("|");
+
+        let popReads = 0;
+        let poppedSource = [1, 2];
+        Object.defineProperty(poppedSource, "1", {
+            get: function() {
+                popReads = popReads + 1;
+                return 9;
+            },
+            configurable: true
+        });
+        let popped = poppedSource.pop();
+
+        let reverseReads = 0;
+        let reverseWrite = 0;
+        let reversed = [1, 2];
+        Object.defineProperty(reversed, "0", {
+            get: function() {
+                reverseReads = reverseReads + 1;
+                return 10;
+            },
+            set: function(value) {
+                reverseWrite = value;
+            },
+            enumerable: true,
+            configurable: true
+        });
+        reversed.reverse();
+
+        let pushedValue = 0;
+        let pushPrototype = Object.create(Array.prototype);
+        Object.defineProperty(pushPrototype, "2", {
+            set: function(value) {
+                pushedValue = value;
+            },
+            configurable: true
+        });
+        let pushed = [1, 2];
+        Object.setPrototypeOf(pushed, pushPrototype);
+        let pushedLength = pushed.push(7);
+
+        index === 1 && included && lastIndex === 1 && joined === "1|42|3" &&
+            searchReads === 4 &&
+            popped === 9 && popReads === 1 && poppedSource.length === 1 &&
+            reverseReads === 1 && reverseWrite === 2 && reversed[1] === 10 &&
+            pushedValue === 7 && pushedLength === 3 &&
+            !Object.prototype.hasOwnProperty.call(pushed, "2")
+        "#,
+        &Value::Bool(true),
+    )
+}
+
+#[test]
 fn setter_parameter_count_is_validated() -> TestResult {
     let Err(error) = eval("var o = { set x() {} };") else {
         return Err("expected setter without parameter to fail parsing".into());

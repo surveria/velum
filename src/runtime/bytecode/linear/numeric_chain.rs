@@ -4,7 +4,7 @@ use crate::{
     runtime::{
         Context,
         binding::scope::BindingCell,
-        numeric::{number_shift_count, number_to_i32, number_to_uint32},
+        numeric::{number_exponentiate, number_shift_count, number_to_i32, number_to_uint32},
     },
     syntax::BinaryOp,
     value::Value,
@@ -569,7 +569,7 @@ pub(in crate::runtime::bytecode::linear) fn apply_number_binary(
         BytecodeNumericBinaryOp::Mul => left * right,
         BytecodeNumericBinaryOp::Div => left / right,
         BytecodeNumericBinaryOp::Rem => left % right,
-        BytecodeNumericBinaryOp::Pow => left.powf(right),
+        BytecodeNumericBinaryOp::Pow => number_exponentiate(left, right),
         BytecodeNumericBinaryOp::BitAnd => {
             f64::from(number_to_i32(left, "&")? & number_to_i32(right, "&")?)
         }

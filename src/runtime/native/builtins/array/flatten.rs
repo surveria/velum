@@ -89,7 +89,7 @@ impl Context {
         callback_this: &Value,
         this_value: &Value,
     ) -> Result<Option<Value>> {
-        if !matches!(callback_this, Value::Undefined) {
+        if !self.optional_optimizations_enabled() || !matches!(callback_this, Value::Undefined) {
             return Ok(None);
         }
         let Value::Function(callback_id) = callback else {
@@ -101,6 +101,14 @@ impl Context {
         let Some(source_values) = self.packed_numeric_flat_map_source_values(this_value)? else {
             return Ok(None);
         };
+        let probe_args = [Value::Number(0.0), Value::Number(0.0), this_value.clone()];
+        if pattern
+            .elements
+            .iter()
+            .any(|source| Self::eval_flat_map_array_source(source, &probe_args).is_none())
+        {
+            return Ok(None);
+        }
         let capacity = source_values
             .len()
             .checked_mul(pattern.elements.len())
@@ -370,7 +378,9 @@ impl Context {
             BytecodeNumericBinaryOp::Mul => left * right,
             BytecodeNumericBinaryOp::Div => left / right,
             BytecodeNumericBinaryOp::Rem => left % right,
-            BytecodeNumericBinaryOp::Pow => left.powf(*right),
+            BytecodeNumericBinaryOp::Pow => {
+                crate::runtime::numeric::number_exponentiate(*left, *right)
+            }
             BytecodeNumericBinaryOp::BitAnd
             | BytecodeNumericBinaryOp::BitOr
             | BytecodeNumericBinaryOp::BitXor

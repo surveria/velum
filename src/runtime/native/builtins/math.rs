@@ -4,7 +4,7 @@ use crate::{
     api::native_call::NativeCallTarget,
     error::{Error, Result},
     runtime::call::RuntimeCallArgs,
-    runtime::numeric::number_to_uint32,
+    runtime::numeric::{number_exponentiate, number_to_uint32},
     runtime::object::{
         DataPropertyUpdate, PropertyConfigurable, PropertyEnumerable, PropertyKey, PropertyUpdate,
         PropertyWritable,
@@ -324,7 +324,7 @@ impl Context {
         let (base, exponent) = Self::eval_math_binary_values(args);
         let base = self.math_arg_or_nan(base)?;
         let exponent = self.math_arg_or_nan(exponent)?;
-        Self::math_number(Self::math_pow(base, exponent))
+        Self::math_number(number_exponentiate(base, exponent))
     }
 
     pub(in crate::runtime::native) fn eval_math_random(
@@ -607,20 +607,6 @@ impl Context {
     #[allow(clippy::unnecessary_wraps)]
     const fn math_number(value: f64) -> Result<Value> {
         Ok(Value::Number(value))
-    }
-
-    fn math_pow(base: f64, exponent: f64) -> f64 {
-        if exponent.is_nan() || (Self::is_exact_abs_one(base) && exponent.is_infinite()) {
-            return f64::NAN;
-        }
-        base.powf(exponent)
-    }
-
-    const fn is_exact_abs_one(value: f64) -> bool {
-        matches!(
-            value.to_bits(),
-            bits if bits == 1.0_f64.to_bits() || bits == (-1.0_f64).to_bits()
-        )
     }
 
     fn fround_to_number(value: f64) -> f64 {
