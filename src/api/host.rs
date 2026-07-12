@@ -67,13 +67,13 @@ impl IntoJsValue for f64 {
 
 impl IntoJsValue for String {
     fn into_js_value(self) -> Result<Value> {
-        Ok(Value::String(self))
+        Ok(Value::HeapString(self.into()))
     }
 }
 
 impl IntoJsValue for &str {
     fn into_js_value(self) -> Result<Value> {
-        Ok(Value::String(self.to_owned()))
+        Ok(Value::HeapString(self.into()))
     }
 }
 

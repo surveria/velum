@@ -53,7 +53,7 @@ impl Context {
         let value = if self.optional_optimizations_enabled() {
             self.string_concat_static_step(left, text, final_result)?
         } else {
-            self.add(&left, &Value::String(text.to_owned()))?
+            self.add(&left, &Value::HeapString(text.into()))?
         };
         state.stack.push(value);
         state.pc = next;

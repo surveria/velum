@@ -114,6 +114,28 @@ impl JsString {
     pub fn into_utf8(self) -> Option<String> {
         self.is_well_formed().then(|| self.data.as_str().to_owned())
     }
+
+    pub(crate) fn into_utf8_accumulator(self) -> Option<String> {
+        if !self.is_well_formed() {
+            return None;
+        }
+        match Rc::try_unwrap(self.data.0) {
+            Ok(data) => Some(data.text),
+            Err(data) => Some(data.text.clone()),
+        }
+    }
+}
+
+impl From<String> for JsString {
+    fn from(value: String) -> Self {
+        Self::from_utf8(value)
+    }
+}
+
+impl From<&str> for JsString {
+    fn from(value: &str) -> Self {
+        Self::from_utf8(value.to_owned())
+    }
 }
 
 impl PartialEq for JsString {

@@ -86,13 +86,20 @@ impl Context {
                 self.push_primitive_string(&mut text, right)?;
                 text
             }
+            Value::HeapString(text) if text.is_well_formed() => {
+                let mut text = text
+                    .into_utf8_accumulator()
+                    .ok_or_else(|| Error::runtime("well-formed string lost its UTF-8 value"))?;
+                self.push_primitive_string(&mut text, right)?;
+                text
+            }
             left => self.concat_values(&left, right)?,
         };
 
         if !final_result {
             self.reserve_string_concat_tail(&mut text)?;
         }
-        self.checked_value(Value::String(text))
+        Ok(Value::HeapString(text.into()))
     }
 
     pub(crate) fn string_concat_static_step(
@@ -107,10 +114,17 @@ impl Context {
             left
         };
         if !has_exact_utf8(&left) {
-            return self.add(&left, &Value::String(right.to_owned()));
+            return self.add(&left, &Value::HeapString(right.into()));
         }
         let mut text = match left {
             Value::String(mut text) => {
+                self.push_concat_text(&mut text, right)?;
+                text
+            }
+            Value::HeapString(text) if text.is_well_formed() => {
+                let mut text = text
+                    .into_utf8_accumulator()
+                    .ok_or_else(|| Error::runtime("well-formed string lost its UTF-8 value"))?;
                 self.push_concat_text(&mut text, right)?;
                 text
             }
@@ -120,7 +134,7 @@ impl Context {
         if !final_result {
             self.reserve_string_concat_tail(&mut text)?;
         }
-        self.checked_value(Value::String(text))
+        Ok(Value::HeapString(text.into()))
     }
 
     fn reserve_string_concat_tail(&self, text: &mut String) -> Result<()> {
